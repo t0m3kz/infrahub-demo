@@ -7,7 +7,8 @@ entry in ``RULES``:
 
 1. Template kind. A zone is our own hardware in our own cage, so every ``fabric_templates`` entry is a
    TemplateDcimPhysicalDevice; a virtual colocation is a provider-hosted presence (Equinix Network Edge, Megaport
-   MCR), so every entry is a TemplateDcimVirtualDevice. The peer is CoreObjectTemplate, so the schema accepts either.
+   MCR), so every entry is a TemplateCloudNetworkAppliance (its devices are CloudNetworkAppliance, not
+   DcimVirtualDevice). The peer is CoreObjectTemplate, so the schema accepts either.
 2. Serving zone. A footprint's ``serving_zone`` is a zone of the footprint's own metro (``parent``): the footprint
    is parented by the metro, the firewall pair that serves it lives in one of its zones.
 3. Serving zone firewalls. A serving zone holds firewall devices, else the footprint gets no FirewallContext.
@@ -27,11 +28,19 @@ fixed fallback, and is only held to these rules where the rule names the design)
 8. Zones within the metro envelope. A metro with a design holds at most the design's ``max_zones`` zones and
    virtual colocations together.
 
-Order data (``provider_account_number`` on the presence, ``notification_emails`` on its ``owner``; not part of the
-design envelope):
+Order data (the presence's ``account`` with its ``owner``, and the appliances it hosts; not part of the design
+envelope):
 
-9. Terraform order data. A virtual colocation routed to terraform has the billing account and an owner with at least
-   one notification address, each an e-mail address: the Terraform artifact prints them and cannot order without.
+9. Terraform order data. A virtual colocation routed to terraform has what the Terraform artifact prints and cannot
+   order without: an ``account`` whose ``account_id`` (the billing account number) is set, whose provider is the
+   colocation operator above the metro (case-insensitive: operator "EQUINIX", provider "Equinix"), and whose owner has
+   at least one notification address, each an e-mail address. Every appliance (CloudNetworkAppliance) of the presence
+   is ordered under that account. A router (edge) is an independent appliance with no redundancy representation; a
+   firewall pair is an HA domain (a ManagedHA on its ``capabilities`` edge, the same as every other HA pair) whose
+   ``mode`` active-passive is the Equinix cluster, and an appliance with no domain is a single device. An appliance is
+   in at most one domain; a domain has exactly two members, both appliances of the presence that list it, and the
+   mode is active-passive (the artifact renders no other). A pair-level problem is reported once, on the first member
+   by name.
 """
 
 from __future__ import annotations
@@ -51,9 +60,12 @@ FOOTPRINT = "TopologyCustomerColocation"
 TERRAFORM = "terraform"
 """The infrastructure_orchestrator value that makes a virtual colocation render its Terraform artifact."""
 
+APPLIANCE = "CloudNetworkAppliance"
+"""The kind of a device hosted by the provider on a virtual colocation."""
+
 HOSTED_TEMPLATE_KIND = {
     ZONE: "TemplateDcimPhysicalDevice",
-    VIRTUAL_COLOCATION: "TemplateDcimVirtualDevice",
+    VIRTUAL_COLOCATION: "TemplateCloudNetworkAppliance",
 }
 """The template kind each fabric-hosting colocation kind may declare."""
 
@@ -79,9 +91,17 @@ def _name(node: dict[str, Any]) -> str:
     return str(node.get("name") or node.get("id") or "<unnamed>")
 
 
-def _owner_label(owner: dict[str, Any]) -> str:
-    """The owner organization by display_label: ``name`` lives on OrganizationGeneric, not on the OrganizationEntity peer."""
+def _display_label(owner: dict[str, Any]) -> str:
+    """A peer by display_label: the account has no ``name`` and ``name`` lives on OrganizationGeneric, not on the
+    OrganizationEntity peer."""
     return str(owner.get("display_label") or owner.get("id") or "<unnamed>")
+
+
+def _ref_id(reference: Any) -> str | None:
+    """The id of a cleaned relationship: a dict with an ``id`` (an id-only selection can also arrive as the bare id)."""
+    if isinstance(reference, dict):
+        reference = reference.get("id")
+    return str(reference) if reference else None
 
 
 def _entry_label(entry: dict[str, Any]) -> str:
@@ -90,7 +110,7 @@ def _entry_label(entry: dict[str, Any]) -> str:
 
 
 def template_kind_findings(cleaned: dict[str, Any]) -> list[Finding]:
-    """Rule 1: a zone declares physical templates only, a virtual colocation virtual ones only."""
+    """Rule 1: a zone declares physical templates only, a virtual colocation network appliance ones only."""
     findings = []
     for kind, wanted in HOSTED_TEMPLATE_KIND.items():
         for node in cleaned.get(kind) or []:
@@ -286,34 +306,143 @@ def metro_zone_count_findings(cleaned: dict[str, Any]) -> list[Finding]:
     return findings
 
 
+def _operator_name(node: dict[str, Any]) -> str:
+    """The colocation operator above the virtual colocation's metro, empty when the query did not reach one."""
+    operator = (node.get("parent") or {}).get("parent") or {}
+    return str(operator.get("name") or "")
+
+
+def _account_findings(node: dict[str, Any], account: dict[str, Any]) -> list[str]:
+    """The problems of the billing account a terraform order is placed under, one text each."""
+    problems = []
+    if not str(account.get("account_id") or "").strip():
+        problems.append(f"account '{_display_label(account)}' has no account_id (the billing account number)")
+    provider = (account.get("provider") or {}).get("name")
+    operator = _operator_name(node)
+    if not provider:
+        problems.append(f"account '{_display_label(account)}' has no provider")
+    elif operator and str(provider).casefold() != operator.casefold():
+        problems.append(
+            f"account '{_display_label(account)}' is a '{provider}' account but the metro's operator is '{operator}'"
+        )
+    owner = account.get("owner") or {}
+    emails = [email for email in owner.get("notification_emails") or [] if email]
+    if not owner:
+        problems.append(f"account '{_display_label(account)}' has no owner to notify")
+    elif not emails:
+        problems.append(f"account owner '{_display_label(owner)}' has no notification_emails")
+    elif any("@" not in email for email in emails):
+        problems.append(
+            f"account owner '{_display_label(owner)}' has notification_emails {emails} that are not all e-mail addresses"
+        )
+    return problems
+
+
+HA_MODES = ("active-passive",)
+"""The HA domain modes the Terraform artifact can render: a cluster."""
+
+
+def _ha_domains(appliance: dict[str, Any]) -> list[dict[str, Any]]:
+    """The HA domains an appliance is a member of: its ``capabilities`` entries that carry a ``mode`` (the
+    ManagedHA attribute), as opposed to e.g. the BGP overlay process."""
+    return [
+        capability
+        for capability in appliance.get("capabilities") or []
+        if isinstance(capability, dict) and "mode" in capability
+    ]
+
+
+def _appliance_problems(appliance: dict[str, Any], account_id: str | None) -> list[str]:
+    """The problems of one appliance on its own: its account and the number of HA domains it is in."""
+    label = f"appliance '{_name(appliance)}'"
+    problems = []
+    if account_id and _ref_id(appliance.get("account")) != account_id:
+        problems.append(f"{label} is not ordered under the presence's account")
+    domains = _ha_domains(appliance)
+    if len(domains) > 1:
+        names = ", ".join(sorted(f"'{_name(domain)}'" for domain in domains))
+        problems.append(f"{label} is a member of {len(domains)} HA domains ({names}) but is in at most one")
+    elif domains:
+        domain = domains[0]
+        if appliance.get("id") not in {member.get("id") for member in domain.get("capabilities") or []}:
+            problems.append(f"{label} lists HA domain '{_name(domain)}' but is not one of its members")
+    return problems
+
+
+def _domain_problems(
+    domain: dict[str, Any], reporter: dict[str, Any], appliances: dict[str, dict[str, Any]]
+) -> list[str]:
+    """The problems of one HA domain as a pair, named after ``reporter`` (the first member by name that lists it)."""
+    label = f"appliance '{_name(reporter)}' (HA domain '{_name(domain)}')"
+    members = domain.get("capabilities") or []
+    problems = []
+    if len(members) != 2:
+        names = ", ".join(sorted(_name(member) for member in members)) or "none"
+        problems.append(f"{label} has {len(members)} members ({names}) but an HA pair has exactly two")
+    if domain.get("mode") not in HA_MODES:
+        problems.append(
+            f"{label} has mode '{domain.get('mode')}' but only {' and '.join(HA_MODES)} can be ordered (a cluster)"
+        )
+    for member in members:
+        if member.get("id") == reporter.get("id"):
+            continue
+        partner = appliances.get(str(member.get("id")))
+        if partner is None:
+            problems.append(f"{label} has member '{_name(member)}', which is not an appliance of this presence")
+        elif domain.get("id") not in {other.get("id") for other in _ha_domains(partner)}:
+            problems.append(
+                f"{label} has member '{_name(partner)}', which does not list the domain on its capabilities"
+            )
+    return problems
+
+
+def _ha_problems(appliances: dict[str, dict[str, Any]]) -> list[str]:
+    """The pair-level problems of every HA domain the presence's appliances list, each domain once."""
+    listing: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    domains: dict[str, dict[str, Any]] = {}
+    for appliance in appliances.values():
+        found = _ha_domains(appliance)
+        if len(found) == 1 and found[0].get("id"):
+            domains[str(found[0]["id"])] = found[0]
+            listing[str(found[0]["id"])].append(appliance)
+    problems = []
+    for domain_id, owners in listing.items():
+        reporter = min(owners, key=_name)
+        problems += _domain_problems(domains[domain_id], reporter, appliances)
+    return problems
+
+
 def terraform_order_data_findings(cleaned: dict[str, Any]) -> list[Finding]:
-    """Rule 9: a virtual colocation routed to terraform carries the account and the notification e-mails."""
+    """Rule 9: a virtual colocation routed to terraform has its account, owner e-mails and consistent appliances (HA domains)."""
     findings = []
     for node in cleaned.get(VIRTUAL_COLOCATION) or []:
         if node.get("infrastructure_orchestrator") != TERRAFORM:
             continue
-        owner = node.get("owner") or {}
-        emails = [email for email in owner.get("notification_emails") or [] if email]
-        problems = []
-        if not str(node.get("provider_account_number") or "").strip():
-            problems.append("no provider_account_number")
-        if not owner:
-            problems.append("no owner to notify")
-        elif not emails:
-            problems.append(f"owner '{_owner_label(owner)}' has no notification_emails")
-        elif any("@" not in email for email in emails):
-            problems.append(
-                f"owner '{_owner_label(owner)}' has notification_emails {emails} that are not all e-mail addresses"
+        account = node.get("account")
+        account = account if isinstance(account, dict) else {}
+        problems = (
+            _account_findings(node, account)
+            if account
+            else ["the presence has no account (the billing account of the order)"]
+        )
+        appliances = {
+            str(device["id"]): device
+            for device in node.get("devices") or []
+            if isinstance(device, dict) and device.get("typename") == APPLIANCE and device.get("id")
+        }
+        for appliance in appliances.values():
+            problems += _appliance_problems(appliance, _ref_id(account))
+        problems += _ha_problems(appliances)
+        findings.extend(
+            Finding(
+                f"{VIRTUAL_COLOCATION} '{_name(node)}' is routed to terraform but its order data is wrong: {problem}. "
+                "The artifact prints the account, the owner's notification addresses and the appliances of the "
+                "provider order.",
+                node.get("id"),
+                VIRTUAL_COLOCATION,
             )
-        if problems:
-            findings.append(
-                Finding(
-                    f"{VIRTUAL_COLOCATION} '{_name(node)}' is routed to terraform but has {' and '.join(problems)}: "
-                    "the artifact prints the account and the owner's notification addresses of the provider order.",
-                    node.get("id"),
-                    VIRTUAL_COLOCATION,
-                )
-            )
+            for problem in problems
+        )
     return findings
 
 

@@ -24,17 +24,6 @@ resource "equinix_network_device" "{{ resource.id }}" {
   term_length    = {{ resource.term_length }}
   account_number = {{ account_number | hcl }}
   notifications  = {{ notifications | hcl_list }}
-{% if resource.diverse_resource %}
-  diverse_device_id = equinix_network_device.{{ resource.diverse_resource }}.uuid
-{% endif %}
-{% if resource.secondary %}
-  secondary_device {
-    name           = {{ resource.secondary.name | hcl }}
-    metro_code     = {{ resource.secondary.metro_code | hcl }}
-    account_number = {{ account_number | hcl }}
-    notifications  = {{ notifications | hcl_list }}
-  }
-{% endif %}
 {% if resource.cluster %}
   byol           = true
   cluster_details {

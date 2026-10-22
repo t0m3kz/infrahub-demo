@@ -272,4 +272,35 @@ fragment CircuitEndDevice on DcimDevice {
       }
     }
   }
+  ... on CloudNetworkAppliance {
+    deployment {
+      node {
+        id
+        __typename
+        name {
+          value
+        }
+        ... on TopologyColocationZone {
+          parent {
+            node {
+              id
+              name {
+                value
+              }
+            }
+          }
+        }
+        ... on TopologyVirtualColocation {
+          parent {
+            node {
+              id
+              name {
+                value
+              }
+            }
+          }
+        }
+      }
+    }
+  }
 }

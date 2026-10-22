@@ -26,12 +26,18 @@ resource "equinix_network_device" "ld_ne_eg_ld01" {
   term_length    = 12
   account_number = "1000001"
   notifications  = ["noc@example.com", "network-ops@example.com"]
-  secondary_device {
-    name           = "eg-ld02"
-    metro_code     = "LD"
-    account_number = "1000001"
-    notifications  = ["noc@example.com", "network-ops@example.com"]
-  }
+}
+
+resource "equinix_network_device" "ld_ne_eg_ld02" {
+  name           = "eg-ld02"
+  metro_code     = "LD"
+  type_code      = "ARISTA-ROUTER"
+  package_code   = "CloudEOS"
+  version        = "4.29.0"
+  core_count     = 4
+  term_length    = 12
+  account_number = "1000001"
+  notifications  = ["noc@example.com", "network-ops@example.com"]
 }
 
 resource "equinix_network_device" "ld_ne_fw_ld" {
@@ -72,5 +78,4 @@ resource "equinix_network_device" "ld_ne_sdwan_ld01" {
   term_length    = 12
   account_number = "1000001"
   notifications  = ["noc@example.com", "network-ops@example.com"]
-  diverse_device_id = equinix_network_device.ld_ne_eg_ld01.uuid
 }

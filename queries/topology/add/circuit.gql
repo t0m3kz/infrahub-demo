@@ -60,6 +60,9 @@ fragment CircuitEndpoint on DcimInterface {
       ... on DcimVirtualDevice {
         deployment { node { ...CircuitDeployment } }
       }
+      ... on CloudNetworkAppliance {
+        deployment { node { ...CircuitDeployment } }
+      }
       ... on DcimCapabilities {
         capabilities {
           edges {

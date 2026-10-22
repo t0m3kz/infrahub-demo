@@ -421,7 +421,7 @@ class TopologyVirtualColocation(
     TopologyConnectableLocation,
     TopologyFacility,
 ):
-    pass
+    account: RelationshipAttribute[CloudAccount]
 
 
 class AppComponent(AppGeneric):
@@ -716,6 +716,20 @@ class CloudNATGateway(CloudResource):
     account: RelationshipAttribute[CloudAccount]
     network_segments: RelationshipManager[CloudNetworkSegment]
     virtual_network: RelationshipAttribute[CloudVirtualNetwork]
+
+
+class CloudNetworkAppliance(CoreArtifactTarget, DcimDevice, DcimCapabilities):
+    cloud_id: StringOptional
+    cluster_name: StringOptional
+    cpu_count: IntegerOptional
+    package_code: StringOptional
+    redundancy: Dropdown
+    service_code: StringOptional
+    software_version: StringOptional
+    term_length: IntegerOptional
+    account: RelationshipAttribute[CloudAccount]
+    deployment: RelationshipAttribute[TopologyDeployment]
+    secondary_device: RelationshipAttribute[CloudNetworkAppliance]
 
 
 class CloudNetworkSegment(CloudResource, ManagedNetworkSegment):

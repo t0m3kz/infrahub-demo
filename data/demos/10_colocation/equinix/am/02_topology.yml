@@ -5,9 +5,10 @@
 # (the Multi-Site site) has a single TopologyVirtualColocation child, AM-NE
 # (Equinix Network Edge). It is named differently from its metro because metro,
 # zone and virtual colocation names share the device-name and pool-name space.
-# A virtual colocation can only host virtual templates (TemplateDcimVirtualDevice),
-# so add_virtual_colocation creates DcimVirtualDevices — instances we rent, not
-# hardware we rack — and a `physical` template would be rejected here.
+# A virtual colocation can only host provider-hosted appliance templates
+# (TemplateCloudNetworkAppliance), so add_virtual_colocation creates
+# CloudNetworkAppliances — instances we rent, not hardware we rack — and a
+# `physical` template would be rejected here.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -19,9 +20,9 @@ spec:
         kind: TopologyColocationMetro
         data:
           # C8000V_EDGE, not the N9K the other metros use: AM-NE can only host
-          # virtual kit. It is a TemplateDcimVirtualDevice, so the generator
-          # creates DcimVirtualDevices (eg-am-ne01, eg-am-ne02) — an Equinix
-          # Network Edge instance we rent, not hardware we rack. The one
+          # provider-hosted kit. It is a TemplateCloudNetworkAppliance, so the
+          # generator creates CloudNetworkAppliances (eg-am-ne01, eg-am-ne02) — two
+          # independent Equinix Network Edge routers we rent, not hardware we rack. The one
           # presence in the demo data that exercises the virtual path at all.
           - name: AM
             design: "S"
@@ -34,12 +35,12 @@ spec:
                 - name: AM-NE
                   design: "EDGE"
                   # Routed to the virtual_colocation_terraform group: one Equinix Network Edge
-                  # Terraform artifact for eg-am-ne01/02 (an HA pair).
+                  # Terraform artifact: one equinix_network_device per router (eg-am-ne01, eg-am-ne02).
                   infrastructure_orchestrator: terraform
-                  # The provider order's contract data, printed into that file: the Equinix billing account
-                  # (a demo value) and the owner, whose notification_emails the provider notifies.
-                  provider_account_number: "1000001"
-                  owner: "P028"
+                  # The provider order's contract data, printed into that file: the account's account_id is the
+                  # Equinix billing account (a demo value), its owner's notification_emails the people the
+                  # provider notifies (02_account.yml).
+                  account: "equinix-network-edge"
                   member_of_groups:
                     - virtual_colocations
                   fabric_templates:

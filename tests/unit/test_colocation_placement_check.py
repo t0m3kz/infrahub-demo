@@ -35,7 +35,8 @@ from checks.colocation_placement import (
 from utils.data_cleaning import clean_data
 
 PHYSICAL = "TemplateDcimPhysicalDevice"
-VIRTUAL = "TemplateDcimVirtualDevice"
+APPLIANCE_TEMPLATE = "TemplateCloudNetworkAppliance"
+OLD_VIRTUAL = "TemplateDcimVirtualDevice"
 
 
 def _edges(nodes: list[dict[str, Any]]) -> dict[str, Any]:
@@ -134,7 +135,7 @@ PA = _metro("m-pa", "PA")
 
 EDGE = _entry("edge", 2, PHYSICAL, "N9K-C9316D-GX_EDGE")
 FIREWALL = _entry("firewall", 2, PHYSICAL, "CP-26000_FIREWALL")
-VEDGE = _entry("edge", 2, VIRTUAL, "C8000V_EDGE")
+VEDGE = _entry("edge", 2, APPLIANCE_TEMPLATE, "C8000V_EDGE")
 
 FR2 = _hosting("z-fr2", "FR2", FR, [EDGE, FIREWALL])
 FR6 = _hosting("z-fr6", "FR6", FR, [])
@@ -171,9 +172,9 @@ def _run(payload: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 class TestTemplateKind:
-    """Rule 1: a zone declares physical templates, a virtual colocation virtual ones."""
+    """Rule 1: a zone declares physical templates, a virtual colocation network appliance ones."""
 
-    def test_zone_with_physical_and_virtual_colocation_with_virtual_pass(self) -> None:
+    def test_zone_with_physical_and_virtual_colocation_with_appliance_pass(self) -> None:
         """The demo shape: no finding."""
         assert _run(_payload()) == []
 
@@ -182,7 +183,7 @@ class TestTemplateKind:
         assert _run(_payload(zones=[FR6], virtual=[_hosting("vc-x", "AM-X", AM, [])])) == []
 
     def test_zone_declaring_a_virtual_template_fails(self) -> None:
-        zone = _hosting("z-fr2", "FR2", FR, [_entry("edge", 2, VIRTUAL, "C8000V_EDGE")])
+        zone = _hosting("z-fr2", "FR2", FR, [_entry("edge", 2, APPLIANCE_TEMPLATE, "C8000V_EDGE")])
 
         findings = _run(_payload(zones=[zone]))
 
@@ -191,7 +192,7 @@ class TestTemplateKind:
         assert findings[0]["object_type"] == "TopologyColocationZone"
         message = findings[0]["message"]
         assert "TopologyColocationZone 'FR2' declares 2 x edge on 'C8000V_EDGE'" in message
-        assert "a TemplateDcimVirtualDevice" in message
+        assert "a TemplateCloudNetworkAppliance" in message
         assert "fabric_templates are TemplateDcimPhysicalDevice only" in message
         assert "our own hardware in our own cage" in message
 
@@ -205,8 +206,18 @@ class TestTemplateKind:
         assert findings[0]["object_type"] == "TopologyVirtualColocation"
         message = findings[0]["message"]
         assert "TopologyVirtualColocation 'AM-NE' declares 2 x edge on 'N9K-C9316D-GX_EDGE'" in message
-        assert "fabric_templates are TemplateDcimVirtualDevice only" in message
+        assert "fabric_templates are TemplateCloudNetworkAppliance only" in message
         assert "provider-hosted instance" in message
+
+    def test_virtual_colocation_declaring_the_old_virtual_device_template_fails(self) -> None:
+        """A provider-hosted function is a CloudNetworkAppliance now: a TemplateDcimVirtualDevice is the old model."""
+        virtual = _hosting("vc-am-ne", "AM-NE", AM, [_entry("edge", 2, OLD_VIRTUAL, "C8000V_EDGE")])
+
+        findings = _run(_payload(virtual=[virtual]))
+
+        assert len(findings) == 1
+        assert "a TemplateDcimVirtualDevice" in findings[0]["message"]
+        assert "fabric_templates are TemplateCloudNetworkAppliance only" in findings[0]["message"]
 
     def test_one_finding_per_wrong_entry(self) -> None:
         """A zone with two wrong entries and one right one reports exactly the two wrong ones."""
@@ -214,7 +225,11 @@ class TestTemplateKind:
             "z-fr2",
             "FR2",
             FR,
-            [EDGE, _entry("firewall", 2, VIRTUAL, "PA-VM"), _entry("load-balancer", 2, VIRTUAL, "F5-VE")],
+            [
+                EDGE,
+                _entry("firewall", 2, APPLIANCE_TEMPLATE, "PA-VM"),
+                _entry("load-balancer", 2, APPLIANCE_TEMPLATE, "F5-VE"),
+            ],
         )
 
         findings = _run(_payload(zones=[zone]))
@@ -244,7 +259,7 @@ class TestTemplateKind:
     def test_rule_function_on_the_cleaned_shape(self) -> None:
         """The rule works on the cleaned dicts, which is also how a caller outside validate() uses it."""
         cleaned = clean_data(
-            _payload(zones=[_hosting("z-fr2", "FR2", FR, [_entry("edge", 2, VIRTUAL, "C8000V_EDGE")])])
+            _payload(zones=[_hosting("z-fr2", "FR2", FR, [_entry("edge", 2, APPLIANCE_TEMPLATE, "C8000V_EDGE")])])
         )
 
         findings = template_kind_findings(cleaned)
@@ -617,72 +632,312 @@ class TestMetroZoneCount:
         assert [type(f) for f in findings] == [Finding]
 
 
-class TestTerraformOrderData:
-    """Rule 9: a virtual colocation routed to terraform has the account and an owner with notification e-mails."""
-
-    OWNER = {
-        "node": {"id": "org-p028", "display_label": "Internal", "notification_emails": {"value": ["noc@example.com"]}}
+def _bgp() -> dict[str, Any]:
+    """The BGP overlay process on an appliance's ``capabilities``: no ``mode``, so it is no HA domain."""
+    return {
+        "id": "bgp-1",
+        "__typename": "ManagedBGP",
+        "name": {"value": "fw-am-ne-bgp"},
+        "capabilities": _edges([{"id": "dev-1", "name": {"value": "fw-am-ne01"}}]),
     }
 
-    def _vc(
-        self, *, orchestrator: str = "terraform", account: str | None = "1000001", owner: Any = None
+
+def _domain(
+    domain_id: str = "ha-1",
+    name: str = "fw-am-ne01-fw-am-ne02-ha",
+    *,
+    mode: str | None = "active-passive",
+    members: list[tuple[str, str]] | None = None,
+) -> dict[str, Any]:
+    """An HA domain capability entry with its members (``id`` and ``name``)."""
+    return {
+        "id": domain_id,
+        "__typename": "ManagedFirewallHA",
+        "name": {"value": name},
+        "mode": {"value": mode},
+        "capabilities": _edges([_node(*member) for member in (members if members is not None else [NE01, NE02])]),
+    }
+
+
+def _appliance(
+    node_id: str,
+    name: str,
+    *,
+    account: str | None = "acct-1",
+    domains: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """A raw device of a virtual colocation, shaped like the ``... on CloudNetworkAppliance`` selection.
+
+    ``capabilities`` holds the BGP overlay process and the HA domains the appliance is a member of.
+    """
+    return {
+        "id": node_id,
+        "__typename": "CloudNetworkAppliance",
+        "name": {"value": name},
+        "account": {"node": {"id": account} if account else None},
+        "capabilities": _edges([_bgp(), *(domains or [])]),
+    }
+
+
+NE01 = ("dev-1", "fw-am-ne01")
+NE02 = ("dev-2", "fw-am-ne02")
+NE03 = ("dev-3", "fw-am-ne03")
+
+
+def _pair(mode: str | None = "active-passive", **domain: Any) -> list[dict[str, Any]]:
+    """The two members of one HA domain, each listing it."""
+    ha = _domain(mode=mode, **domain)
+    return [_appliance(*NE01, domains=[ha]), _appliance(*NE02, domains=[ha])]
+
+
+class TestTerraformOrderData:
+    """Rule 9: a virtual colocation routed to terraform has its account, the owner's e-mails and HA-wired appliances."""
+
+    def _account(
+        self,
+        *,
+        account_id: str | None = "1000001",
+        provider: str | None = "Equinix",
+        emails: list[str] | None = None,
+        owner: bool = True,
     ) -> dict[str, Any]:
+        """The raw ``account`` selection: billing number, provider and the owner with its notification e-mails."""
+        return {
+            "node": {
+                "id": "acct-1",
+                "display_label": "equinix-network-edge",
+                "account_id": {"value": account_id},
+                "provider": {"node": {"id": "org-eq", "name": {"value": provider}} if provider else None},
+                "owner": {
+                    "node": {
+                        "id": "org-p028",
+                        "display_label": "Internal (P028)",
+                        "notification_emails": {"value": ["noc@example.com"] if emails is None else emails},
+                    }
+                    if owner
+                    else None
+                },
+            }
+        }
+
+    def _vc(
+        self,
+        *,
+        orchestrator: str = "terraform",
+        account: dict[str, Any] | None = None,
+        devices: list[dict[str, Any]] | None = None,
+        operator: str | None = "EQUINIX",
+    ) -> dict[str, Any]:
+        """AM-NE as the query returns it: the account, the operator above the metro and the appliances."""
         return {
             **AM_NE,
             "infrastructure_orchestrator": {"value": orchestrator},
-            "provider_account_number": {"value": account},
-            "owner": self.OWNER if owner is None else owner,
+            "account": self._account() if account is None else account,
+            "devices": _edges(_pair() if devices is None else devices),
+            "parent": {
+                "node": {
+                    "id": "m-am",
+                    "name": {"value": "AM"},
+                    "parent": {"node": {"id": "op-eq", "name": {"value": operator}} if operator else None},
+                }
+            },
         }
 
+    def _messages(self, vc: dict[str, Any]) -> list[str]:
+        findings = _run(_payload(virtual=[vc]))
+        for finding in findings:
+            assert finding["object_id"] == "vc-am-ne"
+            assert finding["object_type"] == "TopologyVirtualColocation"
+            assert "TopologyVirtualColocation 'AM-NE' is routed to terraform" in finding["message"]
+        return [finding["message"] for finding in findings]
+
     def test_complete_order_data_passes(self) -> None:
-        assert _run(_payload(virtual=[self._vc()])) == []
+        assert self._messages(self._vc()) == []
 
     def test_a_presence_not_routed_to_terraform_needs_none(self) -> None:
-        vc = self._vc(orchestrator="manual", account=None, owner={"node": None})
+        vc = self._vc(orchestrator="manual", account={"node": None}, devices=[_appliance(*NE01, domains=[_domain()])])
 
-        assert _run(_payload(virtual=[vc])) == []
+        assert self._messages(vc) == []
 
-    def test_missing_account_fails(self) -> None:
-        findings = _run(_payload(virtual=[self._vc(account=None)]))
+    def test_missing_account_fails_once(self) -> None:
+        """Without the account nothing else about it (or about the appliances' account) can be judged."""
+        messages = self._messages(self._vc(account={"node": None}))
 
-        assert len(findings) == 1
-        assert findings[0]["object_id"] == "vc-am-ne"
-        assert findings[0]["object_type"] == "TopologyVirtualColocation"
-        assert "has no provider_account_number" in findings[0]["message"]
+        assert len(messages) == 1
+        assert "the presence has no account" in messages[0]
 
-    def test_blank_account_fails(self) -> None:
-        assert len(_run(_payload(virtual=[self._vc(account="  ")]))) == 1
+    @pytest.mark.parametrize("account_id", [None, "", "  "])
+    def test_blank_account_id_fails(self, account_id: str | None) -> None:
+        messages = self._messages(self._vc(account=self._account(account_id=account_id)))
 
-    def test_missing_owner_fails(self) -> None:
-        findings = _run(_payload(virtual=[self._vc(owner={"node": None})]))
+        assert len(messages) == 1
+        assert "account 'equinix-network-edge' has no account_id" in messages[0]
 
-        assert len(findings) == 1
-        assert "no owner to notify" in findings[0]["message"]
+    def test_provider_that_is_not_the_operator_fails(self) -> None:
+        messages = self._messages(self._vc(account=self._account(provider="Megaport")))
+
+        assert len(messages) == 1
+        assert "is a 'Megaport' account but the metro's operator is 'EQUINIX'" in messages[0]
+
+    def test_provider_matches_the_operator_case_insensitively(self) -> None:
+        assert self._messages(self._vc(account=self._account(provider="eQuInIx"))) == []
+
+    def test_account_without_a_provider_fails(self) -> None:
+        messages = self._messages(self._vc(account=self._account(provider=None)))
+
+        assert len(messages) == 1
+        assert "has no provider" in messages[0]
+
+    def test_unknown_operator_skips_the_provider_comparison(self) -> None:
+        """A metro the query could not walk to an operator is the schema's concern, not a mismatch."""
+        assert self._messages(self._vc(operator=None)) == []
+
+    def test_account_owner_missing_fails(self) -> None:
+        messages = self._messages(self._vc(account=self._account(owner=False)))
+
+        assert len(messages) == 1
+        assert "has no owner to notify" in messages[0]
 
     def test_owner_without_emails_fails(self) -> None:
-        owner = {"node": {"id": "org-p028", "display_label": "Internal", "notification_emails": {"value": []}}}
+        messages = self._messages(self._vc(account=self._account(emails=[])))
 
-        findings = _run(_payload(virtual=[self._vc(owner=owner)]))
-
-        assert len(findings) == 1
-        assert "owner 'Internal' has no notification_emails" in findings[0]["message"]
+        assert len(messages) == 1
+        assert "account owner 'Internal (P028)' has no notification_emails" in messages[0]
 
     def test_entry_that_is_no_email_address_fails(self) -> None:
-        owner = {"node": {"id": "org-p028", "display_label": "Internal", "notification_emails": {"value": ["noc"]}}}
+        messages = self._messages(self._vc(account=self._account(emails=["noc@example.com", "noc"])))
 
-        findings = _run(_payload(virtual=[self._vc(owner=owner)]))
+        assert len(messages) == 1
+        assert "not all e-mail addresses" in messages[0]
 
-        assert len(findings) == 1
-        assert "not all e-mail addresses" in findings[0]["message"]
+    def test_each_account_problem_is_its_own_finding(self) -> None:
+        messages = self._messages(self._vc(account=self._account(account_id=None, provider="Megaport", emails=[])))
 
-    def test_account_and_owner_missing_are_one_finding_naming_both(self) -> None:
-        findings = _run(_payload(virtual=[self._vc(account=None, owner={"node": None})]))
+        assert len(messages) == 3
 
-        assert len(findings) == 1
-        assert "no provider_account_number and no owner to notify" in findings[0]["message"]
+    def test_single_appliance_with_only_a_bgp_capability_passes(self) -> None:
+        assert self._messages(self._vc(devices=[_appliance(*NE01)])) == []
+
+    def test_active_passive_firewall_pair_passes(self) -> None:
+        assert self._messages(self._vc(devices=_pair("active-passive"))) == []
+
+    def test_an_odd_appliance_out_beside_a_pair_passes(self) -> None:
+        devices = [*_pair(), _appliance(*NE03)]
+
+        assert self._messages(self._vc(devices=devices)) == []
+
+    def test_appliance_under_another_account_fails(self) -> None:
+        devices = [_appliance(*NE01, account="acct-other")]
+
+        messages = self._messages(self._vc(devices=devices))
+
+        assert len(messages) == 1
+        assert "appliance 'fw-am-ne01' is not ordered under the presence's account" in messages[0]
+
+    def test_appliance_without_an_account_fails(self) -> None:
+        messages = self._messages(self._vc(devices=[_appliance(*NE01, account=None)]))
+
+        assert len(messages) == 1
+        assert "appliance 'fw-am-ne01' is not ordered under the presence's account" in messages[0]
+
+    def test_appliance_in_two_domains_fails(self) -> None:
+        other = _domain("ha-2", "other-ha")
+        devices = [_appliance(*NE01, domains=[_domain(), other]), _appliance(*NE02, domains=[_domain()])]
+
+        messages = self._messages(self._vc(devices=devices))
+
+        assert any(
+            "appliance 'fw-am-ne01' is a member of 2 HA domains ('fw-am-ne01-fw-am-ne02-ha', 'other-ha')" in m
+            for m in messages
+        )
+
+    @pytest.mark.parametrize("members", [[NE01], [NE01, NE02, NE03]])
+    def test_domain_without_two_members_fails_once(self, members: list[tuple[str, str]]) -> None:
+        ha = _domain(members=members)
+        devices = [_appliance(*NE01, domains=[ha]), _appliance(*NE02, domains=[ha]), _appliance(*NE03, domains=[ha])]
+        devices = [d for d in devices if d["id"] in {m[0] for m in members}]
+
+        messages = self._messages(self._vc(devices=devices))
+
+        assert len(messages) == 1
+        assert (
+            f"appliance 'fw-am-ne01' (HA domain 'fw-am-ne01-fw-am-ne02-ha') has {len(members)} members" in messages[0]
+        )
+        assert "an HA pair has exactly two" in messages[0]
+
+    def test_appliance_that_is_not_a_member_of_its_domain_fails(self) -> None:
+        ha = _domain(members=[NE02, NE03])
+        devices = [_appliance(*NE01, domains=[ha]), _appliance(*NE02, domains=[ha]), _appliance(*NE03, domains=[ha])]
+
+        messages = self._messages(self._vc(devices=devices))
+
+        assert any(
+            "appliance 'fw-am-ne01' lists HA domain 'fw-am-ne01-fw-am-ne02-ha' but is not one of its members" in m
+            for m in messages
+        )
+
+    def test_member_outside_the_presence_fails(self) -> None:
+        """The partner is another presence's appliance (or no appliance): it is not among this VC's devices."""
+        ha = _domain(members=[NE01, ("dev-9", "eg-fr-ne09")])
+
+        messages = self._messages(self._vc(devices=[_appliance(*NE01, domains=[ha])]))
+
+        assert len(messages) == 1
+        assert "has member 'eg-fr-ne09', which is not an appliance of this presence" in messages[0]
+
+    def test_partner_not_listing_the_domain_fails_once(self) -> None:
+        devices = [_appliance(*NE01, domains=[_domain()]), _appliance(*NE02)]
+
+        messages = self._messages(self._vc(devices=devices))
+
+        assert len(messages) == 1
+        assert "appliance 'fw-am-ne01' (HA domain 'fw-am-ne01-fw-am-ne02-ha')" in messages[0]
+        assert "has member 'fw-am-ne02', which does not list the domain on its capabilities" in messages[0]
+
+    def test_partner_listing_another_domain_fails(self) -> None:
+        devices = [_appliance(*NE01, domains=[_domain()]), _appliance(*NE02, domains=[_domain("ha-2", "other-ha")])]
+
+        messages = self._messages(self._vc(devices=devices))
+
+        assert any("which does not list the domain on its capabilities" in m for m in messages)
+
+    @pytest.mark.parametrize("mode", ["active-active", "cloud_managed", None, "bogus"])
+    def test_unsupported_mode_fails_once_per_pair(self, mode: str | None) -> None:
+        messages = self._messages(self._vc(devices=_pair(mode)))
+
+        assert len(messages) == 1
+        assert "appliance 'fw-am-ne01' (HA domain 'fw-am-ne01-fw-am-ne02-ha')" in messages[0]
+        assert f"has mode '{mode}' but only active-passive can be ordered" in messages[0]
+
+    def test_pair_problem_is_reported_on_the_first_member_by_name(self) -> None:
+        """The devices arrive in any order; the finding names the member that sorts first, once."""
+        messages = self._messages(self._vc(devices=list(reversed(_pair("active-active")))))
+
+        assert len(messages) == 1
+        assert "appliance 'fw-am-ne01' (HA domain" in messages[0]
+
+    def test_pair_under_another_account_fails_per_appliance(self) -> None:
+        ha = _domain()
+        devices = [_appliance(*NE01, domains=[ha]), _appliance(*NE02, account="acct-other", domains=[ha])]
+
+        messages = self._messages(self._vc(devices=devices))
+
+        assert messages and all(
+            "appliance 'fw-am-ne02' is not ordered under the presence's account" in m for m in messages
+        )
+        assert len(messages) == 1
+
+    def test_device_that_is_not_an_appliance_is_skipped(self) -> None:
+        """``devices`` returns any DcimDevice peer; only appliances carry the wiring this rule reads."""
+        other = {"id": "dev-7", "__typename": "DcimVirtualDevice", "name": {"value": "old-vm"}}
+
+        assert self._messages(self._vc(devices=[*_pair(), other])) == []
+
+    def test_presence_without_devices_passes(self) -> None:
+        assert self._messages(self._vc(devices=[])) == []
 
     def test_rule_function_on_the_cleaned_shape(self) -> None:
-        findings = terraform_order_data_findings(clean_data(_payload(virtual=[self._vc(account=None)])))
+        findings = terraform_order_data_findings(clean_data(_payload(virtual=[self._vc(account={"node": None})])))
 
         assert [type(f) for f in findings] == [Finding]
 
@@ -706,7 +961,7 @@ class TestRegistry:
 
     def test_findings_from_different_rules_all_surface(self) -> None:
         """One run reports every violated rule: bad template, wrong metro and a name collision together."""
-        zone = _hosting("z-fr2", "FR2", FR, [_entry("edge", 2, VIRTUAL, "C8000V_EDGE")])
+        zone = _hosting("z-fr2", "FR2", FR, [_entry("edge", 2, APPLIANCE_TEMPLATE, "C8000V_EDGE")])
         payload = _payload(
             zones=[zone],
             virtual=[_hosting("vc-fr2", "fr2", AM, [])],

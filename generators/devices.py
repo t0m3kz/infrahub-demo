@@ -17,6 +17,7 @@ from .helpers.pairing import pair_device_names
 from .helpers.pools import CUSTOMER_VLAN_ID_MAX, CUSTOMER_VLAN_ID_MIN
 from .mlag import MLAGWiringMixin
 from .protocols import (
+    CloudNetworkAppliance,
     DcimCable,
     DcimInterface,
     DcimPhysicalDevice,
@@ -184,7 +185,9 @@ class DeviceMixin(MLAGWiringMixin):
             options = DeviceOptions()
         fabric_name = self.fabric_name
         pod_name = self.pod_name or ""
-        virtual: bool = bool(options.get("virtual", False))
+        appliance: bool = bool(options.get("appliance", False))
+        account_id: str | None = options.get("account_id")
+        virtual: bool = appliance or bool(options.get("virtual", False))
         indexes: list[int] | None = options.get("indexes", None)
         allocate_loopback: bool = bool(options.get("allocate_loopback", False))
         rack: str = options.get("rack", "")
@@ -228,7 +231,7 @@ class DeviceMixin(MLAGWiringMixin):
             # device_prefix already includes fabric-pod combination when pod_name is present
             loopback_pool_name = f"{device_prefix}-loopback-pool"
 
-        device_kind = DcimVirtualDevice if virtual else DcimPhysicalDevice
+        device_kind = CloudNetworkAppliance if appliance else DcimVirtualDevice if virtual else DcimPhysicalDevice
 
         owner_id = _object_id(template.get("owner"))
         hosting_device_id = _object_id(hosting_device)
@@ -352,6 +355,7 @@ class DeviceMixin(MLAGWiringMixin):
                         "platform": template.get("platform"),
                         **({"owner": {"id": owner_id}} if owner_id else {}),
                         **({"hosting_device": {"id": hosting_device_id}} if virtual and hosting_device_id else {}),
+                        **({"account": {"id": account_id} if account_id else None} if appliance else {}),
                         "primary_address": primary_address_data,
                         "rack": {"id": rack} if rack else None,
                         "member_of_groups": [{"id": group_id} for group_id in groups],
@@ -486,7 +490,8 @@ class DeviceMixin(MLAGWiringMixin):
         deployment_id: str,
         naming_convention: NamingConvention,
         indexes: list[int],
-        virtual_template_kind: str | None = None,
+        appliance_template_kind: str | None = None,
+        appliance_options: DeviceOptions | None = None,
     ) -> list[tuple[dict[str, Any], list[str]]]:
         """Create HA-paired firewall/load-balancer devices for one fabric_templates role.
 
@@ -500,8 +505,9 @@ class DeviceMixin(MLAGWiringMixin):
         one flat list, so a caller that needs per-entry follow-up (colocation_fabric.py
         registers virtual and physical entries apart) still has the entry at hand.
 
-        virtual_template_kind: when given, an entry whose own
-        template["template_kind"] matches it gets DeviceOptions.virtual=True
+        appliance_template_kind: when given, an entry whose own
+        template["template_kind"] matches it gets DeviceOptions.appliance=True
+        plus ``appliance_options`` (its account)
         (colocation_fabric.py's on-ramp appliances can themselves be provider-hosted,
         unlike dc.py's/pod.py's, which are always physical).
         """
@@ -511,10 +517,11 @@ class DeviceMixin(MLAGWiringMixin):
         for entry in entries:
             entry_options = dict(options)
             if (
-                virtual_template_kind is not None
-                and (entry.get("template") or {}).get("template_kind") == virtual_template_kind
+                appliance_template_kind is not None
+                and (entry.get("template") or {}).get("template_kind") == appliance_template_kind
             ):
-                entry_options["virtual"] = True
+                entry_options.update(appliance_options or {})
+                entry_options["appliance"] = True
             names = await self.create_devices(
                 deployment_id=deployment_id,
                 device_role=role,
@@ -601,7 +608,9 @@ class DeviceMixin(MLAGWiringMixin):
         dc.py (DC-wide firewall/load-balancer) and pod.py (a border-spine pod's
         own firewall/load-balancer) — never pairs across pods/DCs, both members
         must sit in front of the same fabric to mean anything physically.
-        device_kind is DcimVirtualDevice for the shared production/
+        device_kind is CloudNetworkAppliance for a virtual colocation's provider-hosted firewall
+        pair (the provider wires it, so it gets no sync interface and no cable)
+        and DcimVirtualDevice for the shared production/
         non-production virtual instances dc.py provisions per physical HA
         pair — same pairing logic, no physical cabling involved (mirrors the
         skip _ensure_ha_interfaces itself applies for non-physical devices).
@@ -641,7 +650,8 @@ class DeviceMixin(MLAGWiringMixin):
                     self.logger.info(f"Created HA domain {ha_name} for {role_label}s")
                     member_ids = [dev.id for dev in devices]
 
-            await self._ensure_ha_interfaces(ha_obj, ha_name, device_kind=device_kind, member_ids=member_ids)
+            if device_kind is not CloudNetworkAppliance:
+                await self._ensure_ha_interfaces(ha_obj, ha_name, device_kind=device_kind, member_ids=member_ids)
 
     async def _ensure_ha_interfaces(
         self,

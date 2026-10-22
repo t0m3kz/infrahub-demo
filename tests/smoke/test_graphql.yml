@@ -349,6 +349,14 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
+    resource_name: virtual_device_placement
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/virtual_device_placement.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
     resource_name: loadbalancer_validation
     tests:
       - name: syntax_check

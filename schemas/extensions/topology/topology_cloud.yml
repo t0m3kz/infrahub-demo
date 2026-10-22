@@ -1235,6 +1235,80 @@ nodes:
     uniqueness_constraints:
       - [direct_connect, vlan_id__value]
 
+  # --------------------  Network Appliance  --------------------
+  # A network function a provider hosts for us (Equinix Network Edge, Megaport MVE;
+  # later a cloud marketplace NVA): an instance with interfaces, BGP and a config,
+  # but no rack, no chassis and no hypervisor of ours. Every provider models it the
+  # same way: an instance whose routing is a resource of the provider's service.
+  # The function stays a device (DcimDevice: interfaces, capabilities such as
+  # ManagedBGP, owner, platform), only its consumption is cloud-like, so it
+  # inherits the device generics and not CloudResource (both carry name,
+  # description and status, and there is no allow_override). The cloud_id below
+  # is CloudResource's, declared again for that reason. Redundancy is not a
+  # field here: two appliances that form a cluster are the members
+  # (`capabilities`) of one HA domain, like every other HA pair (ha.yml). A
+  # router has no redundancy representation: it is an independent appliance.
+  - name: NetworkAppliance
+    namespace: Cloud
+    description: "Network function hosted by a provider (Equinix Network Edge, Megaport MVE), a device with a cloud-like lifecycle."  # yamllint disable-line rule:line-length
+    label: Network Appliance
+    icon: "mdi:router-network"
+    include_in_menu: false
+    generate_template: true
+    inherit_from:
+      - CoreArtifactTarget
+      - DcimDevice
+      - DcimCapabilities
+    uniqueness_constraints:
+      - ["name__value"]
+    attributes:
+      - name: cloud_id
+        label: Cloud ID
+        kind: Text
+        optional: true
+        description: "The provider's identifier of the instance"
+        order_weight: 2300
+      # How the provider's catalogue names the offer; set on the template.
+      # Accounts, notification lists and licence tokens are never stored here.
+      - name: service_code
+        label: Service Code
+        kind: Text
+        optional: true
+        description: "The provider's code of the function (Equinix Network Edge type_code, e.g. C8000V, PA-VM)"
+        order_weight: 2310
+      - name: package_code
+        label: Package Code
+        kind: Text
+        optional: true
+        description: "The provider's software package (Equinix Network Edge package_code, e.g. network-essentials)"
+        order_weight: 2320
+      - name: software_version
+        label: Software Version
+        kind: Text
+        optional: true
+        description: "Software version as the provider names it (Equinix Network Edge version, e.g. 17.12.01a)"
+        order_weight: 2330
+      - name: cpu_count
+        label: vCPU Count
+        kind: Number
+        optional: true
+        description: "Number of virtual CPUs (Equinix Network Edge core_count)"
+        order_weight: 2340
+      - name: term_length
+        label: Term (months)
+        kind: Number
+        optional: true
+        description: "Contract term in months (Equinix Network Edge term_length: 1, 12, 24, 36)"
+        order_weight: 2350
+    relationships:
+      - name: account
+        peer: CloudAccount
+        label: Account
+        description: "The provider account the instance is ordered under"
+        cardinality: one
+        kind: Attribute
+        optional: true
+        order_weight: 2500
 
 # ==============================================================================
 # Extensions - Cloud resources support for load balancer backend pools

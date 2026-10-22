@@ -4,16 +4,14 @@ A pure renderer with a plain-dict input contract: it reads nothing from Infrahub
 transforms/colocation/virtual_colocation.py builds the dict from the query (normalise_virtual_colocation) and
 calls render_equinix_network_devices(), which validates in Python and prints through the Jinja2 template.
 
-One artifact per virtual colocation: the file describes every device of that presence. Three shapes of device:
+One artifact per virtual colocation: the file describes every device of that presence. Two shapes of device:
 
-* a single device, optionally placed away from another one (`diverse_from` -> `diverse_device_id`);
-* an HA pair (`ha_peer`): one `equinix_network_device` whose `secondary_device` block carries the second node,
-  which may sit in another metro because Equinix allows a geo-redundant pair;
-* a cluster (`cluster`): one resource with a `cluster_details` block, always inside one metro. Only the Palo Alto
-  cluster (PA-VM) is rendered; any other vendor is refused rather than guessed at.
+* a single device: one `equinix_network_device` of its own (a router is always this, no redundancy is expressed);
+* a cluster (`cluster`): one resource with a `cluster_details` block carrying both nodes, always inside one metro.
+  Only the Palo Alto cluster (PA-VM) is rendered; any other vendor is refused rather than guessed at.
 
-The billing account and the notification addresses of the order come from the virtual colocation (`account_number`,
-`notifications`) and are printed in the file. Every licence token is a Terraform variable on purpose: licences,
+The billing account and the notification addresses of the order come from the virtual colocation's account
+(`account_number`: its account_id; `notifications`: the notification_emails of its owner) and are printed in the file. Every licence token is a Terraform variable on purpose: licences,
 tokens, keys and vendor passwords are neither in Infrahub nor in an artifact.
 """
 
@@ -78,8 +76,6 @@ def _group_clusters(vc_name: str, devices: dict[str, dict[str, Any]]) -> dict[st
         cluster = device.get("cluster")
         if not cluster:
             continue
-        if device.get("ha_peer") or device.get("diverse_from"):
-            raise ValueError(f"{vc_name}: {device['name']} is a cluster node and cannot also be ha_peer/diverse_from")
         if device["type_code"] not in _CLUSTER_TYPE_CODES:
             raise ValueError(
                 f"{vc_name}: cluster {cluster['name']!r} uses {device['type_code']!r}; only "
@@ -101,37 +97,21 @@ def _group_clusters(vc_name: str, devices: dict[str, dict[str, Any]]) -> dict[st
 
 def _resource_view(
     vc_name: str,
-    name: str,
-    devices: dict[str, dict[str, Any]],
-    resource_of: dict[str, str],
+    device: dict[str, Any],
+    resource_id: str,
     clusters: dict[str, dict[int, dict[str, Any]]],
 ) -> dict[str, Any]:
-    """What the template prints for the Terraform resource that device `name` opens, every rule already checked."""
-    device = devices[name]
+    """What the template prints for the Terraform resource that `device` opens, every rule already checked."""
     cluster = device.get("cluster")
-    resource_id = resource_of[name]
-    diverse_resource = None
-    if device.get("diverse_from"):
-        target = device["diverse_from"]
-        if target not in devices:
-            raise ValueError(f"{vc_name}: {name} is diverse_from {target!r}, which is not a device of this presence")
-        if device.get("ha_peer") or resource_of[target] == resource_id:
-            raise ValueError(
-                f"{vc_name}: {name} cannot be diverse_from {target!r}: diverse_device_id is only meaningful "
-                "for a single device, and never against itself"
-            )
-        diverse_resource = resource_of[target]
     return {
         "id": resource_id,
-        "name": cluster["name"] if cluster else name,
+        "name": cluster["name"] if cluster else device["name"],
         "metro_code": device["metro_code"],
         "type_code": device["type_code"],
         "package_code": device["package_code"],
         "version": device["version"],
         "core_count": int(device["core_count"]),
         "term_length": int(device["term_length"]),
-        "diverse_resource": diverse_resource,
-        "secondary": devices[device["ha_peer"]] if device.get("ha_peer") else None,
         "cluster": {
             "cluster_name": f"{cluster['name']}-cluster",
             "nodes": [
@@ -151,8 +131,8 @@ def render_equinix_network_devices(vc: dict[str, Any]) -> str:
     """Render the HCL for one virtual colocation.
 
     vc: {"name", "provider", "account_number", "notifications", "devices": [{name, metro_code, type_code, package_code, version, core_count,
-    term_length, ha_peer?, diverse_from?, cluster?: {"name", "node"}}]}. A secondary (`ha_peer` target) is rendered
-    inside its primary's resource and a cluster is one resource named after the cluster, never one per node.
+    term_length, cluster?: {"name", "node"}}]}. A device without `cluster` is one resource of its own; a cluster is
+    one resource named after the cluster, never one per node.
     All validation happens here in Python; templates/configs/equinix/virtual_colocation.tf.j2 only prints the result.
     """
     vc_name = vc.get("name") or "unnamed"
@@ -163,8 +143,8 @@ def render_equinix_network_devices(vc: dict[str, Any]) -> str:
     notifications = [str(email).strip() for email in vc.get("notifications") or [] if str(email).strip()]
     if not account_number or not notifications:
         raise ValueError(
-            f"{vc_name}: the provider order needs an account_number (provider_account_number of the presence) and at "
-            f"least one notification e-mail (notification_emails of its owner); has account_number="
+            f"{vc_name}: the provider order needs an account_number (the account_id of the presence's account) and at "
+            f"least one notification e-mail (notification_emails of that account's owner); has account_number="
             f"{account_number!r}, notifications={notifications}"
         )
 
@@ -175,34 +155,16 @@ def render_equinix_network_devices(vc: dict[str, Any]) -> str:
         _check_device(vc_name, device)
 
     clusters = _group_clusters(vc_name, devices)
-    secondaries: set[str] = set()
-    for device in devices.values():
-        peer = device.get("ha_peer")
-        if peer is None:
-            continue
-        if peer not in devices:
-            raise ValueError(
-                f"{vc_name}: {device['name']} names ha_peer {peer!r}, which is not a device of this presence"
-            )
-        if peer in secondaries or devices[peer].get("cluster"):
-            raise ValueError(f"{vc_name}: {peer} cannot be the secondary of {device['name']}")
-        secondaries.add(peer)
-
-    # device name -> the Terraform resource that contains it, so diverse_from can point at any member
-    resource_of = {name: _label(vc_name, f"{vc_name}_{name}") for name in devices}
-    for device in devices.values():
-        if device.get("ha_peer"):
-            resource_of[device["ha_peer"]] = resource_of[device["name"]]
-        if device.get("cluster"):
-            resource_of[device["name"]] = _label(vc_name, f"{vc_name}_{device['cluster']['name']}")
-
     resources: list[dict[str, Any]] = []
     rendered: set[str] = set()
     for name in sorted(devices):
-        if name in secondaries or resource_of[name] in rendered:
+        device = devices[name]
+        cluster = device.get("cluster")
+        resource_id = _label(vc_name, f"{vc_name}_{cluster['name'] if cluster else name}")
+        if resource_id in rendered:
             continue
-        rendered.add(resource_of[name])
-        resources.append(_resource_view(vc_name, name, devices, resource_of, clusters))
+        rendered.add(resource_id)
+        resources.append(_resource_view(vc_name, device, resource_id, clusters))
 
     license_variables = [
         _token_variable(vc_name, cluster_name, index) for cluster_name in sorted(clusters) for index in (0, 1)

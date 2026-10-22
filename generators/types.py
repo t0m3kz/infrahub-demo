@@ -22,6 +22,11 @@ class DeviceOptions(TypedDict, total=False):
 
     virtual: bool
     """Create virtual devices instead of physical (default: False)."""
+    appliance: bool
+    """Create CloudNetworkAppliances, network functions a provider hosts (Equinix Network Edge), instead of
+    physical devices (default: False). Implies ``virtual``: no rack, no cabling, no hosting device."""
+    account_id: str
+    """With ``appliance``: the CloudAccount the appliances are ordered under."""
     indexes: list[int]
     """Device indexes for hierarchical naming."""
     role_index_start: int

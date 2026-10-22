@@ -17,13 +17,6 @@ spec:
       cpu: 2
       memory: 8
       storage: 60
-      # How Equinix Network Edge orders this instance, should a virtual colocation host it (two of
-      # them become a PA-VM cluster in the virtual colocation Terraform artifact). DEMO VALUES: not
-      # verified against the Equinix API. No demo virtual colocation declares a firewall today.
-      provider_type_code: PA-VM
-      provider_package_code: VM100
-      provider_version: 11.1.3
-      provider_term_length: 12
       interfaces:
         kind: TemplateDcimPhysicalInterface
         parameters:

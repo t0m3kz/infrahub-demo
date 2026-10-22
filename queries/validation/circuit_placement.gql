@@ -60,6 +60,17 @@ query circuit_placement {
                       }
                     }
                   }
+                  ... on CloudNetworkAppliance {
+                    deployment {
+                      node {
+                        id
+                        __typename
+                        name { value }
+                        ... on TopologyColocationZone { parent { node { id __typename name { value } } } }
+                        ... on TopologyVirtualColocation { parent { node { id __typename name { value } } } }
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -117,6 +128,17 @@ query circuit_placement {
                     }
                   }
                   ... on DcimVirtualDevice {
+                    deployment {
+                      node {
+                        id
+                        __typename
+                        name { value }
+                        ... on TopologyColocationZone { parent { node { id __typename name { value } } } }
+                        ... on TopologyVirtualColocation { parent { node { id __typename name { value } } } }
+                      }
+                    }
+                  }
+                  ... on CloudNetworkAppliance {
                     deployment {
                       node {
                         id

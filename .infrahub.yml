@@ -379,6 +379,10 @@ check_definitions:
   - name: validate_hypervisor_environment
     class_name: CheckHypervisorEnvironment
     file_path: checks/hypervisor_environment.py
+  # Targetless: the rule is per virtual device and per network appliance, wherever it is deployed.
+  - name: validate_virtual_device_placement
+    class_name: CheckVirtualDevicePlacement
+    file_path: checks/virtual_device_placement.py
   # Targetless: a DC pool holds its pods' pools, so one query reads every
   # data center and pod with the slices of their pools.
   - name: validate_pool_utilization
@@ -761,6 +765,8 @@ queries:
     file_path: queries/validation/app_dependency.gql
   - name: hypervisor_environment
     file_path: queries/validation/hypervisor_environment.gql
+  - name: virtual_device_placement
+    file_path: queries/validation/virtual_device_placement.gql
   - name: pool_utilization
     file_path: queries/validation/pool_utilization.gql
   - name: loadbalancer_validation

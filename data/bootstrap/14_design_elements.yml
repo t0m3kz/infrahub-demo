@@ -38,11 +38,15 @@ spec:
     # ... and its virtual counterpart, for a virtual colocation
     # (data/demos/10_colocation/equinix/am, AM-NE) — a
     # provider-hosted instance we rent rather than hardware we rack, so the
-    # template is a TemplateDcimVirtualDevice and the generator builds
-    # DcimVirtualDevices from it.
+    # template is a TemplateCloudNetworkAppliance and the generator builds
+    # CloudNetworkAppliances from it.
     - quantity: 2
       role: edge
       template: C8000V_EDGE
+    # ... and the provider-hosted firewall pair a virtual colocation can add next to it (a cluster at the provider).
+    - quantity: 2
+      role: firewall
+      template: PA-VM_FIREWALL
     # Catalyst 9000 office fabric (cisco_xe): the distribution pair is the LISP site's
     # border and control plane, the access pair its fabric edge
     # (TopologyCustomerOffice.fabric_templates, generators/topology/office_fabric.py).

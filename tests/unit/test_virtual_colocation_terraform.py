@@ -3,8 +3,8 @@
 The Jinja2 template (templates/configs/equinix/virtual_colocation.tf.j2) is pinned byte for byte by
 tests/unit/golden/virtual_colocation_london.tf, captured from the pure-Python renderer before it moved to a template.
 
-The fixture is one virtual colocation in London (metro LD): two Arista routers as an HA pair, a Palo Alto firewall
-cluster and an SD-WAN device placed away from the routers. Type, package and version values are the ones the
+The fixture is one virtual colocation in London (metro LD): two independent Arista routers, a Palo Alto firewall
+cluster and an SD-WAN device. Type, package and version values are the ones the
 provider's own examples use; they are fixture data, not a statement about what a design should order.
 """
 
@@ -47,21 +47,21 @@ _SDWAN = {
 
 
 _ORDER = {"account_number": "1000001", "notifications": ["noc@example.com", "network-ops@example.com"]}
-"""The provider order data a virtual colocation carries (provider_account_number, notification_emails)."""
+"""The provider order data a virtual colocation carries (its account's account_id, the notification_emails of the account's owner)."""
 
 
 def _london() -> dict[str, Any]:
-    """One virtual colocation in London: Arista HA pair, PA-VM cluster, SD-WAN away from the routers."""
+    """One virtual colocation in London: two single Arista routers, a PA-VM cluster, a single SD-WAN device."""
     return {
         "name": "LD-NE",
         "provider": "equinix",
         **_ORDER,
         "devices": [
-            {"name": "eg-ld01", **_ARISTA, "ha_peer": "eg-ld02"},
+            {"name": "eg-ld01", **_ARISTA},
             {"name": "eg-ld02", **_ARISTA},
             {"name": "fw-ld01", **_PALO_ALTO, "cluster": {"name": "fw-ld", "node": 0}},
             {"name": "fw-ld02", **_PALO_ALTO, "cluster": {"name": "fw-ld", "node": 1}},
-            {"name": "sdwan-ld01", **_SDWAN, "diverse_from": "eg-ld01"},
+            {"name": "sdwan-ld01", **_SDWAN},
         ],
     }
 
@@ -87,35 +87,27 @@ def test_presence_without_a_cluster_declares_no_licence_variables() -> None:
 
 
 def test_london_presence_renders_one_resource_per_unit_not_per_device() -> None:
-    """Five devices become three resources: the Arista pair, the firewall cluster and the SD-WAN device."""
+    """Five devices become four resources: two routers, the firewall cluster and the SD-WAN device."""
     hcl = render_equinix_network_devices(_london())
 
-    assert hcl.count('resource "equinix_network_device"') == 3
+    assert hcl.count('resource "equinix_network_device"') == 4
     assert 'resource "equinix_network_device" "ld_ne_eg_ld01"' in hcl
+    assert 'resource "equinix_network_device" "ld_ne_eg_ld02"' in hcl
     assert 'resource "equinix_network_device" "ld_ne_fw_ld"' in hcl
     assert 'resource "equinix_network_device" "ld_ne_sdwan_ld01"' in hcl
-    assert 'resource "equinix_network_device" "ld_ne_eg_ld02"' not in hcl
+    assert 'resource "equinix_network_device" "ld_ne_fw_ld01"' not in hcl
 
 
-def test_arista_ha_pair_is_a_secondary_device_block_in_the_london_metro() -> None:
-    """The second router is the primary's secondary_device, in the same metro, not a resource of its own."""
+def test_two_routers_are_independent_resources_without_redundancy_blocks() -> None:
+    """A router is a single device: no secondary_device, no anti-affinity, whatever else the presence holds."""
     hcl = render_equinix_network_devices(_london())
 
     assert 'type_code      = "ARISTA-ROUTER"' in hcl
-    assert "secondary_device {" in hcl
+    assert hcl.count('type_code      = "ARISTA-ROUTER"') == 2
+    assert 'name           = "eg-ld01"' in hcl
     assert 'name           = "eg-ld02"' in hcl
-    assert hcl.count('metro_code     = "LD"') >= 3  # arista primary, secondary, and the other resources
-
-
-def test_secondary_may_sit_in_another_metro_for_geo_redundancy() -> None:
-    """Equinix allows the second node of a pair elsewhere; the secondary block carries its own metro."""
-    vc = _london()
-    _device(vc, "eg-ld02")["metro_code"] = "AM"
-
-    hcl = render_equinix_network_devices(vc)
-
-    secondary = hcl.split("secondary_device {")[1].split("}")[0]
-    assert 'metro_code     = "AM"' in secondary
+    assert "secondary_device" not in hcl
+    assert "diverse_device_id" not in hcl
 
 
 def test_firewall_cluster_is_one_resource_with_both_nodes_and_licence_variables() -> None:
@@ -131,30 +123,12 @@ def test_firewall_cluster_is_one_resource_with_both_nodes_and_licence_variables(
     assert 'variable "ld_ne_fw_ld_node0_license_token" {\n  type      = string\n  sensitive = true\n}' in hcl
 
 
-def test_sdwan_device_points_at_the_router_resource_through_diverse_device_id() -> None:
-    """Anti-affinity from the router pair is expressed as a reference to the pair's resource uuid."""
-    hcl = render_equinix_network_devices(_london())
-
-    assert 'type_code      = "FG-SDWAN"' in hcl
-    assert "diverse_device_id = equinix_network_device.ld_ne_eg_ld01.uuid" in hcl
-
-
-def test_diverse_from_a_cluster_member_points_at_the_cluster_resource() -> None:
-    """Any member of a unit resolves to that unit's resource, so a cluster node is a valid anchor."""
-    vc = _london()
-    _device(vc, "sdwan-ld01")["diverse_from"] = "fw-ld02"
-
-    hcl = render_equinix_network_devices(vc)
-
-    assert "diverse_device_id = equinix_network_device.ld_ne_fw_ld.uuid" in hcl
-
-
-def test_account_and_notifications_come_from_the_presence_and_secrets_are_never_rendered() -> None:
-    """The order data of the presence is printed (also in the secondary block); no licence, key or password is."""
+def test_account_and_notifications_come_from_the_presence_account_and_secrets_are_never_rendered() -> None:
+    """The order data of the presence is printed on every resource; no licence, key or password is."""
     hcl = render_equinix_network_devices(_london())
 
     expected_list = '["noc@example.com", "network-ops@example.com"]'
-    assert hcl.count('account_number = "1000001"') == 4  # arista primary + secondary, firewall cluster, sd-wan
+    assert hcl.count('account_number = "1000001"') == 4  # two routers, firewall cluster, sd-wan
     assert hcl.count(f"notifications  = {expected_list}") == 4
     assert "var.equinix_account_number" not in hcl
     assert "var.notification_emails" not in hcl
@@ -232,24 +206,6 @@ def test_device_missing_a_required_field_is_named_in_the_error() -> None:
         render_equinix_network_devices(vc)
 
 
-def test_ha_peer_outside_the_presence_is_refused() -> None:
-    """A primary naming a secondary that is not in the presence cannot be rendered."""
-    vc = _london()
-    _device(vc, "eg-ld01")["ha_peer"] = "eg-ld99"
-
-    with pytest.raises(ValueError, match="eg-ld99"):
-        render_equinix_network_devices(vc)
-
-
-def test_secondary_claimed_by_two_primaries_is_refused() -> None:
-    """One router cannot be the secondary of two primaries."""
-    vc = _london()
-    vc["devices"].append({"name": "eg-ld03", **_ARISTA, "ha_peer": "eg-ld02"})
-
-    with pytest.raises(ValueError, match="cannot be the secondary"):
-        render_equinix_network_devices(vc)
-
-
 @pytest.mark.parametrize(
     "mutation, message",
     [
@@ -257,12 +213,11 @@ def test_secondary_claimed_by_two_primaries_is_refused() -> None:
         (lambda vc: vc["devices"].remove(_device(vc, "fw-ld02")), "exactly node 0 and node 1"),
         (lambda vc: _device(vc, "fw-ld02").update({"core_count": 8}), "differ in core_count"),
         (lambda vc: _device(vc, "fw-ld02").update({"metro_code": "AM"}), "differ in metro_code"),
-        (lambda vc: _device(vc, "fw-ld01").update({"diverse_from": "eg-ld01"}), "cannot also be"),
     ],
-    ids=["duplicate-node", "missing-node", "different-cores", "different-metro", "cluster-with-diverse"],
+    ids=["duplicate-node", "missing-node", "different-cores", "different-metro"],
 )
 def test_malformed_cluster_is_refused(mutation: Any, message: str) -> None:
-    """A cluster needs two nodes, one metro, one template, and no placement rules of its own."""
+    """A cluster needs two nodes, one metro and one template."""
     vc = _london()
     mutation(vc)
 
@@ -277,20 +232,6 @@ def test_cluster_of_an_unsupported_vendor_is_refused() -> None:
         _device(vc, name)["type_code"] = "FG-VM"
 
     with pytest.raises(ValueError, match="only .*PA-VM"):
-        render_equinix_network_devices(vc)
-
-
-@pytest.mark.parametrize(
-    "device, target",
-    [("eg-ld01", "sdwan-ld01"), ("sdwan-ld01", "sdwan-ld01"), ("sdwan-ld01", "nowhere")],
-    ids=["ha-primary", "itself", "unknown-target"],
-)
-def test_invalid_diverse_from_is_refused(device: str, target: str) -> None:
-    """diverse_device_id is for a single device, never against itself, and the target must exist."""
-    vc = _london()
-    _device(vc, device)["diverse_from"] = target
-
-    with pytest.raises(ValueError):
         render_equinix_network_devices(vc)
 
 

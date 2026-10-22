@@ -301,6 +301,88 @@ class TestRelationshipIdentifiers:
         assert relationship["peer"] == "TopologyColocationZone"
 
 
+class TestCloudNetworkAppliance:
+    """A provider-hosted network function (Equinix Network Edge) is a device with a cloud-like lifecycle."""
+
+    _KIND = "CloudNetworkAppliance"
+
+    def test_it_inherits_the_device_generics_and_not_cloud_resource_nor_the_hosted_instance_ones(self) -> None:
+        """DcimDevice gives interfaces/owner/platform, DcimCapabilities the BGP and HA edges; CloudResource would clash on
+        name/description/status (no allow_override), AppInstance belongs to a machine of ours."""
+        inherited = _kind(self._KIND)["inherit_from"]
+
+        assert {"CoreArtifactTarget", "DcimDevice", "DcimCapabilities"} <= set(inherited)
+        assert "CloudResource" not in inherited
+        assert "AppInstance" not in inherited
+        assert _kind(self._KIND)["generate_template"] is True
+
+    def test_it_declares_cloud_id_itself_and_the_provider_offer(self) -> None:
+        assert {"cloud_id", "service_code", "package_code", "software_version", "cpu_count", "term_length"} <= (
+            _attribute_names(self._KIND)
+        )
+
+    def test_it_has_no_hypervisor_and_no_redundancy_fields_of_its_own(self) -> None:
+        """No hosting_device (nothing of ours runs it); redundancy is an HA domain, not a field or a self-relationship."""
+        assert "hosting_device" not in _relationship_names(self._KIND)
+        assert {"redundancy", "cluster_name"}.isdisjoint(_attribute_names(self._KIND))
+        assert {"secondary_device", "primary_device"}.isdisjoint(_relationship_names(self._KIND))
+
+    def test_its_account_is_an_optional_cloud_account(self) -> None:
+        account = next(r for r in _kind(self._KIND)["relationships"] if r["name"] == "account")
+
+        assert (account["peer"], account["cardinality"], account["optional"]) == ("CloudAccount", "one", True)
+
+    def test_its_deployment_shares_the_identifier_and_peer_of_every_other_device_kind(self) -> None:
+        """TopologyDeviceHosting.devices lists the appliances through the shared identifier. The peer stays the generic
+        TopologyDeployment: narrowing it loads, but queries select `deployment` across the device kinds in one
+        selection and GraphQL refuses sibling fragments whose field types differ. checks/virtual_device_placement.py
+        holds an appliance to a virtual colocation."""
+        extensions = _document(_TOPOLOGY / "topology.yml")["extensions"]["nodes"]
+        deployments = {
+            extension["kind"]: next(r for r in extension["relationships"] if r["name"] == "deployment")
+            for extension in extensions
+            if any(r["name"] == "deployment" for r in extension["relationships"])
+        }
+
+        assert {"DcimPhysicalDevice", "DcimVirtualDevice", self._KIND} <= set(deployments)
+        reference = deployments["DcimVirtualDevice"]
+        assert (deployments[self._KIND]["peer"], deployments[self._KIND]["identifier"]) == (
+            reference["peer"],
+            reference["identifier"],
+        )
+        assert reference["identifier"] == "topology__devices"
+
+    def test_the_virtual_colocation_orders_under_an_account_and_has_no_order_fields_of_its_own(self) -> None:
+        kind = "TopologyVirtualColocation"
+        account = next(r for r in _kind(kind)["relationships"] if r["name"] == "account")
+
+        assert (account["peer"], account["cardinality"], account["optional"]) == ("CloudAccount", "one", True)
+        assert {"provider_account_number"}.isdisjoint(_attribute_names(kind))
+        assert "owner" not in _relationship_names(kind)
+
+    def test_the_virtual_device_lost_the_provider_ordering_fields(self) -> None:
+        assert [name for name in _attribute_names("DcimVirtualDevice") if name.startswith("provider_")] == []
+
+    def test_routers_have_no_ha_domain_kind_and_firewall_pairs_use_the_existing_one(self) -> None:
+        """A provider-hosted router is an independent appliance; a firewall pair is a plain ManagedFirewallHA, whose
+        members attach through `capabilities` and whose `mode` active-passive is the Equinix cluster."""
+        ha_kinds = {kind for kind in _all_entries() if kind.endswith("HA")}
+
+        assert "ManagedRouterHA" not in ha_kinds
+        assert {"ManagedHA", "ManagedGenericDevice"} <= set(_kind("ManagedFirewallHA")["inherit_from"])
+        mode = next(a for a in _kind("ManagedHA")["attributes"] if a["name"] == "mode")
+        assert "active-passive" in {choice["name"] for choice in mode["choices"]}
+        assert mode["default_value"] == "active-passive"
+
+    def test_the_cloud_native_firewall_ha_is_left_alone(self) -> None:
+        """A vendor VM cluster is not a cloud-native firewall service: ManagedCloudFirewallHA keeps its members-less shape."""
+        ha = _kind("ManagedCloudFirewallHA")
+
+        assert "ManagedGenericDevice" not in ha["inherit_from"]
+        provider = next(a for a in ha["attributes"] if a["name"] == "provider")
+        assert {choice["name"] for choice in provider["choices"]} == {"aws_nfw", "azure_firewall", "gcp_ngfw", "other"}
+
+
 def test_every_schema_kind_fits_the_infrahub_profile_name_limit() -> None:
     """Infrahub derives a ProfileSchema from every node and generic and caps its name at 32 characters.
 

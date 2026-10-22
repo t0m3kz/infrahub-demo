@@ -21,11 +21,15 @@ ColocationFabricGenerator holds the one implementation; the two subclasses
 differ only in class attributes (the GraphQL root, the protocol class the pool
 references are attached to, the template kind they may host, a label for logs).
 A zone hosts physical templates (TemplateDcimPhysicalDevice), a virtual
-colocation virtual ones (TemplateDcimVirtualDevice); an entry of the other kind
+colocation provider-hosted ones (TemplateCloudNetworkAppliance); an entry of the other kind
 is skipped with a warning. That one rule is all that separates them: a virtual
 colocation's devices are withheld from cabling and edge pairing by
 _register_fabric_devices, so _cable_services and _ensure_edge_pair no-op for it by
 construction and there is no separate "cabled" switch.
+
+A virtual colocation's devices are CloudNetworkAppliances ordered under the presence's ``account``. An edge router is
+an independent appliance; two firewalls form the usual ManagedFirewallHA (the Equinix cluster), which the provider
+wires, so it gets no sync interface and no cable.
 
 Scope note: every cable a run lays is internal to the zone, between two PHYSICAL
 devices this generator itself just created: the HA sync link between a
@@ -110,12 +114,12 @@ _COLO_VALID_FABRIC_ROLES = frozenset({"edge", "firewall", "load-balancer"})
 _COLO_SERVICE_ROLES = frozenset({"firewall", "load-balancer"})
 
 # What kind of template each class may instantiate. The template itself says
-# whether it is physical or virtual (the queries select it as `template_kind`);
-# the class says whether the node can hold that. A zone holds our own hardware
-# in our own cage racks; a virtual colocation holds provider-hosted instances
-# and has no racks of ours at all.
+# whether it is physical or a provider-hosted appliance (the queries select it as
+# `template_kind`); the class says whether the node can hold that. A zone holds our
+# own hardware in our own cage racks; a virtual colocation holds provider-hosted
+# appliances (CloudNetworkAppliance) and has no racks of ours at all.
 _COLO_TEMPLATE_KIND_PHYSICAL = "TemplateDcimPhysicalDevice"
-_COLO_TEMPLATE_KIND_VIRTUAL = "TemplateDcimVirtualDevice"
+_COLO_TEMPLATE_KIND_APPLIANCE = "TemplateCloudNetworkAppliance"
 
 # The prefix lengths a zone or virtual colocation WITHOUT a design slices from the
 # bootstrap pools (Loopback-IPv4 etc.): fixed, because there is no envelope to
@@ -265,6 +269,7 @@ class ColocationFabricData(TypedDict, total=False):
     name: str
     parent: dict[str, Any]
     design: dict[str, Any] | None
+    account: dict[str, Any] | None
     fabric_templates: list[dict[str, Any]]
 
 
@@ -595,6 +600,19 @@ class ColocationFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMix
         await self.attach_refs(kind=self._node_kind, node_id=self.data["id"], refs=refs)
         self.logger.info(f"Colocation {self._label} {name}: attached loopback/management/technical pool references")
 
+    def _appliance_options(self) -> DeviceOptions:
+        """create_devices() options of a provider-hosted appliance: the account it is ordered under.
+
+        An edge router is an independent appliance (no HA domain). A firewall pair keeps its usual ManagedFirewallHA,
+        whose default mode (active-passive) is the Equinix cluster; the provider wires it, so it gets no sync
+        interface and no cable (DeviceMixin._ensure_ha_pairs).
+        """
+        options = DeviceOptions(appliance=True)
+        account_id = (self.data.get("account") or {}).get("id")
+        if account_id:
+            options["account_id"] = account_id
+        return options
+
     async def _create_fabric_devices(self, *, templates: list[dict[str, Any]]) -> dict[str, list[str]]:
         """Instantiate every fabric_templates entry as this node's devices.
 
@@ -634,7 +652,7 @@ class ColocationFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMix
         physical_names_by_role: dict[str, list[str]] = {}
 
         for entry in (e for e in templates if e["role"] == "edge"):
-            virtual = entry["template"].get("template_kind") == _COLO_TEMPLATE_KIND_VIRTUAL
+            virtual = entry["template"].get("template_kind") == _COLO_TEMPLATE_KIND_APPLIANCE
             # Always allocated, virtual or physical: an edge router runs the
             # routing that peers with the DCs it fronts either way — an MCR
             # still has a loopback and still peers over it.
@@ -642,12 +660,13 @@ class ColocationFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMix
                 indexes=[], allocate_loopback=True, loopback_prefix_length=loopback_prefix_length("ipv4")
             )
             if virtual:
-                # Provider-hosted virtual kit, so a DcimVirtualDevice. No
+                # Provider-hosted kit, so a CloudNetworkAppliance. No
                 # hosting_device: the colocation operator's own platform runs
                 # it (Network Edge, MCR), and that platform is not a device we
                 # model — contrast dc.py's virtual firewall/load-balancer
-                # instances, which sit on physical hardware we do own.
-                options["virtual"] = True
+                # instances (DcimVirtualDevice), which sit on physical hardware
+                # we do own.
+                options.update(self._appliance_options())
             names = await self.create_devices(
                 deployment_id=self.data["id"],
                 device_role="edge",
@@ -670,10 +689,11 @@ class ColocationFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMix
                 deployment_id=self.data["id"],
                 naming_convention=naming_convention,
                 indexes=[],
-                virtual_template_kind=_COLO_TEMPLATE_KIND_VIRTUAL,
+                appliance_template_kind=_COLO_TEMPLATE_KIND_APPLIANCE,
+                appliance_options=self._appliance_options(),
             )
             for entry, names in results:
-                virtual = entry["template"].get("template_kind") == _COLO_TEMPLATE_KIND_VIRTUAL
+                virtual = entry["template"].get("template_kind") == _COLO_TEMPLATE_KIND_APPLIANCE
                 self._register_fabric_devices(physical_names_by_role, role=role, virtual=virtual, names=names)
 
         return physical_names_by_role
@@ -1017,5 +1037,5 @@ class VirtualColocationGenerator(ColocationFabricGenerator):
 
     graphql_root_key = "TopologyVirtualColocation"
     _node_kind = TopologyVirtualColocation
-    _template_kind = _COLO_TEMPLATE_KIND_VIRTUAL
+    _template_kind = _COLO_TEMPLATE_KIND_APPLIANCE
     _label = "virtual colocation"

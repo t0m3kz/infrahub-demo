@@ -7,8 +7,9 @@
 # clean_data() strips "__" out of any key it finds, so a bare __typename would
 # arrive as "typename". The generator reads template_kind to tell a physical
 # template from a virtual one and to refuse the kind this node cannot host.
-# Virtual templates only (a physical one is skipped by the generator, so it is not selected beyond its kind).
-# A provider-hosted device is never cabled, so its template's interfaces are not read.
+# Provider-hosted appliance templates only (a physical one is skipped by the generator, so it is not selected beyond
+# its kind). A provider-hosted device is never cabled, so its template's interfaces are not read. The account is the
+# one the appliances are ordered under: the generator sets it on each appliance it creates.
 query topology_virtual_colocation($name: String!) {
   TopologyVirtualColocation(name__value: $name) {
     edges {
@@ -16,6 +17,11 @@ query topology_virtual_colocation($name: String!) {
         id
         name {
           value
+        }
+        account {
+          node {
+            id
+          }
         }
         design {
           node {
@@ -89,7 +95,7 @@ query topology_virtual_colocation($name: String!) {
                 node {
                   id
                   template_kind: __typename
-                  ... on TemplateDcimVirtualDevice {
+                  ... on TemplateCloudNetworkAppliance {
                     template_name {
                       value
                     }

@@ -16,10 +16,16 @@ resource "equinix_network_device" "am_ne_eg_am_ne01" {
   term_length    = 12
   account_number = "1000001"
   notifications  = ["noc@example.com", "network-ops@example.com"]
-  secondary_device {
-    name           = "eg-am-ne02"
-    metro_code     = "AM"
-    account_number = "1000001"
-    notifications  = ["noc@example.com", "network-ops@example.com"]
-  }
+}
+
+resource "equinix_network_device" "am_ne_eg_am_ne02" {
+  name           = "eg-am-ne02"
+  metro_code     = "AM"
+  type_code      = "C8000V"
+  package_code   = "network-essentials"
+  version        = "17.12.01a"
+  core_count     = 2
+  term_length    = 12
+  account_number = "1000001"
+  notifications  = ["noc@example.com", "network-ops@example.com"]
 }

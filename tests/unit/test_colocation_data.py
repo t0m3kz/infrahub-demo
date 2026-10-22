@@ -29,7 +29,7 @@ from typing import Any
 import pytest
 import yaml
 
-from tests.integration.demo_data import ROOT, Declared, declared_in, name, object_templates
+from tests.integration.demo_data import ROOT, Declared, attribute_names, declared_in, name, object_templates
 from tests.unit.simulators.fabric_designs import (
     COLO_METRO_DESIGN_NAMES,
     COLO_ZONE_DESIGN_NAMES,
@@ -47,7 +47,7 @@ _VIRTUAL = "TopologyVirtualColocation"
 _FOOTPRINT = "TopologyCustomerColocation"
 _NAMESPACED = (_METRO, _ZONE, _VIRTUAL)
 _GROUP = {_METRO: "colocation_metros", _ZONE: "colocation_zones", _VIRTUAL: "virtual_colocations"}
-_TEMPLATE_KIND = {_ZONE: "TemplateDcimPhysicalDevice", _VIRTUAL: "TemplateDcimVirtualDevice"}
+_TEMPLATE_KIND = {_ZONE: "TemplateDcimPhysicalDevice", _VIRTUAL: "TemplateCloudNetworkAppliance"}
 
 
 @cache
@@ -57,7 +57,7 @@ def _objects(demo: str, *kinds: str) -> tuple[Declared, ...]:
 
 @cache
 def _template_kinds() -> dict[str, str]:
-    """Top-level object template name -> its kind, from data/bootstrap/09_virtual_* and 10_physical_*."""
+    """Top-level object template name -> its kind, from data/bootstrap/09_*_templates_* and 10_physical_*."""
     kinds: dict[str, str] = {}
     for path in sorted(_BOOTSTRAP.glob("*_templates_*.y*ml")):
         for document in yaml.safe_load_all(path.read_text()):
@@ -192,7 +192,7 @@ class TestColocationDataset:
 
     @pytest.mark.parametrize("kind", sorted(_TEMPLATE_KIND))
     def test_fabric_templates_are_of_the_kind_the_node_can_host(self, demo: str, kind: str) -> None:
-        """A zone hosts TemplateDcimPhysicalDevice, a virtual colocation TemplateDcimVirtualDevice."""
+        """A zone hosts TemplateDcimPhysicalDevice, a virtual colocation TemplateCloudNetworkAppliance."""
         known = _template_kinds()
         offenders = []
         for obj in _objects(demo, kind):
@@ -372,32 +372,57 @@ class TestVirtualColocationTerraform:
         assert used <= choices
 
     def test_the_template_it_uses_carries_the_provider_order_fields(self) -> None:
-        """The Terraform artifact reads type code, package, version and term off the virtual device template."""
+        """The Terraform artifact reads type code, package, version, term and cores off the appliance (from its template)."""
         am_ne = next(obj for obj in _objects("10_colocation", _VIRTUAL) if name(obj) == "AM-NE")
         template_names = {row[2] for row in am_ne.item["fabric_templates"]}
         assert template_names == {"C8000V_EDGE"}
 
         for template_name in template_names:
             template = object_templates()[template_name]
-            for field in ("provider_type_code", "provider_package_code", "provider_version", "provider_term_length"):
+            for field in ("service_code", "package_code", "software_version", "term_length", "cpu_count"):
                 assert template.get(field) not in (None, ""), f"{template_name}: {field} is not set"
-            assert isinstance(template["provider_term_length"], int)
-            assert template["provider_term_length"] in (1, 12, 24, 36)
+            assert isinstance(template["term_length"], int)
+            assert template["term_length"] in (1, 12, 24, 36)
 
-    def test_the_provider_fields_are_declared_on_the_virtual_device_schema(self) -> None:
-        """Template values only load if DcimVirtualDevice (and so its templates) has the attributes."""
-        schema = yaml.safe_load((ROOT / "schemas" / "base" / "dcim.yml").read_text())
-        node = next(n for n in schema["nodes"] if n["name"] == "VirtualDevice")
-        attributes = {attribute["name"]: attribute["kind"] for attribute in node["attributes"]}
-        assert attributes["provider_type_code"] == "Text"
-        assert attributes["provider_package_code"] == "Text"
-        assert attributes["provider_version"] == "Text"
-        assert attributes["provider_term_length"] == "Number"
+    def test_the_provider_fields_are_declared_on_the_appliance_schema_and_gone_from_the_virtual_device(self) -> None:
+        """Template values only load if CloudNetworkAppliance (and so its templates) has the attributes; DcimVirtualDevice
+        no longer carries any provider ordering field."""
+        assert {"service_code", "package_code", "software_version", "term_length", "cpu_count", "cloud_id"} <= (
+            attribute_names("CloudNetworkAppliance")
+        )
+        assert not [name_ for name_ in attribute_names("DcimVirtualDevice") if name_.startswith("provider_")]
+
+    def test_the_presence_is_ordered_under_an_equinix_account_of_the_internal_owner(self) -> None:
+        """AM-NE names its CloudAccount; the account is Equinix's, owned by Internal (P028), which carries the e-mails."""
+        am_ne = next(obj for obj in _objects("10_colocation", _VIRTUAL) if name(obj) == "AM-NE")
+        assert "provider_account_number" not in am_ne.item and "owner" not in am_ne.item
+        accounts = {name(obj): obj for obj in _objects("10_colocation", "CloudAccount")}
+        account = accounts[str(am_ne.item["account"])].item
+
+        assert account["provider"] == "P016"  # Equinix
+        assert account["owner"] == "P028"  # Internal
+        assert str(account["account_id"]).strip()
+        providers = {
+            str(entry["org_id"]): entry
+            for document in yaml.safe_load_all((_BOOTSTRAP / "02_providers.yml").read_text())
+            if isinstance(document, dict) and document["spec"]["kind"] == "OrganizationProvider"
+            for entry in document["spec"]["data"]
+        }
+        assert providers["P016"]["name"] == "Equinix"
+        assert providers["P028"]["notification_emails"]
+
+    def test_the_account_is_declared_before_the_presence_that_names_it(self) -> None:
+        """Object files load in name order: 02_account.yml sorts before 02_topology.yml."""
+        am = _DEMOS / "10_colocation" / "equinix" / "am"
+        assert sorted(path.name for path in am.glob("0[0-9]_*.yml")).index("02_account.yml") < sorted(
+            path.name for path in am.glob("0[0-9]_*.yml")
+        ).index("02_topology.yml")
 
 
 def test_template_kind_lookup_knows_both_template_families() -> None:
     """The lookup used above resolves a physical and a virtual template, so a typo cannot hide as 'unknown'."""
     known: dict[str, Any] = _template_kinds()
     assert known["N9K-C9316D-GX_EDGE"] == "TemplateDcimPhysicalDevice"
-    assert known["C8000V_EDGE"] == "TemplateDcimVirtualDevice"
+    assert known["C8000V_EDGE"] == "TemplateCloudNetworkAppliance"
+    assert known["PA-VM_EDGE_CUSTOMER_S"] == "TemplateDcimVirtualDevice"
     assert Path(_BOOTSTRAP).is_dir()

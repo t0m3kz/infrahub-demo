@@ -10,18 +10,32 @@
           "infrastructure_orchestrator": {
             "value": "terraform"
           },
-          "provider_account_number": {
-            "value": "1000001"
-          },
-          "owner": {
+          "account": {
             "node": {
-              "id": "o-1",
-              "display_label": "Internal",
-              "notification_emails": {
-                "value": [
-                  "noc@example.com",
-                  "network-ops@example.com"
-                ]
+              "id": "acc-1",
+              "display_label": "AM-NE account",
+              "account_id": {
+                "value": "1000001"
+              },
+              "provider": {
+                "node": {
+                  "id": "p-1",
+                  "name": {
+                    "value": "EQUINIX"
+                  }
+                }
+              },
+              "owner": {
+                "node": {
+                  "id": "o-1",
+                  "display_label": "Internal",
+                  "notification_emails": {
+                    "value": [
+                      "noc@example.com",
+                      "network-ops@example.com"
+                    ]
+                  }
+                }
               }
             }
           },
@@ -50,29 +64,6 @@
                   },
                   "quantity": {
                     "value": 2
-                  },
-                  "template": {
-                    "node": {
-                      "id": "t-C8000V_EDGE",
-                      "template_name": {
-                        "value": "C8000V_EDGE"
-                      },
-                      "cpu": {
-                        "value": 2
-                      },
-                      "provider_type_code": {
-                        "value": "C8000V"
-                      },
-                      "provider_package_code": {
-                        "value": "network-essentials"
-                      },
-                      "provider_version": {
-                        "value": "17.12.01a"
-                      },
-                      "provider_term_length": {
-                        "value": 12
-                      }
-                    }
                   }
                 }
               },
@@ -83,29 +74,6 @@
                   },
                   "quantity": {
                     "value": 2
-                  },
-                  "template": {
-                    "node": {
-                      "id": "t-PA-VM_EDGE_CUSTOMER_S",
-                      "template_name": {
-                        "value": "PA-VM_EDGE_CUSTOMER_S"
-                      },
-                      "cpu": {
-                        "value": 2
-                      },
-                      "provider_type_code": {
-                        "value": "PA-VM"
-                      },
-                      "provider_package_code": {
-                        "value": "VM100"
-                      },
-                      "provider_version": {
-                        "value": "11.1.3"
-                      },
-                      "provider_term_length": {
-                        "value": 12
-                      }
-                    }
                   }
                 }
               }
@@ -116,44 +84,224 @@
               {
                 "node": {
                   "id": "d-eg-am-ne01",
+                  "__typename": "CloudNetworkAppliance",
                   "name": {
                     "value": "eg-am-ne01"
                   },
                   "role": {
                     "value": "edge"
+                  },
+                  "service_code": {
+                    "value": "C8000V"
+                  },
+                  "package_code": {
+                    "value": "network-essentials"
+                  },
+                  "software_version": {
+                    "value": "17.12.01a"
+                  },
+                  "cpu_count": {
+                    "value": 2
+                  },
+                  "term_length": {
+                    "value": 12
+                  },
+                  "capabilities": {
+                    "edges": [
+                      {
+                        "node": {
+                          "id": "bgp-am-ne",
+                          "__typename": "ManagedBGP",
+                          "name": {
+                            "value": "AM-NE-overlay"
+                          }
+                        }
+                      }
+                    ]
                   }
                 }
               },
               {
                 "node": {
                   "id": "d-eg-am-ne02",
+                  "__typename": "CloudNetworkAppliance",
                   "name": {
                     "value": "eg-am-ne02"
                   },
                   "role": {
                     "value": "edge"
+                  },
+                  "service_code": {
+                    "value": "C8000V"
+                  },
+                  "package_code": {
+                    "value": "network-essentials"
+                  },
+                  "software_version": {
+                    "value": "17.12.01a"
+                  },
+                  "cpu_count": {
+                    "value": 2
+                  },
+                  "term_length": {
+                    "value": 12
+                  },
+                  "capabilities": {
+                    "edges": [
+                      {
+                        "node": {
+                          "id": "bgp-am-ne",
+                          "__typename": "ManagedBGP",
+                          "name": {
+                            "value": "AM-NE-overlay"
+                          }
+                        }
+                      }
+                    ]
                   }
                 }
               },
               {
                 "node": {
                   "id": "d-fw-am-ne01",
+                  "__typename": "CloudNetworkAppliance",
                   "name": {
                     "value": "fw-am-ne01"
                   },
                   "role": {
                     "value": "firewall"
+                  },
+                  "service_code": {
+                    "value": "PA-VM"
+                  },
+                  "package_code": {
+                    "value": "VM100"
+                  },
+                  "software_version": {
+                    "value": "11.1.3"
+                  },
+                  "cpu_count": {
+                    "value": 2
+                  },
+                  "term_length": {
+                    "value": 12
+                  },
+                  "capabilities": {
+                    "edges": [
+                      {
+                        "node": {
+                          "id": "bgp-am-ne",
+                          "__typename": "ManagedBGP",
+                          "name": {
+                            "value": "AM-NE-overlay"
+                          }
+                        }
+                      },
+                      {
+                        "node": {
+                          "id": "ha-fw-am-ne01-fw-am-ne02-ha",
+                          "__typename": "ManagedFirewallHA",
+                          "name": {
+                            "value": "fw-am-ne01-fw-am-ne02-ha"
+                          },
+                          "mode": {
+                            "value": "active-passive"
+                          },
+                          "capabilities": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "id": "d-fw-am-ne01",
+                                  "name": {
+                                    "value": "fw-am-ne01"
+                                  }
+                                }
+                              },
+                              {
+                                "node": {
+                                  "id": "d-fw-am-ne02",
+                                  "name": {
+                                    "value": "fw-am-ne02"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
                   }
                 }
               },
               {
                 "node": {
                   "id": "d-fw-am-ne02",
+                  "__typename": "CloudNetworkAppliance",
                   "name": {
                     "value": "fw-am-ne02"
                   },
                   "role": {
                     "value": "firewall"
+                  },
+                  "service_code": {
+                    "value": "PA-VM"
+                  },
+                  "package_code": {
+                    "value": "VM100"
+                  },
+                  "software_version": {
+                    "value": "11.1.3"
+                  },
+                  "cpu_count": {
+                    "value": 2
+                  },
+                  "term_length": {
+                    "value": 12
+                  },
+                  "capabilities": {
+                    "edges": [
+                      {
+                        "node": {
+                          "id": "bgp-am-ne",
+                          "__typename": "ManagedBGP",
+                          "name": {
+                            "value": "AM-NE-overlay"
+                          }
+                        }
+                      },
+                      {
+                        "node": {
+                          "id": "ha-fw-am-ne01-fw-am-ne02-ha",
+                          "__typename": "ManagedFirewallHA",
+                          "name": {
+                            "value": "fw-am-ne01-fw-am-ne02-ha"
+                          },
+                          "mode": {
+                            "value": "active-passive"
+                          },
+                          "capabilities": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "id": "d-fw-am-ne01",
+                                  "name": {
+                                    "value": "fw-am-ne01"
+                                  }
+                                }
+                              },
+                              {
+                                "node": {
+                                  "id": "d-fw-am-ne02",
+                                  "name": {
+                                    "value": "fw-am-ne02"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
                   }
                 }
               }

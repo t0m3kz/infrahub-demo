@@ -82,7 +82,7 @@ _EDGE_TEMPLATE_WITH_ALL_SERVICE_PORTS = {
 
 _VIRTUAL_EDGE_TEMPLATE = {
     "id": "tpl-vedge",
-    "template_kind": "TemplateDcimVirtualDevice",
+    "template_kind": "TemplateCloudNetworkAppliance",
     "template_name": "C8000V_EDGE",
 }
 
@@ -170,7 +170,7 @@ class TestSubclassContract:
                 VirtualColocationGenerator,
                 "TopologyVirtualColocation",
                 TopologyVirtualColocation,
-                "TemplateDcimVirtualDevice",
+                "TemplateCloudNetworkAppliance",
                 "virtual colocation",
             ),
         ],
@@ -253,7 +253,7 @@ class TestTemplateKindGating:
         assert gen._valid_fabric_templates() == []
         gen.logger.warning.assert_called_once()
         message = gen.logger.warning.call_args.args[0]
-        assert "TemplateDcimVirtualDevice" in message
+        assert "TemplateCloudNetworkAppliance" in message
         assert "TemplateDcimPhysicalDevice" in message
         assert "zone" in message
         gen.logger.error.assert_not_called()
@@ -709,8 +709,9 @@ class TestFabricDevices:
         assert kwargs["options"]["indexes"] == []
         assert kwargs["options"]["allocate_loopback"] is True
         assert kwargs["options"]["loopback_prefix_length"] == 32
-        # A physical template must not be flipped to DcimVirtualDevice.
+        # A physical template must not be flipped to a virtual device or an appliance.
         assert "virtual" not in kwargs["options"]
+        assert "appliance" not in kwargs["options"]
         # An edge router peers, it does not fail over.
         assert "ha_kind" not in kwargs["options"]
 
@@ -724,15 +725,15 @@ class TestFabricDevices:
         assert gen._edge_devices == {"eg-fr201": "cisco_nxos", "eg-fr202": "cisco_nxos"}
 
     @pytest.mark.asyncio
-    async def test_virtual_template_creates_virtual_devices(self) -> None:
-        """A provider-hosted router (Network Edge, MCR) is a DcimVirtualDevice, selected via options["virtual"]."""
+    async def test_appliance_template_creates_appliances(self) -> None:
+        """A provider-hosted router (Network Edge, MCR) is a CloudNetworkAppliance, selected via options["appliance"]."""
         gen = _made_virtual()
         gen.create_devices = AsyncMock(return_value=["eg-am-ne01", "eg-am-ne02"])
 
         await gen._create_fabric_devices(templates=gen.data["fabric_templates"])
 
         kwargs = gen.create_devices.await_args_list[-1].kwargs
-        assert kwargs["options"]["virtual"] is True
+        assert kwargs["options"]["appliance"] is True
         # Deployed to the virtual colocation, with loopback addressing unchanged: an MCR still peers over one.
         assert kwargs["deployment_id"] == "vc-1"
         assert kwargs["options"]["allocate_loopback"] is True
@@ -821,7 +822,7 @@ class TestFabricDevices:
         assert physical_names_by_role == {"firewall": ["fw-fr201", "fw-fr202", "fw-fr203", "fw-fr204"]}
 
     @pytest.mark.asyncio
-    async def test_virtual_devices_are_created_but_never_registered_for_cabling(self) -> None:
+    async def test_appliances_are_created_but_never_registered_for_cabling(self) -> None:
         """A DcimCable is fibre between two chassis: provider-hosted instances are created, then withheld.
 
         Not hypothetical: PA-VM_EDGE_CUSTOMER_* exposes `uplink` on eth[1-6], the role _cable_border_services claims
@@ -837,13 +838,13 @@ class TestFabricDevices:
 
         # Created: withholding them from cabling must not mean skipping them.
         assert [c.kwargs["device_role"] for c in gen.create_devices.await_args_list] == ["edge", "firewall"]
-        assert all(c.kwargs["options"]["virtual"] for c in gen.create_devices.await_args_list)
+        assert all(c.kwargs["options"]["appliance"] for c in gen.create_devices.await_args_list)
         assert physical_names_by_role == {}
         # Still registered for EVPN: a virtual edge runs the routing like a physical one.
         assert set(gen._edge_devices) == {"eg-am-ne01", "eg-am-ne02"}
 
     @pytest.mark.asyncio
-    async def test_virtual_firewall_pair_in_a_virtual_colocation_gets_the_virtual_option(self) -> None:
+    async def test_firewall_pair_in_a_virtual_colocation_gets_the_appliance_option(self) -> None:
         templates = [{"role": "firewall", "quantity": 2, "template": _VIRTUAL_EDGE_TEMPLATE}]
         gen = _made_virtual(fabric_templates=templates)
         gen.create_devices = AsyncMock(return_value=["fw-am-ne01", "fw-am-ne02"])
@@ -851,8 +852,71 @@ class TestFabricDevices:
         await gen._create_fabric_devices(templates=templates)
 
         options = gen.create_devices.await_args_list[-1].kwargs["options"]
-        assert options["virtual"] is True
+        assert options["appliance"] is True
         assert options["ha_kind"] == "ManagedFirewallHA"
+
+    @pytest.mark.asyncio
+    async def test_edge_routers_of_a_virtual_colocation_are_independent_appliances_ordered_under_the_account(
+        self,
+    ) -> None:
+        """No redundancy representation for routers: no HA kind, no HA data; each router is its own appliance."""
+        gen = _made_virtual(account={"id": "acct-1"})
+        gen.create_devices = AsyncMock(return_value=["eg-am-ne01", "eg-am-ne02"])
+
+        await gen._create_fabric_devices(templates=gen.data["fabric_templates"])
+
+        options = gen.create_devices.await_args_list[-1].kwargs["options"]
+        assert options["appliance"] is True
+        assert options["account_id"] == "acct-1"
+        assert "ha_kind" not in options
+
+    @pytest.mark.asyncio
+    async def test_firewall_pair_of_a_virtual_colocation_is_a_firewall_ha_cluster(self) -> None:
+        templates = [{"role": "firewall", "quantity": 2, "template": _VIRTUAL_EDGE_TEMPLATE}]
+        gen = _made_virtual(fabric_templates=templates, account={"id": "acct-1"})
+        gen.create_devices = AsyncMock(return_value=["fw-am-ne01", "fw-am-ne02"])
+
+        await gen._create_fabric_devices(templates=templates)
+
+        options = gen.create_devices.await_args_list[-1].kwargs["options"]
+        # The usual firewall HA domain: its default mode (active-passive) is the Equinix cluster.
+        assert options["ha_kind"] == "ManagedFirewallHA"
+        assert options["appliance"] is True
+        assert options["account_id"] == "acct-1"
+
+    @pytest.mark.asyncio
+    async def test_load_balancer_pair_keeps_its_usual_ha_domain(self) -> None:
+        """Only the roles Terraform renders get the provider-hosted domain; a load balancer pair is a LoadbalancerHA."""
+        templates = [{"role": "load-balancer", "quantity": 2, "template": _VIRTUAL_EDGE_TEMPLATE}]
+        gen = _made_virtual(fabric_templates=templates)
+        gen.create_devices = AsyncMock(return_value=["lb-am-ne01", "lb-am-ne02"])
+
+        await gen._create_fabric_devices(templates=templates)
+
+        options = gen.create_devices.await_args_list[-1].kwargs["options"]
+        assert options["appliance"] is True
+        assert options["ha_kind"] == "ManagedLoadbalancerHA"
+        assert "ha_data" not in options
+
+    @pytest.mark.asyncio
+    async def test_a_presence_without_an_account_orders_its_appliances_under_none(self) -> None:
+        gen = _made_virtual(account=None)
+        gen.create_devices = AsyncMock(return_value=["eg-am-ne01", "eg-am-ne02"])
+
+        await gen._create_fabric_devices(templates=gen.data["fabric_templates"])
+
+        assert "account_id" not in gen.create_devices.await_args_list[-1].kwargs["options"]
+
+    @pytest.mark.asyncio
+    async def test_a_zones_edges_are_never_an_ha_domain(self) -> None:
+        """Physical edges are joined by their interlink (_ensure_edge_pair), not by an HA domain."""
+        gen = _made_zone()
+        gen.create_devices = AsyncMock(return_value=["eg-fr201", "eg-fr202"])
+
+        await gen._create_fabric_devices(templates=gen.data["fabric_templates"])
+
+        options = gen.create_devices.await_args_list[-1].kwargs["options"]
+        assert "ha_kind" not in options and "account_id" not in options
 
 
 class TestGeneratedDeviceNames:

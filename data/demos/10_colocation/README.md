@@ -115,7 +115,10 @@ Spread a pair across two zones and none of those would be generated, because the
 
 **Links involving virtual kit.** A virtual colocation gets no cabling: two rented instances are joined by a
 connection inside the provider's platform, which is neither a cable nor something this schema has a node kind for.
-`AM-NE` therefore has two routers (`eg-am-ne01`, `eg-am-ne02`) and no cables.
+`AM-NE` therefore has two routers (`eg-am-ne01`, `eg-am-ne02`) and no cables. They are two independent appliances: a
+router pair has no redundancy representation in the model, and each is its own Terraform device. A firewall pair would
+be a `ManagedFirewallHA` (`active-passive`, an Equinix cluster) whose members the provider wires, so it gets no sync
+port or cable.
 
 ### Physical vs virtual
 
@@ -124,12 +127,20 @@ There is no `deployment_type` any more: the node kind says what the kit is.
 | Node kind | Means | Templates allowed |
 | ----------------------------- | ------------------------------------------- | ------------------------------- |
 | `TopologyColocationZone` | our own hardware in cage space we rent | `TemplateDcimPhysicalDevice` |
-| `TopologyVirtualColocation` | a provider-hosted instance we rent | `TemplateDcimVirtualDevice` |
+| `TopologyVirtualColocation` | a provider-hosted instance we rent | `TemplateCloudNetworkAppliance` |
 
 Frankfurt and Paris zones name an N9K. Equinix Amsterdam is one virtual colocation, `AM-NE` (the metro is `AM`; metro,
 zone and virtual colocation names share the device-name and pool-name space, so they must differ), and names
-`C8000V_EDGE`, so it gets `DcimVirtualDevice`s — an Equinix Network Edge instance, not hardware — and a physical
+`C8000V_EDGE`, so it gets `CloudNetworkAppliance`s — an Equinix Network Edge instance, not hardware, with interfaces,
+BGP and a config like any device, but consumed like a cloud resource — and a physical
 template there would be rejected.
+
+`AM-NE` is routed to Terraform (`infrastructure_orchestrator: terraform`) and ordered under one `CloudAccount`,
+`equinix-network-edge` (`equinix/am/02_account.yml`): its `account_id` is the Equinix billing account number (a demo
+value), its provider is Equinix (P016) and its owner Internal (P028), whose `notification_emails` are the people the
+provider notifies. The ordering parameters of each appliance (`service_code`, `package_code`, `software_version`,
+`term_length`, `cpu_count`) come from its template. The generated `virtual-colocation-terraform` artifact prints all of
+it; licence tokens are Terraform variables and never live in Infrahub.
 
 ### Zones with no kit
 
