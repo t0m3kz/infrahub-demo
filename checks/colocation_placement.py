@@ -79,6 +79,11 @@ def _name(node: dict[str, Any]) -> str:
     return str(node.get("name") or node.get("id") or "<unnamed>")
 
 
+def _owner_label(owner: dict[str, Any]) -> str:
+    """The owner organization by display_label: ``name`` lives on OrganizationGeneric, not on the OrganizationEntity peer."""
+    return str(owner.get("display_label") or owner.get("id") or "<unnamed>")
+
+
 def _entry_label(entry: dict[str, Any]) -> str:
     template = entry.get("template") or {}
     return f"{entry.get('quantity')} x {entry.get('role')} on '{template.get('display_label') or template.get('id')}'"
@@ -295,10 +300,10 @@ def terraform_order_data_findings(cleaned: dict[str, Any]) -> list[Finding]:
         if not owner:
             problems.append("no owner to notify")
         elif not emails:
-            problems.append(f"owner '{_name(owner)}' has no notification_emails")
+            problems.append(f"owner '{_owner_label(owner)}' has no notification_emails")
         elif any("@" not in email for email in emails):
             problems.append(
-                f"owner '{_name(owner)}' has notification_emails {emails} that are not all e-mail addresses"
+                f"owner '{_owner_label(owner)}' has notification_emails {emails} that are not all e-mail addresses"
             )
         if problems:
             findings.append(

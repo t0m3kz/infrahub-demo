@@ -621,7 +621,7 @@ class TestTerraformOrderData:
     """Rule 9: a virtual colocation routed to terraform has the account and an owner with notification e-mails."""
 
     OWNER = {
-        "node": {"id": "org-p028", "name": {"value": "Internal"}, "notification_emails": {"value": ["noc@example.com"]}}
+        "node": {"id": "org-p028", "display_label": "Internal", "notification_emails": {"value": ["noc@example.com"]}}
     }
 
     def _vc(
@@ -660,7 +660,7 @@ class TestTerraformOrderData:
         assert "no owner to notify" in findings[0]["message"]
 
     def test_owner_without_emails_fails(self) -> None:
-        owner = {"node": {"id": "org-p028", "name": {"value": "Internal"}, "notification_emails": {"value": []}}}
+        owner = {"node": {"id": "org-p028", "display_label": "Internal", "notification_emails": {"value": []}}}
 
         findings = _run(_payload(virtual=[self._vc(owner=owner)]))
 
@@ -668,7 +668,7 @@ class TestTerraformOrderData:
         assert "owner 'Internal' has no notification_emails" in findings[0]["message"]
 
     def test_entry_that_is_no_email_address_fails(self) -> None:
-        owner = {"node": {"id": "org-p028", "name": {"value": "Internal"}, "notification_emails": {"value": ["noc"]}}}
+        owner = {"node": {"id": "org-p028", "display_label": "Internal", "notification_emails": {"value": ["noc"]}}}
 
         findings = _run(_payload(virtual=[self._vc(owner=owner)]))
 

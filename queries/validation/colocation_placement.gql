@@ -71,7 +71,7 @@ query colocation_placement {
         name { value }
         infrastructure_orchestrator { value }
         provider_account_number { value }
-        owner { node { id name { value } notification_emails { value } } }
+        owner { node { id display_label notification_emails { value } } }
         design {
           node {
             id

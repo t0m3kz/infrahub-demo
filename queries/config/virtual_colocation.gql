@@ -20,9 +20,7 @@ query virtual_colocation_config($instance: String!) {
         owner {
           node {
             id
-            name {
-              value
-            }
+            display_label
             notification_emails {
               value
             }

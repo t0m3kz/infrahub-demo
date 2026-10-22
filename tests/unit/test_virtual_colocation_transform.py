@@ -97,7 +97,7 @@ def _raw(cleaned: dict[str, Any]) -> dict[str, Any]:
                         "owner": node(
                             {
                                 "id": vc["owner"]["id"],
-                                "name": value(vc["owner"]["name"]),
+                                "display_label": vc["owner"]["name"],
                                 "notification_emails": value(vc["owner"]["notification_emails"]),
                             }
                         )

@@ -16,9 +16,7 @@
           "owner": {
             "node": {
               "id": "o-1",
-              "name": {
-                "value": "Internal"
-              },
+              "display_label": "Internal",
               "notification_emails": {
                 "value": [
                   "noc@example.com",
