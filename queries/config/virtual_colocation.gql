@@ -14,6 +14,20 @@ query virtual_colocation_config($instance: String!) {
         infrastructure_orchestrator {
           value
         }
+        provider_account_number {
+          value
+        }
+        owner {
+          node {
+            id
+            name {
+              value
+            }
+            notification_emails {
+              value
+            }
+          }
+        }
         parent {
           node {
             id

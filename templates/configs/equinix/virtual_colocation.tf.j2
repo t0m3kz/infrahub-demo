@@ -6,14 +6,6 @@ terraform {
   }
 }
 
-variable "equinix_account_number" {
-  type = string
-}
-
-variable "notification_emails" {
-  type = list(string)
-}
-
 {% for variable in license_variables %}
 variable "{{ variable }}" {
   type      = string
@@ -30,8 +22,8 @@ resource "equinix_network_device" "{{ resource.id }}" {
   version        = {{ resource.version | hcl }}
   core_count     = {{ resource.core_count }}
   term_length    = {{ resource.term_length }}
-  account_number = var.equinix_account_number
-  notifications  = var.notification_emails
+  account_number = {{ account_number | hcl }}
+  notifications  = {{ notifications | hcl_list }}
 {% if resource.diverse_resource %}
   diverse_device_id = equinix_network_device.{{ resource.diverse_resource }}.uuid
 {% endif %}
@@ -39,8 +31,8 @@ resource "equinix_network_device" "{{ resource.id }}" {
   secondary_device {
     name           = {{ resource.secondary.name | hcl }}
     metro_code     = {{ resource.secondary.metro_code | hcl }}
-    account_number = var.equinix_account_number
-    notifications  = var.notification_emails
+    account_number = {{ account_number | hcl }}
+    notifications  = {{ notifications | hcl_list }}
   }
 {% endif %}
 {% if resource.cluster %}

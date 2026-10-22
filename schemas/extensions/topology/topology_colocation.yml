@@ -266,6 +266,27 @@ nodes:
     uniqueness_constraints:
       - [name__value, parent]
     include_in_menu: false
+    attributes:
+      # The billing account of the provider order. Contract data, not a secret; licences, tokens and keys never
+      # live in Infrahub. It is per order at one provider, so it sits here and not on the owner organization.
+      # Optional because only a presence routed to terraform needs it (checks/colocation_placement.py).
+      - name: provider_account_number
+        kind: Text
+        label: "Provider Account Number"
+        description: "The provider billing account the presence's devices are ordered under (Equinix account number)"
+        optional: true
+        order_weight: 700
+    relationships:
+      # Whose presence it is; the provider notifies the owner's notification_emails about the order.
+      - name: owner
+        peer: OrganizationEntity
+        label: "Owner"
+        description: "Customer or provider that owns this presence; its notification_emails receive the provider's order notices"  # yamllint disable-line rule:line-length
+        cardinality: one
+        kind: Attribute
+        optional: true
+        order_weight: 1100
+        identifier: "virtual_colocation__owner"
 
   # The envelope of a metro and of a zone or virtual colocation, the colocation
   # counterparts of TopologyTemplateDC / TopologyTemplatePod (topology_dc.yml).

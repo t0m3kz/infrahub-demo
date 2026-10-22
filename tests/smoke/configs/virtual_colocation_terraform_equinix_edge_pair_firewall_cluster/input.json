@@ -10,6 +10,23 @@
           "infrastructure_orchestrator": {
             "value": "terraform"
           },
+          "provider_account_number": {
+            "value": "1000001"
+          },
+          "owner": {
+            "node": {
+              "id": "o-1",
+              "name": {
+                "value": "Internal"
+              },
+              "notification_emails": {
+                "value": [
+                  "noc@example.com",
+                  "network-ops@example.com"
+                ]
+              }
+            }
+          },
           "parent": {
             "node": {
               "id": "m-1",

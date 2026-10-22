@@ -6,14 +6,6 @@ terraform {
   }
 }
 
-variable "equinix_account_number" {
-  type = string
-}
-
-variable "notification_emails" {
-  type = list(string)
-}
-
 resource "equinix_network_device" "am_ne_eg_am_ne01" {
   name           = "eg-am-ne01"
   metro_code     = "AM"
@@ -22,12 +14,12 @@ resource "equinix_network_device" "am_ne_eg_am_ne01" {
   version        = "17.12.01a"
   core_count     = 2
   term_length    = 12
-  account_number = var.equinix_account_number
-  notifications  = var.notification_emails
+  account_number = "1000001"
+  notifications  = ["noc@example.com", "network-ops@example.com"]
   secondary_device {
     name           = "eg-am-ne02"
     metro_code     = "AM"
-    account_number = var.equinix_account_number
-    notifications  = var.notification_emails
+    account_number = "1000001"
+    notifications  = ["noc@example.com", "network-ops@example.com"]
   }
 }

@@ -69,6 +69,9 @@ query colocation_placement {
       node {
         id
         name { value }
+        infrastructure_orchestrator { value }
+        provider_account_number { value }
+        owner { node { id name { value } notification_emails { value } } }
         design {
           node {
             id

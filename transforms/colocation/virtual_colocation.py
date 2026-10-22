@@ -9,7 +9,8 @@ ambiguous and refused.
 normalise_virtual_colocation() is the pure part: query result in, the plain-dict contract of
 render_equinix_network_devices() out. It sets `ha_peer` and `cluster` from the device roles and counts. It never sets
 `diverse_from`: no relation in the schema says that one device must sit away from another (the renderer supports it
-for when one exists). Secrets and licences are never read; they are Terraform variables in the rendered file.
+for when one exists). The billing account is read from the presence and the notification e-mails from its owner; licences and
+other secrets are never read, a licence token is a Terraform variable in the rendered file.
 """
 
 from __future__ import annotations
@@ -138,7 +139,13 @@ def normalise_virtual_colocation(cleaned: dict[str, Any]) -> dict[str, Any]:
                 firewall["cluster"] = {"name": cluster, "node": node}
         devices += firewalls
 
-    return {"name": vc_name, "provider": operator.lower(), "devices": devices}
+    return {
+        "name": vc_name,
+        "provider": operator.lower(),
+        "account_number": cleaned_vc.get("provider_account_number"),
+        "notifications": (cleaned_vc.get("owner") or {}).get("notification_emails") or [],
+        "devices": devices,
+    }
 
 
 class VirtualColocationTerraform(InfrahubTransform):

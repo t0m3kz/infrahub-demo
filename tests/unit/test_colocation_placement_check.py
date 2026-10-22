@@ -28,6 +28,7 @@ from checks.colocation_placement import (
     serving_zone_firewall_findings,
     serving_zone_metro_findings,
     template_kind_findings,
+    terraform_order_data_findings,
     unique_name_findings,
     zone_design_in_metro_findings,
 )
@@ -616,6 +617,76 @@ class TestMetroZoneCount:
         assert [type(f) for f in findings] == [Finding]
 
 
+class TestTerraformOrderData:
+    """Rule 9: a virtual colocation routed to terraform has the account and an owner with notification e-mails."""
+
+    OWNER = {
+        "node": {"id": "org-p028", "name": {"value": "Internal"}, "notification_emails": {"value": ["noc@example.com"]}}
+    }
+
+    def _vc(
+        self, *, orchestrator: str = "terraform", account: str | None = "1000001", owner: Any = None
+    ) -> dict[str, Any]:
+        return {
+            **AM_NE,
+            "infrastructure_orchestrator": {"value": orchestrator},
+            "provider_account_number": {"value": account},
+            "owner": self.OWNER if owner is None else owner,
+        }
+
+    def test_complete_order_data_passes(self) -> None:
+        assert _run(_payload(virtual=[self._vc()])) == []
+
+    def test_a_presence_not_routed_to_terraform_needs_none(self) -> None:
+        vc = self._vc(orchestrator="manual", account=None, owner={"node": None})
+
+        assert _run(_payload(virtual=[vc])) == []
+
+    def test_missing_account_fails(self) -> None:
+        findings = _run(_payload(virtual=[self._vc(account=None)]))
+
+        assert len(findings) == 1
+        assert findings[0]["object_id"] == "vc-am-ne"
+        assert findings[0]["object_type"] == "TopologyVirtualColocation"
+        assert "has no provider_account_number" in findings[0]["message"]
+
+    def test_blank_account_fails(self) -> None:
+        assert len(_run(_payload(virtual=[self._vc(account="  ")]))) == 1
+
+    def test_missing_owner_fails(self) -> None:
+        findings = _run(_payload(virtual=[self._vc(owner={"node": None})]))
+
+        assert len(findings) == 1
+        assert "no owner to notify" in findings[0]["message"]
+
+    def test_owner_without_emails_fails(self) -> None:
+        owner = {"node": {"id": "org-p028", "name": {"value": "Internal"}, "notification_emails": {"value": []}}}
+
+        findings = _run(_payload(virtual=[self._vc(owner=owner)]))
+
+        assert len(findings) == 1
+        assert "owner 'Internal' has no notification_emails" in findings[0]["message"]
+
+    def test_entry_that_is_no_email_address_fails(self) -> None:
+        owner = {"node": {"id": "org-p028", "name": {"value": "Internal"}, "notification_emails": {"value": ["noc"]}}}
+
+        findings = _run(_payload(virtual=[self._vc(owner=owner)]))
+
+        assert len(findings) == 1
+        assert "not all e-mail addresses" in findings[0]["message"]
+
+    def test_account_and_owner_missing_are_one_finding_naming_both(self) -> None:
+        findings = _run(_payload(virtual=[self._vc(account=None, owner={"node": None})]))
+
+        assert len(findings) == 1
+        assert "no provider_account_number and no owner to notify" in findings[0]["message"]
+
+    def test_rule_function_on_the_cleaned_shape(self) -> None:
+        findings = terraform_order_data_findings(clean_data(_payload(virtual=[self._vc(account=None)])))
+
+        assert [type(f) for f in findings] == [Finding]
+
+
 class TestRegistry:
     def test_every_rule_is_registered_once(self) -> None:
         assert RULES == (
@@ -627,6 +698,7 @@ class TestRegistry:
             kit_within_design_findings,
             zone_design_in_metro_findings,
             metro_zone_count_findings,
+            terraform_order_data_findings,
         )
 
     def test_empty_response_has_no_findings(self) -> None:

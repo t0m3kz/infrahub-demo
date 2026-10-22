@@ -12,7 +12,8 @@ One artifact per virtual colocation: the file describes every device of that pre
 * a cluster (`cluster`): one resource with a `cluster_details` block, always inside one metro. Only the Palo Alto
   cluster (PA-VM) is rendered; any other vendor is refused rather than guessed at.
 
-The account number, the notification list and every licence token are Terraform variables on purpose. Licences,
+The billing account and the notification addresses of the order come from the virtual colocation (`account_number`,
+`notifications`) and are printed in the file. Every licence token is a Terraform variable on purpose: licences,
 tokens, keys and vendor passwords are neither in Infrahub nor in an artifact.
 """
 
@@ -53,6 +54,11 @@ def _label(vc_name: str, name: str) -> str:
     if not _HCL_LABEL.match(label):
         raise ValueError(f"{vc_name}: {name!r} does not make a valid Terraform identifier ({label!r})")
     return label
+
+
+def _hcl_list(values: list[str]) -> str:
+    """A quoted HCL list of strings."""
+    return "[" + ", ".join(_q(value) for value in values) + "]"
 
 
 def _check_device(vc_name: str, device: dict[str, Any]) -> None:
@@ -144,7 +150,7 @@ def _resource_view(
 def render_equinix_network_devices(vc: dict[str, Any]) -> str:
     """Render the HCL for one virtual colocation.
 
-    vc: {"name", "provider", "devices": [{name, metro_code, type_code, package_code, version, core_count,
+    vc: {"name", "provider", "account_number", "notifications", "devices": [{name, metro_code, type_code, package_code, version, core_count,
     term_length, ha_peer?, diverse_from?, cluster?: {"name", "node"}}]}. A secondary (`ha_peer` target) is rendered
     inside its primary's resource and a cluster is one resource named after the cluster, never one per node.
     All validation happens here in Python; templates/configs/equinix/virtual_colocation.tf.j2 only prints the result.
@@ -152,6 +158,15 @@ def render_equinix_network_devices(vc: dict[str, Any]) -> str:
     vc_name = vc.get("name") or "unnamed"
     if vc.get("provider") != PROVIDER:
         raise ValueError(f"{vc_name}: provider {vc.get('provider')!r} is not {PROVIDER!r}; only Equinix is rendered")
+
+    account_number = str(vc.get("account_number") or "").strip()
+    notifications = [str(email).strip() for email in vc.get("notifications") or [] if str(email).strip()]
+    if not account_number or not notifications:
+        raise ValueError(
+            f"{vc_name}: the provider order needs an account_number (provider_account_number of the presence) and at "
+            f"least one notification e-mail (notification_emails of its owner); has account_number="
+            f"{account_number!r}, notifications={notifications}"
+        )
 
     devices = {device["name"]: device for device in vc.get("devices") or []}
     if not devices:
@@ -193,6 +208,15 @@ def render_equinix_network_devices(vc: dict[str, Any]) -> str:
         _token_variable(vc_name, cluster_name, index) for cluster_name in sorted(clusters) for index in (0, 1)
     ]
     template = load_template(
-        str(_TEMPLATE_DIR), _TEMPLATE, filters={"hcl": _q}, keep_trailing_newline=True, trim_blocks=True
+        str(_TEMPLATE_DIR),
+        _TEMPLATE,
+        filters={"hcl": _q, "hcl_list": _hcl_list},
+        keep_trailing_newline=True,
+        trim_blocks=True,
     )
-    return template.render(resources=resources, license_variables=license_variables)
+    return template.render(
+        resources=resources,
+        license_variables=license_variables,
+        account_number=account_number,
+        notifications=notifications,
+    )

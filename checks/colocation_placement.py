@@ -26,6 +26,12 @@ fixed fallback, and is only held to these rules where the rule names the design)
    zone's design is one of the metro design's ``zone_templates``.
 8. Zones within the metro envelope. A metro with a design holds at most the design's ``max_zones`` zones and
    virtual colocations together.
+
+Order data (``provider_account_number`` on the presence, ``notification_emails`` on its ``owner``; not part of the
+design envelope):
+
+9. Terraform order data. A virtual colocation routed to terraform has the billing account and an owner with at least
+   one notification address, each an e-mail address: the Terraform artifact prints them and cannot order without.
 """
 
 from __future__ import annotations
@@ -42,6 +48,8 @@ METRO = "TopologyColocationMetro"
 ZONE = "TopologyColocationZone"
 VIRTUAL_COLOCATION = "TopologyVirtualColocation"
 FOOTPRINT = "TopologyCustomerColocation"
+TERRAFORM = "terraform"
+"""The infrastructure_orchestrator value that makes a virtual colocation render its Terraform artifact."""
 
 HOSTED_TEMPLATE_KIND = {
     ZONE: "TemplateDcimPhysicalDevice",
@@ -273,6 +281,37 @@ def metro_zone_count_findings(cleaned: dict[str, Any]) -> list[Finding]:
     return findings
 
 
+def terraform_order_data_findings(cleaned: dict[str, Any]) -> list[Finding]:
+    """Rule 9: a virtual colocation routed to terraform carries the account and the notification e-mails."""
+    findings = []
+    for node in cleaned.get(VIRTUAL_COLOCATION) or []:
+        if node.get("infrastructure_orchestrator") != TERRAFORM:
+            continue
+        owner = node.get("owner") or {}
+        emails = [email for email in owner.get("notification_emails") or [] if email]
+        problems = []
+        if not str(node.get("provider_account_number") or "").strip():
+            problems.append("no provider_account_number")
+        if not owner:
+            problems.append("no owner to notify")
+        elif not emails:
+            problems.append(f"owner '{_name(owner)}' has no notification_emails")
+        elif any("@" not in email for email in emails):
+            problems.append(
+                f"owner '{_name(owner)}' has notification_emails {emails} that are not all e-mail addresses"
+            )
+        if problems:
+            findings.append(
+                Finding(
+                    f"{VIRTUAL_COLOCATION} '{_name(node)}' is routed to terraform but has {' and '.join(problems)}: "
+                    "the artifact prints the account and the owner's notification addresses of the provider order.",
+                    node.get("id"),
+                    VIRTUAL_COLOCATION,
+                )
+            )
+    return findings
+
+
 RULES: tuple[Callable[[dict[str, Any]], list[Finding]], ...] = (
     template_kind_findings,
     serving_zone_metro_findings,
@@ -282,6 +321,7 @@ RULES: tuple[Callable[[dict[str, Any]], list[Finding]], ...] = (
     kit_within_design_findings,
     zone_design_in_metro_findings,
     metro_zone_count_findings,
+    terraform_order_data_findings,
 )
 """Every rule, run in order over the cleaned query result."""
 

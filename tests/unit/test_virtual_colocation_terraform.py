@@ -46,11 +46,16 @@ _SDWAN = {
 }
 
 
+_ORDER = {"account_number": "1000001", "notifications": ["noc@example.com", "network-ops@example.com"]}
+"""The provider order data a virtual colocation carries (provider_account_number, notification_emails)."""
+
+
 def _london() -> dict[str, Any]:
     """One virtual colocation in London: Arista HA pair, PA-VM cluster, SD-WAN away from the routers."""
     return {
         "name": "LD-NE",
         "provider": "equinix",
+        **_ORDER,
         "devices": [
             {"name": "eg-ld01", **_ARISTA, "ha_peer": "eg-ld02"},
             {"name": "eg-ld02", **_ARISTA},
@@ -71,13 +76,13 @@ def test_london_presence_matches_the_golden_file_byte_for_byte() -> None:
 
 
 def test_presence_without_a_cluster_declares_no_licence_variables() -> None:
-    """No cluster, no licence token variable: only the account number and the notification list are inputs."""
-    vc = {"name": "AM-NE", "provider": "equinix", "devices": [{"name": "eg-am-ne01", **_ARISTA}]}
+    """No cluster, no licence token variable: the file declares no variable at all."""
+    vc = {"name": "AM-NE", "provider": "equinix", **_ORDER, "devices": [{"name": "eg-am-ne01", **_ARISTA}]}
 
     hcl = render_equinix_network_devices(vc)
 
     assert "license_token" not in hcl
-    assert hcl.count("variable ") == 2
+    assert "variable " not in hcl
     assert hcl.endswith("}\n") and not hcl.endswith("}\n\n")
 
 
@@ -144,17 +149,53 @@ def test_diverse_from_a_cluster_member_points_at_the_cluster_resource() -> None:
     assert "diverse_device_id = equinix_network_device.ld_ne_fw_ld.uuid" in hcl
 
 
-def test_account_notifications_and_secrets_are_variables_never_values() -> None:
-    """The account number and e-mails are Terraform variables; no licence, key or password is rendered."""
+def test_account_and_notifications_come_from_the_presence_and_secrets_are_never_rendered() -> None:
+    """The order data of the presence is printed (also in the secondary block); no licence, key or password is."""
     hcl = render_equinix_network_devices(_london())
 
-    assert "account_number = var.equinix_account_number" in hcl
-    assert "notifications  = var.notification_emails" in hcl
+    expected_list = '["noc@example.com", "network-ops@example.com"]'
+    assert hcl.count('account_number = "1000001"') == 4  # arista primary + secondary, firewall cluster, sd-wan
+    assert hcl.count(f"notifications  = {expected_list}") == 4
+    assert "var.equinix_account_number" not in hcl
+    assert "var.notification_emails" not in hcl
     lowered = hcl.lower()
     assert "password" not in lowered
     assert "ssh_key" not in lowered
     assert "license_file" not in lowered
-    assert "@" not in hcl
+    assert "license_token = var." in hcl  # tokens stay Terraform variables, never a value
+
+
+@pytest.mark.parametrize(
+    "mutation, message",
+    [
+        (lambda vc: vc.pop("account_number"), "account_number"),
+        (lambda vc: vc.update(account_number="  "), "account_number"),
+        (lambda vc: vc.update(notifications=[]), "notification"),
+        (lambda vc: vc.pop("notifications"), "notification"),
+        (lambda vc: vc.update(notifications=["", " "]), "notification"),
+    ],
+    ids=["no-account", "blank-account", "empty-list", "no-list", "blank-entries"],
+)
+def test_presence_without_order_data_is_refused(mutation: Any, message: str) -> None:
+    """The provider order cannot be placed without a billing account and a notification address."""
+    vc = _london()
+    mutation(vc)
+
+    with pytest.raises(ValueError, match=message):
+        render_equinix_network_devices(vc)
+
+
+def test_order_data_with_hcl_interpolation_is_escaped_not_evaluated() -> None:
+    """The account and the e-mails are data from Infrahub: ${...} in them must not run at apply time."""
+    vc = _london()
+    vc["account_number"] = '1000001${file("/etc/passwd")}'
+    vc["notifications"] = ["x@example.com%{if true}y%{endif}"]
+
+    hcl = render_equinix_network_devices(vc)
+
+    assert "$${file(" in hcl
+    assert "%%{if true}" in hcl
+    assert "${file(" not in hcl.replace("$${file(", "")
 
 
 def test_rendering_is_deterministic_and_independent_of_device_order() -> None:
@@ -179,7 +220,7 @@ def test_non_equinix_provider_is_refused() -> None:
 def test_empty_presence_is_refused() -> None:
     """A presence with no devices is an error, not an empty file that looks like success."""
     with pytest.raises(ValueError, match="no devices"):
-        render_equinix_network_devices({"name": "LD-NE", "provider": "equinix", "devices": []})
+        render_equinix_network_devices({"name": "LD-NE", "provider": "equinix", **_ORDER, "devices": []})
 
 
 def test_device_missing_a_required_field_is_named_in_the_error() -> None:

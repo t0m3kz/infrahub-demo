@@ -49,6 +49,12 @@ def _vc(entries: list[dict[str, Any]], devices: list[dict[str, Any]], *, operato
                 "id": "vc-1",
                 "name": "AM-NE",
                 "infrastructure_orchestrator": "terraform",
+                "provider_account_number": "1000001",
+                "owner": {
+                    "id": "o-1",
+                    "name": "Internal",
+                    "notification_emails": ["noc@example.com", "network-ops@example.com"],
+                },
                 "parent": {"id": "m-1", "name": "AM", "parent": {"id": "c-1", "name": operator}},
                 "fabric_templates": entries,
                 "devices": devices,
@@ -87,6 +93,16 @@ def _raw(cleaned: dict[str, Any]) -> dict[str, Any]:
                         "id": vc["id"],
                         "name": value(vc["name"]),
                         "infrastructure_orchestrator": value(vc["infrastructure_orchestrator"]),
+                        "provider_account_number": value(vc["provider_account_number"]),
+                        "owner": node(
+                            {
+                                "id": vc["owner"]["id"],
+                                "name": value(vc["owner"]["name"]),
+                                "notification_emails": value(vc["owner"]["notification_emails"]),
+                            }
+                        )
+                        if vc["owner"]
+                        else {"node": None},
                         "parent": node(
                             {
                                 "id": metro["id"],
@@ -341,18 +357,36 @@ def test_transform_renders_edge_pair_and_firewall_cluster() -> None:
     assert "license_token = var.am_ne_fw_am_ne_node1_license_token" in hcl
 
 
-def test_transform_output_carries_no_secret_values() -> None:
-    """Account, notification list and licences are variables; no value of any of them is in the file."""
+def test_transform_prints_the_order_data_of_the_presence_and_no_secret_values() -> None:
+    """The account and the notification list are the presence's data; licences stay Terraform variables."""
     hcl = _run(_raw(_edge_pair_and_firewall_cluster()))
 
-    assert "account_number = var.equinix_account_number" in hcl
-    assert "notifications  = var.notification_emails" in hcl
+    assert 'account_number = "1000001"' in hcl
+    assert 'notifications  = ["noc@example.com", "network-ops@example.com"]' in hcl
+    assert "var.equinix_account_number" not in hcl
     assert hcl.count("sensitive = true") == 2
     lowered = hcl.lower()
     assert "password" not in lowered
     assert "ssh_key" not in lowered
-    assert "@" not in hcl
     assert '= "' not in "".join(line for line in hcl.splitlines() if "license_token" in line)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda vc: vc.update(provider_account_number=None),
+        lambda vc: vc.update(owner=None),
+        lambda vc: vc["owner"].update(notification_emails=[]),
+    ],
+    ids=["no-account", "no-owner", "owner-without-emails"],
+)
+def test_presence_without_order_data_is_refused_by_the_transform(mutation: Any) -> None:
+    """A virtual colocation routed to terraform without its account or an owner's addresses renders no file."""
+    cleaned = _edge_pair()
+    mutation(cleaned["TopologyVirtualColocation"][0])
+
+    with pytest.raises(ValueError, match="account_number .* and at\\s+least one notification"):
+        _run(_raw(cleaned))
 
 
 def test_transform_is_idempotent() -> None:

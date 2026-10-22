@@ -36,6 +36,10 @@ spec:
                   # Routed to the virtual_colocation_terraform group: one Equinix Network Edge
                   # Terraform artifact for eg-am-ne01/02 (an HA pair).
                   infrastructure_orchestrator: terraform
+                  # The provider order's contract data, printed into that file: the Equinix billing account
+                  # (a demo value) and the owner, whose notification_emails the provider notifies.
+                  provider_account_number: "1000001"
+                  owner: "P028"
                   member_of_groups:
                     - virtual_colocations
                   fabric_templates:
