@@ -97,8 +97,12 @@ query virtual_colocation_config($instance: String!) {
                 software_version {
                   value
                 }
-                cpu_count {
-                  value
+                device_type {
+                  node {
+                    cpu_count {
+                      value
+                    }
+                  }
                 }
                 term_length {
                   value

@@ -379,7 +379,7 @@ class TestVirtualColocationTerraform:
 
         for template_name in template_names:
             template = object_templates()[template_name]
-            for field in ("service_code", "package_code", "software_version", "term_length", "cpu_count"):
+            for field in ("service_code", "package_code", "software_version", "term_length"):
                 assert template.get(field) not in (None, ""), f"{template_name}: {field} is not set"
             assert isinstance(template["term_length"], int)
             assert template["term_length"] in (1, 12, 24, 36)
@@ -387,9 +387,11 @@ class TestVirtualColocationTerraform:
     def test_the_provider_fields_are_declared_on_the_appliance_schema_and_gone_from_the_virtual_device(self) -> None:
         """Template values only load if CloudNetworkAppliance (and so its templates) has the attributes; DcimVirtualDevice
         no longer carries any provider ordering field."""
-        assert {"service_code", "package_code", "software_version", "term_length", "cpu_count", "cloud_id"} <= (
+        assert {"service_code", "package_code", "software_version", "term_length", "cloud_id"} <= (
             attribute_names("CloudNetworkAppliance")
         )
+        # The order's core count is the device type's cpu_count, not a field of the appliance.
+        assert "cpu_count" not in attribute_names("CloudNetworkAppliance")
         assert not [name_ for name_ in attribute_names("DcimVirtualDevice") if name_.startswith("provider_")]
 
     def test_the_presence_is_ordered_under_an_equinix_account_of_the_internal_owner(self) -> None:

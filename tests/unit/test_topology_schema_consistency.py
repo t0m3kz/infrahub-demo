@@ -317,9 +317,10 @@ class TestCloudNetworkAppliance:
         assert _kind(self._KIND)["generate_template"] is True
 
     def test_it_declares_cloud_id_itself_and_the_provider_offer(self) -> None:
-        assert {"cloud_id", "service_code", "package_code", "software_version", "cpu_count", "term_length"} <= (
+        assert {"cloud_id", "service_code", "package_code", "software_version", "term_length"} <= (
             _attribute_names(self._KIND)
         )
+        assert "cpu_count" not in _attribute_names(self._KIND)  # the vCPU count is DcimDeviceType.cpu_count
 
     def test_it_has_no_hypervisor_and_no_redundancy_fields_of_its_own(self) -> None:
         """No hosting_device (nothing of ours runs it); redundancy is an HA domain, not a field or a self-relationship."""

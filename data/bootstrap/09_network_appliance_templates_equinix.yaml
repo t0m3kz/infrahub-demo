@@ -3,10 +3,10 @@
 # colocation (TopologyVirtualColocation) can only host these, and add_virtual_colocation creates its appliances
 # from them. The interfaces are the instance's ports; the provider's own routing service is not modelled.
 #
-# service_code / package_code / software_version / term_length / cpu_count are what the Equinix Network Edge
-# Terraform artifact orders (transforms/colocation/virtual_colocation.py). DEMO VALUES: not verified against the
-# Equinix API, check type/package/version/term in the Equinix portal before applying. Accounts, notification
-# lists and licence tokens are never stored on a template (they are Terraform variables).
+# service_code / package_code / software_version / term_length (and the device type's cpu_count) are what the
+# Equinix Network Edge Terraform artifact orders (transforms/colocation/virtual_colocation.py). DEMO VALUES: not
+# verified against the Equinix API, check type/package/version/term in the Equinix portal before applying.
+# The account and its notification list live on the CloudAccount; licence tokens are never stored (Terraform variables).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -19,7 +19,6 @@ spec:
       platform: cisco_xe
       software_image: cisco_xe-17.12.4
       status: active
-      cpu_count: 2
       service_code: C8000V
       package_code: network-essentials
       software_version: 17.12.01a
@@ -35,31 +34,3 @@ spec:
           - template_name: C8000V_EDGE_mgmt0
             name: mgmt0
             role: management
-    # Two of them in one ManagedFirewallHA become a PA-VM cluster in the Terraform artifact. A different template
-    # from the DC's dedicated PA-VM_EDGE_CUSTOMER_* instances: those are DcimVirtualDevices on our own hosts.
-    - template_name: PA-VM_FIREWALL
-      owner: "P027"
-      device_type: PA-VM
-      role: firewall
-      platform: panos
-      software_image: panos-11.1.3
-      status: active
-      cpu_count: 2
-      service_code: PA-VM
-      package_code: VM100
-      software_version: 11.1.3
-      term_length: 12
-      interfaces:
-        kind: TemplateDcimPhysicalInterface
-        parameters:
-          expand_range: true
-        data:
-          - template_name: PA-VM_FIREWALL_mgmt
-            name: mgmt
-            role: management
-          - template_name: PA-VM_FIREWALL_eth[1-6]
-            name: eth1/[1-6]
-            role: uplink
-          - template_name: PA-VM_FIREWALL_ha1
-            name: ha1
-            role: ha

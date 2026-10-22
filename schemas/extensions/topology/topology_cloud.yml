@@ -1288,12 +1288,6 @@ nodes:
         optional: true
         description: "Software version as the provider names it (Equinix Network Edge version, e.g. 17.12.01a)"
         order_weight: 2330
-      - name: cpu_count
-        label: vCPU Count
-        kind: Number
-        optional: true
-        description: "Number of virtual CPUs (Equinix Network Edge core_count)"
-        order_weight: 2340
       - name: term_length
         label: Term (months)
         kind: Number

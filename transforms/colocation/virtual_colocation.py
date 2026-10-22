@@ -33,7 +33,6 @@ _APPLIANCE_FIELDS = {
     "type_code": "service_code",
     "package_code": "package_code",
     "version": "software_version",
-    "core_count": "cpu_count",
     "term_length": "term_length",
 }
 
@@ -117,6 +116,9 @@ def _render_device(
     """The renderer's dict of one appliance: ordering parameters, plus `cluster` from its HA domain."""
     result = {"name": device["name"], "metro_code": metro_code}
     result.update({field: device.get(attribute) for field, attribute in _APPLIANCE_FIELDS.items()})
+    # The device type carries the vCPU count (DcimDeviceType.cpu_count, 4 for a C8000V): it is what the order's
+    # core_count is, so the appliance has no field of its own for it.
+    result["core_count"] = (device.get("device_type") or {}).get("cpu_count")
     result.update(_ha_of(vc_name, device, presence))
     return result
 

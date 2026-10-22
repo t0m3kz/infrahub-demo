@@ -22,14 +22,14 @@ _C8000V = {
     "service_code": "C8000V",
     "package_code": "network-essentials",
     "software_version": "17.12.01a",
-    "cpu_count": 2,
+    "device_type": {"cpu_count": 2},
     "term_length": 12,
 }
 _PA_VM = {
     "service_code": "PA-VM",
     "package_code": "VM100",
     "software_version": "11.1.3",
-    "cpu_count": 2,
+    "device_type": {"cpu_count": 2},
     "term_length": 12,
 }
 _FG_VM = {**_PA_VM, "service_code": "FG-VM"}
@@ -171,7 +171,8 @@ def _raw(cleaned: dict[str, Any]) -> dict[str, Any]:
             "role": value(item["role"]),
         }
         if item["typename"] == "CloudNetworkAppliance":
-            raw.update({key: value(item.get(key)) for key in _C8000V})
+            raw.update({key: value(item.get(key)) for key in _C8000V if key != "device_type"})
+            raw["device_type"] = node({"cpu_count": value((item.get("device_type") or {}).get("cpu_count"))})
             raw["capabilities"] = {"edges": [node(capability(entry)) for entry in item["capabilities"]]}
         return raw
 

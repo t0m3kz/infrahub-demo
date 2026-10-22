@@ -720,10 +720,7 @@ class CloudNATGateway(CloudResource):
 
 class CloudNetworkAppliance(CoreArtifactTarget, DcimDevice, DcimCapabilities):
     cloud_id: StringOptional
-    cluster_name: StringOptional
-    cpu_count: IntegerOptional
     package_code: StringOptional
-    redundancy: Dropdown
     service_code: StringOptional
     software_version: StringOptional
     term_length: IntegerOptional
