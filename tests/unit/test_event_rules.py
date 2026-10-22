@@ -231,3 +231,30 @@ def test_colocation_generators_are_registered_in_infrahub_yml() -> None:
         assert definition["class_name"] == class_name
         assert definition["file_path"] == file_path
         assert (ROOT / queries[query]).is_file()
+
+
+# ---------------------------------------------------------------------------
+# Virtual circuits: the underlay is derived from the ports, never listed
+# ---------------------------------------------------------------------------
+
+
+def test_no_virtual_circuit_rule_watches_physical_circuits() -> None:
+    """A virtual circuit's physical circuits are derived from its ports, so no rule matches that relationship."""
+    watching = [
+        rule["name"]
+        for rule in trigger_rules()
+        if rule["node_kind"] == "TopologyVirtualCircuit"
+        and ("CoreNodeTriggerRelationshipMatch", "physical_circuits") in _match_fields(rule)
+    ]
+    assert not watching, f"TopologyVirtualCircuit rules matching 'physical_circuits': {watching}"
+
+
+def test_virtual_circuit_regenerates_when_its_ports_change() -> None:
+    """An 'updated' rule on the ports (capabilities) re-runs the virtual circuit generator."""
+    rules = [
+        rule
+        for rule in _rules_for("TopologyVirtualCircuit").values()
+        if rule["mutation_action"] == "updated"
+        and ("CoreNodeTriggerRelationshipMatch", "capabilities") in _match_fields(rule)
+    ]
+    assert [rule["action"] for rule in rules] == ["run-virtual-circuit-generator"]

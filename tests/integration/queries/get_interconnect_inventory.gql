@@ -83,20 +83,23 @@ query GetInterconnectInventory {
             }
           }
         }
-        physical_circuits {
-          edges {
-            node {
-              circuit_id {
-                value
-              }
-            }
-          }
-        }
         capabilities {
           edges {
             node {
               name {
                 value
+              }
+              capabilities {
+                edges {
+                  node {
+                    __typename
+                    ... on TopologyPhysicalCircuit {
+                      circuit_id {
+                        value
+                      }
+                    }
+                  }
+                }
               }
               device {
                 node {

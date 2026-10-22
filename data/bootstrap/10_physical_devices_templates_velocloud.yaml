@@ -5,7 +5,11 @@
 #
 # Interface naming:
 #   GE1-GE4  — WAN/LAN copper GigabitEthernet ports on VCE-610
-#   eth0     — VCG-VA gateway uplink
+#   eth0     — VCG-VA gateway uplink (role uplink): the trunk to the cage router, carrying the
+#              tunnel sub-interfaces add_sdwan_edge builds. Exactly one port of the gateway may
+#              be role uplink, the generator refuses several.
+#   eth1     — VCG-VA gateway internet access (role customer, not uplink): the gateway's own
+#              physical connection to its ISP, the end of its INET-*-GW circuit.
 #   mgmt0    — out-of-band management
 #
 # The Gateway is managed BY the Orchestrator (VCO-VA_ORCHESTRATOR,
@@ -80,6 +84,13 @@ spec:
           - template_name: VCG-VA_GATEWAY_eth0
             name: eth0
             role: uplink
+            interface_type: 1000base-t
+          # The gateway's own internet access. Role customer, never uplink:
+          # generators/topology/sdwan_edge.py takes the single role=uplink physical
+          # port for the trunk and fails on several.
+          - template_name: VCG-VA_GATEWAY_eth1
+            name: eth1
+            role: customer
             interface_type: 1000base-t
       member_of_groups:
         - sdwan_gateways

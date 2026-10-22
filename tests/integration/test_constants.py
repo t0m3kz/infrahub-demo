@@ -116,7 +116,7 @@ def _all_demo(kind: str) -> list[Declared]:
 # cage racks too (they are in topologies_rack and add_rack no-ops on them),
 # add_colocation_metro every metro (its VNI and ASN pools, kit or no kit),
 # add_colocation_zone every zone and add_virtual_colocation every virtual
-# colocation, though only FR2 and PA4 carry fabric_templates (the rest no-op), and
+# colocation, though only FR2, PA4 and AM-NE carry fabric_templates (the rest no-op), and
 # add_sdwan_edge every office, though the generator
 # no-ops on those without sdwan_gateway (add_office_fabric likewise: every office,
 # though only those with fabric_templates generate); updated-triggers only add runs.
@@ -324,8 +324,8 @@ ALL_DEMO_PHYSICAL_CIRCUIT_TYPES: dict[str, int] = {
     # DC10/DC11 -> EQX FR2 (eg-fr201 and eg-fr202), DC12 -> EQX PA4 (eg-pa401 and eg-pa402).
     "dark_fiber": 6,
     "cross_connect": 2,  # EQX FR2 -> AWS eu-central-1, EQX PA4 -> Azure westeurope
-    # The declared ones (the shared transit circuits of 06_internet) plus one
-    # generated underlay per SD-WAN office.
+    # The declared ones (the shared transit circuits of 06_internet and the shared
+    # gateway's own access, 08_gateway_access) plus one generated underlay per SD-WAN office.
     "internet": len([c for c in _all_demo("TopologyPhysicalCircuit") if c.value("circuit_type") == "internet"])
     + len(_SDWAN_OFFICES),
 }
@@ -347,6 +347,19 @@ ALL_DEMO_DCI_CIRCUITS: dict[str, tuple[str, tuple[tuple[str, str], tuple[str, st
 # Unowned, unlike a customer's own internet underlay.
 ALL_DEMO_INTERNET_TRANSIT_CIRCUITS: frozenset[str] = frozenset(
     {"INET-LUMEN-EQXFR2", "INET-COGENT-EQXFR2", "INET-LUMEN-EQXPA4", "INET-COGENT-EQXPA4"}
+)
+
+# The shared SD-WAN gateway's own internet access (08_interconnects/08_gateway_access): its eth1 to a free `customer`
+# port of Lumen's Frankfurt provider edge. Unowned like the transit, but not transit: no peering, no address, and it
+# ends on the gateway, not a cage edge. circuit_id -> its two (device, interface) ends.
+ALL_DEMO_GATEWAY_ACCESS_CIRCUITS: dict[str, frozenset[tuple[str, str]]] = {
+    "INET-LUMEN-EQXFR2-GW": frozenset({("EQX-FR2-SDWAN-GW1", "eth1"), ("EXT-LUMEN-FRA1", "et-0/0/1")}),
+}
+ALL_DEMO_GATEWAY_ACCESS_LOCATIONS: tuple[str, ...] = ("FR2", "ISP-LUMEN")
+
+# The unowned internet circuits: only a customer's own underlay (INET-<office>) names an owner.
+ALL_DEMO_SHARED_INTERNET_CIRCUITS: frozenset[str] = ALL_DEMO_INTERNET_TRANSIT_CIRCUITS | frozenset(
+    ALL_DEMO_GATEWAY_ACCESS_CIRCUITS
 )
 
 # The SD-WAN offices' internet access (add_sdwan_edge): INET-<office> runs from the office edge's GE1 to a free
@@ -391,7 +404,8 @@ def _zone_edge_pair(zone: Declared) -> tuple[str, str] | None:
 # _ensure_edge_pair; a virtual colocation's edges are never paired). Keyed by the lowercase zone name the
 # generator uses for its pool and key names (`fr2-technical-ipv6-pool`, `fr2-fabric-key`). Derived from
 # data/demos/30_all/02_colo/equinix/{fr,pa}/02_topology.yml: FR2 and PA4 declare
-# `["2", "edge", "N9K-C9316D-GX_EDGE"]`; the other zones, the virtual colocation AM-NE and the metros declare none.
+# `["2", "edge", "N9K-C9316D-GX_EDGE"]`; the other zones and the metros declare none. The virtual colocation AM-NE
+# declares `["2", "edge", "C8000V_EDGE"]` but is never paired (virtual edges have no port to cable).
 ALL_DEMO_EDGE_PAIR_ZONES: dict[str, tuple[str, str]] = {
     name(zone).lower(): pair for zone in _all_demo("TopologyColocationZone") if (pair := _zone_edge_pair(zone))
 }
@@ -471,7 +485,11 @@ class VirtualCircuitExpectation(TypedDict):
     transport_mode: str
     #: None for the shared on-ramp circuits that belong to no single customer.
     owner: str | None
-    physical_circuits: tuple[str, ...]
+    #: circuit_ids of its derived underlay (the physical circuits on its own ports, deduped); never declared. Order is
+    #: tenant end first (the DC's dark fibre before the cross-connect), the contiguous path test_62 walks; the derived
+    #: list is compared unordered (sorted) in test_02. Empty for a provider_virtual_only circuit with no physical
+    #: circuit on its ports; such a circuit has no physical rule, so the walk of test_62 skips it.
+    underlay: tuple[str, ...]
     interfaces: int
     cloud_endpoints: tuple[str, ...]
 
@@ -497,14 +515,15 @@ def _sdwan_tunnel(office: Declared) -> tuple[str, VirtualCircuitExpectation]:
         "link_type": "sd_wan",
         "transport_mode": "internet_backed",
         "owner": _CUSTOMER_NAMES[render(office, "{{ owner__org_id__value }}")],
-        "physical_circuits": (f"INET-{office_name}",),
+        "underlay": (f"INET-{office_name}",),
         "interfaces": 2,
         "cloud_endpoints": (),
     }
 
 
-# The full virtual-circuit fabric. `physical_circuits` is the underlay mapping
-# and `interfaces` the minimum number of terminating DcimInterfaces reached
+# The full virtual-circuit fabric. `underlay` is the expected derived underlay (the
+# physical circuits on the circuit's own ports; the data declares none) and
+# `interfaces` the minimum number of terminating DcimInterfaces reached
 # through capabilities — the one uniform "what is this port doing"
 # edge in the schema.
 ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
@@ -512,7 +531,7 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
         "link_type": "direct_connect_aws",
         "transport_mode": "physical_backed",
         "owner": "Drentec BV",
-        "physical_circuits": ("DF-DC10-EQXFR2", "XC-EQXFR2-AWS-EUC1"),
+        "underlay": ("DF-DC10-EQXFR2", "XC-EQXFR2-AWS-EUC1"),
         "interfaces": 2,
         "cloud_endpoints": ("vif-transit-hub-euc1",),
     },
@@ -520,7 +539,7 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
         "link_type": "direct_connect_aws",
         "transport_mode": "physical_backed",
         "owner": "Lumivex SA",
-        "physical_circuits": ("DF-DC11-EQXFR2", "XC-EQXFR2-AWS-EUC1"),
+        "underlay": ("DF-DC11-EQXFR2", "XC-EQXFR2-AWS-EUC1"),
         "interfaces": 2,
         "cloud_endpoints": ("vif-transit-hub-euc1",),
     },
@@ -530,7 +549,7 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
         "link_type": "express_route_azure",
         "transport_mode": "physical_backed",
         "owner": "Krafven GmbH",
-        "physical_circuits": ("DF-DC12-EQXPA4", "XC-EQXPA4-AZURE-WEU"),
+        "underlay": ("DF-DC12-EQXPA4", "XC-EQXPA4-AZURE-WEU"),
         "interfaces": 2,
         "cloud_endpoints": (),
     },
@@ -540,7 +559,7 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
         "link_type": "equinix_fabric",
         "transport_mode": "physical_backed",
         "owner": "Nordix Ltd.",
-        "physical_circuits": ("XC-EQXFR2-AWS-EUC1",),
+        "underlay": ("XC-EQXFR2-AWS-EUC1",),
         "interfaces": 1,
         "cloud_endpoints": ("vif-transit-hub-euc1",),
     },
@@ -548,9 +567,30 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
         "link_type": "direct_connect_aws",
         "transport_mode": "physical_backed",
         "owner": None,  # shared SD-WAN on-ramp, not a customer circuit
-        "physical_circuits": ("XC-EQXFR2-AWS-EUC1",),
+        "underlay": ("XC-EQXFR2-AWS-EUC1",),
         "interfaces": 2,
         "cloud_endpoints": ("vif-transit-hub-euc1",),
+    },
+    # Equinix Fabric into the AM-NE Network Edge pair (03_virtual_circuits/02_am_ne_overlays.yml): provider_virtual_only,
+    # so no physical rule. The DC end port (bl-dc101101 Ethernet1/35) rides DF-DC10-EQXFR2, the one underlay circuit
+    # derived at that port; the Fabric hop itself is not carried over the fibre.
+    "VC-C005-DC10-AMNE": {
+        "link_type": "equinix_fabric",
+        "transport_mode": "provider_virtual_only",
+        "owner": "Drentec BV",
+        "underlay": ("DF-DC10-EQXFR2",),
+        "interfaces": 2,
+        "cloud_endpoints": (),
+    },
+    # Shared platform overlay from a Network Edge router to the AWS hub: one NE port, no physical circuit under it, its
+    # cloud end the VIF of dx-eqx-am-euc1.
+    "VC-PLATFORM-AMNE-AWS-EUC1": {
+        "link_type": "equinix_fabric",
+        "transport_mode": "provider_virtual_only",
+        "owner": None,
+        "underlay": (),
+        "interfaces": 1,
+        "cloud_endpoints": ("vif-transit-am-euc1",),
     },
     # One generated tunnel per SD-WAN office (_sdwan_tunnel).
     **dict(_sdwan_tunnel(office) for office in _SDWAN_OFFICES),
@@ -562,7 +602,7 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
         "link_type": "vpn_ipsec",
         "transport_mode": "internet_backed",
         "owner": "Nordix Ltd.",
-        "physical_circuits": ("INET-C001-OFFICE",),
+        "underlay": ("INET-C001-OFFICE",),
         "interfaces": 2,
         "cloud_endpoints": (),
     },
@@ -597,14 +637,15 @@ ALL_DEMO_DECLARED_VIRTUAL_LOCATIONS: dict[str, tuple[str, ...]] = {
     for circuit_name, circuit in _DECLARED_VIRTUAL_CIRCUITS.items()
 }
 
-# Virtual circuit -> its underlay in order, tenant end first: as declared, or the generated tunnel's one hop.
-ALL_DEMO_VIRTUAL_CIRCUIT_CHAINS: dict[str, tuple[str, ...]] = {
-    circuit_name: (
-        tuple(_DECLARED_VIRTUAL_CIRCUITS[circuit_name].item.get("physical_circuits") or ())
-        if circuit_name in _DECLARED_VIRTUAL_CIRCUITS
-        else expected["physical_circuits"]
-    )
-    for circuit_name, expected in ALL_DEMO_VIRTUAL_CIRCUITS.items()
+# circuit_id / name -> the (device, interface) ports the data declares in `capabilities`. A virtual circuit's underlay is
+# derived from them: the physical circuits that terminate on its own ports.
+ALL_DEMO_DECLARED_PHYSICAL_PORTS: dict[str, frozenset[tuple[str, str]]] = {
+    circuit_id: frozenset((str(device), str(port)) for device, port in circuit.item.get("capabilities") or ())
+    for circuit_id, circuit in _DECLARED_PHYSICAL_CIRCUITS.items()
+}
+ALL_DEMO_DECLARED_VIRTUAL_PORTS: dict[str, frozenset[tuple[str, str]]] = {
+    circuit_name: frozenset((str(device), str(port)) for device, port in circuit.item.get("capabilities") or ())
+    for circuit_name, circuit in _DECLARED_VIRTUAL_CIRCUITS.items()
 }
 
 

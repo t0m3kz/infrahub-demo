@@ -167,7 +167,7 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
         edge_uplink = await self._find_edge_uplink(edge.id, office_name)
         isp_location_id, isp_device_id = await self._resolve_isp_access(office_name, internet_provider_id)
 
-        internet_circuit = await self._ensure_internet_circuit(
+        await self._ensure_internet_circuit(
             office_name=office_name,
             office_id=office_id,
             owner_id=owner_id,
@@ -183,7 +183,6 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
             provider_id=overlay_provider_id,
             gateway_zone_id=gateway_zone_id,
             gateway_zone_name=gateway_zone_name,
-            internet_circuit_id=internet_circuit.id,
         )
 
         tunnel_id_attr = getattr(overlay_circuit, "tunnel_id", None)
@@ -274,7 +273,7 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
         edge_uplink_id: str,
         isp_location_id: str,
         isp_device_id: str,
-    ) -> Any:
+    ) -> None:
         """Create/upsert INET-<office> from the Edge uplink to the ISP access PE's port, in one save.
 
         A physical circuit needs both ends when it is written, so the port is
@@ -303,7 +302,6 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
             )
             await circuit.save(allow_upsert=True)
         self.logger.info(f"Ensured internet-underlay circuit '{circuit_name}'")
-        return circuit
 
     async def _pick_isp_port(self, office_name: str, circuit_name: str, isp_device_id: str) -> str:
         """The access PE port for this circuit: the one it already ends on, else the first free ``customer`` port.
@@ -346,9 +344,11 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
         provider_id: str,
         gateway_zone_id: str,
         gateway_zone_name: str,
-        internet_circuit_id: str,
     ) -> Any:
         """Create/upsert the overlay VC without its capabilities.
+
+        Its underlay is not declared: it is the INET-<office> circuit found on the Edge uplink
+        port, which _link_overlay_to_interfaces gives the VC as an end.
 
         The gateway sub-interface doesn't exist yet (its name depends on the
         tunnel_id this same call allocates), and an upsert REPLACES a
@@ -371,7 +371,6 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
                 "owner": {"id": owner_id},
                 "description": f"{office_name} SD-WAN tunnel to {gateway_zone_name} gateway",
                 "locations": [{"id": office_id}, {"id": gateway_zone_id}],
-                "physical_circuits": [{"id": internet_circuit_id}],
                 "member_of_groups": [_target_group("virtual_circuits")],
             },
         )

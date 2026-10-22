@@ -753,17 +753,6 @@ spec:
           - relationship_name: capabilities
             modification_type: updated
 
-    - name: trigger-virtual-circuit-on-physical-circuits-updated
-      branch_scope: "other_branches"
-      node_kind: TopologyVirtualCircuit
-      mutation_action: "updated"
-      action: run-virtual-circuit-generator
-      matches:
-        kind: CoreNodeTriggerRelationshipMatch
-        data:
-          - relationship_name: physical_circuits
-            modification_type: updated
-
     - name: trigger-virtual-circuit-on-link-type-updated
       branch_scope: "other_branches"
       node_kind: TopologyVirtualCircuit

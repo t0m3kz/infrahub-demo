@@ -261,10 +261,15 @@ class MyCheck(InfrahubCheck):
   it). A physical circuit is shared underlay, unowned, except an office's access circuit (`add_sdwan_edge`'s
   `INET-<office>`), owned by the office's owner.
   A virtual circuit's `locations` peer `TopologyConnectableLocation`: an owned one ends on a footprint of its
-  `owner`, an unowned one on facilities, and its `physical_circuits` chain is contiguous end to end. A
-  provider-managed one may surface on one port (`VC-C001-EQXFR-AWS-EUC1`: the cage edge; its cloud end is a
-  `CloudVirtualInterface`).
-  `checks/circuit_placement.py` guards what the schema cannot (cage parent = device metro, owner, chain).
+  `owner`, an unowned one on facilities. Its underlay is derived, never listed: the physical circuits found on the
+  circuit's own ports, each once, a decommissioned one ignored. For a `physical_backed` or `internet_backed` circuit
+  that underlay must be contiguous (end to end, or from one end to the internet) and an empty one is an error.
+  A `provider_virtual_only` or unset circuit has no physical rule (Equinix Network Edge has no physical circuit).
+  A tunnel link type must be `internet_backed` or `physical_backed`. Virtual circuits that meet at a device must
+  have the same environment class (prod vs non-prod). A provider-managed one may surface on one port
+  (`VC-C001-EQXFR-AWS-EUC1`: the cage edge; its cloud end is a `CloudVirtualInterface`).
+  `checks/circuit_placement.py` guards what the schema cannot (cage parent = device metro, owner, derived underlay,
+  tunnel transport mode, environment class).
   `locations` is declared on each circuit node, not on `TopologyCircuit`: an inherited peer cannot be narrowed.
 - **DC service tier**: `TopologyCustomerTemplateDC` (referenced by the footprint's `design`, for example `M_DC`)
   holds `dedicated_firewall`, `dedicated_loadbalancer`, `max_segments`, `ports_25g` and `ports_100g` (0 = no

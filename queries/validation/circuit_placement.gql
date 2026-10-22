@@ -1,8 +1,10 @@
 # The rows of checks/circuit_placement.py: every circuit with the places it terminates on (locations), the device
 # each end port sits on and where that device is deployed (capabilities), the circuit's owner (with an office
-# location's owner: an office's access circuit is owned by it), and for a virtual circuit the locations of every
-# physical circuit it rides. One global query: the underlay chain of a virtual circuit spans
-# several circuits.
+# location's owner: an office's access circuit is owned by it; a virtual circuit's DC and colocation footprints also
+# state their environment, which the environment rule compares per shared device), and for a virtual circuit the
+# physical circuits found in the capabilities of its own ports (its derived underlay), each with its status (a
+# decommissioned one is no underlay) and locations, and its link_type (a tunnel must be physical- or internet-backed).
+# One global query.
 #
 # Concrete inline fragments only, so the query is valid whether physical `locations` peers TopologyConnectableLocation
 # or TopologyFacility: TopologyColocationZone and TopologyVirtualColocation implement both, the customer
@@ -85,6 +87,7 @@ query circuit_placement {
       node {
         id
         name { value }
+        link_type { value }
         transport_mode { value }
         owner { node { id org_id { value } } }
         locations {
@@ -101,8 +104,14 @@ query circuit_placement {
               ... on TopologyCustomerOffice {
                 owner { node { id org_id { value } } }
               }
-              ... on TopologyCustomerDC { parent { node { id __typename name { value } } } }
-              ... on TopologyCustomerColocation { parent { node { id __typename name { value } } } }
+              ... on TopologyCustomerDC {
+                environment { value }
+                parent { node { id __typename name { value } } }
+              }
+              ... on TopologyCustomerColocation {
+                environment { value }
+                parent { node { id __typename name { value } } }
+              }
               ... on TopologyCustomerCloud { parent { node { id __typename name { value } } } }
             }
           }
@@ -112,6 +121,29 @@ query circuit_placement {
             node {
               id
               name { value }
+              capabilities {
+                edges {
+                  node {
+                    __typename
+                    ... on TopologyPhysicalCircuit {
+                      id
+                      name { value }
+                      status { value }
+                      locations {
+                        edges {
+                          node {
+                            id
+                            __typename
+                            name { value }
+                            ... on TopologyColocationZone { parent { node { id __typename name { value } } } }
+                            ... on TopologyVirtualColocation { parent { node { id __typename name { value } } } }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
               device {
                 node {
                   id
@@ -148,25 +180,6 @@ query circuit_placement {
                         ... on TopologyVirtualColocation { parent { node { id __typename name { value } } } }
                       }
                     }
-                  }
-                }
-              }
-            }
-          }
-        }
-        physical_circuits {
-          edges {
-            node {
-              id
-              name { value }
-              locations {
-                edges {
-                  node {
-                    id
-                    __typename
-                    name { value }
-                    ... on TopologyColocationZone { parent { node { id __typename name { value } } } }
-                    ... on TopologyVirtualColocation { parent { node { id __typename name { value } } } }
                   }
                 }
               }

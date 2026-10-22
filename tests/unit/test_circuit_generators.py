@@ -49,6 +49,7 @@ from tests.unit.simulators.circuit_fakes import (
     virtual_generator,
     virtual_payload,
 )
+from utils.circuit_underlay import derived_underlay
 from utils.data_cleaning import clean_data
 
 TRACKED = {"allow_upsert": True}
@@ -56,6 +57,11 @@ TRACKED = {"allow_upsert": True}
 
 def _peerings(client: FakeClient) -> list[dict[str, Any]]:
     return [data for data, _ in client.created_of("ManagedBGPPeering")]
+
+
+def _info_messages(gen: Any) -> list[str]:
+    """The text of every logger.info call the generator made."""
+    return [str(c.args[0]) for c in gen.logger.info.call_args_list]
 
 
 # ===========================================================================
@@ -364,8 +370,8 @@ class TestPhysicalCircuitDciRefusals:
 
 class TestPhysicalCircuitFanOut:
     @pytest.mark.asyncio
-    async def test_reruns_the_overlay_circuits_riding_it(self) -> None:
-        """Fire-and-forget, so a status change reaches the virtual circuits."""
+    async def test_reruns_the_overlay_circuits_on_its_ports(self) -> None:
+        """Fire-and-forget, so a status change reaches the virtual circuits that share one of its ports."""
         client = FakeClient()
         client.virtual_circuits = [MagicMock(id="vc-2"), MagicMock(id="vc-1")]
         gen = physical_generator(client)
@@ -374,9 +380,33 @@ class TestPhysicalCircuitFanOut:
 
         assert (
             "TopologyVirtualCircuit",
-            {"physical_circuits__ids": ["circ-df10"], "peering_role__value": "overlay"},
+            {"capabilities__ids": ["if-bl", "if-eg"], "peering_role__value": "overlay"},
         ) in client.filter_calls
         gen.run_generator.assert_awaited_once_with("add_virtual_circuit", ["vc-1", "vc-2"], wait=False)
+
+    @pytest.mark.asyncio
+    async def test_a_port_listed_twice_is_filtered_once(self) -> None:
+        """The filter takes the deduplicated endpoint interface ids, in query order."""
+        client = FakeClient()
+        gen = physical_generator(client)
+
+        await gen.generate(physical_payload(role="none", ends=[cage_edge(), dc_border_leaf(), cage_edge()]))
+
+        assert client.filter_calls == [
+            ("TopologyVirtualCircuit", {"capabilities__ids": ["if-eg", "if-bl"], "peering_role__value": "overlay"})
+        ]
+
+    @pytest.mark.asyncio
+    async def test_no_endpoints_no_query_and_no_dispatch(self) -> None:
+        """Without ports there is nothing for a virtual circuit to share: no unfiltered query, no fan-out."""
+        client = FakeClient()
+        client.virtual_circuits = [MagicMock(id="vc-1")]
+        gen = physical_generator(client)
+
+        await gen._fan_out_virtual_circuits([], "DF-DC10-EQXFR2")
+
+        assert client.filter_calls == []
+        gen.run_generator.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_no_overlay_circuits_no_fan_out(self) -> None:
@@ -668,6 +698,73 @@ class TestPlanLocations:
 # ===========================================================================
 
 
+def _derived(**kwargs: Any) -> list[dict[str, Any]]:
+    """derived_underlay() over a cleaned virtual_payload()."""
+    circuit = clean_data(virtual_payload(**kwargs))["TopologyVirtualCircuit"][0]
+    return derived_underlay(circuit)
+
+
+class TestDerivedUnderlay:
+    """derived_underlay: the physical circuits found in the capabilities of the circuit's own ports."""
+
+    def test_the_circuits_on_the_ports_are_the_underlay(self) -> None:
+        underlay = _derived(physical=[underlay_circuit("INET-A"), underlay_circuit("INET-B")])
+
+        assert [pc["id"] for pc in underlay] == ["pc-INET-A", "pc-INET-B"]
+        assert underlay[0]["circuit_id"] == "INET-A"
+        assert underlay[0]["status"] == "active"
+
+    def test_a_circuit_on_both_ports_counts_once(self) -> None:
+        assert [pc["id"] for pc in _derived(on_every_port=True)] == ["pc-INET-C001-WAW-FR2"]
+
+    def test_circuits_on_different_ports_are_kept_in_port_order(self) -> None:
+        """First-seen order across the ports, deduplicated by id."""
+        edge = _port_with(sdwan_edge(), [underlay_circuit("INET-B"), underlay_circuit("INET-A")])
+        gateway = _port_with(sdwan_gateway(), [underlay_circuit("INET-C"), underlay_circuit("INET-B")])
+        circuit = {"capabilities": [edge, gateway]}
+
+        assert [pc["id"] for pc in derived_underlay(circuit)] == ["pc-INET-B", "pc-INET-A", "pc-INET-C"]
+
+    def test_other_capability_kinds_are_not_underlay(self) -> None:
+        """A BGP process or a virtual circuit on the port is not a physical circuit, even with an id."""
+        port = _port_with(
+            sdwan_edge(),
+            [
+                {"__typename": "ManagedBGP", "id": "bgp-1"},
+                {"__typename": "TopologyVirtualCircuit", "id": "vc-2"},
+                underlay_circuit("INET-A"),
+            ],
+        )
+
+        assert [pc["id"] for pc in derived_underlay({"capabilities": [port]})] == ["pc-INET-A"]
+
+    def test_a_port_with_nothing_on_it_derives_nothing(self) -> None:
+        assert _derived(physical=[]) == []
+
+    @pytest.mark.parametrize(
+        "circuit",
+        [
+            pytest.param({}, id="no-capabilities-key"),
+            pytest.param({"capabilities": None}, id="capabilities-none"),
+            pytest.param({"capabilities": [{"id": "if-1", "capabilities": None}]}, id="port-capabilities-none"),
+            pytest.param({"capabilities": [{"id": "if-1"}]}, id="port-without-capabilities"),
+            pytest.param(
+                {"capabilities": [{"id": "if-1", "capabilities": [{"typename": "TopologyPhysicalCircuit"}]}]},
+                id="circuit-without-id",
+            ),
+        ],
+    )
+    def test_missing_data_derives_nothing(self, circuit: dict[str, Any]) -> None:
+        assert derived_underlay(circuit) == []
+
+
+def _port_with(port: dict[str, Any], circuits: list[dict[str, Any]]) -> dict[str, Any]:
+    """A cleaned port whose own capabilities hold ``circuits``."""
+    return clean_data(
+        {**port, "capabilities": {"edges": [{"node": {"__typename": "ManagedBGP"}}, *({"node": c} for c in circuits)]}}
+    )
+
+
 class TestVirtualCircuitOverlay:
     @pytest.mark.asyncio
     async def test_role_none_writes_nothing_and_waits_for_nothing(self) -> None:
@@ -782,7 +879,7 @@ class TestVirtualCircuitOverlay:
         assert "password" not in _peerings(client)[0]
 
     @pytest.mark.asyncio
-    async def test_waits_for_every_physical_circuit_run(self) -> None:
+    async def test_waits_for_every_derived_underlay_run(self) -> None:
         gen = virtual_generator(FakeClient())
         payload = virtual_payload(physical=[underlay_circuit("INET-A"), underlay_circuit("INET-B")])
 
@@ -790,6 +887,24 @@ class TestVirtualCircuitOverlay:
 
         waited = [c.args for c in gen.wait_for_parent_generator_and_refetch.await_args_list]
         assert waited == [("add_circuit", "pc-INET-A"), ("add_circuit", "pc-INET-B")]
+
+    @pytest.mark.asyncio
+    async def test_a_circuit_shared_by_both_ports_is_waited_for_once(self) -> None:
+        """Both ends of the tunnel list the same physical circuit: one wait, not two."""
+        gen = virtual_generator(FakeClient())
+
+        await gen.generate(virtual_payload(on_every_port=True))
+
+        waited = [c.args for c in gen.wait_for_parent_generator_and_refetch.await_args_list]
+        assert waited == [("add_circuit", "pc-INET-C001-WAW-FR2")]
+
+    @pytest.mark.asyncio
+    async def test_no_underlay_waits_for_nothing(self) -> None:
+        gen = virtual_generator(FakeClient())
+
+        await gen.generate(virtual_payload(physical=[]))
+
+        gen.wait_for_parent_generator_and_refetch.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_refetched_data_wins(self) -> None:
@@ -820,6 +935,84 @@ class TestVirtualCircuitOverlay:
         assert client.writes == []
 
     @pytest.mark.asyncio
+    async def test_one_live_underlay_circuit_keeps_the_session(self) -> None:
+        """Only a wholly decommissioned underlay removes the session; a live sibling keeps it."""
+        client = FakeClient()
+        underlay = [underlay_circuit("INET-A", status="decommissioned"), underlay_circuit("INET-B")]
+
+        await virtual_generator(client).generate(virtual_payload(physical=underlay))
+
+        assert _peerings(client)[0]["status"] == "active"
+
+    @pytest.mark.parametrize("status", ["active", "provisioning"])
+    @pytest.mark.asyncio
+    async def test_an_empty_derived_underlay_builds_no_session_yet(self, status: str) -> None:
+        """Ports not linked to a physical circuit yet: nothing is written and no error, an info line says why,
+        and it is never reported as a decommissioned underlay."""
+        client = FakeClient()
+        gen = virtual_generator(client)
+
+        await gen.generate(virtual_payload(physical=[], status=status))
+
+        assert client.writes == []
+        gen.logger.error.assert_not_called()
+        messages = _info_messages(gen)
+        assert any("ports not linked to a physical circuit yet" in m for m in messages)
+        assert not any("decommissioned" in m for m in messages)
+
+    @pytest.mark.asyncio
+    async def test_the_rerun_once_the_ports_are_linked_writes_exactly_one_active_peering(self) -> None:
+        """The capabilities-updated trigger reruns the circuit: first run nothing, second run the one session."""
+        client = FakeClient()
+        gen = virtual_generator(client)
+
+        await gen.generate(virtual_payload(physical=[]))
+
+        assert _peerings(client) == []
+        assert any("ports not linked to a physical circuit yet" in m for m in _info_messages(gen))
+
+        await gen.generate(virtual_payload(physical=[underlay_circuit("INET-A")]))
+
+        assert [(d["name"], d["status"]) for d in _peerings(client)] == [("C001-SDWAN-FR2-bgp", "active")]
+        _, node = client.created_of("ManagedBGPPeering")[0]
+        assert client.saves()[node.id] == TRACKED
+        gen.logger.error.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_a_live_underlay_builds_the_session_once_the_ports_are_linked(self) -> None:
+        """The same active circuit with a live derived underlay: the session is written active."""
+        client = FakeClient()
+        gen = virtual_generator(client)
+
+        await gen.generate(virtual_payload(physical=[underlay_circuit("INET-A")], status="active"))
+
+        assert [d["name"] for d in _peerings(client)] == ["C001-SDWAN-FR2-bgp"]
+        assert _peerings(client)[0]["status"] == "active"
+        gen.logger.error.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_a_decommissioned_circuit_ignored_for_underlay_active(self) -> None:
+        """A decommissioned sibling beside a live one that is down: the session stays provisioning."""
+        client = FakeClient()
+        underlay = [underlay_circuit("INET-A", status="decommissioned"), underlay_circuit("INET-B", status="down")]
+
+        await virtual_generator(client).generate(virtual_payload(physical=underlay))
+
+        assert _peerings(client)[0]["status"] == "provisioning"
+
+    @pytest.mark.asyncio
+    async def test_a_decommissioned_circuit_without_underlay_builds_no_session(self) -> None:
+        """The circuit's own status still stops the session when no underlay is derived."""
+        client = FakeClient()
+
+        gen = virtual_generator(client)
+
+        await gen.generate(virtual_payload(physical=[], status="decommissioned"))
+
+        assert client.writes == []
+        assert any("decommissioned" in m for m in _info_messages(gen))
+
+    @pytest.mark.asyncio
     async def test_underlay_down_keeps_the_session_provisioning(self) -> None:
         client = FakeClient()
 
@@ -832,7 +1025,6 @@ class TestVirtualCircuitRefusals:
     @pytest.mark.parametrize(
         ("payload", "client_kwargs", "message"),
         [
-            pytest.param(virtual_payload(physical=[]), {}, "needs its physical_circuits", id="no-underlay"),
             pytest.param(virtual_payload(interfaces=[sdwan_edge()]), {}, "exactly 2 endpoint interfaces", id="one-end"),
             pytest.param(
                 virtual_payload(interfaces=[sdwan_edge(), sdwan_gateway(address=None)]),

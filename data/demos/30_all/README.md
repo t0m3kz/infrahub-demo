@@ -87,7 +87,7 @@ Load the stages **in this order**. After each one, wait until no generator task 
 | 1 | foundation | Customers, cloud, colocation (with the shared SD-WAN gateway and orchestrator), the internet's ISPs (`04_internet`), SaaS, offices, and the three DC sites with their fabrics and controllers | `add_colocation_metro` (×9), `add_colocation_zone`, `add_virtual_colocation` (`AM-NE`), `add_dc` → `add_pod` → `add_rack` (longest stage) |
 | 2 | compute_and_customers | Application hosts and the boarding set: DC/colocation/cloud/office footprints (one `01_deployments.yml` per customer for its DC footprints), cage kit, VMs | `add_endpoint`, `add_customer_deployment_*`, `add_sdwan_edge` |
 | 3 | applications | Segments, applications, deployment-request catalogue | `add_vxlan_segment`, `add_app_application` |
-| 4 | interconnects | Colo on-ramp, cloud hub, virtual circuits, SD-WAN backhaul and handoff, cloud endpoints, internet transit | — (data only) |
+| 4 | interconnects | Colo on-ramp, cloud hub, virtual circuits, SD-WAN backhaul and handoff, cloud endpoints, internet transit, the SD-WAN gateway's own internet access | — (data only) |
 
 ```bash
 D=data/demos/30_all
@@ -153,17 +153,42 @@ Once stage 4 has settled, the branch should contain at least:
 | `ManagedVxlanSegment` | 5 |
 | `AppApplication` | 9 |
 | `TopologyExternalProviders` | 3 |
-| `TopologyPhysicalCircuit` (`internet`) | 9 |
+| `TopologyPhysicalCircuit` (`internet`) | 10 |
+| `TopologyVirtualCircuit` | 13 |
 
 ### Colocation Kit Is Per Zone
 
 A metro (`FR`, `PA`, `AM`, ...) is only the Multi-Site site: it owns the VNI and ASN pools, no devices. The kit is
 declared on the zone that holds it, `FR2` (edge pair `eg-fr201/02` plus firewall pair `fw-fr201/02`) and `PA4`
 (`eg-pa401/02`), and device names carry the zone name. `FR6` and `PA6` are customer cages that declare nothing.
-Equinix Amsterdam is one `TopologyVirtualColocation`, `AM-NE`, with no kit in this demo. A
+Equinix Amsterdam is one `TopologyVirtualColocation`, `AM-NE` (see
+[Equinix Network Edge](#equinix-network-edge-am-ne)). A
 `TopologyCustomerColocation` footprint is still named after its metro (`C001-P-FR`); its optional `serving_zone`
 (`FR2` for `C001` and `C005`) says which zone's firewall pair hosts its firewall context (the shared context of that
 HA cluster). A footprint without a `serving_zone` gets no context.
+
+### Equinix Network Edge (AM-NE)
+
+`AM-NE` hosts two `CloudNetworkAppliance` routers, `eg-am-ne01` and `eg-am-ne02` (template `C8000V_EDGE`, Cisco
+IOS XE): instances we rent from Equinix, not hardware we rack, so there are no cages, cables or edge-pair
+interlink. It is routed to Terraform (`infrastructure_orchestrator: terraform`) and ordered under the
+`CloudAccount` `equinix-network-edge` (`02_colo/equinix/am/02_account.yml`), which sorts before the topology
+file that names it. `AM` is a Multi-Site site like the other metros, so its edges also get a VTEP loopback and an
+overlay `ManagedBGP` process in the metro's site AS (`evpn_rt_as`).
+
+Two `provider_virtual_only` Equinix Fabric circuits end on their `Ethernet1/1` ports
+(`08_interconnects/03_virtual_circuits/02_am_ne_overlays.yml`):
+
+| Circuit | Owner | Ends | Derived underlay |
+| --- | --- | --- | --- |
+| `VC-C005-DC10-AMNE` | C005 (Drentec) | `C005-P-DC10` to `AM-NE` (`bl-dc101101` `Ethernet1/35`, `eg-am-ne01` `Ethernet1/1`) | `DF-DC10-EQXFR2` |
+| `VC-PLATFORM-AMNE-AWS-EUC1` | none (platform overlay) | `AM-NE` to `eu-central-1` (`eg-am-ne02` `Ethernet1/1`, cloud end `vif-transit-am-euc1`) | none |
+
+The DC to NE hop is an Equinix Fabric virtual connection, not carried over the fibre. Only the DC end port rides
+`DF-DC10-EQXFR2` (the circuit on that border-leaf port), and that is the dependency derived at that port. The ports are
+only named: the hop has no addresses and no BGP session, because building one for `equinix_fabric` is out of scope.
+The platform overlay's cloud end is a transit VIF on its own hosted Direct Connect, `dx-eqx-am-euc1`, held by
+`eg-am-ne02`; it is not on the FR2 hybrid attachment, which has a single endpoint.
 
 ### Internet Transit
 
@@ -176,6 +201,16 @@ data row. `08_interconnects/06_internet` connects the cages to the transit ISPs,
 transit circuit on `Ethernet1/14` and an eBGP session in VRF `INTERNET`. The ISPs send a default route only. A
 DC reaches the internet through these edges, so a flow trace towards the internet ends on an ISP device. All
 four edges are Multi-Site border gateways (two per metro), so the default from either ISP reaches the DCs.
+
+The shared SD-WAN gateway `EQX-FR2-SDWAN-GW1` (template `VCG-VA_GATEWAY`) has two physical ports: `eth0`, role
+`uplink`, the trunk to the cage router that carries the offices' tunnel sub-interfaces (`add_sdwan_edge` takes the
+one `uplink` port, so a second one would make it fail), and `eth1`, role `customer`, its own internet access.
+`08_interconnects/08_gateway_access` declares that access, `INET-LUMEN-EQXFR2-GW`: an unowned `internet` circuit from
+`eth1` to a free `customer` port (`et-0/0/1`) of Lumen's Frankfurt edge `EXT-LUMEN-FRA1`, with the cage `FR2` as its
+only listed location (`add_circuit` adds the ISP end). It models the gateway's own internet connection; no generator step
+reads it. It is a modelling simplification: no peering role, addressing or BGP is modelled for this access, the offices'
+traffic still reaches the gateway over its trunk `eth0`. It sits in its own folder because `06_internet` pairs every
+circuit with a transit peering.
 
 The ISP devices are in no group, so no artifact or check targets them. Their configuration is the carrier's
 business. Inter-VRF routing is not wired to these edges yet. The DCs reach `INTERNET` through one

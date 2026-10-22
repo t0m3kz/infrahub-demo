@@ -30,8 +30,6 @@ spec:
       locations:
         - "FR2"
         - "eu-central-1"
-      physical_circuits:
-        - "XC-EQXFR2-AWS-EUC1"
       capabilities:
         - ["EQX-FR2-SDWAN-GW1", "eth0"]
         - ["eg-fr201", "Ethernet1/13"]

@@ -55,8 +55,6 @@ spec:
       locations:
         - "C001-OFFICE"
         - "FR2"
-      physical_circuits:
-        - "INET-C001-OFFICE"
       capabilities:
         - ["C001-OFFICE-EDGE1", "GE1"]
         - ["EQX-FR2-SDWAN-GW1", "eth0.1002"]

@@ -1151,7 +1151,6 @@ class TopologyVirtualCircuit(TopologyCircuit, ManagedGeneric, ManagedGenericInte
     tunnel_id: IntegerOptional
     vni: IntegerOptional
     locations: RelationshipManager[TopologyConnectableLocation]
-    physical_circuits: RelationshipManager[TopologyPhysicalCircuit]
 
 
 class DcimVirtualDevice(CoreArtifactTarget, DcimDevice, DcimCapabilities, AppInstance):

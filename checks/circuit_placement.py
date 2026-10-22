@@ -19,27 +19,57 @@ Virtual circuits
        (TopologyCloudRegion, TopologySaasRegion, TopologyColocationZone, TopologyVirtualColocation) or another
        footprint,
     3. unowned (platform overlay): facilities at both ends, no customer footprint,
-    4. ``physical_circuits`` form one contiguous path, each hop sharing a facility with the next: end to end
-       for a physical- or provider-backed circuit, from one end to the internet (a TopologyExternalProviders)
-       for an internet-backed one. A physical_backed circuit rides at least one. Relationship peers carry no
-       order, so the path is searched over every order of the hops.
+    4. a tunnel of ours (``TUNNEL_LINK_TYPES``: sd_wan, vpn_ipsec, vpn_ssl, gre, geneve) is internet_backed or
+       physical_backed, never provider_virtual_only or unset: the generator selects its session on the link type
+       alone and rule 5 applies no physical rule to those two modes, so such a tunnel would escape both,
+    5. the underlay is derived, never listed: the physical circuits found in ``capabilities`` of the circuit's own
+       ports (``utils.circuit_underlay.derived_underlay``), each once, a decommissioned one ignored (it neither
+       satisfies "rides at least one" nor counts in the path). A physical_backed or internet_backed circuit has at
+       least one, and they are contiguous over the port-derived circuits: in some order each shares a facility with
+       the next, end to end for a physical_backed circuit, from one end to the internet (a TopologyExternalProviders)
+       for an internet_backed one. Relationship peers carry no order, so every order of the hops is tried. A
+       provider_virtual_only or unset transport mode has no physical rule: an Equinix Network Edge has no physical
+       circuit,
+    6. circuits meeting at a device share an environment class: prod and non-prod never connect. An owned circuit's
+       environment is that of its owner's footprints among its locations (a DC or colocation footprint states it,
+       an office is always PROD, a cloud footprint or one without an environment has none and is skipped, as is an
+       unowned platform overlay). When the owner's footprints on one circuit disagree, any prod footprint makes the
+       circuit prod (the strict side), otherwise it is non-prod. Two circuits meet where a port of each sits on the
+       same device; one finding per device, naming each circuit and its environment. Several tenants of one class
+       sharing an on-ramp edge (eg-fr201 Ethernet1/13) pass: their owners need not match, and d / t / s (all
+       non-prod) may meet.
 
 A colocation footprint is parented by the METRO, not a cage, so a zone or virtual colocation of that metro
-reaches it: the chain of VC-C001-EQXFR-AWS-EUC1 starts at FR2, a zone of C001-P-FR's metro FR. A virtual circuit's end count is not checked:
+reaches it: the path of VC-C001-EQXFR-AWS-EUC1 starts at FR2, a zone of C001-P-FR's metro FR.
+A virtual circuit's end count is not checked:
 a provider-managed one may surface on a single port, its far end the provider's (VC-C001-EQXFR-AWS-EUC1 has only
 the cage edge's port, its cloud end is a CloudVirtualInterface). A physical circuit's end count and port kind are
 checks/physical_circuit_ports.py's.
+
+Known limitations (the check sees the final state of the data, nothing more):
+
+- a port removed from a physical circuit reruns nothing: the virtual circuits that sat on it keep their session
+  until their next run,
+- a virtual circuit end on a logical port (LAG, sub-interface) derives nothing for that end: there is no walk to the
+  parent interface,
+- the DC to Network Edge Equinix Fabric hop has no addresses and no session,
+- a virtual circuit created before its ports are linked to a physical circuit (add_sdwan_edge) is reported if the
+  check runs in between.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from itertools import permutations
 from typing import Any
 
 from infrahub_sdk.checks import InfrahubCheck
 
+from utils.circuit_underlay import DECOMMISSIONED, TUNNEL_LINK_TYPES, derived_underlay
 from utils.data_cleaning import clean_data
+from utils.exchange_transit import namespace_type_for_environment
+
+from .segment_placement import OFFICE_ENVIRONMENT
 
 CIRCUIT_LOCATIONS = 2
 """A circuit terminates on exactly two places, one per end."""
@@ -56,7 +86,12 @@ FOOTPRINTS = PARENTED_FOOTPRINTS | {OFFICE}
 FACILITIES = frozenset(
     {"TopologyDataCenter", *ZONE_KINDS, "TopologyCloudRegion", INTERNET, "TopologySaasRegion", OFFICE}
 )
+# The transport modes held to a physical path; provider_virtual_only and unset have no physical rule.
+PHYSICAL_TRANSPORT_MODES = frozenset({"physical_backed", "internet_backed"})
 PROVIDER_FAR_ENDS = frozenset({"TopologyCloudRegion", "TopologySaasRegion", *ZONE_KINDS})
+# Footprints that state an environment (TopologyEnvironmentScoped); an office has none, it is always PROD (`p`, the
+# Production choice, checks.segment_placement.OFFICE_ENVIRONMENT); a cloud footprint has none either, its CloudAccount carries it, so it is unknown here.
+ENVIRONMENT_FOOTPRINTS = frozenset({"TopologyCustomerDC", "TopologyCustomerColocation"})
 
 
 def _label(place: dict[str, Any] | None) -> str:
@@ -101,12 +136,17 @@ def _locations(circuit: dict[str, Any]) -> list[dict[str, Any]]:
     return list(seen.values())
 
 
+def _ports(circuit: dict[str, Any]) -> Iterator[dict[str, Any]]:
+    """The circuit's own ports (``capabilities``), each once."""
+    for port in circuit.get("capabilities") or []:
+        if isinstance(port, dict):
+            yield port
+
+
 def _ends(circuit: dict[str, Any]) -> list[tuple[str, dict[str, Any] | None]]:
     """(``device:port``, the device's deployment) per end port."""
     ends = []
-    for port in circuit.get("capabilities") or []:
-        if not isinstance(port, dict):
-            continue
+    for port in _ports(circuit):
         device = port.get("device") or {}
         label = f"{device.get('name') or '<unknown device>'}:{port.get('name') or port.get('id')}"
         deployment = device.get("deployment")
@@ -116,6 +156,38 @@ def _ends(circuit: dict[str, Any]) -> list[tuple[str, dict[str, Any] | None]]:
 
 def _ends_label(ends: list[tuple[str, dict[str, Any] | None]]) -> str:
     return ", ".join(f"{port} in {_label(deployment)}" for port, deployment in ends) or "no end ports"
+
+
+def _environment(circuit: dict[str, Any]) -> str | None:
+    """The environment of an owned circuit: its owner's footprints among its locations, None when unknown.
+
+    Unowned circuits and circuits whose owner has no footprint stating an environment (a cloud footprint, a
+    footprint without one) have none. Footprints that disagree on the class: any prod one makes the circuit prod,
+    else the lowest environment value of the non-prod ones, so the answer never depends on the order."""
+    owner_id = (circuit.get("owner") or {}).get("id")
+    if not owner_id:
+        return None
+    environments = set()
+    for location in _locations(circuit):
+        if (location.get("owner") or {}).get("id") != owner_id:
+            continue
+        if location.get("typename") == OFFICE:
+            environments.add(OFFICE_ENVIRONMENT)
+        elif location.get("typename") in ENVIRONMENT_FOOTPRINTS and location.get("environment"):
+            environments.add(location["environment"])
+    if not environments:
+        return None
+    return OFFICE_ENVIRONMENT if OFFICE_ENVIRONMENT in environments else min(environments)
+
+
+def _devices(circuit: dict[str, Any]) -> dict[str, str]:
+    """Device id -> name of the devices the circuit's own ports sit on."""
+    devices = {}
+    for port in _ports(circuit):
+        device = port.get("device")
+        if isinstance(device, dict) and device.get("id"):
+            devices[str(device["id"])] = str(device.get("name") or device["id"])
+    return devices
 
 
 def _chain_reaches(
@@ -140,7 +212,7 @@ def _chain_reaches(
 
 class CheckCircuitPlacement(InfrahubCheck):
     """Physical and virtual circuits terminate on the right places, owned by the right customer, on a contiguous
-    underlay."""
+    derived underlay; virtual circuits meeting at a device share an environment class (prod never meets non-prod)."""
 
     query = "circuit_placement"
 
@@ -148,8 +220,43 @@ class CheckCircuitPlacement(InfrahubCheck):
         cleaned = clean_data(data)
         for circuit in cleaned.get("TopologyPhysicalCircuit") or []:
             self._validate_physical(circuit)
-        for circuit in cleaned.get("TopologyVirtualCircuit") or []:
+        virtual = cleaned.get("TopologyVirtualCircuit") or []
+        for circuit in virtual:
             self._validate_virtual(circuit)
+        self._validate_environments(virtual)
+
+    def _validate_environments(self, circuits: list[dict[str, Any]]) -> None:
+        """Virtual circuits with a port on the same device are of one environment class: prod and non-prod never
+        connect. One finding per conflicting device, against its first circuit by name, naming every circuit."""
+        classes: dict[str, str] = {}  # environment value -> its class, computed once
+
+        def env_class(environment: str) -> str:
+            if environment not in classes:
+                classes[environment] = namespace_type_for_environment(environment)
+            return classes[environment]
+
+        # device id -> (device name, [(circuit, environment)]), each circuit once per device
+        meeting: dict[str, tuple[str, list[tuple[dict[str, Any], str]]]] = {}
+        for circuit in circuits:
+            environment = _environment(circuit)
+            if environment is None:
+                continue
+            for device_id, device_name in _devices(circuit).items():
+                meeting.setdefault(device_id, (device_name, []))[1].append((circuit, environment))
+        for device_name, members in meeting.values():
+            if len({env_class(environment) for _, environment in members}) < 2:
+                continue
+            members.sort(key=lambda member: str(member[0].get("name") or member[0].get("id")))
+            listing = ", ".join(
+                f"'{circuit.get('name') or circuit.get('id')}' (environment '{environment}', {env_class(environment)})"
+                for circuit, environment in members
+            )
+            self._error(
+                members[0][0],
+                "TopologyVirtualCircuit",
+                f"Device '{device_name}' carries virtual circuits of different environments: {listing}: prod and "
+                "non-prod never connect, so terminate each environment's circuits on its own device.",
+            )
 
     def _validate_physical(self, circuit: dict[str, Any]) -> None:
         name = circuit.get("name") or circuit.get("id") or "<unnamed-circuit>"
@@ -228,12 +335,27 @@ class CheckCircuitPlacement(InfrahubCheck):
             )
             return
 
+        self._validate_tunnel_transport(circuit, name)
         owner = circuit.get("owner")
         if isinstance(owner, dict):
             self._validate_owned(circuit, name, owner, locations)
         else:
             self._validate_unowned(circuit, name, locations)
         self._validate_underlay(circuit, name, locations)
+
+    def _validate_tunnel_transport(self, circuit: dict[str, Any], name: str) -> None:
+        """A tunnel of ours is internet_backed or physical_backed: the generator selects its session on the link type
+        alone and the underlay rule holds only those two modes to a physical path."""
+        link_type = circuit.get("link_type")
+        transport_mode = circuit.get("transport_mode")
+        if link_type in TUNNEL_LINK_TYPES and transport_mode not in PHYSICAL_TRANSPORT_MODES:
+            self._error(
+                circuit,
+                "TopologyVirtualCircuit",
+                f"Virtual circuit '{name}' is a tunnel (link_type '{link_type}') with transport_mode "
+                f"'{transport_mode or 'unset'}': a tunnel runs over the internet or a physical circuit, set its "
+                f"transport_mode to one of {', '.join(sorted(PHYSICAL_TRANSPORT_MODES))}.",
+            )
 
     def _validate_owned(
         self, circuit: dict[str, Any], name: str, owner: dict[str, Any], locations: list[dict[str, Any]]
@@ -295,23 +417,32 @@ class CheckCircuitPlacement(InfrahubCheck):
                 )
 
     def _validate_underlay(self, circuit: dict[str, Any], name: str, locations: list[dict[str, Any]]) -> None:
-        """``physical_circuits`` form one contiguous path: end to end, or one end to the internet."""
+        """The derived underlay (live physical circuits on the circuit's own ports) exists and is contiguous:
+        end to end for a physical_backed circuit, from one end to the internet for an internet_backed one. A
+        provider_virtual_only or unset circuit has no physical rule (an Equinix Network Edge has no physical circuit
+        at all)."""
+        transport_mode = circuit.get("transport_mode")
+        if transport_mode not in PHYSICAL_TRANSPORT_MODES:
+            return
         first, second = (_facility(location) for location in locations)
         named_hops = [
             (hop.get("name") or hop.get("id"), _locations(hop))
-            for hop in circuit.get("physical_circuits") or []
-            if isinstance(hop, dict)
+            for hop in derived_underlay(circuit)
+            if hop.get("status") != DECOMMISSIONED
         ]
         hops = [ends for _, ends in named_hops]
-        transport_mode = circuit.get("transport_mode")
         if not hops:
-            if transport_mode == "physical_backed":
-                self._error(
-                    circuit,
-                    "TopologyVirtualCircuit",
-                    f"Virtual circuit '{name}' is physical_backed but rides no physical circuit: list its underlay "
-                    f"from {_label(first)} to {_label(second)} in physical_circuits.",
-                )
+            expected = (
+                f"from {_label(first)} to {_label(second)}"
+                if transport_mode == "physical_backed"
+                else f"from {_label(first)} or {_label(second)} to the internet (a {INTERNET})"
+            )
+            self._error(
+                circuit,
+                "TopologyVirtualCircuit",
+                f"Virtual circuit '{name}' is {transport_mode} but its ports are on no physical circuit: terminate "
+                f"it on ports cabled through a physical circuit {expected}.",
+            )
             return
         if any(len(hop) != CIRCUIT_LOCATIONS for hop in hops):
             return  # that physical circuit's own location count is reported against it

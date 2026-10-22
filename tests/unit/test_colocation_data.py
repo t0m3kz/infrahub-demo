@@ -337,43 +337,42 @@ class TestAllDemoServingZones:
         assert _metro_of(virtual["AM-NE"]) == "AM"
         assert {"AM1", "AM4"}.isdisjoint({name(obj) for obj in _objects("30_all", _ZONE)})
 
-    def test_30_all_virtual_colocation_carries_no_kit(self) -> None:
-        """AM-NE has no fabric_templates in 30_all (the edge pair of the Amsterdam on-ramp is declared elsewhere)."""
-        assert all(not obj.item.get("fabric_templates") for obj in _objects("30_all", _VIRTUAL))
 
-    def test_10_colocation_virtual_colocation_carries_the_edge_pair(self) -> None:
-        """The colocation demo alone has AM-NE host two C8000V edges."""
-        am_ne = next(obj for obj in _objects("10_colocation", _VIRTUAL) if name(obj) == "AM-NE")
-        assert am_ne.item["fabric_templates"] == [["2", "edge", "C8000V_EDGE"]]
+@pytest.mark.parametrize("demo", sorted(_DEMO_SETS))
+def test_virtual_colocation_carries_the_edge_pair(demo: str) -> None:
+    """Both demos have AM-NE host two C8000V edges (eg-am-ne01, eg-am-ne02); 30_all's circuits terminate on their ports."""
+    am_ne = next(obj for obj in _objects(demo, _VIRTUAL) if name(obj) == "AM-NE")
+    assert am_ne.item["fabric_templates"] == [["2", "edge", "C8000V_EDGE"]]
+    assert _design_name(am_ne) == "EDGE"
 
 
+@pytest.mark.parametrize("demo", sorted(_DEMO_SETS))
 class TestVirtualColocationTerraform:
-    """AM-NE is the one Terraform-orchestrated presence: routed by infrastructure_orchestrator, ordered from its template."""
+    """AM-NE is the one Terraform-orchestrated presence, in both demos: routed by infrastructure_orchestrator, ordered from its template."""
 
-    def test_am_ne_is_orchestrated_by_terraform_in_the_colocation_demo(self) -> None:
+    def test_am_ne_is_orchestrated_by_terraform(self, demo: str) -> None:
         """The virtual_colocation_terraform routing group is picked from this value."""
-        am_ne = next(obj for obj in _objects("10_colocation", _VIRTUAL) if name(obj) == "AM-NE")
+        am_ne = next(obj for obj in _objects(demo, _VIRTUAL) if name(obj) == "AM-NE")
 
         assert am_ne.item["infrastructure_orchestrator"] == "terraform"
         assert am_ne.kind == _VIRTUAL
 
-    def test_the_orchestrator_values_are_schema_choices(self) -> None:
+    def test_the_orchestrator_values_are_schema_choices(self, demo: str) -> None:
         """A value outside the dropdown would fail the load; the object files only ever name a real choice."""
         schema = yaml.safe_load((ROOT / "schemas" / "extensions" / "topology" / "topology_customer.yml").read_text())
         generic = next(g for g in schema["generics"] if g["name"] == "OrchestratorScoped")
         choices = {choice["name"] for choice in generic["attributes"][0]["choices"]}
         used = {
             obj.item["infrastructure_orchestrator"]
-            for demo in _DEMO_SETS
             for obj in _objects(demo, _VIRTUAL, _FOOTPRINT)
             if "infrastructure_orchestrator" in obj.item
         }
         assert "terraform" in used
         assert used <= choices
 
-    def test_the_template_it_uses_carries_the_provider_order_fields(self) -> None:
+    def test_the_template_it_uses_carries_the_provider_order_fields(self, demo: str) -> None:
         """The Terraform artifact reads type code, package, version, term and cores off the appliance (from its template)."""
-        am_ne = next(obj for obj in _objects("10_colocation", _VIRTUAL) if name(obj) == "AM-NE")
+        am_ne = next(obj for obj in _objects(demo, _VIRTUAL) if name(obj) == "AM-NE")
         template_names = {row[2] for row in am_ne.item["fabric_templates"]}
         assert template_names == {"C8000V_EDGE"}
 
@@ -384,7 +383,9 @@ class TestVirtualColocationTerraform:
             assert isinstance(template["term_length"], int)
             assert template["term_length"] in (1, 12, 24, 36)
 
-    def test_the_provider_fields_are_declared_on_the_appliance_schema_and_gone_from_the_virtual_device(self) -> None:
+    def test_the_provider_fields_are_declared_on_the_appliance_schema_and_gone_from_the_virtual_device(
+        self, demo: str
+    ) -> None:
         """Template values only load if CloudNetworkAppliance (and so its templates) has the attributes; DcimVirtualDevice
         no longer carries any provider ordering field."""
         assert {"service_code", "package_code", "software_version", "term_length", "cloud_id"} <= (
@@ -394,11 +395,11 @@ class TestVirtualColocationTerraform:
         assert "cpu_count" not in attribute_names("CloudNetworkAppliance")
         assert not [name_ for name_ in attribute_names("DcimVirtualDevice") if name_.startswith("provider_")]
 
-    def test_the_presence_is_ordered_under_an_equinix_account_of_the_internal_owner(self) -> None:
+    def test_the_presence_is_ordered_under_an_equinix_account_of_the_internal_owner(self, demo: str) -> None:
         """AM-NE names its CloudAccount; the account is Equinix's, owned by Internal (P028), which carries the e-mails."""
-        am_ne = next(obj for obj in _objects("10_colocation", _VIRTUAL) if name(obj) == "AM-NE")
+        am_ne = next(obj for obj in _objects(demo, _VIRTUAL) if name(obj) == "AM-NE")
         assert "provider_account_number" not in am_ne.item and "owner" not in am_ne.item
-        accounts = {name(obj): obj for obj in _objects("10_colocation", "CloudAccount")}
+        accounts = {name(obj): obj for obj in _objects(demo, "CloudAccount")}
         account = accounts[str(am_ne.item["account"])].item
 
         assert account["provider"] == "P016"  # Equinix
@@ -413,12 +414,11 @@ class TestVirtualColocationTerraform:
         assert providers["P016"]["name"] == "Equinix"
         assert providers["P028"]["notification_emails"]
 
-    def test_the_account_is_declared_before_the_presence_that_names_it(self) -> None:
-        """Object files load in name order: 02_account.yml sorts before 02_topology.yml."""
-        am = _DEMOS / "10_colocation" / "equinix" / "am"
-        assert sorted(path.name for path in am.glob("0[0-9]_*.yml")).index("02_account.yml") < sorted(
-            path.name for path in am.glob("0[0-9]_*.yml")
-        ).index("02_topology.yml")
+    def test_the_account_is_declared_before_the_presence_that_names_it(self, demo: str) -> None:
+        """Object files load in path order: 02_account.yml sorts before 02_topology.yml, in the same folder."""
+        am = _DEMO_SETS[demo] / ("02_colo" if demo == "30_all" else "") / "equinix" / "am"
+        names = sorted(path.name for path in am.glob("0[0-9]_*.yml"))
+        assert names.index("02_account.yml") < names.index("02_topology.yml")
 
 
 def test_template_kind_lookup_knows_both_template_families() -> None:

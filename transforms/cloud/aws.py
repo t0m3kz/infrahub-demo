@@ -490,6 +490,11 @@ def _account_blocks_aws(ctx: dict, provider_attr: str = "") -> list[str]:
         )
 
     for dc in ctx["direct_connects"]:
+        # A hosted connection is created by the Direct Connect partner on the customer's behalf, so
+        # `aws_dx_connection` (which orders a dedicated port) cannot provision it. Terraform can only
+        # accept it through `aws_dx_hosted_*` resources, which this transform does not emit.
+        if dc.get("connection_type") == "hosted":
+            continue
         dc_name = dc.get("name", "")
         dc_id = tf_id(dc_name)
         lines += _res(

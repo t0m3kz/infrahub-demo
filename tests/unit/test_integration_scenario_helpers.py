@@ -760,11 +760,14 @@ async def test_fetch_interconnect_inventory_parses_location_and_end_placement() 
     def value(v: Any) -> dict:
         return {"value": v}
 
-    def end(device: str, deployment: str, kind: str, parent: dict | None = None) -> dict:
+    def end(
+        device: str, deployment: str, kind: str, parent: dict | None = None, peers: list[dict] | None = None
+    ) -> dict:
         return {
             "node": {
                 "id": f"if-{device}",
                 "name": value("Ethernet1/35"),
+                "capabilities": {"edges": [{"node": peer} for peer in peers or []]},
                 "device": {
                     "node": {
                         "id": f"dev-{device}",
@@ -831,8 +834,27 @@ async def test_fetch_interconnect_inventory_parses_location_and_end_placement() 
                 },
             ]
         },
-        "physical_circuits": {"edges": [{"node": {"circuit_id": value("DF-DC10-EQXFR2")}}]},
-        "capabilities": {"edges": [end("bl-dc101101", "DC10", "TopologyDataCenter")]},
+        "capabilities": {
+            "edges": [
+                end(
+                    "bl-dc101101",
+                    "DC10",
+                    "TopologyDataCenter",
+                    peers=[
+                        {"__typename": "TopologyPhysicalCircuit", "circuit_id": value("DF-DC10-EQXFR2")},
+                        {"__typename": "TopologyPhysicalCircuit", "circuit_id": value("DF-DC10-EQXFR2")},
+                        {"__typename": "ManagedBGPPeering"},
+                    ],
+                ),
+                end(
+                    "eg-fr201",
+                    "FR2",
+                    "TopologyColocationZone",
+                    parent=metro,
+                    peers=[{"__typename": "TopologyPhysicalCircuit", "circuit_id": value("XC-EQXFR2-AWS-EUC1")}],
+                ),
+            ]
+        },
         "cloud_endpoints": {"edges": []},
     }
     client = MagicMock()
@@ -894,4 +916,5 @@ async def test_fetch_interconnect_inventory_parses_location_and_end_placement() 
         "DC10",
         "org-C005",
     )
-    assert [device["deployment_name"] for device in overlay["end_devices"]] == ["DC10"]
+    assert [device["deployment_name"] for device in overlay["end_devices"]] == ["DC10", "FR2"]
+    assert overlay["underlay"] == ["DF-DC10-EQXFR2", "XC-EQXFR2-AWS-EUC1"]

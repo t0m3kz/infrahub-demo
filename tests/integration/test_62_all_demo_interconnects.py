@@ -75,8 +75,9 @@ from .test_constants import (
     ALL_DEMO_FACILITY_KINDS,
     ALL_DEMO_FIREWALL_MEMBERS,
     ALL_DEMO_FOOTPRINT_KINDS,
+    ALL_DEMO_GATEWAY_ACCESS_CIRCUITS,
+    ALL_DEMO_GATEWAY_ACCESS_LOCATIONS,
     ALL_DEMO_INTERNET_BGWS,
-    ALL_DEMO_INTERNET_TRANSIT_CIRCUITS,
     ALL_DEMO_INTERNET_TRANSIT_PEERINGS,
     ALL_DEMO_INTERNET_UPSTREAM_BY_DC,
     ALL_DEMO_ISP_ACCESS_DEVICE,
@@ -96,6 +97,7 @@ from .test_constants import (
     ALL_DEMO_SDWAN_UNDERLAY_CIRCUITS,
     ALL_DEMO_SEGMENT_LEGS,
     ALL_DEMO_SHARED_FIREWALL_CONTEXTS,
+    ALL_DEMO_SHARED_INTERNET_CIRCUITS,
     ALL_DEMO_SHARED_LOADBALANCER_CONTEXTS,
     ALL_DEMO_SNAT_ADDRESSES,
     ALL_DEMO_SNAT_POOL_PREFIX,
@@ -105,7 +107,6 @@ from .test_constants import (
     ALL_DEMO_TRANSIT_PREFIXES,
     ALL_DEMO_TRANSIT_RESOURCES,
     ALL_DEMO_TRANSIT_SUBINTERFACES,
-    ALL_DEMO_VIRTUAL_CIRCUIT_CHAINS,
     ALL_DEMO_VIRTUAL_CIRCUITS,
     ALL_DEMO_ZONE_SITE_VIPS,
     OFFICE_NAMESPACE,
@@ -514,10 +515,10 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             circuit_id = circuit["circuit_id"]
             if not circuit["provider"]:
                 errors.append(f"{circuit_id}: no provider")
-            # The shared circuits (dark fibre, cross-connects, ISP transit) are
-            # deliberately unowned; only a customer's own internet underlay
-            # names an owner.
-            transit = circuit_id in ALL_DEMO_INTERNET_TRANSIT_CIRCUITS
+            # The shared circuits (dark fibre, cross-connects, ISP transit, the
+            # gateway's own access) are deliberately unowned; only a customer's
+            # own internet underlay names an owner.
+            transit = circuit_id in ALL_DEMO_SHARED_INTERNET_CIRCUITS
             if circuit["circuit_type"] == "internet" and not transit and not circuit["owner"]:
                 errors.append(f"{circuit_id}: internet underlay with no owning customer")
             if transit and circuit["owner"]:
@@ -529,6 +530,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         errors.extend(self._placement_errors(physical))
         errors.extend(self._derived_location_errors(physical))
         errors.extend(self._sdwan_underlay_errors(physical))
+        errors.extend(self._gateway_access_errors(physical))
 
         assert not errors, f"30_all physical circuits are wrong on branch '{scenario_branch}':\n" + "\n".join(
             f"  - {e}" for e in errors
@@ -674,6 +676,24 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             )
         return errors
 
+    @staticmethod
+    def _gateway_access_errors(physical: list[dict]) -> list[str]:
+        """The shared gateway's own access: its eth1 to the ISP edge port, in the cage and the ISP, unowned."""
+        errors: list[str] = []
+        by_id = {circuit["circuit_id"]: circuit for circuit in physical}
+        for circuit_id, ends in sorted(ALL_DEMO_GATEWAY_ACCESS_CIRCUITS.items()):
+            circuit = by_id.get(circuit_id)
+            if circuit is None:
+                errors.append(f"{circuit_id}: the gateway's internet access was not created")
+                continue
+            if set(circuit["ends"]) != ends:
+                errors.append(f"{circuit_id}: ends {circuit['ends']}, expected {sorted(ends)}")
+            if circuit["locations"] != sorted(ALL_DEMO_GATEWAY_ACCESS_LOCATIONS):
+                errors.append(
+                    f"{circuit_id}: locations {circuit['locations']}, expected {sorted(ALL_DEMO_GATEWAY_ACCESS_LOCATIONS)}"
+                )
+        return errors
+
     # ------------------------------------------------------------------
     # Virtual layer
     # ------------------------------------------------------------------
@@ -715,11 +735,11 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             if circuit["owner"] != expected["owner"]:
                 errors.append(f"{name}: owner '{circuit['owner']}', expected '{expected['owner']}'")
 
-            expected_physical = sorted(expected["physical_circuits"])
-            if circuit["physical_circuits"] != expected_physical:
+            expected_underlay = sorted(expected["underlay"])
+            if circuit["underlay"] != expected_underlay:
                 errors.append(
-                    f"{name}: underlay {circuit['physical_circuits']}, expected {expected_physical} — "
-                    "physical_circuits is the only mapping from overlay to underlay"
+                    f"{name}: underlay {circuit['underlay']}, expected {expected_underlay} — "
+                    "the underlay is derived: the physical circuits on the circuit's own ports"
                 )
 
             if len(circuit["interfaces"]) != expected["interfaces"]:
@@ -742,7 +762,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
 
     @staticmethod
     def _virtual_placement_errors(virtual: list[dict], physical: list[dict]) -> list[str]:
-        """Where each overlay ends, and that its ordered underlay joins those two ends.
+        """Where each overlay ends, and that its derived underlay is one contiguous path joining those two ends.
 
         Owned: one end is a footprint (or the office) of the circuit's owner, whose
         facility (a footprint's parent: its DC, metro or region; the office itself)
@@ -751,11 +771,11 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         (a platform overlay): facilities at both ends. Nothing on a virtual circuit
         is derived, so the branch holds exactly the declared locations.
 
-        The underlay (ALL_DEMO_VIRTUAL_CIRCUIT_CHAINS, tenant end first) is
-        contiguous: each hop shares a location with the next, the first hop reaches
-        the tenant end's facility (a metro through one of its cages) and the last the
-        far end. An internet-backed overlay's last hop ends at an ISP instead: past it,
-        the far end is reached across the internet.
+        A physical_backed / internet_backed overlay's underlay (the expectation's ``underlay``, tenant end first;
+        the derived list itself carries no order) is contiguous: each hop shares a location with the next, the
+        first hop reaches the tenant end's facility (a metro through one of its cages) and the last the far end.
+        An internet-backed overlay's last hop ends at an ISP instead: past it, the far end is reached across the
+        internet. A provider_virtual_only or unset transport mode has no physical rule and is skipped.
         """
         errors: list[str] = []
         physical_by_id = {circuit["circuit_id"]: circuit for circuit in physical}
@@ -809,7 +829,10 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                     errors.append(f"{name}: unowned, so both ends must be facilities, but {strays} is not")
                 orientations = [(locations[0], locations[1]), (locations[1], locations[0])]
 
-            chain = ALL_DEMO_VIRTUAL_CIRCUIT_CHAINS.get(name, ())
+            if circuit["transport_mode"] not in ("physical_backed", "internet_backed"):
+                continue
+            expected = ALL_DEMO_VIRTUAL_CIRCUITS.get(name)
+            chain = expected["underlay"] if expected else ()
             missing = [circuit_id for circuit_id in chain if circuit_id not in physical_by_id]
             if not chain or missing:
                 errors.append(f"{name}: underlay {list(chain)} is empty or {missing} are not on the branch")

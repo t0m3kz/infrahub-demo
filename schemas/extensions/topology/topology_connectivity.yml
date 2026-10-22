@@ -375,12 +375,6 @@ nodes:
         description: "Footprints or facilities where this circuit terminates"
 
       # capabilities (many DcimInterface, via ManagedGenericInterfaces)
-      # — the A/Z (or more) technical interfaces this circuit terminates on.
-      - name: physical_circuits
-        label: "Physical Underlay Circuits"
-        peer: TopologyPhysicalCircuit
-        cardinality: many
-        optional: true
-        identifier: "virtual_circuit__physical_circuits"
-        order_weight: 1075
-        description: "Direct mapping to underlay circuits carrying this virtual circuit"
+      # — the A/Z (or more) technical interfaces this circuit terminates on. The underlay is the
+      # physical circuits on these ports (each port's own `capabilities`); there is no separate
+      # overlay-to-underlay mapping to keep in step.

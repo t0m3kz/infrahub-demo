@@ -46,6 +46,7 @@ def _make_gen() -> SdwanEdgeGenerator:
 
 
 _SUBIFACE_ETH0_1999 = {"typename": "DcimVirtualInterface", "id": "sub-1999", "name": "eth0.1999", "role": "uplink"}
+_ACCESS_ETH1 = {"typename": "DcimPhysicalInterface", "id": "access-1", "name": "eth1", "role": "customer"}
 _SECOND_TRUNK_ETH1 = {"typename": "DcimPhysicalInterface", "id": "trunk-2", "name": "eth1", "role": "uplink"}
 
 
@@ -377,6 +378,19 @@ class TestGenerateHappyPath:
         assert subiface_data["parent_interface"] == {"id": "trunk-1"}
 
     @pytest.mark.asyncio
+    async def test_gateway_internet_access_port_is_not_taken_for_the_trunk(self) -> None:
+        """VCG-VA_GATEWAY has a second physical port, eth1 (role customer): the gateway's own internet access. Listed
+        before the trunk, it must neither be picked as the trunk nor make the single-uplink guard fail."""
+        gen = self._wire_full_success()
+        payload = _office_payload(gateway=_gateway(extra_interfaces=[_ACCESS_ETH1]))
+
+        await gen.generate(payload)
+
+        subiface_data = gen.client.create.call_args_list[3].kwargs["data"]
+        assert subiface_data["name"] == "eth0.2000"
+        assert subiface_data["parent_interface"] == {"id": "trunk-1"}
+
+    @pytest.mark.asyncio
     async def test_circuits_use_real_ids_for_locations_not_names(self) -> None:
         """locations peers TopologyConnectableLocation — it must be given
         real resolved ids (office_id, ISP location id, gateway_zone_id), never
@@ -460,6 +474,17 @@ class TestGenerateHappyPath:
 
         overlay_data = gen.client.create.call_args_list[2].kwargs["data"]
         assert "capabilities" not in overlay_data
+
+    @pytest.mark.asyncio
+    async def test_overlay_upsert_declares_no_underlay(self) -> None:
+        """The underlay is derived from the Edge uplink port's capabilities, never sent on the VC."""
+        gen = self._wire_full_success()
+
+        await gen.generate(_office_payload())
+
+        overlay_data = gen.client.create.call_args_list[2].kwargs["data"]
+        assert "physical_circuits" not in overlay_data
+        assert overlay_data["member_of_groups"] == [{"hfid": ["virtual_circuits"], "kind": "CoreStandardGroup"}]
 
     @pytest.mark.asyncio
     async def test_rerun_over_unchanged_data_removes_and_adds_nothing(self) -> None:

@@ -17,7 +17,15 @@
 # needs every circuit to already exist.
 #
 # VC-C008-DC12-AZURE-WEU is absent on purpose — it lands in Azure westeurope, and
-# only the AWS hub is modelled.
+# only the AWS hub is modelled. VC-C005-DC10-AMNE is absent too: it ends on the Network Edge
+# router eg-am-ne01, not in the cloud.
+#
+# The second VIF, vif-transit-am-euc1, is the cloud end of VC-PLATFORM-AMNE-AWS-EUC1: the Equinix
+# Fabric connection from eg-am-ne02 into the hub, over its own hosted Direct Connect
+# (dx-eqx-am-euc1, ../02_cloud_hub/04_direct_connect.yml). It names the hub's Transit Gateway but no
+# transit_gateway_attachment: a hybrid attachment has one endpoint and tgwa-hybrid-eqx-fr2 already has
+# the FR2 VIF (a second hybrid attachment is the follow-up 02_cloud_hub/05_attachments.yml describes).
+# Nothing on the Network Edge router is configured for it: no sub-interface, address or BGP session.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -37,3 +45,14 @@ spec:
         - "VC-C005-DC10-AWS-EUC1"
         - "VC-C006-DC11-AWS-EUC1"
         - "VC-SDWAN-FR2-AWS-EUC1"
+
+    - name: "vif-transit-am-euc1"
+      cloud_id: "dxvif-am3k4m5n"
+      description: "Transit VIF from dx-eqx-am-euc1 onto tgw-30all-euc1"
+      status: active
+      vif_type: transit
+      vlan_id: 1100
+      direct_connect: "dx-eqx-am-euc1"
+      transit_gateway: "tgw-30all-euc1"
+      virtual_circuits:
+        - "VC-PLATFORM-AMNE-AWS-EUC1"

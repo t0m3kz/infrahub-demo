@@ -2,11 +2,15 @@
 # The overlay half of the connectable-set split: per-customer virtual circuits
 # riding the shared physical underlay of ../01_colo_onramp/03_physical_circuits.yml.
 #
-# Every circuit here carries its own `owner`, and every one names its underlay in
-# `physical_circuits`. That pair is what makes underlay impact traceable: a change
-# to an unowned dark fibre or cage port has no customer on it directly, and only
-# becomes a customer-visible risk through the overlays bound to it. Editing
-# DF-DC10-EQXFR2 hits exactly the tenants whose virtual circuits list it.
+# Every circuit here carries its own `owner`, and its underlay is derived, never
+# declared: the physical dependencies at the circuit's own ports (the physical circuits
+# in each port's `capabilities`). Underlay impact is traced from the other side: a
+# change to an unowned dark fibre or cage port has no customer on it directly, and only
+# becomes a customer-visible risk through the overlays on its ports. From a physical
+# circuit that is two hops, circuit -> its ports -> the virtual circuits on them
+# (filter each port's `capabilities` by kind TopologyVirtualCircuit: an interface's
+# capabilities also return segments and peerings). Editing DF-DC10-EQXFR2 hits exactly
+# the tenants whose virtual circuits have a port on it.
 #
 # Termination is expressed through `capabilities` (ManagedGenericInterfaces)
 # rather than any circuit-specific relationship on the interface — that is the one
@@ -22,8 +26,9 @@ spec:
   kind: TopologyVirtualCircuit
   data:
     # --- DC -> AWS eu-central-1 over the Equinix FR2 cage --------------------
-    # Two hops of underlay each: the dark fibre out of the DC and the cage's
-    # cross-connect into the region. A tenant's reach into AWS therefore depends
+    # Two hops of underlay each, derived from the ports: the dark fibre out of the DC
+    # (the border-leaf port) and the cage's cross-connect into the region (the cage
+    # edge port). A tenant's reach into AWS therefore depends
     # on both, which is precisely the DC-boundary blind spot this leg closes.
     - name: "VC-C005-DC10-AWS-EUC1"
       member_of_groups: [virtual_circuits]
@@ -38,9 +43,6 @@ spec:
       locations:
         - "C005-P-DC10"
         - "eu-central-1"
-      physical_circuits:
-        - "DF-DC10-EQXFR2"
-        - "XC-EQXFR2-AWS-EUC1"
       capabilities:
         - ["bl-dc101101", "Ethernet1/35"]
         - ["eg-fr201", "Ethernet1/13"]
@@ -58,9 +60,6 @@ spec:
       locations:
         - "C006-P-DC11"
         - "eu-central-1"
-      physical_circuits:
-        - "DF-DC11-EQXFR2"
-        - "XC-EQXFR2-AWS-EUC1"
       capabilities:
         - ["bl-dc1111101", "Ethernet1/35"]
         - ["eg-fr201", "Ethernet1/13"]
@@ -82,9 +81,6 @@ spec:
       locations:
         - "C008-P-DC12"
         - "westeurope"
-      physical_circuits:
-        - "DF-DC12-EQXPA4"
-        - "XC-EQXPA4-AZURE-WEU"
       capabilities:
         - ["bl-dc1212101", "Ethernet1/35"]
         - ["eg-pa401", "Ethernet1/13"]
@@ -118,7 +114,5 @@ spec:
       locations:
         - "C001-P-FR"
         - "eu-central-1"
-      physical_circuits:
-        - "XC-EQXFR2-AWS-EUC1"
       capabilities:
         - ["eg-fr201", "Ethernet1/13"]

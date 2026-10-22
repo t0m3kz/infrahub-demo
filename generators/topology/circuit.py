@@ -24,15 +24,29 @@ PhysicalCircuitGenerator (add_circuit)
     devices' overlay ManagedBGP processes, keyed with the DC fabric's
     ``{fabric}-overlay-key``. ``underlay`` and ``transit`` are accepted but
     not generated yet; ``none`` writes nothing. Every run then fans out
-    add_virtual_circuit to the overlay virtual circuits riding the circuit,
-    so a status change reaches them.
+    add_virtual_circuit to the overlay virtual circuits that share one of
+    the circuit's endpoint interfaces, so a status change reaches them.
 
 VirtualCircuitGenerator (add_virtual_circuit)
     ``peering_role: overlay`` on a tunnel link type builds one eBGP peering
     between the two endpoint interfaces (capabilities) over their
-    existing addresses, after waiting for the add_circuit runs of the
-    physical circuits it rides. It allocates nothing and never writes the
-    interfaces: a tunnel port carries several virtual circuits.
+    existing addresses, after waiting for the add_circuit runs of its
+    underlay. The underlay is derived, never declared: the physical circuits
+    found in the ``capabilities`` of the virtual circuit's own ports
+    (``utils.circuit_underlay.derived_underlay``). The session is built from
+    that underlay: an empty one builds nothing yet (info, no error) and the
+    capabilities-updated trigger reruns the virtual circuit once the ports are
+    linked to a physical circuit; a decommissioned circuit or a wholly
+    decommissioned underlay builds nothing. That a virtual link has a physical
+    connection is enforced by checks/circuit_placement.py, not here. It allocates
+    nothing and never writes the interfaces: a tunnel port carries several
+    virtual circuits.
+
+    Known limitations, all silent: a port removed from a physical circuit does
+    not rerun the virtual circuits that sat on it; a virtual circuit end on a
+    logical port (LAG, sub-interface) derives nothing for that end; the generator
+    selects on ``link_type`` only, so a tunnel with a wrong ``transport_mode``
+    is caught by checks/circuit_placement.py, not here.
 
 Ownership (the run's tracking group, delete_unused_nodes=True): a run owns
 what exists only because of its circuit — the DCI prefix, its two addresses
@@ -51,6 +65,7 @@ from typing import Any
 
 from infrahub_sdk.protocols import CoreIPPrefixPool
 
+from utils.circuit_underlay import DECOMMISSIONED, TUNNEL_LINK_TYPES, derived_underlay
 from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator
@@ -64,23 +79,6 @@ VIRTUAL_CIRCUIT_GENERATOR = "add_virtual_circuit"
 
 # Roles the schema accepts on a physical circuit that this version does not build.
 _NOT_IMPLEMENTED_PHYSICAL_ROLES = frozenset({"underlay", "transit"})
-
-# Overlay sessions are ours to build only across a tunnel we terminate. Every
-# other link type is provider-managed (cloud on-ramps, exchange fabrics, MPLS):
-# the session there is the provider's, not something this generator builds.
-_TUNNEL_LINK_TYPES = frozenset({"sd_wan", "vpn_ipsec", "vpn_ssl", "gre", "geneve"})
-_PHYSICAL_BACKED_LINK_TYPES = frozenset(
-    {
-        "direct_connect_aws",
-        "express_route_azure",
-        "interconnect_gcp",
-        "fast_connect_oracle",
-        "equinix_fabric",
-        "megaport",
-        "packetfabric",
-        "mpls_l3vpn",
-    }
-)
 
 # DCI P2P pools (data/bootstrap/20_dci_pools.yml), by the DC fabric's address
 # family: an EVPN Multi-Site tunnel only forms between border gateways whose
@@ -96,7 +94,6 @@ _INTERFACE_STATUS_FOR_CIRCUIT = {
     "maintenance": "maintenance",
     "down": "outage",
 }
-_DECOMMISSIONED = "decommissioned"
 # Interface kinds that carry an ip_address relationship.
 _ADDRESSABLE_INTERFACE_KINDS = frozenset({"DcimPhysicalInterface", "DcimVirtualInterface"})
 
@@ -351,7 +348,7 @@ class PhysicalCircuitGenerator(CablingMixin, _CircuitGenerator):
                 self.logger.info(f"  {circuit_name}: a session would need {problem} (peering_role none, no session)")
 
         await self._add_locations(circuit["id"], circuit_name, missing_locations)
-        await self._fan_out_virtual_circuits(circuit["id"], circuit_name)
+        await self._fan_out_virtual_circuits(endpoints, circuit_name)
         self.logger.info(f"Physical circuit {circuit_name} — completed")
 
     async def _build_dci_session(
@@ -363,7 +360,7 @@ class PhysicalCircuitGenerator(CablingMixin, _CircuitGenerator):
             self.logger.error(f"{circuit_name}: peering_role dci needs {problem}")
             return
         status: str = circuit.get("status") or ""
-        if status == _DECOMMISSIONED:
+        if status == DECOMMISSIONED:
             self.logger.info(
                 f"  {circuit_name} is decommissioned — no DCI session; cleanup removes the prefix, "
                 "addresses and peering an earlier run built"
@@ -497,14 +494,20 @@ class PhysicalCircuitGenerator(CablingMixin, _CircuitGenerator):
         await node.add_relationships(relation_to_update="locations", related_nodes=[loc.id for loc in locations])
         self.logger.info(f"  {circuit_name}: derived location(s) {', '.join(loc.label for loc in locations)}")
 
-    async def _fan_out_virtual_circuits(self, circuit_id: str, circuit_name: str) -> None:
-        """Re-run add_virtual_circuit for the overlay circuits riding this one.
+    async def _fan_out_virtual_circuits(self, endpoints: list[CircuitEndpoint], circuit_name: str) -> None:
+        """Re-run add_virtual_circuit for the overlay circuits on this circuit's ports.
 
-        Fire-and-forget: each of those runs waits for this run itself
-        (wait_for_parent_generator_and_refetch), so it sees what this run wrote.
+        A virtual circuit rides this one when it terminates on one of its
+        endpoint interfaces (the derived underlay). Fire-and-forget: each of
+        those runs waits for this run itself (wait_for_parent_generator_and_refetch),
+        so it sees what this run wrote.
         """
+        if not endpoints:
+            return
         overlays = await self.client.filters(
-            kind=TopologyVirtualCircuit, physical_circuits__ids=[circuit_id], peering_role__value="overlay"
+            kind=TopologyVirtualCircuit,
+            capabilities__ids=[e.interface_id for e in endpoints],
+            peering_role__value="overlay",
         )
         overlay_ids = sorted(vc.id for vc in overlays)
         if overlay_ids:
@@ -516,14 +519,6 @@ class VirtualCircuitGenerator(_CircuitGenerator):
     """add_virtual_circuit — the overlay session across a tunnel virtual circuit."""
 
     graphql_root_key = "TopologyVirtualCircuit"
-
-    @staticmethod
-    def _infer_transport_mode(link_type: str) -> str:
-        if link_type in _TUNNEL_LINK_TYPES:
-            return "internet_backed"
-        if link_type in _PHYSICAL_BACKED_LINK_TYPES:
-            return "physical_backed"
-        return "provider_virtual_only"
 
     async def generate(self, data: dict[str, Any]) -> None:
         circuit = self._single_circuit(data)
@@ -538,15 +533,8 @@ class VirtualCircuitGenerator(_CircuitGenerator):
             self.logger.info(f"Virtual circuit {circuit_name} — completed")
             return
 
-        physical = circuit.get("physical_circuits") or []
-        if not physical:
-            self.logger.error(
-                f"{circuit_name}: an overlay session on own infrastructure needs its physical_circuits "
-                "(the underlay it rides) — none listed"
-            )
-            return
         refreshed: dict[str, Any] | None = None
-        for underlay in physical:
+        for underlay in derived_underlay(circuit):
             refreshed = await self.wait_for_parent_generator_and_refetch(
                 PHYSICAL_CIRCUIT_GENERATOR, underlay["id"]
             ) or (refreshed)
@@ -564,7 +552,7 @@ class VirtualCircuitGenerator(_CircuitGenerator):
             self.logger.info(f"  peering_role {role} — no session for {circuit_name}")
             return False
         link_type = circuit.get("link_type") or ""
-        if link_type not in _TUNNEL_LINK_TYPES:
+        if link_type not in TUNNEL_LINK_TYPES:
             self.logger.warning(
                 f"  {circuit_name}: link_type '{link_type}' is provider-managed, not a tunnel of ours — "
                 "peering_role overlay ignored, no session"
@@ -574,11 +562,19 @@ class VirtualCircuitGenerator(_CircuitGenerator):
 
     async def _build_overlay_session(self, circuit: dict[str, Any], circuit_name: str) -> None:
         status: str = circuit.get("status") or ""
-        live_underlay = [pc for pc in circuit.get("physical_circuits") or [] if pc.get("status") != _DECOMMISSIONED]
-        if status == _DECOMMISSIONED or not live_underlay:
+        underlay = derived_underlay(circuit)
+        live_underlay = [pc for pc in underlay if pc.get("status") != DECOMMISSIONED]
+        if status == DECOMMISSIONED or (underlay and not live_underlay):
             self.logger.info(
                 f"  {circuit_name}: circuit or its whole underlay is decommissioned — no session; "
                 "cleanup removes the peering an earlier run built"
+            )
+            return
+        if not underlay:
+            # Not a decommissioned underlay, and not an error: add_sdwan_edge creates the circuit before it links the
+            # ports, and the capabilities-updated trigger reruns this generator once they are.
+            self.logger.info(
+                f"  {circuit_name}: ports not linked to a physical circuit yet - session built when they are"
             )
             return
 
@@ -627,32 +623,25 @@ class VirtualCircuitGenerator(_CircuitGenerator):
         )
 
     def _log_summary(self, circuit: dict[str, Any], circuit_name: str) -> None:
-        """Log the circuit and warn where its transport and underlay disagree."""
+        """Log the circuit, its ends and its derived underlay; checks/ enforces what must hold."""
         link_type: str = circuit.get("link_type") or ""
-        transport_mode: str = circuit.get("transport_mode") or self._infer_transport_mode(link_type)
         interfaces = circuit.get("capabilities") or []
-        physical = circuit.get("physical_circuits") or []
         ends = " | ".join(
             f"{(iface.get('device') or {}).get('name') or '?'}/{iface.get('name', '?')}" for iface in interfaces
         )
-        underlay = ", ".join(f"{pc.get('circuit_id') or pc.get('name') or '?'}" for pc in physical) or "none"
+        underlay = (
+            ", ".join(pc.get("circuit_id") or pc.get("name") or "?" for pc in derived_underlay(circuit)) or "none"
+        )
         self.logger.info(
-            f"Processing virtual circuit {circuit_name} (type={link_type or '?'}, transport={transport_mode}, "
+            f"Processing virtual circuit {circuit_name} (type={link_type or '?'}, "
             f"role={circuit.get('peering_role') or 'none'}): {ends or 'no interfaces'}; underlay: {underlay}"
         )
         # A tunnel of ours has both ends; a provider-managed circuit may surface
         # on one port only, its far end the provider's (a cloud on-ramp from
         # the cage: VC-C001-EQXFR-AWS-EUC1, its cloud end a CloudVirtualInterface).
-        expected_ends = (2,) if link_type in _TUNNEL_LINK_TYPES else (1, 2)
+        expected_ends = (2,) if link_type in TUNNEL_LINK_TYPES else (1, 2)
         if len(interfaces) not in expected_ends:
             self.logger.warning(
                 f"  Virtual circuit {circuit_name}: expected {' or '.join(map(str, expected_ends))} interfaces, "
                 f"found {len(interfaces)}"
             )
-        underlay_types = {(pc.get("circuit_type") or "").lower() for pc in physical}
-        if transport_mode == "internet_backed" and physical and "internet" not in underlay_types:
-            self.logger.warning(
-                f"  Virtual circuit {circuit_name}: internet_backed should ride at least one circuit_type=internet underlay"
-            )
-        elif transport_mode == "physical_backed" and not physical:
-            self.logger.warning(f"  Virtual circuit {circuit_name}: physical_backed without physical underlay")

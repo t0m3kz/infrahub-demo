@@ -153,14 +153,37 @@ def sdwan_gateway(**kwargs: Any) -> dict[str, Any]:
 
 
 def underlay_circuit(circuit_id: str = "INET-C001-WAW-FR2", status: str = "active") -> dict[str, Any]:
+    """A physical circuit as virtual_circuit.gql selects it under a port's capabilities."""
     return {
+        "__typename": "TopologyPhysicalCircuit",
         "id": f"pc-{circuit_id}",
         "name": {"value": circuit_id},
         "circuit_id": {"value": circuit_id},
-        "circuit_type": {"value": "internet"},
         "status": {"value": status},
-        "provider": {"node": {"id": "prov-1", "name": {"value": "Orange"}}},
     }
+
+
+def _with_port_capabilities(port: dict[str, Any], circuits: list[dict[str, Any]]) -> dict[str, Any]:
+    """A copy of the port with its own ``capabilities`` edge: ``circuits`` plus a non-circuit entry.
+
+    The query selects ``__typename`` on every capability peer and the circuit fields only through the
+    TopologyPhysicalCircuit fragment, so a ManagedBGP on the port arrives as a bare typename.
+    """
+    peers = [{"__typename": "ManagedBGP"}, *circuits]
+    return {**port, "capabilities": {"edges": [{"node": peer} for peer in peers]}}
+
+
+def _without_display_label(value: Any) -> Any:
+    """A copy of ``value`` with every ``display_label`` key removed.
+
+    The shared location fake carries one for queries/topology/add/circuit.gql; virtual_circuit.gql does not select
+    it (the virtual-circuit generator never reads a deployment's label).
+    """
+    if isinstance(value, dict):
+        return {key: _without_display_label(child) for key, child in value.items() if key != "display_label"}
+    if isinstance(value, list):
+        return [_without_display_label(child) for child in value]
+    return value
 
 
 def virtual_payload(
@@ -170,10 +193,21 @@ def virtual_payload(
     status: str = "active",
     interfaces: list[dict[str, Any]] | None = None,
     physical: list[dict[str, Any]] | None = None,
+    on_every_port: bool = False,
     name: str = "C001-SDWAN-FR2",
 ) -> dict[str, Any]:
+    """A virtual circuit payload; its underlay is derived, so it hangs on the ports, not on the circuit.
+
+    ``physical`` (default: one active internet circuit) is listed in the ``capabilities`` of the first
+    port, or of every port when ``on_every_port`` (two ends of one circuit, or a circuit per end);
+    ``physical=[]`` leaves the ports with no circuit. Every port also carries a non-circuit capability.
+    """
     interfaces = [sdwan_edge(), sdwan_gateway()] if interfaces is None else interfaces
     physical = [underlay_circuit()] if physical is None else physical
+    ports = [
+        _with_port_capabilities(port, physical if on_every_port or index == 0 else [])
+        for index, port in enumerate(interfaces)
+    ]
     return {
         "TopologyVirtualCircuit": {
             "edges": [
@@ -183,12 +217,10 @@ def virtual_payload(
                         "name": {"value": name},
                         "status": {"value": status},
                         "link_type": {"value": link_type},
-                        "transport_mode": {"value": "internet_backed"},
                         "peering_role": {"value": role},
                         "vni": {"value": None},
                         "tunnel_id": {"value": 1001},
-                        "capabilities": {"edges": [{"node": i} for i in interfaces]},
-                        "physical_circuits": {"edges": [{"node": pc} for pc in physical]},
+                        "capabilities": {"edges": [{"node": _without_display_label(port)} for port in ports]},
                     }
                 }
             ]

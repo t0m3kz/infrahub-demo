@@ -1079,7 +1079,7 @@ async def fetch_interconnect_inventory(client: InfrahubClient, branch: str) -> d
                        "end_ids": [str], "ends": [(device, interface)]}],
          "virtual": [{"id", "name", "link_type", "transport_mode", "owner",
                       "owner_id", "locations": [str], "location_nodes": [location],
-                      "end_devices": [device], "physical_circuits": [str],
+                      "end_devices": [device], "underlay": [str],
                       "interfaces": [(device, interface)],
                       "cloud_endpoints": [str]}]}
 
@@ -1090,6 +1090,9 @@ async def fetch_interconnect_inventory(client: InfrahubClient, branch: str) -> d
         device is {"device", "device_id", "deployment_id", "deployment_kind",
         "deployment_name", "deployment_parent_id"}, one per circuit end, in end order; the parent is the metro
         of a zone or virtual colocation deployment, None otherwise.
+
+        A virtual circuit's "underlay" is derived, not declared: the circuit_ids of the
+        TopologyPhysicalCircuit peers in the `capabilities` of its own ports, deduped and sorted.
     """
     client.default_branch = branch
     await asyncio.sleep(DATA_PROPAGATION_DELAY)
@@ -1129,8 +1132,13 @@ async def fetch_interconnect_inventory(client: InfrahubClient, branch: str) -> d
             "locations": sorted(str(loc.get("name") or "") for loc in circuit.get("locations", []) or []),
             "location_nodes": _circuit_locations(circuit),
             "end_devices": _circuit_end_devices(circuit),
-            "physical_circuits": sorted(
-                str(phys.get("circuit_id") or "") for phys in circuit.get("physical_circuits", []) or []
+            "underlay": sorted(
+                {
+                    str(peer.get("circuit_id") or "")
+                    for port in circuit.get("capabilities", []) or []
+                    for peer in port.get("capabilities", []) or []
+                    if peer.get("typename") == "TopologyPhysicalCircuit"
+                }
             ),
             "interfaces": sorted(
                 (str((iface.get("device") or {}).get("name") or ""), str(iface.get("name") or ""))
@@ -1161,12 +1169,12 @@ async def fetch_interconnect_inventory(client: InfrahubClient, branch: str) -> d
         )
     for circuit in sorted(virtual, key=lambda c: str(c["name"])):
         logger.info(
-            "  VC  %s [%s/%s] owner=%s phys=%s ifaces=%d cloud=%s",
+            "  VC  %s [%s/%s] owner=%s underlay=%s ifaces=%d cloud=%s",
             circuit["name"],
             circuit["link_type"],
             circuit["transport_mode"],
             circuit["owner"],
-            circuit["physical_circuits"],
+            circuit["underlay"],
             len(circuit["interfaces"]),
             circuit["cloud_endpoints"],
         )
@@ -1857,8 +1865,8 @@ TOPOLOGY_SNAPSHOT_KINDS = {
         "name { value } locations { edges { node { id } } } capabilities { edges { node { id } } }"
     ),
     "TopologyVirtualCircuit": (
-        "name { value } tunnel_id { value } physical_circuits { edges { node { id } } } "
-        "capabilities { edges { node { id } } } locations { edges { node { id } } }"
+        "name { value } tunnel_id { value } "
+        "capabilities { edges { node { id capabilities { edges { node { id } } } } } } locations { edges { node { id } } }"
     ),
     "ManagedController": "name { value } managed_devices { edges { node { id } } }",
     "ManagedFirewallHA": "name { value }",

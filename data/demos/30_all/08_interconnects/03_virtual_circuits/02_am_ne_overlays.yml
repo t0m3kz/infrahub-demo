@@ -1,0 +1,61 @@
+---
+# The Equinix Network Edge routers of AM-NE (eg-am-ne01, eg-am-ne02, 02_colo/equinix/am) as the far end
+# of two Equinix Fabric virtual connections. Both are provider_virtual_only: Equinix runs the hop inside its
+# own platform, so there is no physical circuit of ours to carry it.
+#
+# Ports are named only. Neither hop has an address or a BGP session: building a session for an
+# equinix_fabric circuit is out of scope (add_virtual_circuit builds one only for a tunnel of ours and
+# peering_role overlay, and neither circuit sets it). The two NE ports (Ethernet1/1 of each router, role
+# `customer` in the C8000V_EDGE template) are used by these circuits only.
+#
+# The underlay of a virtual circuit is derived, never declared: the physical circuits on its own ports.
+# That is why VC-A below depends on DF-DC10-EQXFR2 and VC-B on nothing.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyVirtualCircuit
+  data:
+    # --- DC10 -> AM-NE ---------------------------------------------------------
+    # C005's DC10 footprint into its own Network Edge router. The DC -> NE hop is an Equinix Fabric
+    # virtual connection, not carried over the fibre: only the DC end port (bl-dc101101 Ethernet1/35)
+    # rides DF-DC10-EQXFR2, and that is the dependency derived at that port (the same border-leaf
+    # port VC-C005-DC10-AWS-EUC1 uses, so a change to that fibre reaches both).
+    # checks/circuit_placement.py: the tenant end is C005-P-DC10, whose DC is where bl-dc101101 is
+    # deployed; the far end AM-NE is a provider facility.
+    - name: "VC-C005-DC10-AMNE"
+      member_of_groups: [virtual_circuits]
+      link_type: equinix_fabric
+      transport_mode: provider_virtual_only
+      status: active
+      bandwidth: 1000
+      encryption: false
+      provider: "P016"
+      owner: "C005"
+      description: "Drentec DC10 production footprint into the Network Edge router eg-am-ne01 over Equinix Fabric"
+      locations:
+        - "C005-P-DC10"
+        - "AM-NE"
+      capabilities:
+        - ["bl-dc101101", "Ethernet1/35"]
+        - ["eg-am-ne01", "Ethernet1/1"]
+
+    # --- AM-NE -> AWS eu-central-1 ---------------------------------------------
+    # A shared platform overlay, like VC-SDWAN-FR2-AWS-EUC1 (../04_sdwan/05_overlays.yml): unowned,
+    # facilities at both ends. It is the Fabric connection from the second Network Edge router to
+    # the Direct Connect hosted connection dx-eqx-am-euc1, whose transit VIF is the cloud end
+    # (../05_cloud_endpoints/01_transit_vif.yml). The cloud end is not a device port, so the circuit
+    # surfaces on one port only and has no physical circuit under it.
+    - name: "VC-PLATFORM-AMNE-AWS-EUC1"
+      member_of_groups: [virtual_circuits]
+      link_type: equinix_fabric
+      transport_mode: provider_virtual_only
+      status: active
+      bandwidth: 1000
+      encryption: false
+      provider: "P016"
+      description: "Shared Network Edge router eg-am-ne02 into the AWS transit hub over Equinix Fabric"
+      locations:
+        - "AM-NE"
+        - "eu-central-1"
+      capabilities:
+        - ["eg-am-ne02", "Ethernet1/1"]
