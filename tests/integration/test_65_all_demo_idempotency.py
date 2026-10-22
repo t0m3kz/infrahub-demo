@@ -32,7 +32,7 @@ import pytest
 from infrahub_sdk import InfrahubClient
 
 from .conftest import TestInfrahubDockerWithClient
-from .test_constants import ALL_DEMO_BRANCH, ALL_DEMO_FABRIC_PEERINGS, ALL_DEMO_METRO_SITE_VIPS
+from .test_constants import ALL_DEMO_BRANCH, ALL_DEMO_FABRIC_PEERINGS, ALL_DEMO_ZONE_SITE_VIPS
 from .test_helpers import diff_snapshots, snapshot_topology
 from .workflow_helpers import run_generator, verify_no_failed_tasks, wait_for_tasks_completion
 
@@ -59,6 +59,7 @@ RERUN_GENERATORS = {
     "add_customer_colocation_orchestrator_routing": "customer_deployments_colocation",
     "add_customer_cloud_orchestrator_routing": "customer_deployments_cloud",
     "add_customer_office_orchestrator_routing": "customer_deployments_office",
+    "add_virtual_colocation_orchestrator_routing": "virtual_colocations",
 }
 # These must have targets in 30_all; the others are skipped when their group is empty.
 REQUIRED_RERUN_GENERATORS = {
@@ -188,6 +189,8 @@ TOPOLOGY_RERUN_GENERATORS = {
     "add_rack": "topologies_rack",
     "add_mlag": "mlag_domains",
     "add_colocation_metro": "colocation_metros",
+    "add_colocation_zone": "colocation_zones",
+    "add_virtual_colocation": "virtual_colocations",
     "add_circuit": "physical_circuits",
     "add_virtual_circuit": "virtual_circuits",
     "add_endpoint": "endpoints",
@@ -472,14 +475,14 @@ class TestAllDemoIdempotency(TestInfrahubDockerWithClient):
         logging.info("Topology snapshot: %s", {kind: len(objects) for kind, objects in before.items()})
         for kind in ("DcimDevice", "DcimInterface", "DcimCable", "IpamIPAddress"):
             assert before[kind], f"No {kind} on the branch to compare"
-        # The metro edge pairs must be in the snapshot, or a second interlink cable / FABRIC session
+        # The zone edge pairs must be in the snapshot, or a second interlink cable / FABRIC session
         # / shared-VIP address would go unnoticed (a duplicate is a new id, hence an "added" diff).
         for peering in ALL_DEMO_FABRIC_PEERINGS.values():
             held = [node_id for node_id, state in before["ManagedBGPPeering"].items() if repr(peering) in repr(state)]
             assert len(held) == 1, f"{peering} is {len(held)} ManagedBGPPeering object(s) in the snapshot, not 1"
-        for vip in ALL_DEMO_METRO_SITE_VIPS.values():
+        for vip in ALL_DEMO_ZONE_SITE_VIPS.values():
             holders = [node_id for node_id, state in before["IpamIPAddress"].items() if repr(vip) in repr(state)]
-            assert len(holders) == 1, f"the shared metro VIP {vip} is {len(holders)} IpamIPAddress object(s), not 1"
+            assert len(holders) == 1, f"the shared zone VIP {vip} is {len(holders)} IpamIPAddress object(s), not 1"
 
         targets = await self._targets(client, scenario_branch, TOPOLOGY_RERUN_GENERATORS, set())
         await self._rerun(client, scenario_branch, "Topology rerun", targets, security_before, before, labels)

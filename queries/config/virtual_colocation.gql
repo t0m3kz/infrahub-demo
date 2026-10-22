@@ -1,0 +1,147 @@
+# Feeds the Equinix Network Edge Terraform artifact of one virtual colocation
+# (transforms/colocation/virtual_colocation.py). What is ordered lives on the appliances themselves
+# (CloudNetworkAppliance: service/package code, software version, term, vCPUs, set from their template when the
+# generator created them). Their HA is the HA domain they are members of, like every HA pair: the appliance's
+# `capabilities` hold the domain (the one with a `mode`: active-active is a redundant pair, active-passive a cluster)
+# and the domain's own `capabilities` its members. The ManagedBGP among them has no mode and is ignored. The parent
+# metro gives the Equinix metro code (its name) and, one level up, the colocation operator that decides the provider;
+# the account gives the billing account number, the provider it belongs to and, through its owner, the notification
+# e-mails.
+# fabric_templates is read for role and quantity only, to refuse a presence whose generator stopped midway.
+# The owner is an OrganizationEntity (a generic): only fields the generic declares are selected, hence display_label.
+query virtual_colocation_config($instance: String!) {
+  TopologyVirtualColocation(name__value: $instance) {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        infrastructure_orchestrator {
+          value
+        }
+        account {
+          node {
+            id
+            display_label
+            account_id {
+              value
+            }
+            provider {
+              node {
+                id
+                name {
+                  value
+                }
+              }
+            }
+            owner {
+              node {
+                id
+                display_label
+                notification_emails {
+                  value
+                }
+              }
+            }
+          }
+        }
+        parent {
+          node {
+            id
+            name {
+              value
+            }
+            ... on TopologyColocationMetro {
+              parent {
+                node {
+                  id
+                  name {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
+        fabric_templates {
+          edges {
+            node {
+              role {
+                value
+              }
+              quantity {
+                value
+              }
+            }
+          }
+        }
+        devices {
+          edges {
+            node {
+              id
+              __typename
+              name {
+                value
+              }
+              role {
+                value
+              }
+              ... on CloudNetworkAppliance {
+                service_code {
+                  value
+                }
+                package_code {
+                  value
+                }
+                software_version {
+                  value
+                }
+                device_type {
+                  node {
+                    cpu_count {
+                      value
+                    }
+                  }
+                }
+                term_length {
+                  value
+                }
+                capabilities {
+                  edges {
+                    node {
+                      id
+                      __typename
+                      ... on ManagedGeneric {
+                        name {
+                          value
+                        }
+                      }
+                      ... on ManagedHA {
+                        mode {
+                          value
+                        }
+                      }
+                      ... on ManagedGenericDevice {
+                        capabilities {
+                          edges {
+                            node {
+                              id
+                              name {
+                                value
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

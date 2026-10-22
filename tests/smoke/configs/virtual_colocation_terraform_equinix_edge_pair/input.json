@@ -1,0 +1,168 @@
+{
+  "TopologyVirtualColocation": {
+    "edges": [
+      {
+        "node": {
+          "id": "vc-1",
+          "name": {
+            "value": "AM-NE"
+          },
+          "infrastructure_orchestrator": {
+            "value": "terraform"
+          },
+          "account": {
+            "node": {
+              "id": "acc-1",
+              "display_label": "AM-NE account",
+              "account_id": {
+                "value": "1000001"
+              },
+              "provider": {
+                "node": {
+                  "id": "p-1",
+                  "name": {
+                    "value": "EQUINIX"
+                  }
+                }
+              },
+              "owner": {
+                "node": {
+                  "id": "o-1",
+                  "display_label": "Internal",
+                  "notification_emails": {
+                    "value": [
+                      "noc@example.com",
+                      "network-ops@example.com"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "parent": {
+            "node": {
+              "id": "m-1",
+              "name": {
+                "value": "AM"
+              },
+              "parent": {
+                "node": {
+                  "id": "c-1",
+                  "name": {
+                    "value": "EQUINIX"
+                  }
+                }
+              }
+            }
+          },
+          "fabric_templates": {
+            "edges": [
+              {
+                "node": {
+                  "role": {
+                    "value": "edge"
+                  },
+                  "quantity": {
+                    "value": 2
+                  }
+                }
+              }
+            ]
+          },
+          "devices": {
+            "edges": [
+              {
+                "node": {
+                  "id": "d-eg-am-ne01",
+                  "__typename": "CloudNetworkAppliance",
+                  "name": {
+                    "value": "eg-am-ne01"
+                  },
+                  "role": {
+                    "value": "edge"
+                  },
+                  "service_code": {
+                    "value": "C8000V"
+                  },
+                  "package_code": {
+                    "value": "network-essentials"
+                  },
+                  "software_version": {
+                    "value": "17.12.01a"
+                  },
+                  "term_length": {
+                    "value": 12
+                  },
+                  "capabilities": {
+                    "edges": [
+                      {
+                        "node": {
+                          "id": "bgp-am-ne",
+                          "__typename": "ManagedBGP",
+                          "name": {
+                            "value": "AM-NE-overlay"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "device_type": {
+                    "node": {
+                      "cpu_count": {
+                        "value": 2
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "id": "d-eg-am-ne02",
+                  "__typename": "CloudNetworkAppliance",
+                  "name": {
+                    "value": "eg-am-ne02"
+                  },
+                  "role": {
+                    "value": "edge"
+                  },
+                  "service_code": {
+                    "value": "C8000V"
+                  },
+                  "package_code": {
+                    "value": "network-essentials"
+                  },
+                  "software_version": {
+                    "value": "17.12.01a"
+                  },
+                  "term_length": {
+                    "value": 12
+                  },
+                  "capabilities": {
+                    "edges": [
+                      {
+                        "node": {
+                          "id": "bgp-am-ne",
+                          "__typename": "ManagedBGP",
+                          "name": {
+                            "value": "AM-NE-overlay"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "device_type": {
+                    "node": {
+                      "cpu_count": {
+                        "value": 2
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+}

@@ -38,7 +38,7 @@ def _ip(address: str, namespace: str = "default") -> dict[str, Any]:
 
 
 def _handoff_peering(*, remote_ip: dict[str, Any] | None = None, namespace: str = "PROD") -> dict[str, Any]:
-    """The PROD handoff peering eg-fr01 <-> EQX-FR2-SDWAN-GW1, as the transform sees it."""
+    """The PROD handoff peering eg-fr201 <-> EQX-FR2-SDWAN-GW1, as the transform sees it."""
     remote: dict[str, Any] = {"name": "eth0.1900", "device": {"name": "EQX-FR2-SDWAN-GW1"}}
     if remote_ip is not None:
         remote["ip_address"] = remote_ip
@@ -51,13 +51,13 @@ def _handoff_peering(*, remote_ip: dict[str, Any] | None = None, namespace: str 
         "capabilities": [
             {
                 "name": "Ethernet1/13.1900",
-                "device": {"name": "eg-fr01"},
+                "device": {"name": "eg-fr201"},
                 "ip_address": _ip("10.255.5.0/31", namespace),
             },
             remote,
         ],
         "bgp_processes": [
-            {"local_as": {"asn": 4200000100}, "capabilities": [{"name": "eg-fr01"}]},
+            {"local_as": {"asn": 4200000100}, "capabilities": [{"name": "eg-fr201"}]},
             {"local_as": {"asn": 65028}, "capabilities": [{"name": "EQX-FR2-SDWAN-GW1"}]},
         ],
     }
@@ -101,7 +101,7 @@ class TestVrfSession:
     def test_tenant_namespace_makes_a_vrf_session(self) -> None:
         """A PROD local address yields a VRF session with the inline handoff addresses."""
         session = _build_session_from_peering(
-            _handoff_peering(remote_ip=_ip("10.255.5.1/31", "PROD")), "eg-fr01", {"asn": 4200000100}, []
+            _handoff_peering(remote_ip=_ip("10.255.5.1/31", "PROD")), "eg-fr201", {"asn": 4200000100}, []
         )
         assert session is not None
         assert session["vrf"] == "PROD"
@@ -114,7 +114,7 @@ class TestVrfSession:
         """ttl 1 normally prefers cable IPs; a VRF session must keep its own sub-interface's."""
         session = _build_session_from_peering(
             _handoff_peering(remote_ip=_ip("10.255.5.1/31", "PROD")),
-            "eg-fr01",
+            "eg-fr201",
             {"asn": 4200000100},
             _parent_port_with_cable(),
         )
@@ -124,7 +124,9 @@ class TestVrfSession:
     def test_missing_remote_address_skips_with_warning(self) -> None:
         """Without the far side's address there's no neighbour to configure."""
         warnings: list[str] = []
-        session = _build_session_from_peering(_handoff_peering(), "eg-fr01", {"asn": 4200000100}, [], warnings=warnings)
+        session = _build_session_from_peering(
+            _handoff_peering(), "eg-fr201", {"asn": 4200000100}, [], warnings=warnings
+        )
         assert session is None
         assert len(warnings) == 1
         assert "VRF-PROD-EQXFR2-SDWAN" in warnings[0]
@@ -132,7 +134,7 @@ class TestVrfSession:
     def test_default_namespace_is_not_a_vrf_session(self) -> None:
         """A default-namespace address keeps the existing underlay resolution."""
         session = _build_session_from_peering(
-            _handoff_peering(namespace="default"), "eg-fr01", {"asn": 4200000100}, _parent_port_with_cable()
+            _handoff_peering(namespace="default"), "eg-fr201", {"asn": 4200000100}, _parent_port_with_cable()
         )
         assert session is not None
         assert "vrf" not in session
@@ -172,7 +174,7 @@ class TestMultisiteVrfImports:
     def test_l3_mapping_imports_the_other_sites_rt(self) -> None:
         """Each site imports every other site's {asn}:{l3_vni}, never its own."""
         device = {
-            "name": "eg-fr01",
+            "name": "eg-fr201",
             "interfaces": [{"name": "loopback1", "role": "loopback-vtep", "ip_address": {"address": "fd00::1/128"}}],
         }
         acts = [{"vlan_id": 100, "vni": 10100, "segment": _stretched_segment()}]
@@ -448,7 +450,7 @@ class TestNxosFabricForwardingFeature:
 class TestEdgeTemplate:
     def _render(self, env: jinja2.Environment, **ctx: Any) -> str:
         base: dict[str, Any] = {
-            "name": "eg-fr01",
+            "name": "eg-fr201",
             "interfaces": [],
             "loopback_name": "loopback0",
             "vlans": [],

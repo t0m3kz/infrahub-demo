@@ -59,6 +59,7 @@ from .test_constants import (
     ALL_DEMO_BRANCH,
     ALL_DEMO_CLOUD_LOAD_BALANCED_COMPONENTS,
     ALL_DEMO_COLOCATION_SERVED,
+    ALL_DEMO_COLOCATION_SERVING_ZONE,
     ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS,
     ALL_DEMO_DC_NAMES,
     ALL_DEMO_DCI_CIRCUITS,
@@ -88,7 +89,6 @@ from .test_constants import (
     ALL_DEMO_LOAD_BALANCED_COMPONENTS,
     ALL_DEMO_LOADBALANCER_CONTEXTS,
     ALL_DEMO_LOADBALANCER_MEMBERS,
-    ALL_DEMO_METRO_SITE_VIPS,
     ALL_DEMO_OFFICE_WAN_EXITS,
     ALL_DEMO_PHYSICAL_CIRCUIT_TYPES,
     ALL_DEMO_PROVIDER_FACILITY_KINDS,
@@ -107,6 +107,7 @@ from .test_constants import (
     ALL_DEMO_TRANSIT_SUBINTERFACES,
     ALL_DEMO_VIRTUAL_CIRCUIT_CHAINS,
     ALL_DEMO_VIRTUAL_CIRCUITS,
+    ALL_DEMO_ZONE_SITE_VIPS,
     OFFICE_NAMESPACE,
     deployment_environment,
     deployment_namespace,
@@ -132,11 +133,10 @@ query {
     edges {
       node {
         name { value }
-        parent {
+        serving_zone {
           node {
-            ... on TopologyColocationMetro {
-              devices(role__value: "firewall") { edges { node { id } } }
-            }
+            name { value }
+            devices(role__value: "firewall") { edges { node { id } } }
           }
         }
         serving_firewall_context {
@@ -182,7 +182,7 @@ query ($names: [String]) {
 }
 """
 
-# The interlink ports of the metro edge pairs: role and /127 address.
+# The interlink ports of the zone edge pairs: role and /127 address.
 EDGE_INTERLINK_INTERFACES_QUERY = """
 query ($devices: [String], $name: String) {
   DcimPhysicalInterface(device__name__values: $devices, name__value: $name) {
@@ -247,7 +247,7 @@ query ($names: [String]) {
 }
 """
 
-# The metro-owned slice of Technical-IPv6 the interlink /127 comes from.
+# The zone-owned slice of Technical-IPv6 the interlink /127 comes from.
 EDGE_PAIR_POOL_QUERY = """
 query ($name: String) {
   CoreIPPrefixPool(name__value: $name) {
@@ -261,7 +261,7 @@ query ($name: String) {
 }
 """
 
-# The loopback100 Multi-Site VIP of both edges of a metro: one shared address object.
+# The loopback100 Multi-Site VIP of both edges of a zone's pair: one shared address object.
 EDGE_PAIR_VIP_QUERY = """
 query ($devices: [String]) {
   DcimVirtualInterface(device__name__values: $devices, name__value: "loopback100") {
@@ -407,7 +407,7 @@ DCI_POOL_NETWORK = ipaddress.IPv6Network("fd00:2200::/40")
 _TRANSIT_PEER_NAMES = {"internet": "INTERNET", "management": "MANAGEMENT"}
 
 
-_ZONE_KIND = "TopologyColocationZone"
+_ZONE_KINDS = frozenset({"TopologyColocationZone", "TopologyVirtualColocation"})
 _OFFICE_KIND = "TopologyCustomerOffice"
 
 
@@ -417,14 +417,15 @@ def _label(location: dict[str, Any]) -> str:
 
 
 def _at(location: dict[str, Any], place_id: str | None) -> bool:
-    """Whether a location is the place ``place_id``, or a cage of it (a zone whose parent is that metro).
+    """Whether a location is the place ``place_id``, or a zone / virtual colocation of it (one whose parent is that metro).
 
     The place is where a device is deployed: a border leaf in its DC, a provider router in its region, an on-ramp
-    edge in its METRO, of which the circuit names one cage.
+    edge in its ZONE (or virtual colocation), which is the location itself. A footprint's place is its metro, which
+    the zones and virtual colocations below it reach.
     """
     if not place_id:
         return False
-    return location["id"] == place_id or (location["kind"] == _ZONE_KIND and location["parent_id"] == place_id)
+    return location["id"] == place_id or (location["kind"] in _ZONE_KINDS and location["parent_id"] == place_id)
 
 
 def _place(location: dict[str, Any]) -> tuple[str | None, str | None]:
@@ -552,14 +553,13 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
 
     @staticmethod
     def _placement_errors(physical: list[dict]) -> list[str]:
-        """Two distinct facilities, each the deployment of one end's device (a cage: a zone of its metro).
+        """Two distinct facilities, each the deployment of one end's device (an on-ramp edge: its zone).
 
         A facility is a TopologyFacility kind (DC, colocation zone, cloud region,
         ISP, SaaS region, office); a pod, a metro or a footprint is never one, and an
         office only ends its own internet access. The two ends' devices must account for
         the two locations one-to-one: the border leaf's DC, the PE's ISP, the provider
-        router's region, and for the on-ramp edge (deployed to the metro) one cage of
-        that metro.
+        router's region, and for the on-ramp edge (deployed to its zone) that zone.
         """
         errors: list[str] = []
         for circuit in sorted(physical, key=lambda c: c["circuit_id"]):
@@ -584,13 +584,15 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                 errors.append(f"{circuit_id}: end devices {_deployments(circuit)}, expected 2, each with a deployment")
                 continue
             (first, second), (left, right) = locations, devices
+            # Exact, like checks/circuit_placement.py's _end_at: a physical circuit's location IS the end device's
+            # deployment (an on-ramp edge's zone), never a sibling cage of the same metro.
             if not (
-                (_at(first, left["deployment_id"]) and _at(second, right["deployment_id"]))
-                or (_at(first, right["deployment_id"]) and _at(second, left["deployment_id"]))
+                (first["id"] == left["deployment_id"] and second["id"] == right["deployment_id"])
+                or (first["id"] == right["deployment_id"] and second["id"] == left["deployment_id"])
             ):
                 errors.append(
                     f"{circuit_id}: locations {[_label(location) for location in locations]} are not where its ends "
-                    f"sit {_deployments(circuit)} (each end's deployment, or a cage of the edge's metro)"
+                    f"sit {_deployments(circuit)} (each end's deployment)"
                 )
         return errors
 
@@ -599,8 +601,10 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         """The data authors only what is not derivable; add_circuit wrote exactly the derived ends.
 
         Derivable: an end device's deployment that is itself a facility (DC, ISP,
-        cloud region). The 30_all data must not list it, and the locations the branch
-        holds beyond the data's are exactly those. Circuits no data file declares
+        cloud region, colocation zone or virtual colocation). The 30_all data must not
+        list one, except the cage it authors (redundant with the edge's zone, which
+        add_circuit also derives: an authored zone must be that zone), and the
+        locations the branch holds beyond the data's are exactly those. Circuits no data file declares
         (INET-<office>, add_sdwan_edge) are written whole by their generator.
         """
         errors: list[str] = []
@@ -615,7 +619,14 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                 for device in circuit["end_devices"]
                 if device["deployment_kind"] in ALL_DEMO_FACILITY_KINDS
             }
-            listed = sorted(set(declared) & derivable)
+            listed = sorted(
+                set(declared)
+                & {
+                    str(device["deployment_name"])
+                    for device in circuit["end_devices"]
+                    if device["deployment_kind"] in ALL_DEMO_FACILITY_KINDS - _ZONE_KINDS
+                }
+            )
             if listed:
                 errors.append(f"{circuit_id}: the data lists {listed}, which add_circuit derives from the end devices")
             missing = sorted(set(declared) - set(circuit["locations"]))
@@ -780,7 +791,13 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                 if far["kind"] not in ALL_DEMO_PROVIDER_FACILITY_KINDS | ALL_DEMO_TENANT_LOCATION_KINDS:
                     errors.append(f"{name}: far end {_label(far)} is neither a provider facility nor a footprint")
                 place_id, place_name = _place(near)
-                if not place_id or place_id not in {device["deployment_id"] for device in circuit["end_devices"]}:
+                # An end device sits in the footprint's facility, or in a zone / virtual colocation of it.
+                deployed_in = {
+                    place
+                    for device in circuit["end_devices"]
+                    for place in (device["deployment_id"], device["deployment_parent_id"])
+                }
+                if not place_id or place_id not in deployed_in:
                     errors.append(
                         f"{name}: tenant end {_label(near)} sits in {place_name}, where none of its end devices "
                         f"{_deployments(circuit)} is deployed"
@@ -875,7 +892,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         """Verify the firewall contexts match the customers' design blueprints.
 
         A context with no tenant is a cluster's shared low-risk context (each
-        DC's, and the colocation metro's); a context with a tenant exists only
+        DC's, and the serving colocation zone's); a context with a tenant exists only
         because that customer's design sets dedicated_firewall. Getting this wrong is how a customer silently ends
         up sharing a security context with everyone else.
 
@@ -938,10 +955,10 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         pool and tagged with the context and with the leg's exchange(s). The
         expectations come from the customers' environments and designs
         (ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS), and the served deployments the
-        graph itself reports must agree with them. The FR colocation metro's
+        graph itself reports must agree with them. The FR2 colocation zone's
         shared context is held to the same rules as a DC's: its legs face the
-        metro's two edges, whose firewall-role ports are tagged with it, and its
-        VLAN comes from the metro's FirewallContext pool (3000-3099).
+        zone's two edges, whose firewall-role ports are tagged with it, and its
+        VLAN comes from the zone's FirewallContext pool (3000-3099).
         """
         logging.info("=== %s - Step 3b: Exchange Transit Legs ===", SCENARIO_NAME)
 
@@ -1000,7 +1017,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                 FW_CONTEXT_VLAN_START <= int(context_vlan) <= FW_CONTEXT_VLAN_END
             ):
                 errors.append(
-                    f"{label}: VLAN {context_vlan} is outside the metro pool {FW_CONTEXT_VLAN_START}-{FW_CONTEXT_VLAN_END}"
+                    f"{label}: VLAN {context_vlan} is outside the zone pool {FW_CONTEXT_VLAN_START}-{FW_CONTEXT_VLAN_END}"
                 )
             legs_by_namespace: dict[str, list[dict]] = {}
             for leg in context["legs"]:
@@ -1074,7 +1091,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                         f"is not an allowed pairing {EXCHANGE_PEERS}"
                     )
 
-            # The service ports the members' uplinks are cabled to (border leafs of a DC, edges of a metro).
+            # The service ports the members' uplinks are cabled to (border leafs of a DC, edges of a zone).
             if len(context["border_ports"]) != ALL_DEMO_FIREWALL_MEMBERS:
                 errors.append(
                     f"{label}: '{context_name}' tags {len(context['border_ports'])} service port(s), "
@@ -1115,13 +1132,13 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                     errors.append(
                         f"{site}: service port {port} carries {sorted(names)}, expected {contexts_in_site} context(s)"
                     )
-        # A metro's two ports sit on its two DIFFERENT edges (one per firewall member), not both on one.
+        # A zone's two ports sit on its two DIFFERENT edges (one per firewall member), not both on one.
         for site in ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS:
             devices = port_devices_by_site.get(site, set())
             if len(devices) != ALL_DEMO_FIREWALL_MEMBERS:
                 errors.append(f"{site}: service ports tagged on {sorted(devices)}, expected one per edge")
 
-        # Every colocation context must be a served metro's: no stray one without legs (policy-only) is left.
+        # Every colocation context must be a serving zone's: no stray one without legs (policy-only) is left.
         if colocation:
             errors.append(f"unexpected colocation firewall context(s) {sorted(str(c['name']) for c in colocation)}")
 
@@ -1148,7 +1165,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
 
         The address lives in the INTERNET namespace, inside the FW-SNAT-INTERNET-IPv4
         block (ALL_DEMO_SNAT_POOL_PREFIX), is a /32 and is distinct per context, the
-        FR colocation metro's included (it must not reuse a DC's address).
+        FR2 colocation zone's included (it must not reuse a DC's address).
         """
         logging.info("=== %s - Step 3c: SNAT addresses ===", SCENARIO_NAME)
 
@@ -1626,13 +1643,13 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify each colocation deployment is served by its own metro's firewalls.
+        """Verify each colocation deployment is served by its serving zone's firewalls.
 
-        A deployment in a metro with a firewall pair is served by that pair's
-        shared context. That context has a VLAN from the metro's pool and one
+        A deployment whose serving_zone has a firewall pair (FR2) is served by that
+        pair's shared context. That context has a VLAN from the zone's pool and one
         transit sub-interface per member per VRF leg (ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS;
-        test_03b checks their addresses and exchanges). A deployment in an
-        edge-only metro has no context: pointing it at another metro's firewalls
+        test_03b checks their addresses and exchanges). A deployment with no
+        serving_zone has no context: pointing it at another zone's firewalls
         would hairpin its traffic across the WAN.
         """
         logging.info("=== %s - Step 5: Colocation Serving Contexts ===", SCENARIO_NAME)
@@ -1652,38 +1669,44 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             deployment = deployments.get(name)
             if deployment is None:
                 continue
-            metro = (deployment.get("parent") or {}).get("node") or {}
-            metro_firewalls = {edge["node"]["id"] for edge in (metro.get("devices") or {}).get("edges", [])}
+            zone = (deployment.get("serving_zone") or {}).get("node") or {}
+            zone_firewalls = {edge["node"]["id"] for edge in (zone.get("devices") or {}).get("edges", [])}
             context = (deployment.get("serving_firewall_context") or {}).get("node")
+            serving_zone = ALL_DEMO_COLOCATION_SERVING_ZONE[name]
+            zone_name = (zone.get("name") or {}).get("value")
+            if zone_name != serving_zone:
+                errors.append(f"{name}: serving_zone '{zone_name}', expected '{serving_zone}'")
 
             if not served:
-                if metro_firewalls:
-                    errors.append(f"{name}: metro has firewalls, expected an edge-only metro")
+                if zone_firewalls:
+                    errors.append(f"{name}: serving zone has firewalls, expected none (an unserved footprint)")
                 if context:
-                    errors.append(f"{name}: edge-only metro, but served by '{context['name']['value']}'")
+                    errors.append(f"{name}: no serving zone with firewalls, but served by '{context['name']['value']}'")
                 continue
 
             if not context:
-                errors.append(f"{name}: metro has firewalls but the deployment has no serving_firewall_context")
+                errors.append(
+                    f"{name}: zone {zone_name} has firewalls but the deployment has no serving_firewall_context"
+                )
                 continue
             context_name = context["name"]["value"]
             if (context.get("tenant") or {}).get("node"):
-                errors.append(f"{name}: served by tenant-dedicated '{context_name}', expected the metro's shared one")
+                errors.append(f"{name}: served by tenant-dedicated '{context_name}', expected the zone's shared one")
             cluster = (context.get("cluster") or {}).get("node") or {}
             members = {edge["node"]["id"] for edge in (cluster.get("capabilities") or {}).get("edges", [])}
-            if not metro_firewalls or members != metro_firewalls:
-                errors.append(f"{name}: '{context_name}' is on cluster {sorted(members)}, not the metro's firewalls")
+            if not zone_firewalls or members != zone_firewalls:
+                errors.append(f"{name}: '{context_name}' is on cluster {sorted(members)}, not the zone's firewalls")
 
-            site = name.rsplit("-", 1)[-1]
             expected = next(
-                (e for e in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS if e["site"] == site and e["tenant"] is None), None
+                (e for e in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS if e["site"] == serving_zone and e["tenant"] is None),
+                None,
             )
             if expected is None:
-                errors.append(f"{name}: no expected transit context for the metro '{site}'")
+                errors.append(f"{name}: no expected transit context for the zone '{serving_zone}'")
                 continue
             vlan = (context.get("vlan_id") or {}).get("value")
             if not vlan or not FW_CONTEXT_VLAN_START <= int(vlan) <= FW_CONTEXT_VLAN_END:
-                errors.append(f"{name}: '{context_name}' VLAN {vlan}, expected one in the metro pool")
+                errors.append(f"{name}: '{context_name}' VLAN {vlan}, expected one in the zone pool")
                 continue
             # Sub-interfaces are `<uplink>.<vlan>`; the tagged edge ports (Ethernet1/15-16) have no dot.
             sub_vlans = sorted(
@@ -1872,18 +1895,18 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
     @pytest.mark.order(411)
     @pytest.mark.dependency(scope="session", depends=["all_demo_physical_circuits"])
     @pytest.mark.asyncio
-    async def test_08_verify_metro_edge_pair(
+    async def test_08_verify_zone_edge_pair(
         self,
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify each metro with exactly two physical edges (FR, PA) links and peers them.
+        """Verify each zone with exactly two physical edges (FR2, PA4) links and peers them.
 
-        Per metro: one DcimCable between Ethernet1/8 of both edges, both ports
-        role `interlink` and addressed from one /127 inside the metro slice of
+        Per zone: one DcimCable between Ethernet1/8 of both edges, both ports
+        role `interlink` and addressed from one /127 inside the zone slice of
         Technical-IPv6; exactly one FABRIC-<a>-<b> iBGP session (ttl 1, role
         fabric, IPv6 unicast + l2vpn evpn) on both overlay processes, keyed
-        with the metro's own key; and one shared Multi-Site VIP (a single
+        with the zone's own key; and one shared Multi-Site VIP (a single
         IpamIPAddress on loopback100 of both edges).
         """
         logging.info("=== %s - Step 8: Metro edge pair ===", SCENARIO_NAME)
@@ -1905,7 +1928,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         if fabric_count != len(ALL_DEMO_FABRIC_PEERINGS):
             errors.append(f"{fabric_count} fabric session(s), expected {len(ALL_DEMO_FABRIC_PEERINGS)}")
 
-        for metro, ends in sorted(ALL_DEMO_EDGE_INTERLINKS.items()):
+        for zone, ends in sorted(ALL_DEMO_EDGE_INTERLINKS.items()):
             devices = [device for device, _ in ends]
             ports = await client.execute_graphql(
                 query=EDGE_INTERLINK_INTERFACES_QUERY,
@@ -1916,13 +1939,11 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                 e["node"]["device"]["node"]["name"]["value"]: e["node"] for e in ports["DcimPhysicalInterface"]["edges"]
             }
             if sorted(by_device) != sorted(devices):
-                errors.append(
-                    f"{metro}: {ALL_DEMO_EDGE_INTERLINK_INTERFACE} on {sorted(by_device)}, expected {devices}"
-                )
+                errors.append(f"{zone}: {ALL_DEMO_EDGE_INTERLINK_INTERFACE} on {sorted(by_device)}, expected {devices}")
                 continue
             for device, node in sorted(by_device.items()):
                 if node["role"]["value"] != "interlink":
-                    errors.append(f"{metro}/{device}: {node['name']['value']} has role {node['role']['value']}")
+                    errors.append(f"{zone}/{device}: {node['name']['value']} has role {node['role']['value']}")
 
             port_ids = {node["id"] for node in by_device.values()}
             cable_result = await client.execute_graphql(
@@ -1930,11 +1951,11 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             )
             cables = cable_result["DcimCable"]["edges"]
             if len(cables) != 1:
-                errors.append(f"{metro}: {len(cables)} cable(s) on the interlink ports, expected exactly 1")
+                errors.append(f"{zone}: {len(cables)} cable(s) on the interlink ports, expected exactly 1")
             elif {e["node"]["id"] for e in cables[0]["node"]["endpoints"]["edges"]} != port_ids:
-                errors.append(f"{metro}: the cable does not join exactly the two interlink ports")
+                errors.append(f"{zone}: the cable does not join exactly the two interlink ports")
 
-            pool_name = ALL_DEMO_EDGE_PAIR_POOL_TEMPLATE.format(metro=metro)
+            pool_name = ALL_DEMO_EDGE_PAIR_POOL_TEMPLATE.format(zone=zone)
             pool = await client.execute_graphql(
                 query=EDGE_PAIR_POOL_QUERY, variables={"name": pool_name}, branch_name=scenario_branch
             )
@@ -1946,29 +1967,29 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                 if r["node"].get("prefix")
             ]
             if len(pool_edges) != 1 or not slices:
-                errors.append(f"{metro}: pool {pool_name} missing or without a prefix ({len(pool_edges)} pool(s))")
+                errors.append(f"{zone}: pool {pool_name} missing or without a prefix ({len(pool_edges)} pool(s))")
             addresses = [
                 ipaddress.IPv6Interface(node["ip_address"]["node"]["address"]["value"])
                 for node in by_device.values()
                 if node.get("ip_address")
             ]
             if len(addresses) != 2 or addresses[0].network != addresses[1].network:
-                errors.append(f"{metro}: interlink addresses {addresses} are not one IPv6 P2P")
+                errors.append(f"{zone}: interlink addresses {addresses} are not one IPv6 P2P")
             elif addresses[0].network.prefixlen != 127 or not any(addresses[0].network.subnet_of(s) for s in slices):
-                errors.append(f"{metro}: interlink {addresses[0].network} is not a /127 inside {pool_name} {slices}")
+                errors.append(f"{zone}: interlink {addresses[0].network} is not a /127 inside {pool_name} {slices}")
 
-            name = ALL_DEMO_FABRIC_PEERINGS[metro]
+            name = ALL_DEMO_FABRIC_PEERINGS[zone]
             session = sessions.get(name)
             if session is None:
-                errors.append(f"{metro}: no {name} session")
+                errors.append(f"{zone}: no {name} session")
             else:
                 if session["peering_role"]["value"] != "fabric" or session["session_type"]["value"] != "IBGP":
                     errors.append(f"{name}: {session['peering_role']['value']}/{session['session_type']['value']}")
                 if session["ttl"]["value"] != 1:
                     errors.append(f"{name}: ttl {session['ttl']['value']}, expected 1 (directly connected)")
                 key = ((session.get("password") or {}).get("node") or {}).get("name", {}).get("value")
-                if key != f"{metro}-fabric-key":
-                    errors.append(f"{name}: keyed with '{key}', expected '{metro}-fabric-key'")
+                if key != f"{zone}-fabric-key":
+                    errors.append(f"{name}: keyed with '{key}', expected '{zone}-fabric-key'")
                 families = sorted(
                     (e["node"]["afi"]["value"], e["node"]["safi"]["value"])
                     for e in session["address_families"]["edges"]
@@ -1997,27 +2018,27 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                 for e in vip_result["DcimVirtualInterface"]["edges"]
             }
             if sorted(vips) != sorted(devices):
-                errors.append(f"{metro}: loopback100 on {sorted(vips)}, expected {devices}")
+                errors.append(f"{zone}: loopback100 on {sorted(vips)}, expected {devices}")
                 continue
             vip_ids = {((node.get("ip_address") or {}).get("node") or {}).get("id") for node in vips.values()}
             if len(vip_ids) != 1 or None in vip_ids:
-                errors.append(f"{metro}: loopback100 of {devices} reference {len(vip_ids)} address object(s), not 1")
+                errors.append(f"{zone}: loopback100 of {devices} reference {len(vip_ids)} address object(s), not 1")
             if any(node["role"]["value"] != "multisite-vip" for node in vips.values()):
-                errors.append(f"{metro}: loopback100 is not role multisite-vip on every edge")
-            vip_address = ALL_DEMO_METRO_SITE_VIPS[metro]
+                errors.append(f"{zone}: loopback100 is not role multisite-vip on every edge")
+            vip_address = ALL_DEMO_ZONE_SITE_VIPS[zone]
             count = await client.execute_graphql(
                 query="query ($a: String) { IpamIPAddress(address__value: $a) { count } }",
                 variables={"a": vip_address},
                 branch_name=scenario_branch,
             )
             if count["IpamIPAddress"]["count"] != 1:
-                errors.append(f"{metro}: {count['IpamIPAddress']['count']} IpamIPAddress for {vip_address}, expected 1")
+                errors.append(f"{zone}: {count['IpamIPAddress']['count']} IpamIPAddress for {vip_address}, expected 1")
 
-        assert not errors, f"30_all metro edge pairs are wrong on branch '{scenario_branch}':\n" + "\n".join(
+        assert not errors, f"30_all zone edge pairs are wrong on branch '{scenario_branch}':\n" + "\n".join(
             f"  - {e}" for e in errors
         )
 
-        logging.info("Metro edge pairs verified: %s", sorted(ALL_DEMO_EDGE_INTERLINKS))
+        logging.info("Zone edge pairs verified: %s", sorted(ALL_DEMO_EDGE_INTERLINKS))
         logging.info("=== %s - COMPLETED ===", SCENARIO_NAME)
 
     @pytest.mark.order(411)

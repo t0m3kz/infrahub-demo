@@ -14,6 +14,7 @@ from infrahub_sdk.protocols import CoreStandardGroup
 
 from generators.devices import ROLE_GROUP_NAMES, DeviceMixin
 from generators.protocols import (
+    CloudNetworkAppliance,
     DcimCable,
     DcimInterface,
     DcimPhysicalDevice,
@@ -152,6 +153,54 @@ class TestDeviceMixinCreateDevices:
         assert create_kwargs["data"]["hosting_device"] == {"id": "host-1"}
 
     @pytest.mark.asyncio
+    async def test_appliance_option_creates_provider_hosted_appliances(self) -> None:
+        """options["appliance"] selects CloudNetworkAppliance: no hosting device, no standalone VLAN domain, no cabling.
+
+        An edge is a VLAN domain role for a physical device; a rented instance has no ports of ours to domain."""
+
+        gen = _make_generator()
+        created_device = _mock_created_device(CloudNetworkAppliance.__name__, "eg-am-ne01")
+        gen.client.create = AsyncMock(return_value=created_device)
+        gen._ensure_standalone_vlan_domains = AsyncMock()
+
+        names = await gen.create_devices(
+            device_role="edge",
+            quantity=1,
+            deployment_id="vc-1",
+            template={"id": "tpl-1", "device_type": {"id": "dt-1"}, "platform": {"name": "cisco_xe"}, "owner": "p027"},
+            options={"appliance": True, "indexes": []},
+            hosting_device=MagicMock(id="host-1"),
+        )
+
+        assert len(names) == 1
+        create_kwargs = gen.client.create.call_args.kwargs
+        assert create_kwargs["kind"] is CloudNetworkAppliance
+        assert create_kwargs["data"]["deployment"] == {"id": "vc-1"}
+        assert create_kwargs["data"]["object_template"] == {"id": "tpl-1"}
+        gen._ensure_standalone_vlan_domains.assert_not_awaited()
+        assert gen.client.filters.await_args_list[0].kwargs["kind"] is CloudNetworkAppliance
+
+    @pytest.mark.asyncio
+    async def test_appliance_wins_over_virtual_and_physical_is_the_default(self) -> None:
+        for options, expected in (
+            ({"appliance": True, "virtual": True}, CloudNetworkAppliance),
+            ({"virtual": True}, DcimVirtualDevice),
+            ({}, DcimPhysicalDevice),
+        ):
+            gen = _make_generator()
+            gen.client.create = AsyncMock(return_value=_mock_created_device(expected.__name__, "x-01"))
+
+            await gen.create_devices(
+                device_role="firewall",
+                quantity=1,
+                deployment_id="dep-1",
+                template={"device_type": {"id": "dt-1"}, "platform": {"name": "linux"}},
+                options={**options, "name_override": "x-01"},  # type: ignore[typeddict-item]
+            )
+
+            assert gen.client.create.call_args.kwargs["kind"] is expected
+
+    @pytest.mark.asyncio
     async def test_name_override_bypasses_naming_convention(self) -> None:
         gen = _make_generator()
         created_device = _mock_created_device(DcimVirtualDevice.__name__, "dc1-fw-01-C001-p-dedicated")
@@ -228,6 +277,57 @@ class TestCreateDevicesPairingDispatch:
     via DeviceOptions.mlag_create. Any quantity (not just 2) is paired two-at-a-
     time — see test_rack_mlag_pairs.py for the pairing algorithm itself; this
     covers create_devices()'s dispatch into it."""
+
+    @pytest.mark.asyncio
+    async def test_an_edge_is_never_paired_into_an_ha_domain(self) -> None:
+        """An edge router is joined by its interlink (physical) or stands alone (provider-hosted), whatever ha_kind says."""
+        gen = _make_generator()
+        gen._ensure_ha_pairs = AsyncMock()
+        gen.client.create = AsyncMock(side_effect=lambda **kw: _mock_created_device(kw["kind"].__name__, "x"))
+
+        await gen.create_devices(
+            device_role="edge",
+            quantity=2,
+            deployment_id="dep-1",
+            template={"device_type": {"id": "dt-1"}, "platform": {"name": "cisco_xe"}},
+            options={"indexes": [], "ha_kind": "ManagedFirewallHA"},
+        )
+
+        gen._ensure_ha_pairs.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_appliance_account_is_sent_and_cleared_with_the_presence_account(self) -> None:
+        for account_id, expected in (("acct-1", {"id": "acct-1"}), (None, None)):
+            gen = _make_generator()
+            gen.client.create = AsyncMock(return_value=_mock_created_device(CloudNetworkAppliance.__name__, "eg-01"))
+            options: Any = {"appliance": True, "name_override": "eg-01"}
+            if account_id:
+                options["account_id"] = account_id
+
+            await gen.create_devices(
+                device_role="edge",
+                quantity=1,
+                deployment_id="vc-1",
+                template={"device_type": {"id": "dt-1"}, "platform": {"name": "cisco_xe"}},
+                options=options,
+            )
+
+            assert gen.client.create.call_args.kwargs["data"]["account"] == expected
+
+    @pytest.mark.asyncio
+    async def test_a_device_that_is_not_an_appliance_never_gets_an_account(self) -> None:
+        gen = _make_generator()
+        gen.client.create = AsyncMock(return_value=_mock_created_device(DcimPhysicalDevice.__name__, "sw-01"))
+
+        await gen.create_devices(
+            device_role="firewall",
+            quantity=1,
+            deployment_id="dep-1",
+            template={"device_type": {"id": "dt-1"}, "platform": {"name": "nxos"}},
+            options={"name_override": "sw-01", "account_id": "acct-1"},
+        )
+
+        assert "account" not in gen.client.create.call_args.kwargs["data"]
 
     @pytest.mark.asyncio
     async def test_firewall_with_ha_kind_pairs_after_creation(self) -> None:
@@ -468,6 +568,20 @@ class TestEnsureHaPairs:
         assert pair_lookup_kwargs["kind"] is DcimVirtualDevice
 
     @pytest.mark.asyncio
+    async def test_provider_hosted_pair_gets_no_sync_interface_or_cable(self) -> None:
+        """Equinix wires the pair itself: there is no HA port of ours, so nothing is created for one."""
+        gen = self._gen()
+        gen.client.filters = AsyncMock(side_effect=[[], [_mock_device("fw-01"), _mock_device("fw-02")]])
+        gen.client.get = AsyncMock(return_value=_mock_group())
+        gen.client.create = AsyncMock(return_value=MagicMock(id="ha-1", save=AsyncMock()))
+
+        await gen._ensure_ha_pairs(
+            ["fw-01", "fw-02"], ha_kind="ManagedFirewallHA", role_label="firewall", device_kind=CloudNetworkAppliance
+        )
+
+        gen._ensure_ha_interfaces.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_pairs_two_at_a_time_for_larger_even_counts(self) -> None:
         """quantity=4/6 must pair all of them, not just the first two."""
         gen = self._gen()
@@ -700,7 +814,7 @@ class TestEnsureHaInterfaces:
         """A port carrying the HA sync link must not keep DcimInterface's
         `free` default — it is in service, exactly like both ends of any cable
         create_connections() lays. Caught live on a colocation metro, where
-        fw-fr01:HA1 sat at `free` while cabled to fw-fr02:HA1."""
+        fw-fr201:HA1 sat at `free` while cabled to fw-fr202:HA1."""
         gen = self._gen()
         ha_obj = MagicMock(id="ha-1", capabilities=_mock_relmgr(["dev-1", "dev-2"]))
         dev_1 = MagicMock(id="dev-1", deployment=MagicMock(initialized=False))

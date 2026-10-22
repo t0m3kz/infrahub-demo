@@ -650,9 +650,11 @@ class RoutingMixin:
             self.client.group_context.related_node_ids.append(as_obj.id)
             return as_obj.id
 
-    async def ensure_shared_as(self, *, description: str, asn_pool_id: str | None) -> str | None:
+    async def ensure_shared_as(self, *, description: str, asn_pool_id: str | None, track: bool = True) -> str | None:
         """Find the AS carrying this deterministic description, or draw a new
-        one from asn_pool_id, and track it in this run's group.
+        one from asn_pool_id, and track it in this run's group (unless track=False:
+        an AS several runs share, none of which may own it, like a colocation
+        metro's site AS found by every zone below it).
 
         The description is the idempotency key: from_pool on a new node would
         allocate a fresh ASN on every run. Returns None when no such AS exists
@@ -664,9 +666,9 @@ class RoutingMixin:
         delete_unused_nodes, since a ManagedBGP still uses it as local_as.
         """
         async with self.resource_lock(f"shared-as-{description}"):
-            return await self._ensure_shared_as_locked(description=description, asn_pool_id=asn_pool_id)
+            return await self._ensure_shared_as_locked(description=description, asn_pool_id=asn_pool_id, track=track)
 
-    async def _ensure_shared_as_locked(self, *, description: str, asn_pool_id: str | None) -> str | None:
+    async def _ensure_shared_as_locked(self, *, description: str, asn_pool_id: str | None, track: bool) -> str | None:
         existing = await self.client.filters(kind=RoutingAutonomousSystem, description__value=description)
         if existing:
             as_obj = existing[0]
@@ -675,11 +677,14 @@ class RoutingMixin:
                 kind=RoutingAutonomousSystem,
                 data={"asn": {"from_pool": {"id": asn_pool_id}}, "description": description},
             )
-            await as_obj.save(allow_upsert=True)
+            # A save claims the node for this run's group on its own; an AS that no run may own must opt out here,
+            # or the creating run owns it and its next run deletes it (still a ManagedBGP local_as) as unused.
+            await as_obj.save(allow_upsert=True, **({} if track else {"update_group_context": False}))
             self.logger.info(f"Created shared AS{as_obj.asn.value} '{description}' ({as_obj.id})")
         else:
             return None
-        self.client.group_context.related_node_ids.append(as_obj.id)
+        if track:
+            self.client.group_context.related_node_ids.append(as_obj.id)
         return as_obj.id
 
     async def bgp_processes_ready(self, device_names: list[str], process_role: str) -> bool:
@@ -705,7 +710,7 @@ class RoutingMixin:
         without bootstrap — two such branches each create their own and the
         second merge fails (uniqueness [afi, safi]).
 
-        One global node every fabric, circuit and metro run references, so no
+        One global node every fabric, circuit and colocation run references, so no
         run may own it (a tracked one is deleted by whichever run stops
         reaching it). The lock serializes concurrent runs racing to create the
         same one.
@@ -738,7 +743,7 @@ class RoutingMixin:
         """Upsert one directly connected (ttl 1, BFD, extended communities) ManagedBGPPeering.
 
         The shared core of the DCI session (add_circuit) and the metro's edge
-        FABRIC session (add_colocation_metro). Peerings share the
+        FABRIC session (add_colocation_zone, add_virtual_colocation). Peerings share the
         ManagedGeneric name space with circuits: callers prefix the name
         (DCI-<circuit>, FABRIC-<a>-<b>). Processes are passed by id, never
         looked up by name here (search-index lag on same-run objects).

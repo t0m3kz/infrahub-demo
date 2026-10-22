@@ -110,7 +110,7 @@ nodes:
       - TopologyFacility
     parent: TopologySaas
     children: ""
-    icon: "mdi:map-marker-network"
+    icon: "mdi:map-marker"
     display_label: "{{ name__value }}"
     uniqueness_constraints:
       - [name__value, parent]

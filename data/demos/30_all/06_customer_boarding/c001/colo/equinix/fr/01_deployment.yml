@@ -8,4 +8,6 @@ spec:
     - owner: "C001"
       environment: "p"
       parent: "FR"
+      # FR2 holds the metro's firewall pair, so this footprint's FirewallContext lives there
+      serving_zone: "FR2"
       member_of_groups: [customer_deployments_colocation]

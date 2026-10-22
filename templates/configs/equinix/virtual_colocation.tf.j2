@@ -1,0 +1,45 @@
+terraform {
+  required_providers {
+    equinix = {
+      source = "equinix/equinix"
+    }
+  }
+}
+
+{% for variable in license_variables %}
+variable "{{ variable }}" {
+  type      = string
+  sensitive = true
+}
+
+{% endfor %}
+{% for resource in resources %}
+resource "equinix_network_device" "{{ resource.id }}" {
+  name           = {{ resource.name | hcl }}
+  metro_code     = {{ resource.metro_code | hcl }}
+  type_code      = {{ resource.type_code | hcl }}
+  package_code   = {{ resource.package_code | hcl }}
+  version        = {{ resource.version | hcl }}
+  core_count     = {{ resource.core_count }}
+  term_length    = {{ resource.term_length }}
+  account_number = {{ account_number | hcl }}
+  notifications  = {{ notifications | hcl_list }}
+{% if resource.cluster %}
+  byol           = true
+  cluster_details {
+    cluster_name = {{ resource.cluster.cluster_name | hcl }}
+{% for node in resource.cluster.nodes %}
+    node{{ loop.index0 }} {
+      vendor_configuration {
+        hostname = {{ node.hostname | hcl }}
+      }
+      license_token = var.{{ node.token_variable }}
+    }
+{% endfor %}
+  }
+{% endif %}
+}
+{% if not loop.last %}
+
+{% endif %}
+{% endfor %}

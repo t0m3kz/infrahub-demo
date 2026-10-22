@@ -16,7 +16,7 @@ import pytest
 import yaml
 
 _DIR = Path(__file__).parents[2] / "data" / "demos" / "30_all" / "08_interconnects" / "06_internet"
-_CAGE_EDGES = {"eg-fr01", "eg-fr02", "eg-pa01", "eg-pa02"}
+_CAGE_EDGES = {"eg-fr201", "eg-fr202", "eg-pa401", "eg-pa402"}
 
 
 def _objects(kind: str) -> list[dict[str, Any]]:

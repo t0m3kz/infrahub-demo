@@ -235,6 +235,23 @@ class TestSegmentVlanDevices:
 
         assert asyncio.run(gen._segment_vlan_devices(segment)) == [edge]
 
+    def test_sdwan_gateway_in_the_zone_is_not_a_border_gateway(self) -> None:
+        """A hand-authored SD-WAN gateway has the `edge` role and sits in the on-ramp's zone, but no VLAN domain."""
+        gen = _make_gen()
+        onramp = _device("eg-fr201")
+        onramp.member_of_groups = MagicMock(peers=[MagicMock(hfid=["edges"])])
+        gateway = _device("EQX-FR2-SDWAN-GW1")
+        gateway.member_of_groups = MagicMock(peers=[MagicMock(hfid=["sdwan_gateways"]), MagicMock(hfid=["edges"])])
+        gen.client.filters = AsyncMock(return_value=[onramp, gateway])
+        segment = {
+            "stretch_scope": "global",
+            "customer_deployments": [{"id": "cust-1", "parent": {"id": "metro-1", "children": [{"id": "zone-1"}]}}],
+            "capabilities": [],
+        }
+
+        assert asyncio.run(gen._segment_vlan_devices(segment)) == [onramp]
+        assert "member_of_groups" in gen.client.filters.call_args.kwargs["include"]
+
     def test_nothing_tagged_and_local_queries_nothing(self) -> None:
         """No ports, not stretched: no device needs the segment."""
         gen = _make_gen()

@@ -19,7 +19,7 @@ asynchronously after the load that triggers them:
   (`bl-dc101101`). `add_dc` creates them, and `add_circuit` then builds each fibre's DCI session and adds the
   border leaf's DC to the fibre's `locations` (the file lists only the cage end). Each DC has
   two fibres into its metro, one per cage edge (both edges are Multi-Site border gateways, linked by the
-  `interlink` port and peered iBGP by `add_colocation_metro`).
+  `interlink` port and peered iBGP by `add_colocation_zone`).
 - `07_applications` references VMs and customer footprints declared in `06_customer_boarding`.
 
 So `infrahubctl object load data/demos/30_all` in one go only works on an instance whose branch already has
@@ -84,7 +84,7 @@ Load the stages **in this order**. After each one, wait until no generator task 
 
 | # | Stage | What it loads | Generators it fires |
 | --- | --- | --- | --- |
-| 1 | foundation | Customers, cloud, colocation (with the shared SD-WAN gateway and orchestrator), the internet's ISPs (`04_internet`), SaaS, offices, and the three DC sites with their fabrics and controllers | `add_colocation_metro` (×9), `add_dc` → `add_pod` → `add_rack` (longest stage) |
+| 1 | foundation | Customers, cloud, colocation (with the shared SD-WAN gateway and orchestrator), the internet's ISPs (`04_internet`), SaaS, offices, and the three DC sites with their fabrics and controllers | `add_colocation_metro` (×9), `add_colocation_zone`, `add_virtual_colocation` (`AM-NE`), `add_dc` → `add_pod` → `add_rack` (longest stage) |
 | 2 | compute_and_customers | Application hosts and the boarding set: DC/colocation/cloud/office footprints (one `01_deployments.yml` per customer for its DC footprints), cage kit, VMs | `add_endpoint`, `add_customer_deployment_*`, `add_sdwan_edge` |
 | 3 | applications | Segments, applications, deployment-request catalogue | `add_vxlan_segment`, `add_app_application` |
 | 4 | interconnects | Colo on-ramp, cloud hub, virtual circuits, SD-WAN backhaul and handoff, cloud endpoints, internet transit | — (data only) |
@@ -145,6 +145,8 @@ Once stage 4 has settled, the branch should contain at least:
 | `TopologyPod` | 6 |
 | `LocationRack` | 25 |
 | `TopologyCustomerDC` | 10 |
+| `TopologyColocationZone` | 12 |
+| `TopologyVirtualColocation` | 1 |
 | `TopologyCustomerColocation` | 7 |
 | `TopologyCustomerCloud` | 4 |
 | `TopologyCustomerOffice` | 5 |
@@ -153,6 +155,16 @@ Once stage 4 has settled, the branch should contain at least:
 | `TopologyExternalProviders` | 3 |
 | `TopologyPhysicalCircuit` (`internet`) | 9 |
 
+### Colocation Kit Is Per Zone
+
+A metro (`FR`, `PA`, `AM`, ...) is only the Multi-Site site: it owns the VNI and ASN pools, no devices. The kit is
+declared on the zone that holds it, `FR2` (edge pair `eg-fr201/02` plus firewall pair `fw-fr201/02`) and `PA4`
+(`eg-pa401/02`), and device names carry the zone name. `FR6` and `PA6` are customer cages that declare nothing.
+Equinix Amsterdam is one `TopologyVirtualColocation`, `AM-NE`, with no kit in this demo. A
+`TopologyCustomerColocation` footprint is still named after its metro (`C001-P-FR`); its optional `serving_zone`
+(`FR2` for `C001` and `C005`) says which zone's firewall pair hosts its firewall context (the shared context of that
+HA cluster). A footprint without a `serving_zone` gets no context.
+
 ### Internet Transit
 
 `04_internet` (foundation stage) declares three ISPs under the `Internet` label, each a
@@ -160,7 +172,7 @@ Once stage 4 has settled, the branch should contain at least:
 SD-WAN offices. Orange's access PE (`EXT-ORANGE`, template `MX204_ISP_ACCESS`) is the far end of every office's
 `INET-<office>` circuit: `add_sdwan_edge` takes a free `customer` port on it per office, so a new office adds no
 data row. `08_interconnects/06_internet` connects the cages to the transit ISPs, whose provider edges
-(`EXT-LUMEN-FRA1`, `EXT-COGENT-PAR1`, ...) it declares. Each cage edge (`eg-fr01/02`, `eg-pa01/02`) gets one 10G
+(`EXT-LUMEN-FRA1`, `EXT-COGENT-PAR1`, ...) it declares. Each cage edge (`eg-fr201/02`, `eg-pa401/02`) gets one 10G
 transit circuit on `Ethernet1/14` and an eBGP session in VRF `INTERNET`. The ISPs send a default route only. A
 DC reaches the internet through these edges, so a flow trace towards the internet ends on an ISP device. All
 four edges are Multi-Site border gateways (two per metro), so the default from either ISP reaches the DCs.

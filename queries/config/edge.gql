@@ -33,13 +33,25 @@ query edge_config($device: String!) {
         # Device Services (BGP, OSPF) with nested peerings
         ...DeviceCapabilitiesOnDeviceFields
 
-        # EVPN Multi-Site: the metro edge is its site's border gateway, so it
+        # EVPN Multi-Site: the colocation edge is its metro's border gateway, so it
         # needs the metro's stretched segments and fabric RT ASN (site-id).
         ... on DcimPhysicalDevice {
           deployment {
             node {
+              # An office edge is deployed to the SegmentHosting itself (direct spreads). A colocation edge
+              # is deployed to its zone or virtual colocation and the metro above it is the site, so both
+              # SegmentHosting fragments are selected in ONE `parent { node { ... } }` block per kind: a
+              # second `parent` selection (as EvpnRtAsOnDeploymentFields adds) returns null for whichever
+              # SegmentHosting fragment comes second (see the ORDER MATTERS note in fragments/evpn_fabric.gql).
+              # Checked on the 30_all stack: eg-fr201 gets evpn_rt_as and segment_deployments from the metro.
               ...SegmentDeploymentsOnDeploymentFields
-              ...EvpnRtAsOnDeploymentFields
+              ...EvpnRtAsOnSegmentHostingFields
+              ... on TopologyColocationZone {
+                parent { node { ...SegmentDeploymentsOnDeploymentFields ...EvpnRtAsOnSegmentHostingFields } }
+              }
+              ... on TopologyVirtualColocation {
+                parent { node { ...SegmentDeploymentsOnDeploymentFields ...EvpnRtAsOnSegmentHostingFields } }
+              }
             }
           }
         }

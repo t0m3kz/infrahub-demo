@@ -1,0 +1,61 @@
+---
+# Colocation designs - the envelope of a zone (or virtual colocation) and of a metro
+# Referenced by TopologyColocationZone.design / TopologyVirtualColocation.design and
+# TopologyColocationMetro.design. Every pool size is derived from these maxima by
+# generators/fabric_sizing.py before any device exists; the devices themselves are the
+# zone's fabric_templates (checks/colocation_placement.py rejects an entry beyond the
+# envelope).
+#
+# Zone designs, named for the kit they hold:
+#   EDGE        an edge router pair (an Equinix Network Edge pair, a Paris on-ramp).
+#   EDGE_FW     an edge router pair and a firewall HA pair (Frankfurt FR2).
+#   EDGE_FW_LB  as EDGE_FW plus a load-balancer HA pair.
+#
+# Metro designs (S, M): the most zones AND virtual colocations the metro holds, and
+# the zone designs they may use. The metro's pools and its ASN block are sized for
+# max_zones of the widest listed zone design.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyTemplateColocationZone
+  data:
+    - name: "EDGE"
+      description: "Edge router pair, no service appliances."
+      max_edges: 2
+      max_firewalls: 0
+      max_load_balancers: 0
+
+    - name: "EDGE_FW"
+      description: "Edge router pair and a firewall HA pair."
+      max_edges: 2
+      max_firewalls: 2
+      max_load_balancers: 0
+
+    - name: "EDGE_FW_LB"
+      description: "Edge router pair, a firewall HA pair and a load-balancer HA pair."
+      max_edges: 2
+      max_firewalls: 2
+      max_load_balancers: 2
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyTemplateColocationMetro
+  data:
+    - name: "S"
+      description: "Small metro: up to 2 zones or virtual colocations."
+      max_zones: 2
+      zone_templates:
+        - "EDGE"
+        - "EDGE_FW"
+        - "EDGE_FW_LB"
+
+    - name: "M"
+      description: "Medium metro: up to 4 zones or virtual colocations."
+      max_zones: 4
+      zone_templates:
+        - "EDGE"
+        - "EDGE_FW"
+        - "EDGE_FW_LB"

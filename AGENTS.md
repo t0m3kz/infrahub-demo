@@ -234,7 +234,7 @@ class MyCheck(InfrahubCheck):
 | Namespace | Holds |
 | --------- | ----- |
 | Managed | On-prem services and the shared generics `ManagedGeneric` (name, description, status), `ManagedGenericDevice` (the device `capabilities` edge), `ManagedGenericInterfaces` (the interface-side `capabilities` edge; its identifier stays `interface_capabilities`), `ManagedNetworkSegment` and `ManagedLoadBalancer` |
-| Cloud | Public-cloud resources; all inherit `CloudResource` |
+| Cloud | Provider-hosted resources (public cloud and provider-hosted network services); every resource inherits `CloudResource`, except `CloudNetworkAppliance`, a provider-hosted network function (Equinix Network Edge) that inherits the device generics (`DcimDevice`, `DcimCapabilities`) so its interfaces, BGP and HA stay device-shaped |
 | Topology | Deployments (`TopologyDataCenter`, `TopologyPod`, `TopologyColocationMetro`, ...), design elements, circuits (`TopologyPhysicalCircuit`, `TopologyVirtualCircuit`) and the tenant footprints `TopologyCustomer*` |
 | Dcim, Ipam, Location, Organization | Devices/interfaces/cables, prefixes/addresses/namespaces, geography, providers/customers |
 | Routing | Shared routing objects (`RoutingAutonomousSystem`, `RoutingOSPFArea`, `RoutingPassword`) |
@@ -253,8 +253,8 @@ class MyCheck(InfrahubCheck):
   `{OWNER}-OFFICE` (for example `C005-OFFICE`), it is always PROD (no `environment`) and its parent is the
   "Campus and Office" `TopologyLabel`.
 - **Circuit placement**: a physical circuit's `locations` peer `TopologyFacility`:
-  the DC (never a pod, rack or footprint), the colocation cage `TopologyColocationZone` (never the metro), the
-  `TopologyCloudRegion` (never a zone or `TopologyCloud`), the ISP `TopologyExternalProviders`, the
+  the DC (never a pod, rack or footprint), the colocation cage `TopologyColocationZone` or the provider-hosted
+  `TopologyVirtualColocation` (never the metro), the `TopologyCloudRegion` (never a zone or `TopologyCloud`), the ISP `TopologyExternalProviders`, the
   `TopologySaasRegion` or the `TopologyCustomerOffice`. Data lists only the cage; `add_circuit` adds every end
   whose endpoint device's `deployment` is a facility (border leaf -> DC, provider router -> region, ISP PE -> ISP),
   when the circuit is created or its ends change: nothing re-runs it on a later `deployment` edit (the check reports

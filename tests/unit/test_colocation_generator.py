@@ -1,17 +1,19 @@
 """Unit tests for ColocationMetroGenerator (generators/topology/colocation.py).
 
-The generator replaces hand-written cage routers with a declarative
-``fabric_templates`` list on the metro, so the tests concentrate on the three
-things the demo data now depends on being exactly right:
+The metro owns no devices: its zones and virtual colocations do (see
+test_colocation_zone_generator.py). What the metro keeps is what those children
+share, the identity of the metro's one EVPN Multi-Site site:
 
-- which fabric_templates entries are usable, and that a bad one warns rather
-  than failing the whole metro (FailOnErrorLogger turns error() into a task
-  failure);
-- the metro's four pool names and — crucially — their KINDS, since
-  create_devices() resolves "{metro}-loopback-pool" and hands it to
-  allocate_next_ip_address(), which needs an address pool, not a prefix pool;
-- the generated device names, because data/demos/30_all/08_interconnects/
-  references "eg-fr01" by name.
+- its L2 VNI pool (``{metro}-vni-pool``, read by the segment generator off
+  TopologySegmentHosting);
+- the ASN pool (``{metro}-asn-pool``) the site's one AS is drawn from later by a
+  zone or virtual colocation.
+
+Both are created and attached on every run, kit or no kit.
+
+A metro WITH a design (TopologyTemplateColocationMetro, data/bootstrap/14c_colocation_templates.yml) is also the
+supernet holder of its zones: five prefix pools sized by generators/fabric_sizing.py for max_zones zones of the widest
+listed zone design, and an ASN block sized for max_zones. A metro without one creates none of them.
 """
 
 from __future__ import annotations
@@ -20,279 +22,353 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from infrahub_sdk.exceptions import NodeNotFoundError
 
-from generators.firewall_context import FIREWALL_CONTEXT
-from generators.helpers.naming import DeviceNameContext, DeviceNamingConfig
-from generators.logger import GeneratorError
-from generators.topology.colocation import (
-    _COLO_LOOPBACK_PREFIX_LENGTH,
-    _COLO_MANAGEMENT_PREFIX_LENGTH,
-    _COLO_SERVICE_ROLES,
-    _COLO_TECHNICAL_PREFIX_LENGTH,
-    _COLO_VALID_FABRIC_ROLES,
-    ColocationMetroGenerator,
+from generators.fabric_sizing import (
+    colo_metro_asn_units,
+    colo_metro_loopback_bits,
+    colo_metro_loopback_ipv6_bits,
+    colo_metro_management_bits,
+    colo_metro_technical_bits,
+    colo_metro_technical_ipv6_bits,
+    host_bits_to_prefix_length,
 )
-
-_EDGE_TEMPLATE = {
-    "id": "tpl-edge",
-    # The cleaned form of the `template_kind: __typename` alias the query
-    # selects — aliased because clean_data() would rewrite __typename to
-    # "typename". This is what tells the generator to build a physical device.
-    "template_kind": "TemplateDcimPhysicalDevice",
-    "template_name": "N9K-C9316D-GX_EDGE",
-    "platform": {"id": "plat-nxos", "name": "cisco_nxos"},
-    "device_type": "dt-9316d",
-}
-
-# Same edge template, but with the real N9K-C9316D-GX_EDGE port layout
-# attached (see data/bootstrap/10_physical_devices_templates_cisco_nxos.yaml):
-# a `firewall`-role port block, no `load-balancer`-role ports at all.
-_EDGE_TEMPLATE_WITH_FIREWALL_PORTS = {
-    **_EDGE_TEMPLATE,
-    "id": "tpl-edge-fw-ports",
-    "interfaces": [
-        {"name": "Ethernet1/15", "role": "firewall"},
-        {"name": "Ethernet1/16", "role": "firewall"},
-    ],
-}
-
-# A hypothetical edge template with BOTH firewall- and load-balancer-role
-# ports (mirrors N9K-C9336C-FX2_BORDER_LEAF's layout) — used where a test
-# wants every colocation role to be cablable, not just structurally valid.
-_EDGE_TEMPLATE_WITH_ALL_SERVICE_PORTS = {
-    **_EDGE_TEMPLATE,
-    "id": "tpl-edge-all-ports",
-    "interfaces": [
-        {"name": "Ethernet1/15", "role": "firewall"},
-        {"name": "Ethernet1/16", "role": "firewall"},
-        {"name": "Ethernet1/17", "role": "load-balancer"},
-        {"name": "Ethernet1/18", "role": "load-balancer"},
-    ],
-}
-
-_VIRTUAL_EDGE_TEMPLATE = {
-    "id": "tpl-vedge",
-    "template_kind": "TemplateDcimVirtualDevice",
-    "template_name": "C8000V_EDGE",
-}
+from generators.helpers.pools import SITE_VNI_END, SITE_VNI_START, name_to_asn_range
+from generators.protocols import TopologyColocationMetro
+from generators.topology.colocation import _METRO_ASN_SIZING_UNITS, ColocationMetroGenerator
+from tests.unit.simulators.fabric_designs import COLO_METRO_DESIGN_NAMES, colo_metro_design
 
 
 def _make_generator() -> Any:
+    """A metro generator whose pool upserts and attach are mocked at the SDK boundary."""
     gen = ColocationMetroGenerator.__new__(ColocationMetroGenerator)
     gen.logger = MagicMock()
     gen.client = MagicMock()
-    gen.client.get = AsyncMock()
-    gen.client.create = AsyncMock()
-    gen.client.allocate_next_ip_prefix = AsyncMock(return_value=MagicMock(id="prefix-1"))
-    gen.fabric_name = "fr"
-    gen.pod_name = None
-    gen.deployment_id = "metro-1"
+    gen.upsert_asn_pool = AsyncMock(return_value=MagicMock(id="asn-pool-id"))
+    gen.upsert_number_pool = AsyncMock(return_value=MagicMock(id="vni-pool-id"))
+    gen.attach_refs = AsyncMock()
+    gen.ensure_sliced_pool = AsyncMock(side_effect=lambda **kw: MagicMock(id=f"id-{kw['pool_name']}"))
     setattr(gen, "acquire_resource_lock", AsyncMock(return_value="lock-id"))  # noqa: B010
     setattr(gen, "release_resource_lock", AsyncMock())  # noqa: B010
     return gen
 
 
-def _metro(**overrides: Any) -> dict[str, Any]:
-    metro: dict[str, Any] = {
-        "id": "metro-1",
-        "name": "FR",
-        "deployment_type": "physical",
-        "naming_convention": "standard",
-        "fabric_templates": [{"role": "edge", "quantity": 2, "template": _EDGE_TEMPLATE}],
-    }
-    metro.update(overrides)
+def _metro(name: str = "FR", metro_id: str = "metro-1", design: dict[str, Any] | None = None) -> dict[str, Any]:
+    metro: dict[str, Any] = {"id": metro_id, "name": name}
+    if design is not None:
+        metro["design"] = design
     return metro
 
 
-class TestFabricTemplateValidation:
-    def test_valid_entry_is_kept(self) -> None:
-        gen = _make_generator()
-        gen.data = _metro()
-
-        assert gen._valid_fabric_templates() == gen.data["fabric_templates"]
-        gen.logger.warning.assert_not_called()
-
-    @pytest.mark.parametrize(
-        "entry",
-        [
-            # DC-only fabric tiers are meaningless in a metro that has no fabric.
-            {"role": "super-spine", "quantity": 2, "template": _EDGE_TEMPLATE},
-            {"role": "leaf", "quantity": 2, "template": _EDGE_TEMPLATE},
-            {"role": None, "quantity": 2, "template": _EDGE_TEMPLATE},
-            {"role": "edge", "quantity": 0, "template": _EDGE_TEMPLATE},
-            {"role": "edge", "quantity": 2, "template": None},
-        ],
-    )
-    def test_unusable_entry_warns_and_is_dropped(self, entry: dict[str, Any]) -> None:
-        gen = _make_generator()
-        gen.data = _metro(fabric_templates=[entry])
-
-        assert gen._valid_fabric_templates() == []
-        gen.logger.warning.assert_called_once()
-        # warning(), never error(): one bad entry must not fail the whole metro.
-        gen.logger.error.assert_not_called()
-
-    def test_one_bad_entry_does_not_drop_the_good_ones(self) -> None:
-        gen = _make_generator()
-        good = {"role": "firewall", "quantity": 2, "template": _EDGE_TEMPLATE}
-        gen.data = _metro(
-            fabric_templates=[
-                {"role": "border-leaf", "quantity": 2, "template": _EDGE_TEMPLATE},
-                good,
-            ]
-        )
-
-        assert gen._valid_fabric_templates() == [good]
-
-    def test_every_colocation_role_is_accepted(self) -> None:
-        """Every colocation role is structurally valid — given an edge
-        template with the matching ports, none of them get dropped as
-        uncablable either (see TestUncablableServiceEntries for the
-        edge-lacks-the-port case)."""
-        gen = _make_generator()
-        entries = [
-            {"role": "edge", "quantity": 2, "template": _EDGE_TEMPLATE_WITH_ALL_SERVICE_PORTS},
-            {"role": "firewall", "quantity": 2, "template": _EDGE_TEMPLATE},
-            {"role": "load-balancer", "quantity": 2, "template": _EDGE_TEMPLATE},
-        ]
-        gen.data = _metro(fabric_templates=entries)
-
-        assert gen._valid_fabric_templates() == entries
-        gen.logger.warning.assert_not_called()
-
-
-class TestUncablableServiceEntries:
-    """_drop_uncablable_service_entries: a physical firewall/load-balancer
-    entry is only usable if some physical edge template in the same metro
-    exposes a same-named port role — otherwise create_devices() would build
-    a real HA pair and create_chain_cabling would fail the task on it right
-    after, with the appliance already left behind."""
-
-    def test_service_role_with_no_matching_edge_port_is_dropped(self) -> None:
-        """N9K-C9316D-GX_EDGE has `firewall` ports but no `load-balancer`
-        ports — exactly the gap that used to reach create_chain_cabling."""
-        gen = _make_generator()
-        entries = [
-            {"role": "edge", "quantity": 2, "template": _EDGE_TEMPLATE_WITH_FIREWALL_PORTS},
-            {"role": "load-balancer", "quantity": 2, "template": _EDGE_TEMPLATE},
-        ]
-        gen.data = _metro(fabric_templates=entries)
-
-        assert gen._valid_fabric_templates() == [entries[0]]
-        gen.logger.warning.assert_called_once()
-        gen.logger.error.assert_not_called()
-
-    def test_service_role_with_a_matching_edge_port_is_kept(self) -> None:
-        gen = _make_generator()
-        entries = [
-            {"role": "edge", "quantity": 2, "template": _EDGE_TEMPLATE_WITH_FIREWALL_PORTS},
-            {"role": "firewall", "quantity": 2, "template": _EDGE_TEMPLATE},
-        ]
-        gen.data = _metro(fabric_templates=entries)
-
-        assert gen._valid_fabric_templates() == entries
-        gen.logger.warning.assert_not_called()
-
-    def test_no_physical_edge_entry_at_all_is_not_this_checks_concern(self) -> None:
-        """A metro can legitimately declare a service role with no edge pair
-        at all (Paris-style) — _cable_metro_services's own no-op guard covers
-        that already, so this check must not also drop the entry."""
-        gen = _make_generator()
-        entries = [{"role": "firewall", "quantity": 2, "template": _EDGE_TEMPLATE}]
-        gen.data = _metro(fabric_templates=entries)
-
-        assert gen._valid_fabric_templates() == entries
-        gen.logger.warning.assert_not_called()
-
-    def test_virtual_service_entry_is_exempt(self) -> None:
-        """A virtual firewall is never cabled in the first place (see
-        _create_metro_devices), so a physical edge lacking the port is
-        irrelevant to it."""
-        gen = _make_generator()
-        entries = [
-            {"role": "edge", "quantity": 2, "template": _EDGE_TEMPLATE_WITH_FIREWALL_PORTS},
-            {"role": "load-balancer", "quantity": 2, "template": _VIRTUAL_EDGE_TEMPLATE},
-        ]
-        gen.data = _metro(deployment_type="hybrid", fabric_templates=entries)
-
-        assert gen._valid_fabric_templates() == entries
-        gen.logger.warning.assert_not_called()
-
-
-class TestDeploymentStrategy:
-    """deployment_type gates which device kind a metro may instantiate.
-
-    It is the only signal available at generator time: a cage's racks are
-    attached by a later file in the same load, so even a metro we own racks in
-    shows none anywhere beneath it when the created-trigger fires.
-    """
-
-    @pytest.mark.parametrize(
-        ("deployment_type", "template", "expected_kept"),
-        [
-            ("physical", _EDGE_TEMPLATE, True),
-            ("physical", _VIRTUAL_EDGE_TEMPLATE, False),
-            ("virtual", _VIRTUAL_EDGE_TEMPLATE, True),
-            ("virtual", _EDGE_TEMPLATE, False),
-            ("hybrid", _EDGE_TEMPLATE, True),
-            ("hybrid", _VIRTUAL_EDGE_TEMPLATE, True),
-            # No strategy declared: the schema defaults to physical, so a
-            # physical template is fine and a virtual one is not.
-            (None, _EDGE_TEMPLATE, True),
-            (None, _VIRTUAL_EDGE_TEMPLATE, False),
-        ],
-    )
-    def test_template_kind_is_checked_against_the_strategy(
-        self, deployment_type: str | None, template: dict[str, Any], expected_kept: bool
-    ) -> None:
-        gen = _make_generator()
-        entry = {"role": "edge", "quantity": 2, "template": template}
-        gen.data = _metro(deployment_type=deployment_type, fabric_templates=[entry])
-
-        assert gen._valid_fabric_templates() == ([entry] if expected_kept else [])
-        assert gen.logger.warning.called is not expected_kept
-        gen.logger.error.assert_not_called()
-
-    def test_unknown_strategy_skips_everything_without_guessing(self) -> None:
-        gen = _make_generator()
-        gen.data = _metro(
-            deployment_type="quantum",
-            fabric_templates=[{"role": "edge", "quantity": 2, "template": _EDGE_TEMPLATE}],
-        )
-
-        assert gen._valid_fabric_templates() == []
-        assert "quantum" in gen.logger.warning.call_args.args[0]
-        gen.logger.error.assert_not_called()
-
-    def test_template_without_a_kind_is_skipped(self) -> None:
-        """Guards a query regression: no template_kind means we cannot tell a
-        physical template from a virtual one, so nothing gets built."""
-        gen = _make_generator()
-        gen.data = _metro(fabric_templates=[{"role": "edge", "quantity": 2, "template": {"id": "tpl-edge"}}])
-
-        assert gen._valid_fabric_templates() == []
-        gen.logger.warning.assert_called_once()
-        gen.logger.error.assert_not_called()
-
-
 class TestGenerateEntry:
+    """generate(): the cleaned input shape and the empty-response guard."""
+
     @pytest.mark.asyncio
     async def test_missing_root_key_logs_error(self) -> None:
+        """No TopologyColocationMetro in the response is an error and writes nothing."""
         gen = _make_generator()
 
         await gen.generate({})
 
         gen.logger.error.assert_called_once()
+        gen.upsert_asn_pool.assert_not_awaited()
+        gen.upsert_number_pool.assert_not_awaited()
+        gen.attach_refs.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_raw_graphql_response_is_cleaned(self) -> None:
-        """generate() must run clean_data() first — without it the root key is
-        an {"edges": [...]} dict and nothing is ever iterated."""
+        """generate() runs clean_data() first: without it the root key is an {"edges": [...]} dict."""
         gen = _make_generator()
-        gen._ensure_colocation_pools = AsyncMock()
-        gen._create_metro_devices = AsyncMock(return_value={"edge": ["eg-fr01", "eg-fr02"]})
-        gen._cable_metro_services = AsyncMock()
+        raw = {"TopologyColocationMetro": {"edges": [{"node": {"id": "metro-1", "name": {"value": "FR"}}}]}}
+
+        await gen.generate(raw)
+
+        assert gen.fabric_name == "fr"
+        assert gen.deployment_id == "metro-1"
+        gen.attach_refs.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_every_metro_in_the_response_is_generated(self) -> None:
+        """Two metros in one response each get their own pools and attach."""
+        gen = _make_generator()
+
+        await gen.generate({"TopologyColocationMetro": [_metro("FR", "m-fr"), _metro("PA", "m-pa")]})
+
+        assert [c.kwargs["pool_name"] for c in gen.upsert_asn_pool.await_args_list] == ["fr-asn-pool", "pa-asn-pool"]
+        assert [c.kwargs["node_id"] for c in gen.attach_refs.await_args_list] == ["m-fr", "m-pa"]
+
+
+class TestMetroPools:
+    """The two pools a metro owns, and what is attached to it."""
+
+    @pytest.mark.asyncio
+    async def test_asn_pool_is_named_per_metro_and_drawn_from_the_name_hash_grid(self) -> None:
+        """The metro ASN pool uses the DC name-hash grid, so a metro cannot collide with a DC."""
+        gen = _make_generator()
+
+        await gen.generate({"TopologyColocationMetro": [_metro()]})
+
+        kwargs = gen.upsert_asn_pool.await_args_list[-1].kwargs
+        start, end = name_to_asn_range(dc_name="fr", max_pods=_METRO_ASN_SIZING_UNITS)
+        assert kwargs["pool_name"] == "fr-asn-pool"
+        assert (kwargs["start_range"], kwargs["end_range"]) == (start, end)
+        assert 4_200_000_000 <= start < end <= 4_294_967_295
+
+    @pytest.mark.asyncio
+    async def test_vni_pool_is_a_number_pool_on_the_segment_deployment_vni(self) -> None:
+        """The metro hosts local segments, so it needs its own VNI pool on ManagedSegmentDeployment.vni."""
+        gen = _make_generator()
+
+        await gen.generate({"TopologyColocationMetro": [_metro()]})
+
+        kwargs = gen.upsert_number_pool.await_args_list[-1].kwargs
+        assert kwargs["pool_name"] == "fr-vni-pool"
+        assert kwargs["node"] == "ManagedSegmentDeployment"
+        assert kwargs["node_attribute"] == "vni"
+        assert (kwargs["start_range"], kwargs["end_range"]) == (SITE_VNI_START, SITE_VNI_END)
+
+    @pytest.mark.asyncio
+    async def test_both_pools_are_attached_to_the_metro_in_one_call(self) -> None:
+        """fabric_asn_pool and vni_pool ride one attach_refs on the metro; no other pool is attached."""
+        gen = _make_generator()
+
+        await gen.generate({"TopologyColocationMetro": [_metro()]})
+
+        gen.attach_refs.assert_awaited_once_with(
+            kind=TopologyColocationMetro,
+            node_id="metro-1",
+            refs={"fabric_asn_pool": "asn-pool-id", "vni_pool": "vni-pool-id"},
+        )
+
+    @pytest.mark.asyncio
+    async def test_metro_names_are_lower_cased_in_pool_names(self) -> None:
+        """Pool names follow the lower-cased metro name, the same space as device names."""
+        gen = _make_generator()
+
+        await gen.generate({"TopologyColocationMetro": [_metro("AM", "m-am")]})
+
+        assert gen.upsert_asn_pool.await_args_list[-1].kwargs["pool_name"] == "am-asn-pool"
+        assert gen.upsert_number_pool.await_args_list[-1].kwargs["pool_name"] == "am-vni-pool"
+
+
+class TestMetroOwnsNoKit:
+    """The metro runs with no kit at all and never creates devices, IP pools or locks."""
+
+    @pytest.mark.asyncio
+    async def test_runs_with_only_id_and_name_and_creates_no_devices_or_ip_pools(self) -> None:
+        """A metro whose zones carry nothing still gets its pools; the client is never written to."""
+        gen = _make_generator()
+
+        await gen.generate({"TopologyColocationMetro": [_metro()]})
+
+        gen.upsert_asn_pool.assert_awaited_once()
+        gen.upsert_number_pool.assert_awaited_once()
+        gen.client.create.assert_not_called()
+        gen.client.allocate_next_ip_prefix.assert_not_called()
+        gen.logger.error.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_rerun_converges_on_the_same_keys(self) -> None:
+        """Idempotent: a second run issues the same pool names and the same attach."""
+        gen = _make_generator()
+
+        for _ in range(2):
+            await gen.generate({"TopologyColocationMetro": [_metro()]})
+
+        first, second = gen.attach_refs.await_args_list
+        assert first == second
+        assert {c.kwargs["pool_name"] for c in gen.upsert_asn_pool.await_args_list} == {"fr-asn-pool"}
+        assert {c.kwargs["pool_name"] for c in gen.upsert_number_pool.await_args_list} == {"fr-vni-pool"}
+
+
+# metro design -> (loopback, management, technical) IPv4 and (loopback, technical) IPv6 prefix lengths, computed by
+# hand from data/bootstrap/14c_colocation_templates.yml: S holds 2 zones, M holds 4, of the widest zone design
+# (EDGE_FW_LB: 8 loopback, 16 management, 16 technical addresses; management holds the devices plus two spare).
+_GOLDEN_SUPERNET_LENGTHS = {
+    "S": {
+        "fr-loopback-pool": 28,
+        "fr-management-pool": 27,
+        "fr-technical-pool": 27,
+        "fr-loopback-ipv6-pool": 119,
+        "fr-technical-ipv6-pool": 123,
+    },
+    "M": {
+        "fr-loopback-pool": 27,
+        "fr-management-pool": 26,
+        "fr-technical-pool": 26,
+        "fr-loopback-ipv6-pool": 118,
+        "fr-technical-ipv6-pool": 122,
+    },
+}
+_SUPERNET_PARENTS = {
+    "fr-loopback-pool": "Loopback-IPv4",
+    "fr-management-pool": "Management-IPv4",
+    "fr-technical-pool": "Technical-IPv4",
+    "fr-loopback-ipv6-pool": "Loopback-IPv6",
+    "fr-technical-ipv6-pool": "Technical-IPv6",
+}
+_SUPERNET_ROLES = {
+    "fr-loopback-pool": "loopback",
+    "fr-management-pool": "management",
+    "fr-technical-pool": "technical",
+    "fr-loopback-ipv6-pool": "loopback",
+    "fr-technical-ipv6-pool": "technical",
+}
+
+
+def _supernet_calls(gen: Any) -> dict[str, dict[str, Any]]:
+    """The ensure_sliced_pool kwargs of a run, keyed by pool name."""
+    return {c.kwargs["pool_name"]: c.kwargs for c in gen.ensure_sliced_pool.await_args_list}
+
+
+class TestMetroWithDesignSupernets:
+    """A metro with a design is the supernet holder of its zones, the way a DC is of its pods."""
+
+    def test_golden_table_covers_every_bootstrap_metro_design(self) -> None:
+        """A new metro design must add its expected supernet lengths here."""
+        assert set(_GOLDEN_SUPERNET_LENGTHS) == set(COLO_METRO_DESIGN_NAMES)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("design_name", COLO_METRO_DESIGN_NAMES)
+    async def test_five_prefix_pools_are_sliced_with_the_sizing_functions_lengths(self, design_name: str) -> None:
+        """Names, kind, role, bootstrap parent and the length from colo_metro_*_bits (and from the hand-made table)."""
+        design = colo_metro_design(design_name)
+        gen = _make_generator()
+
+        await gen.generate({"TopologyColocationMetro": [_metro(design=design)]})
+
+        calls = _supernet_calls(gen)
+        assert set(calls) == set(_SUPERNET_PARENTS)
+        assert {name: call["prefix_length"] for name, call in calls.items()} == _GOLDEN_SUPERNET_LENGTHS[design_name]
+        assert {name: call["parent_pool_name"] for name, call in calls.items()} == _SUPERNET_PARENTS
+        assert {name: call["role"] for name, call in calls.items()} == _SUPERNET_ROLES
+        # A prefix pool for every supernet: the zones slice their own address and prefix pools out of it.
+        assert {call["kind"] for call in calls.values()} == {"prefix"}
+        assert calls["fr-loopback-pool"]["prefix_length"] == host_bits_to_prefix_length(
+            colo_metro_loopback_bits(design), ipv6=False
+        )
+        assert calls["fr-management-pool"]["prefix_length"] == host_bits_to_prefix_length(
+            colo_metro_management_bits(design), ipv6=False
+        )
+        assert calls["fr-technical-pool"]["prefix_length"] == host_bits_to_prefix_length(
+            colo_metro_technical_bits(design), ipv6=False
+        )
+        assert calls["fr-loopback-ipv6-pool"]["prefix_length"] == host_bits_to_prefix_length(
+            colo_metro_loopback_ipv6_bits(design), ipv6=True
+        )
+        assert calls["fr-technical-ipv6-pool"]["prefix_length"] == host_bits_to_prefix_length(
+            colo_metro_technical_ipv6_bits(design), ipv6=True
+        )
+
+    @pytest.mark.asyncio
+    async def test_supernet_names_follow_the_lower_cased_metro_name(self) -> None:
+        """Supernet pools live in the same name space as the metro's devices and pools."""
+        gen = _make_generator()
+
+        await gen.generate({"TopologyColocationMetro": [_metro("AM", "m-am", colo_metro_design("S"))]})
+
+        assert set(_supernet_calls(gen)) == {
+            "am-loopback-pool",
+            "am-management-pool",
+            "am-technical-pool",
+            "am-loopback-ipv6-pool",
+            "am-technical-ipv6-pool",
+        }
+
+    @pytest.mark.asyncio
+    async def test_attach_refs_carries_asn_vni_and_the_three_ipv4_supernets_but_not_the_ipv6_ones(self) -> None:
+        """The IPv6 supernets have no relationship: the zones find them by name."""
+        gen = _make_generator()
+
+        await gen.generate({"TopologyColocationMetro": [_metro(design=colo_metro_design("S"))]})
+
+        gen.attach_refs.assert_awaited_once_with(
+            kind=TopologyColocationMetro,
+            node_id="metro-1",
+            refs={
+                "fabric_asn_pool": "asn-pool-id",
+                "vni_pool": "vni-pool-id",
+                "loopback_pool": "id-fr-loopback-pool",
+                "management_pool": "id-fr-management-pool",
+                "technical_pool": "id-fr-technical-pool",
+            },
+        )
+
+    @pytest.mark.asyncio
+    async def test_supernets_are_sliced_under_the_metro_keyed_lock_and_it_is_released(self) -> None:
+        """Each supernet allocates a prefix from a shared bootstrap pool: two overlapping runs must not both create it."""
+        gen = _make_generator()
+        order: list[str] = []
+        gen.acquire_resource_lock = AsyncMock(side_effect=lambda key: order.append(f"acquire {key}") or "lock-id")
+        gen.release_resource_lock = AsyncMock(side_effect=lambda lock_id: order.append(f"release {lock_id}"))
+        gen.ensure_sliced_pool = AsyncMock(side_effect=lambda **kw: order.append(kw["pool_name"]) or MagicMock(id="x"))
+
+        await gen.generate({"TopologyColocationMetro": [_metro(design=colo_metro_design("S"))]})
+
+        assert order[0] == "acquire colocation-metro-pools-fr"
+        assert order[-1] == "release lock-id"
+        assert sorted(order[1:-1]) == sorted(_SUPERNET_PARENTS)
+
+    @pytest.mark.asyncio
+    async def test_lock_is_released_when_a_supernet_fails(self) -> None:
+        """A failing slice must not leave the metro locked for the next run."""
+        gen = _make_generator()
+        gen.ensure_sliced_pool = AsyncMock(side_effect=RuntimeError("no more resources"))
+
+        with pytest.raises(RuntimeError, match="no more resources"):
+            await gen.generate({"TopologyColocationMetro": [_metro(design=colo_metro_design("S"))]})
+
+        gen.release_resource_lock.assert_awaited_once_with("lock-id")
+        gen.attach_refs.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_asn_block_is_sized_from_the_design(self) -> None:
+        """colo_metro_asn_units(design) replaces the single unit of a metro without a design."""
+        design = colo_metro_design("S")
+        gen = _make_generator()
+
+        await gen.generate({"TopologyColocationMetro": [_metro(design=design)]})
+
+        kwargs = gen.upsert_asn_pool.await_args_list[-1].kwargs
+        start, end = name_to_asn_range(dc_name="fr", max_pods=colo_metro_asn_units(design))
+        assert colo_metro_asn_units(design) == design["max_zones"] == 2
+        assert (kwargs["start_range"], kwargs["end_range"]) == (start, end)
+        assert kwargs["pool_name"] == "fr-asn-pool"
+
+    @pytest.mark.asyncio
+    async def test_a_wider_design_gets_a_wider_asn_block_than_no_design(self) -> None:
+        """The block follows max_zones: a metro without a design keeps the one-unit block, a big one gets more."""
+        big = {**colo_metro_design("S"), "max_zones": 8}
+        sizes = {}
+        for label, metro in (
+            ("none", _metro()),
+            ("S", _metro(design=colo_metro_design("S"))),
+            ("big", _metro(design=big)),
+        ):
+            gen = _make_generator()
+            await gen.generate({"TopologyColocationMetro": [metro]})
+            kwargs = gen.upsert_asn_pool.await_args_list[-1].kwargs
+            sizes[label] = kwargs["end_range"] - kwargs["start_range"]
+
+        assert sizes["none"] < sizes["S"] < sizes["big"]
+        start, end = name_to_asn_range(dc_name="fr", max_pods=_METRO_ASN_SIZING_UNITS)
+        assert sizes["none"] == end - start
+
+    @pytest.mark.asyncio
+    async def test_design_arrives_as_the_cleaned_graphql_shape(self) -> None:
+        """colocation_metro.gql returns design { node { ... zone_templates { edges { node } } } }; clean_data() flattens it."""
+        gen = _make_generator()
+
+        def zone(name: str, edges: int, firewalls: int, load_balancers: int) -> dict[str, Any]:
+            return {
+                "node": {
+                    "id": f"zd-{name}",
+                    "name": {"value": name},
+                    "max_edges": {"value": edges},
+                    "max_firewalls": {"value": firewalls},
+                    "max_load_balancers": {"value": load_balancers},
+                }
+            }
+
         raw = {
             "TopologyColocationMetro": {
                 "edges": [
@@ -300,23 +376,19 @@ class TestGenerateEntry:
                         "node": {
                             "id": "metro-1",
                             "name": {"value": "FR"},
-                            "naming_convention": {"value": "standard"},
-                            "deployment_type": {"value": "physical"},
-                            "fabric_templates": {
-                                "edges": [
-                                    {
-                                        "node": {
-                                            "role": {"value": "edge"},
-                                            "quantity": {"value": 2},
-                                            "template": {
-                                                "node": {
-                                                    "id": "tpl-edge",
-                                                    "template_kind": "TemplateDcimPhysicalDevice",
-                                                }
-                                            },
-                                        }
-                                    }
-                                ]
+                            "design": {
+                                "node": {
+                                    "id": "md-S",
+                                    "name": {"value": "S"},
+                                    "max_zones": {"value": 2},
+                                    "zone_templates": {
+                                        "edges": [
+                                            zone("EDGE", 2, 0, 0),
+                                            zone("EDGE_FW", 2, 2, 0),
+                                            zone("EDGE_FW_LB", 2, 2, 2),
+                                        ]
+                                    },
+                                }
                             },
                         }
                     }
@@ -326,776 +398,82 @@ class TestGenerateEntry:
 
         await gen.generate(raw)
 
-        assert gen.fabric_name == "fr"
-        assert gen.pod_name is None
-        gen._ensure_colocation_pools.assert_awaited_once_with(metro_id="metro-1")
-        gen._create_metro_devices.assert_awaited_once()
-        assert gen._create_metro_devices.await_args_list[-1].kwargs["templates"] == [
-            {
-                "role": "edge",
-                "quantity": 2,
-                "template": {"id": "tpl-edge", "template_kind": "TemplateDcimPhysicalDevice"},
-            }
-        ]
-        # The names the device pass produced are what the cabling pass acts on —
-        # passed through, not re-queried.
-        gen._cable_metro_services.assert_awaited_once_with(physical_names_by_role={"edge": ["eg-fr01", "eg-fr02"]})
-
-    @pytest.mark.asyncio
-    async def test_metro_without_templates_creates_no_pools(self) -> None:
-        """Every metro is a colocation_metros member so the per-kind created
-        trigger never fires on a non-member, which means most metros reach this
-        generator with nothing to build. Those must not acquire pools."""
-        gen = _make_generator()
-        gen._ensure_colocation_pools = AsyncMock()
-        gen._create_metro_devices = AsyncMock()
-
-        await gen.generate({"TopologyColocationMetro": [_metro(fabric_templates=[])]})
-
-        gen._ensure_colocation_pools.assert_not_awaited()
-        gen._create_metro_devices.assert_not_awaited()
+        lengths = {name: call["prefix_length"] for name, call in _supernet_calls(gen).items()}
+        assert lengths == _GOLDEN_SUPERNET_LENGTHS["S"]
         gen.logger.error.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_cabling_runs_after_devices_not_before(self) -> None:
-        """Ordering is load-bearing, not incidental: _cable_metro_services
-        resolves interfaces by device name, so a cabling pass that ran first
-        would find no devices and log create_chain_cabling's missing-ports
-        error — a task failure."""
+    async def test_rerun_converges_on_the_same_supernets(self) -> None:
+        """Idempotent: the same names and sizes are asked for again, so the name-keyed slices converge."""
         gen = _make_generator()
-        gen._ensure_colocation_pools = AsyncMock()
-        calls: list[str] = []
-        gen._create_metro_devices = AsyncMock(side_effect=lambda **_: calls.append("devices") or {})
-        gen._cable_metro_services = AsyncMock(side_effect=lambda **_: calls.append("cabling"))
 
-        await gen.generate({"TopologyColocationMetro": [_metro()]})
-
-        assert calls == ["devices", "cabling"]
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize(
-        ("physical_names_by_role", "expected"),
-        [
-            ({"edge": ["eg-fr01", "eg-fr02"], "firewall": ["fw-fr01", "fw-fr02"]}, True),
-            ({"edge": ["eg-fr01", "eg-fr02"]}, False),  # no firewalls, or only virtual ones (never registered)
-        ],
-    )
-    async def test_vlan_pool_only_for_a_metro_with_physical_firewalls(
-        self, physical_names_by_role: dict[str, list[str]], expected: bool
-    ) -> None:
-        """The FirewallContext VLAN pool exists only where a context can be created."""
-        gen = _make_generator()
-        gen._ensure_colocation_pools = AsyncMock()
-        gen._create_metro_devices = AsyncMock(return_value=physical_names_by_role)
-        gen._cable_metro_services = AsyncMock()
-        gen._ensure_metro_evpn = AsyncMock(return_value=_PROCESSES)
-        gen._ensure_edge_pair = AsyncMock()
-        gen.ensure_context_vlan_pool = AsyncMock()
-
-        await gen.generate({"TopologyColocationMetro": [_metro()]})
-
-        if expected:
-            gen.ensure_context_vlan_pool.assert_awaited_once_with(name="fr", spec=FIREWALL_CONTEXT)
-        else:
-            gen.ensure_context_vlan_pool.assert_not_awaited()
-
-
-class TestPools:
-    @pytest.mark.asyncio
-    async def test_pool_names_kinds_and_parents(self) -> None:
-        gen = _make_generator()
-        gen.ensure_sliced_pool = AsyncMock(side_effect=lambda **kw: MagicMock(id=f"pool-{kw['pool_name']}"))
-        gen.upsert_asn_pool = AsyncMock()
-        gen.upsert_number_pool = AsyncMock()
-        gen.client.get = AsyncMock(return_value=AsyncMock())
-
-        await gen._ensure_colocation_pools(metro_id="metro-1")
-
-        calls = {c.kwargs["pool_name"]: c.kwargs for c in gen.ensure_sliced_pool.await_args_list}
-        assert set(calls) == {
-            "fr-loopback-pool",
-            "fr-loopback-ipv6-pool",
-            "fr-management-pool",
-            "fr-technical-pool",
-        }
-        # The EVPN Multi-Site VTEP loopback is IPv6, matching the IPv6 DCI.
-        assert calls["fr-loopback-ipv6-pool"]["kind"] == "address"
-        assert calls["fr-loopback-ipv6-pool"]["parent_pool_name"] == "Loopback-IPv6"
-        assert calls["fr-loopback-ipv6-pool"]["prefix_length"] == 120
-        # The metro hosts stretched segments, so it needs its own VNI pool.
-        vni_kwargs = gen.upsert_number_pool.await_args_list[-1].kwargs
-        assert vni_kwargs["pool_name"] == "fr-vni-pool"
-        # An address pool for both loopbacks and management: create_devices()
-        # feeds each straight to allocate_next_ip_address().
-        assert calls["fr-loopback-pool"]["kind"] == "address"
-        assert calls["fr-loopback-pool"]["parent_pool_name"] == "Loopback-IPv4"
-        assert calls["fr-loopback-pool"]["prefix_length"] == _COLO_LOOPBACK_PREFIX_LENGTH
-        assert calls["fr-management-pool"]["kind"] == "address"
-        assert calls["fr-management-pool"]["parent_pool_name"] == "Management-IPv4"
-        assert calls["fr-management-pool"]["prefix_length"] == _COLO_MANAGEMENT_PREFIX_LENGTH
-        # P2P links get whole prefixes handed out, so this one is a prefix pool.
-        assert calls["fr-technical-pool"]["kind"] == "prefix"
-        assert calls["fr-technical-pool"]["parent_pool_name"] == "Technical-IPv4"
-        assert calls["fr-technical-pool"]["prefix_length"] == _COLO_TECHNICAL_PREFIX_LENGTH
-
-    @pytest.mark.asyncio
-    async def test_asn_pool_drawn_from_the_name_hash_grid(self) -> None:
-        """The metro ASN pool comes from the same deterministic grid as DC fabric ASNs."""
-        gen = _make_generator()
-        gen.ensure_sliced_pool = AsyncMock(return_value=MagicMock(id="pool-x"))
-        gen.upsert_asn_pool = AsyncMock()
-        gen.upsert_number_pool = AsyncMock()
-        gen.client.get = AsyncMock(return_value=AsyncMock())
-
-        await gen._ensure_colocation_pools(metro_id="metro-1")
-
-        kwargs = gen.upsert_asn_pool.await_args_list[-1].kwargs
-        assert kwargs["pool_name"] == "fr-asn-pool"
-        # Private-use 4-byte range, from the same deterministic name-hash grid
-        # DC fabric ASNs use, so a metro can never collide with a DC.
-        assert 4_200_000_000 <= kwargs["start_range"] < kwargs["end_range"] <= 4_294_967_295
-
-    @pytest.mark.asyncio
-    async def test_ip_pools_are_attached_with_a_plain_save(self) -> None:
-        """allow_upsert=True would resend every relationship and re-fire the
-        fabric_templates `updated` trigger on each pool attach. Untracked: the
-        metro is the run's target, so its own cleanup must never reach it."""
-        gen = _make_generator()
-        gen.ensure_sliced_pool = AsyncMock(side_effect=lambda **kw: MagicMock(id=f"id-{kw['pool_name']}"))
-        gen.upsert_asn_pool = AsyncMock(return_value=MagicMock(id="asn-pool"))
-        gen.upsert_number_pool = AsyncMock(return_value=MagicMock(id="vni-pool"))
-        metro = AsyncMock()
-        gen.client.get = AsyncMock(return_value=metro)
-
-        returned = await gen._ensure_colocation_pools(metro_id="metro-1")
-
-        # The ASN pool id is handed on, so the EVPN step needs no second lookup.
-        assert returned == "asn-pool"
-        assert metro.loopback_pool == {"id": "id-fr-loopback-pool"}
-        assert metro.management_pool == {"id": "id-fr-management-pool"}
-        assert metro.technical_pool == {"id": "id-fr-technical-pool"}
-        # The ASN and VNI pools ride the same single save.
-        assert metro.fabric_asn_pool == {"id": "asn-pool"}
-        assert metro.vni_pool == {"id": "vni-pool"}
-        metro.save.assert_awaited_once_with(update_group_context=False)
-        gen.client.get.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_missing_metro_when_attaching_pools_fails_the_run(self) -> None:
-        """The metro is the generator's own target: not finding it is a fault, not a skip."""
-        gen = _make_generator()
-        gen.ensure_sliced_pool = AsyncMock(return_value=MagicMock(id="pool-x"))
-        gen.upsert_asn_pool = AsyncMock(return_value=MagicMock(id="asn-pool"))
-        gen.upsert_number_pool = AsyncMock(return_value=MagicMock(id="vni-pool"))
-        gen.client.get = AsyncMock(
-            side_effect=NodeNotFoundError(branch_name="main", node_type="TopologyColocationMetro", identifier={})
-        )
-
-        with pytest.raises(GeneratorError, match="TopologyColocationMetro metro-1: node not found"):
-            await gen._ensure_colocation_pools(metro_id="metro-1")
-
-    @pytest.mark.asyncio
-    async def test_sliced_address_pool_wraps_the_allocated_prefix(self) -> None:
-        gen = _make_generator()
-        gen._get_parent_pool_with_retry = AsyncMock(return_value=MagicMock(id="parent-1"))
-        pool = AsyncMock()
-        gen.client.create = AsyncMock(return_value=pool)
-
-        await gen.ensure_sliced_pool(
-            pool_name="fr-loopback-pool",
-            parent_pool_name="Loopback-IPv4",
-            prefix_length=28,
-            role="loopback",
-            kind="address",
-        )
-
-        # Sliced out of the global bootstrap pool, never a runtime-invented
-        # supernet, and keyed by an identifier so the slice is idempotent.
-        alloc = gen.client.allocate_next_ip_prefix.await_args_list[-1].kwargs
-        assert alloc["identifier"] == "fr-loopback-pool"
-        assert alloc["prefix_length"] == 28
-        assert alloc["data"] == {"role": "loopback"}
-
-        create = gen.client.create.await_args_list[-1].kwargs
-        assert create["kind"].__name__ == "CoreIPAddressPool"
-        assert create["data"]["default_address_type"] == "IpamIPAddress"
-        assert create["data"]["resources"] == [gen.client.allocate_next_ip_prefix.return_value]
-        pool.save.assert_awaited_once_with(allow_upsert=True)
-
-    @pytest.mark.asyncio
-    async def test_sliced_prefix_pool_uses_the_prefix_kind(self) -> None:
-        gen = _make_generator()
-        gen._get_parent_pool_with_retry = AsyncMock(return_value=MagicMock(id="parent-1"))
-        gen.client.create = AsyncMock(return_value=AsyncMock())
-
-        await gen.ensure_sliced_pool(
-            pool_name="fr-technical-pool",
-            parent_pool_name="Technical-IPv4",
-            prefix_length=26,
-            role="technical",
-            kind="prefix",
-        )
-
-        create = gen.client.create.await_args_list[-1].kwargs
-        assert create["kind"].__name__ == "CoreIPPrefixPool"
-        assert create["data"]["default_prefix_type"] == "IpamPrefix"
-
-
-class TestMetroDevices:
-    @pytest.mark.asyncio
-    async def test_edge_devices_deploy_to_the_metro_with_flat_naming(self) -> None:
-        gen = _make_generator()
-        gen.create_devices = AsyncMock(return_value=["eg-fr01", "eg-fr02"])
-        gen.data = _metro()
-
-        await gen._create_metro_devices(templates=gen.data["fabric_templates"], metro_id="metro-1")
-
-        kwargs = gen.create_devices.await_args_list[-1].kwargs
-        assert kwargs["device_role"] == "edge"
-        assert kwargs["quantity"] == 2
-        # The metro owns the on-ramp tier, like a DC owns its border-leafs —
-        # never the cage the kit happens to be racked in.
-        assert kwargs["deployment_id"] == "metro-1"
-        assert kwargs["naming_convention"] == "standard"
-        # A metro's on-ramp is flat: no fabric/pod/suite/row/rack path to encode.
-        assert kwargs["options"]["indexes"] == []
-        assert kwargs["options"]["allocate_loopback"] is True
-        assert kwargs["options"]["loopback_prefix_length"] == 32
-        assert "group_name" not in kwargs["options"]
-        # A physical template must not be flipped to DcimVirtualDevice.
-        assert "virtual" not in kwargs["options"]
-        # An edge router is not an HA appliance — it peers, it does not fail over.
-        assert "ha_kind" not in kwargs["options"]
-
-    @pytest.mark.asyncio
-    async def test_virtual_template_creates_virtual_devices(self) -> None:
-        """A provider-hosted on-ramp router (Network Edge, MCR) is a
-        DcimVirtualDevice, which create_devices() selects via options["virtual"]."""
-        gen = _make_generator()
-        gen.create_devices = AsyncMock(return_value=["eg-am01"])
-        templates = [{"role": "edge", "quantity": 2, "template": _VIRTUAL_EDGE_TEMPLATE}]
-        gen.data = _metro(deployment_type="virtual", fabric_templates=templates)
-
-        await gen._create_metro_devices(templates=templates, metro_id="metro-1")
-
-        kwargs = gen.create_devices.await_args_list[-1].kwargs
-        assert kwargs["options"]["virtual"] is True
-        # Loopback and management addressing are unchanged: an MCR still has a
-        # loopback and still peers over it.
-        assert kwargs["options"]["allocate_loopback"] is True
-
-    @pytest.mark.asyncio
-    async def test_load_balancer_leaves_its_group_to_create_devices(self) -> None:
-        """The role's bootstrap group is resolved once, in create_devices (ROLE_GROUP_NAMES)."""
-        gen = _make_generator()
-        gen.create_devices = AsyncMock(return_value=["lb-fr01"])
-        templates = [{"role": "load-balancer", "quantity": 2, "template": _EDGE_TEMPLATE}]
-
-        gen.data = _metro(fabric_templates=templates)
-        await gen._create_metro_devices(templates=templates, metro_id="metro-1")
-
-        assert "group_name" not in gen.create_devices.await_args_list[-1].kwargs["options"]
-
-    @pytest.mark.parametrize(
-        ("role", "expected_ha_kind"),
-        [
-            ("firewall", "ManagedFirewallHA"),
-            ("load-balancer", "ManagedLoadbalancerHA"),
-        ],
-    )
-    @pytest.mark.asyncio
-    async def test_service_appliances_pair_into_an_ha_domain_without_a_loopback(
-        self, role: str, expected_ha_kind: str
-    ) -> None:
-        """A colocation firewall/load-balancer is the same shape as a DC's: the
-        HA domain is built inside create_devices() off options["ha_kind"], and
-        the appliance gets no loopback because it is not part of the underlay or
-        the overlay — only the edge routers route."""
-        gen = _make_generator()
-        gen.create_devices = AsyncMock(return_value=["a-fr01", "a-fr02"])
-        templates = [{"role": role, "quantity": 2, "template": _EDGE_TEMPLATE}]
-        gen.data = _metro(fabric_templates=templates)
-
-        await gen._create_metro_devices(templates=templates, metro_id="metro-1")
-
-        options = gen.create_devices.await_args_list[-1].kwargs["options"]
-        assert options["ha_kind"] == expected_ha_kind
-        assert "allocate_loopback" not in options
-        assert "loopback_prefix_length" not in options
-        # Still the metro's own kit, exactly like the edge pair.
-        assert gen.create_devices.await_args_list[-1].kwargs["deployment_id"] == "metro-1"
-
-    def test_ha_roles_are_a_subset_of_the_valid_colocation_roles(self) -> None:
-        """A service role the metro would never build is dead code, and a
-        role the metro builds but cannot pair is a silent single point of
-        failure — keep the two in step."""
-        assert _COLO_SERVICE_ROLES < _COLO_VALID_FABRIC_ROLES
-
-    @pytest.mark.asyncio
-    async def test_naming_convention_is_lowercased_and_defaulted(self) -> None:
-        gen = _make_generator()
-        gen.create_devices = AsyncMock(return_value=[])
-        templates = [{"role": "edge", "quantity": 2, "template": _EDGE_TEMPLATE}]
-
-        gen.data = _metro(fabric_templates=templates, naming_convention="Standard")
-        await gen._create_metro_devices(templates=templates, metro_id="metro-1")
-        assert gen.create_devices.await_args_list[-1].kwargs["naming_convention"] == "standard"
-
-        gen.data = _metro(fabric_templates=templates, naming_convention=None)
-        await gen._create_metro_devices(templates=templates, metro_id="metro-1")
-        assert gen.create_devices.await_args_list[-1].kwargs["naming_convention"] == "standard"
-
-    @pytest.mark.asyncio
-    async def test_every_role_gets_its_own_create_devices_call(self) -> None:
-        gen = _make_generator()
-        gen.create_devices = AsyncMock(return_value=[])
-        templates = [
-            {"role": "edge", "quantity": 2, "template": _EDGE_TEMPLATE},
-            {"role": "firewall", "quantity": 2, "template": _EDGE_TEMPLATE},
-        ]
-        gen.data = _metro(fabric_templates=templates)
-
-        await gen._create_metro_devices(templates=templates, metro_id="metro-1")
-
-        assert [c.kwargs["device_role"] for c in gen.create_devices.await_args_list] == ["edge", "firewall"]
-
-    @pytest.mark.asyncio
-    async def test_created_names_are_returned_keyed_by_role(self) -> None:
-        """_cable_metro_services needs to know which names are edges and which
-        are appliances, and nothing else records that — the devices all deploy to
-        the same metro, so a later query by deployment cannot tell them apart
-        without re-reading each device's role."""
-        gen = _make_generator()
-        gen.create_devices = AsyncMock(side_effect=[["eg-fr01", "eg-fr02"], ["fw-fr01", "fw-fr02"]])
-        templates = [
-            {"role": "edge", "quantity": 2, "template": _EDGE_TEMPLATE},
-            {"role": "firewall", "quantity": 2, "template": _EDGE_TEMPLATE},
-        ]
-        gen.data = _metro(fabric_templates=templates)
-
-        physical_names_by_role = await gen._create_metro_devices(templates=templates, metro_id="metro-1")
-
-        assert physical_names_by_role == {"edge": ["eg-fr01", "eg-fr02"], "firewall": ["fw-fr01", "fw-fr02"]}
-
-    @pytest.mark.asyncio
-    async def test_two_entries_for_one_role_accumulate(self) -> None:
-        """Nothing in the schema stops a metro declaring two firewall entries
-        (two models), and the second must not overwrite the first — both pairs
-        hang off the same edges."""
-        gen = _make_generator()
-        gen.create_devices = AsyncMock(side_effect=[["fw-fr01", "fw-fr02"], ["fw-fr03", "fw-fr04"]])
-        templates = [
-            {"role": "firewall", "quantity": 2, "template": _EDGE_TEMPLATE},
-            {"role": "firewall", "quantity": 2, "template": _EDGE_TEMPLATE},
-        ]
-        gen.data = _metro(fabric_templates=templates)
-
-        physical_names_by_role = await gen._create_metro_devices(templates=templates, metro_id="metro-1")
-
-        assert physical_names_by_role == {"firewall": ["fw-fr01", "fw-fr02", "fw-fr03", "fw-fr04"]}
-
-    @pytest.mark.asyncio
-    async def test_virtual_devices_are_created_but_never_cabled(self) -> None:
-        """A DcimCable is fibre between two chassis, so provider-hosted instances
-        must not be handed to the cabling pass — the link between two of them is a
-        connection inside the provider's platform.
-
-        Not hypothetical: PA-VM_EDGE_CUSTOMER_* exposes `uplink` on eth[1-6],
-        exactly the role _cable_border_services claims on the service side, so
-        without this a deployment_type=virtual metro declaring an edge and a
-        firewall would reach create_chain_cabling and fail the task on
-        C8000V_EDGE's missing `firewall` ports.
-        """
-        gen = _make_generator()
-        gen.create_devices = AsyncMock(side_effect=[["eg-am01", "eg-am02"], ["fw-am01", "fw-am02"]])
-        templates = [
-            {"role": "edge", "quantity": 2, "template": _VIRTUAL_EDGE_TEMPLATE},
-            {"role": "firewall", "quantity": 2, "template": _VIRTUAL_EDGE_TEMPLATE},
-        ]
-        gen.data = _metro(fabric_templates=templates, deployment_type="virtual")
-
-        physical_names_by_role = await gen._create_metro_devices(templates=templates, metro_id="metro-1")
-
-        # Created — withholding them from cabling must not mean skipping them.
-        assert [c.kwargs["device_role"] for c in gen.create_devices.await_args_list] == ["edge", "firewall"]
-        assert all(c.kwargs["options"]["virtual"] for c in gen.create_devices.await_args_list)
-        assert physical_names_by_role == {}
-
-    @pytest.mark.asyncio
-    async def test_hybrid_metro_reports_only_its_physical_kit(self) -> None:
-        """deployment_type=hybrid allows both kinds in one metro, so the split is
-        per fabric_templates entry rather than per metro."""
-        gen = _make_generator()
-        gen.create_devices = AsyncMock(side_effect=[["eg-fr01", "eg-fr02"], ["fw-fr01", "fw-fr02"]])
-        templates = [
-            {"role": "edge", "quantity": 2, "template": _VIRTUAL_EDGE_TEMPLATE},
-            {"role": "firewall", "quantity": 2, "template": _EDGE_TEMPLATE},
-        ]
-        gen.data = _metro(fabric_templates=templates, deployment_type="hybrid")
-
-        physical_names_by_role = await gen._create_metro_devices(templates=templates, metro_id="metro-1")
-
-        assert physical_names_by_role == {"firewall": ["fw-fr01", "fw-fr02"]}
-
-
-class TestMetroServiceCabling:
-    """The leg from the metro's edge pair to its firewall/load-balancer pair.
-
-    PR-1 as first written created a firewall pair wired to nothing but itself:
-    the HA sync cable joined fw-fr01 to fw-fr02 and no cable reached either from
-    the on-ramp routers that are supposed to front them.
-    """
-
-    @pytest.mark.asyncio
-    async def test_firewall_pair_is_cabled_to_the_edge_pair(self) -> None:
-        gen = _make_generator()
-        gen._cable_border_services = AsyncMock()
-
-        await gen._cable_metro_services(
-            physical_names_by_role={"edge": ["eg-fr01", "eg-fr02"], "firewall": ["fw-fr01", "fw-fr02"]}
-        )
-
-        kwargs = gen._cable_border_services.await_args_list[-1].kwargs
-        # The edges are the "border" side of the leg: they are the tier in the
-        # underlay that the appliance hangs off, exactly as a DC's border-leafs
-        # are for its own shared services.
-        assert kwargs["border_names"] == ["eg-fr01", "eg-fr02"]
-        assert kwargs["firewall_names"] == ["fw-fr01", "fw-fr02"]
-        assert kwargs["load_balancer_names"] == []
-        # Same role names dc.py uses, so a `firewall`-role port faces a firewall.
-        # N9K-C9316D-GX_EDGE provides Ethernet1/[15-16] for this.
-        assert kwargs["border_role_for"] == {"firewall": "firewall", "load-balancer": "load-balancer"}
-
-    @pytest.mark.asyncio
-    async def test_mode_is_always_pbr(self) -> None:
-        """The inline mode would chain edge->fw->lb->edge, which needs a tier
-        that both hands traffic to the appliance and takes it back. An on-ramp
-        router pair forwards on to a DC or a cloud fabric instead, and the metro
-        carries no connectivity_mode attribute to say otherwise."""
-        gen = _make_generator()
-        gen._cable_border_services = AsyncMock()
-
-        await gen._cable_metro_services(
-            physical_names_by_role={"edge": ["eg-fr01"], "firewall": ["fw-fr01"], "load-balancer": ["lb-fr01"]}
-        )
-
-        assert gen._cable_border_services.await_args_list[-1].kwargs["connectivity_mode"] == "pbr"
-
-    @pytest.mark.parametrize(
-        "physical_names_by_role",
-        [
-            # Paris: an on-ramp with no appliances at all.
-            {"edge": ["eg-pa01", "eg-pa02"]},
-            # Appliances declared with no edge pair to hang them off.
-            {"firewall": ["fw-pa01", "fw-pa02"]},
-            # Amsterdam re-run before anything was declared.
-            {},
-        ],
-    )
-    @pytest.mark.asyncio
-    async def test_nothing_to_cable_is_a_no_op(self, physical_names_by_role: dict[str, list[str]]) -> None:
-        """Most metros in the demo data have no services, and one side missing
-        must not reach create_chain_cabling — it would log a missing-ports error,
-        which FailOnErrorLogger turns into a task failure."""
-        gen = _make_generator()
-        gen._cable_border_services = AsyncMock()
-
-        await gen._cable_metro_services(physical_names_by_role=physical_names_by_role)
-
-        gen._cable_border_services.assert_not_awaited()
-        gen.logger.error.assert_not_called()
-
-
-class TestGeneratedMetroDeviceNames:
-    """data/demos/30_all/08_interconnects/ references these names literally, so
-    they are part of this generator's contract, not an implementation detail."""
-
-    @pytest.mark.parametrize(
-        ("metro", "role", "index", "expected"),
-        [
-            ("fr", "edge", 1, "eg-fr01"),
-            ("fr", "edge", 2, "eg-fr02"),
-            ("pa", "edge", 1, "eg-pa01"),
-            ("fr", "firewall", 1, "fw-fr01"),
-            ("fr", "load-balancer", 1, "lb-fr01"),
-        ],
-    )
-    def test_standard_strategy_with_no_location_path(self, metro: str, role: str, index: int, expected: str) -> None:
-        name = DeviceNamingConfig(strategy="standard").format_device_name(
-            DeviceNameContext.from_indexes(fabric_name=metro, device_role=role, role_index=index, indexes=[])
-        )
-        assert name == expected
-
-
-def _loopback(device: str, role: str, *, addressed: bool = True, iface_id: str | None = None) -> MagicMock:
-    loopback = MagicMock()
-    loopback.id = iface_id or f"{device}-{role}"
-    loopback.role.value = role
-    loopback.device.peer.name.value = device
-    loopback.device.peer.id = f"dev-{device}"
-    loopback.ip_address.initialized = addressed
-    loopback.ip_address.id = f"ip-{device}-{role}"
-    return loopback
-
-
-def _evpn_generator(*, existing_as: bool = True, loopbacks: list | None = None) -> Any:
-    gen = _make_generator()
-    gen._edge_devices = {"eg-fr01": "cisco_nxos"}
-    gen._vtep_pool = MagicMock(id="vtep-pool")
-    site_as = MagicMock(id="as-site")
-    site_as.save = AsyncMock()
-    metro_node = MagicMock()
-    metro_node.save = AsyncMock()
-
-    gen.client.get = AsyncMock(return_value=metro_node)
-    gen.client.filters = AsyncMock(
-        side_effect=[
-            [site_as] if existing_as else [],
-            [_loopback("eg-fr01", "loopback")] if loopbacks is None else loopbacks,
-        ]
-    )
-    created = MagicMock()
-    created.save = AsyncMock()
-    gen.client.create = AsyncMock(return_value=created)
-    gen.client.allocate_next_ip_address = AsyncMock(return_value=MagicMock(id="ip-vtep-new"))
-    gen._metro_node = metro_node
-    return gen
-
-
-def _created(gen: Any, kind: str) -> list[dict[str, Any]]:
-    """Data of every client.create() call for `kind` (a protocol class or its name)."""
-    return [
-        c.kwargs["data"]
-        for c in gen.client.create.await_args_list
-        if getattr(c.kwargs["kind"], "__name__", c.kwargs["kind"]) == kind
-    ]
-
-
-class TestMetroEvpn:
-    """_ensure_metro_evpn: site AS, VTEP loopback and overlay BGP per edge."""
-
-    @pytest.mark.asyncio
-    async def test_no_edges_is_a_no_op(self) -> None:
-        """A metro without physical edges makes no EVPN objects."""
-        gen = _evpn_generator()
-        gen._edge_devices = {}
-        await gen._ensure_metro_evpn(metro_id="metro-1", asn_pool_id="asn-pool")
-        gen.client.create.assert_not_awaited()
-        gen.client.filters.assert_not_awaited()
-
-    @pytest.mark.asyncio
-    async def test_existing_site_as_reused_and_attached(self) -> None:
-        """The site AS is found by description — never re-drawn from the pool."""
-        gen = _evpn_generator()
-        await gen._ensure_metro_evpn(metro_id="metro-1", asn_pool_id="asn-pool")
-        assert gen.client.filters.await_args_list[0].kwargs["description__value"] == "fr EVPN site ASN"
-        assert _created(gen, "RoutingAutonomousSystem") == []
-        assert gen._metro_node.evpn_rt_as == {"id": "as-site"}
-        gen._metro_node.save.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_existing_site_as_tracked_on_rerun(self) -> None:
-        """The reused AS is not saved, so it is added to the run's group by
-        hand — else delete_unused_nodes deletes it and the next run draws a
-        new ASN, repointing every edge's overlay BGP."""
-        gen = _evpn_generator()
-        gen.client.group_context.related_node_ids = []
-        await gen._ensure_metro_evpn(metro_id="metro-1", asn_pool_id="asn-pool")
-        assert "as-site" in gen.client.group_context.related_node_ids
-
-    @pytest.mark.asyncio
-    async def test_new_site_as_drawn_from_metro_pool(self) -> None:
-        gen = _evpn_generator(existing_as=False)
-        await gen._ensure_metro_evpn(metro_id="metro-1", asn_pool_id="asn-pool")
-        (as_data,) = _created(gen, "RoutingAutonomousSystem")
-        assert as_data["asn"] == {"from_pool": {"id": "asn-pool"}}
-        assert as_data["description"] == "fr EVPN site ASN"
-
-    @pytest.mark.asyncio
-    async def test_new_vtep_allocated_and_overlay_bgp_created(self) -> None:
-        gen = _evpn_generator()
-        await gen._ensure_metro_evpn(metro_id="metro-1", asn_pool_id="asn-pool")
-        assert gen.client.allocate_next_ip_address.await_args.kwargs["identifier"] == "eg-fr01-vtep"
-        assert gen.client.allocate_next_ip_address.await_args.kwargs["prefix_length"] == 128
-        (vtep,) = _created(gen, "DcimVirtualInterface")
-        assert vtep["role"] == "loopback-vtep"
-        assert vtep["name"] == "loopback1"
-        assert "id" not in vtep
-        (bgp,) = _created(gen, "ManagedBGP")
-        assert bgp["name"] == "eg-fr01-bgp-overlay"
-        assert bgp["local_as"] == {"id": "as-site"}
-        assert bgp["router_id"] == {"id": "ip-eg-fr01-loopback"}
-        assert bgp["process_role"] == "overlay"
-
-    @pytest.mark.asyncio
-    async def test_existing_vtep_reused_idempotently(self) -> None:
-        """A re-run keeps the VTEP's id and address — no new allocation."""
-        loopbacks = [_loopback("eg-fr01", "loopback"), _loopback("eg-fr01", "loopback-vtep", iface_id="vtep-1")]
-        gen = _evpn_generator(loopbacks=loopbacks)
-        await gen._ensure_metro_evpn(metro_id="metro-1", asn_pool_id="asn-pool")
-        gen.client.allocate_next_ip_address.assert_not_awaited()
-        (vtep,) = _created(gen, "DcimVirtualInterface")
-        assert vtep["id"] == "vtep-1"
-        assert vtep["ip_address"] == {"id": "ip-eg-fr01-loopback-vtep"}
-
-    @pytest.mark.asyncio
-    async def test_edge_without_addressed_loopback_skipped(self) -> None:
-        gen = _evpn_generator(loopbacks=[_loopback("eg-fr01", "loopback", addressed=False)])
-        await gen._ensure_metro_evpn(metro_id="metro-1", asn_pool_id="asn-pool")
-        gen.logger.error.assert_called_once()
-        assert _created(gen, "ManagedBGP") == []
-
-
-def _pair_generator(*, legs: list | None = None) -> Any:
-    """A generator whose pair step runs for real; only the SDK edges are mocked."""
-    gen = _make_generator()
-    pool = MagicMock(id="pool-ipv6")
-    gen.ensure_sliced_pool = AsyncMock(return_value=pool)
-    iface_a, iface_b = MagicMock(id="if-a"), MagicMock(id="if-b")
-    gen.create_chain_cabling = AsyncMock(return_value=[[(iface_a, iface_b)]] if legs is None else legs)
-    gen._ensure_routing_password = AsyncMock(return_value="key-1")
-    gen.ensure_address_family = AsyncMock(side_effect=lambda afi, safi: f"af-{afi}-{safi}")
-    created = MagicMock()
-    created.save = AsyncMock()
-    gen.client.create = AsyncMock(return_value=created)
-    gen._pool = pool
-    return gen
-
-
-_PROCESSES = {"eg-fr01": "bgp-1", "eg-fr02": "bgp-2"}
-
-
-class TestEdgePair:
-    """_ensure_edge_pair: interlink cable + /127 + FABRIC iBGP session."""
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize("edges", [[], ["eg-fr01"], ["eg-fr01", "eg-fr02", "eg-fr03"]])
-    async def test_anything_but_two_physical_edges_gets_no_pair(self, edges: list[str]) -> None:
-        gen = _pair_generator()
-        await gen._ensure_edge_pair(physical_edge_names=edges, overlay_process_ids=_PROCESSES)
-        gen.ensure_sliced_pool.assert_not_awaited()
-        gen.create_chain_cabling.assert_not_awaited()
-        gen.client.create.assert_not_awaited()
-        gen.logger.info.assert_called()
-        gen.logger.error.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_virtual_edges_are_not_counted(self) -> None:
-        """generate() hands over only the physical names: 1 physical + 1 virtual is a single edge."""
-        gen = _make_generator()
-        gen._ensure_colocation_pools = AsyncMock()
-        gen._create_metro_devices = AsyncMock(return_value={"edge": ["eg-fr01"]})
-        gen._cable_metro_services = AsyncMock()
-        gen._ensure_metro_evpn = AsyncMock(return_value=_PROCESSES)
-        gen._ensure_edge_pair = AsyncMock()
-        await gen.generate({"TopologyColocationMetro": [_metro()]})
-        gen._ensure_edge_pair.assert_awaited_once_with(physical_edge_names=["eg-fr01"], overlay_process_ids=_PROCESSES)
-
-    @pytest.mark.asyncio
-    async def test_evpn_step_gets_the_asn_pool_of_the_pools_step(self) -> None:
-        gen = _make_generator()
-        gen._ensure_colocation_pools = AsyncMock(return_value="asn-pool")
-        gen._create_metro_devices = AsyncMock(return_value={"edge": ["eg-fr01"]})
-        gen._cable_metro_services = AsyncMock()
-        gen._ensure_metro_evpn = AsyncMock(return_value=_PROCESSES)
-        gen._ensure_edge_pair = AsyncMock()
-        await gen.generate({"TopologyColocationMetro": [_metro()]})
-        gen._ensure_metro_evpn.assert_awaited_once_with(metro_id="metro-1", asn_pool_id="asn-pool")
-
-    @pytest.mark.asyncio
-    async def test_pair_is_ensured_after_the_metro_evpn_step(self) -> None:
-        gen = _make_generator()
-        calls: list[str] = []
-        gen._ensure_colocation_pools = AsyncMock()
-        gen._create_metro_devices = AsyncMock(return_value={"edge": ["eg-fr01", "eg-fr02"]})
-        gen._cable_metro_services = AsyncMock()
-        gen._ensure_metro_evpn = AsyncMock(side_effect=lambda **_: calls.append("evpn") or _PROCESSES)
-        gen._ensure_edge_pair = AsyncMock(side_effect=lambda **_: calls.append("pair"))
-        await gen.generate({"TopologyColocationMetro": [_metro()]})
-        assert calls == ["evpn", "pair"]
-
-    @pytest.mark.asyncio
-    async def test_ipv6_technical_pool_is_a_metro_owned_slice(self) -> None:
-        gen = _pair_generator()
-        await gen._ensure_edge_pair(physical_edge_names=["eg-fr02", "eg-fr01"], overlay_process_ids=_PROCESSES)
-        kwargs = gen.ensure_sliced_pool.await_args.kwargs
-        assert kwargs["pool_name"] == "fr-technical-ipv6-pool"
-        assert kwargs["parent_pool_name"] == "Technical-IPv6"
-        assert kwargs["kind"] == "prefix"
-        assert kwargs["role"] == "technical"
-
-    @pytest.mark.asyncio
-    async def test_cabled_by_interlink_role_with_a_127_from_that_pool(self) -> None:
-        gen = _pair_generator()
-        await gen._ensure_edge_pair(physical_edge_names=["eg-fr02", "eg-fr01"], overlay_process_ids=_PROCESSES)
-        kwargs = gen.create_chain_cabling.await_args.kwargs
-        assert kwargs["hops"] == [
-            {"devices": ["eg-fr01"], "down_role": "interlink"},
-            {"devices": ["eg-fr02"], "up_role": "interlink"},
-        ]
-        assert kwargs["options"]["pool"] is gen._pool
-        assert kwargs["options"]["p2p_prefix_length"] == 127
-
-    @pytest.mark.asyncio
-    async def test_peering_name_password_roles_and_families(self) -> None:
-        gen = _pair_generator()
-        await gen._ensure_edge_pair(physical_edge_names=["eg-fr02", "eg-fr01"], overlay_process_ids=_PROCESSES)
-        (peering,) = _created(gen, "ManagedBGPPeering")
-        assert peering["name"] == "FABRIC-eg-fr01-eg-fr02"
-        assert peering["session_type"] == "IBGP"
-        assert peering["peering_role"] == "fabric"
-        assert peering["ttl"] == 1
-        assert peering["password"] == {"id": "key-1"}
-        assert peering["address_families"] == [{"id": "af-ipv6-unicast"}, {"id": "af-l2vpn-evpn"}]
-        assert peering["capabilities"] == [{"id": "if-a"}, {"id": "if-b"}]
-        assert gen._ensure_routing_password.await_args.kwargs["name"] == "fr-fabric-key"
-
-    @pytest.mark.asyncio
-    async def test_process_ids_come_from_the_evpn_step_not_a_name_query(self) -> None:
-        gen = _pair_generator()
-        gen.client.get = AsyncMock(side_effect=AssertionError("no lookup by name"))
-        gen.client.filters = AsyncMock(side_effect=AssertionError("no lookup by name"))
-        await gen._ensure_edge_pair(physical_edge_names=["eg-fr01", "eg-fr02"], overlay_process_ids=_PROCESSES)
-        (peering,) = _created(gen, "ManagedBGPPeering")
-        assert peering["bgp_processes"] == [{"id": "bgp-1"}, {"id": "bgp-2"}]
-
-    @pytest.mark.asyncio
-    async def test_missing_overlay_process_skips_the_pair(self) -> None:
-        gen = _pair_generator()
-        await gen._ensure_edge_pair(
-            physical_edge_names=["eg-fr01", "eg-fr02"], overlay_process_ids={"eg-fr01": "bgp-1"}
-        )
-        gen.create_chain_cabling.assert_not_awaited()
-        gen.logger.warning.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_no_interlink_ports_writes_no_peering(self) -> None:
-        gen = _pair_generator(legs=[[]])
-        await gen._ensure_edge_pair(physical_edge_names=["eg-fr01", "eg-fr02"], overlay_process_ids=_PROCESSES)
-        gen.client.create.assert_not_awaited()
-        gen.logger.warning.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_rerun_converges_on_the_same_keys(self) -> None:
-        """Idempotent: a second run issues the same deterministic names and identifiers."""
-        gen = _pair_generator()
         for _ in range(2):
-            await gen._ensure_edge_pair(physical_edge_names=["eg-fr01", "eg-fr02"], overlay_process_ids=_PROCESSES)
-        first, second = _created(gen, "ManagedBGPPeering")
+            await gen.generate({"TopologyColocationMetro": [_metro(design=colo_metro_design("M"))]})
+
+        names = [c.kwargs["pool_name"] for c in gen.ensure_sliced_pool.await_args_list]
+        assert len(names) == 10
+        assert names[:5] == names[5:]
+        first, second = gen.attach_refs.await_args_list
         assert first == second
-        assert gen.ensure_sliced_pool.await_count == 2
-        assert {c.kwargs["pool_name"] for c in gen.ensure_sliced_pool.await_args_list} == {"fr-technical-ipv6-pool"}
-        gen.release_resource_lock.assert_awaited()
 
 
-class TestEvpnProcessIds:
-    @pytest.mark.asyncio
-    async def test_overlay_process_ids_are_returned_by_edge_name(self) -> None:
-        gen = _evpn_generator()
-        gen.client.create.return_value.id = "bgp-saved"
-        assert await gen._ensure_metro_evpn(metro_id="metro-1", asn_pool_id="asn-pool") == {"eg-fr01": "bgp-saved"}
+class TestMetroWithoutDesign:
+    """A metro with no design declares no envelope: no supernets, its zones slice the bootstrap pools."""
 
     @pytest.mark.asyncio
-    async def test_no_edges_returns_no_ids(self) -> None:
+    async def test_creates_no_supernets_takes_no_lock_and_attaches_only_asn_and_vni(self) -> None:
         gen = _make_generator()
-        assert await gen._ensure_metro_evpn(metro_id="metro-1", asn_pool_id="asn-pool") == {}
+
+        await gen.generate({"TopologyColocationMetro": [_metro()]})
+
+        gen.ensure_sliced_pool.assert_not_awaited()
+        gen.acquire_resource_lock.assert_not_awaited()
+        gen.attach_refs.assert_awaited_once_with(
+            kind=TopologyColocationMetro,
+            node_id="metro-1",
+            refs={"fabric_asn_pool": "asn-pool-id", "vni_pool": "vni-pool-id"},
+        )
+
+    @pytest.mark.asyncio
+    async def test_design_none_is_the_same_as_no_design(self) -> None:
+        """The query returns design: null for a metro without one."""
+        gen = _make_generator()
+
+        await gen.generate({"TopologyColocationMetro": [{**_metro(), "design": None}]})
+
+        gen.ensure_sliced_pool.assert_not_awaited()
+        gen.logger.error.assert_not_called()
+
+
+class TestMetroDesignWithoutZoneTemplates:
+    """A design that lists no zone designs gives nothing to size the supernets from."""
+
+    @pytest.mark.asyncio
+    async def test_logs_an_error_and_saves_nothing(self) -> None:
+        """Every size is derived before the first save: a partial tracked set would be cleaned up as stale."""
+        design = {**colo_metro_design("S"), "zone_templates": []}
+        gen = _make_generator()
+
+        await gen.generate({"TopologyColocationMetro": [_metro(design=design)]})
+
+        gen.logger.error.assert_called_once()
+        message = gen.logger.error.call_args.args[0]
+        assert "Metro fr" in message
+        assert "zone_templates" in message
+        gen.upsert_asn_pool.assert_not_awaited()
+        gen.upsert_number_pool.assert_not_awaited()
+        gen.ensure_sliced_pool.assert_not_awaited()
+        gen.attach_refs.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_the_other_metros_of_the_response_are_still_generated(self) -> None:
+        """One undersized design stops that metro only."""
+        broken = {**colo_metro_design("S"), "zone_templates": []}
+        gen = _make_generator()
+
+        await gen.generate(
+            {"TopologyColocationMetro": [_metro("FR", "m-fr", broken), _metro("PA", "m-pa", colo_metro_design("S"))]}
+        )
+
+        assert [c.kwargs["node_id"] for c in gen.attach_refs.await_args_list] == ["m-pa"]
+        gen.logger.error.assert_called_once()

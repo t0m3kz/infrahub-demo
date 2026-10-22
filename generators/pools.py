@@ -157,12 +157,12 @@ class PoolMixin:
         ``refs`` maps relationship name -> peer id; a ``None`` id means "nothing
         to attach" and is skipped. The one place a generator writes pool (or
         ``evpn_rt_as``) references onto a node it does not upsert itself (its
-        target: DC, pod, colocation metro, office). A node the run upserts
+        target: DC, pod, colocation metro, zone or virtual colocation, office). A node the run upserts
         anyway (an MLAG or standalone VLAN domain) carries the reference in
         that upsert's data instead.
 
         Missing-node policy: the node MUST exist. Every caller attaches to the
-        generator's own target (DC, pod, metro, office), and it is fetched by id, never by HFID, so
+        generator's own target (DC, pod, metro, zone, virtual colocation, office), and it is fetched by id, never by HFID, so
         neither a trigger race nor HFID index lag can hide it. A missing node
         is therefore a real fault: logged as an error (fatal under
         FailOnErrorLogger) and raised as GeneratorError — never skipped.
@@ -255,15 +255,17 @@ class PoolMixin:
             node_attribute="asn",
         )
 
-    async def _get_parent_pool_with_retry(self, parent_pool_name: str) -> CoreIPPrefixPool:
-        """Fetch a parent CoreIPPrefixPool by name, retrying if it doesn't
-        exist yet — closes the race where a pod-level call needs a DC-level
-        pool that add_dc's own allocate_resource_pools() may not have
-        created yet (add_pod's trigger can fire before add_dc's task is
-        even visible in the task list)."""
+    async def _get_parent_pool_with_retry(self, parent_pool_name: str, kind: type[Any] = CoreIPPrefixPool) -> Any:
+        """Fetch a parent pool of ``kind`` (a CoreIPPrefixPool unless told otherwise) by
+        name, retrying if it doesn't exist yet — closes the race where a
+        pod-level call needs a DC-level pool that add_dc's own
+        allocate_resource_pools() may not have created yet (add_pod's trigger can
+        fire before add_dc's task is even visible in the task list), and where a
+        colocation zone needs its metro's ASN pool (a CoreNumberPool) before
+        add_colocation_metro has created it."""
         for attempt in range(_PARENT_POOL_MAX_RETRIES):
             try:
-                return await self.client.get(kind=CoreIPPrefixPool, name__value=parent_pool_name)
+                return await self.client.get(kind=kind, name__value=parent_pool_name)
             except NodeNotFoundError:
                 if attempt == _PARENT_POOL_MAX_RETRIES - 1:
                     raise
@@ -275,7 +277,7 @@ class PoolMixin:
                 await asyncio.sleep(delay)
         raise NodeNotFoundError(
             branch_name=self.branch_name,
-            node_type="CoreIPPrefixPool",
+            node_type=getattr(kind, "__name__", str(kind)),
             identifier={"name__value": [parent_pool_name]},
         )
 
@@ -283,10 +285,10 @@ class PoolMixin:
         """Create a fabric's VLAN pool for the service contexts of spec's kind, `{name}-{spec.key}-vlan-pool`.
 
         Read by generators/firewall_context.py's _ensure_context_vlan, which
-        gives each DC and colocation-metro context the VLAN its legs derive
+        gives each DC and colocation-zone context the VLAN its legs derive
         from (utils/exchange_transit.py); spec.vlan_range keeps the firewall
         and load-balancer bands apart. Per-fabric (not global) so each DC's or
-        metro's context VLANs stay within its own numbering. The legs'
+        colocation zone's context VLANs stay within its own numbering. The legs'
         addresses come from the per-VRF bootstrap pools (FW-Transit-*,
         LB-Leg-*, LB-VIP-*), not from a fabric pool.
 

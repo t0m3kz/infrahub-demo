@@ -15,11 +15,12 @@
 # Without the second shape the traversal reaches the cage and stops, which is
 # the DC-boundary blind spot this whole leg exists to close.
 #
-# `locations` lists only the cage. The on-ramp edges deploy to the metro, and a
-# metro has several cages, so the cage end cannot be derived. add_circuit
-# (generators/topology/circuit.py) adds the other end from the far endpoint
-# device's deployment: the border leaf's DC, the provider router's cloud region
-# (02_cloud_provider_edges.yml).
+# `locations` lists the cage. The on-ramp edges deploy to their zone (a facility),
+# so add_circuit (generators/topology/circuit.py) derives both ends from the end
+# devices' deployments: the edge's zone, the border leaf's DC, the provider
+# router's cloud region (02_cloud_provider_edges.yml). The cage listed here must
+# be that same zone: add_circuit refuses an authored zone that contradicts the
+# edge's deployment.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -48,7 +49,7 @@ spec:
         - "FR2"
       capabilities:
         - ["bl-dc101101", "Ethernet1/35"]
-        - ["eg-fr01", "Ethernet1/10"]
+        - ["eg-fr201", "Ethernet1/10"]
 
     - circuit_id: "DF-DC11-EQXFR2"
       member_of_groups: [physical_circuits]
@@ -63,7 +64,7 @@ spec:
         - "FR2"
       capabilities:
         - ["bl-dc1111101", "Ethernet1/35"]
-        - ["eg-fr01", "Ethernet1/11"]
+        - ["eg-fr201", "Ethernet1/11"]
 
     - circuit_id: "DF-DC12-EQXPA4"
       member_of_groups: [physical_circuits]
@@ -78,7 +79,7 @@ spec:
         - "PA4"
       capabilities:
         - ["bl-dc1212101", "Ethernet1/35"]
-        - ["eg-pa01", "Ethernet1/10"]
+        - ["eg-pa401", "Ethernet1/10"]
 
     - circuit_id: "DF-DC10-EQXFR2-B"
       member_of_groups: [physical_circuits]
@@ -93,7 +94,7 @@ spec:
         - "FR2"
       capabilities:
         - ["bl-dc101101", "Ethernet1/36"]
-        - ["eg-fr02", "Ethernet1/10"]
+        - ["eg-fr202", "Ethernet1/10"]
 
     - circuit_id: "DF-DC11-EQXFR2-B"
       member_of_groups: [physical_circuits]
@@ -108,7 +109,7 @@ spec:
         - "FR2"
       capabilities:
         - ["bl-dc1111101", "Ethernet1/36"]
-        - ["eg-fr02", "Ethernet1/11"]
+        - ["eg-fr202", "Ethernet1/11"]
 
     - circuit_id: "DF-DC12-EQXPA4-B"
       member_of_groups: [physical_circuits]
@@ -123,7 +124,7 @@ spec:
         - "PA4"
       capabilities:
         - ["bl-dc1212101", "Ethernet1/36"]
-        - ["eg-pa02", "Ethernet1/10"]
+        - ["eg-pa402", "Ethernet1/10"]
 
     # --- cage <-> cloud region cross-connects --------------------------------
     # The cloud end is the region, not a zone: an AZ is finer than any provider
@@ -139,7 +140,7 @@ spec:
       locations:
         - "FR2"
       capabilities:
-        - ["eg-fr01", "Ethernet1/13"]
+        - ["eg-fr201", "Ethernet1/13"]
         - ["EXT-AWS-DX-FR2", "et-0/0/0"]
 
     - circuit_id: "XC-EQXPA4-AZURE-WEU"
@@ -153,5 +154,5 @@ spec:
       locations:
         - "PA4"
       capabilities:
-        - ["eg-pa01", "Ethernet1/13"]
+        - ["eg-pa401", "Ethernet1/13"]
         - ["EXT-AZURE-ER-PA4", "et-0/0/0"]

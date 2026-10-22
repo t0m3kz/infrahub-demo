@@ -3,10 +3,10 @@
 #
 # No fabric_templates, deliberately: an MCR is Megaport's own virtual router in
 # Megaport's cloud, reached over a virtual cross-connect — we buy a port on it,
-# we do not deploy kit into it. The metro still joins colocation_metros because
-# trigger-colocation-metro-on-created fires per kind and Infrahub fails a run
-# whose target sits outside the generator definition's group, so
-# add_colocation_metro runs here and no-ops.
+# we do not deploy kit into it. The metro and the MCR zone still join
+# colocation_metros / colocation_zones because the created-triggers fire per kind
+# and Infrahub fails a run whose target sits outside the generator definition's
+# group, so add_colocation_metro and add_colocation_zone run here and no-op.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -25,3 +25,5 @@ spec:
               kind: TopologyColocationZone
               data:
                 - name: MCR-FRA1
+                  member_of_groups:
+                    - colocation_zones

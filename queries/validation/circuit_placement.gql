@@ -5,9 +5,11 @@
 # several circuits.
 #
 # Concrete inline fragments only, so the query is valid whether physical `locations` peers TopologyConnectableLocation
-# or TopologyFacility: TopologyColocationZone implements both, the customer footprints only the first (they are
-# selected on virtual circuits alone). A zone carries its metro (parent): a cage end matches an edge deployed to
-# the metro, and a colocation footprint (parented by the metro) is reached through any cage of it.
+# or TopologyFacility: TopologyColocationZone and TopologyVirtualColocation implement both, the customer
+# footprints only the first (they are selected on virtual circuits alone). A zone or virtual colocation carries
+# its metro (parent): the edges deploy to the zone, so a physical end must be exactly the zone the edge sits in (a
+# sibling zone is refused, as add_circuit refuses it), and a colocation footprint (parented by the metro) is reached
+# through any zone of it.
 query circuit_placement {
   TopologyPhysicalCircuit {
     edges {
@@ -22,6 +24,7 @@ query circuit_placement {
               __typename
               name { value }
               ... on TopologyColocationZone { parent { node { id __typename name { value } } } }
+              ... on TopologyVirtualColocation { parent { node { id __typename name { value } } } }
               ... on TopologyCustomerOffice { owner { node { id org_id { value } } } }
             }
           }
@@ -42,6 +45,7 @@ query circuit_placement {
                         __typename
                         name { value }
                         ... on TopologyColocationZone { parent { node { id __typename name { value } } } }
+                        ... on TopologyVirtualColocation { parent { node { id __typename name { value } } } }
                       }
                     }
                   }
@@ -52,6 +56,18 @@ query circuit_placement {
                         __typename
                         name { value }
                         ... on TopologyColocationZone { parent { node { id __typename name { value } } } }
+                        ... on TopologyVirtualColocation { parent { node { id __typename name { value } } } }
+                      }
+                    }
+                  }
+                  ... on CloudNetworkAppliance {
+                    deployment {
+                      node {
+                        id
+                        __typename
+                        name { value }
+                        ... on TopologyColocationZone { parent { node { id __typename name { value } } } }
+                        ... on TopologyVirtualColocation { parent { node { id __typename name { value } } } }
                       }
                     }
                   }
@@ -78,6 +94,7 @@ query circuit_placement {
               __typename
               name { value }
               ... on TopologyColocationZone { parent { node { id __typename name { value } } } }
+              ... on TopologyVirtualColocation { parent { node { id __typename name { value } } } }
               ... on TopologyCustomer {
                 owner { node { id org_id { value } } }
               }
@@ -106,6 +123,7 @@ query circuit_placement {
                         __typename
                         name { value }
                         ... on TopologyColocationZone { parent { node { id __typename name { value } } } }
+                        ... on TopologyVirtualColocation { parent { node { id __typename name { value } } } }
                       }
                     }
                   }
@@ -116,6 +134,18 @@ query circuit_placement {
                         __typename
                         name { value }
                         ... on TopologyColocationZone { parent { node { id __typename name { value } } } }
+                        ... on TopologyVirtualColocation { parent { node { id __typename name { value } } } }
+                      }
+                    }
+                  }
+                  ... on CloudNetworkAppliance {
+                    deployment {
+                      node {
+                        id
+                        __typename
+                        name { value }
+                        ... on TopologyColocationZone { parent { node { id __typename name { value } } } }
+                        ... on TopologyVirtualColocation { parent { node { id __typename name { value } } } }
                       }
                     }
                   }
@@ -136,6 +166,7 @@ query circuit_placement {
                     __typename
                     name { value }
                     ... on TopologyColocationZone { parent { node { id __typename name { value } } } }
+                    ... on TopologyVirtualColocation { parent { node { id __typename name { value } } } }
                   }
                 }
               }

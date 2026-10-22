@@ -6,7 +6,8 @@
 # carries what a DCI session needs: its address, its device's deployment (a
 # TopologyDataCenter end names the fabric key and the address family) and the
 # device's BGP processes. The deployment's kind also places that end (a DC,
-# ISP or cloud region deployment is the circuit's location there), checked
+# ISP, cloud region, colocation zone or virtual colocation deployment is the
+# circuit's location there), checked
 # against the circuit's current locations.
 query circuit_data($name: String!) {
   TopologyPhysicalCircuit(name__value: $name) {
@@ -57,6 +58,9 @@ fragment CircuitEndpoint on DcimInterface {
         deployment { node { ...CircuitDeployment } }
       }
       ... on DcimVirtualDevice {
+        deployment { node { ...CircuitDeployment } }
+      }
+      ... on CloudNetworkAppliance {
         deployment { node { ...CircuitDeployment } }
       }
       ... on DcimCapabilities {

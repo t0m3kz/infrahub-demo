@@ -1,11 +1,12 @@
 ---
 # CoreSite real-world colocation topology
 #
-# Every metro joins colocation_metros: trigger-colocation-metro-on-created
-# (data/events/99_actions.yml) fires add_colocation_metro for each one, and
-# Infrahub fails a run whose target is outside the definition's group. None of
-# these metros declares fabric_templates — we rent cage space here, we do not
-# run our own on-ramp in it — so each run is a no-op.
+# Every metro joins colocation_metros and every zone joins colocation_zones:
+# the created-triggers (data/events/99_actions.yml) fire add_colocation_metro and
+# add_colocation_zone for each one, and Infrahub fails a run whose target is
+# outside the definition's group. None of these zones declares fabric_templates
+# — we rent cage space here, we do not run our own on-ramp in it — so each run
+# is a no-op.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -24,7 +25,11 @@ spec:
               kind: TopologyColocationZone
               data:
                 - name: NY1
+                  member_of_groups:
+                    - colocation_zones
                 - name: NY2
+                  member_of_groups:
+                    - colocation_zones
 
           - name: VA
             location: ["iad"]
@@ -34,7 +39,11 @@ spec:
               kind: TopologyColocationZone
               data:
                 - name: VA1
+                  member_of_groups:
+                    - colocation_zones
                 - name: VA2
+                  member_of_groups:
+                    - colocation_zones
 
           - name: SV
             location: ["sjc"]
@@ -44,3 +53,5 @@ spec:
               kind: TopologyColocationZone
               data:
                 - name: SV1
+                  member_of_groups:
+                    - colocation_zones
