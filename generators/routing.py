@@ -677,7 +677,9 @@ class RoutingMixin:
                 kind=RoutingAutonomousSystem,
                 data={"asn": {"from_pool": {"id": asn_pool_id}}, "description": description},
             )
-            await as_obj.save(allow_upsert=True)
+            # A save claims the node for this run's group on its own; an AS that no run may own must opt out here,
+            # or the creating run owns it and its next run deletes it (still a ManagedBGP local_as) as unused.
+            await as_obj.save(allow_upsert=True, **({} if track else {"update_group_context": False}))
             self.logger.info(f"Created shared AS{as_obj.asn.value} '{description}' ({as_obj.id})")
         else:
             return None

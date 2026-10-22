@@ -217,6 +217,9 @@ class TestEnsureSharedAs:
 
         assert result == "shared-as"
         assert "shared-as" not in m.client.group_context.related_node_ids
+        if not existing:
+            # The save itself would add the new AS to the run's group, so it must opt out of group tracking.
+            found.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
 
     @pytest.mark.asyncio
     async def test_no_pool_and_no_existing_returns_none(self) -> None:
