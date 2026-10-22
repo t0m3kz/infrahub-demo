@@ -58,6 +58,9 @@ spec:
     - name: run-customer-office-orchestrator-routing-generator
       description: Sync an office customer deployment into the routing group of its infrastructure_orchestrator
       generator: add_customer_office_orchestrator_routing
+    - name: run-virtual-colocation-orchestrator-routing-generator
+      description: Sync a virtual colocation into the routing group of its infrastructure_orchestrator
+      generator: add_virtual_colocation_orchestrator_routing
     - name: run-circuit-generator
       description: Validate a physical circuit and its customer/provider interfaces
       generator: add_circuit
@@ -74,8 +77,14 @@ spec:
       description: Provision FirewallContext/dedicated LB for a colocation customer deployment
       generator: add_customer_deployment_colocation
     - name: run-colocation-metro-generator
-      description: Create a colocation metro's resource pools and its own on-ramp devices
+      description: Create a colocation metro's VNI and ASN pools (the Multi-Site site)
       generator: add_colocation_metro
+    - name: run-colocation-zone-generator
+      description: Create a colocation zone's resource pools and its on-ramp devices
+      generator: add_colocation_zone
+    - name: run-virtual-colocation-generator
+      description: Create a virtual colocation's resource pools and its virtual on-ramp devices
+      generator: add_virtual_colocation
     - name: run-sdwan-edge-generator
       description: Provision an SD-WAN Edge, tunnel, and circuits for a customer office that opted in
       generator: add_sdwan_edge

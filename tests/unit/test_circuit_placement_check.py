@@ -2,8 +2,9 @@
 
 The payloads are raw GraphQL responses shaped like queries/validation/circuit_placement.gql; ``validate`` runs
 them through ``clean_data``. The places mirror data/demos/30_all: DC10/DC11 with their border leaves, the
-Equinix FR metro (edges eg-fr01/eg-fr02 deployed to it) with cages FR2/FR6, AWS eu-central-1, the ISP Orange,
-C001's office (owner of its access circuit INET-C001-OFFICE).
+Equinix FR metro with cages FR2/FR6 (the edges eg-fr201/eg-fr202 are deployed to the ZONE FR2, not the metro),
+the Equinix AM metro with its virtual colocation AM-NE, AWS eu-central-1, the ISP Orange, C001's office
+(owner of its access circuit INET-C001-OFFICE).
 """
 
 from __future__ import annotations
@@ -29,13 +30,16 @@ DC10 = _place("DC10", "TopologyDataCenter")
 DC11 = _place("DC11", "TopologyDataCenter")
 FR = _place("FR", "TopologyColocationMetro")
 PA = _place("PA", "TopologyColocationMetro")
+AM = _place("AM", "TopologyColocationMetro")
 FR2 = _place("FR2", "TopologyColocationZone", FR)
 FR6 = _place("FR6", "TopologyColocationZone", FR)
 PA4 = _place("PA4", "TopologyColocationZone", PA)
+AM_NE = _place("AM-NE", "TopologyVirtualColocation", AM)
 EUC1 = _place("eu-central-1", "TopologyCloudRegion")
 ORANGE = _place("ISP-ORANGE", "TopologyExternalProviders")
 C005_DC10 = _place("C005-P-DC10", "TopologyCustomerDC", DC10, owner="C005")
 C001_FR = _place("C001-P-FR", "TopologyCustomerColocation", FR, owner="C001")
+C001_AM = _place("C001-P-AM", "TopologyCustomerColocation", AM, owner="C001")
 C001_OFFICE = _place("C001-OFFICE", "TopologyCustomerOffice", owner="C001")
 
 
@@ -50,8 +54,10 @@ def _port(device: str, name: str, deployment: dict[str, Any] | None) -> dict[str
 
 BL10 = _port("bl-dc101101", "Ethernet1/35", DC10)
 BL11 = _port("bl-dc1111101", "Ethernet1/35", DC11)
-EG_FR = _port("eg-fr01", "Ethernet1/13", FR)
-EG_PA = _port("eg-pa01", "Ethernet1/13", PA)
+EG_FR = _port("eg-fr201", "Ethernet1/13", FR2)
+EG_FR_METRO = _port("eg-fr01", "Ethernet1/13", FR)  # legacy: no device is deployed to a metro any more
+EG_PA = _port("eg-pa401", "Ethernet1/13", PA4)
+EG_AM_NE = _port("eg-am-ne01", "Ethernet1/13", AM_NE)  # a virtual edge deployed to the virtual colocation
 AWS = _port("EXT-AWS-DX-FR2", "et-0/0/0", EUC1)
 GW = _port("EQX-FR2-SDWAN-GW1", "eth0", FR2)
 OFFICE_EDGE = _port("C001-OFFICE-EDGE1", "GE1", C001_OFFICE)
@@ -82,6 +88,8 @@ def _physical(
 DF10 = _physical("DF-DC10-EQXFR2", [DC10, FR2], [BL10, EG_FR])
 DF11 = _physical("DF-DC11-EQXFR2", [DC11, FR2], [BL11, EG_FR])
 XC = _physical("XC-EQXFR2-AWS-EUC1", [FR2, EUC1], [EG_FR, AWS])
+DF10_AM_NE = _physical("DF-DC10-EQXAMNE", [DC10, AM_NE], [BL10, EG_AM_NE])
+XC_AM_NE = _physical("XC-EQXAMNE-AWS-EUC1", [AM_NE, EUC1], [EG_AM_NE, AWS])
 INET_OFFICE = _physical("INET-C001-OFFICE", [C001_OFFICE, ORANGE], [OFFICE_EDGE, ORANGE_PE], owner="C001")
 
 
@@ -126,11 +134,21 @@ class TestPhysicalCircuitPlacement:
             INET_OFFICE,
             # A device racked in the cage itself places the cage end too.
             _physical("XC-GW-AWS", [FR2, EUC1], [GW, AWS]),
+            # A virtual colocation is a circuit end like a zone, and so is the provider far end of a cross-connect.
+            DF10_AM_NE,
+            XC_AM_NE,
         ],
-        ids=["dc-to-cage", "cage-to-region", "office-to-isp", "device-in-the-cage"],
+        ids=[
+            "dc-to-cage",
+            "cage-to-region",
+            "office-to-isp",
+            "device-in-the-cage",
+            "dc-to-virtual-colocation",
+            "virtual-colocation-to-region",
+        ],
     )
     def test_placed_circuit_passes(self, circuit: dict[str, Any]) -> None:
-        """Each location is where one end's device is deployed: no finding."""
+        """Each location is the deployment of one end's device: no finding."""
         assert _run(physical=[circuit]) == []
 
     @pytest.mark.parametrize("locations", [[FR2], []], ids=["only-the-authored-cage", "none"])
@@ -156,10 +174,47 @@ class TestPhysicalCircuitPlacement:
         assert "bl-dc1111101:Ethernet1/35 in TopologyDataCenter 'DC11'" in messages[0]
 
     def test_cage_of_another_metro_fails(self) -> None:
-        """A cage end must be a zone of the metro the edge is deployed to: PA4 with an FR edge fails."""
+        """A colocation end must be the edge's zone itself: PA4 with an edge in FR2 fails."""
         messages = _run(physical=[_physical("DF-DC10-EQXPA4", [DC10, PA4], [BL10, EG_FR])])
         assert len(messages) == 1
-        assert "a cage end a zone of the metro the device is deployed to" in messages[0]
+        assert "not a sibling zone of its metro" in messages[0]
+
+    def test_virtual_colocation_of_another_metro_fails(self) -> None:
+        """AM-NE is not in FR: an edge in zone FR2 does not place it."""
+        messages = _run(physical=[_physical("DF-DC10-EQXAMNE", [DC10, AM_NE], [BL10, EG_FR])])
+        assert len(messages) == 1
+        assert "Physical circuit 'DF-DC10-EQXAMNE' terminates on" in messages[0]
+
+    def test_sibling_cage_of_the_same_metro_fails(self) -> None:
+        """Authored FR6 while the edge sits in FR2: add_circuit (plan_locations) refuses it as contradicting the
+        endpoint devices' deployment, so the check does too."""
+        messages = _run(physical=[_physical("DF-DC10-EQXFR6", [DC10, FR6], [BL10, EG_FR])])
+        assert len(messages) == 1
+        assert "eg-fr201:Ethernet1/13 in TopologyColocationZone 'FR2'" in messages[0]
+        assert "TopologyColocationZone 'FR6'" in messages[0]
+
+    def test_sibling_virtual_colocation_of_the_same_metro_fails(self) -> None:
+        """A second presence of the metro is no more the end than a sibling cage is."""
+        sibling = _place("AM-NE2", "TopologyVirtualColocation", AM)
+        messages = _run(physical=[_physical("DF-DC10-EQXAMNE2", [DC10, sibling], [BL10, EG_AM_NE])])
+        assert len(messages) == 1
+
+    def test_device_deployed_to_the_metro_fails(self) -> None:
+        """No device is deployed to a metro any more: a legacy metro deployment places no zone of it."""
+        messages = _run(physical=[_physical("DF-DC10-EQXFR2-METRO", [DC10, FR2], [BL10, EG_FR_METRO])])
+        assert len(messages) == 1
+        assert "eg-fr01:Ethernet1/13 in TopologyColocationMetro 'FR'" in messages[0]
+
+    def test_two_zones_of_different_metros_with_edges_in_one_fail(self) -> None:
+        """FR2 and PA4 with both edges in FR2: one location has no end."""
+        messages = _run(physical=[_physical("XC-FR2-PA4", [FR2, PA4], [EG_FR, _port("eg-fr202", "e1", FR2)])])
+        assert len(messages) == 1
+
+    def test_error_message_names_the_zone_end_and_the_ends_deployment(self) -> None:
+        """The finding shows where the device really is, so the author can fix the location or the deployment."""
+        messages = _run(physical=[_physical("DF-DC10-EQXPA4", [DC10, PA4], [BL10, EG_FR])])
+        assert "eg-fr201:Ethernet1/13 in TopologyColocationZone 'FR2'" in messages[0]
+        assert "TopologyColocationZone 'PA4'" in messages[0]
 
     def test_ends_must_match_locations_one_to_one(self) -> None:
         """Both ends in DC10 leave the FR2 location without an end."""
@@ -218,6 +273,19 @@ class TestVirtualCircuitTermination:
             # A colocation footprint is parented by the metro: the FR edge places it, cage FR2 starts the chain.
             # Single-ended on purpose: provider-managed, its cloud end is a CloudVirtualInterface, not a port.
             _virtual("VC-C001-EQXFR-AWS-EUC1", [C001_FR, EUC1], [EG_FR], [XC], owner="C001"),
+            # The same footprint with an edge deployed to a SIBLING zone of the cage that starts the chain.
+            _virtual(
+                "VC-C001-EQXFR6-AWS-EUC1",
+                [C001_FR, EUC1],
+                [EG_FR],
+                [_physical("XC-FR6", [FR6, EUC1], [EG_FR, AWS])],
+                owner="C001",
+            ),
+            # A colocation footprint of the AM metro: its virtual colocation AM-NE (not a cage) places it and
+            # starts the chain.
+            _virtual("VC-C001-EQXAM-AWS-EUC1", [C001_AM, EUC1], [EG_AM_NE], [XC_AM_NE], owner="C001"),
+            # A virtual colocation is a provider far end of an owned circuit, like a cloud region.
+            _virtual("VC-C005-DC10-AMNE", [C005_DC10, AM_NE], [BL10, EG_AM_NE], [DF10_AM_NE], owner="C005"),
             # Far end another footprint (of the same owner here).
             _virtual(
                 "VC-C005-DC10-FR",
@@ -227,7 +295,14 @@ class TestVirtualCircuitTermination:
                 owner="C005",
             ),
         ],
-        ids=["dc-footprint-to-region", "colo-footprint-via-metro", "footprint-to-footprint"],
+        ids=[
+            "dc-footprint-to-region",
+            "colo-footprint-via-metro",
+            "colo-footprint-chain-on-sibling-zone",
+            "colo-footprint-via-virtual-colocation",
+            "footprint-to-virtual-colocation",
+            "footprint-to-footprint",
+        ],
     )
     def test_owned_circuit_passes(self, circuit: dict[str, Any]) -> None:
         """Tenant end a footprint of the owner with a device in its facility, far end a provider place."""
@@ -262,9 +337,20 @@ class TestVirtualCircuitTermination:
         assert len(messages) == 1
         assert "far end is a provider facility" in messages[0]
 
+    def test_colo_footprint_chain_starting_in_another_metro_fails(self) -> None:
+        """C001-P-FR is in metro FR: a chain that starts at AM-NE (a VC of metro AM) is not its underlay."""
+        circuit = _virtual("VC-C001-EQXFR-AWS-EUC1", [C001_FR, EUC1], [EG_FR], [XC_AM_NE], owner="C001")
+        messages = _run(virtual=[circuit])
+        assert len(messages) == 1
+        assert "is not one contiguous path from TopologyColocationMetro 'FR'" in messages[0]
+
     def test_unowned_between_facilities_passes(self) -> None:
         """A platform overlay (no owner) between two facilities."""
         assert _run(virtual=[_virtual("VC-SDWAN-FR2-AWS-EUC1", [FR2, EUC1], [GW, EG_FR], [XC])]) == []
+
+    def test_unowned_on_a_virtual_colocation_passes(self) -> None:
+        """A virtual colocation is a facility: a platform overlay may end on AM-NE."""
+        assert _run(virtual=[_virtual("VC-SDWAN-AMNE-AWS-EUC1", [AM_NE, EUC1], [EG_AM_NE], [XC_AM_NE])]) == []
 
     def test_unowned_on_a_footprint_fails(self) -> None:
         """No owner but a customer footprint end: a platform overlay terminates on facilities."""

@@ -1,0 +1,36 @@
+---
+# Network functions a provider hosts for us (CloudNetworkAppliance): Equinix Network Edge today. A virtual
+# colocation (TopologyVirtualColocation) can only host these, and add_virtual_colocation creates its appliances
+# from them. The interfaces are the instance's ports; the provider's own routing service is not modelled.
+#
+# service_code / package_code / software_version / term_length (and the device type's cpu_count) are what the
+# Equinix Network Edge Terraform artifact orders (transforms/colocation/virtual_colocation.py). DEMO VALUES: not
+# verified against the Equinix API, check type/package/version/term in the Equinix portal before applying.
+# The account and its notification list live on the CloudAccount; licence tokens are never stored (Terraform variables).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TemplateCloudNetworkAppliance
+  data:
+    - template_name: C8000V_EDGE
+      owner: "P027"
+      device_type: C8000V
+      role: edge
+      platform: cisco_xe
+      software_image: cisco_xe-17.12.4
+      status: active
+      service_code: C8000V
+      package_code: network-essentials
+      software_version: 17.12.01a
+      term_length: 12
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: C8000V_EDGE_Ethernet1/[1-24]
+            name: Ethernet1/[1-24]
+            role: customer
+          - template_name: C8000V_EDGE_mgmt0
+            name: mgmt0
+            role: management

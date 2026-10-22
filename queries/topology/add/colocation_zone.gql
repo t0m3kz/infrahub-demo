@@ -1,0 +1,130 @@
+# The kit a colocation zone (cage) declares (fabric_templates), turned into devices by
+# generators/topology/colocation_fabric.py. The pools it attaches are written, not
+# read, so they are not selected. The parent metro supplies the naming convention
+# and the ASN pool of its one EVPN site AS. Its own design (the envelope: most
+# edges, firewalls and load balancers) and the metro's size the pools
+# (generators/fabric_sizing.py); both are optional. template_kind is aliased deliberately:
+# clean_data() strips "__" out of any key it finds, so a bare __typename would
+# arrive as "typename". The generator reads template_kind to tell a physical
+# template from a virtual one and to refuse the kind this node cannot host.
+# Physical templates only: a zone's
+# virtual entries are skipped.
+query topology_colocation_zone($name: String!) {
+  TopologyColocationZone(name__value: $name) {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        design {
+          node {
+            id
+            name {
+              value
+            }
+            max_edges {
+              value
+            }
+            max_firewalls {
+              value
+            }
+            max_load_balancers {
+              value
+            }
+          }
+        }
+        parent {
+          node {
+            id
+            name {
+              value
+            }
+            ... on TopologyColocationMetro {
+              naming_convention {
+                value
+              }
+              fabric_asn_pool {
+                node {
+                  id
+                  name {
+                    value
+                  }
+                }
+              }
+              design {
+                node {
+                  id
+                  name {
+                    value
+                  }
+                  max_zones {
+                    value
+                  }
+                  zone_templates {
+                    edges {
+                      node {
+                        id
+                        name {
+                          value
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        fabric_templates {
+          edges {
+            node {
+              role {
+                value
+              }
+              quantity {
+                value
+              }
+              template {
+                node {
+                  id
+                  template_kind: __typename
+                  ... on TemplateDcimPhysicalDevice {
+                    template_name {
+                      value
+                    }
+                    platform {
+                      node {
+                        id
+                        name {
+                          value
+                        }
+                      }
+                    }
+                    device_type {
+                      node {
+                        id
+                      }
+                    }
+                    interfaces {
+                      edges {
+                        node {
+                          name {
+                            value
+                          }
+                          role {
+                            value
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

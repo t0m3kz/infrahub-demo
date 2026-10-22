@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+import yaml
 
 from tests.integration.demo_data import (
     ROOT,
@@ -97,3 +98,136 @@ def test_created_objects_are_target_group_members(rule: dict[str, Any]) -> None:
         }
     )
     assert not outside, f"{rule['node_kind']} objects not in '{group}': {outside}"
+
+
+# ---------------------------------------------------------------------------
+# Colocation: the metro owns the site, the zone and virtual colocation own the kit
+# ---------------------------------------------------------------------------
+
+_COLOCATION_KIND_WIRING = {
+    # node kind: (generator action, generator definition, target group)
+    "TopologyColocationMetro": ("run-colocation-metro-generator", "add_colocation_metro", "colocation_metros"),
+    "TopologyColocationZone": ("run-colocation-zone-generator", "add_colocation_zone", "colocation_zones"),
+    "TopologyVirtualColocation": (
+        "run-virtual-colocation-generator",
+        "add_virtual_colocation",
+        "virtual_colocations",
+    ),
+}
+
+
+def _rules_for(node_kind: str) -> dict[str, dict[str, Any]]:
+    """The trigger rules of a node kind, by name."""
+    return {rule["name"]: rule for rule in trigger_rules() if rule["node_kind"] == node_kind}
+
+
+@pytest.mark.parametrize(("node_kind", "wiring"), sorted(_COLOCATION_KIND_WIRING.items()))
+def test_colocation_kind_action_definition_and_group_chain(node_kind: str, wiring: tuple[str, str, str]) -> None:
+    """Metro, zone and virtual colocation each run their own generator on their own group."""
+    action, definition, group = wiring
+    assert action_generators()[action] == definition
+    assert definition_targets()[definition] == group
+
+
+@pytest.mark.parametrize(
+    ("node_kind", "created_rule"),
+    [
+        ("TopologyColocationMetro", "trigger-colocation-metro-on-created"),
+        ("TopologyColocationZone", "trigger-colocation-zone-on-created"),
+        ("TopologyVirtualColocation", "trigger-virtual-colocation-on-created"),
+    ],
+)
+def test_colocation_kind_has_an_unconditional_created_rule(node_kind: str, created_rule: str) -> None:
+    """A node loaded with its fabric_templates inline is a `created` mutation, never an `updated` one."""
+    rule = _rules_for(node_kind)[created_rule]
+    assert rule["mutation_action"] == "created"
+    assert rule["action"] == _COLOCATION_KIND_WIRING[node_kind][0]
+    assert not rule.get("matches")
+
+
+@pytest.mark.parametrize(
+    ("node_kind", "update_rule"),
+    [
+        ("TopologyColocationZone", "trigger-colocation-zone-update-fabric-templates"),
+        ("TopologyVirtualColocation", "trigger-virtual-colocation-update-fabric-templates"),
+    ],
+)
+def test_zone_and_virtual_colocation_watch_only_fabric_templates(node_kind: str, update_rule: str) -> None:
+    """The update trigger matches fabric_templates alone: the generator writes the pool references back onto
+    the node, so watching those (or any field) would re-fire the generator from its own write."""
+    rule = _rules_for(node_kind)[update_rule]
+    assert rule["mutation_action"] == "updated"
+    assert rule["action"] == _COLOCATION_KIND_WIRING[node_kind][0]
+    assert rule["matches"]["kind"] == "CoreNodeTriggerRelationshipMatch"
+    assert [match["relationship_name"] for match in rule["matches"]["data"]] == ["fabric_templates"]
+
+
+def test_metro_has_no_update_trigger() -> None:
+    """The metro lost fabric_templates, and its generator attaches its own pools: only `created` fires it."""
+    rules = _rules_for("TopologyColocationMetro")
+    assert sorted(rules) == ["trigger-colocation-metro-on-created"]
+    assert "trigger-colocation-metro-update-fabric-templates" not in {rule["name"] for rule in trigger_rules()}
+
+
+def test_colocation_rule_set_is_exactly_five_rules() -> None:
+    """Metro created; zone created and updated; virtual colocation created and updated. Nothing else fires them."""
+    fabric_actions = {action for action, _, _ in _COLOCATION_KIND_WIRING.values()}
+    names = {rule["name"] for rule in trigger_rules() if rule["action"] in fabric_actions}
+    assert names == {
+        "trigger-colocation-metro-on-created",
+        "trigger-colocation-zone-on-created",
+        "trigger-colocation-zone-update-fabric-templates",
+        "trigger-virtual-colocation-on-created",
+        "trigger-virtual-colocation-update-fabric-templates",
+    }
+
+
+def test_virtual_colocation_orchestrator_routing_rules() -> None:
+    """A virtual colocation is routed on creation and whenever its infrastructure_orchestrator changes, by a
+    definition targeting the group every virtual colocation already joins."""
+    action = "run-virtual-colocation-orchestrator-routing-generator"
+    definition = "add_virtual_colocation_orchestrator_routing"
+    assert action_generators()[action] == definition
+    assert definition_targets()[definition] == _COLOCATION_KIND_WIRING["TopologyVirtualColocation"][2]
+    rules = {name: rule for name, rule in _rules_for("TopologyVirtualColocation").items() if rule["action"] == action}
+    assert sorted(rules) == [
+        "trigger-virtual-colocation-orchestrator-routing-on-created",
+        "trigger-virtual-colocation-orchestrator-routing-on-orchestrator-updated",
+    ]
+    created = rules["trigger-virtual-colocation-orchestrator-routing-on-created"]
+    assert created["mutation_action"] == "created"
+    assert not created.get("matches")
+    updated = rules["trigger-virtual-colocation-orchestrator-routing-on-orchestrator-updated"]
+    assert updated["mutation_action"] == "updated"
+    assert updated["matches"]["kind"] == "CoreNodeTriggerAttributeMatch"
+    assert [match["attribute_name"] for match in updated["matches"]["data"]] == ["infrastructure_orchestrator"]
+
+
+def test_colocation_generators_are_registered_in_infrahub_yml() -> None:
+    """Each definition names its query, class and file, and the query file exists."""
+    config = yaml.safe_load((ROOT / ".infrahub.yml").read_text())
+    definitions = {definition["name"]: definition for definition in config["generator_definitions"]}
+    expected = {
+        "add_colocation_metro": (
+            "colocation_metro_data",
+            "ColocationMetroGenerator",
+            "generators/topology/colocation.py",
+        ),
+        "add_colocation_zone": (
+            "colocation_zone_data",
+            "ColocationZoneGenerator",
+            "generators/topology/colocation_fabric.py",
+        ),
+        "add_virtual_colocation": (
+            "virtual_colocation_data",
+            "VirtualColocationGenerator",
+            "generators/topology/colocation_fabric.py",
+        ),
+    }
+    queries = {query["name"]: query["file_path"] for query in config["queries"]}
+    for name, (query, class_name, file_path) in expected.items():
+        definition = definitions[name]
+        assert definition["query"] == query
+        assert definition["class_name"] == class_name
+        assert definition["file_path"] == file_path
+        assert (ROOT / queries[query]).is_file()

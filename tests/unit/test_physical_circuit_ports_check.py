@@ -53,9 +53,9 @@ def _run(*circuits: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 BL = _port("p-bl", "bl-dc101101", "Ethernet1/35")
-EG = _port("p-eg", "eg-fr01", "Ethernet1/10")
+EG = _port("p-eg", "eg-fr201", "Ethernet1/10")
 BL2 = _port("p-bl2", "bl-dc101101", "Ethernet1/36")
-EG2 = _port("p-eg2", "eg-fr02", "Ethernet1/10")
+EG2 = _port("p-eg2", "eg-fr202", "Ethernet1/10")
 
 
 class TestCleanInventory:
@@ -91,7 +91,7 @@ class TestSharedPort:
 class TestEndKind:
     @pytest.mark.parametrize("typename", ["DcimVirtualInterface", "DcimLAGInterface", "TopologyVirtualCircuit"])
     def test_an_end_that_is_not_a_physical_interface_is_an_error(self, typename: str) -> None:
-        findings = _run(_circuit("DF-A", BL, _port("p-v", "eg-fr01", "Vlan10", typename)))
+        findings = _run(_circuit("DF-A", BL, _port("p-v", "eg-fr201", "Vlan10", typename)))
 
         assert len(findings) == 1
         assert "DF-A" in findings[0]["message"] and typename in findings[0]["message"]
@@ -99,7 +99,7 @@ class TestEndKind:
 
     def test_a_non_physical_end_is_not_counted_as_a_shared_port(self) -> None:
         """The same virtual port on two circuits is reported once per circuit as the wrong kind, not as shared."""
-        virtual = _port("p-v", "eg-fr01", "Vlan10", "DcimVirtualInterface")
+        virtual = _port("p-v", "eg-fr201", "Vlan10", "DcimVirtualInterface")
 
         findings = _run(_circuit("DF-A", BL, virtual), _circuit("DF-B", EG, virtual))
 

@@ -60,6 +60,10 @@ spec:
       org_id: "P027"
     - name: "Internal"
       org_id: "P028"
+      # Demo distribution list: the operator's own team, notified about the provider orders it owns.
+      notification_emails:
+        - "noc@example.com"
+        - "network-ops@example.com"
     - name: "Arista"
       org_id: "P029"
     - name: "Zscaler"

@@ -425,8 +425,8 @@ spec:
             name: Ethernet1/[1-7]
             role: customer
             interface_type: 100gbase-x-qsfp28
-          # The metro's two edges have no fabric between them: this port is the
-          # direct link carrying their iBGP session (add_colocation_metro).
+          # The zone's two edges have no fabric between them: this port is the
+          # direct link carrying their iBGP session (add_colocation_zone).
           - template_name: N9K-C9316D-GX_EDGE_Ethernet1/8
             name: Ethernet1/8
             role: interlink
@@ -440,7 +440,7 @@ spec:
             role: uplink
             interface_type: 100gbase-x-qsfp28
           # Carved out of what used to be four uplinks (Ethernet1/[13-16]), so
-          # add_colocation_metro can cable a metro's firewall pair to its edge
+          # add_colocation_zone can cable a zone's firewall pair to its edge
           # pair the same way dc.py cables a DC's: on a dedicated `firewall`-role
           # port block, matching N9K-C9336C-FX2_BORDER_LEAF's Ethernet1/[25-28].
           # A 9316D has exactly 16 ports and all of them were already spoken for

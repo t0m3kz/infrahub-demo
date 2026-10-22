@@ -33,7 +33,25 @@ query segment_vlan_domains($segment_id: ID!) {
               ... on TopologyCustomerColocation {
                 # id alone fails server-side ("Unable to identify the type of
                 # the instance"); select a field, as vxlan_segment.gql does.
-                parent { node { id name { value } } }
+                # The edges are deployed into the metro's zones and virtual
+                # colocations, not the metro (generators/vlan_domain.py's
+                # _device_deployment_ids).
+                parent {
+                  node {
+                    id
+                    name { value }
+                    ... on TopologyColocationMetro {
+                      children {
+                        edges {
+                          node {
+                            ... on TopologyColocationZone { id }
+                            ... on TopologyVirtualColocation { id }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
               }
             }
           }

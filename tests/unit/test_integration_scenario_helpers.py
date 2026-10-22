@@ -548,7 +548,7 @@ async def test_fetch_transit_inventory_tags_edge_service_ports_like_border_leaf_
         "id": "ctx",
         "name": {"value": "fw-fr-shared"},
         "capabilities": {
-            "edges": [port("p1", "eg-fr01", "edge"), port("p2", "eg-fr02", "edge"), port("p3", "server-1", "server")]
+            "edges": [port("p1", "eg-fr201", "edge"), port("p2", "eg-fr202", "edge"), port("p3", "server-1", "server")]
         },
         "cluster": {"node": {"capabilities": {"edges": []}}},
         "served_deployments": {"edges": []},
@@ -564,8 +564,8 @@ async def test_fetch_transit_inventory_tags_edge_service_ports_like_border_leaf_
     inventory = await fetch_transit_inventory(client=client, branch="main")
 
     assert [(p["id"], p["device"]) for p in inventory["contexts"][0]["border_ports"]] == [
-        ("p1", "eg-fr01"),
-        ("p2", "eg-fr02"),
+        ("p1", "eg-fr201"),
+        ("p2", "eg-fr202"),
     ]
 
 
@@ -754,12 +754,13 @@ async def test_fetch_loadbalancer_inventory_parses_legs_ports_and_vips() -> None
 
 async def test_fetch_interconnect_inventory_parses_location_and_end_placement() -> None:
     """A circuit location keeps its kind, parent (a cage's metro, a footprint's DC) and owner, and each end
-    its device's deployment: test_62 checks circuit placement on exactly these fields."""
+    its device's deployment, with the metro above a zone or virtual colocation deployment: test_62 checks
+    circuit placement on exactly these fields."""
 
     def value(v: Any) -> dict:
         return {"value": v}
 
-    def end(device: str, deployment: str, kind: str) -> dict:
+    def end(device: str, deployment: str, kind: str, parent: dict | None = None) -> dict:
         return {
             "node": {
                 "id": f"if-{device}",
@@ -769,7 +770,12 @@ async def test_fetch_interconnect_inventory_parses_location_and_end_placement() 
                         "id": f"dev-{device}",
                         "name": value(device),
                         "deployment": {
-                            "node": {"id": f"id-{deployment}", "__typename": kind, "name": value(deployment)}
+                            "node": {
+                                "id": f"id-{deployment}",
+                                "__typename": kind,
+                                "name": value(deployment),
+                                **({"parent": parent} if parent else {}),
+                            }
                         },
                     }
                 },
@@ -802,7 +808,7 @@ async def test_fetch_interconnect_inventory_parses_location_and_end_placement() 
         "capabilities": {
             "edges": [
                 end("bl-dc101101", "DC10", "TopologyDataCenter"),
-                end("eg-fr01", "FR", "TopologyColocationMetro"),
+                end("eg-fr201", "FR2", "TopologyColocationZone", parent=metro),
             ]
         },
     }
@@ -868,13 +874,15 @@ async def test_fetch_interconnect_inventory_parses_location_and_end_placement() 
             "deployment_id": "id-DC10",
             "deployment_kind": "TopologyDataCenter",
             "deployment_name": "DC10",
+            "deployment_parent_id": None,
         },
         {
-            "device": "eg-fr01",
-            "device_id": "dev-eg-fr01",
-            "deployment_id": "id-FR",
-            "deployment_kind": "TopologyColocationMetro",
-            "deployment_name": "FR",
+            "device": "eg-fr201",
+            "device_id": "dev-eg-fr201",
+            "deployment_id": "id-FR2",
+            "deployment_kind": "TopologyColocationZone",
+            "deployment_name": "FR2",
+            "deployment_parent_id": "id-FR",
         },
     ]
     (overlay,) = inventory["virtual"]

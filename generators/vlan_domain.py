@@ -37,11 +37,16 @@ from .devices import standalone_vlan_domain_name
 from .protocols import DcimPhysicalDevice, ManagedStandaloneVlanDomain, ManagedVlanDomainSegment
 
 # Devices that act as a deployment's EVPN Multi-Site border gateway for a
-# stretched segment: the DC's border leaves and the metro's edges. `edge` is
-# also the colocation metro's on-ramp router — its only VTEP, so it is both
-# the metro's border gateway and (via AppInstance resolution, not here) where
+# stretched segment: the DC's border leaves and the colocation edges. `edge` is
+# also the on-ramp router of a colocation zone or virtual colocation — its only
+# VTEP, so it is both the metro site's border gateway and (via AppInstance resolution, not here) where
 # a stretched segment's customer ports land.
 BORDER_GATEWAY_ROLES = frozenset({"border-leaf", "edge"})
+# An SD-WAN gateway also carries the `edge` role and is deployed into the same
+# colocation zone as the on-ramp router, so the zone lookup finds it. It
+# terminates tunnels, not VXLAN segments, and no generator gives it a VLAN
+# domain, so it is never a border gateway.
+NON_BORDER_GATEWAY_GROUPS = frozenset({"sdwan_gateways"})
 # Interface kinds whose segment tag puts the device's VLAN domain in scope. A
 # DcimVirtualInterface carrying the segment is an inline sub-interface on a
 # firewall/LB HA pair, which takes the facing border leaf's VLAN instead.
@@ -178,9 +183,12 @@ class VlanDomainMixin:
     @staticmethod
     def _device_deployment_ids(hosting_parent: dict[str, Any]) -> list[str]:
         """Deployment ids whose devices a segment can land on: the hosting
-        parent itself (border leaves, a metro's edges) plus, for a DC, each of
-        its pods — leafs and ToRs are deployed into the pod, not the DC. The
-        queries select ids only on TopologyPod children."""
+        parent itself (a DC's border leaves) plus its children that deploy
+        devices: each pod of a DC (leafs and ToRs are deployed into the pod, not
+        the DC), each zone and virtual colocation of a metro (the edges are
+        deployed into those, the metro owns none). The queries select ids only
+        on TopologyPod, TopologyColocationZone and TopologyVirtualColocation
+        children."""
         pod_ids = [child["id"] for child in hosting_parent.get("children") or [] if child.get("id")]
         return [hosting_parent["id"], *pod_ids]
 
@@ -246,10 +254,17 @@ class VlanDomainMixin:
                     kind=DcimPhysicalDevice,
                     deployment__ids=list(dict.fromkeys(deployment_ids)),
                     role__values=sorted(BORDER_GATEWAY_ROLES),
-                    include=["capabilities"],
+                    include=["capabilities", "member_of_groups"],
                 ):
+                    if not NON_BORDER_GATEWAY_GROUPS.isdisjoint(self._group_names(device)):
+                        continue
                     devices[device.id] = device
         return list(devices.values())
+
+    @staticmethod
+    def _group_names(device: Any) -> set[str]:
+        """Names of the groups a device was fetched with (a group's HFID is its name)."""
+        return {peer.hfid[0] for peer in device.member_of_groups.peers if peer.hfid}
 
     async def reconcile_segment_vlan_domains(self, segment_id: str, segment_name: str) -> None:
         """Bring the segment's ManagedVlanDomainSegment activations to desired

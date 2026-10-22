@@ -8,7 +8,7 @@ fragment EvpnRtAsOnSegmentHostingFields on TopologySegmentHosting {
 }
 
 # ORDER MATTERS: spread EvpnRtAsOnDeploymentFields FIRST in the device's deployment selection. On the
-# pod -> parent hop Infrahub returns null for the TopologySegmentHosting fields of a spread that comes
+# pod/zone -> parent hop Infrahub returns null for the TopologySegmentHosting fields of a spread that comes
 # after a TopologyDeviceHosting one (FirewallContexts) and for a second
 # SegmentHosting-typed fragment, so every field read from the DC lives in this one fragment. With the
 # spread after that one, a pod-tier VTEP got evpn_rt_as = null and derived its route-targets from its
@@ -21,14 +21,30 @@ fragment EvpnRtAsOnSegmentHostingFields on TopologySegmentHosting {
 #
 # Only TopologyDataCenter, TopologyColocationMetro and TopologyCustomerOffice
 # inherit TopologySegmentHosting (schemas/extensions/topology/topology.yml) —
-# TopologyPod does not. So DC-level tiers (border-leaf, border-spine) and an
-# office's switches (access-switch, distribution-switch) match the generic
-# directly, while pod-level tiers (leaf, tor, access-leaf) whose deployment IS
-# the pod need one `parent` hop to reach the DC. Same two-shape traversal as
+# TopologyPod, TopologyColocationZone and TopologyVirtualColocation do not. So DC-level
+# tiers (border-leaf, border-spine) and an office's switches (access-switch,
+# distribution-switch) match the generic directly, while pod-level tiers (leaf, tor,
+# access-leaf) whose deployment IS the pod, and a colocation edge whose deployment IS its
+# zone or virtual colocation, need one `parent` hop to reach the DC or the metro (the
+# metro is the Multi-Site site, so it keeps evpn_rt_as). Same two-shape traversal as
 # FirewallContextsOnDeploymentFields in queries/fragments/firewall_contexts.gql.
 fragment EvpnRtAsOnDeploymentFields on TopologyDeployment {
   ...EvpnRtAsOnSegmentHostingFields
   ... on TopologyPod {
+    parent {
+      node {
+        ...EvpnRtAsOnSegmentHostingFields
+      }
+    }
+  }
+  ... on TopologyColocationZone {
+    parent {
+      node {
+        ...EvpnRtAsOnSegmentHostingFields
+      }
+    }
+  }
+  ... on TopologyVirtualColocation {
     parent {
       node {
         ...EvpnRtAsOnSegmentHostingFields

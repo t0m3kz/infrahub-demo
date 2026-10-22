@@ -10,9 +10,10 @@
 # the second declares the same address and the loader upserts onto the one
 # IpamIPAddress (address + namespace are its identity), so both interfaces
 # reference it. The two edges are linked by the interlink (Ethernet1/8) and
-# peer iBGP over it (add_colocation_metro, _ensure_edge_pair). The metro's
-# site-id and IPv6 VTEP loopback come from add_colocation_metro
-# (generators/topology/colocation.py _ensure_metro_evpn); a DC's from its
+# peer iBGP over it (add_colocation_zone, _ensure_edge_pair). The metro's
+# site-id (evpn_rt_as) is drawn once from the metro's ASN pool and the IPv6 VTEP
+# loopback comes from the zone's pool, both by add_colocation_zone
+# (generators/topology/colocation_fabric.py _ensure_evpn); a DC's from its
 # evpn_rt_as and Loopback0.
 apiVersion: infrahub.app/v1
 kind: Object
@@ -44,7 +45,7 @@ spec:
         data:
           address: "fd00:2500:ff::12/128"
     - name: "loopback100"
-      device: "eg-fr01"
+      device: "eg-fr201"
       role: multisite-vip
       status: active
       description: "EVPN Multi-Site VIP for metro FR"
@@ -52,7 +53,7 @@ spec:
         data:
           address: "fd00:2500:ff::f1/128"
     - name: "loopback100"
-      device: "eg-pa01"
+      device: "eg-pa401"
       role: multisite-vip
       status: active
       description: "EVPN Multi-Site VIP for metro PA"
@@ -60,7 +61,7 @@ spec:
         data:
           address: "fd00:2500:ff::f2/128"
     - name: "loopback100"
-      device: "eg-fr02"
+      device: "eg-fr202"
       role: multisite-vip
       status: active
       description: "EVPN Multi-Site VIP for metro FR"
@@ -68,7 +69,7 @@ spec:
         data:
           address: "fd00:2500:ff::f1/128"
     - name: "loopback100"
-      device: "eg-pa02"
+      device: "eg-pa402"
       role: multisite-vip
       status: active
       description: "EVPN Multi-Site VIP for metro PA"

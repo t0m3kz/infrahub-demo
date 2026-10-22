@@ -17,24 +17,26 @@ query customer_colocation($name: String!) {
             }
           }
         }
-        parent {
+        # Aliased `parent`: generators/firewall_context.py reads the facility that
+        # hosts the context from customer.parent (the DC for a TopologyCustomerDC),
+        # and for a colocation footprint that is the zone whose firewall pair serves
+        # it (serving_zone, a child of the footprint's real parent, the metro; see
+        # checks/colocation_placement.py), not the metro, which owns no devices.
+        # Unset serving_zone gives a null parent: no context
+        # (generators/topology/customer_colocation.py). No LoadbalancerContext on a
+        # colocation footprint, so no load-balancer devices are read.
+        parent: serving_zone {
           node {
             id
             name { value }
-            # The metro's own firewall pair, which every cage in it shares — a
-            # FirewallContext for this deployment lives on that pair
-            # (generators/topology/customer_colocation.py; no LoadbalancerContext
-            # on a metro, so no load-balancer devices are read).
-            ... on TopologyColocationMetro {
-              firewall_devices: devices(role__value: "firewall") {
-                edges {
-                  node {
-                    id
-                    kind: __typename
-                    name { value }
-                    ... on DcimPhysicalDevice {
-                      platform { node { name { value } } }
-                    }
+            firewall_devices: devices(role__value: "firewall") {
+              edges {
+                node {
+                  id
+                  kind: __typename
+                  name { value }
+                  ... on DcimPhysicalDevice {
+                    platform { node { name { value } } }
                   }
                 }
               }

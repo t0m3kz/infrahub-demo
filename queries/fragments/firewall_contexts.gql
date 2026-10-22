@@ -60,7 +60,10 @@ fragment FirewallContextsOnDeviceHostingFields on TopologyDeviceHosting {
 # deployment_id=self.data["pod"]["id"] vs generators/topology/dc.py's
 # deployment_id=dc_id. One extra `parent` hop covers the pod case; DC-level
 # devices' deployment has no `parent` fragment match, so only the direct
-# TopologyDeviceHosting fragment applies for them.
+# TopologyDeviceHosting fragment applies for them. A colocation firewall's
+# deployment is its zone (or virtual colocation), which is a TopologyDeviceHosting
+# itself and holds the firewall pair, so it takes the direct shape and needs no hop
+# (the metro owns no devices).
 fragment FirewallContextsOnDeploymentFields on TopologyDeployment {
   ...FirewallContextsOnDeviceHostingFields
   ... on TopologyPod {

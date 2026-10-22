@@ -43,7 +43,7 @@ spec:
         - "XC-EQXFR2-AWS-EUC1"
       capabilities:
         - ["bl-dc101101", "Ethernet1/35"]
-        - ["eg-fr01", "Ethernet1/13"]
+        - ["eg-fr201", "Ethernet1/13"]
 
     - name: "VC-C006-DC11-AWS-EUC1"
       member_of_groups: [virtual_circuits]
@@ -63,7 +63,7 @@ spec:
         - "XC-EQXFR2-AWS-EUC1"
       capabilities:
         - ["bl-dc1111101", "Ethernet1/35"]
-        - ["eg-fr01", "Ethernet1/13"]
+        - ["eg-fr201", "Ethernet1/13"]
 
     # --- DC -> Azure westeurope over the Equinix PA4 cage --------------------
     # No cloud endpoint: only the AWS hub is modelled, so this one terminates at
@@ -87,7 +87,7 @@ spec:
         - "XC-EQXPA4-AZURE-WEU"
       capabilities:
         - ["bl-dc1212101", "Ethernet1/35"]
-        - ["eg-pa01", "Ethernet1/13"]
+        - ["eg-pa401", "Ethernet1/13"]
 
     # --- Colo cage -> cloud, no DC in the path ------------------------------
     # C001 buys Equinix Fabric from its own FR cage rather than backhauling from
@@ -97,13 +97,14 @@ spec:
     #
     # One capability on purpose. The DC circuits above end on a tenant port (the
     # border leaf) and on the cage edge's hand-off port; C001 has no device of
-    # its own in the cage (the shared fw-fr01/02 serve it through a firewall
+    # its own in the cage (the shared fw-fr201/02 serve it through a firewall
     # context), so its tenant end IS the cage edge's hand-off port, and the
     # cloud end is the transit VIF (cloud_endpoints), not a device port. A
     # second capability would have to be AWS's own router port, which none of
     # the overlays names. checks/circuit_placement.py places the tenant end
-    # from that one port (eg-fr01 is deployed to C001-P-FR's metro FR), and
-    # test_62 expects one interface (tests/integration/test_constants.py).
+    # from that one port (eg-fr201 is deployed to FR2, a zone of C001-P-FR's
+    # metro FR), and test_62 expects one interface
+    # (tests/integration/test_constants.py).
     - name: "VC-C001-EQXFR-AWS-EUC1"
       member_of_groups: [virtual_circuits]
       link_type: equinix_fabric
@@ -120,4 +121,4 @@ spec:
       physical_circuits:
         - "XC-EQXFR2-AWS-EUC1"
       capabilities:
-        - ["eg-fr01", "Ethernet1/13"]
+        - ["eg-fr201", "Ethernet1/13"]

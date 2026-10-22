@@ -84,7 +84,7 @@ def _bgw_device(role: str = "edge", *, with_vip: bool = True) -> dict[str, Any]:
             {"name": "loopback100", "role": "multisite-vip", "ip_address": {"address": "fd00:1ff::1/128"}}
         )
     return {
-        "name": "eg-fr01",
+        "name": "eg-fr201",
         "interfaces": interfaces,
         "capabilities": [
             {
@@ -93,13 +93,13 @@ def _bgw_device(role: str = "edge", *, with_vip: bool = True) -> dict[str, Any]:
                     {
                         "peering_role": "dci",
                         "capabilities": [
-                            {"name": "Ethernet1/49", "device": {"name": "eg-fr01"}},
+                            {"name": "Ethernet1/49", "device": {"name": "eg-fr201"}},
                             {"name": "Ethernet1/49", "device": {"name": "dc10-bl01"}},
                         ],
                     },
                     {
                         "peering_role": "underlay",
-                        "capabilities": [{"name": "Ethernet1/1", "device": {"name": "eg-fr01"}}],
+                        "capabilities": [{"name": "Ethernet1/1", "device": {"name": "eg-fr201"}}],
                     },
                 ],
             }
@@ -186,14 +186,14 @@ class TestFabricPeerGroup:
         """A fabric peering on a cabled interlink resolves both ends and the site AS."""
         local = {"asn": 65001}
         peering = {
-            "name": "FABRIC-eg-fr01-eg-fr02",
+            "name": "FABRIC-eg-fr201-eg-fr202",
             "session_type": "IBGP",
             "ttl": 1,
             "peering_role": "fabric",
             "address_families": [{"afi": "ipv6", "safi": "unicast"}, {"afi": "l2vpn", "safi": "evpn"}],
             "capabilities": [
-                {"name": "Ethernet1/8", "device": {"name": "eg-fr01"}, "ip_address": {"address": "fd00:ff::/127"}},
-                {"name": "Ethernet1/8", "device": {"name": "eg-fr02"}, "ip_address": {"address": "fd00:ff::1/127"}},
+                {"name": "Ethernet1/8", "device": {"name": "eg-fr201"}, "ip_address": {"address": "fd00:ff::/127"}},
+                {"name": "Ethernet1/8", "device": {"name": "eg-fr202"}, "ip_address": {"address": "fd00:ff::1/127"}},
             ],
         }
         interfaces = [
@@ -202,12 +202,12 @@ class TestFabricPeerGroup:
                 "ip_address": {"address": "fd00:ff::/127"},
                 "cable": {
                     "endpoints": [
-                        {"device": {"name": "eg-fr02"}, "ip_address": {"address": "fd00:ff::1/127"}},
+                        {"device": {"name": "eg-fr202"}, "ip_address": {"address": "fd00:ff::1/127"}},
                     ]
                 },
             }
         ]
-        session = _build_session_from_peering(peering, "eg-fr01", local, interfaces)
+        session = _build_session_from_peering(peering, "eg-fr201", local, interfaces)
         assert session is not None
         assert session["remote_as"] == local
         assert session["remote_ip"] == {"address": "fd00:ff::1/127"}
@@ -404,6 +404,117 @@ class TestCollectBorderGatewayActivations:
         assert (
             transform._collect_border_gateway_activations(None, device_id="d", device_capabilities=[], seen=set()) == []
         )
+
+
+class TestDeviceActivationsBySite:
+    """BaseDeviceTransform._device_activations: the BGW's stretched segments come from the site hosting them.
+
+    A border-leaf is deployed to the DC, which hosts the segments. A colocation edge is deployed to its ZONE (or
+    virtual colocation); the metro, one `parent` hop above, is the Multi-Site site that hosts them.
+    """
+
+    _VIP = {"role": "multisite-vip", "name": "loopback100"}
+
+    def _activations(self, device: dict[str, Any]) -> list[dict[str, Any]]:
+        transform = BaseDeviceTransform.__new__(BaseDeviceTransform)
+        return transform._device_activations(device)
+
+    def test_border_leaf_reads_the_dc_deployment_itself(self) -> None:
+        """Unchanged for a DC border-leaf: its deployment carries the segment deployments."""
+        device = {
+            "id": "dev-1",
+            "interfaces": [self._VIP],
+            "capabilities": [],
+            "deployment": {"id": "dc-1", "segment_deployments": [_deployment_entry("s1")]},
+        }
+
+        (act,) = self._activations(device)
+
+        assert act["segment"]["id"] == "s1"
+        assert act["border_gateway"] is True
+
+    @pytest.mark.parametrize("zone_kind", ["TopologyColocationZone", "TopologyVirtualColocation"])
+    def test_colocation_edge_reads_the_metro_above_its_zone(self, zone_kind: str) -> None:
+        """The edge sits in a zone (or virtual colocation) with no segment_deployments; the metro has them."""
+        device = {
+            "id": "dev-1",
+            "interfaces": [self._VIP],
+            "capabilities": [],
+            "deployment": {
+                "id": "zone-1",
+                "typename": zone_kind,
+                "parent": {"id": "metro-1", "segment_deployments": [_deployment_entry("s1"), _deployment_entry("s2")]},
+            },
+        }
+
+        acts = self._activations(device)
+
+        assert [a["segment"]["id"] for a in acts] == ["s1", "s2"]
+        assert all(a["border_gateway"] for a in acts)
+
+    def test_first_candidate_carrying_segment_deployments_wins(self) -> None:
+        """If both the deployment and its parent carry them, the nearest one is the site (no double-count)."""
+        device = {
+            "id": "dev-1",
+            "interfaces": [self._VIP],
+            "capabilities": [],
+            "deployment": {
+                "id": "dc-1",
+                "segment_deployments": [_deployment_entry("near")],
+                "parent": {"id": "other", "segment_deployments": [_deployment_entry("far")]},
+            },
+        }
+
+        assert [a["segment"]["id"] for a in self._activations(device)] == ["near"]
+
+    def test_zone_whose_metro_hosts_no_segments_has_no_activations(self) -> None:
+        device = {
+            "id": "dev-1",
+            "interfaces": [self._VIP],
+            "capabilities": [],
+            "deployment": {"id": "zone-1", "parent": {"id": "metro-1"}},
+        }
+
+        assert self._activations(device) == []
+
+    def test_border_gateway_without_a_site_warns_instead_of_dropping_segments_silently(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A SegmentHosting fragment on the zone -> metro hop can come back null: that must be visible in the log."""
+        device = {
+            "id": "dev-1",
+            "name": "eg-fr201",
+            "interfaces": [self._VIP],
+            "capabilities": [],
+            "deployment": {"id": "zone-1", "parent": {"id": "metro-1", "segment_deployments": None}},
+        }
+        no_site = {**device, "deployment": {"id": "zone-1", "parent": {"id": "metro-1"}}}
+
+        with caplog.at_level("WARNING", logger="transforms.common"):
+            assert self._activations(no_site) == []
+            assert self._activations(device) == []
+
+        assert caplog.text.count("multi-site border gateway without a site carrying segment_deployments") == 2
+        assert "eg-fr201: multi-site border gateway without a site carrying segment_deployments" in caplog.text
+
+    def test_device_without_a_deployment_has_no_activations(self) -> None:
+        device = {"id": "dev-1", "interfaces": [self._VIP], "capabilities": [], "deployment": None}
+
+        assert self._activations(device) == []
+
+    def test_non_border_gateway_edge_ignores_the_metro_segments(self) -> None:
+        """No multisite-vip interface: the stretched segments are not this device's (only its ports' are)."""
+        device = {
+            "id": "dev-1",
+            "interfaces": [{"role": "uplink", "name": "Ethernet1/1"}],
+            "capabilities": [],
+            "deployment": {
+                "id": "zone-1",
+                "parent": {"id": "metro-1", "segment_deployments": [_deployment_entry("s1")]},
+            },
+        }
+
+        assert self._activations(device) == []
 
 
 # ---------------------------------------------------------------------------

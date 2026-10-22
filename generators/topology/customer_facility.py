@@ -2,10 +2,10 @@
 service contexts on their parent facility's firewall and load-balancer pairs.
 
 customer_dc.py (TopologyCustomerDC on a DataCenter) and customer_colocation.py
-(TopologyCustomerColocation on a ColocationMetro) differ only in the customer
-kind, the parent's label, the parent generators to wait for and the context
-kinds they provision — class attributes the host sets (see
-FirewallContextMixin). The provisioning itself is
+(TopologyCustomerColocation on its serving ColocationZone) differ only in the
+customer kind, the parent's label, whether a parent is required, the parent
+generators to wait for and the context kinds they provision — class attributes
+the host sets (see FirewallContextMixin). The provisioning itself is
 generators/firewall_context.py's FirewallContextMixin, one run per ContextSpec.
 """
 
@@ -26,6 +26,11 @@ class CustomerFacilityMixin(FirewallContextMixin):
     FirewallContextMixin) and CommonGenerator, and sets ``_customer_kind``,
     ``_parent_label``, ``_parent_generators`` and ``_context_specs``.
     """
+
+    # A footprint whose parent is optional (a colocation footprint's serving_zone)
+    # simply has no contexts when it is unset: an info log and a clean return. A
+    # required parent (a DC footprint's DC) that is missing is an error.
+    _parent_required: bool = True
 
     # Provided by DeviceMixin.
     set_controllers_from: Callable[[Mapping[str, Any]], None]
@@ -66,15 +71,19 @@ class CustomerFacilityMixin(FirewallContextMixin):
 
         # Read synchronously by create_devices() — see
         # generators/devices.py's _resolve_role_controller. A parent without
-        # controller aliases in its query (a colocation metro declares none)
+        # controller aliases in its query (a colocation zone declares none)
         # contributes nothing, leaving the list empty.
         parent = customer.get("parent")
         self.set_controllers_from(parent if isinstance(parent, dict) else {})
         if not (parent or {}).get("id"):
-            self.logger.error(
+            message = (
                 f"Deployment {customer.get('name', customer_id)}: no parent {self._parent_label} — "
                 "cannot provision its service contexts"
             )
+            if self._parent_required:
+                self.logger.error(message)
+            else:
+                self.logger.info(message)
             return
 
         # One run per context kind, independent of each other: a parent with

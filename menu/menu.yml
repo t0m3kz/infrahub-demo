@@ -98,6 +98,18 @@ spec:
                   kind: TopologyTemplatePod
                   icon: "mdi:view-grid-outline"
 
+                - namespace: Topology
+                  name: DesignFabricTemplateColocationMetroItem
+                  label: Colocation Metro
+                  kind: TopologyTemplateColocationMetro
+                  icon: "mdi:city-variant-outline"
+
+                - namespace: Topology
+                  name: DesignFabricTemplateColocationZoneItem
+                  label: Colocation Zone
+                  kind: TopologyTemplateColocationZone
+                  icon: "mdi:server-network"
+
     # ──────────────────────────────────────────────────────────────────────────
     # INVENTORY — physical devices and hardware
     # ──────────────────────────────────────────────────────────────────────────

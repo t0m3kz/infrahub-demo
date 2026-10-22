@@ -73,6 +73,13 @@ infrahub_tests:
           kind: check-smoke
 
   - resource: Check
+    resource_name: validate_virtual_device_placement
+    tests:
+      - name: syntax_check
+        spec:
+          kind: check-smoke
+
+  - resource: Check
     resource_name: validate_lisp_fabric
     tests:
       - name: syntax_check

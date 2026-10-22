@@ -436,7 +436,7 @@ ALL_DEMO_BRANCH = "all-demo-scenario"
 #   - 08_interconnects/01_colo_onramp/03_physical_circuits.yml lands its dark
 #     fibres on border leaves by name ("bl-dc101101"), which add_dc creates, and
 #     add_circuit builds their DCI sessions on the overlay BGP processes add_dc
-#     and add_colocation_metro create.
+#     and add_colocation_zone create.
 #   - 07_applications references the VMs and customer deployments declared in
 #     06_customer_boarding.
 #
@@ -455,8 +455,9 @@ ALL_DEMO_LOAD_STAGES: tuple[tuple[str, tuple[str, ...]], ...] = (
         # far end of every SD-WAN office's INET circuit, so it must exist
         # before add_sdwan_edge runs), SaaS, office buildings, and the three DC
         # sites with their fabrics and controllers.
-        # One load, so add_colocation_metro (one run per metro) and
-        # add_dc -> add_pod -> add_rack (per DC) generate in parallel. The
+        # One load, so add_colocation_metro / add_colocation_zone (one run per
+        # metro and per cage) and add_dc -> add_pod -> add_rack (per DC)
+        # generate in parallel. The
         # loader sorts files by path, so each DC's 00_location.yml lands before
         # its topology. By far the longest stage: 20 fabric devices per DC plus
         # all cabling, addressing and routing.
@@ -660,9 +661,10 @@ def load_all_demo(context: Context, branch: str = "", from_stage: str = "") -> N
 # The SDK's InfrahubGenerator.run() tracks each run in a group of one of these
 # kinds (CoreGeneratorGroup when execute_after_merge, else
 # CoreGeneratorAwareGroup), named "<definition name>-<md5 of the run params>"
-# (InfrahubGroupContextBase._generate_group_name). The bootstrap data also
-# declares *target* groups of kind CoreGeneratorGroup (customer_deployments_dc,
-# ...), which carry no hash suffix — the name pattern is what tells them apart.
+# (InfrahubGroupContextBase._generate_group_name). The bootstrap data declares
+# the *target* groups (customer_deployments_dc, ...) as CoreStandardGroup, so
+# the kind alone separates them from tracking groups; the name pattern still
+# guards against a hand-made group of a generator kind.
 GENERATOR_GROUP_KINDS = ("CoreGeneratorGroup", "CoreGeneratorAwareGroup")
 _TRACKING_GROUP_HASH = re.compile(r"-[0-9a-f]{32}$")
 # Peers per RelationshipRemove mutation: a DC's add_dc group holds thousands.
@@ -684,8 +686,8 @@ def _is_tracking_group(name: str, definitions: set[str]) -> bool:
 def _generator_tracking_groups(client: InfrahubClientSync, branch: str) -> list[InfrahubNodeSync]:
     """Return the branch's generator tracking groups, with their members loaded.
 
-    Target groups (CoreStandardGroup, and the CoreGeneratorGroup target groups
-    from data/bootstrap/00_groups.yml) and lock-* groups never match.
+    Target groups (CoreStandardGroup, data/bootstrap/00_groups.yml) and lock-*
+    groups never match.
     """
     definitions = {_node_name(d) for d in client.all(kind="CoreGeneratorDefinition", branch=branch)}
     groups: list[InfrahubNodeSync] = []

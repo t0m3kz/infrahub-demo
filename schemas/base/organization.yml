@@ -13,6 +13,12 @@ generics:
         optional: true
         description: "Unique organization identifier (e.g. C001, P001)"
         order_weight: 900
+      - name: notification_emails
+        kind: List
+        label: "Notification E-mails"
+        description: "Addresses a provider notifies about what this organization owns (the Terraform order of a virtual colocation uses them)"  # yamllint disable-line rule:line-length
+        optional: true
+        order_weight: 950
 
   - name: Generic
     namespace: Organization

@@ -288,8 +288,8 @@ class TestGenerateHappyPath:
 
         circuit_calls = gen.client.create.call_args_list[1:3]
         assert [call.kwargs["data"]["member_of_groups"] for call in circuit_calls] == [
-            [{"hfid": ["physical_circuits"], "kind": "CoreGeneratorGroup"}],
-            [{"hfid": ["virtual_circuits"], "kind": "CoreGeneratorGroup"}],
+            [{"hfid": ["physical_circuits"], "kind": "CoreStandardGroup"}],
+            [{"hfid": ["virtual_circuits"], "kind": "CoreStandardGroup"}],
         ]
 
     @pytest.mark.asyncio

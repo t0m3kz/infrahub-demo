@@ -191,6 +191,19 @@ extensions:
           identifier: "topology__devices"
           order_weight: 1600
 
+    # Same peer as every other device kind: queries select `deployment` across the device kinds in one
+    # selection, and GraphQL refuses sibling fragments whose `deployment` has another type. That an
+    # appliance is deployed to a virtual colocation only is enforced by checks/virtual_device_placement.py.
+    - kind: CloudNetworkAppliance
+      relationships:
+        - name: deployment
+          peer: TopologyDeployment
+          cardinality: one
+          kind: Attribute
+          optional: true
+          identifier: "topology__devices"
+          order_weight: 1600
+
     - kind: ManagedControllerPhysical
       relationships:
         - name: deployment

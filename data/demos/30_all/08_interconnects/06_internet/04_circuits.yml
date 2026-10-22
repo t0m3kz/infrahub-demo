@@ -21,7 +21,7 @@ spec:
       locations:
         - "FR2"
       capabilities:
-        - ["eg-fr01", "Ethernet1/14"]
+        - ["eg-fr201", "Ethernet1/14"]
         - ["EXT-LUMEN-FRA1", "et-0/0/0"]
 
     - circuit_id: "INET-COGENT-EQXFR2"
@@ -35,7 +35,7 @@ spec:
       locations:
         - "FR2"
       capabilities:
-        - ["eg-fr02", "Ethernet1/14"]
+        - ["eg-fr202", "Ethernet1/14"]
         - ["EXT-COGENT-FRA1", "et-0/0/0"]
 
     - circuit_id: "INET-LUMEN-EQXPA4"
@@ -49,7 +49,7 @@ spec:
       locations:
         - "PA4"
       capabilities:
-        - ["eg-pa01", "Ethernet1/14"]
+        - ["eg-pa401", "Ethernet1/14"]
         - ["EXT-LUMEN-PAR1", "et-0/0/0"]
 
     - circuit_id: "INET-COGENT-EQXPA4"
@@ -63,5 +63,5 @@ spec:
       locations:
         - "PA4"
       capabilities:
-        - ["eg-pa02", "Ethernet1/14"]
+        - ["eg-pa402", "Ethernet1/14"]
         - ["EXT-COGENT-PAR1", "et-0/0/0"]

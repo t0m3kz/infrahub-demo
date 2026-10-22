@@ -1,7 +1,7 @@
 ---
 # L3 handoff for the transit VIF vif-transit-hub-euc1 (01_transit_vif.yml), in
-# VRF PROD on eg-fr01, the edge holding the Direct Connect port (Ethernet1/13,
-# XC-EQXFR2-AWS-EUC1; dx-eqx-fr2-euc1 lists eg-fr01 as its physical device).
+# VRF PROD on eg-fr201, the edge holding the Direct Connect port (Ethernet1/13,
+# XC-EQXFR2-AWS-EUC1; dx-eqx-fr2-euc1 lists eg-fr201 as its physical device).
 # One eBGP session per (Direct Connect, namespace): the VIF is the PROD one,
 # because every account behind the hub is environment p. A NON-PROD account
 # would get its own VIF, sub-interface and session in NON-PROD, never this one.
@@ -17,7 +17,7 @@ spec:
   kind: IpamPrefix
   data:
     - prefix: "10.255.5.4/30"
-      description: "eg-fr01 <-> EXT-AWS-DX-FR2 PROD transit VIF (vif-transit-hub-euc1, VLAN 1000)"
+      description: "eg-fr201 <-> EXT-AWS-DX-FR2 PROD transit VIF (vif-transit-hub-euc1, VLAN 1000)"
       status: active
       ip_namespace: "PROD"
 ---
@@ -27,11 +27,11 @@ spec:
   kind: DcimVirtualInterface
   data:
     - name: "Ethernet1/13.1000"
-      device: "eg-fr01"
+      device: "eg-fr201"
       role: uplink
       status: active
       description: "PROD transit VIF to AWS (vif-transit-hub-euc1)"
-      parent_interface: ["eg-fr01", "Ethernet1/13"]
+      parent_interface: ["eg-fr201", "Ethernet1/13"]
       ip_address:
         data:
           address: "10.255.5.5/30"
@@ -40,7 +40,7 @@ spec:
       device: "EXT-AWS-DX-FR2"
       role: uplink
       status: active
-      description: "PROD transit VIF to eg-fr01 (vif-transit-hub-euc1)"
+      description: "PROD transit VIF to eg-fr201 (vif-transit-hub-euc1)"
       parent_interface: ["EXT-AWS-DX-FR2", "et-0/0/0"]
       ip_address:
         data:
@@ -80,11 +80,11 @@ spec:
   kind: RoutingPassword
   data:
     - name: "eqx-fr2-aws-vif-key"
-      description: "BGP auth key for the eg-fr01 <-> EXT-AWS-DX-FR2 PROD transit VIF"
+      description: "BGP auth key for the eg-fr201 <-> EXT-AWS-DX-FR2 PROD transit VIF"
       password: "demo-eqx-fr2-aws-vif"
 ---
 # peering_role regular in a PROD address: an external tenant-VRF peer. On
-# eg-fr01 it renders under `vrf PROD` with RM-<name>-IN (only the reachable
+# eg-fr201 it renders under `vrf PROD` with RM-<name>-IN (only the reachable
 # PROD VPC blocks, never a default) and RM-PROD-EXTERNAL-OUT (only PROD's
 # on-prem segment prefixes). The learned VPC blocks reach the DCs as EVPN
 # type-5 under PROD's own route-target, like any other PROD route.
@@ -97,7 +97,7 @@ spec:
   kind: ManagedBGPPeering
   data:
     - name: "VRF-PROD-EQXFR2-AWS-EUC1"
-      description: "PROD transit VIF eg-fr01 <-> EXT-AWS-DX-FR2 (vif-transit-hub-euc1, AS64512)"
+      description: "PROD transit VIF eg-fr201 <-> EXT-AWS-DX-FR2 (vif-transit-hub-euc1, AS64512)"
       session_type: EBGP
       peering_role: regular
       ttl: 1
@@ -108,9 +108,9 @@ spec:
       address_families:
         - ["ipv4", "unicast"]
       bgp_processes:
-        - "eg-fr01-bgp-overlay"
+        - "eg-fr201-bgp-overlay"
         - "EXT-AWS-DX-FR2-bgp"
       password: "eqx-fr2-aws-vif-key"
       capabilities:
-        - ["eg-fr01", "Ethernet1/13.1000"]
+        - ["eg-fr201", "Ethernet1/13.1000"]
         - ["EXT-AWS-DX-FR2", "et-0/0/0.1000"]

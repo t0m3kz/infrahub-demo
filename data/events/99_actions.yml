@@ -420,12 +420,12 @@ spec:
 
     # ── Orchestrator Routing Groups ───────────────────────────────────────────
     # generators/topology/orchestrator_routing.py moves a node into the
-    # routing group (application_*/topology_*) named by its orchestrator
+    # routing group (application_*/topology_*/virtual_colocation_*) named by its orchestrator
     # dropdown. It writes only member_of_groups, never the dropdown, so the
     # attribute-matched `updated` rules cannot re-fire themselves.
     #
     # Customer deployments: one generator definition per kind, each targeting
-    # that kind's CoreGeneratorGroup (customer_deployments_dc/colocation/
+    # that kind's target group (customer_deployments_dc/colocation/
     # cloud/office). Every footprint in the demo data joins its per-kind group
     # (the add_customer_deployment_* and add_sdwan_edge created-triggers
     # require it).
@@ -514,6 +514,25 @@ spec:
           - attribute_name: infrastructure_orchestrator
             value_match: any
 
+    # Virtual colocation: every one joins `virtual_colocations` (the colocation
+    # created-trigger requires it), the target of this definition too.
+    - name: trigger-virtual-colocation-orchestrator-routing-on-created
+      branch_scope: "other_branches"
+      node_kind: TopologyVirtualColocation
+      mutation_action: "created"
+      action: run-virtual-colocation-orchestrator-routing-generator
+
+    - name: trigger-virtual-colocation-orchestrator-routing-on-orchestrator-updated
+      branch_scope: "other_branches"
+      node_kind: TopologyVirtualColocation
+      mutation_action: "updated"
+      action: run-virtual-colocation-orchestrator-routing-generator
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: infrastructure_orchestrator
+            value_match: any
+
     # ── Customer Deployment (FirewallContext/dedicated LB) ────────────────────
     # Same generator/query shape for both deployment kinds that still have
     # on-site fabric to provision a FirewallContext on (see
@@ -535,36 +554,67 @@ spec:
       mutation_action: "created"
       action: run-customer-deployment-colocation-generator
 
-    # ── Colocation Metro Bootstrap ────────────────────────────────────────────
-    # `created` covers a metro loaded with fabric_templates already populated
-    # inline (the normal bulk-load shape, nested under TopologyColocation),
-    # which is a `created` mutation on the metro itself and never an `updated`
+    # ── Colocation Metro, Zone and Virtual Colocation Bootstrap ───────────────
+    # `created` covers a node loaded with fabric_templates already populated
+    # inline (the normal bulk-load shape, nested under the metro), which is a
+    # `created` mutation on the node itself and never an `updated`
     # relationship mutation — the same gap documented on the segment triggers
     # above.
     #
-    # This fires for EVERY metro, so every TopologyColocationMetro in data/demos
-    # declares `member_of_groups: [colocation_metros]` — including the ones with
-    # no fabric_templates, which the generator no-ops on. That is not optional
-    # tidiness: a trigger firing for a node outside the generator's target group
-    # raises, as the endpoint note above records. Metros we hold no kit in
-    # therefore cost one no-op flow each, the same trade add_rack already makes
-    # for colocation cage racks.
+    # The kit lives on the ZONE (a physical cage) or the VIRTUAL COLOCATION (a
+    # provider-hosted presence), so those two get the fabric_templates rules.
+    # The metro only holds the Multi-Site site (VNI and ASN pools) and has no
+    # fabric_templates of its own, so it keeps just its `created` trigger.
+    #
+    # Each `created` rule fires for EVERY node of its kind, so every
+    # TopologyColocationMetro, TopologyColocationZone and
+    # TopologyVirtualColocation in data/demos declares `member_of_groups:
+    # [colocation_metros]`, `[colocation_zones]` or `[virtual_colocations]` —
+    # including the ones with no fabric_templates, which the generator no-ops
+    # on. That is not optional tidiness: a trigger firing for a node outside
+    # the generator's target group raises, as the endpoint note above records.
+    # Nodes we hold no kit in therefore cost one no-op flow each, the same
+    # trade add_rack already makes for colocation cage racks.
     - name: trigger-colocation-metro-on-created
       branch_scope: "other_branches"
       node_kind: TopologyColocationMetro
       mutation_action: "created"
       action: run-colocation-metro-generator
 
-    # Only fabric_templates is watched, deliberately. The generator itself
-    # writes loopback_pool/management_pool/technical_pool/fabric_asn_pool back onto
-    # the metro, so a rule matching those relationships — or an unguarded
-    # `updated` rule — would re-fire itself on every run. No cascade generator
-    # either: the cages nested below a metro declare no kit of their own.
-    - name: trigger-colocation-metro-update-fabric-templates
+    - name: trigger-colocation-zone-on-created
       branch_scope: "other_branches"
-      node_kind: TopologyColocationMetro
+      node_kind: TopologyColocationZone
+      mutation_action: "created"
+      action: run-colocation-zone-generator
+
+    - name: trigger-virtual-colocation-on-created
+      branch_scope: "other_branches"
+      node_kind: TopologyVirtualColocation
+      mutation_action: "created"
+      action: run-virtual-colocation-generator
+
+    # Only fabric_templates is watched, deliberately. The zone and virtual
+    # colocation generators write loopback_pool/management_pool/technical_pool
+    # back onto the node (and the evpn_rt_as onto the metro's SegmentHosting),
+    # so a rule matching those relationships — or an unguarded `updated` rule —
+    # would re-fire itself on every run. No cascade generator either: the
+    # racks nested below a zone declare no kit of their own.
+    - name: trigger-colocation-zone-update-fabric-templates
+      branch_scope: "other_branches"
+      node_kind: TopologyColocationZone
       mutation_action: "updated"
-      action: run-colocation-metro-generator
+      action: run-colocation-zone-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: fabric_templates
+            modification_type: updated
+
+    - name: trigger-virtual-colocation-update-fabric-templates
+      branch_scope: "other_branches"
+      node_kind: TopologyVirtualColocation
+      mutation_action: "updated"
+      action: run-virtual-colocation-generator
       matches:
         kind: CoreNodeTriggerRelationshipMatch
         data:
@@ -578,7 +628,7 @@ spec:
     # every office, not just ones that opted in. The `updated` rule covers an
     # existing office that opts in later by having sdwan_gateway set on it —
     # the generator never writes back to TopologyCustomerOffice itself, so
-    # this can't self-trigger the way colocation metro's fabric_templates can.
+    # this can't self-trigger the way a colocation zone's fabric_templates can.
     - name: trigger-customer-office-sdwan-on-created
       branch_scope: "other_branches"
       node_kind: TopologyCustomerOffice

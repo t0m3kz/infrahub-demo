@@ -3,8 +3,8 @@ by the customer boarding generators of every facility that owns a firewall or
 load-balancer pair.
 
 generators/topology/customer_dc.py (TopologyCustomerDC on a DataCenter) and
-generators/topology/customer_colocation.py (TopologyCustomerColocation on a
-ColocationMetro) board a customer the same way: a shared or dedicated context
+generators/topology/customer_colocation.py (TopologyCustomerColocation on its
+serving ColocationZone) board a customer the same way: a shared or dedicated context
 on the parent's HA cluster, a VLAN-tagged sub-interface per member, a leg per
 VRF the context serves (utils/exchange_transit.py), and the deployment's
 serving link. One implementation for both kinds of context; a ContextSpec
@@ -17,7 +17,7 @@ serving link. One implementation for both kinds of context; a ContextSpec
   SNAT, a routed VIP /26 behind the leg's .4; one shared context per (cluster,
   tenant namespace), since the LB never joins PROD and NON-PROD.
 
-The legs face the border leaf on a DC and the edge on a colocation metro. The
+The legs face the border leaf on a DC and the edge on a colocation zone. The
 customer kind, the parent's label and the specs to run are class attributes
 of the host.
 """

@@ -40,7 +40,7 @@ _NON_PROD = {"name": "NON-PROD", "namespace_type": "non_prod"}
 
 
 def _peering(namespace: dict[str, Any] | None, *, peering_role: str | None = "regular") -> dict[str, Any]:
-    """The eg-fr01 <-> EXT-AWS-DX-FR2 VIF peering as the transform sees it, local address in ``namespace``."""
+    """The eg-fr201 <-> EXT-AWS-DX-FR2 VIF peering as the transform sees it, local address in ``namespace``."""
     return {
         "name": "VRF-PROD-EQXFR2-AWS-EUC1",
         "session_type": "EBGP",
@@ -50,7 +50,7 @@ def _peering(namespace: dict[str, Any] | None, *, peering_role: str | None = "re
         "capabilities": [
             {
                 "name": "Ethernet1/13.1000",
-                "device": {"name": "eg-fr01"},
+                "device": {"name": "eg-fr201"},
                 "ip_address": {"address": "10.255.5.5/30", "ip_namespace": namespace},
             },
             {
@@ -60,7 +60,7 @@ def _peering(namespace: dict[str, Any] | None, *, peering_role: str | None = "re
             },
         ],
         "bgp_processes": [
-            {"local_as": {"asn": 4200000100}, "capabilities": [{"name": "eg-fr01"}]},
+            {"local_as": {"asn": 4200000100}, "capabilities": [{"name": "eg-fr201"}]},
             {"local_as": {"asn": 64512}, "capabilities": [{"name": "EXT-AWS-DX-FR2"}]},
         ],
     }
@@ -71,7 +71,7 @@ def _blocks(*pairs: tuple[str, str]) -> list[dict[str, Any]]:
     return [{"prefix": prefix, "ip_namespace": {"name": ns}} for prefix, ns in pairs]
 
 
-def _transit_vif(*, vlan: int = 1000, device: str = "eg-fr01", attachments: list[dict[str, Any]]) -> dict[str, Any]:
+def _transit_vif(*, vlan: int = 1000, device: str = "eg-fr201", attachments: list[dict[str, Any]]) -> dict[str, Any]:
     """A cleaned transit VIF on ``device`` whose hybrid attachment is associated with rt-shared."""
     return {
         "name": f"vif-transit-{vlan}-{device}",
@@ -102,7 +102,7 @@ _NO_SDWAN: dict[str, Any] = {"device_capabilities": None, "offices": None}
 
 
 def _bgp_facing(*ends: tuple[str, str]) -> list[dict[str, Any]]:
-    """Cleaned device capabilities: one ManagedBGP whose peerings run eg-fr01 (local iface) -> remote device."""
+    """Cleaned device capabilities: one ManagedBGP whose peerings run eg-fr201 (local iface) -> remote device."""
     return [
         {"typename": "ManagedStandaloneVlanDomain", "name": "vlan-domain"},
         {
@@ -111,7 +111,7 @@ def _bgp_facing(*ends: tuple[str, str]) -> list[dict[str, Any]]:
                 {
                     "name": f"peering-{local}-{remote}",
                     "capabilities": [
-                        {"name": local, "device": {"name": "eg-fr01"}},
+                        {"name": local, "device": {"name": "eg-fr201"}},
                         {"name": "eth0.1900", "device": {"name": remote}},
                     ],
                 }
@@ -184,7 +184,7 @@ class TestExternalFlag:
     @pytest.mark.parametrize("namespace", [_PROD, _NON_PROD])
     def test_regular_peer_in_a_tenant_vrf_is_external(self, namespace: dict[str, Any]) -> None:
         """A regular (partner/provider) eBGP peer in PROD or NON-PROD gets the filtered mode."""
-        session = _build_session_from_peering(_peering(namespace), "eg-fr01", {"asn": 4200000100}, [])
+        session = _build_session_from_peering(_peering(namespace), "eg-fr201", {"asn": 4200000100}, [])
         assert session is not None
         assert session["vrf"] == namespace["name"]
         assert session["external"] is True
@@ -193,7 +193,7 @@ class TestExternalFlag:
     def test_internet_peer_is_transit_not_external(self) -> None:
         """The INTERNET VRF keeps the transit mode (default in, public out)."""
         namespace = {"name": "INTERNET", "namespace_type": "internet"}
-        session = _build_session_from_peering(_peering(namespace), "eg-fr01", {"asn": 4200000100}, [])
+        session = _build_session_from_peering(_peering(namespace), "eg-fr201", {"asn": 4200000100}, [])
         assert session is not None
         assert session["transit"] is True
         assert "external" not in session
@@ -210,7 +210,7 @@ class TestExternalFlag:
     def test_other_vrf_sessions_are_not_external(self, namespace: dict[str, Any], peering_role: str | None) -> None:
         """No regular role, a non-tenant VRF or an unknown namespace type: rendered as before, unfiltered."""
         session = _build_session_from_peering(
-            _peering(namespace, peering_role=peering_role), "eg-fr01", {"asn": 4200000100}, []
+            _peering(namespace, peering_role=peering_role), "eg-fr201", {"asn": 4200000100}, []
         )
         assert session is not None
         assert "external" not in session
@@ -218,7 +218,7 @@ class TestExternalFlag:
     def test_default_namespace_is_not_a_vrf_session(self) -> None:
         """A global-table session is never external, whatever its role."""
         session = _build_session_from_peering(
-            _peering({"name": "default"}), "eg-fr01", {"asn": 4200000100}, [_subif("Ethernet1/13.1000", "default")]
+            _peering({"name": "default"}), "eg-fr201", {"asn": 4200000100}, [_subif("Ethernet1/13.1000", "default")]
         )
         assert session is not None
         assert "vrf" not in session
@@ -241,7 +241,7 @@ class TestExternalPeerPrefixes:
                 {"attachment_type": "hybrid", "propagates_to_route_tables": [{"id": "rt-shared"}]},
             ]
         )
-        found = get_external_peer_prefixes([_subif("Ethernet1/13.1000", "PROD")], [vif], "eg-fr01", **_NO_SDWAN)
+        found = get_external_peer_prefixes([_subif("Ethernet1/13.1000", "PROD")], [vif], "eg-fr201", **_NO_SDWAN)
         assert found == {"Ethernet1/13.1000": ["10.30.0.0/16"]}
 
     def test_private_vif_accepts_its_own_vpc_blocks_in_its_namespace(self) -> None:
@@ -249,10 +249,10 @@ class TestExternalPeerPrefixes:
         vif = {
             "name": "vif-private",
             "vlan_id": 1001,
-            "direct_connect": {"physical_devices": [{"name": "eg-fr01"}]},
+            "direct_connect": {"physical_devices": [{"name": "eg-fr201"}]},
             "virtual_network": {"cidr_blocks": _blocks(("10.60.0.0/16", "NON-PROD"), ("10.31.0.0/16", "PROD"))},
         }
-        found = get_external_peer_prefixes([_subif("Ethernet1/13.1001", "NON-PROD")], [vif], "eg-fr01", **_NO_SDWAN)
+        found = get_external_peer_prefixes([_subif("Ethernet1/13.1001", "NON-PROD")], [vif], "eg-fr201", **_NO_SDWAN)
         assert found == {"Ethernet1/13.1001": ["10.60.0.0/16"]}
 
     def test_default_route_and_ipv6_are_never_accepted(self) -> None:
@@ -264,17 +264,17 @@ class TestExternalPeerPrefixes:
                 )
             ]
         )
-        found = get_external_peer_prefixes([_subif("Ethernet1/13.1000", "PROD")], [vif], "eg-fr01", **_NO_SDWAN)
+        found = get_external_peer_prefixes([_subif("Ethernet1/13.1000", "PROD")], [vif], "eg-fr201", **_NO_SDWAN)
         assert found == {"Ethernet1/13.1000": ["10.30.0.0/16"]}
 
     def test_vif_on_another_device_or_vlan_is_ignored(self) -> None:
         """Only this device's Direct Connects, matched on the sub-interface's dot1q tag."""
         vifs = [
-            _transit_vif(device="eg-fr02", attachments=[_vpc_attachment(["rt-shared"], ("10.30.0.0/16", "PROD"))]),
+            _transit_vif(device="eg-fr202", attachments=[_vpc_attachment(["rt-shared"], ("10.30.0.0/16", "PROD"))]),
             _transit_vif(vlan=1002, attachments=[_vpc_attachment(["rt-shared"], ("10.40.0.0/16", "PROD"))]),
         ]
         interfaces = [_subif("Ethernet1/13.1000", "PROD"), _subif("Ethernet1/13", "PROD"), _subif("Loopback0", None)]
-        assert get_external_peer_prefixes(interfaces, vifs, "eg-fr01", **_NO_SDWAN) == {}
+        assert get_external_peer_prefixes(interfaces, vifs, "eg-fr201", **_NO_SDWAN) == {}
 
     def test_two_vifs_on_one_vlan_accept_nothing(self, caplog: pytest.LogCaptureFixture) -> None:
         """Ambiguous VLAN on one device: fail closed and say so."""
@@ -283,7 +283,7 @@ class TestExternalPeerPrefixes:
             {**_transit_vif(attachments=[]), "name": "vif-other"},
         ]
         with caplog.at_level(logging.WARNING):
-            found = get_external_peer_prefixes([_subif("Ethernet1/13.1000", "PROD")], vifs, "eg-fr01", **_NO_SDWAN)
+            found = get_external_peer_prefixes([_subif("Ethernet1/13.1000", "PROD")], vifs, "eg-fr201", **_NO_SDWAN)
         assert found == {}
         assert "accepts nothing" in caplog.text
 
@@ -291,12 +291,12 @@ class TestExternalPeerPrefixes:
         """No associated route table: nothing is reachable over the VIF."""
         vif = _transit_vif(attachments=[_vpc_attachment(["rt-shared"], ("10.30.0.0/16", "PROD"))])
         vif["transit_gateway_attachment"]["associated_route_table"] = None
-        found = get_external_peer_prefixes([_subif("Ethernet1/13.1000", "PROD")], [vif], "eg-fr01", **_NO_SDWAN)
+        found = get_external_peer_prefixes([_subif("Ethernet1/13.1000", "PROD")], [vif], "eg-fr201", **_NO_SDWAN)
         assert found == {"Ethernet1/13.1000": []}
 
     def test_no_virtual_interfaces_is_empty(self) -> None:
         """A sub-interface with neither a VIF nor an SD-WAN gateway behind it is absent."""
-        assert get_external_peer_prefixes([_subif("Ethernet1/13.1900", "PROD")], None, "eg-fr01", **_NO_SDWAN) == {}
+        assert get_external_peer_prefixes([_subif("Ethernet1/13.1900", "PROD")], None, "eg-fr201", **_NO_SDWAN) == {}
 
 
 class TestSdwanGatewayPrefixes:
@@ -311,7 +311,7 @@ class TestSdwanGatewayPrefixes:
         found = get_external_peer_prefixes(
             [_subif("Ethernet1/13.1900", "PROD")],
             None,
-            "eg-fr01",
+            "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
             offices=offices,
         )
@@ -327,7 +327,7 @@ class TestSdwanGatewayPrefixes:
         found = get_external_peer_prefixes(
             [_subif("Ethernet1/13.1900", "PROD")],
             None,
-            "eg-fr01",
+            "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
             offices=offices,
         )
@@ -347,7 +347,7 @@ class TestSdwanGatewayPrefixes:
         found = get_external_peer_prefixes(
             [_subif("Ethernet1/13.1900", "PROD")],
             None,
-            "eg-fr01",
+            "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
             offices=offices,
         )
@@ -358,7 +358,7 @@ class TestSdwanGatewayPrefixes:
         found = get_external_peer_prefixes(
             [_subif("Ethernet1/13.1901", "NON-PROD")],
             None,
-            "eg-fr01",
+            "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1901", _GW1)),
             offices=[_office(_GW1, ("10.210.5.0/24", "PROD"), ("10.210.2.0/24", "PROD"))],
         )
@@ -369,7 +369,7 @@ class TestSdwanGatewayPrefixes:
         found = get_external_peer_prefixes(
             [_subif("Ethernet1/13.1900", "PROD")],
             None,
-            "eg-fr01",
+            "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
             offices=[_office(_GW1)],
         )
@@ -384,7 +384,7 @@ class TestSdwanGatewayPrefixes:
         found = get_external_peer_prefixes(
             [_subif("Ethernet1/13.1900", "PROD")],
             None,
-            "eg-fr01",
+            "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
             offices=offices,
         )
@@ -397,7 +397,7 @@ class TestSdwanGatewayPrefixes:
         found = get_external_peer_prefixes(
             [_subif("Ethernet1/13.1900", "PROD")],
             None,
-            "eg-fr01",
+            "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
             offices=offices,
         )
@@ -412,7 +412,7 @@ class TestSdwanGatewayPrefixes:
         found = get_external_peer_prefixes(
             [_subif("Ethernet1/13.1900", "PROD")],
             None,
-            "eg-fr01",
+            "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
             offices=offices,
         )
@@ -434,7 +434,7 @@ class TestSdwanGatewayPrefixes:
         found = get_external_peer_prefixes(
             [_subif("Ethernet1/13.1900", "PROD"), _subif("Ethernet1/13.1901", "NON-PROD")],
             None,
-            "eg-fr01",
+            "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1), ("Ethernet1/13.1901", _GW1)),
             offices=offices,
         )
@@ -446,7 +446,7 @@ class TestSdwanGatewayPrefixes:
         found = get_external_peer_prefixes(
             [_subif("Ethernet1/13.1900", "PROD")],
             None,
-            "eg-fr01",
+            "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
             offices=[office],
         )
@@ -457,7 +457,7 @@ class TestSdwanGatewayPrefixes:
         found = get_external_peer_prefixes(
             [_subif("Ethernet1/13.1900", "PROD")],
             None,
-            "eg-fr01",
+            "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
             offices=[],
         )
@@ -468,7 +468,7 @@ class TestSdwanGatewayPrefixes:
         found = get_external_peer_prefixes(
             [_subif("Ethernet1/13.1900", "PROD"), _subif("Ethernet1/14.1900", "PROD")],
             None,
-            "eg-fr01",
+            "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1), ("Ethernet1/14.1900", "EXT-PARTNER-01")),
             offices=[_office(_GW1, ("10.210.5.0/24", "PROD"))],
         )
@@ -479,7 +479,7 @@ class TestSdwanGatewayPrefixes:
         found = get_external_peer_prefixes(
             [_subif("Ethernet1/13.1900", "PROD")],
             None,
-            "eg-fr01",
+            "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1), ("Ethernet1/13.1900", "EXT-PARTNER-01")),
             offices=[_office(_GW1, ("10.210.5.0/24", "PROD"))],
         )
@@ -493,7 +493,7 @@ class TestSdwanGatewayPrefixes:
             get_external_peer_prefixes(
                 [_subif("Ethernet1/13.1900", "PROD")],
                 None,
-                "eg-fr01",
+                "eg-fr201",
                 device_capabilities=capabilities,
                 offices=[_office(_GW1, ("10.210.5.0/24", "PROD"))],
             )
@@ -771,7 +771,7 @@ class TestOfficeQuerySelection:
         found = get_external_peer_prefixes(
             [_subif("Ethernet1/13.1900", "PROD")],
             None,
-            "eg-fr01",
+            "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
             offices=offices,
         )

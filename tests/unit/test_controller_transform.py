@@ -247,12 +247,12 @@ def _gateway_with_handoff(
             "address_families": {"edges": [{"node": {"afi": {"value": "ipv4"}, "safi": {"value": "unicast"}}}]},
             "capabilities": {
                 "edges": [
-                    _raw_iface("eg-fr01", "Ethernet1/13.1900", "10.255.5.0/31", namespace),
+                    _raw_iface("eg-fr201", "Ethernet1/13.1900", "10.255.5.0/31", namespace),
                     _raw_iface("EQX-FR2-SDWAN-GW1", local_iface, "10.255.5.1/31", namespace),
                 ]
             },
             "bgp_processes": {
-                "edges": [_raw_bgp_proc("eg-fr01", 4200000101), _raw_bgp_proc("EQX-FR2-SDWAN-GW1", 65028)]
+                "edges": [_raw_bgp_proc("eg-fr201", 4200000101), _raw_bgp_proc("EQX-FR2-SDWAN-GW1", 65028)]
             },
         }
     }
@@ -274,7 +274,7 @@ def _gateway_with_handoff(
 
 
 class TestVelocloudVrfHandoffs:
-    """The Orchestrator pushes GW1's side of the PROD handoff to eg-fr01, so
+    """The Orchestrator pushes GW1's side of the PROD handoff to eg-fr201, so
     the VCO payload — not a device-config transform — has to carry it."""
 
     def _payload(self, device: dict) -> dict[str, Any]:
@@ -282,7 +282,7 @@ class TestVelocloudVrfHandoffs:
         return json.loads(asyncio.run(_make_transform().transform(data)))
 
     def test_gateway_vrf_session_becomes_segment_handoff(self) -> None:
-        """Both ends come from the same BGP helper as eg-fr01's config."""
+        """Both ends come from the same BGP helper as eg-fr201's config."""
         handoffs = self._payload(_gateway_with_handoff())["edges"][0]["handoffs"]
 
         assert handoffs == [
@@ -295,7 +295,7 @@ class TestVelocloudVrfHandoffs:
                     "local-asn": 65028,
                     "neighbor-ip": "10.255.5.0",
                     "neighbor-asn": 4200000101,
-                    "neighbor": "eg-fr01",
+                    "neighbor": "eg-fr201",
                     "password": "demo-handoff-secret",
                 },
             }

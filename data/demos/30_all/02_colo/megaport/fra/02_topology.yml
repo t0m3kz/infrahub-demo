@@ -18,3 +18,5 @@ spec:
               kind: TopologyColocationZone
               data:
                 - name: MCR-FRA1
+                  member_of_groups:
+                    - colocation_zones

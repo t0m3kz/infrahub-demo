@@ -45,7 +45,7 @@ CUSTOMER_VLAN_ID_MAX = 2999
 SITE_VNI_START = 10001
 SITE_VNI_END = 39999
 
-# FirewallContext VLAN pool of every fabric/metro (one context = one VLAN on the
+# FirewallContext VLAN pool of every fabric/colocation zone (one context = one VLAN on the
 # firewall uplink and the border-leaf service port).
 FW_CONTEXT_VLAN_START = FW_CONTEXT_VLAN_MIN
 FW_CONTEXT_VLAN_END = FW_CONTEXT_VLAN_MAX

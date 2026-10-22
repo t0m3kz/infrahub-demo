@@ -5,9 +5,10 @@ held here, on every circuit at once:
 
 Physical circuits
     1. exactly two distinct locations (the authored cage plus the ends add_circuit derives),
-    2. each location is where one end's device is deployed, one end per location: a DC, ISP or cloud-region end
-       is the device's ``deployment``, a cage end a TopologyColocationZone of the metro the edge is deployed to
-       (or the zone itself, for a device racked in the cage),
+    2. each location is the ``deployment`` of one end's device, one end per location: a DC, ISP or cloud region,
+       or for colocation kit the zone (or virtual colocation) the device is deployed to. A sibling zone of the
+       same metro is not the end: add_circuit (``plan_locations``) refuses an authored location that differs from
+       the end device's deployment. The metro is no facility and no device is deployed to it,
     3. owned exactly when it is an office's access circuit: one ending on a TopologyCustomerOffice is owned by
        that office's owner (add_sdwan_edge's INET-<office>); every other one is shared underlay, unowned.
 
@@ -15,15 +16,16 @@ Virtual circuits
     1. exactly two distinct locations,
     2. owned: one end is a footprint of the circuit's owner with an end device in its facility (a DC, the
        colocation metro, the cloud region; an office is its own facility); the other end is a provider facility
-       (TopologyCloudRegion, TopologySaasRegion, TopologyColocationZone) or another footprint,
+       (TopologyCloudRegion, TopologySaasRegion, TopologyColocationZone, TopologyVirtualColocation) or another
+       footprint,
     3. unowned (platform overlay): facilities at both ends, no customer footprint,
     4. ``physical_circuits`` form one contiguous path, each hop sharing a facility with the next: end to end
        for a physical- or provider-backed circuit, from one end to the internet (a TopologyExternalProviders)
        for an internet-backed one. A physical_backed circuit rides at least one. Relationship peers carry no
        order, so the path is searched over every order of the hops.
 
-A colocation footprint is parented by the METRO, not a cage, so a cage of that metro reaches it: the chain of
-VC-C001-EQXFR-AWS-EUC1 starts at FR2, a zone of C001-P-FR's metro FR. A virtual circuit's end count is not checked:
+A colocation footprint is parented by the METRO, not a cage, so a zone or virtual colocation of that metro
+reaches it: the chain of VC-C001-EQXFR-AWS-EUC1 starts at FR2, a zone of C001-P-FR's metro FR. A virtual circuit's end count is not checked:
 a provider-managed one may surface on a single port, its far end the provider's (VC-C001-EQXFR-AWS-EUC1 has only
 the cage edge's port, its cloud end is a CloudVirtualInterface). A physical circuit's end count and port kind are
 checks/physical_circuit_ports.py's.
@@ -43,13 +45,18 @@ CIRCUIT_LOCATIONS = 2
 """A circuit terminates on exactly two places, one per end."""
 
 ZONE = "TopologyColocationZone"
+VIRTUAL_COLOCATION = "TopologyVirtualColocation"
+# The colocation kinds a circuit can end on, each a child of its metro: a cage and a provider-hosted presence.
+ZONE_KINDS = frozenset({ZONE, VIRTUAL_COLOCATION})
 INTERNET = "TopologyExternalProviders"
 OFFICE = "TopologyCustomerOffice"
 # Footprints whose facility is their parent (a DC, a colocation metro, a cloud region). An office is its own.
 PARENTED_FOOTPRINTS = frozenset({"TopologyCustomerDC", "TopologyCustomerColocation", "TopologyCustomerCloud"})
 FOOTPRINTS = PARENTED_FOOTPRINTS | {OFFICE}
-FACILITIES = frozenset({"TopologyDataCenter", ZONE, "TopologyCloudRegion", INTERNET, "TopologySaasRegion", OFFICE})
-PROVIDER_FAR_ENDS = frozenset({"TopologyCloudRegion", "TopologySaasRegion", ZONE})
+FACILITIES = frozenset(
+    {"TopologyDataCenter", *ZONE_KINDS, "TopologyCloudRegion", INTERNET, "TopologySaasRegion", OFFICE}
+)
+PROVIDER_FAR_ENDS = frozenset({"TopologyCloudRegion", "TopologySaasRegion", *ZONE_KINDS})
 
 
 def _label(place: dict[str, Any] | None) -> str:
@@ -63,12 +70,19 @@ def _labels(places: list[dict[str, Any]]) -> str:
 
 
 def _within(place: dict[str, Any] | None, anchor_id: str | None) -> bool:
-    """The place is the anchor, or a cage (zone) of it when the anchor is a colocation metro."""
+    """The place is the anchor, or a zone / virtual colocation of it when the anchor is a colocation metro."""
     if not place or not anchor_id:
         return False
     if place.get("id") == anchor_id:
         return True
-    return place.get("typename") == ZONE and (place.get("parent") or {}).get("id") == anchor_id
+    return place.get("typename") in ZONE_KINDS and (place.get("parent") or {}).get("id") == anchor_id
+
+
+def _end_at(location: dict[str, Any], deployment: dict[str, Any] | None) -> bool:
+    """The location is the end device's deployment itself. Colocation kit is deployed per zone or virtual
+    colocation, and add_circuit (plan_locations) refuses an authored location that differs from it: no sibling
+    cage of the same metro, never the metro."""
+    return bool(deployment) and bool(location.get("id")) and location.get("id") == (deployment or {}).get("id")
 
 
 def _facility(location: dict[str, Any]) -> dict[str, Any]:
@@ -159,13 +173,13 @@ class CheckCircuitPlacement(InfrahubCheck):
                 circuit,
                 "TopologyPhysicalCircuit",
                 f"Physical circuit '{name}' end '{port}' is on a device with no deployment: set the device's "
-                "deployment to the facility it sits in (an on-ramp edge: its colocation metro).",
+                "deployment to the facility it sits in (an on-ramp edge: its colocation zone).",
             )
         if undeployed:
             return
 
         if any(
-            all(_within(location, (deployment or {}).get("id")) for location, (_, deployment) in zip(locations, order))
+            all(_end_at(location, deployment) for location, (_, deployment) in zip(locations, order))
             for order in permutations(ends)
         ):
             return
@@ -173,8 +187,8 @@ class CheckCircuitPlacement(InfrahubCheck):
             circuit,
             "TopologyPhysicalCircuit",
             f"Physical circuit '{name}' terminates on {_labels(locations)} but its ends are {_ends_label(ends)}: "
-            "each location is where one end's device is deployed (a DC, ISP or cloud-region end is the device's "
-            "deployment, a cage end a zone of the metro the device is deployed to).",
+            "each location is the deployment of one end's device (a DC, ISP, cloud region, or for colocation kit the "
+            "zone or virtual colocation the device is deployed to; not a sibling zone of its metro).",
         )
 
     def _validate_physical_owner(self, circuit: dict[str, Any], name: str, locations: list[dict[str, Any]]) -> None:
@@ -254,7 +268,7 @@ class CheckCircuitPlacement(InfrahubCheck):
                 "TopologyVirtualCircuit",
                 f"Virtual circuit '{name}' tenant end {_label(tenant)} is in {_label(_facility(tenant))} but none "
                 f"of its ends is ({_ends_label(ends)}): terminate it on a device deployed to "
-                f"{_label(_facility(tenant))} (or a cage of it).",
+                f"{_label(_facility(tenant))} (or a zone or virtual colocation of it).",
             )
             return
 

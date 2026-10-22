@@ -130,7 +130,7 @@ def _transit_peering() -> dict[str, Any]:
         "capabilities": [
             {
                 "name": "Ethernet1/14",
-                "device": {"name": "eg-fr01"},
+                "device": {"name": "eg-fr201"},
                 "ip_address": {"address": "203.0.113.0/31", "ip_namespace": _INTERNET_NS},
             }
         ],
@@ -139,7 +139,7 @@ def _transit_peering() -> dict[str, Any]:
 
 def _bgw_edge() -> dict[str, Any]:
     return {
-        "name": "eg-fr01",
+        "name": "eg-fr201",
         "interfaces": [
             {"name": "loopback0", "role": "loopback", "ip_address": {"address": "10.0.0.2/32"}},
             {"name": "loopback1", "role": "loopback-vtep", "ip_address": {"address": "fd00:100::1/128"}},

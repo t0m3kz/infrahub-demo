@@ -23,7 +23,7 @@ _INTERNET_NS = {"name": "INTERNET", "l3_vni": 60002, "namespace_type": "internet
 
 
 def _transit_peering(namespace: dict[str, Any]) -> dict[str, Any]:
-    """The eg-fr01 <-> EXT-LUMEN-FRA1 peering, local address in ``namespace``."""
+    """The eg-fr201 <-> EXT-LUMEN-FRA1 peering, local address in ``namespace``."""
     return {
         "name": "TRANSIT-LUMEN-FRA1",
         "session_type": "EBGP",
@@ -33,7 +33,7 @@ def _transit_peering(namespace: dict[str, Any]) -> dict[str, Any]:
         "capabilities": [
             {
                 "name": "Ethernet1/14",
-                "device": {"name": "eg-fr01"},
+                "device": {"name": "eg-fr201"},
                 "ip_address": {"address": "203.0.113.0/31", "ip_namespace": namespace},
             },
             {
@@ -43,7 +43,7 @@ def _transit_peering(namespace: dict[str, Any]) -> dict[str, Any]:
             },
         ],
         "bgp_processes": [
-            {"local_as": {"asn": 4200000100}, "capabilities": [{"name": "eg-fr01"}]},
+            {"local_as": {"asn": 4200000100}, "capabilities": [{"name": "eg-fr201"}]},
             {"local_as": {"asn": 3356}, "capabilities": [{"name": "EXT-LUMEN-FRA1"}]},
         ],
     }
@@ -59,12 +59,12 @@ def _edge(*, bgw: bool = True, namespace: dict[str, Any] | None = _INTERNET_NS) 
     capabilities = []
     if namespace:
         capabilities.append({"typename": "ManagedBGP", "peerings": [_transit_peering(namespace)]})
-    return {"name": "eg-fr01", "interfaces": interfaces, "capabilities": capabilities}
+    return {"name": "eg-fr201", "interfaces": interfaces, "capabilities": capabilities}
 
 
 class TestTransitFlag:
     def test_internet_namespace_flags_the_vrf_session_transit(self) -> None:
-        session = _build_session_from_peering(_transit_peering(_INTERNET_NS), "eg-fr01", {"asn": 4200000100}, [])
+        session = _build_session_from_peering(_transit_peering(_INTERNET_NS), "eg-fr201", {"asn": 4200000100}, [])
         assert session is not None
         assert session["vrf"] == "INTERNET"
         assert session["transit"] is True
@@ -72,7 +72,7 @@ class TestTransitFlag:
     @pytest.mark.parametrize("namespace_type", ["prod", None])
     def test_other_namespaces_are_not_transit(self, namespace_type: str | None) -> None:
         namespace = {"name": "PROD", "namespace_type": namespace_type}
-        session = _build_session_from_peering(_transit_peering(namespace), "eg-fr01", {"asn": 4200000100}, [])
+        session = _build_session_from_peering(_transit_peering(namespace), "eg-fr201", {"asn": 4200000100}, [])
         assert session is not None
         assert session["vrf"] == "PROD"
         assert "transit" not in session
@@ -145,7 +145,7 @@ def env() -> jinja2.Environment:
 
 
 def _bgp(namespace: dict[str, Any]) -> list[dict[str, Any]]:
-    session = _build_session_from_peering(_transit_peering(namespace), "eg-fr01", {"asn": 4200000100}, [])
+    session = _build_session_from_peering(_transit_peering(namespace), "eg-fr201", {"asn": 4200000100}, [])
     assert session is not None
     session["address_families"] = ["ipv4"]
     # `advertise l2vpn evpn` is only rendered by the process that carries the EVPN address-family.
@@ -165,7 +165,7 @@ def _bgp(namespace: dict[str, Any]) -> list[dict[str, Any]]:
 class TestEdgeTemplate:
     def _render(self, env: jinja2.Environment, namespace: dict[str, Any], vxlan: dict[str, Any] | None) -> str:
         return env.get_template("edges/cisco_nxos.j2").render(
-            name="eg-fr01",
+            name="eg-fr201",
             interfaces=[],
             loopback_name="loopback0",
             vlans=[],

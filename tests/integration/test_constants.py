@@ -114,8 +114,10 @@ def _all_demo(kind: str) -> list[Declared]:
 # run per declared object its created-trigger watches that is in its target
 # group (demo_data.created_dispatches): e.g. add_rack counts the colocation
 # cage racks too (they are in topologies_rack and add_rack no-ops on them),
-# add_colocation_metro every metro, though only FR and PA carry
-# fabric_templates, and add_sdwan_edge every office, though the generator
+# add_colocation_metro every metro (its VNI and ASN pools, kit or no kit),
+# add_colocation_zone every zone and add_virtual_colocation every virtual
+# colocation, though only FR2 and PA4 carry fabric_templates (the rest no-op), and
+# add_sdwan_edge every office, though the generator
 # no-ops on those without sdwan_gateway (add_office_fabric likewise: every office,
 # though only those with fabric_templates generate); updated-triggers only add runs.
 # add_customer_deployment_cloud/office were removed: their only job was
@@ -129,6 +131,8 @@ ALL_DEMO_EXPECTED_GENERATORS: dict[str, int] = {
         "add_pod",
         "add_rack",
         "add_colocation_metro",
+        "add_colocation_zone",
+        "add_virtual_colocation",
         "add_endpoint",
         "add_vxlan_segment",
         "add_app_application",
@@ -143,6 +147,7 @@ ALL_DEMO_EXPECTED_GENERATORS: dict[str, int] = {
         "add_customer_colocation_orchestrator_routing",
         "add_customer_cloud_orchestrator_routing",
         "add_customer_office_orchestrator_routing",
+        "add_virtual_colocation_orchestrator_routing",
     )
 }
 
@@ -316,7 +321,7 @@ ALL_DEMO_PHYSICAL_CIRCUIT_TYPES: dict[str, int] = {
     # — the opt-in TopologyInterconnectRequest that used to scaffold 2 extra
     # DC11<->DC12 stub circuits was removed along with its generator.
     # Each DC has one fibre to each of its metro's two border gateways:
-    # DC10/DC11 -> EQX FR2 (01 and 02 edge), DC12 -> EQX PA4 (01 and 02 edge).
+    # DC10/DC11 -> EQX FR2 (eg-fr201 and eg-fr202), DC12 -> EQX PA4 (eg-pa401 and eg-pa402).
     "dark_fiber": 6,
     "cross_connect": 2,  # EQX FR2 -> AWS eu-central-1, EQX PA4 -> Azure westeurope
     # The declared ones (the shared transit circuits of 06_internet) plus one
@@ -330,12 +335,12 @@ ALL_DEMO_PHYSICAL_CIRCUIT_TYPES: dict[str, int] = {
 # the session, the two (device, interface) ends). add_circuit builds one
 # DCI-<circuit_id> session per entry.
 ALL_DEMO_DCI_CIRCUITS: dict[str, tuple[str, tuple[tuple[str, str], tuple[str, str]]]] = {
-    "DF-DC10-EQXFR2": ("DC10", (("bl-dc101101", "Ethernet1/35"), ("eg-fr01", "Ethernet1/10"))),
-    "DF-DC11-EQXFR2": ("DC11", (("bl-dc1111101", "Ethernet1/35"), ("eg-fr01", "Ethernet1/11"))),
-    "DF-DC12-EQXPA4": ("DC12", (("bl-dc1212101", "Ethernet1/35"), ("eg-pa01", "Ethernet1/10"))),
-    "DF-DC10-EQXFR2-B": ("DC10", (("bl-dc101101", "Ethernet1/36"), ("eg-fr02", "Ethernet1/10"))),
-    "DF-DC11-EQXFR2-B": ("DC11", (("bl-dc1111101", "Ethernet1/36"), ("eg-fr02", "Ethernet1/11"))),
-    "DF-DC12-EQXPA4-B": ("DC12", (("bl-dc1212101", "Ethernet1/36"), ("eg-pa02", "Ethernet1/10"))),
+    "DF-DC10-EQXFR2": ("DC10", (("bl-dc101101", "Ethernet1/35"), ("eg-fr201", "Ethernet1/10"))),
+    "DF-DC11-EQXFR2": ("DC11", (("bl-dc1111101", "Ethernet1/35"), ("eg-fr201", "Ethernet1/11"))),
+    "DF-DC12-EQXPA4": ("DC12", (("bl-dc1212101", "Ethernet1/35"), ("eg-pa401", "Ethernet1/10"))),
+    "DF-DC10-EQXFR2-B": ("DC10", (("bl-dc101101", "Ethernet1/36"), ("eg-fr202", "Ethernet1/10"))),
+    "DF-DC11-EQXFR2-B": ("DC11", (("bl-dc1111101", "Ethernet1/36"), ("eg-fr202", "Ethernet1/11"))),
+    "DF-DC12-EQXPA4-B": ("DC12", (("bl-dc1212101", "Ethernet1/36"), ("eg-pa402", "Ethernet1/10"))),
 }
 
 # Shared ISP transit (08_interconnects/06_internet): colo edges -> ISP PEs.
@@ -353,44 +358,56 @@ ALL_DEMO_ISP_ACCESS_DEVICE = "EXT-ORANGE"
 ALL_DEMO_ISP_ACCESS_LOCATION = "ISP-ORANGE"
 ALL_DEMO_ISP_ACCESS_PORTS: frozenset[str] = frozenset(f"xe-0/1/{n}" for n in range(len(_SDWAN_OFFICES)))
 
-# INTERNET upstream (PR 4c, extended by the metro edge pair): the colo edges are
+# INTERNET upstream (PR 4c, extended by the zone edge pair): the colo edges are
 # their metro's EVPN Multi-Site border gateways and export the ISP default route
 # as an EVPN type-5 route (L3 VNI 60002, one global route-target for the
 # INTERNET namespace). Both edges of each metro share the site VIP and have their
 # own dark fibre to every DC the metro fronts (ALL_DEMO_DCI_CIRCUITS).
-ALL_DEMO_INTERNET_BGWS: frozenset[str] = frozenset({"eg-fr01", "eg-fr02", "eg-pa01", "eg-pa02"})
+ALL_DEMO_INTERNET_BGWS: frozenset[str] = frozenset({"eg-fr201", "eg-fr202", "eg-pa401", "eg-pa402"})
 
 # DC -> the BGWs its DCI sessions land on, i.e. where that DC learns 0/0 from:
 # both edges of the metro it fronts.
 ALL_DEMO_INTERNET_UPSTREAM_BY_DC: dict[str, frozenset[str]] = {
-    "DC10": frozenset({"eg-fr01", "eg-fr02"}),
-    "DC11": frozenset({"eg-fr01", "eg-fr02"}),
-    "DC12": frozenset({"eg-pa01", "eg-pa02"}),
+    "DC10": frozenset({"eg-fr201", "eg-fr202"}),
+    "DC11": frozenset({"eg-fr201", "eg-fr202"}),
+    "DC12": frozenset({"eg-pa401", "eg-pa402"}),
 }
 
-# Metros with exactly two PHYSICAL edges in 30_all (generators/topology/colocation.py
-# _ensure_edge_pair; virtual edges are ignored). Derived from
-# data/demos/30_all/02_colo/equinix/{fr,pa}/02_topology.yml: FR and PA declare
-# `["2", "edge", "N9K-C9316D-GX_EDGE"]`; AM is virtual, the other Equinix/Megaport/
-# CoreSite metros declare no fabric_templates.
-ALL_DEMO_EDGE_PAIR_METROS: dict[str, tuple[str, str]] = {
-    "fr": ("eg-fr01", "eg-fr02"),
-    "pa": ("eg-pa01", "eg-pa02"),
+
+def _zone_edge_pair(zone: Declared) -> tuple[str, str] | None:
+    """The two edge names a zone's fabric_templates declare (``eg-<zone>01``, ``eg-<zone>02``), else None.
+
+    A zone name is in the device name (the standard naming strategy with no location path), so the pair is
+    read from the data. Zones hold physical templates only, so every edge row of a zone is a physical edge.
+    """
+    quantity = sum(int(row[0]) for row in zone.item.get("fabric_templates") or [] if row[1] == "edge")
+    if quantity != 2:
+        return None
+    prefix = f"eg-{name(zone).lower()}"
+    return f"{prefix}01", f"{prefix}02"
+
+
+# Zones with exactly two PHYSICAL edges in 30_all (generators/topology/colocation_fabric.py
+# _ensure_edge_pair; a virtual colocation's edges are never paired). Keyed by the lowercase zone name the
+# generator uses for its pool and key names (`fr2-technical-ipv6-pool`, `fr2-fabric-key`). Derived from
+# data/demos/30_all/02_colo/equinix/{fr,pa}/02_topology.yml: FR2 and PA4 declare
+# `["2", "edge", "N9K-C9316D-GX_EDGE"]`; the other zones, the virtual colocation AM-NE and the metros declare none.
+ALL_DEMO_EDGE_PAIR_ZONES: dict[str, tuple[str, str]] = {
+    name(zone).lower(): pair for zone in _all_demo("TopologyColocationZone") if (pair := _zone_edge_pair(zone))
 }
 
 # The interlink port (N9K-C9316D-GX_EDGE Ethernet1/8, role `interlink`) cabled between the pair.
 ALL_DEMO_EDGE_INTERLINK_INTERFACE = "Ethernet1/8"
 
-# Metro keys are the lowercase metro names the generator uses for its pool and key names.
-# metro -> ((device, interface), (device, interface)) of the one DcimCable per pair.
+# zone -> ((device, interface), (device, interface)) of the one DcimCable per pair.
 ALL_DEMO_EDGE_INTERLINKS: dict[str, tuple[tuple[str, str], tuple[str, str]]] = {
-    metro: ((a, ALL_DEMO_EDGE_INTERLINK_INTERFACE), (b, ALL_DEMO_EDGE_INTERLINK_INTERFACE))
-    for metro, (a, b) in ALL_DEMO_EDGE_PAIR_METROS.items()
+    zone: ((a, ALL_DEMO_EDGE_INTERLINK_INTERFACE), (b, ALL_DEMO_EDGE_INTERLINK_INTERFACE))
+    for zone, (a, b) in ALL_DEMO_EDGE_PAIR_ZONES.items()
 }
 
-# metro -> the one FABRIC-<a>-<b> iBGP session (peering_role fabric) between the pair's overlay processes.
+# zone -> the one FABRIC-<a>-<b> iBGP session (peering_role fabric) between the pair's overlay processes.
 ALL_DEMO_FABRIC_PEERINGS: dict[str, str] = {
-    metro: f"FABRIC-{a}-{b}" for metro, (a, b) in ALL_DEMO_EDGE_PAIR_METROS.items()
+    zone: f"FABRIC-{a}-{b}" for zone, (a, b) in ALL_DEMO_EDGE_PAIR_ZONES.items()
 }
 
 # The offices with a fabric (add_office_fabric): office -> role -> the switch names the generator derives (a flat office
@@ -426,19 +443,19 @@ ALL_DEMO_OFFICE_WAN_EXITS: dict[str, tuple[str, ...]] = {
     if name(office) in ALL_DEMO_OFFICE_FABRICS
 }
 
-# The metro-owned slice of Technical-IPv6 the interlink /127 comes from: `{metro}-technical-ipv6-pool`.
-ALL_DEMO_EDGE_PAIR_POOL_TEMPLATE = "{metro}-technical-ipv6-pool"
+# The zone-owned slice of Technical-IPv6 the interlink /127 comes from: `{zone}-technical-ipv6-pool`.
+ALL_DEMO_EDGE_PAIR_POOL_TEMPLATE = "{zone}-technical-ipv6-pool"
 
-# The shared Multi-Site VIP: both edges of a metro carry ONE /128 on loopback100
+# The shared Multi-Site VIP: both edges of a zone's pair carry ONE /128 on loopback100
 # (data/demos/30_all/08_interconnects/01_colo_onramp/04_multisite_vips.yml).
-ALL_DEMO_METRO_SITE_VIPS: dict[str, str] = {"fr": "fd00:2500:ff::f1/128", "pa": "fd00:2500:ff::f2/128"}
+ALL_DEMO_ZONE_SITE_VIPS: dict[str, str] = {"fr2": "fd00:2500:ff::f1/128", "pa4": "fd00:2500:ff::f2/128"}
 
 # The four eBGP transit sessions in VRF INTERNET (06_internet/05_bgp.yml) -> the colo edge each runs on.
 ALL_DEMO_INTERNET_TRANSIT_PEERINGS: dict[str, str] = {
-    "TRANSIT-LUMEN-EQXFR2": "eg-fr01",
-    "TRANSIT-COGENT-EQXFR2": "eg-fr02",
-    "TRANSIT-LUMEN-EQXPA4": "eg-pa01",
-    "TRANSIT-COGENT-EQXPA4": "eg-pa02",
+    "TRANSIT-LUMEN-EQXFR2": "eg-fr201",
+    "TRANSIT-COGENT-EQXFR2": "eg-fr202",
+    "TRANSIT-LUMEN-EQXPA4": "eg-pa401",
+    "TRANSIT-COGENT-EQXPA4": "eg-pa402",
 }
 
 # The L3 VNI of the INTERNET namespace (data/bootstrap) and its global route-target
@@ -562,14 +579,15 @@ ALL_DEMO_FOOTPRINT_KINDS: frozenset[str] = frozenset(
 )
 ALL_DEMO_TENANT_LOCATION_KINDS: frozenset[str] = ALL_DEMO_FOOTPRINT_KINDS | {"TopologyCustomerOffice"}
 ALL_DEMO_PROVIDER_FACILITY_KINDS: frozenset[str] = frozenset(
-    {"TopologyCloudRegion", "TopologySaasRegion", "TopologyColocationZone"}
+    {"TopologyCloudRegion", "TopologySaasRegion", "TopologyColocationZone", "TopologyVirtualColocation"}
 )
 
 _DECLARED_PHYSICAL_CIRCUITS = {str(c.value("circuit_id")): c for c in _all_demo("TopologyPhysicalCircuit")}
 _DECLARED_VIRTUAL_CIRCUITS = {name(c): c for c in _all_demo("TopologyVirtualCircuit")}
 
 # circuit_id / name -> the locations the 30_all data authors. A physical circuit's other end is derived by add_circuit
-# from its end devices' deployments, so the data lists only what is not derivable (a cage: its edge sits in the metro).
+# from its end devices' deployments, so the data lists only the cage (add_circuit also derives the zone from the edge's deployment, so an authored
+# cage must be that zone).
 ALL_DEMO_DECLARED_PHYSICAL_LOCATIONS: dict[str, tuple[str, ...]] = {
     circuit_id: tuple(circuit.item.get("locations") or ())
     for circuit_id, circuit in _DECLARED_PHYSICAL_CIRCUITS.items()
@@ -595,31 +613,41 @@ def _site(deployment: Declared) -> str:
     return str(deployment.value("parent"))
 
 
-def _metro_has_firewalls(metro: Declared) -> bool:
-    """Whether a colocation metro declares a firewall pair in its fabric_templates."""
-    return any(template[1] == "firewall" for template in metro.item.get("fabric_templates") or [])
+def _zone_has_firewalls(zone: Declared) -> bool:
+    """Whether a colocation zone declares a firewall pair in its fabric_templates."""
+    return any(template[1] == "firewall" for template in zone.item.get("fabric_templates") or [])
 
 
-_FIREWALL_METROS = {name(metro) for metro in _all_demo("TopologyColocationMetro") if _metro_has_firewalls(metro)}
+_FIREWALL_ZONES = {name(zone) for zone in _all_demo("TopologyColocationZone") if _zone_has_firewalls(zone)}
 
-# Every 30_all colocation deployment -> whether its metro has firewalls, and so
-# a serving context. Only metros declaring a firewall pair (FR,
-# 02_colo/equinix/fr) serve; the rest are edge-only metros whose deployments
-# must stay unserved.
-ALL_DEMO_COLOCATION_SERVED: dict[str, bool] = {
-    name(deployment): _site(deployment) in _FIREWALL_METROS for deployment in _all_demo("TopologyCustomerColocation")
+# Every 30_all colocation deployment -> the zone whose firewall pair serves it (its serving_zone), None when unset
+# (the footprint then has no context: an info log, not an error). A footprint is named after its metro
+# (`C001-P-FR`), the zone is a child of that metro.
+ALL_DEMO_COLOCATION_SERVING_ZONE: dict[str, str | None] = {
+    name(deployment): (str(deployment.item["serving_zone"]) if deployment.item.get("serving_zone") else None)
+    for deployment in _all_demo("TopologyCustomerColocation")
 }
-# Served colocation metro -> the deployments its shared context serves, derived from
-# ALL_DEMO_COLOCATION_SERVED (a deployment name ends in its metro: `C001-P-FR` -> FR).
+
+# Every 30_all colocation deployment -> whether it has a serving context: its serving_zone declares a firewall
+# pair (FR2, 02_colo/equinix/fr). Footprints with no serving_zone, or a zone without firewalls, must stay unserved.
+ALL_DEMO_COLOCATION_SERVED: dict[str, bool] = {
+    deployment: zone in _FIREWALL_ZONES for deployment, zone in ALL_DEMO_COLOCATION_SERVING_ZONE.items()
+}
+# Serving zone -> the deployments its shared context serves, keyed by zone name (`FR2`): the zone is the site of
+# a colocation firewall context (its pair, its VLAN pool `fr2-fw-context-vlan-pool`).
 ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS: dict[str, tuple[str, ...]] = {
-    site: tuple(dep for dep, served in ALL_DEMO_COLOCATION_SERVED.items() if served and dep.endswith(f"-{site}"))
-    for site in sorted({dep.rsplit("-", 1)[-1] for dep, served in ALL_DEMO_COLOCATION_SERVED.items() if served})
+    zone: tuple(
+        deployment
+        for deployment, serving in ALL_DEMO_COLOCATION_SERVING_ZONE.items()
+        if serving == zone and ALL_DEMO_COLOCATION_SERVED[deployment]
+    )
+    for zone in sorted({z for z in ALL_DEMO_COLOCATION_SERVING_ZONE.values() if z in _FIREWALL_ZONES})
 }
 # One shared (tenant-less) firewall context per firewall cluster: one per DC
-# and one per served colocation metro, whose pair every colocation deployment
-# in the metro shares (a colocation has no design, so never a dedicated
+# and one per serving colocation zone, whose pair every footprint naming that
+# serving_zone shares (a colocation has no design, so never a dedicated
 # context). The colocation context carries transit legs like a DC one (its
-# legs face the metro's two edges, whose firewall ports are tagged with the
+# legs face the zone's two edges, whose firewall ports are tagged with the
 # context) ...
 ALL_DEMO_SHARED_FIREWALL_CONTEXTS = len(ALL_DEMO_DC_NAMES) + len(ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS)
 
@@ -680,7 +708,7 @@ ALL_DEMO_INTERNET_EGRESS_RULES: dict[str, InternetEgressRule] = {
 # Everything below is DERIVED, not hand-counted. A context's legs are its
 # tenant VRFs plus INTERNET and MANAGEMENT (EXCHANGE_PEERS): a dedicated context serves its one
 # tenant, a shared context serves every customer deployment of its DC that has
-# no dedicated context. A served colocation metro
+# no dedicated context. A serving colocation zone
 # (ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS, FR) has one shared context serving
 # all its deployments, on the same rules. A deployment's VRF follows its
 # environment (`p` is PROD, every other value NON-PROD); an office has no
@@ -742,9 +770,9 @@ ALL_DEMO_FIREWALL_MEMBERS = 2
 
 
 class ExpectedTransitContext(TypedDict):
-    """What one firewall context of a 30_all site (a DC, or a served colocation metro) must carry."""
+    """What one firewall context of a 30_all site (a DC, or a serving colocation zone) must carry."""
 
-    #: The DC (`DC10`) or the colocation metro (`FR`) the context's firewalls sit in.
+    #: The DC (`DC10`) or the serving colocation zone (`FR2`) the context's firewalls sit in.
     site: str
     #: Tenant deployment of a dedicated context, None for the DC's shared one.
     tenant: str | None
@@ -798,7 +826,7 @@ def _expected_transit_context(site: str, tenant: str | None, deployments: tuple[
 
 def expected_transit_contexts() -> list[ExpectedTransitContext]:
     """The shared context of every 30_all DC, then its dedicated ones (ALL_DEMO_DEDICATED_FIREWALL_TENANTS),
-    then the shared context of every served colocation metro (never a dedicated one: no design)."""
+    then the shared context of every serving colocation zone (never a dedicated one: no design)."""
     contexts: list[ExpectedTransitContext] = []
     for dc, deployments in ALL_DEMO_DC_CUSTOMER_DEPLOYMENTS.items():
         dedicated = tuple(d for d in deployments if d in ALL_DEMO_DEDICATED_FIREWALL_TENANTS)
@@ -813,10 +841,10 @@ def expected_transit_contexts() -> list[ExpectedTransitContext]:
 ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS = expected_transit_contexts()
 # PR 4d: every context with an INTERNET leg owns one SNAT /32 (FW-SNAT-INTERNET-IPv4,
 # data/bootstrap/23_transit_pools.yml). EXCHANGE_PEERS gives every tenant VRF an INTERNET
-# leg, so that is every context, the colocation metro's included.
+# leg, so that is every context, the serving colocation zone's included.
 ALL_DEMO_SNAT_POOL_PREFIX = "192.0.2.0/24"
 ALL_DEMO_SNAT_ADDRESSES = sum("INTERNET" in c["namespaces"] for c in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS)
-# DC10 3+3, DC11 3+3, DC12 4+3, FR 3 legs.
+# DC10 3+3, DC11 3+3, DC12 4+3, FR2 3 legs.
 ALL_DEMO_TRANSIT_LEGS = sum(len(c["namespaces"]) for c in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS)
 ALL_DEMO_TRANSIT_EXCHANGES = sum(len(c["exchanges"]) for c in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS)
 # One /29 per leg, so the /29 count per VRF is the leg count per VRF.
@@ -826,7 +854,7 @@ ALL_DEMO_TRANSIT_PREFIXES: dict[str, int] = {
 }
 ALL_DEMO_TRANSIT_SUBINTERFACES = ALL_DEMO_TRANSIT_LEGS * ALL_DEMO_FIREWALL_MEMBERS
 # Each site's member uplinks reach 2 service ports (dedicated virtual members follow
-# their hosting firewall): a DC's border leafs, a colocation metro's two edges
+# their hosting firewall): a DC's border leafs, a serving colocation zone's two edges
 # (firewall-role ports Ethernet1/15-16). Every context of the site tags both.
 ALL_DEMO_BORDER_FIREWALL_PORTS = (
     len(ALL_DEMO_DC_CUSTOMER_DEPLOYMENTS) + len(ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS)
@@ -849,7 +877,7 @@ ALL_DEMO_EXPECTED_OBJECTS["TopologyRoutedExchange"] = ALL_DEMO_TRANSIT_EXCHANGES
 # `{cluster}-context`), else the shared one of its tenant namespace on the DC's
 # cluster (`{cluster}-{NAMESPACE}`), created by the first footprint of that
 # namespace. One-arm: one /29 leg in the tenant VRF (LB-Leg-<NS>-IPv4), a
-# routed VIP /26 (LB-VIP-<NS>-IPv4). A colocation metro has none. A
+# routed VIP /26 (LB-VIP-<NS>-IPv4). A colocation zone has none. A
 # load_balanced AppComponent gets one VIP per port on the context serving the
 # deployment of its instances; a dependency into it is ruled to the VIP
 # (R_client), the context's leg to the component's segment (R_server).

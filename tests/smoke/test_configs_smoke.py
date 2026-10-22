@@ -18,6 +18,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from transforms.cloud.vpc_terraform import CloudVpcTerraform
+from transforms.colocation.virtual_colocation import VirtualColocationTerraform
 from transforms.config.access_leaf import AccessLeaf
 from transforms.config.access_switch import AccessSwitch
 from transforms.config.border_leaf import BorderLeaf
@@ -47,6 +48,7 @@ _PREFIX_TO_CLASS: list[tuple[str, type]] = sorted(
         ("loadbalancer", LoadBalancer),
         ("loadbalancer_cloud", LoadBalancerCloud),
         ("cloud_terraform", CloudVpcTerraform),
+        ("virtual_colocation_terraform", VirtualColocationTerraform),
         ("firewall", Firewall),
         ("spine", Spine),
         ("proxy", Proxy),

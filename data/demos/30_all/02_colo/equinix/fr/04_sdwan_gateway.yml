@@ -9,12 +9,12 @@
 # it is created (../../../06_customer_boarding/c0*/office/02_deployment.yml), so
 # the gateway and its orchestrator have to exist before the offices do.
 # add_colocation_metro never touches either: it builds only the metro's own
-# fabric_templates kit (eg-fr01/02, fw-fr01/02), its pools and cabling.
+# fabric_templates kit (eg-fr201/02, fw-fr201/02), its pools and cabling.
 #
 # The Gateway is a plain DcimPhysicalDevice on VCG-VA_GATEWAY — it is managed BY
 # the Orchestrator below, not a controller itself (see the template's own comment
 # in data/bootstrap/10_physical_devices_templates_velocloud.yaml). It sits in the
-# same cage as eg-fr01, the Frankfurt on-ramp router generated from the metro's
+# same cage as eg-fr201, the Frankfurt on-ramp router generated from the metro's
 # fabric_templates (02_topology.yml). Putting it there rather than in a cloud PoP
 # is deliberate: the cage is where the cross-connect into AWS already lands, so
 # office traffic and DC traffic converge on one facility and a cage-level change

@@ -1,157 +1,71 @@
-"""Colocation metro bootstrap: pools + the metro's own on-ramp devices.
+"""Colocation metro bootstrap: the identity and the address supernets of the metro's EVPN Multi-Site site.
 
-A colocation metro is the third deployment kind that owns physical devices
-(after TopologyDataCenter and TopologyPod), and until now the only one whose
-devices were hand-written YAML: data/demos/30_all/08_interconnects/ declared
-raw DcimPhysicalDevice entries with hand-picked names.
+A colocation metro (the Equinix "FR", the CoreSite "NY") is no facility and owns
+no devices. Its children do: a TopologyColocationZone (the cage, our own hardware)
+and a TopologyVirtualColocation (a provider-hosted presence) declare and deploy
+their own kit, see colocation_fabric.py.
 
-That is what this generator replaces: a metro declares
-``fabric_templates: [{quantity: 2, role: edge, template: ...}]`` exactly like
-a DC declares its super-spines, and gets consistently named, correctly rolled,
-template-instantiated devices with loopback + management addressing.
+What the metro keeps is what those children share. One metro is one EVPN
+Multi-Site site however many zones carry edge routers, so the metro holds the
+site's identity:
 
-The metro, not the cage, is the tier that declares and owns this kit, mirroring
-dc.py's border-leafs: those are declared on the TopologyDataCenter rather than
-on any one of its pods because they are a DC-wide tier, and on-ramp routers are
-a metro-wide tier for the same reason. One pair fronts every cage in Frankfurt
-and the other cages reach it over a cross-connect — nobody racks a router pair
-in each cage they rent. So ``deployment`` on every device created here is the
-metro's id, and the names carry the metro (``eg-fr01``), not a cage. Which cage
-physically houses them matters only to the cross-connect, and a circuit already
-records that on its own endpoints (TopologyPhysicalCircuit.locations, which
-peer at the cage — see TopologyConnectableLocation).
+* the L2 VNI pool of the segments local to the site (``vni_pool``, read by
+  generators/topology/segment.py off TopologySegmentHosting, exactly like a DC's);
+* the ASN pool (``fabric_asn_pool``) the site's one AS is drawn from. The AS itself
+  is not drawn here: it is drawn by whichever zone or virtual colocation first has
+  an edge pair to run it on (ColocationFabricGenerator._ensure_evpn), which also
+  attaches it as ``evpn_rt_as``, the site-id and admin field of the site's
+  route-targets.
 
-Not every metro is one we own hardware in, which is what ``deployment_type`` is
-for: a ``physical`` metro holds our own kit in our own cage racks, a ``virtual``
-one holds provider-hosted instances instead (Equinix Network Edge, a Megaport
-MCR) and has no racks of ours at all, and ``hybrid`` holds both. The template's
-own kind decides whether a slot becomes a DcimPhysicalDevice or a
-DcimVirtualDevice; deployment_type decides whether the metro may host that kind
-at all. See _COLO_ALLOWED_TEMPLATE_KINDS.
+When the metro has a ``design`` (TopologyTemplateColocationMetro) it is also the
+supernet holder of its zones, the way a DC is of its pods. The design states how many
+zones the metro holds (``max_zones``) and which zone designs they may use, and every
+pool is sized for that envelope before any zone exists (generators/fabric_sizing.py):
 
-Scope note — every cable a run lays is internal to the metro, between two
-PHYSICAL devices this generator itself just created: the HA sync link between a
-firewall/load-balancer pair's members (create_devices()), and the leg from the
-edge pair to that pair (_cable_metro_services). Those two conditions — our own
-hardware, one facility — are what a DcimCable means, and they are what bounds
-this file. Two kinds of link consequently do NOT appear:
+* ``{metro}-loopback-pool``, ``{metro}-management-pool`` and ``{metro}-technical-pool``,
+  IPv4 prefix pools sliced from Loopback-IPv4 / Management-IPv4 / Technical-IPv4 and
+  attached as ``loopback_pool`` / ``management_pool`` / ``technical_pool``;
+* ``{metro}-loopback-ipv6-pool`` and ``{metro}-technical-ipv6-pool``, the IPv6
+  supernets of the zones' VTEP loopbacks and edge-pair interlinks, sliced from
+  Loopback-IPv6 / Technical-IPv6. Not attached to anything: the zones find them by name;
+* the ASN block is sized for ``max_zones`` zones.
 
-* anything involving virtual kit, because a link between provider-hosted
-  instances is a connection inside the provider's platform rather than fibre;
-* anything leaving the cage — the on-ramp's links to the DCs and cloud fabrics
-  it fronts. Those are the colocation operator's cross-connects, modelled as
-  TopologyPhysicalCircuits with per-customer TopologyVirtualCircuits riding them
-  (see data/demos/30_all/08_interconnects/), and they need both endpoints, which
-  a colocation-side generator cannot see — they belong to the interconnect
-  generator.
+Each zone and virtual colocation then slices its own pools out of these
+(ColoPoolSlot in colocation_fabric.py is the one table of names and sizes, read by
+both tiers). A metro without a design creates none of the supernets; its zones
+slice the bootstrap pools directly with fixed sizes.
 
-``technical_pool`` is created here because the metro
-owns it, but its first consumer is that interconnect cabling, not this file:
-the intra-metro legs carry no P2P addressing, matching dc.py's border-to-service
-cabling.
+The pools are idempotent upserts by name, so overlapping runs converge; only the
+supernets, which allocate a prefix, are serialized by a lock. A pool that already
+exists keeps its prefix when the design changes (the slice is keyed by the pool's
+name), so a larger design needs the pool and its prefix deleted first.
+
+Registered as add_colocation_metro in .infrahub.yml, targeting the
+colocation_metros group and querying colocation_metro.gql.
 """
 
 from __future__ import annotations
 
-from typing import Any, Literal, cast
+from typing import Any, cast
 
 from typing_extensions import TypedDict
 
 from utils.data_cleaning import clean_data
 
-from ..common import CommonGenerator, DeviceOptions
-from ..connections import BORDER_ROLE_FOR_SERVICES, CablingMixin
-from ..devices import DeviceMixin
-from ..firewall_context import FIREWALL_CONTEXT
-from ..helpers import get_loopback_name
+from ..common import CommonGenerator
+from ..fabric_sizing import colo_metro_asn_units
 from ..helpers.pools import SITE_VNI_END, SITE_VNI_START, name_to_asn_range
-from ..helpers.routing import loopback_prefix_length, p2p_prefix_length
 from ..pools import PoolMixin
-from ..protocols import DcimVirtualInterface, ManagedBGP, TopologyColocationMetro
-from ..routing import EVPN_AF, RoutingMixin
-from ..types import CablingOptions
-
-# Roles a colocation metro can host. Deliberately NOT dc.py's
-# _DC_VALID_FABRIC_ROLES: `edge` is valid here and invalid at DC level (a DC
-# reaches the outside through its border-leafs), while the DC-only fabric tiers
-# (super-spine, hyper-spine, border-leaf) are meaningless in a metro that has no
-# fabric.
-_COLO_VALID_FABRIC_ROLES = frozenset({"edge", "firewall", "load-balancer"})
-
-# Roles that are a service appliance hanging off the on-ramp rather than a
-# router in it — HA-paired two devices at a time via the shared
-# DeviceMixin.create_ha_role_devices() (also used by dc.py and pod.py for
-# their own border-leaf/border-spine firewall/load-balancer pairs), and given
-# no loopback, since they take no part in the underlay/overlay — see
-# _create_metro_devices.
-#
-# The template a firewall/load-balancer entry points at MUST provide an
-# interface with role=ha (CP-26000_FIREWALL's `sync`, PA-5260_FIREWALL's
-# `HA1`): _ensure_ha_interfaces needs one per member to lay the sync cable, and
-# logs an error — i.e. fails the generator task — when a physical member has
-# none. SRX-1500_EDGE_FIREWALL, for
-# instance, has only fxp0 + four downlinks and cannot be paired.
-_COLO_SERVICE_ROLES = frozenset({"firewall", "load-balancer"})
-
-# Which device kind each metro strategy (TopologyColocationMetro.deployment_type)
-# is allowed to instantiate. The template itself says whether it is physical or
-# virtual — queries/topology/add/colocation_metro.gql selects it as
-# `template_kind` — and deployment_type says whether the metro can hold that:
-#
-#   virtual  — provider-hosted kit only (Equinix Network Edge, a Megaport MCR).
-#              We rent no cage space of our own in this metro, so nothing
-#              physical can be mounted in it.
-#   physical — our own hardware, in our own cage racks.
-#   hybrid   — a metro with our own hardware that also fronts provider-hosted
-#              virtual kit.
-#
-# deployment_type is the ONLY signal available at this point, and that is not a
-# shortcut: a cage's LocationRacks are attached by a later file in the same load
-# (data/demos/**/03_racks.yml sets `pod: <cage>`), so when the created-trigger
-# fires this generator even a metro we own racks in still shows zero racks
-# anywhere beneath it. Rack presence cannot be inspected here — the declared
-# strategy stands in for it. Checking that the two actually agree belongs in
-# checks/, against settled data.
-_COLO_TEMPLATE_KIND_PHYSICAL = "TemplateDcimPhysicalDevice"
-_COLO_TEMPLATE_KIND_VIRTUAL = "TemplateDcimVirtualDevice"
-_COLO_ALLOWED_TEMPLATE_KINDS: dict[str, frozenset[str]] = {
-    "virtual": frozenset({_COLO_TEMPLATE_KIND_VIRTUAL}),
-    "physical": frozenset({_COLO_TEMPLATE_KIND_PHYSICAL}),
-    "hybrid": frozenset({_COLO_TEMPLATE_KIND_PHYSICAL, _COLO_TEMPLATE_KIND_VIRTUAL}),
-}
-# Matches the schema's own default_value (schemas/extensions/topology/
-# topology_colocation.yml), so a metro that never declares a strategy is treated
-# as the hardware metro it almost always is.
-_COLO_DEFAULT_DEPLOYMENT_TYPE = "physical"
-
-# A metro's on-ramp is small and its addressing is not sliced further by any
-# child tier, so these are fixed rather than design-driven (contrast dc.py,
-# which derives every prefix length from its design in fabric_sizing.py).
-_COLO_LOOPBACK_PREFIX_LENGTH = 28
-_COLO_TECHNICAL_PREFIX_LENGTH = 26
-_COLO_MANAGEMENT_PREFIX_LENGTH = 28
+from ..protocols import TopologyColocationMetro
+from .colocation_fabric import ATTACHED_SLOTS, COLO_POOL_SLOTS
 
 # Metro ASN blocks are drawn from the same deterministic name-hash grid as DC
 # fabric ASNs (helpers/pools.py's name_to_asn_range), so a metro can never
-# collide with a DC or with another metro. max_pods=1 asks for the smallest
-# block the grid offers — a metro hosts a handful of routers, not a fabric.
-_COLO_ASN_MAX_PODS = 1
-
-# EVPN Multi-Site border gateway (see _ensure_metro_evpn). Every DC fabric this
-# demo builds runs an IPv6 underlay, and a Multi-Site tunnel only forms between
-# VTEPs of one address family, so the edge's VTEP is a dedicated IPv6
-# loopback rather than its IPv4 Loopback0 (which stays the BGP router-id — a
-# router-id is 32-bit and cannot be an IPv6 address).
-_COLO_LOOPBACK_IPV6_PREFIX_LENGTH = 120
-_COLO_VTEP_LOOPBACK_INDEX = 1
-# The two edges of a metro share no fabric: one direct link between them (port
-# role `interlink`, N9K-C9316D-GX_EDGE's Ethernet1/8) carries a /127 and the
-# iBGP FABRIC session (see _ensure_edge_pair). A /124 slice holds eight /127s,
-# far more than the one link needs.
-_COLO_INTERLINK_ROLE = "interlink"
-_COLO_TECHNICAL_IPV6_PREFIX_LENGTH = 124
-_COLO_P2P_IPV6_PREFIX_LENGTH = p2p_prefix_length("ipv6")
-_COLO_FABRIC_UNICAST_AF = ("ipv6", "unicast")
+# collide with a DC or with another metro. The block is sized in name_to_asn_range's
+# max_pods argument, the DC sense of "units of fabric to size for": a metro with a
+# design asks for max_zones of them (colo_metro_asn_units); this is the single unit
+# of a metro without one, which uses its one site AS and nothing else.
+_METRO_ASN_SIZING_UNITS = 1
 
 
 class TopologyColocationMetroData(TypedDict, total=False):
@@ -159,18 +73,11 @@ class TopologyColocationMetroData(TypedDict, total=False):
 
     id: str
     name: str
-    deployment_type: str
-    naming_convention: str
-    parent: dict[str, Any]
-    loopback_pool: dict[str, Any] | None
-    technical_pool: dict[str, Any] | None
-    management_pool: dict[str, Any] | None
-    fabric_asn_pool: dict[str, Any] | None
-    fabric_templates: list[dict[str, Any]]
+    design: dict[str, Any] | None
 
 
-class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, CommonGenerator):
-    """Create a colocation metro's resource pools and its own on-ramp devices."""
+class ColocationMetroGenerator(PoolMixin, CommonGenerator):
+    """Create a colocation metro's VNI and ASN pools and attach them."""
 
     data: TopologyColocationMetroData
     graphql_root_key = "TopologyColocationMetro"
@@ -190,209 +97,23 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
 
     async def _generate_metro(self) -> None:
         metro_id = self.data["id"]
-        metro_name = self.data["name"]
-
-        # pod_name stays None: a metro has no pod tier, which is what makes
-        # DeviceMixin.create_devices() fall back to the metro-scoped pool names
-        # ("{fabric_name}-loopback-pool" / "-management-pool") that
-        # _ensure_colocation_pools creates below — see its docstring.
-        self.fabric_name = metro_name.lower()
-        self.pod_name = None
+        metro = self.data["name"].lower()
+        design = self.data.get("design")
+        self.fabric_name = metro
         self.deployment_id = metro_id
+        self.logger.info(f"Generating colocation metro {self.data['name']}")
 
-        deployment_type = self.data.get("deployment_type") or _COLO_DEFAULT_DEPLOYMENT_TYPE
-        self.logger.info(f"Generating colocation metro {metro_name} (deployment_type={deployment_type})")
-
-        templates = self._valid_fabric_templates()
-        if not templates:
-            self.logger.info(f"Metro {metro_name}: no usable fabric_templates entries — nothing to generate")
+        # Every size is derived before the first save: a run that stopped after
+        # saving would end with a partial tracked set, and its cleanup would delete
+        # what it owned last run and did not recreate.
+        try:
+            supernet_lengths = {slot: slot.metro_length(design) for slot in COLO_POOL_SLOTS} if design else {}
+        except ValueError as exc:
+            self.logger.error(f"Metro {metro}: cannot size its pools from design '{design and design['name']}': {exc}")
             return
 
-        asn_pool_id = await self._ensure_colocation_pools(metro_id=metro_id)
-        physical_names_by_role = await self._create_metro_devices(templates=templates, metro_id=metro_id)
-        if physical_names_by_role.get("firewall"):
-            # The metro's FirewallContext VLAN pool: customer_colocation.py gives
-            # every deployment in this metro a context on the metro's firewall
-            # pair and takes the context's transit VLAN from this pool by name
-            # (the legs' addresses come from the per-VRF FW-Transit-* bootstrap
-            # pools). Only a metro with physical firewalls gets it: without one
-            # no context is ever created. See PoolMixin.ensure_context_vlan_pool.
-            await self.ensure_context_vlan_pool(name=self.fabric_name, spec=FIREWALL_CONTEXT)
-        await self._cable_metro_services(physical_names_by_role=physical_names_by_role)
-        overlay_process_ids = await self._ensure_metro_evpn(metro_id=metro_id, asn_pool_id=asn_pool_id)
-        await self._ensure_edge_pair(
-            physical_edge_names=physical_names_by_role.get("edge", []), overlay_process_ids=overlay_process_ids
-        )
-
-    def _valid_fabric_templates(self) -> list[dict[str, Any]]:
-        """Drop entries this generator cannot act on, warning per entry.
-
-        warning(), not error(): one bad entry must not stop the metro's other
-        roles from being created (FailOnErrorLogger turns error() into a task
-        failure), matching dc.py's _validate_fabric_template_roles.
-        """
-        deployment_type = self.data.get("deployment_type") or _COLO_DEFAULT_DEPLOYMENT_TYPE
-        allowed_template_kinds = _COLO_ALLOWED_TEMPLATE_KINDS.get(deployment_type)
-        if allowed_template_kinds is None:
-            # Schema drift: a new deployment_type choice nobody taught this
-            # generator about. Guessing a device kind is worse than building
-            # nothing, so the metro becomes a no-op and says why.
-            self.logger.warning(
-                f"Metro {self.fabric_name}: unknown deployment_type {deployment_type!r} (expected one of "
-                f"{sorted(_COLO_ALLOWED_TEMPLATE_KINDS)}) — skipping every fabric_templates entry rather "
-                "than guessing whether its devices are physical or virtual."
-            )
-            return []
-
-        usable: list[dict[str, Any]] = []
-        for entry in self.data.get("fabric_templates", []):
-            role = entry.get("role")
-            if role not in _COLO_VALID_FABRIC_ROLES:
-                self.logger.warning(
-                    f"Metro {self.fabric_name}: fabric_templates entry with role={role!r} is not valid in a "
-                    f"colocation metro (expected one of {sorted(_COLO_VALID_FABRIC_ROLES)}) — skipping this entry."
-                )
-                continue
-            if not entry.get("quantity", 0) > 0:
-                self.logger.warning(
-                    f"Metro {self.fabric_name}: fabric_templates entry for role={role!r} has quantity "
-                    f"{entry.get('quantity')!r} — skipping this entry."
-                )
-                continue
-            template = entry.get("template")
-            if not template:
-                self.logger.warning(
-                    f"Metro {self.fabric_name}: fabric_templates entry for role={role!r} has no template — "
-                    "skipping this entry."
-                )
-                continue
-            template_kind = template.get("template_kind")
-            if template_kind not in allowed_template_kinds:
-                self.logger.warning(
-                    f"Metro {self.fabric_name}: fabric_templates entry for role={role!r} uses a "
-                    f"{template_kind or 'unknown'} template, which a deployment_type={deployment_type!r} metro "
-                    f"cannot host (allowed: {sorted(allowed_template_kinds)}) — skipping this entry. Either "
-                    "point it at the other template kind or set the metro's deployment_type to 'hybrid'."
-                )
-                continue
-            usable.append(entry)
-        return self._drop_uncablable_service_entries(usable)
-
-    def _drop_uncablable_service_entries(self, entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Drop a physical firewall/load-balancer entry no physical edge template
-        in this metro can cable to, warning why.
-
-        _cable_metro_services hangs each service role off a same-named port
-        role (`firewall`, `load-balancer`) on the edge devices — see
-        N9K-C9316D-GX_EDGE's Ethernet1/[15-16]=firewall. Without this check,
-        an entry for a role no edge template exposes still passes every other
-        check above, so create_devices() builds its HA pair — only for
-        create_chain_cabling to fail the whole generator task afterwards with
-        "cannot cable ... load-balancer_ports=0", leaving a real, uncabled
-        appliance behind. Catching it here instead means the entry is
-        dropped, with a clear reason, before any device for it exists — same
-        as every other drop above.
-
-        Virtual entries are exempt: a virtual edge/service pair is never
-        cabled in the first place (see _create_metro_devices), so its
-        template carries no `interfaces` to check against.
-
-        No physical edge entry at all is a DIFFERENT, already-handled case —
-        _cable_metro_services's own no-op guard covers "services declared
-        with no edge pair to hang them off" — so this check does nothing
-        when there is none, rather than dropping every service entry.
-        """
-        physical_edge_entries = [
-            entry
-            for entry in entries
-            if entry.get("role") == "edge"
-            and (entry.get("template") or {}).get("template_kind") == _COLO_TEMPLATE_KIND_PHYSICAL
-        ]
-        if not physical_edge_entries:
-            return entries
-
-        physical_edge_port_roles: set[str] = set()
-        for entry in physical_edge_entries:
-            for iface in (entry.get("template") or {}).get("interfaces") or []:
-                role = iface.get("role")
-                if role:
-                    physical_edge_port_roles.add(role)
-
-        usable: list[dict[str, Any]] = []
-        for entry in entries:
-            role = entry.get("role")
-            template = entry.get("template") or {}
-            is_physical_service = role in _COLO_SERVICE_ROLES and template.get("template_kind") == (
-                _COLO_TEMPLATE_KIND_PHYSICAL
-            )
-            if is_physical_service and role not in physical_edge_port_roles:
-                self.logger.warning(
-                    f"Metro {self.fabric_name}: fabric_templates entry for role={role!r} has no matching "
-                    f"{role!r}-role port on any physical edge template in this metro (available edge port "
-                    f"roles: {sorted(physical_edge_port_roles) or 'none'}) — skipping this entry rather than "
-                    "creating an appliance with nothing to cable it to. Point the edge template at a device "
-                    f"with a {role!r}-role port block, or drop this entry."
-                )
-                continue
-            usable.append(entry)
-        return usable
-
-    async def _ensure_colocation_pools(self, *, metro_id: str) -> str:
-        """Create this metro's loopback/management/technical/ASN pools and attach them.
-
-        Returns the ASN pool's id, which _ensure_metro_evpn draws the site AS from.
-
-        Written out rather than delegating to PoolMixin.allocate_resource_pools()
-        for one concrete reason: that helper derives pool KIND from pool name
-        (``is_prefix_pool = strategy == "fabric" and pool_name in ["technical",
-        "loopback"]``), so a pool it names "{metro}-loopback-pool" is always a
-        CoreIPPrefixPool. That is right for a DC, whose pods slice their own
-        address pools out of it, but a metro has no pod tier — create_devices()
-        resolves "{fabric_name}-loopback-pool" and hands it straight to
-        allocate_next_ip_address(), which needs a CoreIPAddressPool. Asking
-        allocate_resource_pools() for both a prefix pool and an address pool
-        under the same name is not expressible, so the three pools are built
-        here with explicit kinds.
-
-        Each pool is a SLICE of a global bootstrap pool (Loopback-IPv4 etc.,
-        data/bootstrap/17_ip_prefix_pools.yml), never a fresh top-level
-        supernet invented at runtime — the bug that rule exists to avoid
-        (a runtime-created IpamPrefix only exists on its creating branch, so
-        re-running on another branch found the pool by name but could not
-        resolve its resource, and every allocation failed with "No more
-        resources available").
-
-        No "does it already exist" short-circuit: allocate_next_ip_prefix()'s
-        identifier makes each slice idempotent and the pools' unique names plus
-        save(allow_upsert=True) make the pools themselves idempotent, so
-        re-running always converges instead of being able to permanently skip
-        healing a pool left broken by an earlier code version.
-        """
-        metro = self.fabric_name
-
-        loopback_pool = await self.ensure_sliced_pool(
-            pool_name=f"{metro}-loopback-pool",
-            parent_pool_name="Loopback-IPv4",
-            prefix_length=_COLO_LOOPBACK_PREFIX_LENGTH,
-            role="loopback",
-            kind="address",
-        )
-        management_pool = await self.ensure_sliced_pool(
-            pool_name=f"{metro}-management-pool",
-            parent_pool_name="Management-IPv4",
-            prefix_length=_COLO_MANAGEMENT_PREFIX_LENGTH,
-            role="management",
-            kind="address",
-        )
-        technical_pool = await self.ensure_sliced_pool(
-            pool_name=f"{metro}-technical-pool",
-            parent_pool_name="Technical-IPv4",
-            prefix_length=_COLO_TECHNICAL_PREFIX_LENGTH,
-            role="technical",
-            kind="prefix",
-        )
-
-        asn_start, asn_end = name_to_asn_range(dc_name=metro, max_pods=_COLO_ASN_MAX_PODS)
+        asn_units = colo_metro_asn_units(design) if design else _METRO_ASN_SIZING_UNITS
+        asn_start, asn_end = name_to_asn_range(dc_name=metro, max_pods=asn_units)
         asn_pool = await self.upsert_asn_pool(
             pool_name=f"{metro}-asn-pool",
             description=f"ASN pool for colocation metro {metro.upper()}",
@@ -412,398 +133,30 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
             node="ManagedSegmentDeployment",
             node_attribute="vni",
         )
-        self._vtep_pool = await self.ensure_sliced_pool(
-            pool_name=f"{metro}-loopback-ipv6-pool",
-            parent_pool_name="Loopback-IPv6",
-            prefix_length=_COLO_LOOPBACK_IPV6_PREFIX_LENGTH,
-            role="loopback",
-            kind="address",
-        )
 
-        await self.attach_refs(
-            kind=TopologyColocationMetro,
-            node_id=metro_id,
-            refs={
-                "loopback_pool": loopback_pool.id,
-                "management_pool": management_pool.id,
-                "technical_pool": technical_pool.id,
-                "fabric_asn_pool": asn_pool.id,
-                "vni_pool": vni_pool.id,
-            },
-        )
-        self.logger.info(f"Metro {metro}: attached loopback/management/technical/ASN/VNI pool references")
-        return asn_pool.id
-
-    async def _create_metro_devices(self, *, templates: list[dict[str, Any]], metro_id: str) -> dict[str, list[str]]:
-        """Instantiate every fabric_templates entry as this metro's devices.
-
-        Returns the created PHYSICAL device names keyed by role, so
-        _cable_metro_services can wire the service appliances to the on-ramp
-        routers. Physical only, because that is all a DcimCable can join — virtual
-        kit is created and then withheld, see the branch below. Names accumulate
-        per role rather than being overwritten, because nothing stops a metro
-        declaring two entries for the same role (two firewall models, say).
-
-        indexes=[] — a metro's on-ramp is flat, with no fabric/pod/suite/row/rack
-        path to encode, so the "standard" naming strategy yields
-        "{role code}-{metro}{NN}" (e.g. ``eg-fr01``). Contrast dc.py, which
-        passes the DC and pod indexes because a border-leaf's name records which
-        pod's spines it cables to.
-
-        Two shapes of device come out of here, split on role exactly as dc.py
-        splits its fabric tiers from its firewall/load-balancer pair:
-
-          edge                    — a router in the on-ramp. Gets a /32 loopback,
-                                    because it runs the routing that peers with
-                                    the DCs it fronts.
-          firewall, load-balancer — a service appliance hanging off that on-ramp.
-                                    No loopback (it is not part of the underlay
-                                    or overlay), HA-paired two-at-a-time via the
-                                    shared DeviceMixin.create_ha_role_devices()
-                                    — the same shape dc.py and pod.py use for
-                                    their own border-leaf/border-spine pairs.
-        """
-        # Edge name -> platform, for _ensure_metro_evpn's BGW setup.
-        self._edge_devices: dict[str, str] = {}
-        naming_convention = cast(
-            Literal["standard", "hierarchical", "flat", "computed"],
-            (self.data.get("naming_convention") or "standard").lower(),
-        )
-
-        physical_names_by_role: dict[str, list[str]] = {}
-
-        for entry in (e for e in templates if e["role"] == "edge"):
-            virtual = entry["template"].get("template_kind") == _COLO_TEMPLATE_KIND_VIRTUAL
-            # Always allocated, virtual or physical: an edge router runs the
-            # routing that peers with the DCs it fronts either way — an MCR
-            # still has a loopback and still peers over it.
-            options = DeviceOptions(
-                indexes=[], allocate_loopback=True, loopback_prefix_length=loopback_prefix_length("ipv4")
-            )
-            if virtual:
-                # Provider-hosted virtual kit, so a DcimVirtualDevice. No
-                # hosting_device: the colocation operator's own platform runs
-                # it (Network Edge, MCR), and that platform is not a device we
-                # model — contrast dc.py's virtual firewall/load-balancer
-                # instances, which sit on physical hardware we do own.
-                options["virtual"] = True
-            names = await self.create_devices(
-                deployment_id=metro_id,
-                device_role="edge",
-                quantity=entry["quantity"],
-                template=entry["template"],
-                naming_convention=naming_convention,
-                options=options,
-            )
-            self._register_metro_devices(physical_names_by_role, role="edge", virtual=virtual, names=names)
-            platform = (entry["template"].get("platform") or {}).get("name") or ""
-            self._edge_devices.update(dict.fromkeys(names, platform))
-
-        for role in sorted(_COLO_SERVICE_ROLES):
-            service_entries = [e for e in templates if e["role"] == role]
-            if not service_entries:
-                continue
-            results = await self.create_ha_role_devices(
-                role=cast(Literal["firewall", "load-balancer"], role),
-                entries=service_entries,
-                deployment_id=metro_id,
-                naming_convention=naming_convention,
-                indexes=[],
-                virtual_template_kind=_COLO_TEMPLATE_KIND_VIRTUAL,
-            )
-            for entry, names in results:
-                virtual = entry["template"].get("template_kind") == _COLO_TEMPLATE_KIND_VIRTUAL
-                self._register_metro_devices(physical_names_by_role, role=role, virtual=virtual, names=names)
-
-        return physical_names_by_role
-
-    async def _ensure_metro_evpn(self, *, metro_id: str, asn_pool_id: str) -> dict[str, str]:
-        """Make the metro's edges EVPN Multi-Site border gateways for their site.
-
-        A stretched segment reaches a colocation through the edge pair, which
-        re-originates the DC's EVPN routes into the metro (and back) — the
-        border-gateway role, with the metro as its own Multi-Site site. That
-        needs three things the generic device pass does not create:
-
-        * a site ASN, attached as ``evpn_rt_as`` — the metro's site-id and the
-          admin field of its local route-targets, same role as a DC's fabric AS
-          (PoolMixin.attach_refs, the same evpn_rt_as link a DC gets);
-        * an overlay ManagedBGP per edge in that ASN, so the DCI peerings
-          (add_circuit, for a circuit with peering_role=dci) have a process
-          to attach to;
-        * an IPv6 VTEP loopback per edge (see _COLO_LOOPBACK_IPV6_PREFIX_LENGTH).
-
-        The DCI sessions (add_circuit, generators/topology/circuit.py) and the
-        shared Multi-Site VIP (data/demos/30_all/08_interconnects/
-        01_colo_onramp/) are not built here: both need the DC end of the dark
-        fibre, which this generator cannot see.
-
-        Idempotent: the AS is found by its deterministic description before a
-        new one is drawn from asn_pool_id (the metro's ASN pool; a from_pool on a new node would allocate
-        a fresh ASN every run), and every other object upserts by HFID.
-
-        Returns the overlay process id of each edge it saved (edge name -> id),
-        so _ensure_edge_pair references them directly instead of re-querying
-        by name (search-index lag on objects created earlier in this run).
-        """
-        metro = self.fabric_name
-        process_ids: dict[str, str] = {}
-        edge_devices: dict[str, str] = getattr(self, "_edge_devices", {})
-        if not edge_devices:
-            return process_ids
-        site_as_id = await self.ensure_shared_as(description=f"{metro} EVPN site ASN", asn_pool_id=asn_pool_id)
-        await self.attach_refs(kind="TopologySegmentHosting", node_id=metro_id, refs={"evpn_rt_as": site_as_id})
-
-        loopbacks = await self.client.filters(
-            kind=DcimVirtualInterface,
-            device__name__values=sorted(edge_devices),
-            role__values=["loopback", "loopback-vtep"],
-            include=["device", "ip_address"],
-        )
-        by_device: dict[tuple[str, str], Any] = {
-            (loopback.device.peer.name.value, loopback.role.value): loopback for loopback in loopbacks
-        }
-        for name, platform in sorted(edge_devices.items()):
-            router_loopback = by_device.get((name, "loopback"))
-            if router_loopback is None or not router_loopback.ip_address.initialized:
-                self.logger.error(f"Metro {metro}: {name} has no addressed loopback — skipping its EVPN process")
-                continue
-            device = router_loopback.device.peer
-            vtep = by_device.get((name, "loopback-vtep"))
-            vtep_ip: Any
-            if vtep is not None and vtep.ip_address.initialized:
-                vtep_ip = {"id": vtep.ip_address.id}
-            else:
-                vtep_ip = await self.client.allocate_next_ip_address(
-                    resource_pool=self._vtep_pool,
-                    identifier=f"{name}-vtep",
-                    prefix_length=128,
-                    data={"description": f"EVPN VTEP loopback for {name}"},
-                )
-            vtep_obj = await self.client.create(
-                kind=DcimVirtualInterface,
-                data={
-                    **({"id": vtep.id} if vtep is not None else {}),
-                    "name": get_loopback_name(platform, _COLO_VTEP_LOOPBACK_INDEX),
-                    "description": "EVPN VTEP source (IPv6)",
-                    "device": {"id": device.id},
-                    "status": "active",
-                    "role": "loopback-vtep",
-                    "ip_address": vtep_ip,
-                },
-            )
-            await vtep_obj.save(allow_upsert=True)
-            bgp = await self.client.create(
-                kind=ManagedBGP,
-                data={
-                    "name": f"{name}-bgp-overlay",
-                    "description": f"EVPN Multi-Site border-gateway process for {name}",
-                    "status": "active",
-                    "local_as": {"id": site_as_id},
-                    "router_id": {"id": router_loopback.ip_address.id},
-                    "capabilities": [{"id": device.id}],
-                    "process_role": "overlay",
-                },
-            )
-            await bgp.save(allow_upsert=True)
-            process_ids[name] = bgp.id
-            self.logger.info(f"Metro {metro}: ensured EVPN VTEP + overlay BGP for {name}")
-        return process_ids
-
-    async def _ensure_edge_pair(self, *, physical_edge_names: list[str], overlay_process_ids: dict[str, str]) -> None:
-        """Link a metro's two physical edges and peer them over that link (iBGP FABRIC).
-
-        The edges are single-box sites with no fabric between them, yet they
-        share one Multi-Site site (same AS, same VIP): they need a direct
-        link plus a directly connected iBGP session carrying IPv6 unicast
-        (VTEP /128 reachability) and l2vpn evpn. A loopback EVPN session is
-        impossible — the edges run no IGP.
-
-        Only when EXACTLY two PHYSICAL edges exist: virtual edges (an MCR, a
-        Network Edge) have no port to cable, and a metro with 0 or 1 physical
-        edge has nothing to pair (info log, no pair). More than two is not a
-        pair either.
-
-        Everything it writes is owned by this metro and keyed
-        deterministically: the technical IPv6 slice, the P2P prefix (keyed by
-        the link), the cable, the FABRIC-<a>-<b> peering and the metro's own
-        routing key. One lock for the whole step, so overlapping runs of one
-        metro never both create any of them.
-        """
-        metro = self.fabric_name
-        if len(physical_edge_names) != 2:
+        refs: dict[str, str | None] = {"fabric_asn_pool": asn_pool.id, "vni_pool": vni_pool.id}
+        if supernet_lengths:
+            # Serialized because each supernet allocates a prefix from a shared
+            # bootstrap pool: two overlapping runs of one metro could otherwise
+            # both create a pool of the same name (see allocate_resource_pools).
+            async with self.resource_lock(f"colocation-metro-pools-{metro}"):
+                for slot, prefix_length in supernet_lengths.items():
+                    # A prefix pool for every slot: the zones slice their own
+                    # address and prefix pools out of it. An existing pool keeps its
+                    # prefix when the design changed, see the module docstring.
+                    pool = await self.ensure_sliced_pool(
+                        pool_name=slot.name(metro),
+                        parent_pool_name=slot.bootstrap_pool,
+                        prefix_length=prefix_length,
+                        role=slot.role,
+                        kind="prefix",
+                    )
+                    if slot in ATTACHED_SLOTS:
+                        refs[cast(str, slot.attribute)] = pool.id
             self.logger.info(
-                f"Metro {metro}: {len(physical_edge_names)} physical edge(s) — an edge pair needs exactly 2, "
-                "no interlink or FABRIC session"
+                f"Metro {metro}: design '{cast(dict, design)['name']}' sized supernets "
+                + ", ".join(f"{slot.name(metro)}=/{length}" for slot, length in supernet_lengths.items())
             )
-            return
-        first, second = sorted(physical_edge_names)
-        processes = [overlay_process_ids.get(first), overlay_process_ids.get(second)]
-        if not all(processes):
-            self.logger.warning(
-                f"Metro {metro}: {first}/{second} have no overlay BGP process from this run — skipping the "
-                "edge pair (see the EVPN step above)"
-            )
-            return
 
-        async with self.resource_lock(f"edge-pair-{metro}"):
-            pool = await self.ensure_sliced_pool(
-                pool_name=f"{metro}-technical-ipv6-pool",
-                parent_pool_name="Technical-IPv6",
-                prefix_length=_COLO_TECHNICAL_IPV6_PREFIX_LENGTH,
-                role="technical",
-                kind="prefix",
-            )
-            legs = await self.create_chain_cabling(
-                hops=[
-                    {"devices": [first], "down_role": _COLO_INTERLINK_ROLE},
-                    {"devices": [second], "up_role": _COLO_INTERLINK_ROLE},
-                ],
-                options=CablingOptions(pool=pool, p2p_prefix_length=_COLO_P2P_IPV6_PREFIX_LENGTH),
-            )
-            pairs = legs[0] if legs else []
-            if not pairs:
-                self.logger.warning(
-                    f"Metro {metro}: no {_COLO_INTERLINK_ROLE}-role port pair on {first}/{second} — no FABRIC session"
-                )
-                return
-            interface_ids = [iface.id for pair in pairs for iface in pair]
-
-            key_id = await self._ensure_routing_password(
-                name=f"{metro}-fabric-key", description=f"iBGP FABRIC session auth key for metro {metro}"
-            )
-            if key_id is None:
-                return
-            address_families = [
-                await self.ensure_address_family(*_COLO_FABRIC_UNICAST_AF),
-                await self.ensure_address_family(*EVPN_AF),
-            ]
-            await self.upsert_bgp_peering(
-                name=f"FABRIC-{first}-{second}",
-                description=f"Metro {metro} edge pair {first} <-> {second}: IPv6 unicast + EVPN over the interlink",
-                status="active",
-                session_type="IBGP",
-                peering_role="fabric",
-                process_ids=[str(process_id) for process_id in processes],
-                address_family_ids=address_families,
-                password_id=key_id,
-                interface_ids=interface_ids,
-            )
-            self.logger.info(f"Metro {metro}: ensured edge pair {first} <-> {second} (interlink + FABRIC session)")
-
-    def _register_metro_devices(
-        self,
-        physical_names_by_role: dict[str, list[str]],
-        *,
-        role: str,
-        virtual: bool,
-        names: list[str],
-    ) -> None:
-        """Log one fabric_templates entry's just-created devices and, if
-        physical, accumulate their names for _cable_metro_services.
-
-        Virtual devices are logged and then deliberately withheld from that
-        accumulation. A DcimCable is fibre someone pulls between two chassis
-        in one room; these are rented instances on the colocation operator's
-        own platform, and the link between them is a connection inside that
-        platform, not a cable. It is a real link and it is not modelled here:
-        there is no virtual-link node kind in the schema, and the thing that
-        does express a link we do not own — a TopologyVirtualCircuit over a
-        TopologyPhysicalCircuit — needs both endpoints and a provider, which
-        is the interconnect generator's input, not this one's.
-
-        Not merely cosmetic: PA-VM_EDGE_CUSTOMER_* exposes `uplink` on
-        eth[1-6], the exact role _cable_border_services claims on the service
-        side, so without this a deployment_type=virtual metro declaring an
-        edge+firewall pair would reach create_chain_cabling and fail the task
-        on C8000V_EDGE's missing `firewall` ports.
-        """
-        kind_label = "virtual" if virtual else "physical"
-        self.logger.info(f"Metro {self.fabric_name}: created {len(names)} {kind_label} {role} device(s): {names}")
-        if virtual:
-            self.logger.info(
-                f"Metro {self.fabric_name}: {role} kit is virtual, so it is not cabled — a link between "
-                "provider-hosted instances is a connection inside the provider's platform, not a DcimCable"
-            )
-            return
-        physical_names_by_role.setdefault(role, []).extend(names)
-
-    async def _cable_metro_services(self, *, physical_names_by_role: dict[str, list[str]]) -> None:
-        """Cable this metro's firewall/load-balancer pair to its edge pair.
-
-        The same leg dc.py builds between its border-leafs and its shared
-        services, and built with the same helper, because it is the same shape:
-        the appliance is not in the underlay, it hangs off the tier that is.
-        Index-paired (eg-fr01<->fw-fr01, eg-fr02<->fw-fr02), so each edge/service
-        couple is one independent redundant path rather than an any-to-any mesh.
-
-        When a DcimCable is the right model, and when it is not
-        ------------------------------------------------------
-        A DcimCable means fibre someone pulled between two chassis, so it is only
-        correct when both ends are kit we own, in one room. Two conditions have to
-        hold, and this method satisfies both by construction rather than by
-        checking:
-
-        1. Both ends are physical. Virtual kit never reaches here — the device
-           pass drops it (see _create_metro_devices), because a link between two
-           provider-hosted instances lives inside the provider's platform.
-        2. Both ends are in one facility. A link that leaves the cage is the
-           colocation operator's cross-connect, modelled as a
-           TopologyPhysicalCircuit with per-customer TopologyVirtualCircuits
-           riding it (data/demos/30_all/08_interconnects/), never as a cable. That
-           is why the on-ramp's links to the DCs and cloud fabrics it fronts are
-           absent here and not merely deferred.
-
-        Condition 2 is an assumption, not an assertion, and worth naming as such:
-        the on-ramp pair is declared on the metro and neither
-        TopologyColocationMetro.fabric_templates nor the devices it creates carry
-        a TopologyColocationZone, so nothing in the model says which cage holds
-        them. The convention the demo data follows is that one cage holds the
-        whole on-ramp (FR2 in Frankfurt, with FR6 customer cages only) and the
-        other cages reach it over a cross-connect. Split an on-ramp across two
-        cages and these cables would be wrong — but so would the single
-        management/loopback pool they share, so the fix belongs in the schema
-        (a zone on the kit) rather than in a guard here.
-
-        Always "pbr": TopologyColocationMetro has no connectivity_mode attribute
-        to read, and the DC's "inline" alternative needs a tier that both hands
-        traffic to the appliance and takes it back (border-leaf), which an
-        on-ramp router pair is not — it forwards on to a DC or a cloud fabric
-        instead of returning it. So each service role gets its own independent
-        leg off the edges.
-
-        No P2P addressing, for the same reason dc.py's call passes no pool:
-        _cable_border_services hands create_chain_cabling no CablingOptions, so
-        _resolve_pool(None, fallback_name=None) returns None. The metro's
-        technical_pool therefore still has no consumer here.
-        """
-        edge_names = physical_names_by_role.get("edge", [])
-        firewall_names = physical_names_by_role.get("firewall", [])
-        load_balancer_names = physical_names_by_role.get("load-balancer", [])
-        if not edge_names or not (firewall_names or load_balancer_names):
-            # Nothing to cable: a metro with no services (Paris), one whose kit is
-            # all virtual (Amsterdam), or — a real possibility worth not crashing
-            # on — services declared with no edge pair to hang them off.
-            # create_chain_cabling would no-op on the empty side anyway; returning
-            # early keeps the log quiet. Note this also covers the mixed case a
-            # deployment_type=hybrid metro allows: physical services declared
-            # against virtual edges leave edge_names empty, and the cage-crossing
-            # question never arises because no cable is laid.
-            return
-
-        # Role names on the EDGE side of each leg — BORDER_ROLE_FOR_SERVICES
-        # (generators/connections.py), the same mapping dc.py and pod.py use
-        # for their own border-leaf/border-spine: a `firewall`-role port
-        # faces a firewall. N9K-C9316D-GX_EDGE provides Ethernet1/[15-16] for
-        # that (see data/bootstrap/10_physical_devices_templates_cisco_nxos.
-        # yaml) and provides no `load-balancer` ports at all — a metro
-        # declaring a load-balancer against an edge template with no such
-        # port never gets this far: _drop_uncablable_service_entries drops
-        # that entry at validation time, before any device for it exists.
-        await self._cable_border_services(
-            border_role_for=BORDER_ROLE_FOR_SERVICES,
-            connectivity_mode="pbr",
-            border_names=edge_names,
-            firewall_names=firewall_names,
-            load_balancer_names=load_balancer_names,
-        )
+        await self.attach_refs(kind=TopologyColocationMetro, node_id=metro_id, refs=refs)
+        self.logger.info(f"Metro {metro}: attached ASN/VNI{'/supernet' if supernet_lengths else ''} pool references")

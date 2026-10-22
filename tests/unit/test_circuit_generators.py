@@ -15,7 +15,14 @@ from unittest.mock import MagicMock
 import pytest
 
 from generators.logger import GeneratorError
-from generators.topology.circuit import CircuitEndpoint, circuit_endpoints, endpoint_problem, order_endpoints
+from generators.topology.circuit import (
+    CircuitEndpoint,
+    CircuitLocation,
+    circuit_endpoints,
+    endpoint_problem,
+    order_endpoints,
+    plan_locations,
+)
 from tests.unit.simulators.circuit_fakes import (
     CAGE,
     CIRCUIT_ID,
@@ -24,8 +31,10 @@ from tests.unit.simulators.circuit_fakes import (
     METRO,
     PREFIX_ID,
     REGION,
+    SIBLING_CAGE,
     V4_POOL_ID,
     V6_POOL_ID,
+    VIRTUAL_COLOCATION,
     FakeClient,
     cage_edge,
     dc_border_leaf,
@@ -60,7 +69,7 @@ class TestEndpoints:
         circuit = clean_data(physical_payload(ends=[dc_border_leaf(), cage_edge(), cage_edge()]))
         endpoints = circuit_endpoints(circuit["TopologyPhysicalCircuit"][0])
 
-        assert [e.label for e in endpoints] == ["bl-dc101101/Ethernet1/35", "eg-fr01/Ethernet1/10"]
+        assert [e.label for e in endpoints] == ["bl-dc101101/Ethernet1/35", "eg-fr201/Ethernet1/10"]
 
     def test_dc_end_carries_its_fabric_and_overlay_process(self) -> None:
         """A device whose deployment is a TopologyDataCenter is a DC fabric end."""
@@ -215,7 +224,7 @@ class TestPhysicalCircuitDci:
         assert cage.ip_address == "IpamIPAddress:fd00:2200::/127"
         assert leaf.ip_address == "IpamIPAddress:fd00:2200::1/127"
         assert cage.description.value == "DCI DF-DC10-EQXFR2 to bl-dc101101 Ethernet1/35"
-        assert leaf.description.value == "DCI DF-DC10-EQXFR2 to eg-fr01 Ethernet1/10"
+        assert leaf.description.value == "DCI DF-DC10-EQXFR2 to eg-fr201 Ethernet1/10"
         assert cage.status.value == leaf.status.value == "active"
         assert client.saves()["if-eg"] == {"update_group_context": False}
         assert client.saves()["if-bl"] == {"update_group_context": False}
@@ -261,7 +270,7 @@ class TestPhysicalCircuitDci:
         data, node = peerings[0]
         assert data == {
             "name": "DCI-DF-DC10-EQXFR2",
-            "description": "EVPN Multi-Site DCI eg-fr01 <-> bl-dc101101 over DF-DC10-EQXFR2",
+            "description": "EVPN Multi-Site DCI eg-fr201 <-> bl-dc101101 over DF-DC10-EQXFR2",
             "status": "active",
             "session_type": "EBGP",
             "peering_role": "dci",
@@ -270,7 +279,7 @@ class TestPhysicalCircuitDci:
             "send_community": True,
             "send_extended_community": True,
             "address_families": [{"id": "af-ipv6-unicast"}, {"id": "af-l2vpn-evpn"}],
-            "bgp_processes": [{"id": "eg-fr01-bgp-overlay"}, {"id": "bl-dc101101-bgp-overlay"}],
+            "bgp_processes": [{"id": "eg-fr201-bgp-overlay"}, {"id": "bl-dc101101-bgp-overlay"}],
             "password": {"id": DC_KEY_ID},
             "capabilities": [{"id": "if-eg"}, {"id": "if-bl"}],
         }
@@ -329,7 +338,7 @@ class TestPhysicalCircuitDciRefusals:
             pytest.param(
                 physical_payload(ends=[dc_border_leaf(), cage_edge(roles=("underlay",))]),
                 {},
-                "eg-fr01 has no single overlay ManagedBGP process",
+                "eg-fr201 has no single overlay ManagedBGP process",
                 id="no-overlay-process",
             ),
             pytest.param(
@@ -383,6 +392,11 @@ def _aws_router(**kwargs: Any) -> dict[str, Any]:
     return interface("if-aws", "Ethernet1", "EXT-AWS-DX-FR2", deployment=REGION, **kwargs)
 
 
+def _virtual_edge(**kwargs: Any) -> dict[str, Any]:
+    """The virtual edge of a provider-hosted presence, deployed in its TopologyVirtualColocation."""
+    return interface("if-ve", "Gi1", "eg-am-ne01", deployment=VIRTUAL_COLOCATION, **kwargs)
+
+
 def _isp_pe(**kwargs: Any) -> dict[str, Any]:
     """The ISP's access PE, deployed in its TopologyExternalProviders."""
     return interface("if-pe", "xe-0/0/1", "pe-orange-fr", deployment=ISP, **kwargs)
@@ -402,6 +416,11 @@ class TestPhysicalCircuitPlacement:
             pytest.param([cage_edge(), _aws_router()], [CAGE], ["loc-eu-central-1"], id="cloud-region-derived"),
             pytest.param([cage_edge(), _isp_pe()], [CAGE], ["loc-ORANGE-FR"], id="isp-derived"),
             pytest.param([dc_border_leaf(), _isp_pe()], [], ["dep-DC10", "loc-ORANGE-FR"], id="both-ends-derived"),
+            # The on-ramp edge deploys to its zone: the cage end is derived too, nothing has to be authored.
+            pytest.param([dc_border_leaf(), cage_edge()], [], ["dep-DC10", "loc-FR2"], id="zone-and-dc-derived"),
+            pytest.param(
+                [dc_border_leaf(), _virtual_edge()], [], ["dep-DC10", "loc-AM-NE"], id="virtual-colocation-derived"
+            ),
         ],
     )
     @pytest.mark.asyncio
@@ -490,11 +509,23 @@ class TestPhysicalCircuitPlacementRefusals:
                 r"location eu-west-1 .* EXT-AWS-DX-FR2 is in eu-central-1",
                 id="authored-region-contradicts-derived-region",
             ),
-            pytest.param([dc_border_leaf(), cage_edge()], [], r"found 1: DC10$", id="cage-not-authored"),
             pytest.param(
                 [dc_border_leaf(), cage_edge()],
-                [CAGE, place("TopologyColocationZone", "FR6")],
-                r"found 3: FR2, FR6, DC10$",
+                [SIBLING_CAGE, dc_place()],
+                r"location FR6 \(TopologyColocationZone\) contradicts the endpoint devices' deployment: "
+                r"eg-fr201 is in FR2",
+                id="authored-zone-contradicts-derived-zone",
+            ),
+            pytest.param(
+                [dc_border_leaf(), interface("if-x", "eth1", "dev-x", no_deployment=True)],
+                [],
+                r"found 1: DC10$",
+                id="second-end-not-placed",
+            ),
+            pytest.param(
+                [dc_border_leaf(), cage_edge()],
+                [CAGE, ISP],
+                r"found 3: FR2, ORANGE-FR, DC10$",
                 id="more-than-two",
             ),
             pytest.param(
@@ -528,10 +559,16 @@ class TestPhysicalCircuitPlacementRefusals:
     @pytest.mark.asyncio
     async def test_error_names_the_circuit_and_its_endpoints(self) -> None:
         with pytest.raises(GeneratorError) as excinfo:
-            await physical_generator(FakeClient()).generate(physical_payload(role="none", locations=[]))
+            await physical_generator(FakeClient()).generate(
+                physical_payload(
+                    role="none",
+                    ends=[dc_border_leaf(), cage_edge(no_deployment=True)],
+                    locations=[],
+                )
+            )
 
         assert str(excinfo.value).startswith(
-            "DF-DC10-EQXFR2 (bl-dc101101/Ethernet1/35 | eg-fr01/Ethernet1/10): needs exactly 2 distinct locations"
+            "DF-DC10-EQXFR2 (bl-dc101101/Ethernet1/35 | eg-fr201/Ethernet1/10): needs exactly 2 distinct locations"
         )
 
     @pytest.mark.asyncio
@@ -543,6 +580,87 @@ class TestPhysicalCircuitPlacementRefusals:
             await physical_generator(client).generate(physical_payload(locations=[CAGE]))
 
         assert client.writes == []
+
+
+def _endpoint(interface_id: str, device: str, deployment: dict[str, Any] | None) -> CircuitEndpoint:
+    """A parsed circuit end on ``device`` deployed to ``deployment`` (a raw place node, or None)."""
+    parsed = CircuitEndpoint.parse(
+        clean_data(
+            interface(interface_id, "Ethernet1/1", device, deployment=deployment, no_deployment=deployment is None)
+        )
+    )
+    assert parsed is not None
+    return parsed
+
+
+class TestPlanLocations:
+    """plan_locations: which locations an end device's deployment derives, and what refuses the plan."""
+
+    @pytest.mark.parametrize(
+        ("deployment", "derived_id"),
+        [
+            pytest.param(CAGE, "loc-FR2", id="zone"),
+            pytest.param(VIRTUAL_COLOCATION, "loc-AM-NE", id="virtual-colocation"),
+            pytest.param(dc_place(), "dep-DC10", id="dc"),
+            pytest.param(REGION, "loc-eu-central-1", id="cloud-region"),
+            pytest.param(ISP, "loc-ORANGE-FR", id="isp"),
+        ],
+    )
+    def test_a_facility_deployment_derives_its_end(self, deployment: dict[str, Any], derived_id: str) -> None:
+        """An end deployed to a derivable facility places that end; the other end completes the pair."""
+        ends = [_endpoint("if-a", "dev-a", deployment), _endpoint("if-b", "dev-b", dc_place("DC11"))]
+
+        derived, problem = plan_locations([], ends)
+
+        assert problem is None
+        assert {location.id for location in derived} == {derived_id, "dep-DC11"}
+
+    def test_an_authored_zone_that_is_the_edges_zone_is_not_derived_again(self) -> None:
+        ends = [_endpoint("if-a", "eg-fr201", CAGE), _endpoint("if-b", "bl-dc101101", dc_place())]
+        authored = [CircuitLocation.parse(clean_data(CAGE))]
+
+        derived, problem = plan_locations([loc for loc in authored if loc], ends)
+
+        assert problem is None
+        assert [location.id for location in derived] == ["dep-DC10"]
+
+    def test_a_metro_deployment_derives_nothing(self) -> None:
+        """The metro is no facility: a device still deployed to it places no end."""
+        ends = [_endpoint("if-a", "eg-fr01", METRO), _endpoint("if-b", "bl-dc101101", dc_place())]
+
+        derived, problem = plan_locations([], ends)
+
+        assert derived == []
+        assert problem is not None
+        assert "found 1: DC10" in problem
+
+    def test_an_authored_zone_other_than_the_edges_zone_contradicts(self) -> None:
+        """FR6 authored, the edge sits in FR2: same kind, different place."""
+        ends = [_endpoint("if-a", "eg-fr201", CAGE), _endpoint("if-b", "bl-dc101101", dc_place())]
+        authored = [CircuitLocation.parse(clean_data(SIBLING_CAGE))]
+
+        derived, problem = plan_locations([loc for loc in authored if loc], ends)
+
+        assert derived == []
+        assert problem is not None
+        assert "location FR6 (TopologyColocationZone) contradicts the endpoint devices' deployment" in problem
+        assert "eg-fr201 is in FR2" in problem
+
+    def test_a_zone_and_a_virtual_colocation_do_not_contradict_each_other(self) -> None:
+        """Different kinds: an authored zone does not contradict a virtual colocation derived from the other end."""
+        ends = [_endpoint("if-a", "eg-fr201", CAGE), _endpoint("if-b", "eg-am-ne01", VIRTUAL_COLOCATION)]
+
+        derived, problem = plan_locations([], ends)
+
+        assert problem is None
+        assert {location.id for location in derived} == {"loc-FR2", "loc-AM-NE"}
+
+    def test_the_problem_text_names_the_colocation_source(self) -> None:
+        """The refusal lists what a deployment can derive, colocation included."""
+        _, problem = plan_locations([], [_endpoint("if-a", "dev-x", None)])
+
+        assert problem is not None
+        assert "a DC, ISP, cloud region or colocation derived from an endpoint device's deployment" in problem
 
 
 # ===========================================================================

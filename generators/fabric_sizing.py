@@ -28,7 +28,7 @@ Model, per pod design and DC design:
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Any
 
 PodDesign = Mapping[str, Any]
@@ -172,3 +172,106 @@ def dc_management_devices(dc: DcDesign) -> int:
 def dc_management_bits(dc: DcDesign) -> int:
     """Host bits of the DC management pool: one address per switch, 25% headroom."""
     return bits_with_headroom(dc_management_devices(dc))
+
+
+# ---------------------------------------------------------------------------
+# Colocation envelope
+# ---------------------------------------------------------------------------
+#
+# A zone (or virtual colocation) ``design`` (TopologyTemplateColocationZone) states
+# the most edge routers, firewalls and load balancers it holds; a metro ``design``
+# (TopologyTemplateColocationMetro) the most zones it holds and the zone designs they
+# may use. Same rules as above: sized for the envelope, never for the devices built
+# so far, 25% headroom on a pool that addresses devices or links, a pool that only
+# holds child pools exactly as wide as its children.
+#
+# Only edge routers take a loopback (firewalls and load balancers are appliances
+# off the on-ramp, outside the underlay and overlay); every device takes a
+# management address; both pools keep two spare addresses (see _COLO_ADDRESS_SPARE). The links of a zone are the interlink of its edge pair and
+# one leg per service appliance to its index-paired edge.
+
+ColoZoneDesign = Mapping[str, Any]
+ColoMetroDesign = Mapping[str, Any]
+
+# Spare addresses a zone keeps beyond its devices, loopback and management alike: on a pool this small
+# (a /30 or /29) 25% headroom is under two addresses, and an allocator that skips the network and broadcast
+# address would leave a two-device zone with none to replace a device with.
+_COLO_ADDRESS_SPARE = 2
+# The IPv6 slices every zone takes, fixed by what they hold rather than by the
+# design: one /128 VTEP loopback per edge (a /120, 256 addresses) and one /127 for
+# the edge pair's interlink (a /124, eight /127s). Host bits, like every size here.
+COLO_ZONE_LOOPBACK_IPV6_BITS = 8
+COLO_ZONE_TECHNICAL_IPV6_BITS = 4
+
+
+def colo_zone_devices(zone: ColoZoneDesign) -> int:
+    """The most devices a zone of this design holds: edge routers, firewalls and load balancers."""
+    return zone["max_edges"] + zone["max_firewalls"] + zone["max_load_balancers"]
+
+
+def colo_zone_links(zone: ColoZoneDesign) -> int:
+    """The point-to-point links of a zone of this design: the edge pair's interlink and one leg per appliance."""
+    interlink = 1 if zone["max_edges"] >= 2 else 0
+    return interlink + zone["max_firewalls"] + zone["max_load_balancers"]
+
+
+def colo_zone_loopback_bits(zone: ColoZoneDesign) -> int:
+    """Host bits of a zone's loopback pool: one per edge router, 25% headroom on top of two spare."""
+    return bits_with_headroom(zone["max_edges"] + _COLO_ADDRESS_SPARE)
+
+
+def colo_zone_management_bits(zone: ColoZoneDesign) -> int:
+    """Host bits of a zone's management pool: one address per device plus two spare, 25% headroom."""
+    return bits_with_headroom(colo_zone_devices(zone) + _COLO_ADDRESS_SPARE)
+
+
+def colo_zone_technical_bits(zone: ColoZoneDesign) -> int:
+    """Host bits of a zone's technical (P2P) pool: two addresses per link, 25% headroom, at least one link."""
+    return bits_with_headroom(2 * max(1, colo_zone_links(zone)))
+
+
+def _colo_zone_templates(metro: ColoMetroDesign) -> list[ColoZoneDesign]:
+    """The zone designs the metro design may host; there is nothing to size a metro from without one."""
+    templates = metro["zone_templates"]
+    if not templates:
+        raise ValueError(f"colocation design {metro.get('name')!r} lists no zone_templates")
+    return templates
+
+
+def _colo_metro_block_bits(metro: ColoMetroDesign, zone_bits: Callable[[ColoZoneDesign], int]) -> int:
+    """Host bits of a metro pool holding max_zones of the widest zone pool among the zone designs."""
+    block = 2 ** max(zone_bits(zone) for zone in _colo_zone_templates(metro))
+    return bits_to_hold(metro["max_zones"] * block)
+
+
+def colo_metro_loopback_bits(metro: ColoMetroDesign) -> int:
+    """Host bits of the metro loopback supernet: one widest zone loopback pool per zone."""
+    return _colo_metro_block_bits(metro, colo_zone_loopback_bits)
+
+
+def colo_metro_management_bits(metro: ColoMetroDesign) -> int:
+    """Host bits of the metro management supernet: one widest zone management pool per zone."""
+    return _colo_metro_block_bits(metro, colo_zone_management_bits)
+
+
+def colo_metro_technical_bits(metro: ColoMetroDesign) -> int:
+    """Host bits of the metro technical supernet: one widest zone technical pool per zone."""
+    return _colo_metro_block_bits(metro, colo_zone_technical_bits)
+
+
+def colo_metro_loopback_ipv6_bits(metro: ColoMetroDesign) -> int:
+    """Host bits of the metro IPv6 loopback supernet: one zone VTEP slice per zone."""
+    return bits_to_hold(metro["max_zones"] * 2**COLO_ZONE_LOOPBACK_IPV6_BITS)
+
+
+def colo_metro_technical_ipv6_bits(metro: ColoMetroDesign) -> int:
+    """Host bits of the metro IPv6 technical supernet: one zone interlink slice per zone."""
+    return bits_to_hold(metro["max_zones"] * 2**COLO_ZONE_TECHNICAL_IPV6_BITS)
+
+
+def colo_metro_asn_units(metro: ColoMetroDesign) -> int:
+    """The units the metro's ASN block is sized for: one per zone it may hold.
+
+    The metro uses one site AS today; the block keeps room for the per-zone ASNs a
+    later change may draw from it."""
+    return metro["max_zones"]

@@ -9,7 +9,7 @@ office_fabric.gql.
 No-ops unless office.fabric_templates is set — that relationship is the opt-in
 (schemas/extensions/topology/topology_customer.yml), the way sdwan_gateway is
 add_sdwan_edge's (generators/topology/sdwan_edge.py). It declares the fabric the
-way a colocation metro declares its on-ramp kit: ``2 x distribution-switch on
+way a colocation zone declares its on-ramp kit: ``2 x distribution-switch on
 template X``, never hand-written DcimPhysicalDevices.
 
 One office footprint is one fabric (an SD-Access style site). Two roles, and no
@@ -261,8 +261,8 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
         """Create this office's loopback/management/technical/VNI pools; attach the VNI pool.
 
         Each IP pool is a SLICE of a global bootstrap pool, never a fresh
-        top-level supernet invented at runtime (see colocation.py's
-        _ensure_colocation_pools for why), keyed by the pool name so a re-run
+        top-level supernet invented at runtime (see colocation_fabric.py's
+        _ensure_fabric_pools for why), keyed by the pool name so a re-run
         gets the same slice back. The loopback and management pools are address
         pools because create_devices() hands them straight to
         allocate_next_ip_address(); the technical pool is a prefix pool the /31

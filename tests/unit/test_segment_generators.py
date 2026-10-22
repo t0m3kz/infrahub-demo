@@ -1267,6 +1267,25 @@ class TestDeviceDeploymentIds:
         assert "... on TopologyDataCenter { children { edges { node { ... on TopologyPod { id } } } } }" in compact
 
     def test_metro_without_children_is_only_itself(self) -> None:
-        """A colocation metro's edges are deployed into the metro directly."""
+        """A metro with no zone or virtual colocation (no children came back) has only itself to look in."""
         assert VxlanSegmentGenerator._device_deployment_ids({"id": "metro-1"}) == ["metro-1"]
         assert VxlanSegmentGenerator._device_deployment_ids({"id": "metro-1", "children": None}) == ["metro-1"]
+
+    def test_metro_includes_its_zones_and_virtual_colocations(self) -> None:
+        """The edges are deployed into the metro's zones and virtual colocations, the metro owns no device: both
+        kinds of child are looked in, after the metro itself."""
+        metro = {"id": "metro-1", "children": [{"id": "zone-fr2"}, {"id": "zone-fr6"}, {"id": "vc-am-ne"}]}
+        assert VxlanSegmentGenerator._device_deployment_ids(metro) == ["metro-1", "zone-fr2", "zone-fr6", "vc-am-ne"]
+
+    def test_metro_skips_children_that_arrive_empty(self) -> None:
+        """A child of another kind comes back as an empty node (ids are selected on zones and virtual
+        colocations only) and is skipped."""
+        metro = {"id": "metro-1", "children": [{}, {"id": "zone-fr2"}]}
+        assert VxlanSegmentGenerator._device_deployment_ids(metro) == ["metro-1", "zone-fr2"]
+
+    def test_vlan_domain_query_selects_zone_and_virtual_colocation_ids_under_the_metro(self, root_dir: Path) -> None:
+        """The zone and virtual colocation filter lives in segment_vlan_domains.gql, not in Python."""
+        query = (root_dir / "queries" / "topology" / "add" / "segment_vlan_domains.gql").read_text()
+        compact = " ".join(query.split())
+        assert "... on TopologyColocationMetro { children { edges { node {" in compact
+        assert "... on TopologyColocationZone { id } ... on TopologyVirtualColocation { id }" in compact

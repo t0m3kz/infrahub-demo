@@ -36,6 +36,9 @@ query virtual_circuit_data($name: String!) {
                   ... on DcimVirtualDevice {
                     deployment { node { ...VirtualCircuitDeployment } }
                   }
+                  ... on CloudNetworkAppliance {
+                    deployment { node { ...VirtualCircuitDeployment } }
+                  }
                   ... on DcimCapabilities {
                     capabilities {
                       edges {

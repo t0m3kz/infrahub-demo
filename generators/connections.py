@@ -26,7 +26,7 @@ _INTERFACE_READY_RETRY_DELAY = 3.0
 # firewall-facing and load-balancer-facing port blocks after the service role
 # itself, so the border-facing role and the service role are the same string.
 # Shared by dc.py (DC-wide border-leaf), pod.py (per-pod border-spine), and
-# colocation.py (metro edge) instead of each inlining its own copy — a caller
+# colocation_fabric.py (zone edge) instead of each inlining its own copy — a caller
 # whose border tier uses a different port-naming convention should build and
 # pass its own dict instead of reusing this one.
 BORDER_ROLE_FOR_SERVICES: dict[str, str] = {"firewall": "firewall", "load-balancer": "load-balancer"}

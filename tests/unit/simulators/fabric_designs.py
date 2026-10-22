@@ -73,3 +73,29 @@ def custom_dc_design(
         "pod_templates": pod_templates if pod_templates is not None else [custom_pod_design()],
         **caps,
     }
+
+
+# ---------------------------------------------------------------------------
+# Colocation designs (data/bootstrap/14c_colocation_templates.yml)
+# ---------------------------------------------------------------------------
+
+_COLO_ZONE_DESIGNS = {
+    name: {"id": f"colo-zone-design-{name}", **row} for name, row in _rows("TopologyTemplateColocationZone").items()
+}
+_COLO_METRO_DESIGNS = {
+    name: {**row, "zone_templates": [_COLO_ZONE_DESIGNS[zone] for zone in row["zone_templates"]]}
+    for name, row in _rows("TopologyTemplateColocationMetro").items()
+}
+
+COLO_ZONE_DESIGN_NAMES = tuple(sorted(_COLO_ZONE_DESIGNS))
+COLO_METRO_DESIGN_NAMES = tuple(sorted(_COLO_METRO_DESIGNS))
+
+
+def colo_zone_design(name: str) -> dict[str, Any]:
+    """The bootstrap colocation zone design ``name`` (a fresh copy, safe to mutate)."""
+    return copy.deepcopy(_COLO_ZONE_DESIGNS[name])
+
+
+def colo_metro_design(name: str) -> dict[str, Any]:
+    """The bootstrap colocation metro design ``name`` with its zone designs (a fresh copy, safe to mutate)."""
+    return copy.deepcopy(_COLO_METRO_DESIGNS[name])

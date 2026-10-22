@@ -7,10 +7,19 @@ from __future__ import annotations
 from tests.integration.test_constants import (
     ALL_DEMO_BORDER_FIREWALL_PORTS,
     ALL_DEMO_CLOUD_LOAD_BALANCED_COMPONENTS,
+    ALL_DEMO_COLOCATION_SERVED,
+    ALL_DEMO_COLOCATION_SERVING_ZONE,
     ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS,
     ALL_DEMO_DC_LOADBALANCER_PLATFORMS,
+    ALL_DEMO_DCI_CIRCUITS,
+    ALL_DEMO_EDGE_INTERLINKS,
+    ALL_DEMO_EDGE_PAIR_POOL_TEMPLATE,
+    ALL_DEMO_EDGE_PAIR_ZONES,
+    ALL_DEMO_EXPECTED_GENERATORS,
     ALL_DEMO_EXPECTED_OBJECTS,
     ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS,
+    ALL_DEMO_FABRIC_PEERINGS,
+    ALL_DEMO_INTERNET_BGWS,
     ALL_DEMO_LB_CLIENT_DEPENDENCIES,
     ALL_DEMO_LB_LEG_RESOURCES,
     ALL_DEMO_LB_VIP_RESOURCES,
@@ -24,13 +33,14 @@ from tests.integration.test_constants import (
     ALL_DEMO_TRANSIT_LEGS,
     ALL_DEMO_TRANSIT_PREFIXES,
     ALL_DEMO_TRANSIT_SUBINTERFACES,
+    ALL_DEMO_ZONE_SITE_VIPS,
     deployment_namespace,
 )
 
 
 def test_transit_totals_match_the_planning_estimate() -> None:
-    """DC10 3+3, DC11 3+3, DC12 4+3, FR 3 legs (tenant VRFs + INTERNET + MANAGEMENT); 16 exchanges;
-    44 sub-interfaces; 7 SNAT /32s; 8 tagged ports (6 border-leaf + the FR edges' 2)."""
+    """DC10 3+3, DC11 3+3, DC12 4+3, FR2 3 legs (tenant VRFs + INTERNET + MANAGEMENT); 16 exchanges;
+    44 sub-interfaces; 7 SNAT /32s; 8 tagged ports (6 border-leaf + the FR2 edges' 2)."""
     legs = {(c["site"], c["tenant"] is None): len(c["namespaces"]) for c in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS}
     assert legs == {
         ("DC10", True): 3,
@@ -39,7 +49,7 @@ def test_transit_totals_match_the_planning_estimate() -> None:
         ("DC11", False): 3,
         ("DC12", True): 4,
         ("DC12", False): 3,
-        ("FR", True): 3,
+        ("FR2", True): 3,
     }
     assert ALL_DEMO_TRANSIT_LEGS == 22
     assert ALL_DEMO_TRANSIT_EXCHANGES == 16
@@ -50,9 +60,10 @@ def test_transit_totals_match_the_planning_estimate() -> None:
     assert ALL_DEMO_EXPECTED_OBJECTS["TopologyRoutedExchange"] == 16
 
 
-def test_served_colocation_metro_has_one_shared_context_with_prod_legs() -> None:
-    """FR serves C001-P-FR and C005-P-FR (both environment p, no design): one shared context, never a dedicated one."""
-    assert ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS == {"FR": ("C001-P-FR", "C005-P-FR")}
+def test_serving_colocation_zone_has_one_shared_context_with_prod_legs() -> None:
+    """C001-P-FR and C005-P-FR (both environment p, no design) name FR2 as serving_zone: one shared context on
+    FR2's firewall pair, never a dedicated one."""
+    assert ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS == {"FR2": ("C001-P-FR", "C005-P-FR")}
     colocation = [c for c in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS if c["site"] in ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS]
     assert len(colocation) == 1
     assert colocation[0]["tenant"] is None
@@ -61,6 +72,46 @@ def test_served_colocation_metro_has_one_shared_context_with_prod_legs() -> None
     assert colocation[0]["exchanges"] == ("PROD-INTERNET", "PROD-MANAGEMENT")
     # The colocation context is a cluster's shared context like the three DC ones.
     assert ALL_DEMO_SHARED_FIREWALL_CONTEXTS == 4
+
+
+def test_only_footprints_with_a_firewall_serving_zone_are_served() -> None:
+    """A footprint is served when its serving_zone declares a firewall pair; the other five colocation footprints
+    (no serving_zone) have no context, even in a metro whose other zone has firewalls."""
+    assert ALL_DEMO_COLOCATION_SERVING_ZONE["C001-P-FR"] == "FR2"
+    assert ALL_DEMO_COLOCATION_SERVING_ZONE["C005-P-FR"] == "FR2"
+    assert {dep for dep, zone in ALL_DEMO_COLOCATION_SERVING_ZONE.items() if zone is None} == {
+        "C002-P-PA",
+        "C011-P-NY",
+        "C012-P-VA",
+        "C013-P-AMS",
+        "C014-P-PAR",
+    }
+    assert {dep for dep, served in ALL_DEMO_COLOCATION_SERVED.items() if served} == {"C001-P-FR", "C005-P-FR"}
+
+
+def test_edge_pairs_are_zone_keyed_and_named_after_the_zone() -> None:
+    """Kit is per zone: FR2 and PA4 carry the physical edge pairs, named eg-<zone>01/02, and every
+    per-pair constant is keyed by the lowercase zone name the generator uses for its pool and key names."""
+    assert ALL_DEMO_EDGE_PAIR_ZONES == {"fr2": ("eg-fr201", "eg-fr202"), "pa4": ("eg-pa401", "eg-pa402")}
+    assert ALL_DEMO_INTERNET_BGWS == {device for pair in ALL_DEMO_EDGE_PAIR_ZONES.values() for device in pair}
+    assert set(ALL_DEMO_EDGE_INTERLINKS) == set(ALL_DEMO_FABRIC_PEERINGS) == set(ALL_DEMO_ZONE_SITE_VIPS)
+    assert set(ALL_DEMO_EDGE_INTERLINKS) == set(ALL_DEMO_EDGE_PAIR_ZONES)
+    assert ALL_DEMO_FABRIC_PEERINGS == {"fr2": "FABRIC-eg-fr201-eg-fr202", "pa4": "FABRIC-eg-pa401-eg-pa402"}
+    assert ALL_DEMO_EDGE_PAIR_POOL_TEMPLATE.format(zone="fr2") == "fr2-technical-ipv6-pool"
+
+
+def test_the_two_new_colocation_generators_are_expected_to_dispatch() -> None:
+    """add_colocation_zone runs once per zone and add_virtual_colocation once per virtual colocation: the
+    created-trigger floor counts every declared node, kit or no kit."""
+    assert ALL_DEMO_EXPECTED_GENERATORS["add_colocation_zone"] == 12
+    assert ALL_DEMO_EXPECTED_GENERATORS["add_virtual_colocation"] == 1
+    assert ALL_DEMO_EXPECTED_GENERATORS["add_colocation_metro"] == 9
+
+
+def test_dci_circuits_land_on_zone_named_edges() -> None:
+    """Every DCI fibre ends on a zone-named edge of the pair of the zone the circuit name carries."""
+    edges = {end[0] for _, ends in ALL_DEMO_DCI_CIRCUITS.values() for end in ends if end[0].startswith("eg-")}
+    assert edges == ALL_DEMO_INTERNET_BGWS
 
 
 def test_environment_maps_to_vrf_namespace() -> None:

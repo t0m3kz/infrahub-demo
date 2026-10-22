@@ -26,15 +26,15 @@ OVERLAY_ROLES = RR_ROLES | RR_CLIENT_ROLES
 # (`border-leaf`); accepting both silently hides drift between layers.
 #
 # `edge` is a VTEP only where it is its site's EVPN Multi-Site border gateway
-# (a colocation metro edge stretching DC segments into the cage); every other
+# (a colocation zone or virtual colocation edge stretching DC segments into the metro); every other
 # edge has no stretched segment, so no activations, so get_vxlan_config still
 # returns None for it.
 VTEP_ROLES = frozenset({"leaf", "border-leaf", "tor", "access-leaf", "border-spine", "edge"})
 """Roles that terminate VXLAN (transforms/helpers/vxlan.py)."""
 
 DC_VTEP_ROLES = VTEP_ROLES - {"edge"}
-"""The VTEPs of a data center: an edge is a VTEP only as a colocation metro's
-border gateway, never part of a data center's fabric (utils/group_policy.py)."""
+"""The VTEPs of a data center: an edge is a VTEP only as the border gateway of a
+colocation zone or virtual colocation, never part of a data center's fabric (utils/group_policy.py)."""
 
 CAMPUS_FABRIC_ROLES = frozenset({"access-switch"})
 """Fabric edge of an office LISP site (SD-Access style): the nodes hosts attach to. Deliberately not in
