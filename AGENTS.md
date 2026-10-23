@@ -290,6 +290,24 @@ class MyCheck(InfrahubCheck):
   (`utils/circuit_underlay.py`). The only role that is an output is `ManagedBGPPeering.peering_role` (`regular`,
   `dci`, `dci-underlay`, `fabric`, `overlay`, `underlay`). The tenant impact of a fibre is a graph traversal (circuit ->
   ports -> segments, peerings, circuits; filter `capabilities` by kind), not a per-tenant circuit.
+- **Border policy**: a `regular` session in a PROD or NON-PROD VRF is external unless its far end is ours: the far
+  end's BGP process in that peering has `process_role: overlay` (not when the far end device is a
+  `CloudNetworkAppliance`, a provider-hosted Network Edge: that hop is external), or the far end is the office's own
+  SD-WAN edge (`deployment.lisp_wan_edges`). The device owner is never the signal. A handoff circuit is unowned; the owner of a
+  prefix is the object that registers it (`CloudVirtualNetwork.account.owner` for a VPC block, the office's owner for
+  `lan_prefixes`, `segment.owner` for a segment), and only an `OrganizationCustomer` counts. An external session
+  accepts its owners' registered prefixes (`RM-<session>-IN`) and is announced (`RM-<session>-OUT`) what those same
+  owners have on-prem or registered behind another external session of the namespace (an office LAN reaches the
+  owner's VPC, its VPC block reaches the office), minus its own IN: the edge passes routes between two external
+  sessions of the SAME owner, never across owners, and never back to the session a prefix was learned on (an
+  office-hosted segment is registered behind its gateway, so it is not local space). Exact match, retired segments
+  dropped, one helper `utils/ownership.py` `exchange_policies`. A prefix of two owners, or an owner's prefix behind
+  two sessions, is a WARNING in the transform and an error of `checks/routing_invariants.py` rule 8. With no owner it
+  accepts and announces nothing.
+  Only the NX-OS edge renders these maps; anywhere else a transform refuses an external session
+  (`BaseDeviceTransform.external_policy_platforms`), except a hosted `CloudNetworkAppliance` on cisco_ios/cisco_xe
+  (`UNFILTERED_BANNER_PLATFORMS`): it renders an `UNFILTERED` comment above the session and logs a WARNING, because a
+  provider-hosted device must not fail its artifact. A handoff peering sends no communities.
 - **DC service tier**: `TopologyCustomerTemplateDC` (referenced by the footprint's `design`, for example `M_DC`)
   holds `dedicated_firewall`, `dedicated_loadbalancer`, `max_segments`, `ports_25g` and `ports_100g` (0 = no
   host-facing ports of that speed). `checks/customer_quota.py` enforces the segment and port numbers; a footprint

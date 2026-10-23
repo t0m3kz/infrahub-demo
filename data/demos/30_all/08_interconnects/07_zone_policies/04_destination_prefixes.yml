@@ -8,9 +8,11 @@
 # SecurityZone it doesn't fit: it has no OrganizationCustomer owner and no
 # VNI/segment lifecycle of its own).
 #
-# AWS's is a real RFC1918 block (typical VPC CIDR shape); partner/SaaS use
-# RFC5737/RFC2544 documentation ranges rather than a real company's public
-# space.
+# 10.40.0.0/16 is the range of C004's Azure VNet (peakora-vnet-prod), not an AWS hub
+# VPC: no handoff session accepts it, so the rule aiming at it is unreachable (an
+# open data gap, see the border-filtering PR). Partner/SaaS use RFC5737/RFC2544
+# documentation ranges rather than a real company's public space; neither is
+# registered behind any BGP session either.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -20,7 +22,7 @@ spec:
       ip_namespace: "default"
       status: active
       role: public
-      description: "AWS eu-central-1 transit hub — reachable VPC range over HANDOFF-FR2-AWS-EUC1-PROD"
+      description: "C004 Azure VNet peakora-vnet-prod range; no handoff session accepts it (no Azure handoff)"
 
     - prefix: "198.18.0.0/24"
       ip_namespace: "default"

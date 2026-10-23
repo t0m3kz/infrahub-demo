@@ -108,9 +108,11 @@ spec:
 # Locations: the cage, where our end sits, and the region the AWS side serves from (the
 # stub EXT-AWS-DX-FR2 is deployed to eu-central-1). maximum_routes 100: the hub carries a
 # handful of VPC aggregates. The session is peering_role regular in a PROD address: an
-# external tenant-VRF peer. On eg-fr201 it renders under `vrf PROD` with RM-<name>-IN
-# (only the reachable PROD VPC blocks, never a default) and RM-PROD-EXTERNAL-OUT (only
-# PROD's on-prem segment prefixes). The learned VPC blocks reach the DCs as EVPN type-5
+# external tenant-VRF peer. On eg-fr201 it renders under `vrf PROD` with RM-<session>-IN
+# (only the reachable PROD VPC blocks, never a default) and RM-<session>-OUT (only the PROD
+# on-prem segment prefixes of the blocks' owners: each block is owned by its VPC's
+# account owner, here C003 and C015). The session sends no communities (a handoff never
+# does). The learned VPC blocks reach the DCs as EVPN type-5
 # under PROD's own route-target, like any other PROD route. BFD, as on the internet
 # transit sessions (AWS runs asynchronous BFD on a VIF), is the generator's default.
 #

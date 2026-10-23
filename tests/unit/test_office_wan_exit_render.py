@@ -356,6 +356,53 @@ class TestRefusals:
             _run_transform(DistributionSwitch, data)
 
 
+class TestExternalSessionPolicyScope:
+    """The WAN-exit session to the office's own SD-WAN edge is internal, so no owner prefix filter is demanded.
+
+    The exit peering is ``regular`` in a tenant VRF, the shape of an external session; what makes it ours is the
+    edge named in ``deployment.lisp_wan_edges`` (transforms/common.py ``_own_devices``).
+    """
+
+    def test_the_exit_renders_when_its_edge_is_in_lisp_wan_edges(self) -> None:
+        """The golden input lists the edge: no refusal, the session to it is rendered."""
+        data = _raw(DISTRIBUTION_EXIT)
+        assert [e["node"]["name"]["value"] for e in _deployment(data)["lisp_wan_edges"]["edges"]] == [OFFICE_EDGE_NAME]
+
+        output = _run_transform(DistributionSwitch, data)
+
+        assert "neighbor 100.66.0.1" in output
+        assert "route-map RM-" not in output
+
+    @pytest.mark.parametrize("edges", [{"edges": []}, None], ids=["empty", "null"])
+    def test_the_exit_is_refused_when_its_edge_is_missing_from_lisp_wan_edges(self, edges: Any) -> None:
+        """Without the edge in the list the session is a foreign one and cisco_xe cannot filter it."""
+        data = _raw(DISTRIBUTION_EXIT)
+        _deployment(data)["lisp_wan_edges"] = edges
+
+        with pytest.raises(ValueError) as err:
+            _run_transform(DistributionSwitch, data)
+
+        message = str(err.value)
+        assert message.startswith(
+            "ds-c005-office01: cisco_xe distribution-switch cannot render the owner prefix filters"
+        )
+        assert f"({OFFICE_EDGE_NAME})" in message
+        assert message.endswith("refusing an open session")
+
+    def test_another_edge_in_lisp_wan_edges_does_not_exempt_the_session(self) -> None:
+        """Only the session's own far end is exempt: a different edge name in the list changes nothing."""
+        data = _raw(DISTRIBUTION_EXIT)
+        _deployment(data)["lisp_wan_edges"] = {"edges": [{"node": {"name": {"value": "C009-OFFICE-EDGE1"}}}]}
+
+        with pytest.raises(ValueError, match="cannot render the owner prefix filters"):
+            _run_transform(DistributionSwitch, data)
+
+    def test_the_plain_office_goldens_without_an_exit_session_still_render(self) -> None:
+        """No regular VRF session on the plain office goldens: nothing to refuse, the output is byte-identical."""
+        for directory, cls in ((ACCESS_PLAIN, AccessSwitch), (DISTRIBUTION_PLAIN, DistributionSwitch)):
+            assert _run_transform(cls, _raw(directory)).rstrip("\n") + "\n" == _golden(directory)[1]
+
+
 class TestDataCenterIsUnchanged:
     def test_a_dc_border_leaf_ignores_an_edge_on_its_deployment(self) -> None:
         """A DC VTEP never takes the LISP path: an edge (or LISP keys) on its deployment changes nothing."""

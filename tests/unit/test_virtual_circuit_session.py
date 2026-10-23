@@ -617,7 +617,7 @@ class TestHandoffSession:
 
     @pytest.mark.asyncio
     async def test_one_peering_with_these_exact_attributes(self) -> None:
-        """Handoff eBGP: ttl 1 (directly connected /31), BFD on, maximum_routes 100 taken from the circuit payload."""
+        """Handoff eBGP: ttl 1 (directly connected /31), BFD on, no communities sent, maximum_routes 100 from the circuit."""
         client = FakeClient()
 
         await _run(client, handoff_payload(password="pw-1"))
@@ -633,7 +633,7 @@ class TestHandoffSession:
             "peering_role": "regular",
             "ttl": 1,
             "bfd_enabled": True,
-            "send_community": True,
+            "send_community": False,
             "send_extended_community": False,
             "maximum_routes": 100,
             "address_families": [{"id": "af-ipv4-unicast"}],

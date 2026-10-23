@@ -1,7 +1,12 @@
-from typing import Any
+from typing import Any, ClassVar
 
 from transforms.common import BaseDeviceTransform
-from transforms.helpers.bgp import get_external_peer_prefixes, get_internet_prefixes, get_onprem_prefixes
+from transforms.helpers.bgp import (
+    get_external_peer_prefixes,
+    get_external_session_policies,
+    get_internet_prefixes,
+    get_onprem_prefixes,
+)
 
 
 class Edge(BaseDeviceTransform):
@@ -15,20 +20,28 @@ class Edge(BaseDeviceTransform):
     # edge resolves the VIP over the transit L2VNI, and exporting it as type-5
     # would let a DC import another site's PROD default via a stretched segment.
     export_tenant_default_to_evpn = False
+    # Only edges/cisco_nxos.j2 defines the RM-<session>-IN/-OUT maps of an external session.
+    external_policy_platforms: ClassVar[frozenset[str]] = frozenset({"cisco_nxos"})
 
     def _extra_config(self, data: dict, platform_name: str, extra_roots: dict | None = None) -> dict[str, Any]:
         config = super()._extra_config(data, platform_name, extra_roots=extra_roots)
         roots = extra_roots or {}
         # The public space an upstream transit session may announce.
         config["internet_prefixes"] = get_internet_prefixes(roots.get("IpamPrefix"))
-        # External tenant-VRF peers (session.external): what each may send in
-        # (by handoff sub-interface) and what its VRF announces out.
-        config["external_peer_prefixes"] = get_external_peer_prefixes(
+        # External tenant-VRF peers (session.external): per handoff sub-interface, the owners behind
+        # it, what it may send in and what it is announced out: the same owners' on-prem prefixes and
+        # what they registered behind another external session, never another owner's, never back
+        # to the session it was learned on (utils/ownership.py exchange_policies).
+        config["external_policies"] = get_external_session_policies(
             data.get("interfaces"),
-            roots.get("CloudVirtualInterface"),
-            data.get("name") or "",
-            device_capabilities=data.get("capabilities"),
-            offices=roots.get("TopologyCustomerOffice"),
+            get_external_peer_prefixes(
+                data.get("interfaces"),
+                roots.get("CloudVirtualInterface"),
+                data.get("name") or "",
+                device_capabilities=data.get("capabilities"),
+                offices=roots.get("TopologyCustomerOffice"),
+            ),
+            get_onprem_prefixes(roots.get("ManagedNetworkSegment")),
+            device_name=data.get("name") or "",
         )
-        config["onprem_prefixes"] = get_onprem_prefixes(roots.get("ManagedNetworkSegment"))
         return config

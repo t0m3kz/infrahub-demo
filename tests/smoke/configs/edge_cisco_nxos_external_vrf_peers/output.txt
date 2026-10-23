@@ -26,6 +26,13 @@ interface Ethernet1
   ip address 10.1.0.1/31
 
 !
+interface Ethernet1/12.1200
+  encapsulation dot1q 1200
+  no shutdown
+  vrf member PROD
+  ip address 10.255.8.0/31
+
+!
 interface Ethernet1/13.1000
   encapsulation dot1q 1000
   no shutdown
@@ -38,6 +45,13 @@ interface Ethernet1/13.1001
   no shutdown
   vrf member NON-PROD
   ip address 10.255.6.5/30
+
+!
+interface Ethernet1/13.1300
+  encapsulation dot1q 1300
+  no shutdown
+  vrf member PROD
+  ip address 10.255.7.0/31
 
 !
 interface Ethernet1/13.1900
@@ -121,20 +135,34 @@ router bgp 65001
       description EQX-FR2-SDWAN-GW1
       password vrf-prod-eqxfr2-sdwan-key
       address-family ipv4 unicast
-        send-community
         maximum-prefix 100
         route-map RM-VRF-PROD-EQXFR2-SDWAN-IN in
-        route-map RM-PROD-EXTERNAL-OUT out
+        route-map RM-VRF-PROD-EQXFR2-SDWAN-OUT out
     neighbor 10.255.5.6
       remote-as 64512
       description EXT-AWS-DX-FR2
       password vrf-prod-eqxfr2-aws-euc1-key
       bfd
       address-family ipv4 unicast
-        send-community
         maximum-prefix 100
         route-map RM-VRF-PROD-EQXFR2-AWS-EUC1-IN in
-        route-map RM-PROD-EXTERNAL-OUT out
+        route-map RM-VRF-PROD-EQXFR2-AWS-EUC1-OUT out
+    neighbor 10.255.7.1
+      remote-as 64520
+      description EXT-MEGAPORT-MCR1
+      password vrf-prod-eqxfr2-megaport-key
+      address-family ipv4 unicast
+        maximum-prefix 100
+        route-map RM-VRF-PROD-EQXFR2-MEGAPORT-IN in
+        route-map RM-VRF-PROD-EQXFR2-MEGAPORT-OUT out
+    neighbor 10.255.8.1
+      remote-as 4200000200
+      description eg-am-ne01
+      password handoff-fr2-amne-prod-key
+      address-family ipv4 unicast
+        maximum-prefix 100
+        route-map RM-HANDOFF-FR2-AMNE-PROD-IN in
+        route-map RM-HANDOFF-FR2-AMNE-PROD-OUT out
   !
   vrf NON-PROD
     address-family ipv4 unicast
@@ -144,10 +172,9 @@ router bgp 65001
       password vrf-nonprod-eqxfr2-aws-euc1-key
       bfd
       address-family ipv4 unicast
-        send-community
         maximum-prefix 100
         route-map RM-VRF-NONPROD-EQXFR2-AWS-EUC1-IN in
-        route-map RM-NON-PROD-EXTERNAL-OUT out
+        route-map RM-VRF-NONPROD-EQXFR2-AWS-EUC1-OUT out
   !
 !
 
@@ -158,29 +185,49 @@ router bgp 65001
 route-map RM-CONN-2-BGP permit 10
   match interface loopback0
 !
+! VRF-PROD-EQXFR2-SDWAN: owners C002, C003, C005
 ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-IN seq 10 permit 10.176.5.0/24
 ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-IN seq 20 permit 10.210.2.0/24
+ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-IN seq 30 permit 10.210.3.0/24
 route-map RM-VRF-PROD-EQXFR2-SDWAN-IN permit 10
   match ip address prefix-list PL-VRF-PROD-EQXFR2-SDWAN-IN
+ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-OUT seq 10 permit 10.5.10.0/24
+ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-OUT seq 20 permit 10.5.20.0/24
+ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-OUT seq 30 permit 10.8.2.0/24
+ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-OUT seq 40 permit 10.30.0.0/16
+route-map RM-VRF-PROD-EQXFR2-SDWAN-OUT permit 10
+  match ip address prefix-list PL-VRF-PROD-EQXFR2-SDWAN-OUT
+route-map RM-VRF-PROD-EQXFR2-SDWAN-OUT deny 20
 !
+! VRF-PROD-EQXFR2-AWS-EUC1: owners C003, C015
 ip prefix-list PL-VRF-PROD-EQXFR2-AWS-EUC1-IN seq 10 permit 10.30.0.0/16
+ip prefix-list PL-VRF-PROD-EQXFR2-AWS-EUC1-IN seq 20 permit 10.32.0.0/16
 route-map RM-VRF-PROD-EQXFR2-AWS-EUC1-IN permit 10
   match ip address prefix-list PL-VRF-PROD-EQXFR2-AWS-EUC1-IN
+ip prefix-list PL-VRF-PROD-EQXFR2-AWS-EUC1-OUT seq 10 permit 10.5.10.0/24
+ip prefix-list PL-VRF-PROD-EQXFR2-AWS-EUC1-OUT seq 20 permit 10.5.20.0/24
+ip prefix-list PL-VRF-PROD-EQXFR2-AWS-EUC1-OUT seq 30 permit 10.7.10.0/24
+ip prefix-list PL-VRF-PROD-EQXFR2-AWS-EUC1-OUT seq 40 permit 10.210.3.0/24
+route-map RM-VRF-PROD-EQXFR2-AWS-EUC1-OUT permit 10
+  match ip address prefix-list PL-VRF-PROD-EQXFR2-AWS-EUC1-OUT
+route-map RM-VRF-PROD-EQXFR2-AWS-EUC1-OUT deny 20
 !
+! VRF-PROD-EQXFR2-MEGAPORT: no registered customer owner, announces nothing and accepts nothing
+route-map RM-VRF-PROD-EQXFR2-MEGAPORT-IN deny 10
+route-map RM-VRF-PROD-EQXFR2-MEGAPORT-OUT deny 10
+!
+! HANDOFF-FR2-AMNE-PROD: no registered customer owner, announces nothing and accepts nothing
+route-map RM-HANDOFF-FR2-AMNE-PROD-IN deny 10
+route-map RM-HANDOFF-FR2-AMNE-PROD-OUT deny 10
+!
+! VRF-NONPROD-EQXFR2-AWS-EUC1: owners C003
 ip prefix-list PL-VRF-NONPROD-EQXFR2-AWS-EUC1-IN seq 10 permit 10.60.0.0/16
 route-map RM-VRF-NONPROD-EQXFR2-AWS-EUC1-IN permit 10
   match ip address prefix-list PL-VRF-NONPROD-EQXFR2-AWS-EUC1-IN
-!
-ip prefix-list PL-PROD-ONPREM seq 10 permit 10.5.10.0/24
-ip prefix-list PL-PROD-ONPREM seq 20 permit 10.5.20.0/24
-route-map RM-PROD-EXTERNAL-OUT permit 10
-  match ip address prefix-list PL-PROD-ONPREM
-route-map RM-PROD-EXTERNAL-OUT deny 20
-!
-ip prefix-list PL-NON-PROD-ONPREM seq 10 permit 10.6.10.0/24
-route-map RM-NON-PROD-EXTERNAL-OUT permit 10
-  match ip address prefix-list PL-NON-PROD-ONPREM
-route-map RM-NON-PROD-EXTERNAL-OUT deny 20
+ip prefix-list PL-VRF-NONPROD-EQXFR2-AWS-EUC1-OUT seq 10 permit 10.6.10.0/24
+route-map RM-VRF-NONPROD-EQXFR2-AWS-EUC1-OUT permit 10
+  match ip address prefix-list PL-VRF-NONPROD-EQXFR2-AWS-EUC1-OUT
+route-map RM-VRF-NONPROD-EQXFR2-AWS-EUC1-OUT deny 20
 !
 
 !

@@ -208,5 +208,5 @@ class TestEdgeTemplate:
         assert "RM-TRANSIT-IN" not in rendered
         assert "RM-TRANSIT-OUT" not in rendered
         assert "PL-TRANSIT" not in rendered
-        assert "route-map RM-PROD-EXTERNAL-OUT out" in rendered
+        assert "route-map RM-TRANSIT-LUMEN-FRA1-OUT out" in rendered
         assert "vrf context PROD" in rendered

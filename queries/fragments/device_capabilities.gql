@@ -43,13 +43,19 @@ fragment ManagedBGPServiceFields on ManagedBGP {
               ... on DcimVirtualInterface {
                 ip_address { node { address { value } ip_namespace { node { name { value } l3_vni { value } namespace_type { value } } } } }
               }
-              device { node { name { value } } }
+              # __typename: a far end that is a CloudNetworkAppliance (provider-hosted) is never ours
+              # (transforms/helpers/bgp.py _far_end_is_ours).
+              device { node { __typename name { value } } }
             }
           }
         }
+        # process_role: a far end that runs one of our overlay processes is an internal
+        # session, so no external prefix policy applies, unless its device is an appliance
+        # (transforms/helpers/bgp.py).
         bgp_processes {
           edges {
             node {
+              process_role { value }
               router_id { node { address { value } } }
               local_as { node { asn { value } } }
               capabilities { edges { node { name { value } } } }

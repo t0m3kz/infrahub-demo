@@ -224,12 +224,13 @@ router bgp {{ bgp_config.local_as.asn }}
         route-map RM-TRANSIT-IN in
         route-map RM-TRANSIT-OUT out
 {%- endif %}
-{#- External tenant-VRF peer (cloud VIF, SD-WAN gateway): its registered
-    prefixes in, the VRF's on-prem prefixes out (also defined by
-    edges/cisco_nxos.j2 only). -#}
+{#- External tenant-VRF peer (cloud VIF, SD-WAN gateway): only its owners'
+    registered prefixes in, only those owners' on-prem prefixes out; the maps
+    are per session and defined by edges/cisco_nxos.j2 only (evidence I:
+    inferred, not lab-verified). -#}
 {%- if session.get('external') %}
         route-map RM-{{ session.name }}-IN in
-        route-map RM-{{ vrf_name }}-EXTERNAL-OUT out
+        route-map RM-{{ session.name }}-OUT out
 {%- endif %}
 {%- endfor %}
   !

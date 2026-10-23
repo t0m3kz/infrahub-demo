@@ -1,12 +1,15 @@
 """BGP configuration helpers for device transforms."""
 
 import logging
+from collections.abc import Iterable
 from ipaddress import ip_address
 from typing import Any, cast
 
 from transforms.helpers.addressing import host_ip
+from utils.circuit_underlay import NETWORK_APPLIANCE_KIND, OVERLAY_ROLE
 from utils.exchange_transit import EXCHANGE_PEERS, INTERNET_TYPE
 from utils.fabric_roles import RR_ROLES
+from utils.ownership import customer_owner, exchange_policies, ownership_conflicts
 
 _log = logging.getLogger(__name__)
 
@@ -105,18 +108,55 @@ def _peering_ends(peering_node: dict[str, Any], device_name: str) -> tuple[dict[
     return local_iface, remote_iface
 
 
+def _far_end_is_ours(peering_node: dict[str, Any], remote_device: str, own_devices: frozenset[str]) -> bool:
+    """Whether the far end of a peering is one of OUR devices, so its session is internal.
+
+    Two signals, neither of them the device's owner (the templates stamp one organisation on all the kit,
+    and the shared SD-WAN gateway is owned by Internal yet must stay filtered):
+
+    - the far end's BGP process in this peering has process_role ``overlay`` (the rule add_virtual_circuit
+      uses for "our end", utils/circuit_underlay.py OVERLAY_ROLE), which makes a handoff between two of our
+      edges internal from both sides. Not when the far end DEVICE is a ``CloudNetworkAppliance`` (a
+      provider-hosted Network Edge): it is not ours to filter for, so the hop to it stays external and,
+      with nothing registered behind it, is denied both ways. A far end whose kind the query did not
+      return (``typename`` absent) is not an appliance;
+    - the far end is in ``own_devices``: the devices the caller knows are ours, for example the office's own
+      SD-WAN edge (``deployment.lisp_wan_edges``). This one holds whatever the kind.
+    """
+    if not remote_device:
+        return False
+    if remote_device in own_devices:
+        return True
+    hosted = any(
+        isinstance(end, dict)
+        and (end.get("device") or {}).get("name") == remote_device
+        and (end.get("device") or {}).get("typename") == NETWORK_APPLIANCE_KIND
+        for end in peering_node.get("capabilities") or []
+    )
+    return not hosted and any(
+        process.get("process_role") == OVERLAY_ROLE
+        and remote_device in {d.get("name") for d in process.get("capabilities") or [] if isinstance(d, dict)}
+        for process in peering_node.get("bgp_processes") or []
+        if isinstance(process, dict)
+    )
+
+
 def _build_session_from_peering(
     peering_node: dict[str, Any],
     device_name: str,
     local_as: dict[str, Any],
     interfaces: list[dict[str, Any]] | None,
     warnings: list[str] | None = None,
+    *,
+    own_devices: frozenset[str] = frozenset(),
 ) -> dict[str, Any] | None:
     """Build a BGP session dict from a peering node using interfaces.
 
     Determines local vs remote by matching device name in interfaces.
     Returns None only for valid "skip" conditions (for example no physical
     underlay path, or unresolved remote ASN on eBGP session).
+
+    ``own_devices`` names devices that are ours beyond the BGP process roles (see _far_end_is_ours).
 
     Raises:
         ValueError: When peering data shape is malformed.
@@ -160,11 +200,20 @@ def _build_session_from_peering(
         ns_type = local_ns.get("namespace_type")
         if ns_type == INTERNET_TYPE:
             session["transit"] = True
-        # A peer outside our administration (peering_role regular: a cloud
-        # VIF, the SD-WAN gateway) inside a tenant VRF: only the far end's
-        # registered prefixes in, only the VRF's on-prem prefixes out
-        # (external_peer_prefixes / onprem_prefixes, edges template).
-        elif ns_type in EXCHANGE_PEERS and peering_node.get("peering_role") == "regular":
+        # INTERNAL vs EXTERNAL. A regular session in a prod/non_prod namespace
+        # is external (a cloud VIF, the SD-WAN gateway, a provider, a hosted
+        # CloudNetworkAppliance) UNLESS its far end is one of our devices
+        # (_far_end_is_ours: an overlay-role BGP process on a far end that is
+        # not an appliance, or a name in own_devices). An external session
+        # gets only the far end's registered prefixes in and, out, only what
+        # the same owners have on-prem or behind another external session
+        # (external_policies, edges template; never another owner's); an
+        # internal one renders like any plain VRF neighbour, without route-maps.
+        elif (
+            ns_type in EXCHANGE_PEERS
+            and peering_node.get("peering_role") == "regular"
+            and not _far_end_is_ours(peering_node, remote_device_name, own_devices)
+        ):
             session["external"] = True
         session["local_ip"] = local_ip_obj
         # The handoff sub-interface — the VCO payload (transforms/config/
@@ -283,7 +332,7 @@ def get_internet_prefixes(prefixes: list[dict[str, Any]] | None) -> list[str]:
     return _sorted_prefixes(found)
 
 
-def _sorted_prefixes(prefixes: set[str]) -> list[str]:
+def _sorted_prefixes(prefixes: Iterable[str]) -> list[str]:
     """Prefixes in address order, then by length."""
     return sorted(prefixes, key=lambda p: (ip_address(p.split("/")[0]), int(p.split("/")[1])))
 
@@ -293,51 +342,70 @@ def _routable_ipv4(prefix: str | None) -> bool:
     return bool(prefix) and ":" not in str(prefix) and str(prefix).split("/")[0] != "0.0.0.0"
 
 
-def get_onprem_prefixes(segments: list[dict[str, Any]] | None) -> dict[str, list[str]]:
-    """Tenant VRF name -> the IPv4 prefixes behind its on-prem segment gateways, sorted.
+RETIRED_STATUS = "retired"
+
+
+def get_onprem_prefixes(segments: list[dict[str, Any]] | None) -> dict[str, dict[str, list[str]]]:
+    """Tenant VRF name -> owner -> the IPv4 prefixes behind that owner's on-prem segment gateways, sorted.
 
     ``segments`` is the cleaned ManagedNetworkSegment query root. A prefix behind
     a segment gateway is the on-prem routed space (the same definition
     checks/routing_invariants.py uses for the VPC overlap gate); a container
     (member_type prefix) is skipped. Only prod/non_prod namespaces qualify, each
-    keeps its own list, so an external peer in PROD is never offered a
-    NON-PROD prefix. What an external tenant-VRF peer is announced
-    (RM-<VRF>-EXTERNAL-OUT).
+    keeps its own lists, so an external peer in PROD is never offered a
+    NON-PROD prefix. A ``retired`` segment is skipped (its space is no longer
+    served), and so is a segment without a customer owner (customer_owner): the
+    owner registers the prefix, so an ownerless one is announced to nobody.
+    What an external tenant-VRF peer is announced (get_external_session_policies).
     """
-    by_vrf: dict[str, set[str]] = {}
+    by_vrf: dict[str, dict[str, set[str]]] = {}
     for segment in segments or []:
+        owner = customer_owner(segment.get("owner"))
         prefix = ((segment.get("gateway") or {}).get("ip_prefix")) or {}
         namespace = prefix.get("ip_namespace") or {}
         if (
-            namespace.get("namespace_type") in EXCHANGE_PEERS
+            owner
+            and segment.get("status") != RETIRED_STATUS
+            and namespace.get("namespace_type") in EXCHANGE_PEERS
             and namespace.get("name")
             and prefix.get("member_type") != "prefix"
             and _routable_ipv4(prefix.get("prefix"))
         ):
-            by_vrf.setdefault(namespace["name"], set()).add(prefix["prefix"])
-    return {vrf: _sorted_prefixes(found) for vrf, found in sorted(by_vrf.items())}
+            by_vrf.setdefault(namespace["name"], {}).setdefault(owner, set()).add(prefix["prefix"])
+    return {
+        vrf: {owner: _sorted_prefixes(found) for owner, found in sorted(owners.items())}
+        for vrf, owners in sorted(by_vrf.items())
+    }
 
 
-def _vif_registered_blocks(vif: dict[str, Any]) -> list[dict[str, Any]]:
-    """The VPC aggregates (cidr_blocks) a cloud virtual interface can reach.
+def vif_registered_blocks(vif: dict[str, Any]) -> list[tuple[str | None, dict[str, Any]]]:
+    """The (owner, VPC aggregate) pairs a cloud virtual interface can reach.
 
     A private VIF: its own virtual network's blocks. A transit VIF: the blocks of
     every VPC attachment propagating into the route table its hybrid attachment
     is associated with, the table the Transit Gateway looks traffic from the VIF
-    up in. A VPC propagating only elsewhere is unreachable over this VIF.
+    up in. A VPC propagating only elsewhere is unreachable over this VIF. The
+    owner of a block is the owner of its own VPC's account (None when it is not
+    a customer, or the account is unknown).
     """
+
+    def blocks(virtual_network: dict[str, Any] | None) -> list[tuple[str | None, dict[str, Any]]]:
+        network = virtual_network or {}
+        owner = customer_owner(((network.get("account") or {}).get("owner")))
+        return [(owner, block) for block in network.get("cidr_blocks") or []]
+
     if vif.get("virtual_network"):
-        return list((vif["virtual_network"] or {}).get("cidr_blocks") or [])
+        return blocks(vif["virtual_network"])
     hybrid = vif.get("transit_gateway_attachment") or {}
     table_id = (hybrid.get("associated_route_table") or {}).get("id")
     if not table_id:
         return []
     return [
-        block
+        registered
         for attachment in ((hybrid.get("transit_gateway") or {}).get("attachments")) or []
         if attachment.get("attachment_type") == "vpc"
         and table_id in {table.get("id") for table in attachment.get("propagates_to_route_tables") or []}
-        for block in ((attachment.get("virtual_network") or {}).get("cidr_blocks")) or []
+        for registered in blocks(attachment.get("virtual_network"))
     ]
 
 
@@ -355,26 +423,47 @@ def _far_end_devices(device_capabilities: list[dict[str, Any]] | None, device_na
     return far
 
 
-def _office_lans_by_gateway(offices: list[dict[str, Any]] | None) -> dict[str, list[dict[str, Any]]]:
-    """SD-WAN gateway name -> the prefixes of every office footprint attached to it.
+def office_lans_by_gateway(
+    offices: list[dict[str, Any]] | None,
+) -> dict[str, list[tuple[str | None, dict[str, Any]]]]:
+    """SD-WAN gateway name -> the (owner, prefix) pairs of every office footprint attached to it.
 
-    An office registers its ``lan_prefixes`` and, derived, the gateway prefix of
-    every segment it hosts itself (``segment_deployments``: an office with a
-    fabric hosts its LAN as a VXLAN segment, whose prefix comes from the tenant
-    pool, not from the office). ``offices`` is the cleaned TopologyCustomerOffice
-    query root. A gateway with offices but no registered LAN is present with an
-    empty list.
+    An office registers its ``lan_prefixes`` (owned by the office's owner) and,
+    derived, the gateway prefix of every segment it hosts itself
+    (``segment_deployments``: an office with a fabric hosts its LAN as a VXLAN
+    segment, whose prefix comes from the tenant pool, not from the office; it is
+    owned by the segment's owner and a ``retired`` segment is skipped).
+    ``offices`` is the cleaned TopologyCustomerOffice query root. A gateway with
+    offices but no registered LAN is present with an empty list.
     """
-    lans: dict[str, list[dict[str, Any]]] = {}
+    lans: dict[str, list[tuple[str | None, dict[str, Any]]]] = {}
     for office in offices or []:
         gateway = (office.get("sdwan_gateway") or {}).get("name")
         if gateway:
-            hosted = (
-                ((deployment.get("segment") or {}).get("gateway") or {}).get("ip_prefix")
-                for deployment in office.get("segment_deployments") or []
-            )
-            lans.setdefault(gateway, []).extend([*(office.get("lan_prefixes") or []), *filter(None, hosted)])
+            office_owner = customer_owner(office.get("owner"))
+            registered = lans.setdefault(gateway, [])
+            registered.extend((office_owner, lan) for lan in office.get("lan_prefixes") or [])
+            for deployment in office.get("segment_deployments") or []:
+                segment = deployment.get("segment") or {}
+                hosted = (segment.get("gateway") or {}).get("ip_prefix")
+                if hosted and segment.get("status") != RETIRED_STATUS:
+                    registered.append((customer_owner(segment.get("owner")), hosted))
     return lans
+
+
+def registered_by_namespace(registered: list[tuple[str | None, dict[str, Any]]]) -> dict[str, dict[str, set[str]]]:
+    """Namespace name -> owner -> the routable IPv4 prefixes of the (owner, IpamPrefix) pairs registered there.
+
+    A pair without a customer owner, a prefix without a namespace, the default route and IPv6 are dropped.
+    Shared by the edge (get_external_peer_prefixes) and checks/routing_invariants.py rule 8, so both read
+    "what an owner registered behind an attachment point" the same way.
+    """
+    found: dict[str, dict[str, set[str]]] = {}
+    for owner, prefix in registered:
+        namespace = (prefix.get("ip_namespace") or {}).get("name")
+        if owner and namespace and _routable_ipv4(prefix.get("prefix")):
+            found.setdefault(namespace, {}).setdefault(owner, set()).add(prefix["prefix"])
+    return found
 
 
 def get_external_peer_prefixes(
@@ -384,34 +473,39 @@ def get_external_peer_prefixes(
     *,
     device_capabilities: list[dict[str, Any]] | None,
     offices: list[dict[str, Any]] | None,
-) -> dict[str, list[str]]:
-    """Handoff sub-interface name -> the far end's registered IPv4 prefixes, sorted.
+) -> dict[str, dict[str, list[str]]]:
+    """Handoff sub-interface name -> owner -> the far end's registered IPv4 prefixes of that owner, sorted.
 
     Two kinds of far end are known, each with its registered prefixes:
 
     - The SD-WAN gateway: a handoff whose only BGP far end
       (``device_capabilities`` peerings) is the ``sdwan_gateway`` of some
-      office footprint accepts the ``lan_prefixes`` and the hosted segments'
-      prefixes of every office behind that gateway (_office_lans_by_gateway).
+      office footprint accepts the ``lan_prefixes`` (owner: the office's owner)
+      and the hosted segments' prefixes (owner: the segment's owner) of every
+      office behind that gateway (office_lans_by_gateway).
     - A cloud VIF: it lands on the device through its Direct Connect
       (``physical_devices``) as the sub-interface ``<port>.<vif.vlan_id>`` and
-      accepts its reachable VPC blocks (_vif_registered_blocks). Two VIFs of
-      this device on one VLAN are ambiguous and accept nothing.
+      accepts its reachable VPC blocks (vif_registered_blocks), each owned by
+      its own VPC's account owner. Two VIFs of this device on one VLAN are
+      ambiguous and accept nothing.
 
-    Either way only prefixes registered in the sub-interface's own namespace
-    are kept, so a PROD session never accepts a NON-PROD prefix, and never the
-    default route or IPv6. A sub-interface with neither far end is absent, and
-    a known far end with nothing registered maps to ``[]``: both accept nothing.
+    Ownership belongs to the object that registers the prefix, never to the
+    handoff circuit, and only a customer owner counts (customer_owner): a
+    prefix without one is never accepted. Only prefixes registered in the
+    sub-interface's own namespace are kept, so a PROD session never accepts a
+    NON-PROD prefix, and never the default route or IPv6. A sub-interface with
+    neither far end is absent, and a known far end with nothing customer-owned
+    registered maps to ``{}``: both accept nothing.
     """
     by_vlan: dict[int, list[dict[str, Any]]] = {}
     for vif in virtual_interfaces or []:
         devices = ((vif.get("direct_connect") or {}).get("physical_devices")) or []
         if device_name in {device.get("name") for device in devices} and isinstance(vif.get("vlan_id"), int):
             by_vlan.setdefault(vif["vlan_id"], []).append(vif)
-    lans_by_gateway = _office_lans_by_gateway(offices)
+    lans_by_gateway = office_lans_by_gateway(offices)
     far_ends = _far_end_devices(device_capabilities, device_name)
 
-    found: dict[str, list[str]] = {}
+    found: dict[str, dict[str, list[str]]] = {}
     for iface in interfaces or []:
         name = iface.get("name") or ""
         far = far_ends.get(name) or set()
@@ -431,18 +525,59 @@ def get_external_peer_prefixes(
                     name,
                 )
                 continue
-            registered = _vif_registered_blocks(vifs[0])
+            registered = vif_registered_blocks(vifs[0])
         namespace = ((iface.get("ip_address") or {}).get("ip_namespace") or {}).get("name")
-        found[name] = _sorted_prefixes(
-            {
-                prefix["prefix"]
-                for prefix in registered
-                if namespace
-                and (prefix.get("ip_namespace") or {}).get("name") == namespace
-                and _routable_ipv4(prefix.get("prefix"))
-            }
-        )
+        by_owner = registered_by_namespace(registered).get(namespace or "", {})
+        found[name] = {owner: _sorted_prefixes(prefixes) for owner, prefixes in sorted(by_owner.items())}
     return found
+
+
+def get_external_session_policies(
+    interfaces: list[dict[str, Any]] | None,
+    peer_prefixes: dict[str, dict[str, list[str]]],
+    onprem_prefixes: dict[str, dict[str, list[str]]],
+    *,
+    device_name: str = "",
+) -> dict[str, dict[str, Any]]:
+    """Handoff sub-interface name -> the prefix policy of its external session.
+
+    ``owners`` are the customers that registered a prefix behind the session
+    (``peer_prefixes``, get_external_peer_prefixes); ``in`` is the sorted union
+    of their registered prefixes (what the far end may send); ``out`` is what
+    the far end is announced, by the same-owner exchange rule
+    (utils/ownership.py exchange_policies, one call per namespace with
+    ``onprem_prefixes[<namespace>]`` as the segments): for each of the
+    session's owners its on-prem segment prefixes and whatever it registered
+    behind another session of the namespace, minus ``in`` (never announced
+    back to where it was learned), and nothing of any other customer. A prefix
+    registered by two owners, or one owner's prefix behind two sessions, is
+    logged as a WARNING (ownership_conflicts) with ``device_name``. Exact
+    prefixes only; a session with no owner has empty lists and the template
+    renders deny-all both ways, a sub-interface without a namespace exchanges
+    with nothing.
+    """
+    namespaces = {
+        iface.get("name"): ((iface.get("ip_address") or {}).get("ip_namespace") or {}).get("name")
+        for iface in interfaces or []
+    }
+    # One group per namespace; a session without one stands alone, it has no on-prem space to exchange.
+    groups: dict[tuple[str | None, str | None], dict[str, dict[str, list[str]]]] = {}
+    for name, by_owner in peer_prefixes.items():
+        namespace = namespaces.get(name)
+        groups.setdefault((namespace, None) if namespace else (None, name), {})[name] = by_owner
+
+    policies: dict[str, dict[str, Any]] = {}
+    for (namespace, _), learned in groups.items():
+        segments = onprem_prefixes.get(namespace or "", {})
+        for conflict in ownership_conflicts(segments, learned):
+            _log.warning("%s: namespace %s: %s", device_name, namespace or "<none>", conflict.message)
+        for name, policy in exchange_policies(segments, learned).items():
+            policies[name] = {
+                "owners": sorted(policy["owners"]),
+                "in": _sorted_prefixes(policy["in"]),
+                "out": _sorted_prefixes(policy["out"]),
+            }
+    return {name: policies[name] for name in peer_prefixes}
 
 
 def _any_flags(sessions: list[dict[str, Any]], *flags: str) -> dict[str, bool]:
@@ -727,6 +862,8 @@ def get_bgp_profile(
     interfaces: list[dict[str, Any]] | None = None,
     device_name: str = "",
     device_role: str = "",
+    *,
+    own_devices: frozenset[str] = frozenset(),
 ) -> list[dict[str, Any]]:
     """
     Extract BGP configuration from ManagedBGP services with peerings.
@@ -739,6 +876,9 @@ def get_bgp_profile(
 
     Remote ASN for eBGP: resolved from bgp_processes in the peering data.
     Remote ASN for iBGP: equals local_as (same AS by definition).
+
+    ``own_devices``: names of devices that are ours although no overlay BGP process says so (the office's
+    own SD-WAN edge); a regular VRF session to one of them is internal, not external.
     """
     if not device_capabilities:
         return []
@@ -771,7 +911,7 @@ def get_bgp_profile(
         if isinstance(peerings, list):
             for peering_node in peerings:
                 session = _build_session_from_peering(
-                    peering_node, device_name, local_as, interfaces, warnings=dropped_warnings
+                    peering_node, device_name, local_as, interfaces, warnings=dropped_warnings, own_devices=own_devices
                 )
                 if session:
                     # Peering templates expect local_as on each session object.

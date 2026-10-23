@@ -144,6 +144,9 @@ router bgp {{ bgp_config.local_as.asn }}
     redistribute lisp metric 10
 {%- endif %}
 {%- for session in _af_sessions %}
+{%- if session.get('unfiltered_banner') %}
+    ! {{ session.unfiltered_banner }}
+{%- endif %}
     neighbor {{ session.neighbor }} remote-as {{ session.remote_as.asn }}
 {%- if session.get('remote_device') %}
     neighbor {{ session.neighbor }} description {{ session.remote_device }}

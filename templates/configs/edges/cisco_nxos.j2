@@ -138,15 +138,25 @@ route-map RM-TRANSIT-OUT deny 10
 !
 {%- endif %}
 {#- External peers in a tenant VRF (session.external, bgp.py): a cloud VIF or
-    the SD-WAN gateway. In: exactly the far end's registered prefixes
-    (external_peer_prefixes, by handoff sub-interface), never a default; a peer
-    with none registered is accepted nothing. Out, per VRF: its on-prem segment
-    prefixes (onprem_prefixes), nothing when none is known. -#}
-{%- set _external = namespace(vrfs=[]) %}
+    the SD-WAN gateway, outside our administration. Per session
+    (external_policies, by handoff sub-interface): the owners are the customers
+    that registered the prefixes behind it. In: exactly those registered
+    prefixes, never a default. Out: only the on-prem prefixes of those same
+    owners, never another customer's. Exact prefixes, no le/ge. A session with
+    no registered customer owner accepts nothing and announces nothing
+    (deny-all both ways). Evidence I: inferred, not lab-verified. -#}
 {%- for bgp_config in bgp %}
-{%- for vrf_name, sessions in (bgp_config.vrf_sessions or {}).items() %}
+{%- for sessions in (bgp_config.vrf_sessions or {}).values() %}
 {%- for session in sessions if session.get('external') %}
-{%- set _in = (external_peer_prefixes | default({})).get(session.local_interface, []) %}
+{%- set _policy = (external_policies | default({})).get(session.local_interface, {}) %}
+{%- set _owners = _policy.get('owners', []) %}
+{%- set _in = _policy.get('in', []) %}
+{%- set _out = _policy.get('out', []) %}
+{%- if _owners %}
+! {{ session.name }}: owners {{ _owners | join(', ') }}
+{%- else %}
+! {{ session.name }}: no registered customer owner, announces nothing and accepts nothing
+{%- endif %}
 {%- for prefix in _in %}
 ip prefix-list PL-{{ session.name }}-IN seq {{ loop.index * 10 }} permit {{ prefix }}
 {%- endfor %}
@@ -156,24 +166,19 @@ route-map RM-{{ session.name }}-IN permit 10
 {%- else %}
 route-map RM-{{ session.name }}-IN deny 10
 {%- endif %}
-!
-{%- if vrf_name not in _external.vrfs %}{% set _external.vrfs = _external.vrfs + [vrf_name] %}{% endif %}
-{%- endfor %}
-{%- endfor %}
-{%- endfor %}
-{%- for vrf_name in _external.vrfs %}
-{%- set _out = (onprem_prefixes | default({})).get(vrf_name, []) %}
 {%- for prefix in _out %}
-ip prefix-list PL-{{ vrf_name }}-ONPREM seq {{ loop.index * 10 }} permit {{ prefix }}
+ip prefix-list PL-{{ session.name }}-OUT seq {{ loop.index * 10 }} permit {{ prefix }}
 {%- endfor %}
 {%- if _out %}
-route-map RM-{{ vrf_name }}-EXTERNAL-OUT permit 10
-  match ip address prefix-list PL-{{ vrf_name }}-ONPREM
-route-map RM-{{ vrf_name }}-EXTERNAL-OUT deny 20
+route-map RM-{{ session.name }}-OUT permit 10
+  match ip address prefix-list PL-{{ session.name }}-OUT
+route-map RM-{{ session.name }}-OUT deny 20
 {%- else %}
-route-map RM-{{ vrf_name }}-EXTERNAL-OUT deny 10
+route-map RM-{{ session.name }}-OUT deny 10
 {%- endif %}
 !
+{%- endfor %}
+{%- endfor %}
 {%- endfor %}
 {%- endif %}
 
