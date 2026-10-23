@@ -1,25 +1,20 @@
-"""Fakes for the circuit generators (generators/topology/circuit.py).
+"""Fakes for the circuit generators (generators/topology/circuit.py, virtual_circuit.py).
 
-GraphQL payload builders shaped like queries/topology/add/circuit.gql and
-virtual_circuit.gql, and an in-memory client that records every write (save,
-pool allocation, tracking-group append) in one ordered log, so a test can
+GraphQL payload builders shaped like queries/topology/add/circuit.gql and virtual_circuit.gql, and an in-memory
+client that records every write (save, pool allocation, tracking-group append) in one ordered log, so a test can
 assert both what a run wrote and that a refused run wrote nothing at all.
 """
 
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 from generators.logger import GeneratorError
-from generators.topology.circuit import PhysicalCircuitGenerator, VirtualCircuitGenerator
-
-DC_KEY_ID = "key-dc10"
-V6_POOL_ID = "pool-dci-v6"
-V4_POOL_ID = "pool-dci-v4"
-PREFIX_ID = "prefix-dci-1"
-
+from generators.topology.circuit import PhysicalCircuitGenerator
+from generators.topology.virtual_circuit import VirtualCircuitSessionGenerator
 
 CIRCUIT_ID = "circ-df10"
 
@@ -47,56 +42,30 @@ ISP = place("TopologyExternalProviders", "ORANGE-FR")
 REGION = place("TopologyCloudRegion", "eu-central-1")
 
 
-def bgp_process(device: str, role: str) -> dict[str, Any]:
-    return {
-        "id": f"{device}-bgp-{role}",
-        "__typename": "ManagedBGP",
-        "name": {"value": f"{device}-bgp-{role}"},
-        "process_role": {"value": role},
-    }
-
-
 def interface(
     iface_id: str,
     name: str,
     device: str,
     *,
-    kind: str = "DcimPhysicalInterface",
-    address: str | None = None,
     dc: str | None = None,
-    underlay: str = "ipv6",
-    roles: tuple[str, ...] = ("underlay", "overlay"),
     deployment: dict[str, Any] | None = None,
     no_deployment: bool = False,
 ) -> dict[str, Any]:
-    """One endpoint interface, as the circuit queries select it (raw GraphQL).
+    """One endpoint interface, as the circuit query selects it (raw GraphQL).
 
-    The device is deployed in DC ``dc`` when given, else in ``deployment``
-    (default: the colocation zone FR2, where the on-ramp edges are deployed);
-    ``no_deployment`` leaves it unset.
+    The device is deployed in DC ``dc`` when given, else in ``deployment`` (default: the colocation zone FR2,
+    where the on-ramp edges are deployed); ``no_deployment`` leaves it unset.
     """
     if dc:
-        deployment = {**dc_place(dc), "name": {"value": dc}, "underlay_protocol": {"value": underlay}}
+        deployment = dc_place(dc)
     elif deployment is None:
         deployment = CAGE
     if no_deployment:
         deployment = None
-    capabilities = [bgp_process(device, role) for role in roles] + [
-        {"id": f"{device}-ospf", "__typename": "ManagedOSPF"}
-    ]
     return {
         "id": iface_id,
-        "__typename": kind,
         "name": {"value": name},
-        "ip_address": {"node": {"id": f"ip-{iface_id}", "address": {"value": address}} if address else None},
-        "device": {
-            "node": {
-                "id": f"dev-{device}",
-                "name": {"value": device},
-                "deployment": {"node": deployment},
-                "capabilities": {"edges": [{"node": cap} for cap in capabilities]},
-            }
-        },
+        "device": {"node": {"name": {"value": device}, "deployment": {"node": deployment}}},
     }
 
 
@@ -110,8 +79,6 @@ def cage_edge(**kwargs: Any) -> dict[str, Any]:
 
 def physical_payload(
     *,
-    role: str | None = "dci",
-    status: str = "active",
     ends: list[dict[str, Any]] | None = None,
     circuit_id: str = "DF-DC10-EQXFR2",
     locations: list[dict[str, Any]] | None = None,
@@ -128,9 +95,6 @@ def physical_payload(
                         "id": CIRCUIT_ID,
                         "name": {"value": circuit_id},
                         "circuit_id": {"value": circuit_id},
-                        "circuit_type": {"value": "dark_fiber"},
-                        "status": {"value": status},
-                        "peering_role": {"value": role},
                         "locations": {"edges": [{"node": loc} for loc in locations]},
                         "capabilities": {"edges": [{"node": i} for i in ends]},
                     }
@@ -140,20 +104,59 @@ def physical_payload(
     }
 
 
-def sdwan_edge(**kwargs: Any) -> dict[str, Any]:
-    kwargs.setdefault("address", "10.99.1.2/30")
-    return interface("if-edge", "GE1", "C001-EDGE1", roles=("underlay",), **kwargs)
+# ---------------------------------------------------------------------------
+# Session circuits (queries/topology/add/virtual_circuit.gql)
+# ---------------------------------------------------------------------------
+
+VC_ID = "vc-1"
+DC_KEY_ID = "key-existing"
+V6_POOL_NETWORK = "fd00:2200::/127"
+V4_POOL_NETWORK = "100.64.0.0/31"
+HANDOFF_POOL_NETWORK = "10.255.128.0/31"
+# Pool name -> the /31 (/127) the fake allocates from it.
+POOL_NETWORKS = {
+    "DCI-Technical-IPv6": V6_POOL_NETWORK,
+    "DCI-Technical-IPv4": V4_POOL_NETWORK,
+    "Handoff-PROD-IPv4": HANDOFF_POOL_NETWORK,
+}
 
 
-def sdwan_gateway(**kwargs: Any) -> dict[str, Any]:
-    kwargs.setdefault("address", "10.99.1.1/30")
-    return interface(
-        "if-gw", "eth0.1001", "EQX-FR2-SDWAN-GW1", kind="DcimVirtualInterface", roles=("underlay",), **kwargs
-    )
+def bgp_process(device: str, role: str) -> dict[str, Any]:
+    """A ManagedBGP of a device, as the query selects it under the device's capabilities."""
+    return {
+        "id": f"{device}-bgp-{role}",
+        "__typename": "ManagedBGP",
+        "name": {"value": f"{device}-bgp-{role}"},
+        "process_role": {"value": role},
+    }
 
 
-def underlay_circuit(circuit_id: str = "INET-C001-WAW-FR2", status: str = "active") -> dict[str, Any]:
-    """A physical circuit as virtual_circuit.gql selects it under a port's capabilities."""
+def loopback(
+    device: str, name: str, role: str, address: str | None, kind: str = "DcimVirtualInterface"
+) -> dict[str, Any]:
+    """A loopback of a device, as the query selects it (the address only under DcimVirtualInterface)."""
+    node: dict[str, Any] = {
+        "id": f"lo-{device}-{name}",
+        "__typename": kind,
+        "name": {"value": name},
+        "role": {"value": role},
+    }
+    if kind == "DcimVirtualInterface":
+        node["ip_address"] = {"node": {"address": {"value": address}} if address else None}
+    return node
+
+
+def deployment(kind: str, name: str, *, underlay: str = "ipv6") -> dict[str, Any]:
+    """A device's deployment as virtual_circuit.gql selects it (a DC also its name and underlay_protocol)."""
+    node: dict[str, Any] = {"id": f"dep-{name}", "__typename": kind}
+    if kind == "TopologyDataCenter":
+        node["name"] = {"value": name}
+        node["underlay_protocol"] = {"value": underlay}
+    return node
+
+
+def underlay_circuit(circuit_id: str = "DF-DC10-EQXFR2", status: str = "active") -> dict[str, Any]:
+    """A physical circuit as virtual_circuit.gql selects it under a port's (or its parent's) capabilities."""
     return {
         "__typename": "TopologyPhysicalCircuit",
         "id": f"pc-{circuit_id}",
@@ -163,87 +166,209 @@ def underlay_circuit(circuit_id: str = "INET-C001-WAW-FR2", status: str = "activ
     }
 
 
-def _with_port_capabilities(port: dict[str, Any], circuits: list[dict[str, Any]]) -> dict[str, Any]:
-    """A copy of the port with its own ``capabilities`` edge: ``circuits`` plus a non-circuit entry.
-
-    The query selects ``__typename`` on every capability peer and the circuit fields only through the
-    TopologyPhysicalCircuit fragment, so a ManagedBGP on the port arrives as a bare typename.
-    """
-    peers = [{"__typename": "ManagedBGP"}, *circuits]
-    return {**port, "capabilities": {"edges": [{"node": peer} for peer in peers]}}
+def _capabilities(circuits: list[dict[str, Any]]) -> dict[str, Any]:
+    """A port's ``capabilities`` edge: the carrier(s) plus a non-circuit entry, which arrives as a bare typename."""
+    return {"edges": [{"node": peer} for peer in [{"__typename": "ManagedBGP"}, *circuits]]}
 
 
-def _without_display_label(value: Any) -> Any:
-    """A copy of ``value`` with every ``display_label`` key removed.
-
-    The shared location fake carries one for queries/topology/add/circuit.gql; virtual_circuit.gql does not select
-    it (the virtual-circuit generator never reads a deployment's label).
-    """
-    if isinstance(value, dict):
-        return {key: _without_display_label(child) for key, child in value.items() if key != "display_label"}
-    if isinstance(value, list):
-        return [_without_display_label(child) for child in value]
-    return value
-
-
-def virtual_payload(
+def session_port(
+    port_id: str,
+    name: str,
+    device: str,
     *,
-    role: str | None = "overlay",
-    link_type: str = "sd_wan",
-    status: str = "active",
-    interfaces: list[dict[str, Any]] | None = None,
-    physical: list[dict[str, Any]] | None = None,
-    on_every_port: bool = False,
-    name: str = "C001-SDWAN-FR2",
+    kind: str = "DcimPhysicalInterface",
+    where: dict[str, Any] | None = None,
+    roles: tuple[str, ...] = ("underlay", "overlay"),
+    loopbacks: list[dict[str, Any]] | None = None,
+    circuits: list[dict[str, Any]] | None = None,
+    parent_circuits: list[dict[str, Any]] | None = None,
+    cabled: bool = False,
+    parent_cabled: bool = False,
 ) -> dict[str, Any]:
-    """A virtual circuit payload; its underlay is derived, so it hangs on the ports, not on the circuit.
+    """One end of a session circuit, as virtual_circuit.gql selects it (raw GraphQL).
 
-    ``physical`` (default: one active internet circuit) is listed in the ``capabilities`` of the first
-    port, or of every port when ``on_every_port`` (two ends of one circuit, or a circuit per end);
-    ``physical=[]`` leaves the ports with no circuit. Every port also carries a non-circuit capability.
+    ``circuits`` terminate on the port itself, ``parent_circuits`` on its parent interface, which a sub-interface
+    (``kind="DcimVirtualInterface"``) reads its carrier from. A DcimCable sits on a physical port (``cabled``) or on
+    the parent of a sub-interface (``parent_cabled``): only those two carry the ``cable`` selection.
     """
-    interfaces = [sdwan_edge(), sdwan_gateway()] if interfaces is None else interfaces
-    physical = [underlay_circuit()] if physical is None else physical
-    ports = [
-        _with_port_capabilities(port, physical if on_every_port or index == 0 else [])
-        for index, port in enumerate(interfaces)
-    ]
-    return {
-        "TopologyVirtualCircuit": {
-            "edges": [
-                {
-                    "node": {
-                        "id": "vc-1",
-                        "name": {"value": name},
-                        "status": {"value": status},
-                        "link_type": {"value": link_type},
-                        "peering_role": {"value": role},
-                        "vni": {"value": None},
-                        "tunnel_id": {"value": 1001},
-                        "capabilities": {"edges": [{"node": _without_display_label(port)} for port in ports]},
-                    }
-                }
-            ]
+    port: dict[str, Any] = {"id": port_id, "__typename": kind, "name": {"value": name}}
+    if kind == "DcimVirtualInterface":
+        port["parent_interface"] = {
+            "node": {
+                "cable": {"node": {"id": f"cable-{port_id}"} if parent_cabled else None},
+                "capabilities": _capabilities(parent_circuits or []),
+            }
+        }
+    else:
+        port["cable"] = {"node": {"id": f"cable-{port_id}"} if cabled else None}
+    port["capabilities"] = _capabilities(circuits or [])
+    port["device"] = {
+        "node": {
+            "id": f"dev-{device}",
+            "name": {"value": device},
+            "deployment": {"node": where},
+            "capabilities": {
+                "edges": [
+                    {"node": cap}
+                    for cap in [
+                        *(bgp_process(device, role) for role in roles),
+                        {"id": f"{device}-ospf", "__typename": "ManagedOSPF"},
+                    ]
+                ]
+            },
+            "interfaces": {"edges": [{"node": lo} for lo in loopbacks or []]},
         }
     }
+    return port
+
+
+def dc_border_port(**kwargs: Any) -> dict[str, Any]:
+    """The DC border leaf port of a DCI: physical, in DC10 (ipv6), a VTEP loopback and a multisite VIP."""
+    kwargs.setdefault("where", deployment("TopologyDataCenter", "DC10"))
+    kwargs.setdefault("circuits", [underlay_circuit()])
+    kwargs.setdefault(
+        "loopbacks",
+        [
+            loopback("bl-dc101101", "loopback1", "loopback", "fd00:10::1/128"),
+            loopback("bl-dc101101", "loopback2", "loopback-vtep", "fd00:10::2/128"),
+            loopback("bl-dc101101", "loopback3", "multisite-vip", "fd00:10::99/128"),
+        ],
+    )
+    return session_port("if-bl", "Ethernet1/35", "bl-dc101101", **kwargs)
+
+
+def colo_edge_port(**kwargs: Any) -> dict[str, Any]:
+    """The colocation edge port of a DCI: physical, in the zone FR2, an IPv6 VTEP loopback only."""
+    kwargs.setdefault("where", deployment("TopologyColocationZone", "FR2"))
+    kwargs.setdefault("circuits", [underlay_circuit()])
+    kwargs.setdefault("loopbacks", [loopback("eg-fr201", "loopback1", "loopback-vtep", "fd00:20::1/128")])
+    return session_port("if-eg", "Ethernet1/10", "eg-fr201", **kwargs)
+
+
+def handoff_edge_port(**kwargs: Any) -> dict[str, Any]:
+    """Our end of a handoff: the VLAN 1900 sub-interface of the cage edge's port, whose parent has the carrier."""
+    kwargs.setdefault("where", deployment("TopologyColocationZone", "FR2"))
+    kwargs.setdefault("parent_circuits", [underlay_circuit("XC-FR2-AWS")])
+    return session_port("if-hs", "Ethernet1/10.1900", "eg-fr201", kind="DcimVirtualInterface", **kwargs)
+
+
+def handoff_party_port(**kwargs: Any) -> dict[str, Any]:
+    """The party's end of a handoff: a sub-interface of the provider router, one ManagedBGP (its remote ASN)."""
+    kwargs.setdefault("where", deployment("TopologyCloudRegion", "eu-central-1"))
+    kwargs.setdefault("roles", ("regular",))
+    return session_port("if-aws", "Ethernet1.1900", "EXT-AWS-DX-FR2", kind="DcimVirtualInterface", **kwargs)
+
+
+def session_payload(
+    kind: str,
+    ends: list[dict[str, Any]],
+    *,
+    name: str | None = None,
+    status: str = "active",
+    namespace: str | None = "PROD",
+    maximum_routes: int | None = 100,
+    password: str | None = None,
+) -> dict[str, Any]:
+    """A virtual circuit payload of ``kind``; a handoff also carries its namespace, maximum_routes and password."""
+    node: dict[str, Any] = {
+        "id": VC_ID,
+        "__typename": kind,
+        "name": {
+            "value": name or ("VC-DCI-DC10-FR2" if kind == "TopologyInterconnectCircuit" else "VC-C001-EQXFR-AWS")
+        },
+        "status": {"value": status},
+    }
+    if kind == "TopologyHandoffCircuit":
+        node["ip_namespace"] = {"node": {"name": {"value": namespace}} if namespace else None}
+        node["maximum_routes"] = {"value": maximum_routes}
+        node["password"] = {"node": {"id": password} if password else None}
+    node["capabilities"] = {"edges": [{"node": port} for port in ends]}
+    return {"TopologyVirtualCircuit": {"edges": [{"node": node}]}}
+
+
+def interconnect_payload(**kwargs: Any) -> dict[str, Any]:
+    """A DCI between the DC border leaf and the colocation edge (override with ``ends=``)."""
+    ends = kwargs.pop("ends", None) or [dc_border_port(), colo_edge_port()]
+    return session_payload("TopologyInterconnectCircuit", ends, **kwargs)
+
+
+def handoff_payload(**kwargs: Any) -> dict[str, Any]:
+    """A handoff between the cage edge sub-interface and the provider router's (override with ``ends=``)."""
+    ends = kwargs.pop("ends", None) or [handoff_edge_port(), handoff_party_port()]
+    return session_payload("TopologyHandoffCircuit", ends, **kwargs)
+
+
+def tunnel_payload() -> dict[str, Any]:
+    """A tunnel circuit: the generator reads nothing but its typename and name."""
+    return session_payload("TopologyTunnelCircuit", [], name="C001-SDWAN-FR2")
+
+
+# ---------------------------------------------------------------------------
+# The client
+# ---------------------------------------------------------------------------
+
+
+class _FakeInterface:
+    """A fetched interface: ``ip_address`` reads as a relationship (``.id``) and accepts an id on assignment."""
+
+    def __init__(self, client: FakeClient, iface_id: str, *, description: str, status: str, mtu: int) -> None:
+        self.id = iface_id
+        self._ip_id: str | None = None
+        self.description = MagicMock(value=description)
+        self.status = MagicMock(value=status)
+        self.mtu = MagicMock(value=mtu)
+
+        async def _save(**kwargs: Any) -> None:
+            client.writes.append(("save", iface_id, kwargs))
+
+        self.save = AsyncMock(side_effect=_save)
+
+    @property
+    def ip_address(self) -> SimpleNamespace:
+        return SimpleNamespace(id=self._ip_id)
+
+    @ip_address.setter
+    def ip_address(self, value: str) -> None:
+        self._ip_id = value
+
+
+class _RecordingList(list):
+    """group_context.related_node_ids that also logs each append as a write."""
+
+    def __init__(self, writes: list[tuple[str, str, dict[str, Any]]]) -> None:
+        super().__init__()
+        self._writes = writes
+
+    def append(self, item: Any) -> None:
+        self._writes.append(("track", item, {}))
+        super().append(item)
 
 
 class FakeClient:
-    """In-memory stand-in for the SDK client the circuit generators use."""
+    """In-memory stand-in for the SDK client the circuit generators use.
 
-    def __init__(self, *, key: bool = True, pools: bool = True, address_families: bool = True) -> None:
+    State persists across runs on one client (interfaces, addresses, keys, prefixes by identifier), so a test can
+    run a generator twice and assert the second run wrote nothing new.
+    """
+
+    def __init__(self, *, key: bool = False, pools: bool = True, address_families: bool = True) -> None:
         self.writes: list[tuple[str, str, dict[str, Any]]] = []  # (action, label, kwargs)
         self.created: list[tuple[str, dict[str, Any], MagicMock]] = []
         self.group_context = MagicMock()
         self.group_context.related_node_ids = _RecordingList(self.writes)
-        self.key = MagicMock(id=DC_KEY_ID) if key else None
-        self.pools = {"DCI-Technical-IPv6": MagicMock(id=V6_POOL_ID), "DCI-Technical-IPv4": MagicMock(id=V4_POOL_ID)}
-        if not pools:
-            self.pools = {}
+        self.keys: dict[str, MagicMock] = {"VC-DCI-DC10-FR2-dci-key": MagicMock(id=DC_KEY_ID)} if key else {}
+        self.pools = (
+            {name: SimpleNamespace(id=f"pool-{name}", pool_name=name) for name in POOL_NETWORKS} if pools else {}
+        )
         self.address_families = address_families
-        self.interfaces: dict[str, MagicMock] = {}
+        self.interfaces: dict[str, _FakeInterface] = {}
+        self.addresses: dict[str, MagicMock] = {}
+        self.prefixes: dict[str, MagicMock] = {}
         self.allocations: list[dict[str, Any]] = []
-        self.virtual_circuits: list[MagicMock] = []
+        # Session circuits ending on a port: kind name -> [(id, name)], returned by filters(capabilities__ids=...).
+        self.session_circuits: dict[str, list[tuple[str, str]]] = {}
+        # DcimVirtualInterface ids whose parent is a port, returned by filters(parent_interface__ids=...).
+        self.sub_interfaces: list[str] = []
         self.filter_calls: list[tuple[str, dict[str, Any]]] = []
         self.get_calls: list[tuple[str, dict[str, Any]]] = []
 
@@ -256,22 +381,23 @@ class FakeClient:
 
         async def _save(**kwargs: Any) -> None:
             self.writes.append(("save", label, kwargs))
+            if label.startswith("IpamIPAddress:"):
+                self.addresses[data["address"]] = node
+            if label.startswith("RoutingPassword:"):
+                self.keys[data["name"]] = node
 
         node.save = AsyncMock(side_effect=_save)
         return node
 
-    def interface_node(
-        self, iface_id: str, *, address_id: str | None = None, description: str = "", status: str = "free"
-    ) -> MagicMock:
-        node = self._node(iface_id)
-        node.ip_address = MagicMock(id=address_id)
-        node.description = MagicMock(value=description)
-        node.status = MagicMock(value=status)
-        self.interfaces[iface_id] = node
+    def interface_node(self, iface_id: str) -> _FakeInterface:
+        node = self.interfaces.get(iface_id)
+        if node is None:
+            node = _FakeInterface(self, iface_id, description="", status="free", mtu=9000)
+            self.interfaces[iface_id] = node
         return node
 
     def circuit_node(self, circuit_id: str) -> MagicMock:
-        """A fetched circuit whose add_relationships() is logged as a ("relate", id, kwargs) write."""
+        """A fetched physical circuit whose add_relationships() is logged as a ("relate", id, kwargs) write."""
         node = self._node(circuit_id)
 
         async def _relate(**kwargs: Any) -> None:
@@ -287,17 +413,14 @@ class FakeClient:
     async def get(self, kind: Any, raise_when_missing: bool = True, **kwargs: Any) -> Any:
         name = kind_name(kind)
         self.get_calls.append((name, kwargs))
+        if name == "TopologyPhysicalCircuit":
+            return self.circuit_node(kwargs["id"])
         if name == "RoutingPassword":
-            return self.key
+            return self.keys.get(kwargs["name__value"])
         if name == "CoreIPPrefixPool":
             return self.pools.get(kwargs["name__value"])
         if name == "IpamIPAddress":
-            return None
-        if name in ("DcimPhysicalInterface", "DcimVirtualInterface"):
-            iface_id = kwargs["id"]
-            return self.interfaces.get(iface_id) or self.interface_node(iface_id)
-        if name == "TopologyPhysicalCircuit":
-            return self.circuit_node(kwargs["id"])
+            return self.addresses.get(kwargs["address__value"])
         raise AssertionError(f"unexpected get({name}, {kwargs})")
 
     async def filters(self, kind: Any, **kwargs: Any) -> list[Any]:
@@ -307,8 +430,17 @@ class FakeClient:
             if not self.address_families:
                 return []
             return [MagicMock(id=f"af-{kwargs['afi__value']}-{kwargs['safi__value']}")]
-        if name == "TopologyVirtualCircuit":
-            return self.virtual_circuits
+        if name in ("DcimPhysicalInterface", "DcimVirtualInterface"):
+            if "parent_interface__ids" in kwargs:
+                return [self.interface_node(iface_id) for iface_id in self.sub_interfaces]
+            return [self.interface_node(iface_id) for iface_id in kwargs["ids"]]
+        if name in ("TopologyInterconnectCircuit", "TopologyHandoffCircuit"):
+            matches = []
+            for circuit_id, circuit_name in self.session_circuits.get(name, []):
+                other = MagicMock(id=circuit_id)
+                other.name = MagicMock(value=circuit_name)
+                matches.append(other)
+            return matches
         raise AssertionError(f"unexpected filters({name}, {kwargs})")
 
     async def create(self, kind: Any, data: dict[str, Any]) -> MagicMock:
@@ -320,11 +452,14 @@ class FakeClient:
 
     async def allocate_next_ip_prefix(self, **kwargs: Any) -> MagicMock:
         self.allocations.append(kwargs)
-        self.writes.append(("allocate", PREFIX_ID, kwargs))
-        prefix = MagicMock(id=PREFIX_ID)
-        network = "100.64.0.0/31" if kwargs["prefix_length"] == 31 else "fd00:2200::/127"
-        prefix.prefix = MagicMock(value=network)
-        prefix.ip_namespace = MagicMock(id="ns-default")
+        identifier = kwargs["identifier"]
+        prefix = self.prefixes.get(identifier)
+        if prefix is None:
+            prefix = MagicMock(id=f"prefix-{identifier}")
+            prefix.prefix = MagicMock(value=POOL_NETWORKS[kwargs["resource_pool"].pool_name])
+            prefix.ip_namespace = MagicMock(id="ns-pool")
+            self.prefixes[identifier] = prefix
+        self.writes.append(("allocate", prefix.id, kwargs))
         return prefix
 
     def created_of(self, kind: str) -> list[tuple[dict[str, Any], MagicMock]]:
@@ -334,17 +469,14 @@ class FakeClient:
         """label -> kwargs of its (last) save."""
         return {label: kwargs for action, label, kwargs in self.writes if action == "save"}
 
-
-class _RecordingList(list):
-    """group_context.related_node_ids that also logs each append as a write."""
-
-    def __init__(self, writes: list[tuple[str, str, dict[str, Any]]]) -> None:
-        super().__init__()
-        self._writes = writes
-
-    def append(self, item: Any) -> None:
-        self._writes.append(("track", item, {}))
-        super().append(item)
+    def claimed(self) -> set[str]:
+        """Every node the run's tracking group gets: tracked saves plus appended ids."""
+        tracked_saves = {
+            label
+            for action, label, kwargs in self.writes
+            if action == "save" and kwargs.get("update_group_context") is not False
+        }
+        return tracked_saves | set(self.group_context.related_node_ids)
 
 
 def raising_logger() -> MagicMock:
@@ -378,10 +510,10 @@ def make_generator(cls: Any, client: FakeClient) -> Any:
 
 
 def physical_generator(client: FakeClient) -> Any:
-    """Typed Any so tests can reach the mocked attributes."""
+    """add_circuit over the fake client (typed Any so tests can reach the mocked attributes)."""
     return make_generator(PhysicalCircuitGenerator, client)
 
 
-def virtual_generator(client: FakeClient) -> Any:
-    """Typed Any so tests can reach the mocked attributes."""
-    return make_generator(VirtualCircuitGenerator, client)
+def session_generator(client: FakeClient) -> Any:
+    """add_virtual_circuit over the fake client (typed Any so tests can reach the mocked attributes)."""
+    return make_generator(VirtualCircuitSessionGenerator, client)

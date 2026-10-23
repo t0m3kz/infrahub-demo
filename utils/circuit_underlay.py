@@ -1,8 +1,18 @@
-"""The physical dependencies of a virtual circuit, shared by the generator and the check.
+"""The physical carrier of a virtual circuit, shared by the generator and the checks.
 
-A virtual circuit's underlay is derived, never declared: the TopologyPhysicalCircuit entries found in the
-``capabilities`` of the circuit's own ports. Both ``generators/topology/circuit.py`` (session status, waits) and
-``checks/circuit_placement.py`` (contiguity) read the same cleaned dicts through :func:`derived_underlay`.
+A virtual circuit's underlay is derived, never declared. A port is carried by
+
+- a TopologyPhysicalCircuit found in the ``capabilities`` of the port, or of its parent interface when the port is a
+  sub-interface (``parent_interface``: a handoff VLAN on a cage edge port rides the circuit that terminates on the
+  parent): :func:`port_underlay`, :func:`derived_underlay` over every end, or
+- a DcimCable on the port or its parent: :func:`port_cabled`. A physical circuit needs two distinct facilities, so a
+  hop inside one facility (the gateway and the cage edge in one cage) is a cable, the project's rule for fibre
+  pulled between two chassis in one facility. A cable has no status: a cabled port is always carried.
+
+:func:`has_carrier` is either. Both ``generators/topology/virtual_circuit.py`` (waits, session status) and
+``checks/circuit_placement.py`` (contiguity, carrier presence) read the same cleaned dicts. The cleaned port has
+``cable`` (the cable's id, or None) when the query selects it on a DcimPhysicalInterface, and a sub-interface's
+``parent_interface`` has its own ``cable``.
 """
 
 from __future__ import annotations
@@ -12,26 +22,49 @@ from typing import Any
 DECOMMISSIONED = "decommissioned"
 PHYSICAL_CIRCUIT = "TopologyPhysicalCircuit"
 
-# Link types of a tunnel of ours: an overlay session is built for these only. Any other link type is
-# provider-managed (cloud on-ramps, exchange fabrics, MPLS): the session there is the provider's.
-TUNNEL_LINK_TYPES = frozenset({"sd_wan", "vpn_ipsec", "vpn_ssl", "gre", "geneve"})
+
+def _port_and_parent(port: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The port and, when it is a sub-interface, its parent interface (else an empty dict)."""
+    parent = port.get("parent_interface")
+    return port, parent if isinstance(parent, dict) else {}
+
+
+def port_underlay(port: dict[str, Any]) -> list[dict[str, Any]]:
+    """The physical circuits terminating on one port, or on its parent interface when it is a sub-interface.
+
+    Each port's own ``capabilities`` list the entries that terminate on it (segments, peerings, other circuits
+    too); a sub-interface has no carrier of its own, so its ``parent_interface`` is read as well, one level. The
+    TopologyPhysicalCircuit entries, deduplicated by id in first-seen order, whatever their status.
+    """
+    circuits: dict[str, dict[str, Any]] = {}
+    for interface in _port_and_parent(port):
+        for cap in interface.get("capabilities") or []:
+            if isinstance(cap, dict) and cap.get("typename") == PHYSICAL_CIRCUIT and cap.get("id"):
+                circuits.setdefault(cap["id"], cap)
+    return list(circuits.values())
+
+
+def port_cabled(port: dict[str, Any]) -> bool:
+    """A DcimCable terminates on the port, or on its parent interface when it is a sub-interface (one level)."""
+    return any(interface.get("cable") for interface in _port_and_parent(port))
+
+
+def has_carrier(port: dict[str, Any]) -> bool:
+    """The port is carried: a physical circuit (whatever its status) or a cable at the port or its parent."""
+    return bool(port_underlay(port)) or port_cabled(port)
 
 
 def derived_underlay(circuit: dict[str, Any]) -> list[dict[str, Any]]:
-    """The physical dependencies at a virtual circuit's ports: the physical circuits terminating on them.
+    """The physical carriers at a virtual circuit's ports: :func:`port_underlay` over every end, deduplicated by id.
 
-    Each of the circuit's ``capabilities`` interfaces lists the entries that terminate on it in its own
-    ``capabilities`` (which also hold segments, peerings and other circuits); the TopologyPhysicalCircuit ones,
-    deduplicated by id in first-seen order, are the underlay, whatever their status.
-
-    Limitations, all silent: only the circuit's own ports count, there is no walk to a parent interface, so an end
-    on a logical port (LAG, sub-interface) derives nothing for that end; a middle hop of a chain that touches none
-    of the circuit's ports is not found; and a port removed from a physical circuit reruns nothing, so the virtual
-    circuits that sat on it keep their session until their next run.
+    Only circuits: a cable is no entry here (nothing to wait for, nothing to chain). Limitations, all silent: a LAG
+    or other logical port that is not a ``parent_interface`` of the port derives nothing; a middle hop of a chain that
+    touches none of the circuit's ports is not found; and a port removed from a physical circuit, or cabled after the
+    virtual circuit exists, reruns nothing, so the virtual circuits that sat on it keep (or lack) their session until
+    their next run.
     """
     underlay: dict[str, dict[str, Any]] = {}
-    for interface in circuit.get("capabilities") or []:
-        for cap in interface.get("capabilities") or []:
-            if isinstance(cap, dict) and cap.get("typename") == PHYSICAL_CIRCUIT and cap.get("id"):
-                underlay.setdefault(cap["id"], cap)
+    for port in circuit.get("capabilities") or []:
+        for carrier in port_underlay(port):
+            underlay.setdefault(carrier["id"], carrier)
     return list(underlay.values())

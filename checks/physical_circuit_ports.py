@@ -10,7 +10,8 @@ rules the schema cannot hold are held here, on the circuits as a whole:
 2. both ends are a DcimPhysicalInterface (not a virtual interface or another capability),
 3. a circuit has exactly two ends.
 
-Virtual circuits are out of scope: a tunnel port carries several.
+Virtual circuits are out of scope (a tunnel port carries several; the one-session-per-port rule of the
+Interconnect and Handoff circuits is checks/circuit_placement.py's).
 """
 
 from __future__ import annotations

@@ -1,0 +1,136 @@
+---
+# L3 handoff for the transit VIF vif-transit-hub-euc1 (01_transit_vif.yml), in
+# namespace PROD on eg-fr201, the edge holding the Direct Connect port (Ethernet1/13,
+# XC-EQXFR2-AWS-EUC1; dx-eqx-fr2-euc1 lists eg-fr201 as its physical device).
+# One eBGP session per (Direct Connect, namespace): the VIF is the PROD one,
+# because every account behind the hub is environment p. A NON-PROD account
+# would get its own VIF, handoff circuit and session in NON-PROD, never this one.
+#
+# Loaded BEFORE the VIF (hence the 00): the VIF names its handoff circuit
+# (`virtual_circuit`), and the circuit cannot name the VIF back, because
+# CloudHybridAttachment is an attribute-less generic with no human_friendly_id. The
+# circuit's sub-interfaces, the AWS side's BGP process and its key are declared ahead
+# of the circuit for the same reason: the session generator reads them the moment the
+# circuit is created.
+#
+# The circuit is the handoff and nothing else is authored for the session. The two
+# sub-interfaces are <port>.<vif.vlan_id>: that VLAN is how
+# transforms/helpers/bgp.py (get_external_peer_prefixes) finds the VIF behind
+# the session and so the VPC blocks it may accept (those propagating into the
+# hybrid attachment's route table, registered in PROD). Same shape as the
+# SD-WAN handoff (../04_sdwan/06_vrf_handoff.yml).
+#
+# Addressing and the session are generated: add_virtual_circuit
+# (generators/topology/virtual_circuit.py) allocates a /31 from Handoff-PROD-IPv4
+# (data/bootstrap/26_handoff_pools.yml), addresses BOTH sub-interfaces from it (our
+# edge the lower address) and upserts the eBGP session HANDOFF-FR2-AWS-EUC1-PROD-bgp
+# between eg-fr201's overlay process and EXT-AWS-DX-FR2-bgp. For AWS Direct Connect
+# the customer specifies the peer IPs and AWS assigns none, so the AWS side is
+# addressed from OUR pool too. The sub-interfaces below therefore carry no address.
+#
+# The carrier is the cross-connect XC-EQXFR2-AWS-EUC1 on the sub-interfaces' parent
+# ports (../01_colo_onramp/03_physical_circuits.yml): the circuit lists no physical
+# circuit of its own, it is derived from its ports.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: "Ethernet1/13.1000"
+      device: "eg-fr201"
+      role: uplink
+      status: active
+      description: "PROD transit VIF to AWS (vif-transit-hub-euc1)"
+      parent_interface: ["eg-fr201", "Ethernet1/13"]
+    - name: "et-0/0/0.1000"
+      device: "EXT-AWS-DX-FR2"
+      role: uplink
+      status: active
+      description: "PROD transit VIF to eg-fr201 (vif-transit-hub-euc1)"
+      parent_interface: ["EXT-AWS-DX-FR2", "et-0/0/0"]
+    # The AWS side's router-id. It is a loopback, not a link address: the link addresses
+    # are generated at circuit creation, after the process below needs its router-id.
+    # 10.255.64.0/24 holds the loopbacks of the party devices we model as stubs, clear
+    # of the handoff pools (10.255.128.0/17) and of every authored range.
+    - name: "Loopback0"
+      device: "EXT-AWS-DX-FR2"
+      role: loopback
+      status: active
+      description: "Router-id of the AWS Direct Connect router"
+      ip_address:
+        data:
+          address: "10.255.64.1/32"
+          ip_namespace: "PROD"
+---
+# 64512 is the default Amazon-side ASN of a Direct Connect gateway / Transit
+# Gateway. The 2-byte private range is unused by the fabrics here (their ASNs
+# are 4-byte, 42xxxxxxxx).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingAutonomousSystem
+  data:
+    - asn: 64512
+      owner: "P004"
+      description: "AWS Amazon-side ASN (tgw-30all-euc1 via dx-eqx-fr2-euc1)"
+---
+# The AWS side's BGP process. AWS configures it, not a transform here: it
+# exists so the generated session has a remote AS (the handoff's party ASN is
+# this process's local_as) and a second endpoint. It is the device's only
+# ManagedBGP process, which is how the generator picks it.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGP
+  data:
+    - name: "EXT-AWS-DX-FR2-bgp"
+      status: active
+      local_as: "AS64512"
+      router_id: ["10.255.64.1/32", "PROD"]
+      capabilities:
+        - "EXT-AWS-DX-FR2"
+---
+# The VIF's BGP auth key. Demo-only secret, like the API token in the README.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingPassword
+  data:
+    - name: "eqx-fr2-aws-vif-key"
+      description: "BGP auth key for the eg-fr201 <-> EXT-AWS-DX-FR2 PROD transit VIF"
+      password: "demo-eqx-fr2-aws-vif"
+---
+# The handoff. Unowned shared on-ramp, like the cross-connect it rides. Provider AWS
+# (P004), not Equinix (P016): the party device is AWS's own Direct Connect router, the
+# service handed off to us is AWS's Direct Connect, and Equinix only sells the
+# cross-connect (the physical circuit). An Equinix Fabric service would make it Equinix.
+#
+# Locations: the cage, where our end sits, and the region the AWS side serves from (the
+# stub EXT-AWS-DX-FR2 is deployed to eu-central-1). maximum_routes 100: the hub carries a
+# handful of VPC aggregates. The session is peering_role regular in a PROD address: an
+# external tenant-VRF peer. On eg-fr201 it renders under `vrf PROD` with RM-<name>-IN
+# (only the reachable PROD VPC blocks, never a default) and RM-PROD-EXTERNAL-OUT (only
+# PROD's on-prem segment prefixes). The learned VPC blocks reach the DCs as EVPN type-5
+# under PROD's own route-target, like any other PROD route. BFD, as on the internet
+# transit sessions (AWS runs asynchronous BFD on a VIF), is the generator's default.
+#
+# cloud_endpoint is set from the VIF (01_transit_vif.yml), not here.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyHandoffCircuit
+  data:
+    - name: "HANDOFF-FR2-AWS-EUC1-PROD"
+      member_of_groups: [virtual_circuits]
+      status: active
+      provider: "P004"
+      description: "PROD transit VIF eg-fr201 <-> EXT-AWS-DX-FR2 (vif-transit-hub-euc1, AS64512)"
+      ip_namespace: "PROD"
+      maximum_routes: 100
+      password: "eqx-fr2-aws-vif-key"
+      locations:
+        - "FR2"
+        - "eu-central-1"
+      capabilities:
+        - ["eg-fr201", "Ethernet1/13.1000"]
+        - ["EXT-AWS-DX-FR2", "et-0/0/0.1000"]

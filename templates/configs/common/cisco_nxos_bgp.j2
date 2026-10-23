@@ -95,6 +95,10 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- if session.get('password') %}
     password {{ session.password }}
 {%- endif %}
+{#- A DCI EVPN neighbour is sourced from the loopback its peering names. #}
+{%- if session.get('update_source') %}
+    update-source {{ session.update_source }}
+{%- endif %}
 {%- if session.peer_group is defined %}
     inherit peer-session {{ session.peer_group }}-SESSION
 {%- else %}
@@ -139,6 +143,9 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- endif %}
 {%- if session.get('export_local_only') %}
       route-map RM-FABRIC-OUT out
+{%- endif %}
+{%- if session.get('dci_inbound') %}
+      route-map RM-DCI-IN in
 {%- endif %}
 {%- endif %}
     !

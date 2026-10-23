@@ -55,6 +55,11 @@ def _overlay_key_name(fabric_name: str) -> str:
     return f"{fabric_name}-overlay-key"
 
 
+def _dci_key_name(circuit_name: str) -> str:
+    """The per-circuit key of a DCI (generators/topology/virtual_circuit.py), not a fabric-wide one."""
+    return f"{circuit_name}-dci-key"
+
+
 def _super_spine_as_description(fabric_name: str) -> str:
     return f"{fabric_name} super-spine underlay ASN"
 
@@ -739,18 +744,21 @@ class RoutingMixin:
         address_family_ids: list[str],
         interface_ids: list[str],
         password_id: str | None = None,
+        ttl: int = 1,
+        bfd_enabled: bool = True,
+        send_extended_community: bool = True,
+        maximum_routes: int | None = None,
     ) -> None:
-        """Upsert one directly connected (ttl 1, BFD, extended communities) ManagedBGPPeering.
+        """Upsert one ManagedBGPPeering, by default directly connected (ttl 1, BFD, extended communities).
 
-        The shared core of the DCI session (add_circuit) and the metro's edge
-        FABRIC session (add_colocation_zone, add_virtual_colocation). Peerings share the
-        ManagedGeneric name space with circuits: callers prefix the name
-        (DCI-<circuit>, FABRIC-<a>-<b>). Processes are passed by id, never
-        looked up by name here (search-index lag on same-run objects).
+        The shared core of the sessions of a virtual circuit (generators/topology/virtual_circuit.py), the metro's
+        edge FABRIC session (add_colocation_zone, add_virtual_colocation) and the office fabric. Peerings share
+        the ManagedGeneric name space with circuits: callers suffix or prefix the name (<vc>-evpn, FABRIC-<a>-<b>).
+        Processes are passed by id, never looked up by name here (search-index lag on same-run objects).
 
-        ``password_id`` keys the session; a session between non-DC ends (an
-        SD-WAN edge to its gateway) has no fabric key, so no password is
-        written at all.
+        ``ttl``, ``bfd_enabled``, ``send_extended_community`` and ``maximum_routes`` default to the directly
+        connected shape; ``maximum_routes`` is written only when given. ``password_id`` keys the session; a
+        session without a fabric key (an SD-WAN edge to its gateway) writes no password at all.
         """
         peering = await self.client.create(
             kind=ManagedBGPPeering,
@@ -760,10 +768,11 @@ class RoutingMixin:
                 "status": status,
                 "session_type": session_type,
                 "peering_role": peering_role,
-                "ttl": 1,
-                "bfd_enabled": True,
+                "ttl": ttl,
+                "bfd_enabled": bfd_enabled,
                 "send_community": True,
-                "send_extended_community": True,
+                "send_extended_community": send_extended_community,
+                **({"maximum_routes": maximum_routes} if maximum_routes is not None else {}),
                 "address_families": [{"id": af_id} for af_id in address_family_ids],
                 "bgp_processes": [{"id": process_id} for process_id in process_ids],
                 **({"password": {"id": password_id}} if password_id else {}),

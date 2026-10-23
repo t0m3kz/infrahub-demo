@@ -1,0 +1,83 @@
+---
+# The second hop of the AM-NE chain: the Network Edge router eg-am-ne02 of AM-NE into the AWS
+# transit hub, as one PROD Handoff circuit: eg-am-ne02 Ethernet1/1.1100 <-> EXT-AWS-DX-FR2
+# et-0/0/0.1100, VLAN 1100 on both. Its cloud endpoint is the transit VIF vif-transit-am-euc1 of the
+# hosted Direct Connect dx-eqx-am-euc1, which Equinix Fabric delivers to the router (VLAN 1100 is the
+# VIF's vlan_id; the hosted connection is held by eg-am-ne02, ../02_cloud_hub/04_direct_connect.yml).
+# The first hop, eg-fr201 into eg-am-ne01, is ../03_virtual_circuits/02_am_ne_handoff.yml.
+#
+# Loaded after 00_vif_handoff.yml (sorted: "." before "_"), on purpose: the AWS side of this session is
+# the same Direct Connect router stub as the FR2 VIF's, and its ONLY ManagedBGP process
+# EXT-AWS-DX-FR2-bgp (AS64512, declared there) is this session's remote process too, so it must stay the
+# stub's only one. It is also loaded BEFORE 01_transit_vif.yml, which names this circuit
+# (`virtual_circuit`); the circuit cannot name the VIF back, CloudHybridAttachment having no
+# human_friendly_id.
+#
+# Carrier: the party sub-interface et-0/0/0.1100 rides its PARENT et-0/0/0, the port of the
+# cross-connect XC-EQXFR2-AWS-EUC1 (../01_colo_onramp/03_physical_circuits.yml). That is the circuit's
+# derived underlay, and the one carried end the rule needs. The NE end is a provider-hosted appliance
+# with no port of ours and needs none. The Fabric virtual connection between the NE router and the AWS
+# router is not carried over our fibre: Equinix runs it inside its own platform.
+#
+# Nothing of the session is authored: the addresses come from Handoff-PROD-IPv4
+# (data/bootstrap/26_handoff_pools.yml). add_virtual_circuit (generators/topology/virtual_circuit.py)
+# allocates a /31 from it, addresses BOTH sub-interfaces (eg-am-ne02, with the overlay process, the
+# lower) and upserts the eBGP session HANDOFF-AMNE-AWS-EUC1-PROD-bgp between eg-am-ne02's overlay
+# process and EXT-AWS-DX-FR2-bgp. For AWS Direct Connect the customer specifies the peer IPs, so the AWS
+# side is addressed from OUR pool too. The sub-interfaces carry no address.
+#
+# Unowned platform handoff (eg-am-ne02 is the shared Network Edge router). Provider Equinix (P016),
+# unlike the FR2 VIF's AWS (P004): there the service handed to us is AWS's own Direct Connect and
+# Equinix only sells the cross-connect; here the service that carries the session between our
+# router and the AWS Direct Connect endpoint is the Equinix Fabric virtual connection, and AWS only
+# hosts the endpoint. Locations: the provider-hosted presence AM-NE and the region the AWS side serves
+# from (the stub EXT-AWS-DX-FR2 is deployed to eu-central-1).
+#
+# The cloud endpoint is set from the VIF (01_transit_vif.yml), not here.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: "Ethernet1/1.1100"
+      device: "eg-am-ne02"
+      role: uplink
+      status: active
+      description: "PROD transit VIF to AWS (vif-transit-am-euc1)"
+      parent_interface: ["eg-am-ne02", "Ethernet1/1"]
+    - name: "et-0/0/0.1100"
+      device: "EXT-AWS-DX-FR2"
+      role: uplink
+      status: active
+      description: "PROD transit VIF to eg-am-ne02 (vif-transit-am-euc1)"
+      parent_interface: ["EXT-AWS-DX-FR2", "et-0/0/0"]
+---
+# Demo-only secret, like the API token in the README.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingPassword
+  data:
+    - name: "eqx-am-ne-aws-vif-key"
+      description: "BGP auth key for the eg-am-ne02 <-> EXT-AWS-DX-FR2 PROD transit VIF"
+      password: "demo-eqx-am-ne-aws-vif"
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyHandoffCircuit
+  data:
+    - name: "HANDOFF-AMNE-AWS-EUC1-PROD"
+      member_of_groups: [virtual_circuits]
+      status: active
+      provider: "P016"
+      description: "PROD transit VIF eg-am-ne02 <-> EXT-AWS-DX-FR2 (vif-transit-am-euc1, AS64512)"
+      ip_namespace: "PROD"
+      maximum_routes: 100
+      password: "eqx-am-ne-aws-vif-key"
+      locations:
+        - "AM-NE"
+        - "eu-central-1"
+      capabilities:
+        - ["eg-am-ne02", "Ethernet1/1.1100"]
+        - ["EXT-AWS-DX-FR2", "et-0/0/0.1100"]

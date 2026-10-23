@@ -1,9 +1,9 @@
 """The shared SD-WAN gateway has its own physical internet connection (30_all/08_interconnects/08_gateway_access).
 
-The gateway EQX-FR2-SDWAN-GW1 has its own internet connection besides its trunk eth0: a second port, eth1, and an
-internet circuit to Lumen's Frankfurt edge. It feeds no generator step (the overlay session is built from the
-ports' own underlay); it models the gateway's real access. The trunk stays the gateway's single role=uplink port
-(generators/topology/sdwan_edge.py refuses several), so eth1 must not be one.
+The gateway EQX-FR2-SDWAN-GW1 has its own internet connection besides its cable eth0: a second port, eth1, and an
+internet circuit to Lumen's Frankfurt edge. It feeds no generator step; it is the carrier of the gateway's public port
+eth1, which every tunnel ends on (checks/circuit_placement.py wants each tunnel end on an internet circuit with an ISP
+end). eth0 stays the gateway's single role=uplink port, so eth1 must not be one.
 """
 
 from __future__ import annotations
@@ -119,9 +119,17 @@ def test_gateway_access_circuit_ends_on_the_gateway_eth1_and_a_customer_port_of_
 
 
 def test_gateway_access_ports_are_used_by_no_other_circuit_peering_or_address() -> None:
-    """Both ends are free: the pair appears once in all of 30_all (this circuit) and the ISP port is not et-0/0/0."""
+    """Both ends are free: the pair appears once in all of 30_all (this circuit) and the ISP port is not et-0/0/0.
+
+    A tunnel circuit is no other user: the gateway's public port eth1 is the end every tunnel shares.
+    """
     ends = [tuple(end) for end in _circuit()["capabilities"]]
-    docs = [doc for path in sorted(_ALL.rglob("*.yml")) for doc in yaml.safe_load_all(path.read_text()) if doc]
+    docs = [
+        doc
+        for path in sorted(_ALL.rglob("*.yml"))
+        for doc in yaml.safe_load_all(path.read_text())
+        if doc and doc["spec"]["kind"] != "TopologyTunnelCircuit"
+    ]
 
     for device, port in ends:
         assert sum(_uses(doc, device, port) for doc in docs) == 1, f"{device} {port} is used more than once"
@@ -150,8 +158,9 @@ def test_gateway_access_is_not_in_the_transit_folder_nor_counted_as_transit() ->
     ]
 
 
-def test_internet_circuit_count_is_transit_plus_gateway_access_plus_one_per_office() -> None:
-    """The expected internet count follows the data: the 06_internet transit, the gateway access, an INET-<office> each."""
+def test_internet_circuit_count_is_transit_plus_two_accesses_plus_one_per_office() -> None:
+    """The expected internet count follows the data: the 06_internet transit, the gateway's and the partner's access,
+    an INET-<office> each."""
     transit = {
         c["circuit_id"]
         for path in (_ALL / "08_interconnects" / "06_internet").glob("*.yml")
@@ -161,4 +170,4 @@ def test_internet_circuit_count_is_transit_plus_gateway_access_plus_one_per_offi
     assert transit == ALL_DEMO_INTERNET_TRANSIT_CIRCUITS
     assert set(ALL_DEMO_SDWAN_UNDERLAY_CIRCUITS) == {f"INET-{office}" for office in offices}
     assert offices
-    assert ALL_DEMO_PHYSICAL_CIRCUIT_TYPES["internet"] == len(transit) + 1 + len(offices)
+    assert ALL_DEMO_PHYSICAL_CIRCUIT_TYPES["internet"] == len(transit) + 1 + 1 + len(offices)

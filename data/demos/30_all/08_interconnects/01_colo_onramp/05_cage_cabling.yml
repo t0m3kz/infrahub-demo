@@ -1,0 +1,57 @@
+---
+# The hops that stay inside one cage. A physical circuit needs two distinct facilities
+# (checks/circuit_placement.py, utils/circuit_underlay.py port_cabled), so a hop between two chassis
+# of one cage, or between our edge and the colocation operator's own port in the same IBX, is a cable,
+# the project's rule for fibre pulled inside one facility. A cable has no status: a cabled port is
+# always carried.
+#
+# Both cables carry a handoff: the session generator (add_virtual_circuit) treats a cabled port, or
+# the parent of a cabled sub-interface, as carried. Nothing reruns that generator when a cable is
+# added later, so this file is loaded BEFORE the handoff circuits: it sorts earlier in this tree
+# (01_colo_onramp before 03_virtual_circuits, 04_sdwan and 05_cloud_endpoints).
+#
+# 1. The SD-WAN gateway's own port in the cage router. The gateway (EQX-FR2-SDWAN-GW1) and the cage
+#    router eg-fr201 sit in one cage. The gateway's eth0 gets a port of its own, Ethernet1/12, so the
+#    cage router's Ethernet1/13 stays the AWS cross-connect (XC-EQXFR2-AWS-EUC1) alone. Ethernet1/12
+#    is the last of the edge template's four ports of role `dci` (Ethernet1/[9-12]); the fibres land
+#    on 1/10 and 1/11, so it is free, and the role only matters to a DCI session, which this port
+#    never carries. Carries ../04_sdwan/06_vrf_handoff.yml.
+#
+# 2. The Equinix Fabric port of the FR2 IBX. Equinix Fabric virtual connections (to the Network Edge
+#    routers of AM-NE) enter our cage on a Fabric port of Equinix's, patched to one of our edge ports.
+#    The port is modelled as a stub provider device (../01_colo_onramp/02_cloud_provider_edges.yml,
+#    EXT-EQX-FABRIC-FR2, deployed to the cage FR2); the cable runs from eg-fr201 Ethernet1/1 (a
+#    `customer` port: Ethernet1/[15-16] face the cage's firewall pair and are cabled by add_colocation_zone,
+#    Ethernet1/[13-14] are the cloud and ISP uplinks, Ethernet1/12 the gateway) to the Fabric port's
+#    et-0/0/0. Carries ../03_virtual_circuits/02_am_ne_handoff.yml, whose VLAN sub-interface
+#    Ethernet1/1.1200 rides this cable on its parent.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+    - name: "CBL-FR2-SDWAN-GW1-ETH0"
+      type: copper
+      deployment: "FR2"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "EQX-FR2-SDWAN-GW1"
+            name: "eth0"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "eg-fr201"
+            name: "Ethernet1/12"
+
+    - name: "CBL-FR2-EQX-FABRIC-FR201"
+      type: smf
+      deployment: "FR2"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "eg-fr201"
+            name: "Ethernet1/1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "EXT-EQX-FABRIC-FR2"
+            name: "et-0/0/0"

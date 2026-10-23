@@ -1,14 +1,11 @@
 # add_circuit (generators/topology/circuit.py). Filters on name, the
 # generator's registered parameter (.infrahub.yml `name: name__value`).
 #
-# A circuit's endpoints are one list, capabilities: exactly two
+# A physical circuit's endpoints are one list, capabilities: exactly two
 # interfaces by schema (min_count = max_count = 2), one per end. Each endpoint
-# carries what a DCI session needs: its address, its device's deployment (a
-# TopologyDataCenter end names the fabric key and the address family) and the
-# device's BGP processes. The deployment's kind also places that end (a DC,
+# carries its device's deployment: the deployment's kind places that end (a DC,
 # ISP, cloud region, colocation zone or virtual colocation deployment is the
-# circuit's location there), checked
-# against the circuit's current locations.
+# circuit's location there), checked against the circuit's current locations.
 query circuit_data($name: String!) {
   TopologyPhysicalCircuit(name__value: $name) {
     edges {
@@ -16,9 +13,6 @@ query circuit_data($name: String!) {
         id
         name { value }
         circuit_id { value }
-        circuit_type { value }
-        status { value }
-        peering_role { value }
         locations {
           edges {
             node {
@@ -42,17 +36,9 @@ query circuit_data($name: String!) {
 
 fragment CircuitEndpoint on DcimInterface {
   id
-  __typename
   name { value }
-  ... on DcimPhysicalInterface {
-    ip_address { node { id address { value } } }
-  }
-  ... on DcimVirtualInterface {
-    ip_address { node { id address { value } } }
-  }
   device {
     node {
-      id
       name { value }
       ... on DcimPhysicalDevice {
         deployment { node { ...CircuitDeployment } }
@@ -63,20 +49,6 @@ fragment CircuitEndpoint on DcimInterface {
       ... on CloudNetworkAppliance {
         deployment { node { ...CircuitDeployment } }
       }
-      ... on DcimCapabilities {
-        capabilities {
-          edges {
-            node {
-              id
-              __typename
-              ... on ManagedBGP {
-                name { value }
-                process_role { value }
-              }
-            }
-          }
-        }
-      }
     }
   }
 }
@@ -85,8 +57,4 @@ fragment CircuitDeployment on TopologyDeployment {
   id
   __typename
   display_label
-  ... on TopologyDataCenter {
-    name { value }
-    underlay_protocol { value }
-  }
 }

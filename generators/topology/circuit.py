@@ -1,61 +1,28 @@
-"""Circuit generators: a physical circuit's derived locations and the BGP session a circuit's ``peering_role`` asks for.
+"""add_circuit: the derived facility locations of a TopologyPhysicalCircuit.
 
-PhysicalCircuitGenerator (add_circuit)
-    First the circuit's placement: an endpoint device whose ``deployment``
-    is itself a facility (TopologyDataCenter, TopologyExternalProviders,
-    TopologyCloudRegion, TopologyColocationZone, TopologyVirtualColocation)
-    places that end, so the circuit's locations are the authored ones plus
-    these derived ones, exactly two distinct. An on-ramp edge deploys to its
-    zone or virtual colocation, which is the facility the circuit ends on. A
-    derived facility that contradicts an authored one of the same kind, or anything but two locations, fails the
-    run before any write; the missing derived ones are added with one
-    RelationshipAdd, so an already complete circuit writes nothing.
-    Derived from the devices as they are when the circuit is created or its
-    ends change: no trigger watches an end device's ``deployment`` (a rule on
-    a device kind can only dispatch a generator targeting devices, and none
-    targets every device). Every producer sets it at device creation, before
-    any circuit names the device; a later edit is reported by
-    checks/circuit_placement.py, and a re-run of this generator adds a
-    deployment that was missing but never moves a derived location.
-    Then ``peering_role: dci`` builds the EVPN Multi-Site DCI session over the
-    circuit's two endpoints (capabilities, exactly two by schema): a
-    P2P prefix from the DCI pool, both addresses, the two interfaces
-    addressed, and one directly connected eBGP peering between the two
-    devices' overlay ManagedBGP processes, keyed with the DC fabric's
-    ``{fabric}-overlay-key``. ``underlay`` and ``transit`` are accepted but
-    not generated yet; ``none`` writes nothing. Every run then fans out
-    add_virtual_circuit to the overlay virtual circuits that share one of
-    the circuit's endpoint interfaces, so a status change reaches them.
+A physical circuit is a pure carrier (fibre, cross-connect, internet access): it has no role and no session. This
+generator's one job is its placement. An endpoint device whose ``deployment`` is itself a facility
+(TopologyDataCenter, TopologyExternalProviders, TopologyCloudRegion, TopologyColocationZone,
+TopologyVirtualColocation) places that end, so the circuit's locations are the authored ones plus these derived
+ones, exactly two distinct. An on-ramp edge deploys to its zone or virtual colocation, which is the facility the
+circuit ends on. A derived facility that contradicts an authored one of the same kind, or anything but two
+locations, fails the run before any write; the missing derived ones are added with one RelationshipAdd, so an
+already complete circuit writes nothing.
 
-VirtualCircuitGenerator (add_virtual_circuit)
-    ``peering_role: overlay`` on a tunnel link type builds one eBGP peering
-    between the two endpoint interfaces (capabilities) over their
-    existing addresses, after waiting for the add_circuit runs of its
-    underlay. The underlay is derived, never declared: the physical circuits
-    found in the ``capabilities`` of the virtual circuit's own ports
-    (``utils.circuit_underlay.derived_underlay``). The session is built from
-    that underlay: an empty one builds nothing yet (info, no error) and the
-    capabilities-updated trigger reruns the virtual circuit once the ports are
-    linked to a physical circuit; a decommissioned circuit or a wholly
-    decommissioned underlay builds nothing. That a virtual link has a physical
-    connection is enforced by checks/circuit_placement.py, not here. It allocates
-    nothing and never writes the interfaces: a tunnel port carries several
-    virtual circuits.
+Derived from the devices as they are when the circuit is created or its ends change: no trigger watches an end
+device's ``deployment`` (a rule on a device kind can only dispatch a generator targeting devices, and none targets
+every device). Every producer sets it at device creation, before any circuit names the device; a later edit is
+reported by checks/circuit_placement.py, and a re-run of this generator adds a deployment that was missing but never
+moves a derived location.
 
-    Known limitations, all silent: a port removed from a physical circuit does
-    not rerun the virtual circuits that sat on it; a virtual circuit end on a
-    logical port (LAG, sub-interface) derives nothing for that end; the generator
-    selects on ``link_type`` only, so a tunnel with a wrong ``transport_mode``
-    is caught by checks/circuit_placement.py, not here.
+The derived locations are written untracked: the circuit is the run's target, not its output (tracked, the cleanup
+could delete it). Nothing else is written.
 
-Ownership (the run's tracking group, delete_unused_nodes=True): a run owns
-what exists only because of its circuit — the DCI prefix, its two addresses
-and the peering. The interfaces it addresses come from the device templates
-and are written untracked, as are the derived locations it adds to the
-circuit (its target, not its output); devices, BGP processes, the fabric key and the
-global address families are only referenced. Every precondition fails
-(``self.logger.error`` raises) before the first write, so a refused run never
-returns after a partial save, which its cleanup would turn into deletions.
+BGP sessions over a connection between topologies come from the virtual circuits, not from here: the
+InterconnectCircuit and HandoffCircuit session generator (generators/topology/virtual_circuit.py) waits for this
+generator (``PHYSICAL_CIRCUIT_GENERATOR``) on the physical circuits it rides and reads their ends. This generator
+never waits for it (no cycle): it only fires it, without waiting, for every session circuit on the circuit's ports,
+so a change of the carrier (its status, its ends) reaches the sessions that ride it.
 """
 
 from __future__ import annotations
@@ -63,39 +30,21 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from infrahub_sdk.protocols import CoreIPPrefixPool
-
-from utils.circuit_underlay import DECOMMISSIONED, TUNNEL_LINK_TYPES, derived_underlay
 from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator
-from ..connections import CablingMixin
-from ..pools import PoolMixin
-from ..protocols import RoutingPassword, TopologyPhysicalCircuit, TopologyVirtualCircuit
-from ..routing import EVPN_AF, IPV4_UNICAST_AF, IPV6_UNICAST_AF, RoutingMixin, _overlay_key_name
+from ..protocols import (
+    DcimVirtualInterface,
+    TopologyHandoffCircuit,
+    TopologyInterconnectCircuit,
+    TopologyPhysicalCircuit,
+)
 
 PHYSICAL_CIRCUIT_GENERATOR = "add_circuit"
 VIRTUAL_CIRCUIT_GENERATOR = "add_virtual_circuit"
-
-# Roles the schema accepts on a physical circuit that this version does not build.
-_NOT_IMPLEMENTED_PHYSICAL_ROLES = frozenset({"underlay", "transit"})
-
-# DCI P2P pools (data/bootstrap/20_dci_pools.yml), by the DC fabric's address
-# family: an EVPN Multi-Site tunnel only forms between border gateways whose
-# VTEPs share one, so the DCI follows the fabric's underlay_protocol.
-_DCI_POOLS: dict[int, tuple[str, int]] = {4: ("DCI-Technical-IPv4", 31), 6: ("DCI-Technical-IPv6", 127)}
-_UNICAST_AF: dict[int, tuple[str, str]] = {4: IPV4_UNICAST_AF, 6: IPV6_UNICAST_AF}
-
-# Circuit status -> the status of the interfaces it lands on (templates render
-# a non-active interface shut). A decommissioned circuit builds nothing.
-_INTERFACE_STATUS_FOR_CIRCUIT = {
-    "provisioning": "provisioning",
-    "active": "active",
-    "maintenance": "maintenance",
-    "down": "outage",
-}
-# Interface kinds that carry an ip_address relationship.
-_ADDRESSABLE_INTERFACE_KINDS = frozenset({"DcimPhysicalInterface", "DcimVirtualInterface"})
+# The virtual circuit kinds that have a session generated (the tunnel circuit has none and is not in the
+# generator's target group), here for the fan-out below and for virtual_circuit.py's port-exclusivity check.
+SESSION_CIRCUIT_KINDS = (TopologyInterconnectCircuit, TopologyHandoffCircuit)
 
 # Device deployments that are themselves the facility a physical circuit end
 # terminates on, so that end's location is derived from its device. A colocation
@@ -144,19 +93,8 @@ class CircuitEndpoint:
     """One end of a circuit, parsed from the query's interface selection."""
 
     interface_id: str
-    interface_kind: str
     interface_name: str
-    device_id: str
     device_name: str
-    address_id: str | None
-    # The interface's address with its prefix length ("10.0.0.1/31"), when it has one.
-    address: str | None
-    # Lower-cased TopologyDataCenter name when the device belongs to a DC
-    # fabric (its deployment), which names the fabric's routing objects.
-    fabric: str | None
-    underlay_protocol: str | None
-    # (id, name, process_role) of every ManagedBGP process on the device.
-    bgp_processes: tuple[tuple[str, str, str], ...]
     # The device's deployment, whatever its kind; None when it has none.
     deployment: CircuitLocation | None
 
@@ -170,77 +108,22 @@ class CircuitEndpoint:
         if not interface or not interface.get("id"):
             return None
         device = interface.get("device") or {}
-        deployment = device.get("deployment") or {}
-        is_dc = isinstance(deployment, dict) and deployment.get("typename") == "TopologyDataCenter"
-        fabric = (deployment.get("name") or "").lower() if is_dc else ""
-        address = interface.get("ip_address") or {}
         return cls(
             interface_id=interface["id"],
-            interface_kind=interface.get("typename") or "",
             interface_name=interface.get("name") or "?",
-            device_id=device.get("id") or "",
             device_name=device.get("name") or "?",
-            address_id=address.get("id") if isinstance(address, dict) else None,
-            address=address.get("address") if isinstance(address, dict) else None,
-            fabric=fabric or None,
-            underlay_protocol=deployment.get("underlay_protocol") if is_dc else None,
-            bgp_processes=tuple(
-                (cap["id"], cap.get("name") or "", cap.get("process_role") or "")
-                for cap in device.get("capabilities") or []
-                if isinstance(cap, dict) and cap.get("typename") == "ManagedBGP" and cap.get("id")
-            ),
-            deployment=CircuitLocation.parse(deployment),
+            deployment=CircuitLocation.parse(device.get("deployment")),
         )
-
-    def bgp_process(self, role: str) -> str | None:
-        """Id of the device's single ManagedBGP process of this role, else None."""
-        matching = [proc_id for proc_id, _, proc_role in self.bgp_processes if proc_role == role]
-        return matching[0] if len(matching) == 1 else None
-
-    def session_process(self) -> str | None:
-        """Id of the process an overlay session runs on: the device's only
-        ManagedBGP, else its only role=regular one; None when ambiguous."""
-        if len(self.bgp_processes) == 1:
-            return self.bgp_processes[0][0]
-        return self.bgp_process("regular")
-
-
-def _parse_endpoints(interfaces: list[dict[str, Any]]) -> list[CircuitEndpoint]:
-    """Endpoints in query order, deduplicated by interface id."""
-    endpoints: list[CircuitEndpoint] = []
-    seen: set[str] = set()
-    for interface in interfaces:
-        endpoint = CircuitEndpoint.parse(interface)
-        if endpoint is None or endpoint.interface_id in seen:
-            continue
-        seen.add(endpoint.interface_id)
-        endpoints.append(endpoint)
-    return endpoints
 
 
 def circuit_endpoints(circuit: dict[str, Any]) -> list[CircuitEndpoint]:
-    """The circuit's ends, from its one ``capabilities`` edge (physical and virtual circuits alike)."""
-    return _parse_endpoints(circuit.get("capabilities") or [])
-
-
-def endpoint_problem(endpoints: list[CircuitEndpoint]) -> str | None:
-    """Why these endpoints cannot carry a session, or None: a session needs
-    exactly two interfaces on two different devices."""
-    if len(endpoints) != 2:
-        return f"exactly 2 endpoint interfaces, found {len(endpoints)}"
-    if endpoints[0].device_id == endpoints[1].device_id:
-        return f"endpoints on 2 different devices, both are on {endpoints[0].device_name}"
-    return None
-
-
-def order_endpoints(endpoints: list[CircuitEndpoint]) -> tuple[CircuitEndpoint, CircuitEndpoint]:
-    """(first, second): a non-DC end before a DC end, then by device name.
-
-    The first end takes the lower P2P address — the facility end of a dark
-    fibre the even one, the DC end the odd one.
-    """
-    first, second = sorted(endpoints, key=lambda e: (e.fabric is not None, e.device_name, e.interface_name))
-    return first, second
+    """The circuit's ends, from its one ``capabilities`` edge, in query order and deduplicated by interface id."""
+    endpoints: dict[str, CircuitEndpoint] = {}
+    for interface in circuit.get("capabilities") or []:
+        endpoint = CircuitEndpoint.parse(interface)
+        if endpoint is not None:
+            endpoints.setdefault(endpoint.interface_id, endpoint)
+    return list(endpoints.values())
 
 
 def plan_locations(
@@ -279,214 +162,38 @@ def plan_locations(
     return missing, None
 
 
-class _CircuitGenerator(PoolMixin, RoutingMixin, CommonGenerator):
-    """Shared plumbing: one circuit per run, its fabric key, address families."""
+class PhysicalCircuitGenerator(CommonGenerator):
+    """add_circuit — a TopologyPhysicalCircuit's derived facility locations."""
 
-    graphql_root_key = ""
     client: Any
 
-    def _single_circuit(self, data: dict[str, Any]) -> dict[str, Any] | None:
-        circuits = clean_data(data).get(self.graphql_root_key) or []
-        if not circuits:
-            self.logger.error(f"No {self.graphql_root_key} data in GraphQL response")
-            return None
-        return circuits[0]
-
-    async def _overlay_key(self, circuit_name: str, endpoints: list[CircuitEndpoint]) -> Any | None:
-        """The DC fabric's pre-loaded overlay key, or None when no end is a DC device.
-
-        Looked up, never written: add_dc owns it. A DC end whose key is missing
-        fails the run (logger.error raises) instead of building an
-        unauthenticated session. With a DC at both ends the fabric that sorts
-        first keys the session.
-        """
-        fabrics = sorted({e.fabric for e in endpoints if e.fabric})
-        if not fabrics:
-            return None
-        key_name = _overlay_key_name(fabrics[0])
-        key = await self.client.get(kind=RoutingPassword, name__value=key_name, raise_when_missing=False)
-        if key is None:
-            self.logger.error(
-                f"{circuit_name}: RoutingPassword '{key_name}' not found — the session is keyed with the "
-                f"{fabrics[0]} fabric's overlay key, which add_dc creates; not building an unauthenticated session"
-            )
-            return None
-        return key
-
-
-class PhysicalCircuitGenerator(CablingMixin, _CircuitGenerator):
-    """add_circuit — a TopologyPhysicalCircuit's derived locations and the session its peering_role asks for."""
-
-    graphql_root_key = "TopologyPhysicalCircuit"
-
     async def generate(self, data: dict[str, Any]) -> None:
-        circuit = self._single_circuit(data)
-        if circuit is None:
+        circuits = clean_data(data).get("TopologyPhysicalCircuit") or []
+        if not circuits:
+            self.logger.error("No TopologyPhysicalCircuit data in GraphQL response")
             return
+        circuit = circuits[0]
         circuit_name: str = circuit.get("circuit_id") or circuit.get("name") or ""
         if not circuit_name:
             self.logger.error("TopologyPhysicalCircuit missing circuit_id/name")
             return
 
-        role: str = circuit.get("peering_role") or "none"
-        status: str = circuit.get("status") or ""
         endpoints = circuit_endpoints(circuit)
         summary = " | ".join(e.label for e in endpoints) or "no endpoints"
-        self.logger.info(f"Processing physical circuit {circuit_name} (role={role}, status={status}): {summary}")
+        self.logger.info(f"Processing physical circuit {circuit_name}: {summary}")
         missing_locations, problem = plan_locations(circuit_locations(circuit), endpoints)
         if problem:
             self.logger.error(f"{circuit_name} ({summary}): {problem}")
             return
 
-        if role == "dci":
-            await self._build_dci_session(circuit, circuit_name, endpoints)
-        elif role in _NOT_IMPLEMENTED_PHYSICAL_ROLES:
-            self.logger.info(f"  peering_role '{role}' is not implemented yet — nothing generated for {circuit_name}")
-        else:
-            problem = endpoint_problem(endpoints)
-            if problem:
-                self.logger.info(f"  {circuit_name}: a session would need {problem} (peering_role none, no session)")
-
         await self._add_locations(circuit["id"], circuit_name, missing_locations)
-        await self._fan_out_virtual_circuits(endpoints, circuit_name)
+        await self._fan_out_sessions(endpoints, circuit_name)
         self.logger.info(f"Physical circuit {circuit_name} — completed")
-
-    async def _build_dci_session(
-        self, circuit: dict[str, Any], circuit_name: str, endpoints: list[CircuitEndpoint]
-    ) -> None:
-        """P2P from the DCI pool, both interfaces addressed, one eBGP DCI peering."""
-        problem = endpoint_problem(endpoints)
-        if problem:
-            self.logger.error(f"{circuit_name}: peering_role dci needs {problem}")
-            return
-        status: str = circuit.get("status") or ""
-        if status == DECOMMISSIONED:
-            self.logger.info(
-                f"  {circuit_name} is decommissioned — no DCI session; cleanup removes the prefix, "
-                "addresses and peering an earlier run built"
-            )
-            return
-
-        first, second = order_endpoints(endpoints)
-        dc_ends = sorted((e for e in (first, second) if e.fabric), key=lambda e: e.fabric or "")
-        if not dc_ends:
-            self.logger.error(
-                f"{circuit_name}: peering_role dci needs a DC fabric device at one end "
-                f"({first.device_name}, {second.device_name} belong to no TopologyDataCenter)"
-            )
-            return
-        processes: list[str] = []
-        for endpoint in (first, second):
-            if endpoint.interface_kind not in _ADDRESSABLE_INTERFACE_KINDS:
-                self.logger.error(
-                    f"{circuit_name}: {endpoint.label} is a {endpoint.interface_kind}, it takes no address"
-                )
-                return
-            process_id = endpoint.bgp_process("overlay")
-            if process_id is None:
-                self.logger.error(
-                    f"{circuit_name}: {endpoint.device_name} has no single overlay ManagedBGP process for the DCI "
-                    "session (add_dc/add_pod, add_colocation_zone or add_virtual_colocation creates it)"
-                )
-                return
-            processes.append(process_id)
-        key = await self._overlay_key(circuit_name, [first, second])
-        if key is None:
-            return
-        family = 4 if dc_ends[0].underlay_protocol == "ipv4" else 6
-        pool_name, prefix_length = _DCI_POOLS[family]
-        pool = await self.client.get(kind=CoreIPPrefixPool, name__value=pool_name, raise_when_missing=False)
-        if pool is None:
-            self.logger.error(f"{circuit_name}: DCI pool '{pool_name}' not found (data/bootstrap/20_dci_pools.yml)")
-            return
-        interfaces: list[Any] = []
-        for endpoint in (first, second):
-            node = await self.client.get(
-                kind=endpoint.interface_kind, id=endpoint.interface_id, raise_when_missing=False
-            )
-            if node is None:
-                self.logger.error(f"{circuit_name}: interface {endpoint.label} not found")
-                return
-            interfaces.append(node)
-
-        # Every precondition holds — the writes start here.
-        address_families = [
-            await self.ensure_address_family(*_UNICAST_AF[family]),
-            await self.ensure_address_family(*EVPN_AF),
-        ]
-        prefix = await self.client.allocate_next_ip_prefix(
-            resource_pool=pool,
-            identifier=f"dci-p2p__{circuit['id']}",
-            prefix_length=prefix_length,
-            member_type="address",
-            data={"role": "technical", "is_pool": True, "description": f"DCI {circuit_name}"},
-        )
-        if prefix is None:
-            self.logger.error(f"{circuit_name}: DCI pool '{pool_name}' returned no prefix — exhausted?")
-            return
-        # Owned by this circuit. allocate_next_ip_prefix() is a pool mutation,
-        # not a save(), so the prefix joins the run's tracking group only here.
-        self.client.group_context.related_node_ids.append(prefix.id)
-        self.logger.info(f"  DCI prefix {prefix.prefix.value} for {circuit_name}")
-
-        addresses = await self.upsert_p2p_addresses(prefix, description=f"DCI {circuit_name}")
-        interface_status = _INTERFACE_STATUS_FOR_CIRCUIT.get(status, "provisioning")
-        for endpoint, node, address, peer in (
-            (first, interfaces[0], addresses[0], second),
-            (second, interfaces[1], addresses[1], first),
-        ):
-            await self._update_interface(
-                node,
-                address_id=address.id,
-                description=f"DCI {circuit_name} to {peer.device_name} {peer.interface_name}",
-                status=interface_status,
-            )
-            self.logger.info(f"  {endpoint.label} = {address.address.value}")
-
-        await self.upsert_bgp_peering(
-            # DCI-<circuit>, never the circuit's own name: peerings and
-            # circuits share one name space.
-            name=f"DCI-{circuit_name}",
-            description=f"EVPN Multi-Site DCI {first.device_name} <-> {second.device_name} over {circuit_name}",
-            status="active" if status == "active" else "provisioning",
-            session_type="EBGP",
-            # dci keeps the session out of the underlay peer group (ttl 1
-            # otherwise reads as underlay) and marks its local interface
-            # for `evpn multisite dci-tracking` (transforms/helpers/).
-            peering_role="dci",
-            process_ids=processes,
-            address_family_ids=address_families,
-            password_id=key.id,
-            interface_ids=[first.interface_id, second.interface_id],
-        )
-
-    async def _update_interface(self, node: Any, *, address_id: str, description: str, status: str) -> None:
-        """Address an endpoint interface, untracked, and only if something changed.
-
-        The interface comes from the device's object template, not from this
-        run: tracked, a later run that stopped addressing it would delete the
-        port. A plain save() on the fetched node sends only the modified fields.
-        """
-        changed = False
-        if getattr(getattr(node, "ip_address", None), "id", None) != address_id:
-            node.ip_address = address_id
-            changed = True
-        if node.description.value != description:
-            node.description.value = description
-            changed = True
-        if node.status.value != status:
-            node.status.value = status
-            changed = True
-        if changed:
-            await node.save(update_group_context=False)
 
     async def _add_locations(self, circuit_id: str, circuit_name: str, locations: list[CircuitLocation]) -> None:
         """Add the derived locations the circuit lacks: one RelationshipAdd, untracked.
 
-        The circuit is the run's target, not its output (tracked, cleanup
-        could delete it), and a RelationshipAdd names only these peers, so it
-        never drops an authored location. Written after the session, whose
-        preconditions all fail before the first write.
+        A RelationshipAdd names only these peers, so it never drops an authored location.
         """
         if not locations:
             return
@@ -494,154 +201,21 @@ class PhysicalCircuitGenerator(CablingMixin, _CircuitGenerator):
         await node.add_relationships(relation_to_update="locations", related_nodes=[loc.id for loc in locations])
         self.logger.info(f"  {circuit_name}: derived location(s) {', '.join(loc.label for loc in locations)}")
 
-    async def _fan_out_virtual_circuits(self, endpoints: list[CircuitEndpoint], circuit_name: str) -> None:
-        """Re-run add_virtual_circuit for the overlay circuits on this circuit's ports.
+    async def _fan_out_sessions(self, endpoints: list[CircuitEndpoint], circuit_name: str) -> None:
+        """Re-run add_virtual_circuit for every session circuit riding this carrier, without waiting.
 
-        A virtual circuit rides this one when it terminates on one of its
-        endpoint interfaces (the derived underlay). Fire-and-forget: each of
-        those runs waits for this run itself (wait_for_parent_generator_and_refetch),
-        so it sees what this run wrote.
+        A virtual circuit rides this one when it ends on one of its ports or on a sub-interface whose
+        ``parent_interface`` is one of them (the derived underlay, utils/circuit_underlay.py). Each of those runs
+        waits for this run itself (wait_for_parent_generator_and_refetch), so it sees what this run wrote.
         """
-        if not endpoints:
+        port_ids = [endpoint.interface_id for endpoint in endpoints]
+        if not port_ids:
             return
-        overlays = await self.client.filters(
-            kind=TopologyVirtualCircuit,
-            capabilities__ids=[e.interface_id for e in endpoints],
-            peering_role__value="overlay",
-        )
-        overlay_ids = sorted(vc.id for vc in overlays)
-        if overlay_ids:
-            self.logger.info(f"  {circuit_name} carries {len(overlay_ids)} overlay virtual circuit(s)")
-            await self.run_generator(VIRTUAL_CIRCUIT_GENERATOR, overlay_ids, wait=False)
-
-
-class VirtualCircuitGenerator(_CircuitGenerator):
-    """add_virtual_circuit — the overlay session across a tunnel virtual circuit."""
-
-    graphql_root_key = "TopologyVirtualCircuit"
-
-    async def generate(self, data: dict[str, Any]) -> None:
-        circuit = self._single_circuit(data)
-        if circuit is None:
-            return
-        circuit_name: str = circuit.get("name") or ""
-        if not circuit_name:
-            self.logger.error("TopologyVirtualCircuit missing name")
-            return
-        self._log_summary(circuit, circuit_name)
-        if not self._wants_overlay_session(circuit, circuit_name):
-            self.logger.info(f"Virtual circuit {circuit_name} — completed")
-            return
-
-        refreshed: dict[str, Any] | None = None
-        for underlay in derived_underlay(circuit):
-            refreshed = await self.wait_for_parent_generator_and_refetch(
-                PHYSICAL_CIRCUIT_GENERATOR, underlay["id"]
-            ) or (refreshed)
-        if refreshed is not None:
-            circuit = self._single_circuit(refreshed)
-            if circuit is None or not self._wants_overlay_session(circuit, circuit_name):
-                return
-
-        await self._build_overlay_session(circuit, circuit_name)
-        self.logger.info(f"Virtual circuit {circuit_name} — completed")
-
-    def _wants_overlay_session(self, circuit: dict[str, Any], circuit_name: str) -> bool:
-        role = circuit.get("peering_role") or "none"
-        if role != "overlay":
-            self.logger.info(f"  peering_role {role} — no session for {circuit_name}")
-            return False
-        link_type = circuit.get("link_type") or ""
-        if link_type not in TUNNEL_LINK_TYPES:
-            self.logger.warning(
-                f"  {circuit_name}: link_type '{link_type}' is provider-managed, not a tunnel of ours — "
-                "peering_role overlay ignored, no session"
-            )
-            return False
-        return True
-
-    async def _build_overlay_session(self, circuit: dict[str, Any], circuit_name: str) -> None:
-        status: str = circuit.get("status") or ""
-        underlay = derived_underlay(circuit)
-        live_underlay = [pc for pc in underlay if pc.get("status") != DECOMMISSIONED]
-        if status == DECOMMISSIONED or (underlay and not live_underlay):
-            self.logger.info(
-                f"  {circuit_name}: circuit or its whole underlay is decommissioned — no session; "
-                "cleanup removes the peering an earlier run built"
-            )
-            return
-        if not underlay:
-            # Not a decommissioned underlay, and not an error: add_sdwan_edge creates the circuit before it links the
-            # ports, and the capabilities-updated trigger reruns this generator once they are.
-            self.logger.info(
-                f"  {circuit_name}: ports not linked to a physical circuit yet - session built when they are"
-            )
-            return
-
-        endpoints = circuit_endpoints(circuit)
-        problem = endpoint_problem(endpoints)
-        if problem:
-            self.logger.error(f"{circuit_name}: peering_role overlay needs {problem}")
-            return
-        first, second = order_endpoints(endpoints)
-        processes: list[str] = []
-        for endpoint in (first, second):
-            if not endpoint.address_id:
-                self.logger.error(
-                    f"{circuit_name}: {endpoint.label} has no IP address — the overlay session runs over "
-                    "the endpoints' existing addresses"
-                )
-                return
-            process_id = endpoint.session_process()
-            if process_id is None:
-                names = ", ".join(name for _, name, _ in endpoint.bgp_processes) or "none"
-                self.logger.error(
-                    f"{circuit_name}: {endpoint.device_name} needs one ManagedBGP process for the overlay session "
-                    f"(its only one, or its only role=regular one); has: {names}"
-                )
-                return
-            processes.append(process_id)
-        key = await self._overlay_key(circuit_name, [first, second])
-        if key is None and any(e.fabric for e in (first, second)):
-            return
-
-        underlay_active = any(pc.get("status") == "active" for pc in live_underlay)
-        # The session rides the endpoints' own addresses, directly connected
-        # (ttl 1): it carries that address family's unicast routes.
-        family = 6 if ":" in (first.address or "") else 4
-        await self.upsert_bgp_peering(
-            # <vc>-bgp: peerings and circuits share one name space.
-            name=f"{circuit_name}-bgp",
-            description=f"Overlay eBGP {first.label} <-> {second.label} over {circuit_name}",
-            status="active" if status == "active" and underlay_active else "provisioning",
-            session_type="EBGP",
-            peering_role="overlay",
-            process_ids=processes,
-            address_family_ids=[await self.ensure_address_family(*_UNICAST_AF[family])],
-            password_id=key.id if key is not None else None,
-            interface_ids=[first.interface_id, second.interface_id],
-        )
-
-    def _log_summary(self, circuit: dict[str, Any], circuit_name: str) -> None:
-        """Log the circuit, its ends and its derived underlay; checks/ enforces what must hold."""
-        link_type: str = circuit.get("link_type") or ""
-        interfaces = circuit.get("capabilities") or []
-        ends = " | ".join(
-            f"{(iface.get('device') or {}).get('name') or '?'}/{iface.get('name', '?')}" for iface in interfaces
-        )
-        underlay = (
-            ", ".join(pc.get("circuit_id") or pc.get("name") or "?" for pc in derived_underlay(circuit)) or "none"
-        )
-        self.logger.info(
-            f"Processing virtual circuit {circuit_name} (type={link_type or '?'}, "
-            f"role={circuit.get('peering_role') or 'none'}): {ends or 'no interfaces'}; underlay: {underlay}"
-        )
-        # A tunnel of ours has both ends; a provider-managed circuit may surface
-        # on one port only, its far end the provider's (a cloud on-ramp from
-        # the cage: VC-C001-EQXFR-AWS-EUC1, its cloud end a CloudVirtualInterface).
-        expected_ends = (2,) if link_type in TUNNEL_LINK_TYPES else (1, 2)
-        if len(interfaces) not in expected_ends:
-            self.logger.warning(
-                f"  Virtual circuit {circuit_name}: expected {' or '.join(map(str, expected_ends))} interfaces, "
-                f"found {len(interfaces)}"
-            )
+        sub_interfaces = await self.client.filters(kind=DcimVirtualInterface, parent_interface__ids=port_ids)
+        end_ids = [*port_ids, *(sub.id for sub in sub_interfaces)]
+        session_ids: set[str] = set()
+        for kind in SESSION_CIRCUIT_KINDS:
+            session_ids.update(vc.id for vc in await self.client.filters(kind=kind, capabilities__ids=end_ids))
+        if session_ids:
+            self.logger.info(f"  {circuit_name} carries {len(session_ids)} session circuit(s)")
+            await self.run_generator(VIRTUAL_CIRCUIT_GENERATOR, sorted(session_ids), wait=False)

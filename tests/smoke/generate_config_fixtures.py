@@ -2250,7 +2250,10 @@ def build_edge_bgw_pair_data(*, device_name: str, platform: str) -> dict:
     """A colocation metro edge that is one of two BGWs sharing a site VIP.
 
     BGW edge (Loopback1 IPv6 VTEP, Loopback100 multisite-vip) with two DCI dark
-    fibres (Ethernet1/10 and 1/11, peering_role dci) and an interlink
+    fibres (Ethernet1/10 and 1/11, MTU 9216), each carrying two sessions with one
+    per-circuit key: the underlay (peering_role dci-underlay, ttl 1, bfd, on the
+    port /127) and the EVPN session (peering_role dci, ttl 2 multihop, no bfd,
+    Loopback1 to the remote loopback), and an interlink
     (Ethernet1/8, role interlink) cabled to its sibling edge, with a FABRIC iBGP
     session (ttl 1, ipv6 unicast + l2vpn evpn) in the shared site AS on that /127.
     Ethernet1/13 and 1/14 (uplinks to an ISP / cross-connect) carry nothing.
@@ -2325,21 +2328,23 @@ def build_edge_bgw_pair_data(*, device_name: str, platform: str) -> dict:
         ]
     ):
         remote = f"dc{10 + index}-border-leaf-01"
-        interfaces.append(
-            {
-                "node": _make_interface(
-                    name=port,
-                    device_name=device_name,
-                    description=f"to {remote}",
-                    role="dci",
-                    ip_address=local_ip,
-                    remote_name="Ethernet1/35",
-                    remote_ip=remote_ip,
-                    remote_device=remote,
-                )
-            }
+        dci_port = _make_interface(
+            name=port,
+            device_name=device_name,
+            description=f"to {remote}",
+            role="dci",
+            ip_address=local_ip,
+            remote_name="Ethernet1/35",
+            remote_ip=remote_ip,
+            remote_device=remote,
         )
-        dci = _make_bgp_peering(
+        # The generator sets the routed-port MTU on the physical DCI ports.
+        dci_port["mtu"] = _v(9216)
+        interfaces.append({"node": dci_port})
+        # One key per circuit, on both of its sessions.
+        key = f"dci-s3cr3t-{index}"
+        # Underlay: eBGP unicast over the physical port, bfd, capped.
+        underlay = _make_bgp_peering(
             device_name=device_name,
             device_ip=local_ip,
             device_asn=65001,
@@ -2350,10 +2355,30 @@ def build_edge_bgw_pair_data(*, device_name: str, platform: str) -> dict:
             ttl=1,
             local_iface_name=port,
             remote_iface_name="Ethernet1/35",
+            maximum_routes=16,
+            password=key,
         )
-        dci["peering_role"] = _v("dci")
-        dci["address_families"] = _af_edges(("ipv6", "unicast"), ("l2vpn", "evpn"))
-        dci_peerings.append(dci)
+        underlay["peering_role"] = _v("dci-underlay")
+        underlay["address_families"] = _af_edges(("ipv6", "unicast"))
+        # EVPN: eBGP multihop between the loopbacks, no bfd, extended communities.
+        evpn = _make_bgp_peering(
+            device_name=device_name,
+            device_ip="2001:db8:100::1/128",
+            device_asn=65001,
+            remote_name=remote,
+            remote_ip=f"2001:db8:dc1{index}:ffff::1/128",
+            remote_asn=65100 + index,
+            session_type="EBGP_MULTIHOP",
+            ttl=2,
+            bfd=False,
+            send_extended_community=True,
+            local_iface_name="Loopback1",
+            remote_iface_name="Loopback0",
+            password=key,
+        )
+        evpn["peering_role"] = _v("dci")
+        evpn["address_families"] = _af_edges(("l2vpn", "evpn"))
+        dci_peerings.extend([underlay, evpn])
     fabric = _make_bgp_peering(
         device_name=device_name,
         device_ip="2001:db8:100:ff::/127",

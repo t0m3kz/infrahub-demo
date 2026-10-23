@@ -1,6 +1,10 @@
 # The circuit layer of a branch. A location carries its kind, its parent (a cage's or virtual colocation's metro, a
 # footprint's facility) and a footprint's owner, an end its device's deployment (an on-ramp edge: its zone or virtual
 # colocation, with that one's metro): what test_62 checks circuit placement against.
+# A virtual circuit is one of three kinds (`__typename`: tunnel, interconnect, handoff); a handoff adds its namespace,
+# its accepted-prefix limit, its key and its cloud endpoint (with the VLAN the VIF states). Its carrier is derived: the
+# physical circuits in the `capabilities` of each end port, or of the port's `parent_interface` for a sub-interface,
+# else the cable on the port or on that parent (a hop inside one facility is a cable, not a circuit).
 query GetInterconnectInventory {
   TopologyPhysicalCircuit {
     edges {
@@ -59,13 +63,8 @@ query GetInterconnectInventory {
     edges {
       node {
         id
+        __typename
         name {
-          value
-        }
-        link_type {
-          value
-        }
-        transport_mode {
           value
         }
         owner {
@@ -76,28 +75,124 @@ query GetInterconnectInventory {
             }
           }
         }
-        locations {
-          edges {
+        ... on TopologyTunnelCircuit {
+          locations {
+            edges {
+              node {
+                ...CircuitLocation
+              }
+            }
+          }
+        }
+        ... on TopologyInterconnectCircuit {
+          locations {
+            edges {
+              node {
+                ...CircuitLocation
+              }
+            }
+          }
+        }
+        ... on TopologyHandoffCircuit {
+          locations {
+            edges {
+              node {
+                ...CircuitLocation
+              }
+            }
+          }
+        }
+        ... on TopologyHandoffCircuit {
+          ip_namespace {
             node {
-              ...CircuitLocation
+              id
+              name {
+                value
+              }
+            }
+          }
+          maximum_routes {
+            value
+          }
+          password {
+            node {
+              name {
+                value
+              }
+            }
+          }
+          cloud_endpoint {
+            node {
+              id
+              __typename
+              ... on CloudResource {
+                name {
+                  value
+                }
+              }
+              ... on CloudVirtualInterface {
+                vlan_id {
+                  value
+                }
+              }
             }
           }
         }
         capabilities {
           edges {
             node {
+              id
+              __typename
               name {
                 value
+              }
+              ... on DcimPhysicalInterface {
+                cable {
+                  node {
+                    id
+                  }
+                }
+                ip_address {
+                  node {
+                    address {
+                      value
+                    }
+                  }
+                }
+              }
+              ... on DcimVirtualInterface {
+                ip_address {
+                  node {
+                    address {
+                      value
+                    }
+                  }
+                }
+                parent_interface {
+                  node {
+                    id
+                    name {
+                      value
+                    }
+                    cable {
+                      node {
+                        id
+                      }
+                    }
+                    capabilities {
+                      edges {
+                        node {
+                          ...CircuitCarrier
+                        }
+                      }
+                    }
+                  }
+                }
               }
               capabilities {
                 edges {
                   node {
-                    __typename
-                    ... on TopologyPhysicalCircuit {
-                      circuit_id {
-                        value
-                      }
-                    }
+                    ...CircuitCarrier
                   }
                 }
               }
@@ -109,22 +204,21 @@ query GetInterconnectInventory {
             }
           }
         }
-        cloud_endpoints {
-          edges {
-            node {
-              __typename
-              ... on CloudVirtualInterface {
-                name {
-                  value
-                }
-                vif_type {
-                  value
-                }
-              }
-            }
-          }
-        }
       }
+    }
+  }
+}
+
+# A port's carrier: the physical circuits among what terminates on it (segments, peerings and other circuits too).
+fragment CircuitCarrier on ManagedGenericInterfaces {
+  __typename
+  ... on TopologyPhysicalCircuit {
+    id
+    circuit_id {
+      value
+    }
+    status {
+      value
     }
   }
 }

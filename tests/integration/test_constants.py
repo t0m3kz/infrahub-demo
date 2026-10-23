@@ -12,6 +12,7 @@ from generators.fabric_sizing import (
     pod_technical_bits,
 )
 from generators.helpers.lb_vip import cloud_lb_name, cloud_lb_scheme
+from generators.helpers.naming import sdwan_edge_name
 from generators.helpers.routing import underlay_pool_is_ipv6
 from tests.unit.simulators.fabric_designs import dc_design, pod_design
 from utils.exchange_transit import (
@@ -173,7 +174,9 @@ ALL_DEMO_EXPECTED_OBJECTS: dict[str, int] = {
         "SecurityAccessProfile",
         "DcimVirtualDevice",
         "TopologyPhysicalCircuit",
-        "TopologyVirtualCircuit",
+        "TopologyTunnelCircuit",
+        "TopologyInterconnectCircuit",
+        "TopologyHandoffCircuit",
         "CloudInstance",
         "ManagedCloudProxy",
     )
@@ -316,31 +319,33 @@ _SDWAN_OFFICES: list[Declared] = [
     office for office in _all_demo("TopologyCustomerOffice") if office.item.get("sdwan_gateway")
 ]
 
+# Physical circuits are pure carriers, all declared in the data except the office underlays: the dark fibres and
+# cross-connects of 08_interconnects/01_colo_onramp (each DC has one fibre to each of its metro's two border gateways:
+# DC10/DC11 -> EQX FR2 (eg-fr201 and eg-fr202), DC12 -> EQX PA4 (eg-pa401 and eg-pa402); cross-connects: AWS
+# eu-central-1, Azure westeurope, Megaport MCR), the shared transit circuits of 06_internet, the shared gateway's own
+# access (08_gateway_access) and the partner's access (07_zone_policies), plus one generated underlay per SD-WAN office.
+_DECLARED_CIRCUIT_TYPE_COUNTS: dict[str, int] = {
+    circuit_type: len([c for c in _all_demo("TopologyPhysicalCircuit") if c.value("circuit_type") == circuit_type])
+    for circuit_type in ("dark_fiber", "cross_connect", "internet")
+}
 ALL_DEMO_PHYSICAL_CIRCUIT_TYPES: dict[str, int] = {
-    # The dark fibres and cross-connects are hand-authored in 08_interconnects/
-    # — the opt-in TopologyInterconnectRequest that used to scaffold 2 extra
-    # DC11<->DC12 stub circuits was removed along with its generator.
-    # Each DC has one fibre to each of its metro's two border gateways:
-    # DC10/DC11 -> EQX FR2 (eg-fr201 and eg-fr202), DC12 -> EQX PA4 (eg-pa401 and eg-pa402).
-    "dark_fiber": 6,
-    "cross_connect": 2,  # EQX FR2 -> AWS eu-central-1, EQX PA4 -> Azure westeurope
-    # The declared ones (the shared transit circuits of 06_internet and the shared
-    # gateway's own access, 08_gateway_access) plus one generated underlay per SD-WAN office.
-    "internet": len([c for c in _all_demo("TopologyPhysicalCircuit") if c.value("circuit_type") == "internet"])
-    + len(_SDWAN_OFFICES),
+    **_DECLARED_CIRCUIT_TYPE_COUNTS,
+    "internet": _DECLARED_CIRCUIT_TYPE_COUNTS["internet"] + len(_SDWAN_OFFICES),
 }
 
-# The peering_role=dci dark fibres (08_interconnects/01_colo_onramp/
-# 03_physical_circuits.yml): circuit_id -> (DC whose fabric overlay key keys
-# the session, the two (device, interface) ends). add_circuit builds one
-# DCI-<circuit_id> session per entry.
+# The DCI Interconnect circuits (08_interconnects/03_virtual_circuits/01_dci_interconnects.yml), one per dark fibre:
+# circuit name -> (the DC end, the two (device, interface) ends). add_virtual_circuit builds two sessions on each,
+# `<name>-underlay` (the directly connected eBGP session) and `<name>-evpn` (the loopback-to-loopback EVPN session), keyed
+# with the per-circuit key `<name>-dci-key`. The DC end is the DC among the circuit's two facility locations.
 ALL_DEMO_DCI_CIRCUITS: dict[str, tuple[str, tuple[tuple[str, str], tuple[str, str]]]] = {
-    "DF-DC10-EQXFR2": ("DC10", (("bl-dc101101", "Ethernet1/35"), ("eg-fr201", "Ethernet1/10"))),
-    "DF-DC11-EQXFR2": ("DC11", (("bl-dc1111101", "Ethernet1/35"), ("eg-fr201", "Ethernet1/11"))),
-    "DF-DC12-EQXPA4": ("DC12", (("bl-dc1212101", "Ethernet1/35"), ("eg-pa401", "Ethernet1/10"))),
-    "DF-DC10-EQXFR2-B": ("DC10", (("bl-dc101101", "Ethernet1/36"), ("eg-fr202", "Ethernet1/10"))),
-    "DF-DC11-EQXFR2-B": ("DC11", (("bl-dc1111101", "Ethernet1/36"), ("eg-fr202", "Ethernet1/11"))),
-    "DF-DC12-EQXPA4-B": ("DC12", (("bl-dc1212101", "Ethernet1/36"), ("eg-pa402", "Ethernet1/10"))),
+    name(circuit): (
+        next(location for location in circuit.item["locations"] if location in ALL_DEMO_DC_NAMES),
+        (
+            (str(circuit.item["capabilities"][0][0]), str(circuit.item["capabilities"][0][1])),
+            (str(circuit.item["capabilities"][1][0]), str(circuit.item["capabilities"][1][1])),
+        ),
+    )
+    for circuit in _all_demo("TopologyInterconnectCircuit")
 }
 
 # Shared ISP transit (08_interconnects/06_internet): colo edges -> ISP PEs.
@@ -357,9 +362,20 @@ ALL_DEMO_GATEWAY_ACCESS_CIRCUITS: dict[str, frozenset[tuple[str, str]]] = {
 }
 ALL_DEMO_GATEWAY_ACCESS_LOCATIONS: tuple[str, ...] = ("FR2", "ISP-LUMEN")
 
+# The partner's own internet access (08_interconnects/07_zone_policies/01_partner_tunnel.yml): the stub router
+# EXT-ACME-EDGE1 (deployed to the partner topology PARTNER-ACME) to a free `customer` port of Cogent's Frankfurt edge.
+# Unowned shared underlay: the carrier of the partner end of the tunnel C001-PARTNER-ACME-FR2. The data lists only
+# ISP-COGENT; add_circuit derives PARTNER-ACME from the stub's deployment.
+ALL_DEMO_PARTNER_ACCESS_CIRCUITS: dict[str, frozenset[tuple[str, str]]] = {
+    "INET-ACME-COGENT": frozenset({("EXT-ACME-EDGE1", "et-0/0/0"), ("EXT-COGENT-FRA1", "et-0/0/1")}),
+}
+ALL_DEMO_PARTNER_ACCESS_LOCATIONS: tuple[str, ...] = ("ISP-COGENT", "PARTNER-ACME")
+
 # The unowned internet circuits: only a customer's own underlay (INET-<office>) names an owner.
-ALL_DEMO_SHARED_INTERNET_CIRCUITS: frozenset[str] = ALL_DEMO_INTERNET_TRANSIT_CIRCUITS | frozenset(
-    ALL_DEMO_GATEWAY_ACCESS_CIRCUITS
+ALL_DEMO_SHARED_INTERNET_CIRCUITS: frozenset[str] = (
+    ALL_DEMO_INTERNET_TRANSIT_CIRCUITS
+    | frozenset(ALL_DEMO_GATEWAY_ACCESS_CIRCUITS)
+    | frozenset(ALL_DEMO_PARTNER_ACCESS_CIRCUITS)
 )
 
 # The SD-WAN offices' internet access (add_sdwan_edge): INET-<office> runs from the office edge's GE1 to a free
@@ -479,19 +495,27 @@ INTERNET_ROUTE_TARGET = "60002:60002"
 
 
 class VirtualCircuitExpectation(TypedDict):
-    """What one TopologyVirtualCircuit in 30_all must look like."""
+    """What one virtual circuit (a Tunnel, Interconnect or Handoff kind) in 30_all must look like."""
 
-    link_type: str
-    transport_mode: str
-    #: None for the shared on-ramp circuits that belong to no single customer.
+    #: TopologyTunnelCircuit, TopologyInterconnectCircuit or TopologyHandoffCircuit: the role IS the kind.
+    kind: str
+    #: The owning customer's name; None for the shared on-ramp circuits that belong to no single customer.
     owner: str | None
-    #: circuit_ids of its derived underlay (the physical circuits on its own ports, deduped); never declared. Order is
-    #: tenant end first (the DC's dark fibre before the cross-connect), the contiguous path test_62 walks; the derived
-    #: list is compared unordered (sorted) in test_02. Empty for a provider_virtual_only circuit with no physical
-    #: circuit on its ports; such a circuit has no physical rule, so the walk of test_62 skips it.
-    underlay: tuple[str, ...]
-    interfaces: int
-    cloud_endpoints: tuple[str, ...]
+    #: The circuit's locations, sorted. Authored for a declared circuit, `(office, the gateway's zone)` for the tunnel
+    #: add_sdwan_edge builds.
+    locations: tuple[str, ...]
+    #: The (device, interface) ends in `capabilities`, sorted. A Handoff end is the `<port>.<vlan>` sub-interface, a
+    #: Tunnel's the gateway's public port and the other device's uplink.
+    ends: tuple[tuple[str, str], ...]
+    #: circuit_ids of the physical circuits derived from the ends (on the end port, or on its parent interface when it
+    #: is a sub-interface), in end order, each once; never declared. Empty when the carrier is a cable or there is none.
+    #: The derived list is compared sorted in test_02 (declared ones only: the generated INET-<office> is in no row).
+    carrier: tuple[str, ...]
+    #: The Handoff's environment namespace; None for the other kinds.
+    ip_namespace: str | None
+    #: The Handoff's cloud endpoint (a transit VIF, set from the VIF side); None for the other kinds and for a Handoff
+    #: that ends on no cloud service.
+    cloud_endpoint: str | None
 
 
 _CUSTOMER_NAMES: dict[str, str] = {
@@ -501,133 +525,180 @@ _DEVICE_DEPLOYMENTS: dict[str, str] = {
     name(device): str(device.value("deployment")) for device in _all_demo("DcimPhysicalDevice")
 }
 
+#: The public port of the shared SD-WAN gateway every tunnel ends on (its one `customer` physical port).
+ALL_DEMO_SDWAN_GATEWAY_PUBLIC_PORT = "eth1"
+#: The circuit that carries the gateway's public port.
+ALL_DEMO_SDWAN_GATEWAY_ACCESS = "INET-LUMEN-EQXFR2-GW"
+TUNNEL_KIND = "TopologyTunnelCircuit"
+INTERCONNECT_KIND = "TopologyInterconnectCircuit"
+HANDOFF_KIND = "TopologyHandoffCircuit"
+
 
 def _sdwan_tunnel(office: Declared) -> tuple[str, VirtualCircuitExpectation]:
     """The tunnel add_sdwan_edge builds for one opted-in office, named as the generator names it.
 
-    `<office>-SDWAN-<the gateway's zone>`, owned by the office's customer, riding
-    `INET-<office>` and terminating on the edge uplink and the gateway's
-    `eth0.<tunnel_id>` sub-interface.
+    `<office>-SDWAN-<the gateway's zone>`, a TopologyTunnelCircuit owned by the office's customer, located at the
+    office and the gateway's zone, ending on the gateway's public port and the edge uplink. Each end rides its own
+    internet access: the edge uplink `INET-<office>`, the gateway's port the shared `INET-LUMEN-EQXFR2-GW`.
     """
     office_name = name(office)
-    zone = _DEVICE_DEPLOYMENTS[str(office.item["sdwan_gateway"])]
+    gateway = str(office.item["sdwan_gateway"])
+    zone = _DEVICE_DEPLOYMENTS[gateway]
     return f"{office_name}-SDWAN-{zone}", {
-        "link_type": "sd_wan",
-        "transport_mode": "internet_backed",
+        "kind": TUNNEL_KIND,
         "owner": _CUSTOMER_NAMES[render(office, "{{ owner__org_id__value }}")],
-        "underlay": (f"INET-{office_name}",),
-        "interfaces": 2,
-        "cloud_endpoints": (),
+        "locations": tuple(sorted((office_name, zone))),
+        "ends": tuple(
+            sorted(
+                (
+                    (gateway, ALL_DEMO_SDWAN_GATEWAY_PUBLIC_PORT),
+                    (sdwan_edge_name(office_name), ALL_DEMO_SDWAN_EDGE_UPLINK),
+                )
+            )
+        ),
+        "carrier": (f"INET-{office_name}", ALL_DEMO_SDWAN_GATEWAY_ACCESS),
+        "ip_namespace": None,
+        "cloud_endpoint": None,
     }
 
 
-# The full virtual-circuit fabric. `underlay` is the expected derived underlay (the
-# physical circuits on the circuit's own ports; the data declares none) and
-# `interfaces` the minimum number of terminating DcimInterfaces reached
-# through capabilities — the one uniform "what is this port doing"
-# edge in the schema.
+# The full virtual-circuit fabric: the generated tunnels (one per SD-WAN office), the partner tunnel, the six DCI
+# Interconnects (one per dark fibre, unowned, carrier = the fibre) and the five Handoffs (unowned shared on-ramps, all
+# PROD). `carrier` is the expected derived underlay: the physical circuits on the circuit's own ports, or on the parent
+# of a sub-interface; the data declares none.
 ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
-    "VC-C005-DC10-AWS-EUC1": {
-        "link_type": "direct_connect_aws",
-        "transport_mode": "physical_backed",
-        "owner": "Drentec BV",
-        "underlay": ("DF-DC10-EQXFR2", "XC-EQXFR2-AWS-EUC1"),
-        "interfaces": 2,
-        "cloud_endpoints": ("vif-transit-hub-euc1",),
-    },
-    "VC-C006-DC11-AWS-EUC1": {
-        "link_type": "direct_connect_aws",
-        "transport_mode": "physical_backed",
-        "owner": "Lumivex SA",
-        "underlay": ("DF-DC11-EQXFR2", "XC-EQXFR2-AWS-EUC1"),
-        "interfaces": 2,
-        "cloud_endpoints": ("vif-transit-hub-euc1",),
-    },
-    # Azure westeurope: only the AWS hub is modelled, so this one deliberately
-    # has no cloud endpoint.
-    "VC-C008-DC12-AZURE-WEU": {
-        "link_type": "express_route_azure",
-        "transport_mode": "physical_backed",
-        "owner": "Krafven GmbH",
-        "underlay": ("DF-DC12-EQXPA4", "XC-EQXPA4-AZURE-WEU"),
-        "interfaces": 2,
-        "cloud_endpoints": (),
-    },
-    # Colocation-only leg: the customer end is in the cage, so a single
-    # terminating interface is correct.
-    "VC-C001-EQXFR-AWS-EUC1": {
-        "link_type": "equinix_fabric",
-        "transport_mode": "physical_backed",
-        "owner": "Nordix Ltd.",
-        "underlay": ("XC-EQXFR2-AWS-EUC1",),
-        "interfaces": 1,
-        "cloud_endpoints": ("vif-transit-hub-euc1",),
-    },
-    "VC-SDWAN-FR2-AWS-EUC1": {
-        "link_type": "direct_connect_aws",
-        "transport_mode": "physical_backed",
-        "owner": None,  # shared SD-WAN on-ramp, not a customer circuit
-        "underlay": ("XC-EQXFR2-AWS-EUC1",),
-        "interfaces": 2,
-        "cloud_endpoints": ("vif-transit-hub-euc1",),
-    },
-    # Equinix Fabric into the AM-NE Network Edge pair (03_virtual_circuits/02_am_ne_overlays.yml): provider_virtual_only,
-    # so no physical rule. The DC end port (bl-dc101101 Ethernet1/35) rides DF-DC10-EQXFR2, the one underlay circuit
-    # derived at that port; the Fabric hop itself is not carried over the fibre.
-    "VC-C005-DC10-AMNE": {
-        "link_type": "equinix_fabric",
-        "transport_mode": "provider_virtual_only",
-        "owner": "Drentec BV",
-        "underlay": ("DF-DC10-EQXFR2",),
-        "interfaces": 2,
-        "cloud_endpoints": (),
-    },
-    # Shared platform overlay from a Network Edge router to the AWS hub: one NE port, no physical circuit under it, its
-    # cloud end the VIF of dx-eqx-am-euc1.
-    "VC-PLATFORM-AMNE-AWS-EUC1": {
-        "link_type": "equinix_fabric",
-        "transport_mode": "provider_virtual_only",
-        "owner": None,
-        "underlay": (),
-        "interfaces": 1,
-        "cloud_endpoints": ("vif-transit-am-euc1",),
-    },
     # One generated tunnel per SD-WAN office (_sdwan_tunnel).
     **dict(_sdwan_tunnel(office) for office in _SDWAN_OFFICES),
-    # Second tunnel riding the same internet underlay as C001-OFFICE-SDWAN-FR2, on a
-    # different gateway sub-interface — see 08_interconnects/07_zone_policies/
-    # 01_partner_virtual_circuit.yml for why this is an overlay, not a new
-    # dedicated physical cross-connect.
+    # C001's partner extranet (08_interconnects/07_zone_policies/01_partner_tunnel.yml): the gateway's public port to
+    # the partner stub router, each end on its own internet access; located at C001's office and the gateway's zone.
     "C001-PARTNER-ACME-FR2": {
-        "link_type": "vpn_ipsec",
-        "transport_mode": "internet_backed",
+        "kind": TUNNEL_KIND,
         "owner": "Nordix Ltd.",
-        "underlay": ("INET-C001-OFFICE",),
-        "interfaces": 2,
-        "cloud_endpoints": (),
+        "locations": ("C001-OFFICE", "FR2"),
+        "ends": (("EQX-FR2-SDWAN-GW1", "eth1"), ("EXT-ACME-EDGE1", "et-0/0/0")),
+        "carrier": ("INET-LUMEN-EQXFR2-GW", "INET-ACME-COGENT"),
+        "ip_namespace": None,
+        "cloud_endpoint": None,
+    },
+    # The DCI: ends = the fibre's two ports, locations = the fibre's two facilities.
+    **{
+        circuit_name: {
+            "kind": INTERCONNECT_KIND,
+            "owner": None,
+            "locations": tuple(sorted(locations)),
+            "ends": ends,
+            "carrier": (fibre,),
+            "ip_namespace": None,
+            "cloud_endpoint": None,
+        }
+        for circuit_name, locations, ends, fibre in (
+            (
+                "ICX-DC10-EQXFR2",
+                ("DC10", "FR2"),
+                (("bl-dc101101", "Ethernet1/35"), ("eg-fr201", "Ethernet1/10")),
+                "DF-DC10-EQXFR2",
+            ),
+            (
+                "ICX-DC11-EQXFR2",
+                ("DC11", "FR2"),
+                (("bl-dc1111101", "Ethernet1/35"), ("eg-fr201", "Ethernet1/11")),
+                "DF-DC11-EQXFR2",
+            ),
+            (
+                "ICX-DC12-EQXPA4",
+                ("DC12", "PA4"),
+                (("bl-dc1212101", "Ethernet1/35"), ("eg-pa401", "Ethernet1/10")),
+                "DF-DC12-EQXPA4",
+            ),
+            (
+                "ICX-DC10-EQXFR2-B",
+                ("DC10", "FR2"),
+                (("bl-dc101101", "Ethernet1/36"), ("eg-fr202", "Ethernet1/10")),
+                "DF-DC10-EQXFR2-B",
+            ),
+            (
+                "ICX-DC11-EQXFR2-B",
+                ("DC11", "FR2"),
+                (("bl-dc1111101", "Ethernet1/36"), ("eg-fr202", "Ethernet1/11")),
+                "DF-DC11-EQXFR2-B",
+            ),
+            (
+                "ICX-DC12-EQXPA4-B",
+                ("DC12", "PA4"),
+                (("bl-dc1212101", "Ethernet1/36"), ("eg-pa402", "Ethernet1/10")),
+                "DF-DC12-EQXPA4-B",
+            ),
+        )
+    },
+    # The AWS transit VIF of the FR2 cage (05_cloud_endpoints/00_vif_handoff.yml): the party sub-interface rides the
+    # parent et-0/0/0 of the cross-connect.
+    "HANDOFF-FR2-AWS-EUC1-PROD": {
+        "kind": HANDOFF_KIND,
+        "owner": None,
+        "locations": ("FR2", "eu-central-1"),
+        "ends": (("EXT-AWS-DX-FR2", "et-0/0/0.1000"), ("eg-fr201", "Ethernet1/13.1000")),
+        "carrier": ("XC-EQXFR2-AWS-EUC1",),
+        "ip_namespace": "PROD",
+        "cloud_endpoint": "vif-transit-hub-euc1",
+    },
+    # The SD-WAN gateway's LAN handoff (04_sdwan/06_vrf_handoff.yml): both ends in one cage, carried by a cable.
+    "HANDOFF-FR2-SDWAN-GW1-PROD": {
+        "kind": HANDOFF_KIND,
+        "owner": None,
+        "locations": ("FR2",),
+        "ends": (("EQX-FR2-SDWAN-GW1", "eth0.1900"), ("eg-fr201", "Ethernet1/12.1900")),
+        "carrier": (),
+        "ip_namespace": "PROD",
+        "cloud_endpoint": None,
+    },
+    # The AM-NE chain (03_virtual_circuits/02_am_ne_handoff.yml, 05_cloud_endpoints/00_vif_handoff_am_ne.yml): the
+    # Equinix Fabric hop cage -> NE (carried by the cable to the Fabric port, the NE end needs none) and the NE ->
+    # AWS hop whose party end rides the same cross-connect as the FR2 VIF.
+    "HANDOFF-FR2-AMNE-PROD": {
+        "kind": HANDOFF_KIND,
+        "owner": None,
+        "locations": ("AM-NE", "FR2"),
+        "ends": (("eg-am-ne01", "Ethernet1/1.1200"), ("eg-fr201", "Ethernet1/1.1200")),
+        "carrier": (),
+        "ip_namespace": "PROD",
+        "cloud_endpoint": None,
+    },
+    "HANDOFF-AMNE-AWS-EUC1-PROD": {
+        "kind": HANDOFF_KIND,
+        "owner": None,
+        "locations": ("AM-NE", "eu-central-1"),
+        "ends": (("EXT-AWS-DX-FR2", "et-0/0/0.1100"), ("eg-am-ne02", "Ethernet1/1.1100")),
+        "carrier": ("XC-EQXFR2-AWS-EUC1",),
+        "ip_namespace": "PROD",
+        "cloud_endpoint": "vif-transit-am-euc1",
+    },
+    # The Megaport Cloud Router (05_cloud_endpoints/03_megaport_handoff.yml): the cloud-neutral example, carried by the
+    # cross-connect to the MCR; no cloud endpoint. The Azure cross-connect has no handoff (idle carrier).
+    "HANDOFF-PA4-MEGAPORT-PROD": {
+        "kind": HANDOFF_KIND,
+        "owner": None,
+        "locations": ("MCR-PAR1", "PA4"),
+        "ends": (("EXT-MEGAPORT-MCR1", "et-0/0/0.1300"), ("eg-pa401", "Ethernet1/1.1300")),
+        "carrier": ("XC-EQXPA4-MEGAPORT",),
+        "ip_namespace": "PROD",
+        "cloud_endpoint": None,
     },
 }
 
 # Circuit placement (test_62 test_01/test_02). A physical circuit terminates on two facilities: the kinds that inherit
-# TopologyFacility (read from schemas/). A virtual circuit's tenant end is a footprint (a TopologyCustomer) or an
-# office of the circuit's owner, its far end a provider facility or another footprint.
+# TopologyFacility (read from schemas/); a virtual circuit's locations are facilities too.
 ALL_DEMO_FACILITY_KINDS: frozenset[str] = frozenset(
     kind for kind, definition in schema().items() if "TopologyFacility" in definition.inherit_from
 )
-ALL_DEMO_FOOTPRINT_KINDS: frozenset[str] = frozenset(
-    kind for kind, definition in schema().items() if "TopologyCustomer" in definition.inherit_from
-)
-ALL_DEMO_TENANT_LOCATION_KINDS: frozenset[str] = ALL_DEMO_FOOTPRINT_KINDS | {"TopologyCustomerOffice"}
-ALL_DEMO_PROVIDER_FACILITY_KINDS: frozenset[str] = frozenset(
-    {"TopologyCloudRegion", "TopologySaasRegion", "TopologyColocationZone", "TopologyVirtualColocation"}
-)
 
 _DECLARED_PHYSICAL_CIRCUITS = {str(c.value("circuit_id")): c for c in _all_demo("TopologyPhysicalCircuit")}
-_DECLARED_VIRTUAL_CIRCUITS = {name(c): c for c in _all_demo("TopologyVirtualCircuit")}
+_DECLARED_VIRTUAL_CIRCUITS = {
+    name(c): c for kind in (TUNNEL_KIND, INTERCONNECT_KIND, HANDOFF_KIND) for c in _all_demo(kind)
+}
 
 # circuit_id / name -> the locations the 30_all data authors. A physical circuit's other end is derived by add_circuit
-# from its end devices' deployments, so the data lists only the cage (add_circuit also derives the zone from the edge's deployment, so an authored
-# cage must be that zone).
+# from its end devices' deployments, so the data lists only one place: the cage for the on-ramp circuits (add_circuit also
+# derives the zone from the edge's deployment, so an authored cage must be that zone), the ISP for the partner's access.
 ALL_DEMO_DECLARED_PHYSICAL_LOCATIONS: dict[str, tuple[str, ...]] = {
     circuit_id: tuple(circuit.item.get("locations") or ())
     for circuit_id, circuit in _DECLARED_PHYSICAL_CIRCUITS.items()
@@ -646,6 +717,28 @@ ALL_DEMO_DECLARED_PHYSICAL_PORTS: dict[str, frozenset[tuple[str, str]]] = {
 ALL_DEMO_DECLARED_VIRTUAL_PORTS: dict[str, frozenset[tuple[str, str]]] = {
     circuit_name: frozenset((str(device), str(port)) for device, port in circuit.item.get("capabilities") or ())
     for circuit_name, circuit in _DECLARED_VIRTUAL_CIRCUITS.items()
+}
+
+
+# Handoff circuit -> (the party device, its ASN): the ASN is the `local_as` of the ManagedBGP process the data declares on
+# the party stub (EXT-AWS-DX-FR2 AS64512, EQX-FR2-SDWAN-GW1 AS65028, EXT-MEGAPORT-MCR1 AS133937), which add_virtual_circuit
+# makes the session's remote process. A handoff whose both ends are devices whose processes are generated (the Network
+# Edge pair, HANDOFF-FR2-AMNE-PROD) has no declared party and is absent.
+_DECLARED_PROCESS_ASNS: dict[str, int] = {
+    str(device): int(str(process.item["local_as"]).removeprefix("AS"))
+    for process in _all_demo("ManagedBGP")
+    for device in process.item.get("capabilities") or []
+}
+ALL_DEMO_HANDOFF_PARTY_ASNS: dict[str, tuple[str, int]] = {
+    circuit_name: (party[0], _DECLARED_PROCESS_ASNS[party[0]])
+    for circuit_name, party in (
+        (
+            name(circuit),
+            [str(device) for device, _ in circuit.item["capabilities"] if str(device) in _DECLARED_PROCESS_ASNS],
+        )
+        for circuit in _all_demo(HANDOFF_KIND)
+    )
+    if len(party) == 1
 }
 
 

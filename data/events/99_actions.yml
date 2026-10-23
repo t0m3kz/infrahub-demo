@@ -673,13 +673,12 @@ spec:
             modification_type: updated
 
     # ── Circuits ──────────────────────────────────────────────────────────────
-    # add_circuit/add_virtual_circuit target physical_circuits/virtual_circuits,
-    # so every circuit — loaded or generator-created (add_sdwan_edge creates
-    # both kinds) — must be a member, or its created-trigger raises (see the
-    # endpoint note above). The `updated` rules watch only what defines a
-    # circuit's ends and role. tunnel_id is deliberately absent: add_sdwan_edge
-    # writes it back onto the overlay circuit, so watching it would re-fire,
-    # and so is `locations`: add_circuit writes the derived ends there.
+    # add_circuit targets physical_circuits, so every physical circuit — loaded or
+    # generator-created (add_sdwan_edge creates INET-<office>) — must be a member, or
+    # its created-trigger raises (see the endpoint note above). A physical circuit
+    # is a pure carrier and add_circuit reads only its ends, so the `updated` rule
+    # watches only `capabilities`; `locations` is deliberately absent: add_circuit
+    # writes the derived ends there.
     # An end device's `deployment` (what a derived end is read from) has no
     # rule either: a rule on a device kind dispatches only a generator whose
     # target group holds the device, and none targets every device (see the
@@ -703,48 +702,27 @@ spec:
           - relationship_name: capabilities
             modification_type: updated
 
-    - name: trigger-circuit-on-status-updated
-      branch_scope: "other_branches"
-      node_kind: TopologyPhysicalCircuit
-      mutation_action: "updated"
-      action: run-circuit-generator
-      matches:
-        kind: CoreNodeTriggerAttributeMatch
-        data:
-          - attribute_name: status
-            value_match: any
+    # ── Virtual circuits ──────────────────────────────────────────────────────
+    # add_virtual_circuit targets virtual_circuits and builds the BGP session(s) of an interconnect or a
+    # handoff circuit, so every such circuit — loaded or generator-created — must be a member, or its
+    # created-trigger raises (see the endpoint note above). A TopologyTunnelCircuit has no rule and is not a
+    # member: the SD-WAN orchestrator owns its overlay routing.
+    # One set of rules per kind, none on the TopologyVirtualCircuit generic: a rule on a generic node_kind is
+    # unprobed here, a per-kind rule is the shape every rule in this file uses.
+    # Each `updated` rule watches what the generator reads and nothing it writes: `capabilities` (the ends, hence
+    # the carrier), `status`, and for a handoff its `ip_namespace` (the pool), `password` and `maximum_routes`.
+    # `cloud_endpoint` is deliberately absent: the generator does not read it. A carrier's change reaches the
+    # circuits through add_circuit, which fans out here (generators/topology/circuit.py).
 
-    - name: trigger-circuit-on-circuit-type-updated
+    - name: trigger-interconnect-circuit-on-created
       branch_scope: "other_branches"
-      node_kind: TopologyPhysicalCircuit
-      mutation_action: "updated"
-      action: run-circuit-generator
-      matches:
-        kind: CoreNodeTriggerAttributeMatch
-        data:
-          - attribute_name: circuit_type
-            value_match: any
-
-    - name: trigger-circuit-on-peering-role-updated
-      branch_scope: "other_branches"
-      node_kind: TopologyPhysicalCircuit
-      mutation_action: "updated"
-      action: run-circuit-generator
-      matches:
-        kind: CoreNodeTriggerAttributeMatch
-        data:
-          - attribute_name: peering_role
-            value_match: any
-
-    - name: trigger-virtual-circuit-on-created
-      branch_scope: "other_branches"
-      node_kind: TopologyVirtualCircuit
+      node_kind: TopologyInterconnectCircuit
       mutation_action: "created"
       action: run-virtual-circuit-generator
 
-    - name: trigger-virtual-circuit-on-interfaces-updated
+    - name: trigger-interconnect-circuit-on-capabilities-updated
       branch_scope: "other_branches"
-      node_kind: TopologyVirtualCircuit
+      node_kind: TopologyInterconnectCircuit
       mutation_action: "updated"
       action: run-virtual-circuit-generator
       matches:
@@ -753,37 +731,74 @@ spec:
           - relationship_name: capabilities
             modification_type: updated
 
-    - name: trigger-virtual-circuit-on-link-type-updated
+    - name: trigger-interconnect-circuit-on-status-updated
       branch_scope: "other_branches"
-      node_kind: TopologyVirtualCircuit
-      mutation_action: "updated"
-      action: run-virtual-circuit-generator
-      matches:
-        kind: CoreNodeTriggerAttributeMatch
-        data:
-          - attribute_name: link_type
-            value_match: any
-
-    - name: trigger-virtual-circuit-on-peering-role-updated
-      branch_scope: "other_branches"
-      node_kind: TopologyVirtualCircuit
-      mutation_action: "updated"
-      action: run-virtual-circuit-generator
-      matches:
-        kind: CoreNodeTriggerAttributeMatch
-        data:
-          - attribute_name: peering_role
-            value_match: any
-
-    # The overlay session is active only while the circuit is; no generator
-    # writes a virtual circuit's status, so this cannot re-fire itself.
-    - name: trigger-virtual-circuit-on-status-updated
-      branch_scope: "other_branches"
-      node_kind: TopologyVirtualCircuit
+      node_kind: TopologyInterconnectCircuit
       mutation_action: "updated"
       action: run-virtual-circuit-generator
       matches:
         kind: CoreNodeTriggerAttributeMatch
         data:
           - attribute_name: status
+            value_match: any
+
+    - name: trigger-handoff-circuit-on-created
+      branch_scope: "other_branches"
+      node_kind: TopologyHandoffCircuit
+      mutation_action: "created"
+      action: run-virtual-circuit-generator
+
+    - name: trigger-handoff-circuit-on-capabilities-updated
+      branch_scope: "other_branches"
+      node_kind: TopologyHandoffCircuit
+      mutation_action: "updated"
+      action: run-virtual-circuit-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: capabilities
+            modification_type: updated
+
+    - name: trigger-handoff-circuit-on-status-updated
+      branch_scope: "other_branches"
+      node_kind: TopologyHandoffCircuit
+      mutation_action: "updated"
+      action: run-virtual-circuit-generator
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: status
+            value_match: any
+
+    - name: trigger-handoff-circuit-on-namespace-updated
+      branch_scope: "other_branches"
+      node_kind: TopologyHandoffCircuit
+      mutation_action: "updated"
+      action: run-virtual-circuit-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: ip_namespace
+            modification_type: updated
+
+    - name: trigger-handoff-circuit-on-password-updated
+      branch_scope: "other_branches"
+      node_kind: TopologyHandoffCircuit
+      mutation_action: "updated"
+      action: run-virtual-circuit-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: password
+            modification_type: updated
+
+    - name: trigger-handoff-circuit-on-maximum-routes-updated
+      branch_scope: "other_branches"
+      node_kind: TopologyHandoffCircuit
+      mutation_action: "updated"
+      action: run-virtual-circuit-generator
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: maximum_routes
             value_match: any

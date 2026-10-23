@@ -794,79 +794,104 @@ class TestPodDecommission:
 
 
 # ---------------------------------------------------------------------------
-# Circuit generators: a circuit owns its session, never the ports or the key
+# Circuit generator: add_circuit owns nothing, the circuit is its target
 # ---------------------------------------------------------------------------
 
 
 class TestCircuitOwnership:
-    """add_circuit / add_virtual_circuit (generators/topology/circuit.py).
+    """add_circuit (generators/topology/circuit.py) only adds derived locations to its target circuit.
 
-    A circuit run owns what exists only because of that circuit; the template
-    interfaces, devices, BGP processes, fabric key and global address
-    families belong to other runs or to data.
+    The circuit is the run's target, not its output: tracked, delete_unused_nodes could remove it.
     """
 
-    @staticmethod
-    def _claimed(client: Any) -> set[str]:
-        """Every node the run's tracking group gets: tracked saves plus appended ids."""
-        tracked_saves = {
-            label
-            for action, label, kwargs in client.writes
-            if action == "save" and kwargs.get("update_group_context") is not False
-        }
-        return tracked_saves | set(client.group_context.related_node_ids)
+    @pytest.mark.asyncio
+    async def test_adding_derived_locations_claims_and_saves_nothing(self) -> None:
+        client = circuit_fakes.FakeClient()
+
+        await circuit_fakes.physical_generator(client).generate(
+            circuit_fakes.physical_payload(locations=[circuit_fakes.CAGE])
+        )
+
+        assert [action for action, _, _ in client.writes] == ["relate"]
+        assert client.created == []
+
+
+class TestSessionCircuitOwnership:
+    """add_virtual_circuit (generators/topology/virtual_circuit.py): a session circuit owns its session, never the ports.
+
+    The prefix, its addresses, the peerings and the interconnect's own key exist only because of the circuit; the
+    end interfaces come from device templates, and the devices, BGP processes and global address families belong to
+    other runs or to data.
+    """
 
     @pytest.mark.asyncio
-    async def test_dci_run_claims_prefix_addresses_and_peering_only(self) -> None:
+    async def test_handoff_run_claims_prefix_addresses_and_peering_only(self) -> None:
         client = circuit_fakes.FakeClient(address_families=False)
 
-        await circuit_fakes.physical_generator(client).generate(circuit_fakes.physical_payload())
+        await circuit_fakes.session_generator(client).generate(circuit_fakes.handoff_payload())
 
-        assert self._claimed(client) == {
-            circuit_fakes.PREFIX_ID,
+        assert client.claimed() == {
+            f"prefix-vc-p2p__{circuit_fakes.VC_ID}",
+            "IpamIPAddress:10.255.128.0/31",
+            "IpamIPAddress:10.255.128.1/31",
+            "ManagedBGPPeering:VC-C001-EQXFR-AWS-bgp",
+        }
+
+    @pytest.mark.asyncio
+    async def test_interconnect_run_claims_its_session_and_its_key(self) -> None:
+        client = circuit_fakes.FakeClient()
+
+        await circuit_fakes.session_generator(client).generate(circuit_fakes.interconnect_payload())
+
+        assert client.claimed() == {
+            f"prefix-vc-p2p__{circuit_fakes.VC_ID}",
             "IpamIPAddress:fd00:2200::/127",
             "IpamIPAddress:fd00:2200::1/127",
-            "ManagedBGPPeering:DCI-DF-DC10-EQXFR2",
+            "ManagedBGPPeering:VC-DCI-DC10-FR2-underlay",
+            "ManagedBGPPeering:VC-DCI-DC10-FR2-evpn",
+            "RoutingPassword:VC-DCI-DC10-FR2-dci-key",
         }
 
     @pytest.mark.asyncio
-    async def test_dci_run_writes_shared_nodes_untracked(self) -> None:
-        """Template interfaces and created address families: written, never claimed."""
+    async def test_interfaces_and_created_address_families_are_written_untracked(self) -> None:
         client = circuit_fakes.FakeClient(address_families=False)
 
-        await circuit_fakes.physical_generator(client).generate(circuit_fakes.physical_payload())
+        await circuit_fakes.session_generator(client).generate(circuit_fakes.interconnect_payload())
 
         saves = client.saves()
         for label in ("if-eg", "if-bl", "RoutingBGPAddressFamily:ipv6", "RoutingBGPAddressFamily:l2vpn"):
             assert saves[label].get("update_group_context") is False, label
 
     @pytest.mark.asyncio
-    async def test_dci_run_never_writes_devices_processes_or_key(self) -> None:
+    async def test_the_run_never_writes_devices_or_processes(self) -> None:
         client = circuit_fakes.FakeClient()
 
-        await circuit_fakes.physical_generator(client).generate(circuit_fakes.physical_payload())
+        await circuit_fakes.session_generator(client).generate(circuit_fakes.interconnect_payload())
 
-        written = {label for _, label, _ in client.writes}
-        assert circuit_fakes.DC_KEY_ID not in written
-        assert not any(label.startswith(("dev-", "bl-dc101101-bgp", "eg-fr201-bgp")) for label in written)
-        assert {name for name, _, _ in client.created} == {"IpamIPAddress", "ManagedBGPPeering"}
+        assert {name for name, _, _ in client.created} == {
+            "IpamIPAddress",
+            "ManagedBGPPeering",
+            "RoutingPassword",
+        }
+        assert not any(label.startswith(("dev-", "bl-dc101101-bgp", "eg-fr201-bgp")) for _, label, _ in client.writes)
 
     @pytest.mark.asyncio
-    async def test_refused_dci_run_claims_nothing(self) -> None:
-        """A missing key fails before the first write, so cleanup has nothing new to diff against."""
-        client = circuit_fakes.FakeClient(key=False)
+    async def test_a_refused_run_claims_nothing(self) -> None:
+        """A missing overlay process fails before the first write, so cleanup has nothing new to diff against."""
+        client = circuit_fakes.FakeClient()
+        payload = circuit_fakes.interconnect_payload(
+            ends=[circuit_fakes.dc_border_port(roles=("underlay",)), circuit_fakes.colo_edge_port()]
+        )
 
         with pytest.raises(GeneratorError):
-            await circuit_fakes.physical_generator(client).generate(circuit_fakes.physical_payload())
+            await circuit_fakes.session_generator(client).generate(payload)
 
         assert client.writes == []
 
     @pytest.mark.asyncio
-    async def test_overlay_run_claims_its_peering_only(self) -> None:
-        """The tunnel ports carry several virtual circuits: never written by one."""
+    async def test_a_decommissioned_circuit_claims_nothing_so_cleanup_removes_its_session(self) -> None:
         client = circuit_fakes.FakeClient()
 
-        await circuit_fakes.virtual_generator(client).generate(circuit_fakes.virtual_payload())
+        await circuit_fakes.session_generator(client).generate(circuit_fakes.handoff_payload(status="decommissioned"))
 
-        assert self._claimed(client) == {"ManagedBGPPeering:C001-SDWAN-FR2-bgp"}
-        assert [action for action, _, _ in client.writes] == ["save"]
+        assert client.writes == [] and client.claimed() == set()

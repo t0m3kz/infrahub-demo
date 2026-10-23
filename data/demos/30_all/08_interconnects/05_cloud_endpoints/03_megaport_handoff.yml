@@ -1,0 +1,111 @@
+---
+# Megaport, as a PROD Handoff circuit: our PA4 cage edge's sub-interface eg-pa401 Ethernet1/1.1300 <->
+# the Megaport Cloud Router (MCR) stub's EXT-MEGAPORT-MCR1 et-0/0/0.1300, VLAN 1300 on both. It takes
+# the place the Azure ExpressRoute handoff had in the earlier model, as the example of a cloud-neutral
+# network-as-a-service provider: a Megaport MCR is a virtual router in Megaport's own facility that
+# the customer reaches over a cross-connect and then sells onwards to any cloud, so unlike an AWS
+# Direct Connect it has no cloud endpoint (no VIF, no attachment) and no cloud region of its own.
+#
+# Azure westeurope has no handoff on purpose: no Azure VIF or attachment is modelled, so
+# XC-EQXPA4-AZURE-WEU and the stub EXT-AZURE-ER-PA4 (../01_colo_onramp/) stay as an idle carrier.
+#
+# The carrier is the cross-connect XC-EQXPA4-MEGAPORT on the sub-interfaces' parent ports
+# (../01_colo_onramp/03_physical_circuits.yml): eg-pa401 Ethernet1/1 and the stub's et-0/0/0. The
+# circuit lists no physical circuit of its own, it is derived from its ports. The stub is deployed to
+# the Megaport zone MCR-PAR1 (../01_colo_onramp/02_cloud_provider_edges.yml explains why).
+#
+# Nothing of the session is authored: the addresses come from Handoff-PROD-IPv4
+# (data/bootstrap/26_handoff_pools.yml). add_virtual_circuit (generators/topology/virtual_circuit.py)
+# allocates a /31 from it, addresses BOTH sub-interfaces (eg-pa401, with the overlay process, the
+# lower) and upserts the eBGP session HANDOFF-PA4-MEGAPORT-PROD-bgp between eg-pa401's overlay process
+# and EXT-MEGAPORT-MCR1-bgp. The party's ASN is that process's local_as. Everything the generator reads
+# is declared ahead of the circuit, which is last in this file: sub-interfaces, loopback router-id,
+# ASN, BGP process and key.
+#
+# Unowned shared on-ramp, in PROD like every handoff of the cage edges. Provider Megaport (P033): Equinix
+# only sells the cross-connect (XC-EQXPA4-MEGAPORT), the service handed to us is Megaport's MCR.
+# Locations: the cage and the Megaport zone the MCR is deployed to.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: "Ethernet1/1.1300"
+      device: "eg-pa401"
+      role: uplink
+      status: active
+      description: "PROD handoff to the Megaport MCR"
+      parent_interface: ["eg-pa401", "Ethernet1/1"]
+    - name: "et-0/0/0.1300"
+      device: "EXT-MEGAPORT-MCR1"
+      role: uplink
+      status: active
+      description: "PROD handoff to eg-pa401"
+      parent_interface: ["EXT-MEGAPORT-MCR1", "et-0/0/0"]
+    # The MCR's router-id: a loopback, not a link address (those are generated at circuit creation).
+    # 10.255.64.0/24 holds the loopbacks of the party devices we model as stubs, clear of the handoff
+    # pools (10.255.128.0/17); .1 is the AWS router, .2 the SD-WAN gateway.
+    - name: "Loopback0"
+      device: "EXT-MEGAPORT-MCR1"
+      role: loopback
+      status: active
+      description: "Router-id of the Megaport Cloud Router"
+      ip_address:
+        data:
+          address: "10.255.64.3/32"
+          ip_namespace: "PROD"
+---
+# Megaport's public ASN (an MCR peers with it).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingAutonomousSystem
+  data:
+    - asn: 133937
+      owner: "P033"
+      description: "AS133937 - Megaport (Megaport Cloud Router)"
+---
+# The MCR's BGP process. Megaport configures it, not a transform here: it exists so the generated
+# session has a remote AS (the party ASN of a handoff is this process's local_as) and a second
+# endpoint. It is the device's only ManagedBGP process, which is how the generator picks it.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGP
+  data:
+    - name: "EXT-MEGAPORT-MCR1-bgp"
+      status: active
+      local_as: "AS133937"
+      router_id: ["10.255.64.3/32", "PROD"]
+      capabilities:
+        - "EXT-MEGAPORT-MCR1"
+---
+# Demo-only secret, like the API token in the README.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingPassword
+  data:
+    - name: "eqx-pa4-megaport-key"
+      description: "BGP auth key for the eg-pa401 <-> EXT-MEGAPORT-MCR1 PROD handoff"
+      password: "demo-eqx-pa4-megaport"
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyHandoffCircuit
+  data:
+    - name: "HANDOFF-PA4-MEGAPORT-PROD"
+      member_of_groups: [virtual_circuits]
+      status: active
+      provider: "P033"
+      description: "PROD handoff eg-pa401 <-> Megaport Cloud Router EXT-MEGAPORT-MCR1 (AS133937)"
+      ip_namespace: "PROD"
+      maximum_routes: 100
+      password: "eqx-pa4-megaport-key"
+      locations:
+        - "PA4"
+        - "MCR-PAR1"
+      capabilities:
+        - ["eg-pa401", "Ethernet1/1.1300"]
+        - ["EXT-MEGAPORT-MCR1", "et-0/0/0.1300"]

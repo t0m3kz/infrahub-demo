@@ -9,8 +9,9 @@
 # CloudNetworkAppliances (C8000V_EDGE), two independent Network Edge routers we rent,
 # not hardware we rack, ordered through Terraform (02_account.yml holds the
 # billing account of that order). They are the one virtual edge pair of this demo;
-# the virtual circuits VC-C005-DC10-AMNE and VC-PLATFORM-AMNE-AWS-EUC1
-# (08_interconnects/03_virtual_circuits/02_am_ne_overlays.yml) terminate on their ports.
+# the handoff circuits HANDOFF-FR2-AMNE-PROD (08_interconnects/03_virtual_circuits/02_am_ne_handoff.yml)
+# and HANDOFF-AMNE-AWS-EUC1-PROD (08_interconnects/05_cloud_endpoints/00_vif_handoff_am_ne.yml)
+# terminate on their Ethernet1/1 sub-interfaces.
 # AM-NE still joins virtual_colocations because the created-trigger fires per kind and
 # would raise on a non-member. data/demos/10_colocation gives it the same pair on its own.
 apiVersion: infrahub.app/v1

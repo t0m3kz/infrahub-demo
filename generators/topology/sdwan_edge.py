@@ -11,11 +11,18 @@ signal (see schemas/extensions/topology/topology_customer.yml), same shape
 as design.dedicated_firewall gating dedicated provisioning elsewhere. When
 set, this generator provisions the per-office slice of SD-WAN: an Edge
 device, the internet-underlay TopologyPhysicalCircuit INET-<office> (the
-Edge's uplink to a free ``customer`` port of the ISP's access PE), the
-SD-WAN overlay TopologyVirtualCircuit (with a pool-allocated tunnel_id) and
-the Gateway's matching tunnel sub-interface — then attaches the new Edge to
-the Gateway's own Orchestrator (VCO) via managed_devices. It is the only
-path: no office's Edge, tunnel or underlay is hand-authored.
+Edge's uplink to a free ``customer`` port of the ISP's access PE) and the
+SD-WAN TopologyTunnelCircuit <office>-SDWAN-<gateway zone> (owned by the
+office's owner, ending on the Gateway's public port and the Edge's uplink) —
+then attaches the new Edge to the Gateway's own Orchestrator (VCO) via
+managed_devices. It is the only path: no office's Edge, tunnel or underlay is
+hand-authored.
+
+The tunnel is an inventory record: the orchestrator owns the overlay routing,
+so no session is generated and the tunnel is not a member of the
+``virtual_circuits`` generator group. Both ends are written with the circuit in
+one save. The Gateway's public port is its one ``customer`` physical interface;
+the trunk (role uplink) is not used here.
 
 The underlay's far end is not authored per office. The ISP is the one
 TopologyExternalProviders of the internet provider (data/demos/30_all/
@@ -24,7 +31,8 @@ free ``customer`` port (a port that is an end of no physical circuit), and
 reuses its own port on a rerun. The pick and the circuit's single save (a
 physical circuit needs both ends at creation) run under one resource_lock,
 because the offices board in one load and run concurrently. The circuit's
-locations are the office and the ISP; the overlay keeps the Gateway's zone.
+locations are the office and the ISP; the tunnel's are the office and the
+Gateway's zone.
 
 The shared Gateway/VCO themselves stay hand-authored and load with the
 foundation stage (data/demos/30_all/02_colo/equinix/fr/04_sdwan_gateway.yml),
@@ -33,24 +41,11 @@ them, mirroring how CustomerDeploymentColocationExchangeGenerator
 (generators/topology/customer_colocation.py) assumes the shared colocation fabric
 already exists and only handles the per-tenant slice.
 
-Deliberately does NOT reuse DeviceMixin.create_devices()/CablingMixin.
-ensure_vlan_subinterface(): create_devices() unconditionally resolves a
-"{fabric_name}-management-pool" (generators/devices.py) that no office has,
-and ensure_vlan_subinterface() hardcodes role="service" for its
-sub-interface (generators/connections.py), while an SD-WAN tunnel
-termination on the Gateway's trunk is role="uplink" (the role the trunk
-itself has, and the one the Gateway's other sub-interfaces use). Both
-helpers are tailored to DC/pod-scale fabric devices; a branch-office Edge is
-simple enough that a direct create+upsert is less code and less risk than
-bending those assumptions.
-
-Ordering note: the Gateway's tunnel sub-interface is named "<trunk>.<tunnel_id>",
-so the overlay circuit is created FIRST (allocating tunnel_id from
-GLOBAL-SDWAN-TUNNEL-ID via a from_pool dict on the attribute) and its
-resolved value read back, THEN the sub-interface is created, THEN the
-circuit's capabilities is updated to include it — there is no
-standalone "allocate a number" call for a CoreNumberPool, only from_pool
-applied to a real node's attribute.
+Deliberately does NOT reuse DeviceMixin.create_devices(): it unconditionally
+resolves a "{fabric_name}-management-pool" (generators/devices.py) that no
+office has, and is tailored to DC/pod-scale fabric devices; a branch-office
+Edge is simple enough that a direct create+upsert is less code and less risk
+than bending those assumptions.
 
 Failures raise: a missing prerequisite is logged with self.logger.error and
 raised as GeneratorError (CommonGenerator.fail), and an SDK error propagates as is,
@@ -72,11 +67,10 @@ from ..pools import PoolMixin
 from ..protocols import (
     DcimPhysicalDevice,
     DcimPhysicalInterface,
-    DcimVirtualInterface,
     ManagedController,
     TopologyExternalProviders,
     TopologyPhysicalCircuit,
-    TopologyVirtualCircuit,
+    TopologyTunnelCircuit,
 )
 
 # Who sells each office its internet access. Not modelled per office (no
@@ -89,21 +83,20 @@ _INTERNET_PROVIDER_ORG_ID = "P019"
 # Who operates the overlay riding that underlay: the SD-WAN service provider
 # (VMware VeloCloud), never the ISP — the tunnel is not bought from the ISP.
 _OVERLAY_PROVIDER_ORG_ID = "P035"
-_TUNNEL_ID_POOL_NAME = "GLOBAL-SDWAN-TUNNEL-ID"
 _EDGE_TEMPLATE_NAME = "VCE-610_EDGE"
 
 
 def _target_group(name: str) -> dict[str, Any]:
     """A circuit generator target group (data/bootstrap/00_groups.yml), by HFID.
 
-    Membership is what lets add_circuit/add_virtual_circuit run for the
-    circuits this generator creates, as for the data-declared ones.
+    Membership is what lets add_circuit run for the INET circuits this
+    generator creates, as for the data-declared ones.
     """
     return {"hfid": [name], "kind": "CoreStandardGroup"}
 
 
 class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
-    """add_sdwan_edge — per-office SD-WAN Edge, tunnel, and circuit provisioning."""
+    """add_sdwan_edge — per-office SD-WAN Edge, internet underlay circuit and tunnel circuit provisioning."""
 
     # Widens the type for the type checker only (mirrors generators/devices.py's
     # DeviceMixin.client: Any) — the real InfrahubGenerator.client property
@@ -145,22 +138,21 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
         if not gateway_zone_id or not gateway_zone_name:
             self.fail(f"{office_name}: gateway {gateway_name} has no deployment — cannot set circuit locations")
 
-        # Only physical ports qualify: this generator's own tunnel sub-interfaces
-        # (DcimVirtualInterface, role uplink) must never be taken for the trunk.
-        trunk_candidates = sorted(
+        # The public port: the gateway's one physical customer-role interface.
+        public_ports = sorted(
             (
                 iface
                 for iface in gateway.get("interfaces") or []
-                if iface.get("typename") == DcimPhysicalInterface.__name__ and iface.get("role") == "uplink"
+                if iface.get("typename") == DcimPhysicalInterface.__name__ and iface.get("role") == "customer"
             ),
             key=lambda iface: iface.get("name") or "",
         )
-        if not trunk_candidates:
-            self.fail(f"{office_name}: gateway {gateway_name} has no role=uplink trunk interface")
-        if len(trunk_candidates) > 1:
-            names = [iface.get("name") for iface in trunk_candidates]
-            self.fail(f"{office_name}: gateway {gateway_name} has several role=uplink trunk interfaces {names}")
-        trunk_iface = trunk_candidates[0]
+        if not public_ports:
+            self.fail(f"{office_name}: gateway {gateway_name} has no role=customer public interface")
+        if len(public_ports) > 1:
+            names = [iface.get("name") for iface in public_ports]
+            self.fail(f"{office_name}: gateway {gateway_name} has several role=customer public interfaces {names}")
+        gateway_public_port_id: str = public_ports[0]["id"]
 
         internet_provider_id, overlay_provider_id = await self._resolve_provider_ids(office_name)
         edge = await self._ensure_edge_device(office_name, office_id, owner_id)
@@ -176,29 +168,15 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
             isp_location_id=isp_location_id,
             isp_device_id=isp_device_id,
         )
-        overlay_circuit = await self._ensure_overlay_circuit(
+        await self._ensure_tunnel_circuit(
             office_name=office_name,
             office_id=office_id,
             owner_id=owner_id,
             provider_id=overlay_provider_id,
             gateway_zone_id=gateway_zone_id,
             gateway_zone_name=gateway_zone_name,
+            end_ids=[gateway_public_port_id, edge_uplink.id],
         )
-
-        tunnel_id_attr = getattr(overlay_circuit, "tunnel_id", None)
-        tunnel_id = getattr(tunnel_id_attr, "value", None) if tunnel_id_attr else None
-        if tunnel_id is None:
-            self.fail(f"{office_name}: overlay circuit has no resolved tunnel_id after save")
-
-        gateway_sub_iface = await self._ensure_gateway_subinterface(
-            gateway_id=gateway_id,
-            gateway_name=gateway_name,
-            trunk_iface_id=trunk_iface["id"],
-            trunk_iface_name=trunk_iface.get("name", "eth0"),
-            tunnel_id_value=int(tunnel_id),
-        )
-
-        await self._link_overlay_to_interfaces(overlay_circuit, [edge_uplink.id, gateway_sub_iface.id], office_name)
         await self._attach_to_orchestrator(gateway_id=gateway_id, gateway_name=gateway_name, edge_id=edge.id)
 
     async def _resolve_provider_ids(self, office_name: str) -> tuple[str, str]:
@@ -335,7 +313,7 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
             self.fail(f"{office_name}: the ISP access device has no free customer port for {circuit_name}")
         return free[sort_interface_list(list(free))[0]]
 
-    async def _ensure_overlay_circuit(
+    async def _ensure_tunnel_circuit(
         self,
         *,
         office_name: str,
@@ -344,91 +322,30 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
         provider_id: str,
         gateway_zone_id: str,
         gateway_zone_name: str,
-    ) -> Any:
-        """Create/upsert the overlay VC without its capabilities.
+        end_ids: list[str],
+    ) -> None:
+        """Create/upsert the office's TopologyTunnelCircuit, both ends in one save.
 
-        Its underlay is not declared: it is the INET-<office> circuit found on the Edge uplink
-        port, which _link_overlay_to_interfaces gives the VC as an end.
-
-        The gateway sub-interface doesn't exist yet (its name depends on the
-        tunnel_id this same call allocates), and an upsert REPLACES a
-        cardinality-many relationship it carries: sending the edge side alone
-        would drop the gateway link on every rerun for the follow-up to re-add.
-        _link_overlay_to_interfaces sets both ends once, from the server's list.
+        Ends: the gateway's public port and the edge uplink. An upsert replaces the
+        cardinality-many ``capabilities``, so a rerun over unchanged data resends the
+        same two ends. Not in the ``virtual_circuits`` group: the orchestrator owns
+        the overlay routing and no session is generated for a tunnel.
         """
-        vc_name = f"{office_name}-SDWAN-{gateway_zone_name}"
-        pool = await self.client.get(kind="CoreNumberPool", name__value=_TUNNEL_ID_POOL_NAME)
-        circuit = await self.client.create(
-            kind=TopologyVirtualCircuit,
+        tunnel_name = f"{office_name}-SDWAN-{gateway_zone_name}"
+        tunnel = await self.client.create(
+            kind=TopologyTunnelCircuit,
             data={
-                "name": vc_name,
-                "link_type": "sd_wan",
-                "transport_mode": "internet_backed",
+                "name": tunnel_name,
                 "status": "active",
-                "encryption": True,
-                "tunnel_id": {"from_pool": {"id": pool.id}},
                 "provider": {"id": provider_id},
                 "owner": {"id": owner_id},
                 "description": f"{office_name} SD-WAN tunnel to {gateway_zone_name} gateway",
                 "locations": [{"id": office_id}, {"id": gateway_zone_id}],
-                "member_of_groups": [_target_group("virtual_circuits")],
+                "capabilities": [{"id": end_id} for end_id in end_ids],
             },
         )
-        await circuit.save(allow_upsert=True)
-        self.logger.info(f"Ensured SD-WAN overlay circuit '{vc_name}'")
-        return circuit
-
-    async def _ensure_gateway_subinterface(
-        self,
-        *,
-        gateway_id: str,
-        gateway_name: str,
-        trunk_iface_id: str,
-        trunk_iface_name: str,
-        tunnel_id_value: int,
-    ) -> Any:
-        sub_iface_name = f"{trunk_iface_name}.{tunnel_id_value}"
-        sub_iface = await self.client.create(
-            kind=DcimVirtualInterface,
-            data={
-                "name": sub_iface_name,
-                "device": {"id": gateway_id},
-                "parent_interface": {"id": trunk_iface_id},
-                "role": "uplink",
-                "status": "active",
-            },
-        )
-        await sub_iface.save(allow_upsert=True)
-        self.logger.info(f"Ensured Gateway sub-interface '{sub_iface_name}' on {gateway_name}")
-        return sub_iface
-
-    async def _link_overlay_to_interfaces(
-        self, overlay_circuit: Any, interface_ids: list[str], office_name: str
-    ) -> None:
-        """Make the overlay terminate on exactly ``interface_ids`` (edge uplink, gateway sub-interface).
-
-        Re-reads the circuit via filters(..., include=[...]) for the server's
-        full peer list (peer ids are all this needs, no .fetch()), then adds
-        what is missing and removes what is extra: a rerun over unchanged data
-        finds nothing to change and saves nothing.
-        """
-        refreshed = await self.client.filters(
-            kind=TopologyVirtualCircuit, ids=[overlay_circuit.id], include=["capabilities"]
-        )
-        if not refreshed:
-            self.fail(f"{office_name}: overlay circuit vanished before linking its interfaces")
-        circuit = refreshed[0]
-        iface_capabilities = getattr(circuit, "capabilities")
-        current = {peer.id for peer in iface_capabilities.peers}
-        desired = set(interface_ids)
-        if current == desired:
-            return
-        for interface_id in interface_ids:
-            if interface_id not in current:
-                await self._safe_rel_add(iface_capabilities, {"id": interface_id})
-        for interface_id in sorted(current - desired):
-            iface_capabilities.remove(interface_id)
-        await circuit.save(allow_upsert=True)
+        await tunnel.save(allow_upsert=True)
+        self.logger.info(f"Ensured SD-WAN tunnel circuit '{tunnel_name}'")
 
     async def _attach_to_orchestrator(self, *, gateway_id: str, gateway_name: str, edge_id: str) -> None:
         orchestrators = await self.client.filters(

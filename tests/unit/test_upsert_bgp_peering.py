@@ -71,3 +71,60 @@ class TestUpsertBgpPeering:
 
         with pytest.raises(RuntimeError, match="rejected"):
             await m.upsert_bgp_peering(**_COMMON)
+
+
+class TestUpsertBgpPeeringShape:
+    """ttl, bfd_enabled, send_extended_community and maximum_routes: the defaults are the directly connected shape."""
+
+    @pytest.mark.asyncio
+    async def test_defaults_keep_the_directly_connected_shape(self) -> None:
+        """Every existing caller (office fabric, colocation fabric) passes none of the new parameters."""
+        m = _mixin()
+
+        await m.upsert_bgp_peering(**_COMMON)
+
+        data = m.client.create.call_args.kwargs["data"]
+        assert data == {
+            "name": "DCI-c1",
+            "description": "d",
+            "status": "active",
+            "session_type": "EBGP",
+            "peering_role": "dci",
+            "ttl": 1,
+            "bfd_enabled": True,
+            "send_community": True,
+            "send_extended_community": True,
+            "address_families": [{"id": "af1"}],
+            "bgp_processes": [{"id": "p1"}, {"id": "p2"}],
+            "capabilities": [{"id": "i1"}, {"id": "i2"}],
+        }
+
+    @pytest.mark.asyncio
+    async def test_the_shape_parameters_are_written_as_given(self) -> None:
+        m = _mixin()
+
+        await m.upsert_bgp_peering(
+            **{**_COMMON, "session_type": "EBGP_MULTIHOP"},
+            ttl=2,
+            bfd_enabled=False,
+            send_extended_community=False,
+            maximum_routes=16,
+        )
+
+        data = m.client.create.call_args.kwargs["data"]
+        assert data["session_type"] == "EBGP_MULTIHOP"
+        assert (data["ttl"], data["bfd_enabled"], data["send_extended_community"], data["maximum_routes"]) == (
+            2,
+            False,
+            False,
+            16,
+        )
+        assert data["send_community"] is True
+
+    @pytest.mark.asyncio
+    async def test_maximum_routes_is_written_only_when_given(self) -> None:
+        m = _mixin()
+
+        await m.upsert_bgp_peering(**_COMMON, maximum_routes=None)
+
+        assert "maximum_routes" not in m.client.create.call_args.kwargs["data"]

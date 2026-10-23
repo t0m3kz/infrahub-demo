@@ -1,9 +1,10 @@
-"""The virtual-circuit queries select every field the code and the fakes read.
+"""The virtual-circuit session query selects every field the generator reads.
 
-Unit tests feed canned payloads, so a field the code reads but the query does not select (or a fake that invents a
-field no query returns) passes here and fails only on a real stack. These tests parse the two ``.gql`` files with
-graphql-core, flatten them to the field paths the cleaned data carries (``edges``/``node``/``value`` wrappers
-dropped, inline fragments merged) and compare them with what the generator, the check and the fakes use.
+Unit tests feed canned payloads, so a field the code reads but the query does not select passes there and fails only
+on a real stack. These tests parse ``queries/topology/add/virtual_circuit.gql`` with graphql-core, flatten it to the
+field paths the cleaned data carries (``edges``/``node``/``value`` wrappers dropped, inline fragments and fragment
+spreads merged) and compare them with what the session generator uses. The helpers are shared with
+``test_circuit_check_query_shapes.py``, which does the same for the placement check's query.
 """
 
 from __future__ import annotations
@@ -21,7 +22,15 @@ from graphql import (
     parse,
 )
 
-from tests.unit.simulators.circuit_fakes import virtual_payload
+from tests.unit.simulators.circuit_fakes import (
+    colo_edge_port,
+    dc_border_port,
+    handoff_edge_port,
+    handoff_party_port,
+    handoff_payload,
+    interconnect_payload,
+    tunnel_payload,
+)
 
 _QUERIES = Path(__file__).parents[2] / "queries"
 _WRAPPERS = frozenset({"edges", "node"})
@@ -90,72 +99,77 @@ def generator_paths() -> set[str]:
     return _selected_paths(_QUERIES / "topology" / "add" / "virtual_circuit.gql", "TopologyVirtualCircuit")
 
 
-@pytest.fixture(scope="module")
-def check_paths() -> set[str]:
-    """Paths selected by queries/validation/circuit_placement.gql for the virtual circuits."""
-    return _selected_paths(_QUERIES / "validation" / "circuit_placement.gql", "TopologyVirtualCircuit")
-
-
-# What generators/topology/circuit.py reads from the cleaned virtual circuit (utils/circuit_underlay.py included).
+# What generators/topology/virtual_circuit.py reads from the cleaned virtual circuit, for every kind
+# (utils/circuit_underlay.py included). `__typename` is `typename` once cleaned.
 _GENERATOR_READS = [
     "id",
+    "__typename",
     "name",
     "status",
-    "link_type",
-    "peering_role",
     "capabilities.id",
     "capabilities.name",
     "capabilities.__typename",
-    "capabilities.ip_address.id",
-    "capabilities.ip_address.address",
-    "capabilities.device.id",
-    "capabilities.device.name",
-    "capabilities.device.deployment.id",
-    "capabilities.device.deployment.__typename",
-    "capabilities.device.capabilities.id",
-    "capabilities.device.capabilities.__typename",
-    "capabilities.device.capabilities.name",
-    "capabilities.device.capabilities.process_role",
-    # the derived underlay: the physical circuits on each port
-    "capabilities.capabilities.__typename",
-    "capabilities.capabilities.id",
-    "capabilities.capabilities.name",
-    "capabilities.capabilities.circuit_id",
-    "capabilities.capabilities.status",
-]
-
-# What checks/circuit_placement.py reads from the cleaned virtual circuit.
-_CHECK_READS = [
-    "id",
-    "name",
-    "link_type",
-    "transport_mode",
-    "owner.id",
-    "owner.org_id",
-    "locations.id",
-    "locations.__typename",
-    "locations.name",
-    "locations.owner.id",
-    "locations.environment",
-    "locations.parent.id",
-    "capabilities.id",
-    "capabilities.name",
     "capabilities.device.id",
     "capabilities.device.name",
     "capabilities.device.deployment.id",
     "capabilities.device.deployment.__typename",
     "capabilities.device.deployment.name",
-    "capabilities.device.deployment.parent.id",
-    # the derived underlay: the physical circuits on each port, with their ends
+    "capabilities.device.deployment.underlay_protocol",
+    "capabilities.device.capabilities.id",
+    "capabilities.device.capabilities.__typename",
+    "capabilities.device.capabilities.name",
+    "capabilities.device.capabilities.process_role",
+    # the DCI EVPN session sources its loopbacks
+    "capabilities.device.interfaces.id",
+    "capabilities.device.interfaces.__typename",
+    "capabilities.device.interfaces.name",
+    "capabilities.device.interfaces.role",
+    "capabilities.device.interfaces.ip_address.address",
+    # the derived underlay: the physical circuits on each port ...
     "capabilities.capabilities.__typename",
     "capabilities.capabilities.id",
     "capabilities.capabilities.name",
+    "capabilities.capabilities.circuit_id",
     "capabilities.capabilities.status",
-    "capabilities.capabilities.locations.id",
-    "capabilities.capabilities.locations.__typename",
-    "capabilities.capabilities.locations.name",
-    "capabilities.capabilities.locations.parent.id",
+    # ... and, for a sub-interface, on its parent interface
+    "capabilities.parent_interface.capabilities.__typename",
+    "capabilities.parent_interface.capabilities.id",
+    "capabilities.parent_interface.capabilities.name",
+    "capabilities.parent_interface.capabilities.circuit_id",
+    "capabilities.parent_interface.capabilities.status",
+    # a hop inside one facility is a cable, not a circuit: on a physical port, or on a sub-interface's parent
+    "capabilities.cable.id",
+    "capabilities.parent_interface.cable.id",
+    # TopologyHandoffCircuit
+    "ip_namespace.name",
+    "maximum_routes",
+    "password.id",
 ]
+
+# Fields the redesign removed from the virtual circuit (and the physical one): selecting one fails on a real stack.
+_REMOVED_FIELDS = [
+    "link_type",
+    "transport_mode",
+    "peering_role",
+    "vni",
+    "tunnel_id",
+    "encryption",
+    "bandwidth",
+    "cloud_endpoints",
+    # read by no session generator: the ends' addresses are allocated, the cloud side is data
+    "cloud_endpoint",
+    "owner",
+]
+
+
+def _cabled_handoff() -> dict[str, Any]:
+    """A handoff whose edge has no circuit, only a cable on the parent of its sub-interface."""
+    return handoff_payload(ends=[handoff_edge_port(parent_circuits=[], parent_cabled=True), handoff_party_port()])
+
+
+def _cabled_interconnect() -> dict[str, Any]:
+    """A DCI whose ends are cabled physical ports."""
+    return interconnect_payload(ends=[dc_border_port(cabled=True), colo_edge_port(cabled=True)])
 
 
 @pytest.mark.parametrize("path", _GENERATOR_READS)
@@ -164,21 +178,57 @@ def test_the_generator_query_selects_what_the_generator_reads(path: str, generat
     assert path in generator_paths
 
 
-@pytest.mark.parametrize("path", _CHECK_READS)
-def test_the_check_query_selects_what_the_check_reads(path: str, check_paths: set[str]) -> None:
-    """Every path in `_CHECK_READS` is selected by circuit_placement.gql."""
-    assert path in check_paths
+@pytest.mark.parametrize("field", _REMOVED_FIELDS)
+def test_the_generator_query_selects_no_removed_field(field: str, generator_paths: set[str]) -> None:
+    """No path of virtual_circuit.gql ends in a field of the old virtual circuit."""
+    assert not {p for p in generator_paths if p.split(".")[-1] == field}
 
 
-def test_the_fakes_return_only_selected_fields(generator_paths: set[str]) -> None:
+def test_every_selected_field_is_read(generator_paths: set[str]) -> None:
+    """A leaf the query selects that the generator does not read is dead weight (parents of a read path are fine)."""
+    parents = {".".join(path.split(".")[:i]) for path in _GENERATOR_READS for i in range(1, len(path.split(".")))}
+    unread = generator_paths - set(_GENERATOR_READS) - parents
+    assert not unread, f"selected but not read: {sorted(unread)}"
+
+
+def _fake_paths(payload: dict[str, Any]) -> set[str]:
+    """Paths of one fake circuit payload (raw GraphQL), in the query's spelling."""
+    return _payload_paths(payload["TopologyVirtualCircuit"]["edges"][0]["node"])
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        pytest.param(interconnect_payload(), id="interconnect"),
+        pytest.param(handoff_payload(password="pw-1"), id="handoff"),
+        pytest.param(tunnel_payload(), id="tunnel"),
+        pytest.param(_cabled_handoff(), id="handoff-cabled-parent"),
+        pytest.param(_cabled_interconnect(), id="interconnect-cabled-port"),
+    ],
+)
+def test_the_fakes_return_only_selected_fields(payload: dict[str, Any], generator_paths: set[str]) -> None:
     """A fake payload path the query does not select is a field no real response carries."""
-    node = virtual_payload()["TopologyVirtualCircuit"]["edges"][0]["node"]
-    fake_paths = {path.replace(".typename", ".__typename") for path in _payload_paths(node)}
-    unselected = {p for p in fake_paths if p not in generator_paths and not p.startswith(("vni", "tunnel_id"))}
+    unselected = _fake_paths(payload) - generator_paths
     assert not unselected, f"fake payload fields the query does not select: {sorted(unselected)}"
 
 
-def test_the_decommissioned_filter_has_a_status_to_read(generator_paths: set[str], check_paths: set[str]) -> None:
-    """Both consumers drop decommissioned circuits, so both queries select the derived circuit's status."""
+def test_the_fakes_carry_every_field_the_generator_reads() -> None:
+    """A field the generator reads that no fake carries is read nowhere in the unit tests."""
+    carried = (
+        _fake_paths(interconnect_payload())
+        | _fake_paths(handoff_payload(password="pw-1"))
+        | _fake_paths(_cabled_handoff())
+        | _fake_paths(_cabled_interconnect())
+    )
+    assert not set(_GENERATOR_READS) - carried, f"read but never faked: {sorted(set(_GENERATOR_READS) - carried)}"
+
+
+def test_the_cable_is_selected_on_the_port_and_on_its_parent(generator_paths: set[str]) -> None:
+    """A cable-only handoff has no circuit: the carrier is the cable on the physical port or on the parent."""
+    assert {"capabilities.cable.id", "capabilities.parent_interface.cable.id"} <= generator_paths
+
+
+def test_the_decommissioned_filter_has_a_status_to_read(generator_paths: set[str]) -> None:
+    """The generator drops decommissioned carriers, so the query selects the carrier's status, on a port and its parent."""
     assert "capabilities.capabilities.status" in generator_paths
-    assert "capabilities.capabilities.status" in check_paths
+    assert "capabilities.parent_interface.capabilities.status" in generator_paths

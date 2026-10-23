@@ -27,7 +27,7 @@ spec:
         - "eg-fr201"
 
     # The cloud-side landing of the Equinix Fabric connection out of the Network Edge router
-    # eg-am-ne02 (VC-PLATFORM-AMNE-AWS-EUC1, ../03_virtual_circuits/02_am_ne_overlays.yml): a hosted
+    # eg-am-ne02 (HANDOFF-AMNE-AWS-EUC1-PROD, ../05_cloud_endpoints/00_vif_handoff_am_ne.yml): a hosted
     # connection, ordered through the Equinix Fabric partner rather than a dedicated port of our own.
     # `physical_devices` is the router that holds it. There is no `location`: AM-NE is a provider-hosted
     # presence, not a room of ours. Its transit VIF is in ../05_cloud_endpoints/01_transit_vif.yml.

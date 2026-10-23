@@ -45,9 +45,8 @@ def _make_gen() -> SdwanEdgeGenerator:
     return gen
 
 
-_SUBIFACE_ETH0_1999 = {"typename": "DcimVirtualInterface", "id": "sub-1999", "name": "eth0.1999", "role": "uplink"}
-_ACCESS_ETH1 = {"typename": "DcimPhysicalInterface", "id": "access-1", "name": "eth1", "role": "customer"}
-_SECOND_TRUNK_ETH1 = {"typename": "DcimPhysicalInterface", "id": "trunk-2", "name": "eth1", "role": "uplink"}
+_VIRTUAL_CUSTOMER = {"typename": "DcimVirtualInterface", "id": "sub-1", "name": "eth1.10", "role": "customer"}
+_SECOND_PUBLIC_PORT = {"typename": "DcimPhysicalInterface", "id": "public-2", "name": "eth2", "role": "customer"}
 
 
 def _gateway(
@@ -55,12 +54,16 @@ def _gateway(
     gateway_id: str = "gw-1",
     name: str = "EQX-FR2-SDWAN-GW1",
     zone_name: str | None = "FR2",
-    trunk_role: str | None = "uplink",
+    public_role: str | None = "customer",
     extra_interfaces: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """The Gateway as generate() sees it; extra_interfaces are listed BEFORE the trunk."""
-    trunk = {"typename": "DcimPhysicalInterface", "id": "trunk-1", "name": "eth0", "role": trunk_role}
-    interfaces = [*(extra_interfaces or []), *([trunk] if trunk_role else [])]
+    """The Gateway as generate() sees it: its trunk eth0 (role uplink, unused here) and its public port eth1.
+
+    extra_interfaces are listed BEFORE the public port; ``public_role=None`` leaves it out.
+    """
+    trunk = {"typename": "DcimPhysicalInterface", "id": "trunk-1", "name": "eth0", "role": "uplink"}
+    public = {"typename": "DcimPhysicalInterface", "id": "public-1", "name": "eth1", "role": public_role}
+    interfaces = [trunk, *(extra_interfaces or []), *([public] if public_role else [])]
     return {
         "id": gateway_id,
         "name": name,
@@ -176,16 +179,20 @@ class TestGenerateGuardClauses:
             pytest.param(_office_payload(office_id=None), "missing id", id="no-office-id"),
             pytest.param(_office_payload(owner_id=None), "no owner", id="no-owner"),
             pytest.param(_office_payload(gateway=_gateway(zone_name=None)), "no deployment", id="no-gateway-zone"),
-            pytest.param(_office_payload(gateway=_gateway(trunk_role=None)), "no role=uplink trunk", id="no-trunk"),
             pytest.param(
-                _office_payload(gateway=_gateway(trunk_role=None, extra_interfaces=[_SUBIFACE_ETH0_1999])),
-                "no role=uplink trunk",
-                id="only-a-virtual-uplink",
+                _office_payload(gateway=_gateway(public_role=None)),
+                "no role=customer public interface",
+                id="no-public-port",
             ),
             pytest.param(
-                _office_payload(gateway=_gateway(extra_interfaces=[_SECOND_TRUNK_ETH1])),
-                r"several role=uplink trunk interfaces \['eth0', 'eth1'\]",
-                id="ambiguous-trunk",
+                _office_payload(gateway=_gateway(public_role=None, extra_interfaces=[_VIRTUAL_CUSTOMER])),
+                "no role=customer public interface",
+                id="only-a-virtual-customer-interface",
+            ),
+            pytest.param(
+                _office_payload(gateway=_gateway(extra_interfaces=[_SECOND_PUBLIC_PORT])),
+                r"several role=customer public interfaces \['eth1', 'eth2'\]",
+                id="ambiguous-public-port",
             ),
         ],
     )
@@ -211,16 +218,9 @@ class TestGenerateHappyPath:
 
         edge = _node("edge-1")
         internet_circuit = _node("inet-1")
-        overlay_circuit = _node("vc-1")
-        overlay_circuit.tunnel_id = MagicMock(value=2000)
-        iface_capabilities = MagicMock()
-        iface_capabilities.peers = []
-        overlay_circuit.capabilities = iface_capabilities
-        gateway_subiface = _node("subiface-1")
-        # The server-side re-read of the overlay is a different node object from the upserted one.
-        refreshed_overlay = _node("vc-1", capabilities=MagicMock(peers=[]))
+        tunnel_circuit = _node("tunnel-1")
 
-        gen.client.create = AsyncMock(side_effect=[edge, internet_circuit, overlay_circuit, gateway_subiface])
+        gen.client.create = AsyncMock(side_effect=[edge, internet_circuit, tunnel_circuit])
 
         edge_template = MagicMock(id="template-1")
         edge_uplink = MagicMock(id="edge-uplink-1")
@@ -233,14 +233,11 @@ class TestGenerateHappyPath:
         orchestrator.save = AsyncMock()
         orchestrator.add_relationships = AsyncMock()
         # Call order: (1) provider org lookup (ISP + overlay operator, one
-        # query); (2) existing-edge-by-
-        # name lookup -> none, so the edge is new and the template gets
-        # resolved; (3) VCE-610_EDGE template lookup; (4) edge uplink
-        # interface lookup; (5-7) ISP topology, INET-<office> by name, the
-        # access PE's customer ports; (8) re-read the just-created overlay
-        # circuit (full capabilities peer list, see
-        # _link_overlay_to_interfaces's docstring); (9) orchestrator
-        # lookup (managed_devices included).
+        # query); (2) existing-edge-by-name lookup -> none, so the edge is new
+        # and the template gets resolved; (3) VCE-610_EDGE template lookup;
+        # (4) edge uplink interface lookup; (5-7) ISP topology, INET-<office>
+        # by name, the access PE's customer ports; (8) orchestrator lookup
+        # (managed_devices included).
         gen.client.filters = AsyncMock(
             side_effect=[
                 _providers(),
@@ -248,25 +245,19 @@ class TestGenerateHappyPath:
                 [edge_template],
                 [edge_uplink],
                 *_isp_lookups(ports=ports, circuits=circuits),
-                [refreshed_overlay],
                 [orchestrator],
             ]
         )
 
-        pool = MagicMock(id="pool-1")
-        gen.client.get = AsyncMock(return_value=pool)
-
         self._edge = edge
         self._internet_circuit = internet_circuit
-        self._overlay_circuit = overlay_circuit
-        self._refreshed_overlay = refreshed_overlay
-        self._gateway_subiface = gateway_subiface
+        self._tunnel_circuit = tunnel_circuit
         self._orchestrator = orchestrator
         return gen
 
     @pytest.mark.asyncio
     async def test_full_flow_creates_every_object_in_order(self) -> None:
-        """Edge, underlay, overlay, then the gateway sub-interface whose name needs the tunnel id."""
+        """Edge, underlay circuit, then the tunnel circuit: no pool allocation, no gateway sub-interface."""
         gen = self._wire_full_success()
 
         await gen.generate(_office_payload())
@@ -275,23 +266,20 @@ class TestGenerateHappyPath:
         assert [k.__name__ for k in create_kinds] == [
             "DcimPhysicalDevice",
             "TopologyPhysicalCircuit",
-            "TopologyVirtualCircuit",
-            "DcimVirtualInterface",
+            "TopologyTunnelCircuit",
         ]
+        gen.client.get.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_circuits_join_their_generator_target_groups(self) -> None:
-        """The created circuits join physical_circuits/virtual_circuits, so
-        add_circuit/add_virtual_circuit run for them like for data circuits."""
+    async def test_only_the_underlay_circuit_joins_a_generator_target_group(self) -> None:
+        """INET-<office> joins physical_circuits so add_circuit runs for it; the tunnel is in no group (inventory only)."""
         gen = self._wire_full_success()
 
         await gen.generate(_office_payload())
 
-        circuit_calls = gen.client.create.call_args_list[1:3]
-        assert [call.kwargs["data"]["member_of_groups"] for call in circuit_calls] == [
-            [{"hfid": ["physical_circuits"], "kind": "CoreStandardGroup"}],
-            [{"hfid": ["virtual_circuits"], "kind": "CoreStandardGroup"}],
-        ]
+        internet_data, tunnel_data = (call.kwargs["data"] for call in gen.client.create.call_args_list[1:3])
+        assert internet_data["member_of_groups"] == [{"hfid": ["physical_circuits"], "kind": "CoreStandardGroup"}]
+        assert "member_of_groups" not in tunnel_data
 
     @pytest.mark.asyncio
     async def test_new_edge_sends_object_template(self) -> None:
@@ -311,15 +299,7 @@ class TestGenerateHappyPath:
         create_devices() avoids this the same way) — an existing edge must
         be upserted by id instead, with no template lookup at all."""
         gen = _make_gen()
-        edge = _node("edge-1")
-        internet_circuit = _node("inet-1")
-        overlay_circuit = _node("vc-1")
-        overlay_circuit.tunnel_id = MagicMock(value=2000)
-        iface_capabilities = MagicMock()
-        iface_capabilities.peers = []
-        overlay_circuit.capabilities = iface_capabilities
-        gateway_subiface = _node("subiface-1")
-        gen.client.create = AsyncMock(side_effect=[edge, internet_circuit, overlay_circuit, gateway_subiface])
+        gen.client.create = AsyncMock(side_effect=[_node("edge-1"), _node("inet-1"), _node("tunnel-1")])
 
         existing_edge = MagicMock(id="edge-1")
         edge_uplink = MagicMock(id="edge-uplink-1")
@@ -331,22 +311,15 @@ class TestGenerateHappyPath:
         orchestrator.save = AsyncMock()
         orchestrator.add_relationships = AsyncMock()
         # Existing-edge lookup now returns a match — no template lookup follows.
-        # The 4th entry is the post-create re-fetch of the overlay circuit
-        # (real __typename for capabilities peers, see
-        # _link_overlay_to_interfaces's docstring) — reusing the
-        # same overlay_circuit mock, since only its .capabilities
-        # matters here, not a distinct identity.
         gen.client.filters = AsyncMock(
             side_effect=[
                 _providers(),
                 [existing_edge],
                 [edge_uplink],
                 *_isp_lookups(),
-                [overlay_circuit],
                 [orchestrator],
             ]
         )
-        gen.client.get = AsyncMock(return_value=MagicMock(id="pool-1"))
 
         await gen.generate(_office_payload())
 
@@ -355,56 +328,20 @@ class TestGenerateHappyPath:
         assert "object_template" not in edge_call.kwargs["data"]
 
     @pytest.mark.asyncio
-    async def test_gateway_subinterface_named_from_resolved_tunnel_id(self) -> None:
-        """The gateway sub-interface is <trunk>.<pooled tunnel id>."""
-        gen = self._wire_full_success()
-
-        await gen.generate(_office_payload())
-
-        subiface_call = gen.client.create.call_args_list[3]
-        assert subiface_call.kwargs["data"]["name"] == "eth0.2000"
-
-    @pytest.mark.asyncio
-    async def test_trunk_is_the_physical_uplink_even_when_virtual_uplinks_are_listed_first(self) -> None:
-        """The generator's own tunnel sub-interfaces are role=uplink too: listed before the trunk, they
-        must not be taken for it (the new sub-interface would be eth0.1999.2000 under the wrong parent)."""
-        gen = self._wire_full_success()
-        payload = _office_payload(gateway=_gateway(extra_interfaces=[_SUBIFACE_ETH0_1999]))
-
-        await gen.generate(payload)
-
-        subiface_data = gen.client.create.call_args_list[3].kwargs["data"]
-        assert subiface_data["name"] == "eth0.2000"
-        assert subiface_data["parent_interface"] == {"id": "trunk-1"}
-
-    @pytest.mark.asyncio
-    async def test_gateway_internet_access_port_is_not_taken_for_the_trunk(self) -> None:
-        """VCG-VA_GATEWAY has a second physical port, eth1 (role customer): the gateway's own internet access. Listed
-        before the trunk, it must neither be picked as the trunk nor make the single-uplink guard fail."""
-        gen = self._wire_full_success()
-        payload = _office_payload(gateway=_gateway(extra_interfaces=[_ACCESS_ETH1]))
-
-        await gen.generate(payload)
-
-        subiface_data = gen.client.create.call_args_list[3].kwargs["data"]
-        assert subiface_data["name"] == "eth0.2000"
-        assert subiface_data["parent_interface"] == {"id": "trunk-1"}
-
-    @pytest.mark.asyncio
     async def test_circuits_use_real_ids_for_locations_not_names(self) -> None:
         """locations peers TopologyConnectableLocation — it must be given
         real resolved ids (office_id, ISP location id, gateway_zone_id), never
         a *name* string wrapped in {"id": ...}, which would silently fail to
         resolve against a real backend. The underlay sits in the office and
-        the ISP; the overlay keeps the office and the gateway's zone."""
+        the ISP; the tunnel the office and the gateway's zone."""
         gen = self._wire_full_success()
 
         await gen.generate(_office_payload(office_id="office-1"))
 
         internet_call = gen.client.create.call_args_list[1]
         assert internet_call.kwargs["data"]["locations"] == [{"id": "office-1"}, {"id": _ISP_ID}]
-        overlay_call = gen.client.create.call_args_list[2]
-        assert overlay_call.kwargs["data"]["locations"] == [{"id": "office-1"}, {"id": "zone-1"}]
+        tunnel_call = gen.client.create.call_args_list[2]
+        assert tunnel_call.kwargs["data"]["locations"] == [{"id": "office-1"}, {"id": "zone-1"}]
 
     @pytest.mark.asyncio
     async def test_underlay_is_bought_from_the_isp_and_overlay_from_the_sdwan_operator(self) -> None:
@@ -419,12 +356,12 @@ class TestGenerateHappyPath:
         }
         internet_call = gen.client.create.call_args_list[1]
         assert internet_call.kwargs["data"]["provider"] == {"id": "provider-inet"}
-        overlay_call = gen.client.create.call_args_list[2]
-        assert overlay_call.kwargs["data"]["provider"] == {"id": "provider-overlay"}
+        tunnel_call = gen.client.create.call_args_list[2]
+        assert tunnel_call.kwargs["data"]["provider"] == {"id": "provider-overlay"}
 
     @pytest.mark.asyncio
     async def test_rerun_sends_the_same_payloads(self) -> None:
-        """Idempotent: a second run upserts the same names, HFIDs and pool reference (no new tunnel id key)."""
+        """Idempotent: a second run upserts the same names, ids and ends."""
         first = self._wire_full_success()
         await first.generate(_office_payload())
         second = self._wire_full_success()
@@ -438,91 +375,51 @@ class TestGenerateHappyPath:
             "C002-OFFICE-EDGE1",
             "INET-C002-OFFICE",
             "C002-OFFICE-SDWAN-FR2",
-            "eth0.2000",
         ]
 
     @pytest.mark.asyncio
-    async def test_overlay_circuit_allocates_tunnel_id_from_pool(self) -> None:
-        """The tunnel id comes from GLOBAL-SDWAN-TUNNEL-ID; a Number pool is idempotent per node id, so the
-        from_pool dict carries no identifier."""
+    async def test_tunnel_is_an_inventory_record_of_the_office(self) -> None:
+        """A TopologyTunnelCircuit owned by the office's owner, active, from the SD-WAN operator, in no generator
+        group, with no tunnel id, link type, encryption or session attribute."""
         gen = self._wire_full_success()
 
         await gen.generate(_office_payload())
 
-        overlay_call = gen.client.create.call_args_list[2]
-        assert overlay_call.kwargs["data"]["tunnel_id"] == {"from_pool": {"id": "pool-1"}}
+        tunnel_call = gen.client.create.call_args_list[2]
+        assert tunnel_call.kwargs["kind"].__name__ == "TopologyTunnelCircuit"
+        assert tunnel_call.kwargs["data"] == {
+            "name": "C002-OFFICE-SDWAN-FR2",
+            "status": "active",
+            "provider": {"id": "provider-overlay"},
+            "owner": {"id": "org-c002"},
+            "description": "C002-OFFICE SD-WAN tunnel to FR2 gateway",
+            "locations": [{"id": "office-1"}, {"id": "zone-1"}],
+            "capabilities": [{"id": "public-1"}, {"id": "edge-uplink-1"}],
+        }
+        self._tunnel_circuit.save.assert_awaited_once_with(allow_upsert=True)
 
     @pytest.mark.asyncio
-    async def test_first_run_links_the_overlay_to_edge_uplink_and_gateway_subinterface(self) -> None:
-        """The overlay terminates on both ends, added in one save once the sub-interface exists."""
+    async def test_tunnel_ends_are_the_gateway_public_port_and_the_edge_uplink_in_one_write(self) -> None:
+        """Both ends go with the circuit's own save: no follow-up link step, no re-read of the circuit."""
         gen = self._wire_full_success()
 
         await gen.generate(_office_payload())
 
-        caps = self._refreshed_overlay.capabilities
-        assert [c.args[0] for c in caps.add.call_args_list] == [{"id": "edge-uplink-1"}, {"id": "subiface-1"}]
-        caps.remove.assert_not_called()
-        self._refreshed_overlay.save.assert_awaited()
+        ends = gen.client.create.call_args_list[2].kwargs["data"]["capabilities"]
+        assert ends == [{"id": "public-1"}, {"id": "edge-uplink-1"}]
+        assert gen.client.filters.await_count == 8  # no lookup of the tunnel after its save
 
     @pytest.mark.asyncio
-    async def test_overlay_upsert_never_carries_capabilities(self) -> None:
-        """An upsert replaces a many-relationship it carries: sending the edge side alone would
-        drop the gateway link on every rerun. The link step owns the whole list."""
+    async def test_the_gateway_trunk_is_not_an_end_even_when_listed_with_other_ports(self) -> None:
+        """The trunk eth0 (role uplink) and a virtual customer interface are ignored: the public port is the one
+        physical customer-role interface, wherever it is listed."""
         gen = self._wire_full_success()
+        payload = _office_payload(gateway=_gateway(extra_interfaces=[_VIRTUAL_CUSTOMER]))
 
-        await gen.generate(_office_payload())
+        await gen.generate(payload)
 
-        overlay_data = gen.client.create.call_args_list[2].kwargs["data"]
-        assert "capabilities" not in overlay_data
-
-    @pytest.mark.asyncio
-    async def test_overlay_upsert_declares_no_underlay(self) -> None:
-        """The underlay is derived from the Edge uplink port's capabilities, never sent on the VC."""
-        gen = self._wire_full_success()
-
-        await gen.generate(_office_payload())
-
-        overlay_data = gen.client.create.call_args_list[2].kwargs["data"]
-        assert "physical_circuits" not in overlay_data
-        assert overlay_data["member_of_groups"] == [{"hfid": ["virtual_circuits"], "kind": "CoreStandardGroup"}]
-
-    @pytest.mark.asyncio
-    async def test_rerun_over_unchanged_data_removes_and_adds_nothing(self) -> None:
-        """Rerun: both ends already linked, so the overlay is neither modified nor saved again."""
-        gen = self._wire_full_success()
-        caps = self._refreshed_overlay.capabilities
-        caps.peers = [MagicMock(id="edge-uplink-1"), MagicMock(id="subiface-1")]
-
-        await gen.generate(_office_payload())
-
-        caps.add.assert_not_called()
-        caps.remove.assert_not_called()
-        self._refreshed_overlay.save.assert_not_awaited()
-
-    @pytest.mark.asyncio
-    async def test_only_the_missing_end_is_added(self) -> None:
-        """Gateway side present, edge side missing: just the edge uplink is added, nothing removed."""
-        gen = self._wire_full_success()
-        caps = self._refreshed_overlay.capabilities
-        caps.peers = [MagicMock(id="subiface-1")]
-
-        await gen.generate(_office_payload())
-
-        caps.add.assert_called_once_with({"id": "edge-uplink-1"})
-        caps.remove.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_a_stale_end_is_removed(self) -> None:
-        """A replaced edge uplink leaves its old interface behind: the link step prunes it."""
-        gen = self._wire_full_success()
-        caps = self._refreshed_overlay.capabilities
-        caps.peers = [MagicMock(id="old-uplink"), MagicMock(id="edge-uplink-1"), MagicMock(id="subiface-1")]
-
-        await gen.generate(_office_payload())
-
-        caps.remove.assert_called_once_with("old-uplink")
-        caps.add.assert_not_called()
-        self._refreshed_overlay.save.assert_awaited()
+        ends = gen.client.create.call_args_list[2].kwargs["data"]["capabilities"]
+        assert ends[0] == {"id": "public-1"}
 
     @pytest.mark.asyncio
     async def test_edge_attached_to_orchestrator_managed_devices(self) -> None:
@@ -569,7 +466,6 @@ class TestGenerateHappyPath:
                 [edge_template],
                 [edge_uplink],
                 *_isp_lookups(),
-                [self._refreshed_overlay],
                 [],
             ]
         )
@@ -784,21 +680,15 @@ class TestGenerateFailurePaths:
 
     @pytest.mark.asyncio
     async def test_sdk_error_propagates_instead_of_a_green_run(self) -> None:
-        """An SDK failure (here the tunnel-id pool lookup) is not caught and turned into a silent return."""
-        gen = _make_gen()
-        edge = _node("edge-1")
-        internet_circuit = _node("inet-1")
-        gen.client.create = AsyncMock(side_effect=[edge, internet_circuit])
-        edge_template = MagicMock(id="template-1")
-        edge_uplink = MagicMock(id="edge-uplink-1")
-        edge_uplink.name.value = "GE1"
-        gen.client.filters = AsyncMock(side_effect=[_providers(), [], [edge_template], [edge_uplink], *_isp_lookups()])
-        gen.client.get = AsyncMock(side_effect=RuntimeError("pool not found"))
+        """An SDK failure (here saving the tunnel) is not caught and turned into a silent return."""
+        wiring = TestGenerateHappyPath()
+        gen = wiring._wire_full_success()
+        getattr(wiring, "_tunnel_circuit").save = AsyncMock(side_effect=RuntimeError("tunnel rejected"))
 
-        with pytest.raises(RuntimeError, match="pool not found"):
+        with pytest.raises(RuntimeError, match="tunnel rejected"):
             await gen.generate(_office_payload())
 
-        assert gen.client.create.await_count == 2
+        assert gen.client.create.await_count == 3
 
     @pytest.mark.asyncio
     async def test_failed_save_propagates(self) -> None:
@@ -810,35 +700,6 @@ class TestGenerateFailurePaths:
         gen.client.filters = AsyncMock(side_effect=[_providers(), [], [MagicMock(id="template-1")]])
 
         with pytest.raises(RuntimeError, match="server rejected the edge"):
-            await gen.generate(_office_payload())
-
-    @pytest.mark.asyncio
-    async def test_unresolved_tunnel_id_raises_before_the_gateway_subinterface(self) -> None:
-        """No tunnel id read back means no sub-interface name: fail instead of skipping the gateway side."""
-        wiring = TestGenerateHappyPath()
-        gen = wiring._wire_full_success()
-        wiring._overlay_circuit.tunnel_id = MagicMock(value=None)
-
-        with pytest.raises(GeneratorError, match="no resolved tunnel_id"):
-            await gen.generate(_office_payload())
-
-        assert gen.client.create.await_count == 3
-
-    @pytest.mark.asyncio
-    async def test_overlay_vanished_before_linking_raises(self) -> None:
-        """The overlay circuit's re-fetch finding nothing is a failure, not a skipped link."""
-        gen = _make_gen()
-        overlay_circuit = _node("vc-1")
-        overlay_circuit.tunnel_id = MagicMock(value=2000)
-        gen.client.create = AsyncMock(side_effect=[_node("edge-1"), _node("inet-1"), overlay_circuit, _node("sub-1")])
-        edge_uplink = MagicMock(id="edge-uplink-1")
-        edge_uplink.name.value = "GE1"
-        gen.client.filters = AsyncMock(
-            side_effect=[_providers(), [], [MagicMock(id="template-1")], [edge_uplink], *_isp_lookups(), []]
-        )
-        gen.client.get = AsyncMock(return_value=MagicMock(id="pool-1"))
-
-        with pytest.raises(GeneratorError, match="vanished"):
             await gen.generate(_office_payload())
 
 
