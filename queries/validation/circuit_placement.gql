@@ -108,8 +108,10 @@ query circuit_placement {
         ip_namespace { node { name { value } namespace_type { value } } }
         cloud_endpoint {
           node {
-            name { value }
-            ... on CloudVirtualInterface { vlan_id { value } }
+            ... on CloudVirtualInterface {
+              name { value }
+              vlan_id { value }
+            }
           }
         }
         capabilities { edges { node { ...VirtualPort } } }

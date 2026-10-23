@@ -33,78 +33,82 @@ query virtual_circuit_data($name: String!) {
         id
         __typename
         name { value }
-        status { value }
+        ... on TopologyCircuit {
+          status { value }
+        }
         ... on TopologyHandoffCircuit {
           ip_namespace { node { name { value } } }
           maximum_routes { value }
           password { node { id } }
         }
-        capabilities {
-          edges {
-            node {
-              id
-              __typename
-              name { value }
-              ... on DcimPhysicalInterface {
-                cable { node { id } }
-              }
-              ... on DcimVirtualInterface {
-                parent_interface {
-                  node {
-                    cable { node { id } }
-                    capabilities {
-                      edges {
-                        node {
-                          ...VirtualCircuitCarrier
-                        }
-                      }
-                    }
-                  }
+        ... on ManagedGenericInterfaces {
+          capabilities {
+            edges {
+              node {
+                id
+                __typename
+                name { value }
+                ... on DcimPhysicalInterface {
+                  cable { node { id } }
                 }
-              }
-              capabilities {
-                edges {
-                  node {
-                    ...VirtualCircuitCarrier
-                  }
-                }
-              }
-              device {
-                node {
-                  id
-                  name { value }
-                  ... on DcimPhysicalDevice {
-                    deployment { node { ...VirtualCircuitDeployment } }
-                  }
-                  ... on DcimVirtualDevice {
-                    deployment { node { ...VirtualCircuitDeployment } }
-                  }
-                  ... on CloudNetworkAppliance {
-                    deployment { node { ...VirtualCircuitDeployment } }
-                  }
-                  ... on DcimCapabilities {
-                    capabilities {
-                      edges {
-                        node {
-                          id
-                          __typename
-                          ... on ManagedBGP {
-                            name { value }
-                            process_role { value }
+                ... on DcimVirtualInterface {
+                  parent_interface {
+                    node {
+                      cable { node { id } }
+                      capabilities {
+                        edges {
+                          node {
+                            ...VirtualCircuitCarrier
                           }
                         }
                       }
                     }
                   }
-                  interfaces(role__values: ["loopback", "loopback-vtep"]) {
-                    edges {
-                      node {
-                        id
-                        __typename
-                        name { value }
-                        role { value }
-                        ... on DcimVirtualInterface {
-                          ip_address { node { address { value } } }
+                }
+                capabilities {
+                  edges {
+                    node {
+                      ...VirtualCircuitCarrier
+                    }
+                  }
+                }
+                device {
+                  node {
+                    id
+                    name { value }
+                    ... on DcimPhysicalDevice {
+                      deployment { node { ...VirtualCircuitDeployment } }
+                    }
+                    ... on DcimVirtualDevice {
+                      deployment { node { ...VirtualCircuitDeployment } }
+                    }
+                    ... on CloudNetworkAppliance {
+                      deployment { node { ...VirtualCircuitDeployment } }
+                    }
+                    ... on DcimCapabilities {
+                      capabilities {
+                        edges {
+                          node {
+                            id
+                            __typename
+                            ... on ManagedBGP {
+                              name { value }
+                              process_role { value }
+                            }
+                          }
+                        }
+                      }
+                    }
+                    interfaces(role__values: ["loopback", "loopback-vtep"]) {
+                      edges {
+                        node {
+                          id
+                          __typename
+                          name { value }
+                          role { value }
+                          ... on DcimVirtualInterface {
+                            ip_address { node { address { value } } }
+                          }
                         }
                       }
                     }
