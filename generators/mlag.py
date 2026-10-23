@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 
 from .connections import tracked_save_kwargs
 from .helpers import get_lag_name, get_loopback_name
+from .helpers.cable_attributes import RackPosition, cable_attributes, endpoint_label
 from .protocols import (
     DcimCable,
     DcimLAGInterface,
@@ -52,13 +53,14 @@ class MLAGWiringMixin:
     API/UI edit or branch merge).
 
     Expects the host class to provide: ``client``, ``logger``, CablingMixin's
-    ``upsert_p2p_addresses`` and PoolMixin's ``resource_lock``.
+    ``upsert_p2p_addresses`` and ``_cable_layouts`` and PoolMixin's ``resource_lock``.
     """
 
     client: InfrahubClient
     logger: logging.Logger
     # Callable attributes, not stub methods, so they never shadow the real ones via the MRO.
     upsert_p2p_addresses: Callable[..., Awaitable[list[Any]]]
+    _cable_layouts: Callable[..., Awaitable[dict[str, RackPosition | None]]]
     resource_lock: Callable[[str], AbstractAsyncContextManager[None]]
 
     async def ensure_mlag_wiring(
@@ -446,6 +448,7 @@ class MLAGWiringMixin:
         if not ifaces_a or not ifaces_b:
             return
 
+        layouts = await self._cable_layouts([dev_a.id, dev_b.id])
         for idx, (iface_a, iface_b) in enumerate(zip(ifaces_a, ifaces_b), start=1):
             cable_name = f"CBL-{mlag_name}-PL{idx}"
 
@@ -469,6 +472,15 @@ class MLAGWiringMixin:
                 "name": cable_name,
                 "type": "smf",
                 "endpoints": [iface_a.id, iface_b.id],
+                **cable_attributes(
+                    "smf",
+                    [
+                        endpoint_label(dev_a_name, iface_a.name.value),
+                        endpoint_label(dev_b_name, iface_b.name.value),
+                    ],
+                    layouts.get(dev_a.id),
+                    layouts.get(dev_b.id),
+                ),
             }
             if deployment_id:
                 cable_data["deployment"] = {"id": deployment_id}

@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     import logging
 
 from .helpers import DeviceNameContext, DeviceNamingConfig, get_loopback_name
+from .helpers.cable_attributes import cable_attributes, endpoint_label
 from .helpers.pairing import pair_device_names
 from .helpers.pools import CUSTOMER_VLAN_ID_MAX, CUSTOMER_VLAN_ID_MIN
 from .mlag import MLAGWiringMixin
@@ -783,10 +784,20 @@ class DeviceMixin(MLAGWiringMixin):
             f"  [{ha_name}] Creating HA sync cable {cable_name}: "
             f"{dev_a.name.value}:{iface_a.name.value} ↔ {dev_b.name.value}:{iface_b.name.value}"
         )
+        layouts = await self._cable_layouts([dev_a.id, dev_b.id])
         cable_data: dict[str, Any] = {
             "name": cable_name,
             "type": "smf",
             "endpoints": [iface_a.id, iface_b.id],
+            **cable_attributes(
+                "smf",
+                [
+                    endpoint_label(dev_a.name.value, iface_a.name.value),
+                    endpoint_label(dev_b.name.value, iface_b.name.value),
+                ],
+                layouts.get(dev_a.id),
+                layouts.get(dev_b.id),
+            ),
         }
         if deployment_id:
             cable_data["deployment"] = {"id": deployment_id}

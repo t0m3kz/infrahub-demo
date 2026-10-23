@@ -19,13 +19,19 @@ spec:
                   index: 1
                   shortname: "lyo-1-s-1"
                   parent: lyo-1
+                  rows: 2
                   # One network rack (leaf + access-leaf pair) and one compute
                   # rack (application servers) per row — see 01_topology.yml.
+                  racks_per_row: 9
                 - suite_name: "Suite-2"
                   index: 2
                   shortname: "lyo-1-s-2"
                   parent: lyo-1
+                  rows: 2
+                  racks_per_row: 1
                 - suite_name: "Suite-3"
                   index: 3
                   shortname: "lyo-1-s-3"
                   parent: lyo-1
+                  rows: 1
+                  racks_per_row: 1
