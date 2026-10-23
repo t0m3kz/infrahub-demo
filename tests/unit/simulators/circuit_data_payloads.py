@@ -238,6 +238,7 @@ class _Model:
                     "id": f"id-{device}",
                     "__typename": info["kind"],
                     "name": {"value": device},
+                    "deployment": self.deployment(device),
                     "capabilities": _edges(
                         [{"__typename": "ManagedBGP", "process_role": {"value": role}} for role in info["bgp"]]
                     ),

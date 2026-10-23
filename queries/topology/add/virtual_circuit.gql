@@ -17,7 +17,7 @@
 #   capabilities[].cable, capabilities[].parent_interface.cable     (a cable's id, else null; physical port / parent)
 #   capabilities[].capabilities[].typename, and for a TopologyPhysicalCircuit .id, .name, .circuit_id, .status
 #   capabilities[].device.id, .name
-#   capabilities[].device.deployment.id, .typename                 (a TopologyDataCenter also .name, .underlay_protocol:
+#   capabilities[].device.deployment.typename                      (a TopologyDataCenter also .name, .underlay_protocol:
 #                                                                   the address family of a DCI)
 #   capabilities[].device.capabilities[].id, .typename             (a ManagedBGP also .name, .process_role)
 #   capabilities[].device.interfaces[].id, .typename, .name, .role, .ip_address.address
@@ -135,7 +135,6 @@ fragment VirtualCircuitCarrier on ManagedGenericInterfaces {
 }
 
 fragment VirtualCircuitDeployment on TopologyDeployment {
-  id
   __typename
   ... on TopologyDataCenter {
     name { value }

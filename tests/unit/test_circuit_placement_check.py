@@ -132,6 +132,22 @@ def _carrier(circuit: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _deployment_of(device: str) -> dict[str, Any] | None:
+    """Where a device of the virtual-circuit fixtures is deployed: the edges and gateways in their cage or DC, every
+    party router (EXT-*) in the cloud region."""
+    deployed = {
+        "bl-dc101101": DC10,
+        "bl-dc1111101": DC11,
+        "eg-fr201": FR2,
+        "EQX-FR2-SDWAN-GW1": FR2,
+        "eg-pa401": PA4,
+        "eg-am-ne01": AM_NE,
+        "C001-OFFICE-EDGE1": C001_OFFICE,
+    }
+    place = deployed.get(device, EUC1 if device.startswith("EXT-") else None)
+    return {key: place[key] for key in ("id", "__typename", "name")} if place else None
+
+
 def _vport(
     device: str,
     name: str,
@@ -143,7 +159,7 @@ def _vport(
     parent_cabled: bool = False,
 ) -> dict[str, Any]:
     """A virtual circuit's end port: the physical circuits on it, the parent interface (name, circuits on it) of a
-    sub-interface, and its device with the device's BGP processes (one per role in ``bgp``).
+    sub-interface, and its device with its deployment and its BGP processes (one per role in ``bgp``).
 
     ``cabled`` puts a DcimCable on a physical port, ``parent_cabled`` on the parent of a sub-interface (a
     sub-interface itself has no ``cable``: the query selects it on the physical interface only)."""
@@ -157,6 +173,7 @@ def _vport(
                 "id": f"id-{device}",
                 "__typename": device_kind,
                 "name": {"value": device},
+                "deployment": {"node": _deployment_of(device)},
                 "capabilities": _edges(
                     [{"__typename": "ManagedBGP", "process_role": {"value": role}} for role in bgp]
                     + [{"__typename": "ManagedOSPF"}]
@@ -216,12 +233,18 @@ def _interconnect(
 
 def _handoff(
     name: str,
-    locations: list[dict[str, Any]],
+    locations: list[dict[str, Any]] | None,
     ends: list[dict[str, Any]],
     namespace: tuple[str, str | None] | None = ("PROD", "prod"),
     vif: tuple[str, int | None] | None = None,
 ) -> dict[str, Any]:
-    """A handoff in ``namespace`` (name, namespace_type); ``vif`` is its cloud endpoint (name, vlan_id)."""
+    """A handoff in ``namespace`` (name, namespace_type); ``vif`` is its cloud endpoint (name, vlan_id).
+
+    ``locations=None`` places the handoff where its ends are deployed (what the check requires); a list states them.
+    """
+    if locations is None:
+        deployments = [end["device"]["node"]["deployment"]["node"] for end in ends]
+        locations = list({deployment["id"]: deployment for deployment in deployments if deployment}.values())
     node = _virtual(name, locations, ends)
     node["ip_namespace"] = {
         "node": {"name": {"value": namespace[0]}, "namespace_type": {"value": namespace[1]}} if namespace else None
@@ -262,7 +285,7 @@ def _run(
 TUNNEL = _tunnel("C001-OFFICE-SDWAN-FR2", [C001_OFFICE, FR2], [OFFICE_EDGE, GW_PUBLIC])
 DCI = _interconnect("DCI-DC10-FR2", [DC10, FR2], [BL10, EG_FR_DF10])
 HANDOFF = _handoff(
-    "HO-C005-P-AWS-EUC1", [FR2], [EG_FR_VLAN, AWS_VLAN], namespace=("PROD", "prod"), vif=("VIF-C005-P", 3101)
+    "HO-C005-P-AWS-EUC1", None, [EG_FR_VLAN, AWS_VLAN], namespace=("PROD", "prod"), vif=("VIF-C005-P", 3101)
 )
 
 
@@ -607,10 +630,56 @@ class TestHandoffCircuit:
         """The reference handoff (VLAN 3101 sub-interfaces on both ends, riding a cross-connect) has no finding."""
         assert _run(handoffs=[HANDOFF]) == []
 
-    @pytest.mark.parametrize("locations", [[FR2], [FR2, EUC1]], ids=["one-facility", "two-facilities"])
-    def test_one_or_two_locations_pass(self, locations: list[dict[str, Any]]) -> None:
-        """A handoff sits in one facility (a cage) or spans two (cage and region): both are valid."""
-        circuit = _handoff("HO", locations, [EG_FR_VLAN, AWS_VLAN])
+    @pytest.mark.parametrize(
+        ("locations", "ends"),
+        [
+            pytest.param(
+                [FR2],
+                [EG_FR_VLAN, _vport("EQX-FR2-SDWAN-GW1", "eth0.3101", parent=("eth0", (XC,)))],
+                id="one-facility",
+            ),
+            pytest.param([FR2, EUC1], [EG_FR_VLAN, AWS_VLAN], id="two-facilities"),
+        ],
+    )
+    def test_one_or_two_locations_pass(self, locations: list[dict[str, Any]], ends: list[dict[str, Any]]) -> None:
+        """A handoff sits in one facility (both ends in one cage) or spans two (cage and region): both are valid."""
+        assert _run(handoffs=[_handoff("HO", locations, ends)]) == []
+
+    @pytest.mark.parametrize(
+        ("locations", "ends"),
+        [
+            pytest.param([FR2], [EG_FR_VLAN, AWS_VLAN], id="an-end-is-deployed-in-no-location"),
+            pytest.param(
+                [FR2, EUC1], [EG_FR_VLAN, _vport("EQX-FR2-SDWAN-GW1", "eth0.3101", (XC,))], id="location-no-end-is-in"
+            ),
+            pytest.param([FR2, PA4], [EG_FR_VLAN, AWS_VLAN], id="wrong-facility"),
+        ],
+    )
+    def test_locations_that_differ_from_where_the_ends_are_deployed_fail(
+        self, locations: list[dict[str, Any]], ends: list[dict[str, Any]]
+    ) -> None:
+        """Nothing derives a handoff's locations: they must be exactly the facilities its two end devices sit in."""
+        messages = _run(handoffs=[_handoff("HO", locations, ends)])
+        assert len(messages) == 1
+        assert messages[0].startswith("Handoff circuit 'HO' terminates on ")
+        assert "locations are exactly the facilities its two end devices are deployed in" in messages[0]
+
+    def test_a_location_that_no_end_device_is_deployed_in_is_named(self) -> None:
+        """The finding names the location and the deployment of each end."""
+        (message,) = _run(handoffs=[_handoff("HO", [FR2, PA4], [EG_FR_VLAN, AWS_VLAN])])
+        assert "TopologyColocationZone 'PA4'" in message
+        assert "eg-fr201:Ethernet1/13.3101 in TopologyColocationZone 'FR2'" in message
+        assert "EXT-AWS-DX-FR2:et-0/0/0.3101 in TopologyCloudRegion 'eu-central-1'" in message
+
+    def test_an_end_device_with_no_deployment_fails(self) -> None:
+        """A device with no deployment can sit in none of the handoff's locations."""
+        undeployed = _vport("STUB-1", "et-0/0/0.3101", parent=("et-0/0/0", (XC,)))
+        (message,) = _run(handoffs=[_handoff("HO", [FR2], [EG_FR_VLAN, undeployed])])
+        assert "STUB-1:et-0/0/0.3101 in <unknown kind> '<unknown>'" in message
+
+    def test_a_decommissioned_handoff_is_not_held_to_where_its_ends_are(self) -> None:
+        """add_virtual_circuit builds nothing for it: like every rule, this one skips a decommissioned circuit."""
+        circuit = {**_handoff("HO", [FR2], [EG_FR_VLAN, AWS_VLAN]), "status": {"value": "decommissioned"}}
         assert _run(handoffs=[circuit]) == []
 
     def test_no_location_fails(self) -> None:
@@ -622,7 +691,7 @@ class TestHandoffCircuit:
 
     def test_not_two_end_ports_fails(self) -> None:
         """A handoff with a single end port is reported."""
-        messages = _run(handoffs=[_handoff("HO", [FR2], [EG_FR_VLAN])])
+        messages = _run(handoffs=[_handoff("HO", None, [EG_FR_VLAN])])
         assert messages == ["Handoff circuit 'HO' has 1 end port(s): it terminates on exactly 2 ports, one per end."]
 
     def test_unowned_and_owned_both_pass(self) -> None:
@@ -634,11 +703,11 @@ class TestHandoffCircuit:
     def test_carrier_on_the_port_itself_passes(self) -> None:
         """A handoff on an unchannelled port: the port's own circuit is the carrier."""
         ends = [_vport("eg-fr201", "Ethernet1/13.3101", (XC,)), AWS_VLAN_NO_CARRIER]
-        assert _run(handoffs=[_handoff("HO", [FR2], ends)]) == []
+        assert _run(handoffs=[_handoff("HO", None, ends)]) == []
 
     def test_one_physical_end_with_a_carrier_is_enough(self) -> None:
         """The stub has no circuit at its parent port, the edge has: the handoff rides it."""
-        assert _run(handoffs=[_handoff("HO", [FR2], [EG_FR_VLAN, AWS_VLAN_NO_CARRIER])]) == []
+        assert _run(handoffs=[_handoff("HO", None, [EG_FR_VLAN, AWS_VLAN_NO_CARRIER])]) == []
 
     def test_a_cable_on_the_parent_port_is_a_carrier(self) -> None:
         """Both ends in one cage: a hop inside one facility is a DcimCable, not a physical circuit."""
@@ -646,7 +715,7 @@ class TestHandoffCircuit:
             _vport("eg-fr201", "Ethernet1/13.3101", parent=("Ethernet1/13", ()), parent_cabled=True),
             _vport("EQX-FR2-SDWAN-GW1", "eth0.3101", parent=("eth0", ())),
         ]
-        assert _run(handoffs=[_handoff("HO", [FR2], ends)]) == []
+        assert _run(handoffs=[_handoff("HO", None, ends)]) == []
 
     def test_a_cable_with_a_decommissioned_circuit_still_passes(self) -> None:
         """A cable has no status: the dead circuit is ignored, the cable carries."""
@@ -656,7 +725,7 @@ class TestHandoffCircuit:
             ),
             AWS_VLAN_NO_CARRIER,
         ]
-        assert _run(handoffs=[_handoff("HO", [FR2], ends)]) == []
+        assert _run(handoffs=[_handoff("HO", None, ends)]) == []
 
     def test_a_decommissioned_circuit_and_no_cable_fails(self) -> None:
         """A decommissioned circuit and no cable on the only physical end leaves the handoff with no carrier."""
@@ -664,7 +733,7 @@ class TestHandoffCircuit:
             _vport("eg-fr201", "Ethernet1/13.3101", parent=("Ethernet1/13", (_decommissioned(XC),))),
             AWS_VLAN_NO_CARRIER,
         ]
-        messages = _run(handoffs=[_handoff("HO", [FR2], ends)])
+        messages = _run(handoffs=[_handoff("HO", None, ends)])
         assert len(messages) == 1
         assert "no live physical circuit and no cable" in messages[0]
 
@@ -674,7 +743,7 @@ class TestHandoffCircuit:
             _vport("eg-am-ne01", "Ethernet1/13.3101", parent=("Ethernet1/13", ()), device_kind="CloudNetworkAppliance"),
             _vport("EXT-AWS-DX-AM", "et-0/0/0.3101", parent=("et-0/0/0", ()), device_kind="DcimVirtualDevice"),
         ]
-        assert _run(handoffs=[_handoff("HO", [AM_NE], ends)]) == []
+        assert _run(handoffs=[_handoff("HO", None, ends)]) == []
 
     def test_an_appliance_end_with_a_physical_end_without_carrier_fails(self) -> None:
         """The appliance needs none, but the physical end is the one that is held to it."""
@@ -682,14 +751,14 @@ class TestHandoffCircuit:
             _vport("eg-am-ne01", "Ethernet1/13.3101", parent=("Ethernet1/13", ()), device_kind="CloudNetworkAppliance"),
             AWS_VLAN_NO_CARRIER,
         ]
-        messages = _run(handoffs=[_handoff("HO", [AM_NE], ends)])
+        messages = _run(handoffs=[_handoff("HO", None, ends)])
         assert len(messages) == 1
         assert "has no live physical circuit and no cable at EXT-AWS-DX-FR2:et-0/0/0.3101" in messages[0]
 
     def test_no_carrier_on_physical_ends_fails(self) -> None:
         """Physical ends with no circuit and no cable are reported, naming the first such port."""
         ends = [_vport("eg-fr201", "Ethernet1/13.3101", parent=("Ethernet1/13", ())), AWS_VLAN_NO_CARRIER]
-        messages = _run(handoffs=[_handoff("HO", [FR2], ends)])
+        messages = _run(handoffs=[_handoff("HO", None, ends)])
         assert len(messages) == 1
         assert (
             "Handoff circuit 'HO' has no live physical circuit and no cable at eg-fr201:Ethernet1/13.3101"
@@ -702,14 +771,14 @@ class TestHandoffCircuit:
             _vport("eg-fr201", "Ethernet1/13.3101", parent=("Ethernet1/13", (_decommissioned(XC),))),
             _vport("EXT-AWS-DX-FR2", "et-0/0/0.3101", parent=("et-0/0/0", (_decommissioned(XC),))),
         ]
-        messages = _run(handoffs=[_handoff("HO", [FR2], ends)])
+        messages = _run(handoffs=[_handoff("HO", None, ends)])
         assert len(messages) == 1
         assert "has no live physical circuit and no cable" in messages[0]
 
     def test_end_that_is_not_a_vlan_sub_interface_fails(self) -> None:
         """A handoff end must be named <port>.<vlan>; a bare physical port is reported."""
         ends = [EG_FR_VLAN, _vport("EXT-AWS-DX-FR2", "et-0/0/0", (XC,))]
-        messages = _run(handoffs=[_handoff("HO", [FR2], ends)])
+        messages = _run(handoffs=[_handoff("HO", None, ends)])
         assert messages == [
             "Handoff circuit 'HO' end 'EXT-AWS-DX-FR2:et-0/0/0' is not a VLAN sub-interface: a handoff end is named "
             "<port>.<vlan>."
@@ -718,7 +787,7 @@ class TestHandoffCircuit:
     def test_different_vlans_fail(self) -> None:
         """The VLAN is what joins the two ends (3101 against 3102 here), so differing VLANs are reported."""
         other = _vport("EXT-AWS-DX-FR2", "et-0/0/0.3102", parent=("et-0/0/0", (XC,)))
-        messages = _run(handoffs=[_handoff("HO", [FR2], [EG_FR_VLAN, other])])
+        messages = _run(handoffs=[_handoff("HO", None, [EG_FR_VLAN, other])])
         assert len(messages) == 1
         assert (
             "ends carry different VLANs (eg-fr201:Ethernet1/13.3101 = 3101, EXT-AWS-DX-FR2:et-0/0/0.3102 = 3102)"
@@ -727,7 +796,7 @@ class TestHandoffCircuit:
 
     def test_cloud_endpoint_vlan_must_mirror_the_sub_interface(self) -> None:
         """The cloud virtual interface states VLAN 3102 while the sub-interfaces use 3101: reported."""
-        messages = _run(handoffs=[_handoff("HO", [FR2], [EG_FR_VLAN, AWS_VLAN], vif=("VIF-C005-P", 3102))])
+        messages = _run(handoffs=[_handoff("HO", None, [EG_FR_VLAN, AWS_VLAN], vif=("VIF-C005-P", 3102))])
         assert messages == [
             "Handoff circuit 'HO' ends are on VLAN 3101 but its cloud endpoint 'VIF-C005-P' states vlan_id 3102: "
             "the virtual interface mirrors the sub-interface VLAN."
@@ -735,11 +804,11 @@ class TestHandoffCircuit:
 
     def test_cloud_endpoint_without_a_vlan_passes(self) -> None:
         """A VPN gateway endpoint has no VLAN to mirror."""
-        assert _run(handoffs=[_handoff("HO", [FR2], [EG_FR_VLAN, AWS_VLAN], vif=("VGW-C005-P", None))]) == []
+        assert _run(handoffs=[_handoff("HO", None, [EG_FR_VLAN, AWS_VLAN], vif=("VGW-C005-P", None))]) == []
 
     def test_no_cloud_endpoint_passes(self) -> None:
         """A handoff with no cloud endpoint has no VLAN to mirror."""
-        assert _run(handoffs=[_handoff("HO", [FR2], [EG_FR_VLAN, AWS_VLAN], vif=None)]) == []
+        assert _run(handoffs=[_handoff("HO", None, [EG_FR_VLAN, AWS_VLAN], vif=None)]) == []
 
 
 class TestSessionPorts:
@@ -747,7 +816,7 @@ class TestSessionPorts:
 
     def test_two_handoffs_on_the_same_pair_of_ports_are_one_finding(self) -> None:
         """Two handoffs on the same two ports give one finding naming both circuits, not one per port."""
-        other = _handoff("HO-B", [FR2], [EG_FR_VLAN, AWS_VLAN])
+        other = _handoff("HO-B", None, [EG_FR_VLAN, AWS_VLAN])
         messages = _run(handoffs=[HANDOFF, other])
         assert messages == [
             "Circuits 'HO-B', 'HO-C005-P-AWS-EUC1' all terminate on 'EXT-AWS-DX-FR2:et-0/0/0.3101', "
@@ -758,13 +827,13 @@ class TestSessionPorts:
     def test_two_handoffs_sharing_one_port_fail(self) -> None:
         """Sharing a single port is enough: one port carries one session."""
         other_stub = _vport("EXT-AWS-DX-FR2", "et-0/0/1.3101", parent=("et-0/0/1", (XC,)))
-        messages = _run(handoffs=[HANDOFF, _handoff("HO-B", [FR2], [EG_FR_VLAN, other_stub])])
+        messages = _run(handoffs=[HANDOFF, _handoff("HO-B", None, [EG_FR_VLAN, other_stub])])
         assert len(messages) == 1
         assert "all terminate on 'eg-fr201:Ethernet1/13.3101'" in messages[0]
 
     def test_an_interconnect_and_a_handoff_sharing_a_port_fail(self) -> None:
         """The one-session-per-port rule spans both kinds: a DCI and a handoff on one port conflict."""
-        handoff = _handoff("HO-B", [FR2], [_vport("eg-fr201", "Ethernet1/10", (DF10,)), AWS_VLAN])
+        handoff = _handoff("HO-B", None, [_vport("eg-fr201", "Ethernet1/10", (DF10,)), AWS_VLAN])
         messages = [m for m in _run(interconnects=[DCI], handoffs=[handoff]) if "all terminate on" in m]
         assert len(messages) == 1
         assert "'DCI-DC10-FR2', 'HO-B' all terminate on 'eg-fr201:Ethernet1/10'" in messages[0]
@@ -773,7 +842,7 @@ class TestSessionPorts:
         """Sub-interfaces are ports of their own: a cage port carries one handoff per VLAN."""
         edge = _vport("eg-fr201", "Ethernet1/13.3102", parent=("Ethernet1/13", (XC,)))
         stub = _vport("EXT-AWS-DX-FR2", "et-0/0/0.3102", parent=("et-0/0/0", (XC,)))
-        assert _run(handoffs=[HANDOFF, _handoff("HO-B", [FR2], [edge, stub])]) == []
+        assert _run(handoffs=[HANDOFF, _handoff("HO-B", None, [edge, stub])]) == []
 
 
 class TestEnvironmentSeparation:
@@ -784,7 +853,7 @@ class TestEnvironmentSeparation:
         """A handoff on the cage edge eg-fr201 (VLAN ``vlan``) towards its own stub."""
         edge = _vport("eg-fr201", f"Ethernet1/13.{vlan}", parent=("Ethernet1/13", (XC,)))
         stub = _vport(f"EXT-{name}", f"et-0/0/0.{vlan}", parent=("et-0/0/0", (XC,)))
-        return _handoff(name, [FR2], [edge, stub], namespace=namespace)
+        return _handoff(name, None, [edge, stub], namespace=namespace)
 
     def test_handoffs_of_one_class_sharing_an_edge_pass(self) -> None:
         """Two prod handoffs (VLANs 3101 and 3102) on one edge are the same environment class."""
@@ -815,8 +884,8 @@ class TestEnvironmentSeparation:
         """A prod and a non-prod handoff sharing both of their devices: one finding for each device."""
         gateway = _vport("EQX-FR2-SDWAN-GW1", "eth2.3101", parent=("eth2", (XC,)))
         edge = _vport("eg-fr201", "Ethernet1/13.3101", parent=("Ethernet1/13", (XC,)))
-        prod = _handoff("HO-P", [FR2], [edge, gateway], namespace=("PROD", "prod"))
-        non_prod = _handoff("HO-N", [FR2], [edge, gateway], namespace=("NON-PROD", "non_prod"))
+        prod = _handoff("HO-P", None, [edge, gateway], namespace=("PROD", "prod"))
+        non_prod = _handoff("HO-N", None, [edge, gateway], namespace=("NON-PROD", "non_prod"))
         messages = _run(handoffs=[prod, non_prod])
         env_messages = [message for message in messages if "different environments" in message]
         assert sorted(message.split("'")[1] for message in env_messages) == ["EQX-FR2-SDWAN-GW1", "eg-fr201"]
@@ -830,7 +899,7 @@ class TestEnvironmentSeparation:
         """An office is always PROD: its tunnel meets a prod handoff on the gateway, conflicts with a non-prod one."""
         edge = _vport("eg-fr201", "Ethernet1/13.3101", parent=("Ethernet1/13", (XC,)))
         gateway = _vport("EQX-FR2-SDWAN-GW1", "eth2.3101", parent=("eth2", (XC,)))
-        handoff = _handoff("HO", [FR2], [edge, gateway], namespace=namespace)
+        handoff = _handoff("HO", None, [edge, gateway], namespace=namespace)
         messages = [message for message in _run(tunnels=[TUNNEL], handoffs=[handoff]) if "environments" in message]
         assert len(messages) == expected
         if expected:
@@ -854,7 +923,7 @@ class TestEnvironmentSeparation:
         """A non-prod handoff on its own edge does not meet the prod one on eg-fr201."""
         edge = _vport("eg-pa401", "Ethernet1/13.3101", parent=("Ethernet1/13", (XC,)))
         stub = _vport("EXT-NONPROD-PA", "et-0/0/0.3101", parent=("et-0/0/0", (XC,)))
-        non_prod = _handoff("HO-N", [PA4], [edge, stub], namespace=("NON-PROD", "non_prod"))
+        non_prod = _handoff("HO-N", None, [edge, stub], namespace=("NON-PROD", "non_prod"))
         assert _run(handoffs=[self._on_edge("HO-P", ("PROD", "prod")), non_prod]) == []
 
     def test_interconnect_states_no_class(self) -> None:
@@ -862,7 +931,7 @@ class TestEnvironmentSeparation:
         circuit = _interconnect("DCI", [DC10, FR2], [BL10, EG_FR_DF10])
         edge = _vport("eg-fr201", "Ethernet1/10.3101", parent=("Ethernet1/10", (DF10,)))
         stub = _vport("EXT-NONPROD", "et-0/0/0.3101", parent=("et-0/0/0", (XC,)))
-        handoff = _handoff("HO-N", [FR2], [edge, stub], namespace=("NON-PROD", "non_prod"))
+        handoff = _handoff("HO-N", None, [edge, stub], namespace=("NON-PROD", "non_prod"))
         messages = _run(interconnects=[circuit], handoffs=[handoff])
         assert not any("environments" in message for message in messages)
 
@@ -886,7 +955,7 @@ class TestDecommissionedSessionCircuits:
     @staticmethod
     def _bad_handoff(name: str, status: str, ends: list[dict[str, Any]]) -> dict[str, Any]:
         """A handoff in FR2 with the given ends and status, for defects the check must or must not report."""
-        return {**_handoff(name, [FR2], ends), "status": {"value": status}}
+        return {**_handoff(name, None, ends), "status": {"value": status}}
 
     def test_decommissioned_interconnect_with_an_uncarried_end_is_not_reported(self) -> None:
         """A decommissioned DCI is not built, so an uncarried end on it is not a finding."""
@@ -947,7 +1016,7 @@ class TestDecommissionedSessionCircuits:
 
     def test_decommissioned_interconnect_sharing_a_port_with_a_live_handoff_is_not_reported(self) -> None:
         """A dead DCI holds no port, so the live handoff on the same port is not reported."""
-        handoff = _handoff("HO-B", [FR2], [_vport("eg-fr201", "Ethernet1/10", (DF10,)), AWS_VLAN])
+        handoff = _handoff("HO-B", None, [_vport("eg-fr201", "Ethernet1/10", (DF10,)), AWS_VLAN])
         dead = {**DCI, "status": {"value": "decommissioned"}}
         assert not any("all terminate on" in m for m in _run(interconnects=[dead], handoffs=[handoff]))
 
