@@ -896,3 +896,24 @@ class TestSessionCircuitOwnership:
         await circuit_fakes.session_generator(client).generate(circuit_fakes.handoff_payload(status="decommissioned"))
 
         assert client.writes == [] and client.claimed() == set()
+        # the circuit is the run's target: tracked, so the SDK's cleanup runs (it skips an empty group)
+        assert client.targets == [circuit_fakes.VC_ID]
+
+    @pytest.mark.asyncio
+    async def test_a_built_session_tracks_its_circuit_as_the_target(self) -> None:
+        """The circuit was a member of the earlier runs' group: a run that does not reach it would delete it."""
+        client = circuit_fakes.FakeClient()
+
+        await circuit_fakes.session_generator(client).generate(circuit_fakes.handoff_payload())
+
+        assert client.targets == [circuit_fakes.VC_ID]
+
+    @pytest.mark.asyncio
+    async def test_a_run_that_sees_no_carrier_tracks_nothing_so_cleanup_keeps_the_session(self) -> None:
+        """Transient: the SDK skips the whole group update for an empty run, so the earlier session stays."""
+        client = circuit_fakes.FakeClient()
+        ends = [circuit_fakes.handoff_edge_port(parent_circuits=[]), circuit_fakes.handoff_party_port()]
+
+        await circuit_fakes.session_generator(client).generate(circuit_fakes.handoff_payload(ends=ends))
+
+        assert client.writes == [] and client.targets == [] and client.tracked_ids() == set()

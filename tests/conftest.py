@@ -1,5 +1,8 @@
 # import json
+import shutil
 import sys
+import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 from unittest.mock import Mock
@@ -15,6 +18,25 @@ CURRENT_DIR = Path(__file__).parent
 
 # Add project root to sys.path for imports
 sys.path.insert(0, str(CURRENT_DIR.parent))
+
+
+@pytest.fixture
+def tmp_path() -> Iterator[Path]:
+    """A scratch directory inside the repository, instead of pytest's own ``tmp_path``.
+
+    pytest builds ``tmp_path`` under ``PYTEST_DEBUG_TEMPROOT``, which the CI workflow points at a directory that exists
+    only on the project's own runners (``/var/lib/github/<runner>/_temp``); anywhere else every test using it errors in
+    setup. One override here serves every test, so a new test cannot reintroduce the failure.
+    """
+    base = CURRENT_DIR / ".scratch"
+    base.mkdir(exist_ok=True)
+    path = Path(tempfile.mkdtemp(dir=base))
+    yield path
+    shutil.rmtree(path, ignore_errors=True)
+    try:
+        base.rmdir()
+    except OSError:
+        pass
 
 
 # ============================================================================

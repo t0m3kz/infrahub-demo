@@ -537,6 +537,19 @@ stack at a time. The full 30_all subset is `test_01, 02, 59, 60, 61, 62, 64, 65,
 | Templates, transforms, checks and their validation queries | Subset `01, 02, 59–64` (no `test_65`, no `test_66`) plus the smoke golden diff |
 | Docs, tests only | Unit + smoke |
 
+For ANY schema, query or generator change, run the fast loop BEFORE the full 30_all subset: `uv run invoke
+test-integration-fast` on a stack kept alive with `INFRAHUB_TESTING_KEEP_STACK=1`, then `uv run invoke validate-queries`
+against that stack. The task runs every `.gql` under `queries/` and `tests/` against the live schema and exits non-zero
+on a schema error (`Cannot query field`, `Unknown type`, `Unknown argument`, ...); runtime errors from its dummy
+variables are ignored, and exit code 2 means the task itself failed (server unreachable, bad token), not a query. It
+takes minutes, where the same error found by the full subset costs tens of minutes. The test stack serves on port 8100
+(the default `--address http://localhost:8100`; `--server-port` moves it): pass `--address` for any other server and
+`--branch` for a branch other than `main`.
+
+The smoke `syntax_check` entries (`tests/smoke/test_graphql.yml`) are an offline parse with no schema and run in `uv run
+invoke validate`; `validate-queries` is the live schema check and needs a stack. Every query under `queries/` needs a
+smoke entry (guarded by `tests/unit/test_smoke_query_coverage.py`).
+
 Always, after any run that registers a new check or transform query: run that query against the settled stack
 (`KEEP_STACK`) and simulate the check or transform on the real data. Unit tests with canned responses do not catch
 schema-invalid queries or false positives on real data. Run `test_65` once on `main` before every release. Clean the

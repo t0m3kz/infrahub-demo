@@ -9,24 +9,19 @@ artifact or a failed edge check in the Proposed Change.
 from __future__ import annotations
 
 import ipaddress
-from pathlib import Path
 from typing import Any
 
 import pytest
-import yaml
 
-_DIR = Path(__file__).parents[2] / "data" / "demos" / "30_all" / "08_interconnects" / "06_internet"
+from tests.integration.demo_data import ROOT, declared
+
+_DIR = ROOT / "data" / "demos" / "30_all" / "08_interconnects" / "06_internet"
 _CAGE_EDGES = {"eg-fr201", "eg-fr202", "eg-pa401", "eg-pa402"}
 
 
 def _objects(kind: str) -> list[dict[str, Any]]:
-    """Return the data entries of every document of `kind` in the directory."""
-    entries: list[dict[str, Any]] = []
-    for path in sorted(_DIR.glob("*.yml")):
-        for doc in yaml.safe_load_all(path.read_text()):
-            if doc and doc["spec"]["kind"] == kind:
-                entries.extend(doc["spec"]["data"])
-    return entries
+    """Return the data entries of `kind` the directory's object files declare."""
+    return [obj.item for obj in declared(kind, _DIR)]
 
 
 def _interface_ips() -> dict[tuple[str, str], ipaddress.IPv4Interface]:

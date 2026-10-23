@@ -14,7 +14,6 @@ import pytest
 
 from generators.logger import GeneratorError
 from generators.topology.circuit import (
-    SESSION_CIRCUIT_KINDS,
     VIRTUAL_CIRCUIT_GENERATOR,
     CircuitEndpoint,
     CircuitLocation,
@@ -38,6 +37,7 @@ from tests.unit.simulators.circuit_fakes import (
     physical_payload,
     place,
 )
+from utils.circuit_underlay import SESSION_CIRCUIT_KINDS
 from utils.data_cleaning import clean_data
 
 
@@ -278,7 +278,7 @@ class TestFanOutToSessionCircuits:
         await physical_generator(client).generate(physical_payload())
 
         asked = [kind for kind, kwargs in client.filter_calls if "capabilities__ids" in kwargs]
-        assert asked == [kind.__name__ for kind in SESSION_CIRCUIT_KINDS]
+        assert asked == list(SESSION_CIRCUIT_KINDS)
         assert {"TopologyTunnelCircuit", "TopologyVirtualCircuit"}.isdisjoint(kind for kind, _ in client.filter_calls)
 
     @pytest.mark.asyncio

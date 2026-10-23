@@ -14,10 +14,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-import yaml
 
-_DEMOS = Path(__file__).parents[2] / "data" / "demos"
-_BOOTSTRAP_GROUPS = Path(__file__).parents[2] / "data" / "bootstrap" / "00_groups.yml"
+from tests.integration.demo_data import BOOTSTRAP, ROOT, declared, name, object_documents, object_templates
+
+_DEMOS = ROOT / "data" / "demos"
+_BOOTSTRAP_GROUPS = BOOTSTRAP / "00_groups.yml"
 _TARGET_GROUPS = {
     "TopologyPhysicalCircuit": "physical_circuits",
     "TopologyInterconnectCircuit": "virtual_circuits",
@@ -26,7 +27,6 @@ _TARGET_GROUPS = {
 _ALL = _DEMOS / "30_all"
 _ONRAMP = _ALL / "08_interconnects" / "01_colo_onramp"
 _INTERNET = _ALL / "04_internet"
-_JUNOS_TEMPLATES = Path(__file__).parents[2] / "data" / "bootstrap" / "10_physical_devices_templates_junos.yaml"
 # One fibre per DC to each of the metro's two edges (both are Multi-Site border gateways), and the Interconnect that
 # rides each (the DCI session is built on it).
 _DCI_FIBRES = {
@@ -40,14 +40,9 @@ _DCI_FIBRES = {
 _DCI_CIRCUITS = set(_DCI_FIBRES)
 
 
-def _objects(root: Path, kind: str) -> list[tuple[Path, dict[str, Any]]]:
-    """(file, entry) for every data entry of `kind` under root (a directory or one file)."""
-    entries: list[tuple[Path, dict[str, Any]]] = []
-    for path in [root] if root.is_file() else sorted(root.rglob("*.yml")):
-        for doc in yaml.safe_load_all(path.read_text()):
-            if isinstance(doc, dict) and doc.get("kind") == "Object" and doc["spec"]["kind"] == kind:
-                entries.extend((path, entry) for entry in doc["spec"]["data"])
-    return entries
+def _rows(kind: str, root: Path) -> list[dict[str, Any]]:
+    """The entries of `kind` the object files under root (a directory or one file) declare, nested ones included."""
+    return [obj.item for obj in declared(kind, root)]
 
 
 def _nested(node: Any, key: str) -> list[dict[str, Any]]:
@@ -67,36 +62,31 @@ def _circuit_name(entry: dict[str, Any]) -> str:
 @pytest.mark.parametrize("kind", sorted(_TARGET_GROUPS))
 def test_every_circuit_is_in_its_generator_target_group(kind: str) -> None:
     """Without membership the generator never runs for the circuit."""
-    rows = _objects(_DEMOS, kind)
-    assert rows
+    circuits = declared(kind, _DEMOS)
+    assert circuits
     outside = [
-        f"{path.relative_to(_DEMOS)}: {_circuit_name(entry)}"
-        for path, entry in rows
-        if _TARGET_GROUPS[kind] not in (entry.get("member_of_groups") or [])
+        f"{circuit.path.relative_to(_DEMOS)}: {_circuit_name(circuit.item)}"
+        for circuit in circuits
+        if _TARGET_GROUPS[kind] not in circuit.groups()
     ]
     assert not outside, f"{kind} outside {_TARGET_GROUPS[kind]}: {outside}"
 
 
 def test_a_tunnel_circuit_is_in_no_generator_group() -> None:
     """The SD-WAN orchestrator owns a tunnel's routing: no session is generated, so it is not a group member."""
-    rows = _objects(_DEMOS, "TopologyTunnelCircuit")
-    assert [_circuit_name(entry) for _, entry in rows] == ["C001-PARTNER-ACME-FR2"]
-    assert not [_circuit_name(entry) for _, entry in rows if entry.get("member_of_groups")]
+    rows = _rows("TopologyTunnelCircuit", _DEMOS)
+    assert [_circuit_name(entry) for entry in rows] == ["C001-PARTNER-ACME-FR2"]
+    assert not [_circuit_name(entry) for entry in rows if entry.get("member_of_groups")]
 
 
 def test_no_virtual_circuit_is_declared_as_the_generic() -> None:
     """The generic TopologyVirtualCircuit has no data row: the role of a virtual circuit is its kind."""
-    assert not _objects(_DEMOS, "TopologyVirtualCircuit")
+    assert not _rows("TopologyVirtualCircuit", _DEMOS)
 
 
 def test_circuit_target_groups_are_generator_groups() -> None:
     """Target groups are CoreStandardGroups, like the other generator targets (the SDK tracks runs in its own groups)."""
-    generator_groups = {
-        entry["name"]
-        for doc in yaml.safe_load_all(_BOOTSTRAP_GROUPS.read_text())
-        if doc and doc["spec"]["kind"] == "CoreStandardGroup"
-        for entry in doc["spec"]["data"]
-    }
+    generator_groups = {group["name"] for group in _rows("CoreStandardGroup", _BOOTSTRAP_GROUPS)}
     assert set(_TARGET_GROUPS.values()) <= generator_groups
 
 
@@ -106,27 +96,25 @@ _REMOVED_CIRCUIT_KEYS = ("peering_role", "link_type", "transport_mode", "tunnel_
 @pytest.mark.parametrize("kind", ["TopologyTunnelCircuit", "TopologyInterconnectCircuit", "TopologyHandoffCircuit"])
 def test_a_virtual_circuit_row_uses_no_removed_attribute(kind: str) -> None:
     """The role is the kind: no `peering_role`, `link_type`, `transport_mode`, `tunnel_id`, and no carrier key."""
-    for _, entry in _objects(_DEMOS, kind):
+    for entry in _rows(kind, _DEMOS):
         assert not [key for key in (*_REMOVED_CIRCUIT_KEYS, "physical_circuits") if key in entry], _circuit_name(entry)
 
 
 def test_no_physical_circuit_names_a_peering_role() -> None:
     """A physical circuit is a pure carrier: the DCI session belongs to the Interconnect that rides it."""
-    assert _objects(_DEMOS / "30_all", "TopologyPhysicalCircuit")
-    assert not [
-        _circuit_name(e) for _, e in _objects(_DEMOS / "30_all", "TopologyPhysicalCircuit") if "peering_role" in e
-    ]
+    assert _rows("TopologyPhysicalCircuit", _DEMOS / "30_all")
+    assert not [_circuit_name(e) for e in _rows("TopologyPhysicalCircuit", _DEMOS / "30_all") if "peering_role" in e]
 
 
 def test_the_dark_fibres_are_the_six_dci_carriers() -> None:
     """Exactly the six DC <-> cage fibres are dark fibre, and each has one Interconnect with the same two ports."""
     fibres = {
         _circuit_name(e): e
-        for _, e in _objects(_DEMOS / "30_all", "TopologyPhysicalCircuit")
+        for e in _rows("TopologyPhysicalCircuit", _DEMOS / "30_all")
         if e["circuit_type"] == "dark_fiber"
     }
     assert set(fibres) == _DCI_CIRCUITS
-    interconnects = {e["name"]: e for _, e in _objects(_DEMOS / "30_all", "TopologyInterconnectCircuit")}
+    interconnects = {e["name"]: e for e in _rows("TopologyInterconnectCircuit", _DEMOS / "30_all")}
     assert set(interconnects) == set(_DCI_FIBRES.values())
     for fibre_id, interconnect in _DCI_FIBRES.items():
         assert interconnects[interconnect]["capabilities"] == fibres[fibre_id]["capabilities"]
@@ -140,7 +128,7 @@ def test_the_dark_fibres_are_the_six_dci_carriers() -> None:
 @pytest.mark.parametrize("circuit_id", sorted(_DCI_CIRCUITS))
 def test_dci_circuit_has_a_border_leaf_and_a_cage_edge_end(circuit_id: str) -> None:
     """add_circuit refuses anything but two endpoints on two devices, one of them a DC device."""
-    circuit = next(e for _, e in _objects(_ONRAMP, "TopologyPhysicalCircuit") if e["circuit_id"] == circuit_id)
+    circuit = next(e for e in _rows("TopologyPhysicalCircuit", _ONRAMP) if e["circuit_id"] == circuit_id)
     ends = [tuple(i) for i in circuit["capabilities"]]
     devices = sorted(device for device, _ in ends)
 
@@ -150,24 +138,23 @@ def test_dci_circuit_has_a_border_leaf_and_a_cage_edge_end(circuit_id: str) -> N
 
 def test_no_hand_written_dci_session_or_addressing_is_left() -> None:
     """The generator owns the DCI sessions, their /127s and the interface addressing."""
-    assert not [
-        e["name"] for _, e in _objects(_DEMOS / "30_all", "ManagedBGPPeering") if e.get("peering_role") == "dci"
-    ]
-    assert not _objects(_ONRAMP, "DcimPhysicalInterface")
-    assert not [e["prefix"] for _, e in _objects(_ONRAMP, "IpamPrefix") if e["prefix"].endswith("/127")]
+    assert not [e["name"] for e in _rows("ManagedBGPPeering", _DEMOS / "30_all") if e.get("peering_role") == "dci"]
+    # Top-level rows only: the interfaces nested under a DcimCable are its endpoint lookups, not declarations.
+    assert not [obj for obj in declared("DcimPhysicalInterface", _ONRAMP) if obj.enclosing is None]
+    assert not [e["prefix"] for e in _rows("IpamPrefix", _ONRAMP) if e["prefix"].endswith("/127")]
 
 
 def test_generated_peering_and_key_names_do_not_collide_with_data() -> None:
     """The session generator names its objects after the circuit: `<name>-underlay` and `<name>-evpn` (Interconnect),
     `<name>-bgp` (Handoff), `<name>-dci-key`. They share the peering/circuit name space, so no row may reuse them."""
-    names = {e["name"] for _, e in _objects(_DEMOS, "ManagedBGPPeering")}
-    names |= {_circuit_name(e) for kind in _TARGET_GROUPS for _, e in _objects(_DEMOS, kind)}
-    names |= {e["name"] for _, e in _objects(_DEMOS, "TopologyTunnelCircuit")}
-    names |= {e["name"] for _, e in _objects(_DEMOS, "RoutingPassword")}
+    names = {e["name"] for e in _rows("ManagedBGPPeering", _DEMOS)}
+    names |= {_circuit_name(e) for kind in _TARGET_GROUPS for e in _rows(kind, _DEMOS)}
+    names |= {e["name"] for e in _rows("TopologyTunnelCircuit", _DEMOS)}
+    names |= {e["name"] for e in _rows("RoutingPassword", _DEMOS)}
     generated: set[str] = set()
-    for _, e in _objects(_DEMOS, "TopologyInterconnectCircuit"):
+    for e in _rows("TopologyInterconnectCircuit", _DEMOS):
         generated |= {f"{e['name']}-underlay", f"{e['name']}-evpn", f"{e['name']}-dci-key"}
-    generated |= {f"{e['name']}-bgp" for _, e in _objects(_DEMOS, "TopologyHandoffCircuit")}
+    generated |= {f"{e['name']}-bgp" for e in _rows("TopologyHandoffCircuit", _DEMOS)}
 
     assert generated
     assert not generated & names
@@ -175,7 +162,7 @@ def test_generated_peering_and_key_names_do_not_collide_with_data() -> None:
 
 def test_every_dci_fibre_lands_on_its_own_free_port() -> None:
     """No two fibres share a port: each DC border leaf uses Ethernet1/35 and 1/36, each cage edge its dci ports."""
-    ends = [tuple(i) for _, e in _objects(_ONRAMP, "TopologyPhysicalCircuit") for i in e["capabilities"]]
+    ends = [tuple(i) for e in _rows("TopologyPhysicalCircuit", _ONRAMP) for i in e["capabilities"]]
     assert len(ends) == len(set(ends))
     border_leaf_ports = {port for device, port in ends if device.startswith("bl-dc")}
     assert border_leaf_ports == {"Ethernet1/35", "Ethernet1/36"}
@@ -184,18 +171,18 @@ def test_every_dci_fibre_lands_on_its_own_free_port() -> None:
 def test_both_edges_of_a_metro_share_one_multisite_vip_address() -> None:
     """The two edges of a metro are one Multi-Site site: same /128, so the loader upserts one IpamIPAddress."""
     vips: dict[str, set[str]] = {}
-    for _, entry in _objects(_ONRAMP, "DcimVirtualInterface"):
+    for entry in _rows("DcimVirtualInterface", _ONRAMP):
         if entry["role"] == "multisite-vip" and entry["device"].startswith("eg-"):
             vips.setdefault(entry["device"][:-2], set()).add(entry["ip_address"]["data"]["address"])
     assert vips == {"eg-fr2": {"fd00:2500:ff::f1/128"}, "eg-pa4": {"fd00:2500:ff::f2/128"}}
-    devices = [e["device"] for _, e in _objects(_ONRAMP, "DcimVirtualInterface") if e["device"].startswith("eg-")]
+    devices = [e["device"] for e in _rows("DcimVirtualInterface", _ONRAMP) if e["device"].startswith("eg-")]
     assert sorted(devices) == ["eg-fr201", "eg-fr202", "eg-pa401", "eg-pa402"]
 
 
 def test_generated_fabric_peering_names_do_not_collide_with_data() -> None:
     """FABRIC-<a>-<b> shares the peering/circuit name space."""
-    names = {e["name"] for _, e in _objects(_DEMOS, "ManagedBGPPeering")}
-    names |= {_circuit_name(e) for kind in _TARGET_GROUPS for _, e in _objects(_DEMOS, kind)}
+    names = {e["name"] for e in _rows("ManagedBGPPeering", _DEMOS)}
+    names |= {_circuit_name(e) for kind in _TARGET_GROUPS for e in _rows(kind, _DEMOS)}
     assert not {"FABRIC-eg-fr201-eg-fr202", "FABRIC-eg-pa401-eg-pa402"} & names
 
 
@@ -204,10 +191,10 @@ def test_every_physical_circuit_row_has_two_distinct_ends_and_no_port_is_in_two_
 
     The INET-<office> circuits are not data rows: add_sdwan_edge creates them with both ends in one write.
     """
-    rows = _objects(_ALL, "TopologyPhysicalCircuit")
+    rows = _rows("TopologyPhysicalCircuit", _ALL)
     assert rows
     seen: dict[tuple[str, str], str] = {}
-    for _, row in rows:
+    for row in rows:
         ends = [tuple(end) for end in row["capabilities"]]
         assert len(ends) == 2 and len(set(ends)) == 2, f"{_circuit_name(row)}: {ends}"
         for end in ends:
@@ -217,10 +204,8 @@ def test_every_physical_circuit_row_has_two_distinct_ends_and_no_port_is_in_two_
 
 def test_every_cross_connect_far_end_is_a_declared_cloud_provider_edge() -> None:
     """A cross-connect's second port sits on a stub device the 01_colo_onramp provider edges declare."""
-    declared = {e["name"] for _, e in _objects(_ONRAMP / "02_cloud_provider_edges.yml", "DcimPhysicalDevice")}
-    cross_connects = [
-        e for _, e in _objects(_ONRAMP, "TopologyPhysicalCircuit") if e["circuit_type"] == "cross_connect"
-    ]
+    stubs = {e["name"] for e in _rows("DcimPhysicalDevice", _ONRAMP / "02_cloud_provider_edges.yml")}
+    cross_connects = [e for e in _rows("TopologyPhysicalCircuit", _ONRAMP) if e["circuit_type"] == "cross_connect"]
     assert sorted(_circuit_name(e) for e in cross_connects) == [
         "XC-EQXFR2-AWS-EUC1",
         "XC-EQXPA4-AZURE-WEU",
@@ -229,15 +214,13 @@ def test_every_cross_connect_far_end_is_a_declared_cloud_provider_edge() -> None
     for circuit in cross_connects:
         cage_end, cloud_end = circuit["capabilities"]
         assert cage_end[0].startswith("eg-")
-        assert cloud_end[0] in declared, f"{_circuit_name(circuit)}: {cloud_end[0]} is not declared"
+        assert cloud_end[0] in stubs, f"{_circuit_name(circuit)}: {cloud_end[0]} is not declared"
 
 
-def _template_ports(name: str, role: str) -> list[str]:
+def _template_ports(template_name: str, role: str) -> list[str]:
     """The expanded interface names of `role` on a bootstrap device template."""
-    (doc,) = [d for d in yaml.safe_load_all(_JUNOS_TEMPLATES.read_text()) if d]
-    (template,) = [t for t in doc["spec"]["data"] if t["template_name"] == name]
     ports: list[str] = []
-    for iface in template["interfaces"]["data"]:
+    for iface in object_templates()[template_name]["interfaces"]["data"]:
         if iface["role"] != role:
             continue
         match = re.fullmatch(r"(.*)\[(\d+)-(\d+)\]", iface["name"])
@@ -251,7 +234,7 @@ def _template_ports(name: str, role: str) -> list[str]:
 
 def test_the_orange_access_pe_has_a_customer_port_for_every_sdwan_office() -> None:
     """add_sdwan_edge takes a free `customer` port of the one access PE per office: 8 ports cover the 5 offices."""
-    (device,) = [e for _, e in _objects(_INTERNET, "DcimPhysicalDevice")]
+    (device,) = _rows("DcimPhysicalDevice", _INTERNET)
     assert (device["name"], device["object_template"], device["deployment"]) == (
         "EXT-ORANGE",
         "MX204_ISP_ACCESS",
@@ -261,9 +244,8 @@ def test_the_orange_access_pe_has_a_customer_port_for_every_sdwan_office() -> No
     assert ports == [f"xe-0/1/{n}" for n in range(8)]
     sdwan_offices = [
         office
-        for path in (_ALL / "06_customer_boarding").rglob("*.yml")
-        for doc in yaml.safe_load_all(path.read_text())
-        for office in _nested(doc, "sdwan_gateway")
+        for _, document in object_documents(_ALL / "06_customer_boarding")
+        for office in _nested(document, "sdwan_gateway")
     ]
     assert len(sdwan_offices) == 5
     assert len(ports) >= len(sdwan_offices)
@@ -271,10 +253,10 @@ def test_the_orange_access_pe_has_a_customer_port_for_every_sdwan_office() -> No
 
 def test_the_orange_isp_topology_is_the_foundation_isp_of_its_access_pe() -> None:
     """The generator resolves the ISP topology of the internet provider (Orange, P019); its one device is the PE."""
-    isps = {e["name"]: e for _, e in _objects(_INTERNET / "01_topology.yml", "TopologyExternalProviders")}
+    isps = {e["name"]: e for e in _rows("TopologyExternalProviders", _INTERNET / "01_topology.yml")}
     assert {isp["parent"] for isp in isps.values()} == {"Internet"}
     assert isps["ISP-ORANGE"]["provider"] == "P019"
-    (device,) = [e for _, e in _objects(_INTERNET, "DcimPhysicalDevice")]
+    (device,) = _rows("DcimPhysicalDevice", _INTERNET)
     assert device["deployment"] == "ISP-ORANGE" and device["owner"] == "P019"
 
 
@@ -283,28 +265,28 @@ def test_the_orange_isp_topology_is_the_foundation_isp_of_its_access_pe() -> Non
 # ---------------------------------------------------------------------------
 
 _SUBINTERFACE = re.compile(r"^(?P<parent>.+)\.(?P<vlan>\d+)$")
-_HANDOFF_POOLS = _DEMOS.parent / "bootstrap" / "26_handoff_pools.yml"
-_NAMESPACES = _DEMOS.parent / "bootstrap" / "22_namespaces.yml"
+_HANDOFF_POOLS = BOOTSTRAP / "26_handoff_pools.yml"
+_NAMESPACES = BOOTSTRAP / "22_namespaces.yml"
 _STUB_LOOPBACKS = "10.255.64."
 
 
 def _handoffs() -> list[dict[str, Any]]:
-    return [entry for _, entry in _objects(_ALL, "TopologyHandoffCircuit")]
+    return _rows("TopologyHandoffCircuit", _ALL)
 
 
 def _sub_interfaces() -> dict[tuple[str, str], dict[str, Any]]:
-    return {(e["device"], e["name"]): e for _, e in _objects(_ALL, "DcimVirtualInterface")}
+    return {(e["device"], e["name"]): e for e in _rows("DcimVirtualInterface", _ALL)}
 
 
 def _declared_devices() -> set[str]:
     """Devices the 30_all files declare by hand (the generated ones, edges and NE routers, are not in the data)."""
-    return {e["name"] for _, e in _objects(_ALL, "DcimPhysicalDevice")}
+    return {e["name"] for e in _rows("DcimPhysicalDevice", _ALL)}
 
 
 def test_every_handoff_names_a_namespace_with_a_pool() -> None:
     """The /31 comes from `Handoff-<namespace>-IPv4` (virtual_circuit.handoff_pool_name): both must exist."""
-    namespaces = {e["name"] for _, e in _objects(_NAMESPACES, "IpamNamespace")}
-    pools = {e["name"] for _, e in _objects(_HANDOFF_POOLS, "CoreIPPrefixPool")}
+    namespaces = {e["name"] for e in _rows("IpamNamespace", _NAMESPACES)}
+    pools = {e["name"] for e in _rows("CoreIPPrefixPool", _HANDOFF_POOLS)}
     assert _handoffs()
     for handoff in _handoffs():
         assert handoff["ip_namespace"] in namespaces, handoff["name"]
@@ -330,7 +312,7 @@ def test_every_handoff_end_is_a_declared_sub_interface_of_one_vlan_and_carries_n
 
 def test_every_authored_handoff_password_is_a_declared_key() -> None:
     """A handoff's optional key refers to a RoutingPassword the data declares."""
-    keys = {e["name"] for _, e in _objects(_ALL, "RoutingPassword")}
+    keys = {e["name"] for e in _rows("RoutingPassword", _ALL)}
     for handoff in _handoffs():
         assert handoff.get("password") in keys, handoff["name"]
 
@@ -339,17 +321,17 @@ def test_every_party_device_of_a_handoff_has_exactly_one_bgp_process_with_a_decl
     """The session generator takes the party's ONLY ManagedBGP process (a stub has no overlay one); its local_as is the
     party ASN and its router_id a loopback of the device. Our edge and the NE routers are generated, not declared."""
     declared_devices = _declared_devices()
-    processes = _objects(_ALL, "ManagedBGP")
-    asns = {f"AS{e['asn']}" for _, e in _objects(_ALL, "RoutingAutonomousSystem")}
+    processes = _rows("ManagedBGP", _ALL)
+    asns = {f"AS{e['asn']}" for e in _rows("RoutingAutonomousSystem", _ALL)}
     loopbacks = {
         (e["device"], e["ip_address"]["data"]["address"], e["ip_address"]["data"]["ip_namespace"])
-        for _, e in _objects(_ALL, "DcimVirtualInterface")
+        for e in _rows("DcimVirtualInterface", _ALL)
         if e.get("role") == "loopback"
     }
     parties = {device for handoff in _handoffs() for device, _ in handoff["capabilities"] if device in declared_devices}
     assert parties == {"EXT-AWS-DX-FR2", "EQX-FR2-SDWAN-GW1", "EXT-MEGAPORT-MCR1"}
     for device in parties:
-        own = [entry for _, entry in processes if device in entry["capabilities"]]
+        own = [entry for entry in processes if device in entry["capabilities"]]
         assert len(own) == 1, f"{device}: {[e['name'] for e in own]}"
         assert own[0]["local_as"] in asns, device
         address, namespace = own[0]["router_id"]
@@ -361,7 +343,7 @@ def test_the_stub_loopbacks_are_distinct_and_in_the_reserved_range() -> None:
     """10.255.64.0/24 holds the router-ids of the party stubs, clear of the handoff pools and every authored range."""
     addresses = [
         e["ip_address"]["data"]["address"]
-        for _, e in _objects(_ALL, "DcimVirtualInterface")
+        for e in _rows("DcimVirtualInterface", _ALL)
         if e["device"].startswith(("EXT-", "EQX-FR2-SDWAN-GW")) and e.get("role") == "loopback"
     ]
     assert sorted(addresses) == ["10.255.64.1/32", "10.255.64.2/32", "10.255.64.3/32"]
@@ -371,7 +353,7 @@ def test_a_cloud_endpoint_is_set_from_its_vif_and_mirrors_the_sub_interface_vlan
     """A VIF names its one handoff (`virtual_circuit`); the handoff cannot name the VIF back. The VIF's vlan_id is the
     sub-interface VLAN, and a handoff has at most one VIF."""
     handoffs = {h["name"]: h for h in _handoffs()}
-    vifs = [e for _, e in _objects(_ALL, "CloudVirtualInterface")]
+    vifs = _rows("CloudVirtualInterface", _ALL)
     assert vifs
     circuits = [vif["virtual_circuit"] for vif in vifs]
     assert len(circuits) == len(set(circuits))
@@ -385,15 +367,12 @@ def test_a_cloud_endpoint_is_set_from_its_vif_and_mirrors_the_sub_interface_vlan
 def test_provider_stubs_deployed_to_a_zone_are_in_the_provider_stubs_group() -> None:
     """A stub router in a colocation zone has the `edge` role of its template: only the group keeps it out of the
     border-gateway lookup of generators/vlan_domain.py (a stretched segment would demand a VLAN domain for it)."""
-    from tests.integration.demo_data import ROOT, declared, name
-
-    root = ROOT / "data" / "demos" / "30_all"
     zones = {
-        name(zone) for kind in ("TopologyColocationZone", "TopologyVirtualColocation") for zone in declared(kind, root)
+        name(zone) for kind in ("TopologyColocationZone", "TopologyVirtualColocation") for zone in declared(kind, _ALL)
     }
     stubs = [
         device
-        for device in declared("DcimPhysicalDevice", root)
+        for device in declared("DcimPhysicalDevice", _ALL)
         if name(device).startswith("EXT-") and device.item.get("deployment") in zones
     ]
     assert {name(device) for device in stubs} == {"EXT-EQX-FABRIC-FR2", "EXT-MEGAPORT-MCR1"}

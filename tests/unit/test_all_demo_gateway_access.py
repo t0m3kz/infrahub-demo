@@ -12,9 +12,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-import yaml
-
-from tests.integration.demo_data import declared, name
+from tests.integration.demo_data import ROOT, declared, name, object_documents, object_templates
 from tests.integration.test_constants import (
     ALL_DEMO_GATEWAY_ACCESS_CIRCUITS,
     ALL_DEMO_INTERNET_TRANSIT_CIRCUITS,
@@ -22,42 +20,34 @@ from tests.integration.test_constants import (
     ALL_DEMO_SDWAN_UNDERLAY_CIRCUITS,
 )
 
-_ROOT = Path(__file__).parents[2]
-_ALL = _ROOT / "data" / "demos" / "30_all"
+_ALL = ROOT / "data" / "demos" / "30_all"
 _GATEWAY_DIR = _ALL / "08_interconnects" / "08_gateway_access"
-_TEMPLATES = _ROOT / "data" / "bootstrap" / "10_physical_devices_templates_velocloud.yaml"
-_JUNOS_TEMPLATES = _ROOT / "data" / "bootstrap" / "10_physical_devices_templates_junos.yaml"
+_INTERNET_DIR = _ALL / "08_interconnects" / "06_internet"
 _GATEWAY = "EQX-FR2-SDWAN-GW1"
 _CIRCUIT = "INET-LUMEN-EQXFR2-GW"
 _ISP_PE = "EXT-LUMEN-FRA1"
 
 
-def _entries(path: Path, kind: str) -> list[dict[str, Any]]:
-    """The data entries of every document of `kind` in one YAML file."""
-    return [
-        entry
-        for doc in yaml.safe_load_all(path.read_text())
-        if doc and doc.get("spec", {}).get("kind") == kind
-        for entry in doc["spec"]["data"]
-    ]
+def _entries(kind: str, *paths: Path) -> list[dict[str, Any]]:
+    """The data entries of `kind` the object files under `paths` (directories or single files) declare."""
+    return [obj.item for obj in declared(kind, *paths)]
 
 
 def _circuit() -> dict[str, Any]:
     """The gateway access circuit as the data declares it."""
-    (circuit,) = [c for path in sorted(_GATEWAY_DIR.glob("*.yml")) for c in _entries(path, "TopologyPhysicalCircuit")]
+    (circuit,) = _entries("TopologyPhysicalCircuit", _GATEWAY_DIR)
     return circuit
 
 
-def _template_ports(path: Path, template: str) -> dict[str, dict[str, Any]]:
+def _template_ports(template: str) -> dict[str, dict[str, Any]]:
     """Port name -> template row, for the physical interfaces of one device template (`[0-3]` ranges expanded)."""
-    (row,) = [r for r in _entries(path, "TemplateDcimPhysicalDevice") if r["template_name"] == template]
     ports: dict[str, dict[str, Any]] = {}
-    for port in row["interfaces"]["data"]:
+    for port in object_templates()[template]["interfaces"]["data"]:
         match = re.fullmatch(r"(.*)\[(\d+)-(\d+)\](.*)", port["name"])
         names = (
             [f"{match[1]}{n}{match[4]}" for n in range(int(match[2]), int(match[3]) + 1)] if match else [port["name"]]
         )
-        ports.update({name: port for name in names})
+        ports.update({port_name: port for port_name in names})
     return ports
 
 
@@ -75,7 +65,7 @@ def _uses(node: Any, device: str, port: str) -> int:
 
 def test_gateway_template_has_exactly_one_uplink_and_the_new_eth1() -> None:
     """eth0 stays the single role=uplink trunk; eth1 is the gateway's own internet port and not an uplink."""
-    ports = _template_ports(_TEMPLATES, "VCG-VA_GATEWAY")
+    ports = _template_ports("VCG-VA_GATEWAY")
 
     assert sorted(ports) == ["eth0", "eth1"]
     assert [name for name, port in ports.items() if port["role"] == "uplink"] == ["eth0"]
@@ -111,10 +101,10 @@ def test_gateway_access_circuit_ends_on_the_gateway_eth1_and_a_customer_port_of_
 
     pe_template = next(
         row["object_template"]
-        for row in _entries(_ALL / "08_interconnects" / "06_internet" / "02_devices.yml", "DcimPhysicalDevice")
+        for row in _entries("DcimPhysicalDevice", _INTERNET_DIR / "02_devices.yml")
         if row["name"] == _ISP_PE
     )
-    assert _template_ports(_JUNOS_TEMPLATES, pe_template)[port]["role"] == "customer"
+    assert _template_ports(pe_template)[port]["role"] == "customer"
     assert set(ALL_DEMO_GATEWAY_ACCESS_CIRCUITS[_CIRCUIT]) == set(ends)
 
 
@@ -124,12 +114,7 @@ def test_gateway_access_ports_are_used_by_no_other_circuit_peering_or_address() 
     A tunnel circuit is no other user: the gateway's public port eth1 is the end every tunnel shares.
     """
     ends = [tuple(end) for end in _circuit()["capabilities"]]
-    docs = [
-        doc
-        for path in sorted(_ALL.rglob("*.yml"))
-        for doc in yaml.safe_load_all(path.read_text())
-        if doc and doc["spec"]["kind"] != "TopologyTunnelCircuit"
-    ]
+    docs = [doc for _, doc in object_documents(_ALL) if doc["spec"]["kind"] != "TopologyTunnelCircuit"]
 
     for device, port in ends:
         assert sum(_uses(doc, device, port) for doc in docs) == 1, f"{device} {port} is used more than once"
@@ -141,31 +126,20 @@ def test_gateway_access_is_a_modelled_simplification_without_peering() -> None:
     circuit = _circuit()
 
     assert "peering_role" not in circuit
-    assert not any(
-        _CIRCUIT in str(peering) for path in _ALL.rglob("*.yml") for peering in _entries(path, "ManagedBGPPeering")
-    )
+    assert not any(_CIRCUIT in str(peering) for peering in _entries("ManagedBGPPeering", _ALL))
 
 
 def test_gateway_access_is_not_in_the_transit_folder_nor_counted_as_transit() -> None:
     """06_internet pairs every circuit with a transit peering (and tests it); the gateway access is separate."""
     assert _CIRCUIT not in ALL_DEMO_INTERNET_TRANSIT_CIRCUITS
-    assert not (_ALL / "08_interconnects" / "06_internet" / "01_circuit.yml").exists()
-    assert not [
-        c
-        for path in (_ALL / "08_interconnects" / "06_internet").glob("*.yml")
-        for c in _entries(path, "TopologyPhysicalCircuit")
-        if c["circuit_id"] == _CIRCUIT
-    ]
+    assert not (_INTERNET_DIR / "01_circuit.yml").exists()
+    assert not [c for c in _entries("TopologyPhysicalCircuit", _INTERNET_DIR) if c["circuit_id"] == _CIRCUIT]
 
 
 def test_internet_circuit_count_is_transit_plus_two_accesses_plus_one_per_office() -> None:
     """The expected internet count follows the data: the 06_internet transit, the gateway's and the partner's access,
     an INET-<office> each."""
-    transit = {
-        c["circuit_id"]
-        for path in (_ALL / "08_interconnects" / "06_internet").glob("*.yml")
-        for c in _entries(path, "TopologyPhysicalCircuit")
-    }
+    transit = {c["circuit_id"] for c in _entries("TopologyPhysicalCircuit", _INTERNET_DIR)}
     offices = {name(o) for o in declared("TopologyCustomerOffice", _ALL) if o.item.get("sdwan_gateway")}
     assert transit == ALL_DEMO_INTERNET_TRANSIT_CIRCUITS
     assert set(ALL_DEMO_SDWAN_UNDERLAY_CIRCUITS) == {f"INET-{office}" for office in offices}
