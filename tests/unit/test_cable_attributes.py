@@ -193,8 +193,13 @@ class TestCableColor:
         assert cable_color(cable_type) is None
 
     def test_cable_id_and_length_attributes_are_declared_by_the_schema(self) -> None:
-        """The attributes the generators write exist on DcimCable: cable_id unique, length_cm a Number."""
-        assert (attribute("DcimCable", "cable_id") or {}).get("unique") is True
+        """The attributes the generators write exist on DcimCable: cable_id (not unique), length_cm a Number.
+
+        cable_id must NOT be ``unique``: Infrahub counts an unset value as a value, so the second cable declared in a
+        data file without one fails to load with "Violates uniqueness constraint 'cable_id'" (found on the live stack).
+        The id is a hash of the endpoint labels, as unique as the cable's own name.
+        """
+        assert not (attribute("DcimCable", "cable_id") or {}).get("unique")
         assert (attribute("DcimCable", "length_cm") or {}).get("kind") == "Number"
 
 

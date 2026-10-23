@@ -816,9 +816,8 @@ nodes:
             label: Direct Attach Copper (DAC)
       - name: cable_id
         label: "Cable ID"
-        description: "Short label printed on the physical cable, derived from its endpoints; unique when set"
+        description: "Short label printed on the physical cable, derived from its endpoints; unset on hand-declared cables"
         kind: Text
-        unique: true
         optional: true
         order_weight: 1050
       - name: color

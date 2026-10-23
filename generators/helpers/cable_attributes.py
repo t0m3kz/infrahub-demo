@@ -8,8 +8,9 @@ cable's create data, so one rule decides all three values and a rerun writes the
     endpoint labels (``<device>-<interface>``), sorted and joined with ``__`` (the same text a cable is named by).
     It is short enough to print on a label, depends only on the two ends (never a counter, a random value or the
     deployment, which is not known at every creation site and may be renamed), so it is identical on every rerun.
-    Two different cables collide with probability n^2 / 2^41 (about 5e-5 for 10 000 cables); the schema declares
-    ``cable_id`` unique, so a collision fails the save instead of passing silently.
+    Two different cables collide with probability n^2 / 2^41 (about 5e-5 for 10 000 cables). The schema does not
+    declare ``cable_id`` unique on purpose: Infrahub counts an unset value as a value, so hand-declared cables
+    (which carry no ``cable_id``) would collide with each other on load.
 
 ``color``
     The TIA-598 jacket colour of the cable type, see ``CABLE_COLOR_BY_TYPE``; ``None`` for a type with no entry.
