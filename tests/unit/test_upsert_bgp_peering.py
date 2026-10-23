@@ -128,3 +128,37 @@ class TestUpsertBgpPeeringShape:
         await m.upsert_bgp_peering(**_COMMON, maximum_routes=None)
 
         assert "maximum_routes" not in m.client.create.call_args.kwargs["data"]
+
+
+class TestUpsertBgpPeeringSendCommunity:
+    """send_community defaults to True for every caller; a handoff session turns it off."""
+
+    @pytest.mark.asyncio
+    async def test_send_community_is_written_true_by_default(self) -> None:
+        """Failure side of the new keyword: a caller that does not pass it keeps today's behaviour."""
+        m = _mixin()
+
+        await m.upsert_bgp_peering(**_COMMON)
+
+        assert m.client.create.call_args.kwargs["data"]["send_community"] is True
+
+    @pytest.mark.asyncio
+    async def test_send_community_false_is_written_as_given(self) -> None:
+        """send_community=False reaches the data dict and leaves send_extended_community on its own default."""
+        m = _mixin()
+
+        await m.upsert_bgp_peering(**_COMMON, send_community=False)
+
+        data = m.client.create.call_args.kwargs["data"]
+        assert data["send_community"] is False
+        assert data["send_extended_community"] is True
+
+    @pytest.mark.asyncio
+    async def test_both_community_flags_can_be_off(self) -> None:
+        """The handoff shape: neither standard nor extended communities are sent."""
+        m = _mixin()
+
+        await m.upsert_bgp_peering(**_COMMON, send_community=False, send_extended_community=False)
+
+        data = m.client.create.call_args.kwargs["data"]
+        assert (data["send_community"], data["send_extended_community"]) == (False, False)

@@ -4,6 +4,14 @@
     interface_ips, vlan_interfaces, bgp_neighbors, bgp_globals, ospf_router,
     bgp_peer_groups, bgp_globals_af, and (templates with host ports, i.e. not
     the spines) vlan_members -#}
+{#- The two model flags map to the three BGP_NEIGHBOR send_community modes: both,
+    extended only, standard only. Called only when at least one flag is set. -#}
+{%- macro _community_mode(item) -%}
+{%- if item.get('send_community') and item.get('send_extended_community') -%}both
+{%- elif item.get('send_extended_community') -%}extended
+{%- else -%}standard
+{%- endif -%}
+{%- endmacro -%}
 {%- if vlans and vlans|length > 0 -%}
 {%- for vlan in vlans -%}
 {%- set _ = vlan_config.update({
@@ -101,10 +109,8 @@
 {%- if pg.get('bfd_enabled') -%}
 {%- set _ = pg_entry.update({'bfd': 'true'}) -%}
 {%- endif -%}
-{%- if pg.get('send_extended_community') -%}
-{%- set _ = pg_entry.update({'send_community': 'extended'}) -%}
-{%- elif pg.get('send_community') -%}
-{%- set _ = pg_entry.update({'send_community': 'standard'}) -%}
+{%- if pg.get('send_community') or pg.get('send_extended_community') -%}
+{%- set _ = pg_entry.update({'send_community': _community_mode(pg)}) -%}
 {%- endif -%}
 {%- if pg.get('remove_private_as') -%}
 {#- NOTE: 'remove_private_as' key unverified against real SONiC BGP_PEER_GROUP config-DB schema -#}
@@ -168,10 +174,8 @@
 }) -%}
 {%- endif -%}
 {%- if session.peer_group is not defined -%}
-{%- if session.get('send_extended_community') -%}
-{%- set _ = neighbor_entry.update({'send_community': 'extended'}) -%}
-{%- elif session.get('send_community') -%}
-{%- set _ = neighbor_entry.update({'send_community': 'standard'}) -%}
+{%- if session.get('send_community') or session.get('send_extended_community') -%}
+{%- set _ = neighbor_entry.update({'send_community': _community_mode(session)}) -%}
 {%- endif -%}
 {%- if session.get('remove_private_as') -%}
 {#- NOTE: 'remove_private_as' key unverified against real SONiC BGP_NEIGHBOR config-DB schema -#}

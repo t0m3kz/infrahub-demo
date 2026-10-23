@@ -31,6 +31,34 @@ rendered config; each is a property of data that spans topologies.
    held to the same overlap rule as a VPC block: inside one namespace it
    overlaps no VPC block, no other office's LAN and no on-prem prefix. These
    are the routes an office may announce into its VRF over SD-WAN.
+7. Registered-prefix owners. The colocation edge announces to and accepts from
+   an external BGP peer only prefixes whose owner is an OrganizationCustomer,
+   and the owner belongs to the object that registers the prefix: a VPC block's
+   owner is `CloudVirtualNetwork.account.owner`, an office LAN's (and that of
+   the segments the office hosts) is `TopologyCustomerOffice.owner`. So every
+   VPC with at least one `cidr_blocks` entry needs an account owned by a
+   customer, and every office that registers `lan_prefixes` or hosts a segment
+   (`network_segments`) needs a customer owner; a provider-owned (or ownerless)
+   account or office is silently never accepted or announced at the border.
+   This covers every registered block and LAN, not only those currently
+   behind a handoff: that is cheaper, and any of them can be put behind one.
+   A segment needs no check: `ManagedNetworkSegment.owner` is a required
+   OrganizationCustomer in the schema.
+8. Ownership of what sits behind the border. The edge passes routes between two
+   external sessions of the SAME owner and never across owners
+   (utils/ownership.py exchange_policies), which only holds if a prefix has one
+   owner and one attachment point. Per namespace this rule runs
+   ownership_conflicts over the registrations: the on-prem segments (owner and
+   status as on the edge; retired are skipped), the offices' `lan_prefixes` and
+   hosted segments grouped by their `sdwan_gateway` (one attachment point per
+   gateway), and the VPC blocks grouped by the handoff circuit their VIF
+   reaches (transforms/helpers/bgp.py vif_registered_blocks, the very chain walk
+   the edge uses: a private VIF's own VPC, or every VPC propagating into the
+   route table of the transit VIF's hybrid attachment; a VIF without a handoff
+   circuit has no session and is skipped). It reports a prefix registered by
+   more than one owner (it would be announced to another owner's session) and
+   an owner's prefix reachable behind more than one attachment point (local or
+   through exactly one session).
 
 A missing evpn_rt_as on an eBGP-overlay fabric is checked by CheckEvpnFabric.
 """
@@ -40,8 +68,15 @@ from __future__ import annotations
 import ipaddress
 from typing import Any, NamedTuple
 
+from transforms.helpers.bgp import (
+    get_onprem_prefixes,
+    office_lans_by_gateway,
+    registered_by_namespace,
+    vif_registered_blocks,
+)
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import INTERNET_TYPE, PROD_TYPE, namespace_type_for_environment
+from utils.ownership import customer_owner, ownership_conflicts
 from utils.segment_addressing import segment_namespace
 
 from .base import WarningCheck
@@ -89,6 +124,12 @@ class CheckRoutingInvariants(WarningCheck):
         self._validate_aggregate_namespaces(aggregates)
         self._validate_subnets_in_vpc(networks, cleaned.get("CloudNetworkSegment") or [])
         self._validate_aggregate_overlaps(aggregates, cleaned.get("ManagedNetworkSegment") or [])
+        self._validate_registered_prefix_owners(networks, cleaned.get("TopologyCustomerOffice") or [])
+        self._validate_ownership_conflicts(
+            cleaned.get("ManagedNetworkSegment") or [],
+            cleaned.get("TopologyCustomerOffice") or [],
+            cleaned.get("CloudVirtualInterface") or [],
+        )
 
     # ------------------------------------------------------------------
     # 1. L3 VNI sharing
@@ -292,6 +333,61 @@ class CheckRoutingInvariants(WarningCheck):
                         )
                     )
 
+    # ------------------------------------------------------------------
+    # 7. Registered-prefix owners are customers
+    # ------------------------------------------------------------------
+
+    def _validate_registered_prefix_owners(self, networks: list[dict[str, Any]], offices: list[dict[str, Any]]) -> None:
+        registrants = [
+            (
+                f"VPC '{network.get('name')}' registers blocks, but its account "
+                f"'{(network.get('account') or {}).get('name')}'",
+                (network.get("account") or {}).get("owner"),
+            )
+            for network in networks
+            if network.get("cidr_blocks")
+        ] + [
+            (f"office '{office.get('name')}' registers LANs or hosts segments, but it", office.get("owner"))
+            for office in offices
+            if office.get("lan_prefixes") or office.get("network_segments")
+        ]
+        for subject, owner in registrants:
+            if customer_owner(owner) is None:
+                self.log_error(
+                    message=(
+                        f"{subject} has {_describe_owner(owner)}: only a customer-owned prefix is accepted from or "
+                        "announced to an external BGP peer, so its prefixes are never accepted or announced at the border"
+                    )
+                )
+
+    # ------------------------------------------------------------------
+    # 8. One owner and one attachment point per registered prefix
+    # ------------------------------------------------------------------
+
+    def _validate_ownership_conflicts(
+        self, segments: list[dict[str, Any]], offices: list[dict[str, Any]], vifs: list[dict[str, Any]]
+    ) -> None:
+        # namespace -> attachment point -> owner -> prefixes, read as the edge reads them.
+        learned: dict[str, dict[str, dict[str, set[str]]]] = {}
+
+        def attach(point: str, registered: list[tuple[str | None, dict[str, Any]]]) -> None:
+            for namespace, by_owner in registered_by_namespace(registered).items():
+                behind = learned.setdefault(namespace, {}).setdefault(point, {})
+                for owner, prefixes in by_owner.items():
+                    behind.setdefault(owner, set()).update(prefixes)
+
+        for gateway, registered in office_lans_by_gateway(offices).items():
+            attach(f"SD-WAN gateway '{gateway}'", registered)
+        for vif in vifs:
+            circuit = (vif.get("virtual_circuit") or {}).get("name")
+            if circuit:
+                attach(f"handoff circuit '{circuit}'", vif_registered_blocks(vif))
+
+        onprem = get_onprem_prefixes(segments)
+        for namespace in sorted(set(onprem) | set(learned)):
+            for conflict in ownership_conflicts(onprem.get(namespace, {}), learned.get(namespace, {})):
+                self.log_error(message=f"Namespace '{namespace}': {conflict.message}")
+
 
 def _vpc_aggregates(networks: list[dict[str, Any]]) -> list[_Aggregate]:
     """Each VPC cidr_blocks entry, expected in its account's environment namespace."""
@@ -321,6 +417,13 @@ def _office_aggregates(offices: list[dict[str, Any]]) -> list[_Aggregate]:
         for office in offices
         for prefix in office.get("lan_prefixes") or []
     ]
+
+
+def _describe_owner(owner: dict[str, Any] | None) -> str:
+    """'no owner' or the owner's org_id (display_label) and kind, for a message."""
+    if not owner:
+        return "no owner"
+    return f"owner {owner.get('org_id')} ({owner.get('display_label')}, {owner.get('typename')})"
 
 
 def _network(prefix: str | None) -> ipaddress.IPv4Network | ipaddress.IPv6Network | None:

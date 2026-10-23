@@ -152,9 +152,15 @@ query edge_config($device: String!) {
   # On-prem routed space per tenant VRF: what an external tenant-VRF peer (a
   # cloud VIF, the SD-WAN gateway) may be announced. Grouped by namespace in
   # transforms/helpers/bgp.py (get_onprem_prefixes).
+  # owner: who owns the announced prefix (only an OrganizationCustomer owner counts, so a
+  # session is announced only the prefixes of its own owner). status: the transform drops
+  # `retired` segments in Python (deliberately no server-side filter here, so the smoke
+  # fixtures exercise that branch).
   ManagedNetworkSegment {
     edges {
       node {
+        status { value }
+        owner { node { __typename org_id { value } display_label } }
         gateway {
           node {
             ip_prefix {
@@ -174,6 +180,8 @@ query edge_config($device: String!) {
   # session on the edge's <port>.<vlan_id> sub-interface may accept. Matched to
   # this device through the Direct Connect's physical_devices in
   # transforms/helpers/bgp.py (get_external_peer_prefixes).
+  # virtual_network.account.owner: the owner of the registered VPC aggregate (only an
+  # OrganizationCustomer owner counts), so the session accepts only its own owner's VPCs.
   CloudVirtualInterface {
     edges {
       node {
@@ -183,6 +191,7 @@ query edge_config($device: String!) {
         virtual_network {
           node {
             cidr_blocks { edges { node { prefix { value } ip_namespace { node { name { value } } } } } }
+            account { node { owner { node { __typename org_id { value } display_label } } } }
           }
         }
         transit_gateway_attachment {
@@ -198,6 +207,7 @@ query edge_config($device: String!) {
                       virtual_network {
                         node {
                           cidr_blocks { edges { node { prefix { value } ip_namespace { node { name { value } } } } } }
+                          account { node { owner { node { __typename org_id { value } display_label } } } }
                         }
                       }
                     }
@@ -216,9 +226,13 @@ query edge_config($device: String!) {
   # the prefixes of the segments they host themselves).
   # Matched to the handoff through the BGP peering's far-end device in
   # transforms/helpers/bgp.py (get_external_peer_prefixes).
+  # owner: who owns the office's lan_prefixes (only an OrganizationCustomer owner counts).
+  # segment.owner: who owns a hosted segment's prefix; segment.status: a `retired` segment
+  # is dropped in Python.
   TopologyCustomerOffice {
     edges {
       node {
+        owner { node { __typename org_id { value } display_label } }
         sdwan_gateway { node { name { value } } }
         lan_prefixes { edges { node { prefix { value } ip_namespace { node { name { value } } } } } }
         segment_deployments(status__values: ["active", "provisioning"]) {
@@ -226,6 +240,8 @@ query edge_config($device: String!) {
             node {
               segment {
                 node {
+                  status { value }
+                  owner { node { __typename org_id { value } display_label } }
                   gateway { node { ip_prefix { node { prefix { value } ip_namespace { node { name { value } } } } } } }
                 }
               }

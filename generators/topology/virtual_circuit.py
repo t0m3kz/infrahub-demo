@@ -37,7 +37,8 @@ tracked cleanup would turn into deletions.
 HandoffCircuit: the two ends are the sub-interfaces (``<parent>.<vlan>``) of our edge and of the party-owned device,
 inside the circuit's ``ip_namespace``. The /31 comes from the pool named after that namespace (``Handoff-<NAMESPACE>-
 IPv4``, data/bootstrap/26_handoff_pools.yml): addresses on both sides come from OUR pool only. One eBGP session
-(peering_role ``regular``) between the devices' BGP processes; the party's ASN is its process's ``local_as``.
+(peering_role ``regular``) between the devices' BGP processes; the party's ASN is its process's ``local_as``. The
+session sends no communities (standard or extended): there is nothing to strip yet, communities come in a later change.
 
 InterconnectCircuit: DCI between two EVPN Multi-Site border gateways, both ends physical ports on a device with exactly
 one overlay ManagedBGP process. The /31 (/127) comes from the DCI pools (data/bootstrap/20_dci_pools.yml) by the DC
@@ -239,6 +240,7 @@ class PeeringPlan:
     # Directly connected eBGP by default; only the EVPN multihop session overrides.
     ttl: int = 1
     bfd_enabled: bool = True
+    send_community: bool = True
     send_extended_community: bool = False
     maximum_routes: int | None = None
 
@@ -460,6 +462,7 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, Comm
                     peering_role="regular",
                     session_type="EBGP",
                     address_family=IPV4_UNICAST_AF,
+                    send_community=False,
                     maximum_routes=circuit.get("maximum_routes"),
                     interface_ids=(first.port_id, second.port_id),
                 ),
@@ -619,6 +622,7 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, Comm
                     password_id=password_id,
                     ttl=peering.ttl,
                     bfd_enabled=peering.bfd_enabled,
+                    send_community=peering.send_community,
                     send_extended_community=peering.send_extended_community,
                     maximum_routes=peering.maximum_routes,
                 )

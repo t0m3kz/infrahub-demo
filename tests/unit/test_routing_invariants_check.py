@@ -5,6 +5,9 @@ from __future__ import annotations
 from typing import Any, cast
 
 from checks.routing_invariants import CheckRoutingInvariants
+from tests.integration.demo_data import attribute_names, relationship_names
+from tests.unit.test_circuit_query_shapes import _QUERIES, _selected_paths
+from utils.data_cleaning import clean_data
 
 
 def _v(value: Any) -> dict[str, Any]:
@@ -272,12 +275,26 @@ def _block(prefix: str, ns_name: str = "PROD", ns_type: str = "prod", block_id: 
     }
 
 
-def _vpc(name: str, env: str | None, *blocks: dict[str, Any]) -> dict[str, Any]:
-    """A CloudVirtualNetwork with its account environment and aggregate blocks."""
+_CUSTOMER = ("OrganizationCustomer", "C003", "Vaultex Inc. (C003)")
+_PROVIDER = ("OrganizationProvider", "P028", "Internal (P028)")
+
+
+def _owner(who: tuple[str, str, str] | None) -> dict[str, Any]:
+    """An `owner { node { __typename org_id display_label } }` selection (None: no owner)."""
+    if who is None:
+        return {"node": None}
+    typename, org_id, label = who
+    return {"node": {"__typename": typename, "org_id": _v(org_id), "display_label": label}}
+
+
+def _vpc(
+    name: str, env: str | None, *blocks: dict[str, Any], owner: tuple[str, str, str] | None = _CUSTOMER
+) -> dict[str, Any]:
+    """A CloudVirtualNetwork with its account environment and owner (a customer unless told otherwise) and blocks."""
     return {
         "id": f"vpc-{name}",
         "name": _v(name),
-        "account": {"node": {"id": f"acc-{name}", "name": _v("acc"), "environment": _v(env)}},
+        "account": {"node": {"id": f"acc-{name}", "name": _v("acc"), "environment": _v(env), "owner": _owner(owner)}},
         "cidr_blocks": {"edges": [{"node": block} for block in blocks]},
     }
 
@@ -458,11 +475,19 @@ class TestVpcOverlaps:
         assert check._captured_errors == []
 
 
-def _office(name: str, *prefixes: dict[str, Any]) -> dict[str, Any]:
-    """A TopologyCustomerOffice footprint with its LAN prefixes (an office has no environment)."""
+def _office(
+    name: str,
+    *prefixes: dict[str, Any],
+    owner: tuple[str, str, str] | None = _CUSTOMER,
+    segments: int = 0,
+) -> dict[str, Any]:
+    """A TopologyCustomerOffice footprint with its owner (a customer unless told otherwise), LAN prefixes and hosted
+    segments (an office has no environment)."""
     return {
         "id": f"office-{name}",
         "name": _v(name),
+        "owner": _owner(owner),
+        "network_segments": {"edges": [{"node": {"id": f"seg-{name}-{n}"}} for n in range(segments)]},
         "lan_prefixes": {"edges": [{"node": prefix} for prefix in prefixes]},
     }
 
@@ -532,3 +557,396 @@ class TestOfficeLanPrefixes:
         )
         assert len(check._captured_errors) == 1
         assert "the LAN prefix adopted an on-prem prefix" in check._captured_errors[0]
+
+
+class TestRegisteredPrefixOwners:
+    """Rule 7: a VPC with blocks and an office with LANs or hosted segments are owned by a customer."""
+
+    def test_customer_owned_vpc_and_office_pass(self) -> None:
+        """A VPC whose account and an office whose owner are customers raise nothing."""
+        check = _run(
+            CloudVirtualNetwork=[_vpc("a", "p", _block("10.30.0.0/16"))],
+            TopologyCustomerOffice=[_office("C003-OFFICE", _block("10.210.3.0/24"))],
+        )
+        assert check._captured_errors == []
+
+    def test_provider_owned_account_fails(self) -> None:
+        """A provider-owned account of a VPC with blocks is an error naming the VPC, account, owner and effect."""
+        check = _run(CloudVirtualNetwork=[_vpc("hub", "p", _block("10.30.0.0/16"), owner=_PROVIDER)])
+        assert len(check._captured_errors) == 1
+        message = check._captured_errors[0]
+        assert "VPC 'hub'" in message
+        assert "account 'acc'" in message
+        assert "owner P028 (Internal (P028), OrganizationProvider)" in message
+        assert "never accepted or announced at the border" in message
+
+    def test_account_without_owner_fails(self) -> None:
+        """An account with no owner is an error that says so."""
+        check = _run(CloudVirtualNetwork=[_vpc("a", "p", _block("10.30.0.0/16"), owner=None)])
+        assert len(check._captured_errors) == 1
+        assert "has no owner" in check._captured_errors[0]
+
+    def test_vpc_without_blocks_is_ignored(self) -> None:
+        """A VPC that registers no block announces nothing, whoever owns its account."""
+        assert _run(CloudVirtualNetwork=[_vpc("a", "p", owner=_PROVIDER)])._captured_errors == []
+        assert _run(CloudVirtualNetwork=[_vpc("a", "p", owner=None)])._captured_errors == []
+
+    def test_provider_owned_office_with_lans_fails(self) -> None:
+        """A provider-owned office with lan_prefixes is an error naming the office and owner."""
+        check = _run(TopologyCustomerOffice=[_office("P028-OFFICE", _block("10.210.9.0/24"), owner=_PROVIDER)])
+        assert len(check._captured_errors) == 1
+        message = check._captured_errors[0]
+        assert "office 'P028-OFFICE'" in message
+        assert "owner P028 (Internal (P028), OrganizationProvider)" in message
+        assert "never accepted or announced at the border" in message
+
+    def test_provider_owned_office_hosting_segments_fails(self) -> None:
+        """An office with no LAN but a hosted segment is held to the same rule."""
+        check = _run(TopologyCustomerOffice=[_office("P028-OFFICE", owner=_PROVIDER, segments=1)])
+        assert len(check._captured_errors) == 1
+
+    def test_provider_owned_office_without_lans_or_segments_is_ignored(self) -> None:
+        """An office that registers and hosts nothing announces nothing."""
+        assert _run(TopologyCustomerOffice=[_office("P028-OFFICE", owner=_PROVIDER)])._captured_errors == []
+
+    def test_customer_owned_office_hosting_segments_passes(self) -> None:
+        """A customer-owned office hosting segments raises nothing."""
+        assert _run(TopologyCustomerOffice=[_office("C003-OFFICE", segments=2)])._captured_errors == []
+
+    def test_cleaned_owner_shape(self) -> None:
+        """The cleaned query selection reads as `typename`, `org_id` and `display_label` on the owner."""
+        cleaned = clean_data({"TopologyCustomerOffice": {"edges": [{"node": _office("C003-OFFICE", segments=1)}]}})
+        office = cleaned["TopologyCustomerOffice"][0]
+        assert office["owner"] == {
+            "typename": "OrganizationCustomer",
+            "org_id": "C003",
+            "display_label": "Vaultex Inc. (C003)",
+        }
+        assert office["network_segments"] == [{"id": "seg-C003-OFFICE-0"}]
+
+
+def test_the_query_selects_what_rule_seven_reads() -> None:
+    """The owner of an account and of an office, and the segments an office hosts, are selected, on real fields."""
+    for root, reads in {
+        "CloudVirtualNetwork": [
+            "account.name",
+            "account.owner.__typename",
+            "account.owner.org_id",
+            "account.owner.display_label",
+            "cidr_blocks",
+        ],
+        "TopologyCustomerOffice": [
+            "owner.__typename",
+            "owner.org_id",
+            "owner.display_label",
+            "network_segments",
+            "lan_prefixes",
+        ],
+    }.items():
+        selected = _selected_paths(_QUERIES / "validation" / "routing_invariants.gql", root)
+        assert not [path for path in reads if path not in selected]
+    assert {"owner", "network_segments", "lan_prefixes"} <= relationship_names("TopologyCustomerOffice")
+    assert {"account", "cidr_blocks"} <= relationship_names("CloudVirtualNetwork")
+    assert "owner" in relationship_names("CloudAccount")
+
+
+# ---------------------------------------------------------------------------
+# 8. One owner and one attachment point per registered prefix
+# ---------------------------------------------------------------------------
+
+_C002 = ("OrganizationCustomer", "C002", "Solvex (C002)")
+_C005 = ("OrganizationCustomer", "C005", "Brightwave (C005)")
+_C015 = ("OrganizationCustomer", "C015", "Novantis (C015)")
+
+
+def _segment(
+    name: str,
+    prefix: str,
+    owner: tuple[str, str, str] | None,
+    *,
+    status: str = "active",
+    ns_name: str = "PROD",
+    ns_type: str = "prod",
+) -> dict[str, Any]:
+    """An on-prem segment with its owner and status (what rule 8 reads next to the gateway prefix)."""
+    return {**_onprem(name, prefix, ns_name, ns_type), "status": _v(status), "owner": _owner(owner)}
+
+
+def _gateway_office(
+    name: str,
+    gateway: str | None,
+    owner: tuple[str, str, str] | None,
+    *lans: dict[str, Any],
+    hosted: tuple[tuple[str, tuple[str, str, str] | None, str], ...] = (),
+) -> dict[str, Any]:
+    """An office behind an SD-WAN gateway with its LANs and hosted segments, (prefix, owner, status) each (PROD)."""
+    return {
+        **_office(name, *lans, owner=owner),
+        "sdwan_gateway": {"node": {"name": _v(gateway)}} if gateway else {"node": None},
+        "segment_deployments": {
+            "edges": [
+                {
+                    "node": {
+                        "segment": {
+                            "node": {
+                                "status": _v(status),
+                                "owner": _owner(segment_owner),
+                                "gateway": {
+                                    "node": {
+                                        "ip_prefix": {
+                                            "node": {
+                                                "prefix": _v(prefix),
+                                                "ip_namespace": {"node": {"name": _v("PROD")}},
+                                            }
+                                        }
+                                    }
+                                },
+                            }
+                        }
+                    }
+                }
+                for prefix, segment_owner, status in hosted
+            ]
+        },
+    }
+
+
+def _private_vif(vif_id: str, vpc: dict[str, Any], circuit: str | None = "HO") -> dict[str, Any]:
+    """A private VIF onto one VPC (its blocks and account owner), on the handoff circuit ``circuit``."""
+    vif = _vif(vif_id, "prod", "p")
+    vif["virtual_network"] = {"node": vpc}
+    vif["virtual_circuit"] = (
+        {"node": {"name": _v(circuit), "ip_namespace": {"node": {"name": _v("PROD"), "namespace_type": _v("prod")}}}}
+        if circuit
+        else {"node": None}
+    )
+    return vif
+
+
+def _transit_vif(
+    vif_id: str, table: str, attachments: list[tuple[str, dict[str, Any]]], circuit: str | None = "HO-HUB"
+) -> dict[str, Any]:
+    """A transit VIF whose hybrid attachment sits on ``table``; ``attachments`` are (propagated table, VPC)."""
+    vif = _private_vif(vif_id, {}, circuit)
+    vif["virtual_network"] = {"node": None}
+    vif["transit_gateway_attachment"] = {
+        "node": {
+            "associated_route_table": {"node": {"id": table}},
+            "transit_gateway": {
+                "node": {
+                    "attachments": {
+                        "edges": [
+                            {
+                                "node": {
+                                    "attachment_type": _v("vpc"),
+                                    "propagates_to_route_tables": {"edges": [{"node": {"id": propagated}}]},
+                                    "virtual_network": {"node": vpc},
+                                }
+                            }
+                            for propagated, vpc in attachments
+                        ]
+                    }
+                }
+            },
+        }
+    }
+    return vif
+
+
+def _rule_eight(check: Any) -> list[str]:
+    """The errors rule 8 raised (they start with the namespace)."""
+    return [message for message in check._captured_errors if message.startswith("Namespace '")]
+
+
+class TestOwnershipConflicts:
+    """Rule 8: no prefix of two owners, no owner's prefix behind two attachment points."""
+
+    def _demo(self, **extra: Any) -> dict[str, Any]:
+        """The 30_all shape: C002 and C003 offices behind GW1, C003 and C015 VPCs on the hub transit VIF."""
+        sections: dict[str, Any] = {
+            "ManagedNetworkSegment": [
+                _segment("c003-web", "10.5.10.0/24", _CUSTOMER),
+                _segment("c015-web", "10.7.10.0/24", _C015),
+                _segment("c005-lan", "10.176.5.0/24", _C005),
+            ],
+            "TopologyCustomerOffice": [
+                _gateway_office("C002-OFFICE", "GW1", _C002, _block("10.210.2.0/24")),
+                _gateway_office("C003-OFFICE", "GW1", _CUSTOMER, _block("10.210.3.0/24")),
+                _gateway_office("C005-OFFICE", "GW1", _C005, hosted=(("10.176.5.0/24", _C005, "active"),)),
+            ],
+            "CloudVirtualInterface": [
+                _transit_vif(
+                    "hub",
+                    "rt-shared",
+                    [
+                        ("rt-shared", _vpc("c003", "p", _block("10.30.0.0/16"))),
+                        ("rt-shared", _vpc("c015", "p", _block("10.32.0.0/16"), owner=_C015)),
+                    ],
+                )
+            ],
+        }
+        sections.update(extra)
+        return sections
+
+    def test_the_demo_shape_passes(self) -> None:
+        """Every prefix has one owner and one attachment point; an office-hosted segment is its owner's own."""
+        assert _rule_eight(_run(**self._demo())) == []
+
+    def test_a_prefix_of_two_owners_fails(self) -> None:
+        """C003's office LAN equals C015's VPC block: it would be announced to the other owner's session."""
+        check = _run(
+            **self._demo(
+                TopologyCustomerOffice=[_gateway_office("C003-OFFICE", "GW1", _CUSTOMER, _block("10.32.0.0/16"))]
+            )
+        )
+        errors = _rule_eight(check)
+        assert len(errors) == 1
+        assert "Namespace 'PROD'" in errors[0]
+        assert "10.32.0.0/16" in errors[0]
+        assert "C003, C015" in errors[0]
+        assert "SD-WAN gateway 'GW1'" in errors[0]
+        assert "handoff circuit 'HO-HUB'" in errors[0]
+        assert "another owner's session" in errors[0]
+
+    def test_a_segment_prefix_of_another_owner_fails(self) -> None:
+        """An on-prem segment of C003 on the same prefix as C015's VPC block."""
+        check = _run(**self._demo(ManagedNetworkSegment=[_segment("c003-web", "10.32.0.0/16", _CUSTOMER)]))
+        errors = _rule_eight(check)
+        assert len(errors) == 1
+        assert "registered by more than one owner" in errors[0]
+
+    def test_an_owners_prefix_behind_two_circuits_fails(self) -> None:
+        """C003's VPC block reaches the hub and a private VIF on another circuit: two attachment points."""
+        vpc = _vpc("c003", "p", _block("10.30.0.0/16"))
+        vifs = [
+            _transit_vif("hub", "rt-shared", [("rt-shared", vpc)]),
+            _private_vif("direct", vpc, circuit="HO-DIRECT"),
+        ]
+        errors = _rule_eight(_run(CloudVirtualInterface=vifs))
+        assert len(errors) == 1
+        assert "10.30.0.0/16 of C003" in errors[0]
+        assert "handoff circuit 'HO-DIRECT', handoff circuit 'HO-HUB'" in errors[0]
+        assert "exactly one session" in errors[0]
+
+    def test_an_owners_lan_behind_two_gateways_fails(self) -> None:
+        """The same LAN registered by two offices of C003 behind GW1 and GW2."""
+        offices = [
+            _gateway_office("C003-A", "GW1", _CUSTOMER, _block("10.210.3.0/24")),
+            _gateway_office("C003-B", "GW2", _CUSTOMER, _block("10.210.3.0/24")),
+        ]
+        errors = _rule_eight(_run(TopologyCustomerOffice=offices))
+        assert len(errors) == 1
+        assert "SD-WAN gateway 'GW1', SD-WAN gateway 'GW2'" in errors[0]
+
+    def test_two_offices_behind_one_gateway_are_one_attachment_point(self) -> None:
+        """One owner's two offices behind GW1 each with its own LAN: no conflict."""
+        offices = [
+            _gateway_office("C003-A", "GW1", _CUSTOMER, _block("10.210.3.0/24")),
+            _gateway_office("C003-B", "GW1", _CUSTOMER, _block("10.210.4.0/24")),
+        ]
+        assert _rule_eight(_run(TopologyCustomerOffice=offices)) == []
+
+    def test_a_retired_segment_does_not_conflict(self) -> None:
+        """A retired on-prem segment and a retired hosted segment are not registered any more."""
+        check = _run(
+            ManagedNetworkSegment=[_segment("old", "10.32.0.0/16", _CUSTOMER, status="retired")],
+            TopologyCustomerOffice=[
+                _gateway_office("C003-OFFICE", "GW1", _CUSTOMER, hosted=(("10.32.0.0/16", _CUSTOMER, "retired"),))
+            ],
+            CloudVirtualInterface=[_private_vif("direct", _vpc("c015", "p", _block("10.32.0.0/16"), owner=_C015))],
+        )
+        assert _rule_eight(check) == []
+
+    def test_the_same_prefix_in_two_namespaces_does_not_conflict(self) -> None:
+        """PROD and NON-PROD are separate routing domains: the rule runs per namespace."""
+        check = _run(
+            ManagedNetworkSegment=[_segment("dev", "10.32.0.0/16", _CUSTOMER, ns_name="NON-PROD", ns_type="non_prod")],
+            CloudVirtualInterface=[_private_vif("direct", _vpc("c015", "p", _block("10.32.0.0/16"), owner=_C015))],
+        )
+        assert _rule_eight(check) == []
+
+    def test_a_vpc_that_propagates_elsewhere_is_not_behind_the_vif(self) -> None:
+        """Only the VPCs propagating into the hybrid attachment's table are reachable: the isolated one is not."""
+        vif = _transit_vif(
+            "hub",
+            "rt-shared",
+            [
+                ("rt-shared", _vpc("c015", "p", _block("10.32.0.0/16"), owner=_C015)),
+                ("rt-isolated", _vpc("x", "p", _block("10.30.0.0/16"))),
+            ],
+        )
+        check = _run(
+            CloudVirtualInterface=[vif],
+            TopologyCustomerOffice=[_gateway_office("C003-OFFICE", "GW1", _CUSTOMER, _block("10.30.0.0/16"))],
+        )
+        assert _rule_eight(check) == []
+
+    def test_a_vif_without_a_handoff_circuit_has_no_session(self) -> None:
+        """No circuit, no session: its blocks are not an attachment point."""
+        vpc = _vpc("c003", "p", _block("10.30.0.0/16"))
+        check = _run(CloudVirtualInterface=[_private_vif("direct", vpc, circuit=None), _private_vif("hub", vpc)])
+        assert _rule_eight(check) == []
+
+    def test_a_non_customer_registration_is_not_judged_here(self) -> None:
+        """A provider-owned office registers nothing at the border (rule 7 reports it); rule 8 stays silent."""
+        check = _run(
+            TopologyCustomerOffice=[_gateway_office("P-OFFICE", "GW1", _PROVIDER, _block("10.30.0.0/16"))],
+            CloudVirtualInterface=[_private_vif("direct", _vpc("c003", "p", _block("10.30.0.0/16")))],
+        )
+        assert _rule_eight(check) == []
+
+    def test_an_office_without_a_gateway_is_not_an_attachment_point(self) -> None:
+        """No sdwan_gateway: nothing is announced through it, so it cannot conflict."""
+        check = _run(
+            TopologyCustomerOffice=[_gateway_office("C003-OFFICE", None, _CUSTOMER, _block("10.32.0.0/16"))],
+            CloudVirtualInterface=[_private_vif("direct", _vpc("c015", "p", _block("10.32.0.0/16"), owner=_C015))],
+        )
+        assert _rule_eight(check) == []
+
+    def test_an_empty_payload_passes(self) -> None:
+        """Nothing registered: nothing to report."""
+        assert _rule_eight(_run()) == []
+
+
+def test_the_query_selects_what_rule_eight_reads() -> None:
+    """Segment status and owner, the office gateway and hosted segments, and the VIF chain, on real fields."""
+    path = _QUERIES / "validation" / "routing_invariants.gql"
+    reads = {
+        "ManagedNetworkSegment": [
+            "status",
+            "owner.org_id",
+            "gateway.ip_prefix.prefix",
+            "gateway.ip_prefix.ip_namespace.name",
+        ],
+        "TopologyCustomerOffice": [
+            "sdwan_gateway.name",
+            "segment_deployments.segment.status",
+            "segment_deployments.segment.owner.org_id",
+            "segment_deployments.segment.gateway.ip_prefix.prefix",
+            "segment_deployments.segment.gateway.ip_prefix.ip_namespace.name",
+            "lan_prefixes.ip_namespace.name",
+        ],
+        "CloudVirtualInterface": [
+            "virtual_circuit.name",
+            "virtual_network.cidr_blocks.prefix",
+            "virtual_network.cidr_blocks.ip_namespace.name",
+            "virtual_network.account.owner.org_id",
+            "transit_gateway_attachment.associated_route_table.id",
+            "transit_gateway_attachment.transit_gateway.attachments.attachment_type",
+            "transit_gateway_attachment.transit_gateway.attachments.propagates_to_route_tables.id",
+            "transit_gateway_attachment.transit_gateway.attachments.virtual_network.cidr_blocks.prefix",
+            "transit_gateway_attachment.transit_gateway.attachments.virtual_network.account.owner.org_id",
+        ],
+    }
+    for root, paths in reads.items():
+        selected = _selected_paths(path, root)
+        assert not [item for item in paths if item not in selected], root
+    assert "owner" in relationship_names("ManagedNetworkSegment")
+    assert "status" in attribute_names("ManagedNetworkSegment")
+    assert {"sdwan_gateway", "segment_deployments", "lan_prefixes"} <= relationship_names("TopologyCustomerOffice")
+    assert {"transit_gateway_attachment", "virtual_circuit", "virtual_network"} <= relationship_names(
+        "CloudVirtualInterface"
+    )
+    assert {"transit_gateway", "associated_route_table"} <= relationship_names("CloudTransitGatewayAttachment")
+    assert "attachments" in relationship_names("CloudTransitGateway")
+    assert "segment" in relationship_names("ManagedSegmentDeployment")

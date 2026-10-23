@@ -79,7 +79,7 @@
     "UNDERLAY-PEERS": {
       "bfd": "true",
       "remove_private_as": "true",
-      "send_community": "extended"
+      "send_community": "both"
     }
   },
   "DEVICE_METADATA": {
