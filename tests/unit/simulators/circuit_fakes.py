@@ -7,6 +7,7 @@ assert both what a run wrote and that a refused run wrote nothing at all.
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from typing import Any
@@ -148,7 +149,7 @@ def loopback(
 
 def deployment(kind: str, name: str, *, underlay: str = "ipv6") -> dict[str, Any]:
     """A device's deployment as virtual_circuit.gql selects it (a DC also its name and underlay_protocol)."""
-    node: dict[str, Any] = {"id": f"dep-{name}", "__typename": kind}
+    node: dict[str, Any] = {"__typename": kind}
     if kind == "TopologyDataCenter":
         node["name"] = {"value": name}
         node["underlay_protocol"] = {"value": underlay}
@@ -268,10 +269,13 @@ def session_payload(
     namespace: str | None = "PROD",
     maximum_routes: int | None = 100,
     password: str | None = None,
+    circuit_id: str = VC_ID,
 ) -> dict[str, Any]:
-    """A virtual circuit payload of ``kind``; a handoff also carries its namespace, maximum_routes and password."""
+    """A virtual circuit payload of ``kind``; a handoff also carries its namespace, maximum_routes and password.
+
+    ``circuit_id`` is for a second circuit on the same client (see ``FakeClient.circuit_ids``)."""
     node: dict[str, Any] = {
-        "id": VC_ID,
+        "id": circuit_id,
         "__typename": kind,
         "name": {
             "value": name or ("VC-DCI-DC10-FR2" if kind == "TopologyInterconnectCircuit" else "VC-C001-EQXFR-AWS")
@@ -335,18 +339,21 @@ class _FakeInterface:
 class _RecordingList(list):
     """group_context.related_node_ids that also logs each append as a write.
 
-    The circuit itself (``VC_ID``) is the run's target, not an output: the generator adds it to the group so that the
-    SDK's cleanup always runs. It is logged in ``targets`` and not as a write, so "the run wrote nothing" assertions
-    and ``FakeClient.claimed()`` keep describing outputs only.
+    A circuit itself (``VC_ID``, or any id in ``circuit_ids``) is the run's target, not an output: the generator adds it
+    to the group on the runs that clean up or build. It is logged in ``targets`` and not as a write, so "the run wrote
+    nothing" assertions and ``FakeClient.claimed()`` keep describing outputs only.
     """
 
-    def __init__(self, writes: list[tuple[str, str, dict[str, Any]]], targets: list[str]) -> None:
+    def __init__(
+        self, writes: list[tuple[str, str, dict[str, Any]]], targets: list[str], circuit_ids: set[str]
+    ) -> None:
         super().__init__()
         self._writes = writes
         self._targets = targets
+        self._circuit_ids = circuit_ids
 
     def append(self, item: Any) -> None:
-        if item == VC_ID:
+        if item in self._circuit_ids:
             self._targets.append(item)
         else:
             self._writes.append(("track", item, {}))
@@ -365,7 +372,10 @@ class FakeClient:
         self.created: list[tuple[str, dict[str, Any], MagicMock]] = []
         self.group_context = MagicMock()
         self.targets: list[str] = []  # the circuit ids a run added to its tracking group as its target
-        self.group_context.related_node_ids = _RecordingList(self.writes, self.targets)
+        self.circuit_ids: set[str] = {VC_ID}  # ids of the circuits under test: tracking one is a target, not an output
+        self.group_context.related_node_ids = _RecordingList(self.writes, self.targets, self.circuit_ids)
+        # One real lock per resource_lock key, shared by every generator on this client: concurrent runs contend.
+        self.locks: dict[str, asyncio.Lock] = {}
         self.keys: dict[str, MagicMock] = {"VC-DCI-DC10-FR2-dci-key": MagicMock(id=DC_KEY_ID)} if key else {}
         self.pools = (
             {name: SimpleNamespace(id=f"pool-{name}", pool_name=name) for name in POOL_NETWORKS} if pools else {}
@@ -437,6 +447,7 @@ class FakeClient:
     async def filters(self, kind: Any, **kwargs: Any) -> list[Any]:
         name = kind_name(kind)
         self.filter_calls.append((name, kwargs))
+        await asyncio.sleep(0)  # a round trip: other runs on this client may go on meanwhile
         if name == "RoutingBGPAddressFamily":
             if not self.address_families:
                 return []
@@ -538,7 +549,7 @@ def raising_logger() -> MagicMock:
 
 
 def make_generator(cls: Any, client: FakeClient) -> Any:
-    """A circuit generator over the fake client, with a no-op resource lock and stubbed fan-out/wait."""
+    """A circuit generator over the fake client, with the client's keyed resource locks and stubbed fan-out/wait."""
     gen: Any = cls.__new__(cls)
     gen.client = client
     gen.logger = raising_logger()
@@ -547,8 +558,10 @@ def make_generator(cls: Any, client: FakeClient) -> Any:
 
     @asynccontextmanager
     async def _lock(key: str):  # noqa: ANN202
-        gen.lock_keys.append(key)
-        yield
+        async with client.locks.setdefault(key, asyncio.Lock()):
+            await asyncio.sleep(0)  # acquiring is a round trip: other runs may go on meanwhile
+            gen.lock_keys.append(key)
+            yield
 
     gen.resource_lock = _lock
     gen.run_generator = AsyncMock()

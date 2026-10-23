@@ -40,21 +40,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from utils.circuit_underlay import SESSION_CIRCUIT_KINDS
 from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator
-from ..protocols import (
-    DcimVirtualInterface,
-    TopologyHandoffCircuit,
-    TopologyInterconnectCircuit,
-    TopologyPhysicalCircuit,
-)
+from ..protocols import DcimVirtualInterface, TopologyPhysicalCircuit
 
 PHYSICAL_CIRCUIT_GENERATOR = "add_circuit"
 VIRTUAL_CIRCUIT_GENERATOR = "add_virtual_circuit"
-# The virtual circuit kinds that have a session generated (the tunnel circuit has none and is not in the
-# generator's target group), here for the fan-out below and for virtual_circuit.py's port-exclusivity check.
-SESSION_CIRCUIT_KINDS = (TopologyInterconnectCircuit, TopologyHandoffCircuit)
 
 # Device deployments that are themselves the facility a physical circuit end
 # terminates on, so that end's location is derived from its device. A colocation

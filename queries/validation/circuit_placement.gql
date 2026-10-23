@@ -8,7 +8,8 @@
 #   locations and end ports; each port's device carries its BGP processes (the Interconnect needs exactly one
 #   overlay process on it).
 # - TopologyHandoffCircuit: status (as above), locations and end ports; the environment namespace; the cloud-side
-#   endpoint (a VIF states its VLAN, which mirrors the sub-interface name).
+#   endpoint (a VIF states its VLAN, which mirrors the sub-interface name). Its locations are exactly where its two
+#   end devices are deployed, so every end port's device carries its deployment.
 #
 # A virtual circuit's end port (VirtualPort) carries the physical circuits terminating on it (its own
 # `capabilities`, which also hold segments and peerings: only TopologyPhysicalCircuit is selected) and, for a
@@ -157,6 +158,15 @@ fragment VirtualPort on DcimInterface {
       id
       __typename
       name { value }
+      ... on DcimPhysicalDevice {
+        deployment { node { id __typename name { value } } }
+      }
+      ... on DcimVirtualDevice {
+        deployment { node { id __typename name { value } } }
+      }
+      ... on CloudNetworkAppliance {
+        deployment { node { id __typename name { value } } }
+      }
       ... on DcimCapabilities {
         capabilities {
           edges {

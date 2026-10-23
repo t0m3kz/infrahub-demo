@@ -111,7 +111,6 @@ _GENERATOR_READS = [
     "capabilities.__typename",
     "capabilities.device.id",
     "capabilities.device.name",
-    "capabilities.device.deployment.id",
     "capabilities.device.deployment.__typename",
     "capabilities.device.deployment.name",
     "capabilities.device.deployment.underlay_protocol",

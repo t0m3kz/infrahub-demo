@@ -33,6 +33,7 @@ import yaml
 
 ROOT = Path(__file__).parents[2]
 EVENTS = ROOT / "data" / "events"
+BOOTSTRAP = ROOT / "data" / "bootstrap"
 
 
 # ---------------------------------------------------------------------------
@@ -202,20 +203,33 @@ def _walk(kind: str, data: Any, path: Path, enclosing: Declared | None) -> Itera
 
 
 @cache
-def declared_in(*directories: Path) -> tuple[Declared, ...]:
-    """Every object declared in the object files (*.yml) under ``directories``, in load order."""
-    found: list[Declared] = []
-    for directory in directories:
-        for path in sorted(directory.rglob("*.yml")):
+def object_documents(*paths: Path) -> tuple[tuple[Path, dict[str, Any]], ...]:
+    """(file, document) for every ``kind: Object`` document under ``paths``, in load order.
+
+    A path is a directory (every *.yml below it) or one object file. This is the raw view
+    (for a scan of the whole structure, comments aside); ``declared_in`` is the per-object one.
+    """
+    found: list[tuple[Path, dict[str, Any]]] = []
+    for root in paths:
+        for path in [root] if root.is_file() else sorted(root.rglob("*.yml")):
             for document in yaml.safe_load_all(path.read_text()):
                 if isinstance(document, dict) and document.get("kind") == "Object":
-                    found.extend(_walk(document["spec"]["kind"], document["spec"].get("data") or [], path, None))
+                    found.append((path, document))
     return tuple(found)
 
 
-def declared(kind: str, *directories: Path) -> list[Declared]:
-    """The declarations of ``kind`` under ``directories``."""
-    return [obj for obj in declared_in(*directories) if obj.kind == kind]
+@cache
+def declared_in(*paths: Path) -> tuple[Declared, ...]:
+    """Every object declared in the object files (*.yml) under ``paths`` (directories or single files), in load order."""
+    found: list[Declared] = []
+    for path, document in object_documents(*paths):
+        found.extend(_walk(document["spec"]["kind"], document["spec"].get("data") or [], path, None))
+    return tuple(found)
+
+
+def declared(kind: str, *paths: Path) -> list[Declared]:
+    """The declarations of ``kind`` under ``paths`` (directories or single object files)."""
+    return [obj for obj in declared_in(*paths) if obj.kind == kind]
 
 
 # ---------------------------------------------------------------------------

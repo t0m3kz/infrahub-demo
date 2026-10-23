@@ -138,6 +138,30 @@ infrahub_tests:
           path: queries/config/super_spine.gql
           kind: graphql-query-smoke
 
+  - resource: GraphQLQuery
+    resource_name: controller_payload
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/config/controller.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: placeholder
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/placeholder.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: device_decommission
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/config/device_decommission.gql
+          kind: graphql-query-smoke
+
   # ==================== TOPOLOGY QUERIES ====================
   - resource: GraphQLQuery
     resource_name: topology_dc
@@ -153,14 +177,6 @@ infrahub_tests:
       - name: syntax_check
         spec:
           path: queries/topology/add/pod.gql
-          kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
-    resource_name: topology_rack
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/topology/add/rack.gql
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
@@ -331,6 +347,111 @@ infrahub_tests:
           path: queries/topology/add/mlag_domain.gql
           kind: graphql-query-smoke
 
+  - resource: GraphQLQuery
+    resource_name: application_orchestrator_routing
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/application_orchestrator_routing.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: application_orchestrator_routing_data
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/application_orchestrator_routing_data.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: colocation_metro_data
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/colocation_metro.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: virtual_colocation_data
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/colocation_virtual.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: colocation_zone_data
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/colocation_zone.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: customer_colocation
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/customer_colocation.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: customer_dc
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/customer_dc.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: customer_deployment_orchestrator_routing
+    tests:
+      - name: syntax_check
+        spec:
+          # yamllint disable-line rule:line-length
+          path: queries/topology/add/customer_deployment_orchestrator_routing.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: customer_office_sdwan
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/customer_office_sdwan.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: office_fabric_data
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/office_fabric.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: topology_orchestrator_routing_data
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/topology_orchestrator_routing_data.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: virtual_colocation_orchestrator_routing
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/virtual_colocation_orchestrator_routing.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: rack_elevation_query
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/rack.gql
+          kind: graphql-query-smoke
+
   # ==================== VALIDATION QUERIES ====================
   - resource: GraphQLQuery
     resource_name: app_dependency_validation
@@ -434,4 +555,44 @@ infrahub_tests:
       - name: syntax_check
         spec:
           path: queries/validation/reference_fabric.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: colocation_placement
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/colocation_placement.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: pbr_firewall_reachability
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/pbr_firewall_reachability.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: routing_invariants
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/routing_invariants.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: segment_security
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/segment_security.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: tenant_svi_protection
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/tenant_svi_protection.gql
           kind: graphql-query-smoke

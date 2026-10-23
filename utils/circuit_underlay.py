@@ -13,14 +13,47 @@ A virtual circuit's underlay is derived, never declared. A port is carried by
 ``checks/circuit_placement.py`` (contiguity, carrier presence) read the same cleaned dicts. The cleaned port has
 ``cable`` (the cable's id, or None) when the query selects it on a DcimPhysicalInterface, and a sub-interface's
 ``parent_interface`` has its own ``cable``.
+
+The virtual circuit kind names live here once (strings, no protocols import): the generators, the check and the
+planner mapping all read :data:`SESSION_CIRCUIT_KINDS`. The two rules of a session end that the generator and the check
+must agree on are here too: the overlay BGP processes of a device (:func:`overlay_processes`) and the VLAN of a
+``<port>.<vlan>`` sub-interface (:func:`subinterface_vlan`).
 """
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 DECOMMISSIONED = "decommissioned"
 PHYSICAL_CIRCUIT = "TopologyPhysicalCircuit"
+TUNNEL_CIRCUIT = "TopologyTunnelCircuit"
+INTERCONNECT_CIRCUIT = "TopologyInterconnectCircuit"
+HANDOFF_CIRCUIT = "TopologyHandoffCircuit"
+# The virtual circuit kinds that have a session generated (the tunnel circuit has none): a port is an end of at most one.
+SESSION_CIRCUIT_KINDS = (INTERCONNECT_CIRCUIT, HANDOFF_CIRCUIT)
+
+BGP_PROCESS = "ManagedBGP"
+OVERLAY_ROLE = "overlay"
+# A handoff end is a VLAN sub-interface, <parent>.<vlan>: the VLAN lives in the name.
+_VLAN_SUBINTERFACE = re.compile(r".+\.(\d+)")
+
+
+def overlay_processes(device: dict[str, Any]) -> list[dict[str, Any]]:
+    """The ManagedBGP processes of process_role ``overlay`` among a cleaned device's ``capabilities``."""
+    return [
+        process
+        for process in device.get("capabilities") or []
+        if isinstance(process, dict)
+        and process.get("typename") == BGP_PROCESS
+        and process.get("process_role") == OVERLAY_ROLE
+    ]
+
+
+def subinterface_vlan(name: str) -> int | None:
+    """The VLAN of a sub-interface named ``<port>.<vlan>``, None for any other name."""
+    match = _VLAN_SUBINTERFACE.fullmatch(name)
+    return int(match.group(1)) if match else None
 
 
 def _port_and_parent(port: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:

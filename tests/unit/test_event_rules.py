@@ -170,10 +170,18 @@ def test_metro_has_no_update_trigger() -> None:
     assert "trigger-colocation-metro-update-fabric-templates" not in {rule["name"] for rule in trigger_rules()}
 
 
-def test_colocation_rule_set_is_exactly_five_rules() -> None:
-    """Metro created; zone created and updated; virtual colocation created and updated. Nothing else fires them."""
-    fabric_actions = {action for action, _, _ in _COLOCATION_KIND_WIRING.values()}
-    names = {rule["name"] for rule in trigger_rules() if rule["action"] in fabric_actions}
+def test_colocation_generators_are_fired_by_exactly_the_expected_rules() -> None:
+    """Metro created; zone created and updated; virtual colocation created and updated. Nothing else fires them.
+
+    The rules are pinned by name (a missing or renamed one fails, and so does a stray one firing these three
+    generators); rules of the same kinds that run another generator (the orchestrator routing) are not in the set.
+    """
+    names = {
+        rule["name"]
+        for node_kind, (action, _, _) in _COLOCATION_KIND_WIRING.items()
+        for rule in _rules_for(node_kind).values()
+        if rule["action"] == action
+    }
     assert names == {
         "trigger-colocation-metro-on-created",
         "trigger-colocation-zone-on-created",

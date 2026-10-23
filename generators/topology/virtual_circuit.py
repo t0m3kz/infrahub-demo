@@ -5,25 +5,29 @@ routing) and is not in the generator's target group; a run that reaches one logs
 
 The flow, shared by both kinds (what differs is a planner per kind: pool, family, peerings):
 
-1. A decommissioned circuit, or one with fewer than two ends, builds nothing: the run's tracked cleanup then removes
-   what an earlier run built (see "Ownership" for why the circuit itself is tracked). Two ends on one device, or more
-   than two ends, is an error.
-2. It waits for add_circuit on every physical circuit it rides (``derived_underlay``: the carrier terminating on each
-   end port, or on a sub-interface's parent). add_circuit never waits for this generator, so there is no cycle.
-   Then it decides whether the ends are carried (``utils.circuit_underlay.has_carrier``: a physical circuit of any
-   status, or a DcimCable, at the port or its parent; a hop inside one facility is a cable, not a circuit):
+1. A decommissioned circuit, or one with fewer than two ends, builds nothing and CLEANS UP: the run's tracked cleanup
+   removes what an earlier run built (see "Ownership"). Two ends on one device, or more than two ends, is an error.
+2. It waits (concurrently: the carriers are independent) for add_circuit on every physical circuit it rides
+   (``derived_underlay``: the carrier terminating on each end port, or on a sub-interface's parent). add_circuit never
+   waits for this generator, so there is no cycle. Then it decides whether the ends are carried
+   (``utils.circuit_underlay.has_carrier``: a physical circuit of any status, or a DcimCable, at the port or its
+   parent; a hop inside one facility is a cable, not a circuit):
 
    - InterconnectCircuit: BOTH ends need a carrier (a DCI between two border gateways, each on its own fibre);
    - HandoffCircuit: AT LEAST ONE end needs one (the party end may be a stub, or a provider-hosted appliance, with
      none).
 
-   Not enough carried ends builds nothing and is not an error (a check enforces carriers; add_circuit fans back out
-   here once a port is linked to a circuit, but nothing reruns this generator when a cable is added later, so cable
-   first, circuit after). A carrier that is wholly decommissioned circuits (at least one, all decommissioned, and no
-   cable at any end) builds nothing; a cable has no status, so a cabled end is always live.
+   Not enough carried ends (no carrier found, or one end only of an interconnect) builds nothing, is not an error and
+   KEEPS whatever an earlier run built: the run cannot tell "not linked yet / the link is not visible yet" from "the
+   link is gone", and deleting a good session on a transient read is worse than keeping a stale one (a check enforces
+   carriers; add_circuit fans back out here once a port is linked to a circuit, but nothing reruns this generator
+   when a cable is added later, so cable first, circuit after). A carrier that is wholly decommissioned circuits (at
+   least one, all decommissioned, and no cable at any end) is explicit: it builds nothing and CLEANS UP; a cable has
+   no status, so a cabled end is always live.
 3. A port that is also an end of another session circuit is an error: one port, one session.
-4. Under a lock per circuit it allocates a /31 (/127) from the pool the kind names (identifier ``vc-p2p__<id>``, so a
-   re-run gets the same prefix), addresses the two ends, and
+4. Under a lock per port (sorted, so two runs never wait on each other in a cycle) around the check of step 3 and
+   the writes, and under a lock per circuit around the writes, it allocates a /31 (/127) from the pool the kind names
+   (identifier ``vc-p2p__<id>``, so a re-run gets the same prefix), addresses the two ends, and
 5. upserts the peering(s), named ``<vc>-bgp`` (handoff) or ``<vc>-underlay`` and ``<vc>-evpn`` (interconnect).
    Peerings share the ManagedGeneric name space with circuits, hence the suffix.
 
@@ -44,37 +48,61 @@ IPv6 only. Two sessions on the overlay processes, keyed with one generated per-c
 physical ports get MTU 9216.
 
 Ownership (the run's tracking group, delete_unused_nodes=True): the prefix, its addresses and the peerings belong to
-the circuit. The circuit itself is added to the group first thing, before any early return: the SDK's
-``update_group`` returns without any cleanup when the run tracked nothing (``if not members: return`` precedes the
-deletion of the previous members that this run did not reach), so a run that builds nothing (decommissioned, an end
-missing, no carrier yet, whole carrier decommissioned) would leave the old peerings, prefix and addresses in place.
-With the circuit in the group the members are never empty and everything an earlier run tracked and this one did not
-write is deleted; the circuit is the target and is a member of both sets, so it is never deleted. The end interfaces come from device templates and are written untracked (only when something changed);
+the circuit. The SDK's ``update_group`` returns without any cleanup when the run tracked nothing (``if not members:
+return`` precedes the deletion of the previous members that this run did not reach), and deletes every previous member
+the run did not reach otherwise. Cleanup runs for EXACTLY these reasons, and the circuit (the run's target) is added to
+the group only on them and on a run that builds:
+
+- the circuit is decommissioned,
+- it has fewer than two ends,
+- its whole carrier is decommissioned (at least one carrier circuit, all decommissioned, no cable),
+
+so the group is never empty there and everything an earlier run tracked and this one did not write is deleted; the
+circuit is a member of both sets, so it is never deleted itself. A run that builds tracks the circuit for the same
+reason (a previous member the run did not reach would be deleted, and the circuit was one). The one path that does NOT
+track it is "not enough carried ends / no carrier found" (see step 2): nothing is written before that decision (the
+waits and the refetch read only; locks are saved untracked), so the group is empty, ``update_group`` returns at once
+and the old outputs stay. Do not move the tracking back above that decision: a run that transiently sees no carrier
+(index lag) would then delete a good session.
+
+The end interfaces come from device templates and are written untracked (only when something changed);
 devices, BGP processes and the global address families are only referenced. The interconnect's key is untracked too,
-deliberately: a tracked key is deleted by any run that returns early (decommissioned circuit, an end missing, no
-carrier) or stops reaching it, and the next full run would then generate a NEW secret, rotating a key the far side
-may already use. Untracked, no cleanup ever touches it, so it is created once and never rotated. The trade-off: a
-deleted circuit leaves its ``<vc>-dci-key`` behind (demo data of a circuit that no longer exists).
+deliberately: a tracked key is deleted by any run that stops reaching it, and the next full run would then generate a
+NEW secret, rotating a key the far side may already use. Untracked, no cleanup ever touches it, so it is created once
+and never rotated. The trade-off: a deleted circuit leaves its ``<vc>-dci-key`` behind (demo data of a circuit that no
+longer exists).
 """
 
 from __future__ import annotations
 
-import re
-from collections.abc import Callable
+import asyncio
+from collections.abc import AsyncGenerator, Callable
+from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, ClassVar
 
 from infrahub_sdk.protocols import CoreIPPrefixPool
 
-from utils.circuit_underlay import DECOMMISSIONED, derived_underlay, has_carrier, port_cabled
+from utils.circuit_underlay import (
+    BGP_PROCESS,
+    DECOMMISSIONED,
+    HANDOFF_CIRCUIT,
+    INTERCONNECT_CIRCUIT,
+    SESSION_CIRCUIT_KINDS,
+    derived_underlay,
+    has_carrier,
+    overlay_processes,
+    port_cabled,
+    subinterface_vlan,
+)
 from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator
 from ..connections import CablingMixin
 from ..pools import PoolMixin
-from ..protocols import DcimPhysicalInterface, DcimVirtualInterface, TopologyHandoffCircuit, TopologyInterconnectCircuit
+from ..protocols import DcimPhysicalInterface, DcimVirtualInterface
 from ..routing import EVPN_AF, IPV4_UNICAST_AF, IPV6_UNICAST_AF, RoutingMixin, _dci_key_name
-from .circuit import PHYSICAL_CIRCUIT_GENERATOR, SESSION_CIRCUIT_KINDS
+from .circuit import PHYSICAL_CIRCUIT_GENERATOR
 
 # DCI P2P pools (data/bootstrap/20_dci_pools.yml) by address family, with the prefix length allocated from them.
 _DCI_POOLS: dict[int, tuple[str, int]] = {4: ("DCI-Technical-IPv4", 31), 6: ("DCI-Technical-IPv6", 127)}
@@ -84,8 +112,6 @@ _DCI_UNDERLAY_MAXIMUM_ROUTES = 16
 # Loopback roles an EVPN session may source from, in order of preference. Never the multisite-vip, shared by every
 # border gateway of a site (the query does not select it either).
 _SESSION_LOOPBACK_ROLES = ("loopback-vtep", "loopback")
-# A handoff end is a VLAN sub-interface, <parent>.<vlan>: the VLAN lives in the name.
-_VLAN_SUBINTERFACE = re.compile(r"^.+\.\d+$")
 
 # Circuit status -> the status of the interfaces it lands on (templates render a non-active interface shut).
 _INTERFACE_STATUS_FOR_CIRCUIT = {
@@ -128,8 +154,9 @@ class SessionEnd:
     deployment_kind: str
     deployment_name: str
     underlay_protocol: str | None
-    # (id, name, process_role) of every ManagedBGP process on the device.
-    processes: tuple[tuple[str, str, str], ...]
+    # (id, name) of every ManagedBGP process on the device, and the ids of those of process_role overlay.
+    processes: tuple[tuple[str, str], ...]
+    overlay_ids: tuple[str, ...]
     loopbacks: tuple[Loopback, ...]
 
     @property
@@ -142,8 +169,7 @@ class SessionEnd:
 
     def overlay_process(self) -> str | None:
         """Id of the device's single overlay-role ManagedBGP process, else None."""
-        overlay = [proc_id for proc_id, _, role in self.processes if role == "overlay"]
-        return overlay[0] if len(overlay) == 1 else None
+        return self.overlay_ids[0] if len(self.overlay_ids) == 1 else None
 
     def session_process(self) -> str | None:
         """Id of the process a session runs on: the single overlay one, else the device's only ManagedBGP."""
@@ -190,10 +216,11 @@ class SessionEnd:
             deployment_name=(deployment.get("name") or "") if is_dc else "",
             underlay_protocol=deployment.get("underlay_protocol") if is_dc else None,
             processes=tuple(
-                (cap["id"], cap.get("name") or "", cap.get("process_role") or "")
+                (cap["id"], cap.get("name") or "")
                 for cap in device.get("capabilities") or []
-                if isinstance(cap, dict) and cap.get("typename") == "ManagedBGP" and cap.get("id")
+                if isinstance(cap, dict) and cap.get("typename") == BGP_PROCESS and cap.get("id")
             ),
+            overlay_ids=tuple(process["id"] for process in overlay_processes(device) if process.get("id")),
             loopbacks=tuple(loopbacks),
         )
 
@@ -206,12 +233,14 @@ class PeeringPlan:
     description: str
     peering_role: str
     session_type: str
-    ttl: int
-    bfd_enabled: bool
-    send_extended_community: bool
-    maximum_routes: int | None
-    address_family: tuple[tuple[str, str], ...]
+    # (afi, safi) of the one address family the session carries.
+    address_family: tuple[str, str]
     interface_ids: tuple[str, ...]
+    # Directly connected eBGP by default; only the EVPN multihop session overrides.
+    ttl: int = 1
+    bfd_enabled: bool = True
+    send_extended_community: bool = False
+    maximum_routes: int | None = None
 
 
 @dataclass(frozen=True)
@@ -239,13 +268,6 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, Comm
 
     client: Any
 
-    def _planners(self) -> dict[str, Callable[[dict[str, Any], str, list[SessionEnd]], SessionPlan]]:
-        """Circuit kind -> its planner. Keys are exactly SESSION_CIRCUIT_KINDS (a test pins it)."""
-        return {
-            TopologyInterconnectCircuit.__name__: self._plan_interconnect,
-            TopologyHandoffCircuit.__name__: self._plan_handoff,
-        }
-
     async def generate(self, data: dict[str, Any]) -> None:
         circuits = clean_data(data).get("TopologyVirtualCircuit") or []
         if not circuits:
@@ -257,13 +279,10 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, Comm
             self.logger.error("TopologyVirtualCircuit missing name")
             return
         kind = circuit.get("typename") or ""
-        planner = self._planners().get(kind)
+        planner = self._PLANNERS.get(kind)
         if planner is None:
             self.logger.info(f"Virtual circuit {name} ({kind}): no session is generated for this kind")
             return
-        # Never an empty tracking group: infrahub_sdk's update_group() does no cleanup when a run tracked nothing, so
-        # without this the "no session" paths below would leave the old peerings, prefix and addresses behind.
-        self.client.group_context.related_node_ids.append(circuit["id"])
         self.logger.info(
             f"Processing virtual circuit {name} ({kind}, status={circuit.get('status') or '?'}); "
             f"carrier: {self._carrier_label(circuit)}"
@@ -271,12 +290,17 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, Comm
 
         ends = self._ends_or_none(circuit, name)
         if ends is None:
+            self._track_circuit(circuit["id"])
             return
-        refreshed: dict[str, Any] | None = None
-        for carrier in derived_underlay(circuit):
-            refreshed = (
-                await self.wait_for_parent_generator_and_refetch(PHYSICAL_CIRCUIT_GENERATOR, carrier["id"]) or refreshed
+        # The carriers are independent: wait for all of them at once. The data built from is the last refetch, in
+        # carrier order (every refetch re-collects the whole query, so the last one is the freshest).
+        refetched = await asyncio.gather(
+            *(
+                self.wait_for_parent_generator_and_refetch(PHYSICAL_CIRCUIT_GENERATOR, carrier["id"])
+                for carrier in derived_underlay(circuit)
             )
+        )
+        refreshed = next((result for result in reversed(refetched) if result), None)
         if refreshed is not None:
             circuits = clean_data(refreshed).get("TopologyVirtualCircuit") or []
             if not circuits:
@@ -285,13 +309,15 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, Comm
             circuit = circuits[0]
             ends = self._ends_or_none(circuit, name)
             if ends is None:
+                self._track_circuit(circuit["id"])
                 return
         ports = [port for port in circuit.get("capabilities") or [] if isinstance(port, dict) and port.get("id")]
         carried = [has_carrier(port) for port in ports]
-        if not (all(carried) if kind == TopologyInterconnectCircuit.__name__ else any(carried)):
+        if not (all(carried) if kind == INTERCONNECT_CIRCUIT else any(carried)):
+            # Not tracked, on purpose: see "Ownership". The run tracks nothing, so the SDK cleans nothing.
             self.logger.info(
-                f"  {name}: ports not linked to a physical carrier yet - session built when they are "
-                "(add_circuit reruns it for a circuit)"
+                f"  {name}: ports not linked to a physical carrier yet - nothing built, any session an earlier run "
+                "built is kept; built when they are (add_circuit reruns it for a circuit)"
             )
             return
         carriers = derived_underlay(circuit)
@@ -300,16 +326,40 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, Comm
             and all(carrier.get("status") == DECOMMISSIONED for carrier in carriers)
             and not any(port_cabled(port) for port in ports)
         ):
+            self._track_circuit(circuit["id"])
             self.logger.info(f"  {name}: its whole carrier is decommissioned - no session; the old one is cleaned up")
             return
 
-        plan = planner(circuit, name, ends)
-        await self._refuse_shared_ports(circuit["id"], name, ends)
-        pool = await self.client.get(kind=CoreIPPrefixPool, name__value=plan.pool_name, raise_when_missing=False)
-        if pool is None:
-            self.fail(f"{name}: pool '{plan.pool_name}' not found (data/bootstrap/)")
-        await self._write_session(circuit, name, plan, pool)
+        self._track_circuit(circuit["id"])
+        plan = planner(self, circuit, name, ends)
+        async with self._hold_ports(ends):
+            await self._refuse_shared_ports(circuit["id"], name, ends)
+            pool = await self.client.get(kind=CoreIPPrefixPool, name__value=plan.pool_name, raise_when_missing=False)
+            if pool is None:
+                self.fail(f"{name}: pool '{plan.pool_name}' not found (data/bootstrap/)")
+            await self._write_session(circuit, name, plan, pool)
         self.logger.info(f"Virtual circuit {name} — completed")
+
+    def _track_circuit(self, circuit_id: str) -> None:
+        """Make the circuit a member of the run's group, so the SDK's cleanup runs (see "Ownership" above).
+
+        infrahub_sdk's update_group() does no cleanup when a run tracked nothing, so every path that must clean up an
+        earlier run's outputs tracks the circuit first.
+        """
+        self.client.group_context.related_node_ids.append(circuit_id)
+
+    @asynccontextmanager
+    async def _hold_ports(self, ends: list[SessionEnd]) -> AsyncGenerator[None]:
+        """A lock per end port, taken in sorted order, around the shared-port check AND the writes.
+
+        The check reads other circuits and the writes address the ports: two circuits created together on one port
+        must not both pass the check before either has written. Sorted keys mean two runs never hold one port each
+        while waiting for the other's.
+        """
+        async with AsyncExitStack() as stack:
+            for port_id in sorted({end.port_id for end in ends}):
+                await stack.enter_async_context(self.resource_lock(f"vc-port-{port_id}"))
+            yield
 
     # -- shared preconditions ------------------------------------------------------------------------------------
 
@@ -376,7 +426,7 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, Comm
         for end in (first, second):
             process_id = end.session_process()
             if process_id is None:
-                names = ", ".join(proc for _, proc, _ in end.processes) or "none"
+                names = ", ".join(proc for _, proc in end.processes) or "none"
                 self.fail(
                     f"{name}: {end.device_name} needs one overlay ManagedBGP process, or only one ManagedBGP "
                     f"process; has: {names}"
@@ -392,7 +442,7 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, Comm
         if not isinstance(namespace, dict) or not namespace.get("name"):
             self.fail(f"{name}: a handoff circuit needs its ip_namespace")
         for end in ends:
-            if end.port_kind != DcimVirtualInterface.__name__ or not _VLAN_SUBINTERFACE.match(end.port_name):
+            if end.port_kind != DcimVirtualInterface.__name__ or subinterface_vlan(end.port_name) is None:
                 self.fail(f"{name}: {end.label} must be a DcimVirtualInterface named <parent>.<vlan>")
         first, second = sorted(ends, key=lambda e: (e.overlay_process() is None, e.device_name, e.port_name))
         return SessionPlan(
@@ -409,11 +459,8 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, Comm
                     description=f"Handoff eBGP {first.label} <-> {second.label} over {name}",
                     peering_role="regular",
                     session_type="EBGP",
-                    ttl=1,
-                    bfd_enabled=True,
-                    send_extended_community=False,
+                    address_family=IPV4_UNICAST_AF,
                     maximum_routes=circuit.get("maximum_routes"),
-                    address_family=(IPV4_UNICAST_AF,),
                     interface_ids=(first.port_id, second.port_id),
                 ),
             ),
@@ -465,11 +512,8 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, Comm
                     description=f"DCI underlay eBGP {first.label} <-> {second.label} over {name}",
                     peering_role="dci-underlay",
                     session_type="EBGP",
-                    ttl=1,
-                    bfd_enabled=True,
-                    send_extended_community=False,
+                    address_family=_UNICAST_AF[family],
                     maximum_routes=_DCI_UNDERLAY_MAXIMUM_ROUTES,
-                    address_family=(_UNICAST_AF[family],),
                     interface_ids=(first.port_id, second.port_id),
                 ),
                 PeeringPlan(
@@ -477,17 +521,22 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, Comm
                     description=f"DCI EVPN multihop {first.device_name} <-> {second.device_name} over {name}",
                     peering_role="dci",
                     session_type="EBGP_MULTIHOP",
+                    address_family=EVPN_AF,
                     ttl=2,
                     bfd_enabled=False,
                     send_extended_community=True,
-                    maximum_routes=None,
-                    address_family=(EVPN_AF,),
                     interface_ids=(by_port[first.port_id].id, by_port[second.port_id].id),
                 ),
             ),
             key_name=_dci_key_name(name),
             mtu=_DCI_MTU,
         )
+
+    # Circuit kind -> its planner. Keys are exactly SESSION_CIRCUIT_KINDS (a test pins it).
+    _PLANNERS: ClassVar[dict[str, Callable[..., SessionPlan]]] = {
+        INTERCONNECT_CIRCUIT: _plan_interconnect,
+        HANDOFF_CIRCUIT: _plan_handoff,
+    }
 
     def _dci_family(self, name: str, ends: list[SessionEnd]) -> int:
         """4 or 6, from the DC end's underlay_protocol; dual-stack and disagreeing DCs are refused."""
@@ -565,7 +614,7 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, Comm
                     session_type=peering.session_type,
                     peering_role=peering.peering_role,
                     process_ids=list(plan.process_ids),
-                    address_family_ids=[await self.ensure_address_family(*af) for af in peering.address_family],
+                    address_family_ids=[await self.ensure_address_family(*peering.address_family)],
                     interface_ids=list(peering.interface_ids),
                     password_id=password_id,
                     ttl=peering.ttl,

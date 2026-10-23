@@ -47,6 +47,10 @@ _PORT_READS = [
     "capabilities.device.id",
     "capabilities.device.__typename",
     "capabilities.device.name",
+    # a handoff's locations are exactly where its end devices are deployed
+    "capabilities.device.deployment.id",
+    "capabilities.device.deployment.__typename",
+    "capabilities.device.deployment.name",
     "capabilities.device.capabilities.__typename",
     "capabilities.device.capabilities.process_role",
     # a hop inside one facility is a cable: on the physical port, or on the parent of a sub-interface

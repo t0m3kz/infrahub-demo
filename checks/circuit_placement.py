@@ -32,7 +32,9 @@ Interconnect circuit (DCI between two EVPN Multi-Site border gateways; an underl
        of a DCI: the EVPN session runs between those processes).
 
 Handoff circuit (our edge sub-interface to a party device sub-interface, in one environment namespace)
-    1. one or two distinct locations (both ends may sit in one cage) and two end ports,
+    1. one or two distinct locations (both ends may sit in one cage) and two end ports; the locations are exactly the
+       facilities the two end devices are deployed in (nothing derives them, so a location no end device is deployed
+       in, or an end device deployed elsewhere, is drift),
     2. at least one end on a physical device is carried at its port or its parent interface: by a live physical
        circuit, or by a DcimCable (a hop inside one facility, such as the gateway and the cage edge in one cage, is a
        cable, not a circuit; a cable has no status). An end on a Network Edge appliance or other virtual device has
@@ -83,26 +85,35 @@ from typing import Any
 
 from infrahub_sdk.checks import InfrahubCheck
 
-from utils.circuit_underlay import DECOMMISSIONED, derived_underlay, port_cabled, port_underlay
+from utils.circuit_underlay import (
+    BGP_PROCESS,
+    DECOMMISSIONED,
+    HANDOFF_CIRCUIT,
+    INTERCONNECT_CIRCUIT,
+    OVERLAY_ROLE,
+    SESSION_CIRCUIT_KINDS,
+    TUNNEL_CIRCUIT,
+    derived_underlay,
+    overlay_processes,
+    port_cabled,
+    port_underlay,
+    subinterface_vlan,
+)
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import PROD_TYPE, TENANT_NAMESPACE_TYPES
 
 PHYSICAL = "TopologyPhysicalCircuit"
-TUNNEL = "TopologyTunnelCircuit"
-INTERCONNECT = "TopologyInterconnectCircuit"
-HANDOFF = "TopologyHandoffCircuit"
+TUNNEL = TUNNEL_CIRCUIT
+INTERCONNECT = INTERCONNECT_CIRCUIT
+HANDOFF = HANDOFF_CIRCUIT
 VIRTUAL_KINDS = (TUNNEL, INTERCONNECT, HANDOFF)
 NOUNS = {TUNNEL: "Tunnel", INTERCONNECT: "Interconnect", HANDOFF: "Handoff"}
-SESSION_KINDS = (INTERCONNECT, HANDOFF)
-"""The kinds a session is generated on: a port is an end of at most one of them."""
 
 CIRCUIT_ENDS = 2
 """A circuit terminates on exactly two places and two ports, one per end."""
 INTERNET = "TopologyExternalProviders"
 OFFICE = "TopologyCustomerOffice"
 PHYSICAL_DEVICE = "DcimPhysicalDevice"
-BGP = "ManagedBGP"
-OVERLAY = "overlay"
 
 
 def _label(place: dict[str, Any] | None) -> str:
@@ -180,9 +191,8 @@ def _carriers_label(carriers: list[dict[str, Any]]) -> str:
 
 
 def _vlan(port: dict[str, Any]) -> int | None:
-    """The VLAN of a sub-interface named ``<port>.<vlan>``, None for any other name."""
-    _, dot, suffix = str(port.get("name") or "").rpartition(".")
-    return int(suffix) if dot and suffix.isdigit() else None
+    """The VLAN of an end port named ``<port>.<vlan>``, None for any other name."""
+    return subinterface_vlan(str(port.get("name") or ""))
 
 
 def _devices(circuit: dict[str, Any]) -> dict[str, str]:
@@ -244,7 +254,9 @@ class CheckCircuitPlacement(InfrahubCheck):
         # add_virtual_circuit builds nothing for a decommissioned session circuit: it is not validated, holds no port
         # and meets no device. A tunnel is not generated on either, so it is always validated.
         live = {
-            kind: [c for c in circuits if c.get("status") != DECOMMISSIONED] if kind in SESSION_KINDS else circuits
+            kind: [c for c in circuits if c.get("status") != DECOMMISSIONED]
+            if kind in SESSION_CIRCUIT_KINDS
+            else circuits
             for kind, circuits in virtual.items()
         }
         for circuit in live[TUNNEL]:
@@ -253,7 +265,7 @@ class CheckCircuitPlacement(InfrahubCheck):
             self._validate_interconnect(circuit)
         for circuit in live[HANDOFF]:
             self._validate_handoff(circuit)
-        self._validate_session_ports([(kind, circuit) for kind in SESSION_KINDS for circuit in live[kind]])
+        self._validate_session_ports([(kind, circuit) for kind in SESSION_CIRCUIT_KINDS for circuit in live[kind]])
         self._validate_environments([(kind, circuit) for kind in VIRTUAL_KINDS for circuit in live[kind]])
 
     # ------------------------------------------------------------------
@@ -429,19 +441,13 @@ class CheckCircuitPlacement(InfrahubCheck):
         """Each end device runs exactly one overlay BGP process: the EVPN session is built between them."""
         devices = {str(port["device"]["id"]): port["device"] for port in ports if (port.get("device") or {}).get("id")}
         for device in devices.values():
-            overlay = [
-                process
-                for process in device.get("capabilities") or []
-                if isinstance(process, dict)
-                and process.get("typename") == BGP
-                and process.get("process_role") == OVERLAY
-            ]
+            overlay = overlay_processes(device)
             if len(overlay) != 1:
                 self._error(
                     circuit,
                     INTERCONNECT,
-                    f"Interconnect circuit '{name}' end device '{device.get('name')}' has {len(overlay)} {BGP} "
-                    f"process(es) of process_role '{OVERLAY}': a border gateway runs exactly one.",
+                    f"Interconnect circuit '{name}' end device '{device.get('name')}' has {len(overlay)} {BGP_PROCESS} "
+                    f"process(es) of process_role '{OVERLAY_ROLE}': a border gateway runs exactly one.",
                 )
 
     # ------------------------------------------------------------------
@@ -451,7 +457,9 @@ class CheckCircuitPlacement(InfrahubCheck):
     def _validate_handoff(self, circuit: dict[str, Any]) -> None:
         name = _name(circuit)
         ports = _ports(circuit)
-        self._validate_shape(circuit, HANDOFF, _locations(circuit), ports, 1)
+        locations = _locations(circuit)
+        self._validate_shape(circuit, HANDOFF, locations, ports, 1)
+        self._validate_handoff_placement(circuit, name, locations)
 
         physical = [port for port in ports if (port.get("device") or {}).get("typename") == PHYSICAL_DEVICE]
         if physical and not any(_live_carriers(port) or port_cabled(port) for port in physical):
@@ -493,6 +501,26 @@ class CheckCircuitPlacement(InfrahubCheck):
                 f"'{endpoint.get('name')}' states vlan_id {endpoint['vlan_id']}: the virtual interface mirrors the "
                 "sub-interface VLAN.",
             )
+
+    def _validate_handoff_placement(self, circuit: dict[str, Any], name: str, locations: list[dict[str, Any]]) -> None:
+        """The handoff's locations are exactly the facilities its two end devices are deployed in.
+
+        Skipped when the shape is already reported (not 1 or 2 locations, not 2 ports). Unlike a physical circuit
+        nothing derives a handoff's locations, so they are authored and must agree with the devices; both ends may be
+        deployed in one cage, which is one location.
+        """
+        ends = _ends(circuit)
+        if not 1 <= len(locations) <= CIRCUIT_ENDS or len(ends) != CIRCUIT_ENDS:
+            return
+        deployed = {(deployment or {}).get("id") for _, deployment in ends}
+        if {location.get("id") for location in locations} == deployed:
+            return
+        self._error(
+            circuit,
+            HANDOFF,
+            f"Handoff circuit '{name}' terminates on {_labels(locations)} but its ends are {_ends_label(ends)}: a "
+            "handoff's locations are exactly the facilities its two end devices are deployed in.",
+        )
 
     # ------------------------------------------------------------------
     # Rules across circuits
