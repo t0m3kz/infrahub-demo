@@ -47,6 +47,7 @@ def _match_fields(rule: dict[str, Any]) -> list[tuple[str, str]]:
 
 
 def _rule_id(rule: dict[str, Any]) -> str:
+    """The rule name, as the test id."""
     return rule["name"]
 
 
@@ -238,18 +239,34 @@ def test_colocation_generators_are_registered_in_infrahub_yml() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_physical_circuit_rules_watch_only_creation_and_ports() -> None:
-    """add_circuit reads only a circuit's ends: it runs on creation and when `capabilities` change, nothing else."""
+def test_physical_circuit_rules_watch_creation_ends_and_status() -> None:
+    """add_circuit runs on creation, when `capabilities` change and when `status` changes, nothing else.
+
+    The status rule is what lets a carrier set to decommissioned (or back to active) reach, through add_circuit's
+    fan-out, the sessions riding it. `locations` (written by add_circuit itself, so a rule would loop) and
+    `circuit_type` (read by nothing) have no rule.
+    """
     rules = _rules_for("TopologyPhysicalCircuit")
     assert sorted(rules) == [
         "trigger-circuit-on-created",
         "trigger-circuit-on-interface-capabilities-updated",
+        "trigger-circuit-on-status-updated",
     ]
     assert {rule["action"] for rule in rules.values()} == {"run-circuit-generator"}
     assert _match_fields(rules["trigger-circuit-on-interface-capabilities-updated"]) == [
         ("CoreNodeTriggerRelationshipMatch", "capabilities")
     ]
+    assert _match_fields(rules["trigger-circuit-on-status-updated"]) == [("CoreNodeTriggerAttributeMatch", "status")]
+    status_rule = rules["trigger-circuit-on-status-updated"]
+    assert status_rule["mutation_action"] == "updated"
+    assert status_rule["matches"]["data"] == [{"attribute_name": "status", "value_match": "any"}]
     assert not rules["trigger-circuit-on-created"].get("matches")
+
+
+def test_the_circuit_action_runs_add_circuit_on_the_physical_circuits_group() -> None:
+    """The physical-circuit rules reach add_circuit, whose target group is physical_circuits."""
+    assert action_generators()["run-circuit-generator"] == "add_circuit"
+    assert definition_targets()["add_circuit"] == "physical_circuits"
 
 
 _SESSION_COMMON_RULES = {
@@ -301,6 +318,7 @@ def test_a_tunnel_circuit_and_the_generic_have_no_rule() -> None:
 
 
 def test_every_rule_of_the_session_action_is_on_a_session_kind() -> None:
+    """Only interconnect and handoff circuits trigger add_virtual_circuit; a tunnel or the generic would raise."""
     kinds = {rule["node_kind"] for rule in trigger_rules() if rule["action"] == "run-virtual-circuit-generator"}
     assert kinds == {"TopologyInterconnectCircuit", "TopologyHandoffCircuit"}
 

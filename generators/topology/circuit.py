@@ -21,8 +21,18 @@ could delete it). Nothing else is written.
 BGP sessions over a connection between topologies come from the virtual circuits, not from here: the
 InterconnectCircuit and HandoffCircuit session generator (generators/topology/virtual_circuit.py) waits for this
 generator (``PHYSICAL_CIRCUIT_GENERATOR``) on the physical circuits it rides and reads their ends. This generator
-never waits for it (no cycle): it only fires it, without waiting, for every session circuit on the circuit's ports,
-so a change of the carrier (its status, its ends) reaches the sessions that ride it.
+never waits for it (no cycle): it only fires it, without waiting, for every session circuit on the circuit's ports
+(or on a sub-interface whose parent is one of them).
+
+What reaches a session: it reruns on its own created / capabilities / status (a handoff also ip_namespace, password
+and maximum_routes), and, through this fan-out, when a physical circuit on its ports (or on a port's parent) is
+created, has its ends changed (capabilities) or its status changed (data/events/99_actions.yml: created, capabilities
+and status rules on TopologyPhysicalCircuit). It does NOT rerun when a cable is added later, when a port is removed
+from a circuit (the circuit no longer lists the port, so the fan-out does not find the session), or when a circuit's
+type changes (no rule).
+
+No trigger loop: this generator writes only the derived ``locations`` relationship (one RelationshipAdd), never the
+status or the ends that the rules watch.
 """
 
 from __future__ import annotations
@@ -207,6 +217,9 @@ class PhysicalCircuitGenerator(CommonGenerator):
         A virtual circuit rides this one when it ends on one of its ports or on a sub-interface whose
         ``parent_interface`` is one of them (the derived underlay, utils/circuit_underlay.py). Each of those runs
         waits for this run itself (wait_for_parent_generator_and_refetch), so it sees what this run wrote.
+
+        This run happens when the circuit is created, its ends change or its status changes; a port removed from
+        the circuit is no longer in ``endpoints``, so the sessions that sat on it are not reached.
         """
         port_ids = [endpoint.interface_id for endpoint in endpoints]
         if not port_ids:

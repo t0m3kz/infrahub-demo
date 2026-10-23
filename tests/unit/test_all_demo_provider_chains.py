@@ -73,12 +73,12 @@ def test_the_megaport_handoff_is_an_unowned_prod_handoff_provided_by_megaport() 
 
 
 def test_the_megaport_stub_is_a_provider_owned_router_in_the_megaport_zone() -> None:
-    """The MCR is a stub MX204_ISP_PE owned by Megaport, in no group, deployed to a zone (a facility add_circuit derives)."""
+    """The MCR is a stub MX204_ISP_PE owned by Megaport, in the provider_stubs group only (not a border gateway), deployed to a zone (a facility add_circuit derives)."""
     stub = _one("DcimPhysicalDevice", _MCR)
 
     assert stub.item["object_template"] == "MX204_ISP_PE"
     assert stub.item["owner"] == "P033"
-    assert not stub.groups()
+    assert list(stub.groups()) == ["provider_stubs"]
     zone = stub.item["deployment"]
     assert zone == "MCR-PAR1"
     assert zone in {name(z) for z in declared("TopologyColocationZone", _ALL)}

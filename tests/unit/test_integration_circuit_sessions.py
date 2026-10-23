@@ -32,6 +32,7 @@ from tests.unit.simulators.circuit_inventory_payloads import inventory_payload
 
 
 def _value(value: Any) -> dict[str, Any]:
+    """A GraphQL attribute: ``{value: ...}``."""
     return {"value": value}
 
 
@@ -110,6 +111,7 @@ def _session(
 
 
 def _prefix(prefix: str, description: str, namespace: str) -> dict[str, Any]:
+    """A technical IpamPrefix node of CIRCUIT_PREFIXES_QUERY."""
     return {
         "prefix": _value(prefix),
         "description": _value(description),
@@ -122,6 +124,7 @@ class FakeStack:
     """What the stack holds after the generators ran, and the answers it gives to the test_62 queries."""
 
     def __init__(self) -> None:
+        """Plan the sessions of the shipped DCIs and handoffs, then derive the inventory and group members."""
         self.sessions: dict[str, dict[str, Any]] = {}
         self.prefixes: dict[str, dict[str, Any]] = {}
         self.group_members: list[dict[str, Any]] = []
@@ -140,6 +143,7 @@ class FakeStack:
         ]
 
     def _dci(self) -> None:
+        """Per DCI: /127 ends (point-to-point IPv6 link prefix), ports at jumbo MTU 9216, two sessions, one key."""
         for index, (circuit, (_, ends)) in enumerate(sorted(ALL_DEMO_DCI_CIRCUITS.items())):
             edge = next(end for end in ends if end[0].startswith("eg-"))
             dc_end = next(end for end in ends if end != edge)
@@ -197,6 +201,7 @@ class FakeStack:
             self.prefixes[f"DCI {circuit}"] = _prefix(f"fd00:2200::{2 * index:x}/127", f"DCI {circuit}", "default")
 
     def _handoffs(self, payload: dict[str, Any], addresses: dict[tuple[str, str], str]) -> None:
+        """Per handoff: one session over a /31 of the namespace pool, our overlay end on the lower address."""
         nodes = {e["node"]["name"]["value"]: e["node"] for e in payload["TopologyVirtualCircuit"]["edges"]}
         handoffs = sorted(n for n, e in ALL_DEMO_VIRTUAL_CIRCUITS.items() if e["kind"] == HANDOFF_KIND)
         for index, name in enumerate(handoffs):
@@ -246,6 +251,7 @@ class FakeStack:
     async def execute_graphql(
         self, query: str, variables: dict[str, Any] | None = None, branch_name: str | None = None
     ) -> dict[str, Any]:
+        """Answer the queries of the test_62 session tests from the planned state; any other query is a test bug."""
         variables = variables or {}
         if query == test_helpers.QUERY_GET_INTERCONNECT_INVENTORY:
             return self.inventory
@@ -271,6 +277,7 @@ class FakeStack:
 
 @pytest.fixture
 def stack(monkeypatch: pytest.MonkeyPatch) -> FakeStack:
+    """A fake stack with the DCI role counts the stack run expects: one underlay and one evpn session per DCI."""
     monkeypatch.setattr(test_helpers, "DATA_PROPAGATION_DELAY", 0)
     fake = FakeStack()
     fake.roles = {"dci": len(ALL_DEMO_DCI_CIRCUITS), "dci-underlay": len(ALL_DEMO_DCI_CIRCUITS)}
@@ -278,16 +285,19 @@ def stack(monkeypatch: pytest.MonkeyPatch) -> FakeStack:
 
 
 def _client(stack: FakeStack) -> MagicMock:
+    """A client whose ``execute_graphql`` is answered by the fake stack."""
     client = MagicMock()
     client.execute_graphql = AsyncMock(side_effect=stack.execute_graphql)
     return client
 
 
 def _tests() -> interconnects.TestAllDemoInterconnects:
+    """The real test_62 class, whose test methods run against the fake stack."""
     return interconnects.TestAllDemoInterconnects()
 
 
 def _addresses(stack: FakeStack, session: str) -> list[dict[str, Any]]:
+    """The interface nodes (ports or loopbacks) a session is addressed on."""
     return [e["node"] for e in stack.sessions[session]["capabilities"]["edges"]]
 
 
@@ -295,6 +305,7 @@ def _addresses(stack: FakeStack, session: str) -> list[dict[str, Any]]:
 
 
 async def test_the_dci_sessions_the_generator_plans_pass(stack: FakeStack) -> None:
+    """The sessions the generator plans for every shipped DCI satisfy the real test_06 rules."""
     await _tests().test_06_verify_dci_sessions(_client(stack), "main")
 
 
@@ -327,12 +338,14 @@ async def test_the_dci_sessions_the_generator_plans_pass(stack: FakeStack) -> No
 async def test_a_dci_session_that_differs_from_the_plan_fails_naming_the_field(
     stack: FakeStack, mutate: Any, message: str
 ) -> None:
+    """Each single deviation from the plan (ttl, type, key, MTU 1500 vs 9216, missing) fails naming its field."""
     mutate(stack)
     with pytest.raises(AssertionError, match=message.replace("(", r"\(").replace(")", r"\)")):
         await _tests().test_06_verify_dci_sessions(_client(stack), "main")
 
 
 async def test_a_legacy_dci_session_per_fibre_fails(stack: FakeStack) -> None:
+    """A DCI-DF-* session per dark fibre, the model before circuits carried the sessions, must be gone."""
     stack.sessions["DCI-DF-DC10-EQXFR2"] = {
         **stack.sessions["ICX-DC10-EQXFR2-underlay"],
         "name": _value("DCI-DF-DC10-EQXFR2"),
@@ -351,6 +364,7 @@ async def test_a_dci_edge_with_the_higher_address_fails(stack: FakeStack) -> Non
 
 
 async def test_a_dci_evpn_session_on_the_multisite_vip_fails(stack: FakeStack) -> None:
+    """The EVPN session sources from the VTEP loopback, never the multisite VIP shared by the gateways of a site."""
     _addresses(stack, "ICX-DC10-EQXFR2-evpn")[0]["role"] = _value("multisite-vip")
     with pytest.raises(AssertionError, match="expected the VTEP loopback"):
         await _tests().test_06_verify_dci_sessions(_client(stack), "main")
@@ -360,6 +374,7 @@ async def test_a_dci_evpn_session_on_the_multisite_vip_fails(stack: FakeStack) -
 
 
 async def test_the_handoff_sessions_the_generator_plans_pass(stack: FakeStack) -> None:
+    """The sessions the generator plans for every shipped handoff satisfy the real test_06b rules."""
     await _tests().test_06b_verify_handoff_sessions(_client(stack), "main")
 
 
@@ -386,12 +401,14 @@ async def test_the_handoff_sessions_the_generator_plans_pass(stack: FakeStack) -
 async def test_a_handoff_session_that_differs_from_the_plan_fails_naming_the_field(
     stack: FakeStack, mutate: Any, message: str
 ) -> None:
+    """Each single deviation from the plan (ttl, route limit, missing, legacy, pool) fails naming its field."""
     mutate(stack)
     with pytest.raises(AssertionError, match=message.replace("(", r"\(").replace(")", r"\)")):
         await _tests().test_06b_verify_handoff_sessions(_client(stack), "main")
 
 
 async def test_a_legacy_authored_session_still_present_fails(stack: FakeStack) -> None:
+    """A hand-authored VRF-* session that predates the generated one must be gone."""
     stack.sessions["VRF-PROD-EQXFR2-SDWAN"] = stack.sessions["HANDOFF-FR2-SDWAN-GW1-PROD-bgp"]
     stack.sessions["VRF-PROD-EQXFR2-SDWAN"]["name"] = _value("VRF-PROD-EQXFR2-SDWAN")
     with pytest.raises(AssertionError, match=r"authored session\(s\) \['VRF-PROD-EQXFR2-SDWAN'\] still exist"):
@@ -399,6 +416,7 @@ async def test_a_legacy_authored_session_still_present_fails(stack: FakeStack) -
 
 
 async def test_a_handoff_with_the_remote_asn_of_the_data_changed_fails(stack: FakeStack) -> None:
+    """The party's ASN is the data's (AS64512 for AWS DX); AS 64999 is also private but not the declared one."""
     for edge in stack.sessions["HANDOFF-FR2-AWS-EUC1-PROD-bgp"]["bgp_processes"]["edges"]:
         if edge["node"]["capabilities"]["edges"][0]["node"]["name"]["value"] == "EXT-AWS-DX-FR2":
             edge["node"]["local_as"]["node"]["asn"]["value"] = 64999
@@ -425,11 +443,13 @@ async def test_a_handoff_whose_lower_address_is_on_the_party_end_fails(stack: Fa
 
 
 async def test_tunnels_without_a_session_pass(stack: FakeStack) -> None:
+    """No session exists for any tunnel circuit, which is what test_06c asserts."""
     await _tests().test_06c_verify_tunnels_have_no_session(_client(stack), "main")
 
 
 @pytest.mark.parametrize("suffix", ["", "-bgp", "-underlay", "-evpn"])
 async def test_a_tunnel_with_a_session_of_any_name_fails(stack: FakeStack, suffix: str) -> None:
+    """A session named after a tunnel, bare or with any generated suffix, fails: tunnel routing is SD-WAN's."""
     name = f"C001-OFFICE-SDWAN-FR2{suffix}"
     stack.sessions[name] = stack.sessions["HANDOFF-FR2-SDWAN-GW1-PROD-bgp"]
     stack.sessions[name]["name"] = _value(name)
@@ -438,6 +458,7 @@ async def test_a_tunnel_with_a_session_of_any_name_fails(stack: FakeStack, suffi
 
 
 async def test_the_group_holds_exactly_the_interconnects_and_handoffs(stack: FakeStack) -> None:
+    """The virtual-circuits group has the DCIs and handoffs, the circuits add_virtual_circuit runs on, and no tunnel."""
     await _tests().test_02a_verify_virtual_circuits_group(_client(stack), "main")
     assert len(stack.group_members) == len(ALL_DEMO_DCI_CIRCUITS) + sum(
         1 for e in ALL_DEMO_VIRTUAL_CIRCUITS.values() if e["kind"] == HANDOFF_KIND
@@ -445,6 +466,7 @@ async def test_the_group_holds_exactly_the_interconnects_and_handoffs(stack: Fak
 
 
 async def test_a_tunnel_in_the_group_or_a_circuit_missing_from_it_fails(stack: FakeStack) -> None:
+    """A tunnel in the group would raise inside the generator, and a session circuit left out would never run."""
     nodes = [e["node"] for e in stack.inventory["TopologyVirtualCircuit"]["edges"]]
     tunnel = next(n for n in nodes if n["__typename"] == TUNNEL_KIND)
     stack.group_members.append({"id": tunnel["id"], "__typename": TUNNEL_KIND, "display_label": "tunnel"})

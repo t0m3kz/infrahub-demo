@@ -365,8 +365,9 @@ class FakeClient:
         self.addresses: dict[str, MagicMock] = {}
         self.prefixes: dict[str, MagicMock] = {}
         self.allocations: list[dict[str, Any]] = []
-        # Session circuits ending on a port: kind name -> [(id, name)], returned by filters(capabilities__ids=...).
-        self.session_circuits: dict[str, list[tuple[str, str]]] = {}
+        # Session circuits ending on a port: kind name -> [(id, name) or (id, name, status)], returned by
+        # filters(capabilities__ids=...); the status defaults to active.
+        self.session_circuits: dict[str, list[tuple[str, ...]]] = {}
         # DcimVirtualInterface ids whose parent is a port, returned by filters(parent_interface__ids=...).
         self.sub_interfaces: list[str] = []
         self.filter_calls: list[tuple[str, dict[str, Any]]] = []
@@ -436,9 +437,10 @@ class FakeClient:
             return [self.interface_node(iface_id) for iface_id in kwargs["ids"]]
         if name in ("TopologyInterconnectCircuit", "TopologyHandoffCircuit"):
             matches = []
-            for circuit_id, circuit_name in self.session_circuits.get(name, []):
+            for circuit_id, circuit_name, *rest in self.session_circuits.get(name, []):
                 other = MagicMock(id=circuit_id)
                 other.name = MagicMock(value=circuit_name)
+                other.status = MagicMock(value=rest[0] if rest else "active")
                 matches.append(other)
             return matches
         raise AssertionError(f"unexpected filters({name}, {kwargs})")

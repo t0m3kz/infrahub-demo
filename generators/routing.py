@@ -468,21 +468,27 @@ class RoutingMixin:
 
         return device_to_as_id
 
-    async def _ensure_routing_password(self, *, name: str, description: str) -> str | None:
+    async def _ensure_routing_password(self, *, name: str, description: str, track: bool = True) -> str | None:
         """Create or reuse a shared RoutingPassword node by deterministic name.
 
         Serialized per name: add_dc and dc_pod_cascade can reach this together,
         both find nothing and both create the key, and the loser either fails
         the uniqueness constraint or leaves a second, untracked key behind.
+
+        track=False: a key no run may own, because its cleanup would delete it
+        whenever the run stops reaching it and the next run would generate a new
+        secret (a rotation). It is neither saved into nor appended to the run's
+        tracking group, so delete_unused_nodes never sees it.
         """
         async with self.resource_lock(f"routing-password-{name}"):
-            return await self._ensure_routing_password_locked(name=name, description=description)
+            return await self._ensure_routing_password_locked(name=name, description=description, track=track)
 
-    async def _ensure_routing_password_locked(self, *, name: str, description: str) -> str | None:
+    async def _ensure_routing_password_locked(self, *, name: str, description: str, track: bool) -> str | None:
         try:
             existing = await self.client.get(kind=RoutingPassword, name__value=name, raise_when_missing=False)
             if existing:
-                self.client.group_context.related_node_ids.append(existing.id)
+                if track:
+                    self.client.group_context.related_node_ids.append(existing.id)
                 return existing.id
         except Exception as exc:
             # Fatal (logger.error raises): add_dc owns this key, and a run that
@@ -499,8 +505,10 @@ class RoutingMixin:
                     "password": secrets.token_urlsafe(32),
                 },
             )
-            await obj.save(allow_upsert=True)
-            self.client.group_context.related_node_ids.append(obj.id)
+            # A save claims the node for this run's group on its own; an untracked key must opt out here.
+            await obj.save(allow_upsert=True, **({} if track else {"update_group_context": False}))
+            if track:
+                self.client.group_context.related_node_ids.append(obj.id)
             self.logger.info(f"Created shared RoutingPassword: {name}")
             return obj.id
         except Exception as exc:

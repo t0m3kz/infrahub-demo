@@ -68,6 +68,7 @@ def _peering(client: FakeClient, suffix: str) -> dict[str, Any]:
 
 
 def _interface_saves(client: FakeClient) -> list[str]:
+    """The labels of the interface saves a run made (the writes whose label starts with if-)."""
     return [label for action, label, _ in client.writes if action == "save" and label.startswith("if-")]
 
 
@@ -76,6 +77,7 @@ class TestNothingToBuild:
 
     @pytest.mark.asyncio
     async def test_a_tunnel_circuit_has_no_session(self) -> None:
+        """A tunnel circuit is the SD-WAN orchestrator's, so the run only logs that and writes nothing."""
         client = FakeClient()
 
         gen = await _run(client, tunnel_payload())
@@ -99,6 +101,7 @@ class TestNothingToBuild:
     @pytest.mark.parametrize("ends", [[], [handoff_edge_port()]], ids=["no-end", "one-end"])
     @pytest.mark.asyncio
     async def test_fewer_than_two_ends_builds_nothing(self, ends: list[dict[str, Any]]) -> None:
+        """A session needs two ends: with none or one the run only logs it, as a port may be linked later."""
         client = FakeClient()
 
         gen = await _run(client, session_payload("TopologyHandoffCircuit", ends))
@@ -135,6 +138,7 @@ class TestNothingToBuild:
     )
     @pytest.mark.asyncio
     async def test_a_malformed_pair_of_ends_is_an_error(self, payload: dict[str, Any], message: str) -> None:
+        """Three ends, or two ends on one device, cannot be a session: refused with nothing written."""
         await _assert_refused(payload, message)
 
     @pytest.mark.parametrize(
@@ -178,6 +182,7 @@ class TestNothingToBuild:
 
     @pytest.mark.asyncio
     async def test_an_interconnect_without_a_carrier_builds_nothing(self) -> None:
+        """A DCI whose two ends ride no physical circuit and no cable has nothing to run over, so nothing is built."""
         client = FakeClient()
         ends = [dc_border_port(circuits=[]), colo_edge_port(circuits=[])]
 
@@ -187,6 +192,7 @@ class TestNothingToBuild:
 
     @pytest.mark.asyncio
     async def test_a_wholly_decommissioned_carrier_builds_nothing(self) -> None:
+        """The only carrier is decommissioned and the party end has no cable: nothing live carries the handoff."""
         client = FakeClient()
         dead = underlay_circuit("XC-FR2-AWS", status="decommissioned")
         ends = [handoff_edge_port(parent_circuits=[dead]), handoff_party_port()]
@@ -220,6 +226,7 @@ class TestNothingToBuild:
 
     @pytest.mark.asyncio
     async def test_one_live_carrier_among_decommissioned_ones_still_builds(self) -> None:
+        """A single live circuit is enough, whatever retired circuits also sit on the port."""
         client = FakeClient()
         carriers = [underlay_circuit("XC-OLD", status="decommissioned"), underlay_circuit("XC-FR2-AWS")]
         ends = [handoff_edge_port(parent_circuits=carriers), handoff_party_port()]
@@ -230,6 +237,7 @@ class TestNothingToBuild:
 
     @pytest.mark.asyncio
     async def test_empty_response_is_an_error(self) -> None:
+        """A query response with no circuit at all is an error, not a silent no-op."""
         with pytest.raises(GeneratorError, match="No TopologyVirtualCircuit data"):
             await _run(FakeClient(), {"TopologyVirtualCircuit": {"edges": []}})
 
@@ -327,6 +335,7 @@ class TestOnePortOneSession:
     )
     @pytest.mark.asyncio
     async def test_a_port_that_ends_another_session_circuit_is_refused(self, payload_for: Any, other_kind: str) -> None:
+        """Any other handoff or interconnect circuit on one of the two ports refuses the run before it writes."""
         client = FakeClient()
         client.session_circuits[other_kind] = [("vc-2", "VC-OTHER")]
 
@@ -334,8 +343,58 @@ class TestOnePortOneSession:
             payload_for(), r"are also ends of VC-OTHER; a port carries one interconnect or handoff session", client
         )
 
+    @pytest.mark.parametrize("payload_for", [handoff_payload, interconnect_payload])
+    @pytest.mark.parametrize("status", ["active", "provisioning", "maintenance", "down"])
+    @pytest.mark.asyncio
+    async def test_a_live_holder_of_the_port_blocks_before_any_write(self, payload_for: Any, status: str) -> None:
+        """Any status but decommissioned keeps its ports: the new circuit is refused with nothing written."""
+        client = FakeClient()
+        client.session_circuits["TopologyHandoffCircuit"] = [("vc-2", "VC-LIVE", status)]
+
+        await _assert_refused(payload_for(), r"are also ends of VC-LIVE; a port carries one", client)
+
+    @pytest.mark.parametrize("payload_for", [handoff_payload, interconnect_payload])
+    @pytest.mark.parametrize("other_kind", ["TopologyHandoffCircuit", "TopologyInterconnectCircuit"])
+    @pytest.mark.asyncio
+    async def test_a_decommissioned_holder_of_the_port_does_not_block(self, payload_for: Any, other_kind: str) -> None:
+        """A retired circuit that kept its ports must not block a live one; only the live holder is named."""
+        client = FakeClient()
+        client.session_circuits[other_kind] = [("vc-old", "VC-RETIRED", "decommissioned")]
+
+        await _run(client, payload_for())
+
+        assert len(client.created_of("ManagedBGPPeering")) >= 1
+
+    @pytest.mark.asyncio
+    async def test_a_decommissioned_holder_is_not_named_beside_a_live_one(self) -> None:
+        """Only the live holder is named in the refusal; the retired circuit that kept its ports is left out."""
+        client = FakeClient()
+        client.session_circuits["TopologyHandoffCircuit"] = [
+            ("vc-old", "VC-RETIRED", "decommissioned"),
+            ("vc-2", "VC-LIVE", "active"),
+        ]
+
+        with pytest.raises(GeneratorError, match=r"are also ends of VC-LIVE; a port carries one") as raised:
+            await _run(client, handoff_payload())
+
+        assert "VC-RETIRED" not in str(raised.value)
+        assert client.writes == []
+
+    @pytest.mark.parametrize("payload_for", [handoff_payload, interconnect_payload])
+    @pytest.mark.asyncio
+    async def test_a_tunnel_circuit_on_the_same_port_does_not_block(self, payload_for: Any) -> None:
+        """A tunnel port is shared by design: the tunnel kind is never queried, whatever its status."""
+        client = FakeClient()
+        client.session_circuits["TopologyTunnelCircuit"] = [("vc-t", "TUN-1", "active")]
+
+        await _run(client, payload_for())
+
+        assert "TopologyTunnelCircuit" not in {kind for kind, _ in client.filter_calls}
+        assert len(client.created_of("ManagedBGPPeering")) >= 1
+
     @pytest.mark.asyncio
     async def test_the_circuit_itself_does_not_count(self) -> None:
+        """The circuit being run is also found on its own ports and must not block itself."""
         client = FakeClient()
         client.session_circuits["TopologyHandoffCircuit"] = [(VC_ID, HANDOFF)]
 
@@ -366,6 +425,7 @@ class TestOnePortOneSession:
 class TestHandoffSession:
     @pytest.mark.asyncio
     async def test_allocates_the_namespace_pool_by_circuit_identifier(self) -> None:
+        """A /31 (point-to-point IPv4 link) comes from the namespace's Handoff pool, keyed by circuit id for reruns."""
         client = FakeClient()
 
         await _run(client, handoff_payload())
@@ -379,6 +439,7 @@ class TestHandoffSession:
 
     @pytest.mark.asyncio
     async def test_the_prefix_joins_the_tracking_group_before_anything_else_is_written(self) -> None:
+        """The prefix is tracked right after the allocation, so a crash later still leaves it owned by the cleanup."""
         client = FakeClient()
 
         await _run(client, handoff_payload())
@@ -405,6 +466,7 @@ class TestHandoffSession:
 
     @pytest.mark.asyncio
     async def test_one_peering_with_these_exact_attributes(self) -> None:
+        """Handoff eBGP: ttl 1 (directly connected /31), BFD on, maximum_routes 100 taken from the circuit payload."""
         client = FakeClient()
 
         await _run(client, handoff_payload(password="pw-1"))
@@ -431,6 +493,7 @@ class TestHandoffSession:
 
     @pytest.mark.asyncio
     async def test_no_password_and_no_maximum_routes_are_not_written(self) -> None:
+        """A handoff that states neither a key nor a route limit gets a session without those two fields."""
         client = FakeClient()
 
         await _run(client, handoff_payload(maximum_routes=None))
@@ -441,6 +504,7 @@ class TestHandoffSession:
 
     @pytest.mark.asyncio
     async def test_a_circuit_that_is_not_active_is_provisioning(self) -> None:
+        """Any status other than active gives the session and its interfaces the provisioning status."""
         client = FakeClient()
 
         await _run(client, handoff_payload(status="provisioning"))
@@ -463,6 +527,7 @@ class TestHandoffSession:
 
     @pytest.mark.asyncio
     async def test_the_writes_run_under_one_lock_per_circuit(self) -> None:
+        """All writes of a circuit sit under a single lock keyed by the circuit id, so two runs cannot interleave."""
         gen = await _run(FakeClient(), handoff_payload())
 
         assert gen.lock_keys.count(f"vc-session-{VC_ID}") == 1
@@ -483,6 +548,7 @@ class TestHandoffSession:
 
     @pytest.mark.asyncio
     async def test_a_second_run_allocates_the_same_prefix_and_writes_no_interface_again(self) -> None:
+        """Idempotency: the rerun gets the same /31 and the interfaces, already correct, are not saved again."""
         client = FakeClient()
         await _run(client, handoff_payload())
         first_labels = [label for _, label, _ in client.writes]
@@ -509,6 +575,7 @@ class TestHandoffSession:
     )
     @pytest.mark.asyncio
     async def test_namespace_problems_are_refused_before_any_write(self, payload: dict[str, Any], message: str) -> None:
+        """A handoff with no namespace, or a namespace that has no Handoff pool, is refused with nothing written."""
         await _assert_refused(payload, message)
 
     @pytest.mark.parametrize(
@@ -535,10 +602,12 @@ class TestHandoffSession:
     )
     @pytest.mark.asyncio
     async def test_a_bad_end_is_refused_before_any_write(self, party: dict[str, Any], message: str) -> None:
+        """A party end that is no VLAN sub-interface, or a device without a usable BGP process, is refused up front."""
         await _assert_refused(handoff_payload(ends=[handoff_edge_port(), party]), message)
 
     @pytest.mark.asyncio
     async def test_an_interface_that_cannot_be_fetched_is_refused_before_the_allocation(self) -> None:
+        """A missing end interface fails before the pool is touched, so no prefix is left allocated."""
         client = FakeClient()
 
         async def _only_one(kind: Any, **kwargs: Any) -> list[Any]:
@@ -553,6 +622,7 @@ class TestHandoffSession:
 
     @pytest.mark.asyncio
     async def test_an_exhausted_pool_fails_before_any_other_write(self) -> None:
+        """A pool that returns no prefix aborts the run with nothing else written."""
         client = FakeClient()
 
         async def _none(**kwargs: Any) -> None:
@@ -587,6 +657,7 @@ def _two_dc_ends(protocol: str, address_for: Any) -> list[dict[str, Any]]:
 class TestInterconnectSession:
     @pytest.mark.asyncio
     async def test_allocates_the_dci_pool_by_the_dc_ends_underlay_protocol(self) -> None:
+        """An IPv6 fabric takes a /127 (point-to-point IPv6 link prefix, RFC 6164) from DCI-Technical-IPv6."""
         client = FakeClient()
 
         await _run(client, interconnect_payload())
@@ -598,6 +669,7 @@ class TestInterconnectSession:
 
     @pytest.mark.asyncio
     async def test_an_ipv4_fabric_between_two_dcs_uses_the_ipv4_pool_and_family(self) -> None:
+        """An IPv4 fabric takes a /31 (point-to-point IPv4 link) from DCI-Technical-IPv4 and the ipv4 unicast family."""
         client = FakeClient()
         ends = _two_dc_ends("ipv4", lambda n: f"10.0.0.{n}/32")
 
@@ -610,6 +682,7 @@ class TestInterconnectSession:
 
     @pytest.mark.asyncio
     async def test_the_colocation_edge_takes_the_lower_address(self) -> None:
+        """The colocation edge takes the lower address of the /127, the DC border gateway the upper one."""
         client = FakeClient()
 
         await _run(client, interconnect_payload())
@@ -619,6 +692,7 @@ class TestInterconnectSession:
 
     @pytest.mark.asyncio
     async def test_the_underlay_peering_has_these_exact_attributes(self) -> None:
+        """DCI underlay eBGP: ttl 1 (directly connected /127), BFD on, 16 routes at most (links, loopbacks), keyed."""
         client = FakeClient()
 
         await _run(client, interconnect_payload())
@@ -708,6 +782,7 @@ class TestInterconnectSession:
     )
     @pytest.mark.asyncio
     async def test_loopback_selection(self, loopbacks: list[dict[str, Any]], expected: str) -> None:
+        """EVPN source loopback: VTEP before plain, same address family only, with an address, first by name."""
         client = FakeClient()
 
         await _run(client, interconnect_payload(ends=[dc_border_port(loopbacks=loopbacks), colo_edge_port()]))
@@ -715,18 +790,21 @@ class TestInterconnectSession:
         assert _peering(client, "evpn")["capabilities"] == [{"id": "lo-eg-fr201-loopback1"}, {"id": expected}]
 
     @pytest.mark.asyncio
-    async def test_the_key_is_created_once_tracked_and_shared_by_both_peerings(self) -> None:
+    async def test_the_key_is_created_once_untracked_and_shared_by_both_peerings(self) -> None:
+        """Untracked: the run's cleanup must never reach the key, or the next run would generate a new one."""
         client = FakeClient()
 
         await _run(client, interconnect_payload())
 
         (key_data, _) = client.created_of("RoutingPassword")[0]
         assert key_data["name"] == f"{DCI}-dci-key" and key_data["password"]
-        assert DCI_KEY in client.claimed()
+        assert client.saves()[DCI_KEY] == {"allow_upsert": True, **UNTRACKED}
+        assert DCI_KEY not in client.claimed()
         assert {_peering(client, s)["password"]["id"] for s in ("underlay", "evpn")} == {DCI_KEY}
 
     @pytest.mark.asyncio
     async def test_a_second_run_reuses_the_key_and_creates_no_second_one(self) -> None:
+        """The rerun finds the key by name: no second key, the same secret, and still not tracked."""
         client = FakeClient()
         await _run(client, interconnect_payload())
         first_password = client.created_of("RoutingPassword")[0][0]["password"]
@@ -736,20 +814,67 @@ class TestInterconnectSession:
         assert len(client.created_of("RoutingPassword")) == 1
         assert client.keys[f"{DCI}-dci-key"].id == DCI_KEY
         assert first_password == client.created_of("RoutingPassword")[0][0]["password"]
+        assert DCI_KEY not in client.claimed()
         assert len(client.prefixes) == 1 and len(client.addresses) == 2
 
+    @pytest.mark.parametrize(
+        "second_payload",
+        [
+            pytest.param(lambda: interconnect_payload(status="decommissioned"), id="decommissioned"),
+            pytest.param(lambda: interconnect_payload(ends=[dc_border_port()]), id="one-end"),
+            pytest.param(
+                lambda: interconnect_payload(
+                    ends=[dc_border_port(circuits=[]), colo_edge_port(circuits=[])],
+                ),
+                id="no-carrier",
+            ),
+            pytest.param(
+                lambda: interconnect_payload(
+                    ends=[
+                        dc_border_port(circuits=[underlay_circuit(status="decommissioned")]),
+                        colo_edge_port(circuits=[underlay_circuit(status="decommissioned")]),
+                    ]
+                ),
+                id="whole-carrier-decommissioned",
+            ),
+        ],
+    )
     @pytest.mark.asyncio
-    async def test_an_existing_key_is_reused_and_tracked(self) -> None:
+    async def test_a_run_that_returns_early_after_a_build_never_touches_the_key(self, second_payload: Any) -> None:
+        """Every early return skips the writes, and an untracked key is not in the run's group for the cleanup to
+        delete, so a later full run finds the same key (no rotation)."""
+        client = FakeClient()
+        await _run(client, interconnect_payload())
+        key = client.keys[f"{DCI}-dci-key"]
+        password = client.created_of("RoutingPassword")[0][0]["password"]
+        writes_before = len(client.writes)
+
+        await _run(client, second_payload())
+
+        assert len(client.writes) == writes_before
+        assert len(client.created_of("RoutingPassword")) == 1
+        assert client.keys[f"{DCI}-dci-key"] is key
+        assert DCI_KEY not in client.claimed()
+
+        await _run(client, interconnect_payload())
+
+        assert len(client.created_of("RoutingPassword")) == 1
+        assert client.created_of("RoutingPassword")[0][0]["password"] == password
+
+    @pytest.mark.asyncio
+    async def test_an_existing_key_is_reused_and_not_tracked(self) -> None:
+        """A key that already exists is referenced as it is: nothing created and the run's cleanup cannot delete it."""
         client = FakeClient(key=True)
 
         await _run(client, interconnect_payload())
 
         assert client.created_of("RoutingPassword") == []
-        assert DC_KEY_ID in client.group_context.related_node_ids
+        assert DC_KEY_ID not in client.group_context.related_node_ids
         assert _peering(client, "underlay")["password"] == {"id": DC_KEY_ID}
 
     @pytest.mark.asyncio
     async def test_the_two_physical_ports_get_mtu_9216_untracked(self) -> None:
+        """9216 is the jumbo routed-port MTU on DCI ports; the two ports are saved untracked."""
         client = FakeClient()
 
         await _run(client, interconnect_payload())
@@ -760,7 +885,8 @@ class TestInterconnectSession:
         assert client.interfaces["if-eg"].description.value == f"DCI {DCI} to bl-dc101101 Ethernet1/35"
 
     @pytest.mark.asyncio
-    async def test_claims_prefix_addresses_peerings_and_key_only(self) -> None:
+    async def test_claims_prefix_addresses_and_peerings_only(self) -> None:
+        """Only the prefix, its two addresses and the two peerings are tracked; interfaces and the key are not."""
         client = FakeClient()
 
         await _run(client, interconnect_payload())
@@ -771,11 +897,11 @@ class TestInterconnectSession:
             "IpamIPAddress:fd00:2200::1/127",
             f"ManagedBGPPeering:{DCI}-underlay",
             f"ManagedBGPPeering:{DCI}-evpn",
-            DCI_KEY,
         }
 
     @pytest.mark.asyncio
     async def test_a_second_run_writes_no_interface_again(self) -> None:
+        """Idempotency: a rerun does not save the already configured interfaces again."""
         client = FakeClient()
         await _run(client, interconnect_payload())
         first_interface_saves = _interface_saves(client)
@@ -885,11 +1011,13 @@ class TestInterconnectSession:
 
     @pytest.mark.asyncio
     async def test_a_missing_pool_is_refused_before_any_write(self) -> None:
+        """Without the DCI-Technical-IPv6 pool the run is refused before it writes anything."""
         await _assert_refused(interconnect_payload(), r"pool 'DCI-Technical-IPv6' not found", FakeClient(pools=False))
 
 
 class TestSessionEnd:
     def test_a_loopback_without_an_address_is_not_a_candidate(self) -> None:
+        """A VTEP loopback with no address cannot source a session and is dropped from the candidates."""
         port = clean_data(
             dc_border_port(
                 loopbacks=[loopback("bl", "lo1", "loopback-vtep", None), loopback("bl", "lo2", "loopback", "fd::1/128")]
@@ -912,6 +1040,7 @@ class TestSessionEnd:
         assert end is not None and end.loopbacks == ()
 
     def test_an_empty_slot_is_not_an_end(self) -> None:
+        """An empty end slot of the response parses to no end rather than raising."""
         assert SessionEnd.parse({}) is None
 
 
@@ -921,9 +1050,11 @@ class TestHandoffPoolData:
     _ROOT = Path(__file__).parents[2]
 
     def _documents(self, name: str) -> list[dict[str, Any]]:
+        """The ``spec`` of every YAML document of a data/bootstrap file."""
         return [doc["spec"] for doc in yaml.safe_load_all((self._ROOT / "data" / "bootstrap" / name).read_text())]
 
     def test_every_namespace_has_its_pool_in_that_namespace(self) -> None:
+        """Each namespace has one Handoff pool in it, handing out /31 prefixes (point-to-point IPv4 link)."""
         namespaces = [row["name"] for spec in self._documents("22_namespaces.yml") for row in spec["data"]]
         pools = {row["name"]: row for spec in self._documents("26_handoff_pools.yml") for row in spec["data"]}
 
@@ -936,6 +1067,7 @@ class TestHandoffPoolData:
             assert [resource["member_type"] for resource in pool["resources"]["data"]] == ["prefix"]
 
     def test_the_pool_prefixes_do_not_overlap_each_other_or_the_authored_handoffs(self) -> None:
+        """The pool prefixes overlap neither each other nor 10.255.5.0/24, where the hand-authored handoffs sit."""
         import ipaddress
 
         networks = [

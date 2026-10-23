@@ -19,14 +19,17 @@ _GOLDEN = Path(__file__).parents[1] / "smoke" / "configs" / "edge_cisco_nxos_bgw
 
 @pytest.fixture
 def rendered() -> str:
+    """The golden NX-OS config of the edge, a border gateway with two DCI circuits."""
     return _GOLDEN.read_text()
 
 
 def test_the_golden_edge_renders_both_sessions_of_each_of_its_two_dci_circuits(rendered: str) -> None:
+    """Two circuits expect two underlay and two EVPN neighbours; the golden render holds all four."""
     assert firewall_config._dci_session_errors("dc1-edge-01", rendered, 2) == []
 
 
 def test_a_circuit_the_render_does_not_hold_is_reported_on_both_session_kinds(rendered: str) -> None:
+    """Expecting three circuits when the render holds two reports both neighbour groups short by one."""
     errors = firewall_config._dci_session_errors("dc1-edge-01", rendered, 3)
     assert errors == [
         "dc1-edge-01: 2 DCI-UNDERLAY-PEERS neighbour(s), expected 3",
@@ -45,6 +48,7 @@ def test_a_circuit_the_render_does_not_hold_is_reported_on_both_session_kinds(re
     ],
 )
 def test_a_missing_line_of_the_dci_render_is_named(rendered: str, line: str, error: str) -> None:
+    """Dropping one DCI line names it (16 = DCI underlay route cap, multihop 2 = loopback to loopback)."""
     assert line in rendered
     errors = firewall_config._dci_session_errors("dc1-edge-01", rendered.replace(line, ""), 2)
     assert any(error in e for e in errors)

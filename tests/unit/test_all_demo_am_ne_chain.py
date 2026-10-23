@@ -120,7 +120,8 @@ def test_the_cage_end_is_carried_by_a_cable_to_the_fabric_port_stub_and_the_ne_e
     (stub,) = [d for d in declared("DcimPhysicalDevice", _ALL) if name(d) == _FABRIC_PORT_STUB]
     assert stub.item["owner"] == "P016"
     assert stub.item["deployment"] == "FR2"
-    assert not stub.groups()
+    # Only `provider_stubs`: it keeps the stub (role edge, deployed in a zone) out of the border-gateway lookup.
+    assert list(stub.groups()) == ["provider_stubs"]
     assert stub.item["object_template"] == "MX204_ISP_PE"
 
 

@@ -380,3 +380,21 @@ def test_a_cloud_endpoint_is_set_from_its_vif_and_mirrors_the_sub_interface_vlan
         assert "cloud_endpoint" not in handoff
         for _, port in handoff["capabilities"]:
             assert port.rpartition(".")[2] == str(vif["vlan_id"]), vif["name"]
+
+
+def test_provider_stubs_deployed_to_a_zone_are_in_the_provider_stubs_group() -> None:
+    """A stub router in a colocation zone has the `edge` role of its template: only the group keeps it out of the
+    border-gateway lookup of generators/vlan_domain.py (a stretched segment would demand a VLAN domain for it)."""
+    from tests.integration.demo_data import ROOT, declared, name
+
+    root = ROOT / "data" / "demos" / "30_all"
+    zones = {
+        name(zone) for kind in ("TopologyColocationZone", "TopologyVirtualColocation") for zone in declared(kind, root)
+    }
+    stubs = [
+        device
+        for device in declared("DcimPhysicalDevice", root)
+        if name(device).startswith("EXT-") and device.item.get("deployment") in zones
+    ]
+    assert {name(device) for device in stubs} == {"EXT-EQX-FABRIC-FR2", "EXT-MEGAPORT-MCR1"}
+    assert [name(device) for device in stubs if "provider_stubs" not in device.groups()] == []

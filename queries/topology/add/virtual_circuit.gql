@@ -10,7 +10,7 @@
 # a DcimEndpoint relationship: a physical interface has it, a sub-interface does not (its parent does).
 #
 # The generator reads the cleaned payload (utils/data_cleaning.clean_data: edges/node/value flattened, `__typename`
-# becomes `typename`, a node selecting only `id` becomes the id string). Paths of the cleaned circuit:
+# becomes `typename`, a node selecting only `id` becomes `{"id": ...}`). Paths of the cleaned circuit:
 #   id, typename, name, status
 #   capabilities[].id, .name, .typename
 #   capabilities[].parent_interface.capabilities[]                  (sub-interfaces only: the carrier on the parent)

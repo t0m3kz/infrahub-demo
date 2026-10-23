@@ -42,9 +42,13 @@ IPv6 only. Two sessions on the overlay processes, keyed with one generated per-c
 (``dci-underlay``) and the loopback-to-loopback multihop eBGP session carrying only l2vpn evpn (``dci``). The two
 physical ports get MTU 9216.
 
-Ownership (the run's tracking group, delete_unused_nodes=True): the prefix, its addresses, the peerings and the
-interconnect's key belong to the circuit. The end interfaces come from device templates and are written untracked
-(only when something changed); devices, BGP processes and the global address families are only referenced.
+Ownership (the run's tracking group, delete_unused_nodes=True): the prefix, its addresses and the peerings belong to
+the circuit. The end interfaces come from device templates and are written untracked (only when something changed);
+devices, BGP processes and the global address families are only referenced. The interconnect's key is untracked too,
+deliberately: a tracked key is deleted by any run that returns early (decommissioned circuit, an end missing, no
+carrier) or stops reaching it, and the next full run would then generate a NEW secret, rotating a key the far side
+may already use. Untracked, no cleanup ever touches it, so it is created once and never rotated. The trade-off: a
+deleted circuit leaves its ``<vc>-dci-key`` behind (demo data of a circuit that no longer exists).
 """
 
 from __future__ import annotations
@@ -339,12 +343,17 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, Comm
         return list(ends.values())
 
     async def _refuse_shared_ports(self, circuit_id: str, name: str, ends: list[SessionEnd]) -> None:
-        """One port, one session: refuse an end that is also an end of another interconnect or handoff circuit."""
+        """One port, one session: refuse an end that is also an end of another live interconnect or handoff circuit.
+
+        One query per session kind, not one on the TopologyVirtualCircuit generic: that generic is a marker (it has
+        only ``name``, neither ``capabilities`` to filter on nor ``status`` to read), and a tunnel circuit shares its
+        ports by design so it must stay out. A decommissioned circuit that kept its ports does not hold them.
+        """
         port_ids = [end.port_id for end in ends]
         others: set[str] = set()
         for kind in SESSION_CIRCUIT_KINDS:
             for other in await self.client.filters(kind=kind, capabilities__ids=port_ids):
-                if other.id != circuit_id:
+                if other.id != circuit_id and other.status.value != DECOMMISSIONED:
                     others.add(other.name.value)
         if others:
             self.fail(
@@ -537,7 +546,7 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, Comm
             password_id = plan.password_id
             if plan.key_name:
                 password_id = await self._ensure_routing_password(
-                    name=plan.key_name, description=f"Session key of {name}, generated once, never rotated"
+                    name=plan.key_name, description=f"Session key of {name}, generated once, never rotated", track=False
                 )
             for peering in plan.peerings:
                 await self.upsert_bgp_peering(

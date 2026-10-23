@@ -819,9 +819,10 @@ class TestCircuitOwnership:
 class TestSessionCircuitOwnership:
     """add_virtual_circuit (generators/topology/virtual_circuit.py): a session circuit owns its session, never the ports.
 
-    The prefix, its addresses, the peerings and the interconnect's own key exist only because of the circuit; the
-    end interfaces come from device templates, and the devices, BGP processes and global address families belong to
-    other runs or to data.
+    The prefix, its addresses and the peerings exist only because of the circuit and are tracked. The interconnect's
+    own key is untracked on purpose (a tracked one is deleted by a run that returns early, and the next run would
+    rotate it); the end interfaces come from device templates, and the devices, BGP processes and global address
+    families belong to other runs or to data.
     """
 
     @pytest.mark.asyncio
@@ -838,7 +839,7 @@ class TestSessionCircuitOwnership:
         }
 
     @pytest.mark.asyncio
-    async def test_interconnect_run_claims_its_session_and_its_key(self) -> None:
+    async def test_interconnect_run_claims_its_session_but_not_its_key(self) -> None:
         client = circuit_fakes.FakeClient()
 
         await circuit_fakes.session_generator(client).generate(circuit_fakes.interconnect_payload())
@@ -849,8 +850,8 @@ class TestSessionCircuitOwnership:
             "IpamIPAddress:fd00:2200::1/127",
             "ManagedBGPPeering:VC-DCI-DC10-FR2-underlay",
             "ManagedBGPPeering:VC-DCI-DC10-FR2-evpn",
-            "RoutingPassword:VC-DCI-DC10-FR2-dci-key",
         }
+        assert client.saves()["RoutingPassword:VC-DCI-DC10-FR2-dci-key"].get("update_group_context") is False
 
     @pytest.mark.asyncio
     async def test_interfaces_and_created_address_families_are_written_untracked(self) -> None:

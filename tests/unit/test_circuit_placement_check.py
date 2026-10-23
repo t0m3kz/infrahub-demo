@@ -48,6 +48,7 @@ C002_OFFICE = _place("C002-OFFICE", "TopologyCustomerOffice", owner="C002")
 
 
 def _edges(nodes: list[dict[str, Any]]) -> dict[str, Any]:
+    """A GraphQL ``edges`` list over the given nodes."""
     return {"edges": [{"node": node} for node in nodes]}
 
 
@@ -88,6 +89,7 @@ def _physical(
     ends: list[dict[str, Any]],
     owner: str | None = None,
 ) -> dict[str, Any]:
+    """A physical circuit as the query selects it: its locations and the end ports it terminates on."""
     return {
         "id": f"id-{name}",
         "name": {"value": name},
@@ -106,7 +108,7 @@ INET_GW = _physical("INET-LUMEN-EQXFR2-GW", [FR2, LUMEN], [GW_END, LUMEN_PE_END]
 
 
 def _decommissioned(circuit: dict[str, Any]) -> dict[str, Any]:
-    """The physical circuit with its status set to decommissioned (as ``status { value }`` selects it)."""
+    """The circuit with its status set to decommissioned (as ``status { value }`` selects it)."""
     return {**circuit, "status": {"value": "decommissioned"}}
 
 
@@ -201,12 +203,14 @@ def _virtual(name: str, locations: list[dict[str, Any]], ends: list[dict[str, An
 def _tunnel(
     name: str, locations: list[dict[str, Any]], ends: list[dict[str, Any]], owner: str | None = "C001"
 ) -> dict[str, Any]:
+    """A tunnel circuit, owned by C001 (the owner of the C001 office) unless told otherwise."""
     return {**_virtual(name, locations, ends), "owner": _owner(owner)}
 
 
 def _interconnect(
     name: str, locations: list[dict[str, Any]], ends: list[dict[str, Any]], owner: str | None = None
 ) -> dict[str, Any]:
+    """An interconnect (DCI) circuit; unowned unless told otherwise, since a DCI is shared platform."""
     return {**_virtual(name, locations, ends), "owner": _owner(owner)}
 
 
@@ -366,6 +370,7 @@ class TestPhysicalCircuitOwnership:
         ("owner", "ownership"), [(None, "unowned"), ("C005", "owned by 'C005'")], ids=["unowned", "other-customer"]
     )
     def test_office_access_circuit_not_owned_by_the_office_owner_fails(self, owner: str | None, ownership: str) -> None:
+        """An office's access circuit that is unowned or owned by another customer is reported with its ownership."""
         circuit = _physical("INET-C001-OFFICE", [C001_OFFICE, ORANGE], [OFFICE_EDGE_END, ORANGE_PE_END], owner=owner)
         messages = _run(physical=[circuit])
         assert messages == [
@@ -392,9 +397,11 @@ class TestTunnelCircuit:
     """Office edge to SD-WAN gateway: owned by the office's owner, every end on its own live internet circuit."""
 
     def test_tunnel_passes(self) -> None:
+        """The reference tunnel (office edge to SD-WAN gateway, each on its own internet circuit) has no finding."""
         assert _run(tunnels=[TUNNEL]) == []
 
     def test_location_order_and_end_order_do_not_matter(self) -> None:
+        """The query does not order locations or ends, so the check must not depend on it."""
         circuit = _tunnel("C001-OFFICE-SDWAN-FR2", [FR2, C001_OFFICE], [GW_PUBLIC, OFFICE_EDGE])
         assert _run(tunnels=[circuit]) == []
 
@@ -405,12 +412,14 @@ class TestTunnelCircuit:
         assert _run(tunnels=[TUNNEL, other]) == []
 
     def test_not_two_locations_fails(self) -> None:
+        """A tunnel with one location is reported; it needs the office and the gateway's facility."""
         messages = _run(tunnels=[_tunnel("T", [C001_OFFICE], [OFFICE_EDGE, GW_PUBLIC])])
         assert len(messages) == 1
         assert "Tunnel circuit 'T' terminates on 1 location(s)" in messages[0]
         assert "exactly 2 distinct locations" in messages[0]
 
     def test_not_two_end_ports_fails(self) -> None:
+        """A tunnel with a single end port is reported: one port per end, two in all."""
         messages = _run(tunnels=[_tunnel("T", [C001_OFFICE, FR2], [OFFICE_EDGE])])
         assert messages == ["Tunnel circuit 'T' has 1 end port(s): it terminates on exactly 2 ports, one per end."]
 
@@ -420,12 +429,14 @@ class TestTunnelCircuit:
         ids=["unowned", "other-customers-office", "no-office"],
     )
     def test_not_owned_by_the_offices_owner_fails(self, owner: str | None, locations: list[dict[str, Any]]) -> None:
+        """Unowned, owned by another customer or with no office among its locations: all break the ownership rule."""
         messages = _run(tunnels=[_tunnel("T", locations, [OFFICE_EDGE, GW_PUBLIC], owner=owner)])
         assert len(messages) == 1
         assert "Tunnel circuit 'T' is " in messages[0]
         assert "a tunnel is owned by its office's owner" in messages[0]
 
     def test_end_on_no_physical_circuit_fails(self) -> None:
+        """A tunnel end whose port rides no physical circuit is reported as riding no live internet circuit."""
         messages = _run(tunnels=[_tunnel("T", [C001_OFFICE, FR2], [OFFICE_EDGE, _vport("EQX-FR2-SDWAN-GW1", "eth1")])])
         assert len(messages) == 1
         assert "end 'EQX-FR2-SDWAN-GW1:eth1' rides no live internet physical circuit" in messages[0]
@@ -440,6 +451,7 @@ class TestTunnelCircuit:
         assert "its live physical circuits are DF-DC10-EQXFR2 (DC10 - FR2)" in messages[0]
 
     def test_end_on_a_decommissioned_internet_circuit_fails(self) -> None:
+        """A decommissioned internet circuit is not a carrier, and is left out of the message."""
         port = _vport("C001-OFFICE-EDGE1", "GE1", (_decommissioned(INET_OFFICE),))
         messages = _run(tunnels=[_tunnel("T", [C001_OFFICE, FR2], [port, GW_PUBLIC])])
         assert len(messages) == 1
@@ -463,9 +475,11 @@ class TestInterconnectCircuit:
     overlay process per end device."""
 
     def test_pure_fibre_passes(self) -> None:
+        """The reference DCI (border leaf to cage edge over one dark fibre) has no finding."""
         assert _run(interconnects=[DCI]) == []
 
     def test_ends_and_locations_in_either_order_pass(self) -> None:
+        """The query does not order locations or ends, so the check must not depend on it."""
         circuit = _interconnect("DCI-DC10-FR2", [FR2, DC10], [EG_FR_DF10, BL10])
         assert _run(interconnects=[circuit]) == []
 
@@ -475,6 +489,7 @@ class TestInterconnectCircuit:
             assert _run(interconnects=[_interconnect("DCI-DC10-DC11", [DC10, DC11], ends)]) == []
 
     def test_owned_fails(self) -> None:
+        """A DCI is shared platform: an owner on it is reported."""
         messages = _run(interconnects=[_interconnect("DCI-DC10-FR2", [DC10, FR2], [BL10, EG_FR_DF10], owner="C005")])
         assert messages == [
             "Interconnect circuit 'DCI-DC10-FR2' is owned by 'C005': a DCI between two border gateways is shared "
@@ -482,15 +497,18 @@ class TestInterconnectCircuit:
         ]
 
     def test_not_two_locations_fails(self) -> None:
+        """A DCI with one location is reported."""
         messages = _run(interconnects=[_interconnect("DCI", [DC10], [BL10, EG_FR_DF10])])
         assert len(messages) == 1
         assert "Interconnect circuit 'DCI' terminates on 1 location(s)" in messages[0]
 
     def test_not_two_end_ports_fails(self) -> None:
+        """A DCI with a single end port is reported."""
         messages = _run(interconnects=[_interconnect("DCI", [DC10, FR2], [BL10])])
         assert any("has 1 end port(s)" in message for message in messages)
 
     def test_end_on_no_live_physical_circuit_fails(self) -> None:
+        """A DCI end whose port is on no physical circuit is reported with the fix to apply."""
         circuit = _interconnect("DCI", [DC10, FR2], [BL10, _vport("eg-fr201", "Ethernet1/10")])
         messages = _run(interconnects=[circuit])
         assert messages == [
@@ -533,6 +551,7 @@ class TestInterconnectCircuit:
         assert _run(interconnects=[circuit]) == []
 
     def test_a_decommissioned_carrier_is_no_carrier(self) -> None:
+        """When both ends only ride a decommissioned circuit, each end is reported as on no live circuit."""
         circuit = _interconnect(
             "DCI",
             [DC10, FR2],
@@ -585,20 +604,24 @@ class TestHandoffCircuit:
     """Our edge sub-interface to a party sub-interface: a VLAN joins them, a physical end rides a circuit."""
 
     def test_handoff_passes(self) -> None:
+        """The reference handoff (VLAN 3101 sub-interfaces on both ends, riding a cross-connect) has no finding."""
         assert _run(handoffs=[HANDOFF]) == []
 
     @pytest.mark.parametrize("locations", [[FR2], [FR2, EUC1]], ids=["one-facility", "two-facilities"])
     def test_one_or_two_locations_pass(self, locations: list[dict[str, Any]]) -> None:
+        """A handoff sits in one facility (a cage) or spans two (cage and region): both are valid."""
         circuit = _handoff("HO", locations, [EG_FR_VLAN, AWS_VLAN])
         assert _run(handoffs=[circuit]) == []
 
     def test_no_location_fails(self) -> None:
+        """A handoff with no location is reported; it needs one or two."""
         messages = _run(handoffs=[_handoff("HO", [], [EG_FR_VLAN, AWS_VLAN])])
         assert len(messages) == 1
         assert "Handoff circuit 'HO' terminates on 0 location(s)" in messages[0]
         assert "1 or 2 distinct locations" in messages[0]
 
     def test_not_two_end_ports_fails(self) -> None:
+        """A handoff with a single end port is reported."""
         messages = _run(handoffs=[_handoff("HO", [FR2], [EG_FR_VLAN])])
         assert messages == ["Handoff circuit 'HO' has 1 end port(s): it terminates on exactly 2 ports, one per end."]
 
@@ -636,6 +659,7 @@ class TestHandoffCircuit:
         assert _run(handoffs=[_handoff("HO", [FR2], ends)]) == []
 
     def test_a_decommissioned_circuit_and_no_cable_fails(self) -> None:
+        """A decommissioned circuit and no cable on the only physical end leaves the handoff with no carrier."""
         ends = [
             _vport("eg-fr201", "Ethernet1/13.3101", parent=("Ethernet1/13", (_decommissioned(XC),))),
             AWS_VLAN_NO_CARRIER,
@@ -663,6 +687,7 @@ class TestHandoffCircuit:
         assert "has no live physical circuit and no cable at EXT-AWS-DX-FR2:et-0/0/0.3101" in messages[0]
 
     def test_no_carrier_on_physical_ends_fails(self) -> None:
+        """Physical ends with no circuit and no cable are reported, naming the first such port."""
         ends = [_vport("eg-fr201", "Ethernet1/13.3101", parent=("Ethernet1/13", ())), AWS_VLAN_NO_CARRIER]
         messages = _run(handoffs=[_handoff("HO", [FR2], ends)])
         assert len(messages) == 1
@@ -672,6 +697,7 @@ class TestHandoffCircuit:
         )
 
     def test_decommissioned_carriers_do_not_count(self) -> None:
+        """A decommissioned circuit on every end carries nothing: the handoff has no carrier."""
         ends = [
             _vport("eg-fr201", "Ethernet1/13.3101", parent=("Ethernet1/13", (_decommissioned(XC),))),
             _vport("EXT-AWS-DX-FR2", "et-0/0/0.3101", parent=("et-0/0/0", (_decommissioned(XC),))),
@@ -681,6 +707,7 @@ class TestHandoffCircuit:
         assert "has no live physical circuit and no cable" in messages[0]
 
     def test_end_that_is_not_a_vlan_sub_interface_fails(self) -> None:
+        """A handoff end must be named <port>.<vlan>; a bare physical port is reported."""
         ends = [EG_FR_VLAN, _vport("EXT-AWS-DX-FR2", "et-0/0/0", (XC,))]
         messages = _run(handoffs=[_handoff("HO", [FR2], ends)])
         assert messages == [
@@ -689,6 +716,7 @@ class TestHandoffCircuit:
         ]
 
     def test_different_vlans_fail(self) -> None:
+        """The VLAN is what joins the two ends (3101 against 3102 here), so differing VLANs are reported."""
         other = _vport("EXT-AWS-DX-FR2", "et-0/0/0.3102", parent=("et-0/0/0", (XC,)))
         messages = _run(handoffs=[_handoff("HO", [FR2], [EG_FR_VLAN, other])])
         assert len(messages) == 1
@@ -698,6 +726,7 @@ class TestHandoffCircuit:
         )
 
     def test_cloud_endpoint_vlan_must_mirror_the_sub_interface(self) -> None:
+        """The cloud virtual interface states VLAN 3102 while the sub-interfaces use 3101: reported."""
         messages = _run(handoffs=[_handoff("HO", [FR2], [EG_FR_VLAN, AWS_VLAN], vif=("VIF-C005-P", 3102))])
         assert messages == [
             "Handoff circuit 'HO' ends are on VLAN 3101 but its cloud endpoint 'VIF-C005-P' states vlan_id 3102: "
@@ -709,6 +738,7 @@ class TestHandoffCircuit:
         assert _run(handoffs=[_handoff("HO", [FR2], [EG_FR_VLAN, AWS_VLAN], vif=("VGW-C005-P", None))]) == []
 
     def test_no_cloud_endpoint_passes(self) -> None:
+        """A handoff with no cloud endpoint has no VLAN to mirror."""
         assert _run(handoffs=[_handoff("HO", [FR2], [EG_FR_VLAN, AWS_VLAN], vif=None)]) == []
 
 
@@ -716,6 +746,7 @@ class TestSessionPorts:
     """A port is an end of at most one Interconnect or Handoff circuit; a tunnel is exempt."""
 
     def test_two_handoffs_on_the_same_pair_of_ports_are_one_finding(self) -> None:
+        """Two handoffs on the same two ports give one finding naming both circuits, not one per port."""
         other = _handoff("HO-B", [FR2], [EG_FR_VLAN, AWS_VLAN])
         messages = _run(handoffs=[HANDOFF, other])
         assert messages == [
@@ -725,12 +756,14 @@ class TestSessionPorts:
         ]
 
     def test_two_handoffs_sharing_one_port_fail(self) -> None:
+        """Sharing a single port is enough: one port carries one session."""
         other_stub = _vport("EXT-AWS-DX-FR2", "et-0/0/1.3101", parent=("et-0/0/1", (XC,)))
         messages = _run(handoffs=[HANDOFF, _handoff("HO-B", [FR2], [EG_FR_VLAN, other_stub])])
         assert len(messages) == 1
         assert "all terminate on 'eg-fr201:Ethernet1/13.3101'" in messages[0]
 
     def test_an_interconnect_and_a_handoff_sharing_a_port_fail(self) -> None:
+        """The one-session-per-port rule spans both kinds: a DCI and a handoff on one port conflict."""
         handoff = _handoff("HO-B", [FR2], [_vport("eg-fr201", "Ethernet1/10", (DF10,)), AWS_VLAN])
         messages = [m for m in _run(interconnects=[DCI], handoffs=[handoff]) if "all terminate on" in m]
         assert len(messages) == 1
@@ -754,6 +787,7 @@ class TestEnvironmentSeparation:
         return _handoff(name, [FR2], [edge, stub], namespace=namespace)
 
     def test_handoffs_of_one_class_sharing_an_edge_pass(self) -> None:
+        """Two prod handoffs (VLANs 3101 and 3102) on one edge are the same environment class."""
         circuits = [self._on_edge("HO-A", ("PROD", "prod"), 3101), self._on_edge("HO-B", ("PROD", "prod"), 3102)]
         assert _run(handoffs=circuits) == []
 
@@ -769,6 +803,7 @@ class TestEnvironmentSeparation:
             assert "'HO-N' (namespace 'NON-PROD', non_prod)" in messages[0]
 
     def test_conflict_among_many_circuits_is_one_finding_per_device(self) -> None:
+        """Three circuits on one device with prod and non-prod among them give a single finding for the device."""
         circuits = [
             self._on_edge("HO-P1", ("PROD", "prod"), 3101),
             self._on_edge("HO-P2", ("PROD", "prod"), 3102),
@@ -810,6 +845,7 @@ class TestEnvironmentSeparation:
     def test_a_handoff_in_a_namespace_with_no_tenant_class_is_skipped(
         self, namespace: tuple[str, str | None] | None
     ) -> None:
+        """Internet, management, untyped or absent namespaces state no environment class, so they never conflict."""
         prod = self._on_edge("HO-P", ("PROD", "prod"), 3101)
         other = self._on_edge("HO-X", namespace, 3102)
         assert _run(handoffs=[prod, other]) == []
@@ -829,6 +865,116 @@ class TestEnvironmentSeparation:
         handoff = _handoff("HO-N", [FR2], [edge, stub], namespace=("NON-PROD", "non_prod"))
         messages = _run(interconnects=[circuit], handoffs=[handoff])
         assert not any("environments" in message for message in messages)
+
+
+class TestDecommissionedSessionCircuits:
+    """add_virtual_circuit builds nothing for a decommissioned session circuit, so the check does not enforce the
+    session rules on it; the same defect on an active circuit is still reported."""
+
+    @staticmethod
+    def _uncarried_dci(status: str) -> dict[str, Any]:
+        """A DCI whose far end is on no physical circuit."""
+        circuit = _interconnect("DCI", [DC10, FR2], [BL10, _vport("eg-fr201", "Ethernet1/10")])
+        return {**circuit, "status": {"value": status}}
+
+    @staticmethod
+    def _broken_chain_dci(status: str) -> dict[str, Any]:
+        """A DCI whose carrier stops at FR2, short of the region."""
+        circuit = _interconnect("DCI", [DC10, EUC1], [BL10, EG_FR_DF10])
+        return {**circuit, "status": {"value": status}}
+
+    @staticmethod
+    def _bad_handoff(name: str, status: str, ends: list[dict[str, Any]]) -> dict[str, Any]:
+        """A handoff in FR2 with the given ends and status, for defects the check must or must not report."""
+        return {**_handoff(name, [FR2], ends), "status": {"value": status}}
+
+    def test_decommissioned_interconnect_with_an_uncarried_end_is_not_reported(self) -> None:
+        """A decommissioned DCI is not built, so an uncarried end on it is not a finding."""
+        assert _run(interconnects=[self._uncarried_dci("decommissioned")]) == []
+
+    def test_decommissioned_interconnect_with_a_non_contiguous_carrier_is_not_reported(self) -> None:
+        """A decommissioned DCI is not built, so a broken carrier chain on it is not a finding."""
+        assert _run(interconnects=[self._broken_chain_dci("decommissioned")]) == []
+
+    def test_decommissioned_interconnect_with_other_defects_is_not_reported(self) -> None:
+        """Owned, one end port and no overlay process: nothing is reported for a circuit nothing builds."""
+        circuit = _interconnect("DCI", [DC10], [_vport("bl-dc101101", "Ethernet1/35", (DF10,), bgp=())], owner="C001")
+        assert _run(interconnects=[{**circuit, "status": {"value": "decommissioned"}}]) == []
+
+    def test_active_interconnect_with_the_same_defects_is_reported(self) -> None:
+        """The same two defects on an active DCI are findings, so the exemption is by status only."""
+        uncarried = _run(interconnects=[self._uncarried_dci("active")])
+        assert len(uncarried) == 1
+        assert "end 'eg-fr201:Ethernet1/10' is on no live physical circuit" in uncarried[0]
+        chain = _run(interconnects=[self._broken_chain_dci("active")])
+        assert len(chain) == 1
+        assert "is not one contiguous path" in chain[0]
+
+    def test_decommissioned_handoff_with_no_carrier_is_not_reported(self) -> None:
+        """A decommissioned handoff is not built, so a missing carrier is not a finding."""
+        ends = [_vport("eg-fr201", "Ethernet1/13.3101", parent=("Ethernet1/13", ())), AWS_VLAN_NO_CARRIER]
+        assert _run(handoffs=[self._bad_handoff("HO", "decommissioned", ends)]) == []
+
+    def test_decommissioned_handoff_with_mismatched_vlans_is_not_reported(self) -> None:
+        """A decommissioned handoff is not built, so differing VLANs (3101, 3102) are not a finding."""
+        other = _vport("EXT-AWS-DX-FR2", "et-0/0/0.3102", parent=("et-0/0/0", (XC,)))
+        assert _run(handoffs=[self._bad_handoff("HO", "decommissioned", [EG_FR_VLAN, other])]) == []
+
+    def test_active_handoff_with_the_same_defects_is_reported(self) -> None:
+        """The same two defects on an active handoff are findings, so the exemption is by status only."""
+        no_carrier = [_vport("eg-fr201", "Ethernet1/13.3101", parent=("Ethernet1/13", ())), AWS_VLAN_NO_CARRIER]
+        messages = _run(handoffs=[self._bad_handoff("HO", "active", no_carrier)])
+        assert len(messages) == 1
+        assert "has no live physical circuit and no cable" in messages[0]
+        other = _vport("EXT-AWS-DX-FR2", "et-0/0/0.3102", parent=("et-0/0/0", (XC,)))
+        messages = _run(handoffs=[self._bad_handoff("HO", "active", [EG_FR_VLAN, other])])
+        assert len(messages) == 1
+        assert "ends carry different VLANs" in messages[0]
+
+    @pytest.mark.parametrize("live_first", [True, False], ids=["live-first", "dead-first"])
+    def test_decommissioned_circuit_sharing_ports_with_a_live_one_is_not_reported(self, live_first: bool) -> None:
+        """The dead circuit holds no port: neither it nor the live circuit gets the one-session-per-port finding."""
+        dead = self._bad_handoff("HO-OLD", "decommissioned", [EG_FR_VLAN, AWS_VLAN])
+        circuits = [HANDOFF, dead] if live_first else [dead, HANDOFF]
+        assert _run(handoffs=circuits) == []
+
+    def test_two_active_circuits_sharing_ports_are_still_reported(self) -> None:
+        """Two live circuits on the same ports still conflict."""
+        live = self._bad_handoff("HO-OLD", "active", [EG_FR_VLAN, AWS_VLAN])
+        messages = _run(handoffs=[HANDOFF, live])
+        assert len(messages) == 1
+        assert "all terminate on" in messages[0]
+
+    def test_decommissioned_interconnect_sharing_a_port_with_a_live_handoff_is_not_reported(self) -> None:
+        """A dead DCI holds no port, so the live handoff on the same port is not reported."""
+        handoff = _handoff("HO-B", [FR2], [_vport("eg-fr201", "Ethernet1/10", (DF10,)), AWS_VLAN])
+        dead = {**DCI, "status": {"value": "decommissioned"}}
+        assert not any("all terminate on" in m for m in _run(interconnects=[dead], handoffs=[handoff]))
+
+    def test_decommissioned_prod_handoff_meeting_a_live_non_prod_one_is_not_reported(self) -> None:
+        """A dead prod handoff meets nothing, so the live non-prod one on the same device is not a conflict."""
+        prod = TestEnvironmentSeparation._on_edge("HO-P", ("PROD", "prod"), 3101)
+        non_prod = TestEnvironmentSeparation._on_edge("HO-N", ("NON-PROD", "non_prod"), 3102)
+        dead = {**prod, "status": {"value": "decommissioned"}}
+        assert _run(handoffs=[dead, non_prod]) == []
+
+    def test_active_prod_handoff_meeting_a_non_prod_one_is_still_reported(self) -> None:
+        """With an explicit active status the prod and non-prod handoffs on one device still conflict."""
+        prod = {**TestEnvironmentSeparation._on_edge("HO-P", ("PROD", "prod"), 3101), "status": {"value": "active"}}
+        non_prod = TestEnvironmentSeparation._on_edge("HO-N", ("NON-PROD", "non_prod"), 3102)
+        messages = _run(handoffs=[prod, non_prod])
+        assert len(messages) == 1
+        assert "different environments" in messages[0]
+
+    def test_decommissioned_tunnel_is_still_validated(self) -> None:
+        """A tunnel is an inventory record no generator reads the status of: not exempt."""
+        tunnel = {
+            **_tunnel("T", [C001_OFFICE, FR2], [OFFICE_EDGE, GW_PUBLIC], owner=None),
+            "status": {"value": "decommissioned"},
+        }
+        messages = _run(tunnels=[tunnel])
+        assert len(messages) == 1
+        assert "is unowned" in messages[0]
 
 
 def test_all_circuits_together_pass() -> None:

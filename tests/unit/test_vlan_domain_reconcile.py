@@ -252,6 +252,36 @@ class TestSegmentVlanDevices:
         assert asyncio.run(gen._segment_vlan_devices(segment)) == [onramp]
         assert "member_of_groups" in gen.client.filters.call_args.kwargs["include"]
 
+    def test_provider_stub_in_the_zone_is_not_a_border_gateway(self) -> None:
+        """A provider stub (Fabric port, Megaport MCR) has the `edge` role of its template and sits in a zone."""
+        gen = _make_gen()
+        onramp = _device("eg-fr201")
+        onramp.member_of_groups = MagicMock(peers=[MagicMock(hfid=["edges"])])
+        stub = _device("EXT-EQX-FABRIC-FR2")
+        stub.member_of_groups = MagicMock(peers=[MagicMock(hfid=["provider_stubs"])])
+        gen.client.filters = AsyncMock(return_value=[onramp, stub])
+        segment = {
+            "stretch_scope": "global",
+            "customer_deployments": [{"id": "cust-1", "parent": {"id": "metro-1", "children": [{"id": "zone-1"}]}}],
+            "capabilities": [],
+        }
+
+        assert asyncio.run(gen._segment_vlan_devices(segment)) == [onramp]
+
+    def test_the_same_device_without_the_group_is_a_border_gateway(self) -> None:
+        """Group membership is what excludes a stub: the same device outside `provider_stubs` is returned."""
+        gen = _make_gen()
+        stray = _device("EXT-EQX-FABRIC-FR2")
+        stray.member_of_groups = MagicMock(peers=[])
+        gen.client.filters = AsyncMock(return_value=[stray])
+        segment = {
+            "stretch_scope": "global",
+            "customer_deployments": [{"id": "cust-1", "parent": {"id": "metro-1", "children": [{"id": "zone-1"}]}}],
+            "capabilities": [],
+        }
+
+        assert asyncio.run(gen._segment_vlan_devices(segment)) == [stray]
+
     def test_nothing_tagged_and_local_queries_nothing(self) -> None:
         """No ports, not stretched: no device needs the segment."""
         gen = _make_gen()

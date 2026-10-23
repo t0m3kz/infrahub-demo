@@ -44,7 +44,7 @@ spec:
       parent_interface: ["EXT-MEGAPORT-MCR1", "et-0/0/0"]
     # The MCR's router-id: a loopback, not a link address (those are generated at circuit creation).
     # 10.255.64.0/24 holds the loopbacks of the party devices we model as stubs, clear of the handoff
-    # pools (10.255.128.0/17); .1 is the AWS router, .2 the SD-WAN gateway.
+    # pools (10.255.128.0/18); .1 is the AWS router, .2 the SD-WAN gateway.
     - name: "Loopback0"
       device: "EXT-MEGAPORT-MCR1"
       role: loopback

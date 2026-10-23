@@ -44,6 +44,12 @@ All session circuits (Interconnect and Handoff)
     A port is an end of at most one of them, so two circuits never share the same pair of ports: one session per
     address. A Tunnel is exempt: one gateway port serves many tunnels.
 
+    A decommissioned session circuit is exempt from all of it (its own rules, the one-session-per-port rule and the
+    environment rule): add_virtual_circuit builds nothing for it, only cleans what an earlier run built, so it holds
+    no port against a live circuit, meets no device and is not reported. A Tunnel is not exempt: add_sdwan_edge
+    always writes it ``active`` and no generator reads its status, so it stays an inventory record that is validated
+    whatever its status.
+
 Environment class
     Prod and non-prod never connect: circuits meeting at a device share a class, one finding per device. A
     Handoff's class is that of its ``ip_namespace`` (``namespace_type`` prod or non_prod; INTERNET, MANAGEMENT or
@@ -235,14 +241,20 @@ class CheckCircuitPlacement(InfrahubCheck):
         for circuit in cleaned.get(PHYSICAL) or []:
             self._validate_physical(circuit)
         virtual = {kind: cleaned.get(kind) or [] for kind in VIRTUAL_KINDS}
-        for circuit in virtual[TUNNEL]:
+        # add_virtual_circuit builds nothing for a decommissioned session circuit: it is not validated, holds no port
+        # and meets no device. A tunnel is not generated on either, so it is always validated.
+        live = {
+            kind: [c for c in circuits if c.get("status") != DECOMMISSIONED] if kind in SESSION_KINDS else circuits
+            for kind, circuits in virtual.items()
+        }
+        for circuit in live[TUNNEL]:
             self._validate_tunnel(circuit)
-        for circuit in virtual[INTERCONNECT]:
+        for circuit in live[INTERCONNECT]:
             self._validate_interconnect(circuit)
-        for circuit in virtual[HANDOFF]:
+        for circuit in live[HANDOFF]:
             self._validate_handoff(circuit)
-        self._validate_session_ports([(kind, circuit) for kind in SESSION_KINDS for circuit in virtual[kind]])
-        self._validate_environments([(kind, circuit) for kind in VIRTUAL_KINDS for circuit in virtual[kind]])
+        self._validate_session_ports([(kind, circuit) for kind in SESSION_KINDS for circuit in live[kind]])
+        self._validate_environments([(kind, circuit) for kind in VIRTUAL_KINDS for circuit in live[kind]])
 
     # ------------------------------------------------------------------
     # Physical circuits

@@ -48,10 +48,12 @@ async def inventory(
 
 
 def _placement(data: dict[str, list[dict[str, Any]]]) -> list[str]:
+    """The per-kind placement errors test_62 computes from the inventory."""
     return interconnects.TestAllDemoInterconnects._virtual_placement_errors(data["virtual"], data["physical"])
 
 
 def _circuit(data: dict[str, list[dict[str, Any]]], circuit_name: str) -> dict[str, Any]:
+    """The inventory entry of one virtual circuit, by name."""
     return next(circuit for circuit in data["virtual"] if circuit["name"] == circuit_name)
 
 
@@ -121,6 +123,7 @@ async def test_without_the_cables_the_cable_carried_handoffs_have_no_carrier(mon
 
 
 async def test_a_handoff_whose_vlans_differ_or_miss_the_vif_is_reported(monkeypatch: pytest.MonkeyPatch) -> None:
+    """VIF VLAN 4000 against 1000 on the ends, ends on 1000 and 1001, and a bare port are each reported."""
     data = await inventory(monkeypatch)
     aws = _circuit(data, "HANDOFF-FR2-AWS-EUC1-PROD")
     aws["cloud_endpoint_vlan"] = 4000
@@ -132,6 +135,7 @@ async def test_a_handoff_whose_vlans_differ_or_miss_the_vif_is_reported(monkeypa
 
 
 async def test_a_handoff_placed_elsewhere_than_its_ends_is_reported(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A handoff left with one of its two locations is not where its ends are deployed."""
     data = await inventory(monkeypatch)
     megaport = _circuit(data, "HANDOFF-PA4-MEGAPORT-PROD")
     megaport["location_nodes"] = megaport["location_nodes"][:1]
@@ -141,6 +145,7 @@ async def test_a_handoff_placed_elsewhere_than_its_ends_is_reported(monkeypatch:
 async def test_an_owned_dci_a_foreign_tunnel_owner_and_a_wrong_gateway_are_reported(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """An owner on a DCI, a tunnel owned by a stranger and a gateway outside its locations are three findings."""
     data = await inventory(monkeypatch)
     _circuit(data, "ICX-DC10-EQXFR2")["owner_id"] = "org-x"
     tunnel = _circuit(data, "C001-OFFICE-SDWAN-FR2")
@@ -154,6 +159,7 @@ async def test_an_owned_dci_a_foreign_tunnel_owner_and_a_wrong_gateway_are_repor
 
 
 async def test_a_dci_that_is_not_pure_fibre_or_not_contiguous_is_reported(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A DCI port that is no end of its carrier breaks pure fibre; a carrier between other places breaks contiguity."""
     data = await inventory(monkeypatch)
     dci = _circuit(data, "ICX-DC10-EQXFR2")
     dci["end_nodes"][0]["id"] = "other-port"
@@ -171,6 +177,7 @@ async def test_a_dci_that_is_not_pure_fibre_or_not_contiguous_is_reported(monkey
 async def test_two_session_circuits_on_one_port_and_prod_meeting_non_prod_are_reported(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """A shared port and a PROD handoff moved into NON-PROD on a device that has prod circuits are both reported."""
     data = await inventory(monkeypatch)
     first = _circuit(data, "ICX-DC10-EQXFR2")
     second = _circuit(data, "ICX-DC11-EQXFR2")
@@ -198,6 +205,7 @@ async def test_two_session_circuits_on_one_port_and_prod_meeting_non_prod_are_re
 def test_contiguous_walks_every_order_of_the_hops(
     hops: list[list[str]], start: str, finish: str, expected: bool
 ) -> None:
+    """A path is contiguous when every hop is used, in any order and direction, and fails on a gap or an unused hop."""
     assert interconnects._contiguous(hops, start, finish) is expected
 
 
@@ -206,6 +214,7 @@ def test_contiguous_walks_every_order_of_the_hops(
     [("Ethernet1/13.1000", 1000), ("eth0.1900", 1900), ("Ethernet1/13", None), ("et-0/0/0.x", None)],
 )
 def test_vlan_is_the_numeric_suffix_of_a_sub_interface(interface: str, vlan: int | None) -> None:
+    """The VLAN is the number after the last dot of a sub-interface; a bare or non-numeric name has none."""
     assert interconnects._vlan(interface) == vlan
 
 
@@ -240,6 +249,7 @@ _EXPECTED_SESSION: dict[str, Any] = {
 
 
 def test_session_errors_name_every_knob_that_differs() -> None:
+    """Each differing knob (ttl, BFD, route limit, key, families) is named once, in a fixed order."""
     assert interconnects._session_errors(_session(), _EXPECTED_SESSION) == []
     errors = interconnects._session_errors(
         _session(
@@ -255,10 +265,12 @@ def test_session_errors_name_every_knob_that_differs() -> None:
 
 
 def _prefix(prefix: str, role: str = "technical") -> dict[str, Any]:
+    """A prefix node of CIRCUIT_PREFIXES_QUERY, technical unless told otherwise."""
     return {"prefix": {"value": prefix}, "role": {"value": role}}
 
 
 def test_p2p_errors_hold_a_pair_of_addresses_to_its_pool_and_its_one_prefix() -> None:
+    """The /31 (point-to-point IPv4 link) of a pair must be adjacent, in the pool, with one technical prefix object."""
     pools = [ipaddress.ip_network("10.255.128.0/20")]
     good = interconnects._p2p_errors(
         "h", ["10.255.128.0/31", "10.255.128.1/31"], 31, pools, [_prefix("10.255.128.0/31")]

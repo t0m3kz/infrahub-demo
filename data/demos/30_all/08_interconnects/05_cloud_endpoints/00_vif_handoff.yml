@@ -51,7 +51,7 @@ spec:
     # The AWS side's router-id. It is a loopback, not a link address: the link addresses
     # are generated at circuit creation, after the process below needs its router-id.
     # 10.255.64.0/24 holds the loopbacks of the party devices we model as stubs, clear
-    # of the handoff pools (10.255.128.0/17) and of every authored range.
+    # of the handoff pools (10.255.128.0/18) and of every authored range.
     - name: "Loopback0"
       device: "EXT-AWS-DX-FR2"
       role: loopback

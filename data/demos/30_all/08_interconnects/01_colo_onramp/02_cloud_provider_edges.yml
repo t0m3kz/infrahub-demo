@@ -2,7 +2,9 @@
 # The provider edges we meet in the cages, as seen from our side of the handoffs and cross-connects:
 # AWS's Direct Connect router at FR2 (the far end of the transit VIF), Azure's ExpressRoute router at
 # PA4, Megaport's Cloud Router (MCR) next to PA4, and Equinix's own Fabric port in the FR2 IBX.
-# They are the provider's kit, not ours: owned by the provider, in no device group, so no config
+# They are the provider's kit, not ours: owned by the provider, in no device group (the two stubs deployed
+# to a colocation zone are in `provider_stubs`, which keeps them out of the border-gateway lookup of
+# generators/vlan_domain.py: they carry the `edge` role of their template), so no config
 # artifact or device check targets them. They exist, like the ISP provider edges in
 # ../06_internet/02_devices.yml, so a cross-connect, a cable or a handoff circuit has a second endpoint
 # (and, for the AWS router and the Megaport MCR, a remote AS). MX204_ISP_PE is the generic
@@ -44,8 +46,12 @@ spec:
       owner: "P033"
       description: "Megaport Cloud Router (MCR) in Paris (far end of XC-EQXPA4-MEGAPORT)"
       deployment: "MCR-PAR1"
+      member_of_groups:
+        - provider_stubs
     - name: "EXT-EQX-FABRIC-FR2"
       object_template: MX204_ISP_PE
       owner: "P016"
       description: "Equinix Fabric port in the FR2 IBX (cabled to eg-fr201, Fabric connections to AM-NE)"
       deployment: "FR2"
+      member_of_groups:
+        - provider_stubs

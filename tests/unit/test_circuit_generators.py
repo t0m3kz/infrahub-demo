@@ -133,6 +133,17 @@ class TestPhysicalCircuitPlacement:
         assert client.created == []
 
     @pytest.mark.asyncio
+    async def test_the_only_write_is_the_locations_relationship_so_the_status_trigger_cannot_loop(self) -> None:
+        """data/events/99_actions.yml fires add_circuit on a physical circuit's status and capabilities; the run
+        writes neither (only a RelationshipAdd on `locations`), so it cannot re-trigger itself."""
+        client = FakeClient()
+
+        await physical_generator(client).generate(physical_payload(locations=[CAGE]))
+
+        assert {kwargs["relation_to_update"] for _, kwargs in client.related()} == {"locations"}
+        assert [action for action, _, _ in client.writes if action == "save"] == []
+
+    @pytest.mark.asyncio
     async def test_already_complete_rerun_adds_nothing(self) -> None:
         """Authored cage plus the DC an earlier run derived: the circuit is not even fetched."""
         client = FakeClient()

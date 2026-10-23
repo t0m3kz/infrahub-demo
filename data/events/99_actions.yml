@@ -676,9 +676,14 @@ spec:
     # add_circuit targets physical_circuits, so every physical circuit — loaded or
     # generator-created (add_sdwan_edge creates INET-<office>) — must be a member, or
     # its created-trigger raises (see the endpoint note above). A physical circuit
-    # is a pure carrier and add_circuit reads only its ends, so the `updated` rule
-    # watches only `capabilities`; `locations` is deliberately absent: add_circuit
-    # writes the derived ends there.
+    # is a pure carrier; add_circuit reads its ends and fans out to the session
+    # circuits riding it, so the `updated` rules watch `capabilities` (the ends) and
+    # `status` (a carrier set to decommissioned, or back to active, reaches the
+    # sessions on it through that fan-out, generators/topology/circuit.py).
+    # `locations` is deliberately absent: add_circuit writes the derived ends there.
+    # No loop: add_circuit writes only that derived `locations` relationship (one
+    # RelationshipAdd), never `status` or `capabilities`, so it cannot re-fire these
+    # rules. `circuit_type` has no rule: neither generator reads it.
     # An end device's `deployment` (what a derived end is read from) has no
     # rule either: a rule on a device kind dispatches only a generator whose
     # target group holds the device, and none targets every device (see the
@@ -701,6 +706,17 @@ spec:
         data:
           - relationship_name: capabilities
             modification_type: updated
+
+    - name: trigger-circuit-on-status-updated
+      branch_scope: "other_branches"
+      node_kind: TopologyPhysicalCircuit
+      mutation_action: "updated"
+      action: run-circuit-generator
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: status
+            value_match: any
 
     # ── Virtual circuits ──────────────────────────────────────────────────────
     # add_virtual_circuit targets virtual_circuits and builds the BGP session(s) of an interconnect or a

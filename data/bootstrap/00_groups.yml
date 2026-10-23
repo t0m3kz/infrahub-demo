@@ -68,6 +68,8 @@ spec:
       description: VeloCloud SD-WAN branch edge appliances (VCE)
     - name: sdwan_gateways
       description: Arista SD-WAN hub gateways (VCG) deployed at colocation or cloud sites
+    - name: provider_stubs
+      description: Provider stub routers inside a colocation zone (Fabric port, Megaport MCR); never border gateways
     - name: sdwan_orchestrators
       description: Arista SD-WAN Orchestrators (VCO) — on-premises or private cloud deployments
     - name: ha_domains

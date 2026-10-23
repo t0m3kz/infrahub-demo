@@ -85,6 +85,7 @@ _VIRTUAL_READS = {
     "TopologyInterconnectCircuit": [
         "id",
         "name",
+        "status",
         "owner.id",
         "owner.org_id",
         "locations.id",
@@ -94,6 +95,7 @@ _VIRTUAL_READS = {
     "TopologyHandoffCircuit": [
         "id",
         "name",
+        "status",
         "locations.id",
         "locations.__typename",
         "locations.name",
