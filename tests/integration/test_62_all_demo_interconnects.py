@@ -1016,7 +1016,10 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                     if device["deployment_kind"] in ALL_DEMO_FACILITY_KINDS - _ZONE_KINDS
                 }
             )
-            if listed:
+            # A circuit with no end in a cage has nothing but derivable facilities, and the schema requires one
+            # location: authoring exactly one of them is then unavoidable, not redundant.
+            no_cage_end = not any(device["deployment_kind"] in _ZONE_KINDS for device in circuit["end_devices"])
+            if listed and not (no_cage_end and len(declared) == 1):
                 errors.append(f"{circuit_id}: the data lists {listed}, which add_circuit derives from the end devices")
             missing = sorted(set(declared) - set(circuit["locations"]))
             if missing:

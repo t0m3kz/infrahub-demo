@@ -1919,7 +1919,8 @@ TOPOLOGY_SNAPSHOT_KINDS = {
         "name { value } locations { edges { node { id } } } capabilities { edges { node { id } } }"
     ),
     "TopologyVirtualCircuit": (
-        "name { value } capabilities { edges { node { id capabilities { edges { node { id } } } } } } "
+        "name { value } "
+        "... on ManagedGenericInterfaces { capabilities { edges { node { id capabilities { edges { node { id } } } } } } } "
         "... on TopologyTunnelCircuit { locations { edges { node { id } } } } "
         "... on TopologyInterconnectCircuit { locations { edges { node { id } } } } "
         "... on TopologyHandoffCircuit { locations { edges { node { id } } } ip_namespace { node { id } } "
