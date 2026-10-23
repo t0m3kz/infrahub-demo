@@ -44,10 +44,10 @@ consequently do NOT appear:
 * anything leaving the zone, including the link to another zone of the same
   metro, the on-ramp's links to the DCs and cloud fabrics it fronts. Those are
   the colocation operator's cross-connects, modelled as TopologyPhysicalCircuits
-  with per-customer TopologyVirtualCircuits riding them (see
-  data/demos/30_all/08_interconnects/), and they need both endpoints, which a
-  colocation-side generator cannot see; they belong to the interconnect
-  generator.
+  (pure carriers) with the TopologyInterconnectCircuit or TopologyHandoffCircuit
+  that rides them (see data/demos/30_all/08_interconnects/), and they need both
+  endpoints, which a colocation-side generator cannot see; their sessions belong
+  to the virtual circuit generator (add_virtual_circuit).
 
 ``technical_pool`` is created here because the zone owns it, but its first
 consumer is that interconnect cabling, not the edge/service legs: those carry no
@@ -739,11 +739,11 @@ class ColocationFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMix
           gets). Whichever zone or virtual colocation runs first draws it; the
           others find it by its description;
         * an overlay ManagedBGP per edge in that ASN, so the DCI peerings
-          (add_circuit, for a circuit with peering_role=dci) have a process
-          to attach to;
+          (add_virtual_circuit, for a TopologyInterconnectCircuit) have a
+          process to attach to;
         * an IPv6 VTEP loopback per edge (LOOPBACK_IPV6_SLOT).
 
-        The DCI sessions (add_circuit, generators/topology/circuit.py) and the
+        The DCI sessions (add_virtual_circuit, generators/topology/virtual_circuit.py) and the
         shared Multi-Site VIP (data/demos/30_all/08_interconnects/
         01_colo_onramp/) are not built here: both need the DC end of the dark
         fibre, which this generator cannot see.
@@ -932,9 +932,10 @@ class ColocationFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMix
         own platform, and the link between them is a connection inside that
         platform, not a cable. It is a real link and it is not modelled here:
         there is no virtual-link node kind in the schema, and the thing that
-        does express a link we do not own — a TopologyVirtualCircuit over a
-        TopologyPhysicalCircuit — needs both endpoints and a provider, which
-        is the interconnect generator's input, not this one's.
+        does express a link we do not own — a virtual circuit (Interconnect or
+        Handoff kind) riding a TopologyPhysicalCircuit — needs both endpoints
+        and a provider, which is the virtual circuit generator's input, not
+        this one's.
 
         This withholding is also what makes a virtual colocation need no flag:
         its templates are all virtual, so nothing reaches cabling or edge
@@ -978,8 +979,8 @@ class ColocationFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMix
         2. Both ends are in one facility: the edge pair and the appliances are
            all deployed to this one zone. A link that leaves the zone is the
            colocation operator's cross-connect, modelled as a
-           TopologyPhysicalCircuit with per-customer TopologyVirtualCircuits
-           riding it (data/demos/30_all/08_interconnects/), never as a cable. That
+           TopologyPhysicalCircuit carrying a TopologyInterconnectCircuit or
+           TopologyHandoffCircuit (data/demos/30_all/08_interconnects/), never as a cable. That
            is why the on-ramp's links to the DCs, the cloud fabrics it fronts and
            the other zones are absent here and not merely deferred.
 

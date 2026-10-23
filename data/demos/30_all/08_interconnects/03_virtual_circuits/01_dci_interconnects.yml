@@ -1,0 +1,102 @@
+---
+# The DCI of the colo on-ramp: one Interconnect circuit per dark fibre of
+# ../01_colo_onramp/03_physical_circuits.yml (six: each DC lands one fibre on each of
+# its metro's two border gateways).
+#
+# The fibre is a pure carrier; this circuit is the DCI that rides it, unowned like the
+# fibre. Its capabilities are EXACTLY the fibre's two ports (checks/circuit_placement.py:
+# a single carrier's ends must be the circuit's ports) and its locations the fibre's two
+# facilities, the DC and the cage zone. Nothing else is authored: no prefix, no address,
+# no BGP peering. add_virtual_circuit (generators/topology/virtual_circuit.py), a member of
+# `virtual_circuits` is what triggers it, builds the DCI session between the two border
+# gateways' overlay BGP processes once add_circuit has run for the fibre:
+#
+#   - an underlay /31 or /127 from the DCI pool (data/bootstrap/20_dci_pools.yml), addressed
+#     on both ports, with the directly connected eBGP session <name>-underlay on it, and
+#   - the loopback-to-loopback EVPN session <name>-evpn (VTEP loopbacks the DC and colocation
+#     generators create), keyed with a generated per-circuit key.
+#
+# Tenant impact is a traversal, not a circuit: the old per-tenant circuits that rode the
+# fibres are gone. From a fibre, circuit -> its ports -> the segments, peerings and circuits
+# on them reaches exactly the tenants behind that border gateway.
+#
+# Name: ICX-<DC>-<cage zone> with -B for the second fibre (the second border gateway),
+# after the fibre it rides (DF-<DC>-<cage zone>). The generated peerings are named
+# <name>-underlay and <name>-evpn and share the circuit name space, so no authored
+# object may reuse those names.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyInterconnectCircuit
+  data:
+    - name: "ICX-DC10-EQXFR2"
+      member_of_groups: [virtual_circuits]
+      status: active
+      provider: "P016"
+      description: "DCI DC10 <-> Equinix FR2 over DF-DC10-EQXFR2"
+      locations:
+        - "DC10"
+        - "FR2"
+      capabilities:
+        - ["bl-dc101101", "Ethernet1/35"]
+        - ["eg-fr201", "Ethernet1/10"]
+
+    - name: "ICX-DC11-EQXFR2"
+      member_of_groups: [virtual_circuits]
+      status: active
+      provider: "P016"
+      description: "DCI DC11 <-> Equinix FR2 over DF-DC11-EQXFR2"
+      locations:
+        - "DC11"
+        - "FR2"
+      capabilities:
+        - ["bl-dc1111101", "Ethernet1/35"]
+        - ["eg-fr201", "Ethernet1/11"]
+
+    - name: "ICX-DC12-EQXPA4"
+      member_of_groups: [virtual_circuits]
+      status: active
+      provider: "P016"
+      description: "DCI DC12 <-> Equinix PA4 over DF-DC12-EQXPA4"
+      locations:
+        - "DC12"
+        - "PA4"
+      capabilities:
+        - ["bl-dc1212101", "Ethernet1/35"]
+        - ["eg-pa401", "Ethernet1/10"]
+
+    - name: "ICX-DC10-EQXFR2-B"
+      member_of_groups: [virtual_circuits]
+      status: active
+      provider: "P016"
+      description: "DCI DC10 <-> Equinix FR2 over DF-DC10-EQXFR2-B"
+      locations:
+        - "DC10"
+        - "FR2"
+      capabilities:
+        - ["bl-dc101101", "Ethernet1/36"]
+        - ["eg-fr202", "Ethernet1/10"]
+
+    - name: "ICX-DC11-EQXFR2-B"
+      member_of_groups: [virtual_circuits]
+      status: active
+      provider: "P016"
+      description: "DCI DC11 <-> Equinix FR2 over DF-DC11-EQXFR2-B"
+      locations:
+        - "DC11"
+        - "FR2"
+      capabilities:
+        - ["bl-dc1111101", "Ethernet1/36"]
+        - ["eg-fr202", "Ethernet1/11"]
+
+    - name: "ICX-DC12-EQXPA4-B"
+      member_of_groups: [virtual_circuits]
+      status: active
+      provider: "P016"
+      description: "DCI DC12 <-> Equinix PA4 over DF-DC12-EQXPA4-B"
+      locations:
+        - "DC12"
+        - "PA4"
+      capabilities:
+        - ["bl-dc1212101", "Ethernet1/36"]
+        - ["eg-pa402", "Ethernet1/10"]

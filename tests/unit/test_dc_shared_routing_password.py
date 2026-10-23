@@ -110,6 +110,39 @@ class TestEnsureRoutingPassword:
         assert created_names == ["dc1-underlay-key", "dc1-overlay-key"]
 
 
+class TestEnsureRoutingPasswordUntracked:
+    """track=False: a key no run may own is neither saved into nor appended to the run's tracking group."""
+
+    @pytest.mark.asyncio
+    async def test_a_new_untracked_key_is_saved_outside_the_group_and_not_appended(self) -> None:
+        g = _make_generator()
+        g.client.get = AsyncMock(return_value=None)
+        new_obj = MagicMock()
+        new_obj.id = "pw-new-1"
+        new_obj.save = AsyncMock()
+        g.client.create = AsyncMock(return_value=new_obj)
+
+        key_id = await g._ensure_routing_password(name="vc-dci-key", description="desc", track=False)
+
+        assert key_id == "pw-new-1"
+        new_obj.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
+        assert g.client.group_context.related_node_ids == []
+
+    @pytest.mark.asyncio
+    async def test_an_existing_untracked_key_is_reused_and_not_appended(self) -> None:
+        g = _make_generator()
+        existing = MagicMock()
+        existing.id = "pw-existing-1"
+        g.client.get = AsyncMock(return_value=existing)
+        g.client.create = AsyncMock()
+
+        key_id = await g._ensure_routing_password(name="vc-dci-key", description="desc", track=False)
+
+        assert key_id == "pw-existing-1"
+        g.client.create.assert_not_called()
+        assert g.client.group_context.related_node_ids == []
+
+
 class TestEnsureRoutingPasswordLock:
     """Two runs racing the find-or-create would each create the key: it is serialized per name."""
 

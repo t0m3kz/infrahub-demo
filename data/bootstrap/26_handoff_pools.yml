@@ -1,0 +1,81 @@
+---
+# /31 pools for HandoffCircuit sessions (generators/topology/virtual_circuit.py), one per environment namespace
+# and named after it (`Handoff-<NAMESPACE>-IPv4`, virtual_circuit.handoff_pool_name): the generator picks the pool
+# from the circuit's `ip_namespace`. Each pool allocates inside its namespace, so the resource prefix itself lives
+# in that namespace; this file sorts after 22_namespaces.yml on purpose (the loader processes files in name order
+# and the namespaces must exist first).
+#
+# Both ends of a handoff, ours and the party's (cloud on-ramp, SD-WAN gateway handoff, Equinix or Megaport service),
+# are addressed from OUR pool only. For AWS Direct Connect the customer specifies the peer IPs and the provider
+# assigns none; there is no provider-assigned (169.254) mode and no authored-address mode.
+#
+# 10.255.128.0/18 split in /20s (2048 /31 links each): PROD .128, NON-PROD .144, INTERNET .160, MANAGEMENT .176.
+# Clear of the authored 10.255.5.x handoffs of data/demos/30_all/08_interconnects/.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CoreIPPrefixPool
+  data:
+    - name: Handoff-PROD-IPv4
+      description: "Handoff P2P /31 links in the PROD namespace"
+      default_prefix_type: IpamPrefix
+      default_prefix_length: 31
+      resources:
+        kind: IpamPrefix
+        data:
+          - prefix: 10.255.128.0/20
+            description: "Handoff P2P space, PROD namespace"
+            status: active
+            member_type: prefix
+            is_pool: true
+            role: technical
+            ip_namespace: "PROD"
+      ip_namespace: "PROD"
+
+    - name: Handoff-NON-PROD-IPv4
+      description: "Handoff P2P /31 links in the NON-PROD namespace"
+      default_prefix_type: IpamPrefix
+      default_prefix_length: 31
+      resources:
+        kind: IpamPrefix
+        data:
+          - prefix: 10.255.144.0/20
+            description: "Handoff P2P space, NON-PROD namespace"
+            status: active
+            member_type: prefix
+            is_pool: true
+            role: technical
+            ip_namespace: "NON-PROD"
+      ip_namespace: "NON-PROD"
+
+    - name: Handoff-INTERNET-IPv4
+      description: "Handoff P2P /31 links in the INTERNET namespace"
+      default_prefix_type: IpamPrefix
+      default_prefix_length: 31
+      resources:
+        kind: IpamPrefix
+        data:
+          - prefix: 10.255.160.0/20
+            description: "Handoff P2P space, INTERNET namespace"
+            status: active
+            member_type: prefix
+            is_pool: true
+            role: technical
+            ip_namespace: "INTERNET"
+      ip_namespace: "INTERNET"
+
+    - name: Handoff-MANAGEMENT-IPv4
+      description: "Handoff P2P /31 links in the MANAGEMENT namespace"
+      default_prefix_type: IpamPrefix
+      default_prefix_length: 31
+      resources:
+        kind: IpamPrefix
+        data:
+          - prefix: 10.255.176.0/20
+            description: "Handoff P2P space, MANAGEMENT namespace"
+            status: active
+            member_type: prefix
+            is_pool: true
+            role: technical
+            ip_namespace: "MANAGEMENT"
+      ip_namespace: "MANAGEMENT"

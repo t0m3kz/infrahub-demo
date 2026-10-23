@@ -2,7 +2,7 @@
 # The transit VIF — the object that closes the on-prem-to-cloud path, and the only
 # file in this tree that has to load last.
 #
-# A virtual circuit's customer end is a DcimInterface, but its cloud end is a
+# A handoff circuit's edge end is a DcimInterface, but its cloud end is a
 # CloudVirtualInterface, not a device port. Both edges that express that are
 # declared on the CloudHybridAttachment generic (see
 # schemas/extensions/topology/topology_cloud.yml), which is an attribute-less marker
@@ -10,14 +10,32 @@
 # both are set from this, the concrete side:
 #
 #   transit_gateway_attachment -> the hybrid TGW attachment (02_cloud_hub/)
-#   virtual_circuits           -> every circuit landing here (03_virtual_circuits/,
-#                                 04_sdwan/)
+#   virtual_circuit            -> the ONE handoff circuit landing here
+#                                 (00_vif_handoff.yml; 1:1, a VIF has one handoff)
 #
 # Which is why the VIF is defined here rather than next to its Direct Connect: it
-# needs every circuit to already exist.
+# needs its handoff circuit to already exist.
 #
-# VC-C008-DC12-AZURE-WEU is absent on purpose — it lands in Azure westeurope, and
-# only the AWS hub is modelled.
+# Two VIFs, one handoff circuit each (a VIF has exactly one handoff):
+#
+#   vif-transit-hub-euc1  on dx-eqx-fr2-euc1, the dedicated 10G port of the FR2 cage:
+#                         HANDOFF-FR2-AWS-EUC1-PROD (00_vif_handoff.yml), VLAN 1000
+#   vif-transit-am-euc1   on dx-eqx-am-euc1, the hosted connection Equinix Fabric delivers to the
+#                         Network Edge router eg-am-ne02: HANDOFF-AMNE-AWS-EUC1-PROD
+#                         (00_vif_handoff_am_ne.yml), VLAN 1100. It names the hub's Transit Gateway but
+#                         no transit_gateway_attachment: a hybrid attachment has one endpoint and
+#                         tgwa-hybrid-eqx-fr2 already has the FR2 VIF (a second hybrid attachment is the
+#                         follow-up 02_cloud_hub/05_attachments.yml describes).
+#
+# Each handoff circuit generates its own eBGP session on a /31 of its sub-interfaces (the VLAN of the
+# sub-interface mirrors the VIF's vlan_id; checks/circuit_placement.py holds them equal). The session
+# on the Network Edge router is generated too: add_virtual_circuit
+# (generators/topology/virtual_circuit.py) builds it between the router's overlay BGP process and the
+# AWS Direct Connect router stub's EXT-AWS-DX-FR2-bgp, nothing is authored for it.
+#
+# The Azure westeurope cross-connect (XC-EQXPA4-AZURE-WEU) has no handoff on purpose: only the AWS hub
+# is modelled. The Network Edge hop eg-fr201 -> eg-am-ne01 (HANDOFF-FR2-AMNE-PROD) ends on the router,
+# not in the cloud, so it has no VIF either.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -32,8 +50,14 @@ spec:
       direct_connect: "dx-eqx-fr2-euc1"
       transit_gateway: "tgw-30all-euc1"
       transit_gateway_attachment: "tgwa-hybrid-eqx-fr2"
-      virtual_circuits:
-        - "VC-C001-EQXFR-AWS-EUC1"
-        - "VC-C005-DC10-AWS-EUC1"
-        - "VC-C006-DC11-AWS-EUC1"
-        - "VC-SDWAN-FR2-AWS-EUC1"
+      virtual_circuit: "HANDOFF-FR2-AWS-EUC1-PROD"
+
+    - name: "vif-transit-am-euc1"
+      cloud_id: "dxvif-am3k4m5n"
+      description: "Transit VIF from dx-eqx-am-euc1 onto tgw-30all-euc1"
+      status: active
+      vif_type: transit
+      vlan_id: 1100
+      direct_connect: "dx-eqx-am-euc1"
+      transit_gateway: "tgw-30all-euc1"
+      virtual_circuit: "HANDOFF-AMNE-AWS-EUC1-PROD"

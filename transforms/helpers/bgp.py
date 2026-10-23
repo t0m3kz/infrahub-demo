@@ -225,6 +225,10 @@ def _build_session_from_peering(
         remote_ip = remote_iface.get("ip_address")
         if remote_ip:
             session["remote_ip"] = remote_ip
+        # A DCI EVPN session is sourced from the loopback the peering names, not
+        # the device's default one (rendered per neighbour, cisco_nxos_bgp.j2).
+        if peering_node.get("peering_role") == "dci":
+            session["update_source"] = local_iface.get("name")
 
     # Remote ASN resolution
     session_type = str(peering_node.get("session_type", "")).upper()
@@ -453,7 +457,13 @@ def _build_peer_groups(sessions: list[dict[str, Any]], device_role: str = "") ->
     - UNDERLAY-PEERS: eBGP sessions with TTL=1 (P2P underlay), per-neighbor remote-as
     - EVPN-PEERS: iBGP sessions with TTL!=1 (EVPN overlay), shared remote-as from peer group
     - EVPN-OVERLAY: eBGP sessions with TTL!=1 (eBGP EVPN overlay), per-neighbor remote-as
-    - DCI-PEERS: peering_role=dci sessions between EVPN Multi-Site border gateways
+    - DCI-UNDERLAY-PEERS: peering_role=dci-underlay sessions, the eBGP unicast over the
+      physical DCI ports between two EVPN Multi-Site border gateways. Their sessions
+      announce only this box's own loopbacks (``export_local_only``) and take a
+      no-export inbound policy (``dci_inbound``)
+    - DCI-PEERS: peering_role=dci sessions, the loopback-to-loopback eBGP EVPN between
+      the same border gateways (EVPN only, ``ebgp_multihop`` the largest session TTL,
+      each session sourced from its own loopback: ``update_source``)
     - FABRIC-PEERS: peering_role=fabric sessions, an iBGP session on a directly cabled
       link between the two border gateways of one site (the metro edge pair)
 
@@ -463,15 +473,18 @@ def _build_peer_groups(sessions: list[dict[str, Any]], device_role: str = "") ->
     Mutates sessions in-place by adding 'peer_group' (and 'remote_as_from_peer_group' for iBGP)
     keys. Returns list of peer group definitions.
     """
-    # A DCI session is directly connected (ttl 1) like the underlay, but it
-    # carries EVPN between sites and the neighbour is in another fabric — it
-    # must not inherit UNDERLAY-PEERS' unicast-only policy.
     sessions = [s for s in sessions if not s.get("vrf")]
+    # A DCI underlay session is directly connected (ttl 1) like the underlay, but
+    # the neighbour is in another fabric — it must not inherit UNDERLAY-PEERS'
+    # policy. The DCI EVPN session is multihop between loopbacks (ttl 2) and would
+    # otherwise fall into EVPN-OVERLAY, whose ebgp-multihop 255 and update-source
+    # loopback0 are wrong for it.
+    dci_underlay = [s for s in sessions if s.get("peering_role") == "dci-underlay"]
+    dci = [s for s in sessions if s.get("peering_role") == "dci"]
     # A fabric session is iBGP over a cabled link (ttl 1): without its own group
     # it would fall into UNDERLAY-PEERS and render as an eBGP unicast underlay.
-    dci = [s for s in sessions if s.get("peering_role") == "dci"]
     fabric = [s for s in sessions if s.get("peering_role") == "fabric"]
-    sessions = [s for s in sessions if s.get("peering_role") not in ("dci", "fabric")]
+    sessions = [s for s in sessions if s.get("peering_role") not in ("dci-underlay", "dci", "fabric")]
     underlay = [s for s in sessions if s.get("ttl") == 1]
     overlay_ibgp = [s for s in sessions if s.get("ttl") != 1 and str(s.get("session_type", "")).upper() == "IBGP"]
     overlay_ebgp = [
@@ -566,16 +579,38 @@ def _build_peer_groups(sessions: list[dict[str, Any]], device_role: str = "") ->
         for session in overlay_ebgp:
             session["peer_group"] = pg_name
 
+    if dci_underlay:
+        pg_name = "DCI-UNDERLAY-PEERS"
+        dci_underlay_afs = [
+            af for af in ("ipv4", "ipv6") if any(af in (s.get("address_families") or []) for s in dci_underlay)
+        ]
+        peer_groups.append(
+            {
+                "name": pg_name,
+                "type": "dci-underlay",
+                "session_type": "EBGP",
+                **_any_flags(dci_underlay, "bfd_enabled", *_POLICY_FLAGS),
+                "address_families": dci_underlay_afs or ["ipv4"],
+            }
+        )
+        for session in dci_underlay:
+            session["peer_group"] = pg_name
+            # Announce only this box's own loopbacks (RM-FABRIC-OUT) and tag what
+            # the other site sends no-export (RM-DCI-IN): a DCI port is a transit
+            # for nobody's routes.
+            session["export_local_only"] = True
+            session["dci_inbound"] = True
+
     if dci:
         pg_name = "DCI-PEERS"
-        dci_afs = [af for af in ("ipv4", "ipv6", "evpn") if any(af in (s.get("address_families") or []) for s in dci)]
         peer_groups.append(
             {
                 "name": pg_name,
                 "type": "dci",
                 "session_type": "EBGP",
                 **_any_flags(dci, "bfd_enabled", *_POLICY_FLAGS),
-                "address_families": dci_afs or ["evpn"],
+                "ebgp_multihop": max(s.get("ttl") or 255 for s in dci),
+                "address_families": ["evpn"],
             }
         )
         for session in dci:

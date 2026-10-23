@@ -7,7 +7,7 @@ spec:
     - name: DC7
       index: 7
       design: S
-      parent: DC
+      parent: "Data Center"
       routing_strategy: ebgp-ebgp
       underlay_protocol: ipv6
       naming_convention: hierarchical

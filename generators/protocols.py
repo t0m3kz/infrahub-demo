@@ -43,7 +43,6 @@ class DcimCapabilities(CoreNode):
 
 
 class TopologyCircuit(CoreNode):
-    bandwidth: IntegerOptional
     description: StringOptional
     name: String
     status: Dropdown
@@ -256,7 +255,7 @@ class CloudResource(CoreNode):
 
 
 class CloudHybridAttachment(CoreNode):
-    pass
+    virtual_circuit: RelationshipAttribute[TopologyHandoffCircuit]
 
 
 class ManagedTenantScoped(CoreNode):
@@ -332,6 +331,10 @@ class ManagedBGPPeering(ManagedGeneric, ManagedPeering, ManagedGenericInterfaces
     ttl: Integer
     bgp_processes: RelationshipManager[ManagedBGP]
     password: RelationshipAttribute[RoutingPassword]
+
+
+class TopologyVirtualCircuit(TopologyCircuit, ManagedGeneric, ManagedGenericInterfaces):
+    pass
 
 
 class DcimCable(CoreNode):
@@ -807,9 +810,9 @@ class RoutingPassword(CoreNode):
 
 
 class TopologyPhysicalCircuit(TopologyCircuit, ManagedGeneric, ManagedGenericInterfaces):
+    bandwidth: IntegerOptional
     circuit_id: String
     circuit_type: Dropdown
-    peering_role: DropdownOptional
     locations: RelationshipManager[TopologyFacility]
 
 
@@ -1143,15 +1146,20 @@ class CloudVPNGateway(CloudResource, CloudHybridAttachment):
     virtual_network: RelationshipAttribute[CloudVirtualNetwork]
 
 
-class TopologyVirtualCircuit(TopologyCircuit, ManagedGeneric, ManagedGenericInterfaces):
-    encryption: Boolean
-    link_type: Dropdown
-    peering_role: DropdownOptional
-    transport_mode: DropdownOptional
-    tunnel_id: IntegerOptional
-    vni: IntegerOptional
+class TopologyHandoffCircuit(TopologyVirtualCircuit):
+    maximum_routes: IntegerOptional
+    cloud_endpoint: RelationshipAttribute[CloudHybridAttachment]
+    ip_namespace: RelationshipAttribute[IpamNamespace]
+    locations: RelationshipManager[TopologyFacility]
+    password: RelationshipAttribute[RoutingPassword]
+
+
+class TopologyInterconnectCircuit(TopologyVirtualCircuit):
+    locations: RelationshipManager[TopologyFacility]
+
+
+class TopologyTunnelCircuit(TopologyVirtualCircuit):
     locations: RelationshipManager[TopologyConnectableLocation]
-    physical_circuits: RelationshipManager[TopologyPhysicalCircuit]
 
 
 class DcimVirtualDevice(CoreArtifactTarget, DcimDevice, DcimCapabilities, AppInstance):
@@ -1169,7 +1177,6 @@ class DcimVirtualInterface(DcimInterface):
 class CloudVirtualInterface(CloudResource, CloudHybridAttachment):
     vif_type: Dropdown
     vlan_id: Integer
-    asn: RelationshipAttribute[RoutingAutonomousSystem]
     direct_connect: RelationshipAttribute[CloudDirectConnect]
     transit_gateway: RelationshipAttribute[CloudTransitGateway]
     virtual_network: RelationshipAttribute[CloudVirtualNetwork]

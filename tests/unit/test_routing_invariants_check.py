@@ -69,8 +69,8 @@ def _attachment(
     }
 
 
-def _vif(vif_id: str, circuits: dict[str, list[str | None]], env: str | None = None) -> dict[str, Any]:
-    """A VIF whose circuits terminate on interfaces addressed in namespaces of the given types."""
+def _vif(vif_id: str, handoff_type: str | None, env: str | None = None) -> dict[str, Any]:
+    """A VIF whose handoff circuit terminates in a namespace of the given type (None: the VIF has no handoff)."""
     return {
         "id": vif_id,
         "name": _v(vif_id),
@@ -83,32 +83,14 @@ def _vif(vif_id: str, circuits: dict[str, list[str | None]], env: str | None = N
         }
         if env
         else {"node": None},
-        "virtual_circuits": {
-            "edges": [
-                {
-                    "node": {
-                        "id": f"c-{circuit}",
-                        "name": _v(circuit),
-                        "capabilities": {
-                            "edges": [
-                                {
-                                    "node": {
-                                        "__typename": "DcimVirtualInterface",
-                                        "id": f"{circuit}-{i}",
-                                        "name": _v("e"),
-                                        "ip_address": {"node": {"ip_namespace": {"node": _ns("X", ns_type)}}}
-                                        if ns_type
-                                        else {"node": None},
-                                    }
-                                }
-                                for i, ns_type in enumerate(types)
-                            ]
-                        },
-                    }
-                }
-                for circuit, types in circuits.items()
-            ]
-        },
+        "virtual_circuit": {
+            "node": {
+                "name": _v(f"HO-{vif_id}"),
+                "ip_namespace": {"node": {"name": _v("NS"), "namespace_type": _v(handoff_type)}},
+            }
+        }
+        if handoff_type
+        else {"node": None},
     }
 
 
@@ -232,14 +214,14 @@ class TestTgwRouteTables:
         )
         assert check._captured_errors == []
 
-    def test_hybrid_attachment_resolves_via_vif_circuits(self) -> None:
-        """A hybrid attachment takes the type of its VIF's circuit namespaces, not its account's."""
+    def test_hybrid_attachment_resolves_via_the_vif_handoff(self) -> None:
+        """A hybrid attachment takes the type of its VIF's handoff namespace, not its account's."""
         check = _run(
             CloudTransitGatewayAttachment=[
                 _attachment("hub", "hybrid", "p", "shared", [], endpoint_id="vif-1"),
                 _attachment("a", "vpc", "p", "shared", []),
             ],
-            CloudVirtualInterface=[_vif("vif-1", {"c1": ["non_prod"]})],
+            CloudVirtualInterface=[_vif("vif-1", "non_prod")],
         )
         assert len(check._captured_errors) == 1
 
@@ -250,30 +232,35 @@ class TestTgwRouteTables:
         assert check._captured_infos and check._captured_infos[0].startswith("WARNING")
 
 
-class TestVifCircuits:
-    """A VIF's circuits all resolve to one namespace type."""
+class TestVifHandoff:
+    """A VIF's handoff circuit terminates in the namespace type of its virtual network's account environment."""
 
-    def test_uniform_circuits_pass(self) -> None:
-        """Circuits terminating in prod namespaces (or unaddressed ports) pass."""
-        check = _run(CloudVirtualInterface=[_vif("vif-1", {"c1": ["prod", None], "c2": ["prod"]})])
-        assert check._captured_errors == []
+    def test_handoff_in_the_account_environment_passes(self) -> None:
+        """A prod handoff on a VIF of a prod virtual network, and a non-prod one on a development account."""
+        assert _run(CloudVirtualInterface=[_vif("vif-1", "prod", env="p")])._captured_errors == []
+        assert _run(CloudVirtualInterface=[_vif("vif-2", "non_prod", env="d")])._captured_errors == []
 
-    def test_mixed_circuits_fail(self) -> None:
-        """A prod and a non_prod circuit on one VIF is an error."""
-        check = _run(CloudVirtualInterface=[_vif("vif-1", {"c1": ["prod"], "c2": ["non_prod"]})])
-        assert len(check._captured_errors) == 1
-        assert "never mix" in check._captured_errors[0]
+    def test_handoff_namespace_differs_from_the_vif_network_fails(self) -> None:
+        """A non_prod handoff on a VIF of a prod virtual network is an error naming the circuit and namespace."""
+        check = _run(CloudVirtualInterface=[_vif("vif-1", "non_prod", env="p")])
+        assert check._captured_errors == [
+            "VIF 'vif-1' belongs to a prod virtual network but its handoff circuit 'HO-vif-1' terminates in the "
+            "non_prod namespace 'NS'"
+        ]
 
-    def test_circuit_type_differs_from_vif_network_fails(self) -> None:
-        """A non_prod circuit on a VIF of a prod virtual network is an error."""
-        check = _run(CloudVirtualInterface=[_vif("vif-1", {"c1": ["non_prod"]}, env="p")])
-        assert len(check._captured_errors) == 1
-        assert "prod virtual network" in check._captured_errors[0]
+    def test_vif_without_a_handoff_passes(self) -> None:
+        """A VIF no handoff circuit uses yet resolves to no type and raises nothing."""
+        assert _run(CloudVirtualInterface=[_vif("vif-1", None, env="p")])._captured_errors == []
 
-    def test_unaddressed_circuits_pass(self) -> None:
-        """Circuits on unaddressed (underlay) ports resolve to no type and raise nothing."""
-        check = _run(CloudVirtualInterface=[_vif("vif-1", {"c1": [None]})])
-        assert check._captured_errors == []
+    def test_handoff_in_an_untyped_namespace_passes(self) -> None:
+        """A namespace with no namespace_type resolves to no type and raises nothing."""
+        vif = _vif("vif-1", "prod", env="p")
+        vif["virtual_circuit"]["node"]["ip_namespace"]["node"]["namespace_type"] = _v(None)
+        assert _run(CloudVirtualInterface=[vif])._captured_errors == []
+
+    def test_vif_network_without_environment_is_not_judged(self) -> None:
+        """No account environment: any handoff namespace passes."""
+        assert _run(CloudVirtualInterface=[_vif("vif-1", "non_prod")])._captured_errors == []
 
 
 def _block(prefix: str, ns_name: str = "PROD", ns_type: str = "prod", block_id: str | None = None) -> dict[str, Any]:

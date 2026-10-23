@@ -2,8 +2,15 @@
 
 Everything here is the part of the model that leaves a single site: the dark
 fibre and cross-connects into the colocation on-ramps, the virtual circuits
-riding them into AWS and Azure, the SD-WAN branches' internet underlay, and
-the cloud-side terminations that close the on-prem-to-cloud path.
+riding them (the DCI between the border gateways, the handoffs into AWS, the
+Network Edge chain, Megaport and the SD-WAN gateway), the SD-WAN branches'
+tunnels and internet underlay, and the cloud-side terminations that close the
+on-prem-to-cloud path.
+
+A physical circuit is a pure carrier. The role of a virtual circuit is its KIND:
+a Tunnel (inventory only, no session), an Interconnect (a DCI: an underlay and
+an EVPN session) or a Handoff (one eBGP session in one environment namespace).
+Their carrier is never declared: it is derived from the circuit's own ports.
 
 Two edges get special attention because the schema deliberately has exactly one
 way to express each of them, and a regression would silently split the graph
@@ -12,19 +19,22 @@ into islands:
   * ``capabilities`` — how a circuit surfaces on the port it
     terminates on. It is the single uniform "what is this port doing" edge, and
     replaced the bespoke ``interfaces`` relationship the node used to declare.
-  * ``cloud_endpoints`` — how a circuit reaches its cloud side, which is a
+  * ``cloud_endpoint`` — how a Handoff reaches its cloud side, which is a
     CloudVirtualInterface, not a device port. Without it the traversal walks
     from a border leaf out to the cage and then stops at an island boundary.
 
 Circuit placement is checked from both sides: a physical circuit ends on two
 facilities where its end devices sit (the end the data leaves out is the one
-add_circuit derived), an owned virtual circuit on its owner's footprint, and
-every location's reverse ``circuits`` lists exactly the circuits naming it.
+add_circuit derived), a tunnel on its owner's office, and every location's
+reverse ``circuits`` lists exactly the circuits naming it. The per-kind rules
+(_tunnel_errors, _interconnect_errors, _handoff_errors) assert on the live data
+what checks/circuit_placement.py enforces, independently of it.
 
-Also covered: the tenant-scoped firewall and load-balancer contexts (shared vs
-dedicated, driven by the customer design blueprint), the VIPs of the
-load_balanced components with their R_server/R_client rules, and the segment
-deployment legs, where a stretch segment must carry one leg per DC.
+Also covered: the sessions add_virtual_circuit builds (two per DCI, one per
+Handoff, none for a Tunnel), the tenant-scoped firewall and load-balancer
+contexts (shared vs dedicated, driven by the customer design blueprint), the
+VIPs of the load_balanced components with their R_server/R_client rules, and
+the segment deployment legs, where a stretch segment must carry one leg per DC.
 
 Runs against the branch test_59 builds; it never loads data of its own.
 """
@@ -47,6 +57,8 @@ from utils.data_cleaning import clean_data
 from utils.exchange_transit import (
     EXCHANGE_PEERS,
     LB_VIP_PREFIXLEN,
+    PROD_TYPE,
+    TENANT_NAMESPACE_TYPES,
     TRANSIT_OFFSETS,
     transit_addresses,
     transit_vlan,
@@ -74,9 +86,10 @@ from .test_constants import (
     ALL_DEMO_FABRIC_PEERINGS,
     ALL_DEMO_FACILITY_KINDS,
     ALL_DEMO_FIREWALL_MEMBERS,
-    ALL_DEMO_FOOTPRINT_KINDS,
+    ALL_DEMO_GATEWAY_ACCESS_CIRCUITS,
+    ALL_DEMO_GATEWAY_ACCESS_LOCATIONS,
+    ALL_DEMO_HANDOFF_PARTY_ASNS,
     ALL_DEMO_INTERNET_BGWS,
-    ALL_DEMO_INTERNET_TRANSIT_CIRCUITS,
     ALL_DEMO_INTERNET_TRANSIT_PEERINGS,
     ALL_DEMO_INTERNET_UPSTREAM_BY_DC,
     ALL_DEMO_ISP_ACCESS_DEVICE,
@@ -91,24 +104,26 @@ from .test_constants import (
     ALL_DEMO_LOADBALANCER_MEMBERS,
     ALL_DEMO_OFFICE_WAN_EXITS,
     ALL_DEMO_PHYSICAL_CIRCUIT_TYPES,
-    ALL_DEMO_PROVIDER_FACILITY_KINDS,
     ALL_DEMO_SDWAN_EDGE_UPLINK,
+    ALL_DEMO_SDWAN_GATEWAY_PUBLIC_PORT,
     ALL_DEMO_SDWAN_UNDERLAY_CIRCUITS,
     ALL_DEMO_SEGMENT_LEGS,
     ALL_DEMO_SHARED_FIREWALL_CONTEXTS,
+    ALL_DEMO_SHARED_INTERNET_CIRCUITS,
     ALL_DEMO_SHARED_LOADBALANCER_CONTEXTS,
     ALL_DEMO_SNAT_ADDRESSES,
     ALL_DEMO_SNAT_POOL_PREFIX,
-    ALL_DEMO_TENANT_LOCATION_KINDS,
     ALL_DEMO_TRANSIT_EXCHANGES,
     ALL_DEMO_TRANSIT_LEGS,
     ALL_DEMO_TRANSIT_PREFIXES,
     ALL_DEMO_TRANSIT_RESOURCES,
     ALL_DEMO_TRANSIT_SUBINTERFACES,
-    ALL_DEMO_VIRTUAL_CIRCUIT_CHAINS,
     ALL_DEMO_VIRTUAL_CIRCUITS,
     ALL_DEMO_ZONE_SITE_VIPS,
+    HANDOFF_KIND,
+    INTERCONNECT_KIND,
     OFFICE_NAMESPACE,
+    TUNNEL_KIND,
     deployment_environment,
     deployment_namespace,
     transit_namespace_type,
@@ -154,25 +169,53 @@ query {
 }
 """
 
-# The DCI sessions add_circuit builds for the peering_role=dci dark fibres.
-DCI_SESSIONS_QUERY = """
+# The BGP sessions by name: the <vc>-underlay / <vc>-evpn of an Interconnect and the <vc>-bgp of a Handoff (both
+# add_virtual_circuit), and the FABRIC-<a>-<b> of a zone edge pair. A session's interfaces are its `capabilities`: the
+# physical ports of the DCI underlay, the VTEP loopbacks of the DCI EVPN session, the two sub-interfaces of a Handoff.
+# A process names its device through its own `capabilities`.
+SESSIONS_QUERY = """
 query ($names: [String]) {
   ManagedBGPPeering(name__values: $names) {
     edges {
       node {
         name { value }
+        status { value }
         peering_role { value }
         session_type { value }
         ttl { value }
+        bfd_enabled { value }
+        send_extended_community { value }
+        maximum_routes { value }
         password { node { name { value } } }
         address_families { edges { node { afi { value } safi { value } } } }
-        bgp_processes { edges { node { name { value } process_role { value } } } }
+        bgp_processes {
+          edges {
+            node {
+              name { value }
+              process_role { value }
+              local_as { node { asn { value } } }
+              capabilities { edges { node { name { value } } } }
+            }
+          }
+        }
         capabilities {
           edges {
             node {
               name { value }
               device { node { name { value } } }
-              ... on DcimPhysicalInterface { ip_address { node { address { value } } } }
+              ... on DcimPhysicalInterface {
+                description { value }
+                status { value }
+                mtu { value }
+                ip_address { node { address { value } ip_namespace { node { name { value } } } } }
+              }
+              ... on DcimVirtualInterface {
+                description { value }
+                status { value }
+                role { value }
+                parent_interface { node { name { value } } }
+                ip_address { node { address { value } ip_namespace { node { name { value } } } } }
+              }
             }
           }
         }
@@ -180,6 +223,36 @@ query ($names: [String]) {
     }
   }
 }
+"""
+
+# The /31 (/127) add_virtual_circuit allocates per circuit, found by its description ("DCI <name>", "Handoff <name>").
+CIRCUIT_PREFIXES_QUERY = """
+query ($descriptions: [String]) {
+  IpamPrefix(description__values: $descriptions) {
+    edges {
+      node {
+        prefix { value }
+        description { value }
+        role { value }
+        ip_namespace { node { name { value } } }
+      }
+    }
+  }
+}
+"""
+
+# The members of a group, with their kind.
+GROUP_MEMBERS_QUERY = """
+query ($name: String!) {
+  CoreGroup(name__value: $name) {
+    edges { node { members { edges { node { id __typename display_label } } } } }
+  }
+}
+"""
+
+# Addresses that must not exist (the authored handoff addresses the generator replaced).
+ADDRESS_COUNT_QUERY = """
+query ($addresses: [String]) { IpamIPAddress(address__values: $addresses) { count } }
 """
 
 # The interlink ports of the zone edge pairs: role and /127 address.
@@ -402,6 +475,13 @@ def _rules(result: dict) -> list[dict]:
 
 # DCI-Technical-IPv6 (data/bootstrap/20_dci_pools.yml) — the DC fabrics run an IPv6 underlay.
 DCI_POOL_NETWORK = ipaddress.IPv6Network("fd00:2200::/40")
+# The MTU add_virtual_circuit sets on the two physical ports of a DCI.
+_DCI_MTU = 9216
+
+# What the handoffs were before add_virtual_circuit generated them: sessions and addresses authored in 30_all
+# (08_interconnects/04_sdwan and 05_cloud_endpoints). They must not come back.
+LEGACY_HANDOFF_PEERINGS = ("VRF-PROD-EQXFR2-AWS-EUC1", "VRF-PROD-EQXFR2-SDWAN")
+LEGACY_HANDOFF_ADDRESSES = ("10.255.5.5/30", "10.255.5.6/30", "10.255.5.0/31", "10.255.5.1/31")
 
 
 _TRANSIT_PEER_NAMES = {"internet": "INTERNET", "management": "MANAGEMENT"}
@@ -409,6 +489,9 @@ _TRANSIT_PEER_NAMES = {"internet": "INTERNET", "management": "MANAGEMENT"}
 
 _ZONE_KINDS = frozenset({"TopologyColocationZone", "TopologyVirtualColocation"})
 _OFFICE_KIND = "TopologyCustomerOffice"
+_ISP_KIND = "TopologyExternalProviders"
+_DECOMMISSIONED = "decommissioned"
+_CIRCUIT_ENDS = 2
 
 
 def _label(location: dict[str, Any]) -> str:
@@ -416,34 +499,339 @@ def _label(location: dict[str, Any]) -> str:
     return f"{location['name']} ({location['kind']})"
 
 
-def _at(location: dict[str, Any], place_id: str | None) -> bool:
-    """Whether a location is the place ``place_id``, or a zone / virtual colocation of it (one whose parent is that metro).
+def _sessions_by_name(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """The ManagedBGPPeering nodes of a SESSIONS_QUERY result, by name."""
+    return {edge["node"]["name"]["value"]: edge["node"] for edge in result["ManagedBGPPeering"]["edges"]}
 
-    The place is where a device is deployed: a border leaf in its DC, a provider router in its region, an on-ramp
-    edge in its ZONE (or virtual colocation), which is the location itself. A footprint's place is its metro, which
-    the zones and virtual colocations below it reach.
-    """
-    if not place_id:
+
+def _interfaces(session: dict[str, Any]) -> dict[tuple[str, str], dict[str, Any]]:
+    """The interfaces a session runs on (its `capabilities`), by (device, interface)."""
+    return {
+        (edge["node"]["device"]["node"]["name"]["value"], edge["node"]["name"]["value"]): edge["node"]
+        for edge in session["capabilities"]["edges"]
+    }
+
+
+def _address(interface: dict[str, Any]) -> str | None:
+    """The address on an interface node of SESSIONS_QUERY, None when unaddressed."""
+    return (((interface.get("ip_address") or {}).get("node")) or {}).get("address", {}).get("value")
+
+
+def _address_namespace(interface: dict[str, Any]) -> str | None:
+    """The namespace of the address on an interface node of SESSIONS_QUERY, None when unaddressed."""
+    address = ((interface.get("ip_address") or {}).get("node")) or {}
+    return (((address.get("ip_namespace") or {}).get("node")) or {}).get("name", {}).get("value")
+
+
+def _process_nodes(session: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """The BGP processes a session runs on, by the one device each runs on."""
+    processes = {}
+    for edge in session["bgp_processes"]["edges"]:
+        devices = [d["node"]["name"]["value"] for d in edge["node"]["capabilities"]["edges"]]
+        if len(devices) == 1:
+            processes[devices[0]] = edge["node"]
+    return processes
+
+
+def _process_roles(session: dict[str, Any]) -> dict[str, str]:
+    """device -> process_role of the processes a session runs on."""
+    return {device: node["process_role"]["value"] for device, node in _process_nodes(session).items()}
+
+
+def _session_errors(session: dict[str, Any], expected: dict[str, Any]) -> list[str]:
+    """Why a session is not what ``expected`` says: status, peering_role, session_type, ttl, bfd_enabled,
+    send_extended_community, maximum_routes (None: unset), key (the password's name) and address families."""
+    name = session["name"]["value"]
+    password = (session.get("password") or {}).get("node") or {}
+    actual = {
+        "status": session["status"]["value"],
+        "peering_role": session["peering_role"]["value"],
+        "session_type": session["session_type"]["value"],
+        "ttl": session["ttl"]["value"],
+        "bfd_enabled": session["bfd_enabled"]["value"],
+        "send_extended_community": session["send_extended_community"]["value"],
+        "maximum_routes": session["maximum_routes"]["value"],
+        "key": password.get("name", {}).get("value"),
+        "families": sorted(
+            (edge["node"]["afi"]["value"], edge["node"]["safi"]["value"])
+            for edge in session["address_families"]["edges"]
+        ),
+    }
+    return [
+        f"{name}: {field} {actual[field]!r}, expected {want!r}"
+        for field, want in expected.items()
+        if actual[field] != want
+    ]
+
+
+def _prefixes_by_description(result: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    """The IpamPrefix nodes of a CIRCUIT_PREFIXES_QUERY result, by description."""
+    prefixes: dict[str, list[dict[str, Any]]] = {}
+    for edge in result["IpamPrefix"]["edges"]:
+        prefixes.setdefault(edge["node"]["description"]["value"], []).append(edge["node"])
+    return prefixes
+
+
+def _p2p_errors(
+    label: str, addresses: list[str | None], length: int, pools: list[Any], prefixes: list[dict[str, Any]] | None
+) -> list[str]:
+    """Why two interface addresses are not one point-to-point /``length`` inside one of ``pools``, or why the circuit's
+    own prefix (``prefixes``, found by description: exactly one) is not that network, a technical one."""
+    if len(addresses) != _CIRCUIT_ENDS or any(address is None for address in addresses):
+        return [f"{label}: interface addresses {addresses} are not two"]
+    first, second = (ipaddress.ip_interface(str(address)) for address in addresses)
+    network: Any = first.network
+    errors: list[str] = []
+    if second.network != network or first == second:
+        return [f"{label}: interface addresses {first}, {second} are not one P2P"]
+    if network.prefixlen != length or not any(
+        network.version == pool.version and network.subnet_of(pool) for pool in pools
+    ):
+        errors.append(f"{label}: P2P {network} is not a /{length} from {[str(pool) for pool in pools]}")
+    if not prefixes or len(prefixes) != 1:
+        errors.append(f"{label}: {len(prefixes or [])} prefix object(s) for the circuit, expected exactly 1")
+    else:
+        prefix = prefixes[0]
+        if ipaddress.ip_network(prefix["prefix"]["value"]) != network:
+            errors.append(f"{label}: its prefix is {prefix['prefix']['value']}, the addresses are on {network}")
+        if prefix["role"]["value"] != "technical":
+            errors.append(
+                f"{label}: prefix {prefix['prefix']['value']} has role {prefix['role']['value']}, expected technical"
+            )
+    return errors
+
+
+def _live(carriers: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The carriers (``{"id", "circuit_id", "status"}``) of a port that are not decommissioned."""
+    return [carrier for carrier in carriers if carrier["status"] != _DECOMMISSIONED]
+
+
+def _vlan(interface: str) -> int | None:
+    """The VLAN of a sub-interface named ``<port>.<vlan>``, None for any other name."""
+    _, dot, suffix = interface.rpartition(".")
+    return int(suffix) if dot and suffix.isdigit() else None
+
+
+def _contiguous(hops: list[list[str]], start: str, finish: str) -> bool:
+    """Whether some order of ALL hops (each the ids of a circuit's two locations) is one path from ``start`` to
+    ``finish``: each hop begins where the previous one ended, in either direction."""
+
+    def walk(place: str, remaining: list[list[str]]) -> bool:
+        if not remaining:
+            return place == finish
+        for index, hop in enumerate(remaining):
+            rest = remaining[:index] + remaining[index + 1 :]
+            for near, far in (hop, hop[::-1]):
+                if near == place and walk(far, rest):
+                    return True
         return False
-    return location["id"] == place_id or (location["kind"] in _ZONE_KINDS and location["parent_id"] == place_id)
+
+    return walk(start, hops)
 
 
-def _place(location: dict[str, Any]) -> tuple[str | None, str | None]:
-    """(id, name) of the facility a location stands for: a footprint's parent (DC, metro, region), else itself."""
-    if location["kind"] in ALL_DEMO_FOOTPRINT_KINDS:
-        return location["parent_id"], location["parent_name"]
-    return location["id"], location["name"]
+def _tunnel_errors(circuit: dict[str, Any], physical_by_id: dict[str, dict[str, Any]]) -> list[str]:
+    """A Tunnel: owned by its office's owner, one end on the gateway's public port in the gateway's zone, and every
+    end on a live internet physical circuit of its own (one with an end on an ISP): no shared path to be contiguous."""
+    name = circuit["name"]
+    errors: list[str] = []
+    locations = circuit["location_nodes"]
+    offices = [location for location in locations if location["kind"] == _OFFICE_KIND]
+    if not circuit["owner_id"] or not any(office["owner_id"] == circuit["owner_id"] for office in offices):
+        errors.append(
+            f"{name}: owned by {circuit['owner']}, but none of its locations {[_label(loc) for loc in locations]} is "
+            "an office of that owner"
+        )
+    gateway = [
+        device
+        for end, device in zip(circuit["end_nodes"], circuit["end_devices"], strict=True)
+        if end["interface"] == ALL_DEMO_SDWAN_GATEWAY_PUBLIC_PORT
+    ]
+    if len(gateway) != 1:
+        errors.append(
+            f"{name}: {len(gateway)} end(s) on '{ALL_DEMO_SDWAN_GATEWAY_PUBLIC_PORT}', expected the gateway's one"
+        )
+    elif gateway[0]["deployment_id"] not in {location["id"] for location in locations}:
+        errors.append(
+            f"{name}: gateway {gateway[0]['device']} is deployed in {gateway[0]['deployment_name']}, which is none of "
+            f"its locations {circuit['locations']}"
+        )
+    for end in circuit["end_nodes"]:
+        live = _live(end["carriers"])
+        internet = any(
+            location["kind"] == _ISP_KIND
+            for carrier in live
+            for location in physical_by_id.get(carrier["circuit_id"], {}).get("location_nodes", [])
+        )
+        if not internet:
+            errors.append(
+                f"{name}: end {end['device']}:{end['interface']} rides no live internet physical circuit "
+                f"(carriers {[carrier['circuit_id'] for carrier in end['carriers']]}): every end of a tunnel has its own"
+            )
+    return errors
 
 
-def _chain_joins(hops: list[list[dict[str, Any]]], near: dict[str, Any], far: dict[str, Any], internet: bool) -> bool:
-    """Whether an underlay (each hop's locations, in order) starts at ``near``'s facility and ends at ``far``'s.
+def _interconnect_errors(circuit: dict[str, Any], physical_by_id: dict[str, dict[str, Any]]) -> list[str]:
+    """An Interconnect (a DCI): unowned, two facilities, every end on a live physical circuit, and those circuits one
+    contiguous path between the two facilities. When one circuit carries it, it is pure fibre: its two ends are
+    exactly the DCI's two ports."""
+    name = circuit["name"]
+    errors: list[str] = []
+    locations = circuit["location_nodes"]
+    if circuit["owner_id"]:
+        errors.append(f"{name}: owned by {circuit['owner']}, a DCI between border gateways is shared platform")
+    strays = [_label(location) for location in locations if location["kind"] not in ALL_DEMO_FACILITY_KINDS]
+    if strays:
+        errors.append(f"{name}: a DCI ends on facilities, but {strays} is not one")
+    uncarried = [f"{end['device']}:{end['interface']}" for end in circuit["end_nodes"] if not _live(end["carriers"])]
+    if uncarried:
+        errors.append(f"{name}: end(s) {uncarried} are on no live physical circuit")
+        return errors
+    carriers: dict[str, dict[str, Any]] = {}
+    for end in circuit["end_nodes"]:
+        for carrier in _live(end["carriers"]):
+            carriers.setdefault(carrier["circuit_id"], physical_by_id.get(carrier["circuit_id"], {}))
+    missing = sorted(circuit_id for circuit_id, node in carriers.items() if not node)
+    if missing:
+        errors.append(f"{name}: carrier(s) {missing} are not on the branch")
+        return errors
+    if len(carriers) == 1:
+        (fibre,) = carriers.values()
+        if set(fibre["end_ids"]) != {end["id"] for end in circuit["end_nodes"]}:
+            errors.append(
+                f"{name}: its ports {circuit['ends']} are not the ends {fibre['ends']} of its carrier "
+                f"{fibre['circuit_id']}: a DCI is pure fibre"
+            )
+    hops = [[location["id"] for location in node["location_nodes"]] for node in carriers.values()]
+    if any(len(hop) != _CIRCUIT_ENDS for hop in hops):
+        errors.append(f"{name}: a carrier does not terminate on exactly {_CIRCUIT_ENDS} locations")
+    elif len(locations) == _CIRCUIT_ENDS:
+        first, second = (location["id"] for location in locations)
+        if not (_contiguous(hops, first, second) or _contiguous(hops, second, first)):
+            errors.append(
+                f"{name}: carrier {sorted(carriers)} is not one contiguous path between "
+                f"{[_label(location) for location in locations]}"
+            )
+    return errors
 
-    An internet-backed overlay's underlay ends at an ISP instead: the far end is reached across the internet.
-    """
-    starts = any(_at(location, _place(near)[0]) for location in hops[0])
-    if internet:
-        return starts and any(location["kind"] == "TopologyExternalProviders" for location in hops[-1])
-    return starts and any(_at(location, _place(far)[0]) for location in hops[-1])
+
+def _handoff_errors(circuit: dict[str, Any]) -> list[str]:
+    """A Handoff: unowned, one or two facilities that are where its two ends are deployed, both ends VLAN
+    sub-interfaces on one VLAN (the VIF's, when it has a cloud endpoint), at least one end carried by a live
+    physical circuit or a cable at the port or its parent, and its namespace stated."""
+    name = circuit["name"]
+    errors: list[str] = []
+    locations = circuit["location_nodes"]
+    if circuit["owner_id"]:
+        errors.append(f"{name}: owned by {circuit['owner']}, a handoff is a shared on-ramp")
+    strays = [_label(location) for location in locations if location["kind"] not in ALL_DEMO_FACILITY_KINDS]
+    if strays:
+        errors.append(f"{name}: a handoff ends on facilities, but {strays} is not one")
+    deployed = {device["deployment_id"] for device in circuit["end_devices"]}
+    if {location["id"] for location in locations} != deployed:
+        errors.append(
+            f"{name}: locations {circuit['locations']} are not where its ends are deployed "
+            f"{sorted(str(device['deployment_name']) for device in circuit['end_devices'])}"
+        )
+    if not circuit["ip_namespace"]:
+        errors.append(f"{name}: no ip_namespace")
+    if not any(_live(end["carriers"]) or end["cabled"] for end in circuit["end_nodes"]):
+        errors.append(f"{name}: no end is on a live physical circuit or a cable (at the port or its parent)")
+    vlans = {_vlan(end["interface"]) for end in circuit["end_nodes"]}
+    for end in circuit["end_nodes"]:
+        if end["kind"] != "DcimVirtualInterface" or _vlan(end["interface"]) is None:
+            errors.append(f"{name}: end {end['device']}:{end['interface']} is not a VLAN sub-interface <port>.<vlan>")
+        elif end["parent_name"] is None or end["interface"] != f"{end['parent_name']}.{_vlan(end['interface'])}":
+            errors.append(
+                f"{name}: end {end['device']}:{end['interface']} has parent '{end['parent_name']}', "
+                "expected <parent>.<vlan>"
+            )
+    if len(vlans) > 1:
+        errors.append(f"{name}: the ends are on different VLANs {sorted(v for v in vlans if v is not None)}")
+    elif circuit["cloud_endpoint_vlan"] is not None and circuit["cloud_endpoint_vlan"] not in vlans:
+        errors.append(
+            f"{name}: its ends are on VLAN {sorted(v for v in vlans if v is not None)} but cloud endpoint "
+            f"{circuit['cloud_endpoint']} states vlan_id {circuit['cloud_endpoint_vlan']}"
+        )
+    return errors
+
+
+def _session_port_errors(virtual: list[dict[str, Any]]) -> list[str]:
+    """One port, one session: no port is an end of two Interconnect or Handoff circuits (a Tunnel is exempt: one
+    gateway port serves many tunnels)."""
+    circuits_of_port: dict[str, list[str]] = {}
+    for circuit in virtual:
+        if circuit["kind"] in (INTERCONNECT_KIND, HANDOFF_KIND):
+            for end in circuit["end_nodes"]:
+                circuits_of_port.setdefault(end["id"], []).append(circuit["name"])
+    return [
+        f"port {port_id} is an end of {sorted(names)}: one port carries one interconnect or handoff session"
+        for port_id, names in sorted(circuits_of_port.items())
+        if len(names) > 1
+    ]
+
+
+def _environment_errors(virtual: list[dict[str, Any]]) -> list[str]:
+    """Prod and non-prod never connect: circuits meeting at a device share an environment class. A Tunnel is PROD (its
+    office is always production), a Handoff takes the type of its namespace (INTERNET and MANAGEMENT state none), an
+    Interconnect runs in the underlay and states none."""
+    by_device: dict[str, tuple[str, list[tuple[str, str]]]] = {}
+    for circuit in virtual:
+        env_class: str | None = None
+        if circuit["kind"] == TUNNEL_KIND:
+            env_class = PROD_TYPE
+        elif circuit["kind"] == HANDOFF_KIND and circuit["ip_namespace"]:
+            namespace_type = transit_namespace_type(circuit["ip_namespace"])
+            env_class = namespace_type if namespace_type in TENANT_NAMESPACE_TYPES else None
+        if env_class is None:
+            continue
+        for end in circuit["end_nodes"]:
+            by_device.setdefault(str(end["device_id"]), (end["device"], []))[1].append((circuit["name"], env_class))
+    return [
+        f"device {device} carries circuits of different environments: {sorted(set(members))}"
+        for device, members in by_device.values()
+        if len({env_class for _, env_class in members}) > 1
+    ]
+
+
+def _expectation_errors(virtual: list[dict[str, Any]]) -> list[str]:
+    """Where the virtual circuits of the branch differ from ALL_DEMO_VIRTUAL_CIRCUITS: a missing or an unexpected
+    one, and per circuit its kind, owner, locations, ends, derived carrier, namespace and cloud endpoint."""
+    by_name = {circuit["name"]: circuit for circuit in virtual}
+    errors: list[str] = []
+    missing = sorted(set(ALL_DEMO_VIRTUAL_CIRCUITS) - set(by_name))
+    if missing:
+        errors.append(f"virtual circuit(s) missing: {missing}")
+    unexpected = sorted(set(by_name) - set(ALL_DEMO_VIRTUAL_CIRCUITS))
+    if unexpected:
+        errors.append(f"unexpected virtual circuit(s): {unexpected}")
+
+    for name, expected in sorted(ALL_DEMO_VIRTUAL_CIRCUITS.items()):
+        circuit = by_name.get(name)
+        if circuit is None:
+            continue
+        if circuit["kind"] != expected["kind"]:
+            errors.append(f"{name}: kind '{circuit['kind']}', expected '{expected['kind']}'")
+        if circuit["owner"] != expected["owner"]:
+            errors.append(f"{name}: owner '{circuit['owner']}', expected '{expected['owner']}'")
+        if circuit["locations"] != sorted(expected["locations"]):
+            errors.append(f"{name}: locations {circuit['locations']}, expected {sorted(expected['locations'])}")
+        if circuit["ends"] != sorted(expected["ends"]):
+            errors.append(
+                f"{name}: ends {circuit['ends']}, expected {sorted(expected['ends'])} "
+                "(capabilities: the circuit's interfaces)"
+            )
+        if circuit["carrier"] != sorted(expected["carrier"]):
+            errors.append(
+                f"{name}: carrier {circuit['carrier']}, expected {sorted(expected['carrier'])} — "
+                "the carrier is derived: the physical circuits on the circuit's own ports (or their parents)"
+            )
+        if circuit["ip_namespace"] != expected["ip_namespace"]:
+            errors.append(f"{name}: ip_namespace '{circuit['ip_namespace']}', expected '{expected['ip_namespace']}'")
+        if circuit["cloud_endpoint"] != expected["cloud_endpoint"]:
+            errors.append(
+                f"{name}: cloud_endpoint '{circuit['cloud_endpoint']}', expected '{expected['cloud_endpoint']}'"
+            )
+    return errors
 
 
 def _deployments(circuit: dict[str, Any]) -> list[str]:
@@ -514,10 +902,10 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             circuit_id = circuit["circuit_id"]
             if not circuit["provider"]:
                 errors.append(f"{circuit_id}: no provider")
-            # The shared circuits (dark fibre, cross-connects, ISP transit) are
-            # deliberately unowned; only a customer's own internet underlay
-            # names an owner.
-            transit = circuit_id in ALL_DEMO_INTERNET_TRANSIT_CIRCUITS
+            # The shared circuits (dark fibre, cross-connects, ISP transit, the
+            # gateway's own access) are deliberately unowned; only a customer's
+            # own internet underlay names an owner.
+            transit = circuit_id in ALL_DEMO_SHARED_INTERNET_CIRCUITS
             if circuit["circuit_type"] == "internet" and not transit and not circuit["owner"]:
                 errors.append(f"{circuit_id}: internet underlay with no owning customer")
             if transit and circuit["owner"]:
@@ -529,6 +917,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         errors.extend(self._placement_errors(physical))
         errors.extend(self._derived_location_errors(physical))
         errors.extend(self._sdwan_underlay_errors(physical))
+        errors.extend(self._gateway_access_errors(physical))
 
         assert not errors, f"30_all physical circuits are wrong on branch '{scenario_branch}':\n" + "\n".join(
             f"  - {e}" for e in errors
@@ -627,7 +1016,10 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                     if device["deployment_kind"] in ALL_DEMO_FACILITY_KINDS - _ZONE_KINDS
                 }
             )
-            if listed:
+            # A circuit with no end in a cage has nothing but derivable facilities, and the schema requires one
+            # location: authoring exactly one of them is then unavoidable, not redundant.
+            no_cage_end = not any(device["deployment_kind"] in _ZONE_KINDS for device in circuit["end_devices"])
+            if listed and not (no_cage_end and len(declared) == 1):
                 errors.append(f"{circuit_id}: the data lists {listed}, which add_circuit derives from the end devices")
             missing = sorted(set(declared) - set(circuit["locations"]))
             if missing:
@@ -674,6 +1066,24 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             )
         return errors
 
+    @staticmethod
+    def _gateway_access_errors(physical: list[dict]) -> list[str]:
+        """The shared gateway's own access: its eth1 to the ISP edge port, in the cage and the ISP, unowned."""
+        errors: list[str] = []
+        by_id = {circuit["circuit_id"]: circuit for circuit in physical}
+        for circuit_id, ends in sorted(ALL_DEMO_GATEWAY_ACCESS_CIRCUITS.items()):
+            circuit = by_id.get(circuit_id)
+            if circuit is None:
+                errors.append(f"{circuit_id}: the gateway's internet access was not created")
+                continue
+            if set(circuit["ends"]) != ends:
+                errors.append(f"{circuit_id}: ends {circuit['ends']}, expected {sorted(ends)}")
+            if circuit["locations"] != sorted(ALL_DEMO_GATEWAY_ACCESS_LOCATIONS):
+                errors.append(
+                    f"{circuit_id}: locations {circuit['locations']}, expected {sorted(ALL_DEMO_GATEWAY_ACCESS_LOCATIONS)}"
+                )
+        return errors
+
     # ------------------------------------------------------------------
     # Virtual layer
     # ------------------------------------------------------------------
@@ -686,82 +1096,42 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify each overlay circuit's underlay, ports, cloud termination and placement (_virtual_placement_errors)."""
+        """Verify each virtual circuit's kind, owner, locations, ends, derived carrier and placement.
+
+        The role of a virtual circuit is its kind (Tunnel, Interconnect, Handoff). The carrier is derived, never
+        declared: the physical circuits on the circuit's own ports (or on the parent of a sub-interface), compared
+        with ALL_DEMO_VIRTUAL_CIRCUITS. The per-kind rules (_virtual_placement_errors) hold on the live data.
+        """
         logging.info("=== %s - Step 2: Virtual Circuits ===", SCENARIO_NAME)
 
         inventory = await fetch_interconnect_inventory(client=async_client_main, branch=scenario_branch)
-        by_name = {circuit["name"]: circuit for circuit in inventory["virtual"]}
 
-        errors: list[str] = []
-
-        missing = sorted(set(ALL_DEMO_VIRTUAL_CIRCUITS) - set(by_name))
-        if missing:
-            errors.append(f"virtual circuit(s) missing: {missing}")
-        unexpected = sorted(set(by_name) - set(ALL_DEMO_VIRTUAL_CIRCUITS))
-        if unexpected:
-            errors.append(f"unexpected virtual circuit(s): {unexpected}")
-
-        for name, expected in sorted(ALL_DEMO_VIRTUAL_CIRCUITS.items()):
-            circuit = by_name.get(name)
-            if circuit is None:
-                continue
-
-            if circuit["link_type"] != expected["link_type"]:
-                errors.append(f"{name}: link_type '{circuit['link_type']}', expected '{expected['link_type']}'")
-            if circuit["transport_mode"] != expected["transport_mode"]:
-                errors.append(
-                    f"{name}: transport_mode '{circuit['transport_mode']}', expected '{expected['transport_mode']}'"
-                )
-            if circuit["owner"] != expected["owner"]:
-                errors.append(f"{name}: owner '{circuit['owner']}', expected '{expected['owner']}'")
-
-            expected_physical = sorted(expected["physical_circuits"])
-            if circuit["physical_circuits"] != expected_physical:
-                errors.append(
-                    f"{name}: underlay {circuit['physical_circuits']}, expected {expected_physical} — "
-                    "physical_circuits is the only mapping from overlay to underlay"
-                )
-
-            if len(circuit["interfaces"]) != expected["interfaces"]:
-                errors.append(
-                    f"{name}: surfaces on {len(circuit['interfaces'])} interface(s) via "
-                    f"capabilities, expected {expected['interfaces']}"
-                )
-
-            expected_cloud = sorted(expected["cloud_endpoints"])
-            if circuit["cloud_endpoints"] != expected_cloud:
-                errors.append(f"{name}: cloud_endpoints {circuit['cloud_endpoints']}, expected {expected_cloud}")
-
+        errors = _expectation_errors(inventory["virtual"])
         errors.extend(self._virtual_placement_errors(inventory["virtual"], inventory["physical"]))
 
         assert not errors, f"30_all virtual circuits are wrong on branch '{scenario_branch}':\n" + "\n".join(
             f"  - {e}" for e in errors
         )
 
-        logging.info("Virtual circuits verified: %d", len(by_name))
+        kinds: dict[str, int] = {}
+        for circuit in inventory["virtual"]:
+            kinds[circuit["kind"]] = kinds.get(circuit["kind"], 0) + 1
+        logging.info("Virtual circuits verified: %d %s", len(inventory["virtual"]), dict(sorted(kinds.items())))
 
     @staticmethod
     def _virtual_placement_errors(virtual: list[dict], physical: list[dict]) -> list[str]:
-        """Where each overlay ends, and that its ordered underlay joins those two ends.
+        """Where each virtual circuit ends and what carries it, per kind, then across circuits.
 
-        Owned: one end is a footprint (or the office) of the circuit's owner, whose
-        facility (a footprint's parent: its DC, metro or region; the office itself)
-        is where one of the circuit's end devices is deployed; the far end is a
-        provider facility (cloud/SaaS region, cage) or another footprint. Unowned
-        (a platform overlay): facilities at both ends. Nothing on a virtual circuit
-        is derived, so the branch holds exactly the declared locations.
-
-        The underlay (ALL_DEMO_VIRTUAL_CIRCUIT_CHAINS, tenant end first) is
-        contiguous: each hop shares a location with the next, the first hop reaches
-        the tenant end's facility (a metro through one of its cages) and the last the
-        far end. An internet-backed overlay's last hop ends at an ISP instead: past it,
-        the far end is reached across the internet.
+        Every circuit has two distinct ports, and the locations the data authors are exactly the ones on the branch
+        (add_sdwan_edge writes a tunnel's own). Then the rules of its kind (_tunnel_errors, _interconnect_errors,
+        _handoff_errors): the same ones checks/circuit_placement.py enforces, asserted here on the live data. Across
+        circuits: one port, one session (_session_port_errors), and prod never meets non-prod at a device
+        (_environment_errors).
         """
         errors: list[str] = []
         physical_by_id = {circuit["circuit_id"]: circuit for circuit in physical}
         for circuit in sorted(virtual, key=lambda c: c["name"]):
             name = circuit["name"]
-            locations = circuit["location_nodes"]
             if name in ALL_DEMO_DECLARED_VIRTUAL_LOCATIONS and circuit["locations"] != sorted(
                 ALL_DEMO_DECLARED_VIRTUAL_LOCATIONS[name]
             ):
@@ -769,62 +1139,68 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                     f"{name}: locations {circuit['locations']}, declared "
                     f"{sorted(ALL_DEMO_DECLARED_VIRTUAL_LOCATIONS[name])} (a virtual circuit derives none)"
                 )
-            if len({location["id"] for location in locations}) != 2:
-                errors.append(f"{name}: terminates at {circuit['locations']}, expected exactly 2 distinct locations")
-                continue
-
-            if circuit["owner_id"]:
-                tenant_ends = [
-                    location
-                    for location in locations
-                    if location["kind"] in ALL_DEMO_TENANT_LOCATION_KINDS
-                    and location["owner_id"] == circuit["owner_id"]
-                ]
-                if not tenant_ends:
-                    errors.append(
-                        f"{name}: owned by {circuit['owner']}, but neither end {[_label(loc) for loc in locations]} "
-                        "is a footprint or office of that owner"
-                    )
-                    continue
-                near = tenant_ends[0]
-                far = next(location for location in locations if location["id"] != near["id"])
-                if far["kind"] not in ALL_DEMO_PROVIDER_FACILITY_KINDS | ALL_DEMO_TENANT_LOCATION_KINDS:
-                    errors.append(f"{name}: far end {_label(far)} is neither a provider facility nor a footprint")
-                place_id, place_name = _place(near)
-                # An end device sits in the footprint's facility, or in a zone / virtual colocation of it.
-                deployed_in = {
-                    place
-                    for device in circuit["end_devices"]
-                    for place in (device["deployment_id"], device["deployment_parent_id"])
-                }
-                if not place_id or place_id not in deployed_in:
-                    errors.append(
-                        f"{name}: tenant end {_label(near)} sits in {place_name}, where none of its end devices "
-                        f"{_deployments(circuit)} is deployed"
-                    )
-                orientations = [(near, far)]
-            else:
-                strays = [_label(location) for location in locations if location["kind"] not in ALL_DEMO_FACILITY_KINDS]
-                if strays:
-                    errors.append(f"{name}: unowned, so both ends must be facilities, but {strays} is not")
-                orientations = [(locations[0], locations[1]), (locations[1], locations[0])]
-
-            chain = ALL_DEMO_VIRTUAL_CIRCUIT_CHAINS.get(name, ())
-            missing = [circuit_id for circuit_id in chain if circuit_id not in physical_by_id]
-            if not chain or missing:
-                errors.append(f"{name}: underlay {list(chain)} is empty or {missing} are not on the branch")
-                continue
-            hops = [physical_by_id[circuit_id]["location_nodes"] for circuit_id in chain]
-            for index in range(1, len(hops)):
-                if not {location["id"] for location in hops[index - 1]} & {location["id"] for location in hops[index]}:
-                    errors.append(f"{name}: underlay hops {chain[index - 1]} and {chain[index]} share no location")
-            internet = circuit["transport_mode"] == "internet_backed"
-            if not any(_chain_joins(hops, near, far, internet) for near, far in orientations):
+            locations = {location["id"] for location in circuit["location_nodes"]}
+            allowed = (1, _CIRCUIT_ENDS) if circuit["kind"] == HANDOFF_KIND else (_CIRCUIT_ENDS,)
+            if len(locations) not in allowed:
                 errors.append(
-                    f"{name}: underlay {list(chain)} does not run from {_label(orientations[0][0])} to "
-                    f"{'an ISP' if internet else _label(orientations[0][1])}"
+                    f"{name}: terminates at {circuit['locations']}, expected {' or '.join(map(str, allowed))} distinct location(s)"
                 )
+                continue
+            if len({end["id"] for end in circuit["end_nodes"]}) != _CIRCUIT_ENDS:
+                errors.append(f"{name}: ends {circuit['ends']}, expected exactly {_CIRCUIT_ENDS} distinct ports")
+                continue
+            if circuit["kind"] == TUNNEL_KIND:
+                errors.extend(_tunnel_errors(circuit, physical_by_id))
+            elif circuit["kind"] == INTERCONNECT_KIND:
+                errors.extend(_interconnect_errors(circuit, physical_by_id))
+            elif circuit["kind"] == HANDOFF_KIND:
+                errors.extend(_handoff_errors(circuit))
+            else:
+                errors.append(f"{name}: kind '{circuit['kind']}' is none of the three virtual circuit kinds")
+        errors.extend(_session_port_errors(virtual))
+        errors.extend(_environment_errors(virtual))
         return errors
+
+    @pytest.mark.order(395)
+    @pytest.mark.dependency(scope="session", depends=["all_demo_virtual_circuits"])
+    @pytest.mark.asyncio
+    async def test_02a_verify_virtual_circuits_group(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """Verify `virtual_circuits`, add_virtual_circuit's target group, is exactly the Interconnect and Handoff
+        circuits: a Tunnel has no session (the SD-WAN orchestrator owns its overlay routing), so it is not a member."""
+        logging.info("=== %s - Step 2a: virtual_circuits group ===", SCENARIO_NAME)
+
+        inventory = await fetch_interconnect_inventory(client=async_client_main, branch=scenario_branch)
+        result = clean_data(
+            await async_client_main.execute_graphql(
+                query=GROUP_MEMBERS_QUERY, variables={"name": "virtual_circuits"}, branch_name=scenario_branch
+            )
+        )
+        groups = result["CoreGroup"]
+        assert groups, "group 'virtual_circuits' not found"
+        members = {str(member["id"]): str(member["typename"]) for member in groups[0]["members"] or []}
+
+        session_kinds = {INTERCONNECT_KIND, HANDOFF_KIND}
+        expected = {c["id"] for c in inventory["virtual"] if c["kind"] in session_kinds}
+        tunnels = {c["id"] for c in inventory["virtual"] if c["kind"] == TUNNEL_KIND}
+        errors = []
+        if expected - set(members):
+            errors.append(
+                f"not in the group: {sorted(c['name'] for c in inventory['virtual'] if c['id'] in expected - set(members))}"
+            )
+        if set(members) - expected:
+            errors.append(f"members that are no interconnect or handoff circuit: {sorted(set(members) - expected)}")
+        if tunnels & set(members):
+            errors.append("a tunnel circuit is in the group, it has no session to generate")
+        if not expected:
+            errors.append("no interconnect or handoff circuit on the branch")
+
+        assert not errors, f"virtual_circuits group is wrong on branch '{scenario_branch}':\n" + "\n".join(
+            f"  - {e}" for e in errors
+        )
 
     @pytest.mark.order(395)
     @pytest.mark.dependency(scope="session", depends=["all_demo_inventory"])
@@ -1733,80 +2109,367 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         )
 
     # ------------------------------------------------------------------
-    # DCI sessions (add_circuit, peering_role dci)
+    # Sessions of the virtual circuits (add_virtual_circuit)
     # ------------------------------------------------------------------
 
     @pytest.mark.order(409)
-    @pytest.mark.dependency(scope="session", depends=["all_demo_physical_circuits"])
+    @pytest.mark.dependency(scope="session", depends=["all_demo_virtual_circuits"])
     @pytest.mark.asyncio
     async def test_06_verify_dci_sessions(
         self,
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify add_circuit built one keyed EVPN Multi-Site session per dark fibre.
+        """Verify add_virtual_circuit built two keyed sessions on each Interconnect (DCI) circuit.
 
-        Each session runs between the two ends' overlay BGP processes over a
-        /127 from the DCI pool, carries IPv6 unicast + L2VPN EVPN, and is keyed
-        with the DC fabric's overlay key.
+        Per circuit `<name>`: `<name>-underlay` (peering_role dci-underlay, eBGP, ttl 1, bfd, IPv6 unicast, 16 routes)
+        on the two physical ports, addressed from one /127 of the DCI pool (the colocation edge the lower address) and
+        MTU 9216; and `<name>-evpn` (peering_role dci, EBGP_MULTIHOP, ttl 2, extended communities, l2vpn evpn only)
+        between the two VTEP loopbacks. Both run on the ends' overlay BGP processes and carry the circuit's own key
+        `<name>-dci-key` (created once, never a fabric's overlay key). The /127 is the one prefix `DCI <name>` of the DCI pool.
         """
         logging.info("=== %s - Step 6: DCI Sessions ===", SCENARIO_NAME)
 
-        expected = {f"DCI-{circuit_id}": ends for circuit_id, ends in ALL_DEMO_DCI_CIRCUITS.items()}
-        result = await async_client_main.execute_graphql(
-            query=DCI_SESSIONS_QUERY, variables={"names": sorted(expected)}, branch_name=scenario_branch
-        )
-        sessions = {edge["node"]["name"]["value"]: edge["node"] for edge in result["ManagedBGPPeering"]["edges"]}
-
+        client = async_client_main
         errors: list[str] = []
-        if sorted(sessions) != sorted(expected):
-            errors.append(f"DCI sessions {sorted(sessions)}, expected {sorted(expected)}")
-
-        for name, (dc_name, ends) in sorted(expected.items()):
-            session = sessions.get(name)
-            if session is None:
-                continue
-            if session["peering_role"]["value"] != "dci" or session["session_type"]["value"] != "EBGP":
-                errors.append(f"{name}: {session['peering_role']['value']}/{session['session_type']['value']}")
-            if session["ttl"]["value"] != 1:
-                errors.append(f"{name}: ttl {session['ttl']['value']}, expected 1 (directly connected)")
-            key = ((session.get("password") or {}).get("node") or {}).get("name", {}).get("value")
-            if key != f"{dc_name.lower()}-overlay-key":
-                errors.append(f"{name}: keyed with '{key}', expected '{dc_name.lower()}-overlay-key'")
-            families = sorted(
-                (edge["node"]["afi"]["value"], edge["node"]["safi"]["value"])
-                for edge in session["address_families"]["edges"]
+        names = {f"{circuit}-{suffix}": circuit for circuit in ALL_DEMO_DCI_CIRCUITS for suffix in ("underlay", "evpn")}
+        # add_circuit used to build one DCI-<fibre> session per dark fibre (the fibre is DF-<x> where the circuit is ICX-<x>)
+        legacy = [f"DCI-{circuit.replace('ICX-', 'DF-', 1)}" for circuit in ALL_DEMO_DCI_CIRCUITS]
+        found = _sessions_by_name(
+            await client.execute_graphql(
+                query=SESSIONS_QUERY, variables={"names": sorted([*names, *legacy])}, branch_name=scenario_branch
             )
-            if families != [("ipv6", "unicast"), ("l2vpn", "evpn")]:
-                errors.append(f"{name}: address families {families}")
-            processes = sorted(
-                (edge["node"]["name"]["value"], edge["node"]["process_role"]["value"])
-                for edge in session["bgp_processes"]["edges"]
+        )
+        sessions = {session: node for session, node in found.items() if session in names}
+        if sorted(sessions) != sorted(names):
+            errors.append(f"DCI sessions {sorted(sessions)}, expected {sorted(names)}")
+        if set(found) & set(legacy):
+            errors.append(f"legacy session(s) {sorted(set(found) & set(legacy))} still exist: the circuit builds two")
+        for role, expected_count in (("dci", len(ALL_DEMO_DCI_CIRCUITS)), ("dci-underlay", len(ALL_DEMO_DCI_CIRCUITS))):
+            count = await client.execute_graphql(
+                query="query ($role: String) { ManagedBGPPeering(peering_role__value: $role) { count } }",
+                variables={"role": role},
+                branch_name=scenario_branch,
             )
-            if processes != sorted((f"{device}-bgp-overlay", "overlay") for device, _ in ends):
-                errors.append(f"{name}: runs on {processes}")
-            interfaces = {
-                (edge["node"]["device"]["node"]["name"]["value"], edge["node"]["name"]["value"]): (
-                    ((edge["node"].get("ip_address") or {}).get("node") or {}).get("address", {}).get("value")
-                )
-                for edge in session["capabilities"]["edges"]
-            }
-            if sorted(interfaces) != sorted(ends):
-                errors.append(f"{name}: on interfaces {sorted(interfaces)}, expected {sorted(ends)}")
-                continue
-            addresses = [ipaddress.IPv6Interface(a) for a in interfaces.values() if a and ":" in a]
-            if len(addresses) != 2 or addresses[0].network != addresses[1].network:
+            if count["ManagedBGPPeering"]["count"] != expected_count:
                 errors.append(
-                    f"{name}: interface addresses {sorted(interfaces.values(), key=str)} are not one IPv6 P2P"
+                    f"{count['ManagedBGPPeering']['count']} session(s) with peering_role {role}, expected {expected_count}"
                 )
-            elif addresses[0].network.prefixlen != 127 or not addresses[0].network.subnet_of(DCI_POOL_NETWORK):
-                errors.append(f"{name}: P2P {addresses[0].network} is not a /127 from {DCI_POOL_NETWORK}")
+        prefixes = _prefixes_by_description(
+            await client.execute_graphql(
+                query=CIRCUIT_PREFIXES_QUERY,
+                variables={"descriptions": [f"DCI {circuit}" for circuit in ALL_DEMO_DCI_CIRCUITS]},
+                branch_name=scenario_branch,
+            )
+        )
+
+        keys: dict[str, str] = {}
+        for circuit, (_, ends) in sorted(ALL_DEMO_DCI_CIRCUITS.items()):
+            devices = sorted(device for device, _ in ends)
+            underlay = sessions.get(f"{circuit}-underlay")
+            evpn = sessions.get(f"{circuit}-evpn")
+            if underlay is None or evpn is None:
+                continue
+            key = f"{circuit}-dci-key"
+            errors.extend(
+                _session_errors(
+                    underlay,
+                    {
+                        "status": "active",
+                        "peering_role": "dci-underlay",
+                        "session_type": "EBGP",
+                        "ttl": 1,
+                        "bfd_enabled": True,
+                        "send_extended_community": False,
+                        "maximum_routes": 16,
+                        "key": key,
+                        "families": [("ipv6", "unicast")],
+                    },
+                )
+            )
+            errors.extend(
+                _session_errors(
+                    evpn,
+                    {
+                        "status": "active",
+                        "peering_role": "dci",
+                        "session_type": "EBGP_MULTIHOP",
+                        "ttl": 2,
+                        "bfd_enabled": False,
+                        "send_extended_community": True,
+                        "maximum_routes": None,
+                        "key": key,
+                        "families": [("l2vpn", "evpn")],
+                    },
+                )
+            )
+            keys[circuit] = key
+            for session in (underlay, evpn):
+                if _process_roles(session) != {device: "overlay" for device in devices}:
+                    errors.append(
+                        f"{session['name']['value']}: runs on {_process_roles(session)}, expected {devices} overlay"
+                    )
+
+            # underlay: the two physical ports, one /127 of the DCI pool, the edge the lower address, MTU 9216
+            ports = _interfaces(underlay)
+            if sorted(ports) != sorted(ends):
+                errors.append(f"{circuit}-underlay: on interfaces {sorted(ports)}, expected {sorted(ends)}")
+                continue
+            for (device, port), node in sorted(ports.items()):
+                if node.get("mtu", {}).get("value") != _DCI_MTU:
+                    errors.append(
+                        f"{circuit}-underlay: {device}:{port} MTU {node.get('mtu', {}).get('value')}, expected {_DCI_MTU}"
+                    )
+            addresses = {end: _address(node) for end, node in ports.items()}
+            errors.extend(
+                _p2p_errors(
+                    f"{circuit}-underlay",
+                    list(addresses.values()),
+                    127,
+                    [DCI_POOL_NETWORK],
+                    prefixes.get(f"DCI {circuit}"),
+                )
+            )
+            if any(a is None or ":" not in a for a in addresses.values()):
+                continue
+            edge = next(end for end in addresses if end[0].startswith("eg-"))
+            dc_end = next(end for end in addresses if end != edge)
+            if ipaddress.IPv6Interface(str(addresses[edge])) > ipaddress.IPv6Interface(str(addresses[dc_end])):
+                errors.append(
+                    f"{circuit}-underlay: the colocation edge {edge[0]} has {addresses[edge]}, above the DC end's "
+                    f"{addresses[dc_end]}: the facility end takes the lower address"
+                )
+
+            # evpn: between the two VTEP loopbacks (never the multisite VIP), /128 IPv6, one per end device
+            loopbacks = _interfaces(evpn)
+            if sorted(device for device, _ in loopbacks) != devices:
+                errors.append(f"{circuit}-evpn: on devices {sorted(d for d, _ in loopbacks)}, expected {devices}")
+                continue
+            for (device, loopback), node in sorted(loopbacks.items()):
+                role = node.get("role", {}).get("value")
+                address = _address(node)
+                if role not in ("loopback-vtep", "loopback"):
+                    errors.append(f"{circuit}-evpn: {device}:{loopback} has role '{role}', expected the VTEP loopback")
+                if address is None or ipaddress.ip_interface(address).network.prefixlen != 128 or ":" not in address:
+                    errors.append(f"{circuit}-evpn: {device}:{loopback} address {address}, expected an IPv6 /128")
+
+        if len(set(keys.values())) != len(keys):
+            errors.append(f"the DCI circuits share a key: {sorted(keys.values())}")
 
         assert not errors, f"30_all DCI sessions are wrong on branch '{scenario_branch}':\n" + "\n".join(
             f"  - {e}" for e in errors
         )
 
-        logging.info("DCI sessions verified: %d", len(sessions))
+        logging.info("DCI sessions verified: %d on %d circuits", len(sessions), len(ALL_DEMO_DCI_CIRCUITS))
+        logging.info("=== %s - COMPLETED ===", SCENARIO_NAME)
+
+    @pytest.mark.order(409)
+    @pytest.mark.dependency(scope="session", depends=["all_demo_virtual_circuits"])
+    @pytest.mark.asyncio
+    async def test_06b_verify_handoff_sessions(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """Verify add_virtual_circuit built exactly one eBGP session on each Handoff circuit, and nothing authored.
+
+        Per circuit `<name>`: one `<name>-bgp` (peering_role regular, EBGP, ttl 1, bfd, no extended communities, the
+        circuit's maximum_routes, IPv4 unicast, the circuit's key) between the two devices' BGP processes, on the two
+        `<port>.<vlan>` sub-interfaces. Both are addressed in the circuit's namespace from one /31 of the pool
+        `Handoff-<namespace>-IPv4` (the overlay-process end the lower address, else the first device by name); the
+        prefix is the one `Handoff <name>`. The party process's `local_as` is the data's ASN, ours differs, and the
+        VLAN is the same on both ends (and the VIF's). The authored addresses and sessions the generator replaced are
+        gone.
+        """
+        logging.info("=== %s - Step 6b: Handoff Sessions ===", SCENARIO_NAME)
+
+        client = async_client_main
+        errors: list[str] = []
+        inventory = await fetch_interconnect_inventory(client=client, branch=scenario_branch)
+        handoffs = {c["name"]: c for c in inventory["virtual"] if c["kind"] == HANDOFF_KIND}
+        expected = sorted(n for n, e in ALL_DEMO_VIRTUAL_CIRCUITS.items() if e["kind"] == HANDOFF_KIND)
+        if sorted(handoffs) != expected:
+            errors.append(f"handoff circuits {sorted(handoffs)}, expected {expected}")
+
+        sessions = _sessions_by_name(
+            await client.execute_graphql(
+                query=SESSIONS_QUERY,
+                variables={"names": sorted([f"{n}-bgp" for n in handoffs] + list(LEGACY_HANDOFF_PEERINGS))},
+                branch_name=scenario_branch,
+            )
+        )
+        gone = sorted(set(sessions) & set(LEGACY_HANDOFF_PEERINGS))
+        if gone:
+            errors.append(f"authored session(s) {gone} still exist: the generator builds <circuit>-bgp")
+        address_count = await client.execute_graphql(
+            query=ADDRESS_COUNT_QUERY,
+            variables={"addresses": list(LEGACY_HANDOFF_ADDRESSES)},
+            branch_name=scenario_branch,
+        )
+        if address_count["IpamIPAddress"]["count"]:
+            errors.append(f"{address_count['IpamIPAddress']['count']} authored handoff address(es) still exist")
+        prefixes = _prefixes_by_description(
+            await client.execute_graphql(
+                query=CIRCUIT_PREFIXES_QUERY,
+                variables={"descriptions": [f"Handoff {n}" for n in handoffs]},
+                branch_name=scenario_branch,
+            )
+        )
+        pools: dict[str, list[ipaddress.IPv4Network]] = {}
+        for namespace in sorted({c["ip_namespace"] for c in handoffs.values() if c["ip_namespace"]}):
+            pool = await client.execute_graphql(
+                query=EDGE_PAIR_POOL_QUERY, variables={"name": f"Handoff-{namespace}-IPv4"}, branch_name=scenario_branch
+            )
+            pools[namespace] = [
+                ipaddress.IPv4Network(r["node"]["prefix"]["value"])
+                for pool_edge in pool["CoreIPPrefixPool"]["edges"]
+                for r in pool_edge["node"]["resources"]["edges"]
+                if r["node"].get("prefix")
+            ]
+            if not pools[namespace]:
+                errors.append(f"pool Handoff-{namespace}-IPv4 is missing or has no prefix")
+
+        for name, circuit in sorted(handoffs.items()):
+            session = sessions.get(f"{name}-bgp")
+            if session is None:
+                errors.append(f"{name}: no {name}-bgp session")
+                continue
+            errors.extend(
+                _session_errors(
+                    session,
+                    {
+                        "status": "active",
+                        "peering_role": "regular",
+                        "session_type": "EBGP",
+                        "ttl": 1,
+                        "bfd_enabled": True,
+                        "send_extended_community": False,
+                        "maximum_routes": circuit["maximum_routes"],
+                        "key": circuit["password"],
+                        "families": [("ipv4", "unicast")],
+                    },
+                )
+            )
+            if circuit["maximum_routes"] is None or circuit["password"] is None:
+                errors.append(
+                    f"{name}: maximum_routes {circuit['maximum_routes']} / key {circuit['password']}, both are authored"
+                )
+
+            # the two sub-interfaces: the circuit's ends, one namespace, one /31 of its pool
+            ports = _interfaces(session)
+            if sorted(ports) != circuit["ends"]:
+                errors.append(f"{name}-bgp: on interfaces {sorted(ports)}, expected {circuit['ends']}")
+                continue
+            by_end = {(end["device"], end["interface"]): end for end in circuit["end_nodes"]}
+            for end, node in sorted(ports.items()):
+                namespace = _address_namespace(node)
+                if namespace != circuit["ip_namespace"]:
+                    errors.append(
+                        f"{name}-bgp: {end[0]}:{end[1]} is addressed in '{namespace}', expected '{circuit['ip_namespace']}'"
+                    )
+                if _address(node) != by_end[end]["address"]:
+                    errors.append(
+                        f"{name}-bgp: {end[0]}:{end[1]} address {_address(node)} differs from the circuit's end {by_end[end]['address']}"
+                    )
+                if node.get("status", {}).get("value") != "active":
+                    errors.append(
+                        f"{name}-bgp: {end[0]}:{end[1]} status {node.get('status', {}).get('value')}, expected active"
+                    )
+                if not str(node.get("description", {}).get("value") or "").startswith(f"Handoff {name} to "):
+                    errors.append(
+                        f"{name}-bgp: {end[0]}:{end[1]} description '{node.get('description', {}).get('value')}'"
+                    )
+                parent = ((node.get("parent_interface") or {}).get("node") or {}).get("name", {}).get("value")
+                if parent != by_end[end]["parent_name"] or end[1] != f"{parent}.{_vlan(end[1])}":
+                    errors.append(f"{name}-bgp: {end[0]}:{end[1]} is not <parent>.<vlan> of its parent ({parent})")
+            addresses = {end: _address(node) for end, node in ports.items()}
+            errors.extend(
+                _p2p_errors(
+                    f"{name}-bgp",
+                    list(addresses.values()),
+                    31,
+                    pools.get(circuit["ip_namespace"] or "", []),
+                    prefixes.get(f"Handoff {name}"),
+                )
+            )
+
+            # processes: one per device; remote ASN is the party stub's local_as, ours differs (eBGP)
+            processes = _process_nodes(session)
+            devices = sorted(device for device, _ in circuit["ends"])
+            if sorted(processes) != devices:
+                errors.append(f"{name}-bgp: runs on processes of {sorted(processes)}, expected {devices}")
+                continue
+            asns = {device: node["local_as"]["node"]["asn"]["value"] for device, node in processes.items()}
+            if len(set(asns.values())) != len(asns):
+                errors.append(
+                    f"{name}-bgp: both processes are in AS {sorted(set(asns.values()))}, an eBGP session needs two"
+                )
+            if name in ALL_DEMO_HANDOFF_PARTY_ASNS:
+                party, asn = ALL_DEMO_HANDOFF_PARTY_ASNS[name]
+                if asns.get(party) != asn:
+                    errors.append(f"{name}-bgp: party {party} is in AS {asns.get(party)}, expected the data's AS{asn}")
+            # our end (the overlay process), else the first device by name, has the lower address
+            lower = min(devices, key=lambda device: (processes[device]["process_role"]["value"] != "overlay", device))
+            lower_end = next(end for end in addresses if end[0] == lower)
+            if all(addresses.values()) and lower_end != min(
+                addresses, key=lambda end: ipaddress.IPv4Interface(str(addresses[end]))
+            ):
+                errors.append(
+                    f"{name}-bgp: {lower} (the lower end) has {addresses[lower_end]}, not the lower address of the /31"
+                )
+
+        assert not errors, f"30_all handoff sessions are wrong on branch '{scenario_branch}':\n" + "\n".join(
+            f"  - {e}" for e in errors
+        )
+
+        logging.info("Handoff sessions verified: %d", len(handoffs))
+        logging.info("=== %s - COMPLETED ===", SCENARIO_NAME)
+
+    @pytest.mark.order(409)
+    @pytest.mark.dependency(scope="session", depends=["all_demo_virtual_circuits"])
+    @pytest.mark.asyncio
+    async def test_06c_verify_tunnels_have_no_session(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """Verify a Tunnel circuit is an inventory record: no session of any name, ends on the gateway's public port
+        and one more port, and no port it ends on is also an end of a session circuit (one gateway port serves many
+        tunnels, but no Interconnect or Handoff).
+        """
+        logging.info("=== %s - Step 6c: Tunnels ===", SCENARIO_NAME)
+
+        client = async_client_main
+        inventory = await fetch_interconnect_inventory(client=client, branch=scenario_branch)
+        tunnels = [c for c in inventory["virtual"] if c["kind"] == TUNNEL_KIND]
+        errors: list[str] = []
+        if not tunnels:
+            errors.append("no tunnel circuit on the branch")
+        names = [f"{tunnel['name']}{suffix}" for tunnel in tunnels for suffix in ("", "-bgp", "-underlay", "-evpn")]
+        found = _sessions_by_name(
+            await client.execute_graphql(query=SESSIONS_QUERY, variables={"names": names}, branch_name=scenario_branch)
+        )
+        if found:
+            errors.append(f"tunnel session(s) {sorted(found)} exist: a tunnel has none")
+
+        session_ports = {end["id"] for c in inventory["virtual"] if c["kind"] != TUNNEL_KIND for end in c["end_nodes"]}
+        for tunnel in tunnels:
+            gateway = [end for end in tunnel["end_nodes"] if end["interface"] == ALL_DEMO_SDWAN_GATEWAY_PUBLIC_PORT]
+            if len(gateway) != 1 or len(tunnel["end_nodes"]) != _CIRCUIT_ENDS:
+                errors.append(
+                    f"{tunnel['name']}: ends {tunnel['ends']}, expected the gateway's '{ALL_DEMO_SDWAN_GATEWAY_PUBLIC_PORT}' and one more"
+                )
+            shared = sorted(
+                f"{end['device']}:{end['interface']}" for end in tunnel["end_nodes"] if end["id"] in session_ports
+            )
+            if shared:
+                errors.append(f"{tunnel['name']}: end(s) {shared} are also ends of an interconnect or handoff circuit")
+
+        assert not errors, f"30_all tunnels are wrong on branch '{scenario_branch}':\n" + "\n".join(
+            f"  - {e}" for e in errors
+        )
+
+        logging.info("Tunnels verified: %d, no session", len(tunnels))
         logging.info("=== %s - COMPLETED ===", SCENARIO_NAME)
 
     @pytest.mark.order(410)
@@ -1862,18 +2525,18 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         if transit_edges != ALL_DEMO_INTERNET_BGWS:
             errors.append(f"transit edges {sorted(transit_edges)} are not exactly the BGWs")
 
-        # Each DC's DCI sessions land on BOTH BGWs of the metro it fronts, and on no other edge.
+        # Each DC's DCI underlay sessions land on BOTH BGWs of the metro it fronts, and on no other edge.
         dci = await async_client_main.execute_graphql(
-            query=DCI_SESSIONS_QUERY,
-            variables={"names": [f"DCI-{circuit_id}" for circuit_id in ALL_DEMO_DCI_CIRCUITS]},
+            query=SESSIONS_QUERY,
+            variables={"names": [f"{circuit}-underlay" for circuit in ALL_DEMO_DCI_CIRCUITS]},
             branch_name=scenario_branch,
         )
         landing: dict[str, set[str]] = {}
         for edge in dci["ManagedBGPPeering"]["edges"]:
             node = edge["node"]
-            circuit_id = node["name"]["value"].removeprefix("DCI-")
+            circuit = node["name"]["value"].removesuffix("-underlay")
             devices = {i["node"]["device"]["node"]["name"]["value"] for i in node["capabilities"]["edges"]}
-            landing.setdefault(ALL_DEMO_DCI_CIRCUITS[circuit_id][0], set()).update(
+            landing.setdefault(ALL_DEMO_DCI_CIRCUITS[circuit][0], set()).update(
                 device for device in devices if device.startswith("eg-")
             )
         for dc_name, upstream in sorted(ALL_DEMO_INTERNET_UPSTREAM_BY_DC.items()):
@@ -1914,7 +2577,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         client = async_client_main
         errors: list[str] = []
         sessions_result = await client.execute_graphql(
-            query=DCI_SESSIONS_QUERY,
+            query=SESSIONS_QUERY,
             variables={"names": sorted(ALL_DEMO_FABRIC_PEERINGS.values())},
             branch_name=scenario_branch,
         )

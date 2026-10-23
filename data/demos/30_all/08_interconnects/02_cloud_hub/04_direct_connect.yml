@@ -25,3 +25,20 @@ spec:
       location: "fr2"
       physical_devices:
         - "eg-fr201"
+
+    # The cloud-side landing of the Equinix Fabric connection out of the Network Edge router
+    # eg-am-ne02 (HANDOFF-AMNE-AWS-EUC1-PROD, ../05_cloud_endpoints/00_vif_handoff_am_ne.yml): a hosted
+    # connection, ordered through the Equinix Fabric partner rather than a dedicated port of our own.
+    # `physical_devices` is the router that holds it. There is no `location`: AM-NE is a provider-hosted
+    # presence, not a room of ours. Its transit VIF is in ../05_cloud_endpoints/01_transit_vif.yml.
+    - name: "dx-eqx-am-euc1"
+      cloud_id: "dxcon-am3k4m5n"
+      description: "1G hosted Direct Connect from Equinix Fabric (AM-NE) into AWS eu-central-1"
+      status: active
+      connection_type: hosted
+      bandwidth: "1Gbps"
+      vlan_id: 1100
+      region: "eu-central-1"
+      account: "net-hub-aws-prod"
+      physical_devices:
+        - "eg-am-ne02"

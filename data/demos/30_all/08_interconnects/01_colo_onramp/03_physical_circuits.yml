@@ -2,15 +2,20 @@
 # The shared underlay of the colo on-ramp.
 #
 # Every circuit here is deliberately *unowned*: no `owner`, because these are
-# shared facilities carrying every tenant. That is the underlay half of the
-# connectable-set split — the per-customer overlays that ride these circuits
-# live in ../03_virtual_circuits/ and each carry their own `owner`.
+# shared facilities carrying every tenant. A physical circuit is a pure carrier:
+# it has no role and builds no session. What rides it is a virtual circuit of a
+# kind, listed in ../03_virtual_circuits/ (the DCI sessions of the dark fibres,
+# one Interconnect circuit per fibre) or in ../05_cloud_endpoints/ (the handoff
+# onto the cross-connect). Tenant impact is a traversal, not a circuit: from a
+# fibre or a cage port, circuit -> its ports -> the segments, peerings and
+# circuits on them.
 #
 # Two circuit shapes, and the two connectable kinds the earlier schema commit
 # added exist precisely so both can be expressed:
 #
 #   dark_fiber    DC <-> colocation cage   (TopologyDataCenter <-> ColocationZone)
-#   cross_connect cage <-> cloud region    (ColocationZone <-> CloudRegion)
+#   cross_connect cage <-> a provider's facility: a cloud region (AWS, Azure) or
+#                 the zone of a cloud-neutral provider (Megaport MCR)
 #
 # Without the second shape the traversal reaches the cage and stops, which is
 # the DC-boundary blind spot this whole leg exists to close.
@@ -27,20 +32,18 @@ spec:
   kind: TopologyPhysicalCircuit
   data:
     # --- DC <-> cage dark fibre ---------------------------------------------
-    # peering_role dci: add_circuit (generators/topology/circuit.py) addresses
-    # both ends from the DCI-Technical-IPv6 pool (data/bootstrap/20_dci_pools.yml)
-    # and builds the EVPN Multi-Site DCI session (DCI-<circuit_id>) between the
-    # border leaf's and the cage edge's overlay BGP processes, keyed with the
-    # DC's {fabric}-overlay-key. Ethernet1/35 and Ethernet1/36 are the border
-    # leaf's free uplinks (Ethernet1/[33-34] go to the two super-spines),
-    # Ethernet1/[10-11] the cage router's `dci` ports. Each metro has TWO
-    # border gateways, so each DC lands one fibre on the "01" edge (Ethernet1/35)
-    # and one on the "02" edge (Ethernet1/36) of the metro it fronts.
+    # The fibre is a carrier only. Its DCI session (an underlay /31 plus the loopback-to-loopback
+    # EVPN session) comes from the Interconnect circuit that lists the same two ports
+    # (../03_virtual_circuits/01_dci_interconnects.yml), built by add_virtual_circuit between the
+    # border leaf's and the cage edge's overlay BGP processes. Ethernet1/35 and Ethernet1/36 are
+    # the border leaf's free uplinks (Ethernet1/[33-34] go to the two super-spines),
+    # Ethernet1/[10-11] the cage router's `dci` ports. Each metro has TWO border gateways, so each
+    # DC lands one fibre on the "01" edge (Ethernet1/35) and one on the "02" edge (Ethernet1/36)
+    # of the metro it fronts.
     - circuit_id: "DF-DC10-EQXFR2"
       member_of_groups: [physical_circuits]
       name: "DF-DC10-EQXFR2"
       circuit_type: dark_fiber
-      peering_role: dci
       status: active
       bandwidth: 100000
       provider: "P016"
@@ -55,7 +58,6 @@ spec:
       member_of_groups: [physical_circuits]
       name: "DF-DC11-EQXFR2"
       circuit_type: dark_fiber
-      peering_role: dci
       status: active
       bandwidth: 100000
       provider: "P016"
@@ -70,7 +72,6 @@ spec:
       member_of_groups: [physical_circuits]
       name: "DF-DC12-EQXPA4"
       circuit_type: dark_fiber
-      peering_role: dci
       status: active
       bandwidth: 100000
       provider: "P016"
@@ -85,7 +86,6 @@ spec:
       member_of_groups: [physical_circuits]
       name: "DF-DC10-EQXFR2-B"
       circuit_type: dark_fiber
-      peering_role: dci
       status: active
       bandwidth: 100000
       provider: "P016"
@@ -100,7 +100,6 @@ spec:
       member_of_groups: [physical_circuits]
       name: "DF-DC11-EQXFR2-B"
       circuit_type: dark_fiber
-      peering_role: dci
       status: active
       bandwidth: 100000
       provider: "P016"
@@ -115,7 +114,6 @@ spec:
       member_of_groups: [physical_circuits]
       name: "DF-DC12-EQXPA4-B"
       circuit_type: dark_fiber
-      peering_role: dci
       status: active
       bandwidth: 100000
       provider: "P016"
@@ -143,6 +141,8 @@ spec:
         - ["eg-fr201", "Ethernet1/13"]
         - ["EXT-AWS-DX-FR2", "et-0/0/0"]
 
+    # No handoff rides this one: no Azure attachment or VIF is modelled for westeurope, so the carrier
+    # (and the stub EXT-AZURE-ER-PA4 it ends on) stays idle, kept as the shape of an unused on-ramp.
     - circuit_id: "XC-EQXPA4-AZURE-WEU"
       member_of_groups: [physical_circuits]
       name: "XC-EQXPA4-AZURE-WEU"
@@ -156,3 +156,21 @@ spec:
       capabilities:
         - ["eg-pa401", "Ethernet1/13"]
         - ["EXT-AZURE-ER-PA4", "et-0/0/0"]
+
+    # Megaport: the Cloud Router (MCR) of Megaport's Paris facility, reached from the PA4 cage over one
+    # cross-connect. The stub EXT-MEGAPORT-MCR1 is deployed to the zone MCR-PAR1 (../../02_colo/megaport/par),
+    # which add_circuit derives as the far end. The handoff HANDOFF-PA4-MEGAPORT-PROD rides this port
+    # (../05_cloud_endpoints/03_megaport_handoff.yml). Equinix sells the cross-connect, Megaport the service.
+    - circuit_id: "XC-EQXPA4-MEGAPORT"
+      member_of_groups: [physical_circuits]
+      name: "XC-EQXPA4-MEGAPORT"
+      circuit_type: cross_connect
+      status: active
+      bandwidth: 10000
+      provider: "P016"
+      description: "Equinix PA4 cage to the Megaport Cloud Router (MCR) in Paris, 10G"
+      locations:
+        - "PA4"
+      capabilities:
+        - ["eg-pa401", "Ethernet1/1"]
+        - ["EXT-MEGAPORT-MCR1", "et-0/0/0"]

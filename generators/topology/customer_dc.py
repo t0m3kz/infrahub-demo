@@ -52,6 +52,6 @@ class CustomerDeploymentDCExchangeGenerator(
     """
 
     _customer_kind = "TopologyCustomerDC"
-    _parent_label = "DC"
+    _parent_label = "Data Center"
     _parent_generators = DC_GENERATORS
     _context_specs = (FIREWALL_CONTEXT, LOADBALANCER_CONTEXT)

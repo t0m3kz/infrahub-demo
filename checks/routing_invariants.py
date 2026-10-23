@@ -12,10 +12,11 @@ rendered config; each is a property of data that spans topologies.
 3. A cloud Transit Gateway route table is environment-pure: every attachment
    associated with or propagating into it resolves to one namespace type. A
    VPC attachment resolves through its account's environment; a hybrid
-   attachment through the namespaces its VIF circuits terminate in (falling
-   back to its owner account's environment while no circuit is addressed).
-4. Every circuit on a cloud virtual interface resolves to one namespace type,
-   and to its private VIF's virtual network when it has one.
+   attachment through the namespace its VIF's handoff circuit terminates in
+   (falling back to its owner account's environment while it has no handoff).
+4. The handoff circuit of a cloud virtual interface terminates in the namespace
+   type of its VIF's virtual network's account environment (the VIF has one
+   handoff and the handoff one namespace, so a VIF never mixes environments).
 
 5. Cloud VPC aggregates. Each `CloudVirtualNetwork.cidr_blocks` prefix is
    registered in the namespace whose type matches its account's environment
@@ -143,35 +144,25 @@ class CheckRoutingInvariants(WarningCheck):
     # ------------------------------------------------------------------
 
     def _validate_vif_circuits(self, vifs: list[dict[str, Any]]) -> dict[str, str]:
-        """Check each VIF's circuits; return VIF id -> its namespace type (circuit-resolved)."""
+        """Check each VIF's handoff circuit; return VIF id -> the namespace type it terminates in."""
         resolved: dict[str, str] = {}
         for vif in vifs:
-            name = vif.get("name", "<unnamed-vif>")
+            circuit = vif.get("virtual_circuit") or {}
+            namespace = circuit.get("ip_namespace") or {}
+            actual = namespace.get("namespace_type")
+            if not actual:
+                continue
             expected = _type_for_environment(_account_environment(vif.get("virtual_network")))
-            per_circuit: dict[str, set[str]] = {}
-            for circuit in vif.get("virtual_circuits") or []:
-                types = {
-                    ((iface.get("ip_address") or {}).get("ip_namespace") or {}).get("namespace_type")
-                    for iface in circuit.get("capabilities") or []
-                }
-                per_circuit[circuit.get("name", "<unnamed-circuit>")] = {t for t in types if t}
-            all_types = set().union(*per_circuit.values()) if per_circuit else set()
-            if len(all_types) > 1:
+            if expected and actual != expected:
                 self.log_error(
                     message=(
-                        f"VIF '{name}' carries circuits of different namespace types "
-                        f"{ {c: sorted(t) for c, t in sorted(per_circuit.items())} }: never mix environments on one VIF"
+                        f"VIF '{vif.get('name', '<unnamed-vif>')}' belongs to a {expected} virtual network but its "
+                        f"handoff circuit '{circuit.get('name')}' terminates in the {actual} namespace "
+                        f"'{namespace.get('name')}'"
                     )
                 )
-            elif expected and all_types and all_types != {expected}:
-                self.log_error(
-                    message=(
-                        f"VIF '{name}' belongs to a {expected} virtual network but its circuits terminate in "
-                        f"{sorted(all_types)} namespaces"
-                    )
-                )
-            if len(all_types) == 1 and vif.get("id"):
-                resolved[vif["id"]] = next(iter(all_types))
+            if vif.get("id"):
+                resolved[vif["id"]] = actual
         return resolved
 
     # ------------------------------------------------------------------

@@ -32,7 +32,14 @@ import pytest
 from infrahub_sdk import InfrahubClient
 
 from .conftest import TestInfrahubDockerWithClient
-from .test_constants import ALL_DEMO_BRANCH, ALL_DEMO_FABRIC_PEERINGS, ALL_DEMO_ZONE_SITE_VIPS
+from .test_constants import (
+    ALL_DEMO_BRANCH,
+    ALL_DEMO_FABRIC_PEERINGS,
+    ALL_DEMO_VIRTUAL_CIRCUITS,
+    ALL_DEMO_ZONE_SITE_VIPS,
+    HANDOFF_KIND,
+    INTERCONNECT_KIND,
+)
 from .test_helpers import diff_snapshots, snapshot_topology
 from .workflow_helpers import run_generator, verify_no_failed_tasks, wait_for_tasks_completion
 
@@ -73,7 +80,7 @@ REQUIRED_RERUN_GENERATORS = {
 # Generators that dispatch others without waiting (dc_pod_cascade ->
 # pod_rack_cascade -> add_rack -> row-dependent add_rack; add_app_dependency
 # and add_app_component -> add_app_application; add_circuit ->
-# add_virtual_circuit for the overlay circuits riding it). The queue can go
+# add_virtual_circuit for the Interconnect and Handoff circuits riding it). The queue can go
 # quiet between waves, so their reruns wait for a longer quiet spell before
 # the next generator starts.
 FAN_OUT_GENERATORS = {
@@ -192,6 +199,9 @@ TOPOLOGY_RERUN_GENERATORS = {
     "add_colocation_zone": "colocation_zones",
     "add_virtual_colocation": "virtual_colocations",
     "add_circuit": "physical_circuits",
+    # virtual_circuits holds the Interconnect and Handoff circuits (no Tunnel: it has no session). The rerun must
+    # keep each one's /31 (/127), the addresses on its ports, its <name>-bgp or <name>-underlay/<name>-evpn
+    # peerings and a DCI's per-circuit key exactly as they were: same ids, same values (snapshot_topology).
     "add_virtual_circuit": "virtual_circuits",
     "add_endpoint": "endpoints",
     "add_app_component_segment": "app_components",
@@ -483,6 +493,25 @@ class TestAllDemoIdempotency(TestInfrahubDockerWithClient):
         for vip in ALL_DEMO_ZONE_SITE_VIPS.values():
             holders = [node_id for node_id, state in before["IpamIPAddress"].items() if repr(vip) in repr(state)]
             assert len(holders) == 1, f"the shared zone VIP {vip} is {len(holders)} IpamIPAddress object(s), not 1"
+        # The sessions add_virtual_circuit builds must be in the snapshot, one object each, or a duplicate session
+        # (new id) or a re-created per-circuit key would go unnoticed: an Interconnect holds <name>-underlay,
+        # <name>-evpn and <name>-dci-key, a Handoff <name>-bgp and no key of its own (its key is data-loaded).
+        for circuit, expected in ALL_DEMO_VIRTUAL_CIRCUITS.items():
+            if expected["kind"] == INTERCONNECT_KIND:
+                peerings = [f"{circuit}-underlay", f"{circuit}-evpn"]
+                keys = [f"{circuit}-dci-key"]
+            elif expected["kind"] == HANDOFF_KIND:
+                peerings, keys = [f"{circuit}-bgp"], []
+            else:
+                peerings, keys = [], []
+            for peering in peerings:
+                held = [
+                    n for n, state in before["ManagedBGPPeering"].items() if repr(("value", peering)) in repr(state)
+                ]
+                assert len(held) == 1, f"{peering} is {len(held)} ManagedBGPPeering object(s) in the snapshot, not 1"
+            for key in keys:
+                held = [n for n, state in before["RoutingPassword"].items() if repr(("value", key)) in repr(state)]
+                assert len(held) == 1, f"{key} is {len(held)} RoutingPassword object(s) in the snapshot, not 1"
 
         targets = await self._targets(client, scenario_branch, TOPOLOGY_RERUN_GENERATORS, set())
         await self._rerun(client, scenario_branch, "Topology rerun", targets, security_before, before, labels)

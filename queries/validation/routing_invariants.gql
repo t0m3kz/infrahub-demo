@@ -1,7 +1,7 @@
 # What the routing invariants read, across topologies: namespaces and their
 # type, interfaces/segments living in the INTERNET namespace, and the cloud
 # Transit Gateway attachments, route tables and virtual interfaces (with the
-# namespaces their circuits terminate in), plus the cloud VPC aggregates
+# namespace their handoff circuit terminates in), plus the cloud VPC aggregates
 # (cidr_blocks) with the namespace each is registered in, the cloud subnets
 # that must lie inside them, and the office footprints' LAN prefixes with their
 # namespace and environment. The *Interface queries read every interface of the
@@ -132,31 +132,10 @@ query routing_invariants {
         id
         name { value }
         virtual_network { node { id name { value } account { node { id name { value } environment { value } } } } }
-        virtual_circuits {
-          edges {
-            node {
-              id
-              name { value }
-              capabilities {
-                edges {
-                  node {
-                    __typename
-                    id
-                    name { value }
-                    device { node { name { value } } }
-                    ... on DcimPhysicalInterface {
-                      ip_address { node { ip_namespace { node { id name { value } l3_vni { value } namespace_type { value } } } } }
-                    }
-                    ... on DcimVirtualInterface {
-                      ip_address { node { ip_namespace { node { id name { value } l3_vni { value } namespace_type { value } } } } }
-                    }
-                    ... on DcimLAGInterface {
-                      ip_address { node { ip_namespace { node { id name { value } l3_vni { value } namespace_type { value } } } } }
-                    }
-                  }
-                }
-              }
-            }
+        virtual_circuit {
+          node {
+            name { value }
+            ip_namespace { node { name { value } namespace_type { value } } }
           }
         }
       }

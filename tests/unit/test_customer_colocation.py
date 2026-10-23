@@ -225,7 +225,7 @@ class TestFirewallContextNoFirewallOrCluster:
 
         gen.client.filters.assert_not_called()
         gen.logger.error.assert_called_once()
-        assert "no parent DC" in gen.logger.error.call_args.args[0]
+        assert "no parent Data Center" in gen.logger.error.call_args.args[0]
 
     @pytest.mark.asyncio
     async def test_no_firewall_devices_on_parent_is_noop(self) -> None:

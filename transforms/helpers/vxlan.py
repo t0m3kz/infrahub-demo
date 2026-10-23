@@ -451,7 +451,8 @@ def _get_multisite_config(
     A device is a BGW exactly when it carries a role=multisite-vip loopback
     (the anycast VIP every BGW of a site shares). site_id is the fabric's
     evpn_rt_as ASN — unique per site and already agreed on by every BGW of it.
-    DCI-tracking goes on the local end of every peering_role=dci peering;
+    DCI-tracking goes on the local end of every peering_role=dci-underlay peering
+    (the physical DCI ports; the peering_role=dci EVPN peering sits on loopbacks);
     fabric-tracking on the uplinks of a BGW that sits inside a fabric and on
     the interlink (role=interlink) of any BGW.
     """
@@ -473,7 +474,7 @@ def _get_multisite_config(
             for cap in data.get("capabilities") or []
             if cap.get("typename") == "ManagedBGP"
             for peering in cap.get("peerings") or []
-            if peering.get("peering_role") == "dci"
+            if peering.get("peering_role") == "dci-underlay"
             for iface in peering.get("capabilities") or []
             if (iface.get("device") or {}).get("name") == device_name and iface.get("name")
         }

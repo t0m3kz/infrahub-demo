@@ -534,9 +534,8 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
         """Address one cabled link in the tenant VRF: a /31 from its transit pool, a dot1q sub-interface per end.
 
         The /31 is keyed by the link (its two interface ids), so a re-run gets the same one. Both
-        sub-interfaces are ``<port>.<vlan>`` with the port's own role, the convention of the gateway's
-        ``eth0.<tunnel_id>`` (add_sdwan_edge) and of the hand-authored handoff; the switch takes the
-        lower address.
+        sub-interfaces are ``<port>.<vlan>`` with the port's own role, the convention of a handoff circuit's
+        ends (``eth0.1900``, add_virtual_circuit); the switch takes the lower address.
         """
         switch_name = switch_port.device.display_label
         prefix = await self.client.allocate_next_ip_prefix(
