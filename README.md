@@ -3,6 +3,9 @@
 [![Ruff][ruff-badge]][ruff-link]
 [![Python][python-badge]][python-link]
 [![Actions status][github-badge]][github-link]
+[![Latest release][release-badge]][release-link]
+[![License][license-badge]][license-link]
+[![Contributors][contributors-badge]][contributors-link]
 [![Coverage Status][coverage-badge]][coverage-link]
 [![GitHub Discussion][github-discussions-badge]][github-discussions-link]
 
@@ -315,3 +318,15 @@ This project is licensed under the MIT License.
 <https://img.shields.io/badge/python-3.11%7C3.12%7C3.13%7C3.14-000000?logo=python>
 [python-link]:
 <https://www.python.org>
+[release-badge]:
+<https://img.shields.io/github/v/release/t0m3kz/infrahub-demo>
+[release-link]:
+<https://github.com/t0m3kz/infrahub-demo/releases/latest>
+[license-badge]:
+<https://img.shields.io/github/license/t0m3kz/infrahub-demo>
+[license-link]:
+<https://github.com/t0m3kz/infrahub-demo/blob/main/LICENSE>
+[contributors-badge]:
+<https://img.shields.io/github/contributors/t0m3kz/infrahub-demo>
+[contributors-link]:
+<https://github.com/t0m3kz/infrahub-demo/graphs/contributors>

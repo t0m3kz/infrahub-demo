@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import ipaddress
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from typing import TYPE_CHECKING, Any, Callable, Literal
 
 from infrahub_sdk.protocols import CoreIPAddressPool, CoreIPPrefixPool
@@ -13,8 +13,17 @@ if TYPE_CHECKING:
     import logging
 
 from .helpers import CableTypeDetector, CablingPlanner
+from .helpers.cable_attributes import RackPosition, cable_attributes, endpoint_label
 from .helpers.common import save_with_node_not_found_retry
-from .protocols import DcimCable, DcimPhysicalInterface, DcimVirtualInterface, IpamIPAddress
+from .protocols import (
+    DcimCable,
+    DcimPhysicalDevice,
+    DcimPhysicalInterface,
+    DcimVirtualInterface,
+    IpamIPAddress,
+    LocationRack,
+    LocationSuite,
+)
 from .types import CablingOptions, ChainHop
 
 _INTERFACE_READY_MAX_RETRIES = 10
@@ -40,6 +49,11 @@ def tracked_save_kwargs(track: bool) -> dict[str, Any]:
     it. track=True keeps the plain upsert (the run claims the node).
     """
     return {"allow_upsert": True} if track else {"allow_upsert": True, "update_group_context": False}
+
+
+def _peer_id(rel: Any) -> str | None:
+    """Id of a loaded relationship's peer, None when it is missing or unset."""
+    return rel.id if rel is not None and rel.initialized else None
 
 
 class CablingMixin:
@@ -154,6 +168,51 @@ class CablingMixin:
 
         return await self._execute_cabling_plan(cabling_plan, iface_map, options, technical_pool)
 
+    async def _cable_layouts(self, device_ids: Iterable[str]) -> dict[str, RackPosition | None]:
+        """Rack position of each device, for the length of the cables between them.
+
+        THE lookup behind every cable's ``length_cm`` (this mixin's cabling, the HA sync cable, the MLAG
+        peer-link cables): at most three batched reads whatever the number of devices or cables
+        (devices -> racks -> suites), none when no device has a rack. A device missing from the result, or
+        mapped to None, has no derivable position: a virtual device, a device with no rack, a rack with no suite.
+        """
+        ids = sorted(set(device_ids))
+        if not ids:
+            return {}
+        devices = await self.client.filters(kind=DcimPhysicalDevice, ids=ids, include=["rack"])
+        rack_id_by_device = {device.id: _peer_id(getattr(device, "rack", None)) for device in devices}
+        rack_ids = sorted({rack_id for rack_id in rack_id_by_device.values() if rack_id})
+        if not rack_ids:
+            return dict.fromkeys(ids)
+        racks = {
+            rack.id: rack for rack in await self.client.filters(kind=LocationRack, ids=rack_ids, include=["parent"])
+        }
+        suite_ids = sorted(
+            {suite_id for rack in racks.values() if (suite_id := _peer_id(getattr(rack, "parent", None)))}
+        )
+        suites = (
+            {suite.id: suite for suite in await self.client.filters(kind=LocationSuite, ids=suite_ids)}
+            if suite_ids
+            else {}
+        )
+
+        layouts: dict[str, RackPosition | None] = dict.fromkeys(ids)
+        for device_id, rack_id in rack_id_by_device.items():
+            rack = racks.get(rack_id) if rack_id else None
+            suite = suites.get(_peer_id(getattr(rack, "parent", None)) or "") if rack is not None else None
+            if rack is None or suite is None:
+                continue
+            layouts[device_id] = RackPosition(
+                suite_id=suite.id,
+                row_index=rack.row_index.value,
+                index=rack.index.value,
+                rows=suite.rows.value,
+                racks_per_row=suite.racks_per_row.value,
+                rack_pitch_cm=suite.rack_pitch_cm.value,
+                row_pitch_cm=suite.row_pitch_cm.value,
+            )
+        return layouts
+
     async def _execute_cabling_plan(
         self,
         cabling_plan: list[tuple[Any, Any]],
@@ -165,11 +224,12 @@ class CablingMixin:
         P2P IPs if a pool is given, save both interfaces. Shared tail for
         create_cabling() and create_chain_cabling()."""
         cabled_pairs: list[tuple[Any, Any]] = []
+        layouts = await self._cable_layouts(interface.device.id for pair in cabling_plan for interface in pair)
         for src_interface, dst_interface in cabling_plan:
             endpoint_names = sorted(
                 [
-                    f"{src_interface.device.display_label}-{src_interface.name.value}",
-                    f"{dst_interface.device.display_label}-{dst_interface.name.value}",
+                    endpoint_label(src_interface.device.display_label, src_interface.name.value),
+                    endpoint_label(dst_interface.device.display_label, dst_interface.name.value),
                 ]
             )
             cable_name = "__".join(endpoint_names)
@@ -234,6 +294,12 @@ class CablingMixin:
                     "type": cable_type,
                     "endpoints": [updated_src.id, updated_dst.id],
                     "deployment": {"id": self.deployment_id} if self.deployment_id else None,
+                    **cable_attributes(
+                        cable_type,
+                        endpoint_names,
+                        layouts.get(src_interface.device.id),
+                        layouts.get(dst_interface.device.id),
+                    ),
                 },
             )
             await cable.save(allow_upsert=True)

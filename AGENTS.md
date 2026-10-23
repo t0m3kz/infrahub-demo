@@ -301,6 +301,14 @@ class MyCheck(InfrahubCheck):
   (`TopologyTemplatePod`: S_MIDDLE, S_TOR, ...) are required and hold only the envelope (`max_*`); the rows live in
   `data/bootstrap/14b_fabric_templates.yml`. Every fabric pool size is derived from them by
   `generators/fabric_sizing.py`, and a pod's design must be one of its DC design's `pod_templates`.
+- **Suite capacity**: a `LocationSuite` is the physical capacity: `rows` and `racks_per_row` (both required) are its
+  grid. `checks/suite_capacity.py` enforces that every rack sits inside it (`row_index <= rows`,
+  `index <= racks_per_row`, where `index` is the slot in the row) and that each hosting suite fits the pod's design
+  envelope (`max_rows`, `max_compute_racks_per_row + max_network_racks_per_row`). Racks are data, never generated.
+- **Cable attributes**: a generator-created `DcimCable` carries `cable_id` (the short printed label, a hash of the
+  endpoint labels), `color` (the TIA-598 jacket colour of its `type`) and `length_cm`, derived from the suite layout
+  (`rack_pitch_cm`, `row_pitch_cm`; `generators/helpers/cable_attributes.py`). The length is unset when an end is not
+  in a rack or the ends are in different suites. Cables declared in data are not generated and stay unset.
 - **Capability edges**: a capability reaches devices via `ManagedGenericDevice` and interfaces via
   `ManagedGenericInterfaces`. Inherit the second only when something reads the interface edge.
 

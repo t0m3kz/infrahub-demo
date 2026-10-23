@@ -1889,7 +1889,9 @@ TOPOLOGY_SNAPSHOT_KINDS = {
         "... on DcimVirtualInterface { ip_address { node { id address { value } } } } "
         "... on DcimLAGInterface { ip_address { node { id address { value } } } }"
     ),
-    "DcimCable": "endpoints { edges { node { id } } }",
+    # cable_id, color and length_cm are derived by the cabling, HA and MLAG sites from the endpoints, the type and
+    # the suite layout: a rerun that rewrote one is a diff.
+    "DcimCable": "endpoints { edges { node { id } } } cable_id { value } color { value } length_cm { value }",
     "IpamIPAddress": "address { value }",
     "IpamPrefix": "prefix { value }",
     "CoreNumberPool": "name { value }",

@@ -542,6 +542,14 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
+    resource_name: suite_capacity
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/suite_capacity.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
     resource_name: pool_utilization
     tests:
       - name: syntax_check

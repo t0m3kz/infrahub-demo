@@ -39,6 +39,8 @@ def _gen() -> Any:
     gen.logger = MagicMock()
     gen.acquire_resource_lock = AsyncMock(return_value="lock-id")
     gen.release_resource_lock = AsyncMock()
+    # The cable length's rack lookup has its own tests (test_cable_attributes_generators.py).
+    gen._cable_layouts = AsyncMock(return_value={})
     return gen
 
 

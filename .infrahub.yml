@@ -365,6 +365,11 @@ check_definitions:
   - name: validate_circuit_placement
     class_name: CheckCircuitPlacement
     file_path: checks/circuit_placement.py
+  # Targetless: a pod's design is judged against every suite hosting a rack of
+  # it, so one query reads every rack with its suite and its pod's design.
+  - name: validate_suite_capacity
+    class_name: CheckSuiteCapacity
+    file_path: checks/suite_capacity.py
   # Targetless: a name must be unique across metros, zones and virtual
   # colocations, and a footprint's serving zone is judged against its metro.
   - name: validate_colocation_placement
@@ -760,6 +765,8 @@ queries:
     file_path: queries/validation/physical_circuit_ports.gql
   - name: circuit_placement
     file_path: queries/validation/circuit_placement.gql
+  - name: suite_capacity
+    file_path: queries/validation/suite_capacity.gql
   - name: colocation_placement
     file_path: queries/validation/colocation_placement.gql
   - name: app_dependency_validation

@@ -340,6 +340,9 @@ class TopologyVirtualCircuit(TopologyCircuit, ManagedGeneric, ManagedGenericInte
 class DcimCable(CoreNode):
     name: String
     type: Dropdown
+    cable_id: StringOptional
+    color: DropdownOptional
+    length_cm: IntegerOptional
     endpoints: RelationshipManager[DcimEndpoint]
 
 
@@ -1076,6 +1079,10 @@ class DcimSoftwareImage(CoreNode):
 class LocationSuite(LocationGeneric):
     index: Integer
     name: String
+    rack_pitch_cm: IntegerOptional
+    racks_per_row: Integer
+    row_pitch_cm: IntegerOptional
+    rows: Integer
     suite_name: String
     owner: RelationshipAttribute[OrganizationGeneric]
 

@@ -72,6 +72,8 @@ def _make_generator() -> Any:
     # CoreStandardGroup behavior, not controller routing (see
     # TestCreateDevicesControllerRouting for the controller-routing path).
     gen._all_controllers = []
+    # CablingMixin._cable_layouts (the cable length's rack lookup) has its own tests (test_cable_attributes_generators.py).
+    gen._cable_layouts = AsyncMock(return_value={})
     return gen
 
 
@@ -683,6 +685,7 @@ class TestEnsureHaInterfaces:
 
     def _gen(self) -> Any:
         gen = DeviceMixin.__new__(DeviceMixin)
+        gen._cable_layouts = AsyncMock(return_value={})
         gen.logger = MagicMock()
         gen.client = MagicMock()
         gen.client.filters = AsyncMock(return_value=[])
@@ -965,6 +968,7 @@ class TestEnsureHaInterfaces:
 class TestEnsureHaCable:
     def _gen(self) -> Any:
         gen = DeviceMixin.__new__(DeviceMixin)
+        gen._cable_layouts = AsyncMock(return_value={})
         gen.logger = MagicMock()
         gen.client = MagicMock()
         gen.client.filters = AsyncMock(return_value=[])

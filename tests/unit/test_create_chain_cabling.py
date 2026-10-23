@@ -33,6 +33,8 @@ def _make_generator() -> Any:
     gen.client.allocate_next_ip_prefix = AsyncMock()
     gen.deployment_id = "dc-1"
     gen._resolve_pool = AsyncMock(return_value=None)
+    # No rack lookup here: the cable length derivation has its own tests (test_cable_attributes_generators.py).
+    gen._cable_layouts = AsyncMock(return_value={})
     return gen
 
 
