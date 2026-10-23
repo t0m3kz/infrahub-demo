@@ -95,6 +95,40 @@ nodes:
         kind: Number
         optional: false
         order_weight: 120
+      - name: rows
+        label: "Number of Rows"
+        description: "Physical capacity: rack rows (checks/suite_capacity.py: racks and pod designs must fit)"
+        kind: Number
+        optional: false
+        order_weight: 130
+        parameters:
+          min_value: 1
+      - name: racks_per_row
+        label: "Racks per Row"
+        description: "Physical capacity: rack slots per row (checks/suite_capacity.py: racks and pod designs must fit)"
+        kind: Number
+        optional: false
+        order_weight: 140
+        parameters:
+          min_value: 1
+      - name: rack_pitch_cm
+        label: "Rack Pitch (cm)"
+        description: "Centimetres from one rack to the next in a row (cable length derivation)"
+        kind: Number
+        optional: true
+        default_value: 60
+        order_weight: 150
+        parameters:
+          min_value: 1
+      - name: row_pitch_cm
+        label: "Row Pitch (cm)"
+        description: "Centimetres from one row to the next (cable length derivation)"
+        kind: Number
+        optional: true
+        default_value: 300
+        order_weight: 160
+        parameters:
+          min_value: 1
     relationships:
       - name: owner
         peer: OrganizationGeneric

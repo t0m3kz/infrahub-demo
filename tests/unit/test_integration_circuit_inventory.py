@@ -340,6 +340,9 @@ def test_the_snapshot_covers_the_addresses_sessions_and_keys_the_generator_write
     for field in ("peering_role", "ttl", "bfd_enabled", "send_extended_community", "maximum_routes", "password"):
         assert field in peering
     assert "password { value }" in TOPOLOGY_SNAPSHOT_KINDS["RoutingPassword"]
+    cable = TOPOLOGY_SNAPSHOT_KINDS["DcimCable"]
+    for field in ("endpoints", "cable_id { value }", "color { value }", "length_cm { value }"):
+        assert field in cable
     circuits = TOPOLOGY_SNAPSHOT_KINDS["TopologyVirtualCircuit"]
     assert "tunnel_id" not in circuits and "physical_circuits" not in circuits
     assert all(f"... on {kind} {{ locations" in circuits for kind in (TUNNEL_KIND, INTERCONNECT_KIND, HANDOFF_KIND))

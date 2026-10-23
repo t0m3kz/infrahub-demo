@@ -1,0 +1,47 @@
+# The rows of checks/suite_capacity.py: every rack with where it sits, the suite it sits in (the physical capacity:
+# rows and racks_per_row) and the pod hosting it with the pod's design envelope.
+#   - LocationRack: row_index and index (the slot in the row) are its position in the suite's grid; parent is its
+#     suite.
+#   - pod: any TopologyRackHosting (a TopologyPod, or a colocation zone). Only a TopologyPod has a design, so only the
+#     TopologyPod fragment selects the envelope (max_rows, max_compute_racks_per_row, max_network_racks_per_row) the
+#     suite must hold; a zone's rack is judged on its position alone.
+# One global query: a pod's envelope is judged against every suite that hosts a rack of it.
+query suite_capacity {
+  LocationRack {
+    edges {
+      node {
+        id
+        name { value }
+        row_index { value }
+        index { value }
+        parent {
+          node {
+            ... on LocationSuite {
+              id
+              name { value }
+              rows { value }
+              racks_per_row { value }
+            }
+          }
+        }
+        pod {
+          node {
+            id
+            name { value }
+            ... on TopologyPod {
+              design {
+                node {
+                  id
+                  name { value }
+                  max_rows { value }
+                  max_compute_racks_per_row { value }
+                  max_network_racks_per_row { value }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

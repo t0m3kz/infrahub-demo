@@ -814,6 +814,40 @@ nodes:
             label: Copper
           - name: dac
             label: Direct Attach Copper (DAC)
+      - name: cable_id
+        label: "Cable ID"
+        description: "Short label printed on the physical cable, derived from its endpoints; unique when set"
+        kind: Text
+        unique: true
+        optional: true
+        order_weight: 1050
+      - name: color
+        label: "Color"
+        description: "Jacket colour, derived from the cable type (TIA-598 convention); unset when unknown"
+        kind: Dropdown
+        optional: true
+        order_weight: 1150
+        choices:
+          - name: blue
+            label: Blue
+            color: "#3b82f6"
+          - name: yellow
+            label: Yellow
+            color: "#eab308"
+          - name: aqua
+            label: Aqua
+            color: "#06b6d4"
+          - name: black
+            label: Black
+            color: "#111827"
+      - name: length_cm
+        label: "Length (cm)"
+        description: "Centimetres, derived from the rack positions when both ends sit in racks of one suite; else unset"
+        kind: Number
+        optional: true
+        order_weight: 1200
+        parameters:
+          min_value: 0
     relationships:
       - name: endpoints
         peer: DcimEndpoint

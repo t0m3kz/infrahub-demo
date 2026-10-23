@@ -444,6 +444,7 @@ def _wiring_mixin() -> Any:
     gen: Any = MLAGWiringMixin.__new__(MLAGWiringMixin)
     gen.logger = MagicMock()
     gen.client = _client()
+    gen._cable_layouts = AsyncMock(return_value={})
     return gen
 
 
