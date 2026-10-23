@@ -117,13 +117,13 @@ generics:
     description: "Connection between topologies on which routing is generated (SD-WAN, cloud services, DCI)"
     label: "Virtual Circuit"
     include_in_menu: false
-    inherit_from:
-      - TopologyCircuit
-      - ManagedGeneric
-      - ManagedGenericInterfaces
     human_friendly_id:
       - name__value
     display_label: "{{ name__value }}"
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 100
 
 nodes:
   - name: PhysicalCircuit
@@ -226,7 +226,10 @@ nodes:
     icon: "mdi:shield-link-variant"
     include_in_menu: false
     inherit_from:
+      - TopologyCircuit
+      - ManagedGeneric
       - TopologyVirtualCircuit
+      - ManagedGenericInterfaces
     human_friendly_id:
       - name__value
     uniqueness_constraints:
@@ -252,7 +255,10 @@ nodes:
     icon: "mdi:swap-horizontal-bold"
     include_in_menu: false
     inherit_from:
+      - TopologyCircuit
+      - ManagedGeneric
       - TopologyVirtualCircuit
+      - ManagedGenericInterfaces
     human_friendly_id:
       - name__value
     uniqueness_constraints:
@@ -283,7 +289,10 @@ nodes:
     icon: "mdi:cloud-sync"
     include_in_menu: false
     inherit_from:
+      - TopologyCircuit
+      - ManagedGeneric
       - TopologyVirtualCircuit
+      - ManagedGenericInterfaces
     human_friendly_id:
       - name__value
     uniqueness_constraints:
