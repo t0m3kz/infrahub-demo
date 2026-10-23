@@ -30,11 +30,13 @@ interface Ethernet1/8
 interface Ethernet1/10
   no shutdown
   ipv6 address 2001:db8:dc10::/127
+  mtu 9216
 
 !
 interface Ethernet1/11
   no shutdown
   ipv6 address 2001:db8:dc11::/127
+  mtu 9216
 
 !
 interface Ethernet1/15
@@ -74,8 +76,16 @@ router bgp 65001
   !
   template peer-policy DCI-PEERS-POLICY
     send-community
+    send-community extended
   !
   template peer-session DCI-PEERS-SESSION
+    ebgp-multihop 2
+  !
+  !
+  template peer-policy DCI-UNDERLAY-PEERS-POLICY
+    send-community
+  !
+  template peer-session DCI-UNDERLAY-PEERS-SESSION
     bfd
   !
   !
@@ -140,24 +150,24 @@ router bgp 65001
   neighbor 2001:db8:dc10::1
     remote-as 65100
     description dc10-border-leaf-01
-    peer-type fabric-external
-    inherit peer-session DCI-PEERS-SESSION
+    password dci-s3cr3t-0
+    inherit peer-session DCI-UNDERLAY-PEERS-SESSION
     address-family ipv6 unicast
-      inherit peer-policy DCI-PEERS-POLICY
-    !
-    address-family l2vpn evpn
-      inherit peer-policy DCI-PEERS-POLICY
+      inherit peer-policy DCI-UNDERLAY-PEERS-POLICY
+      maximum-prefix 16
+      route-map RM-FABRIC-OUT out
+      route-map RM-DCI-IN in
     !
   neighbor 2001:db8:dc11::1
     remote-as 65101
     description dc11-border-leaf-01
-    peer-type fabric-external
-    inherit peer-session DCI-PEERS-SESSION
+    password dci-s3cr3t-1
+    inherit peer-session DCI-UNDERLAY-PEERS-SESSION
     address-family ipv6 unicast
-      inherit peer-policy DCI-PEERS-POLICY
-    !
-    address-family l2vpn evpn
-      inherit peer-policy DCI-PEERS-POLICY
+      inherit peer-policy DCI-UNDERLAY-PEERS-POLICY
+      maximum-prefix 16
+      route-map RM-FABRIC-OUT out
+      route-map RM-DCI-IN in
     !
   neighbor 10.0.0.100
     remote-as 65100
@@ -172,6 +182,26 @@ router bgp 65001
     inherit peer-session EVPN-OVERLAY-SESSION
     address-family l2vpn evpn
       inherit peer-policy EVPN-OVERLAY-POLICY
+    !
+  neighbor 2001:db8:dc10:ffff::1
+    remote-as 65100
+    description dc10-border-leaf-01
+    peer-type fabric-external
+    password dci-s3cr3t-0
+    update-source Loopback1
+    inherit peer-session DCI-PEERS-SESSION
+    address-family l2vpn evpn
+      inherit peer-policy DCI-PEERS-POLICY
+    !
+  neighbor 2001:db8:dc11:ffff::1
+    remote-as 65101
+    description dc11-border-leaf-01
+    peer-type fabric-external
+    password dci-s3cr3t-1
+    update-source Loopback1
+    inherit peer-session DCI-PEERS-SESSION
+    address-family l2vpn evpn
+      inherit peer-policy DCI-PEERS-POLICY
     !
 !
 
@@ -227,6 +257,9 @@ route-map RM-CONN-2-BGP permit 10
 !
 route-map RM-FABRIC-OUT permit 10
   match interface loopback0 Loopback1 Loopback100
+!
+route-map RM-DCI-IN permit 10
+  set community no-export additive
 !
 
 !

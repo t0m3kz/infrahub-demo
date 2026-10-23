@@ -25,7 +25,7 @@ spec:
   data:
     - name: DC14
       index: 14
-      parent: DC
+      parent: "Data Center"
       design: M
       routing_strategy: ebgp-ebgp
       underlay_protocol: ipv4

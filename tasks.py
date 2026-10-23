@@ -288,14 +288,17 @@ def test_integration_all_demo(
     catalogue enforcement workflow (60), compute and the application graph
     (61), interconnects and tenant services (62), colo cloud/partner/SaaS zone
     policy check + render (64), and reruns of the security generators that
-    must leave the branch unchanged (65).
+    must leave the branch unchanged (65), and the sessions of an Interconnect and a Handoff
+    following the status of their carrier or of the circuit itself, both ways (66, mutates the
+    branch, so it runs last).
     """
     _run_integration_suite(
         context,
         tests="tests/integration/test_01_setup.py tests/integration/test_02_repository.py "
         "tests/integration/test_59_all_demo_load.py tests/integration/test_60_app_catalogue.py "
         "tests/integration/test_61_all_demo_compute.py tests/integration/test_62_all_demo_interconnects.py "
-        "tests/integration/test_64_all_demo_firewall_config.py tests/integration/test_65_all_demo_idempotency.py",
+        "tests/integration/test_64_all_demo_firewall_config.py tests/integration/test_65_all_demo_idempotency.py "
+        "tests/integration/test_66_all_demo_circuit_lifecycle.py",
         basetemp=basetemp,
         server_port=server_port,
     )
@@ -434,9 +437,10 @@ ALL_DEMO_BRANCH = "all-demo-scenario"
 #     the host's row. Those access-leafs are created by add_rack, which is
 #     dispatched asynchronously by the *same* load that declared the rack.
 #   - 08_interconnects/01_colo_onramp/03_physical_circuits.yml lands its dark
-#     fibres on border leaves by name ("bl-dc101101"), which add_dc creates, and
-#     add_circuit builds their DCI sessions on the overlay BGP processes add_dc
-#     and add_colocation_zone create.
+#     fibres on border leaves by name ("bl-dc101101"), which add_dc creates;
+#     add_circuit places them, and add_virtual_circuit then builds the DCI
+#     sessions of 03_virtual_circuits/01_dci_interconnects.yml on the overlay
+#     BGP processes add_dc and add_colocation_zone create.
 #   - 07_applications references the VMs and customer deployments declared in
 #     06_customer_boarding.
 #
@@ -504,11 +508,11 @@ ALL_DEMO_LOAD_STAGES: tuple[tuple[str, tuple[str, ...]], ...] = (
         ("07_applications",),
     ),
     (
-        # Colo on-ramp, cloud hub, virtual circuits, the SD-WAN gateway's
-        # backhaul and PROD handoff, cloud endpoints.
-        # Data plus the circuit generators it dispatches (add_circuit builds
-        # the dark fibres' DCI sessions) — every generator those need has
-        # already run.
+        # Colo on-ramp, cloud hub, the DCI and handoff circuits, the SD-WAN
+        # gateway's PROD handoff, cloud endpoints, internet, the partner tunnel.
+        # Data plus the circuit generators it dispatches (add_circuit places
+        # the physical circuits, add_virtual_circuit builds the DCI and handoff
+        # sessions) — every generator those need has already run.
         "interconnects",
         ("08_interconnects",),
     ),

@@ -1,7 +1,8 @@
 """Unit tests for EVPN Multi-Site (colocation edge as border gateway).
 
 Covers:
-  - _build_peer_groups()                    — DCI-PEERS group, peer-type fabric-external
+  - _build_peer_groups()                    — DCI-UNDERLAY-PEERS / DCI-PEERS groups, peer-type fabric-external
+  - _build_session_from_peering()           — update_source of a DCI EVPN session
   - _stretch_rt_anchor()                    — shared L2 RT admin ASN across sites
   - _is_multisite_segment()                 — stretched across >1 deployment
   - _l2_from_activations()                  — multisite / rt_anchor_asn on mappings
@@ -9,7 +10,8 @@ Covers:
   - _get_multisite_config()                 — BGW detection, dci/fabric tracking interfaces
   - get_vxlan_config()                      — route_target and multisite keys
   - _collect_border_gateway_activations()   — stretched segments from the site's deployment
-  - cisco_nxos_vxlan.j2 / cisco_nxos_bgp.j2 — NX-OS BGW rendering
+  - cisco_nxos_vxlan.j2 / cisco_nxos_bgp.j2 / cisco_nxos_interface_ip.j2 / cisco_nxos_dci_route_maps.j2
+                                            — NX-OS BGW rendering
 """
 
 from __future__ import annotations
@@ -59,15 +61,30 @@ def _segment(
 
 
 def _dci_session(name: str = "dci-1", address_families: list[str] | None = None) -> dict[str, Any]:
+    """The loopback-to-loopback EVPN session (peering_role dci)."""
+    return {
+        "name": name,
+        "session_type": "EBGP_MULTIHOP",
+        "ttl": 2,
+        "peering_role": "dci",
+        "bfd_enabled": False,
+        "send_community": True,
+        "send_extended_community": True,
+        "address_families": ["evpn"] if address_families is None else address_families,
+    }
+
+
+def _dci_underlay_session(name: str = "dci-u-1") -> dict[str, Any]:
+    """The eBGP unicast session over a physical DCI port (peering_role dci-underlay)."""
     return {
         "name": name,
         "session_type": "EBGP",
         "ttl": 1,
-        "peering_role": "dci",
+        "peering_role": "dci-underlay",
         "bfd_enabled": True,
         "send_community": True,
-        "send_extended_community": True,
-        "address_families": ["ipv6", "evpn"] if address_families is None else address_families,
+        "send_extended_community": False,
+        "address_families": ["ipv6"],
     }
 
 
@@ -91,10 +108,17 @@ def _bgw_device(role: str = "edge", *, with_vip: bool = True) -> dict[str, Any]:
                 "typename": "ManagedBGP",
                 "peerings": [
                     {
-                        "peering_role": "dci",
+                        "peering_role": "dci-underlay",
                         "capabilities": [
                             {"name": "Ethernet1/49", "device": {"name": "eg-fr201"}},
                             {"name": "Ethernet1/49", "device": {"name": "dc10-bl01"}},
+                        ],
+                    },
+                    {
+                        "peering_role": "dci",
+                        "capabilities": [
+                            {"name": "loopback1", "device": {"name": "eg-fr201"}},
+                            {"name": "Loopback0", "device": {"name": "dc10-bl01"}},
                         ],
                     },
                     {
@@ -113,33 +137,104 @@ def _bgw_device(role: str = "edge", *, with_vip: bool = True) -> dict[str, Any]:
 
 
 class TestDciPeerGroup:
-    def test_dci_sessions_get_own_group_not_underlay(self) -> None:
-        """DCI sessions are ttl 1 but must land in DCI-PEERS, not UNDERLAY-PEERS."""
+    def test_dci_sessions_get_own_groups_not_underlay(self) -> None:
+        """DCI sessions must land in their DCI groups, not UNDERLAY-PEERS / EVPN-OVERLAY."""
         underlay = {"name": "u", "session_type": "EBGP", "ttl": 1, "address_families": ["ipv4"]}
+        dci_underlay = _dci_underlay_session()
         dci = _dci_session()
-        groups = {pg["name"]: pg for pg in _build_peer_groups([underlay, dci])}
-        assert set(groups) == {"UNDERLAY-PEERS", "DCI-PEERS"}
+        groups = {pg["name"]: pg for pg in _build_peer_groups([underlay, dci_underlay, dci])}
+        assert set(groups) == {"UNDERLAY-PEERS", "DCI-UNDERLAY-PEERS", "DCI-PEERS"}
         assert underlay["peer_group"] == "UNDERLAY-PEERS"
+        assert dci_underlay["peer_group"] == "DCI-UNDERLAY-PEERS"
         assert dci["peer_group"] == "DCI-PEERS"
         assert groups["UNDERLAY-PEERS"]["address_families"] == ["ipv4"]
 
-    def test_dci_group_carries_evpn_and_session_is_fabric_external(self) -> None:
+    def test_dci_underlay_group_is_unicast_with_bfd_and_local_only_export(self) -> None:
+        sessions = [_dci_underlay_session("a"), _dci_underlay_session("b")]
+        (group,) = _build_peer_groups(sessions)
+        assert group["type"] == "dci-underlay"
+        assert group["session_type"] == "EBGP"
+        assert group["address_families"] == ["ipv6"]
+        assert group["bfd_enabled"] is True
+        assert "ebgp_multihop" not in group
+        for session in sessions:
+            assert session["export_local_only"] is True
+            assert session["dci_inbound"] is True
+            assert "peer_type" not in session
+
+    def test_dci_underlay_group_defaults_to_ipv4_without_families(self) -> None:
+        session = _dci_underlay_session()
+        session["address_families"] = []
+        (group,) = _build_peer_groups([session])
+        assert group["address_families"] == ["ipv4"]
+
+    def test_dci_group_is_evpn_only_multihop_without_bfd(self) -> None:
         dci = _dci_session()
         (group,) = _build_peer_groups([dci])
         assert group["type"] == "dci"
         assert group["session_type"] == "EBGP"
-        assert group["address_families"] == ["ipv6", "evpn"]
-        assert group["bfd_enabled"] is True
+        assert group["address_families"] == ["evpn"]
+        assert group["ebgp_multihop"] == 2
+        assert group["bfd_enabled"] is False
+        assert group["send_community"] is True
+        assert group["send_extended_community"] is True
         assert dci["peer_type"] == "fabric-external"
+        assert "export_local_only" not in dci
+        assert "dci_inbound" not in dci
 
-    def test_dci_group_defaults_to_evpn_without_families(self) -> None:
-        (group,) = _build_peer_groups([_dci_session(address_families=[])])
+    def test_dci_group_multihop_is_the_largest_session_ttl(self) -> None:
+        near, far = _dci_session("near"), _dci_session("far")
+        far["ttl"] = 4
+        (group,) = _build_peer_groups([near, far])
+        assert group["ebgp_multihop"] == 4
+
+    def test_dci_group_is_evpn_only_whatever_the_session_families(self) -> None:
+        (group,) = _build_peer_groups([_dci_session(address_families=["ipv6", "evpn"])])
         assert group["address_families"] == ["evpn"]
 
     def test_non_dci_sessions_have_no_peer_type(self) -> None:
         underlay = {"name": "u", "session_type": "EBGP", "ttl": 1}
         _build_peer_groups([underlay])
         assert "peer_type" not in underlay
+
+
+def _loopback_peering(role: str, *, ttl: int = 2) -> dict[str, Any]:
+    return {
+        "name": "dci-evpn",
+        "session_type": "EBGP_MULTIHOP",
+        "ttl": ttl,
+        "peering_role": role,
+        "address_families": [{"afi": "l2vpn", "safi": "evpn"}],
+        "capabilities": [
+            {"name": "Loopback1", "device": {"name": "eg-fr201"}, "ip_address": {"address": "fd00:100::1/128"}},
+            {"name": "Loopback0", "device": {"name": "dc10-bl01"}, "ip_address": {"address": "fd00:10::1/128"}},
+        ],
+        "bgp_processes": [
+            {"capabilities": [{"name": "eg-fr201"}], "local_as": {"asn": 65100}},
+            {"capabilities": [{"name": "dc10-bl01"}], "local_as": {"asn": 65010}},
+        ],
+    }
+
+
+class TestDciUpdateSource:
+    def test_dci_session_is_sourced_from_its_local_loopback(self) -> None:
+        session = _build_session_from_peering(_loopback_peering("dci"), "eg-fr201", {"asn": 65100}, [])
+        assert session is not None
+        assert session["update_source"] == "Loopback1"
+        assert session["local_ip"] == {"address": "fd00:100::1/128"}
+        assert session["remote_ip"] == {"address": "fd00:10::1/128"}
+        assert session["address_families"] == ["evpn"]
+
+    def test_the_remote_end_names_its_own_loopback(self) -> None:
+        session = _build_session_from_peering(_loopback_peering("dci"), "dc10-bl01", {"asn": 65010}, [])
+        assert session is not None
+        assert session["update_source"] == "Loopback0"
+
+    @pytest.mark.parametrize("role", ["regular", "underlay"])
+    def test_other_roles_get_no_update_source(self, role: str) -> None:
+        session = _build_session_from_peering(_loopback_peering(role), "eg-fr201", {"asn": 65100}, [])
+        assert session is not None
+        assert "update_source" not in session
 
 
 def _fabric_session(name: str = "fabric-1") -> dict[str, Any]:
@@ -181,6 +276,7 @@ class TestFabricPeerGroup:
         _build_peer_groups([dci, underlay])
         assert "export_local_only" not in dci
         assert "export_local_only" not in underlay
+        assert "dci_inbound" not in underlay
 
     def test_cabled_ibgp_ttl1_session_resolves_remote_as_and_ip(self) -> None:
         """A fabric peering on a cabled interlink resolves both ends and the site AS."""
@@ -298,6 +394,19 @@ class TestGetMultisiteConfig:
             "fabric_interfaces": [],
             "advertise_interfaces": ["loopback1", "loopback100"],
         }
+
+    def test_dci_tracking_follows_dci_underlay_not_the_evpn_loopbacks(self) -> None:
+        """The loopbacks of the dci peering never become tracked interfaces."""
+        config = _get_multisite_config(_bgw_device(), "edge", 65100, vtep_source="loopback1")
+        assert config is not None
+        assert config["dci_interfaces"] == ["Ethernet1/49"]
+        device = _bgw_device()
+        device["capabilities"][0]["peerings"] = [
+            p for p in device["capabilities"][0]["peerings"] if p["peering_role"] == "dci"
+        ]
+        config = _get_multisite_config(device, "edge", 65100, vtep_source="loopback1")
+        assert config is not None
+        assert config["dci_interfaces"] == []
 
     def test_edge_bgw_tracks_fabric_on_interlink_only(self) -> None:
         device = _bgw_device()
@@ -594,3 +703,133 @@ class TestNxosMultisiteRendering:
         add_template_fields(bgp[0])
         rendered = nxos_env.get_template("common/cisco_nxos_bgp.j2").render(bgp=bgp, loopback_name="loopback0")
         assert "description dc10-bl01\n    peer-type fabric-external" in rendered
+
+
+def _dci_bgp(*, with_underlay: bool = True, with_evpn: bool = True) -> list[dict[str, Any]]:
+    """A BGW's BGP config as the transform builds it: one DCI circuit, both sessions."""
+    sessions: list[dict[str, Any]] = [
+        {
+            "name": "regular",
+            "session_type": "EBGP",
+            "ttl": 1,
+            "bfd_enabled": True,
+            "send_community": True,
+            "remote_ip": {"address": "10.1.0.0/31"},
+            "remote_as": {"asn": 65200},
+            "address_families": ["ipv4"],
+        }
+    ]
+    if with_underlay:
+        sessions.append(
+            _dci_underlay_session()
+            | {
+                "remote_ip": {"address": "fd00:200::1/127"},
+                "remote_as": {"asn": 65010},
+                "remote_device": "dc10-bl01",
+                "password": "key-1",
+                "maximum_routes": 16,
+            }
+        )
+    if with_evpn:
+        sessions.append(
+            _dci_session()
+            | {
+                "remote_ip": {"address": "fd00:10::1/128"},
+                "remote_as": {"asn": 65010},
+                "remote_device": "dc10-bl01",
+                "password": "key-1",
+                "update_source": "Loopback1",
+            }
+        )
+    config: dict[str, Any] = {
+        "local_as": {"asn": 65100},
+        "router_id": {"address": "10.0.0.1/32"},
+        "sessions": sessions,
+    }
+    config["peer_groups"] = _build_peer_groups(sessions)
+    add_template_fields(config)
+    return [config]
+
+
+class TestNxosDciRendering:
+    def test_dci_underlay_neighbour(self, nxos_env: jinja2.Environment) -> None:
+        rendered = nxos_env.get_template("common/cisco_nxos_bgp.j2").render(bgp=_dci_bgp(), loopback_name="loopback0")
+        assert "template peer-session DCI-UNDERLAY-PEERS-SESSION\n    bfd\n" in rendered
+        underlay = rendered.split("neighbor fd00:200::1\n")[1].split("  neighbor ")[0]
+        assert "inherit peer-session DCI-UNDERLAY-PEERS-SESSION" in underlay
+        assert "password key-1" in underlay
+        assert "peer-type" not in underlay
+        assert "update-source" not in underlay
+        assert "address-family ipv6 unicast" in underlay
+        assert "l2vpn evpn" not in underlay
+        assert "maximum-prefix 16" in underlay
+        assert "route-map RM-FABRIC-OUT out\n      route-map RM-DCI-IN in" in underlay
+
+    def test_dci_evpn_neighbour_is_multihop_from_its_loopback(self, nxos_env: jinja2.Environment) -> None:
+        rendered = nxos_env.get_template("common/cisco_nxos_bgp.j2").render(bgp=_dci_bgp(), loopback_name="loopback0")
+        assert "template peer-session DCI-PEERS-SESSION\n    ebgp-multihop 2\n" in rendered
+        session_template = rendered.split("template peer-session DCI-PEERS-SESSION")[1].split("  !")[0]
+        assert "bfd" not in session_template
+        assert "update-source" not in session_template
+        evpn = rendered.split("neighbor fd00:10::1\n")[1].split("  neighbor ")[0]
+        assert "peer-type fabric-external\n    password key-1\n    update-source Loopback1\n" in evpn
+        assert "inherit peer-session DCI-PEERS-SESSION" in evpn
+        assert "address-family l2vpn evpn" in evpn
+        assert "unicast" not in evpn
+        assert "RM-DCI-IN" not in evpn
+
+    def test_regular_underlay_neighbour_is_unchanged(self, nxos_env: jinja2.Environment) -> None:
+        rendered = nxos_env.get_template("common/cisco_nxos_bgp.j2").render(bgp=_dci_bgp(), loopback_name="loopback0")
+        regular = rendered.split("neighbor 10.1.0.0\n")[1].split("  neighbor ")[0]
+        assert regular == (
+            "    remote-as 65200\n    inherit peer-session UNDERLAY-PEERS-SESSION\n"
+            "    address-family ipv4 unicast\n      inherit peer-policy UNDERLAY-PEERS-POLICY\n    !\n"
+        )
+
+    def test_no_dci_lines_without_dci_sessions(self, nxos_env: jinja2.Environment) -> None:
+        rendered = nxos_env.get_template("common/cisco_nxos_bgp.j2").render(
+            bgp=_dci_bgp(with_underlay=False, with_evpn=False), loopback_name="loopback0"
+        )
+        assert "DCI" not in rendered
+        assert "update-source" not in rendered
+
+    def test_route_maps_only_when_a_session_asks(self, nxos_env: jinja2.Environment) -> None:
+        template = nxos_env.get_template("common/cisco_nxos_dci_route_maps.j2")
+        both = template.render(bgp=_dci_bgp(), loopback_name="loopback0", vxlan=_vxlan_ctx())
+        assert "route-map RM-FABRIC-OUT permit 10\n  match interface loopback0 loopback1 loopback100\n!" in both
+        assert "route-map RM-DCI-IN permit 10\n  set community no-export additive\n!" in both
+        evpn_only = template.render(bgp=_dci_bgp(with_underlay=False), loopback_name="loopback0", vxlan=_vxlan_ctx())
+        assert evpn_only == ""
+
+    def test_fabric_session_alone_defines_only_the_fabric_route_map(self, nxos_env: jinja2.Environment) -> None:
+        bgp = _dci_bgp(with_underlay=False, with_evpn=False)
+        bgp[0]["sessions"][0]["export_local_only"] = True
+        rendered = nxos_env.get_template("common/cisco_nxos_dci_route_maps.j2").render(
+            bgp=bgp, loopback_name="loopback0", vxlan=_vxlan_ctx()
+        )
+        assert "RM-FABRIC-OUT" in rendered
+        assert "RM-DCI-IN" not in rendered
+
+
+class TestNxosDciPortMtu:
+    @staticmethod
+    def _render(nxos_env: jinja2.Environment, interface: dict[str, Any], vxlan: dict[str, Any] | None) -> str:
+        return nxos_env.get_template("common/cisco_nxos_interface_ip.j2").render(interface=interface, vxlan=vxlan)
+
+    def test_dci_port_carries_its_mtu(self, nxos_env: jinja2.Environment) -> None:
+        interface = {"name": "Ethernet1/49", "mtu": 9216, "ip_addresses": [{"address": "fd00:200::/127"}]}
+        rendered = self._render(nxos_env, interface, _vxlan_ctx())
+        assert "  ipv6 address fd00:200::/127\n  mtu 9216" in rendered
+
+    def test_other_ports_keep_no_mtu_line(self, nxos_env: jinja2.Environment) -> None:
+        interface = {"name": "Ethernet1/1", "mtu": 9000, "ip_addresses": [{"address": "10.1.0.1/31"}]}
+        assert "mtu" not in self._render(nxos_env, interface, _vxlan_ctx())
+
+    def test_dci_port_without_an_mtu_renders_none(self, nxos_env: jinja2.Environment) -> None:
+        interface = {"name": "Ethernet1/49", "ip_addresses": [{"address": "fd00:200::/127"}]}
+        assert "mtu" not in self._render(nxos_env, interface, _vxlan_ctx())
+
+    def test_device_without_multisite_renders_no_mtu(self, nxos_env: jinja2.Environment) -> None:
+        interface = {"name": "Ethernet1/49", "mtu": 9216, "ip_addresses": [{"address": "10.1.0.1/31"}]}
+        assert "mtu" not in self._render(nxos_env, interface, {**_vxlan_ctx(), "multisite": None})
+        assert "mtu" not in self._render(nxos_env, interface, None)

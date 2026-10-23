@@ -104,18 +104,7 @@ interface Vlan{{ vlan.vlan_id }}
 route-map RM-CONN-2-BGP permit 10
   match interface {{ ([loopback_name] + (vxlan.multisite.advertise_interfaces if vxlan and vxlan.multisite else [])) | unique | join(' ') }}
 !
-{#- D5: the fabric session (FABRIC-PEERS, session.export_local_only) announces
-    only this box's own loopbacks (VTEP + site VIP), same match as the
-    redistribution above, and no next-hop-self. -#}
-{%- set _fabric = namespace(on=false) %}
-{%- for bgp_config in bgp %}
-{%- for session in bgp_config.sessions if session.get('export_local_only') %}{% set _fabric.on = true %}{% endfor %}
-{%- endfor %}
-{%- if _fabric.on %}
-route-map RM-FABRIC-OUT permit 10
-  match interface {{ ([loopback_name] + (vxlan.multisite.advertise_interfaces if vxlan and vxlan.multisite else [])) | unique | join(' ') }}
-!
-{%- endif %}
+{%- include 'common/cisco_nxos_dci_route_maps.j2' -%}
 {%- if vxlan and vxlan.l3_vni_mappings %}
 route-map RM-VRF-DIRECT-2-EVPN permit 10
 !

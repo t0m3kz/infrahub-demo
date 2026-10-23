@@ -1,0 +1,18 @@
+---
+# The Equinix account the Network Edge appliances of AM-NE are ordered under.
+#
+# `account_id` is the Equinix billing account number printed into the Terraform artifact (a demo value: it is
+# contract data, not a secret). `owner` is Internal (P028): the operator's own team receives the provider's order
+# notices, so the artifact's `notifications` are the notification_emails of P028 (data/bootstrap/02_providers.yml).
+# Licence tokens, API credentials and keys never live in Infrahub; they are Terraform variables.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudAccount
+  data:
+    - name: "equinix-network-edge"
+      account_id: "1000001"
+      description: "Equinix Network Edge billing account of the AM-NE virtual colocation"
+      environment: "p"
+      provider: "P016"
+      owner: "P028"

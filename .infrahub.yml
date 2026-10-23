@@ -359,8 +359,9 @@ check_definitions:
   - name: validate_physical_circuit_ports
     class_name: CheckPhysicalCircuitPorts
     file_path: checks/physical_circuit_ports.py
-  # Targetless: a virtual circuit's underlay chain spans several physical
-  # circuits, so one query reads every circuit of both kinds.
+  # Targetless: the rules span the carriers found on a virtual circuit's
+  # ports, so one query reads every physical circuit and every Tunnel,
+  # Interconnect and Handoff circuit.
   - name: validate_circuit_placement
     class_name: CheckCircuitPlacement
     file_path: checks/circuit_placement.py
@@ -929,10 +930,10 @@ generator_definitions:
         - generators/
         - utils/
   - name: add_virtual_circuit
-    file_path: generators/topology/circuit.py
+    file_path: generators/topology/virtual_circuit.py
     targets: virtual_circuits
     query: virtual_circuit_data
-    class_name: VirtualCircuitGenerator
+    class_name: VirtualCircuitSessionGenerator
     execute_in_proposed_change: false
     execute_after_merge: false
     parameters:

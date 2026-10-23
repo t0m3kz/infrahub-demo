@@ -9,7 +9,7 @@ spec:
   kind: TopologyDataCenter
   data:
     - name: DC10
-      parent: "DC"
+      parent: "Data Center"
       index: 1
       design: L
       fabric_templates:

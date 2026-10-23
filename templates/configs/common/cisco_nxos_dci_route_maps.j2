@@ -1,0 +1,22 @@
+{#- D5: the fabric session (FABRIC-PEERS) and the DCI underlay session
+    (DCI-UNDERLAY-PEERS) set session.export_local_only: they announce only this
+    box's own loopbacks (VTEP + site VIP), same match as the redistribution in
+    RM-CONN-2-BGP, and no next-hop-self. A DCI underlay session also sets
+    session.dci_inbound: what the other site sends is tagged no-export. -#}
+{%- set _local = namespace(out=false, dci_in=false) %}
+{%- for bgp_config in bgp %}
+{%- for session in bgp_config.sessions %}
+{%- if session.get('export_local_only') %}{% set _local.out = true %}{% endif %}
+{%- if session.get('dci_inbound') %}{% set _local.dci_in = true %}{% endif %}
+{%- endfor %}
+{%- endfor %}
+{%- if _local.out %}
+route-map RM-FABRIC-OUT permit 10
+  match interface {{ ([loopback_name] + (vxlan.multisite.advertise_interfaces if vxlan and vxlan.multisite else [])) | unique | join(' ') }}
+!
+{%- endif %}
+{%- if _local.dci_in %}
+route-map RM-DCI-IN permit 10
+  set community no-export additive
+!
+{%- endif -%}

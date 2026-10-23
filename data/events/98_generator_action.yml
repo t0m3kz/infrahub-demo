@@ -62,10 +62,10 @@ spec:
       description: Sync a virtual colocation into the routing group of its infrastructure_orchestrator
       generator: add_virtual_colocation_orchestrator_routing
     - name: run-circuit-generator
-      description: Validate a physical circuit and its customer/provider interfaces
+      description: Derive a physical circuit's facility locations
       generator: add_circuit
     - name: run-virtual-circuit-generator
-      description: Validate and register a virtual circuit and its endpoint interfaces
+      description: Build the BGP session(s) of an interconnect or handoff circuit
       generator: add_virtual_circuit
     - name: run-endpoint-generator
       description: Run Endpoint Connectivity Generator

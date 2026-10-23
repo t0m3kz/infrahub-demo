@@ -47,6 +47,7 @@ def _match_fields(rule: dict[str, Any]) -> list[tuple[str, str]]:
 
 
 def _rule_id(rule: dict[str, Any]) -> str:
+    """The rule name, as the test id."""
     return rule["name"]
 
 
@@ -231,3 +232,104 @@ def test_colocation_generators_are_registered_in_infrahub_yml() -> None:
         assert definition["class_name"] == class_name
         assert definition["file_path"] == file_path
         assert (ROOT / queries[query]).is_file()
+
+
+# ---------------------------------------------------------------------------
+# Circuits: a physical circuit is a pure carrier, the session kinds of a virtual circuit run add_virtual_circuit
+# ---------------------------------------------------------------------------
+
+
+def test_physical_circuit_rules_watch_creation_ends_and_status() -> None:
+    """add_circuit runs on creation, when `capabilities` change and when `status` changes, nothing else.
+
+    The status rule is what lets a carrier set to decommissioned (or back to active) reach, through add_circuit's
+    fan-out, the sessions riding it. `locations` (written by add_circuit itself, so a rule would loop) and
+    `circuit_type` (read by nothing) have no rule.
+    """
+    rules = _rules_for("TopologyPhysicalCircuit")
+    assert sorted(rules) == [
+        "trigger-circuit-on-created",
+        "trigger-circuit-on-interface-capabilities-updated",
+        "trigger-circuit-on-status-updated",
+    ]
+    assert {rule["action"] for rule in rules.values()} == {"run-circuit-generator"}
+    assert _match_fields(rules["trigger-circuit-on-interface-capabilities-updated"]) == [
+        ("CoreNodeTriggerRelationshipMatch", "capabilities")
+    ]
+    assert _match_fields(rules["trigger-circuit-on-status-updated"]) == [("CoreNodeTriggerAttributeMatch", "status")]
+    status_rule = rules["trigger-circuit-on-status-updated"]
+    assert status_rule["mutation_action"] == "updated"
+    assert status_rule["matches"]["data"] == [{"attribute_name": "status", "value_match": "any"}]
+    assert not rules["trigger-circuit-on-created"].get("matches")
+
+
+def test_the_circuit_action_runs_add_circuit_on_the_physical_circuits_group() -> None:
+    """The physical-circuit rules reach add_circuit, whose target group is physical_circuits."""
+    assert action_generators()["run-circuit-generator"] == "add_circuit"
+    assert definition_targets()["add_circuit"] == "physical_circuits"
+
+
+_SESSION_COMMON_RULES = {
+    "created": None,
+    "capabilities-updated": ("CoreNodeTriggerRelationshipMatch", "capabilities"),
+    "status-updated": ("CoreNodeTriggerAttributeMatch", "status"),
+}
+# What only a handoff circuit reads, beyond its ends and status.
+_HANDOFF_ONLY_RULES = {
+    "namespace-updated": ("CoreNodeTriggerRelationshipMatch", "ip_namespace"),
+    "password-updated": ("CoreNodeTriggerRelationshipMatch", "password"),
+    "maximum-routes-updated": ("CoreNodeTriggerAttributeMatch", "maximum_routes"),
+}
+
+
+def test_the_virtual_circuit_action_runs_the_session_generator_on_the_virtual_circuits_group() -> None:
+    """One action, one definition, one group for both session kinds."""
+    assert action_generators()["run-virtual-circuit-generator"] == "add_virtual_circuit"
+    assert definition_targets()["add_virtual_circuit"] == "virtual_circuits"
+
+
+@pytest.mark.parametrize(
+    ("node_kind", "slug", "extra"),
+    [
+        ("TopologyInterconnectCircuit", "interconnect-circuit", {}),
+        ("TopologyHandoffCircuit", "handoff-circuit", _HANDOFF_ONLY_RULES),
+    ],
+)
+def test_every_session_kind_has_its_own_rules(node_kind: str, slug: str, extra: dict[str, tuple[str, str]]) -> None:
+    """Per-kind rules (a rule on the TopologyVirtualCircuit generic is unprobed): created, the ends, the status,
+    and for a handoff what its generator also reads. `cloud_endpoint` is not read, so it has no rule."""
+    rules = _rules_for(node_kind)
+    expected = {**_SESSION_COMMON_RULES, **extra}
+    assert sorted(rules) == sorted(f"trigger-{slug}-on-{suffix}" for suffix in expected)
+    for suffix, match in expected.items():
+        rule = rules[f"trigger-{slug}-on-{suffix}"]
+        assert rule["action"] == "run-virtual-circuit-generator"
+        if match is None:
+            assert rule["mutation_action"] == "created" and not rule.get("matches")
+        else:
+            assert rule["mutation_action"] == "updated"
+            assert _match_fields(rule) == [match]
+
+
+def test_a_tunnel_circuit_and_the_generic_have_no_rule() -> None:
+    """The SD-WAN orchestrator owns a tunnel's routing, and it is not in the generator's group: a rule would raise."""
+    assert _rules_for("TopologyTunnelCircuit") == {}
+    assert _rules_for("TopologyVirtualCircuit") == {}
+
+
+def test_every_rule_of_the_session_action_is_on_a_session_kind() -> None:
+    """Only interconnect and handoff circuits trigger add_virtual_circuit; a tunnel or the generic would raise."""
+    kinds = {rule["node_kind"] for rule in trigger_rules() if rule["action"] == "run-virtual-circuit-generator"}
+    assert kinds == {"TopologyInterconnectCircuit", "TopologyHandoffCircuit"}
+
+
+def test_the_session_generator_is_registered_in_infrahub_yml() -> None:
+    """The definition names its class, file and query, and the query file exists."""
+    config = yaml.safe_load((ROOT / ".infrahub.yml").read_text())
+    definition = {d["name"]: d for d in config["generator_definitions"]}["add_virtual_circuit"]
+    queries = {query["name"]: query["file_path"] for query in config["queries"]}
+    assert definition["class_name"] == "VirtualCircuitSessionGenerator"
+    assert definition["file_path"] == "generators/topology/virtual_circuit.py"
+    assert definition["query"] == "virtual_circuit_data"
+    assert (ROOT / queries["virtual_circuit_data"]).is_file()
+    assert (ROOT / definition["file_path"]).is_file()

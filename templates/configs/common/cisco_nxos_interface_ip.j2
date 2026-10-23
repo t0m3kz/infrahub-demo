@@ -11,3 +11,8 @@
 {%- endif %}
 {%- endfor %}
 {%- endif %}
+
+{#- A DCI port (evpn multisite dci-tracking) carries the routed-port MTU the generator set. #}
+{%- if vxlan and vxlan.multisite and interface.name in vxlan.multisite.dci_interfaces and interface.mtu %}
+  mtu {{ interface.mtu }}
+{%- endif %}

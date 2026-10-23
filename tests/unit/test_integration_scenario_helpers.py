@@ -760,11 +760,20 @@ async def test_fetch_interconnect_inventory_parses_location_and_end_placement() 
     def value(v: Any) -> dict:
         return {"value": v}
 
-    def end(device: str, deployment: str, kind: str, parent: dict | None = None) -> dict:
+    def end(
+        device: str,
+        deployment: str,
+        kind: str,
+        parent: dict | None = None,
+        peers: list[dict] | None = None,
+        port: dict | None = None,
+    ) -> dict:
         return {
             "node": {
                 "id": f"if-{device}",
                 "name": value("Ethernet1/35"),
+                "capabilities": {"edges": [{"node": peer} for peer in peers or []]},
+                **(port or {}),
                 "device": {
                     "node": {
                         "id": f"dev-{device}",
@@ -812,12 +821,32 @@ async def test_fetch_interconnect_inventory_parses_location_and_end_placement() 
             ]
         },
     }
+
+    def carrier(circuit_id: str) -> dict:
+        return {
+            "__typename": "TopologyPhysicalCircuit",
+            "id": f"pc-{circuit_id}",
+            "circuit_id": value(circuit_id),
+            "status": value("active"),
+        }
+
+    # A handoff: our edge's sub-interface rides its PARENT's cross-connect, the DC-side end is cabled, not carried.
     virtual = {
         "id": "vc1",
-        "name": value("VC-C005-DC10-AWS-EUC1"),
-        "link_type": value("direct_connect_aws"),
-        "transport_mode": value("physical_backed"),
+        "__typename": "TopologyHandoffCircuit",
+        "name": value("HANDOFF-C005-DC10-AWS-EUC1"),
         "owner": owner,
+        "ip_namespace": {"node": {"id": "ns-prod", "name": value("PROD")}},
+        "maximum_routes": value(100),
+        "password": {"node": {"name": value("eqx-fr2-aws-vif-key")}},
+        "cloud_endpoint": {
+            "node": {
+                "id": "vif1",
+                "__typename": "CloudVirtualInterface",
+                "name": value("vif-1"),
+                "vlan_id": value(1000),
+            }
+        },
         "locations": {
             "edges": [
                 {
@@ -831,9 +860,45 @@ async def test_fetch_interconnect_inventory_parses_location_and_end_placement() 
                 },
             ]
         },
-        "physical_circuits": {"edges": [{"node": {"circuit_id": value("DF-DC10-EQXFR2")}}]},
-        "capabilities": {"edges": [end("bl-dc101101", "DC10", "TopologyDataCenter")]},
-        "cloud_endpoints": {"edges": []},
+        "capabilities": {
+            "edges": [
+                end(
+                    "bl-dc101101",
+                    "DC10",
+                    "TopologyDataCenter",
+                    peers=[
+                        # a segment on the port is no carrier; the same circuit twice counts once
+                        {"__typename": "ManagedVxlanSegment"},
+                        carrier("DF-DC10-EQXFR2"),
+                        carrier("DF-DC10-EQXFR2"),
+                    ],
+                    port={
+                        "__typename": "DcimPhysicalInterface",
+                        "cable": {"node": {"id": "cable1"}},
+                        "ip_address": {"node": {"address": value("10.255.128.1/31")}},
+                    },
+                ),
+                end(
+                    "eg-fr201",
+                    "FR2",
+                    "TopologyColocationZone",
+                    parent=metro,
+                    port={
+                        "__typename": "DcimVirtualInterface",
+                        "name": value("Ethernet1/13.1000"),
+                        "ip_address": {"node": None},
+                        "parent_interface": {
+                            "node": {
+                                "id": "if-parent",
+                                "name": value("Ethernet1/13"),
+                                "cable": {"node": None},
+                                "capabilities": {"edges": [{"node": carrier("XC-EQXFR2-AWS-EUC1")}]},
+                            }
+                        },
+                    },
+                ),
+            ]
+        },
     }
     client = MagicMock()
     client.execute_graphql = AsyncMock(
@@ -885,13 +950,65 @@ async def test_fetch_interconnect_inventory_parses_location_and_end_placement() 
             "deployment_parent_id": "id-FR",
         },
     ]
-    (overlay,) = inventory["virtual"]
-    assert (overlay["id"], overlay["owner"], overlay["owner_id"]) == ("vc1", "Drentec BV", "org-C005")
-    (footprint,) = overlay["location_nodes"]
+    (handoff,) = inventory["virtual"]
+    assert (handoff["id"], handoff["kind"], handoff["owner"], handoff["owner_id"]) == (
+        "vc1",
+        "TopologyHandoffCircuit",
+        "Drentec BV",
+        "org-C005",
+    )
+    (footprint,) = handoff["location_nodes"]
     assert (footprint["kind"], footprint["parent_id"], footprint["parent_name"], footprint["owner_id"]) == (
         "TopologyCustomerDC",
         "id-DC10",
         "DC10",
         "org-C005",
     )
-    assert [device["deployment_name"] for device in overlay["end_devices"]] == ["DC10"]
+    assert [device["deployment_name"] for device in handoff["end_devices"]] == ["DC10", "FR2"]
+    # the carrier is derived from the ports and their parents, each circuit once; ends are sorted pairs
+    assert handoff["carrier"] == ["DF-DC10-EQXFR2", "XC-EQXFR2-AWS-EUC1"]
+    assert handoff["ends"] == [("bl-dc101101", "Ethernet1/35"), ("eg-fr201", "Ethernet1/13.1000")]
+    assert [(c["circuit_id"], c["status"]) for c in handoff["carriers"]] == [
+        ("DF-DC10-EQXFR2", "active"),
+        ("XC-EQXFR2-AWS-EUC1", "active"),
+    ]
+    physical_end, virtual_end = handoff["end_nodes"]
+    assert (physical_end["kind"], physical_end["address"], physical_end["cabled"], physical_end["parent_id"]) == (
+        "DcimPhysicalInterface",
+        "10.255.128.1/31",
+        True,
+        None,
+    )
+    assert (virtual_end["kind"], virtual_end["address"], virtual_end["cabled"]) == ("DcimVirtualInterface", None, False)
+    assert (virtual_end["parent_id"], virtual_end["parent_name"]) == ("if-parent", "Ethernet1/13")
+    assert [c["circuit_id"] for c in virtual_end["carriers"]] == ["XC-EQXFR2-AWS-EUC1"]
+    assert (handoff["ip_namespace"], handoff["maximum_routes"], handoff["password"]) == (
+        "PROD",
+        100,
+        "eqx-fr2-aws-vif-key",
+    )
+    assert (handoff["cloud_endpoint"], handoff["cloud_endpoint_vlan"]) == ("vif-1", 1000)
+
+
+async def test_fetch_interconnect_inventory_leaves_the_handoff_fields_empty_on_the_other_kinds() -> None:
+    """A tunnel or an interconnect has no namespace, limit, key or cloud endpoint."""
+    tunnel = {
+        "id": "vc2",
+        "__typename": "TopologyTunnelCircuit",
+        "name": {"value": "C001-OFFICE-SDWAN-FR2"},
+        "owner": {"node": None},
+        "locations": {"edges": []},
+        "capabilities": {"edges": []},
+    }
+    client = MagicMock()
+    client.execute_graphql = AsyncMock(
+        return_value={"TopologyPhysicalCircuit": {"edges": []}, "TopologyVirtualCircuit": {"edges": [{"node": tunnel}]}}
+    )
+
+    inventory = await fetch_interconnect_inventory(client=client, branch="main")
+
+    (circuit,) = inventory["virtual"]
+    assert circuit["kind"] == "TopologyTunnelCircuit"
+    assert (circuit["owner"], circuit["ends"], circuit["carrier"], circuit["end_nodes"]) == (None, [], [], [])
+    assert (circuit["ip_namespace"], circuit["maximum_routes"], circuit["password"]) == (None, None, None)
+    assert (circuit["cloud_endpoint"], circuit["cloud_endpoint_vlan"]) == (None, None)

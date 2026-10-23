@@ -7,7 +7,7 @@ spec:
     - name: DC6
       index: 1
       design: L
-      parent: DC
+      parent: "Data Center"
       routing_strategy: ebgp-ibgp
       underlay_protocol: ipv6
       naming_convention: standard

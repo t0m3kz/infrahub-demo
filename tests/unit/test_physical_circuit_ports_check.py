@@ -89,7 +89,7 @@ class TestSharedPort:
 
 
 class TestEndKind:
-    @pytest.mark.parametrize("typename", ["DcimVirtualInterface", "DcimLAGInterface", "TopologyVirtualCircuit"])
+    @pytest.mark.parametrize("typename", ["DcimVirtualInterface", "DcimLAGInterface", "CloudVirtualInterface"])
     def test_an_end_that_is_not_a_physical_interface_is_an_error(self, typename: str) -> None:
         findings = _run(_circuit("DF-A", BL, _port("p-v", "eg-fr201", "Vlan10", typename)))
 

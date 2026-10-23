@@ -442,6 +442,70 @@ class TestTerraformAwsResources:
         assert "gateway_id             = aws_internet_gateway.prod_igw.id" in result
 
 
+def _aws_with_direct_connects(*connections: tuple[str, str]) -> dict:
+    """AWS data with one VIF per (name, connection_type) Direct Connect."""
+    data = _aws_cleaned()
+    account = data["CloudVirtualNetwork"][0]["account"]
+    data["CloudDirectConnect"] = [
+        {
+            "id": f"dx-{name}",
+            "name": name,
+            "bandwidth": "1Gbps",
+            "connection_type": connection_type,
+            "account": account,
+            "region": {"name": "eu-central-1"},
+        }
+        for name, connection_type in connections
+    ]
+    data["CloudVirtualInterface"] = [
+        {
+            "id": f"vif-{name}",
+            "name": f"{name}-vif",
+            "vif_type": "transit",
+            "vlan_id": 1100,
+            "direct_connect": {"name": name},
+            "virtual_network": None,
+            "transit_gateway": None,
+        }
+        for name, _ in connections
+    ]
+    return data
+
+
+class TestTerraformAwsDirectConnect:
+    """A hosted connection is ordered through the partner, so only a dedicated one is provisioned."""
+
+    @pytest.mark.asyncio
+    async def test_dedicated_connection_is_rendered(self) -> None:
+        """A dedicated Direct Connect renders an aws_dx_connection."""
+        tf = _make_terraform()
+        data = _aws_with_direct_connects(("prod-dx", "dedicated"))
+        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=data):
+            result = await tf.transform({})
+        assert 'resource "aws_dx_connection" "prod_dx"' in result
+
+    @pytest.mark.asyncio
+    async def test_hosted_connection_is_skipped(self) -> None:
+        """A hosted Direct Connect renders nothing, not an aws_dx_connection with an empty location."""
+        tf = _make_terraform()
+        data = _aws_with_direct_connects(("dx-eqx-am-euc1", "hosted"))
+        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=data):
+            result = await tf.transform({})
+        assert "aws_dx_connection" not in result
+        assert "dx_eqx_am_euc1" not in result
+
+    @pytest.mark.asyncio
+    async def test_hosted_is_skipped_while_dedicated_alongside_is_rendered(self) -> None:
+        """Only the dedicated connection of a mixed account is rendered."""
+        tf = _make_terraform()
+        data = _aws_with_direct_connects(("prod-dx", "dedicated"), ("dx-eqx-am-euc1", "hosted"))
+        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=data):
+            result = await tf.transform({})
+        assert result.count('resource "aws_dx_connection"') == 1
+        assert 'resource "aws_dx_connection" "prod_dx"' in result
+        assert "dx_eqx_am_euc1" not in result
+
+
 class TestTerraformAwsMultiRegion:
     @pytest.mark.asyncio
     async def test_single_region_no_alias(self) -> None:

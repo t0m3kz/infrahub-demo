@@ -14,7 +14,7 @@ spec:
   kind: TopologyDataCenter
   data:
     - name: DC12
-      parent: "DC"
+      parent: "Data Center"
       index: 12
       design: L
       fabric_templates:

@@ -1,0 +1,32 @@
+---
+# The shared SD-WAN gateway's own internet access (EQX-FR2-SDWAN-GW1, 02_colo/equinix/fr/04_sdwan_gateway.yml):
+# eth1 -> a customer port of Lumen's Frankfurt provider edge. Unowned shared underlay like the transit circuits
+# (../06_internet/04_circuits.yml), unlike an office's INET-<office> circuit, which add_sdwan_edge creates and owns.
+# The gateway has its own internet connection, besides the cable to the cage router. No generator step reads it:
+# it is the carrier of the gateway's public port eth1, which every tunnel of the gateway ends on, and
+# checks/circuit_placement.py requires each tunnel end to ride an internet circuit with an end at an ISP.
+#
+# MODELLING SIMPLIFICATION: no addressing or BGP is modelled for this access (as for INET-<office>), it is a
+# physical connection only. The gateway's real reachability is its eth0 to the cage router.
+#
+# Its own folder, loaded after 06_internet/02_devices.yml (the ISP PE) and after the gateway (foundation stage):
+# 06_internet is not an option, it pairs every circuit there with a transit peering. Only the cage is listed:
+# add_circuit derives the ISP end from the provider edge's `deployment`.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyPhysicalCircuit
+  data:
+    - circuit_id: "INET-LUMEN-EQXFR2-GW"
+      member_of_groups: [physical_circuits]
+      name: "INET-LUMEN-EQXFR2-GW"
+      circuit_type: internet
+      status: active
+      bandwidth: 1000
+      provider: "P014"
+      description: "Lumen internet access of the shared SD-WAN gateway in the Equinix FR2 cage, 1G"
+      locations:
+        - "FR2"
+      capabilities:
+        - ["EQX-FR2-SDWAN-GW1", "eth1"]
+        - ["EXT-LUMEN-FRA1", "et-0/0/1"]

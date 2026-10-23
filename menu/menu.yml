@@ -221,6 +221,7 @@ spec:
                   label: Virtual Circuits
                   kind: TopologyVirtualCircuit
                   icon: "mdi:cloud-sync"
+                  description: "Tunnel, Interconnect and Handoff circuits: the connections routing is generated on"
 
           # --------- Virtualisation Inventory ---------
           - namespace: Virt

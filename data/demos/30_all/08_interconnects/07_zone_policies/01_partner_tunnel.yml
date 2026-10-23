@@ -1,0 +1,95 @@
+---
+# Partner-acme B2B extranet: C001's IPsec tunnel between the shared SD-WAN gateway and the partner
+# Acme Logistics, as a TopologyTunnelCircuit (an inventory record: no address, no session; the
+# partner's IPsec endpoint is configured by the partner and the gateway's by its orchestrator).
+# Most B2B partner integrations really are IPsec over the internet, not a private cross-connect, so
+# nothing here is a new dedicated physical circuit to the partner.
+#
+# The partner is modelled the way the other parties are, as a stub the demo does not configure:
+#
+#   PARTNER-ACME     TopologyExternalProviders (provider_type partner) under the "Partners" label: the
+#                    facility the partner's device sits in, so that `deployment` is a derivable facility
+#                    for the internet circuit below.
+#   EXT-ACME-EDGE1   the partner's border router, a DcimPhysicalDevice on the generic provider-edge
+#                    template MX204_ISP_PE (like the ISP and cloud stubs), owned by ACME (P031, the
+#                    partner organization of data/bootstrap/02_providers.yml), in no device group.
+#   INET-ACME-COGENT the partner's own internet access, from EXT-ACME-EDGE1 et-0/0/0 to a free
+#                    `customer` port of Cogent's Frankfurt edge (et-0/0/1; GW1 uses Lumen's et-0/0/1).
+#                    Shared underlay, unowned. A tunnel end must ride an internet circuit with an end
+#                    at an ISP or partner topology (checks/circuit_placement.py): the gateway's eth1
+#                    rides INET-LUMEN-EQXFR2-GW (../08_gateway_access/01_circuit.yml) and the partner's
+#                    et-0/0/0 rides this one, so each end of the tunnel has its own internet access.
+#                    The circuit lists only ISP-COGENT: add_circuit derives PARTNER-ACME from the
+#                    router's deployment.
+#
+# The tunnel: owner C001 (the owner of its office location C001-OFFICE, as a tunnel's owner must be)
+# and the gateway's zone FR2, the same pair of locations as the office's own SD-WAN tunnel
+# C001-OFFICE-SDWAN-FR2 (generators/topology/sdwan_edge.py): an owned tunnel has a location of the owner's
+# office, and the other is where the gateway sits. The partner end is not a location of the tunnel, it
+# is the tunnel's second port, whose device is deployed in PARTNER-ACME. Ends: the gateway's public
+# port eth1 (shared by every tunnel of the gateway: a tunnel is exempt from the one-port-one-session
+# rule) and EXT-ACME-EDGE1 et-0/0/0. There are no sub-interfaces for tunnels, so nothing is added to
+# the gateway. Not in `virtual_circuits`: no session is generated. Provider VeloCloud (P035), the
+# overlay operator whose gateway terminates it, like the office tunnels.
+#
+# Loaded with the interconnects, after the compute_and_customers stage whose add_sdwan_edge run
+# created C001-OFFICE, and after ../06_internet/02_devices.yml (EXT-COGENT-FRA1). The gateway's own
+# access circuit (../08_gateway_access) loads after this file, which is fine: a tunnel builds nothing
+# when it is created, and the placement check reads the final state.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyExternalProviders
+  data:
+    - name: PARTNER-ACME
+      parent: "Partners"
+      provider_type: partner
+      status: active
+      provider: "P031"
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: "EXT-ACME-EDGE1"
+      object_template: MX204_ISP_PE
+      owner: "P031"
+      description: "Acme Logistics border router (the partner end of C001-PARTNER-ACME-FR2)"
+      deployment: "PARTNER-ACME"
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyPhysicalCircuit
+  data:
+    - circuit_id: "INET-ACME-COGENT"
+      member_of_groups: [physical_circuits]
+      name: "INET-ACME-COGENT"
+      circuit_type: internet
+      status: active
+      bandwidth: 1000
+      provider: "P023"
+      description: "Cogent internet access of the partner Acme Logistics, 1G"
+      locations:
+        - "ISP-COGENT"
+      capabilities:
+        - ["EXT-ACME-EDGE1", "et-0/0/0"]
+        - ["EXT-COGENT-FRA1", "et-0/0/1"]
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyTunnelCircuit
+  data:
+    - name: "C001-PARTNER-ACME-FR2"
+      status: active
+      provider: "P035"
+      owner: "C001"
+      description: "Nordix to B2B extranet partner Acme Logistics, IPsec over the internet, via the SD-WAN gateway"
+      locations:
+        - "C001-OFFICE"
+        - "FR2"
+      capabilities:
+        - ["EQX-FR2-SDWAN-GW1", "eth1"]
+        - ["EXT-ACME-EDGE1", "et-0/0/0"]

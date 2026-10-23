@@ -235,7 +235,7 @@ class MyCheck(InfrahubCheck):
 | --------- | ----- |
 | Managed | On-prem services and the shared generics `ManagedGeneric` (name, description, status), `ManagedGenericDevice` (the device `capabilities` edge), `ManagedGenericInterfaces` (the interface-side `capabilities` edge; its identifier stays `interface_capabilities`), `ManagedNetworkSegment` and `ManagedLoadBalancer` |
 | Cloud | Provider-hosted resources (public cloud and provider-hosted network services); every resource inherits `CloudResource`, except `CloudNetworkAppliance`, a provider-hosted network function (Equinix Network Edge) that inherits the device generics (`DcimDevice`, `DcimCapabilities`) so its interfaces, BGP and HA stay device-shaped |
-| Topology | Deployments (`TopologyDataCenter`, `TopologyPod`, `TopologyColocationMetro`, ...), design elements, circuits (`TopologyPhysicalCircuit`, `TopologyVirtualCircuit`) and the tenant footprints `TopologyCustomer*` |
+| Topology | Deployments (`TopologyDataCenter`, `TopologyPod`, `TopologyColocationMetro`, ...), design elements, circuits (`TopologyPhysicalCircuit` and the virtual-circuit kinds `TopologyTunnelCircuit`, `TopologyInterconnectCircuit`, `TopologyHandoffCircuit`) and the tenant footprints `TopologyCustomer*` |
 | Dcim, Ipam, Location, Organization | Devices/interfaces/cables, prefixes/addresses/namespaces, geography, providers/customers |
 | Routing | Shared routing objects (`RoutingAutonomousSystem`, `RoutingOSPFArea`, `RoutingPassword`) |
 | Security, Loadbalancer, Proxy, App, Virt | Functional domains |
@@ -252,20 +252,44 @@ class MyCheck(InfrahubCheck):
 - **Office**: `TopologyCustomerOffice` is not a `TopologyCustomer`. The owner sits directly on it, its name is
   `{OWNER}-OFFICE` (for example `C005-OFFICE`), it is always PROD (no `environment`) and its parent is the
   "Campus and Office" `TopologyLabel`.
-- **Circuit placement**: a physical circuit's `locations` peer `TopologyFacility`:
-  the DC (never a pod, rack or footprint), the colocation cage `TopologyColocationZone` or the provider-hosted
-  `TopologyVirtualColocation` (never the metro), the `TopologyCloudRegion` (never a zone or `TopologyCloud`), the ISP `TopologyExternalProviders`, the
+- **Circuit placement**: a physical circuit is a pure carrier (fibre, cross-connect, internet access) with no role
+  and no session; its `locations` peer `TopologyFacility`: the DC (never a pod, rack or footprint), the colocation
+  cage `TopologyColocationZone` or the provider-hosted `TopologyVirtualColocation` (never the metro), the
+  `TopologyCloudRegion` (never a zone or `TopologyCloud`), the ISP `TopologyExternalProviders`, the
   `TopologySaasRegion` or the `TopologyCustomerOffice`. Data lists only the cage; `add_circuit` adds every end
   whose endpoint device's `deployment` is a facility (border leaf -> DC, provider router -> region, ISP PE -> ISP),
   when the circuit is created or its ends change: nothing re-runs it on a later `deployment` edit (the check reports
   it). A physical circuit is shared underlay, unowned, except an office's access circuit (`add_sdwan_edge`'s
-  `INET-<office>`), owned by the office's owner.
-  A virtual circuit's `locations` peer `TopologyConnectableLocation`: an owned one ends on a footprint of its
-  `owner`, an unowned one on facilities, and its `physical_circuits` chain is contiguous end to end. A
-  provider-managed one may surface on one port (`VC-C001-EQXFR-AWS-EUC1`: the cage edge; its cloud end is a
-  `CloudVirtualInterface`).
-  `checks/circuit_placement.py` guards what the schema cannot (cage parent = device metro, owner, chain).
-  `locations` is declared on each circuit node, not on `TopologyCircuit`: an inherited peer cannot be narrowed.
+  `INET-<office>`), owned by the office's owner. `locations` is declared on each circuit node, not on
+  `TopologyCircuit`: an inherited peer cannot be narrowed. `checks/circuit_placement.py` guards what the schema
+  cannot, per kind:
+  - **Physical**: exactly two distinct locations, one per end device's `deployment`; owned exactly when it ends on a
+    `TopologyCustomerOffice`.
+  - **Tunnel**: two locations and two ports, owned by the office's owner, every end port rides a live internet
+    physical circuit of its own (no contiguity rule).
+  - **Interconnect**: unowned, two locations and two ports, both ports carried, the carriers found at the two ports
+    form one contiguous path between the two locations and a single carrier is pure fibre (its two ends are the
+    circuit's two ports); each end device has exactly one `overlay` `ManagedBGP`.
+  - **Handoff**: one or two locations (both ends may sit in one cage); at least one end on a physical device is
+    carried (a live physical circuit or a `DcimCable` on the port or its `parent_interface`); both ports are
+    sub-interfaces `<port>.<vlan>` with the same VLAN (the cloud endpoint's `vlan_id` too).
+  - **Session circuits (Interconnect, Handoff)**: a port is an end of at most one of them. **Environment class**:
+    circuits meeting at a device share a class (prod vs non-prod; a handoff takes its `ip_namespace`'s
+    `namespace_type`, a tunnel is PROD, an interconnect has none).
+- **Virtual circuits**: `TopologyVirtualCircuit` (generic) is the connection between topologies on which routing is
+  generated or recorded; its role is its KIND, never an attribute. `TopologyTunnelCircuit` (SD-WAN office edge <->
+  gateway `eth1`, and the partner tunnel; inventory only, no session, owner = the office),
+  `TopologyInterconnectCircuit` (DCI, unowned: a `/31` or `/127` eBGP underlay plus a loopback-to-loopback EVPN
+  multihop session keyed per circuit, MTU 9216) and `TopologyHandoffCircuit` (our edge sub-interface <-> a party
+  device sub-interface in one environment namespace: cloud on-ramps, Equinix/Megaport, the SD-WAN gateway LAN; a `/31`
+  from `Handoff-<namespace>-IPv4` and one eBGP session; the cloud or provider side address comes from OUR pool only,
+  and for AWS Direct Connect the customer specifies the peer IPs). One generator, `add_virtual_circuit`
+  (`VirtualCircuitSessionGenerator`), builds the sessions of Interconnect and Handoff circuits; `add_circuit` only
+  derives physical locations and fans out to it. The carrier of a virtual circuit is derived, never listed: the
+  physical circuits (or a `DcimCable` inside one facility) on its port or its `parent_interface`
+  (`utils/circuit_underlay.py`). The only role that is an output is `ManagedBGPPeering.peering_role` (`regular`,
+  `dci`, `dci-underlay`, `fabric`, `overlay`, `underlay`). The tenant impact of a fibre is a graph traversal (circuit ->
+  ports -> segments, peerings, circuits; filter `capabilities` by kind), not a per-tenant circuit.
 - **DC service tier**: `TopologyCustomerTemplateDC` (referenced by the footprint's `design`, for example `M_DC`)
   holds `dedicated_firewall`, `dedicated_loadbalancer`, `max_segments`, `ports_25g` and `ports_100g` (0 = no
   host-facing ports of that speed). `checks/customer_quota.py` enforces the segment and port numbers; a footprint
@@ -504,13 +528,13 @@ uv run pytest --cov=.
 ### Which integration run a change needs
 
 Integration runs go through `uv run invoke test-integration` (see the `infrahub-running-integration-tests` skill), one
-stack at a time. The full 30_all subset is `test_01, 02, 59, 60, 61, 62, 64, 65`; `test_65` (idempotency) is the last
-~20 of its ~55 minutes. Match the run to the change:
+stack at a time. The full 30_all subset is `test_01, 02, 59, 60, 61, 62, 64, 65, 66`; `test_65` (idempotency) is the last
+~20 of its ~55 minutes, `test_66` (circuit lifecycle, mutates the branch) runs after it. Match the run to the change:
 
 | Change touches | Run |
 | --- | --- |
-| Generators (including their helpers), schema, `data/`, or queries used by generators | Full subset **including `test_65`** |
-| Templates, transforms, checks and their validation queries | Subset `01, 02, 59–64` (no `test_65`) plus the smoke golden diff |
+| Generators (including their helpers), schema, `data/`, or queries used by generators | Full subset **including `test_65` and `test_66`** (a generator's cleanup is only proven by `test_66`) |
+| Templates, transforms, checks and their validation queries | Subset `01, 02, 59–64` (no `test_65`, no `test_66`) plus the smoke golden diff |
 | Docs, tests only | Unit + smoke |
 
 Always, after any run that registers a new check or transform query: run that query against the settled stack
@@ -821,7 +845,7 @@ async def main():
             TopologyVirtualCircuit {
                 edges {
                     node {
-                        link_type { value }
+                        __typename
                         provider {
                             node {
                                 name { value }

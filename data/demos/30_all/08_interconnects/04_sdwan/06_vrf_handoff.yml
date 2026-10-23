@@ -1,48 +1,57 @@
 ---
 # L3 handoff between the SD-WAN gateway and the cage's EVPN Multi-Site border
-# gateway, in VRF PROD. This is how the C005 office (Amsterdam Branch) reaches
+# gateway, in namespace PROD. This is how the C005 office (Amsterdam Branch) reaches
 # colo-services-stretch: office -> SD-WAN overlay -> GW1 -> eBGP in PROD ->
 # eg-fr201 -> EVPN type-5 -> DC10. The segment itself is never extended to the
 # office at L2; only its PROD prefix is.
 #
-# Rides the same physical path as VC-SDWAN-FR2-AWS-EUC1 (GW1 eth0 <->
-# eg-fr201 Ethernet1/13, see 05_overlays.yml) as a dot1q sub-interface on each
-# side. VLAN 1900 sits outside the SD-WAN tunnel-id pool (2000-9999) the
-# generated eth0.<tunnel_id> terminations draw from, so it never collides with one.
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: IpamPrefix
-  data:
-    - prefix: "10.255.5.0/31"
-      description: "eg-fr201 <-> EQX-FR2-SDWAN-GW1 PROD handoff"
-      status: active
-      ip_namespace: "PROD"
----
+# The per-office tunnels are not here: add_sdwan_edge (generators/topology/
+# sdwan_edge.py) builds each office's `<office>-SDWAN-FR2` tunnel circuit and its
+# `INET-<office>` internet underlay when the office opts in with sdwan_gateway. The
+# gateway has no backhaul circuit into the cloud: the AWS leg is the handoff of
+# ../05_cloud_endpoints/00_vif_handoff.yml, not the gateway's.
+#
+# GW1 reaches eg-fr201 over its own cage port: eth0 <-> Ethernet1/12, a cable in one
+# cage (../01_colo_onramp/05_cage_cabling.yml, loaded earlier on purpose), and a dot1q
+# sub-interface on each side (VLAN 1900). Ethernet1/13 is the AWS cross-connect and is not shared.
+#
+# The circuit is the handoff and nothing else is authored for the session. The two
+# sub-interfaces carry no address: add_virtual_circuit (generators/topology/virtual_circuit.py)
+# allocates a /31 from Handoff-PROD-IPv4 (data/bootstrap/26_handoff_pools.yml), addresses
+# BOTH ends from it (eg-fr201, with the overlay process, the lower) and upserts the eBGP
+# session HANDOFF-FR2-SDWAN-GW1-PROD-bgp between eg-fr201's overlay process and
+# EQX-FR2-SDWAN-GW1-bgp.
+#
+# Everything the generator reads is declared ahead of the circuit, which is last in this
+# file: the sub-interfaces, GW1's ASN, its loopback router-id, its BGP process and the key.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: DcimVirtualInterface
   data:
-    - name: "Ethernet1/13.1900"
+    - name: "Ethernet1/12.1900"
       device: "eg-fr201"
       role: uplink
       status: active
       description: "PROD handoff to EQX-FR2-SDWAN-GW1"
-      parent_interface: ["eg-fr201", "Ethernet1/13"]
-      ip_address:
-        data:
-          address: "10.255.5.0/31"
-          ip_namespace: "PROD"
+      parent_interface: ["eg-fr201", "Ethernet1/12"]
     - name: "eth0.1900"
       device: "EQX-FR2-SDWAN-GW1"
       role: uplink
       status: active
       description: "PROD handoff to eg-fr201"
       parent_interface: ["EQX-FR2-SDWAN-GW1", "eth0"]
+    # GW1's router-id: a loopback, not a handoff address (those are generated at circuit
+    # creation). 10.255.64.0/24 holds the loopbacks of the party devices modelled as stubs
+    # (see ../05_cloud_endpoints/00_vif_handoff.yml), clear of the handoff pools.
+    - name: "Loopback0"
+      device: "EQX-FR2-SDWAN-GW1"
+      role: loopback
+      status: active
+      description: "Router-id of the SD-WAN gateway"
       ip_address:
         data:
-          address: "10.255.5.1/31"
+          address: "10.255.64.2/32"
           ip_namespace: "PROD"
 ---
 # 2-byte private ASN: every fabric/cage ASN here is 4-byte (42xxxxxxxx), so
@@ -56,8 +65,10 @@ spec:
       description: "EQX-FR2-SDWAN-GW1 AS (PROD handoff)"
 ---
 # GW1's own BGP process. Its config is pushed by the Orchestrator, not by a
-# transform here — this exists so the peering below has a remote AS and a
-# second endpoint, and so eg-fr201's transform can render its side.
+# transform here — this exists so the generated session has a remote AS (the party
+# ASN of a handoff is this process's local_as) and a second endpoint, and so
+# eg-fr201's transform can render its side. It is GW1's only ManagedBGP process,
+# which is how the generator picks it.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -66,7 +77,7 @@ spec:
     - name: "EQX-FR2-SDWAN-GW1-bgp"
       status: active
       local_as: "AS65028"
-      router_id: ["10.255.5.1/31", "PROD"]
+      router_id: ["10.255.64.2/32", "PROD"]
       capabilities:
         - "EQX-FR2-SDWAN-GW1"
 ---
@@ -82,37 +93,38 @@ spec:
       description: "BGP auth key for the eg-fr201 <-> EQX-FR2-SDWAN-GW1 PROD handoff"
       password: "demo-eqx-fr2-sdwan-handoff"
 ---
-# The local interface's address being in PROD (not `default`) is what makes
-# transforms/helpers/bgp.py render this under `vrf PROD` on eg-fr201, outside
-# every peer group. peering_role regular there makes it an external tenant-VRF
-# peer, filtered like the cloud VIF (../05_cloud_endpoints/03_vif_handoff.yml):
-# RM-<name>-IN accepts only the far end's registered prefixes and
-# RM-PROD-EXTERNAL-OUT announces only PROD's on-prem segment prefixes. The far
-# end here is EQX-FR2-SDWAN-GW1, so the registered prefixes are the PROD
-# lan_prefixes and the PROD segments hosted by every TopologyCustomerOffice whose
+# The handoff circuit, in PROD. Unowned shared on-ramp: both ends are in the FR2 cage (the
+# gateway and the cage router), so the one location is the cage, and the carrier is the cable
+# of ../01_colo_onramp/05_cage_cabling.yml. Provider: VeloCloud (P035), the SD-WAN
+# service provider, who operates the gateway.
+#
+# The session is the generated HANDOFF-FR2-SDWAN-GW1-PROD-bgp, peering_role regular on a
+# PROD address: the local interface's address being in PROD (not `default`) is what makes
+# transforms/helpers/bgp.py render it under `vrf PROD` on eg-fr201, outside every peer
+# group. peering_role regular there makes it an external tenant-VRF peer, filtered like
+# the cloud VIF (../05_cloud_endpoints/00_vif_handoff.yml): RM-<name>-IN accepts only the
+# far end's registered prefixes and RM-PROD-EXTERNAL-OUT announces only PROD's on-prem
+# segment prefixes. The far end here is EQX-FR2-SDWAN-GW1, so the registered prefixes are
+# the PROD lan_prefixes and the PROD segments hosted by every TopologyCustomerOffice whose
 # sdwan_gateway is GW1 (C002's lan_prefixes 10.210.2.0/24, C005's hosted office-lan
-# segment; get_external_peer_prefixes in transforms/helpers/bgp.py). An office
-# with neither adds nothing: C001, C003 and C015 are behind GW1 too but register none.
+# segment; get_external_peer_prefixes in transforms/helpers/bgp.py). An office with
+# neither adds nothing: C001, C003 and C015 are behind GW1 too but register none.
+# No cloud_endpoint: this is no cloud service.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: ManagedBGPPeering
+  kind: TopologyHandoffCircuit
   data:
-    - name: "VRF-PROD-EQXFR2-SDWAN"
+    - name: "HANDOFF-FR2-SDWAN-GW1-PROD"
+      member_of_groups: [virtual_circuits]
+      status: active
+      provider: "P035"
       description: "PROD handoff eg-fr201 <-> EQX-FR2-SDWAN-GW1 (office routes into the stretched segments)"
-      session_type: EBGP
-      peering_role: regular
-      ttl: 1
-      bfd_enabled: false
-      send_community: true
-      send_extended_community: true
+      ip_namespace: "PROD"
       maximum_routes: 100
-      address_families:
-        - ["ipv4", "unicast"]
-      bgp_processes:
-        - "eg-fr201-bgp-overlay"
-        - "EQX-FR2-SDWAN-GW1-bgp"
       password: "eqx-fr2-sdwan-handoff-key"
+      locations:
+        - "FR2"
       capabilities:
-        - ["eg-fr201", "Ethernet1/13.1900"]
+        - ["eg-fr201", "Ethernet1/12.1900"]
         - ["EQX-FR2-SDWAN-GW1", "eth0.1900"]

@@ -2,7 +2,7 @@
 # SD-WAN hub: one shared gateway in the Equinix FR2 cage, managed by one shared
 # Orchestrator (VCO). Every branch office reaches it through
 # generators/topology/sdwan_edge.py (add_sdwan_edge), which builds the office's
-# Edge, internet underlay, tunnel and the gateway's tunnel sub-interface.
+# Edge, internet underlay and tunnel (ending on the gateway's public port eth1).
 #
 # Loaded with the foundation stage (after FR2 in 02_topology.yml), not with the
 # interconnects: an office opts in by naming this gateway in sdwan_gateway when

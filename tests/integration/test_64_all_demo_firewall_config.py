@@ -524,6 +524,35 @@ async def _vip_contexts(client: InfrahubClient, branch: str) -> dict[Loadbalance
     return {key: by_key[key] for key in keys}
 
 
+def _dci_session_errors(device: str, rendered: str, expected: int) -> list[str]:
+    """What an edge renders for the DCI sessions of its ``expected`` dark fibres (add_virtual_circuit builds two each).
+
+    The underlay neighbours inherit DCI-UNDERLAY-PEERS-SESSION: one per fibre, with `maximum-prefix 16`, announcing
+    only the box's own loopbacks (`RM-FABRIC-OUT out`) and tagging what the other site sends no-export
+    (`RM-DCI-IN in`, defined). The EVPN neighbours inherit DCI-PEERS-SESSION: one per fibre, keyed, sourced from the
+    loopback their peering names (`update-source`), the template giving `ebgp-multihop 2`.
+    """
+    errors: list[str] = []
+    neighbours = re.findall(r"^  neighbor (\S+)\n((?:    .*\n)*)", rendered + "\n", re.MULTILINE)
+    underlay = [body for _, body in neighbours if "inherit peer-session DCI-UNDERLAY-PEERS-SESSION" in body]
+    evpn = [body for _, body in neighbours if "inherit peer-session DCI-PEERS-SESSION" in body]
+    if len(underlay) != expected:
+        errors.append(f"{device}: {len(underlay)} DCI-UNDERLAY-PEERS neighbour(s), expected {expected}")
+    if len(evpn) != expected:
+        errors.append(f"{device}: {len(evpn)} DCI-PEERS neighbour(s), expected {expected}")
+    for needle in ("maximum-prefix 16", "route-map RM-FABRIC-OUT out", "route-map RM-DCI-IN in"):
+        if any(needle not in body for body in underlay):
+            errors.append(f"{device}: a DCI underlay neighbour has no '{needle}'")
+    for needle in ("update-source ", "password "):
+        if any(needle not in body for body in evpn):
+            errors.append(f"{device}: a DCI EVPN neighbour has no '{needle.strip()}'")
+    if not re.search(r"template peer-session DCI-PEERS-SESSION\n\s+ebgp-multihop 2\n", rendered):
+        errors.append(f"{device}: DCI-PEERS-SESSION does not give 'ebgp-multihop 2'")
+    if not re.search(r"^route-map RM-DCI-IN permit \d+$", rendered, re.MULTILINE):
+        errors.append(f"{device}: RM-DCI-IN is referenced but not defined")
+    return errors
+
+
 def _f5_blocks(rendered: str, header: str) -> list[str]:
     """The bodies of every top-level TMOS stanza `<header> {` ... `}` (header may end in an object name)."""
     return re.findall(rf"^{re.escape(header)}(?: \S+)? \{{\n(.*?)^\}}", rendered, re.MULTILINE | re.DOTALL)
@@ -1148,7 +1177,8 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         interlink: one `FABRIC-PEERS` neighbour (iBGP, remote-as = the site AS,
         no peer-type, no update-source, `RM-FABRIC-OUT` out), `evpn multisite
         fabric-tracking` on the interlink port only and `dci-tracking` on the
-        dark-fibre ports.
+        dark-fibre ports. The two sessions add_virtual_circuit builds per DCI circuit render as one
+        DCI-UNDERLAY-PEERS and one DCI-PEERS neighbour each (_dci_session_errors).
         """
         logging.info("=== %s - Step 6: Render edge INTERNET upstream ===", SCENARIO_NAME)
 
@@ -1168,6 +1198,11 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
             if not re.search(r"ip prefix-list \S+ seq \d+ permit 0\.0\.0\.0/0\n", rendered):
                 errors.append(f"{device}: no default-only prefix-list")
             errors += _fabric_pair_errors(device, rendered)
+            errors += _dci_session_errors(
+                device,
+                rendered,
+                sum(any(end == device for end, _ in ends) for _, ends in ALL_DEMO_DCI_CIRCUITS.values()),
+            )
 
             # The public block goes upstream as one summary and nothing else leaves (every edge).
             if not re.search(

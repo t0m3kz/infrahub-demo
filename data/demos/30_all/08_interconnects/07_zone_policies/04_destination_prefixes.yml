@@ -20,13 +20,13 @@ spec:
       ip_namespace: "default"
       status: active
       role: public
-      description: "AWS eu-central-1 transit hub — reachable VPC range over VC-C001-EQXFR-AWS-EUC1"
+      description: "AWS eu-central-1 transit hub — reachable VPC range over HANDOFF-FR2-AWS-EUC1-PROD"
 
     - prefix: "198.18.0.0/24"
       ip_namespace: "default"
       status: active
       role: public
-      description: "Acme Logistics B2B extranet — reachable range over XC-EQXFR2-PARTNERACME"
+      description: "Acme Logistics B2B extranet — reachable range over the IPsec tunnel C001-PARTNER-ACME-FR2"
 
     - prefix: "198.51.100.0/24"
       ip_namespace: "default"

@@ -314,7 +314,7 @@ nodes:
       - name: peering_role
         kind: Dropdown
         label: Peering Role
-        description: "Underlay, overlay, DCI, fabric, or regular (external partner) peering — set explicitly at creation."  # yamllint disable-line rule:line-length
+        description: "Underlay, overlay, DCI underlay, DCI, fabric, or regular (external partner) peering — set explicitly at creation."  # yamllint disable-line rule:line-length
         optional: true
         order_weight: 2450
         choices:
@@ -330,9 +330,13 @@ nodes:
             label: Regular
             description: "Regular BGP peering to an external partner/provider"
             color: "#FDCB6E"
+          - name: dci-underlay
+            label: DCI underlay
+            description: "Directly connected eBGP unicast session on the DCI /31, carries loopback reachability"
+            color: "#6C5CE7"
           - name: dci
             label: DCI
-            description: "EVPN Multi-Site DCI peering between border gateways of two sites (directly connected, IPv4 + L2VPN EVPN)"  # yamllint disable-line rule:line-length
+            description: "Loopback-to-loopback (multihop) EVPN Multi-Site DCI session between two border gateways; l2vpn evpn only"  # yamllint disable-line rule:line-length
             color: "#A29BFE"
           - name: fabric
             label: Fabric

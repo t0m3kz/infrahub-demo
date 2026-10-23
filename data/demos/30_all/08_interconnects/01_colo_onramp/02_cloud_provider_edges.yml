@@ -1,17 +1,31 @@
 ---
-# AWS's Direct Connect router at Equinix FR2, as seen from our side of the
-# transit VIF (01_transit_vif.yml). It is AWS's kit, not ours: owned by AWS
-# (P004), in no device group, so no config artifact or device check targets
-# it. It exists, like the ISP provider edges in ../06_internet/02_devices.yml,
-# so the VIF's eBGP session (03_vif_handoff.yml) has a second endpoint and a
-# remote AS. MX204_ISP_PE is the generic provider-edge stand-in template; only
-# its et-0/0/0 port is used, as the parent of the VIF sub-interface.
+# The provider edges we meet in the cages, as seen from our side of the handoffs and cross-connects:
+# AWS's Direct Connect router at FR2 (the far end of the transit VIF), Azure's ExpressRoute router at
+# PA4, Megaport's Cloud Router (MCR) next to PA4, and Equinix's own Fabric port in the FR2 IBX.
+# They are the provider's kit, not ours: owned by the provider, in no device group (the two stubs deployed
+# to a colocation zone are in `provider_stubs`, which keeps them out of the border-gateway lookup of
+# generators/vlan_domain.py: they carry the `edge` role of their template), so no config
+# artifact or device check targets them. They exist, like the ISP provider edges in
+# ../06_internet/02_devices.yml, so a cross-connect, a cable or a handoff circuit has a second endpoint
+# (and, for the AWS router and the Megaport MCR, a remote AS). MX204_ISP_PE is the generic
+# provider-edge stand-in template; only its et-0/0/0 port is used, as the far end of the
+# cross-connect or cable and the parent of the handoff sub-interface (plus a Loopback0 router-id for the
+# routers that peer with us).
 #
-# Created before 03_vif_handoff.yml (../05_cloud_endpoints/), whose sub-interface references it by
-# device name, and before 03_physical_circuits.yml (this directory), whose cross-connects end on
-# these routers' et-0/0/0. The Azure router is the far end of XC-EQXPA4-AZURE-WEU only: no VIF
-# rides it. `deployment` is the router's cloud region: add_circuit derives each cross-connect's
-# cloud end from it (the circuit data lists only the cage).
+# Created before ../05_cloud_endpoints/00_vif_handoff.yml, whose sub-interface references the AWS router
+# by device name, and before 03_physical_circuits.yml and 05_cage_cabling.yml (this directory), whose
+# cross-connects and cable end on these routers' et-0/0/0. `deployment` is the router's facility:
+# add_circuit derives each cross-connect's far end from it (the circuit data lists only the cage):
+#
+#   EXT-AWS-DX-FR2      the cloud region eu-central-1 it serves
+#   EXT-AZURE-ER-PA4    the cloud region westeurope; the far end of XC-EQXPA4-AZURE-WEU only, no handoff
+#                       rides it (no Azure VIF or attachment is modelled), the carrier stays idle
+#   EXT-MEGAPORT-MCR1   the Megaport zone MCR-PAR1 (../../02_colo/megaport/par). A Megaport MCR is a
+#                       cloud-neutral virtual router that Megaport runs in its own enabled facility, so the
+#                       facility it is deployed to is Megaport's, not a cloud region; a zone is a facility a
+#                       circuit end derives from. The far end of XC-EQXPA4-MEGAPORT
+#   EXT-EQX-FABRIC-FR2  the cage FR2 itself: Equinix's Fabric port sits in the same IBX, so the hop to
+#                       eg-fr201 is a cable (05_cage_cabling.yml), not a circuit
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -27,3 +41,17 @@ spec:
       owner: "P005"
       description: "Azure ExpressRoute router at Equinix PA4 (far end of XC-EQXPA4-AZURE-WEU)"
       deployment: "westeurope"
+    - name: "EXT-MEGAPORT-MCR1"
+      object_template: MX204_ISP_PE
+      owner: "P033"
+      description: "Megaport Cloud Router (MCR) in Paris (far end of XC-EQXPA4-MEGAPORT)"
+      deployment: "MCR-PAR1"
+      member_of_groups:
+        - provider_stubs
+    - name: "EXT-EQX-FABRIC-FR2"
+      object_template: MX204_ISP_PE
+      owner: "P016"
+      description: "Equinix Fabric port in the FR2 IBX (cabled to eg-fr201, Fabric connections to AM-NE)"
+      deployment: "FR2"
+      member_of_groups:
+        - provider_stubs

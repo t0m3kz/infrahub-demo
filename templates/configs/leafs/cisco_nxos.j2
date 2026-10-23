@@ -84,6 +84,7 @@ interface {{ interface.name }}
 route-map RM-CONN-2-BGP permit 10
   match interface {{ ([loopback_name] + (vxlan.multisite.advertise_interfaces if nxos_border and vxlan and vxlan.multisite else [])) | unique | join(' ') }}
 !
+{%- include 'common/cisco_nxos_dci_route_maps.j2' -%}
 {%- if vxlan and vxlan.l3_vni_mappings %}
 {#- Permit-all, deliberately unqualified: inside a tenant VRF everything that is
     directly connected (the anycast-gateway SVIs) is exactly what should become an

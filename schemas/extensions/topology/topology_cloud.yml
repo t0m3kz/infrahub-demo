@@ -1211,12 +1211,6 @@ nodes:
         optional: false
         order_weight: 350
     relationships:
-      - name: asn
-        peer: RoutingAutonomousSystem
-        cardinality: one
-        optional: true
-        kind: Attribute
-        order_weight: 400
       - name: direct_connect
         peer: CloudDirectConnect
         cardinality: one
@@ -1347,27 +1341,16 @@ extensions:
           identifier: "transit_gateway_attachment__hybrid_endpoint"
           order_weight: 2000
           description: "Transit Gateway attachment this hybrid endpoint feeds"
-        # The edge that closes the colo leg. A virtual circuit's customer end is
-        # a DcimInterface, but its cloud end is a CloudVirtualInterface, not a
-        # device port. Without this the traversal walks from a DC border leaf
-        # out to the colo cage and then stops at an island boundary.
-        - name: virtual_circuits
-          label: "Virtual Circuits"
-          peer: TopologyVirtualCircuit
-          cardinality: many
+        # The edge that closes the handoff leg. A handoff circuit's customer end is a DcimInterface, but its
+        # cloud end is a CloudVirtualInterface (or a VPN gateway), not a device port. Without this the traversal
+        # walks from a DC border leaf out to the colo cage and then stops at an island boundary. 1:1: one VIF
+        # has one handoff circuit; the other side is TopologyHandoffCircuit.cloud_endpoint.
+        - name: virtual_circuit
+          label: "Handoff Circuit"
+          peer: TopologyHandoffCircuit
+          cardinality: one
+          kind: Attribute
           optional: true
-          identifier: "virtual_circuit__cloud_endpoints"
+          identifier: "handoff_circuit__cloud_endpoint"
           order_weight: 2100
-          description: "Circuit(s) terminating on this cloud attachment"
-
-    - kind: TopologyVirtualCircuit
-      relationships:
-        - name: cloud_endpoints
-          label: "Cloud Endpoints"
-          peer: CloudHybridAttachment
-          kind: Generic
-          cardinality: many
-          optional: true
-          identifier: "virtual_circuit__cloud_endpoints"
-          order_weight: 1080
-          description: "Cloud-side terminations of this circuit (transit VIF or VPN gateway)"
+          description: "Handoff circuit terminating on this cloud attachment"

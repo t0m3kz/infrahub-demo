@@ -35,7 +35,7 @@ spec:
             destination_prefixes:
               - ["10.40.0.0/16", "default"]
             log: false
-            description: "Nordix web/app tier to AWS transit hub over VC-C001-EQXFR-AWS-EUC1"
+            description: "Nordix web/app tier to AWS transit hub over HANDOFF-FR2-AWS-EUC1-PROD"
 
           - index: 20
             name: nordix-prod-to-partner-acme

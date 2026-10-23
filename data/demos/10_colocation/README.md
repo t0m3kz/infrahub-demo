@@ -103,11 +103,12 @@ A `DcimCable` means fibre someone pulled between two chassis, so the generator l
 
 **Links that leave the zone.** The on-ramp's links to the DC border-leafs (the edge's `dci` ports) and to the cloud
 fabrics (its `uplink` ports) are the colocation operator's cross-connect, not fibre we pull, so the model is a
-`TopologyPhysicalCircuit` with per-customer `TopologyVirtualCircuit`s riding it — see
-`data/demos/30_all/08_interconnects/`. They also need both endpoints, and a colocation-side generator can only see
-one. In this demo, which loads no data centers and no clouds, those ports stay `free` by design. The same applies
-between two zones of one metro: FR6 reaches the on-ramp in FR2 over a cross-connect (a circuit between zones), never
-over a cable.
+`TopologyPhysicalCircuit` with the virtual circuits that ride it (`TopologyInterconnectCircuit` for a DCI,
+`TopologyHandoffCircuit` for a cloud or provider handoff) — see `data/demos/30_all/08_interconnects/`. They also need
+both endpoints, and a colocation-side generator can only see one. In this demo, which loads no data centers and no
+clouds, those ports stay `free` by design. The same applies between two zones of one metro: FR6 reaches the on-ramp in FR2 over a cross-connect (a circuit between zones), never
+over a cable. The reverse also holds: a hop inside one cage, such as the patch from an edge to the colocation operator's
+own port in the same building (the Equinix Fabric port of the FR2 IBX), is a cable, never a circuit.
 
 The edge pair, its interlink, its FABRIC iBGP session and the edge<->firewall cabling all stay inside **one** zone.
 Spread a pair across two zones and none of those would be generated, because the pair is the unit of one
