@@ -102,13 +102,15 @@ spec:
 # PROD address: the local interface's address being in PROD (not `default`) is what makes
 # transforms/helpers/bgp.py render it under `vrf PROD` on eg-fr201, outside every peer
 # group. peering_role regular there makes it an external tenant-VRF peer, filtered like
-# the cloud VIF (../05_cloud_endpoints/00_vif_handoff.yml): RM-<name>-IN accepts only the
-# far end's registered prefixes and RM-PROD-EXTERNAL-OUT announces only PROD's on-prem
-# segment prefixes. The far end here is EQX-FR2-SDWAN-GW1, so the registered prefixes are
-# the PROD lan_prefixes and the PROD segments hosted by every TopologyCustomerOffice whose
-# sdwan_gateway is GW1 (C002's lan_prefixes 10.210.2.0/24, C005's hosted office-lan
-# segment; get_external_peer_prefixes in transforms/helpers/bgp.py). An office with
-# neither adds nothing: C001, C003 and C015 are behind GW1 too but register none.
+# the cloud VIF (../05_cloud_endpoints/00_vif_handoff.yml): RM-<session>-IN accepts only the
+# far end's registered prefixes, and RM-<session>-OUT announces only the PROD on-prem segment
+# prefixes of the customers who registered them. The far end here is EQX-FR2-SDWAN-GW1, so the
+# registered prefixes are the PROD lan_prefixes (owner: the office's owner) and the PROD
+# segments hosted by every TopologyCustomerOffice whose sdwan_gateway is GW1 (owner: the
+# segment's owner): C002's lan_prefixes 10.210.2.0/24 and C005's hosted office-lan segment
+# (get_external_peer_prefixes in transforms/helpers/bgp.py). The session's owners are C002 and
+# C005, so only their PROD segments are announced. An office with neither adds nothing: C001,
+# C003 and C015 are behind GW1 too but register none, so none of their segments is announced.
 # No cloud_endpoint: this is no cloud service.
 apiVersion: infrahub.app/v1
 kind: Object

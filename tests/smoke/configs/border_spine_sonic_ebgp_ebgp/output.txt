@@ -80,7 +80,7 @@
     "EVPN-OVERLAY": {
       "ebgp_multihop": "255",
       "local_addr": "10.0.0.1",
-      "send_community": "extended"
+      "send_community": "both"
     },
     "UNDERLAY-PEERS": {
       "bfd": "true",

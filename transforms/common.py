@@ -1,7 +1,7 @@
 """Base class and shared helpers for Infrahub device transforms."""
 
 import logging
-from typing import Any
+from typing import Any, ClassVar
 
 from infrahub_sdk.transforms import InfrahubTransform
 from jinja2 import Template
@@ -30,10 +30,15 @@ from transforms.helpers.segments import (
 )
 from transforms.helpers.templates import load_template
 from transforms.helpers.vxlan import get_interfaces, get_vxlan_config
+from utils.circuit_underlay import NETWORK_APPLIANCE_KIND
 from utils.data_cleaning import clean_data
 from utils.fabric_roles import BORDER_ROLES, OFFICE_LISP_ROLES
 
 _log = logging.getLogger(__name__)
+
+# The platforms whose BGP template (common/cisco_ios_bgp.j2) renders the session["unfiltered_banner"] comment above
+# a VRF neighbour. A hosted appliance on any other platform is refused: its template would render no banner.
+UNFILTERED_BANNER_PLATFORMS = frozenset({"cisco_ios", "cisco_xe"})
 
 
 def _fabric_rt_asn(deployment: Any) -> int | None:
@@ -65,6 +70,15 @@ def _fabric_anycast_mac(deployment: Any) -> str | None:
         if isinstance(mac, str) and mac.strip():
             return mac.strip()
     return None
+
+
+def _own_devices(deployment: Any) -> frozenset[str]:
+    """Names of the devices the deployment itself owns beyond BGP process roles: an office's SD-WAN edge.
+
+    A BGP session to one of them is internal (transforms/helpers/bgp.py), the office WAN exit for one.
+    """
+    wan_edges = deployment.get("lisp_wan_edges") if isinstance(deployment, dict) else None
+    return frozenset(edge["name"] for edge in wan_edges or [] if isinstance(edge, dict) and edge.get("name"))
 
 
 def get_capabilities(data: dict[str, Any]) -> dict[str, Any]:
@@ -141,6 +155,9 @@ class BaseDeviceTransform(InfrahubTransform):
     comment_char: str = "!"
     # Resolve a VxlanSegment's local VLAN through this device's own VLAN domain.
     resolve_vlan_domain: bool = True
+    # The platforms whose template defines the RM-<session>-IN/-OUT maps of an external BGP session
+    # (transforms/helpers/bgp.py). Any other platform would render that session with no policy.
+    external_policy_platforms: ClassVar[frozenset[str]] = frozenset()
 
     def _device_activations(self, device: dict[str, Any]) -> list[dict[str, Any]]:
         """Segment activations of one device: from its interface capabilities, plus the
@@ -190,6 +207,52 @@ class BaseDeviceTransform(InfrahubTransform):
         self._refuse_cisco_xe_unrendered(platform_name, config)
         config.update(self._cisco_xe_context(platform_name, config))
         return self._render(platform_name, config)
+
+    def _refuse_unfiltered_external_sessions(self, platform_name: str, config: dict, device_kind: str | None) -> None:
+        """Raise when an external BGP session would render with no owner prefix filter.
+
+        An external session (session["external"]: a regular peer outside our administration in a tenant VRF)
+        must be limited to its owners' prefixes in both directions. Only the templates of
+        ``external_policy_platforms`` define those route-maps; on any other platform or role the session
+        would be an open one, so refuse instead, like the unrendered cisco_xe features.
+
+        A provider-hosted ``CloudNetworkAppliance`` (``device_kind``) must still get its artifact: on a
+        ``UNFILTERED_BANNER_PLATFORMS`` platform each external session is marked with
+        ``session["unfiltered_banner"]`` (the template renders it as a comment above the neighbour) and
+        logged as a WARNING instead (never an error: the SDK would fail the artifact). An unknown kind
+        refuses, fail-closed.
+        """
+        if platform_name in self.external_policy_platforms:
+            return
+        external = [
+            session
+            for bgp in config.get("bgp") or []
+            for session in bgp.get("sessions") or []
+            if session.get("external")
+        ]
+        if not external:
+            return
+        if device_kind == NETWORK_APPLIANCE_KIND and platform_name in UNFILTERED_BANNER_PLATFORMS:
+            for session in external:
+                session["unfiltered_banner"] = (
+                    f"UNFILTERED: no external-policy renderer for {platform_name}; this session announces and "
+                    "accepts everything the peer sends - provider-side filter required"
+                )
+                _log.warning(
+                    "%s: external BGP session %s (%s) renders unfiltered on %s %s; provider-side filter required",
+                    config.get("name"),
+                    session.get("name"),
+                    session.get("remote_device") or "unknown far end",
+                    platform_name,
+                    device_kind,
+                )
+            return
+        sessions = ", ".join(f"{s.get('name')} ({s.get('remote_device') or 'unknown far end'})" for s in external)
+        role = self.device_role or config.get("device_role") or "device"
+        raise ValueError(
+            f"{config.get('name')}: {platform_name} {role} cannot render the owner prefix filters of "
+            f"external BGP session(s) {sessions}; refusing an open session"
+        )
 
     # The roles rendered by a cisco_xe fabric template (leafs/, border_leafs/ and the office's
     # access_switches/, distribution_switches/); the Edge's cisco_xe template is IOS.
@@ -310,11 +373,13 @@ class BaseDeviceTransform(InfrahubTransform):
                 interfaces,
                 device_name=device_name,
                 device_role=data.get("role", ""),
+                own_devices=_own_devices(data.get("deployment")),
             ),
             "ospf": get_ospf(device_capabilities, interfaces),
             "mlag": mlag,
             "capabilities": get_capabilities(data),
         }
+        self._refuse_unfiltered_external_sessions(platform_name, config, data.get("typename"))
         if platform_name in {"sonic", "dell_sonic"}:
             config["sonic_mlag"] = get_sonic_mlag_config(mlag)
         return config

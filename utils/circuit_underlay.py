@@ -35,6 +35,8 @@ SESSION_CIRCUIT_KINDS = (INTERCONNECT_CIRCUIT, HANDOFF_CIRCUIT)
 
 BGP_PROCESS = "ManagedBGP"
 OVERLAY_ROLE = "overlay"
+# A provider-hosted network function (Equinix Network Edge): a device kind we do not administer.
+NETWORK_APPLIANCE_KIND = "CloudNetworkAppliance"
 # A handoff end is a VLAN sub-interface, <parent>.<vlan>: the VLAN lives in the name.
 _VLAN_SUBINTERFACE = re.compile(r".+\.(\d+)")
 

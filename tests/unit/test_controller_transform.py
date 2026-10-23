@@ -314,6 +314,21 @@ class TestVelocloudVrfHandoffs:
         assert "password" in handoff["bgp"]
         assert handoff["bgp"]["password"] is None
 
+    @pytest.mark.parametrize("far_end_role", [None, "regular", "underlay", "overlay"])
+    def test_handoff_payload_does_not_depend_on_whether_the_far_end_is_ours(self, far_end_role: str | None) -> None:
+        """The VCO payload has no refusal path and no external flag: internal or external, the handoff is the same."""
+        baseline = self._payload(_gateway_with_handoff())["edges"][0]["handoffs"]
+        device = _gateway_with_handoff()
+        peering = device["node"]["capabilities"]["edges"][0]["node"]["peerings"]["edges"][0]["node"]
+        for process in peering["bgp_processes"]["edges"]:
+            process["node"]["process_role"] = {"value": far_end_role}
+
+        handoffs = self._payload(device)["edges"][0]["handoffs"]
+
+        assert handoffs == baseline
+        assert len(handoffs) == 1
+        assert set(handoffs[0]) == {"segment", "interface", "vlan", "local-address", "bgp"}
+
     def test_default_namespace_session_is_not_a_handoff(self) -> None:
         """Only sessions in a tenant namespace are VRF handoffs."""
         assert self._payload(_gateway_with_handoff(namespace="default"))["edges"][0]["handoffs"] == []
