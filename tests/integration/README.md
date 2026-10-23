@@ -36,7 +36,7 @@ Each scenario creates infrastructure incrementally and merges to main:
 - `test_18_dc6_add_spine.py` - **Scenario 5:** Add a spine to DC6-1-POD-1 by swapping its spine element
 - `test_19_dc6_segments.py` - **Scenario 6:** Board C001 into DC6 and deploy two VXLAN segments (`data/20_segments`)
 - `test_20_dc6_add_endpoints.py` - **Scenario 7:** Endpoint servers across DC6's pods (`data/demos/06_servers`)
-- `test_59` - `test_65` - **Scenario 8:** The `30_all` demo, end to end (see [The 30_all Suite](#the-30_all-suite)). This one deviates from the pattern above: it loads in stages, shares one branch across six modules, and does not merge to main.
+- `test_59` - `test_66` - **Scenario 8:** The `30_all` demo, end to end (see [The 30_all Suite](#the-30_all-suite)). This one deviates from the pattern above: it loads in stages, shares one branch across seven modules, and does not merge to main.
 - `test_71` - **Scenario 9:** The Arista EOS MSS-G demo fabric (`data/demos/32_arista_mssg`), on its own branch (see [The Arista MSS-G Suite](#the-arista-mss-g-suite)).
 
 Scenarios 2-7 form one chain on DC6: `test_12` depends on `dc6_verify_after_merge` from `test_10`, and each
@@ -88,7 +88,7 @@ The DC6 chain (`test_12`-`test_20`) loads its switch, rack, pod and server data 
 test-local exception: `data/demos/07_customers` and `08_segments` depend on the `30_all` customer organizations
 and still use the old `[org_id, environment]` footprint HFID (a footprint's HFID is now its `name`), so they cannot be loaded on their own.
 
-The `30_all` suite (`test_59`-`test_65`) is the exception: it loads from `data/demos/30_all/` at the repository
+The `30_all` suite (`test_59`-`test_66`) is the exception: it loads from `data/demos/30_all/` at the repository
 root, not from here, because it exercises the shipped demo rather than test-only fixtures.
 
 ## Running Tests
@@ -147,7 +147,7 @@ The fast profile intentionally stops after setup and repository synchronization.
 
 ### The 30_all Suite
 
-`test_59` through `test_65` are one scenario split across six modules. They share a single branch (`ALL_DEMO_BRANCH`) and run in dependency order:
+`test_59` through `test_66` are one scenario split across seven modules. They share a single branch (`ALL_DEMO_BRANCH`) and run in dependency order:
 
 | Module | Covers |
 | --- | --- |
@@ -157,8 +157,9 @@ The fast profile intentionally stops after setup and repository synchronization.
 | `test_62_all_demo_interconnects.py` | Physical and virtual circuits, cloud terminations, firewall contexts, segment legs, which metro's firewalls serve each colocation deployment |
 | `test_64_all_demo_firewall_config.py` | Colo cloud/partner/SaaS zone policies: served by the FR metro's firewall pair, `CheckFirewall` passes, every pair member renders them and a firewall outside the pair does not. Office LISP fabrics: `CheckLispFabric` passes and every access-switch and distribution-switch renders its LISP site in-process (`router lisp`, the map-server `site` and EID records, `proxy-etr` / `use-petr` where the office has an SD-WAN edge; every IOS-XE line is unverified-no-lab) |
 | `test_65_all_demo_idempotency.py` | Two more runs of the security generators, then of the topology generators, leave rules, contexts, devices, cables, addresses, pools and allocated numbers unchanged |
+| `test_66_all_demo_circuit_lifecycle.py` | Runs after `test_65` because it mutates the branch. Decommissioning an Interconnect's carrier, and a Handoff itself, removes its BGP sessions, its `/31` (`/127`) and the port addresses (ports, key and other circuits' sessions untouched); setting it active again rebuilds them on the same key. Each test restores the status it changed |
 
-Only `test_59` loads data, and the load is deliberately staged — later stages reference objects that only exist once an earlier stage's generators have finished. `ALL_DEMO_LOAD_STAGES` in `tasks.py` (shared with `invoke load-all-demo`, re-exported by `test_constants.py`) documents which stage needs what. Running `test_60`-`test_65` on their own will skip: their session-scoped dependencies are unmet without `test_59`.
+Only `test_59` loads data, and the load is deliberately staged — later stages reference objects that only exist once an earlier stage's generators have finished. `ALL_DEMO_LOAD_STAGES` in `tasks.py` (shared with `invoke load-all-demo`, re-exported by `test_constants.py`) documents which stage needs what. Running `test_60`-`test_66` on their own will skip: their session-scoped dependencies are unmet without `test_59`.
 
 ### The Arista MSS-G Suite
 

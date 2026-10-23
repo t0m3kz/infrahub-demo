@@ -333,14 +333,23 @@ class _FakeInterface:
 
 
 class _RecordingList(list):
-    """group_context.related_node_ids that also logs each append as a write."""
+    """group_context.related_node_ids that also logs each append as a write.
 
-    def __init__(self, writes: list[tuple[str, str, dict[str, Any]]]) -> None:
+    The circuit itself (``VC_ID``) is the run's target, not an output: the generator adds it to the group so that the
+    SDK's cleanup always runs. It is logged in ``targets`` and not as a write, so "the run wrote nothing" assertions
+    and ``FakeClient.claimed()`` keep describing outputs only.
+    """
+
+    def __init__(self, writes: list[tuple[str, str, dict[str, Any]]], targets: list[str]) -> None:
         super().__init__()
         self._writes = writes
+        self._targets = targets
 
     def append(self, item: Any) -> None:
-        self._writes.append(("track", item, {}))
+        if item == VC_ID:
+            self._targets.append(item)
+        else:
+            self._writes.append(("track", item, {}))
         super().append(item)
 
 
@@ -355,7 +364,8 @@ class FakeClient:
         self.writes: list[tuple[str, str, dict[str, Any]]] = []  # (action, label, kwargs)
         self.created: list[tuple[str, dict[str, Any], MagicMock]] = []
         self.group_context = MagicMock()
-        self.group_context.related_node_ids = _RecordingList(self.writes)
+        self.targets: list[str] = []  # the circuit ids a run added to its tracking group as its target
+        self.group_context.related_node_ids = _RecordingList(self.writes, self.targets)
         self.keys: dict[str, MagicMock] = {"VC-DCI-DC10-FR2-dci-key": MagicMock(id=DC_KEY_ID)} if key else {}
         self.pools = (
             {name: SimpleNamespace(id=f"pool-{name}", pool_name=name) for name in POOL_NETWORKS} if pools else {}
@@ -471,14 +481,49 @@ class FakeClient:
         """label -> kwargs of its (last) save."""
         return {label: kwargs for action, label, kwargs in self.writes if action == "save"}
 
-    def claimed(self) -> set[str]:
-        """Every node the run's tracking group gets: tracked saves plus appended ids."""
-        tracked_saves = {
+    def claimed(self, since: int = 0) -> set[str]:
+        """The outputs the tracking group gets from ``writes[since:]``: tracked saves plus appended ids.
+
+        The circuit itself (the run's target) is not an output, see ``tracked_ids`` for the whole group.
+        """
+        return {
             label
-            for action, label, kwargs in self.writes
-            if action == "save" and kwargs.get("update_group_context") is not False
+            for action, label, kwargs in self.writes[since:]
+            if (action == "save" and kwargs.get("update_group_context") is not False) or action == "track"
         }
-        return tracked_saves | set(self.group_context.related_node_ids)
+
+    def tracked_ids(self, since: int = 0, targets_since: int = 0) -> set[str]:
+        """Everything a run adds to its tracking group: its outputs plus the circuit it targets."""
+        return self.claimed(since) | set(self.targets[targets_since:])
+
+
+class SdkTrackingGroup:
+    """One generator's tracking group across runs, with the cleanup semantics of infrahub_sdk (v1.23) ``update_group``.
+
+    ``finish_run`` mirrors ``InfrahubGroupContext.update_group``: it returns WITHOUT any cleanup when the run tracked
+    nothing (``if not members: return`` comes before the unused members are computed), else it deletes the previous
+    members this run did not reach and keeps the current ones as the next run's baseline.
+    """
+
+    def __init__(self, client: FakeClient) -> None:
+        self.client = client
+        self.previous: set[str] = set()
+        self._writes_at_start = 0
+        self._targets_at_start = 0
+
+    def start_run(self) -> None:
+        """Mark where the next run's writes begin."""
+        self._writes_at_start = len(self.client.writes)
+        self._targets_at_start = len(self.client.targets)
+
+    def finish_run(self) -> set[str]:
+        """End the run: the ids the SDK would delete as unused (empty when it skips the cleanup)."""
+        members = self.client.tracked_ids(self._writes_at_start, self._targets_at_start)
+        if not members:
+            return set()
+        deleted = self.previous - members
+        self.previous = members
+        return deleted
 
 
 def raising_logger() -> MagicMock:

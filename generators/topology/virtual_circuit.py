@@ -5,8 +5,9 @@ routing) and is not in the generator's target group; a run that reaches one logs
 
 The flow, shared by both kinds (what differs is a planner per kind: pool, family, peerings):
 
-1. A decommissioned circuit, or one with fewer than two ends, builds nothing and writes nothing: the run's tracked
-   cleanup then removes what an earlier run built. Two ends on one device, or more than two ends, is an error.
+1. A decommissioned circuit, or one with fewer than two ends, builds nothing: the run's tracked cleanup then removes
+   what an earlier run built (see "Ownership" for why the circuit itself is tracked). Two ends on one device, or more
+   than two ends, is an error.
 2. It waits for add_circuit on every physical circuit it rides (``derived_underlay``: the carrier terminating on each
    end port, or on a sub-interface's parent). add_circuit never waits for this generator, so there is no cycle.
    Then it decides whether the ends are carried (``utils.circuit_underlay.has_carrier``: a physical circuit of any
@@ -43,7 +44,12 @@ IPv6 only. Two sessions on the overlay processes, keyed with one generated per-c
 physical ports get MTU 9216.
 
 Ownership (the run's tracking group, delete_unused_nodes=True): the prefix, its addresses and the peerings belong to
-the circuit. The end interfaces come from device templates and are written untracked (only when something changed);
+the circuit. The circuit itself is added to the group first thing, before any early return: the SDK's
+``update_group`` returns without any cleanup when the run tracked nothing (``if not members: return`` precedes the
+deletion of the previous members that this run did not reach), so a run that builds nothing (decommissioned, an end
+missing, no carrier yet, whole carrier decommissioned) would leave the old peerings, prefix and addresses in place.
+With the circuit in the group the members are never empty and everything an earlier run tracked and this one did not
+write is deleted; the circuit is the target and is a member of both sets, so it is never deleted. The end interfaces come from device templates and are written untracked (only when something changed);
 devices, BGP processes and the global address families are only referenced. The interconnect's key is untracked too,
 deliberately: a tracked key is deleted by any run that returns early (decommissioned circuit, an end missing, no
 carrier) or stops reaching it, and the next full run would then generate a NEW secret, rotating a key the far side
@@ -255,6 +261,9 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, Comm
         if planner is None:
             self.logger.info(f"Virtual circuit {name} ({kind}): no session is generated for this kind")
             return
+        # Never an empty tracking group: infrahub_sdk's update_group() does no cleanup when a run tracked nothing, so
+        # without this the "no session" paths below would leave the old peerings, prefix and addresses behind.
+        self.client.group_context.related_node_ids.append(circuit["id"])
         self.logger.info(
             f"Processing virtual circuit {name} ({kind}, status={circuit.get('status') or '?'}); "
             f"carrier: {self._carrier_label(circuit)}"
@@ -291,7 +300,7 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, Comm
             and all(carrier.get("status") == DECOMMISSIONED for carrier in carriers)
             and not any(port_cabled(port) for port in ports)
         ):
-            self.logger.info(f"  {name}: its whole carrier is decommissioned - no session; cleanup removes the old one")
+            self.logger.info(f"  {name}: its whole carrier is decommissioned - no session; the old one is cleaned up")
             return
 
         plan = planner(circuit, name, ends)
@@ -322,7 +331,7 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, Comm
         than two ends, is.
         """
         if circuit.get("status") == DECOMMISSIONED:
-            self.logger.info(f"  {name} is decommissioned - no session; cleanup removes the one an earlier run built")
+            self.logger.info(f"  {name} is decommissioned - no session; the one an earlier run built is cleaned up")
             return None
         ends: dict[str, SessionEnd] = {}
         for port in circuit.get("capabilities") or []:
@@ -331,7 +340,7 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, Comm
                 ends.setdefault(end.port_id, end)
         if len(ends) < 2:
             self.logger.info(
-                f"  {name}: {len(ends)} end(s), a session needs 2 - nothing built, cleanup removes the old"
+                f"  {name}: {len(ends)} end(s), a session needs 2 - nothing built, the old one is cleaned up"
             )
             return None
         labels = ", ".join(end.label for end in ends.values())

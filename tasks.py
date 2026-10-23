@@ -288,14 +288,17 @@ def test_integration_all_demo(
     catalogue enforcement workflow (60), compute and the application graph
     (61), interconnects and tenant services (62), colo cloud/partner/SaaS zone
     policy check + render (64), and reruns of the security generators that
-    must leave the branch unchanged (65).
+    must leave the branch unchanged (65), and the sessions of an Interconnect and a Handoff
+    following the status of their carrier or of the circuit itself, both ways (66, mutates the
+    branch, so it runs last).
     """
     _run_integration_suite(
         context,
         tests="tests/integration/test_01_setup.py tests/integration/test_02_repository.py "
         "tests/integration/test_59_all_demo_load.py tests/integration/test_60_app_catalogue.py "
         "tests/integration/test_61_all_demo_compute.py tests/integration/test_62_all_demo_interconnects.py "
-        "tests/integration/test_64_all_demo_firewall_config.py tests/integration/test_65_all_demo_idempotency.py",
+        "tests/integration/test_64_all_demo_firewall_config.py tests/integration/test_65_all_demo_idempotency.py "
+        "tests/integration/test_66_all_demo_circuit_lifecycle.py",
         basetemp=basetemp,
         server_port=server_port,
     )
