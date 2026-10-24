@@ -111,6 +111,12 @@ Duplication here usually starts as "copy the sibling generator/template and edit
 - **No redundant round trips**: one `filters(ids=[...])` instead of `get()` in a loop; no `fetch()` after `include=`;
   filter by `name__value` instead of listing and scanning.
 - **Template refactors keep output byte-identical**; render the golden fixtures before and after and diff.
+- **A number or name used in more than one place is defined once in `utils/limits.py`**: design ranges and limits,
+  vendor limits, the pool and group names the bootstrap data must define, and the retry policy. The schema and
+  `data/bootstrap` stay the source of truth; a constant there is a mirror, and `tests/unit/test_limits_consistency.py`
+  names the one to change when they drift. A value used by one module (an algorithm internal) stays next to its code.
+- **A platform's config template is `templates/configs/<role>/<platform name>.j2`**: there is no separate template-key
+  attribute, so a new platform is a `DcimPlatform` record plus its templates (`tests/unit/test_platform_keys.py`).
 
 For a cleanup sweep, use the `infrahub-simplifying-code` skill (`.claude/skills/`). For change reviews, the review
 board includes a `simplification-reviewer`.
