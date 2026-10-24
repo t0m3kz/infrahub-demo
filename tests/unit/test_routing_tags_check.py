@@ -25,7 +25,6 @@ def _segment(
     *,
     owner: str = "c-1",
     kind: str = "ManagedVxlanSegment",
-    status: str = "active",
     namespace_type: str | None = "prod",
     zone: str = "PROD-ZONE",
 ) -> dict[str, Any]:
@@ -39,7 +38,6 @@ def _segment(
             "__typename": kind,
             "id": f"seg-{name}",
             "name": _v(name),
-            "status": _v(status),
             "routing_tag": _v(tag),
             "owner": {"node": {"id": owner}},
             "security_zone": {"node": {"name": _v(zone)}},
@@ -96,18 +94,6 @@ class TestComplete:
         errors, _ = _run([_customer("c-1", "C005", None)], [segment])
 
         assert errors == []
-
-    def test_retired_segment_needs_no_tag_and_neither_does_its_owner(self) -> None:
-        errors, _ = _run([_customer("c-1", "C005", None)], [_segment("old", None, status="retired")])
-
-        assert errors == []
-
-    def test_retired_segment_keeps_its_tag_in_the_uniqueness_count(self) -> None:
-        """A pool draw is never given back, so a retired segment's number is still taken."""
-        errors, _ = _run([], [_segment("old", 5, status="retired"), _segment("new", 5)])
-
-        assert len(errors) == 1
-        assert "routing_tag 5 is on 2 segments" in errors[0]
 
 
 class TestViolations:
@@ -177,13 +163,12 @@ class TestViolations:
 
 
 def test_query_selects_what_the_check_reads(root_dir: Path) -> None:
-    """The routed-segment test (kind, namespace type, zone), status, owner and both tags come from the query."""
+    """The routed-segment test (kind, namespace type, zone), owner and both tags come from the query."""
     query = (root_dir / "queries/validation/routing_tags.gql").read_text()
     for needed in (
         "OrganizationCustomer",
         "ManagedNetworkSegment",
         "routing_tag { value }",
-        "status { value }",
         "owner { node { id } }",
         "namespace_type { value }",
         "security_zone",

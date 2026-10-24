@@ -1,7 +1,7 @@
 # validate_routing_tags (checks/routing_tags.py): every customer and every segment
 # with its routing tag (the number behind its community), and for a segment what
 # decides whether it is a routed tenant segment (utils/exchange_transit.
-# is_routed_tenant_segment: kind, gateway namespace type, zone), its status and its owner.
+# is_routed_tenant_segment: kind, gateway namespace type, zone) and its owner.
 query routing_tags {
   OrganizationCustomer {
     edges {
@@ -19,7 +19,6 @@ query routing_tags {
         __typename
         id
         name { value }
-        status { value }
         routing_tag { value }
         owner { node { id } }
         security_zone { node { name { value } } }
