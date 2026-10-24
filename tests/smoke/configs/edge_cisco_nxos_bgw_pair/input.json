@@ -2182,7 +2182,7 @@
                     "value": "10gbase-x-sfpp"
                   },
                   "mtu": {
-                    "value": 9216
+                    "value": 9214
                   },
                   "ip_address": {
                     "node": {
@@ -2275,7 +2275,7 @@
                     "value": "10gbase-x-sfpp"
                   },
                   "mtu": {
-                    "value": 9216
+                    "value": 9214
                   },
                   "ip_address": {
                     "node": {

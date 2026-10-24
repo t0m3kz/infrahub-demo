@@ -1,0 +1,46 @@
+{#- Route-maps `router bgp` references, shared by every NX-OS role that runs BGP and rendered BEFORE
+    `router bgp` so a whole-config push finds each name defined.
+    D: Cisco Nexus 9000 Unicast Routing guide: `redistribute direct route-map <name>` names a route-map;
+    the route-map is configured ahead of the routing process that references it.
+    RM-CONN-2-BGP is referenced by cisco_nxos_bgp.j2's `redistribute direct` in both address families;
+    a BGW also advertises its VTEP and site-VIP loopbacks so the remote site can reach the tunnel endpoints. #}
+! Route-maps
+{#- Per-session policy named by the neighbour's `route-map <name> in|out` in cisco_nxos_bgp.j2.
+    D: Cisco Nexus 9000 Unicast Routing guide: a route-map is global configuration (`route-map <name> permit <seq>`
+    at the top level); it is not a `router bgp` sub-command. #}
+{%- if capabilities is not defined or capabilities.bgp_enabled is not defined or capabilities.bgp_enabled %}
+{%- for bgp_config in bgp or [] %}
+{%- for session in bgp_config.sessions %}
+{%- if session.get('local_pref') %}
+route-map {{ session.name }}-LOCAL-PREF-IN permit 10
+  set local-preference {{ session.local_pref }}
+!
+{%- endif %}
+{%- if session.get('med') %}
+route-map {{ session.name }}-MED-OUT permit 10
+  set metric {{ session.med }}
+!
+{%- endif %}
+{%- endfor %}
+{%- endfor %}
+{%- endif %}
+route-map RM-CONN-2-BGP permit 10
+  match interface {{ ([loopback_name] + (vxlan.multisite.advertise_interfaces if vxlan and vxlan.multisite else [])) | unique | join(' ') }}
+!
+{%- include 'common/cisco_nxos_dci_route_maps.j2' -%}
+{%- if vxlan and vxlan.l3_vni_mappings %}
+{#- Permit-all, deliberately unqualified: inside a tenant VRF everything that is
+    directly connected (the anycast-gateway SVIs) is exactly what should become an
+    EVPN type-5 route. Referenced from cisco_nxos_bgp.j2's per-VRF block. #}
+{%- if leaf_transit_prefixes and not nxos_border %}
+! The firewall transit /29s this leaf holds locally for PBR are originated by the borders only
+! documented-not-lab-verified: deny sequence keeps the leaf's connected transit /29 out of the type-5 table
+{%- for prefix in leaf_transit_prefixes %}
+ip prefix-list PL-XCHG-TRANSIT seq {{ loop.index * 10 }} permit {{ prefix }}
+{%- endfor %}
+route-map RM-VRF-DIRECT-2-EVPN deny 5
+  match ip address prefix-list PL-XCHG-TRANSIT
+{%- endif %}
+route-map RM-VRF-DIRECT-2-EVPN permit 10
+!
+{%- endif -%}

@@ -565,7 +565,7 @@ def build_edge_bgw_pair_data(*, device_name: str, platform: str) -> dict:
     """A colocation metro edge that is one of two BGWs sharing a site VIP.
 
     BGW edge (Loopback1 IPv6 VTEP, Loopback100 multisite-vip) with two DCI dark
-    fibres (Ethernet1/10 and 1/11, MTU 9216), each carrying two sessions with one
+    fibres (Ethernet1/10 and 1/11, MTU 9214), each carrying two sessions with one
     per-circuit key: the underlay (peering_role dci-underlay, ttl 1, bfd, on the
     port /127) and the EVPN session (peering_role dci, ttl 2 multihop, no bfd,
     Loopback1 to the remote loopback), and an interlink
@@ -654,7 +654,7 @@ def build_edge_bgw_pair_data(*, device_name: str, platform: str) -> dict:
             remote_device=remote,
         )
         # The generator sets the routed-port MTU on the physical DCI ports.
-        dci_port["mtu"] = _v(9216)
+        dci_port["mtu"] = _v(9214)
         interfaces.append({"node": dci_port})
         # One key per circuit, on both of its sessions.
         key = f"dci-s3cr3t-{index}"
