@@ -338,6 +338,11 @@ check_definitions:
   - name: validate_reference_fabric
     class_name: CheckReferenceFabric
     file_path: checks/reference_fabric.py
+  # Targetless: a tag is unique across all customers or all segments, and a
+  # customer owns segments of many topologies.
+  - name: validate_routing_tags
+    class_name: CheckRoutingTags
+    file_path: checks/routing_tags.py
   # Targetless: the invariants span topologies (namespaces, the INTERNET VRF,
   # cloud Transit Gateways and virtual interfaces), not one device.
   - name: validate_routing_invariants
@@ -715,6 +720,8 @@ queries:
     file_path: queries/topology/add/application.gql
   - name: app_dependency
     file_path: queries/topology/add/app_dependency.gql
+  - name: customer_routing_tag
+    file_path: queries/topology/add/customer_routing_tag.gql
   - name: app_component
     file_path: queries/topology/add/app_component.gql
   - name: app_component_segment
@@ -755,6 +762,8 @@ queries:
     file_path: queries/validation/pbr_firewall_reachability.gql
   - name: reference_fabric
     file_path: queries/validation/reference_fabric.gql
+  - name: routing_tags
+    file_path: queries/validation/routing_tags.gql
   - name: routing_invariants
     file_path: queries/validation/routing_invariants.gql
   - name: evpn_fabric
@@ -915,6 +924,19 @@ generator_definitions:
     targets: vxlan_segments
     query: vxlan_segment_data
     class_name: VxlanSegmentGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+    watch:
+      files:
+        - generators/
+        - utils/
+  - name: add_customer_routing_tag
+    file_path: generators/topology/customer_routing_tag.py
+    targets: customers
+    query: customer_routing_tag
+    class_name: CustomerRoutingTagGenerator
     execute_in_proposed_change: false
     execute_after_merge: false
     parameters:

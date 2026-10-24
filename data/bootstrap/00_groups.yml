@@ -78,6 +78,8 @@ spec:
       description: MLAG domains — generator target for MLAGWiringGenerator
     - name: app_applications
       description: Application instances — generator target for AppApplicationGenerator
+    - name: customers
+      description: Customers (OrganizationCustomer) — generator target for CustomerRoutingTagGenerator (add_customer_routing_tag)  # yamllint disable-line rule:line-length
     - name: app_components
       description: Application component instances
     - name: app_dependencies

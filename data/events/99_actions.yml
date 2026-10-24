@@ -190,6 +190,16 @@ spec:
     # VRF namespace: generator auto-triggers via group membership (execute_in_proposed_change: true)
     # No deployment-based trigger needed — L3 VNI comes from global pool
 
+    # A customer gets its routing tag when it is created, and every customer
+    # object file declares the `customers` group (tests/unit/test_event_rules.py
+    # requires it: a trigger for a non-member raises). No update trigger: the
+    # tag is written once and never changes.
+    - name: trigger-customer-routing-tag-on-created
+      branch_scope: "other_branches"
+      node_kind: OrganizationCustomer
+      mutation_action: "created"
+      action: run-customer-routing-tag-generator
+
     # Segment triggers: `created` fires when customer_deployments is set inline
     # during object creation (e.g. nested under OrganizationCustomer.network_
     # segments — see data/demos/30_all/07_applications/*/00_segment*.yml), which

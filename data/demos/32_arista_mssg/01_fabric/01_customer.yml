@@ -8,3 +8,5 @@ spec:
   data:
     - name: "Roma Segment Security Demo S.p.A."
       org_id: "MSSG1"
+      member_of_groups:
+        - customers

@@ -72,6 +72,7 @@ route-map RM-VRF-STATIC-2-EVPN-{{ vrf }} permit 10
    match ip address prefix-list PL-VRF-STATIC-{{ vrf }}
 {%- endfor %}
 {%- endif %}
+{%- include 'common/arista_eos_vrf_conn_route_map.j2' -%}
 
 {%- if vxlan and vxlan.enabled %}
 !

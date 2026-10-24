@@ -35,5 +35,7 @@ spec:
   data:
     - name: "IT001 Test Customer"
       org_id: "IT001"
+      member_of_groups:
+        - customers
       egress_service: it001-web-gateway
       private_access_service: it001-ztna-broker

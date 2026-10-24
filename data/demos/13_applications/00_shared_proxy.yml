@@ -19,4 +19,6 @@ spec:
   kind: OrganizationCustomer
   data:
     - org_id: "C001"
+      member_of_groups:
+        - customers
       egress_service: shared-cloud-proxy

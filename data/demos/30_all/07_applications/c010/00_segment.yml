@@ -11,6 +11,8 @@ spec:
   data:
     - name: "Zindra Corp."
       org_id: "C010"
+      member_of_groups:
+        - customers
       network_segments:
         - kind: ManagedVxlanSegment
           data:

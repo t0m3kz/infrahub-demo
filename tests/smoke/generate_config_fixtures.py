@@ -19,7 +19,18 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from tests.smoke.fixture_builders import cisco_xe, edge, fabric, firewall, group_policy, mlag, office, proxy_lb, transit
+from tests.smoke.fixture_builders import (
+    cisco_xe,
+    edge,
+    fabric,
+    firewall,
+    group_policy,
+    mlag,
+    office,
+    proxy_lb,
+    routing_identity,
+    transit,
+)
 from tests.smoke.fixture_builders.common import SMOKE_DIR
 
 # (heading printed before the writer or None when the writer prints its own, writer -> (generated, errors)).
@@ -35,6 +46,7 @@ WRITERS: list[tuple[str | None, Callable[[], tuple[int, int]]]] = [
     (None, mlag.write_fixtures),
     (None, proxy_lb.write_fixtures),
     (None, group_policy.write_fixtures),
+    (None, routing_identity.write_fixtures),
 ]
 
 

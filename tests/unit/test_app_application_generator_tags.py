@@ -163,13 +163,15 @@ class TestComponentTags:
 
 
 def _tenant(segment: dict[str, Any], tag_id: str | None = None) -> dict[str, Any]:
-    """``segment`` as a routed PROD tenant segment (gateway namespace type prod), tagged or not."""
+    """``segment`` as a routed PROD tenant segment (gateway namespace type prod), tagged (group tag and routing
+    tag) or not."""
     return {
         **segment,
         "gateway": {
             "ip_prefix": {"prefix": "10.60.0.0/24", "ip_namespace": {"name": "PROD", "namespace_type": "prod"}}
         },
         "security_tag": {"id": tag_id} if tag_id else None,
+        "routing_tag": 7 if tag_id else None,
     }
 
 
@@ -193,31 +195,39 @@ class TestSegmentTags:
         return _app(frontend)
 
     def test_component_and_edge_target_segments_are_tagged_after_zones_before_rules(self) -> None:
-        """A VLAN segment has no generator: this is where it is tagged, with the edge target's segment."""
+        """A VLAN segment has no generator: this is where it gets its group tag and its routing tag, with the
+        edge target's segment."""
         gen = self._gen()
         order: list[str] = []
         gen._ensure_segment_zones = AsyncMock(side_effect=lambda segments: order.append("zones"))
         gen._reconcile_segment_rule = AsyncMock(side_effect=lambda **kw: order.append("rule") or (True, False))
         ensure = AsyncMock(side_effect=lambda client, lock, *, segment: order.append(f"tag {segment['id']}"))
+        routing = AsyncMock(side_effect=lambda client, *, segment: order.append(f"routing {segment['id']}"))
 
-        with patch("generators.topology.application_security.ensure_segment_tag", ensure):
+        with (
+            patch("generators.topology.application_security.ensure_segment_tag", ensure),
+            patch("generators.topology.application_security.ensure_segment_routing_tag", routing),
+        ):
             asyncio.run(gen._reconcile_application_rules(self._app_on_tenant_segments()))
 
-        assert order == ["zones", "tag seg-src", "tag seg-dst", "rule"]
+        assert order == ["zones", "tag seg-src", "routing seg-src", "tag seg-dst", "routing seg-dst", "rule"]
         assert all(call.args == (gen.client, gen.resource_lock) for call in ensure.await_args_list)
+        assert all(call.args == (gen.client,) for call in routing.await_args_list)
 
     def test_second_run_over_tagged_segments_writes_nothing(self) -> None:
-        """With the real helper, segments that carry their tag cause no lookup, lock or write."""
+        """With the real helpers, segments that carry both tags cause no lookup, lock or write."""
         gen = self._gen()
         gen.client = MagicMock()
         gen.client.create = AsyncMock()
         gen.client.filters = AsyncMock()
+        gen.client.get = AsyncMock()
         gen._reconcile_segment_rule = AsyncMock(return_value=(False, True))
 
         asyncio.run(gen._reconcile_application_rules(self._app_on_tenant_segments(tag_id="tag-seg")))
 
         gen.client.create.assert_not_awaited()
         gen.client.filters.assert_not_awaited()
+        gen.client.get.assert_not_awaited()
         gen.resource_lock.assert_not_called()
 
     def test_segment_tag_failure_stops_the_application_before_any_rule(self) -> None:
@@ -229,6 +239,22 @@ class TestSegmentTags:
         with (
             patch("generators.topology.application_security.ensure_segment_tag", ensure),
             pytest.raises(LookupError, match="No group tag pool"),
+        ):
+            asyncio.run(gen._reconcile_application_rules(self._app_on_tenant_segments()))
+
+        gen._reconcile_segment_rule.assert_not_awaited()
+
+    def test_routing_tag_pool_missing_stops_the_application_before_any_rule(self) -> None:
+        """An untagged routed segment and no Segment-Routing-Tag pool: the run fails, no rule is planned."""
+        gen = self._gen()
+        gen.client = MagicMock()
+        gen.client.get = AsyncMock(return_value=None)
+        gen._reconcile_segment_rule = AsyncMock()
+        group_tag = AsyncMock()
+
+        with (
+            patch("generators.topology.application_security.ensure_segment_tag", group_tag),
+            pytest.raises(LookupError, match="Segment-Routing-Tag"),
         ):
             asyncio.run(gen._reconcile_application_rules(self._app_on_tenant_segments()))
 

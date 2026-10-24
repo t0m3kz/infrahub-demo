@@ -99,17 +99,8 @@ interface {{ interface.name }}
 ! Configure route-maps
 route-map RM-CONN-2-BGP permit 10
    match interface {{ loopback_name }}
-{%- if leaf_transit_prefixes %}
-!
-! The firewall transit /29s this leaf holds locally for PBR are originated by the borders only
-! documented-not-lab-verified: a deny entry keeps the leaf's connected transit /29 out of the EVPN type-5 table
-{%- for prefix in leaf_transit_prefixes %}
-ip prefix-list PL-XCHG-TRANSIT seq {{ loop.index * 10 }} permit {{ prefix }}
-{%- endfor %}
-route-map RM-VRF-CONN-2-EVPN deny 5
-   match ip address prefix-list PL-XCHG-TRANSIT
-route-map RM-VRF-CONN-2-EVPN permit 10
-{%- endif %}
+{%- set vrf_conn_transit = leaf_transit_prefixes %}
+{%- include 'common/arista_eos_vrf_conn_route_map.j2' -%}
 
 {%- if vxlan and vxlan.enabled %}
 !

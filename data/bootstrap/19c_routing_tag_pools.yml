@@ -1,0 +1,28 @@
+---
+# Routing tags: the numbers behind the standard communities that mark a route with its
+# customer (64496:<tag>) and its segment (64497:<tag>), derived in utils/routing_identity.py.
+# A community is a tag for reading the routing table, never a filter: the model's
+# prefix-lists stay the control. The tags are drawn from here by generators, never typed in
+# data (the object loader cannot draw from a pool): add_customer_routing_tag for a customer,
+# the segment and application generators for a routed tenant segment.
+#
+# 1-65534: the community value is 16 bits and 65535 is reserved. Never shrink a range once
+# tags are allocated. The segment pool is bound to the generic, so the VLAN and the VXLAN
+# segments draw from one range and a tag identifies a segment across both.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CoreNumberPool
+  data:
+    - name: Customer-Routing-Tag
+      description: "Customer routing tags (OrganizationCustomer.routing_tag)"
+      node: OrganizationCustomer
+      node_attribute: routing_tag
+      start_range: 1
+      end_range: 65534
+    - name: Segment-Routing-Tag
+      description: "Segment routing tags (ManagedNetworkSegment.routing_tag)"
+      node: ManagedNetworkSegment
+      node_attribute: routing_tag
+      start_range: 1
+      end_range: 65534

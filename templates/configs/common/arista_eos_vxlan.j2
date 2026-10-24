@@ -74,7 +74,7 @@ router bgp {{ bgp_config.local_as.asn }}
       {%- for rt in mapping.import_route_targets | default([]) %}
       route-target import evpn {{ rt }}
       {%- endfor %}
-      redistribute connected{% if eos_leaf and leaf_transit_prefixes %} route-map RM-VRF-CONN-2-EVPN{% endif %}
+      redistribute connected{% if (eos_leaf and leaf_transit_prefixes) or origination %} route-map RM-VRF-CONN-2-EVPN{% endif %}
 {%- if not eos_leaf and vrf_routes | default([]) | selectattr('vrf', 'equalto', mapping.vrf_name) | list %}
       redistribute static route-map RM-VRF-STATIC-2-EVPN-{{ mapping.vrf_name }}
 {%- endif %}

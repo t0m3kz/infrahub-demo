@@ -104,3 +104,16 @@ nodes:
     human_friendly_id:
       - org_id__value
     display_label: "{{name__value}} ({{org_id__value}})"
+    attributes:
+      # Not `unique: true`: an optional attribute collides on the second unset value (a customer
+      # created by data has none until add_customer_routing_tag draws it). The pool hands out
+      # distinct numbers and checks/routing_tags.py reports a duplicate.
+      - name: routing_tag
+        kind: Number
+        label: Routing Tag
+        optional: true
+        order_weight: 1100
+        description: "Tag of the customer community 64496:<tag> on its routes (drawn from a pool, never typed)."
+        parameters:
+          min_value: 1
+          max_value: 65534

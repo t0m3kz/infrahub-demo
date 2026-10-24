@@ -1,6 +1,7 @@
 {#- Nokia SR OS Leaf Configuration — flat MD-CLI form (every command is a
     full path from "configure", no nested block/exit), consistent with
-    every common/nokia_sros_*.j2 fragment this file includes. -#}
+    every common/nokia_sros_*.j2 fragment this file includes.
+    Routing identity communities (utils/routing_identity.py) are not rendered on this platform yet. -#}
 configure system hostname "{{ hostname }}"
 configure system dns resolver admin-state enable
 {%- include 'common/nokia_sros_mclag.j2' %}

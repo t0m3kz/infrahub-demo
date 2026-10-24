@@ -53,8 +53,13 @@ def build_device_data(
     isolation_mode: str | None = None,
     security_fields: bool = False,
     vlan_segment_vrf: bool = False,
+    routing_identity: bool = False,
 ) -> dict:
     """Build a complete raw GraphQL response for a device config query.
+
+    ``routing_identity`` tags the segments with their routing_tag and their owner's: seg-100 (segment 12, owner 5),
+    and with ``vlan_segment_vrf`` seg-200 too (segment 13, owner without a tag), so a device renders both the
+    two-community and the segment-only origination sequence.
 
     ``vlan_segment_vrf`` puts the VLAN-only seg-200 in VRF_A with an L3 VNI instead of the default
     namespace: an office LISP fabric refuses a gateway outside a VRF with an L3 instance-id.
@@ -410,6 +415,7 @@ def build_device_data(
                 "isolation_mode": isolation_mode,
                 "has_firewall": microseg,
                 "vlan_domain_id": vlan_domain_id,
+                **({"routing_identity": (12, 5)} if routing_identity else {}),
             }
         )
         # SR OS models no VLAN-only service: it has no vpls/vprn to attach the gateway IRB
@@ -427,6 +433,7 @@ def build_device_data(
                     "security_policy": policy_vlan,
                     "isolation_mode": isolation_mode,
                     "num_deployments": 1,
+                    **({"routing_identity": (13, None)} if routing_identity and vlan_segment_vrf else {}),
                 }
             )
 

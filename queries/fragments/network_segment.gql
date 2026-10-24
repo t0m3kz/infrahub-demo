@@ -27,10 +27,15 @@ fragment SegmentSecurityPolicyFields on ManagedNetworkSegment {
     }
   }
   isolation_mode { value }
+  # routing_tag: the segment's and its owner's tag, rendered as the standard communities
+  # 64497:<segment tag> and 64496:<customer tag> on the routes the leaf originates
+  # (transforms/helpers/routing_identity.py). A tag is visibility only, never a filter.
+  routing_tag { value }
   owner {
     node {
       id
       org_id { value }
+      routing_tag { value }
     }
   }
   # The segment's own rules (its security_policy) and the rules into it
@@ -153,6 +158,10 @@ fragment SegmentDeploymentsOnDeploymentFields on TopologySegmentHosting {
         segment {
           node {
             id
+            # The routing identity of the routes this segment's SVI originates
+            # (transforms/helpers/routing_identity.py); selected on the generic, never inside a `... on` block.
+            routing_tag { value }
+            owner { node { routing_tag { value } } }
             ... on ManagedVlanSegment {
               customer_name { value }
               environment { value }

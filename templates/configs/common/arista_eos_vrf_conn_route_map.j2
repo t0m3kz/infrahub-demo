@@ -1,0 +1,31 @@
+{#- RM-VRF-CONN-2-EVPN: the route-map of `redistribute connected` inside a tenant VRF of `router bgp`, defined before
+    the BGP stanza that references it. Rendered only when it has something to do (arista_eos_vxlan.j2 names it under
+    the same condition): the leaf's own exchange transit /29s kept out of EVPN (`vrf_conn_transit`, set by the
+    including leaf template) and/or the routing-identity communities of the tagged segments (`origination`).
+    D: Arista EOS route-map: `match ip address prefix-list`, `set community <aa:nn> ... additive`. A community is
+    a tag for visibility (utils/routing_identity.py), never a filter. #}
+{%- if vrf_conn_transit %}
+!
+! The firewall transit /29s this leaf holds locally for PBR are originated by the borders only
+! documented-not-lab-verified: a deny entry keeps the leaf's connected transit /29 out of the EVPN type-5 table
+{%- for prefix in vrf_conn_transit %}
+ip prefix-list PL-XCHG-TRANSIT seq {{ loop.index * 10 }} permit {{ prefix }}
+{%- endfor %}
+route-map RM-VRF-CONN-2-EVPN deny 5
+   match ip address prefix-list PL-XCHG-TRANSIT
+{%- endif %}
+{%- if origination %}
+!
+! Routing identity: customer and segment communities on the originated segment prefixes
+{%- for entry in origination %}
+ip prefix-list PL-ORIG-{{ entry.name }} seq 10 permit {{ entry.prefix }}
+{%- endfor %}
+{%- for entry in origination %}
+route-map RM-VRF-CONN-2-EVPN permit {{ loop.index * 10 }}
+   match ip address prefix-list PL-ORIG-{{ entry.name }}
+   set community {{ entry.communities | join(' ') }} additive
+{%- endfor %}
+{%- endif %}
+{%- if vrf_conn_transit or origination %}
+route-map RM-VRF-CONN-2-EVPN permit {{ ((origination | default([]) | length) + 1) * 10 }}
+{%- endif -%}

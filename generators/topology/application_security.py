@@ -11,6 +11,7 @@ from utils.ports import PortProfileHelper
 from ..common import CommonGenerator
 from ..connections import CablingMixin
 from ..helpers.lb_vip import is_cloud_component
+from ..helpers.routing_tag import ensure_segment_routing_tag
 from ..helpers.rules import RulesPlanner
 from ..helpers.security_tag import clear_component_tag, ensure_security_tag, ensure_segment_tag
 from ..lb_vip import LoadbalancerVipMixin
@@ -214,11 +215,12 @@ class AppApplicationGenerator(
         # has not run yet.
         segments = self._used_segments(components, edges)
         await self._ensure_segment_zones(segments)
-        # After the zones (the tenant test reads them); a VLAN segment is
-        # tagged only here. A segment without an id is a component without one.
+        # After the zones (the tenant test reads them); a VLAN segment gets its
+        # group tag and its routing tag only here. A segment without an id is a component without one.
         for segment in segments:
             if segment.get("id"):
                 await ensure_segment_tag(self.client, self.resource_lock, segment=segment)
+                await ensure_segment_routing_tag(self.client, segment=segment)
         for component in components:
             await self._ensure_segment_isolation_mode(component.get("network_segment") or {}, app_security_profile)
         # An edge target on one of those segments is a second dict of it:

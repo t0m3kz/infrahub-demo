@@ -12,6 +12,8 @@ spec:
   data:
     - name: "Krafven GmbH"
       org_id: "C008"
+      member_of_groups:
+        - customers
       network_segments:
         - kind: ManagedVxlanSegment
           data:

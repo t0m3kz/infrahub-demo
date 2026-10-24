@@ -219,6 +219,7 @@ class ManagedNetworkSegment(CoreNode):
     isolation_mode: Dropdown
     name: String
     pbr_enabled: Boolean
+    routing_tag: IntegerOptional
     segment_type: DropdownOptional
     status: Dropdown
     gateway: RelationshipAttribute[IpamIPAddress]
@@ -466,7 +467,7 @@ class LocationCountry(LocationGeneric):
 
 
 class OrganizationCustomer(OrganizationGeneric, OrganizationEntity):
-    pass
+    routing_tag: IntegerOptional
 
 
 class TopologyCustomerCloud(TopologyCustomer, TopologyDeployment, TopologyConnectableLocation):
