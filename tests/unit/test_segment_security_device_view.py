@@ -1,7 +1,7 @@
 """Unit tests for the EOS MSS-G device view (transforms/helpers/group_policy/ _segment_security_build),
 its dispatcher (group_policy_device_view) and the EOS leaf / border-leaf templates that render it.
 
-The fleet is the smoke fixture's (tests/smoke/generate_config_fixtures.py ``_gpo_fleet_roots``) on 7280R3 VTEPs at
+The fleet is the smoke fixture's (tests/smoke/fixture_builders/group_policy.py ``_gpo_fleet_roots``) on 7280R3 VTEPs at
 4.36.2F: DC10 (enforcing) with a leaf, an access leaf and a border leaf in the EOS row, a legacy DC12, NONPROD
 (web-np, app-np, db-np; web-np reaches the internet, db-np is stretched to DC12) and PROD (pay-p, microsegmented,
 whose contracts name component groups, and portal-p).
@@ -21,7 +21,8 @@ from unittest.mock import patch
 import pytest
 from jinja2 import Template
 
-from tests.smoke.generate_config_fixtures import (
+from tests.smoke.fixture_builders.common import run_transform
+from tests.smoke.fixture_builders.group_policy import (
     _GPO_EOS,
     _GPO_NXOS,
     _GPO_PAY_DB_TAGS,
@@ -35,7 +36,6 @@ from tests.smoke.generate_config_fixtures import (
     gpo_roots,
     gpo_segment,
     gpo_view,
-    run_transform,
 )
 from tests.smoke.test_configs_smoke import _run_transform
 from transforms.common import BaseDeviceTransform

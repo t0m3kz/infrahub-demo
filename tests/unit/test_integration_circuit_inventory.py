@@ -22,8 +22,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from graphql import parse
 
+from tests.integration import circuit_helpers, interconnect_queries, interconnect_rules
 from tests.integration import test_62_all_demo_interconnects as interconnects
-from tests.integration import test_helpers
 from tests.integration.test_constants import (
     ALL_DEMO_HANDOFF_PARTY_ASNS,
     ALL_DEMO_VIRTUAL_CIRCUITS,
@@ -41,7 +41,7 @@ async def inventory(
     monkeypatch: pytest.MonkeyPatch, without_cables: bool = False, without_circuits: tuple[str, ...] = ()
 ) -> dict[str, list[dict[str, Any]]]:
     """The real fetch_interconnect_inventory over a mocked client answering with the shipped data."""
-    monkeypatch.setattr(test_helpers, "DATA_PROPAGATION_DELAY", 0)
+    monkeypatch.setattr(circuit_helpers, "DATA_PROPAGATION_DELAY", 0)
     client = MagicMock()
     client.execute_graphql = AsyncMock(return_value=inventory_payload(without_cables, without_circuits))
     return await fetch_interconnect_inventory(client=client, branch="main")
@@ -64,7 +64,7 @@ async def test_the_shipped_data_matches_the_virtual_circuit_expectations(monkeyp
     """Kind, owner, locations, ends, derived carrier, namespace and cloud endpoint of all 30_all circuits."""
     data = await inventory(monkeypatch)
     assert {c["name"] for c in data["virtual"]} == set(ALL_DEMO_VIRTUAL_CIRCUITS)
-    assert interconnects._expectation_errors(data["virtual"]) == []
+    assert interconnect_rules._expectation_errors(data["virtual"]) == []
 
 
 async def test_the_shipped_data_passes_every_per_kind_placement_rule(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -106,7 +106,7 @@ async def test_without_the_internet_underlay_a_tunnel_rides_no_internet_circuit(
     assert any(
         "C001-OFFICE-SDWAN-FR2" in e and "rides no live internet physical circuit" in e for e in _placement(data)
     )
-    assert any("C001-OFFICE-SDWAN-FR2: carrier" in e for e in interconnects._expectation_errors(data["virtual"]))
+    assert any("C001-OFFICE-SDWAN-FR2: carrier" in e for e in interconnect_rules._expectation_errors(data["virtual"]))
 
 
 async def test_without_the_fibre_a_dci_is_on_no_physical_circuit(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -206,7 +206,7 @@ def test_contiguous_walks_every_order_of_the_hops(
     hops: list[list[str]], start: str, finish: str, expected: bool
 ) -> None:
     """A path is contiguous when every hop is used, in any order and direction, and fails on a gap or an unused hop."""
-    assert interconnects._contiguous(hops, start, finish) is expected
+    assert interconnect_rules._contiguous(hops, start, finish) is expected
 
 
 @pytest.mark.parametrize(
@@ -215,7 +215,7 @@ def test_contiguous_walks_every_order_of_the_hops(
 )
 def test_vlan_is_the_numeric_suffix_of_a_sub_interface(interface: str, vlan: int | None) -> None:
     """The VLAN is the number after the last dot of a sub-interface; a bare or non-numeric name has none."""
-    assert interconnects._vlan(interface) == vlan
+    assert interconnect_rules._vlan(interface) == vlan
 
 
 def _session(**changes: Any) -> dict[str, Any]:
@@ -250,8 +250,8 @@ _EXPECTED_SESSION: dict[str, Any] = {
 
 def test_session_errors_name_every_knob_that_differs() -> None:
     """Each differing knob (ttl, BFD, route limit, key, families) is named once, in a fixed order."""
-    assert interconnects._session_errors(_session(), _EXPECTED_SESSION) == []
-    errors = interconnects._session_errors(
+    assert interconnect_rules._session_errors(_session(), _EXPECTED_SESSION) == []
+    errors = interconnect_rules._session_errors(
         _session(
             ttl={"value": 2},
             bfd_enabled={"value": False},
@@ -272,31 +272,33 @@ def _prefix(prefix: str, role: str = "technical") -> dict[str, Any]:
 def test_p2p_errors_hold_a_pair_of_addresses_to_its_pool_and_its_one_prefix() -> None:
     """The /31 (point-to-point IPv4 link) of a pair must be adjacent, in the pool, with one technical prefix object."""
     pools = [ipaddress.ip_network("10.255.128.0/20")]
-    good = interconnects._p2p_errors(
+    good = interconnect_rules._p2p_errors(
         "h", ["10.255.128.0/31", "10.255.128.1/31"], 31, pools, [_prefix("10.255.128.0/31")]
     )
     assert good == []
     assert any(
         "not one P2P" in e
-        for e in interconnects._p2p_errors("h", ["10.255.128.0/31", "10.255.128.4/31"], 31, pools, None)
+        for e in interconnect_rules._p2p_errors("h", ["10.255.128.0/31", "10.255.128.4/31"], 31, pools, None)
     )
     assert any(
         "is not a /31" in e
-        for e in interconnects._p2p_errors("h", ["10.0.0.0/31", "10.0.0.1/31"], 31, pools, [_prefix("10.0.0.0/31")])
+        for e in interconnect_rules._p2p_errors(
+            "h", ["10.0.0.0/31", "10.0.0.1/31"], 31, pools, [_prefix("10.0.0.0/31")]
+        )
     )
     assert any(
         "0 prefix object(s)" in e
-        for e in interconnects._p2p_errors("h", ["10.255.128.0/31", "10.255.128.1/31"], 31, pools, None)
+        for e in interconnect_rules._p2p_errors("h", ["10.255.128.0/31", "10.255.128.1/31"], 31, pools, None)
     )
     assert any(
         "has role customer" in e
-        for e in interconnects._p2p_errors(
+        for e in interconnect_rules._p2p_errors(
             "h", ["10.255.128.0/31", "10.255.128.1/31"], 31, pools, [_prefix("10.255.128.0/31", "customer")]
         )
     )
     assert any(
         "2 prefix object(s)" in e
-        for e in interconnects._p2p_errors(
+        for e in interconnect_rules._p2p_errors(
             "h", ["10.255.128.0/31", "10.255.128.1/31"], 31, pools, [_prefix("10.255.128.0/31")] * 2
         )
     )
@@ -317,10 +319,10 @@ def test_every_handoff_party_asn_is_a_declared_process() -> None:
 
 
 _QUERIES_UNDER_TEST: dict[str, str] = {
-    "sessions": interconnects.SESSIONS_QUERY,
-    "circuit_prefixes": interconnects.CIRCUIT_PREFIXES_QUERY,
-    "group_members": interconnects.GROUP_MEMBERS_QUERY,
-    "address_count": interconnects.ADDRESS_COUNT_QUERY,
+    "sessions": interconnect_queries.SESSIONS_QUERY,
+    "circuit_prefixes": interconnect_queries.CIRCUIT_PREFIXES_QUERY,
+    "group_members": interconnect_queries.GROUP_MEMBERS_QUERY,
+    "address_count": interconnect_queries.ADDRESS_COUNT_QUERY,
     "interconnect_inventory": (_QUERIES / "get_interconnect_inventory.gql").read_text(),
     **{f"snapshot_{kind}": snapshot_query(kind, selection, 0) for kind, selection in TOPOLOGY_SNAPSHOT_KINDS.items()},
 }

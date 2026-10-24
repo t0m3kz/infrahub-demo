@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.integration import test_64_all_demo_firewall_config as firewall_config
+from tests.integration import firewall_config_helpers as firewall_config
 
 _GOLDEN = Path(__file__).parents[1] / "smoke" / "configs" / "edge_cisco_nxos_bgw_pair" / "output.txt"
 

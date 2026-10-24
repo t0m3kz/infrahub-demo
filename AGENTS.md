@@ -536,6 +536,9 @@ tests/
 - **Type hints and docstrings are required** for all test functions.
 - Use descriptive names for tests (e.g., `test_create_device_with_invalid_name_raises_error`).
 - Use `pytest.mark.asyncio` for async tests and `pytest.mark.parametrize` for testing multiple inputs.
+- **No Python module under `tests/` exceeds 1000 lines** (guarded by `tests/unit/test_test_file_sizes.py`). Split by
+  topic into sibling `test_<name>_<topic>.py` modules; builders used by several of them go into one
+  `<name>_helpers.py` (no `test_` prefix, imported as `from tests.unit.<name>_helpers import ...`).
 
 ### Running Tests
 
@@ -554,8 +557,8 @@ uv run pytest --cov=.
 ### Which integration run a change needs
 
 Integration runs go through `uv run invoke test-integration` (see the `infrahub-running-integration-tests` skill), one
-stack at a time. The full 30_all subset is `test_01, 02, 59, 60, 61, 62, 64, 65, 66`; `test_65` (idempotency) is the last
-~20 of its ~55 minutes, `test_66` (circuit lifecycle, mutates the branch) runs after it. Match the run to the change:
+stack at a time. The full 30_all subset is `test_01, 02, 59, 60, 61, 62, 64, 65, 66` (`62` is `test_62`, `62b`, `62c`;
+`64` is `test_64`, `64b`); `test_65` (idempotency) is the last ~20 of its ~55 minutes, `test_66` (circuit lifecycle, mutates the branch) runs after it. Match the run to the change:
 
 | Change touches | Run |
 | --- | --- |

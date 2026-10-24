@@ -1,6 +1,6 @@
 """Unit tests for MLAGWiringMixin (generators/mlag.py) — shared by
 DeviceMixin._ensure_mlag_pairs and MLAGGenerator. Mirrors
-test_device_mixin.py's TestEnsureHaInterfaces/TestEnsureHaCable style: a
+test_device_mixin_ha.py's TestEnsureHaInterfaces/TestEnsureHaCable style: a
 bare mixin instance with mocked client/logger, asserting on
 .filters/.create/.save/.delete call args.
 

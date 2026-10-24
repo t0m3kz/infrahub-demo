@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from tests.unit.test_circuit_placement_check import DCI, DF10, HANDOFF, INET_OFFICE, TUNNEL, _edges
+from tests.unit.circuit_placement_check_helpers import DCI, DF10, HANDOFF, INET_OFFICE, TUNNEL, _edges
 from tests.unit.test_circuit_query_shapes import _QUERIES, _payload_paths, _selected_paths
 from tests.unit.test_routing_invariants_check import _vif
 

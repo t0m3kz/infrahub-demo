@@ -1,7 +1,7 @@
 """Unit tests for CustomerDeploymentDCExchangeGenerator (generators/topology/customer_dc.py).
 
 Covers FirewallContext and LoadbalancerContext target resolution (shared +
-dedicated; their legs are tests/unit/test_customer_dc_transit.py), the dedicated
+dedicated; their legs are tests/unit/test_customer_dc_transit*.py), the dedicated
 pair step, and the _all_controllers wiring that lets create_devices() route
 dedicated FW/LB pairs to an existing ManagedController.
 TopologyCustomerDC never has a circuit of its own (DC customers reach

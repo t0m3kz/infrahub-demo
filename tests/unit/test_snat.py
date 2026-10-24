@@ -229,7 +229,7 @@ def test_fortinet_has_no_accept_all_policy_into_management() -> None:
 
 
 def test_fortinet_permit_into_management_carries_the_pool() -> None:
-    from tests.unit.test_firewall_transform import _render_template
+    from tests.unit.firewall_transform_helpers import _render_template
 
     legs = [
         {

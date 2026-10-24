@@ -36,7 +36,7 @@ Each scenario creates infrastructure incrementally and merges to main:
 - `test_18_dc6_add_spine.py` - **Scenario 5:** Add a spine to DC6-1-POD-1 by swapping its spine element
 - `test_19_dc6_segments.py` - **Scenario 6:** Board C001 into DC6 and deploy two VXLAN segments (`data/20_segments`)
 - `test_20_dc6_add_endpoints.py` - **Scenario 7:** Endpoint servers across DC6's pods (`data/demos/06_servers`)
-- `test_59` - `test_66` - **Scenario 8:** The `30_all` demo, end to end (see [The 30_all Suite](#the-30_all-suite)). This one deviates from the pattern above: it loads in stages, shares one branch across seven modules, and does not merge to main.
+- `test_59` - `test_66` - **Scenario 8:** The `30_all` demo, end to end (see [The 30_all Suite](#the-30_all-suite)). This one deviates from the pattern above: it loads in stages, shares one branch across ten modules, and does not merge to main.
 - `test_71` - **Scenario 9:** The Arista EOS MSS-G demo fabric (`data/demos/32_arista_mssg`), on its own branch (see [The Arista MSS-G Suite](#the-arista-mss-g-suite)).
 
 Scenarios 2-7 form one chain on DC6: `test_12` depends on `dc6_verify_after_merge` from `test_10`, and each
@@ -58,16 +58,28 @@ deployed for the chain, so `DC_DEPLOYMENT_TEST_DCS=dc6` cuts `test_10` down to t
 
 #### `test_helpers.py` - Generic Async Utilities
 
+`test_helpers.py` re-exports the helpers, which live in topic modules: `wait_helpers.py`, `query_files.py`,
+`dc_topology_helpers.py`, `segment_helpers.py`, `branch_helpers.py`, `endpoint_app_helpers.py`,
+`circuit_helpers.py`, `service_inventory_helpers.py`, `fabric_pool_helpers.py` and `snapshot_helpers.py`. A fetcher
+sleeps `DATA_PROPAGATION_DELAY` in the module that defines it, so a unit test that skips the sleep patches that module.
+
 - `wait_for_condition()` - Polling utility for async conditions
 - `render_device_config()` - Run a device-config query and its transform in-process (test_64, test_71)
 - `snapshot_topology()` / `diff_snapshots()` - Snapshot the graph's topology kinds and diff two snapshots (test_65, test_71)
 
+#### Scenario helpers of test_62 and test_64
+
+- `interconnect_queries.py` / `interconnect_rules.py` - The GraphQL queries and the rules `test_62`, `test_62b` and `test_62c` assert
+- `firewall_config_helpers.py` - The queries and rules `test_64` and `test_64b` assert on the rendered configs
+
 #### Other Files
 
-- `test_constants.py` - Timeout and delay constants, and the 30_all expectations: what echoes the data
-  (generator floors, object counts, footprints, applications, segment legs) is computed from the YAML through
-  `demo_data.py`, so boarding a customer needs no constant edit; design pins (DCI ports, MANAGEMENT_*, host rows)
-  stay typed
+- `test_constants.py` - Re-exports the constants, which live in `suite_constants.py` (data paths, DC6 chain,
+  timeout and delay constants), `all_demo_constants.py`, `all_demo_circuit_constants.py`,
+  `all_demo_firewall_constants.py`, `all_demo_loadbalancer_constants.py` (the 30_all expectations) and
+  `fabric_constants.py`. What echoes the data (generator floors, object counts, footprints, applications, segment
+  legs) is computed from the YAML through `demo_data.py`, so boarding a customer needs no constant edit; design
+  pins (DCI ports, MANAGEMENT_*, host rows) stay typed
 - `demo_data.py` - Reads the objects the demo files declare (nested ones included), renders computed names and
   counts the runs a load must dispatch; also used by the unit tests
 - `conftest.py` - Pytest fixtures and base test class
@@ -84,7 +96,7 @@ data/
 ```
 
 The DC6 chain (`test_12`-`test_20`) loads its switch, rack, pod and server data straight from `data/demos/`
-(paths in `test_constants.py`), so the demos and the tests cannot drift apart. `20_segments` is the one
+(paths in `suite_constants.py`), so the demos and the tests cannot drift apart. `20_segments` is the one
 test-local exception: `data/demos/07_customers` and `08_segments` depend on the `30_all` customer organizations
 and still use the old `[org_id, environment]` footprint HFID (a footprint's HFID is now its `name`), so they cannot be loaded on their own.
 
@@ -147,15 +159,18 @@ The fast profile intentionally stops after setup and repository synchronization.
 
 ### The 30_all Suite
 
-`test_59` through `test_66` are one scenario split across seven modules. They share a single branch (`ALL_DEMO_BRANCH`) and run in dependency order:
+`test_59` through `test_66` are one scenario split across ten modules. They share a single branch (`ALL_DEMO_BRANCH`) and run in dependency order:
 
 | Module | Covers |
 | --- | --- |
 | `test_59_all_demo_load.py` | The staged load, no failed tasks, every trigger-dispatched generator, declared-object inventory |
 | `test_60_app_catalogue.py` | Deployment-request materialization, proxy egress rule, inter-segment firewall rule |
 | `test_61_all_demo_compute.py` | The three fabrics, their routing, host cabling, and the application graph down to hosting devices |
-| `test_62_all_demo_interconnects.py` | Physical and virtual circuits, cloud terminations, firewall contexts, segment legs, which metro's firewalls serve each colocation deployment |
-| `test_64_all_demo_firewall_config.py` | Colo cloud/partner/SaaS zone policies: served by the FR metro's firewall pair, `CheckFirewall` passes, every pair member renders them and a firewall outside the pair does not. Office LISP fabrics: `CheckLispFabric` passes and every access-switch and distribution-switch renders its LISP site in-process (`router lisp`, the map-server `site` and EID records, `proxy-etr` / `use-petr` where the office has an SD-WAN edge; every IOS-XE line is unverified-no-lab) |
+| `test_62_all_demo_interconnects.py` | Physical and virtual circuits, their locations and the circuits each location lists |
+| `test_62b_all_demo_tenant_services.py` | Firewall and load-balancer contexts, exchange transit legs, SNAT addresses, VIPs and their rules, segment legs |
+| `test_62c_all_demo_circuit_sessions.py` | Which metro's firewalls serve each colocation deployment, the DCI, handoff and tunnel sessions, the internet upstream, zone edge pairs and office WAN exits |
+| `test_64_all_demo_firewall_config.py` | Colo cloud/partner/SaaS zone policies: served by the FR metro's firewall pair, `CheckFirewall` passes, every pair member renders them and a firewall outside the pair does not; the transit legs, SNAT and internet egress renders |
+| `test_64b_all_demo_management_lb_config.py` | The management exchange and services rules, the leaf without PBR to them, the load-balancer renders (F5 contexts, border-leaf legs, client-leaf bypass). Office LISP fabrics: `CheckLispFabric` passes and every access-switch and distribution-switch renders its LISP site in-process (`router lisp`, the map-server `site` and EID records, `proxy-etr` / `use-petr` where the office has an SD-WAN edge; every IOS-XE line is unverified-no-lab) |
 | `test_65_all_demo_idempotency.py` | Two more runs of the security generators, then of the topology generators, leave rules, contexts, devices, cables, addresses, pools and allocated numbers unchanged |
 | `test_66_all_demo_circuit_lifecycle.py` | Runs after `test_65` because it mutates the branch. Decommissioning an Interconnect's carrier, and a Handoff itself, removes its BGP sessions, its `/31` (`/127`) and the port addresses (ports, key and other circuits' sessions untouched); setting it active again rebuilds them on the same key. Each test restores the status it changed |
 
@@ -378,7 +393,7 @@ Failed tests automatically trigger branch cleanup via the `cleanup_on_failure` f
 
 ### Timeout Adjustments
 
-Modify constants in `test_constants.py`:
+Modify constants in `suite_constants.py`:
 
 ```python
 GENERATOR_TASK_TIMEOUT = 1800  # 30 minutes

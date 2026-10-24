@@ -49,18 +49,18 @@ from generators.topology.colocation_fabric import (
     ColocationZoneGenerator,
     VirtualColocationGenerator,
 )
-from tests.unit.simulators.fabric_designs import (
-    COLO_METRO_DESIGN_NAMES,
-    COLO_ZONE_DESIGN_NAMES,
-    colo_metro_design,
-    colo_zone_design,
-)
-from tests.unit.test_colocation_zone_generator import (
+from tests.unit.colocation_zone_generator_helpers import (
     _EDGE_TEMPLATE,
     _EDGE_TEMPLATE_WITH_ALL_SERVICE_PORTS,
     _VIRTUAL_EDGE_TEMPLATE,
     _made_virtual,
     _made_zone,
+)
+from tests.unit.simulators.fabric_designs import (
+    COLO_METRO_DESIGN_NAMES,
+    COLO_ZONE_DESIGN_NAMES,
+    colo_metro_design,
+    colo_zone_design,
 )
 
 # zone design -> (loopback, management, technical) IPv4 prefix lengths, by hand from the design rows:
