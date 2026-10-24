@@ -9,3 +9,5 @@ spec:
   data:
     - name: "IT001 Test Customer"
       org_id: "IT001"
+      member_of_groups:
+        - customers

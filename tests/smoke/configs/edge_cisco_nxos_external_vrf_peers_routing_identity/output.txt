@@ -1,0 +1,273 @@
+!
+! dc1-edge-01 Configuration
+!
+hostname dc1-edge-01
+!
+feature ospf
+feature bgp
+feature bfd
+feature interface-vlan
+feature lacp
+feature vpc
+feature lldp
+nv overlay evpn
+!
+!
+! VRF Contexts (BGP handoffs without an L3 VNI)
+vrf context PROD
+  address-family ipv4 unicast
+!
+vrf context NON-PROD
+  address-family ipv4 unicast
+!
+!
+! Interfaces
+interface Ethernet1/12
+  no switchport
+!
+interface Ethernet1/13
+  no switchport
+!
+interface Ethernet1
+  no switchport
+  no shutdown
+  ip address 10.1.0.1/31
+
+!
+interface Ethernet1/12.1200
+  encapsulation dot1q 1200
+  no shutdown
+  vrf member PROD
+  ip address 10.255.8.0/31
+
+!
+interface Ethernet1/13.1000
+  encapsulation dot1q 1000
+  no shutdown
+  vrf member PROD
+  ip address 10.255.5.5/30
+
+!
+interface Ethernet1/13.1001
+  encapsulation dot1q 1001
+  no shutdown
+  vrf member NON-PROD
+  ip address 10.255.6.5/30
+
+!
+interface Ethernet1/13.1300
+  encapsulation dot1q 1300
+  no shutdown
+  vrf member PROD
+  ip address 10.255.7.0/31
+
+!
+interface Ethernet1/13.1900
+  encapsulation dot1q 1900
+  no shutdown
+  vrf member PROD
+  ip address 10.255.5.0/31
+
+!
+interface Ethernet2
+  no switchport
+  no shutdown
+  ip address 10.1.0.3/31
+
+!
+interface Loopback0
+  no shutdown
+  ip address 10.0.0.1/32
+
+!
+!
+! Route-maps
+route-map RM-CONN-2-BGP permit 10
+  match interface loopback0
+!
+ip community-list expanded CL-ROUTING-IDENTITY permit ^64496:[0-9]+$
+ip community-list expanded CL-ROUTING-IDENTITY permit ^64497:[0-9]+$
+!
+! VRF-PROD-EQXFR2-SDWAN: owners C001, C002, C003, C005
+ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-IN-C001 seq 10 permit 198.18.0.0/24
+route-map RM-VRF-PROD-EQXFR2-SDWAN-IN permit 10
+  match ip address prefix-list PL-VRF-PROD-EQXFR2-SDWAN-IN-C001
+  set comm-list CL-ROUTING-IDENTITY delete
+ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-IN-C002 seq 10 permit 10.210.2.0/24
+route-map RM-VRF-PROD-EQXFR2-SDWAN-IN permit 20
+  match ip address prefix-list PL-VRF-PROD-EQXFR2-SDWAN-IN-C002
+  set comm-list CL-ROUTING-IDENTITY delete
+  set community 64496:2 additive
+ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-IN-C003 seq 10 permit 10.210.3.0/24
+route-map RM-VRF-PROD-EQXFR2-SDWAN-IN permit 30
+  match ip address prefix-list PL-VRF-PROD-EQXFR2-SDWAN-IN-C003
+  set comm-list CL-ROUTING-IDENTITY delete
+  set community 64496:3 additive
+ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-IN-C005 seq 10 permit 10.176.5.0/24
+route-map RM-VRF-PROD-EQXFR2-SDWAN-IN permit 40
+  match ip address prefix-list PL-VRF-PROD-EQXFR2-SDWAN-IN-C005
+  set comm-list CL-ROUTING-IDENTITY delete
+  set community 64496:5 additive
+ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-OUT seq 10 permit 10.5.10.0/24
+ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-OUT seq 20 permit 10.5.20.0/24
+ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-OUT seq 30 permit 10.8.2.0/24
+ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-OUT seq 40 permit 10.9.1.0/24
+ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-OUT seq 50 permit 10.30.0.0/16
+route-map RM-VRF-PROD-EQXFR2-SDWAN-OUT permit 10
+  match ip address prefix-list PL-VRF-PROD-EQXFR2-SDWAN-OUT
+  set comm-list CL-ROUTING-IDENTITY delete
+route-map RM-VRF-PROD-EQXFR2-SDWAN-OUT deny 20
+!
+! VRF-PROD-EQXFR2-AWS-EUC1: owners C003, C015
+ip prefix-list PL-VRF-PROD-EQXFR2-AWS-EUC1-IN-C003 seq 10 permit 10.30.0.0/16
+route-map RM-VRF-PROD-EQXFR2-AWS-EUC1-IN permit 10
+  match ip address prefix-list PL-VRF-PROD-EQXFR2-AWS-EUC1-IN-C003
+  set comm-list CL-ROUTING-IDENTITY delete
+  set community 64496:3 additive
+ip prefix-list PL-VRF-PROD-EQXFR2-AWS-EUC1-IN-C015 seq 10 permit 10.32.0.0/16
+route-map RM-VRF-PROD-EQXFR2-AWS-EUC1-IN permit 20
+  match ip address prefix-list PL-VRF-PROD-EQXFR2-AWS-EUC1-IN-C015
+  set comm-list CL-ROUTING-IDENTITY delete
+  set community 64496:15 additive
+ip prefix-list PL-VRF-PROD-EQXFR2-AWS-EUC1-OUT seq 10 permit 10.5.10.0/24
+ip prefix-list PL-VRF-PROD-EQXFR2-AWS-EUC1-OUT seq 20 permit 10.5.20.0/24
+ip prefix-list PL-VRF-PROD-EQXFR2-AWS-EUC1-OUT seq 30 permit 10.7.10.0/24
+ip prefix-list PL-VRF-PROD-EQXFR2-AWS-EUC1-OUT seq 40 permit 10.210.3.0/24
+route-map RM-VRF-PROD-EQXFR2-AWS-EUC1-OUT permit 10
+  match ip address prefix-list PL-VRF-PROD-EQXFR2-AWS-EUC1-OUT
+  set comm-list CL-ROUTING-IDENTITY delete
+route-map RM-VRF-PROD-EQXFR2-AWS-EUC1-OUT deny 20
+!
+! VRF-PROD-EQXFR2-MEGAPORT: no registered customer owner, announces nothing and accepts nothing
+route-map RM-VRF-PROD-EQXFR2-MEGAPORT-IN deny 10
+route-map RM-VRF-PROD-EQXFR2-MEGAPORT-OUT deny 10
+!
+! HANDOFF-FR2-AMNE-PROD: no registered customer owner, announces nothing and accepts nothing
+route-map RM-HANDOFF-FR2-AMNE-PROD-IN deny 10
+route-map RM-HANDOFF-FR2-AMNE-PROD-OUT deny 10
+!
+! VRF-NONPROD-EQXFR2-AWS-EUC1: owners C003
+ip prefix-list PL-VRF-NONPROD-EQXFR2-AWS-EUC1-IN-C003 seq 10 permit 10.60.0.0/16
+route-map RM-VRF-NONPROD-EQXFR2-AWS-EUC1-IN permit 10
+  match ip address prefix-list PL-VRF-NONPROD-EQXFR2-AWS-EUC1-IN-C003
+  set comm-list CL-ROUTING-IDENTITY delete
+  set community 64496:3 additive
+ip prefix-list PL-VRF-NONPROD-EQXFR2-AWS-EUC1-OUT seq 10 permit 10.6.10.0/24
+route-map RM-VRF-NONPROD-EQXFR2-AWS-EUC1-OUT permit 10
+  match ip address prefix-list PL-VRF-NONPROD-EQXFR2-AWS-EUC1-OUT
+  set comm-list CL-ROUTING-IDENTITY delete
+route-map RM-VRF-NONPROD-EQXFR2-AWS-EUC1-OUT deny 20
+!
+!
+! BGP Configuration
+
+router bgp 65001
+  router-id 10.0.0.1
+  graceful-restart
+  !
+  template peer-policy EVPN-OVERLAY-POLICY
+    send-community
+    send-community extended
+  !
+  template peer-session EVPN-OVERLAY-SESSION
+    update-source loopback0
+    ebgp-multihop 255
+  !
+  !
+  template peer-policy UNDERLAY-PEERS-POLICY
+    send-community
+  !
+  template peer-session UNDERLAY-PEERS-SESSION
+    bfd
+  !
+  address-family ipv4 unicast
+    redistribute direct route-map RM-CONN-2-BGP
+    maximum-paths 8
+  !
+  address-family l2vpn evpn
+  !
+  neighbor 10.1.0.0
+    remote-as 65100
+    description spine-01
+    inherit peer-session UNDERLAY-PEERS-SESSION
+    address-family ipv4 unicast
+      inherit peer-policy UNDERLAY-PEERS-POLICY 1
+    !
+  neighbor 10.1.0.2
+    remote-as 65101
+    description spine-02
+    inherit peer-session UNDERLAY-PEERS-SESSION
+    address-family ipv4 unicast
+      inherit peer-policy UNDERLAY-PEERS-POLICY 1
+    !
+  neighbor 10.0.0.100
+    remote-as 65100
+    description spine-01
+    inherit peer-session EVPN-OVERLAY-SESSION
+    address-family l2vpn evpn
+      inherit peer-policy EVPN-OVERLAY-POLICY 1
+    !
+  neighbor 10.0.0.101
+    remote-as 65101
+    description spine-02
+    inherit peer-session EVPN-OVERLAY-SESSION
+    address-family l2vpn evpn
+      inherit peer-policy EVPN-OVERLAY-POLICY 1
+    !
+  vrf PROD
+    address-family ipv4 unicast
+    neighbor 10.255.5.1
+      remote-as 65028
+      description EQX-FR2-SDWAN-GW1
+      password vrf-prod-eqxfr2-sdwan-key
+      address-family ipv4 unicast
+        maximum-prefix 100
+        route-map RM-VRF-PROD-EQXFR2-SDWAN-IN in
+        route-map RM-VRF-PROD-EQXFR2-SDWAN-OUT out
+    neighbor 10.255.5.6
+      remote-as 64512
+      description EXT-AWS-DX-FR2
+      password vrf-prod-eqxfr2-aws-euc1-key
+      bfd
+      address-family ipv4 unicast
+        maximum-prefix 100
+        route-map RM-VRF-PROD-EQXFR2-AWS-EUC1-IN in
+        route-map RM-VRF-PROD-EQXFR2-AWS-EUC1-OUT out
+    neighbor 10.255.7.1
+      remote-as 64520
+      description EXT-MEGAPORT-MCR1
+      password vrf-prod-eqxfr2-megaport-key
+      address-family ipv4 unicast
+        maximum-prefix 100
+        route-map RM-VRF-PROD-EQXFR2-MEGAPORT-IN in
+        route-map RM-VRF-PROD-EQXFR2-MEGAPORT-OUT out
+    neighbor 10.255.8.1
+      remote-as 4200000200
+      description eg-am-ne01
+      password handoff-fr2-amne-prod-key
+      address-family ipv4 unicast
+        maximum-prefix 100
+        route-map RM-HANDOFF-FR2-AMNE-PROD-IN in
+        route-map RM-HANDOFF-FR2-AMNE-PROD-OUT out
+  !
+  vrf NON-PROD
+    address-family ipv4 unicast
+    neighbor 10.255.6.6
+      remote-as 64512
+      description EXT-AWS-DX-FR2
+      password vrf-nonprod-eqxfr2-aws-euc1-key
+      bfd
+      address-family ipv4 unicast
+        maximum-prefix 100
+        route-map RM-VRF-NONPROD-EQXFR2-AWS-EUC1-IN in
+        route-map RM-VRF-NONPROD-EQXFR2-AWS-EUC1-OUT out
+  !
+!
+
+!
+
+!
+! Management
+line console
+line vty
+!

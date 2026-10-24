@@ -278,8 +278,12 @@ def _make_segment_node(
     has_firewall: bool = False,
     vlan_domain_id: str | None = None,
     l3_vni: int | None = None,
+    routing_identity: tuple[int | None, int | None] | None = None,
 ) -> dict:
     """Build a ManagedNetworkSegment node, as the query returns it.
+
+    ``routing_identity`` is the (segment routing_tag, owner routing_tag) the fragment selects
+    (queries/fragments/network_segment.gql); without it the node carries neither field, as before.
 
     This is the shape that hangs off ``interfaces[].capabilities`` —
     the ONLY place BaseDeviceTransform._collect_activations_from_interfaces
@@ -368,6 +372,11 @@ def _make_segment_node(
                 "gateway": _node(gateway_node),
             }
         )
+
+    if routing_identity is not None:
+        segment_tag, owner_tag = routing_identity
+        seg["routing_tag"] = _v(segment_tag)
+        seg["owner"] = _node({"id": "cust-c005", "org_id": _v("C005"), "routing_tag": _v(owner_tag)})
 
     if security_policy is not None:
         seg["security_policy"] = _node(security_policy)

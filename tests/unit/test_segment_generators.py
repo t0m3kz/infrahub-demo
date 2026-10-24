@@ -352,10 +352,51 @@ class TestVxlanSegmentGeneratorGenerate:
 
         gen._activate_segment_in_deployment.assert_not_awaited()
 
+    def test_routing_tag_is_ensured_after_the_group_tag_and_before_any_activation(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The routing tag helper gets the cleaned segment (with its stored tag) and the client, once per run."""
+        order: list[str] = []
+        monkeypatch.setattr(
+            "generators.topology.segment.ensure_segment_tag",
+            AsyncMock(side_effect=lambda client, lock, *, segment: order.append("group tag")),
+        )
+        ensure_routing = AsyncMock(side_effect=lambda client, *, segment: order.append("routing tag"))
+        monkeypatch.setattr("generators.topology.segment.ensure_segment_routing_tag", ensure_routing)
+        gen = _make_gen()
+        gen._activate_segment_in_deployment = AsyncMock(side_effect=lambda **kw: order.append("activate"))
+        gen._create_inline_sub_interfaces = AsyncMock()
+        data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1])
+        data["ManagedVxlanSegment"]["edges"][0]["node"]["routing_tag"] = {"value": 12}
+
+        asyncio.run(gen.generate(data))
+
+        assert order == ["group tag", "routing tag", "activate"]
+        (call,) = ensure_routing.await_args_list
+        assert call.args == (gen.client,)
+        assert call.kwargs["segment"]["id"] == "seg-1"
+        assert call.kwargs["segment"]["routing_tag"] == 12
+
+    def test_routing_tag_failure_stops_the_run(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A tag that cannot be drawn (pool not loaded) is not logged away: no deployment is activated."""
+        monkeypatch.setattr("generators.topology.segment.ensure_segment_tag", AsyncMock())
+        monkeypatch.setattr(
+            "generators.topology.segment.ensure_segment_routing_tag",
+            AsyncMock(side_effect=LookupError("Routing tag pool Segment-Routing-Tag not found")),
+        )
+        gen = _make_gen()
+        gen._activate_segment_in_deployment = AsyncMock()
+
+        with pytest.raises(LookupError, match="Segment-Routing-Tag"):
+            asyncio.run(gen.generate(_seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1])))
+
+        gen._activate_segment_in_deployment.assert_not_awaited()
+
     def test_query_selects_the_tenant_test_and_the_segment_tag(self, root_dir: Path) -> None:
         """The fast path (tag present) and the routed-tenant test (namespace type) come from the query."""
         query = (root_dir / "queries/topology/add/vxlan_segment.gql").read_text()
         assert "security_tag { node { id } }" in query
+        assert "routing_tag { value }" in query
         assert "namespace_type { value }" in query
 
     def test_zone_runs_even_when_no_deployments_resolved(self, ensure_zone: AsyncMock) -> None:

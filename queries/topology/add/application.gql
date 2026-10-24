@@ -21,6 +21,8 @@ fragment SegmentSecurityFields on ManagedNetworkSegment {
     }
   }
   security_tag { node { id } }
+  # Its routing tag, likewise (generators/helpers/routing_tag.py).
+  routing_tag { value }
   # The segment's one egress policy, whoever created it (this generator or a
   # hand-written data file): its rules are added there, never to a second one.
   security_policy { node { id name { value } } }

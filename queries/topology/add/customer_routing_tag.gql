@@ -1,0 +1,13 @@
+# The customer and whether it has its routing tag: present means nothing is
+# written (generators/helpers/routing_tag.py).
+query customer_routing_tag($name: String!) {
+  OrganizationCustomer(name__value: $name) {
+    edges {
+      node {
+        id
+        name { value }
+        routing_tag { value }
+      }
+    }
+  }
+}

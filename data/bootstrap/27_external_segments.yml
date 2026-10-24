@@ -13,6 +13,8 @@ spec:
   data:
     - name: "Internet"
       org_id: "INTERNET"
+      member_of_groups:
+        - customers
 ---
 apiVersion: infrahub.app/v1
 kind: Object

@@ -24,6 +24,7 @@ from infrahub_sdk import InfrahubClient, InfrahubClientSync
 from .conftest import TestInfrahubDockerWithClient
 from .test_constants import (
     ALL_DEMO_BRANCH,
+    ALL_DEMO_CUSTOMER_ORG_IDS,
     ALL_DEMO_DATA,
     ALL_DEMO_EXPECTED_GENERATORS,
     ALL_DEMO_EXPECTED_OBJECTS,
@@ -222,3 +223,64 @@ class TestAllDemoLoad(TestInfrahubDockerWithClient):
 
         logging.info("Object inventory verified across %d kind(s)", len(ALL_DEMO_EXPECTED_OBJECTS))
         logging.info("=== %s - COMPLETED ===", SCENARIO_NAME)
+
+    # ------------------------------------------------------------------
+    # Step 5: routing identity
+    # ------------------------------------------------------------------
+
+    @pytest.mark.order(385)
+    @pytest.mark.dependency(scope="session", name="all_demo_routing_tags", depends=["all_demo_inventory"])
+    @pytest.mark.asyncio
+    async def test_06_verify_routing_tags(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """Verify every customer 30_all declares drew its routing tag, and no tag is given twice.
+
+        The customer tag comes from add_customer_routing_tag (a created-trigger on the `customers` group), the
+        segment tag from the segment and application generators; both are Number pool draws, so a duplicate
+        would mean the pool was bypassed. Every declared customer is in the group, so every one is held to it
+        (the bootstrap Internet pseudo-customer is created on main, where no trigger fires, and is not).
+        """
+        logging.info("=== %s - Step 6: Routing Tags ===", SCENARIO_NAME)
+
+        result = await async_client_main.execute_graphql(
+            query="""
+            query {
+              OrganizationCustomer {
+                edges { node { org_id { value } routing_tag { value } } }
+              }
+              ManagedNetworkSegment { edges { node { name { value } routing_tag { value } } } }
+            }
+            """,
+            branch_name=scenario_branch,
+        )
+
+        errors: list[str] = []
+        customer_tags: dict[int, list[str]] = {}
+        for edge in result["OrganizationCustomer"]["edges"]:
+            customer = edge["node"]
+            org_id = customer["org_id"]["value"]
+            tag = customer["routing_tag"]["value"]
+            if tag is not None:
+                customer_tags.setdefault(tag, []).append(org_id)
+            elif org_id in ALL_DEMO_CUSTOMER_ORG_IDS:
+                errors.append(f"customer {org_id} has no routing tag")
+        segment_tags: dict[int, list[str]] = {}
+        for edge in result["ManagedNetworkSegment"]["edges"]:
+            tag = edge["node"]["routing_tag"]["value"]
+            if tag is not None:
+                segment_tags.setdefault(tag, []).append(edge["node"]["name"]["value"])
+        for label, tags in (("customer", customer_tags), ("segment", segment_tags)):
+            errors += [
+                f"{label} routing tag {tag} is on {sorted(names)}" for tag, names in tags.items() if len(names) > 1
+            ]
+
+        assert customer_tags, f"No customer has a routing tag on branch '{scenario_branch}'"
+        assert segment_tags, f"No segment has a routing tag on branch '{scenario_branch}'"
+        assert not errors, f"30_all routing tags are wrong on branch '{scenario_branch}':\n" + "\n".join(
+            f"  - {e}" for e in errors
+        )
+
+        logging.info("Routing tags verified: %d customer(s), %d segment(s)", len(customer_tags), len(segment_tags))
