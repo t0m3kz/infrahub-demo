@@ -309,7 +309,11 @@ def test_integration_all_demo(
         tests="tests/integration/test_01_setup.py tests/integration/test_02_repository.py "
         "tests/integration/test_59_all_demo_load.py tests/integration/test_60_app_catalogue.py "
         "tests/integration/test_61_all_demo_compute.py tests/integration/test_62_all_demo_interconnects.py "
-        "tests/integration/test_64_all_demo_firewall_config.py tests/integration/test_65_all_demo_idempotency.py "
+        "tests/integration/test_62b_all_demo_tenant_services.py "
+        "tests/integration/test_62c_all_demo_circuit_sessions.py "
+        "tests/integration/test_64_all_demo_firewall_config.py "
+        "tests/integration/test_64b_all_demo_management_lb_config.py "
+        "tests/integration/test_65_all_demo_idempotency.py "
         "tests/integration/test_66_all_demo_circuit_lifecycle.py",
         basetemp=basetemp,
         server_port=server_port,

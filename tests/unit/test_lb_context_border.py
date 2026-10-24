@@ -20,10 +20,8 @@ import pytest
 from graphql import parse, print_ast
 from graphql.language import FragmentDefinitionNode
 
-from tests.smoke.generate_config_fixtures import (
-    build_lb_context_bl_data,
-    build_leaf_lb_client_data,
-)
+from tests.smoke.fixture_builders.firewall import build_leaf_lb_client_data
+from tests.smoke.fixture_builders.transit import build_lb_context_bl_data
 from tests.smoke.test_configs_smoke import _run_transform
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.leaf import Leaf

@@ -32,7 +32,9 @@ import pytest
 
 from generators.topology import virtual_circuit
 from generators.topology.virtual_circuit import SessionEnd, SessionPlan, VirtualCircuitSessionGenerator
+from tests.integration import circuit_helpers, interconnect_queries
 from tests.integration import test_62_all_demo_interconnects as interconnects
+from tests.integration import test_62c_all_demo_circuit_sessions as session_steps
 from tests.integration import test_helpers
 from tests.integration.demo_data import BOOTSTRAP, attribute, declared, name
 from tests.integration.test_constants import (
@@ -419,23 +421,23 @@ class FakeStack:
         variables = variables or {}
         if query == test_helpers.QUERY_GET_INTERCONNECT_INVENTORY:
             return self.inventory
-        if query == interconnects.SESSIONS_QUERY:
+        if query == interconnect_queries.SESSIONS_QUERY:
             nodes = [self.sessions[n] for n in variables["names"] if n in self.sessions]
             return {"ManagedBGPPeering": {"edges": [{"node": node} for node in nodes]}}
         if "peering_role__value" in query:
             return {"ManagedBGPPeering": {"count": self.roles.get(variables["role"], 0)}}
-        if query == interconnects.CIRCUIT_PREFIXES_QUERY:
+        if query == interconnect_queries.CIRCUIT_PREFIXES_QUERY:
             nodes = [self.prefixes[d] for d in variables["descriptions"] if d in self.prefixes]
             return {"IpamPrefix": {"edges": [{"node": node} for node in nodes]}}
-        if query == interconnects.EDGE_PAIR_POOL_QUERY:
+        if query == interconnect_queries.EDGE_PAIR_POOL_QUERY:
             resources = [
                 {"node": {"prefix": _value(prefix)}} for prefix in self.pool_resources.get(variables["name"], [])
             ]
             node = {"name": _value(variables["name"]), "resources": {"edges": resources}}
             return {"CoreIPPrefixPool": {"edges": [{"node": node}] if resources else []}}
-        if query == interconnects.ADDRESS_COUNT_QUERY:
+        if query == interconnect_queries.ADDRESS_COUNT_QUERY:
             return {"IpamIPAddress": {"count": self.legacy_addresses}}
-        if query == interconnects.GROUP_MEMBERS_QUERY:
+        if query == interconnect_queries.GROUP_MEMBERS_QUERY:
             members = [{"node": member} for member in self.group_members]
             return {"CoreGroup": {"edges": [{"node": {"members": {"edges": members}}}]}}
         raise AssertionError(f"unexpected query {query[:80]!r}")
@@ -444,7 +446,7 @@ class FakeStack:
 @pytest.fixture(autouse=True)
 def _no_propagation_delay(monkeypatch: pytest.MonkeyPatch) -> None:
     """The test methods wait DATA_PROPAGATION_DELAY for a stack to settle; the fake is settled."""
-    monkeypatch.setattr(test_helpers, "DATA_PROPAGATION_DELAY", 0)
+    monkeypatch.setattr(circuit_helpers, "DATA_PROPAGATION_DELAY", 0)
 
 
 @pytest.fixture
@@ -460,9 +462,9 @@ def _client(stack: FakeStack) -> MagicMock:
     return client
 
 
-def _tests() -> interconnects.TestAllDemoInterconnects:
-    """The real test_62 class, whose test methods run against the fake stack."""
-    return interconnects.TestAllDemoInterconnects()
+def _tests() -> session_steps.TestAllDemoInterconnects:
+    """The real test_62c class, whose test methods run against the fake stack."""
+    return session_steps.TestAllDemoInterconnects()
 
 
 def _addresses(stack: FakeStack, session: str) -> list[dict[str, Any]]:
@@ -628,7 +630,7 @@ async def test_a_tunnel_with_a_session_of_any_name_fails(stack: FakeStack, suffi
 
 async def test_the_group_holds_exactly_the_interconnects_and_handoffs(stack: FakeStack) -> None:
     """The virtual-circuits group has the DCIs and handoffs, the circuits add_virtual_circuit runs on, and no tunnel."""
-    await _tests().test_02a_verify_virtual_circuits_group(_client(stack), "main")
+    await interconnects.TestAllDemoInterconnects().test_02a_verify_virtual_circuits_group(_client(stack), "main")
     assert len(stack.group_members) == len(ALL_DEMO_DCI_CIRCUITS) + sum(
         1 for e in ALL_DEMO_VIRTUAL_CIRCUITS.values() if e["kind"] == HANDOFF_KIND
     )
@@ -640,10 +642,10 @@ async def test_a_tunnel_in_the_group_or_a_circuit_missing_from_it_fails(stack: F
     tunnel = next(n for n in nodes if n["__typename"] == TUNNEL_KIND)
     stack.group_members.append({"id": tunnel["id"], "__typename": TUNNEL_KIND, "display_label": "tunnel"})
     with pytest.raises(AssertionError, match="a tunnel circuit is in the group"):
-        await _tests().test_02a_verify_virtual_circuits_group(_client(stack), "main")
+        await interconnects.TestAllDemoInterconnects().test_02a_verify_virtual_circuits_group(_client(stack), "main")
     stack.group_members = stack.group_members[1:-1]
     with pytest.raises(AssertionError, match="not in the group"):
-        await _tests().test_02a_verify_virtual_circuits_group(_client(stack), "main")
+        await interconnects.TestAllDemoInterconnects().test_02a_verify_virtual_circuits_group(_client(stack), "main")
 
 
 # -- Drift guard: the fake follows the generator --------------------------------------------------------------------------------

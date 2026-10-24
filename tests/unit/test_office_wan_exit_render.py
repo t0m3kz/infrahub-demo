@@ -24,7 +24,7 @@ from typing import Any
 
 import pytest
 
-from tests.smoke.generate_config_fixtures import (
+from tests.smoke.fixture_builders.office import (
     OFFICE_EDGE_NAME,
     OFFICE_EXIT_EDGE_ASN,
     OFFICE_EXIT_LOOPBACK,

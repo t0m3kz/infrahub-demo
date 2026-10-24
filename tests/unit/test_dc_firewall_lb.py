@@ -14,7 +14,7 @@ ServiceDevicesMixin.create_firewall_and_load_balancer_devices (shared with
 PodTopologyGenerator's pod-scoped provisioning — see
 test_pod_border_services.py), which sets DeviceOptions.ha_kind so
 create_devices() itself pairs the created devices two-at-a-time into HA
-domains (see test_device_mixin.py for that pairing logic — any quantity,
+domains (see test_device_mixin_create_devices.py for that pairing logic — any quantity,
 not just 2).
 
 BLF<->FW<->LB cabling: CablingMixin._cable_border_services (shared via
