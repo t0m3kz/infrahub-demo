@@ -20,7 +20,6 @@ _EDGE_TEMPLATE = {
     # selects (aliased because clean_data() would rewrite __typename to
     # "typename"). This is what tells the generator physical from virtual.
     "template_kind": "TemplateDcimPhysicalDevice",
-    "template_name": "N9K-C9316D-GX_EDGE",
     "platform": {"id": "plat-nxos", "name": "cisco_nxos"},
     "device_type": "dt-9316d",
 }
@@ -53,7 +52,6 @@ _EDGE_TEMPLATE_WITH_ALL_SERVICE_PORTS = {
 _VIRTUAL_EDGE_TEMPLATE = {
     "id": "tpl-vedge",
     "template_kind": "TemplateCloudNetworkAppliance",
-    "template_name": "C8000V_EDGE",
 }
 
 _METRO_ASN_POOL = {"id": "asn-pool", "name": "fr-asn-pool"}

@@ -16,15 +16,6 @@
               "id": "plat-cisco_ios",
               "name": {
                 "value": "cisco_ios"
-              },
-              "netmiko_device_type": {
-                "value": "cisco_ios"
-              },
-              "napalm_driver": {
-                "value": "cisco_ios"
-              },
-              "ansible_network_os": {
-                "value": "cisco_ios"
               }
             }
           },

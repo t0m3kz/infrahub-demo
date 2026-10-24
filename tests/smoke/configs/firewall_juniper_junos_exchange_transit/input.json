@@ -16,15 +16,6 @@
               "id": "plat-juniper_junos",
               "name": {
                 "value": "juniper_junos"
-              },
-              "netmiko_device_type": {
-                "value": "juniper_junos"
-              },
-              "napalm_driver": {
-                "value": "juniper_junos"
-              },
-              "ansible_network_os": {
-                "value": "juniper_junos"
               }
             }
           },

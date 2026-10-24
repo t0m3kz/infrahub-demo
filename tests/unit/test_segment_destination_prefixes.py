@@ -47,10 +47,7 @@ def _office(
         "sdwan_gateway": {"node": {"name": _v(gateway)} if gateway else None},
         "lan_prefixes": _edges(*lans),
         "segment_deployments": _edges(
-            *(
-                {"segment": {"node": {"status": _v("active"), "owner": _owner(owner), "gateway": _gw(p)}}}
-                for p in hosted
-            )
+            *({"segment": {"node": {"owner": _owner(owner), "gateway": _gw(p)}}} for p in hosted)
         ),
     }
 
@@ -162,11 +159,6 @@ class TestOnPremDestinations:
         check = _run([_dest_rule("r", "10.9.0.0/25")], [_segment("other", prefix="10.9.0.0/24")])
         assert _unreachable(check) == []
 
-    def test_a_retired_segment_is_no_longer_served(self) -> None:
-        """A retired segment's space is not on-prem any more."""
-        segment = _segment("old", prefix="10.9.0.0/24", status=_v("retired"))
-        assert len(_unreachable(_run([_dest_rule("r", "10.9.0.0/24")], [segment]))) == 1
-
     def test_a_segment_of_another_environment_is_not_reachable(self) -> None:
         """A PROD rule never reaches a NON-PROD segment's range."""
         segment = _segment("dev", env="d", zone="NONPROD-ZONE", prefix="10.9.0.0/24")
@@ -276,7 +268,7 @@ class TestEnvironmentOfTheSource:
 
 
 def test_the_query_selects_what_the_destination_rule_reads() -> None:
-    """Rule prefixes, segment status and the registrations of the edge, on real schema fields."""
+    """Rule prefixes, segment environment and the registrations of the edge, on real schema fields."""
     path = _QUERIES / "validation" / "segment_security.gql"
     reads = {
         "SecurityPolicyRule": ["destination_prefixes.prefix", "source_segment.id", "disabled", "policy.enabled"],
@@ -285,7 +277,6 @@ def test_the_query_selects_what_the_destination_rule_reads() -> None:
             "sdwan_gateway.name",
             "lan_prefixes.prefix",
             "lan_prefixes.ip_namespace.namespace_type",
-            "segment_deployments.segment.status",
             "segment_deployments.segment.owner.org_id",
             "segment_deployments.segment.gateway.ip_prefix.prefix",
             "segment_deployments.segment.gateway.ip_prefix.ip_namespace.namespace_type",
@@ -305,9 +296,9 @@ def test_the_query_selects_what_the_destination_rule_reads() -> None:
             "transit_gateway_attachment.transit_gateway.attachments.virtual_network.cidr_blocks.prefix",
         ],
     }
-    # The segment root spreads a fragment from another file (not resolvable here): status is selected beside it.
-    assert "        status { value }\n        environment { value }" in path.read_text()
-    assert {"status", "environment"} <= attribute_names("ManagedNetworkSegment")
+    # The segment root spreads a fragment from another file (not resolvable here): environment is selected beside it.
+    assert "        ...SegmentGroupPolicyFields\n        environment { value }" in path.read_text()
+    assert "environment" in attribute_names("ManagedNetworkSegment")
     for root, paths in reads.items():
         selected = _selected_paths(path, root)
         assert not [item for item in paths if item not in selected], root

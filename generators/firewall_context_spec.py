@@ -167,8 +167,8 @@ class _TransitState:
 # variant per DC fabric design (e.g. "CloudGuard_EDGE_CUSTOMER_L").
 _VIRTUAL_TEMPLATE_PREFIX_BY_PLATFORM_AND_ROLE: dict[tuple[str, str], str] = {
     ("checkpoint_gaia", "firewall"): "CloudGuard_EDGE",
-    ("panos", "firewall"): "PA-VM_EDGE",
-    ("junos", "firewall"): "vSRX_EDGE",
+    ("paloalto_panos", "firewall"): "PA-VM_EDGE",
+    ("juniper_junos", "firewall"): "vSRX_EDGE",
     ("f5_tmos", "load-balancer"): "BIG-IP-VE_LOAD_BALANCER",
     ("netscaler", "load-balancer"): "NetScaler-ADC-VPX_LOAD_BALANCER",
 }

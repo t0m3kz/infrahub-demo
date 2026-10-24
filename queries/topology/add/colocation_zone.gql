@@ -96,9 +96,6 @@ query topology_colocation_zone($name: String!) {
                   id
                   template_kind: __typename
                   ... on TemplateDcimPhysicalDevice {
-                    template_name {
-                      value
-                    }
                     platform {
                       node {
                         id

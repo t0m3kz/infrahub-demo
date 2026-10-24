@@ -16,15 +16,6 @@
               "id": "plat-cisco_xe",
               "name": {
                 "value": "cisco_xe"
-              },
-              "netmiko_device_type": {
-                "value": "cisco_xe"
-              },
-              "napalm_driver": {
-                "value": "cisco_xe"
-              },
-              "ansible_network_os": {
-                "value": "cisco_xe"
               }
             }
           },
@@ -480,9 +471,6 @@
                           "name": {
                             "value": "seg-100"
                           },
-                          "status": {
-                            "value": "active"
-                          },
                           "customer_name": {
                             "value": "Customer-A"
                           },
@@ -789,9 +777,6 @@
                           "name": {
                             "value": "seg-200"
                           },
-                          "status": {
-                            "value": "active"
-                          },
                           "customer_name": {
                             "value": "Customer-A"
                           },
@@ -1042,9 +1027,6 @@
                           "__typename": "ManagedVxlanSegment",
                           "name": {
                             "value": "seg-100"
-                          },
-                          "status": {
-                            "value": "active"
                           },
                           "customer_name": {
                             "value": "Customer-A"
@@ -1364,9 +1346,6 @@
                           "__typename": "ManagedVlanSegment",
                           "name": {
                             "value": "seg-200"
-                          },
-                          "status": {
-                            "value": "active"
                           },
                           "customer_name": {
                             "value": "Customer-A"

@@ -396,7 +396,7 @@ def write_fixtures() -> tuple[int, int]:
             f"border_leaf_{platform}_exchange_transit",
             build_exchange_transit_bl_data(device_name="dc1-border-leaf-01", platform=platform),
         )
-        for platform in ["cisco_nxos", "arista_eos", "nokia_sros", "sonic", "dell_sonic"]
+        for platform in ["cisco_nxos", "arista_eos", "sonic", "dell_sonic"]
     )
     generated += g
     errors += e
@@ -409,7 +409,7 @@ def write_fixtures() -> tuple[int, int]:
             f"border_leaf_{platform}_lb_context",
             build_lb_context_bl_data(device_name="dc1-border-leaf-01", platform=platform),
         )
-        for platform in ["cisco_nxos", "arista_eos", "nokia_sros", "sonic", "dell_sonic", "cisco_xe"]
+        for platform in ["cisco_nxos", "arista_eos", "sonic", "dell_sonic", "cisco_xe"]
     )
     generated += g
     errors += e

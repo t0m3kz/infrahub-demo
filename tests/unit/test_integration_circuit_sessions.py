@@ -332,7 +332,6 @@ class FakeStack:
         self.group_members: list[dict[str, Any]] = []
         self.roles: dict[str, int] = {}
         self.pool_resources: dict[str, list[str]] = {}
-        self.legacy_addresses = 0
         self.inventory: dict[str, Any] = {}
 
     @classmethod
@@ -434,8 +433,6 @@ class FakeStack:
             ]
             node = {"name": _value(variables["name"]), "resources": {"edges": resources}}
             return {"CoreIPPrefixPool": {"edges": [{"node": node}] if resources else []}}
-        if query == interconnect_queries.ADDRESS_COUNT_QUERY:
-            return {"IpamIPAddress": {"count": self.legacy_addresses}}
         if query == interconnect_queries.GROUP_MEMBERS_QUERY:
             members = [{"node": member} for member in self.group_members]
             return {"CoreGroup": {"edges": [{"node": {"members": {"edges": members}}}]}}
@@ -548,7 +545,6 @@ async def test_the_handoff_sessions_the_generator_plans_pass(stack: FakeStack) -
         ),
         (lambda s: s.sessions.pop("HANDOFF-PA4-MEGAPORT-PROD-bgp"), "no HANDOFF-PA4-MEGAPORT-PROD-bgp session"),
         (lambda s: s.prefixes.pop("Handoff HANDOFF-FR2-SDWAN-GW1-PROD"), "0 prefix object(s)"),
-        (lambda s: setattr(s, "legacy_addresses", 2), "2 authored handoff address"),
         (lambda s: s.pool_resources.update({"Handoff-PROD-IPv4": ["10.0.0.0/20"]}), "is not a /31 from"),
         (
             lambda s: _addresses(s, "HANDOFF-FR2-AWS-EUC1-PROD-bgp")[0]["ip_address"]["node"]["ip_namespace"]["node"][
@@ -561,17 +557,9 @@ async def test_the_handoff_sessions_the_generator_plans_pass(stack: FakeStack) -
 async def test_a_handoff_session_that_differs_from_the_plan_fails_naming_the_field(
     stack: FakeStack, mutate: Any, message: str
 ) -> None:
-    """Each single deviation from the plan (ttl, route limit, missing, legacy, pool) fails naming its field."""
+    """Each single deviation from the plan (ttl, route limit, missing, pool) fails naming its field."""
     mutate(stack)
     with pytest.raises(AssertionError, match=message.replace("(", r"\(").replace(")", r"\)")):
-        await _tests().test_06b_verify_handoff_sessions(_client(stack), "main")
-
-
-async def test_a_legacy_authored_session_still_present_fails(stack: FakeStack) -> None:
-    """A hand-authored VRF-* session that predates the generated one must be gone."""
-    stack.sessions["VRF-PROD-EQXFR2-SDWAN"] = stack.sessions["HANDOFF-FR2-SDWAN-GW1-PROD-bgp"]
-    stack.sessions["VRF-PROD-EQXFR2-SDWAN"]["name"] = _value("VRF-PROD-EQXFR2-SDWAN")
-    with pytest.raises(AssertionError, match=r"authored session\(s\) \['VRF-PROD-EQXFR2-SDWAN'\] still exist"):
         await _tests().test_06b_verify_handoff_sessions(_client(stack), "main")
 
 

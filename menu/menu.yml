@@ -223,28 +223,6 @@ spec:
                   icon: "mdi:cloud-sync"
                   description: "Tunnel, Interconnect and Handoff circuits: the connections routing is generated on"
 
-          # --------- Virtualisation Inventory ---------
-          - namespace: Virt
-            name: VirtMenu
-            label: Virtualisation
-            icon: "mdi:server-network"
-            description: "On-prem and cloud-managed virtualisation clusters"
-            children:
-              data:
-                - namespace: Virt
-                  name: ClusterItem
-                  label: Clusters
-                  kind: VirtCluster
-                  icon: "mdi:server-network"
-                  description: "Kubernetes, vSphere, Nutanix, and cloud-managed clusters"
-
-                - namespace: Virt
-                  name: NodePoolItem
-                  label: Node Pools
-                  kind: VirtNodePool
-                  icon: "mdi:server-plus"
-                  description: "Node groups, ESXi host pools, and cloud ASGs"
-
           # --------- Cloud Inventory ---------
           - namespace: Cloud
             name: Resource
@@ -308,13 +286,6 @@ spec:
                   label: OSPF Areas
                   kind: RoutingOSPFArea
                   icon: "mdi:hexagon-outline"
-
-          # ── Static Routes ───────────────────────────────────────────────────
-          - namespace: Cloud
-            name: StaticRoutesItem
-            label: Static Routes
-            kind: CloudRoute
-            icon: "mdi:routes"
 
     # ──────────────────────────────────────────────────────────────────────────
     # SERVICES — network services organised by function

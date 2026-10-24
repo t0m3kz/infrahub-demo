@@ -7,7 +7,7 @@ A DC customer's segments live on the fabric's own L2 domain; what this
 generator adds is the customer's place on the parent DC's firewall and
 load-balancer pairs (FirewallContextMixin, generators/firewall_context.py):
 
-* a FirewallContext (VDOM/vsys) on the DC's ManagedFirewallHA cluster: ONE
+* a FirewallContext (vsys) on the DC's ManagedFirewallHA cluster: ONE
   shared context per cluster (tenant unset) reused by every customer, or, when
   the footprint's design (TopologyCustomerTemplateDC) sets dedicated_firewall,
   a dedicated virtual pair hosted on the physical peers with this customer as

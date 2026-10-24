@@ -51,7 +51,7 @@ from utils.fabric_roles import OFFICE_LISP_ROLES, VTEP_ROLES
 
 _log = logging.getLogger(__name__)
 
-# Overlay control plane -> the netmiko platforms whose device templates render it (like
+# Overlay control plane -> the platforms whose device templates render it (like
 # group_policy.GPO_RENDERERS). bgp_evpn has no entry: it is the default and every platform
 # decides for itself whether it renders EVPN.
 OVERLAY_RENDERERS: dict[str, frozenset[str]] = {"lisp": frozenset({"cisco_xe"})}

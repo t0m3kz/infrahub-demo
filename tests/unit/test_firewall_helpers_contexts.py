@@ -158,15 +158,13 @@ class TestGetFirewallContextsLegs:
         assert leg["own_ip"] == "100.66.16.5/29"
         assert leg["interface"] == "eth1.3000"
 
-    def test_ha_pair_gets_vip_and_standby_address(self) -> None:
+    def test_ha_pair_gets_the_vip(self) -> None:
         leg = get_firewall_contexts([_leg_iface("prod", "100.66.0.5/29")], _HA)[0]["legs"][0]
         assert leg["virtual_ip"] == "100.66.0.4/29"
-        assert leg["standby_ip"] == "100.66.0.6/29"
 
     def test_standalone_firewall_has_no_vip(self) -> None:
         leg = get_firewall_contexts([_leg_iface("prod", "100.66.0.5/29")])[0]["legs"][0]
         assert leg["virtual_ip"] is None
-        assert leg["standby_ip"] is None
 
     def test_one_context_over_several_interfaces_is_one_context(self) -> None:
         ifaces = [_leg_iface("prod", "100.66.0.5/29"), _leg_iface("internet", "100.66.32.5/29", vlan=3400)]

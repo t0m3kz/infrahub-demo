@@ -23,7 +23,7 @@ query lisp_fabric {
             }
           }
         }
-        segment_deployments(status__values: ["active", "provisioning"]) {
+        segment_deployments {
           edges {
             node {
               vni { value }

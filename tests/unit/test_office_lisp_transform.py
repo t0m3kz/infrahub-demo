@@ -145,7 +145,7 @@ class TestRoleGate:
         data = {
             "name": "dev-1",
             "role": role,
-            "platform": {"netmiko_device_type": "cisco_xe"},
+            "platform": {"name": "cisco_xe"},
             "interfaces": [],
             "capabilities": [],
             "deployment": {"name": _OFFICE, "lisp_map_servers": _MAP_SERVERS, "lisp_site_key": {"password": "k"}}
@@ -381,7 +381,7 @@ class TestRefusals:
         with pytest.raises(ValueError, match="LISP map-server ds-c005-office02 has no loopback address"):
             run_transform(AccessSwitch, data)
 
-    @pytest.mark.parametrize("platform", ["cisco_nxos", "arista_eos", "nokia_sros"])
+    @pytest.mark.parametrize("platform", ["cisco_nxos", "arista_eos"])
     @pytest.mark.parametrize(
         ("cls", "directory", "role"),
         [
@@ -393,7 +393,7 @@ class TestRefusals:
         self, platform: str, cls: type, directory: str, role: str
     ) -> None:
         data = _raw(directory)
-        _node(data)["platform"]["node"]["netmiko_device_type"]["value"] = platform
+        _node(data)["platform"]["node"]["name"]["value"] = platform
 
         with pytest.raises(ValueError) as error:
             run_transform(cls, data)

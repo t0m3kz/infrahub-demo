@@ -16,15 +16,6 @@
               "id": "plat-arista_eos",
               "name": {
                 "value": "arista_eos"
-              },
-              "netmiko_device_type": {
-                "value": "arista_eos"
-              },
-              "napalm_driver": {
-                "value": "arista_eos"
-              },
-              "ansible_network_os": {
-                "value": "arista_eos"
               }
             }
           },
@@ -998,9 +989,6 @@
                           "name": {
                             "value": "web-np"
                           },
-                          "status": {
-                            "value": "active"
-                          },
                           "customer_name": {
                             "value": "Customer-A"
                           },
@@ -1081,9 +1069,6 @@
                           "__typename": "ManagedVxlanSegment",
                           "name": {
                             "value": "app-np"
-                          },
-                          "status": {
-                            "value": "active"
                           },
                           "customer_name": {
                             "value": "Customer-A"
@@ -1166,9 +1151,6 @@
                           "name": {
                             "value": "pay-p"
                           },
-                          "status": {
-                            "value": "active"
-                          },
                           "customer_name": {
                             "value": "Customer-A"
                           },
@@ -1249,9 +1231,6 @@
                           "__typename": "ManagedVxlanSegment",
                           "name": {
                             "value": "portal-p"
-                          },
-                          "status": {
-                            "value": "active"
                           },
                           "customer_name": {
                             "value": "Customer-A"
@@ -1366,9 +1345,6 @@
                           "__typename": "ManagedVxlanSegment",
                           "name": {
                             "value": "pay-p"
-                          },
-                          "status": {
-                            "value": "active"
                           },
                           "customer_name": {
                             "value": "Customer-A"

@@ -119,7 +119,7 @@ query {{
             ip_prefix {{ node {{ prefix {{ value }} ip_namespace {{ node {{ name {{ value }} }} }} }} }}
           }}
         }}
-        segment_deployments(status__values: ["active", "provisioning"]) {{
+        segment_deployments {{
           edges {{ node {{ id vni {{ value }} deployment {{ node {{ name {{ value }} }} }} }} }}
         }}
       }}

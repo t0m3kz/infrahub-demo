@@ -9,7 +9,7 @@
 # cross the colocation edge. Rule 8 groups the registrations by attachment
 # point (an office's sdwan_gateway; a VIF's handoff circuit with the VPC blocks
 # the VIF reaches, the same selection as queries/config/edge.gql) and reads each
-# segment's status and owner. The *Interface queries read every interface of the
+# segment's owner. The *Interface queries read every interface of the
 # fleet (a relationship cannot be filtered by a nested namespace type); the
 # check keeps the ones in the INTERNET namespace. A tunnel's registered_prefixes
 # (PROD, owned by the tunnel's owner) are the other registration behind an SD-WAN
@@ -61,7 +61,6 @@ query routing_invariants {
         __typename
         id
         name { value }
-        status { value }
         owner { node { __typename org_id { value } display_label } }
         gateway { node { ip_prefix { node { id prefix { value } member_type { value } ip_namespace { node { id name { value } l3_vni { value } namespace_type { value } } } } } } }
       }
@@ -99,12 +98,11 @@ query routing_invariants {
         owner { node { __typename org_id { value } display_label } }
         sdwan_gateway { node { name { value } } }
         network_segments { edges { node { id } } }
-        segment_deployments(status__values: ["active", "provisioning"]) {
+        segment_deployments {
           edges {
             node {
               segment {
                 node {
-                  status { value }
                   owner { node { __typename org_id { value } display_label } }
                   gateway { node { ip_prefix { node { prefix { value } ip_namespace { node { name { value } } } } } } }
                 }

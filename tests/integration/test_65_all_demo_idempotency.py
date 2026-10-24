@@ -136,8 +136,6 @@ query {
     }
   }
   AppComponent { edges { node { id security_tag { node { id } } } } }
-  CloudSecurityGroup { edges { node { id name { value } } } }
-  CloudSecurityGroupRule { edges { node { id name { value } } } }
   ProxyPolicyRule { edges { node { id name { value } } } }
   ManagedNetworkSegment {
     edges {
@@ -260,8 +258,6 @@ def _snapshot(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
             for n in _nodes(result, "SecurityTag")
         },
         "AppComponent": {n["id"]: _peer_id(n, "security_tag") for n in _nodes(result, "AppComponent")},
-        "CloudSecurityGroup": {n["id"]: _value(n, "name") for n in _nodes(result, "CloudSecurityGroup")},
-        "CloudSecurityGroupRule": {n["id"]: _value(n, "name") for n in _nodes(result, "CloudSecurityGroupRule")},
         "ProxyPolicyRule": {n["id"]: _value(n, "name") for n in _nodes(result, "ProxyPolicyRule")},
         "ManagedNetworkSegment": {
             n["id"]: (
@@ -422,30 +418,6 @@ class TestAllDemoIdempotency(TestInfrahubDockerWithClient):
         targets = await self._targets(client, scenario_branch, RERUN_GENERATORS, REQUIRED_RERUN_GENERATORS)
         await self._rerun(client, scenario_branch, "Rerun", targets, before, topology_before, labels)
         logging.info("%d reruns left the branch unchanged", RERUNS)
-
-    @pytest.mark.order(411)
-    @pytest.mark.dependency(scope="session", depends=["all_demo_idempotent_reruns"])
-    @pytest.mark.asyncio
-    async def test_02_no_reverse_return_rules(self, workflow_state: dict[str, Any]) -> None:
-        """The generator no longer writes a microsegmented "-return" rule; the
-        destination leaf's ACL answers the flow from inbound_rules instead."""
-        logging.info("=== %s - Step 2: No -return Rules ===", SCENARIO_NAME)
-
-        rules = workflow_state["idempotency_snapshot"]["SecurityPolicyRule"]
-        returns = sorted(state[0] for state in rules.values() if str(state[0]).endswith("-return"))
-        assert not returns, f"Generated return rules still present: {returns}"
-
-    @pytest.mark.order(411)
-    @pytest.mark.dependency(scope="session", depends=["all_demo_idempotent_reruns"])
-    @pytest.mark.asyncio
-    async def test_02b_no_generated_security_groups(self, workflow_state: dict[str, Any]) -> None:
-        """A cloud flow is a SecurityPolicyRule: no sg-{app} CloudSecurityGroup is generated, and the
-        ones an older run created were deleted by the application's tracking group."""
-        logging.info("=== %s - Step 2b: No sg-* Security Groups ===", SCENARIO_NAME)
-
-        groups = workflow_state["idempotency_snapshot"]["CloudSecurityGroup"]
-        generated = sorted(str(name) for name in groups.values() if str(name).startswith("sg-"))
-        assert not generated, f"Generated cloud security groups still present: {generated}"
 
     @pytest.mark.order(412)
     @pytest.mark.dependency(scope="session", depends=["all_demo_idempotent_reruns"])

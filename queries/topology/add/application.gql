@@ -262,7 +262,6 @@ fragment AppComponentSecurityFields on AppComponent {
       ...SegmentSecurityFields
       ... on CloudNetworkSegment {
         name { value }
-        segment_type { value }
         cidr_block { value }
         virtual_network {
           node {

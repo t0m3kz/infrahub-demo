@@ -63,7 +63,7 @@ _CONTROLLER_ALIASES = ("fabric_controllers", "security_manager_controllers", "lb
 
 # firewall/load-balancer route to a controller by controller_type AND a
 # platform match against the device's own template — a checkpoint_gaia
-# firewall must never route to a Panorama (panos) controller just because
+# firewall must never route to a Panorama (paloalto_panos) controller just because
 # both happen to be controller_type=security_manager.
 _ROLE_CONTROLLER_TYPE: dict[str, str] = {"firewall": "security_manager", "load-balancer": "lb_manager"}
 
@@ -480,7 +480,7 @@ class DeviceMixin(DomainPairingMixin):
         alone (ACI APIC/DCNM/NSX/UCS aren't a 1:1 vendor pairing with the
         device's own platform). firewall/load-balancer match by
         controller_type AND platform, so e.g. a checkpoint_gaia firewall
-        never routes to a Panorama (panos) controller.
+        never routes to a Panorama (paloalto_panos) controller.
 
         Returns None (no controller — caller falls back to a
         CoreStandardGroup) when the role has no controller mapping, or no

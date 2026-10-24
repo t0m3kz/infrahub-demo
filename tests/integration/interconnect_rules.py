@@ -52,13 +52,6 @@ DCI_POOL_NETWORK = ipaddress.IPv6Network("fd00:2200::/40")
 _DCI_MTU = 9214
 
 
-# What the handoffs were before add_virtual_circuit generated them: sessions and addresses authored in 30_all
-# (08_interconnects/04_sdwan and 05_cloud_endpoints). They must not come back.
-LEGACY_HANDOFF_PEERINGS = ("VRF-PROD-EQXFR2-AWS-EUC1", "VRF-PROD-EQXFR2-SDWAN")
-
-LEGACY_HANDOFF_ADDRESSES = ("10.255.5.5/30", "10.255.5.6/30", "10.255.5.0/31", "10.255.5.1/31")
-
-
 _TRANSIT_PEER_NAMES = {"internet": "INTERNET", "management": "MANAGEMENT"}
 
 

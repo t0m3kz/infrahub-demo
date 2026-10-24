@@ -212,42 +212,6 @@ class TestTransformDataRouting:
         assert rendered_kwargs.get("vlans")
 
     @pytest.mark.asyncio
-    async def test_vlan_segment_non_active_status_excluded(self) -> None:
-        """A VLAN segment whose status is not active/provisioning (e.g.
-        decommissioned) is excluded — VlanSegment has no server-side status
-        filter (it's a plain attribute, not a filterable relationship), so
-        this must be enforced client-side."""
-        t = _make_transform(device_role="leaf")
-        interfaces = [
-            {
-                "name": "Ethernet10",
-                "capabilities": [
-                    {
-                        "id": "seg-1",
-                        "typename": "ManagedVlanSegment",
-                        "name": "seg-100",
-                        "status": "decommissioned",
-                        "vlan_id": 100,
-                    }
-                ],
-            }
-        ]
-        device = _device_data(interfaces=interfaces)
-
-        fake_template = MagicMock()
-        fake_template.render.return_value = "! rendered"
-
-        with (
-            patch("transforms.common.clean_data") as mock_clean,
-            patch.object(t, "_load_template", return_value=fake_template),
-        ):
-            mock_clean.return_value = {"DcimPhysicalDevice": [device]}
-            await t.transform({"raw": "data"})
-
-        rendered_kwargs = fake_template.render.call_args[1]
-        assert rendered_kwargs.get("vlans") == []
-
-    @pytest.mark.asyncio
     async def test_activation_missing_yields_no_vlans(self) -> None:
         """No segment_deployments on capabilities → vlans is empty in rendered config."""
         t = _make_transform(device_role="leaf")

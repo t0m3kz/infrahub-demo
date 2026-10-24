@@ -17,8 +17,8 @@
 #
 # Segment EIDs are NOT selected here: distribution_switch.gql spreads SegmentDeploymentsOnDeploymentFields
 # (network_segment.gql), whose D["segment_deployments"][i] carries vni, segment.gateway.address,
-# segment.gateway.ip_prefix.prefix and segment.gateway.ip_prefix.ip_namespace.{name,l3_vni} (active/provisioning
-# activations only). One selection per flow, so LISP reads that one.
+# segment.gateway.ip_prefix.prefix and segment.gateway.ip_prefix.ip_namespace.{name,l3_vni}. One selection
+# per flow, so LISP reads that one.
 #
 # Typed on the office, not on TopologySegmentHosting: lisp_site_key lives on TopologyCustomerOffice, and a second
 # SegmentHosting-typed fragment would join the null-on-sibling-fragment quirk (test_fabric_query_order.py).

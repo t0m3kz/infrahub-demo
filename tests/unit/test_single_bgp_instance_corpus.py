@@ -31,11 +31,6 @@ import pytest
 # EOS / NX-OS / SONiC-FRR / IOS. Anchored so a per-neighbor line can never match.
 _CLI_INSTANCE_ASN = re.compile(r"^\s*router bgp (\d+)\s*$", re.MULTILINE)
 
-# Nokia SR OS MD-CLI. The instance ASN is `bgp <instance> local-as <asn>`; the
-# per-neighbor override is `... neighbor "<ip>" local-as as-number <asn>`, which
-# this cannot match — it requires `local-as` immediately followed by the number.
-_SROS_INSTANCE_ASN = re.compile(r"^.*configure router .* bgp \d+ local-as (\d+)\s*$", re.MULTILINE)
-
 
 def _asns_in_config(text: str) -> set[int]:
     """Every distinct BGP instance ASN declared in one rendered config."""
@@ -50,7 +45,7 @@ def _asns_in_config(text: str) -> set[int]:
         globals_table = config.get("BGP_GLOBALS") or {}
         return {int(entry["local_asn"]) for entry in globals_table.values() if entry.get("local_asn") is not None}
 
-    return {int(m) for m in _CLI_INSTANCE_ASN.findall(text)} | {int(m) for m in _SROS_INSTANCE_ASN.findall(text)}
+    return {int(m) for m in _CLI_INSTANCE_ASN.findall(text)}
 
 
 def _config_fixtures(root_dir: Path) -> list[Path]:
@@ -79,11 +74,6 @@ class TestAsnExtraction:
         ("label", "text"),
         [
             ("eos", "router bgp 65001\n   neighbor 1.1.1.1 remote-as 65100\nrouter bgp 65000\n"),
-            (
-                "sros",
-                'A admin configure router "Base" bgp 1 local-as 65000\n'
-                'A admin configure router "Base" bgp 2 local-as 65001\n',
-            ),
             ("configdb", '{"BGP_GLOBALS": {"default": {"local_asn": 65000}, "Vrf1": {"local_asn": 65001}}}'),
         ],
     )
@@ -94,11 +84,6 @@ class TestAsnExtraction:
         ("label", "text"),
         [
             ("eos", "router bgp 65000\n   neighbor 1.1.1.1 local-as 65001 no-prepend replace-as\n"),
-            (
-                "sros",
-                'A admin configure router "Base" bgp 1 local-as 65000\n'
-                'A admin configure router "Base" bgp 1 neighbor "1.1.1.1" local-as as-number 65001\n',
-            ),
             (
                 "configdb",
                 '{"BGP_GLOBALS": {"default": {"local_asn": 65000}}, "BGP_NEIGHBOR": {"x": {"local_asn": "65001"}}}',

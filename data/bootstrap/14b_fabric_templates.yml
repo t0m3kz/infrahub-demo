@@ -10,15 +10,13 @@
 #   max_rows x max_network_racks_per_row x max_leafs_per_network_rack = leafs
 #   No ToRs -> middle_rack, ToRs and no leafs -> tor, ToRs and leafs -> mixed
 #   (the deployment type is derived, never stored).
-#   spine_downlink_ports_per_spine / tor_uplinks_to_spine: the spine port budget
-#   of a design with ToRs. Every leaf, ToR and border-leaf takes one downlink
-#   port on every spine (tor_uplinks_to_spine = max_spines_per_pod), in fixed
+#   The spine port budget of a design with ToRs is derived, not stored: every
+#   leaf, ToR and border-leaf takes one downlink port on every spine, in fixed
 #   blocks (generators/pod_config.py spine_downlink_layout): leafs, then the
 #   border-leafs, then a ToR slot for every rack position of every row
 #   (compute + network racks: a mixed row numbers both); a tor pod puts its
 #   border-leafs after the ToRs. So ports = leafs + max_border_leafs_per_pod +
-#   rows x (compute + network racks per row) x ToRs per rack, checked by a unit
-#   test. Absent on designs without ToRs.
+#   rows x (compute + network racks per row) x ToRs per rack.
 #
 # DC designs (S, M, L, XL): max pods and the DC-level tiers. Every DC design
 # lists all six pod designs; a pod's design must be one of its DC's.
@@ -47,8 +45,6 @@ spec:
       max_tors_per_compute_rack: 2
       max_spines_per_pod: 4
       max_border_leafs_per_pod: 1
-      spine_downlink_ports_per_spine: 33
-      tor_uplinks_to_spine: 4
 
     - name: "S_MIXED"
       description: "Mixed pod: 2 rows of 8 compute racks with 2 ToRs, 1 network rack per row with 2 leafs, 4 spines."
@@ -59,8 +55,6 @@ spec:
       max_tors_per_compute_rack: 2
       max_spines_per_pod: 4
       max_border_leafs_per_pod: 1
-      spine_downlink_ports_per_spine: 41
-      tor_uplinks_to_spine: 4
 
     - name: "S_BORDER_SPINE_POD"
       description: "Micro-fabric pod: 1 network rack with up to 8 leafs, 2 (border-)spines, no compute racks."
@@ -81,8 +75,6 @@ spec:
       max_tors_per_compute_rack: 2
       max_spines_per_pod: 3
       max_border_leafs_per_pod: 1
-      spine_downlink_ports_per_spine: 81
-      tor_uplinks_to_spine: 3
 
     - name: "M_MIDDLE"
       description: "Middle-rack pod: 4 rows of 8 compute racks, 1 network rack per row with up to 4 leafs, 3 spines."

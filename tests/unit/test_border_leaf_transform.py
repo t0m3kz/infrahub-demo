@@ -155,22 +155,11 @@ class TestExchangeTransitRendering:
         assert "ip prefix-list PL-VRF-STATIC-PROD seq 10 permit 0.0.0.0/0" in out
         assert "vxlan vlan 3001 vni 64001" in out
 
-    def test_sros_statics_are_keyed_by_l3_vni_and_transit_irb_uses_explicit_vnis(self) -> None:
-        out = _render("nokia_sros", _transit_device_data("nokia_sros"))
-        assert (
-            'configure service vprn 50001 static-routes route 0.0.0.0/0 route-type unicast next-hop "100.66.0.4"' in out
-        )
-        assert "configure service vprn 50003 static-routes route 192.0.2.5/32" in out
-        assert 'configure service vprn 50001 interface "int-vpls-64001"' in out
-        assert 'configure service vprn 50003 interface "int-vpls-64401"' in out
-        assert 'export-policy ["RM-VRF-STATIC-2-EVPN-PROD"]' in out
-        assert 'export-policy ["RM-VRF-STATIC-2-EVPN-INTERNET"]' in out
-
     @pytest.mark.parametrize("platform", ["sonic", "dell_sonic"])
     def test_sonic_renders_transit_legs_statics_and_redistribution(self, platform: str) -> None:
         """SONiC used to refuse the transit legs; it now renders them as config-DB tables."""
         data = _transit_device_data("cisco_nxos")
-        data["DcimDevice"]["edges"][0]["node"]["platform"]["node"]["netmiko_device_type"] = _v(platform)
+        data["DcimDevice"]["edges"][0]["node"]["platform"]["node"]["name"] = _v(platform)
         config = json.loads(_render(platform, data))
         assert config["VLAN_INTERFACE"]["Vlan3001"]["vrf_name"] == "PROD"
         assert config["VXLAN_TUNNEL_MAP"]["vtep|map_64001_Vlan3001"] == {"vlan": "Vlan3001", "vni": "64001"}
@@ -185,13 +174,13 @@ class TestExchangeTransitRendering:
         )
         assert "PL-VRF-STATIC-PROD|10|0.0.0.0/0|exact" in config["PREFIX"]
 
-    @pytest.mark.parametrize("platform", ["cisco_nxos", "arista_eos", "nokia_sros"])
+    @pytest.mark.parametrize("platform", ["cisco_nxos", "arista_eos"])
     def test_no_pbr_is_rendered_on_the_border_leaf(self, platform: str) -> None:
         out = _render(platform, _transit_device_data(platform))
         assert "BORDER-LEAF-PBR" not in out
         assert "feature pbr" not in out
 
-    @pytest.mark.parametrize("platform", ["cisco_nxos", "arista_eos", "nokia_sros"])
+    @pytest.mark.parametrize("platform", ["cisco_nxos", "arista_eos"])
     def test_without_a_context_leg_nothing_is_added(self, platform: str) -> None:
         data = json.loads((_CONFIGS / f"border_leaf_{platform}_ebgp_ibgp" / "input.json").read_text())
         out = _render(platform, data)

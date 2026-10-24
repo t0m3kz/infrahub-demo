@@ -8,9 +8,6 @@ query firewall_config(
         platform {
           node {
             name { value }
-            netmiko_device_type { value }
-            napalm_driver { value }
-            ansible_network_os { value }
           }
         }
         ... on DcimCapabilities {
@@ -61,10 +58,6 @@ query firewall_config(
                   node {
                     __typename
                     ...NetworkSegmentFields
-                    # The segment's other interfaces: on an HA pair terminating
-                    # it inline, the secondary member's own address is the
-                    # ASA `standby` address (transforms/helpers/ha.py).
-                    ...InlineSegmentMemberFields
                     # A context-less firewall also enforces the rules of
                     # every segment in a zone bound on one of its interfaces:
                     # it routes that zone's CIDRs through the leg

@@ -16,15 +16,6 @@
               "id": "plat-cisco_nxos",
               "name": {
                 "value": "cisco_nxos"
-              },
-              "netmiko_device_type": {
-                "value": "cisco_nxos"
-              },
-              "napalm_driver": {
-                "value": "cisco_nxos"
-              },
-              "ansible_network_os": {
-                "value": "cisco_nxos"
               }
             }
           },
@@ -1989,9 +1980,6 @@
                           "name": {
                             "value": "seg-inline-150"
                           },
-                          "status": {
-                            "value": "active"
-                          },
                           "customer_name": {
                             "value": "Customer-A"
                           },
@@ -2388,9 +2376,6 @@
                           "__typename": "ManagedVxlanSegment",
                           "name": {
                             "value": "seg-inline-150"
-                          },
-                          "status": {
-                            "value": "active"
                           },
                           "customer_name": {
                             "value": "Customer-A"

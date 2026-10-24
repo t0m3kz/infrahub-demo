@@ -7,9 +7,7 @@ version: "1.0"
 # Replaces the free-text os_version field on DcimDevice with a structured
 # relationship so that:
 #   - All devices on the same release share one node (queryable)
-#   - Full lifecycle metadata is tracked per image (dates, approval)
 #   - The platform is implicit from the image (no mismatch possible)
-#   - Golden/approved image policy can be enforced via checks
 #
 # HFID:    name__value  (e.g. "arista_eos-4.28.3M", "linux-22.04.3")
 # Naming convention: {platform_name}-{version}
@@ -49,70 +47,6 @@ nodes:
         optional: true
         description: "Exact container image reference used by Containerlab for this software release"
         order_weight: 250
-
-      - name: release_type
-        kind: Dropdown
-        optional: true
-        default_value: ga
-        order_weight: 300
-        description: "Release track"
-        choices:
-          - name: ga
-            label: "GA"
-            description: "General Availability"
-            color: "#7FBF7F"
-          - name: lts
-            label: "LTS"
-            description: "Long Term Support"
-            color: "#3498DB"
-          - name: beta
-            label: "Beta"
-            description: "Pre-release / beta"
-            color: "#F39C12"
-          - name: eol
-            label: "EOL"
-            description: "End of Life — no longer supported"
-            color: "#E74C3C"
-
-      - name: is_approved
-        kind: Boolean
-        label: "Approved"
-        optional: true
-        default_value: false
-        order_weight: 310
-        description: "Explicitly approved for production deployment by the network/security team"
-
-      - name: is_recommended
-        kind: Boolean
-        label: "Recommended"
-        optional: true
-        default_value: false
-        order_weight: 320
-        description: "Preferred/golden image — new deployments should use this version"
-
-      - name: release_date
-        kind: DateTime
-        optional: true
-        order_weight: 400
-        description: "General availability date"
-
-      - name: end_of_support
-        kind: DateTime
-        optional: true
-        order_weight: 410
-        description: "End of software maintenance / support date"
-
-      - name: end_of_life
-        kind: DateTime
-        optional: true
-        order_weight: 420
-        description: "End of life date — no further security patches after this date"
-
-      - name: release_notes_url
-        kind: URL
-        optional: true
-        order_weight: 600
-        description: "Link to vendor release notes or security advisory"
 
       - name: description
         kind: Text

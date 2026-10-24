@@ -58,7 +58,6 @@ query {
     }
   }
   SecurityPolicyRule { edges { node { name { value } protocol { value } port_start { value } port_end { value } } } }
-  CloudSecurityGroup { edges { node { name { value } } } }
   ProxyPolicyRule { edges { node { name { value } destination { value } ports { value } } } }
 }
 """
@@ -275,8 +274,7 @@ class TestAppCatalogue(TestInfrahubDockerWithClient):
         its target component (publish-{fqdn}); a target_fqdn dependency gets one
         proxy rule named after itself carrying its ports; every other dependency
         gets one SecurityPolicyRule per port it opens (cloud endpoints included),
-        named {dependency}-{protocol}-{port} (a load-balanced target: {dependency}-{protocol}-{port}-vip-{context}, to its VIP). No generated sg-{app}
-        CloudSecurityGroup exists any more.
+        named {dependency}-{protocol}-{port} (a load-balanced target: {dependency}-{protocol}-{port}-vip-{context}, to its VIP).
         """
         logging.info("=== %s - Step 7: Every Dependency Has Its Rule ===", SCENARIO_NAME)
 
@@ -296,13 +294,6 @@ class TestAppCatalogue(TestInfrahubDockerWithClient):
             value(rule, "name"): (value(rule, "destination"), value(rule, "ports") or [])
             for rule in edges("ProxyPolicyRule")
         }
-
-        generated_groups = [
-            value(group, "name") for group in edges("CloudSecurityGroup") if value(group, "name").startswith("sg-")
-        ]
-        assert not generated_groups, (
-            f"Cloud flows are SecurityPolicyRules; no sg-{{app}} group may remain: {generated_groups}"
-        )
 
         dependencies = edges("AppDependency")
         assert dependencies, "No AppDependency on the branch"

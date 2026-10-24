@@ -44,7 +44,6 @@ from .all_demo_firewall_constants import (
 from .circuit_helpers import fetch_interconnect_inventory
 from .conftest import TestInfrahubDockerWithClient
 from .interconnect_queries import (
-    ADDRESS_COUNT_QUERY,
     CIRCUIT_PREFIXES_QUERY,
     COLOCATION_CONTEXTS_QUERY,
     EDGE_INTERLINK_CABLES_QUERY,
@@ -60,8 +59,6 @@ from .interconnect_rules import (
     _CIRCUIT_ENDS,
     _DCI_MTU,
     DCI_POOL_NETWORK,
-    LEGACY_HANDOFF_ADDRESSES,
-    LEGACY_HANDOFF_PEERINGS,
     _address,
     _address_namespace,
     _interfaces,
@@ -339,15 +336,14 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify add_virtual_circuit built exactly one eBGP session on each Handoff circuit, and nothing authored.
+        """Verify add_virtual_circuit built exactly one eBGP session on each Handoff circuit.
 
         Per circuit `<name>`: one `<name>-bgp` (peering_role regular, EBGP, ttl 1, bfd, no extended communities, the
         circuit's maximum_routes, IPv4 unicast, the circuit's key) between the two devices' BGP processes, on the two
         `<port>.<vlan>` sub-interfaces. Both are addressed in the circuit's namespace from one /31 of the pool
         `Handoff-<namespace>-IPv4` (the overlay-process end the lower address, else the first device by name); the
         prefix is the one `Handoff <name>`. The party process's `local_as` is the data's ASN, ours differs, and the
-        VLAN is the same on both ends (and the VIF's). The authored addresses and sessions the generator replaced are
-        gone.
+        VLAN is the same on both ends (and the VIF's).
         """
         logging.info("=== %s - Step 6b: Handoff Sessions ===", SCENARIO_NAME)
 
@@ -362,20 +358,10 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         sessions = _sessions_by_name(
             await client.execute_graphql(
                 query=SESSIONS_QUERY,
-                variables={"names": sorted([f"{n}-bgp" for n in handoffs] + list(LEGACY_HANDOFF_PEERINGS))},
+                variables={"names": sorted(f"{n}-bgp" for n in handoffs)},
                 branch_name=scenario_branch,
             )
         )
-        gone = sorted(set(sessions) & set(LEGACY_HANDOFF_PEERINGS))
-        if gone:
-            errors.append(f"authored session(s) {gone} still exist: the generator builds <circuit>-bgp")
-        address_count = await client.execute_graphql(
-            query=ADDRESS_COUNT_QUERY,
-            variables={"addresses": list(LEGACY_HANDOFF_ADDRESSES)},
-            branch_name=scenario_branch,
-        )
-        if address_count["IpamIPAddress"]["count"]:
-            errors.append(f"{address_count['IpamIPAddress']['count']} authored handoff address(es) still exist")
         prefixes = _prefixes_by_description(
             await client.execute_graphql(
                 query=CIRCUIT_PREFIXES_QUERY,

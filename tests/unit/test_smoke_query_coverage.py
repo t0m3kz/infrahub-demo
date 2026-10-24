@@ -19,14 +19,6 @@ SMOKE_KIND = "graphql-query-smoke"
 SMOKE_TEST_NAME = "syntax_check"
 FRAGMENTS_DIR = "queries/fragments"
 
-# Query files that are NOT registered under `queries:` in .infrahub.yml. They must still have a smoke entry (so they
-# parse), but there is no registered name for its resource_name to match.
-UNREGISTERED_QUERIES: dict[str, str] = {
-    "queries/config/device_decommission.gql": (
-        "its only consumer, the decommission_device generator, is commented out in .infrahub.yml"
-    ),
-}
-
 
 @pytest.fixture(scope="module")
 def registered_queries(root_dir: Path) -> dict[str, str]:
@@ -86,23 +78,14 @@ def test_smoke_resource_name_matches_the_registered_query_name(
     mismatches = {
         path: (name, registered_queries.get(path))
         for name, path, _ in smoke_entries
-        if path not in UNREGISTERED_QUERIES and registered_queries.get(path) != name
+        if registered_queries.get(path) != name
     }
     assert not mismatches
 
 
-def test_every_non_fragment_query_is_registered_or_explicitly_exempt(
-    query_files: list[str], registered_queries: dict[str, str]
-) -> None:
-    """A query file is registered in .infrahub.yml, or listed (with a reason) in UNREGISTERED_QUERIES."""
-    unexplained = [path for path in query_files if path not in registered_queries and path not in UNREGISTERED_QUERIES]
-    assert not unexplained
-
-
-def test_unregistered_exemptions_are_not_stale(query_files: list[str], registered_queries: dict[str, str]) -> None:
-    """An exemption must name an existing file that is still unregistered."""
-    stale = [path for path in UNREGISTERED_QUERIES if path not in query_files or path in registered_queries]
-    assert not stale
+def test_every_non_fragment_query_is_registered(query_files: list[str], registered_queries: dict[str, str]) -> None:
+    """A query file is registered in .infrahub.yml: an unregistered one has no consumer."""
+    assert not [path for path in query_files if path not in registered_queries]
 
 
 def test_registered_queries_exist(root_dir: Path, registered_queries: dict[str, str]) -> None:

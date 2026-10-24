@@ -128,7 +128,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
             other_zones = {zone_name_for_namespace_type(ns_type) for ns_type in EXCHANGE_PEERS} - set(tenant_zones)
             for device in sorted({str(leg["device"]) for leg in context["legs"]}):
                 platform = platform_by_name.get(device)
-                if platform not in ("panos", "checkpoint_gaia"):
+                if platform not in ("paloalto_panos", "checkpoint_gaia"):
                     errors.append(f"{dc}/{device}: platform '{platform}' has no MANAGEMENT assertions in this test")
                     continue
                 rendered = await render_device_config(async_client_main, scenario_branch, device)
@@ -138,7 +138,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
                     for leg in context["legs"]
                     if leg["device"] == device and leg["namespace"] == MANAGEMENT_NAMESPACE
                 )
-                if platform == "panos":
+                if platform == "paloalto_panos":
                     prefix = f"set vsys {name} rulebase nat rules snat-"
                     if f"set vsys {name} zone {management_zone} network layer3 {leg_interface}" not in rendered:
                         errors.append(f"{dc}/{device}: {leg_interface} is not in {management_zone} of vsys {name}")
@@ -207,7 +207,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
                     if f"deny-{management_zone}-to-{zone}" in rendered:
                         errors.append(f"{dc}/{device}: deny towards {zone}, which the context does not hold")
 
-        assert {"panos", "checkpoint_gaia"} <= set(rendered_by_platform), (
+        assert {"paloalto_panos", "checkpoint_gaia"} <= set(rendered_by_platform), (
             f"MANAGEMENT was rendered on {rendered_by_platform}, expected PAN-OS and Check Point"
         )
         assert not errors, f"Firewall MANAGEMENT exchange on branch '{scenario_branch}' is wrong:\n" + "\n".join(

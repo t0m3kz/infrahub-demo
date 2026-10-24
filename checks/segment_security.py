@@ -5,7 +5,7 @@ from __future__ import annotations
 import ipaddress
 from typing import Any
 
-from transforms.helpers.bgp_external import RETIRED_STATUS, registered_by_attachment
+from transforms.helpers.bgp_external import registered_by_attachment
 from transforms.helpers.group_policy import get_vrf_contracts, rule_groups, segment_groups
 from transforms.helpers.policy import segment_flows
 from utils.data_cleaning import clean_data
@@ -379,15 +379,11 @@ def _reachable_space(
 ) -> _Space:
     """Every (network, namespace_type) a destination prefix may sit in: on-prem and registered behind a session.
 
-    On-prem: the gateway prefix of every segment that is not retired. Registered: the prefixes a customer owner
+    On-prem: the gateway prefix of every segment. Registered: the prefixes a customer owner
     registered behind an attachment point (registered_by_attachment, the edge's own reading); a prefix with no
     customer owner is never accepted, so it is no destination either (routing_invariants.py rule 7 reports it).
     """
-    prefixes = [
-        (segment.get("gateway") or {}).get("ip_prefix") or {}
-        for segment in segments
-        if segment.get("status") != RETIRED_STATUS
-    ]
+    prefixes = [(segment.get("gateway") or {}).get("ip_prefix") or {} for segment in segments]
     prefixes += [
         prefix
         for registered in registered_by_attachment(offices, tunnels, vifs).values()

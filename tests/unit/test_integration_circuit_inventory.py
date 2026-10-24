@@ -323,7 +323,6 @@ _QUERIES_UNDER_TEST: dict[str, str] = {
     "sessions": interconnect_queries.SESSIONS_QUERY,
     "circuit_prefixes": interconnect_queries.CIRCUIT_PREFIXES_QUERY,
     "group_members": interconnect_queries.GROUP_MEMBERS_QUERY,
-    "address_count": interconnect_queries.ADDRESS_COUNT_QUERY,
     "interconnect_inventory": (_QUERIES / "get_interconnect_inventory.gql").read_text(),
     **{f"snapshot_{kind}": snapshot_query(kind, selection, 0) for kind, selection in TOPOLOGY_SNAPSHOT_KINDS.items()},
 }

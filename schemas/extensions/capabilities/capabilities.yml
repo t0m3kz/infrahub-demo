@@ -39,10 +39,6 @@ generics:
             label: Active
             description: "Fully operational and currently in service."
             color: "#7fbf7f"
-          - name: decommissioning
-            label: Decommissioning
-            description: "In the process of being taken out of service."
-            color: "#fbfbfb"
           - name: decommissioned
             label: Decommissioned
             description: "Taken out of service."

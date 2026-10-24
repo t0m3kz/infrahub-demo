@@ -10,10 +10,10 @@ from transforms.config.loadbalancer_cloud import LoadBalancerCloud
 from transforms.config.proxy import Proxy
 
 _PROXY_PLATFORM_VENDOR: dict[str, str] = {
-    "haproxy_technologies_linux": "haproxy",
-    "squid_cache_linux": "squid",
+    "haproxy_technologies": "haproxy",
+    "squid_cache": "squid",
     "bluecoat_sgos": "bluecoat",
-    "cisco_wsa_asyncos": "cisco_wsa",
+    "cisco_wsa": "cisco_wsa",
 }
 
 
@@ -82,9 +82,6 @@ def build_proxy_data(
             {
                 "id": f"plat-{platform}",
                 "name": _v(platform),
-                "netmiko_device_type": _v(platform),
-                "napalm_driver": _v(platform),
-                "ansible_network_os": _v(platform),
             }
         ),
         "primary_address": _node(None),
@@ -143,7 +140,7 @@ def build_proxy_inline_data(*, device_name: str, platform: str) -> dict:
     return data
 
 
-LB_PLATFORMS = ["f5_linux", "haproxy_technologies_linux", "netscaler"]
+LB_PLATFORMS = ["f5_tmos", "haproxy_technologies", "netscaler"]
 
 
 def _lb_members(device_name: str, peer_name: str) -> list[dict]:
@@ -193,9 +190,6 @@ def build_lb_inline_data(*, device_name: str, platform: str) -> dict:
             {
                 "id": f"plat-{platform}",
                 "name": _v(platform),
-                "netmiko_device_type": _v(platform),
-                "napalm_driver": _v(platform),
-                "ansible_network_os": _v(platform),
             }
         ),
         "primary_address": _node(None),
@@ -374,9 +368,6 @@ def build_lb_context_data(*, device_name: str, platform: str) -> dict:
         "platform": _node(
             {
                 "name": _v(platform),
-                "netmiko_device_type": _v(platform),
-                "napalm_driver": _v(platform),
-                "ansible_network_os": _v(platform),
             }
         ),
         "capabilities": _edges([ha_cap]),

@@ -32,18 +32,10 @@ generics:
             label: Provisioning
             description: Resource is being provisioned.
             color: "#7f7fff"
-          - name: error
-            label: Error
-            description: Resource is in an error state.
-            color: "#ff7f7f"
-          - name: retired
-            label: Retired
-            description: Resource is retired and inactive.
-            color: "#BFBFBF"
 
   - name: HybridAttachment
     namespace: Cloud
-    description: "Cloud-side endpoint of a hybrid (on-prem/VRF) routing attachment — DX private VIF or VPN Gateway."
+    description: "Cloud-side endpoint of a hybrid (on-prem/VRF) routing attachment — DX private VIF."
     include_in_menu: false
 
 nodes:
@@ -103,14 +95,6 @@ nodes:
             label: Maintenance
             description: "Region is under maintenance"
             color: "#FFD27F"
-          - name: constrained
-            label: Constrained
-            description: "Region has capacity constraints"
-            color: "#F4CCCC"
-          - name: deprecated
-            label: Deprecated
-            description: "Region is deprecated"
-            color: "#BFBFBF"
     relationships:
       - name: location
         peer: LocationMetro
@@ -332,158 +316,6 @@ nodes:
     uniqueness_constraints:
       - [virtual_network, customer_name__value]
 
-  - name: SecurityGroupRule
-    namespace: Cloud
-    description: "Security group rule — ingress or egress firewall rule within a cloud security group"
-    label: Security Group Rule
-    icon: mdi:file-document-edit-outline
-    include_in_menu: false
-    inherit_from:
-      - CloudResource
-    human_friendly_id:
-      - name__value
-    display_label: "{{ name__value }}"
-    uniqueness_constraints:
-      - [security_group, name__value]
-    attributes:
-      - name: direction
-        kind: Dropdown
-        optional: true
-        default_value: ingress
-        order_weight: 1100
-        choices:
-          - name: ingress
-            label: Ingress
-            color: "#2ECC71"
-          - name: egress
-            label: Egress
-            color: "#3498DB"
-      - name: priority
-        kind: Number
-        optional: true
-        order_weight: 1200
-        description: "Rule priority — lower = higher priority (provider-specific semantics)"
-      - name: protocol
-        kind: Dropdown
-        optional: true
-        default_value: tcp
-        order_weight: 1300
-        choices:
-          - name: tcp
-            label: TCP
-            color: "#3498DB"
-          - name: udp
-            label: UDP
-            color: "#2ECC71"
-          - name: icmp
-            label: ICMP
-            color: "#F39C12"
-          - name: any
-            label: Any
-            color: "#9B59B6"
-      - name: port_start
-        kind: Number
-        optional: true
-        order_weight: 1400
-        parameters:
-          min_value: 1
-          max_value: 65535
-      - name: port_end
-        kind: Number
-        optional: true
-        order_weight: 1500
-        parameters:
-          min_value: 1
-          max_value: 65535
-      - name: action
-        kind: Dropdown
-        optional: true
-        default_value: allow
-        order_weight: 1600
-        choices:
-          - name: allow
-            label: Allow
-            color: "#2ECC71"
-          - name: deny
-            label: Deny
-            color: "#E74C3C"
-      - name: log
-        kind: Boolean
-        optional: true
-        default_value: false
-        order_weight: 1700
-      - name: description
-        kind: Text
-        optional: true
-        order_weight: 1800
-      - name: disabled
-        kind: Boolean
-        optional: true
-        default_value: false
-        order_weight: 1900
-      - name: source_cidr
-        kind: Text
-        optional: true
-        order_weight: 2000
-        description: "Source CIDR for ingress rules (e.g. 10.0.0.0/8)"
-      - name: dest_cidr
-        kind: Text
-        optional: true
-        order_weight: 2100
-        description: "Destination CIDR for egress rules"
-    relationships:
-      - name: security_group
-        peer: CloudSecurityGroup
-        cardinality: one
-        kind: Parent
-        optional: false
-        order_weight: 1050
-        identifier: "cloudsecuritygroup__rules"
-        description: "Security group owning this rule"
-
-  - name: SecurityGroup
-    namespace: Cloud
-    description: >-
-      Security group defining network access rules.
-      Maps to: AWS Security Group, GCP Firewall Rules, Azure NSG.
-    label: Security Group
-    icon: mdi:shield-lock
-    menu_placement: CloudResource
-    include_in_menu: false
-    inherit_from:
-      - CloudResource
-    human_friendly_id:
-      - name__value
-    order_by:
-      - name__value
-    display_label: "{{ name__value }}"
-    uniqueness_constraints:
-      - [virtual_network, name__value]
-    relationships:
-      - name: virtual_network
-        peer: CloudVirtualNetwork
-        cardinality: one
-        kind: Attribute
-        optional: false
-        description: Virtual network this security group belongs to
-        order_weight: 1050
-      - name: account
-        peer: CloudAccount
-        cardinality: one
-        kind: Attribute
-        optional: false
-        description: Cloud account owning this security group
-        order_weight: 1100
-      - name: rules
-        peer: CloudSecurityGroupRule
-        label: Rules
-        cardinality: many
-        kind: Component
-        optional: true
-        order_weight: 1200
-        identifier: "cloudsecuritygroup__rules"
-        description: "Ingress/egress rules for this security group"
-
   # --------------------  Compute Instance  --------------------
   - name: Instance
     namespace: Cloud
@@ -528,12 +360,6 @@ nodes:
         optional: true
         description: Memory size in gigabytes
         order_weight: 1700
-      - name: root_volume_size_gb
-        label: Root Volume Size (GB)
-        kind: Number
-        optional: true
-        description: Size of the root/boot volume in gigabytes
-        order_weight: 1800
       - name: os_type
         label: Operating System
         kind: Dropdown
@@ -588,10 +414,3 @@ nodes:
         optional: true
         description: Network segment where this instance is deployed
         order_weight: 1100
-      - name: security_groups
-        peer: CloudSecurityGroup
-        cardinality: many
-        kind: Attribute
-        optional: true
-        description: Security groups attached to this instance
-        order_weight: 2200

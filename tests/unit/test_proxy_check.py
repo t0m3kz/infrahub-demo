@@ -19,7 +19,7 @@ def _device(**overrides: Any) -> dict[str, Any]:
     base: dict[str, Any] = {
         "name": "proxy-1",
         "status": "active",
-        "platform": {"netmiko_device_type": "cisco_xe"},
+        "platform": {"name": "cisco_xe"},
         "interfaces": [{"role": "uplink", "status": "active"}],
         "capabilities": [{"typename": "ManagedProxyHA", "name": "ha-1", "capabilities": [{}, {}]}],
     }
@@ -44,7 +44,7 @@ class TestProxyCheck:
 
         check.validate({"DcimPhysicalDevice": [bad]})
 
-        assert any("no platform with netmiko_device_type" in error for error in check._captured_errors)
+        assert any("has no platform" in error for error in check._captured_errors)
         assert any("status is 'planned'" in error for error in check._captured_errors)
         assert any("none are active" in error for error in check._captured_errors)
         assert any("has no HA domain" in error for error in check._captured_errors)

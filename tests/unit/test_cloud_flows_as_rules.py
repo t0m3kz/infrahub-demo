@@ -31,12 +31,12 @@ def test_generator_has_no_cloud_rule_methods() -> None:
 
 
 def test_generators_never_name_an_sg_after_an_app() -> None:
-    """No generator source builds an sg-{app} name or writes CloudSecurityGroup objects."""
+    """No generator source builds an sg-{app} name: a cloud flow is a SecurityPolicyRule."""
     root = Path(__file__).resolve().parents[2] / "generators"
     offenders = [
         str(path.relative_to(root))
         for path in root.rglob("*.py")
-        if path.name != "protocols.py" and re.search(r'f"sg-\{|kind=CloudSecurityGroup', path.read_text())
+        if path.name != "protocols.py" and re.search(r'f"sg-\{', path.read_text())
     ]
     assert offenders == []
 

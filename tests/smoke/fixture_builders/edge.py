@@ -295,9 +295,8 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
         block; only the NON-PROD one is accepted.
       - Ethernet1/13.1900 PROD: the SD-WAN gateway handoff. It accepts what the offices behind
         EQX-FR2-SDWAN-GW1 register: C002's PROD lan_prefixes (10.210.2.0/24), C003's (10.210.3.0/24)
-        and C005's hosted office-lan segment (10.176.5.0/24; its retired sibling 10.176.6.0/24 is
-        skipped). C003 therefore has a VPC block on the hub VIF AND an office LAN behind GW1. A NON-PROD LAN,
-        an office owned by a provider, an office registering nothing, an office behind another
+        and C005's hosted office-lan segment (10.176.5.0/24). C003 therefore has a VPC block on the hub VIF AND an office LAN behind GW1. A
+        NON-PROD LAN, an office owned by a provider, an office registering nothing, an office behind another
         gateway and an office without a gateway are not accepted.
       - Ethernet1/13.1300 PROD: EXT-MEGAPORT-MCR1, no far end registers a prefix, so the session has
         no owner: deny-all both ways, with a comment.
@@ -310,7 +309,7 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
     office-hosted segment is registered behind GW1, so it is never announced back to it). Never another
     owner's prefix: C015 sits on the hub VIF only, so GW1 never learns of it. Segments of C003, C015,
     C002 and C005 in PROD and NON-PROD; C001's segment is behind no session and never announced, a
-    retired C003 segment, a segment without a customer owner, a PROD container, a MANAGEMENT segment and
+    segment without a customer owner, a PROD container, a MANAGEMENT segment and
     a segment without a gateway are never announced. A VIF on another device with the same VLAN is
     ignored.
     """
@@ -378,10 +377,8 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
         *,
         owner: dict | None,
         member_type: str = "address",
-        status: str = "active",
     ) -> dict:
         return {
-            "status": _v(status),
             "owner": owner if owner is not None else _node(None),
             "gateway": _node(
                 {
@@ -402,7 +399,6 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
             segment_prefix("10.5.20.0/24", "PROD", "prod", owner=_customer("C003")),
             segment_prefix("10.5.10.0/24", "PROD", "prod", owner=_customer("C003")),
             segment_prefix("10.5.0.0/16", "PROD", "prod", owner=_customer("C003"), member_type="prefix"),
-            segment_prefix("10.5.99.0/24", "PROD", "prod", owner=_customer("C003"), status="retired"),
             segment_prefix("10.5.77.0/24", "PROD", "prod", owner=None),
             segment_prefix("10.7.10.0/24", "PROD", "prod", owner=_customer("C015")),
             segment_prefix("10.8.2.0/24", "PROD", "prod", owner=_customer("C002")),
@@ -413,7 +409,7 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
             segment_prefix("10.6.20.0/24", "NON-PROD", "non_prod", owner=_customer("C015")),
             segment_prefix("10.6.30.0/24", "NON-PROD", "non_prod", owner=_customer("C002")),
             segment_prefix("10.250.0.0/24", "MANAGEMENT", "management", owner=_customer("C003")),
-            {"status": _v("active"), "owner": _customer("C003"), "gateway": _node(None)},
+            {"owner": _customer("C003"), "gateway": _node(None)},
         ]
     )
     on_this_edge = _node({"physical_devices": _edges([{"name": _v(device_name)}])})
@@ -487,11 +483,11 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
         gateway: str | None,
         owner: dict,
         *lans: tuple[str, str],
-        hosted: tuple[tuple[str, str, dict, str], ...] = (),
+        hosted: tuple[tuple[str, str, dict], ...] = (),
     ) -> dict:
         """A footprint's gateway and owner, its lan_prefixes and (``hosted``) the segments it hosts itself.
 
-        ``hosted`` entries are (gateway prefix, namespace, segment owner, segment status).
+        ``hosted`` entries are (gateway prefix, namespace, segment owner).
         """
         return {
             "owner": owner,
@@ -502,7 +498,6 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
                     {
                         "segment": _node(
                             {
-                                "status": _v(status),
                                 "owner": segment_owner,
                                 "gateway": _node(
                                     {
@@ -514,7 +509,7 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
                             }
                         )
                     }
-                    for prefix, namespace, segment_owner, status in hosted
+                    for prefix, namespace, segment_owner in hosted
                 ]
             ),
         }
@@ -525,10 +520,7 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
             office(
                 gw1,
                 _customer("C005"),
-                hosted=(
-                    ("10.176.5.0/24", "PROD", _customer("C005"), "active"),
-                    ("10.176.6.0/24", "PROD", _customer("C005"), "retired"),
-                ),
+                hosted=(("10.176.5.0/24", "PROD", _customer("C005")),),
             ),
             office(gw1, _customer("C002"), ("10.210.2.0/24", "PROD"), ("10.211.2.0/24", "NON-PROD")),
             office(gw1, _customer("C003"), ("10.210.3.0/24", "PROD")),

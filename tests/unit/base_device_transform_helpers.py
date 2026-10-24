@@ -58,7 +58,7 @@ def _device_data(
     return {
         "name": name,
         "role": role,
-        "platform": {"netmiko_device_type": platform} if platform else None,
+        "platform": {"name": platform} if platform else None,
         "interfaces": interfaces or [],
         "capabilities": device_capabilities or [],
     }

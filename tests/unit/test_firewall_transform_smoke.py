@@ -41,7 +41,7 @@ def _make_raw_data(
     """
     platform: dict[str, Any] = {}
     if platform_name is not None:
-        platform = {"netmiko_device_type": {"value": platform_name}}
+        platform = {"name": {"value": platform_name}}
 
     raw_ifaces = [{"node": iface} for iface in (interfaces or [])]
 
@@ -222,22 +222,6 @@ class TestFirewallTransformSmoke:
         assert len(result) > 0
 
     @pytest.mark.asyncio
-    async def test_smoke_render_fortinet(self) -> None:
-        fw = _make_fw()
-        data = _make_smoke_data("fortinet_fortios")
-        result = await fw.transform(data)
-        assert isinstance(result, str)
-        assert len(result) > 0
-
-    @pytest.mark.asyncio
-    async def test_smoke_render_cisco_asa(self) -> None:
-        fw = _make_fw()
-        data = _make_smoke_data("cisco_asa")
-        result = await fw.transform(data)
-        assert isinstance(result, str)
-        assert len(result) > 0
-
-    @pytest.mark.asyncio
     async def test_smoke_render_checkpoint(self) -> None:
         fw = _make_fw()
         data = _make_smoke_data("checkpoint_gaia")
@@ -329,8 +313,6 @@ class TestFirewallTransformSmoke:
         "platform",
         [
             "paloalto_panos",
-            "fortinet_fortios",
-            "cisco_asa",
             "checkpoint_gaia",
             "juniper_junos",
         ],
@@ -339,13 +321,11 @@ class TestFirewallTransformSmoke:
     async def test_destination_prefix_rule_renders_cidr_all_platforms(self, platform: str) -> None:
         """Same coverage as the PAN-OS-specific test above, across every
         vendor template — each renders the CIDR as a literal destination
-        match rather than silently falling back to 'any'/'Any'. ASA takes
-        an IPv4 network as "address netmask"."""
+        match rather than silently falling back to 'any'/'Any'."""
         fw = _make_fw()
         data = _make_destination_prefix_policy_data(platform)
         result = await fw.transform(data)
-        expected = "10.40.0.0 255.255.0.0" if platform == "cisco_asa" else "10.40.0.0/16"
-        assert expected in result
+        assert "10.40.0.0/16" in result
 
     @pytest.mark.asyncio
     async def test_single_port_renders_service_object_on_paloalto(self) -> None:
@@ -438,77 +418,10 @@ class TestFirewallTransformSmoke:
         assert len(matched) == 1
         assert "service Any" in matched[0]
 
-    @pytest.mark.asyncio
-    async def test_single_port_renders_service_object_on_fortinet(self) -> None:
-        """FortiOS's `set service "ALL"` was previously hardcoded regardless
-        of protocol/port — a named service object (config firewall service
-        custom) is required, defined in its own top-level block ahead of
-        config firewall policy since FortiOS config sections can't nest."""
-        fw = _make_fw()
-        data = _make_protocol_port_policy_data("fortinet_fortios", protocol="tcp", port_start=443, port_end=None)
-        result = await fw.transform(data)
-        assert 'edit "svc-tcp-443"' in result
-        assert "set tcp-portrange 443" in result
-        assert 'set service "svc-tcp-443"' in result
-
-    @pytest.mark.asyncio
-    async def test_port_range_renders_service_object_on_fortinet(self) -> None:
-        fw = _make_fw()
-        data = _make_protocol_port_policy_data("fortinet_fortios", protocol="udp", port_start=8080, port_end=8090)
-        result = await fw.transform(data)
-        assert 'edit "svc-udp-8080-8090"' in result
-        assert "set udp-portrange 8080-8090" in result
-        assert 'set service "svc-udp-8080-8090"' in result
-
-    @pytest.mark.asyncio
-    async def test_icmp_falls_back_to_service_all_on_fortinet(self) -> None:
-        fw = _make_fw()
-        data = _make_protocol_port_policy_data("fortinet_fortios", protocol="icmp", port_start=None, port_end=None)
-        result = await fw.transform(data)
-        lines = result.splitlines()
-        name_idx = next(i for i, line in enumerate(lines) if 'set name "proto-port-rule"' in line)
-        next_idx = next(i for i in range(name_idx, len(lines)) if lines[i].strip() == "next")
-        assert any('set service "ALL"' in line for line in lines[name_idx:next_idx])
-
-    @pytest.mark.asyncio
-    async def test_shared_protocol_port_deduplicated_on_fortinet(self) -> None:
-        """Two rules using the same protocol/port must produce exactly one
-        service object, not one per rule."""
-        base = _make_smoke_data("fortinet_fortios")
-        rule_a = {
-            "id": "rule-a",
-            "index": {"value": 20},
-            "name": {"value": "rule-a"},
-            "action": {"value": "permit"},
-            "protocol": {"value": "tcp"},
-            "port_start": {"value": 443},
-            "port_end": {"value": None},
-            "log": {"value": False},
-            "disabled": {"value": False},
-            "apply_on_switch": {"value": False},
-            "description": {"value": ""},
-            "source_segment": {"node": _SMOKE_SEGMENT_REF},
-            "destination_segment": {"node": None},
-            "source_prefixes": {"edges": []},
-            "destination_prefixes": {"edges": [{"node": {"id": "px-1", "prefix": {"value": "10.1.0.0/16"}}}]},
-            "source_ip_addresses": {"edges": []},
-            "destination_ip_addresses": {"edges": []},
-            "security_profile": {"node": None},
-        }
-        rule_b = {**rule_a, "id": "rule-b", "index": {"value": 30}, "name": {"value": "rule-b"}}
-        _add_segment_rule(base, rule_a)
-        _add_segment_rule(base, rule_b)
-
-        fw = _make_fw()
-        result = await fw.transform(base)
-        assert result.count('edit "svc-tcp-443"') == 1
-
     @pytest.mark.parametrize(
         "platform",
         [
             "paloalto_panos",
-            "fortinet_fortios",
-            "cisco_asa",
             "checkpoint_gaia",
             "juniper_junos",
         ],
@@ -525,8 +438,6 @@ class TestFirewallTransformSmoke:
         "platform",
         [
             "paloalto_panos",
-            "fortinet_fortios",
-            "cisco_asa",
             "checkpoint_gaia",
             "juniper_junos",
         ],

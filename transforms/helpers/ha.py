@@ -9,7 +9,7 @@ from ipaddress import ip_interface
 from typing import Any
 
 from transforms.helpers.addressing import host_ip
-from utils.exchange_transit import OFFSET_MEMBER_B, OFFSET_VIP
+from utils.exchange_transit import OFFSET_VIP
 
 # The HA sync link is a back-to-back cable between the two members, never
 # routed anywhere else, so its addresses are a fixed link-local /30 per pair
@@ -46,9 +46,9 @@ def get_ha(
     is identified and included as ha_link in the result.
 
     With device_name, ``unit`` is this device's role in the pair — "primary"
-    for the first member by name, "secondary" for the other — the failover
-    unit ASA and the HA link addresses (HA_LINK_ADDRESSES) are keyed by, and
-    ``peer_management_ip`` the other member's management address (its
+    for the first member by name, "secondary" for the other — the unit the
+    HA link addresses (HA_LINK_ADDRESSES) and the keepalived state are keyed by,
+    and ``peer_management_ip`` the other member's management address (its
     primary_address, where the query selects it: the NetScaler HA node).
     """
     for cap in device_capabilities or []:
@@ -89,50 +89,34 @@ def inline_addresses(
     ha: dict[str, Any] | None,
     leg_address: str | None = None,
 ) -> dict[str, str | None]:
-    """The HA pair's addresses on an interface.
+    """The HA pair's virtual IP on an interface.
 
     Two sources, one result shape:
 
     - an interface carrying a segment the pair terminates inline
       (terminate_inline, inline_service == this pair): virtual_ip is the
       segment gateway — the address hosts use, owned by the active member
-      (floating IP / VIP / VRRP address, per vendor) — and standby_ip the
-      secondary member's OWN address on that segment, which the ASA
-      `standby` keyword needs in both members' config.
+      (floating IP / VIP / VRRP address, per vendor).
     - an exchange transit leg (``leg_address`` is the member's own address in
       the leg's /29, see utils/exchange_transit.py): virtual_ip is the /29's
-      firewall VIP, standby_ip member B's address, fixed offsets that need no
-      lookup of the peer.
+      firewall VIP, a fixed offset that needs no lookup of the peer.
 
-    The interface's own ip_address is this member's own address. Both are
+    The interface's own ip_address is this member's own address. virtual_ip is
     None when the interface carries no such segment/leg, or the device has no HA.
     """
-    none: dict[str, str | None] = {"virtual_ip": None, "standby_ip": None}
+    none: dict[str, str | None] = {"virtual_ip": None}
     if not ha:
         return none
     if leg_address:
         network = ip_interface(leg_address).network
         if network.version != 4:
             return none
-        return {
-            "virtual_ip": f"{network[OFFSET_VIP]}/{network.prefixlen}",
-            "standby_ip": f"{network[OFFSET_MEMBER_B]}/{network.prefixlen}",
-        }
-    secondary = ha["members"][1] if len(ha.get("members") or []) > 1 else None
+        return {"virtual_ip": f"{network[OFFSET_VIP]}/{network.prefixlen}"}
     for cap in capabilities or []:
         if not cap.get("terminate_inline") or (cap.get("inline_service") or {}).get("name") != ha.get("name"):
             continue
         virtual_ip = (cap.get("gateway") or {}).get("address")
         if not virtual_ip:
             continue
-        standby_ip = next(
-            (
-                address
-                for iface in cap.get("capabilities") or []
-                if (iface.get("device") or {}).get("name") == secondary
-                and (address := (iface.get("ip_address") or {}).get("address"))
-            ),
-            None,
-        )
-        return {"virtual_ip": virtual_ip, "standby_ip": standby_ip}
+        return {"virtual_ip": virtual_ip}
     return none

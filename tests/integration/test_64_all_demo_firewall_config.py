@@ -256,7 +256,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
             rendered = await render_device_config(async_client_main, scenario_branch, device)
             if f"set vsys {context}" not in rendered:
                 errors.append(f"{device}: no vsys '{context}' rendered")
-            if platform_by_name.get(device) != "panos":
+            if platform_by_name.get(device) != "paloalto_panos":
                 errors.append(f"{device}: platform '{platform_by_name.get(device)}', the FR pair is expected PAN-OS")
                 continue
             if not any(leg["device"] == device for leg in inventory_context["legs"]):
@@ -350,7 +350,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
 
             for device in sorted({str(leg["device"]) for leg in context["legs"]}):
                 platform = platform_by_name.get(device)
-                if platform not in ("panos", "checkpoint_gaia"):
+                if platform not in ("paloalto_panos", "checkpoint_gaia"):
                     errors.append(f"{dc}/{device}: platform '{platform}' has no transit assertions in this test")
                     continue
                 rendered = await render_device_config(async_client_main, scenario_branch, device)
@@ -619,12 +619,12 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
             ]
             for device in sorted({str(leg["device"]) for leg in context["legs"]}):
                 platform = platform_by_name.get(device)
-                if platform not in ("panos", "checkpoint_gaia"):
+                if platform not in ("paloalto_panos", "checkpoint_gaia"):
                     errors.append(f"{dc}/{device}: platform '{platform}' has no SNAT assertions in this test")
                     continue
                 rendered = await render_device_config(async_client_main, scenario_branch, device)
                 rendered_by_platform[str(platform)] = rendered_by_platform.get(str(platform), 0) + 1
-                if platform == "panos":
+                if platform == "paloalto_panos":
                     for zone in zones:
                         base = f"set vsys {name} rulebase nat rules snat-{zone}"
                         if f"{base} source-translation dynamic-ip-and-port translated-address {snat}" not in rendered:
@@ -646,7 +646,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
                             f"{dc}/{device}: {len(nat_rules)} nat-rule line(s) for SNAT-{name}, {len(zones)} expected"
                         )
 
-        assert {"panos", "checkpoint_gaia"} <= set(rendered_by_platform), (
+        assert {"paloalto_panos", "checkpoint_gaia"} <= set(rendered_by_platform), (
             f"SNAT was rendered on {rendered_by_platform}, expected PAN-OS and Check Point"
         )
         assert not errors, f"Firewall SNAT on branch '{scenario_branch}' is wrong:\n" + "\n".join(

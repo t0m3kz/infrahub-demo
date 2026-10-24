@@ -83,7 +83,7 @@ class TestGate:
         assert _view(_roots(raw), platform="arista_eos") is None
 
     def test_a_platform_without_a_renderer_renders_nothing(self) -> None:
-        for platform in ("arista_eos", "sonic", "nokia_sros", ""):
+        for platform in ("arista_eos", "sonic", ""):
             assert _view(_roots(), platform=platform) is None
 
     def test_no_profile_row_is_no_reference_fabric(self) -> None:

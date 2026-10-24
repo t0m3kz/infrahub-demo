@@ -16,15 +16,6 @@
               "id": "plat-cisco_nxos",
               "name": {
                 "value": "cisco_nxos"
-              },
-              "netmiko_device_type": {
-                "value": "cisco_nxos"
-              },
-              "napalm_driver": {
-                "value": "cisco_nxos"
-              },
-              "ansible_network_os": {
-                "value": "cisco_nxos"
               }
             }
           },
@@ -2238,9 +2229,6 @@
     "edges": [
       {
         "node": {
-          "status": {
-            "value": "active"
-          },
           "owner": {
             "node": {
               "__typename": "OrganizationCustomer",
@@ -2278,9 +2266,6 @@
       },
       {
         "node": {
-          "status": {
-            "value": "active"
-          },
           "owner": {
             "node": {
               "__typename": "OrganizationCustomer",
@@ -2318,9 +2303,6 @@
       },
       {
         "node": {
-          "status": {
-            "value": "active"
-          },
           "owner": {
             "node": {
               "__typename": "OrganizationCustomer",
@@ -2358,49 +2340,6 @@
       },
       {
         "node": {
-          "status": {
-            "value": "retired"
-          },
-          "owner": {
-            "node": {
-              "__typename": "OrganizationCustomer",
-              "org_id": {
-                "value": "C003"
-              },
-              "display_label": "C003 Customer"
-            }
-          },
-          "gateway": {
-            "node": {
-              "ip_prefix": {
-                "node": {
-                  "prefix": {
-                    "value": "10.5.99.0/24"
-                  },
-                  "member_type": {
-                    "value": "address"
-                  },
-                  "ip_namespace": {
-                    "node": {
-                      "name": {
-                        "value": "PROD"
-                      },
-                      "namespace_type": {
-                        "value": "prod"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      {
-        "node": {
-          "status": {
-            "value": "active"
-          },
           "owner": {
             "node": null
           },
@@ -2432,9 +2371,6 @@
       },
       {
         "node": {
-          "status": {
-            "value": "active"
-          },
           "owner": {
             "node": {
               "__typename": "OrganizationCustomer",
@@ -2472,9 +2408,6 @@
       },
       {
         "node": {
-          "status": {
-            "value": "active"
-          },
           "owner": {
             "node": {
               "__typename": "OrganizationCustomer",
@@ -2512,9 +2445,6 @@
       },
       {
         "node": {
-          "status": {
-            "value": "active"
-          },
           "owner": {
             "node": {
               "__typename": "OrganizationCustomer",
@@ -2552,9 +2482,6 @@
       },
       {
         "node": {
-          "status": {
-            "value": "active"
-          },
           "owner": {
             "node": {
               "__typename": "OrganizationCustomer",
@@ -2592,9 +2519,6 @@
       },
       {
         "node": {
-          "status": {
-            "value": "active"
-          },
           "owner": {
             "node": {
               "__typename": "OrganizationCustomer",
@@ -2632,9 +2556,6 @@
       },
       {
         "node": {
-          "status": {
-            "value": "active"
-          },
           "owner": {
             "node": {
               "__typename": "OrganizationCustomer",
@@ -2672,9 +2593,6 @@
       },
       {
         "node": {
-          "status": {
-            "value": "active"
-          },
           "owner": {
             "node": {
               "__typename": "OrganizationCustomer",
@@ -2712,9 +2630,6 @@
       },
       {
         "node": {
-          "status": {
-            "value": "active"
-          },
           "owner": {
             "node": {
               "__typename": "OrganizationCustomer",
@@ -2752,9 +2667,6 @@
       },
       {
         "node": {
-          "status": {
-            "value": "active"
-          },
           "owner": {
             "node": {
               "__typename": "OrganizationCustomer",
@@ -2792,9 +2704,6 @@
       },
       {
         "node": {
-          "status": {
-            "value": "active"
-          },
           "owner": {
             "node": {
               "__typename": "OrganizationCustomer",
@@ -3252,9 +3161,6 @@
                 "node": {
                   "segment": {
                     "node": {
-                      "status": {
-                        "value": "active"
-                      },
                       "owner": {
                         "node": {
                           "__typename": "OrganizationCustomer",
@@ -3270,44 +3176,6 @@
                             "node": {
                               "prefix": {
                                 "value": "10.176.5.0/24"
-                              },
-                              "ip_namespace": {
-                                "node": {
-                                  "name": {
-                                    "value": "PROD"
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              },
-              {
-                "node": {
-                  "segment": {
-                    "node": {
-                      "status": {
-                        "value": "retired"
-                      },
-                      "owner": {
-                        "node": {
-                          "__typename": "OrganizationCustomer",
-                          "org_id": {
-                            "value": "C005"
-                          },
-                          "display_label": "C005 Customer"
-                        }
-                      },
-                      "gateway": {
-                        "node": {
-                          "ip_prefix": {
-                            "node": {
-                              "prefix": {
-                                "value": "10.176.6.0/24"
                               },
                               "ip_namespace": {
                                 "node": {

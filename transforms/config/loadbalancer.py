@@ -7,7 +7,7 @@ from transforms.helpers.loadbalancer import get_loadbalancer_contexts
 
 
 def _build_lb_interfaces(interfaces: list[dict[str, Any]], ha: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-    """Addressed interfaces, with the HA pair's virtual_ip/standby_ip on a
+    """Addressed interfaces, with the HA pair's virtual_ip on a
     segment it terminates inline (transforms.helpers.ha.inline_addresses)."""
     lb_ifaces = []
     for iface in interfaces:

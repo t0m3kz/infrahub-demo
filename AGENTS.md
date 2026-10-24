@@ -301,8 +301,8 @@ class MyCheck(InfrahubCheck):
   owners have on-prem or registered behind another external session of the namespace (an office LAN reaches the
   owner's VPC, its VPC block reaches the office), minus its own IN: the edge passes routes between two external
   sessions of the SAME owner, never across owners, and never back to the session a prefix was learned on (an
-  office-hosted segment is registered behind its gateway, so it is not local space). Exact match, retired segments
-  dropped, one helper `utils/ownership.py` `exchange_policies`. A prefix of two owners, or an owner's prefix behind
+  office-hosted segment is registered behind its gateway, so it is not local space). Exact match, one helper
+  `utils/ownership.py` `exchange_policies`. A prefix of two owners, or an owner's prefix behind
   two sessions, is a WARNING in the transform and an error of `checks/routing_invariants.py` rule 8. With no owner it
   accepts and announces nothing. Every destination prefix of an enabled `SecurityPolicyRule` must be on-prem space or
   registered behind an external session (VPC block, office LAN or hosted segment, tunnel range), in a namespace of the

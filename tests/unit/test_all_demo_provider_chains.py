@@ -173,7 +173,6 @@ def test_the_partner_stub_is_owned_by_the_partner_organization_and_deployed_to_t
     assert not stub.groups()
     assert stub.item["deployment"] == name(topology)
     assert topology.item["parent"] == "Partners"
-    assert topology.item["provider_type"] == "partner"
     assert topology.item["provider"] == "P031"
 
 

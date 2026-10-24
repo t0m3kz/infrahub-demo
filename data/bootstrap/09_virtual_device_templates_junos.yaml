@@ -11,8 +11,8 @@ spec:
       owner: "P027"
       device_type: vSRX
       role: firewall
-      platform: junos
-      software_image: junos-23.4R2
+      platform: juniper_junos
+      software_image: juniper_junos-23.4R2
       status: active
       cpu: 2
       memory: 8
@@ -35,8 +35,8 @@ spec:
       owner: "P027"
       device_type: vSRX
       role: firewall
-      platform: junos
-      software_image: junos-23.4R2
+      platform: juniper_junos
+      software_image: juniper_junos-23.4R2
       status: active
       cpu: 4
       memory: 16
@@ -59,8 +59,8 @@ spec:
       owner: "P027"
       device_type: vSRX
       role: firewall
-      platform: junos
-      software_image: junos-23.4R2
+      platform: juniper_junos
+      software_image: juniper_junos-23.4R2
       status: active
       cpu: 8
       memory: 32
@@ -83,8 +83,8 @@ spec:
       owner: "P027"
       device_type: vSRX
       role: firewall
-      platform: junos
-      software_image: junos-23.4R2
+      platform: juniper_junos
+      software_image: juniper_junos-23.4R2
       status: active
       cpu: 16
       memory: 64

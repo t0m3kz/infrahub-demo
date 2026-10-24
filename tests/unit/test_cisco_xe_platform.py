@@ -129,10 +129,10 @@ def _activation() -> dict[str, Any]:
     }
 
 
-def _with_platform(data: dict[str, Any], netmiko_device_type: str) -> dict[str, Any]:
-    """Re-point the first device of a golden input to another netmiko platform."""
+def _with_platform(data: dict[str, Any], platform: str) -> dict[str, Any]:
+    """Re-point the first device of a golden input to another platform."""
     device = data["DcimDevice"]["edges"][0]["node"]
-    device["platform"]["node"]["netmiko_device_type"]["value"] = netmiko_device_type
+    device["platform"]["node"]["name"]["value"] = platform
     return data
 
 
@@ -395,7 +395,7 @@ class TestRefuseCiscoXeUnrendered:
             "VXLAN without an EVPN BGP process; refusing incomplete config"
         )
 
-    @pytest.mark.parametrize("platform", ["arista_eos", "cisco_nxos", "cisco_ios", "nokia_sros"])
+    @pytest.mark.parametrize("platform", ["arista_eos", "cisco_nxos", "cisco_ios"])
     @pytest.mark.parametrize("role", FABRIC_ROLES)
     def test_guard_is_specific_to_cisco_xe(self, platform: str, role: str) -> None:
         """The same truthy keys that refuse a cisco_xe leaf do not raise on any other platform."""

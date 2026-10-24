@@ -42,14 +42,12 @@ def _make_vpc(
     cidr: str,
     account: dict,
     subnets: list[dict],
-    is_default: bool = False,
     dns_support: bool = True,
     dns_hostnames: bool = True,
 ) -> dict:
     return {
         "id": vpc_id,
         "name": _v(vpc_name),
-        "is_default": _v(is_default),
         "dns_support": _v(dns_support),
         "dns_hostnames": _v(dns_hostnames),
         "account": _node(account),
@@ -65,26 +63,14 @@ def _make_subnet(
     name: str,
     cidr: str,
     az: str,
-    segment_type: str = "aws_vpc_subnet",
-    is_public: bool = False,
     auto_assign_public_ip: bool = False,
 ) -> dict:
     return {
         "id": sub_id,
         "name": _v(name),
-        "is_public": _v(is_public),
         "auto_assign_public_ip": _v(auto_assign_public_ip),
-        "segment_type": _v(segment_type),
         "cidr_block": _v(cidr),
         "availability_zone": _node({"name": _v(az)}),
-    }
-
-
-def _make_sg(sg_id: str, name: str, vpc_name: str) -> dict:
-    return {
-        "id": sg_id,
-        "name": _v(name),
-        "virtual_network": _node({"name": _v(vpc_name)}),
     }
 
 
@@ -92,7 +78,6 @@ def _make_instance(
     *,
     inst_id: str,
     name: str,
-    cloud_id: str,
     instance_type: str,
     image: str,
     os_type: str,
@@ -100,13 +85,11 @@ def _make_instance(
     subnet_name: str,
     vpc_name: str,
     az: str,
-    sg_names: list[str],
     public_ip: str | None = None,
 ) -> dict:
     return {
         "id": inst_id,
         "name": _v(name),
-        "cloud_id": _v(cloud_id),
         "instance_type": _v(instance_type),
         "image": _v(image),
         "os_type": _v(os_type),
@@ -119,85 +102,6 @@ def _make_instance(
             }
         ),
         "availability_zone": _node({"name": _v(az)}),
-        "security_groups": _edges([{"name": _v(sg)} for sg in sg_names]),
-    }
-
-
-def _make_igw(igw_id: str, name: str, vpc_name: str) -> dict:
-    return {
-        "id": igw_id,
-        "name": _v(name),
-        "virtual_network": _node({"name": _v(vpc_name)}),
-    }
-
-
-def _make_nat(
-    *,
-    nat_id: str,
-    name: str,
-    vpc_name: str,
-    subnet_names: list[str],
-    public_ip: str | None = None,
-) -> dict:
-    return {
-        "id": nat_id,
-        "name": _v(name),
-        "public_ip": _v(public_ip),
-        "virtual_network": _node({"name": _v(vpc_name)}),
-        "network_segments": _edges([{"name": _v(s)} for s in subnet_names]),
-    }
-
-
-def _make_route_table(
-    *,
-    rt_id: str,
-    name: str,
-    vpc_name: str,
-    subnet_names: list[str],
-    is_main: bool = False,
-) -> dict:
-    return {
-        "id": rt_id,
-        "name": _v(name),
-        "is_main": _v(is_main),
-        "virtual_network": _node({"name": _v(vpc_name)}),
-        "network_segments": _edges([{"name": _v(s)} for s in subnet_names]),
-    }
-
-
-def _make_route(
-    *,
-    route_id: str,
-    name: str,
-    rt_name: str,
-    destination: str,
-    igw_name: str | None = None,
-    nat_name: str | None = None,
-) -> dict:
-    return {
-        "id": route_id,
-        "name": _v(name),
-        "route_table": _node({"name": _v(rt_name)}),
-        "destination": _node({"prefix": _v(destination)}),
-        "internet_gateway": _node({"name": _v(igw_name)}) if igw_name else _node(None),
-        "nat_gateway": _node({"name": _v(nat_name)}) if nat_name else _node(None),
-        "instance": _node(None),
-        "network_interface": _node(None),
-    }
-
-
-def _make_nacl(
-    *,
-    nacl_id: str,
-    name: str,
-    vpc_name: str,
-    subnet_names: list[str],
-) -> dict:
-    return {
-        "id": nacl_id,
-        "name": _v(name),
-        "virtual_network": _node({"name": _v(vpc_name)}),
-        "network_segments": _edges([{"name": _v(s)} for s in subnet_names]),
     }
 
 
@@ -219,42 +123,6 @@ def _make_tgw(
         "vpn_ecmp_support": _v(vpn_ecmp_support),
         "region": _node({"name": _v(region)}),
         "attached_virtual_networks": _edges([{"name": _v(v)} for v in attached_vpcs]),
-    }
-
-
-def _make_cgw(
-    *,
-    cgw_id: str,
-    name: str,
-    device_type: str,
-    asn: int,
-    ip_address: str,
-) -> dict:
-    return {
-        "id": cgw_id,
-        "name": _v(name),
-        "device_type": _v(device_type),
-        "asn": _node({"asn": _v(asn)}),
-        "ip_address": _node({"address": _v(ip_address)}),
-    }
-
-
-def _make_peering(
-    *,
-    pcx_id: str,
-    name: str,
-    requester_vpc: str,
-    accepter_vpc: str,
-    status: str = "active",
-) -> dict:
-    return {
-        "id": pcx_id,
-        "name": _v(name),
-        "peering_status": _v(status),
-        "requester_virtual_network": _node({"name": _v(requester_vpc)}),
-        "accepter_virtual_network": _node({"name": _v(accepter_vpc)}),
-        "requester_route_table": _node(None),
-        "accepter_route_table": _node(None),
     }
 
 
@@ -281,7 +149,6 @@ def _make_vif(
     *,
     vif_id: str,
     name: str,
-    vif_type: str,
     vlan_id: int,
     dx_name: str,
     vpc_name: str | None = None,
@@ -290,7 +157,6 @@ def _make_vif(
     return {
         "id": vif_id,
         "name": _v(name),
-        "vif_type": _v(vif_type),
         "vlan_id": _v(vlan_id),
         "direct_connect": _node({"name": _v(dx_name)}),
         "virtual_network": _node({"name": _v(vpc_name)}) if vpc_name else _node(None),
@@ -304,7 +170,7 @@ def _make_vif(
 
 
 def build_aws_single_region() -> dict:
-    """Single AWS VPC in eu-central-1 with the full resource set."""
+    """Single AWS VPC in eu-central-1 with one subnet and one instance."""
     account = _make_account()
     subnet = _make_subnet(
         sub_id="sub-1",
@@ -322,13 +188,11 @@ def build_aws_single_region() -> dict:
     )
     return {
         "CloudVirtualNetwork": _edges([vpc]),
-        "CloudSecurityGroup": _edges([_make_sg("sg-1", "prod-sg", "prod-vpc")]),
         "CloudInstance": _edges(
             [
                 _make_instance(
                     inst_id="i-1",
                     name="prod-instance-1",
-                    cloud_id="i-abc123",
                     instance_type="t3.micro",
                     image="ami-12345678",
                     os_type="linux",
@@ -336,59 +200,10 @@ def build_aws_single_region() -> dict:
                     subnet_name="prod-subnet-1a",
                     vpc_name="prod-vpc",
                     az="eu-central-1a",
-                    sg_names=["prod-sg"],
-                )
-            ]
-        ),
-        "CloudInternetGateway": _edges([_make_igw("igw-1", "prod-igw", "prod-vpc")]),
-        "CloudNATGateway": _edges(
-            [
-                _make_nat(
-                    nat_id="nat-1",
-                    name="prod-nat",
-                    vpc_name="prod-vpc",
-                    subnet_names=["prod-subnet-1a"],
-                    public_ip="1.2.3.4",
-                )
-            ]
-        ),
-        "CloudRouteTable": _edges(
-            [
-                _make_route_table(
-                    rt_id="rt-1",
-                    name="prod-rt",
-                    vpc_name="prod-vpc",
-                    subnet_names=["prod-subnet-1a"],
-                    is_main=True,
-                )
-            ]
-        ),
-        "CloudRoute": _edges(
-            [
-                _make_route(
-                    route_id="route-1",
-                    name="route-igw",
-                    rt_name="prod-rt",
-                    destination="0.0.0.0/0",
-                    igw_name="prod-igw",
-                )
-            ]
-        ),
-        "CloudPublicIP": _edges([]),
-        "CloudNetworkACL": _edges(
-            [
-                _make_nacl(
-                    nacl_id="nacl-1",
-                    name="prod-nacl",
-                    vpc_name="prod-vpc",
-                    subnet_names=["prod-subnet-1a"],
                 )
             ]
         ),
         "CloudTransitGateway": _edges([]),
-        "CloudVPNGateway": _edges([]),
-        "CloudCustomerGateway": _edges([]),
-        "CloudVirtualNetworkPeering": _edges([]),
         "CloudDirectConnect": _edges([]),
         "CloudVirtualInterface": _edges([]),
     }
@@ -396,7 +211,7 @@ def build_aws_single_region() -> dict:
 
 def build_aws_multi_region() -> dict:
     """Two AWS VPCs: one in eu-central-1 (default), one in eu-west-1 (aliased provider).
-    Includes transit gateway, customer gateway, peering, and direct connect.
+    Includes a transit gateway, a direct connect and a virtual interface.
     """
     account = _make_account()
 
@@ -431,18 +246,11 @@ def build_aws_multi_region() -> dict:
 
     return {
         "CloudVirtualNetwork": _edges([vpc_central, vpc_west]),
-        "CloudSecurityGroup": _edges(
-            [
-                _make_sg("sg-1", "prod-sg", "prod-vpc"),
-                _make_sg("sg-2", "west-sg", "prod-vpc-west"),
-            ]
-        ),
         "CloudInstance": _edges(
             [
                 _make_instance(
                     inst_id="i-1",
                     name="prod-instance-1",
-                    cloud_id="i-abc123",
                     instance_type="t3.micro",
                     image="ami-12345678",
                     os_type="linux",
@@ -450,12 +258,10 @@ def build_aws_multi_region() -> dict:
                     subnet_name="prod-subnet-1a",
                     vpc_name="prod-vpc",
                     az="eu-central-1a",
-                    sg_names=["prod-sg"],
                 ),
                 _make_instance(
                     inst_id="i-2",
                     name="west-instance-1",
-                    cloud_id="i-def456",
                     instance_type="t3.small",
                     image="ami-87654321",
                     os_type="linux",
@@ -463,72 +269,7 @@ def build_aws_multi_region() -> dict:
                     subnet_name="prod-subnet-west-1a",
                     vpc_name="prod-vpc-west",
                     az="eu-west-1a",
-                    sg_names=["west-sg"],
                 ),
-            ]
-        ),
-        "CloudInternetGateway": _edges(
-            [
-                _make_igw("igw-1", "prod-igw", "prod-vpc"),
-                _make_igw("igw-2", "west-igw", "prod-vpc-west"),
-            ]
-        ),
-        "CloudNATGateway": _edges(
-            [
-                _make_nat(
-                    nat_id="nat-1",
-                    name="prod-nat",
-                    vpc_name="prod-vpc",
-                    subnet_names=["prod-subnet-1a"],
-                    public_ip="1.2.3.4",
-                )
-            ]
-        ),
-        "CloudRouteTable": _edges(
-            [
-                _make_route_table(
-                    rt_id="rt-1",
-                    name="prod-rt",
-                    vpc_name="prod-vpc",
-                    subnet_names=["prod-subnet-1a"],
-                    is_main=True,
-                ),
-                _make_route_table(
-                    rt_id="rt-2",
-                    name="west-rt",
-                    vpc_name="prod-vpc-west",
-                    subnet_names=["prod-subnet-west-1a"],
-                    is_main=True,
-                ),
-            ]
-        ),
-        "CloudRoute": _edges(
-            [
-                _make_route(
-                    route_id="route-1",
-                    name="route-igw-central",
-                    rt_name="prod-rt",
-                    destination="0.0.0.0/0",
-                    igw_name="prod-igw",
-                ),
-                _make_route(
-                    route_id="route-2",
-                    name="route-igw-west",
-                    rt_name="west-rt",
-                    destination="0.0.0.0/0",
-                    igw_name="west-igw",
-                ),
-            ]
-        ),
-        "CloudPublicIP": _edges([]),
-        "CloudNetworkACL": _edges(
-            [
-                _make_nacl(
-                    nacl_id="nacl-1",
-                    name="prod-nacl",
-                    vpc_name="prod-vpc",
-                    subnet_names=["prod-subnet-1a"],
-                )
             ]
         ),
         "CloudTransitGateway": _edges(
@@ -538,28 +279,6 @@ def build_aws_multi_region() -> dict:
                     name="prod-tgw",
                     region="eu-central-1",
                     attached_vpcs=["prod-vpc", "prod-vpc-west"],
-                )
-            ]
-        ),
-        "CloudVPNGateway": _edges([]),
-        "CloudCustomerGateway": _edges(
-            [
-                _make_cgw(
-                    cgw_id="cgw-1",
-                    name="on-prem-cgw",
-                    device_type="cisco",
-                    asn=65000,
-                    ip_address="203.0.113.1/32",
-                )
-            ]
-        ),
-        "CloudVirtualNetworkPeering": _edges(
-            [
-                _make_peering(
-                    pcx_id="pcx-1",
-                    name="prod-to-west-peering",
-                    requester_vpc="prod-vpc",
-                    accepter_vpc="prod-vpc-west",
                 )
             ]
         ),
@@ -579,7 +298,6 @@ def build_aws_multi_region() -> dict:
                 _make_vif(
                     vif_id="vif-1",
                     name="prod-vif",
-                    vif_type="private",
                     vlan_id=100,
                     dx_name="prod-dx",
                     vpc_name="prod-vpc",
@@ -691,7 +409,6 @@ def build_azure() -> dict:
         name="prod-subnet-westeurope-1",
         cidr="10.0.1.0/24",
         az="westeurope-1",
-        segment_type="azure_vnet_subnet",
     )
     vpc = _make_vpc(
         vpc_id="vnet-1",
@@ -703,13 +420,11 @@ def build_azure() -> dict:
     )
     return {
         "CloudVirtualNetwork": _edges([vpc]),
-        "CloudSecurityGroup": _edges([_make_sg("nsg-1", "prod-nsg", "prod-vnet")]),
         "CloudInstance": _edges(
             [
                 _make_instance(
                     inst_id="vm-1",
                     name="prod-vm-1",
-                    cloud_id="vm-abc",
                     instance_type="Standard_D2s_v3",
                     image="UbuntuServer-18.04",
                     os_type="linux",
@@ -717,29 +432,10 @@ def build_azure() -> dict:
                     subnet_name="prod-subnet-westeurope-1",
                     vpc_name="prod-vnet",
                     az="westeurope-1",
-                    sg_names=["prod-nsg"],
                 )
             ]
         ),
-        "CloudInternetGateway": _edges([]),
-        "CloudNATGateway": _edges([]),
-        "CloudRouteTable": _edges(
-            [
-                _make_route_table(
-                    rt_id="rt-1",
-                    name="prod-rt",
-                    vpc_name="prod-vnet",
-                    subnet_names=["prod-subnet-westeurope-1"],
-                )
-            ]
-        ),
-        "CloudRoute": _edges([]),
-        "CloudPublicIP": _edges([]),
-        "CloudNetworkACL": _edges([]),
         "CloudTransitGateway": _edges([]),
-        "CloudVPNGateway": _edges([]),
-        "CloudCustomerGateway": _edges([]),
-        "CloudVirtualNetworkPeering": _edges([]),
         "CloudDirectConnect": _edges([]),
         "CloudVirtualInterface": _edges([]),
     }
@@ -757,7 +453,6 @@ def build_gcp() -> dict:
         name="prod-subnet-europe-west1",
         cidr="10.0.1.0/24",
         az="europe-west1-b",
-        segment_type="gcp_vpc_subnet",
     )
     vpc = _make_vpc(
         vpc_id="vpc-1",
@@ -769,13 +464,11 @@ def build_gcp() -> dict:
     )
     return {
         "CloudVirtualNetwork": _edges([vpc]),
-        "CloudSecurityGroup": _edges([_make_sg("fw-1", "prod-fw-rule", "prod-network")]),
         "CloudInstance": _edges(
             [
                 _make_instance(
                     inst_id="inst-1",
                     name="prod-instance-1",
-                    cloud_id="projects/my-gcp-project/zones/europe-west1-b/instances/prod-instance-1",
                     instance_type="n1-standard-1",
                     image="debian-cloud/debian-11",
                     os_type="linux",
@@ -783,20 +476,10 @@ def build_gcp() -> dict:
                     subnet_name="prod-subnet-europe-west1",
                     vpc_name="prod-network",
                     az="europe-west1-b",
-                    sg_names=["prod-fw-rule"],
                 )
             ]
         ),
-        "CloudInternetGateway": _edges([]),
-        "CloudNATGateway": _edges([]),
-        "CloudRouteTable": _edges([]),
-        "CloudRoute": _edges([]),
-        "CloudPublicIP": _edges([]),
-        "CloudNetworkACL": _edges([]),
         "CloudTransitGateway": _edges([]),
-        "CloudVPNGateway": _edges([]),
-        "CloudCustomerGateway": _edges([]),
-        "CloudVirtualNetworkPeering": _edges([]),
         "CloudDirectConnect": _edges([]),
         "CloudVirtualInterface": _edges([]),
     }

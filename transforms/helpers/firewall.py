@@ -82,7 +82,7 @@ def get_firewall_static_routes(
             "destination": "10.99.0.0/24",     # zone member CIDR
             "nexthop":     "10.99.99.2",        # leaf /30 IP (.2 in the /30 link)
             "interface":   "eth0.99",           # FW sub-interface name
-            "zone":        "internal",          # its zone (ASA routes by nameif)
+            "zone":        "internal",          # its zone
           }
         ]
     """
@@ -438,7 +438,7 @@ def get_zone_policies(policies_data: list[dict[str, Any]] | None = None) -> list
     the policies as one flat rule table (a context's, or the root one), so
     rules are numbered 10, 20, ... across the whole table in policy order,
     then rule index order: per-policy indexes collide (each policy starts
-    at the same index) and FortiOS `edit <seq>` / Check Point `position`
+    at the same index) and Check Point `position`
     would overwrite or reorder them. One implicit deny-all closes the table,
     on the last policy; one per policy would shadow every later policy.
 

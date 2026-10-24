@@ -6,7 +6,7 @@ trigger-customer-deployment-colocation-on-created rule).
 Colocation shares the same PROD/NON-PROD data-plane VRFs as every other
 customer deployment kind (see data/bootstrap/22_namespaces.yml) — there is
 still no VRF-per-customer. This generator provisions the FirewallContext
-(VDOM/vsys) on the ManagedFirewallHA cluster of the footprint's serving_zone, the
+(vsys) on the ManagedFirewallHA cluster of the footprint's serving_zone, the
 zone of the parent metro whose firewall pair serves it (customer_colocation.gql
 aliases serving_zone as `parent` and reads its firewall_devices), links the
 deployment to it as its serving_firewall_context so the firewall transform places

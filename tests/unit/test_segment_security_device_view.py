@@ -198,7 +198,7 @@ class TestGate:
             is None
         )
 
-    @pytest.mark.parametrize("platform", ["cisco_nxos", "sonic", "nokia_sros", ""])
+    @pytest.mark.parametrize("platform", ["cisco_nxos", "sonic", ""])
     def test_a_platform_without_a_renderer_renders_nothing(self, platform: str) -> None:
         assert _view(_roots(), platform=platform) is None
 

@@ -336,7 +336,6 @@ def _make_segment_node(
             {
                 "__typename": seg_type,
                 "name": _v(seg_name),
-                "status": _v("active"),
                 "customer_name": _v("Customer-A"),
                 "arp_suppression": _v(True),
                 "security_zone": security_zone_node,
@@ -363,7 +362,6 @@ def _make_segment_node(
             {
                 "__typename": seg_type,
                 "name": _v(seg_name),
-                "status": _v("active"),
                 "customer_name": _v("Customer-A"),
                 # A VlanSegment's vlan_id is a plain attribute on the segment —
                 # no realization record, no VNI (single-site, no overlay).

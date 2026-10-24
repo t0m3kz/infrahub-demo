@@ -109,7 +109,7 @@ def _office_data(role: str, platform: str = "cisco_xe") -> dict[str, Any]:
     return {
         "name": "dev-1",
         "role": role,
-        "platform": {"netmiko_device_type": platform},
+        "platform": {"name": platform},
         "interfaces": [],
         "capabilities": [],
         "deployment": deployment,

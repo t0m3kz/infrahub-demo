@@ -14,7 +14,6 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from infrahub_sdk.exceptions import GraphQLError
 
 from generators.common import CommonGenerator
 from generators.connections import CablingMixin, tracked_save_kwargs
@@ -167,7 +166,7 @@ class TestUpsertIpAddress:
         )
 
         assert result is created
-        assert gen.client.get.await_args.kwargs["ip_namespace__ids"] == ["ns-prod"]
+        assert gen.client.filters.await_args.kwargs["ip_namespace__ids"] == ["ns-prod"]
         assert gen.client.create.await_args_list[0].kwargs["data"] == {
             "address": "10.30.1.11/24",
             "ip_namespace": {"id": "ns-prod"},
@@ -179,7 +178,8 @@ class TestUpsertIpAddress:
     async def test_existing_address_without_description_is_resaved_as_is(self) -> None:
         gen = _make_gen()
         existing = AsyncMock(id="ip-a")
-        gen.client.get = AsyncMock(return_value=existing)
+        existing.address = MagicMock(value="10.30.1.11/24")
+        gen.client.filters = AsyncMock(return_value=[existing])
 
         assert await gen.upsert_ip_address(address="10.30.1.11/24", ip_namespace={"id": "ns-prod"}) is existing
         gen.client.create.assert_not_called()
@@ -439,32 +439,14 @@ class TestFindAddressesBatch:
         assert [node.id for node in result] == ["ip-a", "ip-b"]
 
     @pytest.mark.asyncio
-    async def test_a_refused_batch_filter_falls_back_to_one_get_per_address(self) -> None:
-        """A server that does not take address__values must not weaken the race guard: a get per address."""
-        gen = _make_gen()
-        gen.client.filters = AsyncMock(
-            side_effect=GraphQLError(errors=[{"message": "Unknown argument address__values"}])
-        )
-        gen.client.get = AsyncMock(side_effect=[_address("100.65.0.0/31", "ip-a"), None])
-        created = AsyncMock(id="ip-new")
-        gen.client.create = AsyncMock(return_value=created)
-
-        result = await gen.upsert_p2p_addresses(_prefix("100.65.0.0/31"))
-
-        assert [c.kwargs["address__value"] for c in gen.client.get.call_args_list] == [
-            "100.65.0.0/31",
-            "100.65.0.1/31",
-        ]
-        assert [c.kwargs["data"]["address"] for c in gen.client.create.call_args_list] == ["100.65.0.1/31"]
-        assert [node.id for node in result] == ["ip-a", "ip-new"]
-
-    @pytest.mark.asyncio
-    async def test_a_single_address_is_one_get_not_a_batch(self) -> None:
-        """One address needs no batch: the plain get stays."""
+    async def test_a_single_address_is_one_filtered_read_not_a_get(self) -> None:
+        """One address takes the same batched read as a prefix's addresses."""
         gen = _make_gen()
         gen.client.create = AsyncMock(return_value=AsyncMock(id="ip-a"))
 
         await gen.upsert_ip_address(address="10.0.0.1/24", ip_namespace={"id": "ns-prod"})
 
-        gen.client.filters.assert_not_awaited()
-        gen.client.get.assert_awaited_once()
+        gen.client.filters.assert_awaited_once_with(
+            kind=IpamIPAddress, address__values=["10.0.0.1/24"], ip_namespace__ids=["ns-prod"]
+        )
+        gen.client.get.assert_not_awaited()

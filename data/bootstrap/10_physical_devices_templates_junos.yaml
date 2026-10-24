@@ -7,8 +7,8 @@ spec:
     - template_name: SRX-1500_EDGE_FIREWALL
       owner: "P027"
       device_type: SRX-1500
-      platform: junos
-      software_image: junos-23.4R2
+      platform: juniper_junos
+      software_image: juniper_junos-23.4R2
       role: firewall
       status: provisioning
       interfaces:
@@ -28,8 +28,8 @@ spec:
     - template_name: SRX-1500_DC_FIREWALL
       owner: "P027"
       device_type: SRX-1500
-      platform: junos
-      software_image: junos-23.4R2
+      platform: juniper_junos
+      software_image: juniper_junos-23.4R2
       role: firewall
       status: provisioning
       interfaces:
@@ -62,8 +62,8 @@ spec:
     - template_name: MX204_ISP_PE
       owner: "P027"
       device_type: MX204
-      platform: junos
-      software_image: junos-23.4R2
+      platform: juniper_junos
+      software_image: juniper_junos-23.4R2
       role: edge
       status: active
       interfaces:
@@ -88,8 +88,8 @@ spec:
     - template_name: MX204_ISP_ACCESS
       owner: "P027"
       device_type: MX204
-      platform: junos
-      software_image: junos-23.4R2
+      platform: juniper_junos
+      software_image: juniper_junos-23.4R2
       role: edge
       status: active
       interfaces:

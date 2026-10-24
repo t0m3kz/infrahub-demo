@@ -69,9 +69,9 @@ class TestResolveRoleController:
         assert controller is dnac
 
     def test_firewall_requires_platform_match_not_just_controller_type(self) -> None:
-        # security_manager controller for a DIFFERENT platform (panos) — must
+        # security_manager controller for a DIFFERENT platform (paloalto_panos) — must
         # not match a checkpoint_gaia firewall despite the same controller_type.
-        panorama = _controller_dict("security_manager", platform_id="plat-panos")
+        panorama = _controller_dict("security_manager", platform_id="plat-paloalto_panos")
         gen = self._gen(controllers=[panorama])
 
         controller = gen._resolve_role_controller(
