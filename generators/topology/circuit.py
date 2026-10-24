@@ -40,7 +40,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from utils.circuit_underlay import SESSION_CIRCUIT_KINDS
+from utils.circuit_underlay import session_circuits_on
 from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator
@@ -219,9 +219,7 @@ class PhysicalCircuitGenerator(CommonGenerator):
             return
         sub_interfaces = await self.client.filters(kind=DcimVirtualInterface, parent_interface__ids=port_ids)
         end_ids = [*port_ids, *(sub.id for sub in sub_interfaces)]
-        session_ids: set[str] = set()
-        for kind in SESSION_CIRCUIT_KINDS:
-            session_ids.update(vc.id for vc in await self.client.filters(kind=kind, capabilities__ids=end_ids))
+        session_ids = {vc.id for vc in await session_circuits_on(self.client, end_ids)}
         if session_ids:
             self.logger.info(f"  {circuit_name} carries {len(session_ids)} session circuit(s)")
             await self.run_generator(VIRTUAL_CIRCUIT_GENERATOR, sorted(session_ids), wait=False)

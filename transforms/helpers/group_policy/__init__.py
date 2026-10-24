@@ -112,12 +112,7 @@ enforces it. An enforced VRF that relies on component classification lists the c
 ports (data center wide) in a documented-not-lab-verified comment on its enforce line.
 """
 
-from transforms.helpers.group_policy.dispatch import (
-    _BUILDERS,
-    GPO_CONFIG_KEYS,
-    GPO_RENDERERS,
-    group_policy_device_view,
-)
+from transforms.helpers.group_policy.dispatch import _BUILDERS, GPO_CONFIG_KEYS, GPO_RENDERERS, group_policy_device_view
 from transforms.helpers.group_policy.eos import MSSG_MAX_SEGMENTS, _MssgCatalog, segment_security_view
 from transforms.helpers.group_policy.model import (
     DEFAULT_ACTION,

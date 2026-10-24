@@ -168,7 +168,6 @@ class ManagedGenericInterfaces(CoreNode):
 
 class ManagedGenericVlanDomain(CoreNode):
     vlan_domain_segments: RelationshipManager[ManagedVlanDomainSegment]
-    vlan_pool: RelationshipAttribute[CoreNumberPool]
 
 
 class ManagedHA(CoreNode):

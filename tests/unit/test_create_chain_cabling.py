@@ -18,6 +18,7 @@ import pytest
 from generators.common import CommonGenerator
 from generators.connections import CablingMixin
 from generators.helpers import CablingPlanError
+from generators.protocols import IpamIPAddress
 
 
 class _Gen(CablingMixin, CommonGenerator):
@@ -287,6 +288,23 @@ def _p2p_prefix(*, prefix: str, namespace_id: str = "ns-default") -> MagicMock:
     return p
 
 
+def _filters_with_addresses(interfaces: list[list[MagicMock]], addresses: list[MagicMock]) -> AsyncMock:
+    """A client.filters that answers the two interface reads in order and the address read with ``addresses``."""
+    legs = iter(interfaces)
+
+    async def _filters(*, kind: Any, **_: Any) -> list[MagicMock]:
+        return list(addresses) if kind is IpamIPAddress else next(legs)
+
+    return AsyncMock(side_effect=_filters)
+
+
+def _existing_address(address: str, ip_id: str) -> AsyncMock:
+    """An IpamIPAddress node as the server returns it."""
+    node = AsyncMock(id=ip_id)
+    node.address = MagicMock(value=address)
+    return node
+
+
 class TestP2PAddressIsQueriedBeforeCreate:
     """IpamIPAddress's (address, ip_namespace) uniqueness_constraint is only
     enforced by an async validator, not a synchronous DB constraint (see
@@ -299,7 +317,7 @@ class TestP2PAddressIsQueriedBeforeCreate:
         gen = _make_generator()
         bl_iface = _iface("Eth1/25", device="bl-01")
         fw_iface = _iface("eth1", device="fw-01")
-        gen.client.filters = AsyncMock(side_effect=[[bl_iface], [fw_iface]])
+        gen.client.filters = _filters_with_addresses([[bl_iface], [fw_iface]], [])
         gen._resolve_pool = AsyncMock(return_value=MagicMock(id="pool-1"))
         gen.client.allocate_next_ip_prefix = AsyncMock(return_value=_p2p_prefix(prefix="100.65.0.0/31"))
         gen.client.get = AsyncMock(return_value=None)
@@ -313,10 +331,12 @@ class TestP2PAddressIsQueriedBeforeCreate:
             ]
         )
 
-        get_calls = [c for c in gen.client.get.call_args_list]
-        assert len(get_calls) == 2
-        for call in get_calls:
-            assert call.kwargs["ip_namespace__ids"] == ["ns-default"]
+        # Both addresses are looked up in ONE read of the namespace, not one get each.
+        address_reads = [c for c in gen.client.filters.call_args_list if c.kwargs["kind"] is IpamIPAddress]
+        assert len(address_reads) == 1
+        assert address_reads[0].kwargs["address__values"] == ["100.65.0.0/31", "100.65.0.1/31"]
+        assert address_reads[0].kwargs["ip_namespace__ids"] == ["ns-default"]
+        gen.client.get.assert_not_awaited()
         create_addresses = [
             c.kwargs["data"]["address"] for c in gen.client.create.call_args_list if "address" in c.kwargs["data"]
         ]
@@ -327,13 +347,15 @@ class TestP2PAddressIsQueriedBeforeCreate:
         gen = _make_generator()
         bl_iface = _iface("Eth1/25", device="bl-01")
         fw_iface = _iface("eth1", device="fw-01")
-        gen.client.filters = AsyncMock(side_effect=[[bl_iface], [fw_iface]])
-        gen._resolve_pool = AsyncMock(return_value=MagicMock(id="pool-1"))
-        gen.client.allocate_next_ip_prefix = AsyncMock(return_value=_p2p_prefix(prefix="100.65.0.0/31"))
         # Both addresses already exist — as if an earlier, overlapping call
         # for this same link already created them.
-        existing_ips = [AsyncMock(id="existing-src-ip"), AsyncMock(id="existing-dst-ip")]
-        gen.client.get = AsyncMock(side_effect=existing_ips)
+        existing_ips = [
+            _existing_address("100.65.0.1/31", "existing-dst-ip"),
+            _existing_address("100.65.0.0/31", "existing-src-ip"),
+        ]
+        gen.client.filters = _filters_with_addresses([[bl_iface], [fw_iface]], existing_ips)
+        gen._resolve_pool = AsyncMock(return_value=MagicMock(id="pool-1"))
+        gen.client.allocate_next_ip_prefix = AsyncMock(return_value=_p2p_prefix(prefix="100.65.0.0/31"))
         gen.client.create = AsyncMock(return_value=_cable_obj())
 
         await gen.create_chain_cabling(

@@ -1,7 +1,7 @@
 from typing import Any, ClassVar
 
 from transforms.common import BaseDeviceTransform
-from transforms.helpers.bgp import (
+from transforms.helpers.bgp_external import (
     get_external_peer_prefixes,
     get_external_session_policies,
     get_internet_prefixes,

@@ -1,6 +1,6 @@
 """Target interface resolution of EndpointConnectivityGenerator per deployment type.
 
-The generator lives in generators/topology/endpoint.py.
+The generator lives in generators/topology/endpoint.py; the target resolution is generators/topology/endpoint_targets.py.
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from tests.unit.endpoint_generator_helpers import _iface, _make_generator
+from tests.unit.endpoint_generator_helpers import _iface, _make_generator, _pod_rack
 
 # ===========================================================================
 # _resolve_target_interfaces() — dispatch
@@ -58,20 +58,28 @@ class TestResolveTargetInterfaces:
 # ===========================================================================
 
 
+NETWORK_RACK = _pod_rack("net-rack-1")
+
+
 class TestConnectMiddleRackDeployment:
-    def _gen_with_rack(self) -> Any:
+    def _gen_with_rack(self, pod_racks: list[dict] | None = None) -> Any:
+        """A compute rack in row 1 whose pod carries ``pod_racks`` (the network rack of the row by default)."""
         gen = _make_generator()
         gen.data = {
             "name": "server-1",
-            "rack": {"id": "rack-1", "rack_type": "compute", "row_index": 1, "pod": {"id": "pod-1"}},
+            "rack": {
+                "id": "rack-1",
+                "rack_type": "compute",
+                "row_index": 1,
+                "pod": {"id": "pod-1", "racks": [NETWORK_RACK] if pod_racks is None else pod_racks},
+            },
         }
         gen._free_interfaces = []
         return gen
 
     @pytest.mark.asyncio
     async def test_no_network_rack_found_logs_error(self) -> None:
-        gen = self._gen_with_rack()
-        gen.client.filters = AsyncMock(return_value=[])  # no racks found
+        gen = self._gen_with_rack([_pod_rack("rack-1", rack_type="compute")])
 
         result = await gen._connect_middle_rack_deployment()
 
@@ -79,11 +87,26 @@ class TestConnectMiddleRackDeployment:
         gen.logger.error.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_searches_only_the_network_racks_of_its_own_row_from_the_payload(self) -> None:
+        """The racks come from the pod projection, not a query: only the row's network racks are searched."""
+        gen = self._gen_with_rack(
+            [
+                NETWORK_RACK,
+                _pod_rack("net-rack-2", row_index=2),
+                _pod_rack("compute-rack-1", rack_type="compute"),
+            ]
+        )
+        gen._query_interfaces_by_location = AsyncMock(return_value=[_iface("Eth1", device="tor-1")])
+
+        await gen._connect_middle_rack_deployment()
+
+        assert gen._query_interfaces_by_location.call_args.kwargs["rack_ids"] == ["net-rack-1"]
+        gen.client.filters.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_tor_interfaces_preferred_when_found(self) -> None:
         gen = self._gen_with_rack()
-        network_rack = MagicMock(id="net-rack-1")
         tor_ifaces = [_iface("Eth1", device="tor-1")]
-        gen.client.filters = AsyncMock(return_value=[network_rack])
         gen._query_interfaces_by_location = AsyncMock(return_value=tor_ifaces)
 
         result = await gen._connect_middle_rack_deployment()
@@ -95,8 +118,6 @@ class TestConnectMiddleRackDeployment:
     @pytest.mark.asyncio
     async def test_falls_back_to_l2_aggregation_then_leaf(self) -> None:
         gen = self._gen_with_rack()
-        network_rack = MagicMock(id="net-rack-1")
-        gen.client.filters = AsyncMock(return_value=[network_rack])
         leaf_ifaces = [_iface("Eth1", device="leaf-1")]
         gen._query_interfaces_by_location = AsyncMock(side_effect=[[], leaf_ifaces])
         gen._query_l2_aggregation_layer = AsyncMock(return_value=[])
@@ -109,8 +130,6 @@ class TestConnectMiddleRackDeployment:
     @pytest.mark.asyncio
     async def test_l2_aggregation_layer_used_when_tor_empty(self) -> None:
         gen = self._gen_with_rack()
-        network_rack = MagicMock(id="net-rack-1")
-        gen.client.filters = AsyncMock(return_value=[network_rack])
         l2_ifaces = [_iface("Eth1", device="l2leaf-1")]
         gen._query_interfaces_by_location = AsyncMock(return_value=[])
         gen._query_l2_aggregation_layer = AsyncMock(return_value=l2_ifaces)
@@ -122,8 +141,6 @@ class TestConnectMiddleRackDeployment:
     @pytest.mark.asyncio
     async def test_nothing_found_logs_error(self) -> None:
         gen = self._gen_with_rack()
-        network_rack = MagicMock(id="net-rack-1")
-        gen.client.filters = AsyncMock(return_value=[network_rack])
         gen._query_interfaces_by_location = AsyncMock(return_value=[])
         gen._query_l2_aggregation_layer = AsyncMock(return_value=[])
 
@@ -177,11 +194,19 @@ class TestQueryL2AggregationLayer:
 
 
 class TestConnectTorDeployment:
-    def _gen_with_rack(self) -> Any:
+    def _gen_with_rack(self, pod_racks: list[dict] | None = None) -> Any:
+        """A rack in row 2 whose pod carries ``pod_racks`` (one sibling rack of the row by default)."""
         gen = _make_generator()
         gen.data = {
             "name": "server-1",
-            "rack": {"id": "rack-1", "row_index": 2, "pod": {"id": "pod-1"}},
+            "rack": {
+                "id": "rack-1",
+                "row_index": 2,
+                "pod": {
+                    "id": "pod-1",
+                    "racks": [_pod_rack("rack-2", rack_type="tor", row_index=2)] if pod_racks is None else pod_racks,
+                },
+            },
         }
         return gen
 
@@ -198,20 +223,26 @@ class TestConnectTorDeployment:
 
     @pytest.mark.asyncio
     async def test_falls_back_to_same_row_when_rack_empty(self) -> None:
-        gen = self._gen_with_rack()
-        sibling_rack = MagicMock(id="rack-2")
-        gen.client.filters = AsyncMock(return_value=[sibling_rack])
+        gen = self._gen_with_rack(
+            [
+                _pod_rack("rack-2", rack_type="compute", row_index=2, index=2),
+                _pod_rack("rack-1", rack_type="tor", row_index=2),
+                _pod_rack("rack-9", rack_type="tor", row_index=3),
+            ]
+        )
         row_ifaces = [_iface("Eth1", device="tor-2")]
         gen._query_interfaces_by_location = AsyncMock(side_effect=[[], row_ifaces])
 
         result = await gen._connect_tor_deployment()
 
         assert result == row_ifaces
+        # Every rack of the row (any type, in index order), taken from the pod projection: no query.
+        assert gen._query_interfaces_by_location.call_args_list[1].kwargs["rack_ids"] == ["rack-1", "rack-2"]
+        gen.client.filters.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_no_racks_in_row_logs_error(self) -> None:
-        gen = self._gen_with_rack()
-        gen.client.filters = AsyncMock(return_value=[])
+        gen = self._gen_with_rack([])
         gen._query_interfaces_by_location = AsyncMock(return_value=[])
 
         result = await gen._connect_tor_deployment()
@@ -222,8 +253,6 @@ class TestConnectTorDeployment:
     @pytest.mark.asyncio
     async def test_nothing_found_anywhere_logs_error(self) -> None:
         gen = self._gen_with_rack()
-        sibling_rack = MagicMock(id="rack-2")
-        gen.client.filters = AsyncMock(return_value=[sibling_rack])
         gen._query_interfaces_by_location = AsyncMock(return_value=[])
 
         result = await gen._connect_tor_deployment()
@@ -238,11 +267,16 @@ class TestConnectTorDeployment:
 
 
 class TestConnectMixedDeployment:
-    def _gen_with_rack(self) -> Any:
+    def _gen_with_rack(self, pod_racks: list[dict] | None = None) -> Any:
+        """A rack in row 1 whose pod carries ``pod_racks`` (the network rack of the row by default)."""
         gen = _make_generator()
         gen.data = {
             "name": "server-1",
-            "rack": {"id": "rack-1", "row_index": 1, "pod": {"id": "pod-1"}},
+            "rack": {
+                "id": "rack-1",
+                "row_index": 1,
+                "pod": {"id": "pod-1", "racks": [NETWORK_RACK] if pod_racks is None else pod_racks},
+            },
         }
         return gen
 
@@ -272,8 +306,6 @@ class TestConnectMixedDeployment:
     @pytest.mark.asyncio
     async def test_falls_back_to_middle_rack_l2_aggregation(self) -> None:
         gen = self._gen_with_rack()
-        network_rack = MagicMock(id="net-rack-1")
-        gen.client.filters = AsyncMock(return_value=[network_rack])
         middle_l2_ifaces = [_iface("Eth1", device="l2leaf-2")]
         gen._query_interfaces_by_location = AsyncMock(return_value=[])
         gen._query_l2_aggregation_layer = AsyncMock(side_effect=[[], middle_l2_ifaces])
@@ -281,12 +313,13 @@ class TestConnectMixedDeployment:
         result = await gen._connect_mixed_deployment()
 
         assert result == middle_l2_ifaces
+        # The row's network racks come from the pod projection: no query.
+        assert gen._query_l2_aggregation_layer.call_args_list[1].args == (["net-rack-1"],)
+        gen.client.filters.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_falls_back_to_middle_rack_leaf_as_last_resort(self) -> None:
         gen = self._gen_with_rack()
-        network_rack = MagicMock(id="net-rack-1")
-        gen.client.filters = AsyncMock(return_value=[network_rack])
         leaf_ifaces = [_iface("Eth1", device="leaf-1")]
         gen._query_interfaces_by_location = AsyncMock(side_effect=[[], leaf_ifaces])
         gen._query_l2_aggregation_layer = AsyncMock(side_effect=[[], []])
@@ -297,8 +330,7 @@ class TestConnectMixedDeployment:
 
     @pytest.mark.asyncio
     async def test_no_network_racks_in_row_logs_error(self) -> None:
-        gen = self._gen_with_rack()
-        gen.client.filters = AsyncMock(return_value=[])
+        gen = self._gen_with_rack([_pod_rack("rack-1", rack_type="compute"), _pod_rack("net-rack-2", row_index=2)])
         gen._query_interfaces_by_location = AsyncMock(return_value=[])
         gen._query_l2_aggregation_layer = AsyncMock(return_value=[])
 
@@ -310,8 +342,6 @@ class TestConnectMixedDeployment:
     @pytest.mark.asyncio
     async def test_nothing_found_anywhere_logs_error(self) -> None:
         gen = self._gen_with_rack()
-        network_rack = MagicMock(id="net-rack-1")
-        gen.client.filters = AsyncMock(return_value=[network_rack])
         gen._query_interfaces_by_location = AsyncMock(return_value=[])
         gen._query_l2_aggregation_layer = AsyncMock(return_value=[])
 

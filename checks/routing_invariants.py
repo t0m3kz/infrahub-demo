@@ -52,7 +52,7 @@ rendered config; each is a property of data that spans topologies.
    status as on the edge; retired are skipped), the offices' `lan_prefixes` and
    hosted segments grouped by their `sdwan_gateway` (one attachment point per
    gateway), and the VPC blocks grouped by the handoff circuit their VIF
-   reaches (transforms/helpers/bgp.py vif_registered_blocks, the very chain walk
+   reaches (transforms/helpers/bgp_external.py vif_registered_blocks, the very chain walk
    the edge uses: a private VIF's own VPC, or every VPC propagating into the
    route table of the transit VIF's hybrid attachment; a VIF without a handoff
    circuit has no session and is skipped). It reports a prefix registered by
@@ -68,7 +68,7 @@ from __future__ import annotations
 import ipaddress
 from typing import Any, NamedTuple
 
-from transforms.helpers.bgp import (
+from transforms.helpers.bgp_external import (
     get_onprem_prefixes,
     office_lans_by_gateway,
     registered_by_namespace,

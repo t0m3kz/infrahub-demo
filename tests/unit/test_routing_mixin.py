@@ -8,6 +8,7 @@ Covers:
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
@@ -153,6 +154,52 @@ class TestFindExistingOspfArea:
         await m._resolve_shared_objects(RoutingStrategy.OSPF_IBGP.value)
         call_kwargs = m.client.get.call_args[1]
         assert call_kwargs["name__value"] == "katowice-ospf-area-0"
+
+
+class TestResolveSharedObjectsRunsBothLookupsTogether:
+    @pytest.mark.asyncio
+    async def test_overlay_as_and_ospf_area_are_looked_up_concurrently(self) -> None:
+        """Neither lookup waits for the other: the AS read only returns once the area read has started."""
+        from generators.helpers.routing import RoutingStrategy
+
+        m = _make_mixin()
+        area_started = asyncio.Event()
+
+        async def _filters(**kwargs: Any) -> list[Any]:  # noqa: ARG001
+            await asyncio.wait_for(area_started.wait(), timeout=1)
+            return [_mock_as_obj(obj_id="as-1")]
+
+        async def _get(**kwargs: Any) -> Any:  # noqa: ARG001
+            area_started.set()
+            return MagicMock(id="area-1")
+
+        m.client.filters = AsyncMock(side_effect=_filters)
+        m.client.get = AsyncMock(side_effect=_get)
+
+        assert await m._resolve_shared_objects(RoutingStrategy.OSPF_IBGP.value) == ("as-1", "area-1")
+
+    @pytest.mark.asyncio
+    async def test_a_failed_lookup_leaves_the_other_one_intact(self) -> None:
+        """Each lookup logs its own failure; the other's id still comes back."""
+        from generators.helpers.routing import RoutingStrategy
+
+        m = _make_mixin()
+        m.client.filters = AsyncMock(side_effect=Exception("db down"))
+        m.client.get = AsyncMock(return_value=MagicMock(id="area-1"))
+
+        assert await m._resolve_shared_objects(RoutingStrategy.OSPF_IBGP.value) == (None, "area-1")
+        m.logger.warning.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_strategy_without_overlay_or_area_reads_nothing(self) -> None:
+        """ebgp-ebgp has no shared overlay AS to find and no OSPF area."""
+        m = _make_mixin()
+        m.client.filters = AsyncMock()
+        m.client.get = AsyncMock()
+
+        assert await m._resolve_shared_objects("ebgp-ebgp") == (None, None)
+        m.client.filters.assert_not_awaited()
+        m.client.get.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------

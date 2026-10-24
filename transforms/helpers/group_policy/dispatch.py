@@ -10,13 +10,7 @@ from transforms.helpers.group_policy.eos import _segment_security_build
 from transforms.helpers.group_policy.model import data_center_contracts
 from transforms.helpers.group_policy.nxos import _vxlan_gpo_build
 from utils.fabric_roles import DC_VTEP_ROLES
-from utils.group_policy import (
-    Profiles,
-    profiles_by_platform,
-    site_kind,
-    site_reason,
-    vteps_by_data_center,
-)
+from utils.group_policy import Profiles, profiles_by_platform, site_kind, site_reason, vteps_by_data_center
 
 GPO_RENDERERS: dict[str, frozenset[str]] = {
     "vxlan_gpo": frozenset({"cisco_nxos"}),

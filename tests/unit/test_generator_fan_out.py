@@ -29,6 +29,7 @@ from infrahub_sdk.task.models import TaskState
 
 from generators.common import CommonGenerator
 from generators.pools import PoolMixin
+from generators.topology.dc import DCTopologyGenerator
 from generators.topology.dc_pod_cascade import DCPodCascadeGenerator
 from generators.topology.pod_rack_cascade import PodRackCascadeGenerator
 from tests.unit.simulators.fabric_designs import DESIGN_FOR_DEPLOYMENT_TYPE, pod_design
@@ -337,11 +338,9 @@ class TestGetParentPoolWithRetryKind:
         assert gen.client.get.await_count == 10
 
 
-def _mock_pod(name: str) -> MagicMock:
-    p = MagicMock()
-    p.id = f"id-{name}"
-    p.name = MagicMock(value=name)
-    return p
+def _pod(name: str) -> dict[str, Any]:
+    """A TopologyPod child as the DC query returns it after clean_data()."""
+    return {"id": f"id-{name}", "name": name, "index": 1, "design": {"id": "pod-design"}}
 
 
 def _build_dc_cascade_gen() -> Any:
@@ -362,9 +361,9 @@ def _build_dc_cascade_gen() -> Any:
             gen.logger.error("No TopologyDeployment data found in GraphQL response")
             return
         gen.data = deployment_list[0]
-        # Mirrors DCTopologyGenerator.generate(): fetch the DC's pods (read,
-        # never tracked) and keep them for the cascade.
-        gen._existing_pods = await gen.client.filters(kind="TopologyPod", parent__ids=[gen.data["id"]])
+        # Mirrors DCTopologyGenerator.generate(): the DC's pods ride its own query
+        # (read, never saved); keep them for the cascade.
+        gen._existing_pods = DCTopologyGenerator.pods_of(gen.data)
 
     gen._bootstrap_generate = _fake_bootstrap
     return gen
@@ -378,12 +377,17 @@ class TestDCPodCascadeGenerator:
             "generators.topology.dc.DCTopologyGenerator.generate",
             lambda self, data: gen._bootstrap_generate(data),
         )
-        pod1, pod2 = _mock_pod("POD-1"), _mock_pod("POD-2")
-        gen.client.filters = AsyncMock(return_value=[pod1, pod2])
+        pod1, pod2 = _pod("POD-1"), _pod("POD-2")
 
-        await gen.generate({"TopologyDeployment": [{"id": "dc-1", "name": "DC1", "index": 1}]})
+        await gen.generate(
+            {
+                "TopologyDeployment": [
+                    {"id": "dc-1", "name": "DC1", "index": 1, "children": [pod1, {"id": "not-a-pod"}, pod2]}
+                ]
+            }
+        )
 
-        gen.run_generator.assert_awaited_once_with("pod_rack_cascade", [pod1.id, pod2.id], wait=False)
+        gen.run_generator.assert_awaited_once_with("pod_rack_cascade", [pod1["id"], pod2["id"]], wait=False)
         assert gen.client.group_context.related_node_ids == []
 
     @pytest.mark.asyncio
@@ -393,9 +397,8 @@ class TestDCPodCascadeGenerator:
             "generators.topology.dc.DCTopologyGenerator.generate",
             lambda self, data: gen._bootstrap_generate(data),
         )
-        gen.client.filters = AsyncMock(return_value=[])
 
-        await gen.generate({"TopologyDeployment": [{"id": "dc-1", "name": "DC1", "index": 1}]})
+        await gen.generate({"TopologyDeployment": [{"id": "dc-1", "name": "DC1", "index": 1, "children": []}]})
 
         gen.run_generator.assert_not_awaited()
 
@@ -408,12 +411,10 @@ class TestDCPodCascadeGenerator:
             "generators.topology.dc.DCTopologyGenerator.generate",
             lambda self, data: gen._bootstrap_generate(data),
         )
-        gen.client.filters = AsyncMock(return_value=[])
 
         await gen.generate({"TopologyDeployment": []})
 
         gen.logger.error.assert_called_once()
-        gen.client.filters.assert_not_awaited()
         gen.run_generator.assert_not_awaited()
 
 

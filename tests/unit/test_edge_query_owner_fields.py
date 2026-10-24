@@ -1,6 +1,6 @@
 """The edge config query delivers the owner, status and process_role fields the external BGP filter reads.
 
-transforms/helpers/bgp.py filters the external sessions of the NX-OS colocation edge per owner. It reads the cleaned
+transforms/helpers/bgp_external.py filters the external sessions of the NX-OS colocation edge per owner. It reads the cleaned
 response (utils/data_cleaning.clean_data: ``__typename`` -> ``typename``, ``{node}``/``{edges}`` flattened,
 ``{value: x}`` -> x), so these tests pin, offline, that
 
@@ -16,13 +16,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from graphql import (
-    FieldNode,
-    FragmentDefinitionNode,
-    OperationDefinitionNode,
-    parse,
-    print_ast,
-)
+from graphql import FieldNode, FragmentDefinitionNode, OperationDefinitionNode, parse, print_ast
 
 from tests.integration import demo_data
 from utils.data_cleaning import clean_data

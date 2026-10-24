@@ -11,9 +11,8 @@ from tests.unit.simulators.fabric_designs import pod_design
 
 
 def test_rack_generator_mixes_in_pool_mixin() -> None:
-    """create_devices()'s MLAG-pairing path (_ensure_mlag_pairs ->
-    _ensure_vlan_domain_pool) calls self.upsert_number_pool, which only
-    PoolMixin provides. RackGenerator was missing it (unlike
+    """create_devices()'s MLAG-pairing path (_ensure_mlag_pairs) takes
+    self.resource_lock, which only PoolMixin provides. RackGenerator was missing it (unlike
     DCTopologyGenerator/PodTopologyGenerator), so any add_rack run that
     created an MLAG pair (leaf/tor/l2-leaf — nearly all of them) raised
     AttributeError at runtime, uncaught by mocked-client unit tests."""
@@ -163,6 +162,56 @@ class TestRackGeneratorMethods:
         assert interfaces == ["Eth1/1"]
 
     @pytest.mark.asyncio
+    async def test_get_leaf_devices_in_row_takes_the_racks_from_the_pod_payload(self) -> None:
+        """With the row's network rack in the pod projection the racks are not read at all,
+        not even once per retry attempt: only the devices and their interfaces are."""
+        gen = _build_gen()
+        gen.data["pod"]["racks"] = [
+            {"id": "rack-net", "name": "NET", "index": 1, "row_index": 1, "rack_type": "network"},
+            {"id": "rack-c1", "name": "C1", "index": 2, "row_index": 1, "rack_type": "compute"},
+            {"id": "rack-other", "name": "NET-2", "index": 1, "row_index": 2, "rack_type": "network"},
+        ]
+        leaf_dev = MagicMock()
+        leaf_dev.name = MagicMock(value="leaf-01")
+        leaf_if = MagicMock()
+        leaf_if.name = MagicMock(value="Eth1/1")
+        gen.client.filters = AsyncMock(side_effect=[[leaf_dev], [leaf_if]])
+
+        devices, interfaces = await gen._get_leaf_devices_in_row("pod-1", 1)
+
+        assert (devices, interfaces) == (["leaf-01"], ["Eth1/1"])
+        assert gen.client.filters.await_args_list[0].kwargs["rack__ids"] == ["rack-net", "rack-c1"]
+        assert gen.client.filters.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_get_leaf_devices_in_row_rereads_racks_until_the_network_rack_exists(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The row's network rack missing from the payload (created in the same load, after the
+        query ran) is the race the retry loop waits out: the racks are re-read per attempt."""
+        gen = _build_gen()
+        gen.data["pod"]["racks"] = [{"id": "rack-c1", "name": "C1", "index": 2, "row_index": 1, "rack_type": "compute"}]
+        leaf_dev = MagicMock()
+        leaf_dev.name = MagicMock(value="leaf-01")
+        leaf_if = MagicMock()
+        leaf_if.name = MagicMock(value="Eth1/1")
+        gen.client.filters = AsyncMock(
+            side_effect=[
+                [MagicMock(id="rack-c1")],
+                [],
+                [MagicMock(id="rack-c1"), MagicMock(id="rack-net")],
+                [leaf_dev],
+                [leaf_if],
+            ]
+        )
+        monkeypatch.setattr("generators.rack.asyncio.sleep", AsyncMock())
+
+        devices, interfaces = await gen._get_leaf_devices_in_row("pod-1", 1)
+
+        assert (devices, interfaces) == (["leaf-01"], ["Eth1/1"])
+        assert gen.client.filters.await_args_list[3].kwargs["rack__ids"] == ["rack-c1", "rack-net"]
+
+    @pytest.mark.asyncio
     async def test_get_leaf_devices_in_row_no_racks_logs_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # In production self.logger.error() raises GeneratorError immediately
         # (FailOnErrorLoggerMixin), so execution never reaches the later checks.
@@ -172,7 +221,7 @@ class TestRackGeneratorMethods:
         # after retries are exhausted.
         gen = _build_gen()
         gen.client.filters = AsyncMock(return_value=[])
-        monkeypatch.setattr("generators.topology.rack.asyncio.sleep", AsyncMock())
+        monkeypatch.setattr("generators.rack.asyncio.sleep", AsyncMock())
 
         await gen._get_leaf_devices_in_row("pod-1", 1)
 
@@ -191,7 +240,7 @@ class TestRackGeneratorMethods:
 
         gen.client.filters = AsyncMock(side_effect=[[], [], [rack_obj], [leaf_dev], [leaf_if]])
         sleep_mock = AsyncMock()
-        monkeypatch.setattr("generators.topology.rack.asyncio.sleep", sleep_mock)
+        monkeypatch.setattr("generators.rack.asyncio.sleep", sleep_mock)
 
         devices, interfaces = await gen._get_leaf_devices_in_row("pod-1", 1)
 

@@ -37,9 +37,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.protocols import (
-    ManagedSegmentDeployment,
-)
+from generators.protocols import ManagedSegmentDeployment
 from generators.topology.segment import STRETCHED_VNI_POOL_NAME, VxlanSegmentGenerator
 from tests.unit import segment_generators_helpers
 from tests.unit.segment_generators_helpers import _DEP_1, _DEP_2, _make_gen, _seg_response

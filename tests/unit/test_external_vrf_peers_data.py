@@ -8,15 +8,8 @@ from typing import Any
 import pytest
 import yaml
 
-from tests.unit.external_vrf_peers_helpers import (
-    _GW1,
-    _ROOT,
-    _bgp_facing,
-    _subif,
-)
-from transforms.helpers.bgp import (
-    get_external_peer_prefixes,
-)
+from tests.unit.external_vrf_peers_helpers import _GW1, _ROOT, _bgp_facing, _subif
+from transforms.helpers.bgp_external import get_external_peer_prefixes
 
 _INTERCONNECTS = _ROOT / "data" / "demos" / "30_all" / "08_interconnects"
 

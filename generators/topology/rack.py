@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from typing import Any, Literal, cast
 
 from typing_extensions import TypedDict
@@ -8,15 +7,10 @@ from typing_extensions import TypedDict
 from ..common import CablingOptions, CommonGenerator
 from ..connections import CablingMixin
 from ..devices import DeviceMixin
-from ..helpers.rack import RackRolesHelper, parse_rack_data, rack_sort_key
+from ..helpers.rack import RackRolesHelper, parse_rack_data, pod_row_racks
 from ..helpers.template_interfaces import template_interface_names_by_role
-from ..pod_config import (
-    pod_deployment_type,
-    pod_profile,
-    spine_downlink_layout,
-)
+from ..pod_config import pod_deployment_type, pod_profile, spine_downlink_layout
 from ..pools import PoolMixin
-from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, LocationRack
 from ..rack import (
     MUTUALLY_EXCLUSIVE_ROLE_GROUPS,
     POD_GENERATORS,
@@ -26,9 +20,6 @@ from ..rack import (
     spine_bgp_readiness_role,
 )
 from ..routing import RoutingMixin
-
-_ROW_LEAF_MAX_RETRIES = 10
-_ROW_LEAF_RETRY_DELAY = 3.0
 
 
 class TopologyRackParentData(TypedDict, total=False):
@@ -52,6 +43,16 @@ class TopologyRackParentData(TypedDict, total=False):
     lb_manager_controllers: list[dict[str, Any]]
 
 
+class TopologyRackPodRackData(TypedDict):
+    """One rack of the pod (``racks`` of the PodFields fragment in rack.gql)."""
+
+    id: str
+    name: str
+    index: int
+    row_index: int
+    rack_type: str
+
+
 class TopologyRackPodData(TypedDict, total=False):
     """Shape of the nested TopologyPod projection under LocationRack.pod (see
     queries/topology/add/rack.gql's PodFields fragment)."""
@@ -67,6 +68,7 @@ class TopologyRackPodData(TypedDict, total=False):
     mlag_create: Literal["no", "back-to-back", "virtual"]
     loopback_pool: dict[str, Any] | None
     prefix_pool: dict[str, Any] | None
+    racks: list[TopologyRackPodRackData]
 
 
 class TopologyRackParentSuiteData(TypedDict, total=False):
@@ -165,159 +167,6 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
                 errors.append(f"role(s) {conflicting} are mutually exclusive on the same rack")
 
         return errors
-
-    async def _fan_out_to_row_dependent_racks(self) -> None:
-        """Fan out to the row-dependent (tor/compute) racks' own add_rack runs (mixed mode only).
-
-        Row-dependent racks have no local leaf — their l2-leaf/access-leaf
-        switches cable to this network rack's leafs, which this method only runs
-        after they exist (their ToRs cable to the spines).
-
-        wait=False, not wait=True: a row-dependent rack's own generate() waits for
-        an in-flight add_rack task on this network rack (self-nesting guard — same
-        generator name on both sides). Blocking here would keep this task RUNNING,
-        which that guard would see as "still in flight" and wait on — deadlock.
-        """
-        deployment_type = pod_deployment_type(self.data["pod"]["design"])
-
-        # Only network racks in mixed deployment feed row-dependent racks.
-        if deployment_type != "mixed" or self.data["rack_type"] != "network":
-            return
-
-        # Skip racks that have no leaf template — e.g. border-leaf-only racks.
-        # These are valid network racks but have no leafs to cascade from.
-        if not self.data.get("leafs"):
-            self.logger.warning(f"Rack {self.data['name']} has no leaf template — skipping row-dependent rack fan-out")
-            return
-
-        row_racks = await self.client.filters(
-            kind=LocationRack,
-            pod__ids=[self.data["pod"]["id"]],
-            row_index__value=self.data["row_index"],
-        )
-        row_dependent_racks = sorted(
-            (r for r in row_racks if r.rack_type.value in ROW_DEPENDENT_RACK_TYPES),
-            key=rack_sort_key,
-        )
-
-        await self.run_generator("add_rack", [rack.id for rack in row_dependent_racks], wait=False)
-
-    async def _get_leaf_devices_in_row(self, pod_id: str, row_index: int) -> tuple[list[str], list[str]]:
-        """Query leaf devices in same row and their downlink interfaces, for l2-leaf/access-leaf-to-leaf cabling.
-
-        Retries: a row-dependent (compute/tor) rack's created-trigger can fire
-        and reach this before its row's network rack has created its leaf
-        devices — nesting racks under their pod in one object-load mutation
-        removed the incidental ordering that made this reliable in practice.
-        Checking the actual devices/interfaces (not a task list) closes that
-        race regardless of trigger-dispatch timing.
-        """
-        racks_in_row: list[Any] = []
-        leaf_devices: list[Any] = []
-        leaf_interfaces: list[Any] = []
-        for attempt in range(_ROW_LEAF_MAX_RETRIES):
-            racks_in_row = await self.client.filters(
-                kind=LocationRack,
-                pod__ids=[pod_id],
-                row_index__value=row_index,
-            )
-            leaf_devices = await self.client.filters(
-                kind=DcimPhysicalDevice,
-                role__value="leaf",
-                rack__ids=[rack.id for rack in racks_in_row],
-            )
-            device_names = [dev.name.value for dev in leaf_devices]
-            leaf_interfaces = (
-                await self.client.filters(
-                    kind=DcimPhysicalInterface,
-                    device__name__values=device_names,
-                    role__value="downlink",
-                )
-                if device_names
-                else []
-            )
-            if racks_in_row and leaf_devices and leaf_interfaces:
-                break
-            if attempt < _ROW_LEAF_MAX_RETRIES - 1:
-                delay = self._retry_delay(_ROW_LEAF_RETRY_DELAY, attempt)
-                self.logger.info(
-                    f"Rack {self.data['name']}: row {row_index} leaf devices/interfaces not ready yet "
-                    f"(racks={len(racks_in_row)}, leafs={len(leaf_devices)}, interfaces={len(leaf_interfaces)}) — "
-                    f"retrying in {delay:.2f}s (attempt {attempt + 1}/{_ROW_LEAF_MAX_RETRIES})"
-                )
-                await asyncio.sleep(delay)
-
-        if not racks_in_row:
-            self.logger.error(
-                f"Rack {self.data['name']}: No racks found in row {row_index}. "
-                "Cannot cable the compute rack's switches to the row leafs for mixed deployment."
-            )
-
-        if not leaf_devices:
-            self.logger.error(
-                f"Rack {self.data['name']}: No leaf devices found in row {row_index}. "
-                "Cannot cable the compute rack's switches to the row leafs for mixed deployment."
-            )
-
-        device_names = [dev.name.value for dev in leaf_devices]
-
-        if not leaf_interfaces:
-            self.logger.error(
-                f"Rack {self.data['name']}: No downlink interfaces found on leaf devices in row {row_index}. "
-                "Cannot cable the compute rack's switches to the row leafs for mixed deployment."
-            )
-
-        interface_names = sorted({iface.name.value for iface in leaf_interfaces})
-
-        self.logger.info(
-            f"Found {len(device_names)} leaf devices in row {row_index} with {len(interface_names)} unique downlink interfaces"
-        )
-        return device_names, interface_names
-
-    async def _resolve_local_leaf_cabling_target(
-        self,
-        *,
-        created_leaf_devices: list[str],
-        leaf_row_cache: tuple[list[str], list[str]] | None,
-        devices_per_rack: int,
-        role_label: str,
-    ) -> tuple[list[str], list[str], int, Literal["intra_rack_middle", "intra_rack_mixed"]] | None:
-        """Resolve the leaf devices/interfaces a rack's l2-leaf or access-leaf batch
-        cables to: the local leaf pair created earlier this run (network rack), or
-        the middle-rack leafs in the same row (compute rack, mixed deployment).
-        Returns None if unresolved (already logged) — caller should ``continue``.
-        """
-        if created_leaf_devices:
-            leaf_interfaces_objects = await self.client.filters(
-                kind=DcimPhysicalInterface,
-                device__name__values=created_leaf_devices,
-                role__value="downlink",
-            )
-            if not leaf_interfaces_objects:
-                self.logger.error(
-                    f"Rack {self.data['name']}: No downlink interfaces on leafs — cannot cable {role_label}s."
-                )
-                return None
-            leaf_interfaces = sorted({iface.name.value for iface in leaf_interfaces_objects})
-            return created_leaf_devices, leaf_interfaces, 0, "intra_rack_middle"
-
-        # Compute rack (mixed deployment): cable to middle-rack leafs in same row
-        pod = self.data["pod"]
-        effective_rack_index = max(0, self.data["index"] - 1)
-        cabling_offset = effective_rack_index * devices_per_rack
-
-        if leaf_row_cache is None:
-            leaf_row_cache = await self._get_leaf_devices_in_row(pod_id=pod["id"], row_index=self.data["row_index"])
-        leaf_device_names, leaf_interfaces = leaf_row_cache
-
-        if not leaf_device_names:
-            self.logger.error(
-                f"Rack {self.data['name']}: No middle-rack leafs in row {self.data['row_index']} — "
-                f"cannot cable {role_label}s."
-            )
-            return None
-
-        return leaf_device_names, leaf_interfaces, cabling_offset, "intra_rack_mixed"
 
     def calculate_cabling_offsets(
         self,
@@ -543,14 +392,8 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         # to its row's network rack's leafs. If triggered independently while that rack's add_rack is still
         # running, wait for it rather than cabling against leafs that don't exist yet.
         if deployment_type == "mixed" and self.data["rack_type"] in ROW_DEPENDENT_RACK_TYPES:
-            network_racks = await self.client.filters(
-                kind=LocationRack,
-                pod__ids=[pod["id"]],
-                row_index__value=self.data["row_index"],
-                rack_type__value="network",
-            )
-            for network_rack in network_racks:
-                refreshed = await self.wait_for_parent_generator_and_refetch("add_rack", network_rack.id)
+            for network_rack in pod_row_racks(pod, self.data["row_index"], {"network"}):
+                refreshed = await self.wait_for_parent_generator_and_refetch("add_rack", network_rack["id"])
                 if refreshed is not None:
                     if not self._load_rack_data(refreshed):
                         return

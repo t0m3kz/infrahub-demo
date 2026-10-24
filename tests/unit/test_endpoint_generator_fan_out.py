@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from tests.unit.endpoint_generator_helpers import _bond, _endpoint_data, _endpoint_device, _iface, _make_generator, _nic
+from tests.unit.endpoint_generator_helpers import _bond, _bond_data, _endpoint_data, _iface, _make_generator, _nic
 
 # ===========================================================================
 # Component segment fan-out — when generate() calls it, and what it dispatches
@@ -26,8 +26,7 @@ class TestGenerateFansOutComponentSegments:
         cabled.id = "nic-0"
         free_iface = _iface("eth1", device="server-1")
         free_iface.id = "nic-1"
-        gen.client.get = AsyncMock(return_value=_endpoint_device())
-        gen.client.filters = AsyncMock(side_effect=[[], [cabled, free_iface], [MagicMock(save=AsyncMock())]])
+        gen.client.filters = AsyncMock(side_effect=[[cabled, free_iface], [MagicMock(save=AsyncMock())]])
         gen._resolve_target_interfaces = AsyncMock(return_value=[_iface("Eth1", device="leaf-1")])
 
         await gen.generate(_endpoint_data())
@@ -38,8 +37,7 @@ class TestGenerateFansOutComponentSegments:
     async def test_plain_flow_without_target_ports_does_not_fan_out(self) -> None:
         """Nothing to cable into means nothing was cabled: no fan-out."""
         gen = _make_generator()
-        gen.client.get = AsyncMock(return_value=_endpoint_device())
-        gen.client.filters = AsyncMock(side_effect=[[], [_iface("eth0", device="server-1")]])
+        gen.client.filters = AsyncMock(side_effect=[[_iface("eth0", device="server-1")]])
         gen._resolve_target_interfaces = AsyncMock(return_value=[])
 
         await gen.generate(_endpoint_data())
@@ -50,9 +48,8 @@ class TestGenerateFansOutComponentSegments:
     async def test_plain_flow_rerun_with_everything_cabled_does_not_fan_out(self) -> None:
         """A rerun that finds every uplink cabled returns before cabling, so dispatches nothing."""
         gen = _make_generator()
-        gen.client.get = AsyncMock(return_value=_endpoint_device())
         cabled = _iface("eth0", device="server-1", cabled=True)
-        gen.client.filters = AsyncMock(side_effect=[[], [cabled], [MagicMock(save=AsyncMock())]])
+        gen.client.filters = AsyncMock(side_effect=[[cabled], [MagicMock(save=AsyncMock())]])
 
         await gen.generate(_endpoint_data())
 
@@ -66,10 +63,9 @@ class TestGenerateFansOutComponentSegments:
         cabled.cable = MagicMock(id="cable-1")
         cabled.cable._peer = MagicMock()
         cabled.cable._peer.name = MagicMock(value="leaf-1-Eth1__server-1-eth0")
-        gen.client.get = AsyncMock(return_value=_endpoint_device())
-        gen.client.filters = AsyncMock(side_effect=[[_bond("bond0", [cabled, free])], [cabled, free]])
+        gen.client.filters = AsyncMock(side_effect=[[cabled, free]])
 
-        await gen.generate(_endpoint_data())
+        await gen.generate(_bond_data(_bond("bond0", [cabled, free])))
 
         gen._fan_out_component_segments.assert_awaited_once_with({"id-eth0"})
 
@@ -82,10 +78,9 @@ class TestGenerateFansOutComponentSegments:
             nic.cable = MagicMock(id=f"cable-{nic.id}")
             nic.cable._peer = MagicMock()
             nic.cable._peer.name = MagicMock(value=f"leaf-1-Eth1__server-1-{nic.name.value}")
-        gen.client.get = AsyncMock(return_value=_endpoint_device())
-        gen.client.filters = AsyncMock(side_effect=[[_bond("bond0", [eth0, eth1])], [eth0, eth1]])
+        gen.client.filters = AsyncMock(side_effect=[[eth0, eth1]])
 
-        await gen.generate(_endpoint_data())
+        await gen.generate(_bond_data(_bond("bond0", [eth0, eth1])))
 
         gen._process_lag_endpoint_connections.assert_awaited_once()
         gen._fan_out_component_segments.assert_not_awaited()

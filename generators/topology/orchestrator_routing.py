@@ -84,9 +84,19 @@ class BaseOrchestratorRoutingGenerator(CommonGenerator):
 
         final_group_ids = list(retained_group_ids)
         if routing_group_name:
-            routing_group = await self._ensure_group(routing_group_name)
-            if routing_group.id not in final_group_ids:
-                final_group_ids.append(routing_group.id)
+            # The node's groups in the query payload already name the routing group it is in: no lookup.
+            routing_group_id = next(
+                (
+                    group["id"]
+                    for group in current_groups
+                    if group.get("id") and group.get("name") == routing_group_name
+                ),
+                None,
+            )
+            if routing_group_id is None:
+                routing_group_id = (await self._ensure_group(routing_group_name)).id
+            if routing_group_id not in final_group_ids:
+                final_group_ids.append(routing_group_id)
 
         if existing_group_ids == final_group_ids:
             self.logger.info(f"{node_kind} '{node_name}' already has correct routing groups")

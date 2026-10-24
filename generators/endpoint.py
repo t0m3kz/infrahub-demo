@@ -5,7 +5,7 @@ pattern as rack.py (RackMixin) and routing.py (RoutingMixin): this mixin owns
 the role="uplink" 1:1 cabling path (speed-matched, dual-homed across a switch
 pair) — everything downstream of _process_endpoint_connections — plus the
 device grouping and switch-pair selection the LAG/MLAG bond flow (role="lag",
-in topology/endpoint.py itself) shares with it.
+topology/endpoint_lag.py) shares with it.
 """
 
 from __future__ import annotations

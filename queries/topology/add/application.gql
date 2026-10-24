@@ -238,6 +238,16 @@ fragment AppComponentSecurityFields on AppComponent {
                 name { value }
               }
             }
+            # The owner's proxy policies (ProxyPolicy rules of the ZTNA/egress flow): the generator
+            # looks the policy it wants up here instead of reading it (generators/ztna.py).
+            proxy_policies {
+              edges {
+                node {
+                  id
+                  name { value }
+                }
+              }
+            }
           }
         }
       }

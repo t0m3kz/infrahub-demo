@@ -31,7 +31,7 @@ pool is sized for that envelope before any zone exists (generators/fabric_sizing
 * the ASN block is sized for ``max_zones`` zones.
 
 Each zone and virtual colocation then slices its own pools out of these
-(ColoPoolSlot in colocation_fabric.py is the one table of names and sizes, read by
+(ColoPoolSlot in colocation_pools.py is the one table of names and sizes, read by
 both tiers). A metro without a design creates none of the supernets; its zones
 slice the bootstrap pools directly with fixed sizes.
 
@@ -57,7 +57,7 @@ from ..fabric_sizing import colo_metro_asn_units
 from ..helpers.pools import SITE_VNI_END, SITE_VNI_START, name_to_asn_range
 from ..pools import PoolMixin
 from ..protocols import TopologyColocationMetro
-from .colocation_fabric import ATTACHED_SLOTS, COLO_POOL_SLOTS
+from .colocation_pools import ATTACHED_SLOTS, COLO_POOL_SLOTS
 
 # Metro ASN blocks are drawn from the same deterministic name-hash grid as DC
 # fabric ASNs (helpers/pools.py's name_to_asn_range), so a metro can never

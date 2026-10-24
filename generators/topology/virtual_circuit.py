@@ -89,11 +89,11 @@ from utils.circuit_underlay import (
     DECOMMISSIONED,
     HANDOFF_CIRCUIT,
     INTERCONNECT_CIRCUIT,
-    SESSION_CIRCUIT_KINDS,
     derived_underlay,
     has_carrier,
     overlay_processes,
     port_cabled,
+    session_circuits_on,
     subinterface_vlan,
 )
 from utils.data_cleaning import clean_data
@@ -406,16 +406,15 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, Comm
     async def _refuse_shared_ports(self, circuit_id: str, name: str, ends: list[SessionEnd]) -> None:
         """One port, one session: refuse an end that is also an end of another live interconnect or handoff circuit.
 
-        One query per session kind, not one on the TopologyVirtualCircuit generic: that generic is a marker (it has
-        only ``name``, neither ``capabilities`` to filter on nor ``status`` to read), and a tunnel circuit shares its
-        ports by design so it must stay out. A decommissioned circuit that kept its ports does not hold them.
+        The read is inside the per-port lock on purpose (race guard), only the gather of the two session kinds is
+        shared (session_circuits_on). A decommissioned circuit that kept its ports does not hold them.
         """
         port_ids = [end.port_id for end in ends]
-        others: set[str] = set()
-        for kind in SESSION_CIRCUIT_KINDS:
-            for other in await self.client.filters(kind=kind, capabilities__ids=port_ids):
-                if other.id != circuit_id and other.status.value != DECOMMISSIONED:
-                    others.add(other.name.value)
+        others = {
+            other.name.value
+            for other in await session_circuits_on(self.client, port_ids)
+            if other.id != circuit_id and other.status.value != DECOMMISSIONED
+        }
         if others:
             self.fail(
                 f"{name}: {', '.join(end.label for end in ends)} are also ends of {', '.join(sorted(others))}; "

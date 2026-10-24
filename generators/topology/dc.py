@@ -1,5 +1,6 @@
 """Infrastructure generator for data center topology."""
 
+from collections.abc import Mapping
 from typing import Any, Literal, cast
 
 from typing_extensions import TypedDict
@@ -23,10 +24,7 @@ from ..helpers.routing import RoutingStrategy, loopback_prefix_length, p2p_prefi
 from ..helpers.template_interfaces import template_interface_names_by_role
 from ..pod_config import templates_by_role
 from ..pools import PoolMixin
-from ..protocols import (
-    TopologyDataCenter,
-    TopologyPod,
-)
+from ..protocols import TopologyDataCenter
 from ..routing import RoutingMixin
 from ..types import CablingOptions, RoutingOptions, naming_convention_of
 from .fabric_shared import ServiceDevicesMixin
@@ -62,7 +60,10 @@ class TopologyDcData(TypedDict, total=False):
     technical_pool: dict[str, Any] | None
     management_pool: dict[str, Any] | None
     fabric_asn_pool: dict[str, Any] | None
+    # A TopologyPod child is {id, name, index, design: {id}}; any other child is just {id}.
     children: list[dict[str, Any]]
+    vni_pool: dict[str, Any] | None
+    evpn_rt_as: dict[str, Any] | None
     fabric_controllers: list[dict[str, Any]]
     security_manager_controllers: list[dict[str, Any]]
     lb_manager_controllers: list[dict[str, Any]]
@@ -109,13 +110,12 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
 
         self.logger.info(f"Processing Data Center: {dc_name}")
 
-        # include=["design"] lets _create_border_leaf_devices match each pod's
+        # The DC's pods come with its own query (queries/topology/add/dc.gql's
+        # children): their design lets _create_border_leaf_devices match each pod's
         # design to the DC design's pod_templates (its max_border_leafs_per_pod).
-        # The pods are read, never tracked: they are data, not this run's
-        # output, and a tracked pod that moved to another DC would be deleted
-        # by this DC's next run.
-        existing_pods = await self.client.filters(kind=TopologyPod, parent__ids=[dc_id], include=["design"])
-        self._existing_pods = existing_pods
+        # The pods are read, never saved: they are data, not this run's output
+        # (and DCPodCascadeGenerator fans out to them from the same list).
+        self._existing_pods = self.pods_of(self.data)
 
         self.deployment_id = dc_id  # Store for cable linking
         self.fabric_name = dc_name.lower()
@@ -217,13 +217,12 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
 
         # VlanSegment.vlan_id is set manually — no pool involved (single-site,
         # no collision-tracking concern requiring automated allocation).
-        # VxlanSegment's LOCAL VLAN ID is allocated per VLAN domain (MLAG pair
+        # VxlanSegment's LOCAL VLAN ID is chosen per VLAN domain (MLAG pair
         # or standalone device), not per-DC — see generators/devices.py's
         # _ensure_mlag_pairs/_ensure_standalone_vlan_domains and
-        # generators/topology/segment.py's per-domain ManagedVlanDomainSegment
-        # allocation. IEEE 802.1Q VLAN ID has only local significance; a
-        # DC-wide pool would artificially cap the whole DC to one shared
-        # ~3900-value space instead of ~3900 per independent VLAN domain.
+        # generators/vlan_domain.py's per-domain ManagedVlanDomainSegment
+        # allocation (no pool: the lowest id free on every domain the segment
+        # lands on, so one segment keeps one id across the fabric).
 
         # L2 VNI pool for the VXLAN overlay (VRF-lite: no VRF stretches over
         # EVPN; the only L3 VNIs are the four fixed namespaces' hand-set ones).
@@ -258,22 +257,6 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
             end_range=SITE_VNI_END,
             node="ManagedSegmentDeployment",
             node_attribute="vni",
-        )
-
-        # Attach every pool reference to the DC (one fetch, one save, every run —
-        # the pools above are the same upserted objects whether just created or
-        # already there, so this is idempotent). See PoolMixin.attach_refs for
-        # why the save is plain and untracked.
-        await self.attach_refs(
-            kind=TopologyDataCenter,
-            node_id=dc_id,
-            refs={
-                "loopback_pool": dc_pools["loopback"].id,
-                "management_pool": dc_pools["management"].id,
-                "technical_pool": dc_pools["technical"].id,
-                "fabric_asn_pool": fabric_asn_pool_id,
-                "vni_pool": vni_pool.id,
-            },
         )
 
         super_spine_names: list[str] = []
@@ -319,10 +302,31 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
         # always find them and never create duplicates.
         # overlay_asn is asn_end + 1: outside the per-device pool range [asn_start, asn_end]
         # but still inside this DC's grid slot (see name_to_asn_range)
-        super_spine_as_id = await self._create_shared_routing_objects(
+        shared_routing = await self._create_shared_routing_objects(
             overlay_asn=asn_end + 1,
             asn_pool_id=fabric_asn_pool_id,
-            deployment_id=dc_id,
+        )
+        super_spine_as_id = shared_routing.super_spine_as_id
+
+        # Attach every pool reference and the fabric AS (evpn_rt_as) to the DC in
+        # one fetch and one save — the objects above are the same upserted ones
+        # whether just created or already there, so this is idempotent, and a
+        # reference the DC's own query already read is not written again. See
+        # PoolMixin.attach_refs for why the save is plain and untracked.
+        dc_refs = {
+            "loopback_pool": dc_pools["loopback"].id,
+            "management_pool": dc_pools["management"].id,
+            "technical_pool": dc_pools["technical"].id,
+            "fabric_asn_pool": fabric_asn_pool_id,
+            "vni_pool": vni_pool.id,
+            "evpn_rt_as": shared_routing.overlay_as_id,
+        }
+        dc_data = cast("dict[str, Any]", self.data)
+        await self.attach_refs(
+            kind=TopologyDataCenter,
+            node_id=dc_id,
+            refs=dc_refs,
+            current={name: (dc_data.get(name) or {}).get("id") for name in dc_refs},
         )
 
         # Pre-seed each DC-scoped tier's own BGP so it exists before any pod
@@ -488,28 +492,33 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
                     f"at DC level (expected one of {sorted(_DC_VALID_FABRIC_ROLES)}) — skipping this entry."
                 )
 
-    def _pod_border_leaf_capacities(self, pods: list[Any]) -> dict[str, int]:
+    @staticmethod
+    def pods_of(data: Mapping[str, Any]) -> list[dict[str, Any]]:
+        """The DC's pods from its cleaned query payload: the children that carry a design (``clean_data`` gives a
+        non-pod child as just ``{"id": ...}``)."""
+        return [child for child in data.get("children") or [] if child.get("design")]
+
+    def _pod_border_leaf_capacities(self, pods: list[dict[str, Any]]) -> dict[str, int]:
         """Pod id -> how many border-leaf devices the pod can receive: its own
         design's max_border_leafs_per_pod. A pod whose design caps it at 0 is
         deliberately skipped, which is how a specific subset of pods (e.g. pod 1
         and pod 3, not pod 2) can be chosen to host border-leafs.
 
-        The pods come from the `include=["design"]` fetch in generate() (see
-        self._existing_pods); their design is matched by id against the DC
-        design's pod_templates. A pod whose design is not one of them gets none
-        (add_pod refuses to build such a pod)."""
+        The pods come from the DC's own query (see self._existing_pods); their
+        design is matched by id against the DC design's pod_templates. A pod whose
+        design is not one of them gets none (add_pod refuses to build such a pod)."""
         cap_by_design = {
             template["id"]: template["max_border_leafs_per_pod"] for template in self.data["design"]["pod_templates"]
         }
         capacities: dict[str, int] = {}
         for pod in pods:
-            design_id = pod.design.id
+            design_id = pod["design"]["id"]
             if design_id not in cap_by_design:
                 self.logger.warning(
-                    f"DC {self.fabric_name}: pod {pod.name.value}'s design is not one of the DC design's "
+                    f"DC {self.fabric_name}: pod {pod['name']}'s design is not one of the DC design's "
                     "pod_templates — no border-leafs are placed on it."
                 )
-            capacities[pod.id] = cap_by_design.get(design_id, 0)
+            capacities[pod["id"]] = cap_by_design.get(design_id, 0)
         return capacities
 
     async def _create_border_leaf_devices(self) -> list[str]:
@@ -535,7 +544,7 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
         if not existing_pods:
             self.logger.info(f"DC {self.fabric_name}: no pods yet — deferring border-leaf placement")
             return []
-        sorted_pods = sorted(existing_pods, key=lambda p: p.index.value)
+        sorted_pods = sorted(existing_pods, key=lambda p: p["index"])
 
         max_border_leafs_per_fabric = self.data["design"]["max_border_leafs_per_fabric"]
         capacities = self._pod_border_leaf_capacities(sorted_pods)
@@ -552,14 +561,14 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
             for pod in sorted_pods:
                 if remaining <= 0:
                     break
-                pod_capacity = capacities[pod.id]
+                pod_capacity = capacities[pod["id"]]
                 if pod_capacity <= 0:
                     continue
                 share = min(remaining, pod_capacity)
                 remaining -= share
 
                 device_options = DeviceOptions(
-                    indexes=[self.data["index"], pod.index.value],
+                    indexes=[self.data["index"], pod["index"]],
                     allocate_loopback=True,
                     loopback_pool=self._dc_fabric_loopback_pool_id,
                     loopback_prefix_length=loopback_prefix_length(self._underlay_protocol),

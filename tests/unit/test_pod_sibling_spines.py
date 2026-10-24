@@ -18,7 +18,7 @@ import pytest
 from generators.pod_config import pod_spine_slot_device_names, spine_slot_device_names
 from generators.protocols import DcimPhysicalDevice, DcimPhysicalInterface
 from generators.rack import RackMixin
-from generators.topology import pod as pod_module
+from generators.topology import pod_mesh as pod_mesh_module
 from generators.topology.pod import PodTopologyGenerator
 
 _DC_ID = "dc-7"
@@ -75,11 +75,9 @@ class _FakeClient:
         raise AssertionError(f"unexpected filters kind {kind}")
 
 
-def _sibling(index: int) -> MagicMock:
-    sibling = MagicMock()
-    sibling.id = f"pod-{index}"
-    sibling.index.value = index
-    return sibling
+def _sibling(index: int) -> dict[str, Any]:
+    """A pod of the DC as the ``children`` of the DC in pod.gql carry it."""
+    return {"id": f"pod-{index}", "index": index, "design": {"id": "design-pod"}}
 
 
 def _pod_spines(pod_index: int, *, role: str, deployment_id: str) -> list[MagicMock]:
@@ -103,7 +101,7 @@ def _make_pod_gen(*, pod_index: int, devices: list[MagicMock]) -> Any:
 
 
 async def _mesh(
-    gen: Any, *, siblings: list[MagicMock], spines: list[str], spine_role: str, slot_width: int = 2
+    gen: Any, *, siblings: list[dict[str, Any]], spines: list[str], spine_role: str, slot_width: int = 2
 ) -> None:
     await gen._cable_to_existing_sibling_pods(
         siblings=siblings,
@@ -205,7 +203,7 @@ class TestSiblingSpineLookup:
         pod_2 = _pod_spines(2, role="border-spine", deployment_id=_DC_ID)
         gen = _make_pod_gen(pod_index=2, devices=pod_1 + pod_2)
 
-        with patch.object(pod_module, "_SIBLING_SPINE_MAX_RETRIES", 1):
+        with patch.object(pod_mesh_module, "_SIBLING_SPINE_MAX_RETRIES", 1):
             await _mesh(
                 gen,
                 siblings=[_sibling(1), _sibling(2)],
@@ -225,7 +223,7 @@ class TestSiblingSpineLookup:
         pod_3 = _pod_spines(3, role="border-spine", deployment_id=_DC_ID)
         gen = _make_pod_gen(pod_index=3, devices=pod_1 + pod_2 + pod_3)
 
-        with patch.object(pod_module, "_SIBLING_SPINE_MAX_RETRIES", 1):
+        with patch.object(pod_mesh_module, "_SIBLING_SPINE_MAX_RETRIES", 1):
             await _mesh(
                 gen,
                 siblings=[_sibling(1), _sibling(2), _sibling(3)],
@@ -245,7 +243,7 @@ class TestSiblingSpineLookup:
         pod_2 = _pod_spines(2, role="spine", deployment_id="pod-2")
         gen = _make_pod_gen(pod_index=2, devices=pod_1 + pod_2)
 
-        with patch.object(pod_module, "_SIBLING_SPINE_MAX_RETRIES", 1):
+        with patch.object(pod_mesh_module, "_SIBLING_SPINE_MAX_RETRIES", 1):
             await _mesh(
                 gen,
                 siblings=[_sibling(1), _sibling(2)],
@@ -277,7 +275,7 @@ class TestMeshPortSlots:
         pod_3 = _pod_spines(3, role="spine", deployment_id="pod-3")
         gen = _make_pod_gen(pod_index=3, devices=pod_1 + pod_2 + pod_3)
 
-        with patch.object(pod_module, "_SIBLING_SPINE_MAX_RETRIES", 1):
+        with patch.object(pod_mesh_module, "_SIBLING_SPINE_MAX_RETRIES", 1):
             await _mesh(
                 gen,
                 siblings=[_sibling(1), _sibling(2), _sibling(3)],
@@ -295,7 +293,7 @@ class TestMeshPortSlots:
         pod_2 = _pod_spines(2, role="spine", deployment_id="pod-2")
         gen = _make_pod_gen(pod_index=3, devices=pod_1 + pod_2)
 
-        with patch.object(pod_module, "_SIBLING_SPINE_MAX_RETRIES", 1):
+        with patch.object(pod_mesh_module, "_SIBLING_SPINE_MAX_RETRIES", 1):
             await _mesh(
                 gen,
                 siblings=[_sibling(1), _sibling(2)],
@@ -313,26 +311,24 @@ class TestMeshPortSlots:
         pod_2 = _pod_spines(2, role="spine", deployment_id="pod-2")
         gen = _make_pod_gen(pod_index=3, devices=pod_2)
 
-        with patch.object(pod_module, "_SIBLING_SPINE_MAX_RETRIES", 1):
+        with patch.object(pod_mesh_module, "_SIBLING_SPINE_MAX_RETRIES", 1):
             await _mesh(gen, siblings=[_sibling(2), _sibling(3)], spines=["dc7.7.3.sp01"], spine_role="spine")
 
         assert self._slots(gen) == [(_UPLINKS[2:4], 2)]
 
 
 class TestMeshSlotWidth:
-    """_mesh_slot_width: one spine width for every pod of a back-to-back mesh."""
+    """mesh_slot_width: one spine width for every pod of a back-to-back mesh."""
 
     @staticmethod
-    def _sibling_with_design(index: int, design_id: str) -> MagicMock:
-        sibling = _sibling(index)
-        sibling.design.id = design_id
-        return sibling
+    def _sibling_with_design(index: int, design_id: str) -> dict[str, Any]:
+        return {**_sibling(index), "design": {"id": design_id}}
 
     def test_the_width_is_the_pods_own_design_width(self) -> None:
         design = {"name": "S_POD", "max_spines_per_pod": 4}
         dc_design = {"pod_templates": [{"id": "d-4", "max_spines_per_pod": 4}, {"id": "d-2", "max_spines_per_pod": 2}]}
 
-        assert pod_module._mesh_slot_width(design, dc_design, [self._sibling_with_design(1, "d-4")]) == 4
+        assert pod_mesh_module.mesh_slot_width(design, dc_design, [self._sibling_with_design(1, "d-4")]) == 4
 
     def test_mixed_spine_counts_are_refused(self) -> None:
         """An S DC hosts 2- and 4-spine designs; pods of both kinds cannot share one mesh."""
@@ -341,11 +337,11 @@ class TestMeshSlotWidth:
         siblings = [self._sibling_with_design(1, "d-2"), self._sibling_with_design(2, "d-4")]
 
         with pytest.raises(ValueError, match=r"lower-index sibling pod\(s\) \[1\]"):
-            pod_module._mesh_slot_width(design, dc_design, siblings)
+            pod_mesh_module.mesh_slot_width(design, dc_design, siblings)
 
     def test_a_sibling_whose_design_the_dc_does_not_list_is_refused(self) -> None:
         design = {"name": "S_POD", "max_spines_per_pod": 2}
         dc_design = {"pod_templates": [{"id": "d-2", "max_spines_per_pod": 2}]}
 
         with pytest.raises(ValueError, match="another max_spines_per_pod"):
-            pod_module._mesh_slot_width(design, dc_design, [self._sibling_with_design(1, "unknown")])
+            pod_mesh_module.mesh_slot_width(design, dc_design, [self._sibling_with_design(1, "unknown")])

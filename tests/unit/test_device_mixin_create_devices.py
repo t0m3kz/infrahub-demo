@@ -6,6 +6,8 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from infrahub_sdk.exceptions import NodeNotFoundError
+from infrahub_sdk.protocols import CoreStandardGroup
 
 from generators.protocols import (
     CloudNetworkAppliance,
@@ -346,3 +348,71 @@ class TestCreateDevicesPairingDispatch:
 
         kinds = [call.kwargs["kind"] for call in gen.client.create.call_args_list]
         assert kinds == [DcimPhysicalDevice, ManagedStandaloneVlanDomain]
+
+
+class TestRoleGroupLookup:
+    """create_devices() reads a role's CoreStandardGroup once per run, however many entries use the role."""
+
+    @staticmethod
+    async def _create_twice(gen: Any) -> None:
+        """Two fabric_templates entries of one role: two create_devices() calls on the same generator."""
+        gen.client.create = AsyncMock(
+            side_effect=lambda **kw: _mock_created_device(kw["kind"].__name__, kw["data"]["name"])
+        )
+        for first_index in (1, 2):
+            gen.client.create_batch = AsyncMock(side_effect=[_DummyBatch(), _DummyBatch()])
+            await gen.create_devices(
+                device_role="spine",
+                quantity=1,
+                deployment_id="dep-1",
+                template={},
+                options={"indexes": [1, 1], "role_index_start": first_index},
+            )
+
+    @pytest.mark.asyncio
+    async def test_group_is_read_once_for_repeated_calls(self) -> None:
+        """The second call for the same role finds the group in the run's memo: one get, not two."""
+        gen = _make_generator()
+
+        await self._create_twice(gen)
+
+        group_gets = [c for c in gen.client.get.await_args_list if c.kwargs["name__value"] == "spines"]
+        assert len(group_gets) == 1
+
+    @pytest.mark.asyncio
+    async def test_missing_group_is_created_untracked_once(self) -> None:
+        """A branch without the bootstrap group gets it created (untracked) on the first call and reuses it after."""
+        gen = _make_generator()
+        group = MagicMock(id="group-new", save=AsyncMock())
+        gen.client.get = AsyncMock(side_effect=NodeNotFoundError(identifier={"name": ["spines"]}, node_type="x"))
+
+        async def _create(**kw: Any) -> Any:
+            if kw["kind"] is CoreStandardGroup:
+                return group
+            return _mock_created_device(kw["kind"].__name__, kw["data"]["name"])
+
+        gen.client.create = AsyncMock(side_effect=_create)
+        for first_index in (1, 2):
+            gen.client.create_batch = AsyncMock(side_effect=[_DummyBatch(), _DummyBatch()])
+            await gen.create_devices(
+                device_role="spine",
+                quantity=1,
+                deployment_id="dep-1",
+                template={},
+                options={"indexes": [1, 1], "role_index_start": first_index},
+            )
+
+        group.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
+        assert gen.client.get.await_count == 1
+        group_creates = [c for c in gen.client.create.await_args_list if c.kwargs["kind"] is CoreStandardGroup]
+        assert len(group_creates) == 1
+        assert group_creates[0].kwargs["data"]["name"] == "spines"
+
+    @pytest.mark.asyncio
+    async def test_ha_and_mlag_groups_are_not_created_when_missing(self) -> None:
+        """Only role groups carry the create fallback: a missing ha_domains/mlag_domains group still raises."""
+        gen = _make_generator()
+        gen.client.get = AsyncMock(side_effect=NodeNotFoundError(identifier={"name": ["ha_domains"]}, node_type="x"))
+
+        with pytest.raises(NodeNotFoundError):
+            await gen._standard_group("ha_domains")

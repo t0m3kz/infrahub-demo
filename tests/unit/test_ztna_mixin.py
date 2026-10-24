@@ -168,6 +168,46 @@ class TestReconcileProxyRule:
         destinations = [call.kwargs["data"]["destination"] for call in gen.client.create.call_args_list]
         assert destinations == ["api.stripe.com", "api.github.com"]
 
+    def test_policy_already_attached_to_the_owner_needs_no_lookup_or_attach(self) -> None:
+        """The owner's proxy_policies come with the query payload: the wanted policy found there is
+        used by id, with no policy lookup and no owner attach."""
+        gen = _make_gen_ready()
+        src_comp = self._src_comp()
+        src_comp["parent"]["owner"]["proxy_policies"] = [
+            {"id": "policy-other", "name": "proxy-C001-other-proxy-egress"},
+            {"id": "policy-attached", "name": "proxy-C001-shared-cloud-proxy-egress"},
+        ]
+        proxy_policies: dict[str, str] = {}
+
+        result = asyncio.run(
+            gen._reconcile_proxy_rule(
+                app_name="checkout", src_comp=src_comp, dep=_egress_dep(), proxy_policies=proxy_policies
+            )
+        )
+
+        assert result is True
+        gen._get_or_create_proxy_policy.assert_not_awaited()
+        gen._attach_proxy_policy_to_owner.assert_not_awaited()
+        assert gen.client.create.call_args.kwargs["data"]["policy"] == {"id": "policy-attached"}
+        assert proxy_policies == {"C001:proxy-1": "policy-attached"}
+
+    def test_policy_missing_from_the_owner_payload_is_looked_up_and_attached(self) -> None:
+        """A wanted policy the owner does not list yet (new, or created but never attached) takes the
+        get-or-create path and is attached; the owner's other policies are left alone."""
+        gen = _make_gen_ready()
+        src_comp = self._src_comp()
+        src_comp["parent"]["owner"]["proxy_policies"] = [
+            {"id": "policy-other", "name": "proxy-C001-other-proxy-egress"}
+        ]
+
+        asyncio.run(
+            gen._reconcile_proxy_rule(app_name="checkout", src_comp=src_comp, dep=_egress_dep(), proxy_policies={})
+        )
+
+        gen._get_or_create_proxy_policy.assert_awaited_once_with("proxy-C001-shared-cloud-proxy-egress")
+        gen._attach_proxy_policy_to_owner.assert_awaited_once_with(owner_id="customer-1", policy_id="policy-1")
+        assert gen.client.create.call_args.kwargs["data"]["policy"] == {"id": "policy-1"}
+
     def test_missing_owner_egress_service_is_skipped(self) -> None:
         """Without an egress_service there is no proxy to place the rule on."""
         gen = _make_gen_ready()
@@ -529,7 +569,7 @@ class TestUpsertOwnerProxyRuleOwner:
 
 
 class TestFindRuleByName:
-    """GetOrCreateByNameMixin._find_rule_by_name, shared by the proxy and segment rule paths."""
+    """GetOrCreateByNameMixin._find_rule_by_name, the proxy rule path (segment rules are read per policy)."""
 
     def test_filters_by_kind_policy_and_name(self) -> None:
         """The first match of the server-side policy/name filter is returned."""
@@ -541,7 +581,7 @@ class TestFindRuleByName:
 
         assert found is rule
         gen.client.filters.assert_awaited_once_with(
-            kind=ProxyPolicyRule, policy__ids=["policy-1"], name__value="rule-1", include=None
+            kind=ProxyPolicyRule, policy__ids=["policy-1"], name__value="rule-1"
         )
 
     def test_no_match_returns_none(self) -> None:

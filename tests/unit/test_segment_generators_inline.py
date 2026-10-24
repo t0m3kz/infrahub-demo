@@ -110,6 +110,18 @@ class TestInlineLegs:
         assert legs[0]["member_device_name"] == "fw-01"
         assert legs[0]["border_device"].id == "bl-1"
 
+    def test_the_cables_and_far_ends_of_all_member_ports_are_read_in_one_batch(self) -> None:
+        """Two cabled member ports: one cable query and one far-end query for both, not one per port."""
+        gen = _inline_gen(self._filters())
+
+        asyncio.run(gen._inline_legs(_INLINE_SEGMENT))
+
+        kinds = [call.kwargs["kind"] for call in gen.client.filters.await_args_list]
+        assert kinds.count(DcimCable) == 1
+        cable_call = next(call for call in gen.client.filters.await_args_list if call.kwargs["kind"] is DcimCable)
+        assert cable_call.kwargs["ids"] == ["c1", "c2"]
+        gen.client.get.assert_not_called()
+
     def test_routed_border_port_is_an_error(self) -> None:
         """A pbr-mode border port parenting routed sub-interfaces cannot also be the segment's trunk."""
         gen = _inline_gen(self._filters(routed_parent="bl-fw"))
@@ -181,9 +193,8 @@ class TestCreateInlineSubInterfaces:
         activation.vlan_domain.id = vlan_domain
         activation.vlan_id.value = 210
         gen = _inline_gen({ManagedVlanDomainSegment: [activation]})
-        gen.segment_obj = MagicMock(id="seg-1")
-        gen.client.get = AsyncMock(return_value=gen.segment_obj)
-        gen._resolve_device_vlan_domain = AsyncMock(return_value=("mlag-bl", None))
+        gen.client.get = AsyncMock()
+        gen._resolve_vlan_domains = AsyncMock(return_value={"bl-1": "mlag-bl"})
         gen.ensure_prefix_address_pool = AsyncMock(return_value=MagicMock(id="pool-1"))
         gen.allocate_prefix_address = AsyncMock(return_value="ip-own-1")
         gen.ensure_vlan_subinterface = AsyncMock()
@@ -216,7 +227,10 @@ class TestCreateInlineSubInterfaces:
         sub = gen.ensure_vlan_subinterface.await_args.kwargs
         assert sub["vlan_id_value"] == 210
         assert sub["ip_address_id"] == "ip-own-1"
-        assert sub["capability_obj"] is gen.segment_obj
+        # The segment is linked by id: its node is not read for it.
+        assert sub["capability_ids"] == ["seg-1"]
+        assert "capability_obj" not in sub
+        gen.client.get.assert_not_awaited()
         assert sub["device_name"] == "fw-01"
 
     def test_missing_border_vlan_is_an_error(self) -> None:

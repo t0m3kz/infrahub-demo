@@ -15,7 +15,7 @@ too.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncGenerator, Mapping
+from collections.abc import AsyncGenerator, Iterable, Mapping
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Callable, Literal
@@ -26,7 +26,7 @@ from infrahub_sdk.protocols import CoreIPAddressPool, CoreIPPrefixPool, CoreNumb
 if TYPE_CHECKING:
     import logging
 
-    from .firewall_context import ContextSpec
+    from .firewall_context_spec import ContextSpec
 
 from .helpers.routing import underlay_pool_is_ipv6
 from .logger import GeneratorError
@@ -57,6 +57,8 @@ class PoolMixin:
     # CommonGenerator._retry_delay — annotation only (no method body), so this
     # mixin never shadows the real staticmethod at runtime via MRO.
     _retry_delay: Callable[..., float]
+    # Set on first use by _parent_pools, one per generator instance (= per run).
+    _parent_pool_cache: dict[tuple[type[Any], str], Any] | None
 
     async def acquire_resource_lock(self, resource_key: str) -> str:
         """Serialize concurrent generator runs racing for the same shared
@@ -151,11 +153,22 @@ class PoolMixin:
         finally:
             await self.release_resource_lock(lock_id)
 
-    async def attach_refs(self, *, kind: str | type[Any], node_id: str, refs: Mapping[str, str | None]) -> None:
+    async def attach_refs(
+        self,
+        *,
+        kind: str | type[Any],
+        node_id: str,
+        refs: Mapping[str, str | None],
+        current: Mapping[str, str | None] | None = None,
+    ) -> None:
         """Point attributes of an existing node at pools or shared objects: one fetch, one save.
 
         ``refs`` maps relationship name -> peer id; a ``None`` id means "nothing
-        to attach" and is skipped. The one place a generator writes pool (or
+        to attach" and is skipped. ``current`` maps relationship name -> the peer
+        id the generator's own query already read off the node: a ref whose id
+        equals it is already attached and is skipped, so a re-run whose refs are
+        all in place costs no fetch and no save (nor, with the node read by the
+        query, a missing-node check). Without ``current`` every ref is written. The one place a generator writes pool (or
         ``evpn_rt_as``) references onto a node it does not upsert itself (its
         target: DC, pod, colocation metro, zone or virtual colocation, office). A node the run upserts
         anyway (an MLAG or standalone VLAN domain) carries the reference in
@@ -167,8 +180,8 @@ class PoolMixin:
         is therefore a real fault: logged as an error (fatal under
         FailOnErrorLogger) and raised as GeneratorError — never skipped.
 
-        Idempotent: the same ids are written on every run, without comparing
-        first. The save is not delete_unused_nodes bookkeeping (it is
+        Idempotent: the same ids are written on every run (compared only against
+        ``current``, when given). The save is not delete_unused_nodes bookkeeping (it is
         update_group_context=False, so it never adds the node to the run's
         group). Plain save(), not allow_upsert=True: the node was just
         fetched, so update() sends only the changed fields; the Upsert
@@ -178,7 +191,8 @@ class PoolMixin:
         double-fire dc_pod_cascade. Untracked: attaching a pool does not make
         this run the node's owner — the node is the run's target.
         """
-        attach = {attribute: ref_id for attribute, ref_id in refs.items() if ref_id}
+        known = current or {}
+        attach = {attribute: ref_id for attribute, ref_id in refs.items() if ref_id and known.get(attribute) != ref_id}
         if not attach:
             return
         try:
@@ -255,6 +269,26 @@ class PoolMixin:
             node_attribute="asn",
         )
 
+    async def preload_parent_pools(self, names: Iterable[str], kind: type[Any] = CoreIPPrefixPool) -> None:
+        """Read the parent pools ``names`` of ``kind`` in one query for _get_parent_pool_with_retry to find.
+
+        A generator that slices several pools out of parent pools it knows up front (a colocation zone's five)
+        reads them here once instead of one get per slice. A name the query does not return is simply not
+        cached: its lookup keeps the retry that waits for another generator to create it.
+        """
+        wanted = sorted({name for name in names if (kind, name) not in self._parent_pools()})
+        if not wanted:
+            return
+        for pool in await self.client.filters(kind=kind, name__values=wanted):
+            self._parent_pools()[(kind, pool.name.value)] = pool
+
+    def _parent_pools(self) -> dict[tuple[type[Any], str], Any]:
+        """The parent pools this run has read (see preload_parent_pools), by (kind, name)."""
+        cache: dict[tuple[type[Any], str], Any] | None = getattr(self, "_parent_pool_cache", None)
+        if cache is None:
+            cache = self._parent_pool_cache = {}
+        return cache
+
     async def _get_parent_pool_with_retry(self, parent_pool_name: str, kind: type[Any] = CoreIPPrefixPool) -> Any:
         """Fetch a parent pool of ``kind`` (a CoreIPPrefixPool unless told otherwise) by
         name, retrying if it doesn't exist yet — closes the race where a
@@ -262,7 +296,11 @@ class PoolMixin:
         allocate_resource_pools() may not have created yet (add_pod's trigger can
         fire before add_dc's task is even visible in the task list), and where a
         colocation zone needs its metro's ASN pool (a CoreNumberPool) before
-        add_colocation_metro has created it."""
+        add_colocation_metro has created it.
+
+        A pool read by preload_parent_pools() is returned from there, without a query."""
+        if (cached := self._parent_pools().get((kind, parent_pool_name))) is not None:
+            return cached
         for attempt in range(_PARENT_POOL_MAX_RETRIES):
             try:
                 return await self.client.get(kind=kind, name__value=parent_pool_name)

@@ -335,7 +335,7 @@ nodes:
         order_weight: 1300
         description: "Shared authentication key of the session (optional)"
 
-      # The reverse side, CloudHybridAttachment.virtual_circuit, is declared in topology_cloud.yml.
+      # The reverse side, CloudHybridAttachment.virtual_circuit, is declared in topology_cloud_network.yml.
       - name: cloud_endpoint
         label: "Cloud Endpoint"
         peer: CloudHybridAttachment

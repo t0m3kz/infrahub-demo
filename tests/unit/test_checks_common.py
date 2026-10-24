@@ -7,11 +7,7 @@ import pytest
 
 from checks.border_leaf import CheckBorderLeaf
 from checks.border_spine import CheckBorderSpine
-from checks.common import (
-    validate_exchange_gateways,
-    validate_routing_password,
-    validate_snat_addresses,
-)
+from checks.common import validate_exchange_gateways, validate_routing_password, validate_snat_addresses
 from checks.common import validate_transit_vlans as _validate_transit_vlans
 from checks.edge import CheckEdge
 from transforms.config.border_leaf import BorderLeaf

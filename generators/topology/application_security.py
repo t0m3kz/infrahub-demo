@@ -255,7 +255,7 @@ class AppApplicationGenerator(
         self.logger.info("Found %d dependency edge(s) for %s", len(edges), app_name)
 
         segment_policies: dict[str, Any] = {}
-        proxy_policies: dict[str, Any] = {}
+        proxy_policies: dict[str, str] = {}
 
         rules_failed = 0
         for src_comp, dep, dst_comp in edges:

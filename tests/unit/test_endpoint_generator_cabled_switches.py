@@ -1,6 +1,6 @@
 """Cabled switch names, LAG ids and LAG endpoint connections of EndpointConnectivityGenerator.
 
-The generator lives in generators/topology/endpoint.py.
+The generator lives in generators/topology/endpoint.py; the LAG flow is generators/topology/endpoint_lag.py.
 """
 
 from __future__ import annotations
@@ -248,6 +248,7 @@ class TestProcessLagEndpointConnections:
         await gen._process_lag_endpoint_connections(bond, "tor")
 
         assert gen.create_cabling.await_count == 2
+        assert gen.client.filters.await_count == 2  # no cabled member: no far-end lookup
         assert gen.client.filters.await_args_list[1].kwargs["device__ids"] == ["sw-a", "sw-b"]
         assert gen.client.create.await_count == 2
         for call in gen.client.create.call_args_list:
@@ -288,7 +289,7 @@ class TestProcessLagEndpointConnections:
 
         far_end_port = MagicMock(id="far-end-1")
         far_end_port.lag = MagicMock(id=None, peer=None)
-        existing_cable_obj = MagicMock()
+        existing_cable_obj = MagicMock(id="existing-cable-1")
         existing_cable_obj.endpoints = MagicMock()
         far_end_peer = MagicMock(id="far-end-1")
         member_own_peer = MagicMock(id="member-own-id")
@@ -299,8 +300,8 @@ class TestProcessLagEndpointConnections:
         member_1.cable = MagicMock(id="existing-cable-1")
         bond = {"bond0": [member_1, _iface("eth1", device="server-1")]}
 
-        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], []])
-        gen.client.get = AsyncMock(side_effect=[existing_cable_obj, far_end_port])
+        # filters call order: switches, existing LAGs, then the batched far-end lookup (cables, far ends)
+        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], [], [existing_cable_obj], [far_end_port]])
 
         new_lag = MagicMock(id="lag-obj-1")
         new_lag.save = AsyncMock()
@@ -310,11 +311,47 @@ class TestProcessLagEndpointConnections:
 
         # create_cabling is re-touched for both members (idempotent, allow_upsert
         # server-side) — but member_1's port lookup reused the EXISTING far-end
-        # port (client.get) instead of claiming a fresh one from the switch's
-        # free-port list, which is the behavior under test here.
+        # port instead of claiming a fresh one from the switch's free-port list,
+        # which is the behavior under test here.
         assert gen.create_cabling.await_count == 2
         first_call_kwargs = gen.create_cabling.call_args_list[0].kwargs
         assert first_call_kwargs["top_interfaces"] == [far_end_port.name.value]
+        gen.client.get.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_far_ends_of_all_bonds_are_read_in_one_batch(self) -> None:
+        """Two bonds with a cabled member each: their far ends are looked up together (one cables
+        read, one far-end read), not once per member."""
+        gen = self._gen()
+        switch_a, switch_b, _ = self._switches_with_shared_domain()
+        switch_a.platform = MagicMock(peer=MagicMock(name=MagicMock(value="arista_eos")))
+        switch_b.platform = MagicMock(peer=MagicMock(name=MagicMock(value="arista_eos")))
+        gen._resolve_target_interfaces = AsyncMock(
+            return_value=[_iface(f"Ethernet{n}", device=d) for d in ("leaf-1", "leaf-2") for n in (1, 2, 3)]
+        )
+
+        members = {name: _iface(name, device="server-1") for name in ("eth0", "eth1", "eth2", "eth3")}
+        cables, far_ends = [], []
+        for number, name in enumerate(("eth0", "eth2")):
+            members[name].id = f"member-{name}"
+            members[name].cable = MagicMock(id=f"cable-{name}")
+            cable = MagicMock(id=f"cable-{name}")
+            cable.endpoints.peers = [MagicMock(id=f"member-{name}"), MagicMock(id=f"far-{name}")]
+            cables.append(cable)
+            far_end = MagicMock(id=f"far-{name}")
+            far_end.name = MagicMock(value=f"Ethernet{number + 1}")
+            far_end.lag = MagicMock(id=None, peer=None)
+            far_ends.append(far_end)
+        bonds = {"bond0": [members["eth0"], members["eth1"]], "bond1": [members["eth2"], members["eth3"]]}
+        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], [], cables, far_ends])
+        gen.client.create = AsyncMock(return_value=MagicMock(save=AsyncMock()))
+
+        await gen._process_lag_endpoint_connections(bonds, "tor")
+
+        assert gen.client.filters.await_count == 4
+        assert gen.client.filters.await_args_list[2].kwargs["ids"] == ["cable-eth0", "cable-eth2"]
+        gen.client.get.assert_not_called()
+        assert gen.create_cabling.await_count == 4
 
     @pytest.mark.asyncio
     async def test_existing_lag_id_reused_when_port_already_in_a_lag(self) -> None:

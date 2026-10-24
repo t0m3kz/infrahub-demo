@@ -44,9 +44,6 @@ def _build_gen() -> Any:
     gen.client = MagicMock()
     gen.client.group_context = MagicMock()
     gen.client.group_context.related_node_ids = []
-    # PoolMixin.upsert_number_pool — _ensure_mlag_pairs calls this to create
-    # each VLAN domain's own local VLAN ID pool; not under test here.
-    gen.upsert_number_pool = AsyncMock(return_value=MagicMock(id="vlan-pool-1"))
     # MLAGWiringMixin.ensure_mlag_wiring — peer-link wiring is covered by
     # tests/unit/test_mlag_wiring_helper.py; here we only assert it's called
     # with the right args.
@@ -176,9 +173,9 @@ class TestEnsureMlagPairs:
         )
 
     @pytest.mark.asyncio
-    async def test_vlan_pool_rides_on_the_domain_upsert(self) -> None:
-        """The domain's local VLAN pool is upserted first and carried by the
-        MLAG upsert itself: no get + save of the domain afterwards to attach it."""
+    async def test_mlag_domain_is_one_upsert_and_no_vlan_pool(self) -> None:
+        """The MLAG domain is a single upsert with no VLAN pool (segment generators choose the
+        VLAN IDs): nothing reads or saves the domain afterwards."""
         gen = _build_gen()
         gen.client.filters = AsyncMock(return_value=[])
         gen.client.get = AsyncMock(return_value=_mock_group())
@@ -194,9 +191,7 @@ class TestEnsureMlagPairs:
             mlag_create="virtual",
         )
 
-        gen.upsert_number_pool.assert_awaited_once()
-        assert gen.upsert_number_pool.call_args.kwargs["pool_name"] == "leaf-01-leaf-02-mlag-vlan-pool"
-        assert gen.client.create.call_args.kwargs["data"]["vlan_pool"] == {"id": "vlan-pool-1"}
+        assert "vlan_pool" not in gen.client.create.call_args.kwargs["data"]
         # The only get is the mlag_domains group: nothing re-reads the domain.
         gen.client.get.assert_awaited_once()
         assert gen.client.get.call_args.kwargs["name__value"] == "mlag_domains"
