@@ -269,18 +269,18 @@ class PoolMixin:
             node_attribute="asn",
         )
 
-    async def preload_parent_pools(self, names: Iterable[str], kind: type[Any] = CoreIPPrefixPool) -> None:
-        """Read the parent pools ``names`` of ``kind`` in one query for _get_parent_pool_with_retry to find.
+    async def preload_parent_pools(self, names: Iterable[str]) -> None:
+        """Read the parent prefix pools ``names`` in one query for _get_parent_pool_with_retry to find.
 
         A generator that slices several pools out of parent pools it knows up front (a colocation zone's five)
         reads them here once instead of one get per slice. A name the query does not return is simply not
         cached: its lookup keeps the retry that waits for another generator to create it.
         """
-        wanted = sorted({name for name in names if (kind, name) not in self._parent_pools()})
+        wanted = sorted({name for name in names if (CoreIPPrefixPool, name) not in self._parent_pools()})
         if not wanted:
             return
-        for pool in await self.client.filters(kind=kind, name__values=wanted):
-            self._parent_pools()[(kind, pool.name.value)] = pool
+        for pool in await self.client.filters(kind=CoreIPPrefixPool, name__values=wanted):
+            self._parent_pools()[(CoreIPPrefixPool, pool.name.value)] = pool
 
     def _parent_pools(self) -> dict[tuple[type[Any], str], Any]:
         """The parent pools this run has read (see preload_parent_pools), by (kind, name)."""

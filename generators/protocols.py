@@ -59,10 +59,6 @@ class TopologyFacility(CoreNode):
     name: String
 
 
-class TopologyConnector(CoreNode):
-    name: StringOptional
-
-
 class ManagedController(CoreNode):
     name: String
     controller_type: Dropdown
@@ -83,10 +79,6 @@ class TopologyCustomerTemplate(CoreNode):
 
 
 class TopologyDeployment(CoreNode):
-    name: String
-
-
-class TopologyDesign(CoreNode):
     name: String
 
 
@@ -202,14 +194,6 @@ class ManagedLoadBalancer(CoreNode):
     scheme: DropdownOptional
     status: Dropdown
     tags: RelationshipManager[BuiltinTag]
-
-
-class NetworkManagementServer(CoreNode):
-    description: StringOptional
-    name: String
-    status: Dropdown
-    ip_addresses: RelationshipManager[IpamIPAddress]
-    location: RelationshipManager[LocationGeneric]
 
 
 class ManagedNetworkSegment(CoreNode):
@@ -732,7 +716,6 @@ class CloudNetworkAppliance(CoreArtifactTarget, DcimDevice, DcimCapabilities):
     term_length: IntegerOptional
     account: RelationshipAttribute[CloudAccount]
     deployment: RelationshipAttribute[TopologyDeployment]
-    secondary_device: RelationshipAttribute[CloudNetworkAppliance]
 
 
 class CloudNetworkSegment(CloudResource, ManagedNetworkSegment):
@@ -800,10 +783,6 @@ class ManagedOSPFPeering(ManagedGeneric, ManagedPeering, ManagedGenericInterface
     ospf_area: RelationshipAttribute[RoutingOSPFArea]
     ospf_interface: RelationshipManager[RoutingOSPFInterface]
     ospf_process: RelationshipManager[ManagedOSPF]
-
-
-class TopologyOffice(CoreArtifactTarget, TopologyDeployment):
-    site_type: Dropdown
 
 
 class RoutingPassword(CoreNode):

@@ -230,7 +230,7 @@ class DeviceMixin(DomainPairingMixin):
 
         device_group = None
         if controller is None:
-            group_name = options.get("group_name") or ROLE_GROUP_NAMES.get(device_role) or f"{device_role}s"
+            group_name = ROLE_GROUP_NAMES.get(device_role) or f"{device_role}s"
             # Keep generators robust on branches where bootstrap groups were not
             # loaded yet (e.g. ad-hoc test branches): a missing group is created.
             device_group = await self._standard_group(

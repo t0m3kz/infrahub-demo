@@ -109,15 +109,6 @@ class TestRackRolesHelper:
         assert with_loopback["loopback_pool"] == "lo-pool"
         assert with_loopback["loopback_prefix_length"] == 32
         assert without_loopback["allocate_loopback"] is False
-        assert "group_name" not in without_loopback
-
-    def test_build_device_options_group_name_override(self) -> None:
-        gen = _build_gen()
-        helper = RackRolesHelper(gen)
-
-        options = helper.build_device_options(allocate_loopback=False, group_name="loadbalancers")
-
-        assert options["group_name"] == "loadbalancers"
 
     def test_overlay_only_routing_options(self) -> None:
         """border_leafs_per_rack() was deleted along with border-leaf's rack-level

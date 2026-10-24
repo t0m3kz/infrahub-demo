@@ -10,9 +10,6 @@ from infrahub_sdk.task.models import TaskFilter, TaskState
 from .helpers.common import retry_delay
 from .logger import FailOnErrorLoggerMixin, GeneratorError
 
-# Re-export TypedDicts so existing imports (from .common import DeviceOptions, ...) keep working
-from .types import CablingOptions, ChainHop, DeviceOptions, RoutingOptions  # noqa: F401
-
 _PARENT_WAIT_TIMEOUT = 1800  # 30 min generator-wait timeout
 _PARENT_WAIT_POLL_INTERVAL = 3
 _IN_FLIGHT_STATES = [TaskState.PENDING, TaskState.RUNNING, TaskState.SCHEDULED]

@@ -15,15 +15,15 @@ from typing import Any
 
 import pytest
 
-from tests.integration.demo_data import ROOT, Declared, declared, distinct, name, object_templates
-from tests.integration.test_constants import (
-    ALL_DEMO_DATA,
+from tasks import ALL_DEMO_DATA
+from tests.integration.all_demo_circuit_constants import (
     ALL_DEMO_DECLARED_PHYSICAL_LOCATIONS,
     ALL_DEMO_DECLARED_PHYSICAL_PORTS,
     ALL_DEMO_PARTNER_ACCESS_CIRCUITS,
     ALL_DEMO_PARTNER_ACCESS_LOCATIONS,
     ALL_DEMO_VIRTUAL_CIRCUITS,
 )
+from tests.integration.demo_data import ROOT, Declared, declared, distinct, name, object_templates
 
 _ALL = ROOT / ALL_DEMO_DATA
 _MEGAPORT = "HANDOFF-PA4-MEGAPORT-PROD"

@@ -30,13 +30,13 @@ import pytest
 from infrahub_sdk import InfrahubClient, InfrahubClientSync
 
 from .conftest import TestInfrahubDockerWithClient
-from .test_constants import DEMO_SWITCH_DATA, SCENARIO_DC_NAME, SCENARIO_FABRIC_ROLES, SCENARIO_UNDERLAY_ROLES
-from .test_helpers import (
+from .dc_topology_helpers import (
     fetch_underlay_asn_drift,
     find_min_growth_shortfalls,
     snapshot_dc_device_counts_by_role,
     snapshot_underlay_asn_by_roles,
 )
+from .suite_constants import DEMO_SWITCH_DATA, SCENARIO_DC_NAME, SCENARIO_FABRIC_ROLES, SCENARIO_UNDERLAY_ROLES
 from .workflow_helpers import (
     create_and_validate_proposed_change,
     merge_proposed_change,

@@ -8,10 +8,10 @@ import logging
 from collections.abc import Mapping, Sequence
 from typing import Any, Callable
 
-from ..common import CablingOptions, RoutingOptions
 from ..helpers.routing import p2p_prefix_length
 from ..pod_config import spine_slot_device_names
 from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface
+from ..types import CablingOptions, RoutingOptions
 
 _SIBLING_SPINE_MAX_RETRIES = 10
 _SIBLING_SPINE_RETRY_DELAY = 3.0

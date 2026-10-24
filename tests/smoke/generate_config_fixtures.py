@@ -21,6 +21,7 @@ from collections.abc import Callable
 
 from tests.smoke.fixture_builders import (
     cisco_xe,
+    cloud,
     edge,
     fabric,
     firewall,
@@ -47,6 +48,7 @@ WRITERS: list[tuple[str | None, Callable[[], tuple[int, int]]]] = [
     (None, proxy_lb.write_fixtures),
     (None, group_policy.write_fixtures),
     (None, routing_identity.write_fixtures),
+    ("Cloud VPC Terraform fixtures", cloud.write_fixtures),
 ]
 
 

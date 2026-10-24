@@ -38,7 +38,7 @@ from ..protocols import (
 )
 from ..types import ConnectionFingerprint
 from .endpoint_lag import EndpointLagMixin
-from .endpoint_targets import EndpointTargetsMixin
+from .endpoint_targets import FREE_OR_CABLED_INTERFACE_STATUSES, EndpointTargetsMixin
 
 # Tags the switch ports a component's instances are cabled to with its segment
 # (generators/topology/app_instance_segment.py). A component usually exists
@@ -294,7 +294,7 @@ class EndpointConnectivityGenerator(
             kind=DcimPhysicalInterface,
             device__ids=[self.data["id"]],
             role__value="uplink",
-            status__values=["free", "planned", "active"],
+            status__values=FREE_OR_CABLED_INTERFACE_STATUSES,
             include=["device", "interface_type", "cable"],
         )
 

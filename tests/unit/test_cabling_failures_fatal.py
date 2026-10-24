@@ -13,12 +13,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from generators.common import CablingOptions, CommonGenerator
+from generators.common import CommonGenerator
 from generators.connections import CablingMixin
 from generators.helpers import CablingPlanError
 from generators.logger import GeneratorError
 from generators.topology import pod_mesh as pod_mesh_module
 from generators.topology.pod import PodTopologyGenerator
+from generators.types import CablingOptions
 
 
 class _CablingGen(CablingMixin, CommonGenerator):

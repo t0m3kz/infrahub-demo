@@ -395,6 +395,18 @@ def _make_gen(world: _World) -> tuple[Any, list[str]]:
     return gen, events
 
 
+def _dedicated(gen: Any) -> None:
+    """A dedicated pair already provisioned: the context flow starts at the legs."""
+    cluster = SimpleNamespace(
+        id="ded-cluster", name=SimpleNamespace(value="DC10-ded-ha"), capabilities=SimpleNamespace(peers=[])
+    )
+    members = [
+        SimpleNamespace(id="fw-1", name=SimpleNamespace(value="DC10-FW1-C005-p-dedicated"), hosting_device=None),
+        SimpleNamespace(id="fw-2", name=SimpleNamespace(value="DC10-FW2-C005-p-dedicated"), hosting_device=None),
+    ]
+    gen._ensure_dedicated_device_pair = AsyncMock(return_value=(cluster, members))
+
+
 async def _run(gen: Any, world: _World, payload: dict[str, Any]) -> None:
     await gen.generate(payload)
 

@@ -6,16 +6,15 @@ from typing import Any
 
 from utils.exchange_transit import PROD_TYPE, TENANT_NAMESPACE_TYPES
 
-from .test_constants import (
+from .all_demo_circuit_constants import (
     ALL_DEMO_FACILITY_KINDS,
     ALL_DEMO_SDWAN_GATEWAY_PUBLIC_PORT,
-    ALL_DEMO_TRANSIT_RESOURCES,
     ALL_DEMO_VIRTUAL_CIRCUITS,
     HANDOFF_KIND,
     INTERCONNECT_KIND,
     TUNNEL_KIND,
-    transit_namespace_type,
 )
+from .all_demo_firewall_constants import ALL_DEMO_TRANSIT_RESOURCES, transit_namespace_type
 
 
 def _rules(result: dict) -> list[dict]:

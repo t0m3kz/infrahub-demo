@@ -49,25 +49,10 @@ import pytest
 from infrahub_sdk import InfrahubClient
 
 from generators.helpers.naming import sdwan_edge_name
+from tasks import ALL_DEMO_BRANCH
 from utils.data_cleaning import clean_data
 
-from .conftest import TestInfrahubDockerWithClient
-from .interconnect_queries import CIRCUIT_LOCATIONS_QUERY, GROUP_MEMBERS_QUERY, SCENARIO_NAME
-from .interconnect_rules import (
-    _CIRCUIT_ENDS,
-    _OFFICE_KIND,
-    _ZONE_KINDS,
-    _deployments,
-    _environment_errors,
-    _expectation_errors,
-    _handoff_errors,
-    _interconnect_errors,
-    _label,
-    _session_port_errors,
-    _tunnel_errors,
-)
-from .test_constants import (
-    ALL_DEMO_BRANCH,
+from .all_demo_circuit_constants import (
     ALL_DEMO_DECLARED_PHYSICAL_LOCATIONS,
     ALL_DEMO_DECLARED_VIRTUAL_LOCATIONS,
     ALL_DEMO_FACILITY_KINDS,
@@ -84,7 +69,22 @@ from .test_constants import (
     INTERCONNECT_KIND,
     TUNNEL_KIND,
 )
-from .test_helpers import fetch_interconnect_inventory
+from .circuit_helpers import fetch_interconnect_inventory
+from .conftest import TestInfrahubDockerWithClient
+from .interconnect_queries import CIRCUIT_LOCATIONS_QUERY, GROUP_MEMBERS_QUERY, SCENARIO_NAME
+from .interconnect_rules import (
+    _CIRCUIT_ENDS,
+    _OFFICE_KIND,
+    _ZONE_KINDS,
+    _deployments,
+    _environment_errors,
+    _expectation_errors,
+    _handoff_errors,
+    _interconnect_errors,
+    _label,
+    _session_port_errors,
+    _tunnel_errors,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 

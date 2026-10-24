@@ -10,13 +10,12 @@ Usage:
 
 from __future__ import annotations
 
-import asyncio
 import json
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from tests.smoke.fixture_builders.common import run_transform
 from transforms.cloud.vpc_terraform import CloudVpcTerraform
 from transforms.colocation.virtual_colocation import VirtualColocationTerraform
 from transforms.config.access_leaf import AccessLeaf
@@ -65,26 +64,6 @@ _PREFIX_TO_CLASS: list[tuple[str, type]] = sorted(
 )
 
 
-def _run_transform(transform_cls: type, data: dict) -> str:
-    """Run a transform against data using a mock client (no server needed)."""
-    mock_client = MagicMock()
-    mock_client.clone.return_value = mock_client
-    mock_client.schema = MagicMock()
-    mock_client.schema.get = AsyncMock(return_value=MagicMock())
-    mock_client.execute_graphql = AsyncMock(side_effect=Exception("no server"))
-
-    instance = transform_cls(
-        client=mock_client,
-        infrahub_node=MagicMock(),
-        root_directory=str(PROJECT_ROOT),
-    )
-    loop = asyncio.new_event_loop()
-    try:
-        return loop.run_until_complete(instance.transform(data))
-    finally:
-        loop.close()
-
-
 def _fixture_params() -> list:
     if not CONFIGS_DIR.exists():
         return []
@@ -109,7 +88,7 @@ def test_config_transform_matches_fixture(transform_cls: type, fixture_dir: Path
     input_data = json.loads((fixture_dir / "input.json").read_text())
     is_sonic = "_sonic_" in fixture_dir.name or "_dell_sonic_" in fixture_dir.name
     expected = (fixture_dir / "output.txt").read_text()
-    actual = _run_transform(transform_cls, input_data)
+    actual = run_transform(transform_cls, input_data)
     if is_sonic:
         configdb = json.loads(actual)
         assert isinstance(configdb["DEVICE_METADATA"], dict)

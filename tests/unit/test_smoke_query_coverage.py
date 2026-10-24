@@ -22,7 +22,6 @@ FRAGMENTS_DIR = "queries/fragments"
 # Query files that are NOT registered under `queries:` in .infrahub.yml. They must still have a smoke entry (so they
 # parse), but there is no registered name for its resource_name to match.
 UNREGISTERED_QUERIES: dict[str, str] = {
-    "queries/config/console.gql": "orphan: no transform or definition registers it; its smoke entry is console_config",
     "queries/config/device_decommission.gql": (
         "its only consumer, the decommission_device generator, is commented out in .infrahub.yml"
     ),

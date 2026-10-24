@@ -15,7 +15,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from graphql import parse
 
+from tasks import ALL_DEMO_BRANCH
 from tests.integration import test_66_all_demo_circuit_lifecycle as lifecycle
+from tests.integration.all_demo_circuit_constants import ALL_DEMO_VIRTUAL_CIRCUITS, HANDOFF_KIND, INTERCONNECT_KIND
 from tests.integration.test_66_all_demo_circuit_lifecycle import (
     HANDOFF_CIRCUIT,
     HANDOFF_KEY,
@@ -24,7 +26,6 @@ from tests.integration.test_66_all_demo_circuit_lifecycle import (
     Subject,
     subject_for,
 )
-from tests.integration.test_constants import ALL_DEMO_BRANCH, ALL_DEMO_VIRTUAL_CIRCUITS, HANDOFF_KIND, INTERCONNECT_KIND
 
 DCI = subject_for(INTERCONNECT_CIRCUIT)
 HANDOFF = subject_for(HANDOFF_CIRCUIT, key=HANDOFF_KEY)

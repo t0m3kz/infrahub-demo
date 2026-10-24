@@ -16,7 +16,8 @@ from typing import Any
 
 import pytest
 
-from tests.smoke.test_configs_smoke import CONFIGS_DIR, _run_transform
+from tests.smoke.fixture_builders.common import run_transform
+from tests.smoke.test_configs_smoke import CONFIGS_DIR
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.edge import Edge
 
@@ -47,4 +48,4 @@ def test_a_physical_circuit_on_every_port_leaves_the_config_unchanged(transform_
     data, injected = _with_circuit_on_every_port(json.loads((directory / "input.json").read_text()))
 
     assert injected >= 5
-    assert _run_transform(transform_cls, data) == (directory / "output.txt").read_text()
+    assert run_transform(transform_cls, data) == (directory / "output.txt").read_text()

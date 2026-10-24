@@ -14,32 +14,13 @@ from unittest.mock import MagicMock
 
 from generators.helpers.routing import PendingASRef, RoutingPlan, RoutingPlanInput, RoutingPlanner
 from generators.types import RoutingOptions
+from tests.unit.routing_helpers import make_loopback, make_p2p_interface
 
 
 def _local_as_signature(local_as: Any) -> tuple:
     if isinstance(local_as, PendingASRef):
         return ("pending", local_as.device)
     return tuple(sorted(local_as.items()))
-
-
-def _make_loopback(name: str, device_id: str, role: str, ip: str, lb_id: str | None = None) -> MagicMock:
-    lb = MagicMock()
-    lb.id = lb_id or f"lb-{device_id}"
-    lb.device.peer.name.value = name
-    lb.device.peer.id = device_id
-    lb.device.peer.role.value = role
-    lb.ip_address.id = f"ip-{device_id}"
-    lb.ip_address.display_label = f"{ip}/32"
-    return lb
-
-
-def _make_p2p_interface(iface_id: str, iface_name: str, device_id: str, cable_id: str) -> MagicMock:
-    iface = MagicMock()
-    iface.id = iface_id
-    iface.name.value = iface_name
-    iface.cable.id = cable_id
-    iface.device.id = device_id
-    return iface
 
 
 def _design() -> MagicMock:
@@ -51,20 +32,20 @@ def _design() -> MagicMock:
 def _spine_leaf_topology() -> tuple[list, list]:
     """Two spines + two leafs, fully cabled — returns (loopbacks, interfaces)."""
     loopbacks = [
-        _make_loopback("spine-1", "s1", "spine", "10.0.0.1"),
-        _make_loopback("spine-2", "s2", "spine", "10.0.0.2"),
-        _make_loopback("leaf-1", "l1", "leaf", "10.0.1.1"),
-        _make_loopback("leaf-2", "l2", "leaf", "10.0.1.2"),
+        make_loopback("spine-1", "s1", "spine", "10.0.0.1"),
+        make_loopback("spine-2", "s2", "spine", "10.0.0.2"),
+        make_loopback("leaf-1", "l1", "leaf", "10.0.1.1"),
+        make_loopback("leaf-2", "l2", "leaf", "10.0.1.2"),
     ]
     interfaces = [
-        _make_p2p_interface("if1", "Ethernet1/1", "s1", "c1"),
-        _make_p2p_interface("if2", "Ethernet1/1", "l1", "c1"),
-        _make_p2p_interface("if3", "Ethernet1/2", "s1", "c2"),
-        _make_p2p_interface("if4", "Ethernet1/1", "l2", "c2"),
-        _make_p2p_interface("if5", "Ethernet1/1", "s2", "c3"),
-        _make_p2p_interface("if6", "Ethernet1/2", "l1", "c3"),
-        _make_p2p_interface("if7", "Ethernet1/2", "s2", "c4"),
-        _make_p2p_interface("if8", "Ethernet1/2", "l2", "c4"),
+        make_p2p_interface("if1", "Ethernet1/1", "s1", "c1"),
+        make_p2p_interface("if2", "Ethernet1/1", "l1", "c1"),
+        make_p2p_interface("if3", "Ethernet1/2", "s1", "c2"),
+        make_p2p_interface("if4", "Ethernet1/1", "l2", "c2"),
+        make_p2p_interface("if5", "Ethernet1/1", "s2", "c3"),
+        make_p2p_interface("if6", "Ethernet1/2", "l1", "c3"),
+        make_p2p_interface("if7", "Ethernet1/2", "s2", "c4"),
+        make_p2p_interface("if8", "Ethernet1/2", "l2", "c4"),
     ]
     return loopbacks, interfaces
 
@@ -81,7 +62,6 @@ def _plan_input(loopbacks: list, interfaces: list, strategy: str = "ebgp-ebgp") 
         loopback_interfaces=loopbacks,
         options=options,
         routing_strategy=strategy,
-        deployment_name="dc1",
     )
 
 
@@ -150,8 +130,8 @@ class TestOrderIndependence:
     def test_router_id_picks_lowest_loopback_id_regardless_of_order(self) -> None:
         """Two loopbacks on one device: the lowest interface id wins deterministically."""
         # Same device "spine-1" with two loopbacks; lb id "lb-a" < "lb-z"
-        lb_low = _make_loopback("spine-1", "s1", "spine", "10.0.0.1", lb_id="lb-a")
-        lb_high = _make_loopback("spine-1", "s1", "spine", "10.0.0.9", lb_id="lb-z")
+        lb_low = make_loopback("spine-1", "s1", "spine", "10.0.0.1", lb_id="lb-a")
+        lb_high = make_loopback("spine-1", "s1", "spine", "10.0.0.9", lb_id="lb-z")
         # ip_address ids differ so we can tell which won
         lb_low.ip_address.id = "ip-low"
         lb_high.ip_address.id = "ip-high"
@@ -177,17 +157,17 @@ class TestSelfLoopGuard:
     def test_self_loop_cable_produces_no_peering(self) -> None:
         """A cable whose both endpoints resolve to the same device must be skipped."""
         loopbacks = [
-            _make_loopback("spine-1", "s1", "spine", "10.0.0.1"),
-            _make_loopback("spine-2", "s2", "spine", "10.0.0.2"),
-            _make_loopback("leaf-1", "l1", "leaf", "10.0.1.1"),
+            make_loopback("spine-1", "s1", "spine", "10.0.0.1"),
+            make_loopback("spine-2", "s2", "spine", "10.0.0.2"),
+            make_loopback("leaf-1", "l1", "leaf", "10.0.1.1"),
         ]
         interfaces = [
             # Normal cable: spine-1 ↔ leaf-1
-            _make_p2p_interface("if1", "Ethernet1/1", "s1", "c1"),
-            _make_p2p_interface("if2", "Ethernet1/1", "l1", "c1"),
+            make_p2p_interface("if1", "Ethernet1/1", "s1", "c1"),
+            make_p2p_interface("if2", "Ethernet1/1", "l1", "c1"),
             # Self-loop: both endpoints on spine-2 (race-condition artefact)
-            _make_p2p_interface("if3", "Ethernet1/8", "s2", "c-selfloop"),
-            _make_p2p_interface("if4", "Ethernet1/8", "s2", "c-selfloop"),
+            make_p2p_interface("if3", "Ethernet1/8", "s2", "c-selfloop"),
+            make_p2p_interface("if4", "Ethernet1/8", "s2", "c-selfloop"),
         ]
         planner = RoutingPlanner(deployment_id="dc-1")
         plan = planner.build_routing_plan(
@@ -198,7 +178,6 @@ class TestSelfLoopGuard:
                 loopback_interfaces=loopbacks,
                 options={"asn_pool": "pool-1", "design": _design()},
                 routing_strategy="ebgp-ebgp",
-                deployment_name="dc1",
             )
         )
         peering_names = [p["name"] for p in plan.bgp_peerings]
@@ -209,15 +188,15 @@ class TestSelfLoopGuard:
     def test_normal_peerings_still_created_alongside_self_loop(self) -> None:
         """Self-loop guard must not suppress valid peerings on the same run."""
         loopbacks = [
-            _make_loopback("spine-1", "s1", "spine", "10.0.0.1"),
-            _make_loopback("leaf-1", "l1", "leaf", "10.0.1.1"),
+            make_loopback("spine-1", "s1", "spine", "10.0.0.1"),
+            make_loopback("leaf-1", "l1", "leaf", "10.0.1.1"),
         ]
         interfaces = [
-            _make_p2p_interface("if1", "Ethernet1/1", "s1", "c1"),
-            _make_p2p_interface("if2", "Ethernet1/1", "l1", "c1"),
+            make_p2p_interface("if1", "Ethernet1/1", "s1", "c1"),
+            make_p2p_interface("if2", "Ethernet1/1", "l1", "c1"),
             # Self-loop on spine-1 (race artefact)
-            _make_p2p_interface("if3", "Ethernet1/99", "s1", "c-selfloop"),
-            _make_p2p_interface("if4", "Ethernet1/99", "s1", "c-selfloop"),
+            make_p2p_interface("if3", "Ethernet1/99", "s1", "c-selfloop"),
+            make_p2p_interface("if4", "Ethernet1/99", "s1", "c-selfloop"),
         ]
         planner = RoutingPlanner(deployment_id="dc-1")
         plan = planner.build_routing_plan(
@@ -228,7 +207,6 @@ class TestSelfLoopGuard:
                 loopback_interfaces=loopbacks,
                 options={"asn_pool": "pool-1", "design": _design()},
                 routing_strategy="ebgp-ebgp",
-                deployment_name="dc1",
             )
         )
         peering_names = [p["name"] for p in plan.bgp_peerings]

@@ -7,20 +7,10 @@ from typing import Any
 from .protocols import DcimCable, DcimPhysicalInterface
 
 
-async def far_end_interface(client: Any, interface: Any, include: list[str]) -> Any | None:
-    """The interface at the other end of ``interface``'s cable, fetched with
-    ``include``; None when the cable has no other endpoint."""
-    cable = await client.get(kind=DcimCable, id=interface.cable.id, include=["endpoints"])
-    far_ends = [peer for peer in cable.endpoints.peers if peer.id != interface.id]
-    if not far_ends:
-        return None
-    return await client.get(kind=DcimPhysicalInterface, id=far_ends[0].id, include=include)
-
-
 async def far_end_interfaces(client: Any, interfaces: list[Any], include: list[str]) -> dict[str, Any]:
     """interface id -> the physical interface at the other end of its cable, fetched with ``include``.
 
-    far_end_interface() for several cabled interfaces in two queries, whatever
+    Resolves several cabled interfaces in two queries, whatever
     their number: their cables, then the far ends. An interface whose cable
     has no other endpoint, or whose far end is not a physical interface, is
     absent from the result. No query at all for no interfaces.

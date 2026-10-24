@@ -15,21 +15,9 @@ from typing import Any
 import pytest
 import yaml
 
+from tests.unit.demo_yaml_helpers import walk_objects
+
 _DEMO = Path(__file__).parents[2] / "data" / "demos" / "30_all"
-
-
-def _walk(node: Any, kind: str, found: list[tuple[str, dict[str, Any]]]) -> None:
-    """Collect (kind, entry) for every object, following nested kind/data blocks."""
-    if isinstance(node, dict):
-        if "kind" in node and "data" in node:
-            _walk(node["data"], node["kind"], found)
-            return
-        found.append((kind, node))
-        for value in node.values():
-            _walk(value, kind, found)
-    elif isinstance(node, list):
-        for item in node:
-            _walk(item, kind, found)
 
 
 def _objects() -> list[tuple[str, dict[str, Any]]]:
@@ -37,7 +25,7 @@ def _objects() -> list[tuple[str, dict[str, Any]]]:
     for path in sorted(_DEMO.rglob("*.yml")):
         for doc in yaml.safe_load_all(path.read_text()):
             if doc and "spec" in doc:
-                _walk(doc["spec"]["data"], doc["spec"]["kind"], found)
+                walk_objects(doc["spec"]["data"], doc["spec"]["kind"], found)
     return found
 
 

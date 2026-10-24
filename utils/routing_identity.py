@@ -33,12 +33,6 @@ def segment_community(tag: int) -> str:
     return f"{SEGMENT_COMMUNITY_ASN}:{_checked(tag)}"
 
 
-def is_routing_community(community: str) -> bool:
-    """True for a community this module derives (either ASN half): the ones a handoff strips and re-sets."""
-    asn, _, value = community.partition(":")
-    return asn in (str(CUSTOMER_COMMUNITY_ASN), str(SEGMENT_COMMUNITY_ASN)) and value.isdigit()
-
-
 # Characters a prefix-list name may keep on NX-OS, EOS and FRR; anything else becomes a hyphen.
 _UNSAFE_NAME = re.compile(r"[^A-Za-z0-9_.-]")
 
@@ -92,7 +86,7 @@ def routing_community_regexes() -> list[str]:
     """One regular expression per ASN half, together matching every community this module derives.
 
     For a device community-list that selects them to strip (entries of a list are alternatives, so there is
-    no `|` in an expression); ``is_routing_community`` is the same test on one community string.
+    no `|` in an expression).
     """
     return [f"^{asn}:[0-9]+$" for asn in (CUSTOMER_COMMUNITY_ASN, SEGMENT_COMMUNITY_ASN)]
 

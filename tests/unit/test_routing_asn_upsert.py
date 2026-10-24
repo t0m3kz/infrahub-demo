@@ -13,6 +13,7 @@ from unittest.mock import MagicMock
 
 from generators.helpers.routing import PendingASRef, RoutingPlanInput, RoutingPlanner
 from generators.types import RoutingOptions
+from tests.unit.routing_helpers import make_loopback, make_p2p_interface
 
 # ================================================================
 # Helpers
@@ -22,22 +23,6 @@ from generators.types import RoutingOptions
 def _make_pool(pool_id: str = "pool-1") -> str:
     """Return a pool ID string (planner uses string IDs, not SDK objects)."""
     return pool_id
-
-
-def _make_loopback(
-    name: str,
-    device_id: str,
-    role: str,
-    ip: str,
-) -> MagicMock:
-    lb = MagicMock()
-    lb.id = f"lb-{device_id}"
-    lb.device.peer.name.value = name
-    lb.device.peer.id = device_id
-    lb.device.peer.role.value = role
-    lb.ip_address.id = f"ip-{device_id}"
-    lb.ip_address.display_label = f"{ip}/32"
-    return lb
 
 
 def _make_existing_bgp(
@@ -52,20 +37,6 @@ def _make_existing_bgp(
     bgp.capabilities.peers = [MagicMock(display_label=device_name, id=f"dev-{device_name}")]
     bgp.local_as.id = as_id
     return bgp
-
-
-def _make_p2p_interface(
-    iface_id: str,
-    iface_name: str,
-    device_id: str,
-    cable_id: str,
-) -> MagicMock:
-    iface = MagicMock()
-    iface.id = iface_id
-    iface.name.value = iface_name
-    iface.cable.id = cable_id
-    iface.device.id = device_id
-    return iface
 
 
 def _build_existing_bgp_for_device(
@@ -127,7 +98,6 @@ def _make_plan_input(
         loopback_interfaces=loopbacks,
         options=options,
         routing_strategy="ebgp-ebgp",
-        deployment_name="dc1",
     )
 
 
@@ -141,16 +111,16 @@ class TestExistingASPreservation:
 
     def test_existing_as_excluded_from_batch(self) -> None:
         """Device with existing AS should have _existing_id, not from_pool."""
-        loopbacks = [_make_loopback("spine-1", "s1", "spine", "10.0.0.1")]
+        loopbacks = [make_loopback("spine-1", "s1", "spine", "10.0.0.1")]
         pool = _make_pool()
         underlay = _build_existing_bgp_for_device("spine-1", "as-uuid-1", 65001)
         # Need a cable pair so the interface-driven loop processes the device
         interfaces = [
-            _make_p2p_interface("if1", "Ethernet1/1", "s1", "c1"),
-            _make_p2p_interface("if2", "Ethernet1/1", "s1-peer", "c1"),
+            make_p2p_interface("if1", "Ethernet1/1", "s1", "c1"),
+            make_p2p_interface("if2", "Ethernet1/1", "s1-peer", "c1"),
         ]
         # Add the peer device to loopbacks so it's in device_map
-        loopbacks.append(_make_loopback("peer-1", "s1-peer", "spine", "10.0.0.2"))
+        loopbacks.append(make_loopback("peer-1", "s1-peer", "spine", "10.0.0.2"))
 
         planner = RoutingPlanner(deployment_id="dc-1")
         plan = planner.build_routing_plan(
@@ -165,13 +135,13 @@ class TestExistingASPreservation:
     def test_existing_as_bgp_process_references_id_directly(self) -> None:
         """BGP process for existing AS should reference by id."""
         loopbacks = [
-            _make_loopback("spine-1", "s1", "spine", "10.0.0.1"),
-            _make_loopback("leaf-1", "l1", "leaf", "10.0.0.2"),
+            make_loopback("spine-1", "s1", "spine", "10.0.0.1"),
+            make_loopback("leaf-1", "l1", "leaf", "10.0.0.2"),
         ]
         underlay = _build_existing_bgp_for_device("spine-1", "as-1", 65000)
         interfaces = [
-            _make_p2p_interface("if1", "Ethernet1/1", "s1", "c1"),
-            _make_p2p_interface("if2", "Ethernet1/1", "l1", "c1"),
+            make_p2p_interface("if1", "Ethernet1/1", "s1", "c1"),
+            make_p2p_interface("if2", "Ethernet1/1", "l1", "c1"),
         ]
 
         planner = RoutingPlanner(deployment_id="dc-1")
@@ -186,13 +156,13 @@ class TestExistingASPreservation:
     def test_new_device_uses_from_pool(self) -> None:
         """Device without existing AS allocates from pool."""
         loopbacks = [
-            _make_loopback("leaf-1", "l1", "leaf", "10.0.0.1"),
-            _make_loopback("spine-1", "s1", "spine", "10.0.0.2"),
+            make_loopback("leaf-1", "l1", "leaf", "10.0.0.1"),
+            make_loopback("spine-1", "s1", "spine", "10.0.0.2"),
         ]
         pool = _make_pool("pool-abc")
         interfaces = [
-            _make_p2p_interface("if1", "Ethernet1/1", "l1", "c1"),
-            _make_p2p_interface("if2", "Ethernet1/1", "s1", "c1"),
+            make_p2p_interface("if1", "Ethernet1/1", "l1", "c1"),
+            make_p2p_interface("if2", "Ethernet1/1", "s1", "c1"),
         ]
 
         planner = RoutingPlanner(deployment_id="dc-1")
@@ -208,10 +178,10 @@ class TestExistingASPreservation:
     def test_mixed_existing_and_new_devices(self) -> None:
         """Plan with both existing and new devices separates them correctly."""
         loopbacks = [
-            _make_loopback("spine-1", "s1", "spine", "10.0.0.1"),
-            _make_loopback("leaf-1", "l1", "leaf", "10.0.0.2"),
-            _make_loopback("leaf-2", "l2", "leaf", "10.0.0.3"),
-            _make_loopback("tor-1", "t1", "tor", "10.0.0.4"),
+            make_loopback("spine-1", "s1", "spine", "10.0.0.1"),
+            make_loopback("leaf-1", "l1", "leaf", "10.0.0.2"),
+            make_loopback("leaf-2", "l2", "leaf", "10.0.0.3"),
+            make_loopback("tor-1", "t1", "tor", "10.0.0.4"),
         ]
         underlay = [
             *_build_existing_bgp_for_device("spine-1", "as-spine", 65000),
@@ -220,12 +190,12 @@ class TestExistingASPreservation:
         pool = _make_pool()
         # Create cables: s1-l1, s1-l2, l1-t1, l2-t1 (enough to reach all devices)
         interfaces = [
-            _make_p2p_interface("if1", "Ethernet1/1", "s1", "c1"),
-            _make_p2p_interface("if2", "Ethernet1/1", "l1", "c1"),
-            _make_p2p_interface("if3", "Ethernet1/2", "s1", "c2"),
-            _make_p2p_interface("if4", "Ethernet1/1", "l2", "c2"),
-            _make_p2p_interface("if5", "Ethernet2/1", "l1", "c3"),
-            _make_p2p_interface("if6", "Ethernet1/1", "t1", "c3"),
+            make_p2p_interface("if1", "Ethernet1/1", "s1", "c1"),
+            make_p2p_interface("if2", "Ethernet1/1", "l1", "c1"),
+            make_p2p_interface("if3", "Ethernet1/2", "s1", "c2"),
+            make_p2p_interface("if4", "Ethernet1/1", "l2", "c2"),
+            make_p2p_interface("if5", "Ethernet2/1", "l1", "c3"),
+            make_p2p_interface("if6", "Ethernet1/1", "t1", "c3"),
         ]
 
         planner = RoutingPlanner(deployment_id="dc-1")
@@ -244,8 +214,8 @@ class TestExistingASPreservation:
     def test_existing_as_without_id_treated_as_new(self) -> None:
         """existing_as with None id falls through to pool allocation."""
         loopbacks = [
-            _make_loopback("leaf-1", "l1", "leaf", "10.0.0.1"),
-            _make_loopback("spine-1", "s1", "spine", "10.0.0.2"),
+            make_loopback("leaf-1", "l1", "leaf", "10.0.0.1"),
+            make_loopback("spine-1", "s1", "spine", "10.0.0.2"),
         ]
         bgp_with_no_as_id = _make_existing_bgp(
             name="leaf-1-bgp-underlay",
@@ -255,8 +225,8 @@ class TestExistingASPreservation:
         )
         pool = _make_pool()
         interfaces = [
-            _make_p2p_interface("if1", "Ethernet1/1", "l1", "c1"),
-            _make_p2p_interface("if2", "Ethernet1/1", "s1", "c1"),
+            make_p2p_interface("if1", "Ethernet1/1", "l1", "c1"),
+            make_p2p_interface("if2", "Ethernet1/1", "s1", "c1"),
         ]
 
         planner = RoutingPlanner(deployment_id="dc-1")
@@ -272,12 +242,12 @@ class TestExistingASPreservation:
     def test_no_pool_no_existing_as_skips_device(self) -> None:
         """Device with no pool and no existing AS is skipped."""
         loopbacks = [
-            _make_loopback("leaf-1", "l1", "leaf", "10.0.0.1"),
-            _make_loopback("spine-1", "s1", "spine", "10.0.0.2"),
+            make_loopback("leaf-1", "l1", "leaf", "10.0.0.1"),
+            make_loopback("spine-1", "s1", "spine", "10.0.0.2"),
         ]
         interfaces = [
-            _make_p2p_interface("if1", "Ethernet1/1", "l1", "c1"),
-            _make_p2p_interface("if2", "Ethernet1/1", "s1", "c1"),
+            make_p2p_interface("if1", "Ethernet1/1", "l1", "c1"),
+            make_p2p_interface("if2", "Ethernet1/1", "s1", "c1"),
         ]
 
         planner = RoutingPlanner(deployment_id="dc-1")
@@ -297,14 +267,14 @@ class TestEbgpOverlayWithExistingAS:
     def test_overlay_process_uses_existing_as_id(self) -> None:
         """Overlay BGP process for existing device references AS by id."""
         loopbacks = [
-            _make_loopback("spine-1", "s1", "spine", "10.0.0.1"),
-            _make_loopback("leaf-1", "l1", "leaf", "10.0.0.2"),
+            make_loopback("spine-1", "s1", "spine", "10.0.0.1"),
+            make_loopback("leaf-1", "l1", "leaf", "10.0.0.2"),
         ]
         underlay = _build_existing_bgp_for_device("spine-1", "as-1", 65000)
         pool = _make_pool()
         interfaces = [
-            _make_p2p_interface("if1", "Ethernet1/1", "s1", "c1"),
-            _make_p2p_interface("if2", "Ethernet1/1", "l1", "c1"),
+            make_p2p_interface("if1", "Ethernet1/1", "s1", "c1"),
+            make_p2p_interface("if2", "Ethernet1/1", "l1", "c1"),
         ]
 
         planner = RoutingPlanner(deployment_id="dc-1")
@@ -319,13 +289,13 @@ class TestEbgpOverlayWithExistingAS:
     def test_overlay_process_uses_for_device_for_new(self) -> None:
         """Overlay BGP process for new device references AS via _for_device."""
         loopbacks = [
-            _make_loopback("leaf-1", "l1", "leaf", "10.0.0.1"),
-            _make_loopback("spine-1", "s1", "spine", "10.0.0.2"),
+            make_loopback("leaf-1", "l1", "leaf", "10.0.0.1"),
+            make_loopback("spine-1", "s1", "spine", "10.0.0.2"),
         ]
         pool = _make_pool()
         interfaces = [
-            _make_p2p_interface("if1", "Ethernet1/1", "l1", "c1"),
-            _make_p2p_interface("if2", "Ethernet1/1", "s1", "c1"),
+            make_p2p_interface("if1", "Ethernet1/1", "l1", "c1"),
+            make_p2p_interface("if2", "Ethernet1/1", "s1", "c1"),
         ]
 
         planner = RoutingPlanner(deployment_id="dc-1")
@@ -338,14 +308,14 @@ class TestEbgpOverlayWithExistingAS:
     def test_mixed_overlay_processes(self) -> None:
         """Overlay processes: existing by id, new by _for_device."""
         loopbacks = [
-            _make_loopback("spine-1", "s1", "spine", "10.0.0.1"),
-            _make_loopback("leaf-1", "l1", "leaf", "10.0.0.2"),
+            make_loopback("spine-1", "s1", "spine", "10.0.0.1"),
+            make_loopback("leaf-1", "l1", "leaf", "10.0.0.2"),
         ]
         underlay = _build_existing_bgp_for_device("spine-1", "as-s1", 65000)
         pool = _make_pool()
         interfaces = [
-            _make_p2p_interface("if1", "Ethernet1/1", "s1", "c1"),
-            _make_p2p_interface("if2", "Ethernet1/1", "l1", "c1"),
+            make_p2p_interface("if1", "Ethernet1/1", "s1", "c1"),
+            make_p2p_interface("if2", "Ethernet1/1", "l1", "c1"),
         ]
 
         planner = RoutingPlanner(deployment_id="dc-1")
@@ -369,11 +339,11 @@ class TestMixedExistingNewToRs:
     def test_two_existing_two_new_tors(self) -> None:
         """2 existing ToRs keep their AS, 2 new ToRs get from_pool."""
         loopbacks = [
-            _make_loopback("leaf-1", "lf1", "leaf", "10.0.0.10"),
-            _make_loopback("tor-1", "t1", "tor", "10.0.0.1"),
-            _make_loopback("tor-2", "t2", "tor", "10.0.0.2"),
-            _make_loopback("tor-3", "t3", "tor", "10.0.0.3"),
-            _make_loopback("tor-4", "t4", "tor", "10.0.0.4"),
+            make_loopback("leaf-1", "lf1", "leaf", "10.0.0.10"),
+            make_loopback("tor-1", "t1", "tor", "10.0.0.1"),
+            make_loopback("tor-2", "t2", "tor", "10.0.0.2"),
+            make_loopback("tor-3", "t3", "tor", "10.0.0.3"),
+            make_loopback("tor-4", "t4", "tor", "10.0.0.4"),
         ]
         underlay = [
             *_build_existing_bgp_for_device("tor-1", "as-t1", 65101),
@@ -382,14 +352,14 @@ class TestMixedExistingNewToRs:
         pool = _make_pool("tor-asn-pool")
         # Each tor connects to leaf via cable
         interfaces = [
-            _make_p2p_interface("if-lf1-1", "Ethernet1/1", "lf1", "c1"),
-            _make_p2p_interface("if-t1-1", "Ethernet1/1", "t1", "c1"),
-            _make_p2p_interface("if-lf1-2", "Ethernet1/2", "lf1", "c2"),
-            _make_p2p_interface("if-t2-1", "Ethernet1/1", "t2", "c2"),
-            _make_p2p_interface("if-lf1-3", "Ethernet1/3", "lf1", "c3"),
-            _make_p2p_interface("if-t3-1", "Ethernet1/1", "t3", "c3"),
-            _make_p2p_interface("if-lf1-4", "Ethernet1/4", "lf1", "c4"),
-            _make_p2p_interface("if-t4-1", "Ethernet1/1", "t4", "c4"),
+            make_p2p_interface("if-lf1-1", "Ethernet1/1", "lf1", "c1"),
+            make_p2p_interface("if-t1-1", "Ethernet1/1", "t1", "c1"),
+            make_p2p_interface("if-lf1-2", "Ethernet1/2", "lf1", "c2"),
+            make_p2p_interface("if-t2-1", "Ethernet1/1", "t2", "c2"),
+            make_p2p_interface("if-lf1-3", "Ethernet1/3", "lf1", "c3"),
+            make_p2p_interface("if-t3-1", "Ethernet1/1", "t3", "c3"),
+            make_p2p_interface("if-lf1-4", "Ethernet1/4", "lf1", "c4"),
+            make_p2p_interface("if-t4-1", "Ethernet1/1", "t4", "c4"),
         ]
 
         planner = RoutingPlanner(deployment_id="dc-1")
@@ -409,11 +379,11 @@ class TestMixedExistingNewToRs:
     def test_rerun_with_all_existing(self) -> None:
         """After first run, all ToRs have existing AS — no new allocations."""
         loopbacks = [
-            _make_loopback("leaf-1", "lf1", "leaf", "10.0.0.10"),
-            _make_loopback("tor-1", "t1", "tor", "10.0.0.1"),
-            _make_loopback("tor-2", "t2", "tor", "10.0.0.2"),
-            _make_loopback("tor-3", "t3", "tor", "10.0.0.3"),
-            _make_loopback("tor-4", "t4", "tor", "10.0.0.4"),
+            make_loopback("leaf-1", "lf1", "leaf", "10.0.0.10"),
+            make_loopback("tor-1", "t1", "tor", "10.0.0.1"),
+            make_loopback("tor-2", "t2", "tor", "10.0.0.2"),
+            make_loopback("tor-3", "t3", "tor", "10.0.0.3"),
+            make_loopback("tor-4", "t4", "tor", "10.0.0.4"),
         ]
         underlay = [
             *_build_existing_bgp_for_device("leaf-1", "as-lf1", 65100),
@@ -424,14 +394,14 @@ class TestMixedExistingNewToRs:
         ]
         pool = _make_pool()
         interfaces = [
-            _make_p2p_interface("if-lf1-1", "Ethernet1/1", "lf1", "c1"),
-            _make_p2p_interface("if-t1-1", "Ethernet1/1", "t1", "c1"),
-            _make_p2p_interface("if-lf1-2", "Ethernet1/2", "lf1", "c2"),
-            _make_p2p_interface("if-t2-1", "Ethernet1/1", "t2", "c2"),
-            _make_p2p_interface("if-lf1-3", "Ethernet1/3", "lf1", "c3"),
-            _make_p2p_interface("if-t3-1", "Ethernet1/1", "t3", "c3"),
-            _make_p2p_interface("if-lf1-4", "Ethernet1/4", "lf1", "c4"),
-            _make_p2p_interface("if-t4-1", "Ethernet1/1", "t4", "c4"),
+            make_p2p_interface("if-lf1-1", "Ethernet1/1", "lf1", "c1"),
+            make_p2p_interface("if-t1-1", "Ethernet1/1", "t1", "c1"),
+            make_p2p_interface("if-lf1-2", "Ethernet1/2", "lf1", "c2"),
+            make_p2p_interface("if-t2-1", "Ethernet1/1", "t2", "c2"),
+            make_p2p_interface("if-lf1-3", "Ethernet1/3", "lf1", "c3"),
+            make_p2p_interface("if-t3-1", "Ethernet1/1", "t3", "c3"),
+            make_p2p_interface("if-lf1-4", "Ethernet1/4", "lf1", "c4"),
+            make_p2p_interface("if-t4-1", "Ethernet1/1", "t4", "c4"),
         ]
 
         planner = RoutingPlanner(deployment_id="dc-1")
@@ -454,9 +424,9 @@ class TestRoutingPlanIdempotency:
     def test_underlay_plan_deterministic(self) -> None:
         """Two runs with same input produce identical plans."""
         loopbacks = [
-            _make_loopback("spine-1", "s1", "spine", "10.0.0.1"),
-            _make_loopback("leaf-1", "l1", "leaf", "10.0.0.2"),
-            _make_loopback("leaf-2", "l2", "leaf", "10.0.0.3"),
+            make_loopback("spine-1", "s1", "spine", "10.0.0.1"),
+            make_loopback("leaf-1", "l1", "leaf", "10.0.0.2"),
+            make_loopback("leaf-2", "l2", "leaf", "10.0.0.3"),
         ]
         underlay = [
             *_build_existing_bgp_for_device("spine-1", "as-1", 65000),
@@ -465,10 +435,10 @@ class TestRoutingPlanIdempotency:
         ]
         pool = _make_pool()
         interfaces = [
-            _make_p2p_interface("if1", "Ethernet1/1", "s1", "c1"),
-            _make_p2p_interface("if2", "Ethernet1/1", "l1", "c1"),
-            _make_p2p_interface("if3", "Ethernet1/2", "s1", "c2"),
-            _make_p2p_interface("if4", "Ethernet1/1", "l2", "c2"),
+            make_p2p_interface("if1", "Ethernet1/1", "s1", "c1"),
+            make_p2p_interface("if2", "Ethernet1/1", "l1", "c1"),
+            make_p2p_interface("if3", "Ethernet1/2", "s1", "c2"),
+            make_p2p_interface("if4", "Ethernet1/1", "l2", "c2"),
         ]
         design = MagicMock(
             routing_strategy="ebgp-ebgp", bgp_topology="route_reflector", model_dump=MagicMock(return_value={})
@@ -492,10 +462,10 @@ class TestRoutingPlanIdempotency:
     def test_overlay_peerings_deterministic(self) -> None:
         """Overlay peerings are identical across runs."""
         loopbacks = [
-            _make_loopback("spine-1", "s1", "spine", "10.0.0.1"),
-            _make_loopback("spine-2", "s2", "spine", "10.0.0.2"),
-            _make_loopback("leaf-1", "l1", "leaf", "10.0.0.3"),
-            _make_loopback("leaf-2", "l2", "leaf", "10.0.0.4"),
+            make_loopback("spine-1", "s1", "spine", "10.0.0.1"),
+            make_loopback("spine-2", "s2", "spine", "10.0.0.2"),
+            make_loopback("leaf-1", "l1", "leaf", "10.0.0.3"),
+            make_loopback("leaf-2", "l2", "leaf", "10.0.0.4"),
         ]
         underlay = [
             *_build_existing_bgp_for_device("spine-1", "as-1", 65000),
@@ -505,14 +475,14 @@ class TestRoutingPlanIdempotency:
         ]
         pool = _make_pool()
         interfaces = [
-            _make_p2p_interface("if1", "Ethernet1/1", "s1", "c1"),
-            _make_p2p_interface("if2", "Ethernet1/1", "l1", "c1"),
-            _make_p2p_interface("if3", "Ethernet1/2", "s1", "c2"),
-            _make_p2p_interface("if4", "Ethernet1/1", "l2", "c2"),
-            _make_p2p_interface("if5", "Ethernet1/1", "s2", "c3"),
-            _make_p2p_interface("if6", "Ethernet1/2", "l1", "c3"),
-            _make_p2p_interface("if7", "Ethernet1/2", "s2", "c4"),
-            _make_p2p_interface("if8", "Ethernet1/2", "l2", "c4"),
+            make_p2p_interface("if1", "Ethernet1/1", "s1", "c1"),
+            make_p2p_interface("if2", "Ethernet1/1", "l1", "c1"),
+            make_p2p_interface("if3", "Ethernet1/2", "s1", "c2"),
+            make_p2p_interface("if4", "Ethernet1/1", "l2", "c2"),
+            make_p2p_interface("if5", "Ethernet1/1", "s2", "c3"),
+            make_p2p_interface("if6", "Ethernet1/2", "l1", "c3"),
+            make_p2p_interface("if7", "Ethernet1/2", "s2", "c4"),
+            make_p2p_interface("if8", "Ethernet1/2", "l2", "c4"),
         ]
         design = MagicMock(
             routing_strategy="ebgp-ebgp", bgp_topology="route_reflector", model_dump=MagicMock(return_value={})
@@ -531,9 +501,9 @@ class TestRoutingPlanIdempotency:
     def test_underlay_peerings_deterministic(self) -> None:
         """Underlay peering names are stable across runs."""
         loopbacks = [
-            _make_loopback("spine-1", "s1", "spine", "10.0.0.1"),
-            _make_loopback("leaf-1", "l1", "leaf", "10.0.0.2"),
-            _make_loopback("leaf-2", "l2", "leaf", "10.0.0.3"),
+            make_loopback("spine-1", "s1", "spine", "10.0.0.1"),
+            make_loopback("leaf-1", "l1", "leaf", "10.0.0.2"),
+            make_loopback("leaf-2", "l2", "leaf", "10.0.0.3"),
         ]
         underlay = [
             *_build_existing_bgp_for_device("spine-1", "a1", 65000),
@@ -541,10 +511,10 @@ class TestRoutingPlanIdempotency:
             *_build_existing_bgp_for_device("leaf-2", "a3", 65002),
         ]
         interfaces = [
-            _make_p2p_interface("if1", "Ethernet1/1", "s1", "c1"),
-            _make_p2p_interface("if3", "Ethernet1/1", "l1", "c1"),
-            _make_p2p_interface("if2", "Ethernet1/2", "s1", "c2"),
-            _make_p2p_interface("if4", "Ethernet1/2", "l2", "c2"),
+            make_p2p_interface("if1", "Ethernet1/1", "s1", "c1"),
+            make_p2p_interface("if3", "Ethernet1/1", "l1", "c1"),
+            make_p2p_interface("if2", "Ethernet1/2", "s1", "c2"),
+            make_p2p_interface("if4", "Ethernet1/2", "l2", "c2"),
         ]
         pool = _make_pool()
 
@@ -562,17 +532,17 @@ class TestRoutingPlanIdempotency:
     def test_device_order_does_not_affect_as_allocation(self) -> None:
         """AS allocation order is deterministic regardless of loopback input order."""
         loopbacks_a = [
-            _make_loopback("leaf-2", "l2", "leaf", "10.0.0.2"),
-            _make_loopback("leaf-1", "l1", "leaf", "10.0.0.1"),
+            make_loopback("leaf-2", "l2", "leaf", "10.0.0.2"),
+            make_loopback("leaf-1", "l1", "leaf", "10.0.0.1"),
         ]
         loopbacks_b = [
-            _make_loopback("leaf-1", "l1", "leaf", "10.0.0.1"),
-            _make_loopback("leaf-2", "l2", "leaf", "10.0.0.2"),
+            make_loopback("leaf-1", "l1", "leaf", "10.0.0.1"),
+            make_loopback("leaf-2", "l2", "leaf", "10.0.0.2"),
         ]
         pool = _make_pool()
         interfaces = [
-            _make_p2p_interface("if1", "Ethernet1/1", "l1", "c1"),
-            _make_p2p_interface("if2", "Ethernet1/1", "l2", "c1"),
+            make_p2p_interface("if1", "Ethernet1/1", "l1", "c1"),
+            make_p2p_interface("if2", "Ethernet1/1", "l2", "c1"),
         ]
 
         planner = RoutingPlanner(deployment_id="dc-1")

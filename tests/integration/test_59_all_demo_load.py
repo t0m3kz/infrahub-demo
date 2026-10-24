@@ -21,19 +21,20 @@ from typing import Any
 import pytest
 from infrahub_sdk import InfrahubClient, InfrahubClientSync
 
-from .conftest import TestInfrahubDockerWithClient
-from .test_constants import (
+from tasks import (
     ALL_DEMO_BRANCH,
-    ALL_DEMO_CUSTOMER_ORG_IDS,
     ALL_DEMO_DATA,
-    ALL_DEMO_EXPECTED_GENERATORS,
-    ALL_DEMO_EXPECTED_OBJECTS,
     ALL_DEMO_LOAD_STAGES,
     ALL_DEMO_STAGE_MAX_ATTEMPTS,
     ALL_DEMO_STAGE_POLL_INTERVAL,
     ALL_DEMO_STAGE_STABLE_ZERO,
 )
-from .test_helpers import fetch_generator_runs, fetch_object_counts
+
+# Importing these adds the firewall, routed-exchange and load-balancer floors to ALL_DEMO_EXPECTED_OBJECTS.
+from . import all_demo_firewall_constants, all_demo_loadbalancer_constants  # noqa: F401
+from .all_demo_constants import ALL_DEMO_CUSTOMER_ORG_IDS, ALL_DEMO_EXPECTED_GENERATORS, ALL_DEMO_EXPECTED_OBJECTS
+from .branch_helpers import fetch_generator_runs, fetch_object_counts
+from .conftest import TestInfrahubDockerWithClient
 from .workflow_helpers import verify_no_failed_tasks, wait_for_tasks_completion
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")

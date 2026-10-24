@@ -17,6 +17,7 @@ from typing import Any
 
 import pytest
 
+from tests.smoke.fixture_builders.common import run_transform
 from tests.smoke.fixture_builders.group_policy import (
     _GPO_EOS,
     _GPO_NXOS,
@@ -25,7 +26,6 @@ from tests.smoke.fixture_builders.group_policy import (
     build_gpo_device_data,
     gpo_segment,
 )
-from tests.smoke.test_configs_smoke import _run_transform
 from tests.unit.gpo_device_view_helpers import LEAF_ACTIVATIONS, VRFS, _raw, _roots, _view
 from transforms.common import BaseDeviceTransform
 from transforms.config.access_leaf import AccessLeaf
@@ -611,8 +611,8 @@ class TestStaging:
             assert view["vrfs"]["NONPROD"]["unenforced"] == STAGED
 
     def test_the_rendered_config_keeps_the_policy_and_prints_the_staging_comment_instead_of_enforce(self) -> None:
-        enforcing = _run_transform(Leaf, _raw())
-        staged = _run_transform(Leaf, _raw(enforce=False))
+        enforcing = run_transform(Leaf, _raw())
+        staged = run_transform(Leaf, _raw(enforce=False))
         assert "security enforce tag 0 default deny" in enforcing
         assert "security enforce" not in staged.replace(f"! unenforced: {STAGED}", "")
         assert staged.count(f"! unenforced: {STAGED}") == 2, "one comment per VRF"
@@ -705,7 +705,7 @@ class TestExtraConfig:
         assert config["group_policy"] == {"class_maps": [], "groups": [], "vrfs": {}}
 
     def test_the_enablement_only_config_has_no_group_definitions_or_contracts(self, root_dir: Path) -> None:
-        rendered = _run_transform(Leaf, build_gpo_device_data(device_name="dc1-leaf-01", role="leaf", segments=()))
+        rendered = run_transform(Leaf, build_gpo_device_data(device_name="dc1-leaf-01", role="leaf", segments=()))
         lines = rendered.splitlines()
         assert lines.count("feature security-group") == 1
         assert lines.count("system routing template-security-groups") == 1
@@ -768,7 +768,7 @@ class TestGoldens:
         data = json.loads((configs / gpo_fixture / "input.json").read_text())
         # The fixture's input really carries the fleet roots.
         assert "DcimGroupPolicyProfile" in data
-        assert _run_transform(Leaf, data) == (configs / golden / "output.txt").read_text()
+        assert run_transform(Leaf, data) == (configs / golden / "output.txt").read_text()
 
     @pytest.mark.parametrize(
         "fixture",

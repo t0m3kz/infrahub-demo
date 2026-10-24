@@ -60,7 +60,7 @@ from utils.data_cleaning import clean_data
 from utils.exchange_transit import PROD_TYPE, transit_pool_name, wan_exit_vlan
 from utils.fabric_roles import CAMPUS_FABRIC_ROLES, LISP_BORDER_ROLES
 
-from ..common import CommonGenerator, DeviceOptions
+from ..common import CommonGenerator
 from ..connections import CablingMixin
 from ..devices import DeviceMixin
 from ..helpers.naming import sdwan_edge_name
@@ -76,7 +76,7 @@ from ..protocols import (
     TopologyCustomerOffice,
 )
 from ..routing import IPV4_UNICAST_AF, RoutingMixin
-from ..types import CablingOptions, RoutingOptions, naming_convention_of
+from ..types import CablingOptions, DeviceOptions, RoutingOptions, naming_convention_of
 
 ACCESS_ROLE = "access-switch"
 DISTRIBUTION_ROLE = "distribution-switch"

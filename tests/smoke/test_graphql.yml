@@ -75,14 +75,6 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
-    resource_name: console_config
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/config/console.gql
-          kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
     resource_name: firewall_config
     tests:
       - name: syntax_check

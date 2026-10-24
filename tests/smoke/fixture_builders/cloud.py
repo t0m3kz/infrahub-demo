@@ -1,11 +1,4 @@
-#!/usr/bin/env python3
-"""Generate smoke test fixtures (input.json + output.txt) for cloud VPC transforms.
-
-Usage:
-    python tests/smoke/generate_cloud_fixtures.py
-
-Creates directories under tests/smoke/configs/ with input.json (raw GQL) and
-output.txt (rendered HCL) for CloudVpcTerraform.
+"""Cloud VPC Terraform fixtures (CloudVpcTerraform): one scenario per provider layout.
 
 Scenarios:
     cloud_terraform_aws_single_region  — single AWS VPC, eu-central-1
@@ -17,33 +10,14 @@ Scenarios:
 
 from __future__ import annotations
 
-import asyncio
-import json
-from pathlib import Path
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from collections.abc import Callable
 
+from tests.smoke.fixture_builders.common import _edges, _node, _v, write_data_fixtures
 from transforms.cloud.vpc_terraform import CloudVpcTerraform
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-SMOKE_DIR = Path(__file__).resolve().parent / "configs"
-
 
 # ============================================================================
 # Raw GraphQL response builders (edges/node wrapper format)
 # ============================================================================
-
-
-def _v(val: Any) -> dict:
-    return {"value": val}
-
-
-def _node(inner: dict | None) -> dict:
-    return {"node": inner}
-
-
-def _edges(nodes: list[dict]) -> dict:
-    return {"edges": [{"node": n} for n in nodes]}
 
 
 def _make_account(
@@ -829,67 +803,18 @@ def build_gcp() -> dict:
 
 
 # ============================================================================
-# Runner
+# Writer
 # ============================================================================
 
-
-def run_transform(transform_cls: type, data: dict) -> str:
-    mock_client = MagicMock()
-    mock_client.clone.return_value = mock_client
-    mock_client.schema = MagicMock()
-    mock_client.schema.get = AsyncMock(return_value=MagicMock())
-    mock_client.execute_graphql = AsyncMock(side_effect=Exception("no server"))
-
-    instance = transform_cls(
-        client=mock_client,
-        infrahub_node=MagicMock(),
-        root_directory=str(PROJECT_ROOT),
-    )
-    loop = asyncio.new_event_loop()
-    try:
-        return loop.run_until_complete(instance.transform(data))
-    finally:
-        loop.close()
-
-
-def _write_fixture(transform_cls: type, dir_name: str, data: dict) -> tuple[int, int]:
-    test_dir = SMOKE_DIR / dir_name
-    test_dir.mkdir(parents=True, exist_ok=True)
-
-    with open(test_dir / "input.json", "w") as f:
-        json.dump(data, f, indent=2)
-        f.write("\n")
-
-    try:
-        output = run_transform(transform_cls, data)
-        with open(test_dir / "output.txt", "w") as f:
-            f.write(output)
-        print(f"  ✓ {dir_name}")
-        return 1, 0
-    except Exception as e:
-        print(f"  ✗ {dir_name}: {e}")
-        return 0, 1
-
-
-SCENARIOS: list[tuple[type, str, Any]] = [
-    (CloudVpcTerraform, "cloud_terraform_aws_single_region", build_aws_single_region),
-    (CloudVpcTerraform, "cloud_terraform_aws_multi_region", build_aws_multi_region),
-    (CloudVpcTerraform, "cloud_terraform_azure", build_azure),
-    (CloudVpcTerraform, "cloud_terraform_gcp", build_gcp),
-    (CloudVpcTerraform, "cloud_terraform_aws_policy_rules", build_aws_policy_rules),
+SCENARIOS: list[tuple[str, Callable[[], dict]]] = [
+    ("cloud_terraform_aws_single_region", build_aws_single_region),
+    ("cloud_terraform_aws_multi_region", build_aws_multi_region),
+    ("cloud_terraform_azure", build_azure),
+    ("cloud_terraform_gcp", build_gcp),
+    ("cloud_terraform_aws_policy_rules", build_aws_policy_rules),
 ]
 
 
-def main() -> None:
-    SMOKE_DIR.mkdir(parents=True, exist_ok=True)
-    generated = 0
-    errors = 0
-    for transform_cls, dir_name, builder in SCENARIOS:
-        g, e = _write_fixture(transform_cls, dir_name, builder())
-        generated += g
-        errors += e
-    print(f"\nDone: {generated} generated, {errors} errors")
-
-
-if __name__ == "__main__":
-    main()
+def write_fixtures() -> tuple[int, int]:
+    """Write the cloud Terraform fixtures; return (generated, errors)."""
+    return write_data_fixtures((CloudVpcTerraform, dir_name, builder()) for dir_name, builder in SCENARIOS)

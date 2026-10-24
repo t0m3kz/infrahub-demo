@@ -237,19 +237,7 @@ class TestCreateFirewallAndLoadBalancerDevices:
 
         assert names == ["lb-01"]
         create_kwargs = gen.create_devices.call_args.kwargs
-        assert "group_name" not in create_kwargs["options"]
         assert create_kwargs["deployment_id"] == gen.data["id"]
-
-    @pytest.mark.asyncio
-    async def test_firewall_has_no_group_name_override(self) -> None:
-        gen = _make_generator()
-        gen.create_devices = AsyncMock(return_value=["fw-01"])
-        entries = [_entry("firewall", 1, _FW_TEMPLATE)]
-
-        await self._create(gen, entries)
-
-        create_kwargs = gen.create_devices.call_args.kwargs
-        assert create_kwargs["options"].get("group_name") is None
 
     @pytest.mark.asyncio
     async def test_firewall_passes_ha_kind_through_options(self) -> None:

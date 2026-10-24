@@ -27,7 +27,7 @@ from unittest.mock import patch
 
 import pytest
 
-from tests.smoke.test_configs_smoke import _run_transform
+from tests.smoke.fixture_builders.common import run_transform
 from transforms.common import BaseDeviceTransform
 from transforms.config.access_switch import AccessSwitch
 from transforms.helpers.lisp import EidRecord, LispInputs, build_lisp_inputs, get_lisp_config
@@ -132,7 +132,7 @@ def _lisp_lines(text: str) -> list[str]:
 class TestRenderedEdge:
     def test_a_hostless_edge_renders_the_edge_config_with_no_instance(self) -> None:
         """No segment on the device: the edge LISP config is complete, with no instance-id, VRF or dangling `!`."""
-        text = _run_transform(AccessSwitch, _raw(HOSTLESS_INPUT))
+        text = run_transform(AccessSwitch, _raw(HOSTLESS_INPUT))
         lisp = _lisp_lines(text)
 
         assert "LISP" in text.splitlines()[2] and "EVPN-VXLAN" not in text
@@ -147,7 +147,7 @@ class TestRenderedEdge:
         assert not any(re.search(pattern, text, re.MULTILINE) for pattern in ("l2vpn evpn", r"\bnve1\b", "^router bgp"))
 
     def test_instances_and_dynamic_eid_follow_the_segments(self) -> None:
-        text = _run_transform(AccessSwitch, _raw(ACCESS_INPUT))
+        text = run_transform(AccessSwitch, _raw(ACCESS_INPUT))
 
         assert (
             " instance-id 50001\n  dynamic-eid VRF_A-IPV4\n   database-mapping 10.100.0.0/24 locator-set RLOC\n" in text
@@ -159,7 +159,7 @@ class TestRenderedEdge:
         )
 
     def test_gateway_svi_carries_the_mobility_and_the_anycast_mac(self) -> None:
-        text = _run_transform(AccessSwitch, _raw(ACCESS_INPUT))
+        text = run_transform(AccessSwitch, _raw(ACCESS_INPUT))
 
         assert (
             "interface Vlan100\n description Customer-A\n vrf forwarding VRF_A\n ip address 10.100.0.1 255.255.255.0\n"
@@ -167,14 +167,14 @@ class TestRenderedEdge:
         ) in text
 
     def test_no_evpn_vxlan_or_bgp_leftovers(self) -> None:
-        text = _run_transform(AccessSwitch, _raw(ACCESS_INPUT))
+        text = run_transform(AccessSwitch, _raw(ACCESS_INPUT))
 
         for leftover in ("l2vpn evpn", "nve1", "router bgp", "RM-CONN-2-BGP", "EVPN-VXLAN"):
             assert leftover not in text
         assert "router ospf 1" in text  # the OSPFv2 underlay is the existing template's
 
     def test_every_unverified_vrf_and_router_lisp_line_has_a_marker_above_the_block(self) -> None:
-        lines = _run_transform(AccessSwitch, _raw(ACCESS_INPUT)).splitlines()
+        lines = run_transform(AccessSwitch, _raw(ACCESS_INPUT)).splitlines()
         vrf = lines.index("vrf definition VRF_A")
         assert MARKER in lines[vrf - 1]
         router = lines.index("router lisp")

@@ -37,7 +37,6 @@ FRAGMENTS_DIR = Path("queries") / "fragments"
 
 EXIT_OK = 0
 EXIT_QUERY_ERRORS = 1
-EXIT_TOOLING_ERROR = 2
 
 STATUS_OK = "OK"
 STATUS_FAIL = "FAIL"

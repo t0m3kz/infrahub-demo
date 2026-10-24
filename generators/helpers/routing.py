@@ -76,7 +76,6 @@ class RoutingPlanInput(BaseModel):
     loopback_interfaces: list[Any] = Field(default_factory=list)
     options: RoutingOptions = Field(default_factory=RoutingOptions)
     routing_strategy: str = "ebgp-ebgp"
-    deployment_name: str = ""
     evpn_af_id: str = ""
     underlay_password_id: str = ""
     overlay_password_id: str = ""
@@ -122,15 +121,6 @@ class RoutingPlan(BaseModel):
     ospf_interfaces: list[Any] = Field(default_factory=list)
     bgp_peerings: list[Any] = Field(default_factory=list)
     ospf_peerings: list[Any] = Field(default_factory=list)
-
-
-class BGPSession(NamedTuple):
-    dev1_name: str
-    dev1_id: str
-    dev2_name: str
-    dev2_id: str
-    session_type: str
-    af_types: list[str]
 
 
 class _BGPDevice(NamedTuple):
@@ -317,8 +307,6 @@ class RoutingPlanner:
                     shared_as_id=shared_underlay_as_id,
                 )
             elif underlay_type == "ospf":
-                if not inp.deployment_name:
-                    raise ValueError("deployment_name is required for OSPF underlay")
                 if not existing_ospf_area:
                     raise ValueError(
                         "existing_ospf_area is required for OSPF underlay. "
@@ -328,7 +316,6 @@ class RoutingPlanner:
                     plan,
                     device_map,
                     inp.interfaces,
-                    inp.deployment_name,
                     existing_ospf_area,
                     password_id=inp.underlay_password_id,
                 )
@@ -742,7 +729,6 @@ class RoutingPlanner:
         plan: RoutingPlan,
         device_map: dict[str, dict],
         interfaces: list[Any],
-        deployment_name: str,
         existing_area_id: str,
         password_id: str = "",
     ) -> None:
@@ -886,7 +872,7 @@ class RoutingPlanner:
         if not session_plan:
             return
 
-        for d1_name, d1_id, d2_name, d2_id, stype, af_types in session_plan:
+        for d1_name, d1_id, d2_name, d2_id, stype in session_plan:
             if d1_id not in device_bgp_map or d2_id not in device_bgp_map:
                 continue
 
@@ -947,14 +933,10 @@ class _BGPSessionPlanner:
     def __init__(self, devices: list[_BGPDevice]):
         self.devices = devices
 
-    def build_session_plan(self, session_type: str) -> list[BGPSession]:
-        """Build BGP session plan using route-reflector topology."""
-        sessions = self._build_route_reflector(session_type)
-        return [s if isinstance(s, BGPSession) else BGPSession(*s) for s in sessions]
-
-    def _build_route_reflector(self, session_type: str) -> list[tuple]:
-        """Spines + super-spines + hyper-spines as RR, leafs/border-leafs/tors/
-        access-leafs as clients.
+    def build_session_plan(self, session_type: str) -> list[tuple[str, str, str, str, str]]:
+        """Route-reflector session plan, one (dev1_name, dev1_id, dev2_name, dev2_id,
+        session_type) per session: spines + super-spines + hyper-spines as RR,
+        leafs/border-leafs/tors/access-leafs as clients.
 
         l2-leaf is L2-only and never appears here. access-leaf has no physical link to
         spines (it cables to leafs) but still peers overlay EVPN with them as an RR client,
@@ -970,15 +952,14 @@ class _BGPSessionPlanner:
         roles = {d.role for d in self.devices}
         rrs = [d for d in self.devices if d.role in RR_ROLES]
         clients = [d for d in self.devices if d.role in RR_CLIENT_ROLES]
-        af = ["evpn"]
         has_super_spine = "super-spine" in roles
         has_hyper_spine = "hyper-spine" in roles
         # back-to-back: spines (or border-spines, in micro-fabric mode) peer as equals
         has_only_spines = roles in ({"spine"}, {"border-spine"})
         if rrs and not clients and (has_super_spine or has_hyper_spine or has_only_spines):
             return [
-                (rrs[i].name, rrs[i].id, rrs[j].name, rrs[j].id, session_type, af)
+                (rrs[i].name, rrs[i].id, rrs[j].name, rrs[j].id, session_type)
                 for i in range(len(rrs))
                 for j in range(i + 1, len(rrs))
             ]
-        return [(c.name, c.id, rr.name, rr.id, session_type, af) for rr in rrs for c in clients]
+        return [(c.name, c.id, rr.name, rr.id, session_type) for rr in rrs for c in clients]

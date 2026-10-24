@@ -24,6 +24,7 @@ from typing import Any
 
 import pytest
 
+from tests.smoke.fixture_builders.common import run_transform
 from tests.smoke.fixture_builders.office import (
     OFFICE_EDGE_NAME,
     OFFICE_EXIT_EDGE_ASN,
@@ -35,7 +36,6 @@ from tests.smoke.fixture_builders.office import (
     OFFICE_EXIT_VRF,
     build_office_wan_exit_data,
 )
-from tests.smoke.test_configs_smoke import _run_transform
 from transforms.config.access_switch import AccessSwitch
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.distribution_switch import DistributionSwitch
@@ -294,7 +294,7 @@ class TestRenderedDistributionSwitch:
             data = build_office_wan_exit_data(device_name=name, role=role)
 
             assert data == _raw(directory)
-            assert _run_transform(cls, data).rstrip("\n") + "\n" == _golden(directory)[1]
+            assert run_transform(cls, data).rstrip("\n") + "\n" == _golden(directory)[1]
 
     @pytest.mark.parametrize(
         ("directory", "keyword", "within"),
@@ -335,7 +335,7 @@ class TestRefusals:
         with pytest.raises(
             ValueError, match=rf"a BGP session in VRF {OFFICE_EXIT_VRF}, which no hosted segment defines"
         ):
-            _run_transform(DistributionSwitch, data)
+            run_transform(DistributionSwitch, data)
 
     def test_the_refusal_names_the_role_and_asks_for_no_partial_config(self) -> None:
         data = _raw(DISTRIBUTION_EXIT)
@@ -344,7 +344,7 @@ class TestRefusals:
         with pytest.raises(
             ValueError, match=r"^cisco_xe distribution-switch cannot render: .*refusing incomplete config$"
         ):
-            _run_transform(DistributionSwitch, data)
+            run_transform(DistributionSwitch, data)
 
     def test_a_border_with_no_address_on_its_locator_is_refused(self) -> None:
         data = _raw(DISTRIBUTION_EXIT)
@@ -353,7 +353,7 @@ class TestRefusals:
                 edge["node"]["ip_address"] = {"node": None}
 
         with pytest.raises(ValueError, match="the WAN exit needs an address on the locator loopback"):
-            _run_transform(DistributionSwitch, data)
+            run_transform(DistributionSwitch, data)
 
 
 class TestExternalSessionPolicyScope:
@@ -368,7 +368,7 @@ class TestExternalSessionPolicyScope:
         data = _raw(DISTRIBUTION_EXIT)
         assert [e["node"]["name"]["value"] for e in _deployment(data)["lisp_wan_edges"]["edges"]] == [OFFICE_EDGE_NAME]
 
-        output = _run_transform(DistributionSwitch, data)
+        output = run_transform(DistributionSwitch, data)
 
         assert "neighbor 100.66.0.1" in output
         assert "route-map RM-" not in output
@@ -380,7 +380,7 @@ class TestExternalSessionPolicyScope:
         _deployment(data)["lisp_wan_edges"] = edges
 
         with pytest.raises(ValueError) as err:
-            _run_transform(DistributionSwitch, data)
+            run_transform(DistributionSwitch, data)
 
         message = str(err.value)
         assert message.startswith(
@@ -395,22 +395,22 @@ class TestExternalSessionPolicyScope:
         _deployment(data)["lisp_wan_edges"] = {"edges": [{"node": {"name": {"value": "C009-OFFICE-EDGE1"}}}]}
 
         with pytest.raises(ValueError, match="cannot render the owner prefix filters"):
-            _run_transform(DistributionSwitch, data)
+            run_transform(DistributionSwitch, data)
 
     def test_the_plain_office_goldens_without_an_exit_session_still_render(self) -> None:
         """No regular VRF session on the plain office goldens: nothing to refuse, the output is byte-identical."""
         for directory, cls in ((ACCESS_PLAIN, AccessSwitch), (DISTRIBUTION_PLAIN, DistributionSwitch)):
-            assert _run_transform(cls, _raw(directory)).rstrip("\n") + "\n" == _golden(directory)[1]
+            assert run_transform(cls, _raw(directory)).rstrip("\n") + "\n" == _golden(directory)[1]
 
 
 class TestDataCenterIsUnchanged:
     def test_a_dc_border_leaf_ignores_an_edge_on_its_deployment(self) -> None:
         """A DC VTEP never takes the LISP path: an edge (or LISP keys) on its deployment changes nothing."""
-        plain = _run_transform(BorderLeaf, _raw(DC_BORDER))
+        plain = run_transform(BorderLeaf, _raw(DC_BORDER))
         data = _raw(DC_BORDER)
         _deployment(data)["lisp_wan_edges"] = {"edges": [{"node": {"name": {"value": OFFICE_EDGE_NAME}}}]}
 
-        assert _run_transform(BorderLeaf, data) == plain
+        assert run_transform(BorderLeaf, data) == plain
         assert "proxy-etr" not in plain and "use-petr" not in plain
 
     def test_a_dc_golden_has_no_exit_line(self) -> None:

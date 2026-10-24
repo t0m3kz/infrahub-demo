@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 from graphql import FragmentDefinitionNode, parse
 from infrahub_sdk.exceptions import GraphQLError, ServerNotReachableError
-from invoke import Collection, Context, Exit
+from invoke import Context, Exit
 
 import tasks
 from utils import query_validation as qv
@@ -348,11 +348,6 @@ def test_exit_code_is_zero_without_failures_and_one_with() -> None:
     assert qv.exit_code([]) == 0
 
 
-def test_tooling_exit_code_differs_from_query_failure() -> None:
-    """A tooling error has its own exit code."""
-    assert qv.EXIT_TOOLING_ERROR not in (qv.EXIT_OK, qv.EXIT_QUERY_ERRORS)
-
-
 def test_format_result_and_summary(tmp_path: Path) -> None:
     """Lines read `OK file` / `FAIL file -> message` and the summary counts each status."""
     ok = QueryResult(tmp_path / "queries" / "a.gql", qv.STATUS_OK)
@@ -369,11 +364,8 @@ def test_format_result_and_summary(tmp_path: Path) -> None:
 
 
 def test_validate_queries_task_is_registered_with_defaults() -> None:
-    """The task exists at the root and under dev, with the testcontainers defaults."""
+    """The task exists at the root, with the testcontainers defaults."""
     assert "validate-queries" in tasks.ns.task_names
-    dev = tasks.ns.collections["dev"]
-    assert isinstance(dev, Collection)
-    assert "validate-queries" in dev.task_names
     defaults = {arg.name: arg.default for arg in tasks.validate_queries.get_arguments()}
     assert defaults == {
         "address": "http://localhost:8100",

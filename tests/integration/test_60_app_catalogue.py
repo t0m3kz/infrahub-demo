@@ -27,10 +27,10 @@ from typing import Any
 import pytest
 from infrahub_sdk import InfrahubClient
 
+from tasks import ALL_DEMO_BRANCH
 from utils.ports import PortProfileHelper
 
 from .conftest import TestInfrahubDockerWithClient
-from .test_constants import ALL_DEMO_BRANCH
 from .workflow_helpers import run_generator, wait_for_tasks_completion
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")

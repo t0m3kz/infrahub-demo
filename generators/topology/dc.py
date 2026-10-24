@@ -7,7 +7,7 @@ from typing_extensions import TypedDict
 
 from utils.data_cleaning import clean_data
 
-from ..common import CommonGenerator, DeviceOptions
+from ..common import CommonGenerator
 from ..connections import BORDER_ROLE_FOR_SERVICES, CablingMixin
 from ..devices import DeviceMixin
 from ..fabric_sizing import (
@@ -26,7 +26,7 @@ from ..pod_config import templates_by_role
 from ..pools import PoolMixin
 from ..protocols import TopologyDataCenter
 from ..routing import RoutingMixin
-from ..types import CablingOptions, RoutingOptions, naming_convention_of
+from ..types import CablingOptions, DeviceOptions, RoutingOptions, naming_convention_of
 from .fabric_shared import ServiceDevicesMixin
 
 _DC_VALID_FABRIC_ROLES = frozenset({"super-spine", "hyper-spine", "border-leaf", "firewall", "load-balancer"})

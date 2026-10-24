@@ -32,18 +32,17 @@ import pytest
 
 from generators.topology import virtual_circuit
 from generators.topology.virtual_circuit import SessionEnd, SessionPlan, VirtualCircuitSessionGenerator
-from tests.integration import circuit_helpers, interconnect_queries
+from tests.integration import circuit_helpers, interconnect_queries, query_files
 from tests.integration import test_62_all_demo_interconnects as interconnects
 from tests.integration import test_62c_all_demo_circuit_sessions as session_steps
-from tests.integration import test_helpers
-from tests.integration.demo_data import BOOTSTRAP, attribute, declared, name
-from tests.integration.test_constants import (
+from tests.integration.all_demo_circuit_constants import (
     ALL_DEMO_DCI_CIRCUITS,
     ALL_DEMO_HANDOFF_PARTY_ASNS,
     ALL_DEMO_VIRTUAL_CIRCUITS,
     HANDOFF_KIND,
     TUNNEL_KIND,
 )
+from tests.integration.demo_data import BOOTSTRAP, attribute, declared, name
 from tests.unit.simulators.circuit_fakes import FakeClient, session_generator
 from tests.unit.simulators.circuit_inventory_payloads import inventory_payload
 
@@ -419,7 +418,7 @@ class FakeStack:
     ) -> dict[str, Any]:
         """Answer the queries of the test_62 session tests from the generated state; any other query is a test bug."""
         variables = variables or {}
-        if query == test_helpers.QUERY_GET_INTERCONNECT_INVENTORY:
+        if query == query_files.QUERY_GET_INTERCONNECT_INVENTORY:
             return self.inventory
         if query == interconnect_queries.SESSIONS_QUERY:
             nodes = [self.sessions[n] for n in variables["names"] if n in self.sessions]
@@ -512,16 +511,6 @@ async def test_a_dci_session_that_differs_from_the_plan_fails_naming_the_field(
     """Each single deviation from the plan (ttl, type, key, MTU 1500 vs 9214, missing) fails naming its field."""
     mutate(stack)
     with pytest.raises(AssertionError, match=message.replace("(", r"\(").replace(")", r"\)")):
-        await _tests().test_06_verify_dci_sessions(_client(stack), "main")
-
-
-async def test_a_legacy_dci_session_per_fibre_fails(stack: FakeStack) -> None:
-    """A DCI-DF-* session per dark fibre, the model before circuits carried the sessions, must be gone."""
-    stack.sessions["DCI-DF-DC10-EQXFR2"] = {
-        **stack.sessions["ICX-DC10-EQXFR2-underlay"],
-        "name": _value("DCI-DF-DC10-EQXFR2"),
-    }
-    with pytest.raises(AssertionError, match=r"legacy session\(s\) \['DCI-DF-DC10-EQXFR2'\] still exist"):
         await _tests().test_06_verify_dci_sessions(_client(stack), "main")
 
 

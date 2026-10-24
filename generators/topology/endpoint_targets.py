@@ -14,6 +14,9 @@ from typing import Any, Literal
 from ..helpers.rack import pod_row_racks
 from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface
 
+# DcimInterface statuses of a port that is free to cable or already cabled by this endpoint (a re-run).
+FREE_OR_CABLED_INTERFACE_STATUSES = ["free", "active"]
+
 
 def interface_type_of(intf: Any) -> str | None:
     """An interface's interface_type value, or None when unset."""
@@ -260,7 +263,9 @@ class EndpointTargetsMixin:
         # When the endpoint already has cables (re-run) be permissive so that
         # partially-connected endpoints can still have remaining ports wired up.
         status_filter: dict[str, Any] = (
-            {"status__values": ["free", "planned", "active"]} if self._already_connected else {"status__value": "free"}
+            {"status__values": FREE_OR_CABLED_INTERFACE_STATUSES}
+            if self._already_connected
+            else {"status__value": "free"}
         )
         intf_filters: dict[str, Any] = {
             "kind": DcimPhysicalInterface,

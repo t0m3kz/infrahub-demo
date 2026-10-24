@@ -27,7 +27,7 @@ CheckFirewall on a DC10 (Check Point), DC11 and FR2 (PAN-OS) member, the rendere
 firewall config of every site (leg interface, VIP, default route via the INTERNET
 leg, PROD/NON-PROD isolation), a DC11 border-leaf config carrying the
 transit VRF routes, and the FR edges' config carrying the zone's transit legs. Everything is derived from the loaded graph and from
-test_constants' environment-driven expectations.
+all_demo_firewall_constants' environment-driven expectations.
 
 A last step runs CheckLispFabric and renders every switch of the offices' LISP fabrics (add_office_fabric): the
 distribution-switches as map-servers and the access-switches as edges, with the WAN exit where the office has an
@@ -54,6 +54,7 @@ from infrahub_sdk import InfrahubClient
 
 from checks.firewall import CheckFirewall
 from generators.protocols import DcimPhysicalDevice
+from tasks import ALL_DEMO_BRANCH
 from transforms.config.access_leaf import AccessLeaf
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.edge import Edge
@@ -67,7 +68,21 @@ from utils.exchange_transit import (
 )
 from utils.internet_space import NON_INTERNET_PREFIXES
 
+from .all_demo_circuit_constants import (
+    ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS,
+    ALL_DEMO_DCI_CIRCUITS,
+    ALL_DEMO_INTERNET_BGWS,
+    INTERNET_L3_VNI,
+    INTERNET_ROUTE_TARGET,
+)
+from .all_demo_firewall_constants import (
+    ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS,
+    ALL_DEMO_INTERNET_EGRESS_RULES,
+    ALL_DEMO_SNAT_POOL_PREFIX,
+    transit_namespace_type,
+)
 from .conftest import TestInfrahubDockerWithClient
+from .dc_topology_helpers import fetch_dc_topology
 from .firewall_config_helpers import (
     _ACL_LINE,
     EXPECTED_DESTINATION_CIDRS,
@@ -87,19 +102,8 @@ from .firewall_config_helpers import (
     _segment_on_switches,
     _site_contexts,
 )
-from .test_constants import (
-    ALL_DEMO_BRANCH,
-    ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS,
-    ALL_DEMO_DCI_CIRCUITS,
-    ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS,
-    ALL_DEMO_INTERNET_BGWS,
-    ALL_DEMO_INTERNET_EGRESS_RULES,
-    ALL_DEMO_SNAT_POOL_PREFIX,
-    INTERNET_L3_VNI,
-    INTERNET_ROUTE_TARGET,
-    transit_namespace_type,
-)
-from .test_helpers import fetch_dc_topology, fetch_transit_inventory, render_device_config
+from .service_inventory_helpers import fetch_transit_inventory
+from .snapshot_helpers import render_device_config
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 

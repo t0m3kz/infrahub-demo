@@ -310,7 +310,6 @@ class RoutingMixin(SharedRoutingObjectsMixin):
                 loopback_interfaces=loopback_interfaces,
                 options={**options},
                 routing_strategy=routing_strategy,
-                deployment_name=self.fabric_name,
                 evpn_af_id=evpn_af_id,
                 underlay_password_id=options.get("underlay_password_id") or "",
                 overlay_password_id=options.get("overlay_password_id") or "",

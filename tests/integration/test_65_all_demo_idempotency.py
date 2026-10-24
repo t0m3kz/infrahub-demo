@@ -31,16 +31,17 @@ from typing import Any
 import pytest
 from infrahub_sdk import InfrahubClient
 
-from .conftest import TestInfrahubDockerWithClient
-from .test_constants import (
-    ALL_DEMO_BRANCH,
+from tasks import ALL_DEMO_BRANCH
+
+from .all_demo_circuit_constants import (
     ALL_DEMO_FABRIC_PEERINGS,
     ALL_DEMO_VIRTUAL_CIRCUITS,
     ALL_DEMO_ZONE_SITE_VIPS,
     HANDOFF_KIND,
     INTERCONNECT_KIND,
 )
-from .test_helpers import diff_snapshots, snapshot_topology
+from .conftest import TestInfrahubDockerWithClient
+from .snapshot_helpers import diff_snapshots, snapshot_topology
 from .workflow_helpers import run_generator, verify_no_failed_tasks, wait_for_tasks_completion
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")

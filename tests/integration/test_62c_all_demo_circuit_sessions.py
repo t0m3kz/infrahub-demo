@@ -13,8 +13,35 @@ import pytest
 from infrahub_sdk import InfrahubClient
 
 from generators.helpers.pools import FW_CONTEXT_VLAN_END, FW_CONTEXT_VLAN_START
+from tasks import ALL_DEMO_BRANCH
 from utils.exchange_transit import transit_vlan, wan_exit_vlan
 
+from .all_demo_circuit_constants import (
+    ALL_DEMO_COLOCATION_SERVED,
+    ALL_DEMO_COLOCATION_SERVING_ZONE,
+    ALL_DEMO_DCI_CIRCUITS,
+    ALL_DEMO_EDGE_INTERLINK_INTERFACE,
+    ALL_DEMO_EDGE_INTERLINKS,
+    ALL_DEMO_EDGE_PAIR_POOL_TEMPLATE,
+    ALL_DEMO_FABRIC_PEERINGS,
+    ALL_DEMO_HANDOFF_PARTY_ASNS,
+    ALL_DEMO_INTERNET_BGWS,
+    ALL_DEMO_INTERNET_TRANSIT_PEERINGS,
+    ALL_DEMO_INTERNET_UPSTREAM_BY_DC,
+    ALL_DEMO_OFFICE_WAN_EXITS,
+    ALL_DEMO_SDWAN_GATEWAY_PUBLIC_PORT,
+    ALL_DEMO_VIRTUAL_CIRCUITS,
+    ALL_DEMO_ZONE_SITE_VIPS,
+    HANDOFF_KIND,
+    TUNNEL_KIND,
+)
+from .all_demo_firewall_constants import (
+    ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS,
+    ALL_DEMO_FIREWALL_MEMBERS,
+    OFFICE_NAMESPACE,
+    transit_namespace_type,
+)
+from .circuit_helpers import fetch_interconnect_inventory
 from .conftest import TestInfrahubDockerWithClient
 from .interconnect_queries import (
     ADDRESS_COUNT_QUERY,
@@ -46,31 +73,6 @@ from .interconnect_rules import (
     _sessions_by_name,
     _vlan,
 )
-from .test_constants import (
-    ALL_DEMO_BRANCH,
-    ALL_DEMO_COLOCATION_SERVED,
-    ALL_DEMO_COLOCATION_SERVING_ZONE,
-    ALL_DEMO_DCI_CIRCUITS,
-    ALL_DEMO_EDGE_INTERLINK_INTERFACE,
-    ALL_DEMO_EDGE_INTERLINKS,
-    ALL_DEMO_EDGE_PAIR_POOL_TEMPLATE,
-    ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS,
-    ALL_DEMO_FABRIC_PEERINGS,
-    ALL_DEMO_FIREWALL_MEMBERS,
-    ALL_DEMO_HANDOFF_PARTY_ASNS,
-    ALL_DEMO_INTERNET_BGWS,
-    ALL_DEMO_INTERNET_TRANSIT_PEERINGS,
-    ALL_DEMO_INTERNET_UPSTREAM_BY_DC,
-    ALL_DEMO_OFFICE_WAN_EXITS,
-    ALL_DEMO_SDWAN_GATEWAY_PUBLIC_PORT,
-    ALL_DEMO_VIRTUAL_CIRCUITS,
-    ALL_DEMO_ZONE_SITE_VIPS,
-    HANDOFF_KIND,
-    OFFICE_NAMESPACE,
-    TUNNEL_KIND,
-    transit_namespace_type,
-)
-from .test_helpers import fetch_interconnect_inventory
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -204,18 +206,13 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         client = async_client_main
         errors: list[str] = []
         names = {f"{circuit}-{suffix}": circuit for circuit in ALL_DEMO_DCI_CIRCUITS for suffix in ("underlay", "evpn")}
-        # add_circuit used to build one DCI-<fibre> session per dark fibre (the fibre is DF-<x> where the circuit is ICX-<x>)
-        legacy = [f"DCI-{circuit.replace('ICX-', 'DF-', 1)}" for circuit in ALL_DEMO_DCI_CIRCUITS]
-        found = _sessions_by_name(
+        sessions = _sessions_by_name(
             await client.execute_graphql(
-                query=SESSIONS_QUERY, variables={"names": sorted([*names, *legacy])}, branch_name=scenario_branch
+                query=SESSIONS_QUERY, variables={"names": sorted(names)}, branch_name=scenario_branch
             )
         )
-        sessions = {session: node for session, node in found.items() if session in names}
         if sorted(sessions) != sorted(names):
             errors.append(f"DCI sessions {sorted(sessions)}, expected {sorted(names)}")
-        if set(found) & set(legacy):
-            errors.append(f"legacy session(s) {sorted(set(found) & set(legacy))} still exist: the circuit builds two")
         for role, expected_count in (("dci", len(ALL_DEMO_DCI_CIRCUITS)), ("dci-underlay", len(ALL_DEMO_DCI_CIRCUITS))):
             count = await client.execute_graphql(
                 query="query ($role: String) { ManagedBGPPeering(peering_role__value: $role) { count } }",

@@ -13,12 +13,12 @@ _NODE_RETRY_MAX_ATTEMPTS = 5
 _NODE_RETRY_BASE_DELAY = 2.0
 
 
-def retry_delay(base: float, attempt: int, cap: float = 20.0, jitter: float = 0.25) -> float:
+def retry_delay(base: float, attempt: int, cap: float = 20.0) -> float:
     """Return jittered exponential backoff delay.
 
-    Formula: ``min(base * 2**attempt, cap) + uniform(0, jitter)``.
+    Formula: ``min(base * 2**attempt, cap) + uniform(0, 0.25)``.
     """
-    return min(base * (2**attempt), cap) + random.uniform(0, jitter)
+    return min(base * (2**attempt), cap) + random.uniform(0, 0.25)
 
 
 async def save_with_node_not_found_retry(

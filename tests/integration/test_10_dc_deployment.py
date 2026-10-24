@@ -41,15 +41,11 @@ import pytest
 from infrahub_sdk import Config, InfrahubClient, InfrahubClientSync
 from infrahub_sdk.task.models import TaskFilter
 
+from .branch_helpers import fetch_artifacts
 from .conftest import TestInfrahubDockerWithClient
-from .test_constants import DEMO_DC_DATA_ROOT
-from .test_helpers import (
-    compute_role_counts,
-    compute_routing_summary,
-    fetch_artifacts,
-    fetch_dc_topology,
-    wait_for_condition,
-)
+from .dc_topology_helpers import compute_role_counts, compute_routing_summary, fetch_dc_topology
+from .suite_constants import DEMO_DC_DATA_ROOT
+from .wait_helpers import wait_for_condition
 from .workflow_helpers import (
     create_and_validate_proposed_change,
     merge_proposed_change,
@@ -182,8 +178,8 @@ def _resolve_dc_order() -> list[str]:
     given order.
 
     Example:
-        DC_DEPLOYMENT_TEST_DCS=dc6 uv run invoke dev.test-integration-routing
-        DC_DEPLOYMENT_TEST_DCS=dc6,dc7 uv run invoke dev.test-integration-routing
+        DC_DEPLOYMENT_TEST_DCS=dc6 uv run invoke test-integration-routing
+        DC_DEPLOYMENT_TEST_DCS=dc6,dc7 uv run invoke test-integration-routing
     """
     selected = os.environ.get("DC_DEPLOYMENT_TEST_DCS")
     if not selected:
@@ -246,9 +242,7 @@ _DEPLOYED: dict[str, str | BaseException] = {}
 
 
 # ---------------------------------------------------------------------------
-# Assertion helpers — condition lists mirror what used to live in
-# test_helpers.py's verify_dc_topology()/verify_routing_sessions(), just
-# relocated here so each check is visible next to the test that uses it.
+# Assertion helpers — each check is visible next to the test that uses it.
 # ---------------------------------------------------------------------------
 
 

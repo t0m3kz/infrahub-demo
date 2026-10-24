@@ -42,9 +42,6 @@ class DeviceOptions(TypedDict, total=False):
     """SDK pool object or pool ID string for management IPs."""
     rack: str
     """Rack ID for device placement."""
-    group_name: str
-    """Override the CoreStandardGroup devices are tracked in — default is the
-    role's bootstrap group (devices.ROLE_GROUP_NAMES, else f"{device_role}s")."""
     ha_kind: str
     """When set, create_devices() pairs the created devices two-at-a-time
     (sorted names, odd one left unpaired) into this HA node kind — e.g.

@@ -292,7 +292,7 @@ class TestWanExitData:
         assert office.item.get("sdwan_gateway")
 
     def test_the_test_constants_derive_the_offices_switches_from_the_fabric_templates(self) -> None:
-        from tests.integration.test_constants import ALL_DEMO_OFFICE_FABRICS, ALL_DEMO_OFFICE_WAN_EXITS
+        from tests.integration.all_demo_circuit_constants import ALL_DEMO_OFFICE_FABRICS, ALL_DEMO_OFFICE_WAN_EXITS
 
         assert ALL_DEMO_OFFICE_FABRICS == {
             "C005-OFFICE": {

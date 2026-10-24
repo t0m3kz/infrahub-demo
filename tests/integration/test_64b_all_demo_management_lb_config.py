@@ -17,6 +17,7 @@ from infrahub_sdk import InfrahubClient
 
 from checks.lisp_fabric import CheckLispFabric
 from checks.loadbalancer import CheckLoadBalancer
+from tasks import ALL_DEMO_BRANCH
 from transforms.config.access_leaf import AccessLeaf
 from transforms.config.access_switch import AccessSwitch
 from transforms.config.border_leaf import BorderLeaf
@@ -31,7 +32,30 @@ from utils.exchange_transit import (
     zone_name_for_namespace_type,
 )
 
+from .all_demo_circuit_constants import ALL_DEMO_OFFICE_FABRICS, ALL_DEMO_OFFICE_WAN_EXITS
+from .all_demo_constants import ALL_DEMO_DC_NAMES
+from .all_demo_firewall_constants import (
+    ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS,
+    ALL_DEMO_MANAGEMENT_RULES,
+    MANAGEMENT_CLIENT_SEGMENT,
+    MANAGEMENT_NAMESPACE,
+    MANAGEMENT_SERVICES_DC,
+    MANAGEMENT_SERVICES_GATEWAY,
+    MANAGEMENT_SERVICES_LEAF,
+    MANAGEMENT_SERVICES_PREFIX,
+    MANAGEMENT_SERVICES_VLAN,
+    transit_namespace_type,
+)
+from .all_demo_loadbalancer_constants import (
+    ALL_DEMO_DC_LOADBALANCER_PLATFORMS,
+    ALL_DEMO_DEDICATED_LOADBALANCER_TENANTS,
+    ALL_DEMO_LB_CLIENT_DEPENDENCIES,
+    ALL_DEMO_LOAD_BALANCED_COMPONENTS,
+    ALL_DEMO_NAMESPACE_L3_VNI,
+    ALL_DEMO_SEGMENT_LEGS,
+)
 from .conftest import TestInfrahubDockerWithClient
+from .dc_topology_helpers import fetch_dc_topology
 from .firewall_config_helpers import (
     SCENARIO_NAME,
     _block,
@@ -44,35 +68,12 @@ from .firewall_config_helpers import (
     _site_contexts,
     _vip_contexts,
 )
-from .test_constants import (
-    ALL_DEMO_BRANCH,
-    ALL_DEMO_DC_LOADBALANCER_PLATFORMS,
-    ALL_DEMO_DC_NAMES,
-    ALL_DEMO_DEDICATED_LOADBALANCER_TENANTS,
-    ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS,
-    ALL_DEMO_LB_CLIENT_DEPENDENCIES,
-    ALL_DEMO_LOAD_BALANCED_COMPONENTS,
-    ALL_DEMO_MANAGEMENT_RULES,
-    ALL_DEMO_NAMESPACE_L3_VNI,
-    ALL_DEMO_OFFICE_FABRICS,
-    ALL_DEMO_OFFICE_WAN_EXITS,
-    ALL_DEMO_SEGMENT_LEGS,
-    MANAGEMENT_CLIENT_SEGMENT,
-    MANAGEMENT_NAMESPACE,
-    MANAGEMENT_SERVICES_DC,
-    MANAGEMENT_SERVICES_GATEWAY,
-    MANAGEMENT_SERVICES_LEAF,
-    MANAGEMENT_SERVICES_PREFIX,
-    MANAGEMENT_SERVICES_VLAN,
-    transit_namespace_type,
-)
-from .test_helpers import (
-    fetch_dc_topology,
+from .service_inventory_helpers import (
     fetch_loadbalancer_inventory,
     fetch_transit_inventory,
     match_loadbalancer_contexts,
-    render_device_config,
 )
+from .snapshot_helpers import render_device_config
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 

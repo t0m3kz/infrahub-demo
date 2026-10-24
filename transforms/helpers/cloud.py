@@ -181,10 +181,10 @@ def prepare_cloud_data(cleaned: dict[str, Any]) -> dict[str, Any]:
     raw_provider = (account.get("provider") or {}).get("name", "aws").lower()
     provider_name = raw_provider if raw_provider in ("aws", "azure", "gcp") else "aws"
 
-    def _group(items: list, key: str = "virtual_network") -> dict[str, list]:
+    def _group(items: list) -> dict[str, list]:
         result: dict[str, list] = {}
         for item in items:
-            k = (item.get(key) or {}).get("name", "")
+            k = (item.get("virtual_network") or {}).get("name", "")
             result.setdefault(k, []).append(item)
         return result
 

@@ -7,7 +7,7 @@ from typing_extensions import TypedDict
 
 from utils.data_cleaning import clean_data
 
-from ..common import CablingOptions, CommonGenerator, DeviceOptions, RoutingOptions
+from ..common import CommonGenerator
 from ..connections import BORDER_ROLE_FOR_SERVICES, CablingMixin
 from ..devices import DeviceMixin
 from ..fabric_sizing import host_bits_to_prefix_length, max_sibling_spines, pod_loopback_bits, pod_technical_bits
@@ -25,7 +25,7 @@ from ..pod_config import (
 from ..pools import PoolMixin
 from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface
 from ..routing import RoutingMixin
-from ..types import naming_convention_of
+from ..types import CablingOptions, DeviceOptions, RoutingOptions, naming_convention_of
 from .fabric_shared import DC_GENERATORS, ServiceDevicesMixin
 from .pod_mesh import PodMeshMixin, mesh_slot_width, pod_routing_options
 

@@ -1,40 +1,43 @@
-"""The 30_all exchange-transit expectations in tests/integration/test_constants.py are derived
+"""The 30_all exchange-transit expectations in tests/integration/all_demo_firewall_constants.py are derived
 from the customers' environments; this pins the derivation to the planning estimate so a data
 change that moves a count is a conscious edit."""
 
 from __future__ import annotations
 
-from tests.integration.test_constants import (
-    ALL_DEMO_BORDER_FIREWALL_PORTS,
-    ALL_DEMO_CLOUD_LOAD_BALANCED_COMPONENTS,
+from tests.integration.all_demo_circuit_constants import (
     ALL_DEMO_COLOCATION_SERVED,
     ALL_DEMO_COLOCATION_SERVING_ZONE,
     ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS,
-    ALL_DEMO_DC_LOADBALANCER_PLATFORMS,
     ALL_DEMO_DCI_CIRCUITS,
     ALL_DEMO_EDGE_INTERLINKS,
     ALL_DEMO_EDGE_PAIR_POOL_TEMPLATE,
     ALL_DEMO_EDGE_PAIR_ZONES,
-    ALL_DEMO_EXPECTED_GENERATORS,
-    ALL_DEMO_EXPECTED_OBJECTS,
-    ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS,
     ALL_DEMO_FABRIC_PEERINGS,
     ALL_DEMO_INTERNET_BGWS,
+    ALL_DEMO_ZONE_SITE_VIPS,
+)
+from tests.integration.all_demo_constants import ALL_DEMO_EXPECTED_GENERATORS, ALL_DEMO_EXPECTED_OBJECTS
+from tests.integration.all_demo_firewall_constants import (
+    ALL_DEMO_BORDER_FIREWALL_PORTS,
+    ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS,
+    ALL_DEMO_SHARED_FIREWALL_CONTEXTS,
+    ALL_DEMO_SNAT_ADDRESSES,
+    ALL_DEMO_TRANSIT_EXCHANGES,
+    ALL_DEMO_TRANSIT_LEGS,
+    ALL_DEMO_TRANSIT_PREFIXES,
+    ALL_DEMO_TRANSIT_SUBINTERFACES,
+    deployment_namespace,
+)
+from tests.integration.all_demo_loadbalancer_constants import (
+    ALL_DEMO_CLOUD_LOAD_BALANCED_COMPONENTS,
+    ALL_DEMO_DC_LOADBALANCER_PLATFORMS,
     ALL_DEMO_LB_CLIENT_DEPENDENCIES,
     ALL_DEMO_LB_LEG_RESOURCES,
     ALL_DEMO_LB_VIP_RESOURCES,
     ALL_DEMO_LOAD_BALANCED_COMPONENTS,
     ALL_DEMO_LOADBALANCER_CONTEXTS,
     ALL_DEMO_NAMESPACE_L3_VNI,
-    ALL_DEMO_SHARED_FIREWALL_CONTEXTS,
     ALL_DEMO_SHARED_LOADBALANCER_CONTEXTS,
-    ALL_DEMO_SNAT_ADDRESSES,
-    ALL_DEMO_TRANSIT_EXCHANGES,
-    ALL_DEMO_TRANSIT_LEGS,
-    ALL_DEMO_TRANSIT_PREFIXES,
-    ALL_DEMO_TRANSIT_SUBINTERFACES,
-    ALL_DEMO_ZONE_SITE_VIPS,
-    deployment_namespace,
 )
 
 

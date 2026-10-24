@@ -37,7 +37,6 @@ from tests.smoke.fixture_builders.group_policy import (
     gpo_segment,
     gpo_view,
 )
-from tests.smoke.test_configs_smoke import _run_transform
 from transforms.common import BaseDeviceTransform
 from transforms.config.access_leaf import AccessLeaf
 from transforms.config.border_leaf import BorderLeaf
@@ -743,7 +742,7 @@ class TestRendering:
     @staticmethod
     def _render(cls: type, **kwargs: Any) -> str:
         role, name, segments = VTEPS[cls.__name__]
-        return _run_transform(cls, _raw(role=role, name=name, segments=segments, **kwargs))
+        return run_transform(cls, _raw(role=role, name=name, segments=segments, **kwargs))
 
     @pytest.mark.parametrize("cls", [Leaf, BorderLeaf, AccessLeaf])
     def test_the_block_is_in_spec_order(self, cls: type) -> None:
@@ -846,7 +845,7 @@ class TestRendering:
         for edge in raw["ManagedNetworkSegment"]["edges"]:
             if edge["node"]["id"] == "seg-web-np":
                 edge["node"]["gateway"]["node"]["ip_prefix"]["node"]["prefix"]["value"] = "2001:db8:10::/64"
-        block = _block(_run_transform(Leaf, raw))
+        block = _block(run_transform(Leaf, raw))
         assert "match-list input prefix-ipv6 web-np\n   match prefix-ipv6 2001:db8:10::/64\n" in block
         assert "      segment web-np\n         definition\n            match prefix-ipv6 web-np\n" in block
         assert "match-list input prefix-ipv4 web-np" not in block
@@ -887,7 +886,7 @@ class TestRendering:
         for edge in raw["ManagedNetworkSegment"]["edges"]:
             if edge["node"]["id"] == "seg-app-np":
                 edge["node"]["gateway"]["node"]["ip_prefix"]["node"]["prefix"]["value"] = "10.10.0.0/16"
-        block = _block(_run_transform(Leaf, raw))
+        block = _block(run_transform(Leaf, raw))
         assert "      ! documented-not-lab-verified: this prefix overlaps 10.10.0.0/16 of segment app-np" in block
         assert block.index("! documented-not-lab-verified: this prefix overlaps") < block.index("      segment web-np")
 
@@ -933,14 +932,14 @@ class TestRendering:
             edge["node"] for edge in raw["ManagedNetworkSegment"]["edges"] if edge["node"]["id"] == "seg-app-np"
         )
         segment["gateway"]["node"]["ip_prefix"]["node"]["prefix"]["value"] = None
-        rendered = _run_transform(Leaf, raw)
+        rendered = run_transform(Leaf, raw)
         assert "! VRF NONPROD is not rendered: segment(s) app-np have no gateway prefix" in rendered
         assert "match-list input prefix-ipv4 web-np" not in rendered
         assert "! not expressible (left closed): portal-p -> web_pay_demo_local" in rendered
         assert "   vrf PROD\n" in _block(rendered) and "   vrf NONPROD\n" not in _block(rendered)
 
     def test_a_vtep_without_a_contract_vrf_renders_no_block(self) -> None:
-        rendered = _run_transform(Leaf, _raw(segments=()))
+        rendered = run_transform(Leaf, _raw(segments=()))
         assert "segment-security" not in rendered and "match-list" not in rendered
 
     def test_re_render_is_byte_identical(self) -> None:
@@ -956,14 +955,14 @@ class TestByteIdentity:
     def test_a_non_reference_eos_site_is_the_existing_golden(self, root_dir: Path) -> None:
         data = _gpo_golden_leaf_data(fleet=_GPO_EOS, version="4.36.2F", leaf_type="DCS-7050CX3-32C-R")
         assert "DcimGroupPolicyProfile" in data
-        assert _run_transform(Leaf, data) == self._golden(root_dir)
+        assert run_transform(Leaf, data) == self._golden(root_dir)
 
     def test_a_reference_leaf_carrying_no_contract_vrf_is_the_existing_golden(self, root_dir: Path) -> None:
         data = _gpo_golden_leaf_data(fleet=_GPO_EOS, version="4.36.2F")
-        assert _run_transform(Leaf, data) == self._golden(root_dir)
+        assert run_transform(Leaf, data) == self._golden(root_dir)
 
     def test_the_base_transform_has_no_segment_security_without_the_fleet_roots(self, root_dir: Path) -> None:
         data = _gpo_golden_leaf_data(fleet=_GPO_EOS, version="4.36.2F")
         bare = {key: value for key, value in data.items() if key in ("DcimDevice",)}
-        assert _run_transform(Leaf, bare) == self._golden(root_dir)
+        assert run_transform(Leaf, bare) == self._golden(root_dir)
         assert issubclass(Leaf, BaseDeviceTransform)

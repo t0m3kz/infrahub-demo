@@ -418,7 +418,7 @@ def _autoscaling_blocks_aws(vpc_name: str, vpc_id: str, ctx: dict, provider_attr
     return lines
 
 
-def _account_blocks_aws(ctx: dict, provider_attr: str = "") -> list[str]:
+def _account_blocks_aws(ctx: dict) -> list[str]:
     """Emit account-scoped AWS resources that are not tied to a single VPC."""
     lines: list[str] = []
 
@@ -433,8 +433,6 @@ def _account_blocks_aws(ctx: dict, provider_attr: str = "") -> list[str]:
             f'  vpn_ecmp_support                = "{_enable_disable(tgw.get("vpn_ecmp_support"))}"',
             f'  tags                            = {{ Name = "{tgw_name}", ManagedBy = "Infrahub" }}',
         ]
-        if provider_attr:
-            tgw_block.append(f"  provider                        = {provider_attr}")
         tgw_block += ["}", ""]
         lines += tgw_block
 
@@ -450,8 +448,6 @@ def _account_blocks_aws(ctx: dict, provider_attr: str = "") -> list[str]:
                 "  subnet_ids         = []",
                 f'  tags               = {{ Name = "{tgw_name}-{vpc_name}", ManagedBy = "Infrahub" }}',
             ]
-            if provider_attr:
-                attach_block.append(f"  provider           = {provider_attr}")
             attach_block += ["}", ""]
             lines += attach_block
 
@@ -469,7 +465,6 @@ def _account_blocks_aws(ctx: dict, provider_attr: str = "") -> list[str]:
                 'type       = "ipsec.1"',
                 f'tags       = {{ Name = "{cgw_name}", ManagedBy = "Infrahub" }}',
             ],
-            provider_attr,
         )
 
     for peering in ctx["peerings"]:
@@ -486,7 +481,6 @@ def _account_blocks_aws(ctx: dict, provider_attr: str = "") -> list[str]:
                 "auto_accept = true",
                 f'tags        = {{ Name = "{peering_name}", ManagedBy = "Infrahub" }}',
             ],
-            provider_attr,
         )
 
     for dc in ctx["direct_connects"]:
@@ -506,7 +500,6 @@ def _account_blocks_aws(ctx: dict, provider_attr: str = "") -> list[str]:
                 'location  = ""',
                 f'tags      = {{ Name = "{dc_name}", ManagedBy = "Infrahub" }}',
             ],
-            provider_attr,
         )
 
     return lines

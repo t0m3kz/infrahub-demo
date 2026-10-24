@@ -97,7 +97,6 @@ def name_to_asn_range(
     dc_name: str,
     max_pods: int,
     max_border_leafs_per_fabric: int = 0,
-    base_start: int = DEFAULT_ASN_BASE_START,
 ) -> tuple[int, int]:
     """Derive a deterministic, non-overlapping ASN range from DC name.
 
@@ -118,7 +117,6 @@ def name_to_asn_range(
         max_pods: Maximum pods in the DC design
         max_border_leafs_per_fabric: Maximum border-leaf switches from DC design
             (they draw from this same pool — see calculate_fabric_asn_block_size)
-        base_start: Start of private ASN space
 
     Returns:
         Tuple of (start_range, end_range)
@@ -138,8 +136,8 @@ def name_to_asn_range(
         name_hash = name_hash * 31 + ord(c)
 
     # Use max block for grid spacing to prevent overlap between DCs
-    max_blocks = (max_asn - base_start) // _MAX_ASN_BLOCK
+    max_blocks = (max_asn - DEFAULT_ASN_BASE_START) // _MAX_ASN_BLOCK
     offset = name_hash % max_blocks
-    start = base_start + offset * _MAX_ASN_BLOCK
+    start = DEFAULT_ASN_BASE_START + offset * _MAX_ASN_BLOCK
     end = start + min(block, _MAX_ASN_BLOCK - 1) - 1
     return start, end
