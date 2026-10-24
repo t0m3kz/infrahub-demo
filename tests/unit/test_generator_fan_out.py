@@ -380,7 +380,11 @@ class TestDCPodCascadeGenerator:
         pod1, pod2 = _pod("POD-1"), _pod("POD-2")
 
         await gen.generate(
-            {"TopologyDeployment": [{"id": "dc-1", "name": "DC1", "index": 1, "children": [pod1, "not-a-pod", pod2]}]}
+            {
+                "TopologyDeployment": [
+                    {"id": "dc-1", "name": "DC1", "index": 1, "children": [pod1, {"id": "not-a-pod"}, pod2]}
+                ]
+            }
         )
 
         gen.run_generator.assert_awaited_once_with("pod_rack_cascade", [pod1["id"], pod2["id"]], wait=False)

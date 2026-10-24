@@ -496,7 +496,7 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
     def pods_of(data: Mapping[str, Any]) -> list[dict[str, Any]]:
         """The DC's pods from its cleaned query payload: the children that carry a design (``clean_data`` gives a
         non-pod child as just ``{"id": ...}``)."""
-        return [child for child in data.get("children") or [] if isinstance(child, dict) and child.get("design")]
+        return [child for child in data.get("children") or [] if child.get("design")]
 
     def _pod_border_leaf_capacities(self, pods: list[dict[str, Any]]) -> dict[str, int]:
         """Pod id -> how many border-leaf devices the pod can receive: its own
