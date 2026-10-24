@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from infrahub_sdk.exceptions import NodeNotFoundError
+from infrahub_sdk.protocols import CoreNumberPool
 
 from generators.firewall_context import FIREWALL_CONTEXT, LOADBALANCER_CONTEXT
 from generators.logger import GeneratorError
@@ -272,6 +273,151 @@ class TestAttachRefs:
         await gen._allocate_resource_pools_locked(strategy="fabric", pools={"technical": 24}, id="dc-1")
 
         gen.client.get.assert_not_awaited()
+
+
+class TestAttachRefsCurrent:
+    """attach_refs(current=...): refs the generator's own query already read off the node are not written again."""
+
+    @pytest.mark.asyncio
+    async def test_refs_equal_to_current_cost_no_fetch_and_no_save(self) -> None:
+        """A re-run whose refs are all in place touches nothing."""
+        gen = _make_gen()
+        gen.client.get = AsyncMock()
+
+        await gen.attach_refs(
+            kind="TopologySegmentHosting",
+            node_id="metro-1",
+            refs={"evpn_rt_as": "as-1"},
+            current={"evpn_rt_as": "as-1"},
+        )
+
+        gen.client.get.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_only_the_refs_that_differ_are_written(self) -> None:
+        """One ref in place and one moved: the node is fetched and saved, with the moved one only."""
+        gen = _make_gen()
+        node = _target_node()
+        node.vni_pool = "untouched"
+        gen.client.get = AsyncMock(return_value=node)
+
+        await gen.attach_refs(
+            kind="TopologyColocationMetro",
+            node_id="metro-1",
+            refs={"vni_pool": "vni-1", "fabric_asn_pool": "asn-2"},
+            current={"vni_pool": "vni-1", "fabric_asn_pool": "asn-1"},
+        )
+
+        assert node.fabric_asn_pool == {"id": "asn-2"}
+        assert node.vni_pool == "untouched"
+        node.save.assert_awaited_once_with(update_group_context=False)
+
+    @pytest.mark.asyncio
+    async def test_an_unset_current_ref_is_attached(self) -> None:
+        """First run: the query read nothing (None, or no key), so the ref is written as before."""
+        gen = _make_gen()
+        node = _target_node()
+        gen.client.get = AsyncMock(return_value=node)
+
+        await gen.attach_refs(
+            kind="TopologySegmentHosting", node_id="metro-1", refs={"evpn_rt_as": "as-1"}, current={"evpn_rt_as": None}
+        )
+
+        assert node.evpn_rt_as == {"id": "as-1"}
+        node.save.assert_awaited_once_with(update_group_context=False)
+
+    @pytest.mark.asyncio
+    async def test_a_missing_node_is_still_fatal_when_something_differs(self) -> None:
+        """The error policy holds on the path that does read the node."""
+        gen = _make_gen()
+        gen.client.get = AsyncMock(
+            side_effect=NodeNotFoundError(branch_name="main", node_type="TopologyPod", identifier={})
+        )
+
+        with pytest.raises(GeneratorError, match="node not found"):
+            await gen.attach_refs(
+                kind="TopologyPod", node_id="pod-1", refs={"loopback_pool": "lo-2"}, current={"loopback_pool": "lo-1"}
+            )
+
+
+def _pool(name: str) -> MagicMock:
+    """A CoreIPPrefixPool node as filters() returns it."""
+    pool = MagicMock(id=f"id-{name}")
+    pool.name = MagicMock(value=name)
+    return pool
+
+
+class TestPreloadParentPools:
+    """preload_parent_pools(): the parents of several slices in one read, found by _get_parent_pool_with_retry."""
+
+    @pytest.mark.asyncio
+    async def test_preloaded_parents_are_found_without_a_get_per_pool(self) -> None:
+        """Three parents, one filters(), no get at lookup time."""
+        gen = _make_gen()
+        gen.client.filters = AsyncMock(return_value=[_pool("Loopback-IPv4"), _pool("Management-IPv4"), _pool("T")])
+        gen.client.get = AsyncMock()
+
+        await gen.preload_parent_pools(["Loopback-IPv4", "Management-IPv4", "T", "Loopback-IPv4"])
+
+        gen.client.filters.assert_awaited_once()
+        call = gen.client.filters.await_args
+        assert call is not None
+        assert call.kwargs["name__values"] == ["Loopback-IPv4", "Management-IPv4", "T"]
+        assert (await gen._get_parent_pool_with_retry("Management-IPv4")).id == "id-Management-IPv4"
+        gen.client.get.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_parent_not_returned_keeps_the_retrying_get(self) -> None:
+        """A supernet another generator has not created yet is not cached: its lookup still waits for it."""
+        gen = _make_gen()
+        gen.client.filters = AsyncMock(return_value=[_pool("Loopback-IPv4")])
+        late = _pool("fr-loopback-pool")
+        gen.client.get = AsyncMock(
+            side_effect=[NodeNotFoundError(branch_name="main", node_type="P", identifier={}), late]
+        )
+        gen._retry_delay = MagicMock(return_value=0)
+
+        await gen.preload_parent_pools(["Loopback-IPv4", "fr-loopback-pool"])
+
+        assert (await gen._get_parent_pool_with_retry("fr-loopback-pool")) is late
+        assert gen.client.get.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_a_second_preload_reads_only_what_is_not_known(self) -> None:
+        """Already-cached names are not asked for again, and nothing is read when all are known."""
+        gen = _make_gen()
+        gen.client.filters = AsyncMock(return_value=[_pool("A")])
+        await gen.preload_parent_pools(["A"])
+        gen.client.filters = AsyncMock(return_value=[_pool("B")])
+
+        await gen.preload_parent_pools(["A", "B"])
+        await gen.preload_parent_pools(["A", "B"])
+
+        gen.client.filters.assert_awaited_once()
+        call = gen.client.filters.await_args
+        assert call is not None
+        assert call.kwargs["name__values"] == ["B"]
+
+    @pytest.mark.asyncio
+    async def test_without_a_preload_the_lookup_is_the_get_it_always_was(self) -> None:
+        """No cache entry: one get by name, as before."""
+        gen = _make_gen()
+        pool = _pool("Technical-IPv4")
+        gen.client.get = AsyncMock(return_value=pool)
+
+        assert (await gen._get_parent_pool_with_retry("Technical-IPv4")) is pool
+        gen.client.get.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_the_cache_is_per_kind(self) -> None:
+        """A prefix pool cached under a name is not served for a number pool of the same name."""
+        gen = _make_gen()
+        gen.client.filters = AsyncMock(return_value=[_pool("fr-asn-pool")])
+        number_pool = _pool("fr-asn-pool")
+        gen.client.get = AsyncMock(return_value=number_pool)
+        await gen.preload_parent_pools(["fr-asn-pool"])
+
+        assert (await gen._get_parent_pool_with_retry("fr-asn-pool", kind=CoreNumberPool)) is number_pool
 
 
 class TestFabricParentPoolFamily:

@@ -139,7 +139,7 @@ query edge_config($device: String!) {
 
   # Public space of the INTERNET namespace: what the upstream transit session
   # may be announced (aggregate + RM-TRANSIT-OUT). namespace_type is filtered
-  # in transforms/helpers/bgp.py (get_internet_prefixes).
+  # in transforms/helpers/bgp_external.py (get_internet_prefixes).
   IpamPrefix(role__value: "public") {
     edges {
       node {
@@ -151,7 +151,7 @@ query edge_config($device: String!) {
 
   # On-prem routed space per tenant VRF: what an external tenant-VRF peer (a
   # cloud VIF, the SD-WAN gateway) may be announced. Grouped by namespace in
-  # transforms/helpers/bgp.py (get_onprem_prefixes).
+  # transforms/helpers/bgp_external.py (get_onprem_prefixes).
   # owner: who owns the announced prefix (only an OrganizationCustomer owner counts, so a
   # session is announced only the prefixes of its own owner). status: the transform drops
   # `retired` segments in Python (deliberately no server-side filter here, so the smoke
@@ -179,7 +179,7 @@ query edge_config($device: String!) {
   # Cloud virtual interfaces and the VPC aggregates each can reach: what the
   # session on the edge's <port>.<vlan_id> sub-interface may accept. Matched to
   # this device through the Direct Connect's physical_devices in
-  # transforms/helpers/bgp.py (get_external_peer_prefixes).
+  # transforms/helpers/bgp_external.py (get_external_peer_prefixes).
   # virtual_network.account.owner: the owner of the registered VPC aggregate (only an
   # OrganizationCustomer owner counts), so the session accepts only its own owner's VPCs.
   CloudVirtualInterface {
@@ -225,7 +225,7 @@ query edge_config($device: String!) {
   # facing that gateway may accept (the union of its offices' lan_prefixes and
   # the prefixes of the segments they host themselves).
   # Matched to the handoff through the BGP peering's far-end device in
-  # transforms/helpers/bgp.py (get_external_peer_prefixes).
+  # transforms/helpers/bgp_external.py (get_external_peer_prefixes).
   # owner: who owns the office's lan_prefixes (only an OrganizationCustomer owner counts).
   # segment.owner: who owns a hosted segment's prefix; segment.status: a `retired` segment
   # is dropped in Python.

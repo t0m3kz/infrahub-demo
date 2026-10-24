@@ -24,17 +24,22 @@ class _StopAfterPools(Exception):
     """Raised by the allocate_resource_pools mock: the test only needs its arguments."""
 
 
-def _pod(pod_id: str, *, index: int = 9, design: str = "S_MIDDLE") -> MagicMock:
-    """A pod of the DC as client.filters returns it: id, index and its design's id."""
-    pod = MagicMock()
-    pod.id = pod_id
-    pod.index.value = index
-    pod.design.id = pod_design(design)["id"]
-    return pod
+def _pod(pod_id: str, *, index: int = 9, design: str = "S_MIDDLE") -> dict[str, Any]:
+    """A pod of the DC as the DC's ``children`` carry it in the query payload: id, index and its design's id."""
+    return {"id": pod_id, "index": index, "design": {"node": {"id": pod_design(design)["id"]}}}
 
 
-def _payload(*, pod: str = "S_MIDDLE", dc: str = "S", underlay_protocol: str = "ipv6") -> dict[str, Any]:
-    """A back-to-back DC (no super-spines) with one pod, ready for pool allocation."""
+def _payload(
+    *,
+    pod: str = "S_MIDDLE",
+    dc: str = "S",
+    underlay_protocol: str = "ipv6",
+    pods_of_the_dc: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """A back-to-back DC (no super-spines) with one pod, ready for pool allocation.
+
+    ``pods_of_the_dc`` are the other pods the DC's children list; its customer footprints come back as empty dicts.
+    """
     return {
         "TopologyPod": [
             {
@@ -58,19 +63,20 @@ def _payload(*, pod: str = "S_MIDDLE", dc: str = "S", underlay_protocol: str = "
                     "underlay_protocol": underlay_protocol,
                     "fabric_templates": [],
                     "devices": [],
+                    "children": [{}, *(pods_of_the_dc or [])],
                 },
             }
         ]
     }
 
 
-def _make_generator(*, pods_of_the_dc: list[MagicMock]) -> Any:
+def _make_generator() -> Any:
     gen: Any = PodTopologyGenerator.__new__(PodTopologyGenerator)
     gen.logger = MagicMock()
     gen.client = MagicMock()
     gen.client.group_context = MagicMock()
     gen.client.group_context.related_node_ids = []
-    gen.client.filters = AsyncMock(return_value=pods_of_the_dc)
+    gen.client.filters = AsyncMock(return_value=[])
     gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
     gen.allocate_resource_pools = AsyncMock(side_effect=_StopAfterPools)
     gen.create_devices = AsyncMock()
@@ -81,7 +87,7 @@ def _make_generator(*, pods_of_the_dc: list[MagicMock]) -> Any:
 class TestEnvelopeEnforcement:
     @pytest.mark.asyncio
     async def test_a_design_the_dc_design_does_not_host_fails_before_any_write(self) -> None:
-        gen = _make_generator(pods_of_the_dc=[])
+        gen = _make_generator()
         payload = _payload()
         payload["TopologyPod"][0]["parent"]["design"]["pod_templates"] = [pod_design("S_TOR")]
 
@@ -97,22 +103,23 @@ class TestEnvelopeEnforcement:
     @pytest.mark.asyncio
     async def test_more_pods_than_max_pods_fails_before_any_write(self) -> None:
         """The S design holds at most 2 pods: a third one is refused."""
-        gen = _make_generator(pods_of_the_dc=[_pod("pod-a"), _pod("pod-b")])
+        gen = _make_generator()
 
-        await gen.generate(_payload(dc="S"))
+        await gen.generate(_payload(dc="S", pods_of_the_dc=[_pod("pod-a"), _pod("pod-b")]))
 
         gen.logger.error.assert_called_once()
         assert "DC DC1 holds 3 pods but its design 'S' allows at most 2" in gen.logger.error.call_args.args[0]
+        gen.client.filters.assert_not_awaited()  # the DC's pods come from the query payload
         gen.allocate_resource_pools.assert_not_awaited()
         gen.create_devices.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_the_pod_itself_is_counted_once(self) -> None:
         """A re-run of a pod already in the DC's pod list is within max_pods."""
-        gen = _make_generator(pods_of_the_dc=[_pod("pod-1"), _pod("pod-b")])
+        gen = _make_generator()
 
         with pytest.raises(_StopAfterPools):
-            await gen.generate(_payload(dc="S"))
+            await gen.generate(_payload(dc="S", pods_of_the_dc=[_pod("pod-1"), _pod("pod-b")]))
 
         gen.logger.error.assert_not_called()
         gen.allocate_resource_pools.assert_awaited_once()
@@ -123,8 +130,8 @@ class TestMeshSlotWidth:
     async def test_a_lower_sibling_of_another_spine_width_fails_before_any_write(self) -> None:
         """An S DC lists 2- and 4-spine pod designs: meshing a 2-spine pod 2 to a 4-spine pod 1 would
         slice pod 1's uplinks in 2-port slots for one pair and 4-port slots for the other."""
-        gen = _make_generator(pods_of_the_dc=[_pod("pod-a", index=1, design="S_TOR")])
-        payload = _payload(dc="S")
+        gen = _make_generator()
+        payload = _payload(dc="S", pods_of_the_dc=[_pod("pod-a", index=1, design="S_TOR")])
         payload["TopologyPod"][0]["index"] = 2
 
         await gen.generate(payload)
@@ -139,10 +146,14 @@ class TestMeshSlotWidth:
     @pytest.mark.asyncio
     async def test_siblings_of_the_same_width_pass(self) -> None:
         """S_MIDDLE and S_BORDER_SPINE_POD are different designs with the same 2-spine width."""
-        gen = _make_generator(
-            pods_of_the_dc=[_pod("pod-a", index=1, design="S_BORDER_SPINE_POD"), _pod("pod-c", index=3, design="S_TOR")]
+        gen = _make_generator()
+        payload = _payload(
+            dc="M",
+            pods_of_the_dc=[
+                _pod("pod-a", index=1, design="S_BORDER_SPINE_POD"),
+                _pod("pod-c", index=3, design="S_TOR"),
+            ],
         )
-        payload = _payload(dc="M")
         payload["TopologyPod"][0]["index"] = 2
 
         with pytest.raises(_StopAfterPools):
@@ -153,9 +164,9 @@ class TestMeshSlotWidth:
     @pytest.mark.asyncio
     async def test_a_dc_with_super_spines_does_not_check_mesh_widths(self) -> None:
         """Mixed spine widths are fine under super-spines: every pod owns its own super-spine port stride."""
-        gen = _make_generator(pods_of_the_dc=[_pod("pod-a", index=1, design="S_TOR")])
+        gen = _make_generator()
         gen.bgp_processes_ready = AsyncMock(return_value=True)
-        payload = _payload(dc="L")
+        payload = _payload(dc="L", pods_of_the_dc=[_pod("pod-a", index=1, design="S_TOR")])
         payload["TopologyPod"][0]["index"] = 2
         payload["TopologyPod"][0]["parent"]["devices"] = [{"name": "ss-01"}]
         payload["TopologyPod"][0]["parent"]["fabric_templates"] = [
@@ -178,7 +189,7 @@ class TestPodPoolSizes:
     async def test_pools_are_sized_from_the_pod_and_dc_designs(
         self, dc: str, pod: str, protocol: str, technical_ipv6: bool, loopback_ipv6: bool
     ) -> None:
-        gen = _make_generator(pods_of_the_dc=[])
+        gen = _make_generator()
 
         with pytest.raises(_StopAfterPools):
             await gen.generate(_payload(pod=pod, dc=dc, underlay_protocol=protocol))
@@ -190,7 +201,7 @@ class TestPodPoolSizes:
     @pytest.mark.asyncio
     async def test_m_middle_in_an_m_dc_gets_a_256_address_technical_pool(self) -> None:
         """Pinned example: 87 links (174 addresses) need 8 host bits at 75% fill -> /120 in IPv6."""
-        gen = _make_generator(pods_of_the_dc=[])
+        gen = _make_generator()
 
         with pytest.raises(_StopAfterPools):
             await gen.generate(_payload(pod="M_MIDDLE", dc="M"))
@@ -202,7 +213,7 @@ class TestSuperSpineStride:
     @pytest.mark.asyncio
     async def test_cabling_offset_strides_by_the_widest_pod_design(self) -> None:
         """Pod 2 of an L DC starts at super-spine port 4: the widest pod design the L design hosts has 4 spines."""
-        gen = _make_generator(pods_of_the_dc=[])
+        gen = _make_generator()
         gen.allocate_resource_pools = AsyncMock(return_value={"technical": MagicMock(), "loopback": MagicMock()})
         gen.create_devices = AsyncMock(return_value=["spine-01", "spine-02"])
         gen.create_cabling = AsyncMock(return_value=[])
@@ -225,7 +236,7 @@ class TestSpineSlotEntries:
     async def test_role_index_continues_across_spine_entries(self) -> None:
         """Two spine entries (2 + 2): the second starts at role_index 3, so it never re-creates
         (upserts over) the first entry's spines."""
-        gen = _make_generator(pods_of_the_dc=[])
+        gen = _make_generator()
         gen.allocate_resource_pools = AsyncMock(return_value={"technical": MagicMock(), "loopback": MagicMock()})
         gen.create_devices = AsyncMock(side_effect=[["sp-01", "sp-02"], ["sp-03", "sp-04"]])
         gen._cable_to_existing_sibling_pods = AsyncMock()

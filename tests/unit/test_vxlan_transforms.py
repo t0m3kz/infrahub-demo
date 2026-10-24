@@ -2,9 +2,7 @@
 
 import pytest
 
-from tests.unit.vxlan_transforms_helpers import (
-    _make_activation,
-)
+from tests.unit.vxlan_transforms_helpers import _make_activation
 from transforms.helpers.segments import _vlans_from_activations, get_vlans
 from transforms.helpers.vxlan import (
     _l2_from_activations,

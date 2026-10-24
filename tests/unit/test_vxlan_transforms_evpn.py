@@ -4,9 +4,7 @@ import logging
 
 import pytest
 
-from tests.unit.vxlan_transforms_helpers import (
-    _make_activation,
-)
+from tests.unit.vxlan_transforms_helpers import _make_activation
 from transforms.common import _fabric_anycast_mac, _fabric_rt_asn
 from transforms.helpers.vxlan import (
     _DEFAULT_ANYCAST_GATEWAY_MAC,

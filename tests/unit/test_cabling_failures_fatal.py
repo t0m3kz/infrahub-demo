@@ -17,7 +17,7 @@ from generators.common import CablingOptions, CommonGenerator
 from generators.connections import CablingMixin
 from generators.helpers import CablingPlanError
 from generators.logger import GeneratorError
-from generators.topology import pod as pod_module
+from generators.topology import pod_mesh as pod_mesh_module
 from generators.topology.pod import PodTopologyGenerator
 
 
@@ -92,11 +92,9 @@ class TestCreateCabling:
         gen.logger.warning.assert_not_called()
 
 
-def _sibling(index: int) -> MagicMock:
-    sibling = MagicMock()
-    sibling.id = f"pod-{index}"
-    sibling.index.value = index
-    return sibling
+def _sibling(index: int) -> dict[str, Any]:
+    """A pod of the DC as the ``children`` of the DC in pod.gql carry it."""
+    return {"id": f"pod-{index}", "index": index, "design": {"id": "design-pod"}}
 
 
 def _make_pod_gen(siblings: list[Any]) -> Any:
@@ -152,7 +150,7 @@ class TestBackToBackMesh:
         """Only the higher-index pod cables a pair, so a skipped pair stayed uncabled for good."""
         gen = _make_pod_gen(siblings=[_sibling(1), _sibling(2)])
 
-        with patch.object(pod_module, "_SIBLING_SPINE_MAX_RETRIES", 1):
+        with patch.object(pod_mesh_module, "_SIBLING_SPINE_MAX_RETRIES", 1):
             with pytest.raises(GeneratorError, match="sibling pod idx=1 still has no spine"):
                 await _mesh(gen, spine_interfaces=["Ethernet1/33", "Ethernet1/34"])
 

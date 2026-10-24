@@ -7,10 +7,7 @@ from typing import Any
 import pytest
 
 from generators.logger import GeneratorError
-from tests.unit.simulators.circuit_fakes import (
-    FakeClient,
-    session_generator,
-)
+from tests.unit.simulators.circuit_fakes import FakeClient, session_generator
 
 HANDOFF = "VC-C001-EQXFR-AWS"
 DCI = "VC-DCI-DC10-FR2"

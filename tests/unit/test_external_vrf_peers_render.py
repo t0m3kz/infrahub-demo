@@ -12,9 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from tests.unit.external_vrf_peers_helpers import (
-    _ROOT,
-)
+from tests.unit.external_vrf_peers_helpers import _ROOT
 from transforms.common import UNFILTERED_BANNER_PLATFORMS
 from transforms.config.edge import Edge
 

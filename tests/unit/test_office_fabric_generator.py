@@ -26,9 +26,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from generators.helpers.naming import DeviceNameContext, DeviceNamingConfig
-from generators.protocols import (
-    TopologyCustomerOffice,
-)
+from generators.protocols import TopologyCustomerOffice
 from generators.topology.office_fabric import (
     _OFFICE_LOOPBACK_PREFIX_LENGTH,
     _OFFICE_MANAGEMENT_PREFIX_LENGTH,
@@ -181,23 +179,22 @@ class TestPools:
                 "kind": "prefix",
             },
         }
-        assert set(pools) == {"loopback", "management", "technical"}
+        assert set(pools) == {"loopback", "management", "technical", "vni"}
 
     @pytest.mark.asyncio
-    async def test_vni_pool_is_the_offices_own_and_attached_as_vni_pool(self) -> None:
-        """The pool add_vxlan_segment reads off the office (TopologySegmentHosting.vni_pool)."""
+    async def test_vni_pool_is_the_offices_own_and_handed_back_for_the_attach(self) -> None:
+        """The pool add_vxlan_segment reads off the office (TopologySegmentHosting.vni_pool); generate() attaches it."""
         gen = _make_generator()
         gen.fabric_name = "c005-office"
 
-        await gen._ensure_office_pools(office_id="office-1")
+        pools = await gen._ensure_office_pools(office_id="office-1")
 
         vni = gen.upsert_number_pool.await_args.kwargs
         assert vni["pool_name"] == "c005-office-vni-pool"
         assert (vni["node"], vni["node_attribute"]) == ("ManagedSegmentDeployment", "vni")
         assert (vni["start_range"], vni["end_range"]) == (10001, 39999)
-        gen.attach_refs.assert_awaited_once_with(
-            kind=TopologyCustomerOffice, node_id="office-1", refs={"vni_pool": "vni-pool-id"}
-        )
+        assert pools["vni"].id == "vni-pool-id"
+        gen.attach_refs.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_pools_are_created_under_a_per_office_lock(self) -> None:
@@ -391,12 +388,13 @@ class TestGenerate:
         for name in (
             "ensure_sliced_pool",
             "upsert_number_pool",
+            "ensure_lisp_site_key",
+            "attach_refs",
             "create_devices",
             "create_cabling",
             "create_chain_cabling",
             "ensure_ospf_area",
             "create_routing",
-            "ensure_lisp_site_key",
             "_ensure_wan_exit",
         ):
             manager.attach_mock(getattr(gen, name), name)
@@ -404,16 +402,18 @@ class TestGenerate:
         await gen.generate(_payload(_office()))
         calls = [call[0] for call in manager.mock_calls]
 
-        # the three IP pools and the VNI pool, then devices, links, area, routing, key, and last the WAN exit
+        # the three IP pools and the VNI pool, the site key and the office's one attach of both references,
+        # then devices, links, area, routing, and last the WAN exit
         assert calls[:4] == ["ensure_sliced_pool"] * 3 + ["upsert_number_pool"]
         assert calls[4:] == [
+            "ensure_lisp_site_key",
+            "attach_refs",
             "create_devices",
             "create_devices",
             "create_cabling",
             "create_chain_cabling",
             "ensure_ospf_area",
             "create_routing",
-            "ensure_lisp_site_key",
             "_ensure_wan_exit",
         ]
         assert (gen.fabric_name, gen.pod_name, gen.deployment_id) == ("c005-office", None, "office-1")
@@ -428,7 +428,12 @@ class TestGenerate:
         assert options["no_overlay"] is True
         assert options["ospf_area_id"] == "area-id"
         assert options["design"] == {"routing_strategy": "ospf-ibgp"}
-        gen.ensure_lisp_site_key.assert_awaited_once_with(deployment_id="office-1")
+        gen.ensure_lisp_site_key.assert_awaited_once_with()
+        gen.attach_refs.assert_awaited_once_with(
+            kind=TopologyCustomerOffice,
+            node_id="office-1",
+            refs={"vni_pool": "vni-pool-id", "lisp_site_key": "site-key-id"},
+        )
         # the exit is built toward the distribution pair, from its own template's ports
         gen._ensure_wan_exit.assert_awaited_once_with(
             distribution_names=["ds-c005-office01", "ds-c005-office02"], distribution_template=_DISTRIBUTION_TEMPLATE
@@ -456,6 +461,7 @@ class TestGenerate:
         gen.create_devices.assert_not_awaited()
         gen.create_routing.assert_not_awaited()
         gen.ensure_lisp_site_key.assert_not_awaited()
+        gen.attach_refs.assert_not_awaited()
         gen._ensure_wan_exit.assert_not_awaited()
         gen.logger.error.assert_not_called()
 
@@ -469,15 +475,16 @@ class TestGenerate:
         gen.create_devices.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_a_missing_ospf_area_stops_before_routing_and_the_key(self) -> None:
+    async def test_a_missing_ospf_area_stops_before_routing_and_the_wan_exit(self) -> None:
+        """The references are attached before the area is looked for, so they are in place on the failed run too."""
         gen = _make_generator()
         gen.ensure_ospf_area = AsyncMock(return_value=None)
 
         await gen.generate(_payload(_office()))
 
         gen.create_routing.assert_not_awaited()
-        gen.ensure_lisp_site_key.assert_not_awaited()
         gen._ensure_wan_exit.assert_not_awaited()
+        gen.attach_refs.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_each_office_of_the_response_is_generated_with_its_own_names(self) -> None:

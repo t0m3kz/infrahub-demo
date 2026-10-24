@@ -17,7 +17,8 @@ unique across the three kinds. Kit is per zone because the zones of one metro
 can be asymmetric (FR2 carries the edge pair and the firewalls, FR6 nothing); a
 zone with no kit is legal and common, and its run is a no-op.
 
-ColocationFabricGenerator holds the one implementation; the two subclasses
+The pool table (ColoPoolSlot) is colocation_pools.py and the EVPN Multi-Site and edge-pair steps are
+colocation_evpn.py's mixin; ColocationFabricGenerator holds the one implementation; the two subclasses
 differ only in class attributes (the GraphQL root, the protocol class the pool
 references are attached to, the template kind they may host, a label for logs).
 A zone hosts physical templates (TemplateDcimPhysicalDevice), a virtual
@@ -58,39 +59,31 @@ Registered as add_colocation_zone / add_virtual_colocation in .infrahub.yml.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
-from dataclasses import dataclass
 from typing import Any, ClassVar, Literal, cast
 
 from infrahub_sdk.exceptions import NodeNotFoundError
-from infrahub_sdk.protocols import CoreNumberPool
-from typing_extensions import TypedDict
 
 from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator, DeviceOptions
 from ..connections import BORDER_ROLE_FOR_SERVICES, CablingMixin
 from ..devices import DeviceMixin
-from ..fabric_sizing import (
-    COLO_ZONE_LOOPBACK_IPV6_BITS,
-    COLO_ZONE_TECHNICAL_IPV6_BITS,
-    colo_metro_loopback_bits,
-    colo_metro_loopback_ipv6_bits,
-    colo_metro_management_bits,
-    colo_metro_technical_bits,
-    colo_metro_technical_ipv6_bits,
-    colo_zone_loopback_bits,
-    colo_zone_management_bits,
-    colo_zone_technical_bits,
-    host_bits_to_prefix_length,
-)
 from ..firewall_context import FIREWALL_CONTEXT
-from ..helpers import get_loopback_name
-from ..helpers.routing import loopback_prefix_length, p2p_prefix_length
+from ..helpers.routing import loopback_prefix_length
 from ..pools import PoolMixin
-from ..protocols import DcimVirtualInterface, ManagedBGP, TopologyColocationZone, TopologyVirtualColocation
-from ..routing import EVPN_AF, RoutingMixin
-from ..types import CablingOptions
+from ..protocols import TopologyColocationZone, TopologyVirtualColocation
+from ..routing import RoutingMixin
+from .colocation_evpn import ColocationEvpnMixin
+from .colocation_pools import (
+    _COLO_LOOPBACK_PREFIX_LENGTH,
+    _COLO_MANAGEMENT_PREFIX_LENGTH,
+    _COLO_TECHNICAL_PREFIX_LENGTH,
+    ATTACHED_SLOTS,
+    COLO_POOL_SLOTS,
+    LOOPBACK_IPV6_SLOT,
+    ColocationFabricData,
+    ColoPoolSlot,
+)
 
 # Roles a zone or virtual colocation can host. Deliberately NOT dc.py's
 # _DC_VALID_FABRIC_ROLES: `edge` is valid here and invalid at DC level (a DC
@@ -121,159 +114,13 @@ _COLO_SERVICE_ROLES = frozenset({"firewall", "load-balancer"})
 _COLO_TEMPLATE_KIND_PHYSICAL = "TemplateDcimPhysicalDevice"
 _COLO_TEMPLATE_KIND_APPLIANCE = "TemplateCloudNetworkAppliance"
 
-# The prefix lengths a zone or virtual colocation WITHOUT a design slices from the
-# bootstrap pools (Loopback-IPv4 etc.): fixed, because there is no envelope to
-# derive them from. With a design every size comes from generators/fabric_sizing.py
-# instead (ColoPoolSlot.zone_length), exactly like a DC's.
-_COLO_LOOPBACK_PREFIX_LENGTH = 28
-_COLO_TECHNICAL_PREFIX_LENGTH = 26
-_COLO_MANAGEMENT_PREFIX_LENGTH = 28
-
-# EVPN Multi-Site border gateway (see _ensure_evpn). Every DC fabric this
-# demo builds runs an IPv6 underlay, and a Multi-Site tunnel only forms between
-# VTEPs of one address family, so the edge's VTEP is a dedicated IPv6
-# loopback rather than its IPv4 Loopback0 (which stays the BGP router-id: a
-# router-id is 32-bit and cannot be an IPv6 address). The slice that holds the
-# VTEPs is the loopback-ipv6 slot below.
-_COLO_VTEP_LOOPBACK_INDEX = 1
-# The two edges of a zone share no fabric: one direct link between them (port
-# role `interlink`, N9K-C9316D-GX_EDGE's Ethernet1/8) carries a /127 and the
-# iBGP FABRIC session (see _ensure_edge_pair). The technical-ipv6 slot holds eight
-# /127s, far more than the one link needs.
-_COLO_INTERLINK_ROLE = "interlink"
-_COLO_P2P_IPV6_PREFIX_LENGTH = p2p_prefix_length("ipv6")
-_COLO_FABRIC_UNICAST_AF = ("ipv6", "unicast")
-
 # The design maximum each role is held to (TopologyTemplateColocationZone).
 _COLO_DESIGN_MAX_BY_ROLE = {"edge": "max_edges", "firewall": "max_firewalls", "load-balancer": "max_load_balancers"}
 
-# Host-bit sizing functions of generators/fabric_sizing.py, by tier.
-ZoneBits = Callable[[Mapping[str, Any]], int]
-MetroBits = Callable[[Mapping[str, Any]], int]
 
-
-@dataclass(frozen=True)
-class ColoPoolSlot:
-    """One address block of the colocation hierarchy, in both of its tiers.
-
-    The metro holds a SUPERNET per slot (a prefix pool named ``{metro}-{suffix}``,
-    sized by ``metro_bits`` for max_zones zones of the largest zone design) and each
-    zone or virtual colocation holds a SLICE (a pool named ``{zone}-{suffix}``,
-    sized by ``zone_bits`` from its own design) cut out of that supernet, the way
-    a pod slices its DC's pools. A zone or virtual colocation that is not under a
-    metro with a design slices from the bootstrap pool ``bootstrap_pool``
-    instead, with the design-derived size or, with no design either, ``fallback_length``.
-
-    ``attribute`` is the relationship the pool is attached to on the owner (the
-    metro and the zone use the same three names); the IPv6 slots have none, they are
-    found by name.
-    """
-
-    suffix: str
-    bootstrap_pool: str
-    role: str
-    zone_kind: Literal["address", "prefix"]
-    ipv6: bool
-    fallback_length: int
-    zone_bits: ZoneBits
-    metro_bits: MetroBits
-    attribute: str | None = None
-
-    def name(self, owner: str) -> str:
-        """The pool this slot is on ``owner`` (a lower-case metro, zone or virtual colocation name)."""
-        return f"{owner}-{self.suffix}"
-
-    def zone_length(self, design: Mapping[str, Any] | None) -> int:
-        """Prefix length of the zone's slice: from its design, else the fixed fallback."""
-        if not design:
-            return self.fallback_length
-        return host_bits_to_prefix_length(self.zone_bits(design), ipv6=self.ipv6)
-
-    def metro_length(self, design: Mapping[str, Any]) -> int:
-        """Prefix length of the metro's supernet, from the metro design."""
-        return host_bits_to_prefix_length(self.metro_bits(design), ipv6=self.ipv6)
-
-
-def _zone_vtep_bits(_design: Mapping[str, Any]) -> int:
-    return COLO_ZONE_LOOPBACK_IPV6_BITS
-
-
-def _zone_interlink_bits(_design: Mapping[str, Any]) -> int:
-    return COLO_ZONE_TECHNICAL_IPV6_BITS
-
-
-LOOPBACK_SLOT = ColoPoolSlot(
-    suffix="loopback-pool",
-    bootstrap_pool="Loopback-IPv4",
-    role="loopback",
-    zone_kind="address",
-    ipv6=False,
-    fallback_length=_COLO_LOOPBACK_PREFIX_LENGTH,
-    zone_bits=colo_zone_loopback_bits,
-    metro_bits=colo_metro_loopback_bits,
-    attribute="loopback_pool",
-)
-MANAGEMENT_SLOT = ColoPoolSlot(
-    suffix="management-pool",
-    bootstrap_pool="Management-IPv4",
-    role="management",
-    zone_kind="address",
-    ipv6=False,
-    fallback_length=_COLO_MANAGEMENT_PREFIX_LENGTH,
-    zone_bits=colo_zone_management_bits,
-    metro_bits=colo_metro_management_bits,
-    attribute="management_pool",
-)
-TECHNICAL_SLOT = ColoPoolSlot(
-    suffix="technical-pool",
-    bootstrap_pool="Technical-IPv4",
-    role="technical",
-    zone_kind="prefix",
-    ipv6=False,
-    fallback_length=_COLO_TECHNICAL_PREFIX_LENGTH,
-    zone_bits=colo_zone_technical_bits,
-    metro_bits=colo_metro_technical_bits,
-    attribute="technical_pool",
-)
-# The IPv6 slots are sized by what they hold (one VTEP /128 per edge, one /127 for the
-# interlink), not by the design, so the zone's size is the same with or without one.
-LOOPBACK_IPV6_SLOT = ColoPoolSlot(
-    suffix="loopback-ipv6-pool",
-    bootstrap_pool="Loopback-IPv6",
-    role="loopback",
-    zone_kind="address",
-    ipv6=True,
-    fallback_length=host_bits_to_prefix_length(COLO_ZONE_LOOPBACK_IPV6_BITS, ipv6=True),
-    zone_bits=_zone_vtep_bits,
-    metro_bits=colo_metro_loopback_ipv6_bits,
-)
-TECHNICAL_IPV6_SLOT = ColoPoolSlot(
-    suffix="technical-ipv6-pool",
-    bootstrap_pool="Technical-IPv6",
-    role="technical",
-    zone_kind="prefix",
-    ipv6=True,
-    fallback_length=host_bits_to_prefix_length(COLO_ZONE_TECHNICAL_IPV6_BITS, ipv6=True),
-    zone_bits=_zone_interlink_bits,
-    metro_bits=colo_metro_technical_ipv6_bits,
-)
-COLO_POOL_SLOTS = (LOOPBACK_SLOT, MANAGEMENT_SLOT, TECHNICAL_SLOT, LOOPBACK_IPV6_SLOT, TECHNICAL_IPV6_SLOT)
-# The slots attached to the owner (zone, virtual colocation or metro) as a pool reference.
-ATTACHED_SLOTS = (LOOPBACK_SLOT, MANAGEMENT_SLOT, TECHNICAL_SLOT)
-
-
-class ColocationFabricData(TypedDict, total=False):
-    """The subset of queries/topology/add/colocation_zone.gql and colocation_virtual.gql this generator reads."""
-
-    id: str
-    name: str
-    parent: dict[str, Any]
-    design: dict[str, Any] | None
-    account: dict[str, Any] | None
-    fabric_templates: list[dict[str, Any]]
-
-
-class ColocationFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, CommonGenerator):
+class ColocationFabricGenerator(
+    ColocationEvpnMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, CommonGenerator
+):
     """Create the pools and the on-ramp devices a zone or virtual colocation declares.
 
     Not registered itself: ColocationZoneGenerator and VirtualColocationGenerator
@@ -518,6 +365,12 @@ class ColocationFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMix
             usable.append(entry)
         return usable
 
+    def _parent_pool_name(self, slot: ColoPoolSlot) -> str:
+        """The pool this node's ``slot`` is sliced from: the metro's supernet, else the bootstrap pool."""
+        if self._slices_from_metro:
+            return slot.name((self.data.get("parent") or {})["name"].lower())
+        return slot.bootstrap_pool
+
     async def _slice_pool(self, slot: ColoPoolSlot) -> Any:
         """Upsert this node's pool for ``slot``: a slice of the metro's supernet or of a bootstrap pool.
 
@@ -532,10 +385,7 @@ class ColocationFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMix
         length follows the new design. Resizing means deleting the pool and its
         prefix first; nothing here migrates.
         """
-        if self._slices_from_metro:
-            parent = slot.name((self.data.get("parent") or {})["name"].lower())
-        else:
-            parent = slot.bootstrap_pool
+        parent = self._parent_pool_name(slot)
         try:
             return await self.ensure_sliced_pool(
                 pool_name=slot.name(self.fabric_name),
@@ -591,6 +441,8 @@ class ColocationFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMix
         # twin that hands out the same addresses. Zone, VC and metro names are unique across the three kinds,
         # so one key per name is enough.
         refs: dict[str, str | None] = {}
+        # The parents of all five slots in one read, not one get per slice (a name not there yet keeps its retry).
+        await self.preload_parent_pools(self._parent_pool_name(slot) for slot in COLO_POOL_SLOTS)
         async with self.resource_lock(f"colocation-pools-{name}"):
             for slot in ATTACHED_SLOTS:
                 pool = await self._slice_pool(slot)
@@ -643,7 +495,7 @@ class ColocationFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMix
                                     their own border-leaf/border-spine pairs.
         """
         # Edge name -> platform, for _ensure_evpn's BGW setup.
-        self._edge_devices: dict[str, str] = {}
+        self._edge_devices = {}
         naming_convention = cast(
             Literal["standard", "hierarchical", "flat", "computed"],
             ((self.data.get("parent") or {}).get("naming_convention") or "standard").lower(),
@@ -697,223 +549,6 @@ class ColocationFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMix
                 self._register_fabric_devices(physical_names_by_role, role=role, virtual=virtual, names=names)
 
         return physical_names_by_role
-
-    async def _metro_asn_pool_id(self) -> str:
-        """The id of the parent metro's ASN pool, which the metro's one site AS is drawn from.
-
-        The metro's own generator (add_colocation_metro) creates and attaches
-        the pool, and a zone's created-trigger can fire before that task has
-        finished. So the query's `parent.fabric_asn_pool` may still be empty:
-        wait for the metro's generator, then look the pool up by name with the
-        same bounded retry the DC-pool lookups use.
-        """
-        metro = self.data.get("parent") or {}
-        pool = metro.get("fabric_asn_pool") or {}
-        if pool.get("id"):
-            return pool["id"]
-
-        metro_name = metro.get("name", "")
-        await self.wait_for_parent_generators(("add_colocation_metro",), metro["id"])
-        try:
-            found = await self._get_parent_pool_with_retry(f"{metro_name.lower()}-asn-pool", kind=CoreNumberPool)
-        except NodeNotFoundError:
-            self.fail(
-                f"Colocation {self._label} {self.fabric_name}: metro {metro_name} has no ASN pool "
-                f"'{metro_name.lower()}-asn-pool' (add_colocation_metro creates it) — cannot draw the metro's "
-                "EVPN site AS"
-            )
-        return found.id
-
-    async def _ensure_evpn(self) -> dict[str, str]:
-        """Make this node's edges EVPN Multi-Site border gateways for the metro's site.
-
-        A stretched segment reaches a colocation through the edge pair, which
-        re-originates the DC's EVPN routes into the metro (and back) — the
-        border-gateway role, with the METRO as the Multi-Site site: one site AS
-        however many zones and virtual colocations carry edges. That needs three
-        things the generic device pass does not create:
-
-        * the metro's site ASN, attached to the metro as ``evpn_rt_as`` — the
-          site-id and the admin field of its local route-targets, same role as a
-          DC's fabric AS (PoolMixin.attach_refs, the same evpn_rt_as link a DC
-          gets). Whichever zone or virtual colocation runs first draws it; the
-          others find it by its description;
-        * an overlay ManagedBGP per edge in that ASN, so the DCI peerings
-          (add_virtual_circuit, for a TopologyInterconnectCircuit) have a
-          process to attach to;
-        * an IPv6 VTEP loopback per edge (LOOPBACK_IPV6_SLOT).
-
-        The DCI sessions (add_virtual_circuit, generators/topology/virtual_circuit.py) and the
-        shared Multi-Site VIP (data/demos/30_all/08_interconnects/
-        01_colo_onramp/) are not built here: both need the DC end of the dark
-        fibre, which this generator cannot see.
-
-        Idempotent: the AS is found by its deterministic description before a
-        new one is drawn from the metro's ASN pool (a from_pool on a new node
-        would allocate a fresh ASN every run). ensure_shared_as does the
-        find-or-create under a lock keyed by that description, which is the
-        metro's name, so zones of one metro running concurrently never draw two.
-        Every other object upserts by HFID.
-
-        Returns the overlay process id of each edge it saved (edge name -> id),
-        so _ensure_edge_pair references them directly instead of re-querying
-        by name (search-index lag on objects created earlier in this run).
-        """
-        name = self.fabric_name
-        process_ids: dict[str, str] = {}
-        edge_devices: dict[str, str] = getattr(self, "_edge_devices", {})
-        if not edge_devices:
-            return process_ids
-        metro = self.data["parent"]
-        # Untracked (track=False): every zone and virtual colocation of the metro finds this one AS, so none of
-        # their tracking groups may own it; one that stopped declaring edges would otherwise delete an AS its
-        # sibling's overlay processes still use as local_as.
-        site_as_id = await self.ensure_shared_as(
-            description=f"{metro['name'].lower()} EVPN site ASN",
-            asn_pool_id=await self._metro_asn_pool_id(),
-            track=False,
-        )
-        await self.attach_refs(kind="TopologySegmentHosting", node_id=metro["id"], refs={"evpn_rt_as": site_as_id})
-
-        loopbacks = await self.client.filters(
-            kind=DcimVirtualInterface,
-            device__name__values=sorted(edge_devices),
-            role__values=["loopback", "loopback-vtep"],
-            include=["device", "ip_address"],
-        )
-        by_device: dict[tuple[str, str], Any] = {
-            (loopback.device.peer.name.value, loopback.role.value): loopback for loopback in loopbacks
-        }
-        for edge_name, platform in sorted(edge_devices.items()):
-            router_loopback = by_device.get((edge_name, "loopback"))
-            if router_loopback is None or not router_loopback.ip_address.initialized:
-                self.logger.error(
-                    f"Colocation {self._label} {name}: {edge_name} has no addressed loopback — skipping its EVPN process"
-                )
-                continue
-            device = router_loopback.device.peer
-            vtep = by_device.get((edge_name, "loopback-vtep"))
-            vtep_ip: Any
-            if vtep is not None and vtep.ip_address.initialized:
-                vtep_ip = {"id": vtep.ip_address.id}
-            else:
-                vtep_ip = await self.client.allocate_next_ip_address(
-                    resource_pool=self._vtep_pool,
-                    identifier=f"{edge_name}-vtep",
-                    prefix_length=128,
-                    data={"description": f"EVPN VTEP loopback for {edge_name}"},
-                )
-            vtep_obj = await self.client.create(
-                kind=DcimVirtualInterface,
-                data={
-                    **({"id": vtep.id} if vtep is not None else {}),
-                    "name": get_loopback_name(platform, _COLO_VTEP_LOOPBACK_INDEX),
-                    "description": "EVPN VTEP source (IPv6)",
-                    "device": {"id": device.id},
-                    "status": "active",
-                    "role": "loopback-vtep",
-                    "ip_address": vtep_ip,
-                },
-            )
-            await vtep_obj.save(allow_upsert=True)
-            bgp = await self.client.create(
-                kind=ManagedBGP,
-                data={
-                    "name": f"{edge_name}-bgp-overlay",
-                    "description": f"EVPN Multi-Site border-gateway process for {edge_name}",
-                    "status": "active",
-                    "local_as": {"id": site_as_id},
-                    "router_id": {"id": router_loopback.ip_address.id},
-                    "capabilities": [{"id": device.id}],
-                    "process_role": "overlay",
-                },
-            )
-            await bgp.save(allow_upsert=True)
-            process_ids[edge_name] = bgp.id
-            self.logger.info(f"Colocation {self._label} {name}: ensured EVPN VTEP + overlay BGP for {edge_name}")
-        return process_ids
-
-    async def _ensure_edge_pair(self, *, physical_edge_names: list[str], overlay_process_ids: dict[str, str]) -> None:
-        """Link a zone's two physical edges and peer them over that link (iBGP FABRIC).
-
-        The edges are single-box sites with no fabric between them, yet they
-        share one Multi-Site site (same AS, same VIP): they need a direct
-        link plus a directly connected iBGP session carrying IPv6 unicast
-        (VTEP /128 reachability) and l2vpn evpn. A loopback EVPN session is
-        impossible — the edges run no IGP.
-
-        Only when EXACTLY two PHYSICAL edges exist in this zone: virtual edges
-        (an MCR, a Network Edge) have no port to cable, and a zone with 0 or 1
-        physical edge has nothing to pair (info log, no pair). More than two is
-        not a pair either. The pair stays inside one zone: edges of two zones
-        are joined by circuits, not by this link.
-
-        Everything it writes is owned by this zone and keyed
-        deterministically: the technical IPv6 slice, the P2P prefix (keyed by
-        the link), the cable, the FABRIC-<a>-<b> peering and the zone's own
-        routing key. One lock for the whole step, so overlapping runs of one
-        zone never both create any of them.
-        """
-        name = self.fabric_name
-        if len(physical_edge_names) != 2:
-            self.logger.info(
-                f"Colocation {self._label} {name}: {len(physical_edge_names)} physical edge(s) — an edge pair "
-                "needs exactly 2, no interlink or FABRIC session"
-            )
-            return
-        first, second = sorted(physical_edge_names)
-        processes = [overlay_process_ids.get(first), overlay_process_ids.get(second)]
-        if not all(processes):
-            self.logger.warning(
-                f"Colocation {self._label} {name}: {first}/{second} have no overlay BGP process from this run — "
-                "skipping the edge pair (see the EVPN step above)"
-            )
-            return
-
-        async with self.resource_lock(f"edge-pair-{name}"):
-            pool = await self._slice_pool(TECHNICAL_IPV6_SLOT)
-            legs = await self.create_chain_cabling(
-                hops=[
-                    {"devices": [first], "down_role": _COLO_INTERLINK_ROLE},
-                    {"devices": [second], "up_role": _COLO_INTERLINK_ROLE},
-                ],
-                options=CablingOptions(pool=pool, p2p_prefix_length=_COLO_P2P_IPV6_PREFIX_LENGTH),
-            )
-            pairs = legs[0] if legs else []
-            if not pairs:
-                self.logger.warning(
-                    f"Colocation {self._label} {name}: no {_COLO_INTERLINK_ROLE}-role port pair on "
-                    f"{first}/{second} — no FABRIC session"
-                )
-                return
-            interface_ids = [iface.id for pair in pairs for iface in pair]
-
-            key_id = await self._ensure_routing_password(
-                name=f"{name}-fabric-key", description=f"iBGP FABRIC session auth key for {self._label} {name}"
-            )
-            if key_id is None:
-                return
-            address_families = [
-                await self.ensure_address_family(*_COLO_FABRIC_UNICAST_AF),
-                await self.ensure_address_family(*EVPN_AF),
-            ]
-            await self.upsert_bgp_peering(
-                name=f"FABRIC-{first}-{second}",
-                description=(
-                    f"Colocation {self._label} {name} edge pair {first} <-> {second}: "
-                    "IPv6 unicast + EVPN over the interlink"
-                ),
-                status="active",
-                session_type="IBGP",
-                peering_role="fabric",
-                process_ids=[str(process_id) for process_id in processes],
-                address_family_ids=address_families,
-                password_id=key_id,
-                interface_ids=interface_ids,
-            )
-            self.logger.info(
-                f"Colocation {self._label} {name}: ensured edge pair {first} <-> {second} (interlink + FABRIC session)"
-            )
 
     def _register_fabric_devices(
         self,

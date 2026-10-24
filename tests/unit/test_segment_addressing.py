@@ -60,14 +60,14 @@ class TestSegmentDeploymentIdsCoverCloud:
 
     def test_cloud_segment_customer_deployment_is_listed(self) -> None:
         """A CloudNetworkSegment (customer_deployment, cardinality one) yields its deployment id."""
-        from transforms.helpers.firewall import _segment_deployment_ids
+        from transforms.helpers.firewall_pbr import _segment_deployment_ids
 
         seg = {"cidr_block": "10.0.0.0/24", "customer_deployment": {"id": "cust-1"}}
         assert _segment_deployment_ids(seg) == ["cust-1"]
 
     def test_cloud_segment_without_deployment_yields_nothing(self) -> None:
         """No customer_deployment: no ids."""
-        from transforms.helpers.firewall import _segment_deployment_ids
+        from transforms.helpers.firewall_pbr import _segment_deployment_ids
 
         assert _segment_deployment_ids({"cidr_block": "10.0.0.0/24", "customer_deployment": None}) == []
 

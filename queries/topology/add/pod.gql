@@ -83,6 +83,19 @@ fragment DataCenterFields on TopologyDataCenter {
       }
     }
   }
+  # The DC's pods (this one included), for the pod count and the back-to-back mesh. Its other
+  # children (customer footprints) come back empty. Pods are data this generator never saves.
+  children {
+    edges {
+      node {
+        ... on TopologyPod {
+          id
+          index { value }
+          design { node { id } }
+        }
+      }
+    }
+  }
   fabric_asn_pool {
     node {
       id

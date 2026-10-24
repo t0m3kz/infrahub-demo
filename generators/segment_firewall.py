@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Callable
 
 from utils.ports import PortSpec
@@ -69,6 +70,11 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
     client: Any
     logger: logging.Logger
     _safe_rel_add: Callable[..., Any]
+
+    # policy id -> {rule name: rule}, as _read_policy_rules last read it (the selectors included). Valid only
+    # while the policy is in the caller's rule_indexes: whoever drops it from there (lb_vip re-reads under its
+    # lock) makes the next lookup read the policy again.
+    _rules_by_policy: dict[str, dict[str, Any]] | None = None
 
     async def _reconcile_segment_rule(
         self,
@@ -189,9 +195,13 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
         one of that name to ``rule_data``; the new rule's index, None when it existed.
 
         Shared by the dependency rules and a load balancer context's R_server.
+
+        The rule of that name is looked up in the policy's rules as read once for the run
+        (_find_policy_rule). A rule another run adds to the policy after that read is not seen
+        here: if it has this name, the create below upserts onto it by (policy, name), and if it
+        only takes the index, the collision re-read in _create_or_update_policy_rule catches it.
         """
-        selectors = [field for field in _SELECTOR_FIELDS if field in rule_data]
-        existing_rule = await self._find_rule_by_name(SecurityPolicyRule, policy_id, rule_name, include=selectors)
+        existing_rule = await self._find_policy_rule(policy_id, rule_name, rule_indexes)
         if existing_rule is not None:
             existing_index = existing_rule.index.value
             if existing_index is not None and int(existing_index) < RULE_INDEX_START:
@@ -297,10 +307,14 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
         Untracked: every application with a component on that segment writes
         its rules into this one policy, and hand-written rules live there too,
         so no application's run owns it (its rules stay owned by the
-        application that produced them)."""
+        application that produced them).
+
+        The one it already has is known from the application query (the
+        segment's security_policy), and callers read only its id: a holder of
+        that id, not a read of the policy."""
         existing_id = (segment.get("security_policy") or {}).get("id")
         if existing_id:
-            return await self.client.get(kind=SecurityPolicy, id=existing_id)
+            return SimpleNamespace(id=existing_id)
         return await self._get_or_create_by_name(
             kind=SecurityPolicy,
             name=policy_name,
@@ -317,10 +331,26 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
         )
 
     async def _read_policy_rules(self, policy_id: str, rule_indexes: dict[str, set[int]]) -> list[Any]:
-        """List the policy's rules from the server and record their indexes in ``rule_indexes``."""
-        rules = await self.client.filters(kind=SecurityPolicyRule, policy__ids=[policy_id])
+        """List the policy's rules from the server, with their selectors; record their indexes in
+        ``rule_indexes`` and their names for _find_policy_rule."""
+        rules = await self.client.filters(
+            kind=SecurityPolicyRule, policy__ids=[policy_id], include=list(_SELECTOR_FIELDS)
+        )
         rule_indexes[policy_id] = {int(rule.index.value) for rule in rules if rule.index.value is not None}
+        if self._rules_by_policy is None:
+            self._rules_by_policy = {}
+        self._rules_by_policy[policy_id] = {rule.name.value: rule for rule in rules}
         return rules
+
+    async def _find_policy_rule(self, policy_id: str, rule_name: str, rule_indexes: dict[str, set[int]]) -> Any | None:
+        """The policy's rule named ``rule_name``, or None.
+
+        One read of the policy's rules per run (a policy not yet in ``rule_indexes``, or dropped from
+        it, is read again), shared with the index bookkeeping, instead of one lookup per rule.
+        """
+        if policy_id not in rule_indexes or policy_id not in (self._rules_by_policy or {}):
+            await self._read_policy_rules(policy_id, rule_indexes)
+        return (self._rules_by_policy or {}).get(policy_id, {}).get(rule_name)
 
     async def _create_or_update_policy_rule(
         self,
@@ -374,6 +404,7 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
                     index = _next_free_rule_index(rule_indexes[policy_id])
                 continue
             rule_indexes[policy_id].add(index)
+            (self._rules_by_policy or {}).get(policy_id, {})[rule_name] = rule
             return rule, index
 
     async def _get_profile(self, profile_name: str) -> Any | None:

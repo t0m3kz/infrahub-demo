@@ -3,10 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from utils.dependency_access import component_owner_org_id, crosses_owners, dependency_access_status
-from utils.exchange_transit import (
-    is_exchange_zone,
-    joins_prod_and_nonprod,
-)
+from utils.exchange_transit import is_exchange_zone, joins_prod_and_nonprod
 from utils.group_policy import MICROSEGMENTED, is_microsegmented
 from utils.ports import PortProfileHelper, PortSpec
 

@@ -34,7 +34,13 @@ from generators.fabric_sizing import (
     host_bits_to_prefix_length,
 )
 from generators.logger import GeneratorError
+from generators.pools import PoolMixin
 from generators.topology.colocation_fabric import (
+    ColocationFabricGenerator,
+    ColocationZoneGenerator,
+    VirtualColocationGenerator,
+)
+from generators.topology.colocation_pools import (
     _COLO_LOOPBACK_PREFIX_LENGTH,
     _COLO_MANAGEMENT_PREFIX_LENGTH,
     _COLO_TECHNICAL_PREFIX_LENGTH,
@@ -45,9 +51,6 @@ from generators.topology.colocation_fabric import (
     MANAGEMENT_SLOT,
     TECHNICAL_IPV6_SLOT,
     TECHNICAL_SLOT,
-    ColocationFabricGenerator,
-    ColocationZoneGenerator,
-    VirtualColocationGenerator,
 )
 from tests.unit.colocation_zone_generator_helpers import (
     _EDGE_TEMPLATE,
@@ -309,6 +312,54 @@ class TestZoneDesignSizing:
             "management_pool": f"id-{gen.fabric_name}-management-pool",
             "technical_pool": f"id-{gen.fabric_name}-technical-pool",
         }
+
+
+class TestParentPoolPreload:
+    """The five parents of a node's slices are read once, not one get per slice."""
+
+    @_NODE_KINDS
+    @_COMBINATIONS
+    @pytest.mark.asyncio
+    async def test_all_parents_are_preloaded_in_one_read(
+        self, node: Any, metro: str, metro_has_design: bool, node_has_design: bool, from_metro: bool
+    ) -> None:
+        """Whatever the slices are cut from (metro supernets or bootstrap pools), the preload names exactly those."""
+        gen = _sized(
+            node, design="EDGE_FW" if node_has_design else None, metro_design="S" if metro_has_design else None
+        )
+        gen.preload_parent_pools = AsyncMock()
+
+        await gen._ensure_fabric_pools()
+
+        gen.preload_parent_pools.assert_awaited_once()
+        call = gen.preload_parent_pools.await_args
+        assert call is not None
+        (names,) = call.args
+        expected = [slot.name(metro) if from_metro else slot.bootstrap_pool for slot in COLO_POOL_SLOTS]
+        assert list(names) == expected
+
+    @_NODE_KINDS
+    @pytest.mark.asyncio
+    async def test_preloaded_parents_are_what_the_slices_are_cut_from(self, node: Any, metro: str) -> None:
+        """With the pools in the preload, no per-slice get of a parent pool is made (real preload, real lookup)."""
+        gen = _sized(node)
+        gen.ensure_sliced_pool = PoolMixin.ensure_sliced_pool.__get__(gen)
+        bootstrap = [slot.bootstrap_pool for slot in COLO_POOL_SLOTS]
+        pools = [MagicMock(id=f"id-{name}") for name in bootstrap]
+        for pool, name in zip(pools, bootstrap):
+            pool.name = MagicMock(value=name)
+        gen.client.filters = AsyncMock(return_value=pools)
+        gen.client.get = AsyncMock()
+        gen.client.allocate_next_ip_prefix = AsyncMock(return_value=MagicMock())
+        created = MagicMock()
+        created.save = AsyncMock()
+        gen.client.create = AsyncMock(return_value=created)
+
+        await gen._ensure_fabric_pools()
+
+        gen.client.get.assert_not_awaited()
+        assert gen.client.filters.await_count == 1
+        assert gen.client.allocate_next_ip_prefix.await_count == 4
 
 
 class TestSliceParent:

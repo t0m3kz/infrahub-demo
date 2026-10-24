@@ -6,23 +6,10 @@ from typing import Any
 
 import pytest
 
-from tests.unit.external_vrf_peers_helpers import (
-    _C2,
-    _C3,
-    _C15,
-    _NON_PROD,
-    _PROD,
-    _PROVIDER,
-    _peering,
-    _subif,
-)
+from tests.unit.external_vrf_peers_helpers import _C2, _C3, _C15, _NON_PROD, _PROD, _PROVIDER, _peering, _subif
 from transforms.common import _own_devices
-from transforms.helpers.bgp import (
-    _build_session_from_peering,
-    _far_end_is_ours,
-    get_external_session_policies,
-    get_onprem_prefixes,
-)
+from transforms.helpers.bgp import _build_session_from_peering, _far_end_is_ours
+from transforms.helpers.bgp_external import get_external_session_policies, get_onprem_prefixes
 
 
 def _segment(
@@ -275,7 +262,7 @@ class TestExternalSessionPolicies:
             "Ethernet1/13.1000": {"C003": ["10.30.0.0/16"], "C015": ["10.40.0.0/16"]},
             "Ethernet1/13.1900": {"C003": ["10.30.0.0/16"], "C002": ["10.40.0.0/16"]},
         }
-        with caplog.at_level("WARNING", logger="transforms.helpers.bgp"):
+        with caplog.at_level("WARNING", logger="transforms.helpers.bgp_external"):
             policies = get_external_session_policies(interfaces, peers, {}, device_name="eg-fr201")
         assert set(policies) == set(peers)
         messages = [record.getMessage() for record in caplog.records if record.levelname == "WARNING"]
@@ -287,7 +274,7 @@ class TestExternalSessionPolicies:
 
     def test_clean_registrations_log_nothing(self, caplog: pytest.LogCaptureFixture) -> None:
         """No conflict, no warning."""
-        with caplog.at_level("WARNING", logger="transforms.helpers.bgp"):
+        with caplog.at_level("WARNING", logger="transforms.helpers.bgp_external"):
             get_external_session_policies(
                 [_subif("Ethernet1/13.1000", "PROD")], {"Ethernet1/13.1000": {"C003": ["10.30.0.0/16"]}}, self._ONPREM
             )

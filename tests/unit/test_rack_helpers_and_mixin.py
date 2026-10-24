@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.helpers.rack import RackRolesHelper
+from generators.helpers.rack import RackRolesHelper, pod_row_racks
 from generators.rack import spine_bgp_readiness_role
 from generators.topology.rack import RackGenerator, TopologyRackData
 from tests.unit.simulators.fabric_designs import DESIGN_FOR_DEPLOYMENT_TYPE, pod_design
@@ -424,3 +424,28 @@ class TestRackMixinAdditional:
     # _derive_super_spine_info() was dead code (never called) and was deleted
     # from RackMixin — see tests/unit/test_rack_parse_and_checksum.py's
     # TestDeriveSpineInfo for the still-live _derive_spine_info() coverage.
+
+
+class TestPodRowRacks:
+    """pod_row_racks(): the racks of one row, from the pod's ``racks`` projection."""
+
+    RACKS = [
+        {"id": "c2", "name": "C2", "index": 2, "row_index": 1, "rack_type": "compute"},
+        {"id": "n1", "name": "N1", "index": 1, "row_index": 1, "rack_type": "network"},
+        {"id": "r2", "name": "R2", "index": 1, "row_index": 2, "rack_type": "network"},
+        {"id": "t1", "name": "T1", "index": 3, "row_index": 1, "rack_type": "tor"},
+    ]
+
+    def test_keeps_the_row_in_index_order(self) -> None:
+        """Without a type filter every rack of the row is kept, ordered by (row, index, name)."""
+        assert [r["id"] for r in pod_row_racks({"racks": self.RACKS}, 1)] == ["n1", "c2", "t1"]
+
+    def test_rack_types_narrow_the_row(self) -> None:
+        """A rack type set keeps only those types."""
+        assert [r["id"] for r in pod_row_racks({"racks": self.RACKS}, 1, {"tor", "compute"})] == ["c2", "t1"]
+        assert [r["id"] for r in pod_row_racks({"racks": self.RACKS}, 2, {"network"})] == ["r2"]
+
+    def test_row_without_racks_or_pod_without_projection_is_empty(self) -> None:
+        """No rack in the row, or no ``racks`` key at all (a pod that is not a DC-fabric pod), is an empty list."""
+        assert pod_row_racks({"racks": self.RACKS}, 9) == []
+        assert pod_row_racks({}, 1) == []

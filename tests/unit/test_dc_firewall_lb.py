@@ -69,28 +69,22 @@ def _make_generator() -> Any:
     return gen
 
 
-def _mock_pod(*, id: str, index: int, name: str = "pod-1", loopback_pool_id: str | None = "lo-pool") -> MagicMock:
-    pod = MagicMock()
-    pod.id = id
-    pod.index = MagicMock(value=index)
-    pod.name = MagicMock(value=name)
-    pod.loopback_pool = MagicMock(id=loopback_pool_id) if loopback_pool_id else None
-    return pod
+def _mock_pod(*, id: str, index: int, name: str = "pod-1", design_id: str = "pod-design") -> dict[str, Any]:
+    """A TopologyPod as the DC query's children selection returns it after clean_data()."""
+    return {"id": id, "index": index, "name": name, "design": {"id": design_id}}
 
 
-def _pods_with_caps(gen: Any, caps: list[int], *, max_border_leafs_per_fabric: int = 10) -> list[MagicMock]:
+def _pods_with_caps(gen: Any, caps: list[int], *, max_border_leafs_per_fabric: int = 10) -> list[dict[str, Any]]:
     """One pod per cap, index 1.., each on its own pod design (max_border_leafs_per_pod=cap)
-    that the DC design hosts — the pod's design comes back from filters(include=["design"])
-    as a related node with only its id, matched against the DC design's pod_templates."""
+    that the DC design hosts — the pod's design comes back from the DC query as its bare id,
+    matched against the DC design's pod_templates."""
     templates = [custom_pod_design(f"P{index}", max_border_leafs_per_pod=cap) for index, cap in enumerate(caps, 1)]
     gen.data["design"] = custom_dc_design(
         max_border_leafs_per_fabric=max_border_leafs_per_fabric, pod_templates=templates
     )
     pods = []
     for index, template in enumerate(templates, 1):
-        pod = _mock_pod(id=f"pod-{index}", index=index, name=f"pod-{index}")
-        pod.design = MagicMock(id=template["id"])
-        pods.append(pod)
+        pods.append(_mock_pod(id=f"pod-{index}", index=index, name=f"pod-{index}", design_id=template["id"]))
     return pods
 
 
@@ -120,16 +114,16 @@ class TestPodBorderLeafCapacity:
         gen = _make_generator()
         pod_a, pod_b = _pods_with_caps(gen, [2, 0])
 
-        assert gen._pod_border_leaf_capacities([pod_a, pod_b]) == {pod_a.id: 2, pod_b.id: 0}
+        assert gen._pod_border_leaf_capacities([pod_a, pod_b]) == {pod_a["id"]: 2, pod_b["id"]: 0}
         gen.logger.warning.assert_not_called()
 
     def test_pod_on_a_design_the_dc_does_not_host_gets_none(self) -> None:
         """A pod whose design is not one of the DC design's pod_templates (add_pod refuses it) hosts no border-leaf."""
         gen = _make_generator()
         (pod,) = _pods_with_caps(gen, [2])
-        pod.design = MagicMock(id="pod-design-ELSEWHERE")
+        pod["design"] = {"id": "pod-design-ELSEWHERE"}
 
-        assert gen._pod_border_leaf_capacities([pod]) == {pod.id: 0}
+        assert gen._pod_border_leaf_capacities([pod]) == {pod["id"]: 0}
         gen.logger.warning.assert_called_once()
 
 

@@ -21,7 +21,8 @@ import pytest
 from infrahub_sdk.exceptions import NodeNotFoundError
 
 from generators.decommission.pod import PodDecommissionGenerator
-from generators.devices import DeviceMixin, standalone_vlan_domain_name
+from generators.devices import DeviceMixin
+from generators.domain_pairing import standalone_vlan_domain_name
 from generators.logger import GeneratorError
 from generators.mlag import MLAGWiringMixin
 from generators.pools import PoolMixin
@@ -169,7 +170,6 @@ def _device_mixin() -> Any:
     gen.client.allocate_next_ip_address = AsyncMock(return_value={"id": "ip-1"})
     gen.client.create_batch = _Batches()
     gen._resolve_pool = AsyncMock(return_value=MagicMock(id="pool-1"))
-    gen.upsert_number_pool = AsyncMock(return_value=MagicMock(id="vlan-pool-1"))
     gen.ensure_mlag_wiring = AsyncMock()
     gen.resource_lock = _no_lock
     gen._all_controllers = []
@@ -210,7 +210,7 @@ class TestDeviceGroupOwnership:
 class TestStandaloneVlanDomains:
     @pytest.mark.asyncio
     @pytest.mark.parametrize("role", ["leaf", "tor", "l2-leaf", "access-leaf", "border-leaf", "edge"])
-    async def test_unpaired_switch_gets_its_own_domain_and_pool(self, role: str) -> None:
+    async def test_unpaired_switch_gets_its_own_domain(self, role: str) -> None:
         """A non-MLAG segment-carrying switch is its own VLAN domain, owned by
         the run that creates the switch — named the way segment generators
         look it up."""
@@ -225,12 +225,7 @@ class TestStandaloneVlanDomains:
             "name": domain_name,
             "status": "active",
             "capabilities": [{"id": f"id-{names[0]}"}],
-            # The pool is upserted first and rides on the domain's own upsert.
-            "vlan_pool": {"id": "vlan-pool-1"},
         }
-        pool_kwargs = gen.upsert_number_pool.call_args.kwargs
-        assert pool_kwargs["pool_name"] == f"{domain_name}-vlan-pool"
-        assert "parent_kind" not in pool_kwargs
 
     @pytest.mark.asyncio
     async def test_domain_is_upserted_tracked_on_every_run(self) -> None:
@@ -257,7 +252,6 @@ class TestStandaloneVlanDomains:
         """An MLAG pair shares the MLAG domain; only the odd one out of three
         leafs is standalone."""
         gen = _device_mixin()
-        gen._ensure_vlan_domain_pool = AsyncMock()
         template = {"interfaces": [{"name": "Ethernet1/49", "role": "mlag-peer"}]}
 
         names = await gen.create_devices(
@@ -298,7 +292,6 @@ class TestStandaloneVlanDomains:
     async def test_ensure_mlag_pairs_returns_the_paired_names(self) -> None:
         """The paired set is what create_devices excludes from standalone domains."""
         gen = _device_mixin()
-        gen._ensure_vlan_domain_pool = AsyncMock()
         devices = {name: _node(f"id-{name}", name) for name in ("a", "b", "c")}
 
         paired = await gen._ensure_mlag_pairs(
@@ -407,12 +400,12 @@ class TestPoolParentOwnership:
         gen.client.get = AsyncMock()
 
         result = await gen.upsert_number_pool(
-            pool_name="x-vlan-pool",
+            pool_name="x-vni-pool",
             description="d",
             start_range=100,
             end_range=200,
-            node="ManagedVlanDomainSegment",
-            node_attribute="vlan_id",
+            node="ManagedSegmentDeployment",
+            node_attribute="vni",
         )
 
         assert result is pool

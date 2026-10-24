@@ -5,7 +5,7 @@
 # A handoff circuit's edge end is a DcimInterface, but its cloud end is a
 # CloudVirtualInterface, not a device port. Both edges that express that are
 # declared on the CloudHybridAttachment generic (see
-# schemas/extensions/topology/topology_cloud.yml), which is an attribute-less marker
+# schemas/extensions/topology/topology_cloud_network.yml), which is an attribute-less marker
 # and so declares no human_friendly_id — nothing can reference it by name. Hence
 # both are set from this, the concrete side:
 #

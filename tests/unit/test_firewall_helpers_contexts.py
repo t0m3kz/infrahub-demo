@@ -1,9 +1,6 @@
-"""Unit tests for get_firewall_contexts() and place_policies_in_contexts() in transforms/helpers/firewall.py."""
+"""Unit tests for get_firewall_contexts() and place_policies_in_contexts() in transforms/helpers/firewall_contexts.py."""
 
-from transforms.helpers.firewall import (
-    get_firewall_contexts,
-    place_policies_in_contexts,
-)
+from transforms.helpers.firewall_contexts import get_firewall_contexts, place_policies_in_contexts
 
 # ===========================================================================
 # get_firewall_contexts()

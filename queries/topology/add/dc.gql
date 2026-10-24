@@ -64,10 +64,35 @@ query topology_dc($name: String!) {
               name { value }
             }
           }
+          # Read so a re-run whose pool and fabric AS references are all in place writes nothing
+          # (PoolMixin.attach_refs ``current``).
+          vni_pool {
+            node {
+              id
+              name { value }
+            }
+          }
+          evpn_rt_as {
+            node {
+              id
+              asn { value }
+            }
+          }
+          # The DC's pods (the only children it has): read, never saved. Their design is matched to the DC
+          # design's pod_templates to size the border-leaf placement, and the cascade fans out to them.
           children {
             edges {
               node {
                 id
+                ... on TopologyPod {
+                  name { value }
+                  index { value }
+                  design {
+                    node {
+                      id
+                    }
+                  }
+                }
               }
             }
           }

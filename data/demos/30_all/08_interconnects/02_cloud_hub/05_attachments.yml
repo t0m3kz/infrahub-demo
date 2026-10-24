@@ -16,7 +16,7 @@
 # VIF is looked up in the hybrid attachment's table, rt-hub-shared, so without
 # novantis propagating there on-prem has no route to 10.150.0.0/16 (and the
 # colo edge's inbound filter, which mirrors that table through
-# transforms/helpers/bgp.py _vif_registered_blocks, does not accept it).
+# transforms/helpers/bgp_external.py vif_registered_blocks, does not accept it).
 #
 # Consequence: novantis is no longer isolated from vaultex. vaultex is
 # associated with rt-hub-shared as well, so it now learns 10.150.0.0/16 and its

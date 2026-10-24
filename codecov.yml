@@ -1,0 +1,19 @@
+# Codecov reports on application code only. The CI run executes tests/smoke and tests/unit, whose generator tests
+# mock the SDK, so a covered generator line proves it ran, not that it works: the integration suite does that.
+# Coverage therefore informs, it never gates a merge.
+ignore:
+  - "tests/**"
+
+coverage:
+  status:
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        informational: true
+
+# Comment on a pull request only when coverage moved; a refactor that moves code stays silent.
+comment:
+  layout: "condensed_header, diff, files"
+  require_changes: true

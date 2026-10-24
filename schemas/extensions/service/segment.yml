@@ -234,9 +234,10 @@ nodes:
   # VlanDomainSegment: per-VLAN-domain realization of a VXLAN segment's LOCAL
   # VLAN ID. A "VLAN domain" is either one ManagedMLAG pair (both peers MUST
   # share the same vlan_id — one L2 broadcast domain) or one standalone
-  # (non-MLAG) leaf/tor/l2-leaf/access-leaf device. Two independent VLAN
-  # domains in the same DC may reuse the same numeric vlan_id for two
-  # different segments — IEEE 802.1Q VLAN ID has only local significance.
+  # (non-MLAG) leaf/tor/l2-leaf/access-leaf device. IEEE 802.1Q VLAN ID has
+  # only local significance, but within a domain it is unique (the
+  # [vlan_domain, vlan_id__value] constraint): two segments never share it.
+  # The generator reuses a segment's vlan_id across the domains it lands on.
   # The segment's DC-wide identity remains SegmentDeployment.vni (L2 VNI).
   #
   # Created by: add_vxlan_segment generator, once per (segment, VLAN domain)
@@ -252,13 +253,14 @@ nodes:
     display_label: "{{ segment__customer_name__value }} vlan {{ vlan_id__value }}"
     uniqueness_constraints:
       - [segment, vlan_domain]
+      - [vlan_domain, vlan_id__value]
     attributes:
       - name: vlan_id
         kind: Number
         label: Local VLAN ID
         optional: false
         order_weight: 1000
-        description: "VLAN ID for this segment within this VLAN domain. Unique within the domain only, not DC-wide."  # yamllint disable-line rule:line-length
+        description: "VLAN ID of this segment in this VLAN domain. Unique within the domain, shared across domains where free."  # yamllint disable-line rule:line-length
         parameters:
           min_value: 1
           max_value: 4094

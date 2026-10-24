@@ -536,9 +536,13 @@ tests/
 - **Type hints and docstrings are required** for all test functions.
 - Use descriptive names for tests (e.g., `test_create_device_with_invalid_name_raises_error`).
 - Use `pytest.mark.asyncio` for async tests and `pytest.mark.parametrize` for testing multiple inputs.
-- **No Python module under `tests/` exceeds 1000 lines** (guarded by `tests/unit/test_test_file_sizes.py`). Split by
-  topic into sibling `test_<name>_<topic>.py` modules; builders used by several of them go into one
-  `<name>_helpers.py` (no `test_` prefix, imported as `from tests.unit.<name>_helpers import ...`).
+- **No Python module exceeds 1000 lines**: `tests/`, `generators/`, `transforms/`, `checks/` and `utils/` alike
+  (guarded by `tests/unit/test_test_file_sizes.py`; the only exemption is the hand-curated `generators/protocols.py`).
+  Split by topic. A test module into sibling `test_<name>_<topic>.py` modules; builders used by several of them go
+  into one `<name>_helpers.py` (no `test_` prefix, imported as `from tests.unit.<name>_helpers import ...`). A
+  generator into a mixin (`generators/<topic>.py` or `generators/helpers/`) that the class inherits; a transform or
+  check helper into a sibling module along the topic seam (for example `transforms/helpers/bgp_external.py`).
+  Rewrite the importers; do not leave a re-export wrapper behind.
 
 ### Running Tests
 

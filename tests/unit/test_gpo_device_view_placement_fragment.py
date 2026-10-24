@@ -7,13 +7,7 @@ from typing import Any
 
 import pytest
 from graphql import parse
-from graphql.language import (
-    FieldNode,
-    FragmentDefinitionNode,
-    FragmentSpreadNode,
-    InlineFragmentNode,
-    SelectionNode,
-)
+from graphql.language import FieldNode, FragmentDefinitionNode, FragmentSpreadNode, InlineFragmentNode, SelectionNode
 
 from generators.topology.endpoint import ENDPOINT_NIC_ROLES
 from tests.smoke.fixture_builders.group_policy import _gp_instance

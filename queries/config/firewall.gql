@@ -68,7 +68,7 @@ query firewall_config(
                     # A context-less firewall also enforces the rules of
                     # every segment in a zone bound on one of its interfaces:
                     # it routes that zone's CIDRs through the leg
-                    # (transforms/helpers/firewall.py place_policies_in_contexts).
+                    # (transforms/helpers/firewall_contexts.py place_policies_in_contexts).
                     ... on ManagedNetworkSegment {
                       security_zone {
                         node {

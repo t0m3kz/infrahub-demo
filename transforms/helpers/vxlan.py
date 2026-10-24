@@ -11,10 +11,7 @@ from transforms.helpers.addressing import host_ip
 from transforms.helpers.firewall import FIREWALL_CONTEXT_KIND, SERVICE_CONTEXT_ROLES
 
 # The neutral overlay model owns these (transforms/helpers/overlay.py); they stay importable from here.
-from transforms.helpers.overlay import (
-    _DEFAULT_ANYCAST_GATEWAY_MAC,
-    _INTERNET_NAMESPACE_TYPE,
-)
+from transforms.helpers.overlay import _DEFAULT_ANYCAST_GATEWAY_MAC, _INTERNET_NAMESPACE_TYPE
 from transforms.helpers.overlay import _L3VNI_SVI_VLAN_BASE as _L3VNI_SVI_VLAN_BASE
 from transforms.helpers.overlay import _L3VNI_SVI_VLAN_MAX as _L3VNI_SVI_VLAN_MAX
 from transforms.helpers.overlay import L2Instance, L3Instance, OverlayNode

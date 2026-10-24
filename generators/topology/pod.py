@@ -1,7 +1,6 @@
 """Infrastructure generator for pod topology creation."""
 
 import asyncio
-from collections.abc import Mapping
 from typing import Any, Literal, cast
 
 from typing_extensions import TypedDict
@@ -11,37 +10,25 @@ from utils.data_cleaning import clean_data
 from ..common import CablingOptions, CommonGenerator, DeviceOptions, RoutingOptions
 from ..connections import BORDER_ROLE_FOR_SERVICES, CablingMixin
 from ..devices import DeviceMixin
-from ..fabric_sizing import (
-    host_bits_to_prefix_length,
-    max_sibling_spines,
-    pod_loopback_bits,
-    pod_technical_bits,
-)
+from ..fabric_sizing import host_bits_to_prefix_length, max_sibling_spines, pod_loopback_bits, pod_technical_bits
 from ..helpers.naming import DeviceNamingConfig
 from ..helpers.rack import expected_device_names
-from ..helpers.routing import (
-    RoutingStrategy,
-    loopback_prefix_length,
-    p2p_prefix_length,
-    underlay_pool_is_ipv6,
-)
+from ..helpers.routing import RoutingStrategy, loopback_prefix_length, p2p_prefix_length, underlay_pool_is_ipv6
 from ..helpers.template_interfaces import template_interface_names_by_role
 from ..pod_config import (
     pod_deployment_type,
     spine_downlink_layout,
-    spine_slot_device_names,
     spine_slot_role,
     spine_slot_templates,
     templates_by_role,
 )
 from ..pools import PoolMixin
-from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, TopologyPod
+from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface
 from ..routing import RoutingMixin
 from ..types import naming_convention_of
 from .fabric_shared import DC_GENERATORS, ServiceDevicesMixin
+from .pod_mesh import PodMeshMixin, mesh_slot_width, pod_routing_options
 
-_SIBLING_SPINE_MAX_RETRIES = 10
-_SIBLING_SPINE_RETRY_DELAY = 3.0
 _DC_READY_MAX_RETRIES = 10
 _DC_READY_RETRY_DELAY = 3.0
 # Short/bounded on purpose: most pods host zero border-leaf devices (only
@@ -62,41 +49,6 @@ _BORDER_LEAF_RETRY_DELAY = 2.0
 # connections.py) supplies the border_role_for mapping below.
 
 
-def _routing_options(dc: Any, asn_pool_id: str | None, shared_underlay_as_id: str | None = None) -> RoutingOptions:
-    """create_routing() options for a spine/border-leaf tier of this pod's DC.
-
-    design (the DC's routing_strategy lookup) is always set. asn_pool is only
-    meaningful for eBGP strategies (ospf-ibgp draws no per-device ASN from a
-    pool); shared_underlay_as_id, when given, has every bottom device share that
-    one underlay AS.
-    """
-    options = RoutingOptions(design=dc, asn_pool=asn_pool_id)
-    if shared_underlay_as_id:
-        options["shared_underlay_as_id"] = shared_underlay_as_id
-    return options
-
-
-def _mesh_slot_width(design: Mapping[str, Any], dc_design: Mapping[str, Any], lower_siblings: list[Any]) -> int:
-    """The uplink ports each back-to-back pod pair reserves on either side: this pod's max_spines_per_pod.
-
-    A pair's links take one port per far-end spine on each side, so slots as
-    wide as the design's spine tier keep every pair's ports apart however far
-    a sibling is built. That only holds if every pod of the mesh uses the same
-    width (a 2-spine and a 4-spine pod would slice each other's ports
-    differently), so a lower-index sibling whose design (looked up in the DC
-    design's pod_templates) has another max_spines_per_pod is refused.
-    """
-    width = design["max_spines_per_pod"]
-    widths = {template.get("id"): template["max_spines_per_pod"] for template in dc_design["pod_templates"]}
-    mismatched = sorted(sibling.index.value for sibling in lower_siblings if widths.get(sibling.design.id) != width)
-    if mismatched:
-        raise ValueError(
-            f"back-to-back mesh needs one spine width for every pod: design '{design['name']}' allows {width} "
-            f"spines, lower-index sibling pod(s) {mismatched} have a design with another max_spines_per_pod"
-        )
-    return width
-
-
 class TopologyPodParentData(TypedDict, total=False):
     """Shape of the nested TopologyDataCenter projection under
     TopologyPod.parent (see queries/topology/add/pod.gql's DataCenterFields
@@ -113,6 +65,7 @@ class TopologyPodParentData(TypedDict, total=False):
     underlay_protocol: str
     fabric_templates: list[dict[str, Any]]
     design: dict[str, Any]
+    children: list[dict[str, Any]]
     fabric_asn_pool: dict[str, Any] | None
     management_pool: dict[str, Any] | None
     devices: list[Any]
@@ -140,7 +93,9 @@ class TopologyPodData(TypedDict, total=False):
     prefix_pool: dict[str, Any] | None
 
 
-class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, CommonGenerator):
+class PodTopologyGenerator(
+    PodMeshMixin, ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, CommonGenerator
+):
     """Generate pod topology with resource pools and spine infrastructure.
 
     Creates resource pools (technical and management) and creates spine devices
@@ -277,8 +232,9 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
                 f"'{dc_design['name']}' pod_templates {allowed_designs}"
             )
             return
-        siblings = await self.client.filters(kind=TopologyPod, parent__ids=[dc_id])
-        pod_count = len({sibling.id for sibling in siblings} | {pod_id})
+        # The DC's pods, from its children in the query payload (its customer footprints come back empty).
+        siblings = [child for child in dc.get("children", []) if child]
+        pod_count = len({sibling["id"] for sibling in siblings} | {pod_id})
         if pod_count > dc_design["max_pods"]:
             self.logger.error(
                 f"Pod {pod_name}: DC {dc_name} holds {pod_count} pods but its design '{dc_design['name']}' "
@@ -320,11 +276,11 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
             return
         # No super-spine tier to cable to: the pods mesh back-to-back.
         mesh_cabling = not super_spine_devices or not super_spine_interfaces
-        mesh_slot_width = 0
+        slot_width = 0
         if mesh_cabling:
             try:
-                mesh_slot_width = _mesh_slot_width(
-                    design, dc_design, [sibling for sibling in siblings if sibling.index.value < pod_index]
+                slot_width = mesh_slot_width(
+                    design, dc_design, [sibling for sibling in siblings if sibling["index"] < pod_index]
                 )
             except ValueError as exc:
                 self.logger.error(f"Pod {pod_name}: {exc}")
@@ -416,7 +372,7 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
             await self.create_routing(
                 bottom_devices=spines,
                 top_devices=super_spine_devices,
-                options=_routing_options(dc, dc_asn_pool_id, pod_spine_as_id),
+                options=pod_routing_options(dc, dc_asn_pool_id, pod_spine_as_id),
                 p2p_interfaces=[],
                 bottom_role=spine_role,
                 top_role="super-spine",
@@ -450,7 +406,7 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
                 dc_asn_pool_id=dc_asn_pool_id,
                 pod_pools=pod_pools,
                 underlay_protocol=underlay_protocol,
-                slot_width=mesh_slot_width,
+                slot_width=slot_width,
                 pod_spine_as_id=pod_spine_as_id,
             )
 
@@ -478,7 +434,7 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
             await self.create_routing(
                 bottom_devices=spines,
                 top_devices=super_spine_devices,
-                options=_routing_options(dc, dc_asn_pool_id, pod_spine_as_id),
+                options=pod_routing_options(dc, dc_asn_pool_id, pod_spine_as_id),
                 p2p_interfaces=p2p_pairs,
                 bottom_role=spine_role,
                 top_role="super-spine",
@@ -683,165 +639,8 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
         await self.create_routing(
             bottom_devices=border_leaf_names,
             top_devices=spines,
-            options=_routing_options(dc, dc_asn_pool_id),
+            options=pod_routing_options(dc, dc_asn_pool_id),
             p2p_interfaces=p2p_pairs,
             bottom_role="border-leaf",
             top_role="spine",
         )
-
-    async def _cable_to_existing_sibling_pods(
-        self,
-        siblings: list[Any],
-        spines: list[str],
-        spine_interfaces: list[str],
-        spine_role: str,
-        dc: Any,
-        dc_asn_pool_id: str | None,
-        pod_pools: dict[str, Any],
-        underlay_protocol: str,
-        slot_width: int,
-        pod_spine_as_id: str | None = None,
-    ) -> None:
-        """Cable this pod's spines to every EXISTING lower-index sibling pod (back-to-back mesh).
-
-        slot_width is _mesh_slot_width(): the uplink ports every pair reserves
-        on each side, the same for every pod of the DC, so the port slots
-        follow from the pod indexes alone and never from what a sibling has
-        built so far.
-
-        spine_role is this pod's own spine-slot role ("spine" or
-        "border-spine") — every pod in a back-to-back DC uses the same one
-        (a DC's design fixes the pattern DC-wide), so it's also used to find
-        each sibling's own spine-slot devices below.
-
-        Decentralized: each pod cables itself to its lower-index siblings, rather
-        than a DC-level step waiting for every pod to finish before cabling the
-        whole mesh in one pass. Only the higher-index pod in any given pair ever
-        writes that pair's cabling/routing — pod 1 never initiates anything, pod 2
-        only cables to pod 1, pod 3 to pods 1 and 2, etc. — so there is exactly one
-        writer per pair regardless of how many pods run concurrently; the only
-        remaining concern is data availability (has the sibling's spine/overlay
-        BGP landed yet), which create_cabling's own interface-readiness retry and
-        create_routing's overlay-BGP-readiness retry already absorb.
-
-        This also makes incremental single-pod-add correct for free: a pod added
-        later simply finds its existing lower-index siblings already fully formed
-        and cables to them immediately — no dc.py-level orchestration required.
-        """
-        pod_name = self.data["name"]
-        pod_index = self.data["index"]
-        lower_siblings = [s for s in siblings if s.index.value < pod_index]
-        if not lower_siblings:
-            self.logger.info(f"Pod {pod_name}: no lower-index sibling pods yet — nothing to mesh-cable")
-            return
-        if not spine_interfaces:
-            self.fail(
-                f"Pod {pod_name}: no {spine_role} uplink interfaces to mesh-cable to "
-                f"{len(lower_siblings)} lower-index sibling pod(s) — add uplink-role ports to the spine template"
-            )
-
-        routing_opts = _routing_options(dc, dc_asn_pool_id, pod_spine_as_id)
-        for sibling in sorted(lower_siblings, key=lambda s: s.index.value):
-            # Retry: during INITIAL bulk DC creation, every pod's TopologyPod object
-            # already exists (loaded together before any generator runs), but a lower-
-            # index sibling's own add_pod run may not have reached spine creation yet.
-            # For an incremental single-pod-add, the sibling is already fully formed
-            # and this resolves on the first attempt. Mirrors create_cabling's own
-            # interface-readiness retry.
-            sibling_spines: list[str] = []
-            sibling_uplink_names: list[str] = []
-            # By name, not deployment: a border-spine is deployed to the DC. The
-            # sibling's design holds at most slot_width spines (_mesh_slot_width).
-            candidate_names = spine_slot_device_names(
-                dc=dc,
-                fabric_name=self.fabric_name,
-                pod_index=sibling.index.value,
-                role=spine_role,
-                quantity=slot_width,
-            )
-            for attempt in range(_SIBLING_SPINE_MAX_RETRIES):
-                sibling_spines_devices = await self.client.filters(
-                    kind=DcimPhysicalDevice,
-                    name__values=candidate_names,
-                    role__value=spine_role,
-                )
-                sibling_spines = sorted(s.name.value for s in sibling_spines_devices)
-                if sibling_spines:
-                    sibling_uplinks = await self.client.filters(
-                        kind=DcimPhysicalInterface,
-                        device__name__values=sibling_spines,
-                        role__value="uplink",
-                    )
-                    sibling_uplink_names = sorted({iface.name.value for iface in sibling_uplinks})
-                    if sibling_uplink_names:
-                        break
-                if attempt < _SIBLING_SPINE_MAX_RETRIES - 1:
-                    delay = self._retry_delay(_SIBLING_SPINE_RETRY_DELAY, attempt)
-                    self.logger.info(
-                        f"Pod {pod_name}: sibling pod idx={sibling.index.value} spines/uplinks not ready yet — "
-                        f"retrying in {delay:.2f}s (attempt {attempt + 1}/{_SIBLING_SPINE_MAX_RETRIES})"
-                    )
-                    await asyncio.sleep(delay)
-
-            if not sibling_spines or not sibling_uplink_names:
-                # Only the higher-index pod ever cables a pair, so skipping here
-                # leaves the pair uncabled for good — fail and let a re-run retry.
-                self.fail(
-                    f"Pod {pod_name}: sibling pod idx={sibling.index.value} still has no spine "
-                    f"devices/uplinks after {_SIBLING_SPINE_MAX_RETRIES} attempts — cannot mesh-cable this pair"
-                )
-
-            # Each sibling-pod pair gets a deterministic local uplink slot: slot
-            # (sibling.index - 1), slot_width ports wide, of which this pair
-            # uses one per sibling spine.
-            links_per_sibling = len(sibling_spines)
-            slot_start = (sibling.index.value - 1) * slot_width
-            sibling_local_uplinks = spine_interfaces[slot_start : slot_start + links_per_sibling]
-            if len(sibling_local_uplinks) < links_per_sibling:
-                self.logger.error(
-                    f"Pod {pod_name}: insufficient local {spine_role} uplinks for inter-pod mesh. "
-                    f"Needed {links_per_sibling} free uplink name(s) for sibling pod idx={sibling.index.value}, "
-                    f"but only {len(sibling_local_uplinks)} remain. "
-                    "Increase uplink-role interfaces in the spine template or reduce mesh fan-out."
-                )
-                return
-
-            # Peer-facing offset must be unique per (source pod, sibling pod) pair
-            # AND must not collide with the sibling's own outbound slots. The
-            # sibling's own generate() reserves its first (sibling.index - 1)
-            # uplink slots for its own links to *its* lower siblings (mirrors
-            # slot_start above, computed from the sibling's perspective) — so
-            # inbound callers must start past those, not at 0. Without the base
-            # offset, the immediately-next higher pod (pair_slot=0) always lands
-            # on the sibling's own slot 0, which the sibling itself is already
-            # using for its own lowest-index link — a deterministic collision,
-            # not a timing race (confirmed live: pod2's own link to pod1 and
-            # pod3's inbound link to pod2 both claimed pod2's first uplink pair).
-            sibling_own_outbound_slots = sibling.index.value - 1
-            pair_slot = sibling_own_outbound_slots + max(0, pod_index - sibling.index.value - 1)
-            cabling_offset = pair_slot * slot_width
-            self.logger.info(
-                f"Pod {pod_name} (idx={pod_index}): cabling to sibling pod idx={sibling.index.value} "
-                f"[offset={cabling_offset}, pair_slot={pair_slot}, slot_start={slot_start}, "
-                f"local_uplinks={sibling_local_uplinks}]"
-            )
-            p2p_pairs = await self.create_cabling(
-                bottom_devices=spines,
-                bottom_interfaces=sibling_local_uplinks,
-                top_devices=sibling_spines,
-                top_interfaces=sibling_uplink_names,
-                strategy="pod",
-                options=CablingOptions(
-                    cabling_offset=cabling_offset,
-                    pool=pod_pools.get("technical"),
-                    p2p_prefix_length=p2p_prefix_length(underlay_protocol),
-                ),
-            )
-            await self.create_routing(
-                bottom_devices=spines,
-                top_devices=sibling_spines,
-                options=routing_opts,
-                p2p_interfaces=p2p_pairs,
-                bottom_role=spine_role,
-                top_role=spine_role,
-            )

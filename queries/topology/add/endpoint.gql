@@ -11,6 +11,22 @@ fragment PhysicalInterfaceFields on DcimPhysicalInterface {
   }
 }
 
+# A server's own bond (role=lag). Members are the role=lag physical NICs it bundles. The lag_id
+# attribute marks the dict as a bond, since the physical-interface fragment above leaves it empty.
+fragment BondFields on DcimLAGInterface {
+  id
+  name { value }
+  role { value }
+  lag_id { value }
+  member_interfaces {
+    edges {
+      node {
+        id
+      }
+    }
+  }
+}
+
 fragment PodFields on TopologyPod {
   id
   name { value }
@@ -25,6 +41,19 @@ fragment PodFields on TopologyPod {
     node {
       id
       name { value }
+    }
+  }
+  # Every rack of the pod: the generator filters its row in Python instead of reading it
+  # (racks are data, never saved by this generator).
+  racks {
+    edges {
+      node {
+        id
+        name { value }
+        index { value }
+        row_index { value }
+        rack_type { value }
+      }
     }
   }
 }
@@ -50,6 +79,11 @@ query GetEndpointForConnectivity($device_name: String!) {
         name { value }
         role { value }
         ... on DcimPhysicalDevice {
+          deployment {
+            node {
+              id
+            }
+          }
           rack {
             node {
               ...RackFields
@@ -60,6 +94,7 @@ query GetEndpointForConnectivity($device_name: String!) {
           edges {
             node {
               ...PhysicalInterfaceFields
+              ...BondFields
             }
           }
         }

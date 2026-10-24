@@ -20,12 +20,8 @@ import pytest
 from checks.common import validate_transit_vlans
 from transforms.common import BaseDeviceTransform
 from transforms.config.leaf import Leaf
-from transforms.helpers.firewall import (
-    _service_context_caps,
-    get_customer_pbr_rules,
-    get_exchange_transits,
-    get_leaf_firewall_transits,
-)
+from transforms.helpers.firewall import _service_context_caps, get_exchange_transits, get_leaf_firewall_transits
+from transforms.helpers.firewall_pbr import get_customer_pbr_rules
 
 _PROD_NS = {"name": "PROD", "namespace_type": "prod", "l3_vni": 50001}
 _NONPROD_NS = {"name": "NON-PROD", "namespace_type": "non_prod", "l3_vni": 50002}

@@ -13,7 +13,7 @@ import pytest
 
 from transforms.config.edge import Edge
 from transforms.config.firewall import Firewall, apply_context_routes
-from transforms.helpers.bgp import get_internet_prefixes
+from transforms.helpers.bgp_external import get_internet_prefixes
 
 _ROOT = Path(__file__).parent.parent.parent
 _CONFIGS = _ROOT / "tests" / "smoke" / "configs"

@@ -37,6 +37,8 @@ def _make_generator(cls: type[_T]) -> Any:
     # generate() waits for an in-flight add_colocation_zone on the serving
     # zone before reading firewall_devices — none in flight here, so no-op.
     gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
+    # _resolve_parent_cluster waits for the zone's generator when the cluster is missing, without a re-collect.
+    gen.wait_for_parent_generators = AsyncMock(return_value=False)
     # The shared FirewallContext is provisioned under a resource lock; the
     # lock itself is PoolMixin's, tested in test_dc_firewall_lb.py.
     setattr(gen, "acquire_resource_lock", AsyncMock(return_value="lock-id"))  # noqa: B010
@@ -255,11 +257,8 @@ class TestFirewallContextNoFirewallOrCluster:
         )
 
         gen._ensure_ha_pairs.assert_not_awaited()
-        assert gen.wait_for_parent_generator_and_refetch.await_count == 2
-        assert gen.wait_for_parent_generator_and_refetch.await_args_list[-1].args == (
-            ("add_colocation_zone",),
-            "fr2-zone-id",
-        )
+        assert gen.wait_for_parent_generator_and_refetch.await_count == 1
+        gen.wait_for_parent_generators.assert_awaited_once_with(("add_colocation_zone",), "fr2-zone-id")
         gen._ensure_transit_legs.assert_awaited_once()
         gen.logger.error.assert_not_called()
 
@@ -381,23 +380,33 @@ class TestLinkServingFirewallContext:
         deployment.save = AsyncMock()
         gen.client.get = AsyncMock(return_value=deployment)
 
-        await gen.link_serving_context(FIREWALL_CONTEXT, customer_id="cust-1", context_id="ctx-1")
+        await gen.link_serving_context(FIREWALL_CONTEXT, customer_id="cust-1", context_id="ctx-1", current_id=None)
 
         assert gen.client.get.call_args.kwargs == {"kind": "TopologyCustomerColocation", "id": "cust-1"}
         assert deployment.serving_firewall_context == "ctx-1"
         deployment.save.assert_awaited_once_with(update_group_context=False)
 
     @pytest.mark.asyncio
-    async def test_unchanged_link_is_not_rewritten(self) -> None:
-        """Re-running against the same context writes nothing."""
+    async def test_link_the_query_found_is_neither_read_nor_rewritten(self) -> None:
+        """The boarding query already shows the deployment linked to the context: no read, no write."""
+        gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+
+        await gen.link_serving_context(FIREWALL_CONTEXT, customer_id="cust-1", context_id="ctx-1", current_id="ctx-1")
+
+        gen.client.get.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_link_the_server_has_but_the_query_missed_is_not_rewritten(self) -> None:
+        """A payload without the link (a stale or older query) falls back to reading the deployment: still no write."""
         gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
         deployment = MagicMock()
         deployment.serving_firewall_context.id = "ctx-1"
         deployment.save = AsyncMock()
         gen.client.get = AsyncMock(return_value=deployment)
 
-        await gen.link_serving_context(FIREWALL_CONTEXT, customer_id="cust-1", context_id="ctx-1")
+        await gen.link_serving_context(FIREWALL_CONTEXT, customer_id="cust-1", context_id="ctx-1", current_id=None)
 
+        gen.client.get.assert_awaited_once()
         deployment.save.assert_not_awaited()
 
     @pytest.mark.asyncio
@@ -406,7 +415,7 @@ class TestLinkServingFirewallContext:
         gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
         gen.client.get = AsyncMock(side_effect=RuntimeError("boom"))
 
-        await gen.link_serving_context(FIREWALL_CONTEXT, customer_id="cust-1", context_id="ctx-1")
+        await gen.link_serving_context(FIREWALL_CONTEXT, customer_id="cust-1", context_id="ctx-1", current_id=None)
 
         gen.logger.error.assert_called_once()
 

@@ -38,6 +38,8 @@ def _make_generator(cls: type[_T]) -> Any:
     # before reading firewall_devices/loadbalancer_devices (see pod.py's
     # identical wait) — no in-flight parent in these unit tests, so no-op.
     gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
+    # _resolve_parent_cluster waits for the parent's generators when the cluster is missing, without a re-collect.
+    gen.wait_for_parent_generators = AsyncMock(return_value=False)
     # The shared FirewallContext is provisioned under a resource lock (a
     # CoreStandardGroup mutex in Infrahub) — stub it out like test_dc_generator.
     # setattr: not every generator built here mixes in PoolMixin.
@@ -213,12 +215,9 @@ class TestFirewallContextNoFirewallOrCluster:
         )
 
         gen._ensure_ha_pairs.assert_not_awaited()
-        # Once up front in generate(), once more when the cluster is missing.
-        assert gen.wait_for_parent_generator_and_refetch.await_args_list[-1].args == (
-            ("add_dc", "dc_pod_cascade"),
-            "dc10-id",
-        )
-        assert gen.wait_for_parent_generator_and_refetch.await_count == 2
+        # A full re-collect once up front in generate(); when the cluster is missing only the wait, no re-collect.
+        assert gen.wait_for_parent_generator_and_refetch.await_count == 1
+        gen.wait_for_parent_generators.assert_awaited_once_with(("add_dc", "dc_pod_cascade"), "dc10-id")
         gen._ensure_transit_legs.assert_awaited_once()
         gen.logger.error.assert_not_called()
 
@@ -234,7 +233,8 @@ class TestFirewallContextNoFirewallOrCluster:
         await gen.generate(_dc_payload_with_parent(fw_devices=[_fw_device()]))
 
         assert gen.client.filters.await_count == 2
-        assert gen.wait_for_parent_generator_and_refetch.await_count == 2
+        assert gen.wait_for_parent_generator_and_refetch.await_count == 1
+        gen.wait_for_parent_generators.assert_awaited_once()
         gen._ensure_ha_pairs.assert_not_awaited()
         gen._ensure_transit_legs.assert_not_awaited()
         gen.client.create.assert_not_called()
@@ -376,24 +376,51 @@ class TestLinkServingContext:
         deployment.save = AsyncMock()
         gen.client.get = AsyncMock(return_value=deployment)
 
-        await gen.link_serving_context(spec, customer_id="cust-1", context_id="ctx-1")
+        await gen.link_serving_context(spec, customer_id="cust-1", context_id="ctx-1", current_id=None)
 
         assert gen.client.get.call_args.kwargs == {"kind": "TopologyCustomerDC", "id": "cust-1"}
         assert getattr(deployment, field) == "ctx-1"
         deployment.save.assert_awaited_once_with(update_group_context=False)
 
     @pytest.mark.asyncio
-    async def test_unchanged_link_is_not_rewritten(self) -> None:
-        """Re-running against the same context writes nothing."""
+    @pytest.mark.parametrize("spec", [FIREWALL_CONTEXT, LOADBALANCER_CONTEXT])
+    async def test_link_the_query_found_is_neither_read_nor_rewritten(self, spec: Any) -> None:
+        """The boarding query already shows the deployment linked to the context: no read, no write."""
+        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+
+        await gen.link_serving_context(spec, customer_id="cust-1", context_id="ctx-1", current_id="ctx-1")
+
+        gen.client.get.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_link_the_server_has_but_the_query_missed_is_not_rewritten(self) -> None:
+        """A payload without the link (a stale or older query) falls back to reading the deployment: still no write."""
         gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
         deployment = MagicMock()
         deployment.serving_firewall_context.id = "ctx-1"
         deployment.save = AsyncMock()
         gen.client.get = AsyncMock(return_value=deployment)
 
-        await gen.link_serving_context(FIREWALL_CONTEXT, customer_id="cust-1", context_id="ctx-1")
+        await gen.link_serving_context(FIREWALL_CONTEXT, customer_id="cust-1", context_id="ctx-1", current_id=None)
 
+        gen.client.get.assert_awaited_once()
         deployment.save.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_move_to_another_context_reads_and_saves(self) -> None:
+        """The query shows another context: the deployment is read (the server decides the previous one) and saved."""
+        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        deployment = MagicMock()
+        deployment.serving_firewall_context.id = "ctx-old"
+        deployment.save = AsyncMock()
+        gen.client.get = AsyncMock(return_value=deployment)
+
+        await gen.link_serving_context(
+            FIREWALL_CONTEXT, customer_id="cust-1", context_id="ctx-new", current_id="ctx-old"
+        )
+
+        gen.client.get.assert_awaited_once()
+        deployment.save.assert_awaited_once_with(update_group_context=False)
 
     @pytest.mark.asyncio
     async def test_save_failure_is_logged_not_raised(self) -> None:
@@ -401,7 +428,7 @@ class TestLinkServingContext:
         gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
         gen.client.get = AsyncMock(side_effect=RuntimeError("boom"))
 
-        await gen.link_serving_context(FIREWALL_CONTEXT, customer_id="cust-1", context_id="ctx-1")
+        await gen.link_serving_context(FIREWALL_CONTEXT, customer_id="cust-1", context_id="ctx-1", current_id=None)
 
         gen.logger.error.assert_called_once()
 
@@ -425,7 +452,7 @@ class TestServingContextRelink:
         consumers = AsyncMock(return_value=["comp-1", "comp-2"])
         spec = dataclasses.replace(LOADBALANCER_CONTEXT, relink_consumers=consumers)
 
-        await gen.link_serving_context(spec, customer_id="cust-1", context_id="ctx-shared")
+        await gen.link_serving_context(spec, customer_id="cust-1", context_id="ctx-shared", current_id=None)
 
         deployment.save.assert_awaited_once_with(update_group_context=False)
         consumers.assert_awaited_once_with(gen.client, "cust-1")
@@ -447,6 +474,7 @@ class TestServingContextRelink:
             dataclasses.replace(LOADBALANCER_CONTEXT, relink_consumers=consumers),
             customer_id="cust-1",
             context_id="ctx-shared",
+            current_id=None,
         )
 
         deployment.save.assert_awaited_once()
@@ -462,6 +490,7 @@ class TestServingContextRelink:
             dataclasses.replace(LOADBALANCER_CONTEXT, relink_consumers=AsyncMock(return_value=[])),
             customer_id="cust-1",
             context_id="ctx-shared",
+            current_id=None,
         )
 
         gen.run_generator.assert_not_awaited()
@@ -471,7 +500,7 @@ class TestServingContextRelink:
         """The firewall rules are placed by the transform at render time: nothing to re-run."""
         gen, deployment = self._gen("serving_firewall_context", "fw-dedicated")
 
-        await gen.link_serving_context(FIREWALL_CONTEXT, customer_id="cust-1", context_id="fw-shared")
+        await gen.link_serving_context(FIREWALL_CONTEXT, customer_id="cust-1", context_id="fw-shared", current_id=None)
 
         deployment.save.assert_awaited_once()
         gen.run_generator.assert_not_awaited()
@@ -486,6 +515,7 @@ class TestServingContextRelink:
             dataclasses.replace(LOADBALANCER_CONTEXT, relink_consumers=AsyncMock(return_value=["comp-1"])),
             customer_id="cust-1",
             context_id="ctx-shared",
+            current_id=None,
         )
 
         deployment.save.assert_awaited_once()
@@ -784,7 +814,7 @@ def _uplink(iface_id: str, device_id: str) -> MagicMock:
 class TestUplinksByDevice:
     @pytest.mark.asyncio
     async def test_one_query_for_every_device_first_uplink_per_device(self) -> None:
-        """One filters() for all devices; a device's first uplink wins, as find_role_interface picks it."""
+        """One filters() for all devices; a device's first uplink wins."""
         gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
         first, second, other = _uplink("up-1a", "fw-1"), _uplink("up-1b", "fw-1"), _uplink("up-2", "fw-2")
         gen.client.filters = AsyncMock(return_value=[first, second, other])

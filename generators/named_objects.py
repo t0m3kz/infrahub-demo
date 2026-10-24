@@ -65,13 +65,11 @@ class GetOrCreateByNameMixin:
             self.logger.error("Failed to create %s: %s", name, exc)
             return None
 
-    async def _find_rule_by_name(
-        self, kind: Any, policy_id: str, rule_name: str, include: list[str] | None = None
-    ) -> Any | None:
+    async def _find_rule_by_name(self, kind: Any, policy_id: str, rule_name: str) -> Any | None:
         """The ``kind`` rule named ``rule_name`` in policy ``policy_id``, or None.
 
-        ``include`` names the cardinality-many relationships to read with it
-        (an address or prefix selector the caller reconciles in place).
+        One read per rule: for a policy the run writes a few rules into (the proxy egress policy of
+        an owner). SegmentFirewallMixin reads a security policy's rules once instead.
         """
-        rules = await self.client.filters(kind=kind, policy__ids=[policy_id], name__value=rule_name, include=include)
+        rules = await self.client.filters(kind=kind, policy__ids=[policy_id], name__value=rule_name)
         return rules[0] if rules else None

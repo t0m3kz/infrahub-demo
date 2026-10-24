@@ -1,17 +1,32 @@
 from __future__ import annotations
 
+from collections.abc import Collection, Mapping
 from typing import Any
 
 from utils.data_cleaning import clean_data
 
-from ..protocols import LocationRack
 from ..types import DeviceOptions, RoutingOptions
 from .naming import DeviceNameContext, DeviceNamingConfig
 
 
-def rack_sort_key(rack: LocationRack) -> tuple[int, int, str]:
-    """Deterministic rack ordering for stable idempotent selections."""
-    return rack.row_index.value, rack.index.value, rack.name.value
+def pod_row_racks(
+    pod: Mapping[str, Any], row_index: int, rack_types: Collection[str] | None = None
+) -> list[dict[str, Any]]:
+    """The racks of one row of a pod, from the pod's ``racks`` projection (``PodFields`` in
+    rack.gql and endpoint.gql), in a deterministic (row, index, name) order for stable
+    idempotent selections. ``rack_types`` narrows them; None keeps every type.
+
+    Racks are data, never a generator's output, so the payload read at the start of the run
+    replaces a ``filters(LocationRack, pod__ids=..., row_index__value=...)`` round trip.
+    """
+    return sorted(
+        (
+            rack
+            for rack in pod.get("racks", [])
+            if rack["row_index"] == row_index and (rack_types is None or rack["rack_type"] in rack_types)
+        ),
+        key=lambda rack: (rack["row_index"], rack["index"], rack["name"]),
+    )
 
 
 def parse_rack_data(data: dict[str, Any]) -> dict[str, Any]:

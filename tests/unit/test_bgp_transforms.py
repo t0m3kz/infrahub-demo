@@ -7,10 +7,7 @@ and route reflector client detection from peering_interfaces data.
 import pytest
 
 from tests.unit.bgp_transforms_helpers import _make_peering
-from transforms.helpers.bgp import (
-    _build_session_from_peering,
-    _extract_remote_asn_from_peering,
-)
+from transforms.helpers.bgp import _build_session_from_peering, _extract_remote_asn_from_peering
 
 # ============================================================================
 # _build_session_from_peering

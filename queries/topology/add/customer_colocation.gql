@@ -17,6 +17,9 @@ query customer_colocation($name: String!) {
             }
           }
         }
+        # The context the footprint is already linked to: generators/firewall_context.py's
+        # link_serving_context writes nothing, and reads nothing, when it is the one serving it.
+        serving_firewall_context { node { id } }
         # Aliased `parent`: generators/firewall_context.py reads the facility that
         # hosts the context from customer.parent (the DC for a TopologyCustomerDC),
         # and for a colocation footprint that is the zone whose firewall pair serves

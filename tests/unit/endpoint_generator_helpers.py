@@ -12,6 +12,11 @@ from generators.topology.endpoint import EndpointConnectivityGenerator
 from tests.unit.simulators.fabric_designs import pod_design
 
 
+def _pod_rack(rack_id: str, *, rack_type: str = "network", row_index: int = 1, index: int = 1) -> dict:
+    """One entry of the pod's ``racks`` projection (endpoint.gql's PodFields)."""
+    return {"id": rack_id, "name": rack_id.upper(), "index": index, "row_index": row_index, "rack_type": rack_type}
+
+
 def _rack(*, rack_id: str = "rack-1", row_index: int = 1, rack_type: str = "compute") -> dict:
     return {
         "id": rack_id,
@@ -25,6 +30,7 @@ def _rack(*, rack_id: str = "rack-1", row_index: int = 1, rack_type: str = "comp
             "index": 1,
             "design": pod_design("S_MIXED"),
             "parent": {"id": "dc-1", "name": "DC1"},
+            "racks": [_pod_rack(rack_id, rack_type=rack_type, row_index=row_index)],
         },
     }
 
@@ -32,15 +38,25 @@ def _rack(*, rack_id: str = "rack-1", row_index: int = 1, rack_type: str = "comp
 _UNSET = object()
 
 
-def _endpoint_data(*, endpoint_id: str = "ep-1", name: str = "server-1", rack: Any = _UNSET) -> dict:
+def _endpoint_data(
+    *,
+    endpoint_id: str = "ep-1",
+    name: str = "server-1",
+    rack: Any = _UNSET,
+    deployment: Any = _UNSET,  # the id of the pod the server's deployment points at, or None for unset
+    interfaces: list | None = None,
+) -> dict:
+    """The ``GetEndpointForConnectivity`` payload: deployment defaults to the rack's pod."""
+    deployment_id = "pod-1" if deployment is _UNSET else deployment
     return {
         "DcimDevice": [
             {
                 "id": endpoint_id,
                 "name": name,
                 "role": "endpoint",
+                "deployment": {"node": {"id": deployment_id}} if deployment_id else None,
                 "rack": _rack() if rack is _UNSET else rack,
-                "interfaces": [],
+                "interfaces": interfaces or [],
             }
         ]
     }
@@ -99,13 +115,20 @@ def _endpoint_device() -> MagicMock:
     return endpoint_device
 
 
-def _bond(name: str, members: list[MagicMock]) -> MagicMock:
-    """A server DcimLAGInterface whose member_interfaces peers point at `members` by id."""
-    bond = MagicMock()
-    bond.name = MagicMock(value=name)
-    bond.member_interfaces = MagicMock()
-    bond.member_interfaces.peers = [MagicMock(id=m.id) for m in members]
-    return bond
+def _bond(name: str, members: list[MagicMock]) -> dict:
+    """A server bond as the payload carries it (endpoint.gql's BondFields): members by id."""
+    return {
+        "id": f"id-{name}",
+        "name": name,
+        "role": "lag",
+        "lag_id": None,
+        "member_interfaces": [{"id": m.id} for m in members],
+    }
+
+
+def _bond_data(*bonds: dict) -> dict:
+    """``_endpoint_data`` for a server declaring ``bonds`` next to a physical interface."""
+    return _endpoint_data(interfaces=[{"id": "i1", "name": "eth0"}, *bonds])
 
 
 def _nic(name: str) -> MagicMock:

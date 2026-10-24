@@ -5,9 +5,7 @@ from pathlib import Path
 import jinja2
 import pytest
 
-from transforms.helpers.vxlan import (
-    get_interfaces,
-)
+from transforms.helpers.vxlan import get_interfaces
 
 # ===========================================================================
 # Arista EOS leaf template — isolation_mode rendering smoke tests

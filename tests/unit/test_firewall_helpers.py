@@ -2,18 +2,15 @@
 
 from unittest.mock import patch
 
-from tests.unit.firewall_helpers_shared import (
-    _make_pbr_activation,
-    _make_segment_with_prefix,
-)
+from tests.unit.firewall_helpers_shared import _make_pbr_activation, _make_segment_with_prefix
 from transforms.helpers.firewall import (
     _service_context_caps,
-    get_customer_pbr_rules,
     get_exchange_routes,
     get_exchange_transits,
     get_firewall_static_routes,
     get_firewall_zones,
 )
+from transforms.helpers.firewall_pbr import get_customer_pbr_rules
 from utils.exchange_transit import EXCHANGE_PEERS, exchange_peer_zones
 
 # ---------------------------------------------------------------------------

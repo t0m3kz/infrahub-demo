@@ -16,10 +16,7 @@ from tests.smoke.fixture_builders.group_policy import (
     gpo_roots,
     gpo_view,
 )
-from transforms.helpers.group_policy import (
-    component_coverage,
-    data_center_contracts,
-)
+from transforms.helpers.group_policy import component_coverage, data_center_contracts
 from utils.data_cleaning import clean_data
 
 LEAF_ACTIVATIONS: list[dict[str, Any]] = [

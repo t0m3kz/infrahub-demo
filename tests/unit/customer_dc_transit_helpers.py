@@ -45,7 +45,7 @@ class _Many:
         return None
 
     def add(self, obj: Any) -> None:
-        self.peers.append(SimpleNamespace(id=obj.id))
+        self.peers.append(SimpleNamespace(id=obj["id"] if isinstance(obj, dict) else obj.id))
 
 
 class _World:
@@ -172,6 +172,9 @@ class _World:
             ids = set(kwargs["capabilities__ids"])
             return [sub for sub in self.sub_interfaces.values() if ids & {peer.id for peer in sub.capabilities.peers}]
         if name == "IpamIPAddress":
+            if "address__values" in kwargs:  # CablingMixin._find_addresses: one read for a prefix's addresses
+                wanted = {(address, ns) for address in kwargs["address__values"] for ns in kwargs["ip_namespace__ids"]}
+                return [ip for key, ip in self.addresses.items() if key in wanted]
             return [ip for ip in self.addresses.values() if ip.id in kwargs["ids"]]
         raise AssertionError(f"unexpected filters({name})")
 
@@ -192,6 +195,8 @@ class _World:
             return SimpleNamespace(id="pool-snat")
         if name == "IpamIPAddress":
             return self.addresses.get((kwargs["address__value"], kwargs["ip_namespace__ids"][0]))
+        if name == "DcimVirtualInterface":  # ensure_vlan_subinterface: the stored sub-interface, with its capabilities
+            return next(sub for sub in self.sub_interfaces.values() if sub.id == kwargs["id"])
         raise AssertionError(f"unexpected get({name})")
 
     async def allocate_next_ip_prefix(
@@ -260,7 +265,7 @@ class _World:
                 key,
                 SimpleNamespace(
                     id=f"ip-{len(self.addresses)}",
-                    address=data["address"],
+                    address=SimpleNamespace(value=data["address"]),
                     ip_namespace=SimpleNamespace(id=data["ip_namespace"].id),
                 ),
             )

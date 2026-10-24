@@ -33,7 +33,7 @@ class ZtnaMixin(GetOrCreateByNameMixin):
         app_name: str,
         src_comp: dict[str, Any],
         dep: dict[str, Any],
-        proxy_policies: dict[str, Any],
+        proxy_policies: dict[str, str],
     ) -> bool:
         """Turn a target_fqdn dependency into an owner-scoped egress ProxyPolicyRule."""
         planner = RulesPlanner()
@@ -89,16 +89,18 @@ class ZtnaMixin(GetOrCreateByNameMixin):
         owner: dict[str, Any],
         service: dict[str, Any],
         purpose: str,
-        policies: dict[str, Any],
+        policies: dict[str, str],
         subject: str,
         rule_data: dict[str, Any],
     ) -> bool:
         """Upsert ``rule_data`` into the owner's ``purpose`` ProxyPolicy on ``service``.
 
-        The policy is fetched or created (and attached to the owner) once per
-        owner/service, then cached in ``policies``. An existing rule of the
-        same name is updated in place. False when the owner has no id, the
-        policy cannot be made, or the save fails.
+        The policy is resolved once per owner/service, then its id is cached in
+        ``policies``: the id off the owner's ``proxy_policies`` in the query
+        payload when the policy is already attached (no lookup, no attach),
+        else the policy is fetched or created and attached to the owner. An
+        existing rule of the same name is updated in place. False when the
+        owner has no id, the policy cannot be made, or the save fails.
         """
         owner_org_id = str(owner.get("org_id") or owner.get("id") or "")
         owner_node_id = str(owner.get("id") or "")
@@ -108,18 +110,23 @@ class ZtnaMixin(GetOrCreateByNameMixin):
 
         service_id = service["id"]
         policy_key = f"{owner_org_id}:{service_id}"
-        policy = policies.get(policy_key)
-        if policy is None:
+        policy_id = policies.get(policy_key)
+        if policy_id is None:
             service_name = str(service.get("name") or service_id)
-            policy = await self._get_or_create_proxy_policy(f"proxy-{owner_org_id}-{service_name}-{purpose}")
-            if policy is None:
-                return False
-            policies[policy_key] = policy
-            await self._attach_proxy_policy_to_owner(owner_id=owner_node_id, policy_id=policy.id)
+            policy_name = f"proxy-{owner_org_id}-{service_name}-{purpose}"
+            attached = {policy["name"]: policy["id"] for policy in owner.get("proxy_policies") or []}
+            policy_id = attached.get(policy_name)
+            if policy_id is None:
+                policy = await self._get_or_create_proxy_policy(policy_name)
+                if policy is None:
+                    return False
+                policy_id = policy.id
+                await self._attach_proxy_policy_to_owner(owner_id=owner_node_id, policy_id=policy_id)
+            policies[policy_key] = policy_id
 
         rule_name = rule_data["name"]
-        data: dict[str, Any] = {"policy": {"id": policy.id}, **rule_data}
-        existing_rule = await self._find_rule_by_name(ProxyPolicyRule, policy.id, rule_name)
+        data: dict[str, Any] = {"policy": {"id": policy_id}, **rule_data}
+        existing_rule = await self._find_rule_by_name(ProxyPolicyRule, policy_id, rule_name)
         if existing_rule is not None:
             data["id"] = existing_rule.id
         try:
@@ -188,7 +195,7 @@ class ZtnaMixin(GetOrCreateByNameMixin):
         """
         created = 0
         skipped = 0
-        policies: dict[str, Any] = {}
+        policies: dict[str, str] = {}
 
         for component in components:
             grants = self.private_access_grants(component)

@@ -5,8 +5,10 @@ from __future__ import annotations
 import asyncio
 import ipaddress
 from collections.abc import Iterable, Sequence
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Callable, Literal
 
+from infrahub_sdk.exceptions import GraphQLError
 from infrahub_sdk.protocols import CoreIPAddressPool, CoreIPPrefixPool
 
 if TYPE_CHECKING:
@@ -56,6 +58,34 @@ def _peer_id(rel: Any) -> str | None:
     return rel.id if rel is not None and rel.initialized else None
 
 
+def _address_lookup_filters(addresses: Sequence[str], namespace_id: str) -> dict[str, Any]:
+    """The IpamIPAddress filters that find several addresses of one namespace in a single read.
+
+    The one place the batch filter is spelled, so a server that does not accept it is a one-line change
+    (CablingMixin._find_addresses falls back to a get per address when the read is refused).
+    """
+    return {"address__values": list(addresses), "ip_namespace__ids": [namespace_id]}
+
+
+def _address_key(address: str) -> str:
+    """Canonical text of an interface address, for matching what the server returns to what was asked."""
+    return str(ipaddress.ip_interface(address))
+
+
+@dataclass
+class _LayoutCache:
+    """What one generator run has already read for cable lengths.
+
+    Racks and suites are data, never generated, and no generator moves a device between racks, so a
+    device's position, a rack and a suite are read once per run, however many cabling plans, HA pairs
+    and MLAG pairs ask for them.
+    """
+
+    positions: dict[str, RackPosition | None] = field(default_factory=dict)
+    racks: dict[str, Any] = field(default_factory=dict)
+    suites: dict[str, Any] = field(default_factory=dict)
+
+
 class CablingMixin:
     """Mixin providing device-to-device cabling methods for CommonGenerator.
 
@@ -72,6 +102,8 @@ class CablingMixin:
     _retry_delay: Callable[..., float]
     # CommonGenerator._safe_rel_add — annotation only, needed by ensure_vlan_subinterface.
     _safe_rel_add: Any
+    # Set on first use by _cable_layouts, one per generator instance (= per run).
+    _layout_cache: _LayoutCache | None
 
     async def create_cabling(
         self,
@@ -172,37 +204,58 @@ class CablingMixin:
         """Rack position of each device, for the length of the cables between them.
 
         THE lookup behind every cable's ``length_cm`` (this mixin's cabling, the HA sync cable, the MLAG
-        peer-link cables): at most three batched reads whatever the number of devices or cables
-        (devices -> racks -> suites), none when no device has a rack. A device missing from the result, or
-        mapped to None, has no derivable position: a virtual device, a device with no rack, a rack with no suite.
+        peer-link cables). A device missing from the result, or mapped to None, has no derivable position:
+        a virtual device, a device with no rack, a rack with no suite.
+
+        Memoised per run (_LayoutCache): only the devices, racks and suites not read yet are read, in at most
+        three batched reads (devices -> racks -> suites), none when everything asked for is known or no
+        device has a rack. A device the read does not return, or whose rack or suite is not visible yet, is
+        not memoised, so the next call looks again.
         """
         ids = sorted(set(device_ids))
-        if not ids:
-            return {}
-        devices = await self.client.filters(kind=DcimPhysicalDevice, ids=ids, include=["rack"])
-        rack_id_by_device = {device.id: _peer_id(getattr(device, "rack", None)) for device in devices}
-        rack_ids = sorted({rack_id for rack_id in rack_id_by_device.values() if rack_id})
-        if not rack_ids:
-            return dict.fromkeys(ids)
-        racks = {
-            rack.id: rack for rack in await self.client.filters(kind=LocationRack, ids=rack_ids, include=["parent"])
-        }
-        suite_ids = sorted(
-            {suite_id for rack in racks.values() if (suite_id := _peer_id(getattr(rack, "parent", None)))}
-        )
-        suites = (
-            {suite.id: suite for suite in await self.client.filters(kind=LocationSuite, ids=suite_ids)}
-            if suite_ids
-            else {}
-        )
+        cache: _LayoutCache | None = getattr(self, "_layout_cache", None)
+        if cache is None:
+            cache = self._layout_cache = _LayoutCache()
+        missing = [device_id for device_id in ids if device_id not in cache.positions]
+        if missing:
+            await self._read_layouts(missing, cache)
+        return {device_id: cache.positions.get(device_id) for device_id in ids}
 
-        layouts: dict[str, RackPosition | None] = dict.fromkeys(ids)
+    async def _read_layouts(self, device_ids: list[str], cache: _LayoutCache) -> None:
+        """Read the devices, then the racks and suites they need that the cache lacks, and memoise the positions."""
+        devices = await self.client.filters(kind=DcimPhysicalDevice, ids=device_ids, include=["rack"])
+        rack_id_by_device = {device.id: _peer_id(getattr(device, "rack", None)) for device in devices}
+        rack_ids = sorted({rack_id for rack_id in rack_id_by_device.values() if rack_id and rack_id not in cache.racks})
+        if rack_ids:
+            cache.racks.update(
+                {
+                    rack.id: rack
+                    for rack in await self.client.filters(kind=LocationRack, ids=rack_ids, include=["parent"])
+                }
+            )
+        suite_ids = sorted(
+            {
+                suite_id
+                for rack_id in rack_id_by_device.values()
+                if rack_id in cache.racks
+                and (suite_id := _peer_id(getattr(cache.racks[rack_id], "parent", None)))
+                and suite_id not in cache.suites
+            }
+        )
+        if suite_ids:
+            cache.suites.update(
+                {suite.id: suite for suite in await self.client.filters(kind=LocationSuite, ids=suite_ids)}
+            )
+
         for device_id, rack_id in rack_id_by_device.items():
-            rack = racks.get(rack_id) if rack_id else None
-            suite = suites.get(_peer_id(getattr(rack, "parent", None)) or "") if rack is not None else None
+            if rack_id is None:
+                cache.positions[device_id] = None
+                continue
+            rack = cache.racks.get(rack_id)
+            suite = cache.suites.get(_peer_id(getattr(rack, "parent", None)) or "") if rack is not None else None
             if rack is None or suite is None:
                 continue
-            layouts[device_id] = RackPosition(
+            cache.positions[device_id] = RackPosition(
                 suite_id=suite.id,
                 row_index=rack.row_index.value,
                 index=rack.index.value,
@@ -211,7 +264,6 @@ class CablingMixin:
                 rack_pitch_cm=suite.rack_pitch_cm.value,
                 row_pitch_cm=suite.row_pitch_cm.value,
             )
-        return layouts
 
     async def _execute_cabling_plan(
         self,
@@ -366,14 +418,17 @@ class CablingMixin:
         network = ipaddress.ip_network(prefix.prefix.value, strict=False)
         length = network.prefixlen if address_length is None else address_length
         # network[offset], not .hosts(): .hosts() yields one address for /31 and /127.
+        addresses = {offset: f"{network[offset]}/{length}" for offset in offsets}
+        found = await self._find_addresses(list(addresses.values()), prefix.ip_namespace.id)
         return {
-            offset: await self.upsert_ip_address(
-                address=f"{network[offset]}/{length}",
+            offset: await self._save_address(
+                address=address,
                 ip_namespace=prefix.ip_namespace,
+                existing=found.get(_address_key(address)),
                 description=description,
                 track=track,
             )
-            for offset in offsets
+            for offset, address in addresses.items()
         }
 
     async def upsert_ip_address(
@@ -385,12 +440,50 @@ class CablingMixin:
         as in upsert_prefix_addresses().
         """
         namespace_id = ip_namespace["id"] if isinstance(ip_namespace, dict) else ip_namespace.id
-        ip = await self.client.get(
-            kind=IpamIPAddress,
-            address__value=address,
-            ip_namespace__ids=[namespace_id],
-            raise_when_missing=False,
+        found = await self._find_addresses([address], namespace_id)
+        return await self._save_address(
+            address=address,
+            ip_namespace=ip_namespace,
+            existing=found.get(_address_key(address)),
+            description=description,
+            track=track,
         )
+
+    async def _find_addresses(self, addresses: Sequence[str], namespace_id: str) -> dict[str, Any]:
+        """The IpamIPAddress nodes that already exist among ``addresses`` in the namespace, by canonical address.
+
+        THE find-before-create read (the race guard of upsert_prefix_addresses()): one read for all the
+        addresses of a prefix, a single get for one. A server that refuses the batch filter falls back to a
+        get per address, so the guard never weakens.
+        """
+        if len(addresses) > 1:
+            try:
+                nodes = await self.client.filters(
+                    kind=IpamIPAddress, **_address_lookup_filters(addresses, namespace_id)
+                )
+            except GraphQLError as exc:
+                reason = exc.errors[0].get("message") if exc.errors else "no detail"
+                self.logger.info(f"Batch address lookup refused ({reason}) — looking up one address at a time")
+            else:
+                return {_address_key(node.address.value): node for node in nodes}
+        found: dict[str, Any] = {}
+        for address in addresses:
+            node = await self.client.get(
+                kind=IpamIPAddress, address__value=address, ip_namespace__ids=[namespace_id], raise_when_missing=False
+            )
+            if node:
+                found[_address_key(address)] = node
+        return found
+
+    async def _save_address(
+        self, *, address: str, ip_namespace: Any, existing: Any | None, description: str | None, track: bool
+    ) -> Any:
+        """Save one address, creating it when ``existing`` (what _find_addresses found) is None.
+
+        Saved even when found: the run tracks only what it saves. An existing address is re-created from
+        its id only to (re)write a description.
+        """
+        ip = existing
         if not ip or description is not None:
             ip = await self.client.create(
                 kind=IpamIPAddress,
@@ -441,14 +534,19 @@ class CablingMixin:
 
             top_role = top_hop.get("down_role", "")
             bottom_role = bottom_hop.get("up_role", "")
-            top_interfaces = await self.client.filters(
-                kind=DcimPhysicalInterface, device__name__values=top_devices, role__value=top_role, include=["cable"]
-            )
-            bottom_interfaces = await self.client.filters(
-                kind=DcimPhysicalInterface,
-                device__name__values=bottom_devices,
-                role__value=bottom_role,
-                include=["cable"],
+            top_interfaces, bottom_interfaces = await asyncio.gather(
+                self.client.filters(
+                    kind=DcimPhysicalInterface,
+                    device__name__values=top_devices,
+                    role__value=top_role,
+                    include=["cable"],
+                ),
+                self.client.filters(
+                    kind=DcimPhysicalInterface,
+                    device__name__values=bottom_devices,
+                    role__value=bottom_role,
+                    include=["cable"],
+                ),
             )
             if not top_interfaces or not bottom_interfaces:
                 self.logger.error(
@@ -475,25 +573,6 @@ class CablingMixin:
 
         return all_leg_pairs
 
-    async def find_role_interface(
-        self, *, device_id: str, role: str, fallback_any_physical: bool = False
-    ) -> Any | None:
-        """Return the first physical interface matching role on device_id, or
-        (if fallback_any_physical) the alphabetically-first physical
-        interface when no role match exists. Returns None on error or no
-        match — shared trunk/uplink resolution for
-        ensure_vlan_subinterface() callers.
-        """
-        ifaces = await self.client.filters(kind=DcimPhysicalInterface, device__ids=[device_id], role__value=role)
-        if ifaces:
-            return ifaces[0]
-        if not fallback_any_physical:
-            return None
-        all_ifaces = await self.client.filters(kind=DcimPhysicalInterface, device__ids=[device_id])
-        if not all_ifaces:
-            return None
-        return sorted(all_ifaces, key=lambda i: i.name.value)[0]
-
     async def ensure_vlan_subinterface(
         self,
         *,
@@ -503,27 +582,28 @@ class CablingMixin:
         vlan_id_value: int,
         capability_obj: Any | None = None,
         extra_capability_objs: Sequence[Any] = (),
+        capability_ids: Sequence[str] = (),
         ip_address_id: str | None = None,
         track: bool = True,
         role: str = "service",
     ) -> Any | None:
         """Upsert a VLAN-tagged DcimVirtualInterface (<trunk>.<vlan_id>) on
         trunk_iface, linked to capability_obj (and any extra_capability_objs,
-        e.g. the exchanges a firewall-context leg belongs to) via
-        capabilities. Capabilities are only ever added, never removed —
-        shared by customer_dc.py/customer_colocation.py's FirewallContext
-        sub-interfaces and segment.py's inline VxlanSegment termination.
-        Trunk-interface resolution stays with the caller since fallback
-        behavior differs (see find_role_interface).
+        e.g. the exchanges a firewall-context leg belongs to, and any
+        capability_ids a caller holds without the node) via capabilities.
+        Capabilities are only ever added, never removed — shared by
+        customer_dc.py/customer_colocation.py's FirewallContext sub-interfaces
+        and segment.py's inline VxlanSegment termination. Trunk-interface
+        resolution stays with the caller since the fallback behavior differs.
 
-        No capability_obj: a sub-interface the caller links itself (an office's WAN
+        No capability: a sub-interface the caller links itself (an office's WAN
         exit, which the BGP peering names as its interface), with its own ``role``.
 
         track=False makes every save here (the sub-interface and its
         capability-link re-save) use update_group_context=False, for a
         sub-interface reached by more than one target (e.g. a shared
         FirewallContext's per-firewall leg): written, never claimed by this
-        run's group, so no run's cleanup can delete it. This helper saves no
+        run's group. This helper saves no
         IP itself — ip_address_id must already exist; untracked addressing is
         upsert_p2p_addresses(track=False).
         """
@@ -540,17 +620,21 @@ class CablingMixin:
         try:
             sub_iface = await self.client.create(kind=DcimVirtualInterface, data=sub_iface_data)
             await sub_iface.save(**tracked_save_kwargs(track))
-            capabilities = [cap for cap in (capability_obj, *extra_capability_objs) if cap is not None]
-            if capabilities:
-                iface_capabilities = getattr(sub_iface, "capabilities")
-                await iface_capabilities.fetch()
-                linked = {peer.id for peer in iface_capabilities.peers}
-                missing = [cap for cap in capabilities if cap.id not in linked]
+            wanted = [cap.id for cap in (capability_obj, *extra_capability_objs) if cap is not None]
+            wanted.extend(capability_ids)
+            if wanted:
+                # A node built from create(data) does not know the capabilities the server already holds, and
+                # a RelationshipManager must be loaded before it is added to: one get with the relationship
+                # included (only the peer ids are read), not fetch(), which costs a get plus a read per peer kind.
+                stored = await self.client.get(kind=DcimVirtualInterface, id=sub_iface.id, include=["capabilities"])
+                capabilities = getattr(stored, "capabilities")
+                linked = {peer.id for peer in capabilities.peers}
+                missing = [cap_id for cap_id in dict.fromkeys(wanted) if cap_id not in linked]
                 if missing:
-                    for cap in missing:
-                        await self._safe_rel_add(iface_capabilities, cap)
+                    for cap_id in missing:
+                        await self._safe_rel_add(capabilities, {"id": cap_id})
                     # The capability may be an exchange another run created a moment ago.
-                    await save_with_node_not_found_retry(sub_iface, self.logger, **tracked_save_kwargs(track))
+                    await save_with_node_not_found_retry(stored, self.logger, **tracked_save_kwargs(track))
             self.logger.info(f"Upserted sub-interface {sub_iface_name} on {device_name}")
             return sub_iface
         except Exception as exc:

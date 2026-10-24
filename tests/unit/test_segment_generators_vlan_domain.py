@@ -1,4 +1,4 @@
-"""Unit tests for the VLAN domain helpers of VxlanSegmentGenerator."""
+"""Unit tests for the VLAN domain resolution helpers of VxlanSegmentGenerator."""
 
 from __future__ import annotations
 
@@ -8,9 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from generators.logger import GeneratorError
-from generators.protocols import (
-    ManagedStandaloneVlanDomain,
-)
+from generators.protocols import ManagedStandaloneVlanDomain
 from tests.unit.segment_generators_helpers import _make_gen
 
 # ===========================================================================
@@ -49,98 +47,65 @@ class TestResolveVlanDomain:
         assert result == ("DcimPhysicalDevice", "dev-1")
 
 
-class TestCreateVlanDomainSegment:
-    """_create_vlan_domain_segment — one new (segment, domain) pair, untracked."""
-
-    def test_domain_without_pool_logs_error(self):
-        gen = _make_gen()
-        domain_obj = MagicMock()
-        domain_obj.vlan_pool = None
-        gen.client.get = AsyncMock(return_value=domain_obj)
-
-        asyncio.run(gen._create_vlan_domain_segment("seg-1", "vxlan-1000", "mlag-1"))
-
-        gen.client.create.assert_not_called()
-        error_msg = gen.logger.error.call_args[0][0]
-        assert "vlan_pool" in error_msg
-
-    def test_allocates_vlan_id_from_domain_pool_untracked(self) -> None:
-        """The pair is shared desired state of the segment: saved with
-        update_group_context=False, so no run's cleanup can delete it."""
-        gen = _make_gen()
-        domain_obj = MagicMock()
-        domain_obj.vlan_pool = MagicMock(id="pool-vlan-1")
-        activation = MagicMock()
-        activation.save = AsyncMock()
-        gen.client.get = AsyncMock(return_value=domain_obj)
-        gen.client.create = AsyncMock(return_value=activation)
-
-        asyncio.run(gen._create_vlan_domain_segment("seg-1", "vxlan-1000", "mlag-1"))
-
-        call_kwargs = gen.client.create.call_args.kwargs
-        assert call_kwargs["data"]["segment"] == {"id": "seg-1"}
-        assert call_kwargs["data"]["vlan_domain"] == {"id": "mlag-1"}
-        assert call_kwargs["data"]["vlan_id"] == {"from_pool": {"id": "pool-vlan-1"}}
-        activation.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
-
-    def test_known_pool_skips_reading_the_domain(self) -> None:
-        """A pool id handed over by the caller is used as is, without a domain read."""
-        gen = _make_gen()
-        activation = MagicMock()
-        activation.save = AsyncMock()
-        gen.client.get = AsyncMock()
-        gen.client.create = AsyncMock(return_value=activation)
-
-        asyncio.run(gen._create_vlan_domain_segment("seg-1", "vxlan-1000", "domain-1", "pool-1"))
-
-        gen.client.get.assert_not_called()
-        assert gen.client.create.call_args.kwargs["data"]["vlan_id"]["from_pool"]["id"] == "pool-1"
-
-
-class TestEnsureStandaloneVlanDomain:
-    """The standalone domain and its pool belong to the device's generator:
-    looked up by name, never created or saved here."""
+class TestResolveVlanDomains:
+    """_resolve_vlan_domains: {device id: domain id}, the standalone domains found by ONE name read."""
 
     @staticmethod
-    def _device() -> MagicMock:
-        device = MagicMock(id="dev-1")
-        device.name.value = "bl-dc101101"
+    def _device(dev_id: str, name: str, mlag_id: str | None = None) -> MagicMock:
+        """A device with capabilities fetched; MLAG-paired when ``mlag_id`` is given."""
+        device = MagicMock(id=dev_id)
+        device.name.value = name
+        peers = []
+        if mlag_id:
+            peer = MagicMock(id=mlag_id)
+            peer.typename = "ManagedMLAG"
+            peers.append(peer)
+        device.capabilities = MagicMock(peers=peers)
         return device
 
-    def test_existing_domain_is_read_not_saved(self) -> None:
-        """The domain is found by its device-derived name and returned with its pool."""
-        gen = _make_gen()
-        domain = MagicMock(id="domain-1")
-        domain.vlan_pool = MagicMock(id="pool-1")
+    @staticmethod
+    def _domain(domain_id: str, name: str) -> MagicMock:
+        """A ManagedStandaloneVlanDomain as filters() returns it."""
+        domain = MagicMock(id=domain_id)
+        domain.name.value = name
         domain.save = AsyncMock()
-        gen.client.get = AsyncMock(return_value=domain)
+        return domain
 
-        result = asyncio.run(gen._ensure_standalone_vlan_domain(self._device()))
+    def test_standalone_domains_are_found_by_one_name_read_and_never_saved(self) -> None:
+        """Two standalone devices and an MLAG member: one filters() on the names, MLAG needs no read."""
+        gen = _make_gen()
+        domains = [self._domain("dom-1", "sw-1-vlan-domain"), self._domain("dom-2", "sw-2-vlan-domain")]
+        gen.client.filters = AsyncMock(return_value=domains)
+        devices = [self._device("d1", "sw-1"), self._device("d2", "sw-2"), self._device("d3", "sw-3", "mlag-9")]
 
-        assert result == ("domain-1", "pool-1")
-        kwargs = gen.client.get.call_args.kwargs
-        assert kwargs["kind"] == ManagedStandaloneVlanDomain
-        assert kwargs["name__value"] == "bl-dc101101-vlan-domain"
-        assert kwargs["include"] == ["vlan_pool"]
-        domain.save.assert_not_called()
+        result = asyncio.run(gen._resolve_vlan_domains(devices))
+
+        assert result == {"d1": "dom-1", "d2": "dom-2", "d3": "mlag-9"}
+        gen.client.filters.assert_awaited_once_with(
+            kind=ManagedStandaloneVlanDomain, name__values=["sw-1-vlan-domain", "sw-2-vlan-domain"]
+        )
+        assert "include" not in gen.client.filters.call_args.kwargs
+        for domain in domains:
+            domain.save.assert_not_called()
         gen.client.create.assert_not_called()
 
-    def test_domain_without_pool_returns_none_pool(self) -> None:
-        """A domain whose pool is not attached yet hands back no pool id."""
+    def test_only_mlag_devices_read_nothing(self) -> None:
+        """MLAG domains come from the device's capabilities: no standalone-domain read."""
         gen = _make_gen()
-        domain = MagicMock(id="domain-1")
-        domain.vlan_pool = None
-        gen.client.get = AsyncMock(return_value=domain)
+        gen.client.filters = AsyncMock()
 
-        assert asyncio.run(gen._ensure_standalone_vlan_domain(self._device())) == ("domain-1", None)
+        result = asyncio.run(gen._resolve_vlan_domains([self._device("d1", "sw-1", "mlag-1")]))
 
-    def test_missing_domain_is_an_error(self) -> None:
+        assert result == {"d1": "mlag-1"}
+        gen.client.filters.assert_not_awaited()
+
+    def test_missing_domain_is_an_error_naming_it(self) -> None:
         """The device generator owns the domain; a missing one fails the run instead of being created."""
         gen = _make_gen()
-        gen.client.get = AsyncMock(return_value=None)
+        gen.client.filters = AsyncMock(return_value=[self._domain("dom-1", "sw-1-vlan-domain")])
 
-        with pytest.raises(GeneratorError, match="bl-dc101101-vlan-domain"):
-            asyncio.run(gen._ensure_standalone_vlan_domain(self._device()))
+        with pytest.raises(GeneratorError, match="sw-2-vlan-domain"):
+            asyncio.run(gen._resolve_vlan_domains([self._device("d1", "sw-1"), self._device("d2", "sw-2")]))
 
         gen.logger.error.assert_called_once()
         gen.client.create.assert_not_called()

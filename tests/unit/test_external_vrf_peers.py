@@ -20,10 +20,8 @@ from tests.unit.external_vrf_peers_helpers import (
     _peering,
     _subif,
 )
-from transforms.helpers.bgp import (
-    _build_session_from_peering,
-    get_external_peer_prefixes,
-)
+from transforms.helpers.bgp import _build_session_from_peering
+from transforms.helpers.bgp_external import get_external_peer_prefixes
 from utils.ownership import customer_owner
 
 

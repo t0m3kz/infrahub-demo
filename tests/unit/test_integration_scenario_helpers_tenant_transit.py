@@ -12,9 +12,7 @@ from tests.integration.test_helpers import (
     scope_tenant_services_to_dcs,
 )
 from tests.unit.integration_scenario_helpers_helpers import _no_propagation_delay  # noqa: F401 (autouse fixture)
-from tests.unit.integration_scenario_helpers_helpers import (
-    _deployment,
-)
+from tests.unit.integration_scenario_helpers_helpers import _deployment
 
 # ---------------------------------------------------------------------------
 # Tenant services scoping (test_62 shares main with the DC6 chain)

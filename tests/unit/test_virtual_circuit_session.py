@@ -31,13 +31,7 @@ from tests.unit.simulators.circuit_fakes import (
     tunnel_payload,
     underlay_circuit,
 )
-from tests.unit.virtual_circuit_session_helpers import (
-    DCI,
-    HANDOFF,
-    _assert_refused,
-    _peering,
-    _run,
-)
+from tests.unit.virtual_circuit_session_helpers import DCI, HANDOFF, _assert_refused, _peering, _run
 from utils.circuit_underlay import SESSION_CIRCUIT_KINDS
 from utils.data_cleaning import clean_data
 

@@ -17,7 +17,6 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from generators.logger import GeneratorError
-from generators.protocols import SecurityPolicyRule
 from generators.topology.application_security import AppApplicationGenerator
 from tests.unit.lb_vip_helpers import (
     _CLOUD_FQDN,
@@ -47,7 +46,7 @@ def _app_gen(lb_vips: dict[str, Any], lb_errors: list[str] | None = None) -> Any
     policy = MagicMock()
     policy.id = "policy-portal"
     gen._segment_policy = AsyncMock(return_value=policy)
-    gen._find_rule_by_name = AsyncMock(return_value=None)
+    gen._find_policy_rule = AsyncMock(return_value=None)
     gen._create_or_update_policy_rule = AsyncMock(return_value=(MagicMock(), 100))
     gen._get_profile = AsyncMock(return_value=None)
     return gen
@@ -74,13 +73,8 @@ class TestClientRule:
         assert "destination_segment" not in data
         assert data["source_segment"] == {"id": "seg-portal"}
         assert (data["protocol"], data["port_start"]) == ("tcp", 443)
-        # The rule is read with its selectors, to reconcile them in place on a later run.
-        gen._find_rule_by_name.assert_awaited_once_with(
-            SecurityPolicyRule,
-            "policy-portal",
-            "portal-to-web-tcp-443-vip-dc10-lb-prod",
-            include=["destination_ip_addresses"],
-        )
+        # Looked up by name in the policy's rules, which are read once with their selectors (_read_policy_rules).
+        gen._find_policy_rule.assert_awaited_once_with("policy-portal", "portal-to-web-tcp-443-vip-dc10-lb-prod", {})
 
     def test_one_r_client_per_vip(self) -> None:
         """VIPs on two contexts: two rules, each naming one VIP (the ACL renders one address selector)."""

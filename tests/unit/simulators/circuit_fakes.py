@@ -456,6 +456,8 @@ class FakeClient:
             if "parent_interface__ids" in kwargs:
                 return [self.interface_node(iface_id) for iface_id in self.sub_interfaces]
             return [self.interface_node(iface_id) for iface_id in kwargs["ids"]]
+        if name == "IpamIPAddress":  # CablingMixin._find_addresses: one read for the addresses of a prefix
+            return [self.addresses[address] for address in kwargs["address__values"] if address in self.addresses]
         if name in ("TopologyInterconnectCircuit", "TopologyHandoffCircuit"):
             matches = []
             for circuit_id, circuit_name, *rest in self.session_circuits.get(name, []):

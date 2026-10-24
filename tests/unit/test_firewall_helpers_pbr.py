@@ -1,12 +1,8 @@
-"""Unit tests for the customer PBR rules in transforms/helpers/firewall.py."""
+"""Unit tests for the customer PBR rules in transforms/helpers/firewall_pbr.py."""
 
-from tests.unit.firewall_helpers_shared import (
-    _make_pbr_activation,
-)
-from transforms.helpers.firewall import (
-    _flatten_deployment_firewall_contexts,
-    get_customer_pbr_rules,
-)
+from tests.unit.firewall_helpers_shared import _make_pbr_activation
+from transforms.helpers.firewall_contexts import _flatten_deployment_firewall_contexts
+from transforms.helpers.firewall_pbr import get_customer_pbr_rules
 
 
 def _make_pbr_rule(*, action: str = "permit", dst_prefix: str | None = "10.0.2.0/24", disabled: bool = False) -> dict:

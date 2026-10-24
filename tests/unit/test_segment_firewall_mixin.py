@@ -18,7 +18,6 @@ import pytest
 
 from generators.common import CommonGenerator
 from generators.helpers.rules import RulesPlanner
-from generators.protocols import SecurityPolicy, SecurityPolicyRule
 from generators.segment_firewall import RULE_INDEX_START, SegmentFirewallMixin, _next_free_rule_index
 from transforms.helpers.acl import INTERNET_BAND_SEQ_START, RETURN_LEG_SEQ_START
 
@@ -41,18 +40,18 @@ class TestSegmentPolicy:
     with a component on it and by its hand-written rules: written untracked,
     never a second one."""
 
-    def test_existing_segment_policy_is_used(self) -> None:
-        """A segment that already has its policy (generated or hand-written) keeps it."""
+    def test_existing_segment_policy_is_used_without_reading_it(self) -> None:
+        """A segment that already has its policy (generated or hand-written) keeps it: the id from the
+        application query is all the rule path uses, so the policy itself is not read."""
         gen = _make_gen()
-        policy = MagicMock(id="pol-manual")
-        gen.client.get = AsyncMock(return_value=policy)
 
         result = asyncio.run(
             gen._segment_policy({"id": "seg-1", "security_policy": {"id": "pol-manual"}}, "seg-seg-1-egress")
         )
 
-        assert result is policy
-        gen.client.get.assert_awaited_once_with(kind=SecurityPolicy, id="pol-manual")
+        assert result.id == "pol-manual"
+        gen.client.get.assert_not_awaited()
+        gen.client.filters.assert_not_awaited()
         gen.client.create.assert_not_called()
 
     def test_new_policy_is_created_for_the_segment_untracked(self) -> None:
@@ -404,7 +403,7 @@ class TestMicrosegmentedRuleHasNoReturnRule:
         policy = MagicMock()
         policy.id = "policy-src"
         gen._segment_policy = AsyncMock(return_value=policy)
-        gen._find_rule_by_name = AsyncMock(return_value=existing_rule)
+        gen._find_policy_rule = AsyncMock(return_value=existing_rule)
         gen._create_or_update_policy_rule = AsyncMock(return_value=(MagicMock(), 100))
         gen._get_profile = AsyncMock(return_value=None)
         planner = MagicMock(wraps=RulesPlanner())
@@ -457,9 +456,7 @@ class TestMicrosegmentedRuleHasNoReturnRule:
         assert result == (False, True)
         existing.save.assert_awaited_once_with(allow_upsert=True)
         gen._create_or_update_policy_rule.assert_not_awaited()
-        gen._find_rule_by_name.assert_awaited_once_with(
-            SecurityPolicyRule, "policy-src", "frontend-to-backend-tcp-8443", include=[]
-        )
+        gen._find_policy_rule.assert_awaited_once_with("policy-src", "frontend-to-backend-tcp-8443", {})
 
     def test_hand_written_rule_of_the_same_name_is_not_adopted(self) -> None:
         """A rule below index 100 belongs to the segment's data file: never saved into this run's group."""
@@ -537,7 +534,7 @@ class TestExistingRuleReconciliation:
         policy = MagicMock()
         policy.id = "policy-src"
         gen._segment_policy = AsyncMock(return_value=policy)
-        gen._find_rule_by_name = AsyncMock(return_value=rule)
+        gen._find_policy_rule = AsyncMock(return_value=rule)
         gen._create_or_update_policy_rule = AsyncMock()
         gen._get_profile = AsyncMock(return_value=MagicMock(id=profile_id) if profile_id else None)
         planner = MagicMock(wraps=RulesPlanner())
@@ -599,7 +596,7 @@ class TestExistingRuleReconciliation:
         gen._get_profile = AsyncMock(return_value=None)
         policy = MagicMock(id="policy-src")
         gen._segment_policy = AsyncMock(return_value=policy)
-        gen._find_rule_by_name = AsyncMock(return_value=rule)
+        gen._find_policy_rule = AsyncMock(return_value=rule)
         planner = MagicMock(wraps=RulesPlanner())
         planner.zone_context = MagicMock(return_value=("PROD-ZONE", "NONPROD-ZONE", True))
 
@@ -625,7 +622,7 @@ class TestExistingRuleReconciliation:
         rule = self._rule(log=False, apply_on_switch=False)
         gen = _make_gen()
         gen._segment_policy = AsyncMock(return_value=MagicMock(id="policy-src"))
-        gen._find_rule_by_name = AsyncMock(return_value=rule)
+        gen._find_policy_rule = AsyncMock(return_value=rule)
         gen._get_profile = AsyncMock(return_value=None)
         planner = MagicMock(wraps=RulesPlanner())
         planner.zone_context = MagicMock(return_value=("PROD-ZONE", "PROD-ZONE", False))
@@ -666,7 +663,7 @@ class TestExistingRuleGroupTags:
     ) -> Any:
         gen = _make_gen()
         gen._segment_policy = AsyncMock(return_value=MagicMock(id="policy-src"))
-        gen._find_rule_by_name = AsyncMock(return_value=rule)
+        gen._find_policy_rule = AsyncMock(return_value=rule)
         gen._create_or_update_policy_rule = AsyncMock()
         gen._get_profile = AsyncMock(return_value=MagicMock(id="profile-strict"))
         planner = MagicMock(wraps=RulesPlanner())
@@ -787,7 +784,7 @@ class TestRuleCreationFailure:
     def test_create_error_propagates_to_the_caller(self) -> None:
         gen = _make_gen()
         gen._segment_policy = AsyncMock(return_value=MagicMock(id="policy-src"))
-        gen._find_rule_by_name = AsyncMock(return_value=None)
+        gen._find_policy_rule = AsyncMock(return_value=None)
         gen._get_profile = AsyncMock(return_value=None)
         gen._create_or_update_policy_rule = AsyncMock(side_effect=RuntimeError("boom"))
 
@@ -908,7 +905,7 @@ class TestReconcileSegmentRuleEarlyExits:
         """The source segment's policy could not be found or made: skip the rule."""
         gen = _make_gen()
         gen._segment_policy = AsyncMock(return_value=None)
-        gen._find_rule_by_name = AsyncMock()
+        gen._find_policy_rule = AsyncMock()
         segment_policies: dict[str, Any] = {}
 
         result = asyncio.run(
@@ -929,7 +926,7 @@ class TestReconcileSegmentRuleEarlyExits:
 
         assert result == (False, True)
         assert segment_policies == {}
-        gen._find_rule_by_name.assert_not_awaited()
+        gen._find_policy_rule.assert_not_awaited()
 
 
 class TestGeneratedRuleIndexesStayBelowTheAclBands:

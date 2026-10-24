@@ -2,12 +2,7 @@
 
 from typing import Any
 
-from transforms.helpers.policy import (
-    is_unresolved_segment_endpoint,
-    rule_endpoint,
-    rule_zone,
-    segment_flows,
-)
+from transforms.helpers.policy import is_unresolved_segment_endpoint, rule_endpoint, rule_zone, segment_flows
 from utils.group_policy import is_microsegmented
 from utils.internet_space import NON_INTERNET_PREFIXES
 from utils.segment_addressing import segment_prefix

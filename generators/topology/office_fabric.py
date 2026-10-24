@@ -177,6 +177,13 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
         self.logger.info(f"Generating the fabric of office {office_name}")
 
         pools = await self._ensure_office_pools(office_id=office_id)
+        # The office's two references in one fetch and one save: its VNI pool and its LISP site key.
+        site_key_id = await self.ensure_lisp_site_key()
+        await self.attach_refs(
+            kind=TopologyCustomerOffice,
+            node_id=office_id,
+            refs={"vni_pool": pools["vni"].id, "lisp_site_key": site_key_id},
+        )
         names_by_role = await self._create_office_devices(templates=templates, office_id=office_id, pools=pools)
 
         access_names = names_by_role.get(ACCESS_ROLE, [])
@@ -203,7 +210,6 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
             bottom_role=ACCESS_ROLE,
             top_role=DISTRIBUTION_ROLE,
         )
-        await self.ensure_lisp_site_key(deployment_id=office_id)
         if distribution_names:
             template = next(entry["template"] for entry in templates if entry["role"] == DISTRIBUTION_ROLE)
             await self._ensure_wan_exit(distribution_names=distribution_names, distribution_template=template)
@@ -258,7 +264,7 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
         return usable
 
     async def _ensure_office_pools(self, *, office_id: str) -> dict[str, Any]:
-        """Create this office's loopback/management/technical/VNI pools; attach the VNI pool.
+        """Create this office's loopback/management/technical/VNI pools (attaching the VNI pool is the caller's job).
 
         Each IP pool is a SLICE of a global bootstrap pool, never a fresh
         top-level supernet invented at runtime (see colocation_fabric.py's
@@ -307,8 +313,7 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
                 node="ManagedSegmentDeployment",
                 node_attribute="vni",
             )
-            await self.attach_refs(kind=TopologyCustomerOffice, node_id=office_id, refs={"vni_pool": vni_pool.id})
-        return {"loopback": loopback_pool, "management": management_pool, "technical": technical_pool}
+        return {"loopback": loopback_pool, "management": management_pool, "technical": technical_pool, "vni": vni_pool}
 
     async def _create_office_devices(
         self, *, templates: list[dict[str, Any]], office_id: str, pools: dict[str, Any]

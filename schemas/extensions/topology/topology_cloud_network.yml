@@ -1,0 +1,764 @@
+---
+version: "1.0"
+
+# Gateways, routing, hybrid connectivity, appliances.
+# The generics and the account/network/compute core: topology_cloud.yml.
+nodes:
+  # --------------------  Internet Gateway  --------------------
+  - name: InternetGateway
+    namespace: Cloud
+    description: Internet gateway for public internet connectivity.
+    label: Internet Gateway
+    icon: mdi:web
+    menu_placement: CloudResource
+    include_in_menu: false
+    inherit_from:
+      - CloudResource
+    human_friendly_id:
+      - name__value
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - [virtual_network, name__value]
+    relationships:
+      - name: virtual_network
+        peer: CloudVirtualNetwork
+        cardinality: one
+        kind: Attribute
+        optional: false
+        description: Virtual network this gateway is attached to
+        order_weight: 1050
+      - name: account
+        peer: CloudAccount
+        cardinality: one
+        kind: Attribute
+        optional: false
+        description: Cloud account owning this gateway
+        order_weight: 1100
+
+  # --------------------  NAT Gateway  --------------------
+  - name: NATGateway
+    namespace: Cloud
+    description: >
+      NAT gateway for outbound internet from private subnets.
+      Maps to AWS, Azure, GCP Cloud NAT.
+    label: NAT Gateway
+    icon: mdi:router-network
+    menu_placement: CloudResource
+    include_in_menu: false
+    inherit_from:
+      - CloudResource
+    human_friendly_id:
+      - name__value
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - [virtual_network, name__value]
+    attributes:
+      - name: public_ip
+        label: Public IP Address
+        kind: IPHost
+        optional: true
+        description: Public IP address of the NAT gateway
+        order_weight: 1400
+    relationships:
+      - name: virtual_network
+        peer: CloudVirtualNetwork
+        cardinality: one
+        kind: Attribute
+        optional: false
+        description: Virtual network this NAT gateway belongs to
+        order_weight: 1050
+      - name: network_segments
+        peer: CloudNetworkSegment
+        cardinality: many
+        kind: Attribute
+        optional: false
+        description: Subnets served by this NAT gateway
+        order_weight: 1100
+      - name: account
+        peer: CloudAccount
+        cardinality: one
+        kind: Attribute
+        optional: false
+        description: Cloud account owning this NAT gateway
+        order_weight: 1150
+
+  # --------------------  Route Table  --------------------
+  - name: RouteTable
+    namespace: Cloud
+    description: >-
+      Route table defining network routing rules.
+      Maps to: AWS Route Table, GCP Routes, Azure Route Table.
+    label: Route Table
+    icon: mdi:routes
+    include_in_menu: false
+    menu_placement: CloudResource
+    inherit_from:
+      - CloudResource
+    human_friendly_id:
+      - name__value
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - [virtual_network, name__value]
+    attributes:
+      - name: is_main
+        label: Main Route Table
+        kind: Boolean
+        default_value: false
+        description: Whether this is the main/default route table for the VPC
+        order_weight: 1400
+    relationships:
+      - name: virtual_network
+        peer: CloudVirtualNetwork
+        cardinality: one
+        kind: Attribute
+        optional: false
+        description: Virtual network this route table belongs to
+        order_weight: 1050
+      - name: network_segments
+        peer: CloudNetworkSegment
+        cardinality: many
+        kind: Attribute
+        optional: true
+        description: Network segments associated with this route table
+        order_weight: 2000
+
+  # --------------------  Public/Static IP  --------------------
+  - name: PublicIP
+    namespace: Cloud
+    description: Static/elastic public IP address.
+    label: Public IP
+    icon: mdi:ip-network-outline
+    menu_placement: CloudResource
+    include_in_menu: false
+    inherit_from:
+      - CloudResource
+    human_friendly_id:
+      - name__value
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - [account, public_ip__value]
+    attributes:
+      - name: public_ip
+        label: Public IP Address
+        kind: IPHost
+        description: The static public IP address
+        order_weight: 1500
+    relationships:
+      - name: region
+        peer: TopologyCloudRegion
+        cardinality: one
+        kind: Attribute
+        optional: false
+        description: Cloud region where this elastic IP resides
+        order_weight: 1040
+      - name: account
+        peer: CloudAccount
+        cardinality: one
+        kind: Attribute
+        optional: false
+        description: Cloud account owning this Public IP
+        order_weight: 1050
+      - name: instance
+        peer: CloudInstance
+        cardinality: one
+        kind: Attribute
+        optional: true
+        description: Instance this IP is associated with
+        order_weight: 1700
+
+  - name: Route
+    namespace: Cloud
+    label: Route
+    icon: mdi:transit-connection-horizontal
+    description: Route entry within a route table.
+    include_in_menu: false
+    inherit_from:
+      - CloudResource
+    relationships:
+      - name: route_table
+        peer: CloudRouteTable
+        cardinality: one
+        optional: false
+        order_weight: 600
+      - name: destination
+        peer: IpamPrefix
+        cardinality: one
+        optional: false
+        order_weight: 650
+      - name: internet_gateway
+        peer: CloudInternetGateway
+        cardinality: one
+        optional: true
+        order_weight: 700
+      - name: nat_gateway
+        peer: CloudNATGateway
+        cardinality: one
+        optional: true
+        order_weight: 750
+      - name: instance
+        peer: CloudInstance
+        cardinality: one
+        optional: true
+        order_weight: 800
+    uniqueness_constraints:
+      - [route_table, destination]
+
+
+  - name: TransitGateway
+    namespace: Cloud
+    label: Transit Gateway
+    icon: mdi:transit-connection-horizontal
+    description: Multi-region virtual network transit hub for routing.
+    include_in_menu: false
+    inherit_from:
+      - CloudResource
+    human_friendly_id:
+      - name__value
+    attributes:
+      - name: default_route_table
+        kind: Boolean
+        label: "Default Route Table Association"
+        optional: true
+        default_value: true
+        order_weight: 350
+      - name: dns_support
+        kind: Boolean
+        label: "DNS Support"
+        optional: true
+        default_value: true
+        order_weight: 400
+      - name: vpn_ecmp_support
+        kind: Boolean
+        label: "VPN ECMP Support"
+        optional: true
+        default_value: false
+        order_weight: 450
+    relationships:
+      - name: asn
+        peer: RoutingAutonomousSystem
+        cardinality: one
+        optional: true
+        kind: Attribute
+        order_weight: 350
+      - name: account
+        peer: CloudAccount
+        cardinality: one
+        optional: false
+        order_weight: 600
+      - name: region
+        peer: TopologyCloudRegion
+        cardinality: one
+        optional: false
+        order_weight: 650
+      - name: attached_virtual_networks
+        peer: CloudVirtualNetwork
+        cardinality: many
+        optional: true
+        order_weight: 700
+        description: "Virtual networks attached to this transit gateway"
+    uniqueness_constraints:
+      - [account, name__value]
+
+  # ── Transit Gateway routing domains and attachments ───────────────────────
+  # `attached_virtual_networks` above is a flat list: it says a VPC hangs off
+  # this hub and nothing else. That is enough to draw a picture and not enough
+  # to reason about a change, because it cannot express the two facts that
+  # decide blast radius in a hub-and-spoke cloud:
+  #
+  #   1. WHICH ACCOUNT owns the attachment. The attachment resource lives in
+  #      the spoke account while the Transit Gateway lives in the network
+  #      account; a change in one is not a change in the other.
+  #   2. WHICH ROUTING DOMAIN it joins. Two spokes on separate route tables
+  #      cannot reach each other at all.
+  #
+  # Without (2) every spoke looks like it reaches every other spoke, so a
+  # blast-radius answer computed off the flat list is "everything" — which is
+  # the same as no answer.
+
+  - name: TransitGatewayRouteTable
+    namespace: Cloud
+    label: Transit Gateway Route Table
+    icon: mdi:routes
+    description: "Routing domain inside a Transit Gateway — the unit of spoke-to-spoke isolation"
+    include_in_menu: false
+    inherit_from:
+      - CloudResource
+    human_friendly_id:
+      - name__value
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - [transit_gateway, name__value]
+    attributes:
+      - name: is_default
+        kind: Boolean
+        label: "Default Route Table"
+        optional: true
+        default_value: false
+        order_weight: 350
+        description: "Route table new attachments join when not told otherwise"
+    relationships:
+      - name: transit_gateway
+        label: "Transit Gateway"
+        peer: CloudTransitGateway
+        cardinality: one
+        kind: Attribute
+        optional: false
+        identifier: "transit_gateway__route_tables"
+        order_weight: 600
+        description: "Transit Gateway this route table belongs to"
+
+  - name: TransitGatewayAttachment
+    namespace: Cloud
+    label: Transit Gateway Attachment
+    icon: mdi:transit-connection-variant
+    description: "One spoke's connection into a Transit Gateway"
+    include_in_menu: false
+    inherit_from:
+      - CloudResource
+    human_friendly_id:
+      - name__value
+    order_by:
+      - name__value
+    display_label: "{{ name__value }} ({{ attachment_type__value }})"
+    uniqueness_constraints:
+      - [transit_gateway, name__value]
+    attributes:
+      - name: attachment_type
+        kind: Dropdown
+        label: "Attachment Type"
+        order_weight: 300
+        optional: false
+        choices:
+          - name: vpc
+            label: "VPC"
+            description: Spoke virtual network attached via ENIs, one subnet per zone
+            color: "#3498DB"
+          - name: hybrid
+            label: "Hybrid (DX / VPN)"
+            description: On-premises attachment via a transit VIF or VPN gateway
+            color: "#F39C12"
+          - name: connect
+            label: "Connect (GRE)"
+            description: GRE/BGP attachment, typically an SD-WAN appliance
+            color: "#2ECC71"
+    relationships:
+      - name: transit_gateway
+        label: "Transit Gateway"
+        peer: CloudTransitGateway
+        cardinality: one
+        kind: Attribute
+        optional: false
+        identifier: "transit_gateway__attachments"
+        order_weight: 600
+        description: "Transit Gateway this attachment lands on"
+      # For a cross-account attachment this is the SPOKE account, not the
+      # Transit Gateway's account. That asymmetry is why the attachment is a
+      # node: it is the only place a per-spoke fact can be recorded.
+      - name: owner_account
+        label: "Owner Account"
+        peer: CloudAccount
+        cardinality: one
+        kind: Attribute
+        optional: false
+        identifier: "transit_gateway_attachment__owner_account"
+        order_weight: 650
+        description: "Account the attachment itself lives in (the spoke, when cross-account)"
+      - name: virtual_network
+        label: "Virtual Network"
+        peer: CloudVirtualNetwork
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "transit_gateway_attachment__virtual_network"
+        order_weight: 700
+        description: "Spoke virtual network — set when attachment_type is vpc"
+      # One relationship for both hybrid endpoint kinds rather than a separate
+      # direct_connect/vpn pair — CloudHybridAttachment is the generic that
+      # CloudVirtualInterface and CloudVPNGateway already share.
+      - name: hybrid_endpoint
+        label: "Hybrid Endpoint"
+        peer: CloudHybridAttachment
+        kind: Generic
+        cardinality: one
+        optional: true
+        identifier: "transit_gateway_attachment__hybrid_endpoint"
+        order_weight: 800
+        description: "Transit VIF or VPN gateway — set when attachment_type is hybrid"
+      - name: associated_route_table
+        label: "Associated Route Table"
+        peer: CloudTransitGatewayRouteTable
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "transit_gateway_attachment__associated_route_table"
+        order_weight: 850
+        description: "Route table resolving traffic leaving this spoke"
+      # Association and propagation are separate on purpose: a spoke that
+      # associates to a shared table but propagates nowhere can reach its peers
+      # and cannot be reached by them. Collapsing them hides exactly that case.
+      - name: propagates_to_route_tables
+        label: "Propagates Into"
+        peer: CloudTransitGatewayRouteTable
+        cardinality: many
+        optional: true
+        identifier: "transit_gateway_attachment__propagated_route_tables"
+        order_weight: 900
+        description: "Route tables this spoke's prefixes are advertised into — who can reach it"
+
+  - name: VPNGateway
+    namespace: Cloud
+    label: VPN Gateway
+    icon: mdi:shield-link-variant
+    description: VPN gateway for site-to-site and client VPN connections.
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    inherit_from:
+      - CloudResource
+      - CloudHybridAttachment
+    attributes:
+      - name: vpn_type
+        kind: Dropdown
+        order_weight: 300
+        optional: false
+        choices:
+          - name: site_to_site
+            label: Site-to-Site
+            description: IPsec VPN between sites
+            color: "#3498DB"
+          - name: client_vpn
+            label: Client VPN
+            description: Remote access VPN for clients
+            color: "#2ECC71"
+    relationships:
+      - name: asn
+        peer: RoutingAutonomousSystem
+        cardinality: one
+        optional: true
+        kind: Attribute
+        order_weight: 350
+      - name: region
+        peer: TopologyCloudRegion
+        cardinality: one
+        optional: false
+        order_weight: 450
+      - name: virtual_network
+        peer: CloudVirtualNetwork
+        cardinality: one
+        optional: false
+        order_weight: 600
+      - name: transit_gateway
+        peer: CloudTransitGateway
+        cardinality: one
+        optional: true
+        order_weight: 650
+        description: "Transit gateway attachment (if applicable)"
+      - name: customer_gateway
+        peer: CloudCustomerGateway
+        cardinality: one
+        optional: true
+        order_weight: 700
+        description: "Remote customer gateway"
+    uniqueness_constraints:
+      - [virtual_network, name__value]
+
+  - name: CustomerGateway
+    namespace: Cloud
+    label: Customer Gateway
+    icon: mdi:router-wireless
+    description: Customer/remote gateway for VPN connections.
+    include_in_menu: false
+    inherit_from:
+      - CloudResource
+    attributes:
+      - name: device_type
+        kind: Dropdown
+        order_weight: 350
+        optional: true
+        choices:
+          - name: cisco
+            label: Cisco
+          - name: juniper
+            label: Juniper
+          - name: palo_alto
+            label: Palo Alto
+          - name: fortinet
+            label: Fortinet
+          - name: other
+            label: Other
+    relationships:
+      - name: asn
+        peer: RoutingAutonomousSystem
+        cardinality: one
+        optional: false
+        kind: Attribute
+        order_weight: 300
+      - name: account
+        peer: CloudAccount
+        cardinality: one
+        optional: false
+        order_weight: 600
+      - name: ip_address
+        peer: IpamIPAddress
+        cardinality: one
+        optional: false
+        order_weight: 700
+    uniqueness_constraints:
+      - [account, name__value]
+
+  - name: DirectConnect
+    namespace: Cloud
+    label: Direct Connect
+    icon: mdi:lan-connect
+    description: Dedicated physical connection to cloud provider.
+    include_in_menu: false
+    inherit_from:
+      - CloudResource
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value }}"
+    order_by:
+      - name__value
+    attributes:
+      - name: bandwidth
+        kind: Text
+        label: "Bandwidth"
+        description: "Connection bandwidth (e.g., 1Gbps, 10Gbps)"
+        optional: false
+        order_weight: 300
+      - name: connection_type
+        kind: Dropdown
+        order_weight: 350
+        optional: false
+        choices:
+          - name: dedicated
+            label: Dedicated
+            description: Physical connection at colocation
+            color: "#3498DB"
+          - name: hosted
+            label: Hosted
+            description: Hosted connection via partner
+            color: "#2ECC71"
+      - name: vlan_id
+        kind: Number
+        label: "VLAN ID"
+        optional: true
+        order_weight: 400
+    relationships:
+      - name: account
+        peer: CloudAccount
+        cardinality: one
+        optional: false
+        order_weight: 600
+      - name: physical_devices
+        peer: DcimDevice
+        cardinality: many
+        optional: true
+        kind: Attribute
+        order_weight: 625
+        description: "Physical or virtual routers/switches for direct connect"
+      - name: region
+        peer: TopologyCloudRegion
+        cardinality: one
+        optional: false
+        order_weight: 650
+      - name: location
+        peer: LocationFacility
+        cardinality: one
+        optional: true
+        order_weight: 700
+        description: "Physical location/data center"
+    uniqueness_constraints:
+      - [account, name__value]
+
+  - name: VirtualInterface
+    namespace: Cloud
+    label: Virtual Interface
+    icon: mdi:ethernet
+    description: Virtual interface on Direct Connect/ExpressRoute.
+    include_in_menu: false
+    inherit_from:
+      - CloudResource
+      - CloudHybridAttachment
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value }}"
+    order_by:
+      - name__value
+    attributes:
+      - name: vif_type
+        kind: Dropdown
+        order_weight: 300
+        optional: false
+        choices:
+          - name: private
+            label: Private
+            description: Access to virtual network resources
+            color: "#3498DB"
+          - name: public
+            label: Public
+            description: Access to public endpoints
+            color: "#2ECC71"
+          - name: transit
+            label: Transit
+            description: Transit gateway attachment
+            color: "#9B59B6"
+      - name: vlan_id
+        kind: Number
+        label: "VLAN ID"
+        optional: false
+        order_weight: 350
+    relationships:
+      - name: direct_connect
+        peer: CloudDirectConnect
+        cardinality: one
+        optional: false
+        order_weight: 600
+      - name: virtual_network
+        peer: CloudVirtualNetwork
+        cardinality: one
+        optional: true
+        order_weight: 650
+      - name: transit_gateway
+        peer: CloudTransitGateway
+        cardinality: one
+        optional: true
+        order_weight: 700
+    uniqueness_constraints:
+      - [direct_connect, vlan_id__value]
+
+  # --------------------  Network Appliance  --------------------
+  # A network function a provider hosts for us (Equinix Network Edge, Megaport MVE;
+  # later a cloud marketplace NVA): an instance with interfaces, BGP and a config,
+  # but no rack, no chassis and no hypervisor of ours. Every provider models it the
+  # same way: an instance whose routing is a resource of the provider's service.
+  # The function stays a device (DcimDevice: interfaces, capabilities such as
+  # ManagedBGP, owner, platform), only its consumption is cloud-like, so it
+  # inherits the device generics and not CloudResource (both carry name,
+  # description and status, and there is no allow_override). The cloud_id below
+  # is CloudResource's, declared again for that reason. Redundancy is not a
+  # field here: two appliances that form a cluster are the members
+  # (`capabilities`) of one HA domain, like every other HA pair (ha.yml). A
+  # router has no redundancy representation: it is an independent appliance.
+  - name: NetworkAppliance
+    namespace: Cloud
+    description: "Network function hosted by a provider (Equinix Network Edge, Megaport MVE), a device with a cloud-like lifecycle."  # yamllint disable-line rule:line-length
+    label: Network Appliance
+    icon: "mdi:router-network"
+    include_in_menu: false
+    generate_template: true
+    inherit_from:
+      - CoreArtifactTarget
+      - DcimDevice
+      - DcimCapabilities
+    uniqueness_constraints:
+      - ["name__value"]
+    attributes:
+      - name: cloud_id
+        label: Cloud ID
+        kind: Text
+        optional: true
+        description: "The provider's identifier of the instance"
+        order_weight: 2300
+      # How the provider's catalogue names the offer; set on the template.
+      # Accounts, notification lists and licence tokens are never stored here.
+      - name: service_code
+        label: Service Code
+        kind: Text
+        optional: true
+        description: "The provider's code of the function (Equinix Network Edge type_code, e.g. C8000V, PA-VM)"
+        order_weight: 2310
+      - name: package_code
+        label: Package Code
+        kind: Text
+        optional: true
+        description: "The provider's software package (Equinix Network Edge package_code, e.g. network-essentials)"
+        order_weight: 2320
+      - name: software_version
+        label: Software Version
+        kind: Text
+        optional: true
+        description: "Software version as the provider names it (Equinix Network Edge version, e.g. 17.12.01a)"
+        order_weight: 2330
+      - name: term_length
+        label: Term (months)
+        kind: Number
+        optional: true
+        description: "Contract term in months (Equinix Network Edge term_length: 1, 12, 24, 36)"
+        order_weight: 2350
+    relationships:
+      - name: account
+        peer: CloudAccount
+        label: Account
+        description: "The provider account the instance is ordered under"
+        cardinality: one
+        kind: Attribute
+        optional: true
+        order_weight: 2500
+
+# ==============================================================================
+# Extensions - Cloud resources support for load balancer backend pools
+# ==============================================================================
+extensions:
+  nodes:
+    - kind: CloudInstance
+      relationships:
+        - name: node_pool
+          peer: VirtNodePool
+          cardinality: one
+          kind: Attribute
+          optional: true
+          identifier: "virt_pool__instances"
+          description: "Node pool / ASG that manages this instance."
+          order_weight: 2600
+
+    # Reverse lookup of the hub attachment, so the graph can be walked from the
+    # Transit Gateway to its attachments; a relationship declared on only one
+    # side is a direction GraphQL cannot express.
+    - kind: CloudTransitGateway
+      relationships:
+        - name: attachments
+          label: "Attachments"
+          peer: CloudTransitGatewayAttachment
+          cardinality: many
+          optional: true
+          identifier: "transit_gateway__attachments"
+          order_weight: 2000
+          description: "All attachments landing on this Transit Gateway, across accounts"
+
+    # On the generic, so both CloudVirtualInterface (transit VIF) and
+    # CloudVPNGateway pick it up from one declaration.
+    - kind: CloudHybridAttachment
+      relationships:
+        - name: transit_gateway_attachment
+          label: "Transit Gateway Attachment"
+          peer: CloudTransitGatewayAttachment
+          cardinality: one
+          kind: Attribute
+          optional: true
+          identifier: "transit_gateway_attachment__hybrid_endpoint"
+          order_weight: 2000
+          description: "Transit Gateway attachment this hybrid endpoint feeds"
+        # The edge that closes the handoff leg. A handoff circuit's customer end is a DcimInterface, but its
+        # cloud end is a CloudVirtualInterface (or a VPN gateway), not a device port. Without this the traversal
+        # walks from a DC border leaf out to the colo cage and then stops at an island boundary. 1:1: one VIF
+        # has one handoff circuit; the other side is TopologyHandoffCircuit.cloud_endpoint.
+        - name: virtual_circuit
+          label: "Handoff Circuit"
+          peer: TopologyHandoffCircuit
+          cardinality: one
+          kind: Attribute
+          optional: true
+          identifier: "handoff_circuit__cloud_endpoint"
+          order_weight: 2100
+          description: "Handoff circuit terminating on this cloud attachment"

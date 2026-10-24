@@ -127,8 +127,7 @@ class TestTopologyOrchestratorRoutingGenerator:
 
     def test_skips_save_when_membership_is_already_correct(self) -> None:
         gen = _make_topology_gen()
-        argo_group = MagicMock(id="g-topo-argo")
-        gen.client.get = AsyncMock(return_value=argo_group)
+        gen.client.get = AsyncMock()
         gen.client.create = AsyncMock()
 
         payload = {
@@ -149,6 +148,36 @@ class TestTopologyOrchestratorRoutingGenerator:
         asyncio.run(gen.generate(payload))
 
         gen.client.create.assert_not_called()
+        # The routing group is read off the node's own groups in the payload: no lookup.
+        gen.client.get.assert_not_called()
+
+    def test_routing_group_already_on_the_node_is_not_looked_up_when_another_group_changes(self) -> None:
+        """A switched orchestrator: the new routing group is taken from the payload only if the node is
+        already in it; the stale one is dropped."""
+        gen = _make_topology_gen()
+        updated = _saved_obj()
+        gen.client.get = AsyncMock()
+        gen.client.create = AsyncMock(return_value=updated)
+
+        payload = {
+            "TopologyCustomerDC": [
+                {
+                    "id": "dep-4",
+                    "typename": "TopologyCustomerDC",
+                    "name": "C005-P-DC10",
+                    "infrastructure_orchestrator": "argocd",
+                    "member_of_groups": [
+                        _group("g-topo-argo", "topology_argocd"),
+                        _group("g-topo-tf", "topology_terraform"),
+                    ],
+                }
+            ]
+        }
+
+        asyncio.run(gen.generate(payload))
+
+        gen.client.get.assert_not_called()
+        assert gen.client.create.call_args.kwargs["data"]["member_of_groups"] == [{"id": "g-topo-argo"}]
 
     def test_unsupported_customer_orchestrator_is_an_error_and_leaves_the_node_alone(self) -> None:
         gen = _make_topology_gen()
