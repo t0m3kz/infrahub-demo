@@ -245,6 +245,19 @@ nodes:
         order_weight: 3000
         description: "Footprints where this tunnel terminates (the office and the gateway's facility)"
 
+      # The same concept as TopologyCustomerOffice.lan_prefixes (a PROD prefix a customer registers behind the
+      # SD-WAN gateway, so the gateway's border session accepts it), for space the tunnel reaches that no office
+      # of ours hosts: a B2B partner's extranet range.
+      - name: registered_prefixes
+        label: "Registered Prefixes"
+        peer: IpamPrefix
+        cardinality: many
+        kind: Attribute
+        optional: true
+        identifier: "tunnel_circuit__registered_prefixes"
+        order_weight: 1150
+        description: "PROD prefixes reachable behind the tunnel's far end, owned by the tunnel's owner"
+
   # DCI between two EVPN Multi-Site border gateways (DC border leafs and colocation edges). The session
   # generator builds an underlay eBGP session on a /31 (peering_role dci-underlay) and a loopback-to-loopback
   # EVPN session (peering_role dci) over it.

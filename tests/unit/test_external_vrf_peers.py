@@ -53,7 +53,7 @@ def _vpc_attachment(tables: list[str], *blocks: tuple[str, str], owner: dict[str
     }
 
 
-_NO_SDWAN: dict[str, Any] = {"device_capabilities": None, "offices": None}
+_NO_SDWAN: dict[str, Any] = {"device_capabilities": None, "offices": None, "tunnels": None}
 
 
 def _office(
@@ -228,6 +228,7 @@ class TestSdwanGatewayPrefixes:
             "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
             offices=offices,
+            tunnels=None,
         )
         assert found == {"Ethernet1/13.1900": {"C002": ["10.210.2.0/24", "10.210.5.0/24"]}}
 
@@ -244,6 +245,7 @@ class TestSdwanGatewayPrefixes:
             "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
             offices=offices,
+            tunnels=None,
         )
         assert found == {"Ethernet1/13.1900": {"C002": ["10.210.5.0/24"]}}
 
@@ -264,6 +266,7 @@ class TestSdwanGatewayPrefixes:
             "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
             offices=offices,
+            tunnels=None,
         )
         assert found == {"Ethernet1/13.1900": {"C002": ["10.210.5.0/24"]}}
 
@@ -275,6 +278,7 @@ class TestSdwanGatewayPrefixes:
             "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1901", _GW1)),
             offices=[_office(_GW1, ("10.210.5.0/24", "PROD"), ("10.210.2.0/24", "PROD"))],
+            tunnels=None,
         )
         assert found == {"Ethernet1/13.1901": {}}
 
@@ -286,6 +290,7 @@ class TestSdwanGatewayPrefixes:
             "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
             offices=[_office(_GW1)],
+            tunnels=None,
         )
         assert found == {"Ethernet1/13.1900": {}}
 
@@ -301,6 +306,7 @@ class TestSdwanGatewayPrefixes:
             "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
             offices=offices,
+            tunnels=None,
         )
         assert found == {"Ethernet1/13.1900": {"C002": ["10.176.5.0/24", "10.210.2.0/24"]}}
 
@@ -314,6 +320,7 @@ class TestSdwanGatewayPrefixes:
             "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
             offices=offices,
+            tunnels=None,
         )
         assert found == {"Ethernet1/13.1900": {"C002": ["10.176.5.0/24", "10.176.6.0/24"]}}
 
@@ -329,6 +336,7 @@ class TestSdwanGatewayPrefixes:
             "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
             offices=offices,
+            tunnels=None,
         )
         assert found == {"Ethernet1/13.1900": {"C002": ["10.176.5.0/24"]}}
 
@@ -351,6 +359,7 @@ class TestSdwanGatewayPrefixes:
             "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1), ("Ethernet1/13.1901", _GW1)),
             offices=offices,
+            tunnels=None,
         )
         assert found == {
             "Ethernet1/13.1900": {"C002": ["10.176.5.0/24"]},
@@ -366,6 +375,7 @@ class TestSdwanGatewayPrefixes:
             "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
             offices=[office],
+            tunnels=None,
         )
         assert found == {"Ethernet1/13.1900": {"C002": ["10.210.2.0/24"]}}
 
@@ -377,6 +387,7 @@ class TestSdwanGatewayPrefixes:
             "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
             offices=[],
+            tunnels=None,
         )
         assert found == {}
 
@@ -388,6 +399,7 @@ class TestSdwanGatewayPrefixes:
             "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1), ("Ethernet1/14.1900", "EXT-PARTNER-01")),
             offices=[_office(_GW1, ("10.210.5.0/24", "PROD"))],
+            tunnels=None,
         )
         assert found == {"Ethernet1/13.1900": {"C002": ["10.210.5.0/24"]}}
 
@@ -399,6 +411,7 @@ class TestSdwanGatewayPrefixes:
             "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1), ("Ethernet1/13.1900", "EXT-PARTNER-01")),
             offices=[_office(_GW1, ("10.210.5.0/24", "PROD"))],
+            tunnels=None,
         )
         assert found == {}
 
@@ -413,6 +426,7 @@ class TestSdwanGatewayPrefixes:
                 "eg-fr201",
                 device_capabilities=capabilities,
                 offices=[_office(_GW1, ("10.210.5.0/24", "PROD"))],
+                tunnels=None,
             )
 
 
@@ -520,6 +534,7 @@ class TestPeerPrefixOwners:
             "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
             offices=offices,
+            tunnels=None,
         )
         assert found == {"Ethernet1/13.1900": {"C002": ["10.210.2.0/24"], "C005": ["10.176.5.0/24"]}}
 
@@ -531,6 +546,7 @@ class TestPeerPrefixOwners:
             "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
             offices=[_office(_GW1, hosted=(("10.176.5.0/24", "PROD"),), owner=_C2, segment_owner=_C5)],
+            tunnels=None,
         )
         assert found == {"Ethernet1/13.1900": {"C005": ["10.176.5.0/24"]}}
 
@@ -548,6 +564,7 @@ class TestPeerPrefixOwners:
             "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
             offices=offices,
+            tunnels=None,
         )
         assert found == {"Ethernet1/13.1900": {}}
 
@@ -563,5 +580,6 @@ class TestPeerPrefixOwners:
             "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
             offices=offices,
+            tunnels=None,
         )
         assert found == {"Ethernet1/13.1900": {"C002": ["10.176.5.0/24"]}}

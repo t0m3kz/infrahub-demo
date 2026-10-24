@@ -185,16 +185,18 @@ router bgp 65001
 route-map RM-CONN-2-BGP permit 10
   match interface loopback0
 !
-! VRF-PROD-EQXFR2-SDWAN: owners C002, C003, C005
+! VRF-PROD-EQXFR2-SDWAN: owners C001, C002, C003, C005
 ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-IN seq 10 permit 10.176.5.0/24
 ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-IN seq 20 permit 10.210.2.0/24
 ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-IN seq 30 permit 10.210.3.0/24
+ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-IN seq 40 permit 198.18.0.0/24
 route-map RM-VRF-PROD-EQXFR2-SDWAN-IN permit 10
   match ip address prefix-list PL-VRF-PROD-EQXFR2-SDWAN-IN
 ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-OUT seq 10 permit 10.5.10.0/24
 ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-OUT seq 20 permit 10.5.20.0/24
 ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-OUT seq 30 permit 10.8.2.0/24
-ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-OUT seq 40 permit 10.30.0.0/16
+ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-OUT seq 40 permit 10.9.1.0/24
+ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-OUT seq 50 permit 10.30.0.0/16
 route-map RM-VRF-PROD-EQXFR2-SDWAN-OUT permit 10
   match ip address prefix-list PL-VRF-PROD-EQXFR2-SDWAN-OUT
 route-map RM-VRF-PROD-EQXFR2-SDWAN-OUT deny 20

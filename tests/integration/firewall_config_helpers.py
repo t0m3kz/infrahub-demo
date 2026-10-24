@@ -36,9 +36,10 @@ from .test_helpers import fetch_loadbalancer_inventory, match_loadbalancer_conte
 SCENARIO_NAME = "Scenario 30_all: Colo Cloud/Partner/SaaS Zone Policy"
 
 
-# The three destination CIDRs from 07_zone_policies/04_destination_prefixes.yml,
-# each backing one SecurityPolicyRule in 07_zone_policies/05_security_policy.yml.
-EXPECTED_DESTINATION_CIDRS = ("10.40.0.0/16", "198.18.0.0/24", "198.51.100.0/24")
+# The destination CIDRs of the prefix-selector rules of 07_zone_policies/05_security_policy.yml: the AWS rule's
+# VPC block (06_customer_boarding/c001/cloud) and the Acme extranet range (07_zone_policies/01_partner_tunnel.yml). The
+# Zscaler rule names the Internet segment, so it has no CIDR to render.
+EXPECTED_DESTINATION_CIDRS = ("10.10.0.0/16", "198.18.0.0/24")
 
 
 # The rule names from 05_security_policy.yml. Unlike the CIDRs, nothing else in

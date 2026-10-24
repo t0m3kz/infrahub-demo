@@ -34,6 +34,13 @@ because the offices board in one load and run concurrently. The circuit's
 locations are the office and the ISP; the tunnel's are the office and the
 Gateway's zone.
 
+The office's LAN is allocated here too, when the office declares none: one /24 from
+the PROD tenant pool (``Tenant-PROD-IPv4``, data/bootstrap/23b_tenant_pools.yml), keyed by
+the office name, attached to its ``lan_prefixes`` (what the border registers behind the
+gateway's session, utils/ownership.py). An office that lists a ``lan_prefixes`` (C002's
+hand-authored one) or has ``fabric_templates`` (it hosts its segments instead, registered
+behind the gateway) is left alone, and a rerun allocates and writes nothing.
+
 The shared Gateway/VCO themselves stay hand-authored and load with the
 foundation stage (data/demos/30_all/02_colo/equinix/fr/04_sdwan_gateway.yml),
 so an office can opt in when it is created — this generator only ever reads
@@ -57,6 +64,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from infrahub_sdk.protocols import CoreIPPrefixPool
 from netutils.interface import sort_interface_list
 
 from utils.data_cleaning import clean_data
@@ -67,11 +75,14 @@ from ..pools import PoolMixin
 from ..protocols import (
     DcimPhysicalDevice,
     DcimPhysicalInterface,
+    IpamPrefix,
     ManagedController,
+    TopologyCustomerOffice,
     TopologyExternalProviders,
     TopologyPhysicalCircuit,
     TopologyTunnelCircuit,
 )
+from .segment import tenant_pool_name
 
 # Who sells each office its internet access. Not modelled per office (no
 # "chosen ISP" signal on TopologyCustomerOffice), so every office's underlay
@@ -84,6 +95,8 @@ _INTERNET_PROVIDER_ORG_ID = "P019"
 # (VMware VeloCloud), never the ISP — the tunnel is not bought from the ISP.
 _OVERLAY_PROVIDER_ORG_ID = "P035"
 _EDGE_TEMPLATE_NAME = "VCE-610_EDGE"
+# An office is always PROD (no environment): its LAN comes from the PROD tenant pool.
+_OFFICE_LAN_NAMESPACE = "PROD"
 
 
 def _target_group(name: str) -> dict[str, Any]:
@@ -178,6 +191,7 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
             end_ids=[gateway_public_port_id, edge_uplink.id],
         )
         await self._attach_to_orchestrator(gateway_id=gateway_id, gateway_name=gateway_name, edge_id=edge.id)
+        await self._ensure_office_lan(office, office_name=office_name, office_id=office_id)
 
     async def _resolve_provider_ids(self, office_name: str) -> tuple[str, str]:
         """(internet provider id, overlay provider id), both looked up in one query."""
@@ -346,6 +360,42 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
         )
         await tunnel.save(allow_upsert=True)
         self.logger.info(f"Ensured SD-WAN tunnel circuit '{tunnel_name}'")
+
+    async def _ensure_office_lan(self, office: dict[str, Any], *, office_name: str, office_id: str) -> None:
+        """Give an office with no LAN and no fabric its one /24 from the PROD tenant pool, once.
+
+        An office that lists ``lan_prefixes`` keeps them and one with ``fabric_templates`` registers
+        through the segments it hosts, so neither is allocated a LAN (nothing is read or written
+        for them). The prefix is allocated with ``office-lan__<office>`` as identifier: the office
+        name survives a delete and recreate, and an allocation retried after a failed attach returns
+        the same prefix. The pool and the attach run under one lock keyed by the pool, the way
+        segment addressing serializes its allocations.
+
+        Both writes are untracked: the prefix is a pool mutation, and the office (this run's own
+        target) is saved with ``update_group_context=False``, so no later run's cleanup deletes
+        either. Only ``lan_prefixes`` is sent, so no trigger rule of the office fires.
+        """
+        if office.get("lan_prefixes") or office.get("fabric_templates"):
+            return
+        pool_name = tenant_pool_name(_OFFICE_LAN_NAMESPACE)
+        pools = await self.client.filters(kind=CoreIPPrefixPool, name__value=pool_name)
+        if not pools:
+            self.fail(f"{office_name}: tenant pool {pool_name} not found - load data/bootstrap/23b_tenant_pools.yml")
+        async with self.resource_lock(f"office-lan-{pool_name}"):
+            prefix = await self.client.allocate_next_ip_prefix(
+                resource_pool=pools[0],
+                kind=IpamPrefix,
+                identifier=f"office-lan__{office_name}",
+                member_type="address",
+                data={"role": "customer", "status": "active", "description": f"{office_name} LAN"},
+            )
+            if prefix is None:
+                self.fail(f"{office_name}: tenant pool {pool_name} returned no prefix")
+            office_node = await self.client.create(
+                kind=TopologyCustomerOffice, data={"id": office_id, "lan_prefixes": [{"id": prefix.id}]}
+            )
+            await office_node.save(allow_upsert=True, update_group_context=False)
+        self.logger.info(f"Allocated LAN {prefix.prefix.value} to office {office_name} from {pool_name}")
 
     async def _attach_to_orchestrator(self, *, gateway_id: str, gateway_name: str, edge_id: str) -> None:
         orchestrators = await self.client.filters(

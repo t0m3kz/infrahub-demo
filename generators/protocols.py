@@ -1166,6 +1166,7 @@ class TopologyInterconnectCircuit(TopologyVirtualCircuit):
 
 class TopologyTunnelCircuit(TopologyVirtualCircuit):
     locations: RelationshipManager[TopologyConnectableLocation]
+    registered_prefixes: RelationshipManager[IpamPrefix]
 
 
 class DcimVirtualDevice(CoreArtifactTarget, DcimDevice, DcimCapabilities, AppInstance):

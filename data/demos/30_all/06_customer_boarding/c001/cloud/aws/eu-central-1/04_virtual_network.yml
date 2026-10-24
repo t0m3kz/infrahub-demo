@@ -1,0 +1,16 @@
+---
+# Virtual network (VPC) for C001 in AWS eu-central-1. No subnet segment is declared: the
+# VPC exists to be a registered destination of the colo-hosted AWS interconnect.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudVirtualNetwork
+  data:
+    - name: "nordix-vpc-prod"
+      account: "nordix-aws-prod"
+      region: "eu-central-1"
+      is_default: false
+      dns_support: true
+      dns_hostnames: true
+      cidr_blocks:
+        - ["10.10.0.0/16", "PROD"]

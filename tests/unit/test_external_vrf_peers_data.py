@@ -207,6 +207,7 @@ class TestOfficeQuerySelection:
             "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
             offices=offices,
+            tunnels=None,
         )
 
         assert found == {"Ethernet1/13.1900": {"C005": ["10.176.5.0/24"]}}

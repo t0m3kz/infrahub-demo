@@ -627,8 +627,8 @@ spec:
     # when sdwan_gateway is unset, so this is safe to fire unconditionally for
     # every office, not just ones that opted in. The `updated` rule covers an
     # existing office that opts in later by having sdwan_gateway set on it —
-    # the generator never writes back to TopologyCustomerOffice itself, so
-    # this can't self-trigger the way a colocation zone's fabric_templates can.
+    # the generator writes back only lan_prefixes (the office LAN it allocates), which no rule
+    # matches, so it can't self-trigger the way a colocation zone's fabric_templates can.
     - name: trigger-customer-office-sdwan-on-created
       branch_scope: "other_branches"
       node_kind: TopologyCustomerOffice

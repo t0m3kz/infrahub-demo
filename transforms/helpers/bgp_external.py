@@ -124,32 +124,69 @@ def _far_end_devices(device_capabilities: list[dict[str, Any]] | None, device_na
     return far
 
 
-def office_lans_by_gateway(
-    offices: list[dict[str, Any]] | None,
-) -> dict[str, list[tuple[str | None, dict[str, Any]]]]:
-    """SD-WAN gateway name -> the (owner, prefix) pairs of every office footprint attached to it.
+def office_registered(office: dict[str, Any]) -> list[tuple[str | None, dict[str, Any]]]:
+    """The (owner, prefix) pairs one office footprint registers: its ``lan_prefixes`` and the hosted segments' prefixes.
 
-    An office registers its ``lan_prefixes`` (owned by the office's owner) and,
-    derived, the gateway prefix of every segment it hosts itself
-    (``segment_deployments``: an office with a fabric hosts its LAN as a VXLAN
-    segment, whose prefix comes from the tenant pool, not from the office; it is
-    owned by the segment's owner and a ``retired`` segment is skipped).
-    ``offices`` is the cleaned TopologyCustomerOffice query root. A gateway with
-    offices but no registered LAN is present with an empty list.
+    The ``lan_prefixes`` are owned by the office's owner. Derived, the gateway prefix of every segment the office
+    hosts itself (``segment_deployments``: an office with a fabric hosts its LAN as a VXLAN segment, whose prefix
+    comes from the tenant pool, not from the office) is owned by the segment's owner; a ``retired`` segment is
+    skipped. ``office`` is one cleaned TopologyCustomerOffice.
     """
-    lans: dict[str, list[tuple[str | None, dict[str, Any]]]] = {}
+    office_owner = customer_owner(office.get("owner"))
+    registered = [(office_owner, lan) for lan in office.get("lan_prefixes") or []]
+    for deployment in office.get("segment_deployments") or []:
+        segment = deployment.get("segment") or {}
+        hosted = (segment.get("gateway") or {}).get("ip_prefix")
+        if hosted and segment.get("status") != RETIRED_STATUS:
+            registered.append((customer_owner(segment.get("owner")), hosted))
+    return registered
+
+
+def registered_by_gateway(
+    offices: list[dict[str, Any]] | None, tunnels: list[dict[str, Any]] | None
+) -> dict[str, list[tuple[str | None, dict[str, Any]]]]:
+    """SD-WAN gateway name -> the (owner, prefix) pairs registered behind it, by offices and by tunnels.
+
+    An office footprint attached to the gateway registers what office_registered returns. A tunnel registers its
+    ``registered_prefixes`` (owned by the tunnel's owner) behind the gateway at one of its ends, the way an office
+    LAN is: the space its far end reaches that no office of ours hosts (a B2B partner's range). Its other end (an
+    office edge, a partner router) is no gateway and gets nothing.
+    ``offices`` is the cleaned TopologyCustomerOffice query root, ``tunnels`` the TopologyTunnelCircuit one.
+    A gateway with offices but no registered prefix is present with an empty list; a gateway no office names
+    is absent, so a tunnel registers behind a gateway only where an office sits behind it too.
+    """
+    registered_by: dict[str, list[tuple[str | None, dict[str, Any]]]] = {}
     for office in offices or []:
         gateway = (office.get("sdwan_gateway") or {}).get("name")
         if gateway:
-            office_owner = customer_owner(office.get("owner"))
-            registered = lans.setdefault(gateway, [])
-            registered.extend((office_owner, lan) for lan in office.get("lan_prefixes") or [])
-            for deployment in office.get("segment_deployments") or []:
-                segment = deployment.get("segment") or {}
-                hosted = (segment.get("gateway") or {}).get("ip_prefix")
-                if hosted and segment.get("status") != RETIRED_STATUS:
-                    registered.append((customer_owner(segment.get("owner")), hosted))
-    return lans
+            registered_by.setdefault(gateway, []).extend(office_registered(office))
+    for tunnel in tunnels or []:
+        tunnel_owner = customer_owner(tunnel.get("owner"))
+        ends = {(port.get("device") or {}).get("name") for port in tunnel.get("capabilities") or []}
+        for gateway in sorted(name for name in ends if name in registered_by):
+            registered_by[gateway].extend((tunnel_owner, prefix) for prefix in tunnel.get("registered_prefixes") or [])
+    return registered_by
+
+
+def registered_by_attachment(
+    offices: list[dict[str, Any]] | None, tunnels: list[dict[str, Any]] | None, vifs: list[dict[str, Any]] | None
+) -> dict[str, list[tuple[str | None, dict[str, Any]]]]:
+    """Attachment point -> the (owner, prefix) pairs registered behind it, as the edge reads them.
+
+    An attachment point is where an external session lands: an SD-WAN gateway (registered_by_gateway: its
+    offices and tunnels) or the handoff circuit of a cloud virtual interface (vif_registered_blocks, the very
+    chain walk the edge uses; a VIF without a handoff circuit has no session and is skipped). Shared by
+    checks/routing_invariants.py rule 8 and checks/segment_security.py, so both see the registrations the
+    edge accepts.
+    """
+    points = {
+        f"SD-WAN gateway '{gateway}'": found for gateway, found in registered_by_gateway(offices, tunnels).items()
+    }
+    for vif in vifs or []:
+        circuit = (vif.get("virtual_circuit") or {}).get("name")
+        if circuit:
+            points.setdefault(f"handoff circuit '{circuit}'", []).extend(vif_registered_blocks(vif))
+    return points
 
 
 def registered_by_namespace(registered: list[tuple[str | None, dict[str, Any]]]) -> dict[str, dict[str, set[str]]]:
@@ -174,6 +211,7 @@ def get_external_peer_prefixes(
     *,
     device_capabilities: list[dict[str, Any]] | None,
     offices: list[dict[str, Any]] | None,
+    tunnels: list[dict[str, Any]] | None,
 ) -> dict[str, dict[str, list[str]]]:
     """Handoff sub-interface name -> owner -> the far end's registered IPv4 prefixes of that owner, sorted.
 
@@ -183,7 +221,8 @@ def get_external_peer_prefixes(
       (``device_capabilities`` peerings) is the ``sdwan_gateway`` of some
       office footprint accepts the ``lan_prefixes`` (owner: the office's owner)
       and the hosted segments' prefixes (owner: the segment's owner) of every
-      office behind that gateway (office_lans_by_gateway).
+      office behind that gateway, and the ``registered_prefixes`` (owner: the
+      tunnel's owner) of every tunnel ending on it (registered_by_gateway).
     - A cloud VIF: it lands on the device through its Direct Connect
       (``physical_devices``) as the sub-interface ``<port>.<vif.vlan_id>`` and
       accepts its reachable VPC blocks (vif_registered_blocks), each owned by
@@ -203,15 +242,15 @@ def get_external_peer_prefixes(
         devices = ((vif.get("direct_connect") or {}).get("physical_devices")) or []
         if device_name in {device.get("name") for device in devices} and isinstance(vif.get("vlan_id"), int):
             by_vlan.setdefault(vif["vlan_id"], []).append(vif)
-    lans_by_gateway = office_lans_by_gateway(offices)
+    registered_behind = registered_by_gateway(offices, tunnels)
     far_ends = _far_end_devices(device_capabilities, device_name)
 
     found: dict[str, dict[str, list[str]]] = {}
     for iface in interfaces or []:
         name = iface.get("name") or ""
         far = far_ends.get(name) or set()
-        if len(far) == 1 and next(iter(far)) in lans_by_gateway:
-            registered = lans_by_gateway[next(iter(far))]
+        if len(far) == 1 and next(iter(far)) in registered_behind:
+            registered = registered_behind[next(iter(far))]
         else:
             _, dot, tag = name.rpartition(".")
             vifs = by_vlan.get(int(tag)) if dot and tag.isdigit() else None

@@ -1,0 +1,13 @@
+---
+# VPC aggregate (CIDR block) of the virtual network below, registered in the PROD
+# VRF of its account (environment p). The PROD namespace is never per-customer.
+# The same prefix object is the destination of rule 10 of seg-c001-nordix-prod-p-egress
+# (../../../../../08_interconnects/07_zone_policies/05_security_policy.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamPrefix
+  data:
+    - prefix: "10.10.0.0/16"
+      ip_namespace: "PROD"
+      status: active

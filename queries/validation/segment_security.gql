@@ -8,6 +8,14 @@
 # reads of each segment (SegmentGroupPolicyFields: its group tag and its own
 # rules). Read at check time, so gateways allocated asynchronously by the
 # generators are settled.
+#
+# The destination-prefix rule reads where a rule's destination_prefixes can be
+# reached: the on-prem segments (status, gateway prefix), and what is registered
+# behind an external session, selected as transforms/helpers/bgp_external.py
+# registered_by_attachment reads it (the same fields as routing_invariants.gql,
+# with each prefix's namespace_type): an office's lan_prefixes and hosted
+# segments, a tunnel's registered_prefixes (with the end ports' devices), and a
+# cloud virtual interface's VPC blocks.
 query segment_security {
   ManagedNetworkSegment {
     edges {
@@ -15,6 +23,7 @@ query segment_security {
         # The fragment already selects the id, name, isolation mode, zone name
         # and gateway prefix; only what it lacks is added here.
         ...SegmentGroupPolicyFields
+        status { value }
         environment { value }
         security_zone { node { id } }
         gateway { node { ip_prefix { node { id } } } }
@@ -36,7 +45,7 @@ query segment_security {
         source_segment { node { id name { value } } }
         destination_segment { node { id name { value } } }
         source_prefixes { edges { node { id } } }
-        destination_prefixes { edges { node { id } } }
+        destination_prefixes { edges { node { id prefix { value } } } }
         source_ip_addresses { edges { node { id } } }
         destination_ip_addresses { edges { node { id } } }
         source_security_tag { node { id name { value } } }
@@ -85,6 +94,77 @@ query segment_security {
         unclassified_group_id { value }
         unaware_group_id { value }
         tag_pool { node { id name { value } start_range { value } end_range { value } } }
+      }
+    }
+  }
+
+  TopologyCustomerOffice {
+    edges {
+      node {
+        owner { node { __typename org_id { value } display_label } }
+        sdwan_gateway { node { name { value } } }
+        lan_prefixes { edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } } }
+        segment_deployments(status__values: ["active", "provisioning"]) {
+          edges {
+            node {
+              segment {
+                node {
+                  status { value }
+                  owner { node { __typename org_id { value } display_label } }
+                  gateway { node { ip_prefix { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } } } }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  TopologyTunnelCircuit {
+    edges {
+      node {
+        owner { node { __typename org_id { value } display_label } }
+        registered_prefixes { edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } } }
+        capabilities { edges { node { device { node { name { value } } } } } }
+      }
+    }
+  }
+
+  CloudVirtualInterface {
+    edges {
+      node {
+        name { value }
+        virtual_circuit { node { name { value } } }
+        virtual_network {
+          node {
+            cidr_blocks { edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } } }
+            account { node { owner { node { __typename org_id { value } display_label } } } }
+          }
+        }
+        transit_gateway_attachment {
+          node {
+            associated_route_table { node { id } }
+            transit_gateway {
+              node {
+                attachments {
+                  edges {
+                    node {
+                      attachment_type { value }
+                      propagates_to_route_tables { edges { node { id } } }
+                      virtual_network {
+                        node {
+                          cidr_blocks { edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } } }
+                          account { node { owner { node { __typename org_id { value } display_label } } } }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
   }

@@ -241,6 +241,19 @@ C001's partner extranet is a `TopologyTunnelCircuit`, `C001-PARTNER-ACME-FR2`
 1300, `eg-pa401` to the stub `EXT-MEGAPORT-MCR1`, AS133937) rides the cross-connect `XC-EQXPA4-MEGAPORT`. The Azure
 cross-connect `XC-EQXPA4-AZURE-WEU` has no handoff: no Azure attachment is modelled, so it stays an idle carrier.
 
+C001's egress policy (`07_zone_policies/05_security_policy.yml`, segment `c001-nordix-prod-p`) only aims at destinations
+that are reachable. The border filtering accepts and announces only prefixes an owned object registers, so each
+destination is one of these:
+
+| Rule | Destination | Why it is reachable |
+| --- | --- | --- |
+| 10, `nordix-prod-to-aws` | `10.10.0.0/16` (PROD) | The block of C001's VPC `nordix-vpc-prod` in its account `nordix-aws-prod` (`06_customer_boarding/c001/cloud`), attached to the hub by `tgwa-vpc-nordix` (associated with and propagating into `rt-hub-shared`, the hybrid attachment's table), so the AWS handoff session accepts it for owner C001 |
+| 20, `nordix-prod-to-partner-acme` | `198.18.0.0/24` (PROD) | Registered by C001 behind the tunnel `C001-PARTNER-ACME-FR2` (`registered_prefixes`, `07_zone_policies/01_partner_tunnel.yml`) |
+| 30, `nordix-prod-to-saas-zscaler` | the `internet` segment | The Zscaler PoP is public space: nothing registers it, the rule goes to the Internet segment like C006's internet egress |
+
+No prefix object exists only for the policy: the VPC block and the Acme range are declared where they are registered.
+The C004 Azure VNet (`10.40.0.0/16`) stays a customer VPC of its own, with no handoff behind it, so nothing aims at it.
+
 The ISP devices are in no group, so no artifact or check targets them. Their configuration is the carrier's
 business. Inter-VRF routing is not wired to these edges yet. The DCs reach `INTERNET` through one
 `TopologyRoutedExchange` per firewall context (`dc11-fw-shared-PROD-INTERNET`, ...), created when a customer is

@@ -40,6 +40,7 @@ class Edge(BaseDeviceTransform):
                 data.get("name") or "",
                 device_capabilities=data.get("capabilities"),
                 offices=roots.get("TopologyCustomerOffice"),
+                tunnels=roots.get("TopologyTunnelCircuit"),
             ),
             get_onprem_prefixes(roots.get("ManagedNetworkSegment")),
             device_name=data.get("name") or "",
