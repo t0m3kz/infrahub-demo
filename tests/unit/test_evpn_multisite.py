@@ -662,7 +662,14 @@ def _vxlan_ctx() -> dict[str, Any]:
 class TestNxosMultisiteRendering:
     def test_bgw_block_rendered(self, nxos_env: jinja2.Environment) -> None:
         rendered = nxos_env.get_template("common/cisco_nxos_vxlan.j2").render(vxlan=_vxlan_ctx())
-        assert "nv overlay evpn" in rendered
+        # The features and `nv overlay evpn` live in the feature block (cisco_nxos_feature_evpn.j2), not here.
+        assert "nv overlay evpn" not in rendered
+        features = nxos_env.get_template("common/cisco_nxos_feature_evpn.j2").render(vxlan=_vxlan_ctx())
+        assert features.strip().splitlines() == [
+            "feature nv overlay",
+            "feature vn-segment-vlan-based",
+            "nv overlay evpn",
+        ]
         assert "evpn multisite border-gateway 65100\n  delay-restore time 300" in rendered
         assert "  source-interface loopback1\n" in rendered
         assert "  multisite border-gateway interface loopback100" in rendered
@@ -783,7 +790,7 @@ class TestNxosDciRendering:
         regular = rendered.split("neighbor 10.1.0.0\n")[1].split("  neighbor ")[0]
         assert regular == (
             "    remote-as 65200\n    inherit peer-session UNDERLAY-PEERS-SESSION\n"
-            "    address-family ipv4 unicast\n      inherit peer-policy UNDERLAY-PEERS-POLICY\n    !\n"
+            "    address-family ipv4 unicast\n      inherit peer-policy UNDERLAY-PEERS-POLICY 1\n    !\n"
         )
 
     def test_no_dci_lines_without_dci_sessions(self, nxos_env: jinja2.Environment) -> None:
@@ -817,9 +824,9 @@ class TestNxosDciPortMtu:
         return nxos_env.get_template("common/cisco_nxos_interface_ip.j2").render(interface=interface, vxlan=vxlan)
 
     def test_dci_port_carries_its_mtu(self, nxos_env: jinja2.Environment) -> None:
-        interface = {"name": "Ethernet1/49", "mtu": 9216, "ip_addresses": [{"address": "fd00:200::/127"}]}
+        interface = {"name": "Ethernet1/49", "mtu": 9214, "ip_addresses": [{"address": "fd00:200::/127"}]}
         rendered = self._render(nxos_env, interface, _vxlan_ctx())
-        assert "  ipv6 address fd00:200::/127\n  mtu 9216" in rendered
+        assert "  ipv6 address fd00:200::/127\n  mtu 9214" in rendered
 
     def test_other_ports_keep_no_mtu_line(self, nxos_env: jinja2.Environment) -> None:
         interface = {"name": "Ethernet1/1", "mtu": 9000, "ip_addresses": [{"address": "10.1.0.1/31"}]}
@@ -830,6 +837,6 @@ class TestNxosDciPortMtu:
         assert "mtu" not in self._render(nxos_env, interface, _vxlan_ctx())
 
     def test_device_without_multisite_renders_no_mtu(self, nxos_env: jinja2.Environment) -> None:
-        interface = {"name": "Ethernet1/49", "mtu": 9216, "ip_addresses": [{"address": "10.1.0.1/31"}]}
+        interface = {"name": "Ethernet1/49", "mtu": 9214, "ip_addresses": [{"address": "10.1.0.1/31"}]}
         assert "mtu" not in self._render(nxos_env, interface, {**_vxlan_ctx(), "multisite": None})
         assert "mtu" not in self._render(nxos_env, interface, None)

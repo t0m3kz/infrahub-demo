@@ -50,7 +50,7 @@ def _rules(result: dict) -> list[dict]:
 DCI_POOL_NETWORK = ipaddress.IPv6Network("fd00:2200::/40")
 
 # The MTU add_virtual_circuit sets on the two physical ports of a DCI.
-_DCI_MTU = 9216
+_DCI_MTU = 9214
 
 
 # What the handoffs were before add_virtual_circuit generated them: sessions and addresses authored in 30_all

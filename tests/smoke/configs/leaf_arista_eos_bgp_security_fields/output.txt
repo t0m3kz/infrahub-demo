@@ -6,6 +6,9 @@
 
 hostname dc1-leaf-01
 
+! Enable IP routing
+ip routing
+
 ! Configure spanning tree mode
 spanning-tree mode mstp
 
@@ -14,12 +17,14 @@ no spanning-tree vlan-id 4094
 
 interface Ethernet1
    description to spine-01
+   no switchport
    ip address 10.1.0.1/31
 
    no shutdown
 
 interface Ethernet2
    description to spine-02
+   no switchport
    ip address 10.1.0.3/31
 
    no shutdown
@@ -37,6 +42,12 @@ interface Loopback0
 
 ! Configure BGP
 
+route-map peer-dc1-leaf-01-spine-01-ebgp-LOCAL-PREF-IN permit 10
+   set local-preference 200
+!
+route-map peer-dc1-leaf-01-spine-01-ebgp-MED-OUT permit 10
+   set metric 50
+!
 router bgp 65000
    router-id 10.0.0.1
    no bgp default ipv4-unicast
@@ -54,12 +65,6 @@ router bgp 65000
    neighbor UNDERLAY-PEERS send-community extended
    neighbor UNDERLAY-PEERS remove-private-as
    neighbor UNDERLAY-PEERS bfd
-   route-map peer-dc1-leaf-01-spine-01-ebgp-LOCAL-PREF-IN permit 10
-      set local-preference 200
-   !
-   route-map peer-dc1-leaf-01-spine-01-ebgp-MED-OUT permit 10
-      set metric 50
-   !
    neighbor 10.1.0.0 peer-group UNDERLAY-PEERS
    neighbor 10.1.0.0 remote-as 65100
    neighbor 10.1.0.0 local-as 65001 no-prepend replace-as

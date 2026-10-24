@@ -12,6 +12,7 @@ hostname {{ hostname }}
 ! must be present from the first push, not added later.
 service routing protocols model multi-agent
 {%- endif %}
+{%- include 'common/arista_eos_ip_routing.j2' %}
 
 ! Configure spanning tree mode
 spanning-tree mode mstp
@@ -54,6 +55,7 @@ interface Port-Channel{{ interface.lag_id }}
 {%- if interface.minimum_links and interface.minimum_links > 1 %}
    port-channel min-links {{ interface.minimum_links }}
 {%- endif %}
+{%- set eos_ifname = 'Port-Channel' ~ interface.lag_id %}
 {%- include 'common/arista_eos_interface_ip.j2' %}
    no shutdown
 {% endfor %}

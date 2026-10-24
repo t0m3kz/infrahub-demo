@@ -11,6 +11,11 @@ feature interface-vlan
 feature lacp
 feature vpc
 feature lldp
+feature nv overlay
+feature vn-segment-vlan-based
+feature nve
+feature fabric forwarding
+nv overlay evpn
 !
 
 ! VLANs
@@ -24,11 +29,13 @@ vlan 200
 !
 ! Interfaces
 interface Ethernet1
+  no switchport
   no shutdown
   ip address 10.1.0.1/31
 
 !
 interface Ethernet2
+  no switchport
   no shutdown
   ip address 10.1.0.3/31
 
@@ -44,6 +51,12 @@ interface Loopback0
   no shutdown
   ip address 10.0.0.1/32
 
+!
+! Route-maps
+route-map RM-CONN-2-BGP permit 10
+  match interface loopback0
+!
+route-map RM-VRF-DIRECT-2-EVPN permit 10
 !
 !
 ! OSPF Configuration
@@ -82,28 +95,28 @@ router bgp 65001
     description spine-01
     inherit peer-session UNDERLAY-PEERS-SESSION
     address-family ipv4 unicast
-      inherit peer-policy UNDERLAY-PEERS-POLICY
+      inherit peer-policy UNDERLAY-PEERS-POLICY 1
     !
   neighbor 10.1.0.2
     remote-as 65101
     description spine-02
     inherit peer-session UNDERLAY-PEERS-SESSION
     address-family ipv4 unicast
-      inherit peer-policy UNDERLAY-PEERS-POLICY
+      inherit peer-policy UNDERLAY-PEERS-POLICY 1
     !
   neighbor 10.0.0.100
     remote-as 65100
     description spine-01
     inherit peer-session EVPN-OVERLAY-SESSION
     address-family l2vpn evpn
-      inherit peer-policy EVPN-OVERLAY-POLICY
+      inherit peer-policy EVPN-OVERLAY-POLICY 1
     !
   neighbor 10.0.0.101
     remote-as 65101
     description spine-02
     inherit peer-session EVPN-OVERLAY-SESSION
     address-family l2vpn evpn
-      inherit peer-policy EVPN-OVERLAY-POLICY
+      inherit peer-policy EVPN-OVERLAY-POLICY 1
     !
   vrf VRF_A
     address-family ipv4 unicast
@@ -115,12 +128,6 @@ router bgp 65001
 !
 !
 ! VXLAN Configuration (netlab-style multivendor)
-!
-feature nv overlay
-feature vn-segment-vlan-based
-feature nve
-feature fabric forwarding
-nv overlay evpn
 !
 !
 ! VRF Contexts (symmetric IRB — one L3 VNI per tenant)
@@ -166,15 +173,8 @@ interface Vlan3900
   description L3VNI transit SVI for VRF VRF_A
   vrf member VRF_A
   ip forward
-  mtu 9216
+  mtu 9214
   no shutdown
-!
-!
-! Route-maps
-route-map RM-CONN-2-BGP permit 10
-  match interface loopback0
-!
-route-map RM-VRF-DIRECT-2-EVPN permit 10
 !
 ! Anycast Gateway — identical MAC on every leaf/border-leaf in the fabric
 fabric forwarding anycast-gateway-mac 001c7300dc01

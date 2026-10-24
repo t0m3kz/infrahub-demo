@@ -4,6 +4,7 @@
 !
 
 hostname {{ hostname }}
+{%- include 'common/arista_eos_ip_routing.j2' %}
 
 ! Configure spanning tree mode
 spanning-tree mode mstp

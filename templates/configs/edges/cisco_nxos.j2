@@ -10,6 +10,7 @@ feature interface-vlan
 feature lacp
 feature vpc
 feature lldp
+{%- include 'common/cisco_nxos_feature_evpn.j2' %}
 !
 {%- if vlans and vlans|length > 0 %}
 ! VLANs
@@ -43,8 +44,10 @@ vrf context {{ vrf_name }}
 {%- endif %}
 !
 ! Interfaces
+{%- include 'common/cisco_nxos_subif_parents.j2' %}
 {%- for interface in interfaces %}
 interface {{ interface.name }}
+{%- include 'common/cisco_nxos_routed_port.j2' %}
 {%- if interface.dot1q_vlan %}
   encapsulation dot1q {{ interface.dot1q_vlan }}
 {%- endif %}
@@ -59,56 +62,8 @@ interface {{ interface.name }}
 !
 {%- endfor %}
 !
-{%- if ospf and ospf|length > 0 %}
-! OSPF Configuration
-{% include 'common/cisco_nxos_ospf.j2' %}
-{%- endif %}
-!
 {%- if bgp and bgp|length > 0 %}
-! BGP Configuration
-{% include 'common/cisco_nxos_bgp.j2' %}
-{%- endif %}
-!
-{#- Only a colocation edge acting as its site's EVPN Multi-Site border
-    gateway has a vxlan block (transforms/config/edge.py). #}
-{%- include 'common/cisco_nxos_vxlan.j2' %}
-{#- A BGW also routes its site's stretched segments: same anycast gateway
-    (IP and MAC) as the DC leaves, so a host keeps its gateway wherever the
-    segment reaches, and the SVI's VRF is the handoff VRF towards the office. #}
-{%- if vxlan and vxlan.anycast_gateway and vxlan.anycast_gateway.enabled %}
-!
-fabric forwarding anycast-gateway-mac {{ vxlan.anycast_gateway.mac | replace(':', '') | replace('.', '') }}
-{%- for vlan in vlans if vlan.gateway_ip or vlan.gateway_ipv6 %}
-!
-interface Vlan{{ vlan.vlan_id }}
-  description {{ vlan.description }}
-{%- if vlan.vrf %}
-  vrf member {{ vlan.vrf }}
-{%- endif %}
-{%- if vlan.gateway_ip %}
-  ip address {{ vlan.gateway_ip }}
-{%- endif %}
-{%- if vlan.gateway_ipv6 %}
-  ipv6 address {{ vlan.gateway_ipv6 }}
-{%- endif %}
-  fabric forwarding mode anycast-gateway
-  no shutdown
-{%- endfor %}
-{%- endif %}
-{%- if bgp and bgp|length > 0 %}
-!
-! Route-maps
-{#- Referenced by cisco_nxos_bgp.j2's `redistribute direct`; an undefined
-    route-map redistributes nothing. A BGW also advertises its VTEP and
-    site-VIP loopbacks so the remote site can reach the tunnel endpoints. #}
-route-map RM-CONN-2-BGP permit 10
-  match interface {{ ([loopback_name] + (vxlan.multisite.advertise_interfaces if vxlan and vxlan.multisite else [])) | unique | join(' ') }}
-!
-{%- include 'common/cisco_nxos_dci_route_maps.j2' -%}
-{%- if vxlan and vxlan.l3_vni_mappings %}
-route-map RM-VRF-DIRECT-2-EVPN permit 10
-!
-{%- endif %}
+{%- include 'common/cisco_nxos_route_maps.j2' %}
 {%- include 'common/cisco_nxos_vrf_static.j2' %}
 {#- Upstream transit sessions (session.transit, bgp.py): accept the default
     route only; announce only the INTERNET namespace's public prefixes
@@ -179,6 +134,43 @@ route-map RM-{{ session.name }}-OUT deny 10
 !
 {%- endfor %}
 {%- endfor %}
+{%- endfor %}
+{%- endif %}
+
+{%- if ospf and ospf|length > 0 %}
+! OSPF Configuration
+{% include 'common/cisco_nxos_ospf.j2' %}
+{%- endif %}
+!
+{%- if bgp and bgp|length > 0 %}
+! BGP Configuration
+{% include 'common/cisco_nxos_bgp.j2' %}
+{%- endif %}
+!
+{#- Only a colocation edge acting as its site's EVPN Multi-Site border
+    gateway has a vxlan block (transforms/config/edge.py). #}
+{%- include 'common/cisco_nxos_vxlan.j2' %}
+{#- A BGW also routes its site's stretched segments: same anycast gateway
+    (IP and MAC) as the DC leaves, so a host keeps its gateway wherever the
+    segment reaches, and the SVI's VRF is the handoff VRF towards the office. #}
+{%- if vxlan and vxlan.anycast_gateway and vxlan.anycast_gateway.enabled %}
+!
+fabric forwarding anycast-gateway-mac {{ vxlan.anycast_gateway.mac | replace(':', '') | replace('.', '') }}
+{%- for vlan in vlans if vlan.gateway_ip or vlan.gateway_ipv6 %}
+!
+interface Vlan{{ vlan.vlan_id }}
+  description {{ vlan.description }}
+{%- if vlan.vrf %}
+  vrf member {{ vlan.vrf }}
+{%- endif %}
+{%- if vlan.gateway_ip %}
+  ip address {{ vlan.gateway_ip }}
+{%- endif %}
+{%- if vlan.gateway_ipv6 %}
+  ipv6 address {{ vlan.gateway_ipv6 }}
+{%- endif %}
+  fabric forwarding mode anycast-gateway
+  no shutdown
 {%- endfor %}
 {%- endif %}
 

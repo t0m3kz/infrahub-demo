@@ -9,16 +9,19 @@ feature interface-vlan
 feature lacp
 feature vpc
 feature lldp
+nv overlay evpn
 !
 !
 ! Interfaces
 interface Ethernet1
+  no switchport
   no shutdown
   ip address 10.1.0.1/31
 
   ip ospf area 0.0.0.0
 !
 interface Ethernet2
+  no switchport
   no shutdown
   ip address 10.1.0.3/31
 
@@ -29,6 +32,10 @@ interface Loopback0
   ip address 10.0.0.1/32
 
 !
+!
+! Route-maps
+route-map RM-CONN-2-BGP permit 10
+  match interface loopback0
 !
 ! OSPF Configuration
 
@@ -68,23 +75,17 @@ router bgp 65000
     description spine-01
     inherit peer-session EVPN-PEERS-SESSION
     address-family l2vpn evpn
-      inherit peer-policy EVPN-PEERS-POLICY
+      inherit peer-policy EVPN-PEERS-POLICY 1
     !
   neighbor 10.0.0.101
     remote-as 65000
     description spine-02
     inherit peer-session EVPN-PEERS-SESSION
     address-family l2vpn evpn
-      inherit peer-policy EVPN-PEERS-POLICY
+      inherit peer-policy EVPN-PEERS-POLICY 1
     !
 !
 
-!
-
-!
-! Route-maps
-route-map RM-CONN-2-BGP permit 10
-  match interface loopback0
 !
 
 !

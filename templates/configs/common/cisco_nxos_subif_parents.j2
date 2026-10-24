@@ -1,0 +1,16 @@
+{#- Expects `interfaces` in scope. A routed sub-interface (Ethernet1/13.1000) needs a routed parent; when the
+    parent port is not itself in the interface list (its tag is only in the sub-interface name), render it here.
+    A parent that is in the list gets `no switchport` from cisco_nxos_routed_port.j2.
+    D: Cisco Nexus 9000 Interfaces guide: a routed sub-interface is configured on a Layer 3 (`no switchport`)
+    parent interface. -#}
+{%- set _names = interfaces | map(attribute='name') | list %}
+{%- set _seen = namespace(parents=[]) %}
+{%- for sub in interfaces if sub.name.startswith(('Ethernet', 'port-channel')) and '.' in sub.name %}
+{%- set _parent = sub.name.rpartition('.')[0] %}
+{%- if _parent not in _names and _parent not in _seen.parents %}
+{%- set _seen.parents = _seen.parents + [_parent] %}
+interface {{ _parent }}
+  no switchport
+!
+{%- endif %}
+{%- endfor -%}

@@ -27,7 +27,7 @@ interface Vlan{{ mapping.svi_vlan_id }}
   description L3VNI transit SVI for VRF {{ mapping.vrf_name }}
   vrf member {{ mapping.vrf_name }}
   ip forward
-  mtu 9216
+  mtu 9214
   no shutdown
 !
 {%- endfor %}

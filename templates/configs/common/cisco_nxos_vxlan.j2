@@ -8,13 +8,8 @@
 !
 ! VXLAN Configuration (netlab-style multivendor)
 !
-{%- for feature in vxlan.features %}
-feature {{ feature }}
-{%- endfor %}
-{%- if vxlan.evpn and vxlan.evpn.enabled %}
-nv overlay evpn
-{%- endif %}
-!
+{#- `feature nv overlay`, `nve`, `vn-segment-vlan-based` and `nv overlay evpn` are in the feature block at the
+    top of the config (cisco_nxos_feature_evpn.j2). -#}
 {%- if vxlan.multisite %}
 evpn multisite border-gateway {{ vxlan.multisite.site_id }}
   delay-restore time 300
@@ -85,4 +80,4 @@ vlan {{ mapping.vlan_id }}
   vn-segment {{ mapping.vni }}
 {%- endfor %}
 {%- include 'common/cisco_nxos_l3vni_svi.j2' %}
-{%- endif %}
+{%- endif -%}

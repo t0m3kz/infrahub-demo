@@ -39,11 +39,13 @@ interface Ethernet1/34
 !
 ! Interfaces
 interface Ethernet1/1
+  no switchport
   no shutdown
   ip address 10.1.2.1/31
 
 !
 interface Ethernet1/2
+  no switchport
   no shutdown
   ip address 10.1.2.3/31
 
@@ -52,6 +54,10 @@ interface Loopback0
   no shutdown
   ip address 10.0.2.1/32
 
+!
+! Route-maps
+route-map RM-CONN-2-BGP permit 10
+  match interface loopback0
 !
 !
 ! OSPF Configuration
@@ -62,11 +68,6 @@ interface Loopback0
 
 ! BGP disabled by capability profile
 
-!
-!
-! Route-maps
-route-map RM-CONN-2-BGP permit 10
-  match interface loopback0
 !
 !
 

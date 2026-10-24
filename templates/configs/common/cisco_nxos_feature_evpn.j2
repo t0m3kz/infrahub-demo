@@ -1,0 +1,19 @@
+{#- Features and EVPN enablement the config below needs, rendered in the feature block
+    (before `router bgp` and before any interface or NVE that uses them).
+    D: Cisco Nexus 9000 VXLAN BGP EVPN guide: `feature nv overlay`, `feature vn-segment-vlan-based` and
+    `feature nve` are enabled before the NVE interface; `nv overlay evpn` is enabled before
+    `address-family l2vpn evpn` (a spine, which holds no NVE, carries only `nv overlay evpn`). -#}
+{%- set _evpn = namespace(af=false) %}
+{%- if capabilities is not defined or capabilities.bgp_enabled is not defined or capabilities.bgp_enabled %}
+{%- for bgp_config in bgp or [] %}
+{%- for session in bgp_config.sessions or [] if 'evpn' in (session.address_families | default([])) %}{% set _evpn.af = true %}{% endfor %}
+{%- endfor %}
+{%- endif %}
+{%- if vxlan and vxlan.enabled %}
+{%- for feature in vxlan.features %}
+feature {{ feature }}
+{%- endfor %}
+{%- endif %}
+{%- if (vxlan and vxlan.enabled and vxlan.evpn and vxlan.evpn.enabled) or _evpn.af %}
+nv overlay evpn
+{%- endif -%}

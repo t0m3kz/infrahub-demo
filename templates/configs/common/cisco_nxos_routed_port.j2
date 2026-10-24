@@ -1,0 +1,13 @@
+{#- Expects `interface` and `interfaces` in scope; rendered as the first line of the interface block.
+    A physical or port-channel port that carries an IP address, or that is the parent of a routed
+    sub-interface, is routed. Sub-interfaces (Ethernet1/1.100), Vlan, loopback, mgmt and nve are not.
+    D: Cisco Nexus 9000 Interfaces guide: `no switchport` makes an Ethernet or port-channel interface a
+    Layer 3 interface; a routed sub-interface needs a routed parent, and `no switchport` is not valid on
+    the sub-interface itself. -#}
+{%- if interface.name.startswith(('Ethernet', 'port-channel')) and '.' not in interface.name %}
+{%- set _routed = namespace(on=(interface.ip_addresses | length) > 0) %}
+{%- for sub in interfaces if not _routed.on and sub.name.startswith(interface.name ~ '.') %}{% set _routed.on = true %}{% endfor %}
+{%- if _routed.on %}
+  no switchport
+{%- endif %}
+{%- endif -%}
