@@ -30,16 +30,20 @@ rendered config; each is a property of data that spans topologies.
    registered in the PROD namespace (an office is always production), and is
    held to the same overlap rule as a VPC block: inside one namespace it
    overlaps no VPC block, no other office's LAN and no on-prem prefix. These
-   are the routes an office may announce into its VRF over SD-WAN.
+   are the routes an office may announce into its VRF over SD-WAN. The same
+   holds for a tunnel's `TopologyTunnelCircuit.registered_prefixes` (a B2B
+   partner's range reached through the SD-WAN gateway): PROD, no overlap.
 7. Registered-prefix owners. The colocation edge announces to and accepts from
    an external BGP peer only prefixes whose owner is an OrganizationCustomer,
    and the owner belongs to the object that registers the prefix: a VPC block's
    owner is `CloudVirtualNetwork.account.owner`, an office LAN's (and that of
    the segments the office hosts) is `TopologyCustomerOffice.owner`. So every
    VPC with at least one `cidr_blocks` entry needs an account owned by a
-   customer, and every office that registers `lan_prefixes` or hosts a segment
-   (`network_segments`) needs a customer owner; a provider-owned (or ownerless)
-   account or office is silently never accepted or announced at the border.
+   customer, every office that registers `lan_prefixes` or hosts a segment
+   (`network_segments`) needs a customer owner, and so does every tunnel with
+   `registered_prefixes` (the tunnel's owner); a provider-owned (or ownerless)
+   account, office or tunnel is silently never accepted or announced at the
+   border.
    This covers every registered block and LAN, not only those currently
    behind a handoff: that is cheaper, and any of them can be put behind one.
    A segment needs no check: `ManagedNetworkSegment.owner` is a required
@@ -51,14 +55,20 @@ rendered config; each is a property of data that spans topologies.
    ownership_conflicts over the registrations: the on-prem segments (owner and
    status as on the edge; retired are skipped), the offices' `lan_prefixes` and
    hosted segments grouped by their `sdwan_gateway` (one attachment point per
-   gateway), and the VPC blocks grouped by the handoff circuit their VIF
-   reaches (transforms/helpers/bgp_external.py vif_registered_blocks, the very chain walk
-   the edge uses: a private VIF's own VPC, or every VPC propagating into the
-   route table of the transit VIF's hybrid attachment; a VIF without a handoff
-   circuit has no session and is skipped). It reports a prefix registered by
-   more than one owner (it would be announced to another owner's session) and
-   an owner's prefix reachable behind more than one attachment point (local or
-   through exactly one session).
+   gateway) together with the `registered_prefixes` of the tunnels ending on
+   that gateway, and the VPC blocks grouped by the handoff circuit their VIF
+   reaches (transforms/helpers/bgp_external.py registered_by_attachment: the
+   very chain walk the edge uses, a private VIF's own VPC or every VPC
+   propagating into the route table of the transit VIF's hybrid attachment; a
+   VIF without a handoff circuit has no session and is skipped). It reports a
+   prefix registered by more than one owner (it would be announced to another
+   owner's session) and an owner's prefix reachable behind more than one
+   attachment point (local or through exactly one session).
+9. Every office behind an SD-WAN gateway registers something. An office with an
+   `sdwan_gateway` needs at least one `lan_prefixes` entry or a segment it
+   hosts (the same registrations as the edge reads, office_registered):
+   otherwise the gateway session accepts nothing of it and the office is
+   unreachable from the rest of its owner's network.
 
 A missing evpn_rt_as on an eBGP-overlay fabric is checked by CheckEvpnFabric.
 """
@@ -70,9 +80,9 @@ from typing import Any, NamedTuple
 
 from transforms.helpers.bgp_external import (
     get_onprem_prefixes,
-    office_lans_by_gateway,
+    office_registered,
+    registered_by_attachment,
     registered_by_namespace,
-    vif_registered_blocks,
 )
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import INTERNET_TYPE, PROD_TYPE, namespace_type_for_environment
@@ -120,16 +130,17 @@ class CheckRoutingInvariants(WarningCheck):
         vif_types = self._validate_vif_circuits(cleaned.get("CloudVirtualInterface") or [])
         self._validate_tgw_route_tables(cleaned.get("CloudTransitGatewayAttachment") or [], vif_types)
         networks = cleaned.get("CloudVirtualNetwork") or []
-        aggregates = _vpc_aggregates(networks) + _office_aggregates(cleaned.get("TopologyCustomerOffice") or [])
+        offices = cleaned.get("TopologyCustomerOffice") or []
+        tunnels = cleaned.get("TopologyTunnelCircuit") or []
+        aggregates = _vpc_aggregates(networks) + _office_aggregates(offices) + _tunnel_aggregates(tunnels)
         self._validate_aggregate_namespaces(aggregates)
         self._validate_subnets_in_vpc(networks, cleaned.get("CloudNetworkSegment") or [])
         self._validate_aggregate_overlaps(aggregates, cleaned.get("ManagedNetworkSegment") or [])
-        self._validate_registered_prefix_owners(networks, cleaned.get("TopologyCustomerOffice") or [])
+        self._validate_registered_prefix_owners(networks, offices, tunnels)
         self._validate_ownership_conflicts(
-            cleaned.get("ManagedNetworkSegment") or [],
-            cleaned.get("TopologyCustomerOffice") or [],
-            cleaned.get("CloudVirtualInterface") or [],
+            cleaned.get("ManagedNetworkSegment") or [], offices, tunnels, cleaned.get("CloudVirtualInterface") or []
         )
+        self._validate_offices_register(offices)
 
     # ------------------------------------------------------------------
     # 1. L3 VNI sharing
@@ -337,20 +348,30 @@ class CheckRoutingInvariants(WarningCheck):
     # 7. Registered-prefix owners are customers
     # ------------------------------------------------------------------
 
-    def _validate_registered_prefix_owners(self, networks: list[dict[str, Any]], offices: list[dict[str, Any]]) -> None:
-        registrants = [
-            (
-                f"VPC '{network.get('name')}' registers blocks, but its account "
-                f"'{(network.get('account') or {}).get('name')}'",
-                (network.get("account") or {}).get("owner"),
-            )
-            for network in networks
-            if network.get("cidr_blocks")
-        ] + [
-            (f"office '{office.get('name')}' registers LANs or hosts segments, but it", office.get("owner"))
-            for office in offices
-            if office.get("lan_prefixes") or office.get("network_segments")
-        ]
+    def _validate_registered_prefix_owners(
+        self, networks: list[dict[str, Any]], offices: list[dict[str, Any]], tunnels: list[dict[str, Any]]
+    ) -> None:
+        registrants = (
+            [
+                (
+                    f"VPC '{network.get('name')}' registers blocks, but its account "
+                    f"'{(network.get('account') or {}).get('name')}'",
+                    (network.get("account") or {}).get("owner"),
+                )
+                for network in networks
+                if network.get("cidr_blocks")
+            ]
+            + [
+                (f"office '{office.get('name')}' registers LANs or hosts segments, but it", office.get("owner"))
+                for office in offices
+                if office.get("lan_prefixes") or office.get("network_segments")
+            ]
+            + [
+                (f"tunnel '{tunnel.get('name')}' registers prefixes, but it", tunnel.get("owner"))
+                for tunnel in tunnels
+                if tunnel.get("registered_prefixes")
+            ]
+        )
         for subject, owner in registrants:
             if customer_owner(owner) is None:
                 self.log_error(
@@ -365,28 +386,39 @@ class CheckRoutingInvariants(WarningCheck):
     # ------------------------------------------------------------------
 
     def _validate_ownership_conflicts(
-        self, segments: list[dict[str, Any]], offices: list[dict[str, Any]], vifs: list[dict[str, Any]]
+        self,
+        segments: list[dict[str, Any]],
+        offices: list[dict[str, Any]],
+        tunnels: list[dict[str, Any]],
+        vifs: list[dict[str, Any]],
     ) -> None:
         # namespace -> attachment point -> owner -> prefixes, read as the edge reads them.
         learned: dict[str, dict[str, dict[str, set[str]]]] = {}
-
-        def attach(point: str, registered: list[tuple[str | None, dict[str, Any]]]) -> None:
+        for point, registered in registered_by_attachment(offices, tunnels, vifs).items():
             for namespace, by_owner in registered_by_namespace(registered).items():
                 behind = learned.setdefault(namespace, {}).setdefault(point, {})
                 for owner, prefixes in by_owner.items():
                     behind.setdefault(owner, set()).update(prefixes)
 
-        for gateway, registered in office_lans_by_gateway(offices).items():
-            attach(f"SD-WAN gateway '{gateway}'", registered)
-        for vif in vifs:
-            circuit = (vif.get("virtual_circuit") or {}).get("name")
-            if circuit:
-                attach(f"handoff circuit '{circuit}'", vif_registered_blocks(vif))
-
         onprem = get_onprem_prefixes(segments)
         for namespace in sorted(set(onprem) | set(learned)):
             for conflict in ownership_conflicts(onprem.get(namespace, {}), learned.get(namespace, {})):
                 self.log_error(message=f"Namespace '{namespace}': {conflict.message}")
+
+    # ------------------------------------------------------------------
+    # 9. An office behind an SD-WAN gateway registers something
+    # ------------------------------------------------------------------
+
+    def _validate_offices_register(self, offices: list[dict[str, Any]]) -> None:
+        for office in offices:
+            gateway = (office.get("sdwan_gateway") or {}).get("name")
+            if gateway and not office_registered(office):
+                self.log_error(
+                    message=(
+                        f"office '{office.get('name')}' sits behind SD-WAN gateway '{gateway}' but registers no "
+                        "prefix (no lan_prefixes, no segment it hosts): the gateway session accepts nothing of it"
+                    )
+                )
 
 
 def _vpc_aggregates(networks: list[dict[str, Any]]) -> list[_Aggregate]:
@@ -416,6 +448,21 @@ def _office_aggregates(offices: list[dict[str, Any]]) -> list[_Aggregate]:
         )
         for office in offices
         for prefix in office.get("lan_prefixes") or []
+    ]
+
+
+def _tunnel_aggregates(tunnels: list[dict[str, Any]]) -> list[_Aggregate]:
+    """Each tunnel registered_prefixes entry, expected in the PROD namespace (a tunnel is production)."""
+    return [
+        _Aggregate(
+            owner=f"tunnel '{tunnel.get('name')}'",
+            noun="registered prefix",
+            origin="its being a tunnel (always production)",
+            expected=PROD_TYPE,
+            prefix=prefix,
+        )
+        for tunnel in tunnels
+        for prefix in tunnel.get("registered_prefixes") or []
     ]
 
 

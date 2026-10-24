@@ -19,6 +19,7 @@ import yaml
 
 from generators.logger import GeneratorError
 from generators.topology.sdwan_edge import _INTERNET_PROVIDER_ORG_ID, _OVERLAY_PROVIDER_ORG_ID, SdwanEdgeGenerator
+from utils.data_cleaning import clean_data
 
 _USE_DEFAULT_GATEWAY: Literal["__default__"] = "__default__"
 
@@ -78,7 +79,10 @@ def _office_payload(
     office_name: str = "C002-OFFICE",
     owner_id: str | None = "org-c002",
     gateway: dict[str, Any] | None | Literal["__default__"] = _USE_DEFAULT_GATEWAY,
+    lan_prefix_ids: tuple[str, ...] = ("lan-1",),
+    fabric_template_ids: tuple[str, ...] = (),
 ) -> dict[str, Any]:
+    """The query payload; the office already has a LAN unless ``lan_prefix_ids`` is empty."""
     if gateway == _USE_DEFAULT_GATEWAY:
         gateway = _gateway()
     # clean_data() collapses a single-key {"id": x} dict to the bare string x
@@ -87,17 +91,30 @@ def _office_payload(
     # (matching what customer_office_sdwan.gql actually fetches: id + name)
     # or it silently stops being a dict.
     owner = {"id": owner_id, "name": "SwiftGo GmbH"} if owner_id else None
-    return {
-        "TopologyCustomerOffice": [
-            {
-                "id": office_id,
-                "name": office_name,
-                "branch_to_branch": "full_mesh",
-                "owner": owner,
-                "sdwan_gateway": gateway,
+
+    def relationship(ids: tuple[str, ...]) -> dict[str, Any]:
+        """A many-relationship as the GraphQL response carries it, before clean_data."""
+        return {"edges": [{"node": {"id": node_id}} for node_id in ids]}
+
+    return clean_data(
+        {
+            "TopologyCustomerOffice": {
+                "edges": [
+                    {
+                        "node": {
+                            "id": office_id,
+                            "name": {"value": office_name},
+                            "branch_to_branch": {"value": "full_mesh"},
+                            "lan_prefixes": relationship(lan_prefix_ids),
+                            "fabric_templates": relationship(fabric_template_ids),
+                            "owner": {"node": owner},
+                            "sdwan_gateway": {"node": gateway},
+                        }
+                    }
+                ]
             }
-        ]
-    }
+        }
+    )
 
 
 def _providers(internet_id: str = "provider-inet", overlay_id: str = "provider-overlay") -> list[Any]:
@@ -701,6 +718,175 @@ class TestGenerateFailurePaths:
 
         with pytest.raises(RuntimeError, match="server rejected the edge"):
             await gen.generate(_office_payload())
+
+
+def _wire_office_lan_run(
+    *, pools: list[Any] | None = None, prefix_value: str | None = "10.176.0.0/24"
+) -> tuple[SdwanEdgeGenerator, Any]:
+    """A generator wired for a full first run whose last lookup is the tenant pool, and its allocation.
+
+    No orchestrator manages the gateway, so the lookups after the edge are the ISP's, then the pool's. Returns the
+    generator and the office node the LAN is attached through (the fourth create).
+    """
+    gen = _make_gen()
+    office_node = _node("office-1")
+    gen.client.create = AsyncMock(side_effect=[_node("edge-1"), _node("inet-1"), _node("tunnel-1"), office_node])
+    edge_uplink = MagicMock(id="edge-uplink-1")
+    edge_uplink.name.value = "GE1"
+    gen.client.filters = AsyncMock(
+        side_effect=[
+            _providers(),
+            [],
+            [MagicMock(id="template-1")],
+            [edge_uplink],
+            *_isp_lookups(),
+            [],
+            [MagicMock(id="pool-1")] if pools is None else pools,
+        ]
+    )
+    allocated = None
+    if prefix_value is not None:
+        allocated = MagicMock(id="lan-new")
+        allocated.prefix.value = prefix_value
+    gen.client.allocate_next_ip_prefix = AsyncMock(return_value=allocated)
+    return gen, office_node
+
+
+class TestOfficeLan:
+    """An office with neither lan_prefixes nor fabric_templates gets one /24 from Tenant-PROD-IPv4, once."""
+
+    @pytest.mark.asyncio
+    async def test_office_without_lan_gets_a_prefix_attached_to_lan_prefixes(self) -> None:
+        """The /24 comes from the PROD tenant pool and is attached to the office alone, untracked."""
+        gen, office_node = _wire_office_lan_run()
+
+        await gen.generate(_office_payload(office_name="C001-OFFICE", lan_prefix_ids=()))
+
+        assert gen.client.filters.await_args_list[-1].kwargs["name__value"] == "Tenant-PROD-IPv4"
+        gen.client.allocate_next_ip_prefix.assert_awaited_once()
+        kwargs = gen.client.allocate_next_ip_prefix.await_args.kwargs
+        assert kwargs["resource_pool"].id == "pool-1"
+        assert kwargs["identifier"] == "office-lan__C001-OFFICE"
+        assert kwargs["data"]["status"] == "active"
+        assert "C001-OFFICE" in kwargs["data"]["description"]
+        attach = gen.client.create.await_args_list[-1].kwargs
+        assert attach["kind"].__name__ == "TopologyCustomerOffice"
+        assert attach["data"] == {"id": "office-1", "lan_prefixes": [{"id": "lan-new"}]}
+        office_node.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
+
+    @pytest.mark.asyncio
+    async def test_allocation_and_attach_run_under_one_lock_keyed_by_the_pool(self) -> None:
+        """Pool allocation and the office write are bracketed by a lock named after the pool."""
+        gen, _ = _wire_office_lan_run()
+        events: list[str] = []
+        recorder: Any = gen
+        recorder.client.allocate_next_ip_prefix.side_effect = lambda **_: (
+            events.append("allocate") or MagicMock(id="lan-new")
+        )
+
+        await gen.generate(_office_payload(lan_prefix_ids=()))
+
+        assert "office-lan-Tenant-PROD-IPv4" in recorder.locked_keys
+        # The lock events of the underlay circuit come first; the LAN's bracket is the last lock/unlock pair.
+        assert recorder.events[-2:] == ["lock", "unlock"]
+        assert events == ["allocate"]
+
+    @pytest.mark.asyncio
+    async def test_office_with_lan_prefixes_is_left_alone(self) -> None:
+        """A hand-authored LAN (C002's) is kept: no pool lookup, no allocation, no extra write."""
+        gen, _ = _wire_office_lan_run()
+        payload = _office_payload(lan_prefix_ids=("lan-1",))
+        gen.client.filters.side_effect = list(gen.client.filters.side_effect)[:-1]
+
+        await gen.generate(payload)
+
+        gen.client.allocate_next_ip_prefix.assert_not_called()
+        assert gen.client.create.await_count == 3
+        assert all("Tenant-PROD-IPv4" not in str(call) for call in gen.client.filters.await_args_list)
+
+    @pytest.mark.asyncio
+    async def test_office_with_a_fabric_is_left_alone(self) -> None:
+        """An office hosting segments registers through them: it gets no LAN of its own."""
+        gen, _ = _wire_office_lan_run()
+        gen.client.filters.side_effect = list(gen.client.filters.side_effect)[:-1]
+
+        await gen.generate(_office_payload(lan_prefix_ids=(), fabric_template_ids=("elem-1", "elem-2")))
+
+        gen.client.allocate_next_ip_prefix.assert_not_called()
+        assert gen.client.create.await_count == 3
+
+    @pytest.mark.asyncio
+    async def test_office_without_a_gateway_gets_no_lan(self) -> None:
+        """No sdwan_gateway: the office did not opt in, so nothing is allocated for it."""
+        gen, _ = _wire_office_lan_run()
+
+        await gen.generate(_office_payload(gateway=None, lan_prefix_ids=()))
+
+        gen.client.allocate_next_ip_prefix.assert_not_called()
+        gen.client.filters.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_missing_tenant_pool_fails_loudly_before_allocating(self) -> None:
+        """No Tenant-PROD-IPv4 (bootstrap not loaded) is a failed run, not a silent skip."""
+        gen, office_node = _wire_office_lan_run(pools=[])
+
+        with pytest.raises(GeneratorError, match="Tenant-PROD-IPv4 not found"):
+            await gen.generate(_office_payload(office_name="C001-OFFICE", lan_prefix_ids=()))
+
+        getattr(gen, "logger").error.assert_called_once()
+        gen.client.allocate_next_ip_prefix.assert_not_called()
+        office_node.save.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_pool_returning_no_prefix_fails_and_attaches_nothing(self) -> None:
+        """An allocation that yields nothing fails the run before the office is written."""
+        gen, office_node = _wire_office_lan_run(prefix_value=None)
+
+        with pytest.raises(GeneratorError, match="returned no prefix"):
+            await gen.generate(_office_payload(lan_prefix_ids=()))
+
+        assert gen.client.create.await_count == 3
+        office_node.save.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_allocation_error_propagates(self) -> None:
+        """An exhausted pool (an SDK error) fails the task instead of leaving the office without a LAN, green."""
+        gen, office_node = _wire_office_lan_run()
+        gen.client.allocate_next_ip_prefix.side_effect = RuntimeError("pool exhausted")
+
+        with pytest.raises(RuntimeError, match="pool exhausted"):
+            await gen.generate(_office_payload(lan_prefix_ids=()))
+
+        office_node.save.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_failed_attach_propagates(self) -> None:
+        """A rejected office write fails the run; the retry reuses the same prefix through the identifier."""
+        gen, office_node = _wire_office_lan_run()
+        office_node.save.side_effect = RuntimeError("server rejected the office")
+
+        with pytest.raises(RuntimeError, match="server rejected the office"):
+            await gen.generate(_office_payload(lan_prefix_ids=()))
+
+    def test_query_reads_the_relationships_the_rule_depends_on(self) -> None:
+        """customer_office_sdwan.gql selects lan_prefixes and fabric_templates, or the skip rules never see them."""
+        query = (Path(__file__).parents[2] / "queries" / "topology" / "add" / "customer_office_sdwan.gql").read_text()
+
+        assert "lan_prefixes" in query
+        assert "fabric_templates" in query
+
+    def test_tenant_prod_pool_allocates_a_24_in_the_prod_namespace(self) -> None:
+        """Tenant-PROD-IPv4 (bootstrap) hands out /24s inside the PROD namespace, what a LAN is."""
+        path = Path(__file__).parents[2] / "data" / "bootstrap" / "23b_tenant_pools.yml"
+        pools = {
+            entry["name"]: entry
+            for doc in yaml.safe_load_all(path.read_text())
+            if doc and doc["spec"]["kind"] == "CoreIPPrefixPool"
+            for entry in doc["spec"]["data"]
+        }
+
+        assert pools["Tenant-PROD-IPv4"]["default_prefix_length"] == 24
+        assert pools["Tenant-PROD-IPv4"]["ip_namespace"] == "PROD"
 
 
 class TestHardCodedProviderIds:

@@ -208,8 +208,10 @@ def test_the_partner_tunnel_leaves_no_gateway_sub_interface_and_the_security_pol
         if rule["name"] == "nordix-prod-to-partner-acme"
     ]
     assert _PARTNER_TUNNEL in rule["description"]
-    assert rule["destination_prefixes"] == [["198.18.0.0/24", "default"]]
-    assert "198.18.0.0/24" in {p.item["prefix"] for p in declared("IpamPrefix", _ALL)}
+    assert rule["destination_prefixes"] == [["198.18.0.0/24", "PROD"]]
+    assert ("198.18.0.0/24", "PROD") in {
+        (p.item["prefix"], p.item.get("ip_namespace", "default")) for p in declared("IpamPrefix", _ALL)
+    }
 
 
 # ---------------------------------------------------------------------------

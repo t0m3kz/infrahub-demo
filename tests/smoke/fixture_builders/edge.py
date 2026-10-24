@@ -408,6 +408,7 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
             segment_prefix("10.8.2.0/24", "PROD", "prod", owner=_customer("C002")),
             segment_prefix("10.176.5.0/24", "PROD", "prod", owner=_customer("C005")),
             segment_prefix("10.9.1.0/24", "PROD", "prod", owner=_customer("C001")),
+            segment_prefix("10.9.9.0/24", "PROD", "prod", owner=_customer("C009")),
             segment_prefix("10.6.10.0/24", "NON-PROD", "non_prod", owner=_customer("C003")),
             segment_prefix("10.6.20.0/24", "NON-PROD", "non_prod", owner=_customer("C015")),
             segment_prefix("10.6.30.0/24", "NON-PROD", "non_prod", owner=_customer("C002")),
@@ -535,6 +536,26 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
             office(gw1, _PROVIDER, ("10.210.7.0/24", "PROD")),
             office("EQX-AM5-SDWAN-GW1", _customer("C002"), ("10.210.9.0/24", "PROD")),
             office(None, _customer("C002"), ("10.210.15.0/24", "PROD")),
+        ]
+    )
+
+    def tunnel(owner: dict, prefixes: tuple[tuple[str, str], ...], *ends: str) -> dict:
+        """A tunnel circuit: its owner, the (prefix, namespace) pairs it registers and the device of each end port."""
+        return {
+            "owner": owner,
+            "registered_prefixes": _cidr_blocks(*prefixes),
+            "capabilities": _edges([{"device": _node({"name": _v(end)})} for end in ends]),
+        }
+
+    # The tunnels registering space behind a gateway: C001's partner range behind GW1 (accepted from GW1's
+    # session, announced to C001's other sessions), a provider-owned one (never accepted), a NON-PROD one
+    # (not the PROD session's) and the office's own inventory tunnel, which registers nothing.
+    data["TopologyTunnelCircuit"] = _edges(
+        [
+            tunnel(_customer("C001"), (("198.18.0.0/24", "PROD"),), gw1, "EXT-ACME-EDGE1"),
+            tunnel(_PROVIDER, (("198.19.0.0/24", "PROD"),), gw1, "EXT-PARTNER-EDGE1"),
+            tunnel(_customer("C001"), (("198.20.0.0/24", "NON-PROD"),), gw1, "EXT-PARTNER-EDGE2"),
+            tunnel(_customer("C002"), (), gw1, "C002-OFFICE-EDGE1"),
         ]
     )
     return data

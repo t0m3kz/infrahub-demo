@@ -5,6 +5,20 @@ query customer_office_sdwan($name: String!) {
         id
         name { value }
         branch_to_branch { value }
+        lan_prefixes {
+          edges {
+            node {
+              id
+            }
+          }
+        }
+        fabric_templates {
+          edges {
+            node {
+              id
+            }
+          }
+        }
         owner {
           node {
             id
