@@ -216,6 +216,34 @@ def test_references_defined_checks_prefix_lists_used_by_route_maps() -> None:
     assert nxos_references_defined(ipv6) == []
 
 
+COMMUNITY_LIST_USES = ["  set comm-list CL-X delete", "  match community CL-X"]
+
+
+@pytest.mark.parametrize("use", COMMUNITY_LIST_USES)
+def test_references_defined_flags_undefined_community_list(use: str) -> None:
+    """`set comm-list X delete` and `match community X` need a column-0 `ip community-list` named X."""
+    text = f"route-map RM-X permit 10\n{use}\n"
+    for rule in (nxos_references_defined, eos_references_defined):
+        assert [("community-list CL-X" in v.message) for v in rule(text)] == [True]
+
+
+@pytest.mark.parametrize("use", COMMUNITY_LIST_USES)
+@pytest.mark.parametrize(
+    "definition",
+    [
+        "ip community-list expanded CL-X permit ^64496:[0-9]+$",
+        "ip community-list standard CL-X permit 64496:5",
+        "ip community-list regexp CL-X permit ^64496:[0-9]+$",
+        "ip community-list CL-X permit 64496:5",
+    ],
+)
+def test_references_defined_passes_defined_community_list(use: str, definition: str) -> None:
+    """Every documented definition form (NX-OS expanded/standard, EOS regexp/plain) defines the list."""
+    text = f"{definition}\nroute-map RM-X permit 10\n{use}\n"
+    for rule in (nxos_references_defined, eos_references_defined):
+        assert rule(text) == []
+
+
 def test_references_defined_ignores_comments_and_route_map_definitions() -> None:
     """A `!` comment mentioning route-map, or a definition line itself, is not a use."""
     text = "! Configure route-maps\n  ! route-map NOPE in\nroute-map RM-X permit 10\nroute-map RM-Y deny 5\n"

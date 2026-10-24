@@ -11,6 +11,8 @@ spec:
   data:
     - name: "Dathrex AG"
       org_id: "C014"
+      member_of_groups:
+        - customers
       network_segments:
         - kind: ManagedVlanSegment
           data:

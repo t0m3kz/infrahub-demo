@@ -558,6 +558,22 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
+    resource_name: routing_tags
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/routing_tags.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: customer_routing_tag
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/customer_routing_tag.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
     resource_name: reference_fabric
     tests:
       - name: syntax_check

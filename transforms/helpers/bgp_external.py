@@ -6,13 +6,14 @@ exchange rule in ``utils/ownership.py``.
 """
 
 import logging
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from ipaddress import ip_address
 from typing import Any
 
 from transforms.helpers.bgp import _peering_ends
 from utils.exchange_transit import EXCHANGE_PEERS
 from utils.ownership import customer_owner, exchange_policies, ownership_conflicts
+from utils.routing_identity import customer_community, list_name_part
 
 _log = logging.getLogger(__name__)
 
@@ -278,6 +279,8 @@ def get_external_session_policies(
     onprem_prefixes: dict[str, dict[str, list[str]]],
     *,
     device_name: str = "",
+    customer_tags: Mapping[str, int] | None = None,
+    routing_identity: bool = False,
 ) -> dict[str, dict[str, Any]]:
     """Handoff sub-interface name -> the prefix policy of its external session.
 
@@ -295,6 +298,14 @@ def get_external_session_policies(
     prefixes only; a session with no owner has empty lists and the template
     renders deny-all both ways, a sub-interface without a namespace exchanges
     with nothing.
+
+    With ``routing_identity`` (any customer or segment carries a routing tag, utils/routing_identity.py
+    identity_in_use) a policy also has ``identity: True`` (the template strips our communities from what it
+    sends and accepts) and ``in_owners``: one entry per owner with an accepted prefix, sorted, as ``owner``,
+    ``name`` (the owner, safe in a prefix-list name), ``prefixes`` and ``community`` (the owner's
+    ``64496:<tag>`` from ``customer_tags``, None when it has no tag). The inbound community is set per
+    prefix through the owner that registered it, so a session with several owners tags each correctly.
+    Without ``routing_identity`` the policy is exactly the three fields above.
     """
     namespaces = {
         iface.get("name"): ((iface.get("ip_address") or {}).get("ip_namespace") or {}).get("name")
@@ -317,4 +328,20 @@ def get_external_session_policies(
                 "in": _sorted_prefixes(policy["in"]),
                 "out": _sorted_prefixes(policy["out"]),
             }
+            if routing_identity:
+                policies[name].update(identity=True, in_owners=_in_owners(learned[name], customer_tags or {}))
     return {name: policies[name] for name in peer_prefixes}
+
+
+def _in_owners(by_owner: Mapping[str, list[str]], customer_tags: Mapping[str, int]) -> list[dict[str, Any]]:
+    """The inbound policy entries of one session: its owners with a prefix, each with its customer community."""
+    return [
+        {
+            "owner": owner,
+            "name": list_name_part(owner),
+            "prefixes": _sorted_prefixes(prefixes),
+            "community": customer_community(customer_tags[owner]) if owner in customer_tags else None,
+        }
+        for owner, prefixes in sorted(by_owner.items())
+        if prefixes
+    ]

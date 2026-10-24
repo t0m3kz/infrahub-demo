@@ -9,3 +9,5 @@ spec:
   data:
     - name: "Nordix Ltd."
       org_id: "C001"
+      member_of_groups:
+        - customers

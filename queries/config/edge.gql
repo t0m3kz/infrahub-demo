@@ -160,6 +160,7 @@ query edge_config($device: String!) {
     edges {
       node {
         status { value }
+        routing_tag { value }
         owner { node { __typename org_id { value } display_label } }
         gateway {
           node {
@@ -262,6 +263,20 @@ query edge_config($device: String!) {
         owner { node { __typename org_id { value } display_label } }
         registered_prefixes { edges { node { prefix { value } ip_namespace { node { name { value } } } } } }
         capabilities { edges { node { device { node { name { value } } } } } }
+      }
+    }
+  }
+
+  # The customers' routing tags: an external session's inbound policy sets the community 64496:<tag> of the
+  # customer that registered each accepted prefix (transforms/helpers/bgp_external.py, utils/routing_identity.py).
+  # One root rather than a selection on every owner above (those are generic OrganizationEntity peers);
+  # keyed like utils/ownership.py customer_owner: org_id, else display_label.
+  OrganizationCustomer {
+    edges {
+      node {
+        org_id { value }
+        display_label
+        routing_tag { value }
       }
     }
   }

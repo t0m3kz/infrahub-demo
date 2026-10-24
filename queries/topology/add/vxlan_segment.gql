@@ -11,6 +11,8 @@ query vxlan_segment_data($name: String!) {
         # means nothing is written (generators/helpers/security_tag.py).
         gateway { node { ip_prefix { node { ip_namespace { node { name { value } namespace_type { value } } } } } } }
         security_tag { node { id } }
+        # Its routing tag, likewise (generators/helpers/routing_tag.py).
+        routing_tag { value }
         stretch_scope { value }
         arp_suppression { value }
         terminate_inline { value }

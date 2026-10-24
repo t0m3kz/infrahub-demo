@@ -18,6 +18,8 @@ spec:
   data:
     - name: "Drentec BV"
       org_id: "C005"
+      member_of_groups:
+        - customers
       network_segments:
         - kind: ManagedVxlanSegment
           data:

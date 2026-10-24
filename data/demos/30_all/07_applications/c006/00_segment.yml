@@ -13,6 +13,8 @@ spec:
   data:
     - name: "Lumivex SA"
       org_id: "C006"
+      member_of_groups:
+        - customers
       network_segments:
         - kind: ManagedVxlanSegment
           data:

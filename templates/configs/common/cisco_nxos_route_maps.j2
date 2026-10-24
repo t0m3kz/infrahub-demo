@@ -41,6 +41,21 @@ ip prefix-list PL-XCHG-TRANSIT seq {{ loop.index * 10 }} permit {{ prefix }}
 route-map RM-VRF-DIRECT-2-EVPN deny 5
   match ip address prefix-list PL-XCHG-TRANSIT
 {%- endif %}
-route-map RM-VRF-DIRECT-2-EVPN permit 10
+{#- Routing identity (utils/routing_identity.py): a tagged segment's SVI prefix leaves the VRF carrying its customer
+    and segment communities. One sequence per tagged segment, ahead of the catch-all (numbered after them, so it is
+    `permit 10` when no segment is tagged). A tag is visibility only: nothing matches on it, the prefix-lists stay
+    the gate. D: Cisco Nexus 9000 Unicast Routing guide, `set community <aa:nn> ... additive` in a route-map. #}
+{%- if origination %}
+! Routing identity: customer and segment communities on the originated segment prefixes
+{%- for entry in origination %}
+ip prefix-list PL-ORIG-{{ entry.name }} seq 10 permit {{ entry.prefix }}
+{%- endfor %}
+{%- for entry in origination %}
+route-map RM-VRF-DIRECT-2-EVPN permit {{ loop.index * 10 }}
+  match ip address prefix-list PL-ORIG-{{ entry.name }}
+  set community {{ entry.communities | join(' ') }} additive
+{%- endfor %}
+{%- endif %}
+route-map RM-VRF-DIRECT-2-EVPN permit {{ ((origination | default([]) | length) + 1) * 10 }}
 !
 {%- endif -%}

@@ -28,6 +28,9 @@ spec:
     - name: run-vxlan-segment-generator
       description: Run VXLAN Segment Generator
       generator: add_vxlan_segment
+    - name: run-customer-routing-tag-generator
+      description: Give a new customer its routing tag (the number behind its community)
+      generator: add_customer_routing_tag
     - name: mlag-generator
       description: Create MLAG peer-link interfaces and cables for an MLAG domain
       generator: add_mlag

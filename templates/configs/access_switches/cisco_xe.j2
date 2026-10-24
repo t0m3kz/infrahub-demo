@@ -1,3 +1,4 @@
 {#- IOS-XE office access-switch: the leaf template. The `lisp` context (transforms/common.py, OFFICE_LISP_ROLES) makes it
-    the LISP edge of the office site (ITR/ETR, tenant SVIs with `lisp mobility`) over the OSPF underlay. -#}
+    the LISP edge of the office site (ITR/ETR, tenant SVIs with `lisp mobility`) over the OSPF underlay.
+    Routing identity communities are not rendered on this platform yet (leafs/cisco_xe.j2). -#}
 {%- include 'leafs/cisco_xe.j2' -%}

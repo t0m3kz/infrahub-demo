@@ -21,6 +21,7 @@ from transforms.helpers.firewall_pbr import get_customer_pbr_rules
 from transforms.helpers.group_policy import GPO_CONFIG_KEYS, group_policy_device_view
 from transforms.helpers.lisp import build_lisp_inputs, get_lisp_config
 from transforms.helpers.mlag import get_mlag, get_sonic_mlag_config
+from transforms.helpers.origination import get_origination
 from transforms.helpers.ospf import get_ospf, refuse_unrenderable_ospf_auth
 from transforms.helpers.overlay import OVERLAY_CONFIG_KEYS, OVERLAY_RENDERERS
 from transforms.helpers.segments import get_vlans, routed_activations, segment_hosting_candidates
@@ -496,6 +497,11 @@ class BaseDeviceTransform(InfrahubTransform):
             # The leaf's own transit /29s: kept out of the direct-to-EVPN redistribution
             # so only the borders originate them as type-5 routes.
             "leaf_transit_prefixes": sorted({t["segment"]["gateway"]["ip_prefix"]["prefix"] for t in leaf_transits}),
+            # The tagged segments' SVI prefixes with the routing-identity communities their EVPN export adds
+            # (transforms/helpers/origination.py); empty, so every template renders as before, without tags.
+            "origination": get_origination(
+                activations, [mapping["vrf_name"] for mapping in (vxlan or {}).get("l3_vni_mappings", [])]
+            ),
         }
         if lisp is not None:
             config[OVERLAY_CONFIG_KEYS["lisp"]] = lisp

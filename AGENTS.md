@@ -311,7 +311,10 @@ class MyCheck(InfrahubCheck):
   Only the NX-OS edge renders these maps; anywhere else a transform refuses an external session
   (`BaseDeviceTransform.external_policy_platforms`), except a hosted `CloudNetworkAppliance` on cisco_ios/cisco_xe
   (`UNFILTERED_BANNER_PLATFORMS`): it renders an `UNFILTERED` comment above the session and logs a WARNING, because a
-  provider-hosted device must not fail its artifact. A handoff peering sends no communities.
+  provider-hosted device must not fail its artifact. A handoff peering sends no communities of its own; on the NX-OS
+  edge each external session's `RM-<session>-IN` deletes our two routing communities and then sets the owner's customer
+  community (the owner of a prefix, above), and `RM-<session>-OUT` strips ours, so an internal tag never leaves and an
+  outside party cannot forge one (see **Routing identity**).
 - **DC service tier**: `TopologyCustomerTemplateDC` (referenced by the footprint's `design`, for example `M_DC`)
   holds `dedicated_firewall`, `dedicated_loadbalancer`, `max_segments`, `ports_25g` and `ports_100g` (0 = no
   host-facing ports of that speed). `checks/customer_quota.py` enforces the segment and port numbers; a footprint
@@ -331,6 +334,17 @@ class MyCheck(InfrahubCheck):
   endpoint labels), `color` (the TIA-598 jacket colour of its `type`) and `length_cm`, derived from the suite layout
   (`rack_pitch_cm`, `row_pitch_cm`; `generators/helpers/cable_attributes.py`). The length is unset when an end is not
   in a rack or the ends are in different suites. Cables declared in data are not generated and stay unset.
+- **Routing identity**: `OrganizationCustomer.routing_tag` and `ManagedNetworkSegment.routing_tag` (Number 1..65534,
+  optional) are the numbers behind the standard communities `64496:<customer tag>` and `64497:<segment tag>`
+  (`utils/routing_identity.py` derives the strings, no community is stored, and no template re-derives them). They are
+  drawn from the Number pools `Customer-Routing-Tag` and `Segment-Routing-Tag`
+  (`data/bootstrap/19c_routing_tag_pools.yml`) by generators, never typed in data: `add_customer_routing_tag`
+  (created-trigger on the `customers` group, which every customer object declares) and, for a routed tenant segment,
+  `add_vxlan_segment` or the application generator (a VLAN segment is tagged only there, with its group tag). A
+  community is a tag for reading the routing table, NOT a security control: the model-derived prefix-lists stay the
+  gate and nothing filters on a community. A customer or segment without a tag renders no community.
+  `checks/routing_tags.py` requires a tag on each routed tenant segment and its owner, in range and unique. Not
+  `unique: true` in the schema: an optional attribute collides on the second unset value.
 - **Capability edges**: a capability reaches devices via `ManagedGenericDevice` and interfaces via
   `ManagedGenericInterfaces`. Inherit the second only when something reads the interface edge.
 

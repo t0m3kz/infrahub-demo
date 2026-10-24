@@ -16,6 +16,8 @@ spec:
   data:
     - name: "Quelion BV"
       org_id: "C012"
+      member_of_groups:
+        - customers
       network_segments:
         - kind: ManagedVlanSegment
           data:

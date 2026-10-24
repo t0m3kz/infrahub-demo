@@ -59,6 +59,7 @@ RERUN_GENERATORS = {
     "add_app_dependency": "app_dependencies",
     "add_app_component": "app_components",
     "add_vxlan_segment": "vxlan_segments",
+    "add_customer_routing_tag": "customers",
     "add_customer_deployment_dc": "customer_deployments_dc",
     "add_customer_deployment_colocation": "customer_deployments_colocation",
     "add_application_orchestrator_routing": "app_applications",
@@ -73,6 +74,7 @@ REQUIRED_RERUN_GENERATORS = {
     "add_app_application",
     "add_app_dependency",
     "add_vxlan_segment",
+    "add_customer_routing_tag",
     "add_customer_deployment_dc",
     "add_customer_deployment_colocation",
 }
@@ -144,10 +146,13 @@ query {
         security_zone { node { id } }
         security_policy { node { id } }
         security_tag { node { id } }
+        routing_tag { value }
         inbound_rules { edges { node { id } } }
       }
     }
   }
+  # The customer routing tag (Customer-Routing-Tag pool): a rerun that drew a second number is a diff.
+  OrganizationCustomer { edges { node { id routing_tag { value } } } }
   ManagedFirewallContext {
     edges {
       node {
@@ -264,9 +269,11 @@ def _snapshot(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
                 _peer_ids(n, "inbound_rules"),
                 _peer_id(n, "security_zone"),
                 _peer_id(n, "security_tag"),
+                _value(n, "routing_tag"),
             )
             for n in _nodes(result, "ManagedNetworkSegment")
         },
+        "OrganizationCustomer": {n["id"]: _value(n, "routing_tag") for n in _nodes(result, "OrganizationCustomer")},
         "ManagedFirewallContext": {
             n["id"]: (
                 _value(n, "name"),

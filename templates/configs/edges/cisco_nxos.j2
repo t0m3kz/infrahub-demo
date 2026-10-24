@@ -100,6 +100,22 @@ route-map RM-TRANSIT-OUT deny 10
     owners, never another customer's. Exact prefixes, no le/ge. A session with
     no registered customer owner accepts nothing and announces nothing
     (deny-all both ways). Evidence I: inferred, not lab-verified. -#}
+{#- Routing identity (utils/routing_identity.py), when any customer or segment carries a tag (policy.identity): a tag
+    is visibility, never the filter, so the prefix-lists below stay the gate. In: our two community ranges are
+    deleted from whatever the far end sends (it cannot forge an identity), then the community of the owner that
+    registered the accepted prefix is added; one sequence per owner, so a session with several owners tags each
+    prefix with its own. Out: our communities are deleted before the route leaves our administration.
+    Evidence I: inferred, not lab-verified. UNVERIFIED: the unquoted expanded-list expression and that
+    `set comm-list <list> delete` is applied before `set community ... additive` within one sequence.
+    Cisco Nexus 9000 Unicast Routing guide: `ip community-list expanded`, `set comm-list <list> delete`,
+    `set community <aa:nn> additive`. #}
+{%- set _identity = (external_policies | default({})).values() | selectattr('identity', 'defined') | selectattr('identity') | list %}
+{%- if _identity %}
+{%- for regex in routing_community_regexes %}
+ip community-list expanded CL-ROUTING-IDENTITY permit {{ regex }}
+{%- endfor %}
+!
+{%- endif %}
 {%- for bgp_config in bgp %}
 {%- for sessions in (bgp_config.vrf_sessions or {}).values() %}
 {%- for session in sessions if session.get('external') %}
@@ -112,6 +128,22 @@ route-map RM-TRANSIT-OUT deny 10
 {%- else %}
 ! {{ session.name }}: no registered customer owner, announces nothing and accepts nothing
 {%- endif %}
+{%- if _policy.get('identity') %}
+{%- for owner in _policy.in_owners %}
+{%- set _owner_seq = loop.index * 10 %}
+{%- for prefix in owner.prefixes %}
+ip prefix-list PL-{{ session.name }}-IN-{{ owner.name }} seq {{ loop.index * 10 }} permit {{ prefix }}
+{%- endfor %}
+route-map RM-{{ session.name }}-IN permit {{ _owner_seq }}
+  match ip address prefix-list PL-{{ session.name }}-IN-{{ owner.name }}
+  set comm-list CL-ROUTING-IDENTITY delete
+{%- if owner.community %}
+  set community {{ owner.community }} additive
+{%- endif %}
+{%- else %}
+route-map RM-{{ session.name }}-IN deny 10
+{%- endfor %}
+{%- else %}
 {%- for prefix in _in %}
 ip prefix-list PL-{{ session.name }}-IN seq {{ loop.index * 10 }} permit {{ prefix }}
 {%- endfor %}
@@ -121,12 +153,16 @@ route-map RM-{{ session.name }}-IN permit 10
 {%- else %}
 route-map RM-{{ session.name }}-IN deny 10
 {%- endif %}
+{%- endif %}
 {%- for prefix in _out %}
 ip prefix-list PL-{{ session.name }}-OUT seq {{ loop.index * 10 }} permit {{ prefix }}
 {%- endfor %}
 {%- if _out %}
 route-map RM-{{ session.name }}-OUT permit 10
   match ip address prefix-list PL-{{ session.name }}-OUT
+{%- if _policy.get('identity') %}
+  set comm-list CL-ROUTING-IDENTITY delete
+{%- endif %}
 route-map RM-{{ session.name }}-OUT deny 20
 {%- else %}
 route-map RM-{{ session.name }}-OUT deny 10

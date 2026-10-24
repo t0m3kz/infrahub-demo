@@ -116,6 +116,18 @@ generics:
             label: Microsegmented
             description: "Routed traffic always meets the leaf SVI ACL (even with a firewall); traffic inside the segment only through component group policy"  # yamllint disable-line rule:line-length
             color: "#9B59B6"
+      # Not `unique: true`: an optional attribute collides on the second unset value (a segment
+      # created by data has none until its generator draws it). The pool hands out distinct numbers
+      # and checks/routing_tags.py reports a duplicate.
+      - name: routing_tag
+        kind: Number
+        label: Routing Tag
+        optional: true
+        order_weight: 900
+        description: "Tag of the segment community 64497:<tag> on its routes (drawn from a pool, never typed)."
+        parameters:
+          min_value: 1
+          max_value: 65534
       - name: status
         kind: Dropdown
         optional: true

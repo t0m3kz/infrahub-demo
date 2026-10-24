@@ -57,6 +57,7 @@ ALL_DEMO_EXPECTED_GENERATORS: dict[str, int] = {
         "add_virtual_colocation",
         "add_endpoint",
         "add_vxlan_segment",
+        "add_customer_routing_tag",
         "add_app_application",
         "add_app_dependency",
         "add_customer_deployment_dc",
@@ -72,6 +73,14 @@ ALL_DEMO_EXPECTED_GENERATORS: dict[str, int] = {
         "add_virtual_colocation_orchestrator_routing",
     )
 }
+
+
+# The customers 30_all declares, by org_id: each is created on the branch, so the created-trigger of
+# add_customer_routing_tag fires for it and it must end up with a routing tag. Not the bootstrap Internet
+# pseudo-customer: it is created on main, where no trigger fires.
+ALL_DEMO_CUSTOMER_ORG_IDS: tuple[str, ...] = tuple(
+    sorted(str(customer.item["org_id"]) for customer in _all_demo("OrganizationCustomer"))
+)
 
 
 # Declared-object inventory of data/demos/30_all, counted from the YAML.

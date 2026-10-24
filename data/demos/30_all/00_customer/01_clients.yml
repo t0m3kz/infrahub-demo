@@ -6,41 +6,81 @@ spec:
   data:
     - name: "Nordix Ltd."
       org_id: "C001"
+      member_of_groups:
+        - customers
     - name: "SwiftGo GmbH"
       org_id: "C002"
+      member_of_groups:
+        - customers
     - name: "Vaultex Inc."
       org_id: "C003"
+      member_of_groups:
+        - customers
     - name: "Peakora AG"
       org_id: "C004"
+      member_of_groups:
+        - customers
     - name: "Drentec BV"
       org_id: "C005"
+      member_of_groups:
+        - customers
     - name: "Lumivex SA"
       org_id: "C006"
+      member_of_groups:
+        - customers
     - name: "Orbisan Ltd."
       org_id: "C007"
+      member_of_groups:
+        - customers
     - name: "Krafven GmbH"
       org_id: "C008"
+      member_of_groups:
+        - customers
     - name: "Tavelo Inc."
       org_id: "C009"
+      member_of_groups:
+        - customers
     - name: "Zindra Corp."
       org_id: "C010"
+      member_of_groups:
+        - customers
     - name: "Flarex Ltd."
       org_id: "C011"
+      member_of_groups:
+        - customers
     - name: "Quelion BV"
       org_id: "C012"
+      member_of_groups:
+        - customers
     - name: "Mertova SA"
       org_id: "C013"
+      member_of_groups:
+        - customers
     - name: "Dathrex AG"
       org_id: "C014"
+      member_of_groups:
+        - customers
     - name: "Novantis GmbH"
       org_id: "C015"
+      member_of_groups:
+        - customers
     - name: "Prolexar Inc."
       org_id: "C016"
+      member_of_groups:
+        - customers
     - name: "Stelvix Ltd."
       org_id: "C017"
+      member_of_groups:
+        - customers
     - name: "Calduno BV"
       org_id: "C018"
+      member_of_groups:
+        - customers
     - name: "Wexford Corp."
       org_id: "C019"
+      member_of_groups:
+        - customers
     - name: "Bryntec SA"
       org_id: "C020"
+      member_of_groups:
+        - customers

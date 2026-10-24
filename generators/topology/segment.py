@@ -60,6 +60,7 @@ from utils.exchange_transit import OFFSET_ANYCAST, namespace_type_for_environmen
 from ..common import CommonGenerator
 from ..connections import CablingMixin
 from ..far_end import far_end_interfaces
+from ..helpers.routing_tag import ensure_segment_routing_tag
 from ..helpers.security_tag import ensure_segment_tag
 from ..helpers.security_zone import ensure_security_zone
 from ..pools import PoolMixin
@@ -157,6 +158,8 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, VlanDomainMixin, CommonGene
         # The segment's group tag (a routed tenant segment only), before any
         # segment lock is taken: the helper takes its own.
         await ensure_segment_tag(self.client, self.resource_lock, segment=segment)
+        # And its routing tag (the number of its segment community), same segments, one write when absent.
+        await ensure_segment_routing_tag(self.client, segment=segment)
 
         target_deployments = self._resolve_target_deployments(segment, segment_name)
         if not target_deployments:

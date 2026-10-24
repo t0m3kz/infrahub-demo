@@ -11,6 +11,9 @@ kind: Object
 spec:
   kind: OrganizationCustomer
   data:
+    # Not in the `customers` group on purpose: it owns the External segments, which are never routed tenant segments
+    # and carry no routing tag, and a bootstrap customer exists on main, where the created-trigger of
+    # add_customer_routing_tag never fires, so a member would only be tagged by a later rerun.
     - name: "Internet"
       org_id: "INTERNET"
 ---

@@ -63,17 +63,34 @@
 }}) -%}
 {%- endfor -%}
 
-{#- A leaf keeps its own exchange transit /29s out of EVPN. -#}
+{#- RM-VRF-CONN-2-EVPN, the route map of every VRF's `redistribute connected`: a leaf keeps its own exchange transit
+    /29s out of EVPN, and a tagged segment's SVI prefix gets the routing-identity communities (utils/routing_identity.py,
+    `origination`: customer first, then segment, with `additive`) before the catch-all, which is numbered after them
+    (`10` when no segment is tagged). A community is a tag for visibility, never a filter.
+    UNVERIFIED: ROUTE_MAP `set_community_inline` as a list with the `additive` item follows the frrcfgd route-map
+    schema of the SONiC yang model; not checked against a running device, like the keys above. -#}
 {%- set _transit_filter = not sonic_border and leaf_transit_prefixes | default([]) -%}
+{%- set _origination = origination | default([]) -%}
+{%- set _conn_filter = _transit_filter or _origination -%}
 {%- if _transit_filter -%}
 {%- set _ = prefix_set.update({'PL-XCHG-TRANSIT': {'mode': 'IPv4'}}) -%}
 {%- for prefix in leaf_transit_prefixes -%}
 {%- set _ = prefix_table.update({'PL-XCHG-TRANSIT|' ~ (loop.index * 10) ~ '|' ~ prefix ~ '|exact': {'action': 'permit'}}) -%}
 {%- endfor -%}
-{%- set _ = route_map.update({
-  'RM-VRF-CONN-2-EVPN|5': {'route_operation': 'deny', 'match_prefix_set': 'PL-XCHG-TRANSIT'},
-  'RM-VRF-CONN-2-EVPN|10': {'route_operation': 'permit'}
-}) -%}
+{%- set _ = route_map.update({'RM-VRF-CONN-2-EVPN|5': {'route_operation': 'deny', 'match_prefix_set': 'PL-XCHG-TRANSIT'}}) -%}
+{%- endif -%}
+{%- for entry in _origination -%}
+{%- set set_name = 'PL-ORIG-' ~ entry.name -%}
+{%- set _ = prefix_set.update({set_name: {'mode': 'IPv4'}}) -%}
+{%- set _ = prefix_table.update({set_name ~ '|10|' ~ entry.prefix ~ '|exact': {'action': 'permit'}}) -%}
+{%- set _ = route_map.update({('RM-VRF-CONN-2-EVPN|' ~ (loop.index * 10)): {
+  'route_operation': 'permit',
+  'match_prefix_set': set_name,
+  'set_community_inline': entry.communities + ['additive']
+}}) -%}
+{%- endfor -%}
+{%- if _conn_filter -%}
+{%- set _ = route_map.update({('RM-VRF-CONN-2-EVPN|' ~ ((_origination | length + 1) * 10)): {'route_operation': 'permit'}}) -%}
 {%- endif -%}
 
 {#- Per-VRF BGP instance: connected (and, on a border, exchange statics) into
@@ -90,7 +107,7 @@
 {%- set af_key = vrf ~ '|' ~ af ~ '_unicast' -%}
 {%- set af_entry = dict(bgp_globals_af.get(af_key) or {}) -%}
 {%- set _ = af_entry.update({'admin_status': 'true', 'redistribute_connected': 'true'}) -%}
-{%- if _transit_filter -%}
+{%- if _conn_filter -%}
 {%- set _ = af_entry.update({'route_map_redistribute_connected': 'RM-VRF-CONN-2-EVPN'}) -%}
 {%- endif -%}
 {%- if af == 'ipv4' and vrf in _static_vrfs -%}

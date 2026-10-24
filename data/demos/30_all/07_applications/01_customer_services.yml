@@ -9,5 +9,7 @@ spec:
   data:
     - name: "Nordix Ltd."
       org_id: C001
+      member_of_groups:
+        - customers
       egress_service: c001-web-gateway
       private_access_service: c001-private-access

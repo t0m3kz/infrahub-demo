@@ -13,7 +13,8 @@ NX-OS rules (platform ``nxos``):
   ``router bgp``.
 * ``nxos_references_defined``: every route-map named by a ``route-map X in|out``, ``redistribute ... route-map X``,
   ``ip policy route-map X`` or ``neighbor ... route-map X`` line is defined by a column-0 ``route-map X permit|deny``
-  line, and every ``match ip(v6) address prefix-list X`` names a column-0 ``ip(v6) prefix-list X`` definition.
+  line, every ``match ip(v6) address prefix-list X`` names a column-0 ``ip(v6) prefix-list X`` definition, and every
+  ``set comm-list X delete`` / ``match community X`` names a column-0 ``ip community-list [standard|expanded] X``.
 * ``nxos_definitions_before_bgp``: a reference made inside ``router bgp`` is defined before that ``router bgp`` line.
 
 Arista EOS rules (platform ``eos``):
@@ -41,6 +42,8 @@ _ANY_ROUTE_MAP_DEFINITION = re.compile(r"^route-map \S+ (?:permit|deny)\b")
 _ROUTE_MAP_REFERENCE = re.compile(r"\broute-map (\S+)")
 _PREFIX_LIST_DEFINITION = re.compile(r"^(?:ip|ipv6) prefix-list (\S+)")
 _PREFIX_LIST_REFERENCE = re.compile(r"^match (?:ip|ipv6) address prefix-list (\S+)")
+_COMMUNITY_LIST_DEFINITION = re.compile(r"^ip community-list (?:(?:standard|expanded|regexp) )?(\S+)")
+_COMMUNITY_LIST_REFERENCE = re.compile(r"^(?:set comm-list|match community) (\S+)")
 
 
 @dataclass(frozen=True)
@@ -159,19 +162,24 @@ def nxos_features_before_bgp(text: str) -> list[Violation]:
     ]
 
 
+_DEFINITIONS = {
+    "route-map": _ROUTE_MAP_DEFINITION,
+    "prefix-list": _PREFIX_LIST_DEFINITION,
+    "community-list": _COMMUNITY_LIST_DEFINITION,
+}
+
+
 def _undefined_references(text: str) -> list[tuple[int, str, str]]:
-    """The ``(line, kind, name)`` of every route-map or prefix-list referenced but never defined at column 0."""
-    route_maps = {m.group(1) for _, line in _column0_lines(text) if (m := _ROUTE_MAP_DEFINITION.match(line))}
-    prefix_lists = {m.group(1) for _, line in _column0_lines(text) if (m := _PREFIX_LIST_DEFINITION.match(line))}
-    return [
-        (number, kind, name)
-        for number, kind, name in _references(text)
-        if name not in (route_maps if kind == "route-map" else prefix_lists)
-    ]
+    """The ``(line, kind, name)`` of every route-map, prefix-list or community-list referenced but never defined."""
+    defined = {
+        kind: {m.group(1) for _, line in _column0_lines(text) if (m := pattern.match(line))}
+        for kind, pattern in _DEFINITIONS.items()
+    }
+    return [(number, kind, name) for number, kind, name in _references(text) if name not in defined[kind]]
 
 
 def _references(text: str) -> list[tuple[int, str, str]]:
-    """The ``(line, kind, name)`` of every route-map and prefix-list use (definitions and comments excluded)."""
+    """The ``(line, kind, name)`` of every route-map, prefix-list and community-list use (definitions and comments excluded)."""
     uses: list[tuple[int, str, str]] = []
     for number, raw in enumerate(text.splitlines(), start=1):
         line = raw.strip()
@@ -181,6 +189,8 @@ def _references(text: str) -> list[tuple[int, str, str]]:
             uses.append((number, "route-map", route_map.group(1)))
         if prefix_list := _PREFIX_LIST_REFERENCE.match(line):
             uses.append((number, "prefix-list", prefix_list.group(1)))
+        if community_list := _COMMUNITY_LIST_REFERENCE.match(line):
+            uses.append((number, "community-list", community_list.group(1)))
     return uses
 
 
@@ -205,6 +215,8 @@ def nxos_definitions_before_bgp(text: str) -> list[Violation]:
             definitions.setdefault(("route-map", m.group(1)), number)
         elif m := _PREFIX_LIST_DEFINITION.match(line):
             definitions.setdefault(("prefix-list", m.group(1)), number)
+        elif m := _COMMUNITY_LIST_DEFINITION.match(line):
+            definitions.setdefault(("community-list", m.group(1)), number)
     violations: list[Violation] = []
     for block in _bgp_blocks(text):
         inside = {number for number, _ in block.body}
