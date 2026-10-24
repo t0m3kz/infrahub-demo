@@ -121,11 +121,12 @@ class TestViolations:
             "(rule: every routed segment is tagged)"
         ]
 
-    def test_vlan_segment_is_held_to_the_same_rule(self) -> None:
-        errors, _ = _run([_customer("c-1", "C005", 12)], [_segment("c005-lan-p", None, kind="ManagedVlanSegment")])
+    def test_an_untagged_vlan_segment_is_reported_not_an_error(self) -> None:
+        """Only the application generator tags a VLAN segment: one no application uses is untagged by design."""
+        errors, infos = _run([_customer("c-1", "C005", 12)], [_segment("c005-lan-p", None, kind="ManagedVlanSegment")])
 
-        assert len(errors) == 1
-        assert errors[0].startswith("ManagedVlanSegment 'c005-lan-p'")
+        assert errors == []
+        assert "ManagedVlanSegment 'c005-lan-p': routed tenant segment is untagged (no application uses it)" in infos
 
     def test_customer_owning_a_routed_segment_without_tag(self) -> None:
         errors, _ = _run([_customer("c-1", "C005", None)], [_segment("c005-web-p", 5), _segment("c005-db-p", 6)])

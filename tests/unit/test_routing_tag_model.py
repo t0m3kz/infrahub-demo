@@ -27,6 +27,7 @@ from tests.integration.demo_data import (
 from utils.routing_identity import ROUTING_TAG_MAX, ROUTING_TAG_MIN
 
 CUSTOMER_GROUP = "customers"
+BOOTSTRAP_UNTAGGED_ORG = "INTERNET"  # the only bootstrap customer; owns External segments only
 GENERATOR = "add_customer_routing_tag"
 POOLS = {
     "Customer-Routing-Tag": ("OrganizationCustomer", "routing_tag"),
@@ -139,11 +140,19 @@ class TestGeneratorWiring:
             {
                 str(obj.path.relative_to(ROOT))
                 for obj in declared("OrganizationCustomer", ROOT / "data", ROOT / "tests" / "integration" / "data")
-                if CUSTOMER_GROUP not in obj.groups()
+                if CUSTOMER_GROUP not in obj.groups() and obj.value("org_id") != BOOTSTRAP_UNTAGGED_ORG
             }
         )
 
         assert not outside, f"OrganizationCustomer objects not in '{CUSTOMER_GROUP}': {outside}"
+
+    def test_the_bootstrap_internet_customer_is_deliberately_outside_the_group(self) -> None:
+        """It is created on main, where the created-trigger never fires, and owns only External segments: a member
+        would be tagged by the first rerun and fail the idempotency snapshot."""
+        internet = [obj for obj in declared("OrganizationCustomer", ROOT / "data" / "bootstrap")]
+
+        assert [obj.value("org_id") for obj in internet] == [BOOTSTRAP_UNTAGGED_ORG]
+        assert CUSTOMER_GROUP not in internet[0].groups()
 
     def test_the_30_all_load_must_dispatch_once_per_distinct_customer(self) -> None:
         """The dispatch floor test_59 asserts: one run per customer, a re-declaration counted once."""
