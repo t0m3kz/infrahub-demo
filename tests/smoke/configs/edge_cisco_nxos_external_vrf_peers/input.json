@@ -2599,6 +2599,46 @@
             "node": {
               "__typename": "OrganizationCustomer",
               "org_id": {
+                "value": "C009"
+              },
+              "display_label": "C009 Customer"
+            }
+          },
+          "gateway": {
+            "node": {
+              "ip_prefix": {
+                "node": {
+                  "prefix": {
+                    "value": "10.9.9.0/24"
+                  },
+                  "member_type": {
+                    "value": "address"
+                  },
+                  "ip_namespace": {
+                    "node": {
+                      "name": {
+                        "value": "PROD"
+                      },
+                      "namespace_type": {
+                        "value": "prod"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "node": {
+          "status": {
+            "value": "active"
+          },
+          "owner": {
+            "node": {
+              "__typename": "OrganizationCustomer",
+              "org_id": {
                 "value": "C003"
               },
               "display_label": "C003 Customer"
@@ -3526,6 +3566,223 @@
           },
           "segment_deployments": {
             "edges": []
+          }
+        }
+      }
+    ]
+  },
+  "TopologyTunnelCircuit": {
+    "edges": [
+      {
+        "node": {
+          "owner": {
+            "node": {
+              "__typename": "OrganizationCustomer",
+              "org_id": {
+                "value": "C001"
+              },
+              "display_label": "C001 Customer"
+            }
+          },
+          "registered_prefixes": {
+            "edges": [
+              {
+                "node": {
+                  "prefix": {
+                    "value": "198.18.0.0/24"
+                  },
+                  "ip_namespace": {
+                    "node": {
+                      "name": {
+                        "value": "PROD"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "capabilities": {
+            "edges": [
+              {
+                "node": {
+                  "device": {
+                    "node": {
+                      "name": {
+                        "value": "EQX-FR2-SDWAN-GW1"
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "device": {
+                    "node": {
+                      "name": {
+                        "value": "EXT-ACME-EDGE1"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "node": {
+          "owner": {
+            "node": {
+              "__typename": "OrganizationProvider",
+              "org_id": {
+                "value": "P027"
+              },
+              "display_label": "P027 Provider"
+            }
+          },
+          "registered_prefixes": {
+            "edges": [
+              {
+                "node": {
+                  "prefix": {
+                    "value": "198.19.0.0/24"
+                  },
+                  "ip_namespace": {
+                    "node": {
+                      "name": {
+                        "value": "PROD"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "capabilities": {
+            "edges": [
+              {
+                "node": {
+                  "device": {
+                    "node": {
+                      "name": {
+                        "value": "EQX-FR2-SDWAN-GW1"
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "device": {
+                    "node": {
+                      "name": {
+                        "value": "EXT-PARTNER-EDGE1"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "node": {
+          "owner": {
+            "node": {
+              "__typename": "OrganizationCustomer",
+              "org_id": {
+                "value": "C001"
+              },
+              "display_label": "C001 Customer"
+            }
+          },
+          "registered_prefixes": {
+            "edges": [
+              {
+                "node": {
+                  "prefix": {
+                    "value": "198.20.0.0/24"
+                  },
+                  "ip_namespace": {
+                    "node": {
+                      "name": {
+                        "value": "NON-PROD"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "capabilities": {
+            "edges": [
+              {
+                "node": {
+                  "device": {
+                    "node": {
+                      "name": {
+                        "value": "EQX-FR2-SDWAN-GW1"
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "device": {
+                    "node": {
+                      "name": {
+                        "value": "EXT-PARTNER-EDGE2"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "node": {
+          "owner": {
+            "node": {
+              "__typename": "OrganizationCustomer",
+              "org_id": {
+                "value": "C002"
+              },
+              "display_label": "C002 Customer"
+            }
+          },
+          "registered_prefixes": {
+            "edges": []
+          },
+          "capabilities": {
+            "edges": [
+              {
+                "node": {
+                  "device": {
+                    "node": {
+                      "name": {
+                        "value": "EQX-FR2-SDWAN-GW1"
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "device": {
+                    "node": {
+                      "name": {
+                        "value": "C002-OFFICE-EDGE1"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
           }
         }
       }

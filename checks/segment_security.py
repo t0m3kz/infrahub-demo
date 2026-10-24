@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import ipaddress
 from typing import Any
 
+from transforms.helpers.bgp_external import RETIRED_STATUS, registered_by_attachment
 from transforms.helpers.group_policy import get_vrf_contracts, rule_groups, segment_groups
 from transforms.helpers.policy import segment_flows
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import (
+    EXCHANGE_PEERS,
     EXTERNAL_SEGMENT_KIND,
     ROUTED_SEGMENT_KINDS,
     exchange_peer_zones,
@@ -21,6 +24,9 @@ from utils.segment_addressing import segment_prefix
 from .base import WarningCheck
 
 INTERNET_ZONE = zone_name_for_namespace_type("internet")
+
+_Network = ipaddress.IPv4Network | ipaddress.IPv6Network
+_Space = list[tuple[_Network, str | None]]
 
 
 class CheckSegmentSecurity(WarningCheck):
@@ -47,6 +53,12 @@ class CheckSegmentSecurity(WarningCheck):
     - a rule side carries a component tag only where its segment is
       microsegmented: inside it, or on a component dependency into or out of
       it;
+    - every ``destination_prefixes`` entry of an enabled rule is reachable: inside an on-prem segment prefix, or
+      inside a prefix a customer registered behind an external session (a VPC block of a virtual interface with a
+      handoff circuit, an office ``lan_prefixes`` or hosted segment and a tunnel's ``registered_prefixes``, behind
+      an SD-WAN gateway; transforms/helpers/bgp_external.py registered_by_attachment), in a namespace of the
+      source segment's environment (or an exchange peer of it); otherwise no session accepts it and the rule
+      aims at nothing (a ``destination_segment`` rule is not checked here);
     - every permit rule between two groups is a contract row of the group
       contract builder (transforms/helpers/group_policy.py): a rule the
       builder dropped would be denied by group policy while L0 permits it; a
@@ -67,6 +79,7 @@ class CheckSegmentSecurity(WarningCheck):
             self._validate_gateway_namespace(segment)
         self._validate_unique_names(segments)
         self._validate_rule_endpoints(segments, rules)
+        self._validate_destination_prefixes(cleaned, segments, rules)
         self._warn_component_environment(components)
         self._validate_component_tags(segments, components)
         self._validate_tags(tags, cleaned.get("DcimGroupPolicyProfile") or [])
@@ -148,7 +161,7 @@ class CheckSegmentSecurity(WarningCheck):
         """A rule endpoint segment with no prefix and no selector renders as `any` (warning), unless it is the internet."""
         by_id = {segment["id"]: segment for segment in segments if segment.get("id")}
         for rule in rules:
-            if rule.get("disabled") or not (rule.get("policy") or {}).get("enabled", True):
+            if not _enabled(rule):
                 continue
             for side in ("source", "destination"):
                 endpoint = rule.get(f"{side}_segment") or {}
@@ -165,6 +178,38 @@ class CheckSegmentSecurity(WarningCheck):
                         f"{INTERNET_ZONE} — it would render as any"
                     )
                 )
+
+    def _validate_destination_prefixes(
+        self, cleaned: dict[str, Any], segments: list[dict[str, Any]], rules: list[dict[str, Any]]
+    ) -> None:
+        """A destination prefix of an enabled rule is on-prem space or registered behind an external session."""
+        space = _reachable_space(
+            segments,
+            cleaned.get("TopologyCustomerOffice"),
+            cleaned.get("TopologyTunnelCircuit"),
+            cleaned.get("CloudVirtualInterface"),
+        )
+        environments = {segment["id"]: segment.get("environment") for segment in segments if segment.get("id")}
+        for rule in rules:
+            if not _enabled(rule):
+                continue
+            environment = environments.get((rule.get("source_segment") or {}).get("id"))
+            types = _reachable_types(environment)
+            for destination in rule.get("destination_prefixes") or []:
+                cidr = destination.get("prefix")
+                network = _network(cidr)
+                if network is not None and not any(
+                    network.prefixlen >= pool.prefixlen
+                    and network.network_address in pool
+                    and (types is None or kind in types)
+                    for pool, kind in space
+                ):
+                    self.log_error(
+                        message=(
+                            f"destination {cidr} of rule {rule.get('name', rule.get('id'))} is not reachable: "
+                            "no session accepts it (not on-prem space, not registered behind an external session)"
+                        )
+                    )
 
     def _warn_component_environment(self, components: list[dict[str, Any]]) -> None:
         """An app component in a segment of another environment (a warning, not an error)."""
@@ -299,3 +344,58 @@ class CheckSegmentSecurity(WarningCheck):
                     self.log_error(
                         message=f"Rule '{name}' between groups {pair[0]} -> {pair[1]} has no group contract row"
                     )
+
+
+def _enabled(rule: dict[str, Any]) -> bool:
+    """Whether a rule counts: not disabled itself and in an enabled policy."""
+    return not rule.get("disabled") and (rule.get("policy") or {}).get("enabled", True)
+
+
+def _network(cidr: str | None) -> _Network | None:
+    """The network of a CIDR string, None when it is missing or invalid."""
+    try:
+        return ipaddress.ip_network(cidr, strict=False) if cidr else None
+    except ValueError:
+        return None
+
+
+def _reachable_types(environment: str | None) -> frozenset[str] | None:
+    """The namespace types a rule from a segment of ``environment`` may reach: its own and its exchange peers.
+
+    None when the rule names no source segment (any namespace type): a PROD segment never reaches a prefix
+    registered only in NON-PROD, and the other way round.
+    """
+    if not environment:
+        return None
+    own = namespace_type_for_environment(environment)
+    return frozenset({own, *EXCHANGE_PEERS[own]})
+
+
+def _reachable_space(
+    segments: list[dict[str, Any]],
+    offices: list[dict[str, Any]] | None,
+    tunnels: list[dict[str, Any]] | None,
+    vifs: list[dict[str, Any]] | None,
+) -> _Space:
+    """Every (network, namespace_type) a destination prefix may sit in: on-prem and registered behind a session.
+
+    On-prem: the gateway prefix of every segment that is not retired. Registered: the prefixes a customer owner
+    registered behind an attachment point (registered_by_attachment, the edge's own reading); a prefix with no
+    customer owner is never accepted, so it is no destination either (routing_invariants.py rule 7 reports it).
+    """
+    prefixes = [
+        (segment.get("gateway") or {}).get("ip_prefix") or {}
+        for segment in segments
+        if segment.get("status") != RETIRED_STATUS
+    ]
+    prefixes += [
+        prefix
+        for registered in registered_by_attachment(offices, tunnels, vifs).values()
+        for owner, prefix in registered
+        if owner
+    ]
+    return [
+        (network, (prefix.get("ip_namespace") or {}).get("namespace_type"))
+        for prefix in prefixes
+        if (network := _network(prefix.get("prefix")))
+    ]

@@ -8,6 +8,7 @@
 # Route-table placement (association = the table an attachment's traffic is
 # looked up in; propagation = the tables that learn its CIDRs):
 #   vaultex (C003)   associated rt-hub-shared,   propagates to rt-hub-shared
+#   nordix (C001)    associated rt-hub-shared,   propagates to rt-hub-shared
 #   novantis (C015)  associated rt-hub-isolated, propagates to rt-hub-isolated
 #                    and rt-hub-shared
 #   hybrid (on-prem) associated rt-hub-shared,   propagates to both
@@ -61,6 +62,18 @@ spec:
       transit_gateway: "tgw-30all-euc1"
       owner_account: "vaultex-aws-prod"
       virtual_network: "vaultex-vpc-prod"
+      associated_route_table: "rt-hub-shared"
+      propagates_to_route_tables:
+        - "rt-hub-shared"
+
+    - name: "tgwa-vpc-nordix"
+      cloud_id: "tgw-attach-0nordixvpc"
+      description: "Nordix (C001) production VPC onto the shared hub domain (target of egress rule 10)"
+      status: active
+      attachment_type: vpc
+      transit_gateway: "tgw-30all-euc1"
+      owner_account: "nordix-aws-prod"
+      virtual_network: "nordix-vpc-prod"
       associated_route_table: "rt-hub-shared"
       propagates_to_route_tables:
         - "rt-hub-shared"

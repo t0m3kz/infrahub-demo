@@ -99,15 +99,25 @@ class TestEdgeRender:
         assert "0.0.0.0/0" not in _run_edge(data)
 
     def test_sdwan_peer_accepts_what_the_offices_behind_its_gateway_registered(self) -> None:
-        """C005's hosted segment, C002's and C003's LANs: not the retired segment, the provider's LAN, another gateway's."""
+        """C005's hosted segment, C002's and C003's LANs and C001's tunnel range: not the retired segment, the
+        provider's LAN, another gateway's, the provider-owned and the NON-PROD tunnel's."""
         output = _run_edge(_fixture())
         assert _prefix_list(output, "PL-VRF-PROD-EQXFR2-SDWAN-IN") == [
             "10.176.5.0/24",
             "10.210.2.0/24",
             "10.210.3.0/24",
+            "198.18.0.0/24",
         ]
         assert "route-map RM-VRF-PROD-EQXFR2-SDWAN-IN permit 10\n" in output
-        for excluded in ("10.211.2.0/24", "10.210.9.0/24", "10.210.15.0/24", "10.210.7.0/24", "10.176.6.0/24"):
+        for excluded in (
+            "10.211.2.0/24",
+            "10.210.9.0/24",
+            "10.210.15.0/24",
+            "10.210.7.0/24",
+            "10.176.6.0/24",
+            "198.19.0.0/24",
+            "198.20.0.0/24",
+        ):
             assert excluded not in output
         block = _neighbor_block(output, "10.255.5.1")
         assert "        route-map RM-VRF-PROD-EQXFR2-SDWAN-IN in\n" in block
@@ -116,7 +126,7 @@ class TestEdgeRender:
 
     def test_the_policy_names_its_owners(self) -> None:
         output = _run_edge(_fixture())
-        assert "! VRF-PROD-EQXFR2-SDWAN: owners C002, C003, C005\n" in output
+        assert "! VRF-PROD-EQXFR2-SDWAN: owners C001, C002, C003, C005\n" in output
         assert "! VRF-PROD-EQXFR2-AWS-EUC1: owners C003, C015\n" in output
         assert "! VRF-NONPROD-EQXFR2-AWS-EUC1: owners C003\n" in output
 
@@ -134,6 +144,7 @@ class TestEdgeRender:
             "10.5.10.0/24",
             "10.5.20.0/24",
             "10.8.2.0/24",
+            "10.9.1.0/24",
             "10.30.0.0/16",
         ]
         assert _prefix_list(output, "PL-VRF-NONPROD-EQXFR2-AWS-EUC1-OUT") == ["10.6.10.0/24"]
@@ -142,10 +153,10 @@ class TestEdgeRender:
         assert "le " not in output and "ge " not in output
 
     def test_unregistered_retired_and_ownerless_space_is_never_announced(self) -> None:
-        """C001 is behind no session; a retired, an ownerless and a NON-PROD segment of other owners stay home."""
+        """C009 is behind no session; a retired, an ownerless and a NON-PROD segment of other owners stay home."""
         output = _run_edge(_fixture())
         out_lines = "\n".join(line for line in output.splitlines() if "-OUT seq" in line)
-        for never in ("10.9.1.0/24", "10.5.99.0/24", "10.5.77.0/24", "10.6.20.0/24", "10.6.30.0/24", "10.250.0.0/24"):
+        for never in ("10.9.9.0/24", "10.5.99.0/24", "10.5.77.0/24", "10.6.20.0/24", "10.6.30.0/24", "10.250.0.0/24"):
             assert never not in out_lines
 
     def test_session_without_a_registered_owner_is_deny_all_both_ways(self) -> None:
