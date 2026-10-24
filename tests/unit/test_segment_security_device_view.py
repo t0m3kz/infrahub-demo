@@ -45,12 +45,12 @@ from transforms.helpers.group_policy import (
     _BUILDERS,
     GPO_CONFIG_KEYS,
     GPO_RENDERERS,
-    MSSG_MAX_SEGMENTS,
     group_policy_device_view,
 )
 from transforms.helpers.vxlan import get_interfaces
 from utils.data_cleaning import clean_data
 from utils.fabric_roles import DC_VTEP_ROLES
+from utils.limits import EOS_MSSG_MAX_SEGMENTS
 
 LEAF_SEGMENTS = ("web-np", "app-np", "pay-p", "portal-p")
 VRFS = ("NONPROD", "PROD")
@@ -233,7 +233,7 @@ class TestGate:
     def test_a_refusal_only_fires_on_a_rendering_reference_device(self) -> None:
         """61 segments are refused on an EOS VTEP, not on a device that renders none."""
         roots = _roots()
-        for index in range(MSSG_MAX_SEGMENTS):
+        for index in range(EOS_MSSG_MAX_SEGMENTS):
             _add_segment(roots, f"bulk-{index}", f"10.99.{index}.0/24", group_id=1000 + index)
         for overrides in ({"role": "spine"}, {"device_name": "ghost-01"}, {"platform": "sonic"}, {"vrfs": []}):
             assert _view(roots, **overrides) is None
@@ -491,17 +491,17 @@ class TestDefinitions:
 
     def test_sixty_segments_render_and_sixty_one_are_refused(self) -> None:
         roots = _roots()
-        for index in range(MSSG_MAX_SEGMENTS - 5):
+        for index in range(EOS_MSSG_MAX_SEGMENTS - 5):
             _add_segment(roots, f"bulk-{index}", f"10.99.{index}.0/24", group_id=1000 + index)
         view = _good(roots)
-        assert len(view["match_lists"]) == MSSG_MAX_SEGMENTS
+        assert len(view["match_lists"]) == EOS_MSSG_MAX_SEGMENTS
         _add_segment(roots, "bulk-last", "10.98.0.0/24", group_id=2000)
         with pytest.raises(ValueError, match=r"61 segments.*exceed the 60.*refusing unprotected config"):
             _view(roots)
 
     def test_a_skipped_vrf_does_not_count_against_the_limit(self) -> None:
         roots = _roots()
-        for index in range(MSSG_MAX_SEGMENTS):
+        for index in range(EOS_MSSG_MAX_SEGMENTS):
             segment = _add_segment(
                 roots, f"bulk-{index}", f"10.99.{index}.0/24", group_id=1000 + index, namespace=("BULK", "prod")
             )

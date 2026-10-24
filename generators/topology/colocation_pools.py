@@ -13,6 +13,14 @@ from typing import Any, Literal
 
 from typing_extensions import TypedDict
 
+from utils.limits import (
+    LOOPBACK_IPV4_POOL,
+    LOOPBACK_IPV6_POOL,
+    MANAGEMENT_IPV4_POOL,
+    TECHNICAL_IPV4_POOL,
+    TECHNICAL_IPV6_POOL,
+)
+
 from ..fabric_sizing import (
     COLO_ZONE_LOOPBACK_IPV6_BITS,
     COLO_ZONE_TECHNICAL_IPV6_BITS,
@@ -92,7 +100,7 @@ def _zone_interlink_bits(_design: Mapping[str, Any]) -> int:
 
 LOOPBACK_SLOT = ColoPoolSlot(
     suffix="loopback-pool",
-    bootstrap_pool="Loopback-IPv4",
+    bootstrap_pool=LOOPBACK_IPV4_POOL,
     role="loopback",
     zone_kind="address",
     ipv6=False,
@@ -103,7 +111,7 @@ LOOPBACK_SLOT = ColoPoolSlot(
 )
 MANAGEMENT_SLOT = ColoPoolSlot(
     suffix="management-pool",
-    bootstrap_pool="Management-IPv4",
+    bootstrap_pool=MANAGEMENT_IPV4_POOL,
     role="management",
     zone_kind="address",
     ipv6=False,
@@ -114,7 +122,7 @@ MANAGEMENT_SLOT = ColoPoolSlot(
 )
 TECHNICAL_SLOT = ColoPoolSlot(
     suffix="technical-pool",
-    bootstrap_pool="Technical-IPv4",
+    bootstrap_pool=TECHNICAL_IPV4_POOL,
     role="technical",
     zone_kind="prefix",
     ipv6=False,
@@ -127,7 +135,7 @@ TECHNICAL_SLOT = ColoPoolSlot(
 # interlink), not by the design, so the zone's size is the same with or without one.
 LOOPBACK_IPV6_SLOT = ColoPoolSlot(
     suffix="loopback-ipv6-pool",
-    bootstrap_pool="Loopback-IPv6",
+    bootstrap_pool=LOOPBACK_IPV6_POOL,
     role="loopback",
     zone_kind="address",
     ipv6=True,
@@ -137,7 +145,7 @@ LOOPBACK_IPV6_SLOT = ColoPoolSlot(
 )
 TECHNICAL_IPV6_SLOT = ColoPoolSlot(
     suffix="technical-ipv6-pool",
-    bootstrap_pool="Technical-IPv6",
+    bootstrap_pool=TECHNICAL_IPV6_POOL,
     role="technical",
     zone_kind="prefix",
     ipv6=True,

@@ -9,13 +9,10 @@ import pytest
 import yaml
 
 from utils.exchange_transit import (
-    CONTEXT_VLAN_MAX,
-    CONTEXT_VLAN_MIN,
     EXCHANGE_PEERS,
     MANAGEMENT_TYPE,
     TENANT_NAMESPACE_TYPES,
     TRANSIT_SLOT,
-    TRANSIT_VLAN_BAND,
     TRANSIT_VNI_MAX,
     TRANSIT_VNI_MIN,
     WAN_EXIT_VLAN_BASE,
@@ -30,8 +27,12 @@ from utils.exchange_transit import (
     wan_exit_vlan,
     zone_name_for_namespace_type,
 )
-
-MAX_ENCODABLE_VNI = 65535
+from utils.limits import (
+    FW_CONTEXT_VLAN_START,
+    LB_CONTEXT_VLAN_END,
+    MAX_ENCODABLE_VNI,
+    TRANSIT_VLAN_BAND,
+)
 
 
 def test_slots_are_unique() -> None:
@@ -41,10 +42,10 @@ def test_slots_are_unique() -> None:
 
 def test_slot_vlan_ranges_are_disjoint() -> None:
     """The context VLAN pool is narrower than the slot distance, so slots never overlap."""
-    assert CONTEXT_VLAN_MAX - CONTEXT_VLAN_MIN < TRANSIT_VLAN_BAND
+    assert LB_CONTEXT_VLAN_END - FW_CONTEXT_VLAN_START < TRANSIT_VLAN_BAND
     seen: set[int] = set()
     for ns_type in TRANSIT_SLOT:
-        vlans = {transit_vlan(v, ns_type) for v in range(CONTEXT_VLAN_MIN, CONTEXT_VLAN_MAX + 1)}
+        vlans = {transit_vlan(v, ns_type) for v in range(FW_CONTEXT_VLAN_START, LB_CONTEXT_VLAN_END + 1)}
         assert not vlans & seen
         seen |= vlans
     assert min(seen) == 3000
@@ -338,10 +339,9 @@ def test_wan_exit_vlans_follow_the_slots_just_after_the_transit_band() -> None:
 
 def test_wan_exit_vlans_collide_with_nothing_else_on_a_switch() -> None:
     """Not a customer VLAN (100-2999), not a transit leg (3000-3799), not an L3 VNI SVI (3900-3967)."""
-    from generators.helpers.pools import CUSTOMER_VLAN_ID_MAX
-    from transforms.helpers.overlay import _L3VNI_SVI_VLAN_BASE
+    from utils.limits import CUSTOMER_VLAN_ID_MAX, L3VNI_SVI_VLAN_BASE
 
     tags = {wan_exit_vlan(ns_type) for ns_type in TRANSIT_SLOT}
     assert all(tag > CUSTOMER_VLAN_ID_MAX for tag in tags)
-    assert all(tag > CONTEXT_VLAN_MAX + TRANSIT_VLAN_BAND * max(TRANSIT_SLOT.values()) for tag in tags)
-    assert all(tag < _L3VNI_SVI_VLAN_BASE for tag in tags)
+    assert all(tag > LB_CONTEXT_VLAN_END + TRANSIT_VLAN_BAND * max(TRANSIT_SLOT.values()) for tag in tags)
+    assert all(tag < L3VNI_SVI_VLAN_BASE for tag in tags)

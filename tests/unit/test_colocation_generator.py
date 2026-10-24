@@ -32,10 +32,11 @@ from generators.fabric_sizing import (
     colo_metro_technical_ipv6_bits,
     host_bits_to_prefix_length,
 )
-from generators.helpers.pools import SITE_VNI_END, SITE_VNI_START, name_to_asn_range
+from generators.helpers.pools import name_to_asn_range
 from generators.protocols import TopologyColocationMetro
 from generators.topology.colocation import _METRO_ASN_SIZING_UNITS, ColocationMetroGenerator
 from tests.unit.simulators.fabric_designs import COLO_METRO_DESIGN_NAMES, colo_metro_design
+from utils.limits import SITE_VNI_END, SITE_VNI_START
 
 
 def _make_generator() -> Any:

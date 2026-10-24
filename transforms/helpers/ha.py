@@ -9,7 +9,7 @@ from ipaddress import ip_interface
 from typing import Any
 
 from transforms.helpers.addressing import host_ip
-from utils.exchange_transit import OFFSET_VIP
+from utils.limits import OFFSET_VIP
 
 # The HA sync link is a back-to-back cable between the two members, never
 # routed anywhere else, so its addresses are a fixed link-local /30 per pair

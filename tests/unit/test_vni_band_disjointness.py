@@ -10,7 +10,7 @@ These tests catch it earlier and for free, in the sources that seed those object
 L3 VNIs are only the four hand-set values on the fixed namespaces in
 ``22_namespaces.yml``; no pool allocates them. The only dynamic VNI pools are the
 per-site L2 pool the generators create (``SITE_VNI_START``..``SITE_VNI_END`` in
-``generators/helpers/pools.py``) and ``GLOBAL-L2VNI`` in ``18_vni_pools.yml``.
+``utils/limits.py``) and ``GLOBAL-L2VNI`` in ``18_vni_pools.yml``.
 Nothing at load time stops someone re-picking a namespace value that one of those
 pools will later hand out; they did in fact once overlap (the namespaces sat at
 30000-40001, inside the L2 pool).
@@ -24,11 +24,7 @@ from typing import Any
 import pytest
 import yaml
 
-from generators.helpers.pools import SITE_VNI_END, SITE_VNI_START
-
-# transforms/helpers/vxlan.py's ceiling for a VNI encodable in a type-1 RD or a
-# type-2 RT once a 4-byte private ASN has taken the other 4 bytes.
-MAX_ENCODABLE_VNI = 65535
+from utils.limits import MAX_ENCODABLE_VNI, SITE_VNI_END, SITE_VNI_START
 
 # Name of the synthetic pool standing in for the per-site L2 pool the generators create.
 SITE_POOL_NAME = "<site>-vni-pool"

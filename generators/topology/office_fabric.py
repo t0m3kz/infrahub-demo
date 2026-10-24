@@ -59,12 +59,20 @@ from typing_extensions import TypedDict
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import PROD_TYPE, transit_pool_name, wan_exit_vlan
 from utils.fabric_roles import CAMPUS_FABRIC_ROLES, LISP_BORDER_ROLES
+from utils.limits import (
+    LOOPBACK_IPV4_POOL,
+    MANAGEMENT_IPV4_POOL,
+    OFFICE_EDGE_WAIT,
+    PRIVATE_ASN32_POOL,
+    SITE_VNI_END,
+    SITE_VNI_START,
+    TECHNICAL_IPV4_POOL,
+)
 
 from ..common import CommonGenerator
 from ..connections import CablingMixin
 from ..devices import DeviceMixin
 from ..helpers.naming import sdwan_edge_name
-from ..helpers.pools import SITE_VNI_END, SITE_VNI_START
 from ..helpers.routing import loopback_prefix_length, p2p_prefix_length
 from ..helpers.template_interfaces import template_interface_names_by_role
 from ..pools import PoolMixin
@@ -111,13 +119,8 @@ _ROUTING_STRATEGY = "ospf-ibgp"
 _EDGE_LAN_PORT_ROLE = "downlink"
 _WAN_EXIT_LINK_PREFIX_LENGTH = 31
 _WAN_EXIT_PROCESS_ROLE = "regular"
-# The BGP AS numbers of the exit: one for the pair of distribution-switches, one for the edge, each found by its
-# description (ensure_shared_as) before one is drawn from the bootstrap private 32-bit pool.
-_WAN_EXIT_ASN_POOL = "PRIVATE-ASN32"
 # add_sdwan_edge runs beside this generator, not before it: wait a little for the edge it creates rather than
 # skip the exit on a race. An office without an sdwan_gateway never waits.
-_EDGE_WAIT_ATTEMPTS = 8
-_EDGE_WAIT_BASE_DELAY = 3.0
 
 
 class TopologyCustomerOfficeData(TypedDict, total=False):
@@ -282,14 +285,14 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
         async with self.resource_lock(f"office-pools-{office_id}"):
             loopback_pool = await self.ensure_sliced_pool(
                 pool_name=f"{office}-loopback-pool",
-                parent_pool_name="Loopback-IPv4",
+                parent_pool_name=LOOPBACK_IPV4_POOL,
                 prefix_length=_OFFICE_LOOPBACK_PREFIX_LENGTH,
                 role="loopback",
                 kind="address",
             )
             management_pool = await self.ensure_sliced_pool(
                 pool_name=f"{office}-management-pool",
-                parent_pool_name="Management-IPv4",
+                parent_pool_name=MANAGEMENT_IPV4_POOL,
                 prefix_length=_OFFICE_MANAGEMENT_PREFIX_LENGTH,
                 role="management",
                 kind="address",
@@ -297,7 +300,7 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
             )
             technical_pool = await self.ensure_sliced_pool(
                 pool_name=f"{office}-technical-pool",
-                parent_pool_name="Technical-IPv4",
+                parent_pool_name=TECHNICAL_IPV4_POOL,
                 prefix_length=_OFFICE_TECHNICAL_PREFIX_LENGTH,
                 role="technical",
                 kind="prefix",
@@ -418,7 +421,7 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
         template's ports, which are instantiated asynchronously); one without never waits. A run
         that still finds nothing skips the exit and the next run of this generator builds it.
         """
-        attempts = _EDGE_WAIT_ATTEMPTS if self.data.get("sdwan_gateway") else 1
+        attempts = OFFICE_EDGE_WAIT.attempts if self.data.get("sdwan_gateway") else 1
         for attempt in range(attempts):
             edges = await self.client.filters(kind=DcimPhysicalDevice, name__values=[edge_name])
             if edges:
@@ -428,7 +431,7 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
                 if ports:
                     return edges[0], sorted(port.name.value for port in ports)
             if attempt < attempts - 1:
-                delay = self._retry_delay(_EDGE_WAIT_BASE_DELAY, attempt)
+                delay = self._retry_delay(OFFICE_EDGE_WAIT.delay, attempt)
                 self.logger.info(
                     f"Office {self.fabric_name}: SD-WAN edge {edge_name} or its ports not there yet — "
                     f"retrying in {delay:.2f}s (attempt {attempt + 1}/{attempts})"
@@ -599,7 +602,9 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
         )
         if key_id is None:
             return
-        asn_pool = await self.client.get(kind=CoreNumberPool, name__value=_WAN_EXIT_ASN_POOL)
+        # The BGP AS numbers of the exit: one for the pair of distribution-switches, one for the edge, each found by
+        # its description (ensure_shared_as) before one is drawn from the bootstrap private 32-bit pool.
+        asn_pool = await self.client.get(kind=CoreNumberPool, name__value=PRIVATE_ASN32_POOL)
         switch_as_id = await self.ensure_shared_as(
             description=f"{self.fabric_name} WAN exit ASN", asn_pool_id=asn_pool.id
         )

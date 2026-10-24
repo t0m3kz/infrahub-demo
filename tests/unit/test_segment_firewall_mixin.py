@@ -19,7 +19,7 @@ import pytest
 from generators.common import CommonGenerator
 from generators.helpers.rules import RulesPlanner
 from generators.segment_firewall import RULE_INDEX_START, SegmentFirewallMixin, _next_free_rule_index
-from transforms.helpers.acl import INTERNET_BAND_SEQ_START, RETURN_LEG_SEQ_START
+from utils.limits import ACL_CLOSING_SEQ, ACL_INTERNET_BAND_SEQ_START, ACL_RETURN_LEG_SEQ_START
 
 
 def _make_gen() -> Any:
@@ -934,7 +934,7 @@ class TestGeneratedRuleIndexesStayBelowTheAclBands:
     (5000+) and the internet band (6000+): generated indexes must stay below."""
 
     def test_bands_are_ordered_above_the_generated_rules(self) -> None:
-        assert RULE_INDEX_START < 4000 < RETURN_LEG_SEQ_START < INTERNET_BAND_SEQ_START
+        assert RULE_INDEX_START < 4000 < ACL_RETURN_LEG_SEQ_START < ACL_INTERNET_BAND_SEQ_START < ACL_CLOSING_SEQ
 
     def test_demo_dependencies_cannot_reach_the_4000_band(self) -> None:
         """Worst case: every AppDependency of the 30_all demo hits one segment, on 10 ports each."""

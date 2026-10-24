@@ -12,9 +12,9 @@ import logging
 import pytest
 from infrahub_sdk import InfrahubClient
 
-from generators.helpers.pools import FW_CONTEXT_VLAN_END, FW_CONTEXT_VLAN_START
 from tasks import ALL_DEMO_BRANCH
 from utils.exchange_transit import transit_vlan, wan_exit_vlan
+from utils.limits import CIRCUIT_ENDS, FW_CONTEXT_VLAN_END, FW_CONTEXT_VLAN_START, UNDERLAY_MTU
 
 from .all_demo_circuit_constants import (
     ALL_DEMO_COLOCATION_SERVED,
@@ -56,8 +56,6 @@ from .interconnect_queries import (
     WAN_EXIT_SESSIONS_QUERY,
 )
 from .interconnect_rules import (
-    _CIRCUIT_ENDS,
-    _DCI_MTU,
     DCI_POOL_NETWORK,
     _address,
     _address_namespace,
@@ -281,9 +279,9 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                 errors.append(f"{circuit}-underlay: on interfaces {sorted(ports)}, expected {sorted(ends)}")
                 continue
             for (device, port), node in sorted(ports.items()):
-                if node.get("mtu", {}).get("value") != _DCI_MTU:
+                if node.get("mtu", {}).get("value") != UNDERLAY_MTU:
                     errors.append(
-                        f"{circuit}-underlay: {device}:{port} MTU {node.get('mtu', {}).get('value')}, expected {_DCI_MTU}"
+                        f"{circuit}-underlay: {device}:{port} MTU {node.get('mtu', {}).get('value')}, expected {UNDERLAY_MTU}"
                     )
             addresses = {end: _address(node) for end, node in ports.items()}
             errors.extend(
@@ -509,7 +507,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         session_ports = {end["id"] for c in inventory["virtual"] if c["kind"] != TUNNEL_KIND for end in c["end_nodes"]}
         for tunnel in tunnels:
             gateway = [end for end in tunnel["end_nodes"] if end["interface"] == ALL_DEMO_SDWAN_GATEWAY_PUBLIC_PORT]
-            if len(gateway) != 1 or len(tunnel["end_nodes"]) != _CIRCUIT_ENDS:
+            if len(gateway) != 1 or len(tunnel["end_nodes"]) != CIRCUIT_ENDS:
                 errors.append(
                     f"{tunnel['name']}: ends {tunnel['ends']}, expected the gateway's '{ALL_DEMO_SDWAN_GATEWAY_PUBLIC_PORT}' and one more"
                 )

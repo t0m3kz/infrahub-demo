@@ -6,6 +6,7 @@ from typing import Any, Literal, cast
 from typing_extensions import TypedDict
 
 from utils.data_cleaning import clean_data
+from utils.limits import SITE_VNI_END, SITE_VNI_START
 
 from ..common import CommonGenerator
 from ..connections import BORDER_ROLE_FOR_SERVICES, CablingMixin
@@ -19,7 +20,6 @@ from ..fabric_sizing import (
 )
 from ..firewall_context import FIREWALL_CONTEXT, LOADBALANCER_CONTEXT
 from ..helpers import name_to_asn_range
-from ..helpers.pools import SITE_VNI_END, SITE_VNI_START
 from ..helpers.routing import RoutingStrategy, loopback_prefix_length, p2p_prefix_length, underlay_pool_is_ipv6
 from ..helpers.template_interfaces import template_interface_names_by_role
 from ..pod_config import templates_by_role

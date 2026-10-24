@@ -9,14 +9,12 @@ from utils.data_cleaning import get_data
 from utils.exchange_transit import (
     EXCHANGE_PEERS,
     INTERNET_TYPE,
-    OFFSET_MEMBER_A,
-    OFFSET_MEMBER_B,
-    TRANSIT_PREFIXLEN,
     TRANSIT_SLOT,
     is_public_address,
     transit_addresses,
     transit_vlan,
 )
+from utils.limits import OFFSET_MEMBER_A, OFFSET_MEMBER_B, TRANSIT_PREFIXLEN
 
 from .base import WarningCheck
 

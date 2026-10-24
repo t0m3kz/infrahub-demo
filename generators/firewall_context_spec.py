@@ -13,8 +13,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from utils.exchange_transit import EXCHANGE_PEERS, lb_leg_pool_name, lb_vip_pool_name, transit_pool_name
+from utils.limits import FW_CONTEXT_VLAN_END, FW_CONTEXT_VLAN_START, LB_CONTEXT_VLAN_END, LB_CONTEXT_VLAN_START
 
-from .helpers.pools import FW_CONTEXT_VLAN_END, FW_CONTEXT_VLAN_START, LB_CONTEXT_VLAN_END, LB_CONTEXT_VLAN_START
 from .lb_vip import APP_COMPONENT_GENERATOR, load_balanced_components_in
 from .protocols import ManagedFirewallContext, ManagedFirewallHA, ManagedLoadbalancerContext, ManagedLoadbalancerHA
 

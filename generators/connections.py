@@ -13,6 +13,8 @@ from infrahub_sdk.protocols import CoreIPAddressPool, CoreIPPrefixPool
 if TYPE_CHECKING:
     import logging
 
+from utils.limits import WAIT_FOR_PEER_GENERATOR
+
 from .helpers import CableTypeDetector, CablingPlanner
 from .helpers.cable_attributes import RackPosition, cable_attributes, endpoint_label
 from .helpers.common import save_with_node_not_found_retry
@@ -26,9 +28,6 @@ from .protocols import (
     LocationSuite,
 )
 from .types import CablingOptions, ChainHop
-
-_INTERFACE_READY_MAX_RETRIES = 10
-_INTERFACE_READY_RETRY_DELAY = 3.0
 
 # Default border_role_for for _cable_border_services: every bootstrap border
 # tier (N9K-C9336C-FX2_BORDER_LEAF's Ethernet1/[25-28]/[29-32], border-spine's
@@ -130,7 +129,7 @@ class CablingMixin:
         # Templates are applied asynchronously; a fixed sleep is fragile under load.
         src_interfaces: list = []
         dst_interfaces: list = []
-        for _attempt in range(_INTERFACE_READY_MAX_RETRIES):
+        for _attempt in range(WAIT_FOR_PEER_GENERATOR.attempts):
             src_interfaces = await self.client.filters(
                 kind=DcimPhysicalInterface,
                 device__name__values=bottom_devices,
@@ -145,17 +144,17 @@ class CablingMixin:
             )
             if src_interfaces and dst_interfaces:
                 break
-            delay = self._retry_delay(_INTERFACE_READY_RETRY_DELAY, _attempt)
+            delay = self._retry_delay(WAIT_FOR_PEER_GENERATOR.delay, _attempt)
             self.logger.info(
                 f"Interfaces not ready yet (src={len(src_interfaces)}, dst={len(dst_interfaces)}) — "
-                f"retrying in {delay:.2f}s (attempt {_attempt + 1}/{_INTERFACE_READY_MAX_RETRIES})"
+                f"retrying in {delay:.2f}s (attempt {_attempt + 1}/{WAIT_FOR_PEER_GENERATOR.attempts})"
             )
-            if _attempt < _INTERFACE_READY_MAX_RETRIES - 1:
+            if _attempt < WAIT_FOR_PEER_GENERATOR.attempts - 1:
                 await asyncio.sleep(delay)
 
         if not src_interfaces or not dst_interfaces:
             self.logger.error(
-                f"Interfaces still not found after {_INTERFACE_READY_MAX_RETRIES} attempts "
+                f"Interfaces still not found after {WAIT_FOR_PEER_GENERATOR.attempts} attempts "
                 f"(src={len(src_interfaces)}, dst={len(dst_interfaces)}) — skipping cabling"
             )
             return []

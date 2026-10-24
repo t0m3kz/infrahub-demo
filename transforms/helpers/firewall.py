@@ -14,6 +14,7 @@ from utils.exchange_transit import (
     transit_vlan,
     transit_vni,
 )
+from utils.limits import ACL_CLOSING_SEQ, VLAN_NAME_MAX
 from utils.segment_addressing import segment_prefix
 
 
@@ -138,9 +139,6 @@ LOADBALANCER_CONTEXT_KIND = "ManagedLoadbalancerContext"
 SERVICE_CONTEXT_ROLES: dict[str, str] = {FIREWALL_CONTEXT_KIND: "firewall", LOADBALANCER_CONTEXT_KIND: "load-balancer"}
 """Context kind -> the role of the border service port it is tagged on, which is also the role of the HA
 members holding its legs (generators/connections.py BORDER_ROLE_FOR_SERVICES)."""
-
-VLAN_NAME_MAX = 32
-"""Longest VLAN name NX-OS (and IOS XE, EOS) accepts."""
 
 
 def _transit_names(ctx: dict[str, Any], namespace: str) -> tuple[str, str]:
@@ -553,7 +551,7 @@ def get_zone_policies(policies_data: list[dict[str, Any]] | None = None) -> list
         # Implicit deny-all (mirrors get_acls() behaviour)
         policies[-1]["rules"].append(
             {
-                "seq": max(seq + 10, 9990),
+                "seq": max(seq + 10, ACL_CLOSING_SEQ),
                 "name": "implicit-deny-all",
                 "action": "deny",
                 "protocol": "ip",

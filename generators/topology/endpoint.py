@@ -21,6 +21,7 @@ from infrahub_sdk.protocols import CoreGroup
 from typing_extensions import TypedDict
 
 from utils.data_cleaning import clean_data
+from utils.limits import GROUP_APP_COMPONENTS
 
 from ..common import CommonGenerator
 from ..connections import CablingMixin
@@ -46,8 +47,7 @@ from .endpoint_targets import FREE_OR_CABLED_INTERFACE_STATUSES, EndpointTargets
 # lands later, so a run that cables this endpoint dispatches it for every
 # component instanced on the endpoint or on a VM it hosts.
 _COMPONENT_SEGMENT_GENERATOR = "add_app_component_segment"
-# That definition's `targets` in .infrahub.yml: only members are dispatched.
-_COMPONENT_SEGMENT_TARGETS = "app_components"
+# Its `targets` in .infrahub.yml are the GROUP_APP_COMPONENTS group: only members are dispatched.
 # The endpoint NIC roles this generator cables (and whose far ends add_app_component_segment
 # tags): plain uplinks and bond members.
 ENDPOINT_NIC_ROLES = ("uplink", "lag")
@@ -383,7 +383,7 @@ class EndpointConnectivityGenerator(
         if not components:
             return
 
-        target_group = await self.client.get(kind=CoreGroup, name__value=_COMPONENT_SEGMENT_TARGETS)
+        target_group = await self.client.get(kind=CoreGroup, name__value=GROUP_APP_COMPONENTS)
         component_ids = sorted(
             {
                 component.id
@@ -394,6 +394,6 @@ class EndpointConnectivityGenerator(
         if len(component_ids) < len(components):
             self.logger.warning(
                 f"Endpoint {self.data['name']}: {len(components) - len(component_ids)} component(s) on it are not "
-                f"in {_COMPONENT_SEGMENT_TARGETS}, so {_COMPONENT_SEGMENT_GENERATOR} cannot run for them"
+                f"in {GROUP_APP_COMPONENTS}, so {_COMPONENT_SEGMENT_GENERATOR} cannot run for them"
             )
         await self.run_generator(_COMPONENT_SEGMENT_GENERATOR, component_ids, wait=False)

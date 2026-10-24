@@ -32,7 +32,8 @@ from typing import Any
 from infrahub_sdk.checks import InfrahubCheck
 
 from utils.data_cleaning import clean_data
-from utils.exchange_transit import MAX_ENCODABLE_VNI, TRANSIT_VNI_MAX, TRANSIT_VNI_MIN
+from utils.exchange_transit import TRANSIT_VNI_MAX, TRANSIT_VNI_MIN
+from utils.limits import MAX_ENCODABLE_VNI
 
 # A type-2 route-target (4-byte admin ASN + 2-byte assigned number) and a type-1
 # route-distinguisher (4-byte IP + 2-byte assigned number) both leave 16 bits for

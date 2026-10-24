@@ -9,8 +9,7 @@ from typing import Any
 
 from infrahub_sdk.exceptions import GraphQLError
 
-_NODE_RETRY_MAX_ATTEMPTS = 5
-_NODE_RETRY_BASE_DELAY = 2.0
+from utils.limits import NODE_SAVE_RETRY
 
 
 def retry_delay(base: float, attempt: int, cap: float = 20.0) -> float:
@@ -25,8 +24,8 @@ async def save_with_node_not_found_retry(
     obj: Any,
     logger: logging.Logger,
     *,
-    max_attempts: int = _NODE_RETRY_MAX_ATTEMPTS,
-    base_delay: float = _NODE_RETRY_BASE_DELAY,
+    max_attempts: int = NODE_SAVE_RETRY.attempts,
+    base_delay: float = NODE_SAVE_RETRY.delay,
     **save_kwargs: Any,
 ) -> None:
     """Save ``obj`` (``allow_upsert=True`` unless save_kwargs say otherwise), retrying on a NODE_NOT_FOUND write race.

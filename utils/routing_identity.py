@@ -15,12 +15,10 @@ import re
 from collections.abc import Iterable, Mapping
 from typing import Any
 
+from utils.limits import ROUTING_TAG_MAX, ROUTING_TAG_MIN
+
 CUSTOMER_COMMUNITY_ASN = 64496
 SEGMENT_COMMUNITY_ASN = 64497
-
-# The community value is a 16-bit field; 65535 is reserved, so a tag is 1..65534.
-ROUTING_TAG_MIN = 1
-ROUTING_TAG_MAX = 65534
 
 
 def customer_community(tag: int) -> str:

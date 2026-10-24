@@ -14,15 +14,16 @@ from typing import Any
 import pytest
 from infrahub_sdk import InfrahubClient
 
-from generators.helpers.pools import (
+from tasks import ALL_DEMO_BRANCH
+from utils.data_cleaning import clean_data
+from utils.exchange_transit import EXCHANGE_PEERS, TRANSIT_OFFSETS, transit_addresses, transit_vlan
+from utils.limits import (
     FW_CONTEXT_VLAN_END,
     FW_CONTEXT_VLAN_START,
     LB_CONTEXT_VLAN_END,
     LB_CONTEXT_VLAN_START,
+    LB_VIP_PREFIXLEN,
 )
-from tasks import ALL_DEMO_BRANCH
-from utils.data_cleaning import clean_data
-from utils.exchange_transit import EXCHANGE_PEERS, LB_VIP_PREFIXLEN, TRANSIT_OFFSETS, transit_addresses, transit_vlan
 
 from .all_demo_circuit_constants import ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS
 from .all_demo_constants import ALL_DEMO_DC_NAMES

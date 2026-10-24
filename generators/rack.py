@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING, Any, Literal
 if TYPE_CHECKING:
     import logging
 
+from utils.limits import WAIT_FOR_PEER_GENERATOR
+
 from .helpers.rack import pod_row_racks
 from .helpers.routing import RoutingStrategy, loopback_prefix_length, p2p_prefix_length
 from .helpers.template_interfaces import template_interface_names_by_role
@@ -16,11 +18,6 @@ from .pod_config import pod_deployment_type, pod_spine_slot_device_names, spine_
 from .protocols import DcimPhysicalDevice, DcimPhysicalInterface, LocationRack, TopologyDataCenter, TopologyPod
 from .types import RoutingOptions, naming_convention_of
 
-_POD_POOL_MAX_RETRIES = 10
-_POD_POOL_RETRY_DELAY = 3.0
-# A row-dependent rack waits this long for its row's leaf devices and their downlinks.
-_ROW_LEAF_MAX_RETRIES = 10
-_ROW_LEAF_RETRY_DELAY = 3.0
 # The pod's own generators — a rack waits for an in-flight one before reading
 # pod-level data (spines, pools).
 POD_GENERATORS = ("add_pod", "pod_rack_cascade")
@@ -208,7 +205,7 @@ class RackMixin:
         created no AS and no BGP process for the rack's devices, and the run
         still reported success (DC12's second network rack in a 30_all load).
         """
-        for attempt in range(_POD_POOL_MAX_RETRIES):
+        for attempt in range(WAIT_FOR_PEER_GENERATOR.attempts):
             missing = self._missing_pools(pod, dc, needs_asn_pool=needs_asn_pool)
             if any(label.startswith("pod.") for label in missing):
                 pod_obj = await self.client.get(kind=TopologyPod, id=pod["id"], include=list(_POD_POOL_FIELDS))
@@ -228,11 +225,11 @@ class RackMixin:
             # rather than spending blind retries until they run out.
             if await self.wait_for_parent_generator_and_refetch(POD_GENERATORS, pod["id"]) is not None:
                 continue
-            if attempt < _POD_POOL_MAX_RETRIES - 1:
-                delay = self._retry_delay(_POD_POOL_RETRY_DELAY, attempt)
+            if attempt < WAIT_FOR_PEER_GENERATOR.attempts - 1:
+                delay = self._retry_delay(WAIT_FOR_PEER_GENERATOR.delay, attempt)
                 self.logger.info(
                     f"Rack {self.data['name']}: {', '.join(missing)} not ready yet — "
-                    f"retrying in {delay:.2f}s (attempt {attempt + 1}/{_POD_POOL_MAX_RETRIES})"
+                    f"retrying in {delay:.2f}s (attempt {attempt + 1}/{WAIT_FOR_PEER_GENERATOR.attempts})"
                 )
                 await asyncio.sleep(delay)
 
@@ -265,7 +262,7 @@ class RackMixin:
                 hints.append(f"infrahubctl generator generate_dc name={dc['name']}")
             message = (
                 f"Rack {self.data['name']}: {', '.join(missing_pools)} not found after "
-                f"{_POD_POOL_MAX_RETRIES} attempts — refusing to generate devices that would have no routing. "
+                f"{WAIT_FOR_PEER_GENERATOR.attempts} attempts — refusing to generate devices that would have no routing. "
                 f"Run the generator first: {' / '.join(hints)}"
             )
             self.logger.error(message)
@@ -372,7 +369,8 @@ class RackMixin:
         network_rack_known = any(rack["rack_type"] == "network" for rack in row_racks)
         leaf_devices: list[Any] = []
         leaf_interfaces: list[Any] = []
-        for attempt in range(_ROW_LEAF_MAX_RETRIES):
+        # A row-dependent rack waits for its row's leaf devices and their downlinks.
+        for attempt in range(WAIT_FOR_PEER_GENERATOR.attempts):
             if not network_rack_known:
                 rack_ids = [
                     rack.id
@@ -399,12 +397,12 @@ class RackMixin:
             )
             if rack_ids and leaf_devices and leaf_interfaces:
                 break
-            if attempt < _ROW_LEAF_MAX_RETRIES - 1:
-                delay = self._retry_delay(_ROW_LEAF_RETRY_DELAY, attempt)
+            if attempt < WAIT_FOR_PEER_GENERATOR.attempts - 1:
+                delay = self._retry_delay(WAIT_FOR_PEER_GENERATOR.delay, attempt)
                 self.logger.info(
                     f"Rack {self.data['name']}: row {row_index} leaf devices/interfaces not ready yet "
                     f"(racks={len(rack_ids)}, leafs={len(leaf_devices)}, interfaces={len(leaf_interfaces)}) — "
-                    f"retrying in {delay:.2f}s (attempt {attempt + 1}/{_ROW_LEAF_MAX_RETRIES})"
+                    f"retrying in {delay:.2f}s (attempt {attempt + 1}/{WAIT_FOR_PEER_GENERATOR.attempts})"
                 )
                 await asyncio.sleep(delay)
 

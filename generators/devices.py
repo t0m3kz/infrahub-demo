@@ -11,6 +11,8 @@ from infrahub_sdk.protocols import CoreIPAddressPool
 if TYPE_CHECKING:
     import logging
 
+from utils.limits import ROLE_GROUP_NAMES
+
 from .domain_pairing import DomainPairingMixin
 from .helpers import DeviceNameContext, DeviceNamingConfig, get_loopback_name
 from .protocols import (
@@ -72,17 +74,6 @@ _ROLE_CONTROLLER_TYPE: dict[str, str] = {"firewall": "security_manager", "load-b
 HA_KIND_BY_ROLE: dict[str, str] = {
     "firewall": "ManagedFirewallHA",
     "load-balancer": "ManagedLoadbalancerHA",
-}
-
-# device_role -> the bootstrap CoreStandardGroup its devices join
-# (data/bootstrap/00_groups.yml), for roles whose group does not follow the
-# f"{device_role}s" convention. One map for every create_devices() caller: a
-# group created on a branch because a caller missed it collides with every
-# other branch that creates it when both merge.
-ROLE_GROUP_NAMES: dict[str, str] = {
-    "load-balancer": "loadbalancers",
-    "access-switch": "access-switches",
-    "distribution-switch": "distribution-switches",
 }
 
 

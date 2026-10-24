@@ -38,9 +38,10 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from generators.protocols import ManagedSegmentDeployment
-from generators.topology.segment import STRETCHED_VNI_POOL_NAME, VxlanSegmentGenerator
+from generators.topology.segment import VxlanSegmentGenerator
 from tests.unit import segment_generators_helpers
 from tests.unit.segment_generators_helpers import _DEP_1, _DEP_2, _make_gen, _seg_response
+from utils.limits import STRETCHED_VNI_POOL
 
 # Autouse fixture, re-exported so pytest registers it in this module.
 ensure_zone = segment_generators_helpers.ensure_zone
@@ -126,9 +127,9 @@ class TestVxlanSegmentGeneratorGenerate:
         )
         asyncio.run(gen.generate(data))
 
-        assert gen.client.get.call_args.kwargs["name__value"] == STRETCHED_VNI_POOL_NAME
+        assert gen.client.get.call_args.kwargs["name__value"] == STRETCHED_VNI_POOL
         pools = [c.kwargs["vni_pool"] for c in gen._activate_segment_in_deployment.call_args_list]
-        assert pools == [{"id": "pool-global", "name": STRETCHED_VNI_POOL_NAME}] * 2
+        assert pools == [{"id": "pool-global", "name": STRETCHED_VNI_POOL}] * 2
 
     def test_stretched_segment_without_global_pool_is_a_hard_error(self):
         """Missing GLOBAL-L2VNI fails the run instead of falling back to a site pool."""
@@ -141,7 +142,7 @@ class TestVxlanSegmentGeneratorGenerate:
         asyncio.run(gen.generate(data))
 
         gen._activate_segment_in_deployment.assert_not_called()
-        assert STRETCHED_VNI_POOL_NAME in gen.logger.error.call_args[0][0]
+        assert STRETCHED_VNI_POOL in gen.logger.error.call_args[0][0]
 
     def test_local_segment_does_not_reuse_prefetched_vni(self):
         """A local segment active in two sites gets each site's own pool and no
@@ -603,7 +604,7 @@ class TestVxlanVniAllocation:
         self._run(
             gen,
             reusable_vni=10100,
-            vni_pool={"id": "pool-global", "name": STRETCHED_VNI_POOL_NAME},
+            vni_pool={"id": "pool-global", "name": STRETCHED_VNI_POOL},
         )
 
         assert self._created_data(gen)["vni"] == 10100

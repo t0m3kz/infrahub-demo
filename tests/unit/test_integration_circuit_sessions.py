@@ -670,7 +670,10 @@ def _drift_plan(kind: str, rewrite: Callable[[SessionPlan], SessionPlan]) -> Cal
             id="dci-maximum-routes",
         ),
         pytest.param(
-            _drift_constant("_DCI_MTU", 1500), "test_06_verify_dci_sessions", "MTU 1500, expected 9214", id="dci-mtu"
+            _drift_constant("UNDERLAY_MTU", 1500),
+            "test_06_verify_dci_sessions",
+            "MTU 1500, expected 9214",
+            id="dci-mtu",
         ),
         pytest.param(
             _drift_plan(virtual_circuit.INTERCONNECT_CIRCUIT, _peerings_with(ttl=64)),

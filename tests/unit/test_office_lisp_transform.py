@@ -27,7 +27,6 @@ import yaml
 from graphql import parse
 from graphql.language import FieldNode, FragmentDefinitionNode, FragmentSpreadNode
 
-from generators.devices import ROLE_GROUP_NAMES
 from tests.integration.demo_data import attribute_names, relationship_names
 from tests.smoke.fixture_builders.common import run_transform
 from transforms.common import BaseDeviceTransform
@@ -43,6 +42,7 @@ from utils.fabric_roles import (
     OFFICE_LISP_ROLES,
     VTEP_ROLES,
 )
+from utils.limits import ROLE_GROUP_NAMES
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIGS_DIR = ROOT / "tests" / "smoke" / "configs"

@@ -30,6 +30,7 @@ from transforms.helpers.vxlan import get_interfaces, get_vxlan_config
 from utils.circuit_underlay import NETWORK_APPLIANCE_KIND
 from utils.data_cleaning import clean_data
 from utils.fabric_roles import BORDER_ROLES, OFFICE_LISP_ROLES
+from utils.limits import UNDERLAY_MTU
 
 _log = logging.getLogger(__name__)
 
@@ -375,6 +376,7 @@ class BaseDeviceTransform(InfrahubTransform):
             "ospf": get_ospf(device_capabilities, interfaces),
             "mlag": mlag,
             "capabilities": get_capabilities(data),
+            "underlay_mtu": UNDERLAY_MTU,
         }
         self._refuse_unfiltered_external_sessions(platform_name, config, data.get("typename"))
         if platform_name in {"sonic", "dell_sonic"}:

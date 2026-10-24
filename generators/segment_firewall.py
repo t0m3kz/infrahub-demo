@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Callable
 
+from utils.limits import RULE_SAVE_ATTEMPTS
 from utils.ports import PortSpec
 
 from .helpers.rules import RulesPlanner
@@ -19,7 +20,6 @@ if TYPE_CHECKING:
 # Starting rule index - leaves room below 100 for manually-crafted high-priority rules
 RULE_INDEX_START = 100
 RULE_INDEX_STEP = 10
-RULE_SAVE_ATTEMPTS = 5
 RULE_DEFAULT_VALIDITY_DAYS = 180
 # The cardinality-many selectors a generated rule sets: R_client's VIPs, R_server's leg.
 _SELECTOR_FIELDS = ("destination_ip_addresses", "source_prefixes")

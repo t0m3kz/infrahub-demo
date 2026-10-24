@@ -68,6 +68,7 @@ from infrahub_sdk.protocols import CoreIPPrefixPool
 from netutils.interface import sort_interface_list
 
 from utils.data_cleaning import clean_data
+from utils.limits import GROUP_PHYSICAL_CIRCUITS
 
 from ..common import CommonGenerator
 from ..helpers.naming import sdwan_edge_name
@@ -289,7 +290,7 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
                     # (not the edge device) and the ISP the far end sits in are facilities.
                     "locations": [{"id": office_id}, {"id": isp_location_id}],
                     "capabilities": [{"id": edge_uplink_id}, {"id": isp_port_id}],
-                    "member_of_groups": [_target_group("physical_circuits")],
+                    "member_of_groups": [_target_group(GROUP_PHYSICAL_CIRCUITS)],
                 },
             )
             await circuit.save(allow_upsert=True)

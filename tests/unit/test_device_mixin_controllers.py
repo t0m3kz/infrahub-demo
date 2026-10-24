@@ -10,9 +10,10 @@ import pytest
 import yaml
 from infrahub_sdk.protocols import CoreStandardGroup
 
-from generators.devices import ROLE_GROUP_NAMES, DeviceMixin
+from generators.devices import DeviceMixin
 from generators.protocols import DcimPhysicalDevice, ManagedController, ManagedStandaloneVlanDomain
 from tests.unit.device_mixin_helpers import _make_generator, _mock_created_device
+from utils.limits import ROLE_GROUP_NAMES
 
 
 def _controller_dict(controller_type: str, platform_id: str | None = None, id_: str = "ctrl-1") -> dict[str, Any]:
