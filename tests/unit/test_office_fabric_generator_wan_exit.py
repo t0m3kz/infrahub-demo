@@ -15,20 +15,9 @@ import pytest
 
 from generators.helpers.naming import sdwan_edge_name
 from generators.logger import GeneratorError
-from generators.protocols import (
-    DcimPhysicalDevice,
-    DcimPhysicalInterface,
-    DcimVirtualInterface,
-    ManagedBGP,
-)
-from generators.topology.office_fabric import (
-    _EDGE_WAIT_ATTEMPTS,
-)
-from tests.unit.office_fabric_generator_helpers import (
-    _DISTRIBUTION_TEMPLATE,
-    _make_generator,
-    _office,
-)
+from generators.protocols import DcimPhysicalDevice, DcimPhysicalInterface, DcimVirtualInterface, ManagedBGP
+from generators.topology.office_fabric import _EDGE_WAIT_ATTEMPTS
+from tests.unit.office_fabric_generator_helpers import _DISTRIBUTION_TEMPLATE, _make_generator, _office
 from utils.exchange_transit import wan_exit_vlan
 
 

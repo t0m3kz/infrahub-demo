@@ -1,13 +1,8 @@
 from typing import Any
 
 from transforms.common import BaseDeviceTransform
-from transforms.helpers.firewall import (
-    get_firewall_contexts,
-    get_firewall_static_routes,
-    get_firewall_zones,
-    get_zone_policies,
-    place_policies_in_contexts,
-)
+from transforms.helpers.firewall import get_firewall_static_routes, get_firewall_zones, get_zone_policies
+from transforms.helpers.firewall_contexts import get_firewall_contexts, place_policies_in_contexts
 from transforms.helpers.ha import get_ha, inline_addresses
 from transforms.helpers.segments import segment_vlan_ids
 from utils.exchange_transit import EXCHANGE_PEERS, INTERNET_TYPE, MANAGEMENT_TYPE, ZONE_BY_NS_TYPE

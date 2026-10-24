@@ -1,6 +1,6 @@
 """Unit tests for the RoutingMixin helpers the DC and the office fabric share.
 
-ensure_lisp_site_key (the office's site key, attached to the office as ``lisp_site_key``) and ensure_ospf_area
+ensure_lisp_site_key (the office's site key, which the office generator attaches as ``lisp_site_key``) and ensure_ospf_area
 (shared with the DC's ospf-ibgp) are the helpers the office fabric generator calls; create_routing's ``no_overlay``
 option is the office-driven way to ask for an underlay-only plan.
 """
@@ -21,7 +21,7 @@ from generators.types import RoutingOptions
 
 
 def _mixin() -> Any:
-    """A RoutingMixin standing in for a generator: mock client, no-op lock, recording attach_refs."""
+    """A RoutingMixin standing in for a generator: mock client, no-op lock."""
     mixin: Any = RoutingMixin.__new__(RoutingMixin)
     mixin.fabric_name = "c005-office"
     mixin.deployment_id = "office-1"
@@ -30,7 +30,6 @@ def _mixin() -> Any:
     mixin.client.group_context.related_node_ids = []
     mixin.client.filters = AsyncMock(return_value=[])
     mixin.client.get = AsyncMock(return_value=None)
-    mixin.attach_refs = AsyncMock()
 
     @asynccontextmanager
     async def _no_lock(key: str) -> AsyncGenerator[None]:
@@ -52,20 +51,17 @@ def _created(mixin: Any, id_: str) -> MagicMock:
 
 class TestEnsureLispSiteKey:
     @pytest.mark.asyncio
-    async def test_creates_the_named_key_and_attaches_it_to_the_deployment(self) -> None:
+    async def test_creates_the_named_tracked_key(self) -> None:
         mixin = _mixin()
         key = _created(mixin, "key-1")
 
-        site_key_id = await mixin.ensure_lisp_site_key(deployment_id="office-1")
+        site_key_id = await mixin.ensure_lisp_site_key()
 
         assert site_key_id == "key-1"
         create = mixin.client.create.await_args.kwargs
         assert create["kind"] is RoutingPassword
         assert create["data"]["name"] == "c005-office-lisp-site-key"
         assert create["data"]["password"]
-        mixin.attach_refs.assert_awaited_once_with(
-            kind="TopologyCustomerOffice", node_id="office-1", refs={"lisp_site_key": "key-1"}
-        )
         # tracked: the run that owns the key keeps it on every later run
         assert key.id in mixin.client.group_context.related_node_ids
 
@@ -76,27 +72,21 @@ class TestEnsureLispSiteKey:
         mixin.client.get = AsyncMock(return_value=existing)
         mixin.client.create = AsyncMock()
 
-        site_key_id = await mixin.ensure_lisp_site_key(deployment_id="office-1")
+        site_key_id = await mixin.ensure_lisp_site_key()
 
         assert site_key_id == "key-1"
         mixin.client.create.assert_not_awaited()
-        mixin.attach_refs.assert_awaited_once_with(
-            kind="TopologyCustomerOffice", node_id="office-1", refs={"lisp_site_key": "key-1"}
-        )
         assert "key-1" in mixin.client.group_context.related_node_ids
 
     @pytest.mark.asyncio
-    async def test_a_key_that_could_not_be_created_attaches_nothing(self) -> None:
+    async def test_a_key_that_could_not_be_created_returns_none(self) -> None:
         mixin = _mixin()
         mixin.client.create = AsyncMock(side_effect=RuntimeError("boom"))
 
-        site_key_id = await mixin.ensure_lisp_site_key(deployment_id="office-1")
+        site_key_id = await mixin.ensure_lisp_site_key()
 
         assert site_key_id is None
         mixin.logger.error.assert_called_once()
-        mixin.attach_refs.assert_awaited_once_with(
-            kind="TopologyCustomerOffice", node_id="office-1", refs={"lisp_site_key": None}
-        )
 
 
 class TestEnsureOspfArea:

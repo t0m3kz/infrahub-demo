@@ -181,6 +181,19 @@ fragment PodFields on TopologyPod {
       id
     }
   }
+  # Every rack of the pod: the generator filters its row in Python instead of reading it
+  # (racks are data, never saved by this generator).
+  racks {
+    edges {
+      node {
+        id
+        name { value }
+        index { value }
+        row_index { value }
+        rack_type { value }
+      }
+    }
+  }
 }
 
 query RackGenerator($name: String) {

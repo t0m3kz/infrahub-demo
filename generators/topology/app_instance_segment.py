@@ -56,7 +56,6 @@ _fan_out_component_segments), so the tags follow the cabling.
 
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 from typing import Any
 
@@ -64,13 +63,9 @@ from utils.app_instances import physical_host
 from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator
-from ..far_end import far_end_interface
+from ..far_end import far_end_interfaces
 from ..pools import PoolMixin
-from ..protocols import (
-    DcimPhysicalInterface,
-    ManagedVlanSegment,
-    ManagedVxlanSegment,
-)
+from ..protocols import DcimPhysicalInterface, ManagedVlanSegment, ManagedVxlanSegment
 from ..vlan_domain import TAGGABLE_INTERFACE_KINDS, VlanDomainMixin, segment_lock_key
 from .endpoint import ENDPOINT_NIC_ROLES
 
@@ -129,12 +124,8 @@ class AppInstanceSegmentGenerator(PoolMixin, VlanDomainMixin, CommonGenerator):
             )
             return
 
-        segment_obj = await self.client.get(kind=ManagedVxlanSegment, id=segment_id, raise_when_missing=False)
-        if not segment_obj:
-            self.logger.info(f"Component {fqdn}: segment {segment_id} is not a VXLAN segment — nothing to assign")
-            return
-
         async with self.resource_lock(segment_lock_key(segment_id)):
+            # None when the segment is gone or is no VXLAN segment: nothing to assign.
             state = await self._fetch_segment_vlan_state(segment_id)
             if state is None:
                 self.logger.info(f"Component {fqdn}: segment {segment_id} is not a VXLAN segment — nothing to assign")
@@ -142,7 +133,7 @@ class AppInstanceSegmentGenerator(PoolMixin, VlanDomainMixin, CommonGenerator):
             added, removed = await self._reconcile_segment_interface_tags(
                 segment_id=segment_id,
                 segment_name=segment_name,
-                segment_obj=segment_obj,
+                segment_kind=ManagedVxlanSegment,
                 current_ids=self.tagged_interface_ids(state["segment"]),
             )
             if added or removed:
@@ -181,8 +172,9 @@ class AppInstanceSegmentGenerator(PoolMixin, VlanDomainMixin, CommonGenerator):
             return await self._reconcile_segment_interface_tags(
                 segment_id=segment_id,
                 segment_name=segment_name,
-                segment_obj=segment_obj,
+                segment_kind=ManagedVlanSegment,
                 current_ids=current_ids,
+                segment_obj=segment_obj,
             )
 
     async def _segment_components(self, segment_id: str) -> list[dict[str, Any]]:
@@ -197,8 +189,9 @@ class AppInstanceSegmentGenerator(PoolMixin, VlanDomainMixin, CommonGenerator):
         *,
         segment_id: str,
         segment_name: str,
-        segment_obj: Any,
+        segment_kind: type[ManagedVxlanSegment] | type[ManagedVlanSegment],
         current_ids: set[str],
+        segment_obj: Any | None = None,
     ) -> tuple[int, int]:
         """Make the segment's switch-port tags exactly the customer-facing
         targets of the instances of EVERY component on the segment: tag the
@@ -208,6 +201,10 @@ class AppInstanceSegmentGenerator(PoolMixin, VlanDomainMixin, CommonGenerator):
         RelationshipAdd/RelationshipRemove on the segment's
         capabilities — touches only this segment's edge on each
         port and never enters this run's tracking group.
+
+        ``segment_obj`` is the segment node when the caller already holds it
+        (the VLAN path reads it for ``current_ids``); otherwise it is fetched
+        here, and only when there is a tag to add or remove.
 
         Returns (interfaces tagged, interfaces untagged).
         """
@@ -221,15 +218,17 @@ class AppInstanceSegmentGenerator(PoolMixin, VlanDomainMixin, CommonGenerator):
                 if (device_id := self._resolve_physical_device_id(instance))
             )
         )
-        resolved = await asyncio.gather(*(self._customer_facing_target_ids(device_id) for device_id in device_ids))
-        desired_ids: set[str] = set().union(*resolved)
+        desired_ids = await self._customer_facing_target_ids(device_ids)
 
         to_add = sorted(desired_ids - current_ids)
         to_remove = sorted(current_ids - desired_ids)
-        if to_add:
-            await segment_obj.add_relationships(relation_to_update="capabilities", related_nodes=to_add)
-        if to_remove:
-            await segment_obj.remove_relationships(relation_to_update="capabilities", related_nodes=to_remove)
+        if to_add or to_remove:
+            if segment_obj is None:
+                segment_obj = await self.client.get(kind=segment_kind, id=segment_id)
+            if to_add:
+                await segment_obj.add_relationships(relation_to_update="capabilities", related_nodes=to_add)
+            if to_remove:
+                await segment_obj.remove_relationships(relation_to_update="capabilities", related_nodes=to_remove)
         self.logger.info(
             f"Segment {segment_name}: {len(desired_ids)} customer-facing port(s) from {len(components)} "
             f"component(s) — tagged {len(to_add)}, untagged {len(to_remove)}"
@@ -248,39 +247,41 @@ class AppInstanceSegmentGenerator(PoolMixin, VlanDomainMixin, CommonGenerator):
         host = physical_host(instance)
         return host.get("id") if host else None
 
-    async def _customer_facing_target_ids(self, device_id: str) -> set[str]:
-        """The ids of every switch interface `device_id` is cabled to: the far
+    async def _customer_facing_target_ids(self, device_ids: list[str]) -> set[str]:
+        """The ids of every switch interface the devices are cabled to: the far
         end of a role=uplink NIC directly, a role=lag NIC's switch-side
         port-channel. Several bond members resolving to the SAME port-channel
-        dedup to one id. Read-only."""
+        dedup to one id. Read-only: one query for the NICs of all the devices,
+        two for the far ends of all their cables."""
+        if not device_ids:
+            return set()
         nics = await self.client.filters(
             kind=DcimPhysicalInterface,
-            device__ids=[device_id],
+            device__ids=device_ids,
             role__values=list(ENDPOINT_NIC_ROLES),
             include=["cable"],
         )
         cabled = [nic for nic in nics if nic.cable and nic.cable.id]
         if not cabled:
-            self.logger.info(f"  Device {device_id} has no cabled uplink/lag interface yet — nothing to tag")
+            self.logger.info(
+                f"  Device(s) {', '.join(device_ids)} have no cabled uplink/lag interface yet — nothing to tag"
+            )
             return set()
 
-        # Each nic's resolution is independent read-only lookups, so they run
-        # concurrently; the set merge itself stays single-threaded.
-        resolved_ids = await asyncio.gather(*(self._resolve_customer_facing_target_id(nic) for nic in cabled))
-        target_ids = {target_id for target_id in resolved_ids if target_id is not None}
+        far_ends = await far_end_interfaces(self.client, cabled, include=["lag"])
+        target_ids = {
+            target_id for far_end in far_ends.values() if (target_id := self._customer_facing_target_id(far_end))
+        }
         if not target_ids:
-            self.logger.info(f"  Device {device_id}: cabled but no customer-facing switch port resolved")
+            self.logger.info(f"  Device(s) {', '.join(device_ids)}: cabled but no customer-facing switch port resolved")
         return target_ids
 
-    async def _resolve_customer_facing_target_id(self, nic: Any) -> str | None:
-        """The id of the far end of `nic`'s cable, as the interface to tag: the
-        far-end port itself for a plain uplink, or its own switch-side
+    def _customer_facing_target_id(self, far_end: Any) -> str | None:
+        """The id of the interface to tag for a NIC whose cable ends on `far_end`:
+        the far-end port itself for a plain uplink, or its own switch-side
         port-channel when the far end is a role=lag member — the aggregate is
-        what carries the VLAN, not the raw member port. None if the cable has
-        no resolvable far end, or a lag far end has no port-channel yet."""
-        far_end = await far_end_interface(self.client, nic, include=["lag"])
-        if far_end is None:
-            return None
+        what carries the VLAN, not the raw member port. None if a lag far end
+        has no port-channel yet."""
         if far_end.role.value != "lag":
             return far_end.id
 

@@ -149,7 +149,7 @@ class TestFreshSharedBoarding:
 
         assert events == [f"acquire:fw-context-{_SHARED}", "release"]
         gen.link_serving_context.assert_awaited_once_with(
-            FIREWALL_CONTEXT, customer_id="cust-1", context_id=world.contexts[_SHARED].id
+            FIREWALL_CONTEXT, customer_id="cust-1", context_id=world.contexts[_SHARED].id, current_id=None
         )
 
     @pytest.mark.asyncio
@@ -190,7 +190,7 @@ class TestRerunAndSecondCustomer:
         assert world.writes == before
         assert events == []
         gen.link_serving_context.assert_awaited_with(
-            FIREWALL_CONTEXT, customer_id="cust-2", context_id=world.contexts[_SHARED].id
+            FIREWALL_CONTEXT, customer_id="cust-2", context_id=world.contexts[_SHARED].id, current_id=None
         )
 
     @pytest.mark.asyncio
@@ -447,7 +447,7 @@ class TestSnatAddress:
         world = _World(snat_pool=False)  # the pool is never looked up
         gen, _ = _make_gen(world)
 
-        with patch("generators.firewall_context.EXCHANGE_PEERS", {"prod": ()}):
+        with patch("generators.firewall_context_spec.EXCHANGE_PEERS", {"prod": ()}):
             await _run(gen, world, _payload())
 
         assert world.snat_allocations == {}

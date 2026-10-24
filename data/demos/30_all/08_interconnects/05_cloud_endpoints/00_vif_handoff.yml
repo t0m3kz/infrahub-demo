@@ -15,7 +15,7 @@
 #
 # The circuit is the handoff and nothing else is authored for the session. The two
 # sub-interfaces are <port>.<vif.vlan_id>: that VLAN is how
-# transforms/helpers/bgp.py (get_external_peer_prefixes) finds the VIF behind
+# transforms/helpers/bgp_external.py (get_external_peer_prefixes) finds the VIF behind
 # the session and so the VPC blocks it may accept (those propagating into the
 # hybrid attachment's route table, registered in PROD). Same shape as the
 # SD-WAN handoff (../04_sdwan/06_vrf_handoff.yml).

@@ -7,10 +7,7 @@ and BGP profile selection from session data.
 import pytest
 
 from tests.unit.bgp_transforms_helpers import _make_peering
-from transforms.helpers.bgp import (
-    _build_peer_groups,
-    get_bgp_profile,
-)
+from transforms.helpers.bgp import _build_peer_groups, get_bgp_profile
 from utils.fabric_roles import RR_ROLES
 
 # ============================================================================

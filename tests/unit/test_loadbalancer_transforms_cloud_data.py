@@ -9,11 +9,7 @@ Covers:
 from __future__ import annotations
 
 from tests.unit.loadbalancer_transforms_helpers import _lb, _vips
-from transforms.config.loadbalancer_cloud import (
-    prepare_aws_data,
-    prepare_azure_data,
-    prepare_gcp_data,
-)
+from transforms.config.loadbalancer_cloud import prepare_aws_data, prepare_azure_data, prepare_gcp_data
 
 # pool_name derived from hostname-protocol-port
 _POOL_NAME = "app.example.com-https-443"

@@ -36,9 +36,7 @@ from tests.unit.gpo_device_view_helpers import (
     _view,
 )
 from transforms.config.leaf import Leaf
-from transforms.helpers.group_policy import (
-    ComponentClaim,
-)
+from transforms.helpers.group_policy import ComponentClaim
 from transforms.helpers.vxlan import get_interfaces
 from utils.data_cleaning import clean_data
 

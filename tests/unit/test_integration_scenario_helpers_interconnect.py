@@ -3,9 +3,7 @@
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from tests.integration.test_helpers import (
-    fetch_interconnect_inventory,
-)
+from tests.integration.test_helpers import fetch_interconnect_inventory
 from tests.unit.integration_scenario_helpers_helpers import _no_propagation_delay  # noqa: F401 (autouse fixture)
 
 

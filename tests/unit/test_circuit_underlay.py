@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -14,6 +15,7 @@ from utils.circuit_underlay import (
     has_carrier,
     overlay_processes,
     port_cabled,
+    session_circuits_on,
     subinterface_vlan,
 )
 
@@ -113,3 +115,27 @@ def test_the_kind_names_are_those_of_the_protocol_classes() -> None:
     assert HANDOFF_CIRCUIT == TopologyHandoffCircuit.__name__
     assert INTERCONNECT_CIRCUIT == TopologyInterconnectCircuit.__name__
     assert TUNNEL_CIRCUIT == TopologyTunnelCircuit.__name__
+
+
+@pytest.mark.asyncio
+async def test_session_circuits_on_reads_both_session_kinds_and_never_the_tunnel() -> None:
+    """One capabilities__ids query per session kind, merged, interconnects first; no tunnel circuit."""
+    interconnect, handoff = MagicMock(id="vc-icx"), MagicMock(id="vc-hnd")
+    by_kind = {INTERCONNECT_CIRCUIT: [interconnect], HANDOFF_CIRCUIT: [handoff]}
+    client = MagicMock()
+    client.filters = AsyncMock(side_effect=lambda *, kind, **_: by_kind[kind])
+
+    found = await session_circuits_on(client, ["port-1", "port-2"])
+
+    assert found == [interconnect, handoff]
+    assert sorted(call.kwargs["kind"] for call in client.filters.await_args_list) == sorted(SESSION_CIRCUIT_KINDS)
+    assert all(call.kwargs["capabilities__ids"] == ["port-1", "port-2"] for call in client.filters.await_args_list)
+
+
+@pytest.mark.asyncio
+async def test_session_circuits_on_with_no_circuit_is_empty() -> None:
+    """Nothing rides the ports: an empty list, not an error."""
+    client = MagicMock()
+    client.filters = AsyncMock(return_value=[])
+
+    assert await session_circuits_on(client, ["port-1"]) == []

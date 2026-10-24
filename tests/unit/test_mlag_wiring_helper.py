@@ -26,6 +26,7 @@ from generators.protocols import (
     DcimPhysicalDevice,
     DcimPhysicalInterface,
     DcimVirtualInterface,
+    TopologyPod,
 )
 
 
@@ -64,6 +65,13 @@ def _mock_iface(
     iface.cable = cable
     iface.save = AsyncMock()
     return iface
+
+
+def _pod_with_parent(*, initialized: bool, parent_id: str = "") -> MagicMock:
+    """A TopologyPod as get(include=["parent"]) returns it (``parent`` is a reserved MagicMock kwarg, so set after)."""
+    pod = MagicMock()
+    pod.parent = MagicMock(initialized=initialized, id=parent_id)
+    return pod
 
 
 def _mock_mlag_device(name: str, *, platform: str = "nxos") -> MagicMock:
@@ -522,19 +530,48 @@ class TestEnsurePeerLinkCables:
         dev_a, dev_b = _mock_mlag_device("tor-01"), _mock_mlag_device("tor-02")
         iface_a = _mock_iface("a1", "Ethernet1/1", cable_id="orphan-cable")
         iface_b = _mock_iface("b1", "Ethernet1/1")
-        orphan_obj = MagicMock(id="orphan-cable")
         gen.client.filters = AsyncMock(return_value=[])
-        gen.client.get = AsyncMock(return_value=orphan_obj)
+        gen.client.get = AsyncMock()
         cable_obj = MagicMock(save=AsyncMock())
         gen.client.create = AsyncMock(return_value=cable_obj)
 
         await gen._ensure_peer_link_cables("tor-01-tor-02-mlag", dev_a, dev_b, [iface_a], [iface_b])
 
-        gen.client.get.assert_awaited_once_with(kind=DcimCable, id="orphan-cable")
+        gen.client.get.assert_not_awaited()
         create_kwargs = gen.client.create.call_args.kwargs
         assert create_kwargs["data"]["id"] == "orphan-cable"
         assert create_kwargs["data"]["name"] == "CBL-tor-01-tor-02-mlag-PL1"
         cable_obj.save.assert_awaited_once_with(allow_upsert=True)
+
+    @pytest.mark.asyncio
+    async def test_peer_link_cables_are_filed_under_the_pods_parent_read_once_per_run(self) -> None:
+        """Every pair of a run sits in one pod: its parent is read once, then served from the memo."""
+        gen = _gen()
+        gen.client.filters = AsyncMock(return_value=[])
+        gen.client.get = AsyncMock(return_value=_pod_with_parent(initialized=True, parent_id="dc-1"))
+        gen.client.create = AsyncMock(return_value=MagicMock(save=AsyncMock()))
+        for pair in ("a", "b"):
+            dev_a, dev_b = _mock_mlag_device(f"{pair}-01"), _mock_mlag_device(f"{pair}-02")
+            dev_a.deployment = MagicMock(initialized=True, typename="TopologyPod", id="pod-1")
+            await gen._ensure_peer_link_cables(
+                f"{pair}-mlag", dev_a, dev_b, [_mock_iface("a1", "Ethernet1")], [_mock_iface("b1", "Ethernet1")]
+            )
+
+        gen.client.get.assert_awaited_once_with(kind=TopologyPod, id="pod-1", include=["parent"])
+        deployments = [c.kwargs["data"]["deployment"] for c in gen.client.create.await_args_list]
+        assert deployments == [{"id": "dc-1"}, {"id": "dc-1"}]
+
+    @pytest.mark.asyncio
+    async def test_pod_without_a_parent_files_no_deployment_and_is_remembered(self) -> None:
+        """A pod whose parent is unset yields no deployment, and that answer is memoised too."""
+        gen = _gen()
+        gen.client.get = AsyncMock(return_value=_pod_with_parent(initialized=False))
+        dev = _mock_mlag_device("a-01")
+        dev.deployment = MagicMock(initialized=True, typename="TopologyPod", id="pod-1")
+
+        assert await gen._resolve_peer_link_deployment_id(dev) is None
+        assert await gen._resolve_peer_link_deployment_id(dev) is None
+        gen.client.get.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_existing_cable_gets_upserted_by_id(self) -> None:
@@ -657,6 +694,32 @@ class TestAllocateControlIps:
         assert [c.kwargs["id"] for c in gen.client.delete.await_args_list] == [s.id for s in stale]
         svi_queries = [c.kwargs for c in gen.client.filters.await_args_list if "device__ids" in c.kwargs]
         assert [q["device__ids"] for q in svi_queries] == [[dev.id for dev in devs]]
+
+    @pytest.mark.asyncio
+    async def test_control_pool_is_read_once_per_run(self) -> None:
+        """Two domains of one run draw from the same pool, read a single time."""
+        gen = _gen()
+        devs = [_mock_mlag_device("leaf-01"), _mock_mlag_device("leaf-02")]
+        pool = _control_client(gen, prefix="fd00:2400::/127", devices=devs)
+
+        await gen._allocate_control_ips(_mock_mlag_obj(), "m1", devs, {"arista_eos"}, False)
+        await gen._allocate_control_ips(_mock_mlag_obj(), "m2", devs, {"arista_eos"}, False)
+
+        pool_reads = [c for c in gen.client.filters.await_args_list if c.kwargs["kind"] is CoreIPPrefixPool]
+        assert len(pool_reads) == 1
+        assert [c.kwargs["resource_pool"] for c in gen.client.allocate_next_ip_prefix.await_args_list] == [pool, pool]
+
+    @pytest.mark.asyncio
+    async def test_missing_pool_is_not_remembered(self) -> None:
+        """A pool that was not found is looked up again by the next domain."""
+        gen = _gen()
+        gen.client.filters = AsyncMock(return_value=[])
+        devs = [_mock_mlag_device("leaf-01"), _mock_mlag_device("leaf-02")]
+
+        await gen._allocate_control_ips(_mock_mlag_obj(), "m1", devs, {"sonic"}, False)
+        await gen._allocate_control_ips(_mock_mlag_obj(), "m2", devs, {"sonic"}, False)
+
+        assert gen.client.filters.await_count == 2
 
     @pytest.mark.asyncio
     async def test_vpc_skips_allocation(self) -> None:

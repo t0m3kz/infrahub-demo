@@ -97,6 +97,28 @@ class TestEvpn:
         gen._metro_node.save.assert_awaited_once()
 
     @pytest.mark.asyncio
+    async def test_site_as_already_on_the_metro_costs_no_get_and_no_save(self) -> None:
+        """The query read the metro's evpn_rt_as: a re-run finds it in place and does not fetch or save the metro."""
+        gen = _evpn_generator()
+        gen.data["parent"]["evpn_rt_as"] = {"id": "as-site"}
+
+        await gen._ensure_evpn()
+
+        gen.client.get.assert_not_awaited()
+        gen._metro_node.save.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_different_site_as_on_the_metro_is_replaced(self) -> None:
+        """The metro points at another AS than the shared one: it is fetched and re-pointed."""
+        gen = _evpn_generator()
+        gen.data["parent"]["evpn_rt_as"] = {"id": "as-old"}
+
+        await gen._ensure_evpn()
+
+        assert gen._metro_node.evpn_rt_as == {"id": "as-site"}
+        gen._metro_node.save.assert_awaited_once()
+
+    @pytest.mark.asyncio
     async def test_site_as_is_drawn_under_a_lock_keyed_by_the_metro_description(self) -> None:
         """Zones of one metro running concurrently must not draw two ASNs: the lock key carries the metro's name."""
         gen = _evpn_generator()

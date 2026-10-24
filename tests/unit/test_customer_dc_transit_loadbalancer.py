@@ -92,7 +92,7 @@ class TestLoadbalancerSharedContext:
         assert world.tags == [(context.id, ["bl-port-lb-1", "bl-port-lb-2"])]
         assert events == [f"acquire:lb-context-{_LB_PROD}", "release"]
         gen.link_serving_context.assert_awaited_once_with(
-            LOADBALANCER_CONTEXT, customer_id="cust-1", context_id=context.id
+            LOADBALANCER_CONTEXT, customer_id="cust-1", context_id=context.id, current_id=None
         )
         gen.logger.error.assert_not_called()
 
@@ -147,7 +147,9 @@ class TestLoadbalancerSharedContext:
         assert world.allocated[f"{non_prod.id}-NON-PROD-lb-vip"].prefix.value == "100.66.112.0/26"
         assert all(label != _LB_PROD for _, label, _ in world.saves[prod_saves:])
         assert prod_context.vlan_id.value == 3100
-        gen.link_serving_context.assert_awaited_with(LOADBALANCER_CONTEXT, customer_id="cust-2", context_id=non_prod.id)
+        gen.link_serving_context.assert_awaited_with(
+            LOADBALANCER_CONTEXT, customer_id="cust-2", context_id=non_prod.id, current_id=None
+        )
 
     @pytest.mark.asyncio
     async def test_rerun_and_second_customer_write_nothing_and_never_take_the_lock(self) -> None:
@@ -165,7 +167,7 @@ class TestLoadbalancerSharedContext:
         # No exchanges to look up: an empty name__values filter is never sent.
         assert "TopologyRoutedExchange" not in world.executed_filters
         gen.link_serving_context.assert_awaited_with(
-            LOADBALANCER_CONTEXT, customer_id="cust-2", context_id=world.contexts[_LB_PROD].id
+            LOADBALANCER_CONTEXT, customer_id="cust-2", context_id=world.contexts[_LB_PROD].id, current_id=None
         )
 
     @pytest.mark.asyncio

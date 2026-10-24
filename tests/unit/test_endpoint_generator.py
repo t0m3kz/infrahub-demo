@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from generators.topology.endpoint import EndpointConnectivityGenerator
-from tests.unit.endpoint_generator_helpers import _bond, _endpoint_data, _endpoint_device, _iface, _make_generator, _nic
+from tests.unit.endpoint_generator_helpers import _bond, _bond_data, _endpoint_data, _iface, _make_generator, _nic
 
 # ===========================================================================
 # generate() — guard clauses and dispatch
@@ -103,15 +103,11 @@ class TestGenerateGuardClauses:
 
     @pytest.mark.asyncio
     async def test_filters_empty_interface_nodes(self) -> None:
-        """Empty {} entries in `interfaces` (virtual interfaces not matching the
-        PhysicalInterfaceFields fragment) must be dropped before model construction,
-        not passed through to EndpointModel."""
+        """Empty {} entries in `interfaces` (virtual interfaces matching neither the
+        PhysicalInterfaceFields nor the BondFields fragment) must be dropped before the
+        data is used."""
         gen = _make_generator()
-        endpoint_device = MagicMock()
-        endpoint_device.deployment = MagicMock(id="pod-1")
-        endpoint_device.save = AsyncMock()
-        gen.client.get = AsyncMock(return_value=endpoint_device)
-        gen.client.filters = AsyncMock(side_effect=[[], []])  # no bonds, no uplink interfaces
+        gen.client.filters = AsyncMock(side_effect=[[]])  # no uplink interfaces
 
         data = _endpoint_data()
         data["DcimDevice"][0]["interfaces"] = [{}, {"id": "i1", "name": "eth0"}]
@@ -121,38 +117,58 @@ class TestGenerateGuardClauses:
         assert len(gen.data["interfaces"]) == 1
         assert gen.data["interfaces"][0]["name"] == "eth0"
 
+    @pytest.mark.asyncio
+    async def test_bonds_are_split_from_the_physical_interfaces(self) -> None:
+        """A BondFields dict (it carries lag_id) is a bond, not one of the server's physical interfaces."""
+        gen = _make_generator()
+        eth0, eth1 = _nic("eth0"), _nic("eth1")
+        gen.client.filters = AsyncMock(side_effect=[[eth0, eth1]])  # the lag NICs
+
+        await gen.generate(_bond_data(_bond("bond0", [eth0, eth1])))
+
+        assert [intf["name"] for intf in gen.data["interfaces"]] == ["eth0"]
+        gen._process_lag_endpoint_connections.assert_awaited_once()
+
 
 class TestGenerateDeploymentUpdate:
     @pytest.mark.asyncio
     async def test_deployment_updated_when_mismatched(self) -> None:
         gen = _make_generator()
         endpoint_device = MagicMock()
-        endpoint_device.deployment = MagicMock(id="some-other-pod")
         endpoint_device.save = AsyncMock()
         gen.client.get = AsyncMock(return_value=endpoint_device)
-        gen.client.filters = AsyncMock(side_effect=[[], []])
+        gen.client.filters = AsyncMock(side_effect=[[]])
 
-        await gen.generate(_endpoint_data())
+        await gen.generate(_endpoint_data(deployment="some-other-pod"))
 
         assert endpoint_device.deployment == "pod-1"
         # Untracked: the data-loaded server is this run's target, not its output.
         endpoint_device.save.assert_awaited_once_with(update_group_context=False)
 
     @pytest.mark.asyncio
-    async def test_deployment_not_saved_when_already_correct(self) -> None:
-        """The server is never tracked, so a deployment that already matches
-        needs no write at all (a tracked server would be deleted by the first
-        run that skipped the save)."""
+    async def test_deployment_updated_when_unset(self) -> None:
         gen = _make_generator()
         endpoint_device = MagicMock()
-        endpoint_device.deployment = MagicMock(id="pod-1")
         endpoint_device.save = AsyncMock()
         gen.client.get = AsyncMock(return_value=endpoint_device)
-        gen.client.filters = AsyncMock(side_effect=[[], []])
+        gen.client.filters = AsyncMock(side_effect=[[]])
+
+        await gen.generate(_endpoint_data(deployment=None))
+
+        assert endpoint_device.deployment == "pod-1"
+        endpoint_device.save.assert_awaited_once_with(update_group_context=False)
+
+    @pytest.mark.asyncio
+    async def test_deployment_already_correct_needs_neither_read_nor_write(self) -> None:
+        """The server is never tracked, so a deployment that already matches
+        (read from the query payload) needs no write at all, nor a get() of the
+        device (a tracked server would be deleted by the first run that skipped the save)."""
+        gen = _make_generator()
+        gen.client.filters = AsyncMock(side_effect=[[]])
 
         await gen.generate(_endpoint_data())
 
-        endpoint_device.save.assert_not_awaited()
+        gen.client.get.assert_not_awaited()
 
 
 class TestGenerateLagDispatch:
@@ -161,13 +177,10 @@ class TestGenerateLagDispatch:
         """Declared bonds take the LAG flow, each with its member NICs from the NIC query."""
         gen = _make_generator()
         eth0, eth1, eth2, eth3 = (_nic(f"eth{i}") for i in range(4))
-        gen.client.get = AsyncMock(return_value=_endpoint_device())
-        # filters call order: (1) server bonds, (2) the server's lag NICs
-        gen.client.filters = AsyncMock(
-            side_effect=[[_bond("bond0", [eth0, eth1]), _bond("bond1", [eth2, eth3])], [eth0, eth1, eth2, eth3]]
-        )
+        # The bonds come from the payload; the only read is the server's lag NICs
+        gen.client.filters = AsyncMock(side_effect=[[eth0, eth1, eth2, eth3]])
 
-        await gen.generate(_endpoint_data())
+        await gen.generate(_bond_data(_bond("bond0", [eth0, eth1]), _bond("bond1", [eth2, eth3])))
 
         assert gen._free_interfaces == [eth0, eth1, eth2, eth3]
         gen.acquire_resource_lock.assert_awaited_once_with("endpoint-cabling-pod-pod-1-row-1")
@@ -182,10 +195,9 @@ class TestGenerateLagDispatch:
         """A bond member that is not a role=lag NIC of this server is left out (and the bond then fails < 2 members)."""
         gen = _make_generator()
         eth0, stray = _nic("eth0"), _nic("eth9")
-        gen.client.get = AsyncMock(return_value=_endpoint_device())
-        gen.client.filters = AsyncMock(side_effect=[[_bond("bond0", [eth0, stray])], [eth0]])
+        gen.client.filters = AsyncMock(side_effect=[[eth0]])
 
-        await gen.generate(_endpoint_data())
+        await gen.generate(_bond_data(_bond("bond0", [eth0, stray])))
 
         gen._process_lag_endpoint_connections.assert_awaited_once_with({"bond0": [eth0]}, "mixed")
 
@@ -194,12 +206,11 @@ class TestGenerateLagDispatch:
         """The pod-row lock is released when the bond wiring raises."""
         gen = _make_generator()
         eth0 = _nic("eth0")
-        gen.client.get = AsyncMock(return_value=_endpoint_device())
-        gen.client.filters = AsyncMock(side_effect=[[_bond("bond0", [eth0])], [eth0]])
+        gen.client.filters = AsyncMock(side_effect=[[eth0]])
         gen._process_lag_endpoint_connections = AsyncMock(side_effect=RuntimeError("boom"))
 
         with pytest.raises(RuntimeError):
-            await gen.generate(_endpoint_data())
+            await gen.generate(_bond_data(_bond("bond0", [eth0])))
 
         gen.release_resource_lock.assert_awaited_once_with("lock-1")
 
@@ -211,10 +222,9 @@ class TestGenerateLagDispatch:
         cabled.cable = MagicMock(id="cable-1")
         cabled.cable._peer = MagicMock()
         cabled.cable._peer.name = MagicMock(value="leaf-1-Eth1__server-1-eth0")
-        gen.client.get = AsyncMock(return_value=_endpoint_device())
-        gen.client.filters = AsyncMock(side_effect=[[_bond("bond0", [cabled, free])], [cabled, free]])
+        gen.client.filters = AsyncMock(side_effect=[[cabled, free]])
 
-        await gen.generate(_endpoint_data(name="server-1"))
+        await gen.generate(_bond_data(_bond("bond0", [cabled, free])))
 
         assert gen._existing_switch_names == {"leaf-1"}
 
@@ -223,11 +233,7 @@ class TestGenerateUplinkFlow:
     @pytest.mark.asyncio
     async def test_no_uplink_interfaces_logs_info_and_returns(self) -> None:
         gen = _make_generator()
-        endpoint_device = MagicMock()
-        endpoint_device.deployment = MagicMock(id="pod-1")
-        endpoint_device.save = AsyncMock()
-        gen.client.get = AsyncMock(return_value=endpoint_device)
-        gen.client.filters = AsyncMock(side_effect=[[], []])  # no bonds, no uplink interfaces
+        gen.client.filters = AsyncMock(side_effect=[[]])  # no uplink interfaces
 
         await gen.generate(_endpoint_data())
 
@@ -237,13 +243,9 @@ class TestGenerateUplinkFlow:
     @pytest.mark.asyncio
     async def test_all_interfaces_already_cabled_skips(self) -> None:
         gen = _make_generator()
-        endpoint_device = MagicMock()
-        endpoint_device.deployment = MagicMock(id="pod-1")
-        endpoint_device.save = AsyncMock()
         cabled = _iface("eth0", device="server-1", cabled=True)
         cable_obj = MagicMock(save=AsyncMock())
-        gen.client.get = AsyncMock(return_value=endpoint_device)
-        gen.client.filters = AsyncMock(side_effect=[[], [cabled], [cable_obj]])
+        gen.client.filters = AsyncMock(side_effect=[[cabled], [cable_obj]])
 
         await gen.generate(_endpoint_data())
 
@@ -256,9 +258,6 @@ class TestGenerateUplinkFlow:
         the run tracks only what it saves, and delete_unused_nodes would
         otherwise delete the cables the first run made."""
         gen = _make_generator()
-        endpoint_device = MagicMock()
-        endpoint_device.deployment = MagicMock(id="pod-1")
-        endpoint_device.save = AsyncMock()
         first = _iface("eth0", device="server-1", cabled=True)
         second = _iface("eth1", device="server-1", cabled=True)
         second.cable.id = "cable-2"
@@ -269,8 +268,7 @@ class TestGenerateUplinkFlow:
         cables["cable-1"].name.value = "leaf-1-Ethernet1/1__server-1-eth0"
         cables["cable-2"].name.value = "leaf-2-Ethernet1/1__server-1-eth1"
 
-        gen.client.get = AsyncMock(return_value=endpoint_device)
-        gen.client.filters = AsyncMock(side_effect=[[], [first, second], [cables["cable-1"], cables["cable-2"]]])
+        gen.client.filters = AsyncMock(side_effect=[[first, second], [cables["cable-1"], cables["cable-2"]]])
 
         await gen.generate(_endpoint_data())
 
@@ -284,9 +282,6 @@ class TestGenerateUplinkFlow:
         CBL-... cable) is not this run's output: never re-saved, so never
         tracked and never deleted by this run's cleanup."""
         gen = _make_generator()
-        endpoint_device = MagicMock()
-        endpoint_device.deployment = MagicMock(id="pod-1")
-        endpoint_device.save = AsyncMock()
         first = _iface("eth0", device="server-1", cabled=True)
         second = _iface("eth1", device="server-1", cabled=True)
         second.cable.id = "cable-2"
@@ -295,8 +290,7 @@ class TestGenerateUplinkFlow:
         loaded = MagicMock(save=AsyncMock(), id="cable-2")
         loaded.name.value = "CBL-DC1-SRV1-2"
 
-        gen.client.get = AsyncMock(return_value=endpoint_device)
-        gen.client.filters = AsyncMock(side_effect=[[], [first, second], [own, loaded]])
+        gen.client.filters = AsyncMock(side_effect=[[first, second], [own, loaded]])
 
         await gen.generate(_endpoint_data())
 
@@ -306,12 +300,8 @@ class TestGenerateUplinkFlow:
     @pytest.mark.asyncio
     async def test_free_interfaces_trigger_resolve_and_process(self) -> None:
         gen = _make_generator()
-        endpoint_device = MagicMock()
-        endpoint_device.deployment = MagicMock(id="pod-1")
-        endpoint_device.save = AsyncMock()
         free_iface = _iface("eth0", device="server-1")
-        gen.client.get = AsyncMock(return_value=endpoint_device)
-        gen.client.filters = AsyncMock(side_effect=[[], [free_iface]])
+        gen.client.filters = AsyncMock(side_effect=[[free_iface]])
         targets = [_iface("Eth1", device="leaf-1")]
         gen._resolve_target_interfaces = AsyncMock(return_value=targets)
 
@@ -324,14 +314,10 @@ class TestGenerateUplinkFlow:
     @pytest.mark.asyncio
     async def test_partial_existing_connections_logged_and_processed(self) -> None:
         gen = _make_generator()
-        endpoint_device = MagicMock()
-        endpoint_device.deployment = MagicMock(id="pod-1")
-        endpoint_device.save = AsyncMock()
         cabled = _iface("eth0", device="leaf-1", cabled=True)
         free_iface = _iface("eth1", device="server-1")
         cable_obj = MagicMock(save=AsyncMock())
-        gen.client.get = AsyncMock(return_value=endpoint_device)
-        gen.client.filters = AsyncMock(side_effect=[[], [cabled, free_iface], [cable_obj]])
+        gen.client.filters = AsyncMock(side_effect=[[cabled, free_iface], [cable_obj]])
         gen._resolve_target_interfaces = AsyncMock(return_value=[])
 
         await gen.generate(_endpoint_data())
@@ -343,12 +329,8 @@ class TestGenerateUplinkFlow:
     @pytest.mark.asyncio
     async def test_no_target_interfaces_skips_process_call(self) -> None:
         gen = _make_generator()
-        endpoint_device = MagicMock()
-        endpoint_device.deployment = MagicMock(id="pod-1")
-        endpoint_device.save = AsyncMock()
         free_iface = _iface("eth0", device="server-1")
-        gen.client.get = AsyncMock(return_value=endpoint_device)
-        gen.client.filters = AsyncMock(side_effect=[[], [free_iface]])
+        gen.client.filters = AsyncMock(side_effect=[[free_iface]])
         gen._resolve_target_interfaces = AsyncMock(return_value=[])
 
         await gen.generate(_endpoint_data())
@@ -359,12 +341,8 @@ class TestGenerateUplinkFlow:
     @pytest.mark.asyncio
     async def test_lock_released_even_when_resolve_raises(self) -> None:
         gen = _make_generator()
-        endpoint_device = MagicMock()
-        endpoint_device.deployment = MagicMock(id="pod-1")
-        endpoint_device.save = AsyncMock()
         free_iface = _iface("eth0", device="server-1")
-        gen.client.get = AsyncMock(return_value=endpoint_device)
-        gen.client.filters = AsyncMock(side_effect=[[], [free_iface]])
+        gen.client.filters = AsyncMock(side_effect=[[free_iface]])
         gen._resolve_target_interfaces = AsyncMock(side_effect=RuntimeError("boom"))
 
         with pytest.raises(RuntimeError):

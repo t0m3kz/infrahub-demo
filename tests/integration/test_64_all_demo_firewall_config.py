@@ -12,7 +12,7 @@ of query+check+render already proves.
 CheckFirewall (checks/firewall.py) validates the rules one firewall enforces —
 the same ones its config renders (Firewall.collect_policies): the policies of
 the segments it serves and the rules into them. The render is not
-device-agnostic: place_policies_in_contexts() (transforms/helpers/firewall.py)
+device-agnostic: place_policies_in_contexts() (transforms/helpers/firewall_contexts.py)
 gives a context only the rules of the segments of the deployments it serves,
 so the render runs on every member of the cluster serving the policy's source
 segment (c001-nordix-prod-p, deployment C001-P-FR — the FR2 zone's firewall

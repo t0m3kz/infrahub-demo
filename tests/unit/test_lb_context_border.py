@@ -25,12 +25,8 @@ from tests.smoke.fixture_builders.transit import build_lb_context_bl_data
 from tests.smoke.test_configs_smoke import _run_transform
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.leaf import Leaf
-from transforms.helpers.firewall import (
-    _service_context_caps,
-    get_customer_pbr_rules,
-    get_exchange_routes,
-    get_exchange_transits,
-)
+from transforms.helpers.firewall import _service_context_caps, get_exchange_routes, get_exchange_transits
+from transforms.helpers.firewall_pbr import get_customer_pbr_rules
 from transforms.helpers.group_policy import UNCLASSIFIED, get_vrf_contracts
 from transforms.helpers.vxlan import get_interfaces
 

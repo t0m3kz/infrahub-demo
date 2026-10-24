@@ -23,11 +23,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from transforms.helpers.addressing import host_ip
-from transforms.helpers.overlay import (
-    _DEFAULT_ANYCAST_GATEWAY_MAC,
-    build_overlay_node,
-    select_locator,
-)
+from transforms.helpers.overlay import _DEFAULT_ANYCAST_GATEWAY_MAC, build_overlay_node, select_locator
 from transforms.helpers.segments import _get_segment_gateways
 from transforms.helpers.segments import _get_segment_namespace as segment_namespace
 from transforms.helpers.segments import is_inline_terminated

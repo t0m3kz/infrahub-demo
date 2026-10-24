@@ -8,9 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from generators.logger import GeneratorError
-from generators.protocols import (
-    ManagedStandaloneVlanDomain,
-)
+from generators.protocols import ManagedStandaloneVlanDomain
 from tests.unit.segment_generators_helpers import _make_gen
 
 # ===========================================================================

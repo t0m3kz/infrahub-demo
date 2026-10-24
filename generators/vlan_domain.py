@@ -33,7 +33,7 @@ from typing import Any, NoReturn
 from utils.data_cleaning import clean_data
 
 from .connections import BORDER_ROLE_FOR_SERVICES
-from .devices import standalone_vlan_domain_name
+from .domain_pairing import standalone_vlan_domain_name
 from .protocols import DcimPhysicalDevice, ManagedStandaloneVlanDomain, ManagedVlanDomainSegment
 
 # Devices that act as a deployment's EVPN Multi-Site border gateway for a

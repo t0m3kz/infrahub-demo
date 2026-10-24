@@ -334,16 +334,23 @@ class MLAGWiringMixin:
 
         family = 4 if platforms & _IPV4_CONTROL_PLATFORMS else 6
         pool_name, prefix_length, loopback_length = _CONTROL_POOLS[family]
-        pools = await self.client.filters(kind=CoreIPPrefixPool, name__value=pool_name)
-        if not pools:
-            self.logger.warning(f"[{mlag_name}] Pool {pool_name} not found — skipping MLAG control addressing")
-            return {}
+        # The control pools are static bootstrap data and every domain of a run
+        # draws from the same one: read each once per run. A missing pool is not
+        # remembered, so a later domain looks again.
+        pool_memo: dict[str, Any] = self.__dict__.setdefault("_control_pool_memo", {})
+        pool = pool_memo.get(pool_name)
+        if pool is None:
+            pools = await self.client.filters(kind=CoreIPPrefixPool, name__value=pool_name)
+            if not pools:
+                self.logger.warning(f"[{mlag_name}] Pool {pool_name} not found — skipping MLAG control addressing")
+                return {}
+            pool = pool_memo[pool_name] = pools[0]
 
         if virtual_peer_link:
             await self._disconnect_stale_control_svis(member_devices, mlag_name)
 
         control_prefix = await self.client.allocate_next_ip_prefix(
-            resource_pool=pools[0],
+            resource_pool=pool,
             identifier=f"mlag-control__{mlag_obj.id}",
             prefix_length=prefix_length,
             member_type="address",
@@ -413,11 +420,15 @@ class MLAGWiringMixin:
         if deployment_rel is None or not deployment_rel.initialized:
             return None
         if deployment_rel.typename == "TopologyPod":
-            pod_obj = await self.client.get(kind=TopologyPod, id=deployment_rel.id, include=["parent"])
-            parent_rel = getattr(pod_obj, "parent", None)
-            if parent_rel is not None and parent_rel.initialized:
-                return parent_rel.id
-            return None
+            # Every MLAG pair of a run sits in the same pod: read its parent once.
+            parent_memo: dict[str, str | None] = self.__dict__.setdefault("_pod_parent_id_memo", {})
+            if deployment_rel.id not in parent_memo:
+                pod_obj = await self.client.get(kind=TopologyPod, id=deployment_rel.id, include=["parent"])
+                parent_rel = getattr(pod_obj, "parent", None)
+                parent_memo[deployment_rel.id] = (
+                    parent_rel.id if parent_rel is not None and parent_rel.initialized else None
+                )
+            return parent_memo[deployment_rel.id]
         return deployment_rel.id
 
     async def _ensure_peer_link_cables(
@@ -453,22 +464,20 @@ class MLAGWiringMixin:
             cable_name = f"CBL-{mlag_name}-PL{idx}"
 
             existing_cables = await self.client.filters(kind=DcimCable, name__value=cable_name)
-            existing_cable = existing_cables[0] if existing_cables else None
+            existing_cable_id: str | None = existing_cables[0].id if existing_cables else None
 
-            if existing_cable is None:
+            if existing_cable_id is None:
                 # Adopt an orphan cable already connected to either interface
                 # (e.g. left over from a rename) instead of creating a duplicate.
+                # Its id is all the upsert needs: the ports came with include=["cable"].
                 cable_a, cable_b = getattr(iface_a, "cable", None), getattr(iface_b, "cable", None)
-                orphan_id = None
                 if cable_a is not None and cable_a.initialized:
-                    orphan_id = cable_a.id
+                    existing_cable_id = cable_a.id
                 elif cable_b is not None and cable_b.initialized:
-                    orphan_id = cable_b.id
-                if orphan_id:
-                    existing_cable = await self.client.get(kind=DcimCable, id=orphan_id)
+                    existing_cable_id = cable_b.id
 
             cable_data: dict[str, Any] = {
-                **({"id": existing_cable.id} if existing_cable else {}),
+                **({"id": existing_cable_id} if existing_cable_id else {}),
                 "name": cable_name,
                 "type": "smf",
                 "endpoints": [iface_a.id, iface_b.id],
@@ -487,7 +496,7 @@ class MLAGWiringMixin:
             cable_obj = await self.client.create(kind=DcimCable, data=cable_data)
             await cable_obj.save(**tracked_save_kwargs(track))
             self.logger.info(
-                f"  [{mlag_name}] {'Updated' if existing_cable else 'Created'} {cable_name}: "
+                f"  [{mlag_name}] {'Updated' if existing_cable_id else 'Created'} {cable_name}: "
                 f"{dev_a_name}:{iface_a.name.value} ↔ {dev_b_name}:{iface_b.name.value}"
             )
 

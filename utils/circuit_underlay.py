@@ -22,6 +22,7 @@ must agree on are here too: the overlay BGP processes of a device (:func:`overla
 
 from __future__ import annotations
 
+import asyncio
 import re
 from typing import Any
 
@@ -108,3 +109,16 @@ def derived_underlay(circuit: dict[str, Any]) -> list[dict[str, Any]]:
         for carrier in port_underlay(port):
             underlay.setdefault(carrier["id"], carrier)
     return list(underlay.values())
+
+
+async def session_circuits_on(client: Any, port_ids: list[str]) -> list[Any]:
+    """Every session circuit (interconnect or handoff) with one of ``port_ids`` among its ends.
+
+    One ``capabilities__ids`` query per kind, not one on the TopologyVirtualCircuit generic: that generic is a marker
+    (it has only ``name``, neither ``capabilities`` to filter on nor ``status`` to read), and a tunnel circuit shares
+    its ports by design so it must stay out. The kinds are read together. Nodes of both kinds, interconnects first.
+    """
+    found = await asyncio.gather(
+        *(client.filters(kind=kind, capabilities__ids=port_ids) for kind in SESSION_CIRCUIT_KINDS)
+    )
+    return [circuit for circuits in found for circuit in circuits]

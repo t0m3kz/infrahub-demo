@@ -87,6 +87,10 @@ query customer_dc($name: String!) {
             dedicated_loadbalancer { value }
           }
         }
+        # The contexts the footprint is already linked to: generators/firewall_context.py's
+        # link_serving_context writes nothing, and reads nothing, when they are the ones serving it.
+        serving_firewall_context { node { id } }
+        serving_loadbalancer_context { node { id } }
       }
     }
   }

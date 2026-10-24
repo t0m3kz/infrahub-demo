@@ -11,23 +11,19 @@ from transforms.helpers.acl import get_acls
 from transforms.helpers.bgp import get_bgp_profile
 from transforms.helpers.cisco_xe import get_cisco_xe_acls, get_cisco_xe_vrf_routes, refuse_unfiltered_ipv6
 from transforms.helpers.firewall import (
-    _flatten_deployment_firewall_contexts,
     _service_context_caps,
-    get_customer_pbr_rules,
     get_exchange_routes,
     get_exchange_transits,
     get_leaf_firewall_transits,
 )
+from transforms.helpers.firewall_contexts import _flatten_deployment_firewall_contexts
+from transforms.helpers.firewall_pbr import get_customer_pbr_rules
 from transforms.helpers.group_policy import GPO_CONFIG_KEYS, group_policy_device_view
 from transforms.helpers.lisp import build_lisp_inputs, get_lisp_config
 from transforms.helpers.mlag import get_mlag, get_sonic_mlag_config
 from transforms.helpers.ospf import get_ospf, refuse_unrenderable_ospf_auth
 from transforms.helpers.overlay import OVERLAY_CONFIG_KEYS, OVERLAY_RENDERERS
-from transforms.helpers.segments import (
-    get_vlans,
-    routed_activations,
-    segment_hosting_candidates,
-)
+from transforms.helpers.segments import get_vlans, routed_activations, segment_hosting_candidates
 from transforms.helpers.templates import load_template
 from transforms.helpers.vxlan import get_interfaces, get_vxlan_config
 from utils.circuit_underlay import NETWORK_APPLIANCE_KIND

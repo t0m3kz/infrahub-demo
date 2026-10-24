@@ -2,7 +2,8 @@
 
 The three sites (CablingMixin's cabling, the HA sync cable, the MLAG peer-link cables) merge
 ``cable_attributes`` into the create data and read the devices' racks through ONE method,
-``CablingMixin._cable_layouts``: three batched reads (devices, racks, suites) however many cables there are.
+``CablingMixin._cable_layouts``: three batched reads (devices, racks, suites) however many cables there are,
+and only what an earlier call of the same run has not read yet.
 Cables declared in data files have no generator and are not touched.
 """
 
@@ -17,13 +18,7 @@ from generators.common import CommonGenerator
 from generators.connections import CablingMixin
 from generators.devices import DeviceMixin
 from generators.helpers.cable_attributes import cable_id
-from generators.protocols import (
-    DcimCable,
-    DcimPhysicalDevice,
-    DcimPhysicalInterface,
-    LocationRack,
-    LocationSuite,
-)
+from generators.protocols import DcimCable, DcimPhysicalDevice, DcimPhysicalInterface, LocationRack, LocationSuite
 
 _SUITE = "suite-1"
 
@@ -192,6 +187,54 @@ class TestCableLayouts:
 
         assert await gen._cable_layouts([]) == {}
         assert estate.calls == []
+
+    @pytest.mark.asyncio
+    async def test_a_device_already_read_is_not_read_again(self) -> None:
+        """The same devices asked twice (two legs, an HA pair, an MLAG pair): the second call reads nothing."""
+        estate = _Estate({"d1": "r1", "d2": "r2"}, {"r1": (1, 2), "r2": (3, 7)})
+        gen = _cabling_gen(estate, {})
+
+        first = await gen._cable_layouts(["d1", "d2"])
+        reads = estate.layout_reads()
+        second = await gen._cable_layouts(["d2", "d1"])
+
+        assert second == first
+        assert estate.layout_reads() == reads == 3
+
+    @pytest.mark.asyncio
+    async def test_only_the_missing_device_is_read_and_a_known_rack_is_reused(self) -> None:
+        """A new device in a rack and suite already read costs one read: the device itself."""
+        estate = _Estate({"d1": "r1", "d2": "r1"}, {"r1": (1, 2)})
+        gen = _cabling_gen(estate, {})
+        await gen._cable_layouts(["d1"])
+
+        layouts = await gen._cable_layouts(["d1", "d2"])
+
+        assert layouts["d2"] is not None and layouts["d2"] == layouts["d1"]
+        assert [kind for kind, _ in estate.calls[3:]] == [DcimPhysicalDevice]
+        assert estate.calls[3][1]["ids"] == ["d2"]
+
+    @pytest.mark.asyncio
+    async def test_a_device_the_read_did_not_return_is_looked_up_again(self) -> None:
+        """Not memoised when unseen (a virtual device, or one not visible yet): the next call asks again."""
+        estate = _Estate({"d1": "r1"}, {"r1": (1, 1)})
+        gen = _cabling_gen(estate, {})
+        assert (await gen._cable_layouts(["late"]))["late"] is None
+
+        estate.devices["late"] = "r1"
+
+        assert (await gen._cable_layouts(["late"]))["late"] is not None
+
+    @pytest.mark.asyncio
+    async def test_a_rack_whose_suite_was_not_visible_is_resolved_on_the_next_call(self) -> None:
+        """A missing suite leaves the device unmemoised, so a later call can still find its position."""
+        estate = _Estate({"d1": "r1"}, {"r1": (1, 1)}, drop_suites=True)
+        gen = _cabling_gen(estate, {})
+        assert (await gen._cable_layouts(["d1"]))["d1"] is None
+
+        estate.drop_suites = False
+
+        assert (await gen._cable_layouts(["d1"]))["d1"] is not None
 
 
 class TestCablingSite:

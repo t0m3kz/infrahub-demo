@@ -6,6 +6,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from infrahub_sdk.exceptions import NodeNotFoundError
 
 from generators.devices import DeviceMixin
 from generators.protocols import (
@@ -108,15 +109,17 @@ class TestEnsureHaPairs:
         ha_obj.save.assert_awaited_once_with(allow_upsert=True)
 
     @pytest.mark.asyncio
-    async def test_fresh_domain_passes_member_ids_skipping_capabilities_fetch(self) -> None:
+    async def test_fresh_domain_passes_its_devices_skipping_capabilities_fetch(self) -> None:
         """A just-created ha_obj's capabilities peers only carry the id each
         was created with, no __typename — RelatedNode.fetch() requires both
         (raises 'Unable to fetch the peer, id and/or typename are not
         defined' otherwise, caught live on a real run). _ensure_ha_pairs must
-        pass the already-known device ids through as member_ids so
-        _ensure_ha_interfaces never calls capabilities.fetch() on this path."""
+        pass the already-read devices through as members so
+        _ensure_ha_interfaces neither calls capabilities.fetch() nor reads the
+        devices a second time on this path."""
         gen = self._gen()
-        gen.client.filters = AsyncMock(side_effect=[[], [_mock_device("fw-01"), _mock_device("fw-02")]])
+        devices = [_mock_device("fw-01"), _mock_device("fw-02")]
+        gen.client.filters = AsyncMock(side_effect=[[], devices])
         gen.client.get = AsyncMock(return_value=_mock_group())
         ha_obj = MagicMock()
         ha_obj.id = "ha-1"
@@ -126,15 +129,15 @@ class TestEnsureHaPairs:
         await gen._ensure_ha_pairs(["fw-02", "fw-01"], ha_kind="ManagedFirewallHA", role_label="firewall")
 
         gen._ensure_ha_interfaces.assert_awaited_once_with(
-            ha_obj, "fw-01-fw-02-ha", device_kind=DcimPhysicalDevice, member_ids=["id-fw-01", "id-fw-02"]
+            ha_obj, "fw-01-fw-02-ha", device_kind=DcimPhysicalDevice, members=devices
         )
 
     @pytest.mark.asyncio
-    async def test_existing_domain_passes_no_member_ids_so_capabilities_is_fetched(self) -> None:
+    async def test_existing_domain_passes_no_members_so_they_come_from_its_capabilities(self) -> None:
         """An existing ha_obj came from client.filters(..., include=[
-        "capabilities"]) — real server-side typenames, so letting
-        _ensure_ha_interfaces fetch() it itself is safe and correct (also
-        covers domains whose membership changed since creation)."""
+        "capabilities"]) — real server-side typenames, so
+        _ensure_ha_interfaces resolves the members from it itself (also covers
+        domains whose membership changed since creation)."""
         gen = self._gen()
         existing = MagicMock(id="existing-ha-1")
         gen.client.filters = AsyncMock(return_value=[existing])
@@ -142,7 +145,7 @@ class TestEnsureHaPairs:
         await gen._ensure_ha_pairs(["fw-01", "fw-02"], ha_kind="ManagedFirewallHA", role_label="firewall")
 
         gen._ensure_ha_interfaces.assert_awaited_once_with(
-            existing, "fw-01-fw-02-ha", device_kind=DcimPhysicalDevice, member_ids=None
+            existing, "fw-01-fw-02-ha", device_kind=DcimPhysicalDevice, members=None
         )
 
     @pytest.mark.asyncio
@@ -273,6 +276,109 @@ def _mock_iface(
     return iface
 
 
+class _CapabilityPeer:
+    """A RelatedNode of ha_obj.capabilities read with include=["capabilities"]: ``peer`` is the stored node, or
+    raises the way the SDK does when the store has no such node."""
+
+    def __init__(self, node_id: str, typename: str, node: Any | None) -> None:
+        self.id = node_id
+        self.typename = typename
+        self._node = node
+
+    @property
+    def peer(self) -> Any:
+        if self._node is None:
+            raise NodeNotFoundError(identifier={"id": [self.id]}, node_type=self.typename)
+        return self._node
+
+
+def _stored_pair(typename: str = "DcimPhysicalDevice", *, stored: bool = True) -> tuple[Any, list[Any], list[Any]]:
+    """An HA domain whose two members are (or, with stored=False, are not) in the client store."""
+    devices = []
+    for number in (1, 2):
+        device = MagicMock(id=f"dev-{number}")
+        device.name = MagicMock(value=f"fw-0{number}")
+        devices.append(device)
+    caps = MagicMock()
+    caps.peers = [_CapabilityPeer(device.id, typename, device if stored else None) for device in devices]
+    ifaces = [_mock_iface(f"iface-{n}", device_id=f"dev-{n}", name="sync0", status="active") for n in (1, 2)]
+    return MagicMock(id="ha-1", capabilities=caps), devices, ifaces
+
+
+class TestHaMemberDevices:
+    """_ensure_ha_interfaces reads an existing domain's members from the stored capabilities peers."""
+
+    def _gen(self, ifaces: list[Any], devices: list[Any]) -> Any:
+        gen = DeviceMixin.__new__(DeviceMixin)
+        gen._cable_layouts = AsyncMock(return_value={})
+        gen.logger = MagicMock()
+        gen.client = MagicMock()
+
+        async def _filters(*, kind: Any, **kwargs: Any) -> list[Any]:  # noqa: ARG001
+            if kind is DcimPhysicalInterface:
+                return ifaces
+            if kind is DcimPhysicalDevice:
+                return devices
+            return []
+
+        gen.client.filters = AsyncMock(side_effect=_filters)
+        gen.client.create = AsyncMock(return_value=MagicMock(save=AsyncMock()))
+        gen.client.group_context = MagicMock(related_node_ids=[])
+        return gen
+
+    @pytest.mark.asyncio
+    async def test_members_come_from_the_store_without_a_device_read(self) -> None:
+        """Both peers are in the store: no device query, the sync ports are still read by device id."""
+        ha_obj, devices, ifaces = _stored_pair()
+        gen = self._gen(ifaces, devices)
+
+        await gen._ensure_ha_interfaces(ha_obj, "fw-01-fw-02-ha")
+
+        kinds = [c.kwargs["kind"] for c in gen.client.filters.call_args_list]
+        assert DcimPhysicalDevice not in kinds
+        iface_call = next(
+            c.kwargs for c in gen.client.filters.call_args_list if c.kwargs["kind"] is DcimPhysicalInterface
+        )
+        assert iface_call["device__ids"] == ["dev-1", "dev-2"]
+        assert gen.client.create.call_args.kwargs["data"]["endpoints"] == ["iface-1", "iface-2"]
+
+    @pytest.mark.asyncio
+    async def test_a_peer_missing_from_the_store_falls_back_to_one_read_by_id(self) -> None:
+        """The store lacks a peer: the members are read once by id, as before."""
+        ha_obj, devices, ifaces = _stored_pair(stored=False)
+        gen = self._gen(ifaces, devices)
+
+        await gen._ensure_ha_interfaces(ha_obj, "fw-01-fw-02-ha")
+
+        device_calls = [c.kwargs for c in gen.client.filters.call_args_list if c.kwargs["kind"] is DcimPhysicalDevice]
+        assert device_calls == [{"kind": DcimPhysicalDevice, "ids": ["dev-1", "dev-2"]}]
+        assert gen.client.create.call_args.kwargs["data"]["endpoints"] == ["iface-1", "iface-2"]
+
+    @pytest.mark.asyncio
+    async def test_a_member_of_another_kind_falls_back_to_the_filtered_read(self) -> None:
+        """A peer that is not a device_kind is dropped by the kind-filtered read, never silently kept."""
+        ha_obj, devices, ifaces = _stored_pair(typename="DcimVirtualDevice")
+        gen = self._gen(ifaces, devices[:1])
+
+        await gen._ensure_ha_interfaces(ha_obj, "fw-01-fw-02-ha")
+
+        device_calls = [c.kwargs for c in gen.client.filters.call_args_list if c.kwargs["kind"] is DcimPhysicalDevice]
+        assert device_calls == [{"kind": DcimPhysicalDevice, "ids": ["dev-1", "dev-2"]}]
+
+    @pytest.mark.asyncio
+    async def test_a_stored_peer_without_a_name_falls_back_to_the_read(self) -> None:
+        """A stored peer that carries no name attribute is not trusted: the members are read by id."""
+        ha_obj, devices, ifaces = _stored_pair()
+        nameless = MagicMock(id="dev-1")
+        nameless.name = MagicMock(value=None)
+        ha_obj.capabilities.peers[0]._node = nameless
+        gen = self._gen(ifaces, devices)
+
+        await gen._ensure_ha_interfaces(ha_obj, "fw-01-fw-02-ha")
+
+        assert DcimPhysicalDevice in [c.kwargs["kind"] for c in gen.client.filters.call_args_list]
+
+
 class TestEnsureHaInterfaces:
     """DeviceMixin._ensure_ha_interfaces / _ensure_ha_cable — replaces the old
     standalone add_ha generator (generators/topology/ha.py, deleted). Called
@@ -301,8 +407,8 @@ class TestEnsureHaInterfaces:
         gen.client.filters.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_member_ids_param_skips_capabilities_fetch(self) -> None:
-        """Passing member_ids (the fresh-domain path in _ensure_ha_pairs)
+    async def test_members_param_skips_capabilities_fetch(self) -> None:
+        """Passing members (the fresh-domain path in _ensure_ha_pairs)
         must never touch ha_obj.capabilities.fetch() — a just-created ha_obj's
         capabilities peers have no __typename, so fetch() would raise 'Unable
         to fetch the peer, id and/or typename are not defined' (caught live
@@ -328,9 +434,10 @@ class TestEnsureHaInterfaces:
         gen.client.filters = AsyncMock(side_effect=_filters)
         gen.client.create = AsyncMock(return_value=MagicMock(save=AsyncMock()))
 
-        await gen._ensure_ha_interfaces(ha_obj, "fw-01-fw-02-ha", member_ids=["dev-1", "dev-2"])
+        await gen._ensure_ha_interfaces(ha_obj, "fw-01-fw-02-ha", members=[dev_1, dev_2])
 
         caps.fetch.assert_not_awaited()
+        assert DcimPhysicalDevice not in [c.kwargs["kind"] for c in gen.client.filters.call_args_list]
 
     @pytest.mark.asyncio
     async def test_physical_pair_gets_active_sync_ports_and_a_sync_cable_only(self) -> None:

@@ -21,7 +21,8 @@ import pytest
 from infrahub_sdk.exceptions import NodeNotFoundError
 
 from generators.decommission.pod import PodDecommissionGenerator
-from generators.devices import DeviceMixin, standalone_vlan_domain_name
+from generators.devices import DeviceMixin
+from generators.domain_pairing import standalone_vlan_domain_name
 from generators.logger import GeneratorError
 from generators.mlag import MLAGWiringMixin
 from generators.pools import PoolMixin

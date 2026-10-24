@@ -59,11 +59,11 @@ from utils.exchange_transit import OFFSET_ANYCAST, namespace_type_for_environmen
 
 from ..common import CommonGenerator
 from ..connections import CablingMixin
+from ..far_end import far_end_interfaces
 from ..helpers.security_tag import ensure_segment_tag
 from ..helpers.security_zone import ensure_security_zone
 from ..pools import PoolMixin
 from ..protocols import (
-    DcimCable,
     DcimPhysicalDevice,
     DcimPhysicalInterface,
     DcimVirtualInterface,
@@ -509,25 +509,10 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, VlanDomainMixin, CommonGene
 
         member_ports = await self.client.filters(kind=DcimPhysicalInterface, device__ids=member_ids, include=["cable"])
         cabled = [port for port in member_ports if getattr(getattr(port, "cable", None), "id", None)]
-        cable_ids = sorted({port.cable.id for port in cabled})
-        cables = (
-            {
-                cable.id: cable
-                for cable in await self.client.filters(kind=DcimCable, ids=cable_ids, include=["endpoints"])
-            }
-            if cable_ids
-            else {}
-        )
-        far_ends: dict[str, list[str]] = {}
-        for port in cabled:
-            cable = cables.get(port.cable.id)
-            peers = getattr(cable, "endpoints").peers if cable is not None else []
-            far_ends[port.id] = [peer.id for peer in peers if peer.id != port.id]
-        far_ids = sorted({far_id for ids in far_ends.values() for far_id in ids})
+        # A cable has exactly two endpoints (min_count = max_count = 2): the far end of a member port is one port.
+        far_end_by_port = await far_end_interfaces(self.client, cabled, include=[])
         border_ports = {
-            iface.id: iface
-            for iface in (await self.client.filters(kind=DcimPhysicalInterface, ids=far_ids) if far_ids else [])
-            if iface.role.value in SERVICE_PORT_ROLES
+            far_end.id: far_end for far_end in far_end_by_port.values() if far_end.role.value in SERVICE_PORT_ROLES
         }
         if not border_ports:
             self.logger.error(
@@ -547,25 +532,24 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, VlanDomainMixin, CommonGene
 
         legs: list[dict[str, Any]] = []
         for port in sorted(cabled, key=lambda p: (p.device.id, p.name.value)):
-            for far_id in far_ends[port.id]:
-                border_port = border_ports.get(far_id)
-                if border_port is None:
-                    continue
-                if far_id in routed_parents:
-                    self.logger.error(
-                        f"Segment '{segment_name}': border port {border_port.name.value} is a routed parent "
-                        f"(pbr-mode FirewallContext legs) — it cannot also carry the segment; use connectivity_mode inline"
-                    )
-                    continue
-                legs.append(
-                    {
-                        "member_port": port,
-                        "member_device_id": port.device.id,
-                        "member_device_name": member_names.get(port.device.id, port.device.id),
-                        "border_port_id": far_id,
-                        "border_device": border_devices[border_port.device.id],
-                    }
+            border_port = far_end_by_port.get(port.id)
+            if border_port is None or border_port.id not in border_ports:
+                continue
+            if border_port.id in routed_parents:
+                self.logger.error(
+                    f"Segment '{segment_name}': border port {border_port.name.value} is a routed parent "
+                    f"(pbr-mode FirewallContext legs) — it cannot also carry the segment; use connectivity_mode inline"
                 )
+                continue
+            legs.append(
+                {
+                    "member_port": port,
+                    "member_device_id": port.device.id,
+                    "member_device_name": member_names.get(port.device.id, port.device.id),
+                    "border_port_id": border_port.id,
+                    "border_device": border_devices[border_port.device.id],
+                }
+            )
         return legs
 
     async def _reconcile_inline_service_ports(self, segment: dict[str, Any]) -> list[dict[str, Any]]:
@@ -637,7 +621,6 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, VlanDomainMixin, CommonGene
                 kind=ManagedVlanDomainSegment, segment__ids=[segment_id], include=["vlan_domain"]
             )
         }
-        segment_obj = await self.client.get(kind=ManagedVxlanSegment, id=segment_id)
 
         for leg in legs:
             port = leg["member_port"]
@@ -663,6 +646,6 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, VlanDomainMixin, CommonGene
                 device_name=leg["member_device_name"],
                 trunk_iface=port,
                 vlan_id_value=vlan_id,
-                capability_obj=segment_obj,
+                capability_ids=[segment_id],
                 ip_address_id=ip_id,
             )

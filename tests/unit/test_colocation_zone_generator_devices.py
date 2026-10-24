@@ -14,11 +14,11 @@ from infrahub_sdk.exceptions import NodeNotFoundError
 from generators.helpers.naming import DeviceNameContext, DeviceNamingConfig
 from generators.logger import GeneratorError
 from generators.protocols import TopologyColocationZone, TopologyVirtualColocation
-from generators.topology.colocation_fabric import (
+from generators.topology.colocation_fabric import VirtualColocationGenerator
+from generators.topology.colocation_pools import (
     _COLO_LOOPBACK_PREFIX_LENGTH,
     _COLO_MANAGEMENT_PREFIX_LENGTH,
     _COLO_TECHNICAL_PREFIX_LENGTH,
-    VirtualColocationGenerator,
 )
 from tests.unit.colocation_zone_generator_helpers import (
     _EDGE_TEMPLATE,

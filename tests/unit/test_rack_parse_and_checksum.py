@@ -78,15 +78,9 @@ def _device(name: str) -> MagicMock:
     return device
 
 
-def _mock_rack(name: str, rack_type: str, row_index: int = 1, index: int = 1) -> MagicMock:
-    r = MagicMock()
-    r.id = f"id-{name}"
-    r.name = MagicMock(value=name)
-    r.rack_type = MagicMock(value=rack_type)
-    r.row_index = MagicMock(value=row_index)
-    r.index = MagicMock(value=index)
-    r.save = AsyncMock()
-    return r
+def _pod_rack(name: str, rack_type: str, row_index: int = 1, index: int = 1) -> dict[str, Any]:
+    """One entry of the pod's ``racks`` projection (PodFields in rack.gql)."""
+    return {"id": f"id-{name}", "name": name, "rack_type": rack_type, "row_index": row_index, "index": index}
 
 
 # ---------------------------------------------------------------------------
@@ -295,44 +289,40 @@ class TestFanOutToRowDependentRacks:
     @pytest.mark.asyncio
     async def test_non_mixed_deployment_does_nothing(self) -> None:
         gen = _build_rack_generator(deployment_type="middle_rack", rack_type="network")
-        gen.client.filters = AsyncMock(return_value=[])
         gen.run_generator = AsyncMock()
 
         await gen._fan_out_to_row_dependent_racks()
 
-        gen.client.filters.assert_not_awaited()
         gen.run_generator.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_tor_rack_type_does_nothing(self) -> None:
         gen = _build_rack_generator(deployment_type="mixed", rack_type="tor")
-        gen.client.filters = AsyncMock(return_value=[])
         gen.run_generator = AsyncMock()
 
         await gen._fan_out_to_row_dependent_racks()
 
-        gen.client.filters.assert_not_awaited()
         gen.run_generator.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_no_leafs_skips_fan_out(self) -> None:
         gen = _build_rack_generator(deployment_type="mixed", rack_type="network", leafs=[])
-        gen.client.filters = AsyncMock(return_value=[])
         gen.run_generator = AsyncMock()
 
         await gen._fan_out_to_row_dependent_racks()
 
-        gen.client.filters.assert_not_awaited()
         gen.run_generator.assert_not_awaited()
         gen.logger.warning.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_fans_out_to_tor_and_compute_racks_in_same_row(self) -> None:
         gen = _build_rack_generator(deployment_type="mixed", rack_type="network")
-        tor_rack = _mock_rack("TOR-RACK-1", "tor")
-        compute_rack = _mock_rack("COMP-RACK-1", "compute")
-        network_rack = _mock_rack("NET-RACK-2", "network")  # sibling network rack, not fanned out to
-        gen.client.filters = AsyncMock(return_value=[tor_rack, compute_rack, network_rack])
+        tor_rack = _pod_rack("TOR-RACK-1", "tor")
+        compute_rack = _pod_rack("COMP-RACK-1", "compute", index=2)
+        network_rack = _pod_rack("NET-RACK-2", "network")  # sibling network rack, not fanned out to
+        other_row_rack = _pod_rack("TOR-RACK-9", "tor", row_index=2)  # another row's rack, not fanned out to
+        gen.data["pod"]["racks"] = [compute_rack, other_row_rack, network_rack, tor_rack]
+        gen.client.filters = AsyncMock()
         gen.run_generator = AsyncMock()
 
         await gen._fan_out_to_row_dependent_racks()
@@ -340,7 +330,9 @@ class TestFanOutToRowDependentRacks:
         gen.run_generator.assert_awaited_once()
         args, kwargs = gen.run_generator.call_args
         assert args[0] == "add_rack"
-        assert sorted(args[1]) == sorted([tor_rack.id, compute_rack.id])
+        # (row, index, name) order, read from the pod projection: no query for the racks
+        assert args[1] == [tor_rack["id"], compute_rack["id"]]
+        gen.client.filters.assert_not_awaited()
         # fire-and-forget: a network rack's own task must not stay RUNNING while
         # waiting on its row-dependent racks, or their own wait-for-parent guard
         # (checking for an in-flight "Run generator add_rack" on this same rack)
@@ -350,7 +342,7 @@ class TestFanOutToRowDependentRacks:
     @pytest.mark.asyncio
     async def test_no_row_dependent_racks_calls_with_empty_list(self) -> None:
         gen = _build_rack_generator(deployment_type="mixed", rack_type="network")
-        gen.client.filters = AsyncMock(return_value=[])
+        gen.data["pod"]["racks"] = [_pod_rack("NET-RACK-1", "network")]
         gen.run_generator = AsyncMock()
 
         await gen._fan_out_to_row_dependent_racks()
@@ -464,6 +456,34 @@ class TestGenerateRackGating:
 
         gen.bgp_processes_ready.assert_awaited_once_with(["spine-1"], "overlay")
         assert any("endpoint-only rack" in str(call.args[0]) for call in gen.logger.info.call_args_list)
+
+    @pytest.mark.asyncio
+    async def test_row_dependent_rack_waits_for_the_network_racks_of_its_row_from_the_payload(self) -> None:
+        """A compute rack of a mixed pod waits for the add_rack run of each network rack in its own row.
+
+        The racks are the pod projection of the query: no LocationRack read, and a network rack of
+        another row or a rack of another type is not waited for.
+        """
+        gen = _build_rack_generator(deployment_type="mixed", rack_type="compute", leafs=[])
+        gen.data["tors"] = []
+        gen.data["l2_leafs"] = []
+        gen.data["access_leafs"] = []
+        gen.data["pod"]["racks"] = [
+            _pod_rack("NET-1", "network"),
+            _pod_rack("NET-9", "network", row_index=2),
+            _pod_rack("TOR-1", "tor"),
+        ]
+        gen.client.filters = AsyncMock(return_value=[_device("spine-1")])
+        gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
+        gen.bgp_processes_ready = AsyncMock(return_value=True)
+
+        with patch("generators.topology.rack.parse_rack_data", return_value=gen.data):
+            await gen.generate({"any": "shape"})
+
+        waits = [call.args for call in gen.wait_for_parent_generator_and_refetch.await_args_list]
+        assert ("add_rack", "id-NET-1") in waits
+        assert not [wait for wait in waits if wait[0] == "add_rack" and wait[1] != "id-NET-1"]
+        assert all(call.kwargs["kind"] is DcimPhysicalDevice for call in gen.client.filters.await_args_list)
 
     @pytest.mark.asyncio
     async def test_border_spine_pod_gates_on_its_border_spines_by_name(self) -> None:

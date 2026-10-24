@@ -1,11 +1,7 @@
 """Unit tests for get_zone_policies() in transforms/helpers/firewall.py."""
 
-from tests.unit.firewall_helpers_shared import (
-    _make_segment_with_prefix,
-)
-from transforms.helpers.firewall import (
-    get_zone_policies,
-)
+from tests.unit.firewall_helpers_shared import _make_segment_with_prefix
+from transforms.helpers.firewall import get_zone_policies
 
 # ---------------------------------------------------------------------------
 # Helpers — policy / rule data

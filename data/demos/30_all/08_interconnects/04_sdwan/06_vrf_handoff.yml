@@ -108,7 +108,7 @@ spec:
 # registered prefixes are the PROD lan_prefixes (owner: the office's owner) and the PROD
 # segments hosted by every TopologyCustomerOffice whose sdwan_gateway is GW1 (owner: the
 # segment's owner): C002's lan_prefixes 10.210.2.0/24 and C005's hosted office-lan segment
-# (get_external_peer_prefixes in transforms/helpers/bgp.py). The session's owners are C002 and
+# (get_external_peer_prefixes in transforms/helpers/bgp_external.py). The session's owners are C002 and
 # C005, so only their PROD segments are announced. An office with neither adds nothing: C001,
 # C003 and C015 are behind GW1 too but register none, so none of their segments is announced.
 # No cloud_endpoint: this is no cloud service.

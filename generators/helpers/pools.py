@@ -7,12 +7,7 @@ live device counts, so a re-run never produces a differently-sized pool).
 
 from __future__ import annotations
 
-from utils.exchange_transit import (
-    FW_CONTEXT_VLAN_MAX,
-    FW_CONTEXT_VLAN_MIN,
-    LB_CONTEXT_VLAN_MAX,
-    LB_CONTEXT_VLAN_MIN,
-)
+from utils.exchange_transit import FW_CONTEXT_VLAN_MAX, FW_CONTEXT_VLAN_MIN, LB_CONTEXT_VLAN_MAX, LB_CONTEXT_VLAN_MIN
 
 DEFAULT_ASN_BASE_START = 4200000000
 
