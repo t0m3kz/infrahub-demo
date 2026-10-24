@@ -14,7 +14,6 @@ if TYPE_CHECKING:
 
 from .helpers.cable_attributes import cable_attributes, endpoint_label
 from .helpers.pairing import pair_device_names
-from .helpers.pools import CUSTOMER_VLAN_ID_MAX, CUSTOMER_VLAN_ID_MIN
 from .mlag import MLAGWiringMixin
 from .protocols import (
     CloudNetworkAppliance,
@@ -29,8 +28,8 @@ from .protocols import (
 
 
 def standalone_vlan_domain_name(device_name: str) -> str:
-    """The ManagedStandaloneVlanDomain name for a non-MLAG device; its VLAN
-    pool is f"{this}-vlan-pool". The lookup key segment generators use."""
+    """The ManagedStandaloneVlanDomain name for a non-MLAG device: the lookup
+    key segment generators use."""
     return f"{device_name}-vlan-domain"
 
 
@@ -44,7 +43,7 @@ class DomainPairingMixin(MLAGWiringMixin):
     """Mixin providing HA (firewall / load-balancer) and MLAG pairing for DeviceMixin.
 
     Expects the host class to provide: ``client``, ``logger``, ``deployment_id``,
-    ``_resolve_pool`` and PoolMixin's ``upsert_number_pool`` / ``resource_lock``.
+    ``_resolve_pool`` and PoolMixin's ``resource_lock``.
     """
 
     # Attribute declarations for the type checker — provided by CommonGenerator / InfrahubGenerator / PoolMixin
@@ -57,9 +56,6 @@ class DomainPairingMixin(MLAGWiringMixin):
     # *devices* to the pod on purpose (see test_pod_border_services.py), but DcimCable.deployment's peer
     # type has no TopologyPod — confirmed live on DC7.
     deployment_id: str | None
-    # PoolMixin.upsert_number_pool — every caller of _ensure_mlag_pairs mixes in PoolMixin alongside DeviceMixin;
-    # annotation only, no method body here.
-    upsert_number_pool: Any
     # PoolMixin.resource_lock — a Callable attribute, not a stub, so it never shadows the real one.
     resource_lock: Callable[[str], AbstractAsyncContextManager[None]]
 
@@ -89,8 +85,7 @@ class DomainPairingMixin(MLAGWiringMixin):
         return memo[name]
 
     async def _ensure_standalone_vlan_domains(self, devices: list[Any]) -> None:
-        """Upsert each non-MLAG switch's own ManagedStandaloneVlanDomain and
-        its local VLAN pool, every run.
+        """Upsert each non-MLAG switch's own ManagedStandaloneVlanDomain, every run.
 
         Created with the device rather than on first segment use: the device's
         generator is the one run that owns the switch, so the domain lives and
@@ -100,14 +95,12 @@ class DomainPairingMixin(MLAGWiringMixin):
         """
         for device in devices:
             domain_name = standalone_vlan_domain_name(device.name.value)
-            vlan_pool = await self._ensure_vlan_domain_pool(domain_name)
             domain = await self.client.create(
                 kind=ManagedStandaloneVlanDomain,
                 data={
                     "name": domain_name,
                     "status": "active",
                     "capabilities": [{"id": device.id}],
-                    "vlan_pool": {"id": vlan_pool.id},
                 },
             )
             await domain.save(allow_upsert=True)
@@ -409,7 +402,6 @@ class DomainPairingMixin(MLAGWiringMixin):
                 continue
 
             mlag_group = await self._standard_group("mlag_domains")
-            vlan_pool = await self._ensure_vlan_domain_pool(mlag_name)
 
             # Two overlapping runs (a rack's inline run and its own trigger) can
             # both find no domain and both create it: the lookup and the create
@@ -431,7 +423,6 @@ class DomainPairingMixin(MLAGWiringMixin):
                         "status": "active",
                         "capabilities": [{"id": first_dev.id}, {"id": second_dev.id}],
                         "member_of_groups": [{"id": mlag_group.id}],
-                        "vlan_pool": {"id": vlan_pool.id},
                     },
                 )
                 await mlag_obj.save(allow_upsert=True)
@@ -442,25 +433,3 @@ class DomainPairingMixin(MLAGWiringMixin):
             await self.ensure_mlag_wiring(mlag_obj, mlag_name, member_ids=[first_dev.id, second_dev.id])
             paired.update((first, second))
         return paired
-
-    async def _ensure_vlan_domain_pool(self, domain_name: str) -> Any:
-        """Create/upsert a VLAN domain's own local VLAN ID pool and return it.
-
-        IEEE 802.1Q VLAN ID has only local significance (within one L2
-        domain — an MLAG pair, or a standalone device). Each VLAN domain
-        gets its own independent 100-2999 pool so unrelated domains can
-        reuse the same numeric VLAN ID for different segments; the real
-        DC-wide/fabric-wide segment identifier is ManagedSegmentDeployment.vni.
-
-        Upserted before its domain, so the domain's own upsert (which resends
-        every field anyway) carries ``vlan_pool`` — no separate get + save of
-        the domain just to point it at the pool.
-        """
-        return await self.upsert_number_pool(
-            pool_name=f"{domain_name}-vlan-pool",
-            description=f"Local VLAN ID pool for VLAN domain {domain_name}",
-            start_range=CUSTOMER_VLAN_ID_MIN,
-            end_range=CUSTOMER_VLAN_ID_MAX,
-            node="ManagedVlanDomainSegment",
-            node_attribute="vlan_id",
-        )

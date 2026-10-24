@@ -12,21 +12,29 @@ and by every AppComponent on the segment, so it belongs to no single run.
 Activations are therefore shared desired state, written untracked
 (update_group_context=False) and reconciled explicitly per SEGMENT from what
 the segment needs right now — see reconcile_segment_vlan_domains. The VLAN
-domains themselves (a ManagedStandaloneVlanDomain and its vlan_pool, or a
-ManagedMLAG) belong to the generator that creates the device and are only
-read here, never saved.
+domains themselves (a ManagedStandaloneVlanDomain or a ManagedMLAG) belong to
+the generator that creates the device and are only read here, never saved.
 
-Independent VLAN domains may reuse the same numeric VLAN ID, since IEEE
-802.1Q VLAN ID has only local significance (unlike VNI, which is the real
-DC-wide/fabric-wide segment identifier allocated in segment.py).
+Local significance and consistency: an IEEE 802.1Q VLAN ID only has to be
+unique within one VLAN domain (the real DC-wide segment identity is the VNI,
+allocated in segment.py), so a domain never gives one id to two segments
+(ManagedVlanDomainSegment is unique on [vlan_domain, vlan_id]). But a
+virtualisation cluster spans racks served by different domains and wants ONE
+VLAN id per port group, so the id is chosen, not drawn from a per-domain pool:
+a segment keeps the id it already has on its other domains; a segment with
+none gets the lowest id free on every domain it lands on. Only when a domain
+already uses the preferred id for another segment does that domain fall back
+to its own lowest free id (with a WARNING); a domain with no free id fails.
+The domains' used ids are read, chosen and written under a lock per domain
+(taken in sorted order, inside the segment lock), so two segments landing on
+one domain never pick the same id.
 """
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from collections.abc import Callable
-from contextlib import AbstractAsyncContextManager
+from contextlib import AbstractAsyncContextManager, AsyncExitStack
 from pathlib import Path
 from typing import Any, NoReturn
 
@@ -34,6 +42,7 @@ from utils.data_cleaning import clean_data
 
 from .connections import BORDER_ROLE_FOR_SERVICES
 from .domain_pairing import standalone_vlan_domain_name
+from .helpers.pools import CUSTOMER_VLAN_ID_MAX, CUSTOMER_VLAN_ID_MIN
 from .protocols import DcimPhysicalDevice, ManagedStandaloneVlanDomain, ManagedVlanDomainSegment
 
 # Devices that act as a deployment's EVPN Multi-Site border gateway for a
@@ -56,6 +65,12 @@ TAGGABLE_INTERFACE_KINDS = frozenset({"DcimPhysicalInterface", "DcimLAGInterface
 SERVICE_PORT_ROLES = frozenset(BORDER_ROLE_FOR_SERVICES.values())
 
 _SEGMENT_VLAN_DOMAINS_QUERY_PATH = Path(__file__).resolve().parents[1] / "queries/topology/add/segment_vlan_domains.gql"
+
+
+def vlan_domain_lock_key(domain_id: str) -> str:
+    """The resource_lock key serializing the choice of VLAN IDs on one VLAN
+    domain (taken inside the segment lock, domains in sorted order)."""
+    return f"vlan-domain-ids-{domain_id}"
 
 
 def segment_lock_key(segment_id: str) -> str:
@@ -93,92 +108,119 @@ class VlanDomainMixin:
                     return "ManagedMLAG", peer.id
         return "DcimPhysicalDevice", device.id
 
-    async def _ensure_standalone_vlan_domain(self, device: Any) -> tuple[str, str | None]:
-        """Look up a non-MLAG device's ManagedStandaloneVlanDomain (by its
-        name, ``{device}-vlan-domain``) and its vlan_pool. Returns (domain
-        id, pool id or None).
+    async def _resolve_vlan_domains(self, devices: list[Any]) -> dict[str, str]:
+        """{device id: VLAN domain id} for every device, capabilities included.
 
-        Never saves either: the domain and its pool are created and owned by
-        the generator that creates the device (rack/pod/dc/colocation). A
-        save here would claim them for this segment's run, whose cleanup
-        would then delete them for every other segment on the device. A
-        missing domain is an error (raises): the device generator has not run.
+        An MLAG-paired device's domain is its ManagedMLAG; every other device's
+        is its ManagedStandaloneVlanDomain (``{device}-vlan-domain``), all found
+        by ONE read on their names. Never saves a domain: it is created and owned
+        by the generator that creates the device (rack/pod/dc/colocation), and a
+        save here would claim it for this segment's run, whose cleanup would then
+        delete it for every other segment on the device. A missing standalone
+        domain is an error (raises): the device generator has not run.
         """
-        domain_name = standalone_vlan_domain_name(device.name.value)
-        domain = await self.client.get(
-            kind=ManagedStandaloneVlanDomain,
-            name__value=domain_name,
-            include=["vlan_pool"],
-            raise_when_missing=False,
-        )
-        if domain is None:
-            message = (
-                f"Standalone VLAN domain {domain_name} not found — the generator that created device "
-                f"{device.name.value} owns it and must run first"
-            )
-            self.fail(message)
-        vlan_pool_rel = getattr(domain, "vlan_pool", None)
-        pool_id = getattr(vlan_pool_rel, "id", None) if vlan_pool_rel else None
-        return domain.id, pool_id
+        domain_by_device: dict[str, str] = {}
+        standalone_devices: dict[str, list[str]] = {}
+        for device in devices:
+            domain_kind, domain_id = await self._resolve_vlan_domain(device)
+            if domain_kind == "ManagedMLAG":
+                domain_by_device[device.id] = domain_id
+            else:
+                standalone_devices.setdefault(standalone_vlan_domain_name(device.name.value), []).append(device.id)
+        if standalone_devices:
+            found = await self.client.filters(kind=ManagedStandaloneVlanDomain, name__values=sorted(standalone_devices))
+            domain_id_by_name = {domain.name.value: domain.id for domain in found}
+            missing = sorted(set(standalone_devices) - set(domain_id_by_name))
+            if missing:
+                self.fail(
+                    f"Standalone VLAN domain(s) {', '.join(missing)} not found — the generator that created the "
+                    "device owns them and must run first"
+                )
+            for name, device_ids in standalone_devices.items():
+                for device_id in device_ids:
+                    domain_by_device[device_id] = domain_id_by_name[name]
+        return domain_by_device
 
-    async def _create_vlan_domain_segment(
-        self, segment_id: str, segment_name: str, domain_id: str, pool_id: str | None = None
+    def _choose_vlan_ids(
+        self, segment_name: str, new_domains: list[str], taken: dict[str, set[int]], preferred: int | None
+    ) -> dict[str, int]:
+        """The vlan_id for each domain that needs a new activation of the segment.
+
+        ``taken`` is the ids other segments use on each new domain; ``preferred``
+        is the id the segment already has on its other domains (None when it has
+        none). One id is used everywhere when it is free on every domain: the
+        preferred one, else the lowest free on all of them. A domain where it is
+        taken (or when no id is free on all) gets its own lowest free id, with a
+        WARNING; a domain with no free id in the customer band fails the run.
+        """
+        band = range(CUSTOMER_VLAN_ID_MIN, CUSTOMER_VLAN_ID_MAX + 1)
+        wanted = preferred
+        if wanted is None:
+            busy = set().union(*(taken[domain_id] for domain_id in new_domains))
+            wanted = next((vlan_id for vlan_id in band if vlan_id not in busy), None)
+        chosen: dict[str, int] = {}
+        for domain_id in new_domains:
+            if wanted is not None and wanted not in taken[domain_id]:
+                chosen[domain_id] = wanted
+                continue
+            own = next((vlan_id for vlan_id in band if vlan_id not in taken[domain_id]), None)
+            if own is None:
+                self.fail(
+                    f"VLAN domain {domain_id} has no free VLAN ID in {CUSTOMER_VLAN_ID_MIN}-{CUSTOMER_VLAN_ID_MAX} "
+                    f"for segment {segment_name}"
+                )
+            reason = (
+                f"VLAN ID {wanted} is already used by another segment on VLAN domain {domain_id}"
+                if wanted is not None
+                else f"no VLAN ID is free on every VLAN domain of the segment (VLAN domain {domain_id} included)"
+            )
+            self.logger.warning(
+                f"Segment {segment_name}: {reason} — using {own} there, so the segment has different VLAN IDs "
+                "across domains"
+            )
+            chosen[domain_id] = own
+        return chosen
+
+    async def _create_vlan_domain_segments(
+        self, segment_id: str, segment_name: str, new_domains: list[str], kept_domains: list[str]
     ) -> None:
-        """Create one ManagedVlanDomainSegment (segment, VLAN domain) pair,
-        allocating vlan_id from that domain's own pool via from_pool. Only
-        called for a pair that does not exist yet (the caller holds the
-        segment lock and has just read the existing pairs), so an existing
-        pair's vlan_id is never re-allocated.
+        """Create the segment's missing (segment, VLAN domain) pairs, choosing each vlan_id.
+
+        Only called for pairs that do not exist yet, so an existing pair's
+        vlan_id is never re-chosen. The new domains are locked in sorted order
+        (inside the caller's segment lock, so two runs never hold one domain each
+        while waiting for the other's), then ONE read returns the ids in use on
+        them and the segment's own ids on its ``kept_domains`` — and the pairs are
+        written before the locks are released, so the next segment sees them.
 
         Untracked (update_group_context=False): the pair is shared desired
         state of the segment, cleaned up explicitly by
-        reconcile_segment_vlan_domains, never by a run's group. A known
-        pool_id (a standalone domain just looked up) skips reading it back.
+        reconcile_segment_vlan_domains, never by a run's group.
         """
-        if not pool_id:
-            domain = await self.client.get(kind="ManagedGenericVlanDomain", id=domain_id, include=["vlan_pool"])
-            vlan_pool_rel = getattr(domain, "vlan_pool", None)
-            pool_id = getattr(vlan_pool_rel, "id", None) if vlan_pool_rel else None
-        if not pool_id:
-            self.logger.error(
-                f"VLAN domain {domain_id} has no vlan_pool — cannot allocate VLAN ID for segment {segment_name}"
+        async with AsyncExitStack() as stack:
+            for domain_id in new_domains:
+                await stack.enter_async_context(self.resource_lock(vlan_domain_lock_key(domain_id)))
+            activations = await self.client.filters(
+                kind=ManagedVlanDomainSegment,
+                vlan_domain__ids=sorted({*new_domains, *kept_domains}),
+                include=["segment", "vlan_domain"],
             )
-            return
-
-        activation = await self.client.create(
-            kind=ManagedVlanDomainSegment,
-            data={
-                "segment": {"id": segment_id},
-                "vlan_domain": {"id": domain_id},
-                "vlan_id": {"from_pool": {"id": pool_id}},
-            },
-        )
-        await activation.save(allow_upsert=True, update_group_context=False)
-        self.logger.info(f"  Allocated VLAN ID from domain {domain_id}'s pool for segment {segment_name}")
-
-    async def _ensure_vlan_domains_for_devices(self, devices: list[Any]) -> dict[str, str | None]:
-        """Resolve each device's VLAN domain and return {domain_id: pool_id}
-        for every distinct domain touched.
-
-        Each device's own resolution is independent — a standalone domain is
-        keyed by that device's own name, and an MLAG-paired device only reads
-        its shared peer id — so these run concurrently; the gather's results
-        are merged into one dict afterwards, single-threaded.
-        """
-        resolved = await asyncio.gather(*(self._resolve_device_vlan_domain(device) for device in devices))
-        domain_pools: dict[str, str | None] = {}
-        for domain_id, pool_id in resolved:
-            domain_pools[domain_id] = domain_pools.get(domain_id) or pool_id
-        return domain_pools
-
-    async def _resolve_device_vlan_domain(self, device: Any) -> tuple[str, str | None]:
-        """One device's (domain_id, pool_id) — the per-device body gathered by
-        _ensure_vlan_domains_for_devices."""
-        domain_kind, domain_id = await self._resolve_vlan_domain(device)
-        pool_id = None
-        if domain_kind == "DcimPhysicalDevice":
-            domain_id, pool_id = await self._ensure_standalone_vlan_domain(device)
-        return domain_id, pool_id
+            taken: dict[str, set[int]] = {domain_id: set() for domain_id in new_domains}
+            own_ids: list[int] = []
+            for activation in activations:
+                domain_id = activation.vlan_domain.id
+                if activation.segment.id == segment_id:
+                    own_ids.append(activation.vlan_id.value)
+                elif domain_id in taken:
+                    taken[domain_id].add(activation.vlan_id.value)
+            chosen = self._choose_vlan_ids(segment_name, new_domains, taken, min(own_ids, default=None))
+            for domain_id, vlan_id in chosen.items():
+                activation = await self.client.create(
+                    kind=ManagedVlanDomainSegment,
+                    data={"segment": {"id": segment_id}, "vlan_domain": {"id": domain_id}, "vlan_id": vlan_id},
+                )
+                await activation.save(allow_upsert=True, update_group_context=False)
+                self.logger.info(f"  Allocated VLAN ID {vlan_id} on VLAN domain {domain_id} for segment {segment_name}")
 
     @staticmethod
     def _device_deployment_ids(hosting_parent: dict[str, Any]) -> list[str]:
@@ -278,9 +320,10 @@ class VlanDomainMixin:
     ) -> None:
         """Desired domains = the VLAN domain of every switch with a port
         carrying the segment, plus every border gateway's domain when the
-        segment is stretched. Missing activations are created (untracked,
-        vlan_id from the domain's pool); existing ones keep their vlan_id;
-        activations on domains that no longer need the segment are deleted.
+        segment is stretched. Activations on domains that no longer need the
+        segment are deleted (freeing their ids); missing ones are created
+        (untracked, vlan_id chosen — see _create_vlan_domain_segments); existing
+        ones keep their vlan_id, so a re-run writes nothing.
 
         The caller must hold the segment lock (segment_lock_key). ``state``
         is a fresh _fetch_segment_vlan_state result, or None to read it here.
@@ -295,20 +338,20 @@ class VlanDomainMixin:
         # Raises (fail-on-error logger) before anything is deleted when a
         # standalone domain is missing, so an unresolved domain can never
         # look like one that stopped needing the segment.
-        desired = await self._ensure_vlan_domains_for_devices(devices)
+        desired = set((await self._resolve_vlan_domains(devices)).values())
         existing: dict[str, str] = state["activations"]
-
-        created = 0
-        for domain_id, pool_id in desired.items():
-            if domain_id not in existing:
-                await self._create_vlan_domain_segment(segment_id, segment_name, domain_id, pool_id)
-                created += 1
 
         stale = sorted(activation_id for domain_id, activation_id in existing.items() if domain_id not in desired)
         for activation_id in stale:
             await self.client.delete(kind=ManagedVlanDomainSegment, id=activation_id)
 
+        # After the deletes: the ids they held are free for the new pairs below.
+        new_domains = sorted(desired - existing.keys())
+        if new_domains:
+            kept_domains = sorted(desired & existing.keys())
+            await self._create_vlan_domain_segments(segment_id, segment_name, new_domains, kept_domains)
+
         self.logger.info(
             f"Segment {segment_name}: {len(desired)} VLAN domain(s) need it across {len(devices)} device(s) — "
-            f"created {created}, removed {len(stale)} activation(s)"
+            f"created {len(new_domains)}, removed {len(stale)} activation(s)"
         )

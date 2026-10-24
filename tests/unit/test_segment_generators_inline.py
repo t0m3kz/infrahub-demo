@@ -194,7 +194,7 @@ class TestCreateInlineSubInterfaces:
         activation.vlan_id.value = 210
         gen = _inline_gen({ManagedVlanDomainSegment: [activation]})
         gen.client.get = AsyncMock()
-        gen._resolve_device_vlan_domain = AsyncMock(return_value=("mlag-bl", None))
+        gen._resolve_vlan_domains = AsyncMock(return_value={"bl-1": "mlag-bl"})
         gen.ensure_prefix_address_pool = AsyncMock(return_value=MagicMock(id="pool-1"))
         gen.allocate_prefix_address = AsyncMock(return_value="ip-own-1")
         gen.ensure_vlan_subinterface = AsyncMock()

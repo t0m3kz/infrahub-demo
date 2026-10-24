@@ -216,13 +216,12 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
 
         # VlanSegment.vlan_id is set manually — no pool involved (single-site,
         # no collision-tracking concern requiring automated allocation).
-        # VxlanSegment's LOCAL VLAN ID is allocated per VLAN domain (MLAG pair
+        # VxlanSegment's LOCAL VLAN ID is chosen per VLAN domain (MLAG pair
         # or standalone device), not per-DC — see generators/devices.py's
         # _ensure_mlag_pairs/_ensure_standalone_vlan_domains and
-        # generators/topology/segment.py's per-domain ManagedVlanDomainSegment
-        # allocation. IEEE 802.1Q VLAN ID has only local significance; a
-        # DC-wide pool would artificially cap the whole DC to one shared
-        # ~3900-value space instead of ~3900 per independent VLAN domain.
+        # generators/vlan_domain.py's per-domain ManagedVlanDomainSegment
+        # allocation (no pool: the lowest id free on every domain the segment
+        # lands on, so one segment keeps one id across the fabric).
 
         # L2 VNI pool for the VXLAN overlay (VRF-lite: no VRF stretches over
         # EVPN; the only L3 VNIs are the four fixed namespaces' hand-set ones).

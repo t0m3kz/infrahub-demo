@@ -622,10 +622,11 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, VlanDomainMixin, CommonGene
             )
         }
 
+        domain_by_device = await self._resolve_vlan_domains([leg["border_device"] for leg in legs])
         for leg in legs:
             port = leg["member_port"]
             device_id: str = leg["member_device_id"]
-            domain_id, _pool_id = await self._resolve_device_vlan_domain(leg["border_device"])
+            domain_id = domain_by_device[leg["border_device"].id]
             vlan_id = vlan_by_domain.get(domain_id)
             if vlan_id is None:
                 self.logger.error(
