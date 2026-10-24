@@ -280,7 +280,7 @@ class MyCheck(InfrahubCheck):
   generated or recorded; its role is its KIND, never an attribute. `TopologyTunnelCircuit` (SD-WAN office edge <->
   gateway `eth1`, and the partner tunnel; inventory only, no session, owner = the office),
   `TopologyInterconnectCircuit` (DCI, unowned: a `/31` or `/127` eBGP underlay plus a loopback-to-loopback EVPN
-  multihop session keyed per circuit, MTU 9216) and `TopologyHandoffCircuit` (our edge sub-interface <-> a party
+  multihop session keyed per circuit, MTU 9214) and `TopologyHandoffCircuit` (our edge sub-interface <-> a party
   device sub-interface in one environment namespace: cloud on-ramps, Equinix/Megaport, the SD-WAN gateway LAN; a `/31`
   from `Handoff-<namespace>-IPv4` and one eBGP session; the cloud or provider side address comes from OUR pool only,
   and for AWS Direct Connect the customer specifies the peer IPs). One generator, `add_virtual_circuit`
@@ -540,6 +540,7 @@ tests/
 - **Type hints and docstrings are required** for all test functions.
 - Use descriptive names for tests (e.g., `test_create_device_with_invalid_name_raises_error`).
 - Use `pytest.mark.asyncio` for async tests and `pytest.mark.parametrize` for testing multiple inputs.
+- `tests/smoke/test_golden_structure.py` lints the rendered goldens: a new platform template must keep it green.
 - **No Python module exceeds 1000 lines**: `tests/`, `generators/`, `transforms/`, `checks/` and `utils/` alike
   (guarded by `tests/unit/test_test_file_sizes.py`; the only exemption is the hand-curated `generators/protocols.py`).
   Split by topic. A test module into sibling `test_<name>_<topic>.py` modules; builders used by several of them go

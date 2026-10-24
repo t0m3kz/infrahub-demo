@@ -6,6 +6,9 @@
 
 hostname dc1-super-spine-01
 
+! Enable IP routing
+ip routing
+
 ! Configure spanning tree mode
 spanning-tree mode mstp
 
@@ -13,12 +16,14 @@ spanning-tree mode mstp
 no spanning-tree vlan-id 4094
 interface Ethernet1
    description to spine-01
+   no switchport
    ip address 10.1.0.1/31
 
    no shutdown
 
 interface Ethernet2
    description to spine-02
+   no switchport
    ip address 10.1.0.3/31
 
    no shutdown

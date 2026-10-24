@@ -10,6 +10,10 @@ feature interface-vlan
 feature lacp
 feature vpc
 feature lldp
+feature nv overlay
+feature vn-segment-vlan-based
+feature nve
+nv overlay evpn
 !
 ! VLANs
 vlan 150
@@ -18,25 +22,29 @@ vlan 150
 !
 ! Interfaces
 interface Ethernet1
+  no switchport
   no shutdown
   ip address 10.1.0.1/31
 
 !
 interface Ethernet1/8
+  no switchport
   no shutdown
   ipv6 address 2001:db8:100:ff::/127
 
 !
 interface Ethernet1/10
+  no switchport
   no shutdown
   ipv6 address 2001:db8:dc10::/127
-  mtu 9216
+  mtu 9214
 
 !
 interface Ethernet1/11
+  no switchport
   no shutdown
   ipv6 address 2001:db8:dc11::/127
-  mtu 9216
+  mtu 9214
 
 !
 interface Ethernet1/15
@@ -47,6 +55,7 @@ interface Ethernet1/15
   switchport trunk allowed vlan 150
 !
 interface Ethernet2
+  no switchport
   no shutdown
   ip address 10.1.0.3/31
 
@@ -66,6 +75,16 @@ interface Loopback100
   ipv6 address 2001:db8:100::f1/128
 
 !
+!
+! Route-maps
+route-map RM-CONN-2-BGP permit 10
+  match interface loopback0 Loopback1 Loopback100
+!
+route-map RM-FABRIC-OUT permit 10
+  match interface loopback0 Loopback1 Loopback100
+!
+route-map RM-DCI-IN permit 10
+  set community no-export additive
 !
 !
 ! BGP Configuration
@@ -126,14 +145,14 @@ router bgp 65001
     description spine-01
     inherit peer-session UNDERLAY-PEERS-SESSION
     address-family ipv4 unicast
-      inherit peer-policy UNDERLAY-PEERS-POLICY
+      inherit peer-policy UNDERLAY-PEERS-POLICY 1
     !
   neighbor 10.1.0.2
     remote-as 65101
     description spine-02
     inherit peer-session UNDERLAY-PEERS-SESSION
     address-family ipv4 unicast
-      inherit peer-policy UNDERLAY-PEERS-POLICY
+      inherit peer-policy UNDERLAY-PEERS-POLICY 1
     !
   neighbor 2001:db8:100:ff::1
     remote-as 65001
@@ -141,11 +160,11 @@ router bgp 65001
     password fabric-s3cr3t
     inherit peer-session FABRIC-PEERS-SESSION
     address-family ipv6 unicast
-      inherit peer-policy FABRIC-PEERS-POLICY
+      inherit peer-policy FABRIC-PEERS-POLICY 1
       route-map RM-FABRIC-OUT out
     !
     address-family l2vpn evpn
-      inherit peer-policy FABRIC-PEERS-POLICY
+      inherit peer-policy FABRIC-PEERS-POLICY 1
     !
   neighbor 2001:db8:dc10::1
     remote-as 65100
@@ -153,7 +172,7 @@ router bgp 65001
     password dci-s3cr3t-0
     inherit peer-session DCI-UNDERLAY-PEERS-SESSION
     address-family ipv6 unicast
-      inherit peer-policy DCI-UNDERLAY-PEERS-POLICY
+      inherit peer-policy DCI-UNDERLAY-PEERS-POLICY 1
       maximum-prefix 16
       route-map RM-FABRIC-OUT out
       route-map RM-DCI-IN in
@@ -164,7 +183,7 @@ router bgp 65001
     password dci-s3cr3t-1
     inherit peer-session DCI-UNDERLAY-PEERS-SESSION
     address-family ipv6 unicast
-      inherit peer-policy DCI-UNDERLAY-PEERS-POLICY
+      inherit peer-policy DCI-UNDERLAY-PEERS-POLICY 1
       maximum-prefix 16
       route-map RM-FABRIC-OUT out
       route-map RM-DCI-IN in
@@ -174,14 +193,14 @@ router bgp 65001
     description spine-01
     inherit peer-session EVPN-OVERLAY-SESSION
     address-family l2vpn evpn
-      inherit peer-policy EVPN-OVERLAY-POLICY
+      inherit peer-policy EVPN-OVERLAY-POLICY 1
     !
   neighbor 10.0.0.101
     remote-as 65101
     description spine-02
     inherit peer-session EVPN-OVERLAY-SESSION
     address-family l2vpn evpn
-      inherit peer-policy EVPN-OVERLAY-POLICY
+      inherit peer-policy EVPN-OVERLAY-POLICY 1
     !
   neighbor 2001:db8:dc10:ffff::1
     remote-as 65100
@@ -191,7 +210,7 @@ router bgp 65001
     update-source Loopback1
     inherit peer-session DCI-PEERS-SESSION
     address-family l2vpn evpn
-      inherit peer-policy DCI-PEERS-POLICY
+      inherit peer-policy DCI-PEERS-POLICY 1
     !
   neighbor 2001:db8:dc11:ffff::1
     remote-as 65101
@@ -201,18 +220,13 @@ router bgp 65001
     update-source Loopback1
     inherit peer-session DCI-PEERS-SESSION
     address-family l2vpn evpn
-      inherit peer-policy DCI-PEERS-POLICY
+      inherit peer-policy DCI-PEERS-POLICY 1
     !
 !
 
 !
 !
 ! VXLAN Configuration (netlab-style multivendor)
-!
-feature nv overlay
-feature vn-segment-vlan-based
-feature nve
-nv overlay evpn
 !
 evpn multisite border-gateway 65000
   delay-restore time 300
@@ -249,18 +263,6 @@ evpn
 !
 vlan 150
   vn-segment 10150
-
-!
-! Route-maps
-route-map RM-CONN-2-BGP permit 10
-  match interface loopback0 Loopback1 Loopback100
-!
-route-map RM-FABRIC-OUT permit 10
-  match interface loopback0 Loopback1 Loopback100
-!
-route-map RM-DCI-IN permit 10
-  set community no-export additive
-!
 
 !
 ! Management

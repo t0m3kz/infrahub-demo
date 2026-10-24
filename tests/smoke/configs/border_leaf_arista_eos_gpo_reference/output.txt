@@ -11,6 +11,9 @@ hostname dc1-border-leaf-01
 ! must be present from the first push, not added later.
 service routing protocols model multi-agent
 
+! Enable IP routing
+ip routing
+
 ! Configure spanning tree mode
 spanning-tree mode mstp
 
@@ -34,12 +37,14 @@ vlan 220
 
 interface Ethernet1
    description to spine-01
+   no switchport
    ip address 10.1.0.1/31
 
    no shutdown
 
 interface Ethernet2
    description to spine-02
+   no switchport
    ip address 10.1.0.3/31
 
    no shutdown

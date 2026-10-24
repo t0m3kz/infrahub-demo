@@ -267,14 +267,14 @@ class TestInterconnectSession:
         assert _peering(client, "underlay")["password"] == {"id": DC_KEY_ID}
 
     @pytest.mark.asyncio
-    async def test_the_two_physical_ports_get_mtu_9216_untracked(self) -> None:
-        """9216 is the jumbo routed-port MTU on DCI ports; the two ports are saved untracked."""
+    async def test_the_two_physical_ports_get_mtu_9214_untracked(self) -> None:
+        """9214 is the jumbo routed-port MTU on DCI ports; the two ports are saved untracked."""
         client = FakeClient()
 
         await _run(client, interconnect_payload())
 
         for port in ("if-eg", "if-bl"):
-            assert client.interfaces[port].mtu.value == 9216
+            assert client.interfaces[port].mtu.value == 9214
             assert client.saves()[port] == UNTRACKED
         assert client.interfaces["if-eg"].description.value == f"DCI {DCI} to bl-dc101101 Ethernet1/35"
 

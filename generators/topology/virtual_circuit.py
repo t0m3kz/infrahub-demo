@@ -46,7 +46,7 @@ end's ``underlay_protocol``; dual-stack is refused, and so is IPv4 towards a col
 IPv6 only. Two sessions on the overlay processes, keyed with one generated per-circuit RoutingPassword
 (``<vc>-dci-key``, created once, never rotated): the directly connected underlay eBGP session on the /31
 (``dci-underlay``) and the loopback-to-loopback multihop eBGP session carrying only l2vpn evpn (``dci``). The two
-physical ports get MTU 9216.
+physical ports get MTU 9214.
 
 Ownership (the run's tracking group, delete_unused_nodes=True): the prefix, its addresses and the peerings belong to
 the circuit. The SDK's ``update_group`` returns without any cleanup when the run tracked nothing (``if not members:
@@ -108,7 +108,8 @@ from .circuit import PHYSICAL_CIRCUIT_GENERATOR
 # DCI P2P pools (data/bootstrap/20_dci_pools.yml) by address family, with the prefix length allocated from them.
 _DCI_POOLS: dict[int, tuple[str, int]] = {4: ("DCI-Technical-IPv4", 31), 6: ("DCI-Technical-IPv6", 127)}
 _UNICAST_AF: dict[int, tuple[str, str]] = {4: IPV4_UNICAST_AF, 6: IPV6_UNICAST_AF}
-_DCI_MTU = 9216
+# One MTU every platform accepts: Arista EOS caps a routed port at 9214, NX-OS allows 9216, so the vendor-neutral model uses 9214.
+_DCI_MTU = 9214
 _DCI_UNDERLAY_MAXIMUM_ROUTES = 16
 # Loopback roles an EVPN session may source from, in order of preference. Never the multisite-vip, shared by every
 # border gateway of a site (the query does not select it either).

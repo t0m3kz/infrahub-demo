@@ -6,6 +6,9 @@
 
 hostname DC1-POD1-L1
 
+! Enable IP routing
+ip routing
+
 ! Configure spanning tree mode
 spanning-tree mode mstp
 
@@ -48,12 +51,14 @@ mlag configuration
 
 interface Ethernet1
    description to spine-01
+   no switchport
    ip address 10.1.2.1/31
 
    no shutdown
 
 interface Ethernet2
    description to spine-02
+   no switchport
    ip address 10.1.2.3/31
 
    no shutdown

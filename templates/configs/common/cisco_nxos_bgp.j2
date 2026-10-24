@@ -39,18 +39,6 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- endif %}
   !
 {%- endfor %}
-{%- for session in bgp_config.sessions %}
-{%- if session.get('local_pref') %}
-  route-map {{ session.name }}-LOCAL-PREF-IN permit 10
-    set local-preference {{ session.local_pref }}
-  !
-{%- endif %}
-{%- if session.get('med') %}
-  route-map {{ session.name }}-MED-OUT permit 10
-    set metric {{ session.med }}
-  !
-{%- endif %}
-{%- endfor %}
   address-family ipv4 unicast
     redistribute direct route-map RM-CONN-2-BGP
 {%- if bgp_config.multipath %}
@@ -113,7 +101,9 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- for _af in ['ipv6', 'ipv4', 'evpn'] if _af in _afs %}
     address-family {{ 'l2vpn evpn' if _af == 'evpn' else _af ~ ' unicast' }}
 {%- if session.peer_group is defined %}
-      inherit peer-policy {{ session.peer_group }}-POLICY
+{#- D: Cisco Nexus 9000 Unicast Routing guide: `inherit peer-policy <name> <preference>`; the preference
+    (1-65535) orders several policies and is required. A neighbour inherits one policy per address family. #}
+      inherit peer-policy {{ session.peer_group }}-POLICY 1
 {%- else %}
 {%- if session.get('send_community') %}
       send-community

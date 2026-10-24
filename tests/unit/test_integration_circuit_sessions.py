@@ -494,7 +494,7 @@ async def test_the_dci_sessions_the_generator_plans_pass(stack: FakeStack) -> No
             ),
             "key 'dc10-overlay-key', expected 'ICX-DC10-EQXFR2-dci-key'",
         ),
-        (lambda s: _addresses(s, "ICX-DC10-EQXFR2-underlay")[0].update(mtu=_value(1500)), "MTU 1500, expected 9216"),
+        (lambda s: _addresses(s, "ICX-DC10-EQXFR2-underlay")[0].update(mtu=_value(1500)), "MTU 1500, expected 9214"),
         (
             lambda s: s.sessions.pop("ICX-DC12-EQXPA4-B-evpn"),
             "DCI sessions",
@@ -509,7 +509,7 @@ async def test_the_dci_sessions_the_generator_plans_pass(stack: FakeStack) -> No
 async def test_a_dci_session_that_differs_from_the_plan_fails_naming_the_field(
     stack: FakeStack, mutate: Any, message: str
 ) -> None:
-    """Each single deviation from the plan (ttl, type, key, MTU 1500 vs 9216, missing) fails naming its field."""
+    """Each single deviation from the plan (ttl, type, key, MTU 1500 vs 9214, missing) fails naming its field."""
     mutate(stack)
     with pytest.raises(AssertionError, match=message.replace("(", r"\(").replace(")", r"\)")):
         await _tests().test_06_verify_dci_sessions(_client(stack), "main")
@@ -693,7 +693,7 @@ def _drift_plan(kind: str, rewrite: Callable[[SessionPlan], SessionPlan]) -> Cal
             id="dci-maximum-routes",
         ),
         pytest.param(
-            _drift_constant("_DCI_MTU", 1500), "test_06_verify_dci_sessions", "MTU 1500, expected 9216", id="dci-mtu"
+            _drift_constant("_DCI_MTU", 1500), "test_06_verify_dci_sessions", "MTU 1500, expected 9214", id="dci-mtu"
         ),
         pytest.param(
             _drift_plan(virtual_circuit.INTERCONNECT_CIRCUIT, _peerings_with(ttl=64)),

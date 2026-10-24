@@ -195,7 +195,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
 
         Per circuit `<name>`: `<name>-underlay` (peering_role dci-underlay, eBGP, ttl 1, bfd, IPv6 unicast, 16 routes)
         on the two physical ports, addressed from one /127 of the DCI pool (the colocation edge the lower address) and
-        MTU 9216; and `<name>-evpn` (peering_role dci, EBGP_MULTIHOP, ttl 2, extended communities, l2vpn evpn only)
+        MTU 9214; and `<name>-evpn` (peering_role dci, EBGP_MULTIHOP, ttl 2, extended communities, l2vpn evpn only)
         between the two VTEP loopbacks. Both run on the ends' overlay BGP processes and carry the circuit's own key
         `<name>-dci-key` (created once, never a fabric's overlay key). The /127 is the one prefix `DCI <name>` of the DCI pool.
         """
@@ -281,7 +281,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                         f"{session['name']['value']}: runs on {_process_roles(session)}, expected {devices} overlay"
                     )
 
-            # underlay: the two physical ports, one /127 of the DCI pool, the edge the lower address, MTU 9216
+            # underlay: the two physical ports, one /127 of the DCI pool, the edge the lower address, MTU 9214
             ports = _interfaces(underlay)
             if sorted(ports) != sorted(ends):
                 errors.append(f"{circuit}-underlay: on interfaces {sorted(ports)}, expected {sorted(ends)}")

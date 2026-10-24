@@ -1,0 +1,9 @@
+{#- Expects `interfaces`, `bgp` and `ospf` in scope.
+    D: EOS routes nothing until `ip routing` is enabled globally (a `vrf instance` needs its own `ip routing vrf`, which
+    arista_eos_vxlan.j2 renders). A device with no addressed interface, no BGP and no OSPF is a pure L2 switch and
+    keeps routing off. -#}
+{%- if interfaces | selectattr('ip_addresses') | list or bgp or ospf %}
+
+! Enable IP routing
+ip routing
+{%- endif -%}

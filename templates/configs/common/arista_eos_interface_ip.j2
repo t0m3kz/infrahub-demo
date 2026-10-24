@@ -1,3 +1,20 @@
+{#- Expects `interface` and `interfaces` in scope; `eos_ifname` overrides interface.name (the leaf renders a LAG as
+    Port-Channel<lag_id>).
+    D: a physical or LAG port is a switchport until `no switchport`, and EOS rejects `ip address` on a switchport. The
+    same holds for the parent of a routed sub-interface (<port>.<vlan>), which needs a routed parent. Sub-interfaces
+    (name with a dot), Vlan, Loopback, Management and Vxlan are never switchports. -#}
+{%- set eos_port = eos_ifname | default(interface.name) %}
+{%- if eos_port.startswith('Ethernet') or eos_port.startswith('Port-Channel') %}
+{%- if '.' not in eos_port %}
+{%- set eos_routed = namespace(parent=false) %}
+{%- for sub in interfaces if sub.ip_addresses and sub.name.startswith(eos_port ~ '.') %}
+{%- set eos_routed.parent = true %}
+{%- endfor %}
+{%- if interface.ip_addresses or eos_routed.parent %}
+   no switchport
+{%- endif %}
+{%- endif %}
+{%- endif %}
 {%- if interface.ip_addresses %}
 {%- set ns_name = interface.ip_addresses[0].get('ip_namespace', {}).get('name', 'default') %}
 {%- if ns_name != 'default' %}

@@ -20,6 +20,7 @@ feature interface-vlan
 feature lacp
 feature vpc
 feature lldp
+{%- include 'common/cisco_nxos_feature_evpn.j2' %}
 {%- if leaf_pbr_rules %}
 feature pbr
 {%- endif %}
@@ -48,8 +49,10 @@ vlan {{ vlan.vlan_id }}
 {%- endif %}
 {%- include 'common/cisco_nxos_gpo.j2' %}
 ! Interfaces
+{%- include 'common/cisco_nxos_subif_parents.j2' %}
 {%- for interface in interfaces if interface.role != 'mlag-peer' %}
 interface {{ interface.name }}
+{%- include 'common/cisco_nxos_routed_port.j2' %}
 {%- if nxos_border and interface.display_description %}
   description {{ interface.display_description }}
 {%- endif %}
@@ -71,6 +74,10 @@ interface {{ interface.name }}
 {%- endif %}
 !
 {%- endfor %}
+{%- include 'common/cisco_nxos_route_maps.j2' %}
+{%- if nxos_border %}
+{%- include 'common/cisco_nxos_vrf_static.j2' %}
+{%- endif %}
 !
 ! OSPF Configuration
 {% include 'common/cisco_nxos_ospf.j2' %}
@@ -79,31 +86,6 @@ interface {{ interface.name }}
 {% include 'common/cisco_nxos_bgp.j2' %}
 !
 {%- include 'common/cisco_nxos_vxlan.j2' -%}
-!
-! Route-maps
-route-map RM-CONN-2-BGP permit 10
-  match interface {{ ([loopback_name] + (vxlan.multisite.advertise_interfaces if nxos_border and vxlan and vxlan.multisite else [])) | unique | join(' ') }}
-!
-{%- include 'common/cisco_nxos_dci_route_maps.j2' -%}
-{%- if vxlan and vxlan.l3_vni_mappings %}
-{#- Permit-all, deliberately unqualified: inside a tenant VRF everything that is
-    directly connected (the anycast-gateway SVIs) is exactly what should become an
-    EVPN type-5 route. Referenced from cisco_nxos_bgp.j2's per-VRF block. #}
-{%- if leaf_transit_prefixes and not nxos_border %}
-! The firewall transit /29s this leaf holds locally for PBR are originated by the borders only
-! documented-not-lab-verified: deny sequence keeps the leaf's connected transit /29 out of the type-5 table
-{%- for prefix in leaf_transit_prefixes %}
-ip prefix-list PL-XCHG-TRANSIT seq {{ loop.index * 10 }} permit {{ prefix }}
-{%- endfor %}
-route-map RM-VRF-DIRECT-2-EVPN deny 5
-  match ip address prefix-list PL-XCHG-TRANSIT
-{%- endif %}
-route-map RM-VRF-DIRECT-2-EVPN permit 10
-!
-{%- endif %}
-{%- if nxos_border %}
-{%- include 'common/cisco_nxos_vrf_static.j2' %}
-{%- endif %}
 {%- include 'common/cisco_nxos_svi.j2' -%}
 !
 {%- if leaf_pbr_rules %}
