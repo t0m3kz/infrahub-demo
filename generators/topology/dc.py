@@ -1,5 +1,6 @@
 """Infrastructure generator for data center topology."""
 
+from collections.abc import Mapping
 from typing import Any, Literal, cast
 
 from typing_extensions import TypedDict
@@ -59,8 +60,8 @@ class TopologyDcData(TypedDict, total=False):
     technical_pool: dict[str, Any] | None
     management_pool: dict[str, Any] | None
     fabric_asn_pool: dict[str, Any] | None
-    # A TopologyPod child is a dict (id, name, index, design); any other child collapses to its bare id.
-    children: list[dict[str, Any] | str]
+    # A TopologyPod child is {id, name, index, design: {id}}; any other child is just {id}.
+    children: list[dict[str, Any]]
     vni_pool: dict[str, Any] | None
     evpn_rt_as: dict[str, Any] | None
     fabric_controllers: list[dict[str, Any]]
@@ -114,7 +115,7 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
         # design to the DC design's pod_templates (its max_border_leafs_per_pod).
         # The pods are read, never saved: they are data, not this run's output
         # (and DCPodCascadeGenerator fans out to them from the same list).
-        self._existing_pods = [child for child in self.data.get("children", []) if isinstance(child, dict)]
+        self._existing_pods = self.pods_of(self.data)
 
         self.deployment_id = dc_id  # Store for cable linking
         self.fabric_name = dc_name.lower()
@@ -491,6 +492,12 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
                     f"at DC level (expected one of {sorted(_DC_VALID_FABRIC_ROLES)}) — skipping this entry."
                 )
 
+    @staticmethod
+    def pods_of(data: Mapping[str, Any]) -> list[dict[str, Any]]:
+        """The DC's pods from its cleaned query payload: the children that carry a design (``clean_data`` gives a
+        non-pod child as just ``{"id": ...}``)."""
+        return [child for child in data.get("children") or [] if isinstance(child, dict) and child.get("design")]
+
     def _pod_border_leaf_capacities(self, pods: list[dict[str, Any]]) -> dict[str, int]:
         """Pod id -> how many border-leaf devices the pod can receive: its own
         design's max_border_leafs_per_pod. A pod whose design caps it at 0 is
@@ -505,7 +512,7 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
         }
         capacities: dict[str, int] = {}
         for pod in pods:
-            design_id = pod["design"]
+            design_id = pod["design"]["id"]
             if design_id not in cap_by_design:
                 self.logger.warning(
                     f"DC {self.fabric_name}: pod {pod['name']}'s design is not one of the DC design's "

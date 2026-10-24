@@ -29,6 +29,7 @@ from infrahub_sdk.task.models import TaskState
 
 from generators.common import CommonGenerator
 from generators.pools import PoolMixin
+from generators.topology.dc import DCTopologyGenerator
 from generators.topology.dc_pod_cascade import DCPodCascadeGenerator
 from generators.topology.pod_rack_cascade import PodRackCascadeGenerator
 from tests.unit.simulators.fabric_designs import DESIGN_FOR_DEPLOYMENT_TYPE, pod_design
@@ -339,7 +340,7 @@ class TestGetParentPoolWithRetryKind:
 
 def _pod(name: str) -> dict[str, Any]:
     """A TopologyPod child as the DC query returns it after clean_data()."""
-    return {"id": f"id-{name}", "name": name, "index": 1, "design": "pod-design"}
+    return {"id": f"id-{name}", "name": name, "index": 1, "design": {"id": "pod-design"}}
 
 
 def _build_dc_cascade_gen() -> Any:
@@ -362,7 +363,7 @@ def _build_dc_cascade_gen() -> Any:
         gen.data = deployment_list[0]
         # Mirrors DCTopologyGenerator.generate(): the DC's pods ride its own query
         # (read, never saved); keep them for the cascade.
-        gen._existing_pods = [child for child in gen.data.get("children", []) if isinstance(child, dict)]
+        gen._existing_pods = DCTopologyGenerator.pods_of(gen.data)
 
     gen._bootstrap_generate = _fake_bootstrap
     return gen

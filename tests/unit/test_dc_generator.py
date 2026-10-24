@@ -21,6 +21,7 @@ from generators.protocols import RoutingAutonomousSystem
 from generators.shared_routing import _overlay_as_description
 from generators.topology.dc import DCTopologyGenerator
 from tests.unit.dc_generator_helpers import _dc_design, _deployment, _make_generator
+from utils.data_cleaning import clean_data
 
 
 class TestGenerateGuardClauses:
@@ -69,21 +70,59 @@ class TestGenerateGuardClauses:
 
 
 class TestGenerateExistingPodsTracking:
+    def test_pods_of_reads_the_cleaned_query_shape(self) -> None:
+        """The DC query's ``children`` after clean_data: a pod carries ``design`` as ``{"id": ...}`` and any other
+        child is just ``{"id": ...}``; only the pods are kept and their design id keys the border-leaf capacity."""
+        raw = {
+            "TopologyDataCenter": {
+                "edges": [
+                    {
+                        "node": {
+                            "id": "dc-1",
+                            "children": {
+                                "edges": [
+                                    {
+                                        "node": {
+                                            "id": "pod-a",
+                                            "name": {"value": "DC1-POD1"},
+                                            "index": {"value": 1},
+                                            "design": {"node": {"id": "pod-design-1"}},
+                                        }
+                                    },
+                                    {"node": {"id": "customer-footprint"}},
+                                ]
+                            },
+                        }
+                    }
+                ]
+            }
+        }
+        data = clean_data(raw)["TopologyDataCenter"][0]
+
+        pods = DCTopologyGenerator.pods_of(data)
+
+        assert pods == [{"id": "pod-a", "name": "DC1-POD1", "index": 1, "design": {"id": "pod-design-1"}}]
+        gen = _make_generator()
+        gen.data = {"design": {"pod_templates": [{"id": "pod-design-1", "max_border_leafs_per_pod": 2}]}}
+        assert gen._pod_border_leaf_capacities(pods) == {"pod-a": 2}
+
     @pytest.mark.asyncio
     async def test_existing_pods_are_read_but_never_tracked(self) -> None:
         """Pods are data, not add_dc's output: they are kept for border-leaf
         placement and the cascade, but never claimed, so a pod moved to
         another DC is not deleted by this DC's next run."""
         gen = _make_generator()
-        pod_a = {"id": "pod-a", "name": "DC1-POD1", "index": 1, "design": "pod-design-1"}
-        pod_b = {"id": "pod-b", "name": "DC1-POD2", "index": 2, "design": "pod-design-1"}
+        # The query's shape: a relationship is {"node": {...}}; clean_data turns the pod's design into {"id": ...}.
+        pod_a = {"id": "pod-a", "name": "DC1-POD1", "index": 1, "design": {"node": {"id": "pod-design-1"}}}
+        pod_b = {"id": "pod-b", "name": "DC1-POD2", "index": 2, "design": {"node": {"id": "pod-design-1"}}}
         data = _deployment(design=_dc_design())
-        # A TopologyPod child arrives as a dict; any other child collapses to its bare id.
-        data["TopologyDeployment"][0]["children"] = [pod_a, "not-a-pod", pod_b]
+        # A TopologyPod child carries its design; any other child is just its id.
+        data["TopologyDeployment"][0]["children"] = [pod_a, {"id": "not-a-pod"}, pod_b]
 
         await gen.generate(data)
 
-        assert gen._existing_pods == [pod_a, pod_b]
+        assert [pod["id"] for pod in gen._existing_pods] == ["pod-a", "pod-b"]
+        assert all(pod["design"] == {"id": "pod-design-1"} for pod in gen._existing_pods)
         assert gen.client.group_context.related_node_ids == []
 
     @pytest.mark.asyncio

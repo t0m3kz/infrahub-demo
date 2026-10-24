@@ -71,7 +71,7 @@ def _make_generator() -> Any:
 
 def _mock_pod(*, id: str, index: int, name: str = "pod-1", design_id: str = "pod-design") -> dict[str, Any]:
     """A TopologyPod as the DC query's children selection returns it after clean_data()."""
-    return {"id": id, "index": index, "name": name, "design": design_id}
+    return {"id": id, "index": index, "name": name, "design": {"id": design_id}}
 
 
 def _pods_with_caps(gen: Any, caps: list[int], *, max_border_leafs_per_fabric: int = 10) -> list[dict[str, Any]]:
@@ -121,7 +121,7 @@ class TestPodBorderLeafCapacity:
         """A pod whose design is not one of the DC design's pod_templates (add_pod refuses it) hosts no border-leaf."""
         gen = _make_generator()
         (pod,) = _pods_with_caps(gen, [2])
-        pod["design"] = "pod-design-ELSEWHERE"
+        pod["design"] = {"id": "pod-design-ELSEWHERE"}
 
         assert gen._pod_border_leaf_capacities([pod]) == {pod["id"]: 0}
         gen.logger.warning.assert_called_once()
