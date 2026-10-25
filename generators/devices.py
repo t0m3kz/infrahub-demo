@@ -23,6 +23,7 @@ from .protocols import (
     ManagedController,
 )
 from .types import DeviceOptions, NamingConvention
+from .virtual_nics import VirtualNicMixin
 
 # device_role values that pair into an HA domain via DeviceOptions.ha_kind
 # rather than MLAG — see create_devices()'s pairing dispatch below.
@@ -97,7 +98,7 @@ def _initialized_peer_id(rel: Any) -> str | None:
     return rel.peer.id if rel is not None and rel.initialized else None
 
 
-class DeviceMixin(DomainPairingMixin):
+class DeviceMixin(DomainPairingMixin, VirtualNicMixin):
     """Mixin providing device creation methods for CommonGenerator.
 
     Expects the host class to provide: ``client``, ``logger``, ``fabric_name``,
@@ -377,6 +378,9 @@ class DeviceMixin(DomainPairingMixin):
         except ValidationError as exc:
             self.logger.error("Batch creation failed with validation error: %s", exc)
             raise
+
+        if device_kind is DcimVirtualDevice and hosting_device_id:
+            await self._pin_virtual_nics(created_devices, hosting_device_id)
 
         ha_kind = options.get("ha_kind")
         if ha_kind and device_role in _HA_PAIRED_ROLES:

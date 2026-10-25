@@ -795,13 +795,28 @@ class TestUplinksByDevice:
         first, second, other = _uplink("up-1a", "fw-1"), _uplink("up-1b", "fw-1"), _uplink("up-2", "fw-2")
         gen.client.filters = AsyncMock(return_value=[first, second, other])
 
-        result = await gen._uplinks_by_device([_fw_device()], ["fw-1", "fw-2"])
+        result = await gen._uplinks_by_device([_fw_device(), _fw_device(id="fw-2", name="DC10-FW2")])
 
         assert result == {"fw-1": first, "fw-2": other}
         gen.client.filters.assert_awaited_once()
         assert gen.client.filters.call_args.kwargs["device__ids"] == ["fw-1", "fw-2"]
         assert gen.client.filters.call_args.kwargs["role__value"] == "uplink"
+        assert gen.client.filters.call_args.kwargs["kind"].__name__ == "DcimPhysicalInterface"
         gen.logger.error.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_a_member_without_a_physical_uplink_is_read_again_as_a_virtual_nic(self) -> None:
+        """A hosted instance has no physical port: its uplink is its own DcimVirtualInterface, one more read."""
+        gen = make_generator(CustomerDeploymentDCExchangeGenerator)
+        physical, nic = _uplink("up-1", "fw-1"), _uplink("nic-2", "vfw-2")
+        gen.client.filters = AsyncMock(side_effect=[[physical], [nic]])
+
+        result = await gen._uplinks_by_device([_fw_device(), _fw_device(id="vfw-2", name="DC10-VFW2")])
+
+        assert result == {"fw-1": physical, "vfw-2": nic}
+        kinds = [call.kwargs["kind"].__name__ for call in gen.client.filters.call_args_list]
+        assert kinds == ["DcimPhysicalInterface", "DcimVirtualInterface"]
+        assert gen.client.filters.call_args_list[1].kwargs["device__ids"] == ["vfw-2"]
 
     @pytest.mark.asyncio
     async def test_lookup_exception_is_logged_per_member_and_returns_none(self) -> None:
@@ -810,7 +825,7 @@ class TestUplinksByDevice:
         gen.client.filters = AsyncMock(side_effect=RuntimeError("boom"))
         members = [_fw_device(), _fw_device(id="fw-2", name="DC10-FW2")]
 
-        result = await gen._uplinks_by_device(members, ["fw-1", "fw-2"])
+        result = await gen._uplinks_by_device(members)
 
         assert result is None
         assert [call.args[0] for call in gen.logger.error.call_args_list] == [

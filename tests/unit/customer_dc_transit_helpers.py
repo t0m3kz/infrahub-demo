@@ -135,16 +135,23 @@ class _World:
     async def filters(self, *, kind: Any, **kwargs: Any) -> list[Any]:
         name = kind.__name__
         self.executed_filters.append(name)
-        if name == "DcimPhysicalInterface" and "device__ids" in kwargs:
+        if name in ("DcimPhysicalInterface", "DcimVirtualInterface") and "device__ids" in kwargs:
             assert kwargs["role__value"] == "uplink"
-            self.uplink_lookups.append(list(kwargs["device__ids"]))
+            if name == "DcimPhysicalInterface":  # the first read of every member; a virtual one adds a second
+                self.uplink_lookups.append(list(kwargs["device__ids"]))
             if self.fail_uplink_lookup:
                 raise RuntimeError("uplink lookup failed")
-            return [self.uplinks[device_id] for device_id in kwargs["device__ids"] if device_id in self.uplinks]
+            virtual = name == "DcimVirtualInterface"
+            return [
+                self.uplinks[device_id]
+                for device_id in kwargs["device__ids"]
+                if device_id in self.uplinks
+                and (getattr(self.uplinks[device_id], "typename", None) == "DcimVirtualInterface") is virtual
+            ]
         if name == "DcimCable":
             assert kwargs["include"] == ["endpoints"]
             cables = []
-            for uplink in self.uplinks.values():
+            for uplink in (up for up in self.uplinks.values() if hasattr(up, "cable")):
                 cable_id = uplink.cable.id
                 if cable_id in kwargs["ids"] and cable_id not in {cable.id for cable in cables}:
                     port = self.bl_ports.get(cable_id.removeprefix("cable-"))
@@ -165,7 +172,8 @@ class _World:
             context = self.contexts.get(kwargs["name__value"])
             return [context] if context and context.kind == name else []
         if name == "DcimPhysicalInterface":
-            return [port for port in self.bl_ports.values() if port.id in kwargs["ids"]]
+            ports = [*self.bl_ports.values(), *self.uplinks.values()]
+            return [port for port in ports if port.id in kwargs["ids"]]
         if name == "TopologyRoutedExchange":
             return [ex for ex_name, ex in self.exchanges.items() if ex_name in kwargs["name__values"]]
         if name == "DcimVirtualInterface":

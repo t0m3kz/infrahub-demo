@@ -18,7 +18,7 @@ spec:
       memory: 8
       storage: 60
       interfaces:
-        kind: TemplateDcimPhysicalInterface
+        kind: TemplateDcimVirtualInterface
         parameters:
           expand_range: true
         data:
@@ -42,7 +42,7 @@ spec:
       memory: 16
       storage: 120
       interfaces:
-        kind: TemplateDcimPhysicalInterface
+        kind: TemplateDcimVirtualInterface
         parameters:
           expand_range: true
         data:
@@ -66,7 +66,7 @@ spec:
       memory: 32
       storage: 240
       interfaces:
-        kind: TemplateDcimPhysicalInterface
+        kind: TemplateDcimVirtualInterface
         parameters:
           expand_range: true
         data:
@@ -90,7 +90,7 @@ spec:
       memory: 64
       storage: 480
       interfaces:
-        kind: TemplateDcimPhysicalInterface
+        kind: TemplateDcimVirtualInterface
         parameters:
           expand_range: true
         data:

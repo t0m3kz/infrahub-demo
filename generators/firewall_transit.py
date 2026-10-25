@@ -41,11 +41,17 @@ def _dev_name(device: Any) -> str:
     return device["name"] if isinstance(device, dict) else device.name.value
 
 
-def _cabled_device_id(device: Any) -> str:
-    """The device whose uplink cable a member's traffic leaves through: the
-    physical device hosting a virtual instance (an SDK node), else the member."""
-    hosting = None if isinstance(device, dict) else getattr(device, "hosting_device", None)
-    return getattr(hosting, "id", None) or _dev_id(device)
+def _parent_id(interface: Any) -> str | None:
+    """id of the interface a virtual NIC is pinned to, None for a physical port or an unpinned NIC."""
+    return getattr(getattr(interface, "parent_interface", None), "id", None)
+
+
+def _host_port(uplink: Any, host_ports: dict[str, Any]) -> Any | None:
+    """The port a member's traffic leaves through: its own uplink, or for a virtual instance the host port
+    that uplink is pinned to (None when it is not pinned to a physical port of its host)."""
+    if getattr(uplink, "typename", None) != DcimVirtualInterface.__name__:
+        return uplink
+    return host_ports.get(_parent_id(uplink) or "")
 
 
 def _cable_id(interface: Any) -> str | None:
@@ -109,25 +115,22 @@ class TransitLegsMixin:
         among the resolved ones, so a member that cannot be resolved this run
         never shifts the other's address.
 
-        At most three reads for the pair: the uplinks of the members and of
-        the devices cabled for them (_uplinks_by_device), then the cables and
-        their far ends (far_end_interfaces). All reads come first; the checks
-        then run member by member, in name order, so the members log the same
-        errors in the same order as a member-by-member lookup does.
+        At most three reads for the pair: the members' uplinks (_uplinks_by_device), the host ports
+        the virtual ones are pinned to (_pinned_host_ports), then the cables and their far ends
+        (far_end_interfaces). All reads come first; the checks then run member by member, in name
+        order, so the members log the same errors in the same order as a member-by-member lookup does.
         """
         pairs = list(zip(sorted(devices, key=_dev_name), _MEMBER_OFFSETS, strict=False))
         if not pairs:
             return []
-        cabled_ids = {_dev_id(device): _cabled_device_id(device) for device, _ in pairs}
-        uplinks = await self._uplinks_by_device(
-            [device for device, _ in pairs], sorted({*cabled_ids, *cabled_ids.values()})
-        )
+        uplinks = await self._uplinks_by_device([device for device, _ in pairs])
         if uplinks is None:
             return []
+        host_ports = await self._pinned_host_ports(uplinks.values())
+        if host_ports is None:
+            return []
         cabled_uplinks = [
-            uplinks[device_id]
-            for device_id in dict.fromkeys(cabled_ids.values())
-            if device_id in uplinks and _cable_id(uplinks[device_id])
+            port for up in uplinks.values() if (port := _host_port(up, host_ports)) is not None and _cable_id(port)
         ]
         far_ends = await far_end_interfaces(self.client, cabled_uplinks, include=["capabilities"])
 
@@ -137,8 +140,12 @@ class TransitLegsMixin:
             trunk = self._uplink_of(uplinks, device_id, device_name=device_name)
             if trunk is None:
                 continue
-            uplink = self._uplink_of(uplinks, cabled_ids[device_id], device_name=device_name)
+            uplink = _host_port(trunk, host_ports)
             if uplink is None:
+                self.logger.error(
+                    f"{device_name}: uplink {trunk.name.value} is not pinned to a physical port of its hosting device "
+                    f"(parent_interface) — cannot find its border service port"
+                )
                 continue
             bl_port = self._border_service_port(
                 spec, uplink, far_ends, device_name=device_name, context_name=context_name
@@ -321,26 +328,44 @@ class TransitLegsMixin:
             return None
         return await self.upsert_prefix_addresses(prefix, offsets=TRANSIT_OFFSETS, track=track)
 
-    async def _uplinks_by_device(self, members: list[Any], device_ids: list[str]) -> dict[str, Any] | None:
-        """device id -> its role=uplink interface, one query for all of device_ids.
+    async def _uplinks_by_device(self, members: list[Any]) -> dict[str, Any] | None:
+        """member device id -> its role=uplink interface, one query for the physical members, one more for the rest.
 
-        The first one per device (interfaces order by device name, then name,
-        so a device's own order is the same in one query for several devices).
-        None when the lookup fails, logged once per member like a failing
-        per-member lookup.
+        The first one per device (interfaces order by device name, then name, so a device's own
+        order is the same in one query for several devices). A physical member's is its port (it
+        carries the cable, which a DcimInterface read would not select); a member with none is
+        virtual, and its uplink is its own NIC (DcimVirtualInterface). None when the lookup fails,
+        logged once per member like a failing per-member lookup.
         """
+        by_device: dict[str, Any] = {}
+        device_ids = [_dev_id(member) for member in members]
         try:
-            interfaces = await self.client.filters(
-                kind=DcimPhysicalInterface, device__ids=device_ids, role__value=_UPLINK_ROLE
-            )
+            for kind in (DcimPhysicalInterface, DcimVirtualInterface):
+                wanted = [device_id for device_id in device_ids if device_id not in by_device]
+                if not wanted:
+                    break
+                for interface in await self.client.filters(kind=kind, device__ids=wanted, role__value=_UPLINK_ROLE):
+                    by_device.setdefault(interface.device.id, interface)
         except Exception as exc:
             for member in members:
                 self.logger.error(f"Error resolving {_UPLINK_ROLE} interface on {_dev_name(member)}: {exc}")
             return None
-        by_device: dict[str, Any] = {}
-        for interface in interfaces:
-            by_device.setdefault(interface.device.id, interface)
         return by_device
+
+    async def _pinned_host_ports(self, uplinks: Any) -> dict[str, Any] | None:
+        """port id -> the host port each virtual uplink is pinned to (parent_interface), one query.
+
+        Empty when no uplink is pinned (physical members). None when the lookup fails.
+        """
+        port_ids = sorted({port_id for uplink in uplinks if (port_id := _parent_id(uplink))})
+        if not port_ids:
+            return {}
+        try:
+            ports = await self.client.filters(kind=DcimPhysicalInterface, ids=port_ids)
+        except Exception as exc:
+            self.logger.error(f"Error resolving the host ports the virtual uplinks are pinned to: {exc}")
+            return None
+        return {port.id: port for port in ports}
 
     def _uplink_of(self, uplinks: dict[str, Any], device_id: str, *, device_name: str) -> Any | None:
         """device_id's uplink from _uplinks_by_device, logging an error (for member device_name) when it has none."""
@@ -357,8 +382,8 @@ class TransitLegsMixin:
         """The border service port cabled to a member's uplink (far_ends: far_end_interfaces of the uplinks).
 
         A virtual instance has no cable of its own: its traffic leaves through
-        the uplink of the physical device hosting it, so that is the uplink
-        given (_cabled_device_id). The far end must be a border service port of
+        the host port its uplink is pinned to (_host_port), so that is the
+        uplink given. The far end must be a border service port of
         the spec's role (BORDER_ROLE_FOR_SERVICES) on a border leaf or edge —
         the one port the context's legs face for this member, whatever the
         number of border devices. Fetched with its capabilities, the context

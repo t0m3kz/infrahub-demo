@@ -394,6 +394,10 @@ check_definitions:
   - name: validate_virtual_device_placement
     class_name: CheckVirtualDevicePlacement
     file_path: checks/virtual_device_placement.py
+  # Targetless: the rule is per NIC of every hosted virtual device.
+  - name: validate_virtual_nic_pinning
+    class_name: CheckVirtualNicPinning
+    file_path: checks/virtual_nic_pinning.py
   # Targetless: a DC pool holds its pods' pools, so one query reads every
   # data center and pod with the slices of their pools.
   - name: validate_pool_utilization
@@ -758,6 +762,8 @@ queries:
     file_path: queries/validation/hypervisor_environment.gql
   - name: virtual_device_placement
     file_path: queries/validation/virtual_device_placement.gql
+  - name: virtual_nic_pinning
+    file_path: queries/validation/virtual_nic_pinning.gql
   - name: pool_utilization
     file_path: queries/validation/pool_utilization.gql
   - name: loadbalancer_validation
