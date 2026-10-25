@@ -16,8 +16,8 @@ from typing import Any
 
 import pytest
 
+from tasks import ALL_DEMO_DATA
 from tests.integration.demo_data import BOOTSTRAP, ROOT, Declared, declared, distinct, name
-from tests.integration.test_constants import ALL_DEMO_DATA
 
 _ALL = ROOT / ALL_DEMO_DATA
 _POLICY = "seg-c001-nordix-prod-p-egress"

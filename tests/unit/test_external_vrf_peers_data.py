@@ -131,8 +131,7 @@ class TestOfficeQuerySelection:
 
         assert "sdwan_gateway { node { name { value } } }" in office
         assert "lan_prefixes {" in office
-        deployments = office.split("segment_deployments(", 1)[1]
-        assert deployments.startswith('status__values: ["active", "provisioning"])')
+        deployments = office.split("segment_deployments {", 1)[1]
         assert (
             "gateway { node { ip_prefix { node { prefix { value } ip_namespace { node { name { value } } } } } } }"
             in (deployments)

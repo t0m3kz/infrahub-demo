@@ -65,7 +65,7 @@ from infrahub_sdk.exceptions import NodeNotFoundError
 
 from utils.data_cleaning import clean_data
 
-from ..common import CommonGenerator, DeviceOptions
+from ..common import CommonGenerator
 from ..connections import BORDER_ROLE_FOR_SERVICES, CablingMixin
 from ..devices import DeviceMixin
 from ..firewall_context import FIREWALL_CONTEXT
@@ -73,6 +73,7 @@ from ..helpers.routing import loopback_prefix_length
 from ..pools import PoolMixin
 from ..protocols import TopologyColocationZone, TopologyVirtualColocation
 from ..routing import RoutingMixin
+from ..types import DeviceOptions
 from .colocation_evpn import ColocationEvpnMixin
 from .colocation_pools import (
     _COLO_LOOPBACK_PREFIX_LENGTH,

@@ -12,13 +12,13 @@ import re
 from pathlib import Path
 from typing import Any
 
-from tests.integration.demo_data import ROOT, declared, name, object_documents, object_templates
-from tests.integration.test_constants import (
+from tests.integration.all_demo_circuit_constants import (
     ALL_DEMO_GATEWAY_ACCESS_CIRCUITS,
     ALL_DEMO_INTERNET_TRANSIT_CIRCUITS,
     ALL_DEMO_PHYSICAL_CIRCUIT_TYPES,
     ALL_DEMO_SDWAN_UNDERLAY_CIRCUITS,
 )
+from tests.integration.demo_data import ROOT, declared, name, object_documents, object_templates
 
 _ALL = ROOT / "data" / "demos" / "30_all"
 _GATEWAY_DIR = _ALL / "08_interconnects" / "08_gateway_access"

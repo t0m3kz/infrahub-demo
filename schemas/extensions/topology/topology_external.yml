@@ -20,22 +20,6 @@ nodes:
       - name__value
     display_label: "{{ name__value }}"
     attributes:
-      - name: provider_type
-        kind: Dropdown
-        label: Provider Type
-        optional: true
-        default_value: internet
-        order_weight: 200
-        choices:
-          - name: internet
-            label: Internet
-            color: "#3498DB"
-          - name: partner
-            label: Partner
-            color: "#2ECC71"
-          - name: exchange
-            label: Exchange
-            color: "#1ABC9C"
       - name: status
         kind: Dropdown
         label: Status
@@ -49,9 +33,6 @@ nodes:
           - name: provisioning
             label: Provisioning
             color: "#FFFF7F"
-          - name: maintenance
-            label: Maintenance
-            color: "#FFD27F"
           - name: decommissioned
             label: Decommissioned
             color: "#BFBFBF"

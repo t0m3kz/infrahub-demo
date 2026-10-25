@@ -48,10 +48,11 @@ from typing import Any
 from transforms.helpers.addressing import host_ip
 from transforms.helpers.segments import _get_segment_gateways, _get_segment_namespace
 from utils.fabric_roles import OFFICE_LISP_ROLES, VTEP_ROLES
+from utils.limits import L3VNI_SVI_VLAN_BASE, L3VNI_SVI_VLAN_MAX
 
 _log = logging.getLogger(__name__)
 
-# Overlay control plane -> the netmiko platforms whose device templates render it (like
+# Overlay control plane -> the platforms whose device templates render it (like
 # group_policy.GPO_RENDERERS). bgp_evpn has no entry: it is the default and every platform
 # decides for itself whether it renders EVPN.
 OVERLAY_RENDERERS: dict[str, frozenset[str]] = {"lisp": frozenset({"cisco_xe"})}
@@ -80,11 +81,9 @@ _DEFAULT_ANYCAST_GATEWAY_MAC = "00:1c:73:00:dc:01"
 # modelled, on IpamNamespace.l3_vni). Arista EOS and FRR/SONiC need no such SVI
 # at all — they bind the VRF to the VNI directly — so this is NX-OS-only.
 #
-# 3900-3967 sits above the customer VLAN ceiling (CUSTOMER_VLAN_ID_MAX in
-# generators/helpers/pools.py, which is capped at 2999 so the firewall-context and transit bands fit below)
+# 3900-3967 (L3VNI_SVI_VLAN_BASE..L3VNI_SVI_VLAN_MAX in utils/limits.py) sits above the customer VLAN ceiling
+# (CUSTOMER_VLAN_ID_MAX, which is capped at 2999 so the firewall-context and transit bands fit below)
 # and below NX-OS's own internally-reserved 3968-4094.
-_L3VNI_SVI_VLAN_BASE = 3900
-_L3VNI_SVI_VLAN_MAX = 3967
 
 # namespace_type of the INTERNET VRF. It is one VRF for the whole network, so
 # its L3 route-target is global rather than per fabric (_l3_route_target).
@@ -149,7 +148,7 @@ def _collect_l3_vni_from_namespaces(namespaces) -> list[dict[str, Any]]:
     Each mapping also carries ``svi_vlan_id``: the local VLAN the NX-OS
     templates hang the L3 VNI's `ip forward` SVI on. Assigned by position in the
     VRF-name-sorted list so it is stable for a given set of VRFs on a given
-    device — see _L3VNI_SVI_VLAN_BASE for why local stability is sufficient.
+    device — see L3VNI_SVI_VLAN_BASE for why local stability is sufficient.
     """
     seen: dict[str, dict] = {}
     for ns in namespaces:
@@ -164,15 +163,15 @@ def _collect_l3_vni_from_namespaces(namespaces) -> list[dict[str, Any]]:
                 seen[ns_name]["namespace_type"] = _INTERNET_NAMESPACE_TYPE
     mappings = sorted(seen.values(), key=lambda v: v.get("vrf_name", ""))
     for index, mapping in enumerate(mappings):
-        svi_vlan_id = _L3VNI_SVI_VLAN_BASE + index
-        if svi_vlan_id > _L3VNI_SVI_VLAN_MAX:
+        svi_vlan_id = L3VNI_SVI_VLAN_BASE + index
+        if svi_vlan_id > L3VNI_SVI_VLAN_MAX:
             _log.warning(
                 "VRF %s: no local VLAN left in the L3 VNI SVI band %s-%s (%s VRFs on this "
                 "device). NX-OS symmetric IRB will not be rendered for it; widen the band "
                 "and lower CUSTOMER_VLAN_ID_MAX to match.",
                 mapping["vrf_name"],
-                _L3VNI_SVI_VLAN_BASE,
-                _L3VNI_SVI_VLAN_MAX,
+                L3VNI_SVI_VLAN_BASE,
+                L3VNI_SVI_VLAN_MAX,
                 len(mappings),
             )
             mapping["svi_vlan_id"] = None

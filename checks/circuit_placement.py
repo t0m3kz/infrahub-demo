@@ -101,6 +101,7 @@ from utils.circuit_underlay import (
 )
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import PROD_TYPE, TENANT_NAMESPACE_TYPES
+from utils.limits import CIRCUIT_ENDS
 
 PHYSICAL = "TopologyPhysicalCircuit"
 TUNNEL = TUNNEL_CIRCUIT
@@ -109,8 +110,6 @@ HANDOFF = HANDOFF_CIRCUIT
 VIRTUAL_KINDS = (TUNNEL, INTERCONNECT, HANDOFF)
 NOUNS = {TUNNEL: "Tunnel", INTERCONNECT: "Interconnect", HANDOFF: "Handoff"}
 
-CIRCUIT_ENDS = 2
-"""A circuit terminates on exactly two places and two ports, one per end."""
 INTERNET = "TopologyExternalProviders"
 OFFICE = "TopologyCustomerOffice"
 PHYSICAL_DEVICE = "DcimPhysicalDevice"

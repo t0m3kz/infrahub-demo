@@ -23,7 +23,6 @@ query topology_office_fabric($name: String!) {
                   id
                   template_kind: __typename
                   ... on TemplateDcimPhysicalDevice {
-                    template_name { value }
                     platform { node { id name { value } } }
                     device_type { node { id } }
                     interfaces {

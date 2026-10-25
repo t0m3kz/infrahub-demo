@@ -2,9 +2,6 @@
 # The EOS release the reference-fabric profile row reference-arista-eos asks for
 # (min_release 4.36.2F, data/bootstrap/19b_group_policy_profile.yml). Kept in this scope, not in
 # data/bootstrap/05b_software_images.yml, because only this demo runs a 7280R3 fabric.
-#
-# The dates below are PLACEHOLDERS, not Arista's real release/support dates: nothing here reads them
-# (the profile gate compares only `version`), and no source for the real ones was read.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -12,13 +9,7 @@ spec:
   data:
     - name: arista_eos-4.36.2F
       version: "4.36.2F"
-      release_type: ga
-      is_approved: true
-      is_recommended: false
-      release_date: "2026-01-01T00:00:00+00:00"
-      end_of_support: "2029-01-01T00:00:00+00:00"
-      end_of_life: "2030-01-01T00:00:00+00:00"
       platform: arista_eos
       description: >-
         EOS 4.36.2F - the release the Segment Security (MSS-G) manual describes; the reference-fabric
-        minimum. Dates are placeholders.
+        minimum.

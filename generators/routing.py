@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     import logging
 
+from utils.limits import WAIT_FOR_PEER_GENERATOR
+
 from .helpers import PendingASRef, RoutingPlanInput, RoutingPlanner, RoutingStrategy
 from .helpers.common import retry_delay, save_with_node_not_found_retry
 from .helpers.routing import _safe_device_name
@@ -26,9 +28,6 @@ from .protocols import (
 )
 from .shared_routing import SharedRoutingObjectsMixin
 from .types import RoutingOptions
-
-_SHARED_OBJECT_MAX_RETRIES = 10
-_SHARED_OBJECT_RETRY_DELAY = 3.0
 
 EVPN_AF = ("l2vpn", "evpn")
 IPV4_UNICAST_AF = ("ipv4", "unicast")
@@ -159,7 +158,7 @@ class RoutingMixin(SharedRoutingObjectsMixin):
         all_bgp: list[Any] = []
         loopback_interfaces: list[Any] = []
 
-        for attempt in range(_SHARED_OBJECT_MAX_RETRIES):
+        for attempt in range(WAIT_FOR_PEER_GENERATOR.attempts):
             if (needs_overlay_as and not overlay_as_id) or (needs_ospf_area and not ospf_area_id):
                 resolved_overlay_as_id, resolved_ospf_area_id = await self._resolve_shared_objects(routing_strategy)
                 overlay_as_id = overlay_as_id or resolved_overlay_as_id
@@ -205,7 +204,7 @@ class RoutingMixin(SharedRoutingObjectsMixin):
             )
             if not still_missing:
                 break
-            if attempt < _SHARED_OBJECT_MAX_RETRIES - 1:
+            if attempt < WAIT_FOR_PEER_GENERATOR.attempts - 1:
                 waiting_on = []
                 if needs_overlay_as and not overlay_as_id:
                     waiting_on.append("shared overlay AS")
@@ -213,10 +212,10 @@ class RoutingMixin(SharedRoutingObjectsMixin):
                     waiting_on.append("shared OSPF area")
                 if missing_overlay_bgp:
                     waiting_on.append(f"overlay BGP for {sorted(missing_overlay_bgp)}")
-                delay = retry_delay(_SHARED_OBJECT_RETRY_DELAY, attempt)
+                delay = retry_delay(WAIT_FOR_PEER_GENERATOR.delay, attempt)
                 self.logger.info(
                     f"Waiting on: {', '.join(waiting_on)} — retrying in {delay:.2f}s "
-                    f"(attempt {attempt + 1}/{_SHARED_OBJECT_MAX_RETRIES})"
+                    f"(attempt {attempt + 1}/{WAIT_FOR_PEER_GENERATOR.attempts})"
                 )
                 await asyncio.sleep(delay)
 
@@ -310,7 +309,6 @@ class RoutingMixin(SharedRoutingObjectsMixin):
                 loopback_interfaces=loopback_interfaces,
                 options={**options},
                 routing_strategy=routing_strategy,
-                deployment_name=self.fabric_name,
                 evpn_af_id=evpn_af_id,
                 underlay_password_id=options.get("underlay_password_id") or "",
                 overlay_password_id=options.get("overlay_password_id") or "",

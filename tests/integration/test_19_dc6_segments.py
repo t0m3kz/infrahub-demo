@@ -12,7 +12,7 @@ Coverage: Verifies the end-to-end segment lifecycle on the grown DC6 fabric:
   4. Verify segment deployments exist with correct pool allocations
   5. Merge to main
 
-Data: tests/integration/data/20_segments (see test_constants.SCENARIO_SEGMENT_DATA
+Data: tests/integration/data/20_segments (see suite_constants.SCENARIO_SEGMENT_DATA
 for why it is test-local rather than data/demos/08_segments).
 
 Prerequisites: DC6 deployed and merged to main (Scenario 1), spine added (Scenario 5).
@@ -25,8 +25,8 @@ import pytest
 from infrahub_sdk import InfrahubClient, InfrahubClientSync
 
 from .conftest import TestInfrahubDockerWithClient
-from .test_constants import SCENARIO_DC_NAME, SCENARIO_SEGMENT_DATA, SCENARIO_SEGMENT_FOOTPRINT
-from .test_helpers import fetch_segment_deployments, fetch_vlan_domain_segments
+from .segment_helpers import fetch_segment_deployments, fetch_vlan_domain_segments
+from .suite_constants import SCENARIO_DC_NAME, SCENARIO_SEGMENT_DATA, SCENARIO_SEGMENT_FOOTPRINT
 from .workflow_helpers import (
     create_and_validate_proposed_change,
     merge_proposed_change,

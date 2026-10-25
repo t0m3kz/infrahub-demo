@@ -43,7 +43,7 @@ def _onprem_vip(**overrides: object) -> dict:
 
 
 def _onprem_data(
-    platform: str = "f5_linux",
+    platform: str = "f5_tmos",
     *,
     vips: list[dict] | None = None,
     with_context: bool = True,
@@ -109,7 +109,7 @@ def _onprem_data(
     device = {
         "name": _v("LB-01"),
         "role": _v("load-balancer"),
-        "platform": {"node": {"name": _v(platform), "netmiko_device_type": _v(platform)}},
+        "platform": {"node": {"name": _v(platform)}},
         "capabilities": _edges([ha]),
         "interfaces": _edges(interfaces),
     }
@@ -126,7 +126,7 @@ async def _render_onprem(data: dict) -> str:
 class TestLoadBalancerOnpremMissingPlatform:
     @pytest.mark.asyncio
     async def test_returns_comment_when_no_platform(self) -> None:
-        """A device without a netmiko platform gets the stub config."""
+        """A device without a platform gets the stub config."""
         data = _onprem_data()
         data["DcimPhysicalDevice"]["edges"][0]["node"]["platform"] = {"node": None}
         assert "No configuration generated" in await _render_onprem(data)
@@ -240,7 +240,7 @@ class TestLoadBalancerOnpremContexts:
     @pytest.mark.asyncio
     async def test_haproxy_binds_and_sources_in_the_vrf(self) -> None:
         """HAProxy: VRF table = l3_vni, bind ... interface vrf-PROD, source .4 interface vrf-PROD."""
-        output = await _render_onprem(_onprem_data("haproxy_technologies_linux"))
+        output = await _render_onprem(_onprem_data("haproxy_technologies"))
         assert "#   ip link add vrf-PROD type vrf table 60000" in output
         assert "    bind 100.66.96.10:443 interface vrf-PROD" in output
         assert "    source 100.66.64.4 interface vrf-PROD" in output
@@ -254,7 +254,7 @@ class TestLoadBalancerOnpremContexts:
         vip = _onprem_vip(
             health_checks=_edges([{"check": _v("tcp"), "rise": _v(2), "fall": _v(3), "timeout": _v(1000)}])
         )
-        output = await _render_onprem(_onprem_data("haproxy_technologies_linux", vips=[vip]))
+        output = await _render_onprem(_onprem_data("haproxy_technologies", vips=[vip]))
         check_backend, traffic_backend = output.split("backend chk_")[1].split("backend be_")
         assert "    source 100.66.64.5 interface vrf-PROD" in check_backend
         assert "    server 10.0.0.10 10.0.0.10:443 check inter 5s rise 2 fall 3" in check_backend
@@ -264,7 +264,7 @@ class TestLoadBalancerOnpremContexts:
 
     @pytest.mark.asyncio
     async def test_haproxy_without_a_health_check_has_no_check_backend(self) -> None:
-        output = await _render_onprem(_onprem_data("haproxy_technologies_linux"))
+        output = await _render_onprem(_onprem_data("haproxy_technologies"))
         assert "backend chk_" not in output and " track " not in output
 
     @pytest.mark.asyncio
@@ -286,7 +286,7 @@ class TestLoadBalancerOnpremHeader:
     async def test_haproxy_header_shows_the_cluster_lb_type_only_when_set(self) -> None:
         """lb_type comes from the cluster; no invented `software`/`internal` defaults."""
         assert "# Type: l7_software" in await _render_onprem(
-            _onprem_data("haproxy_technologies_linux", lb_type="l7_software")
+            _onprem_data("haproxy_technologies", lb_type="l7_software")
         )
-        output = await _render_onprem(_onprem_data("haproxy_technologies_linux"))
+        output = await _render_onprem(_onprem_data("haproxy_technologies"))
         assert "# Type:" not in output and "# Scheme:" not in output

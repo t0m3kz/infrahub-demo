@@ -16,21 +16,9 @@ from unittest.mock import AsyncMock
 import pytest
 
 from generators.firewall_context import FIREWALL_CONTEXT
-from tests.unit.customer_dc_transit_helpers import _SHARED, _make_gen, _payload, _run, _World
+from tests.unit.customer_dc_transit_helpers import _SHARED, _dedicated, _make_gen, _payload, _run, _World
 
 _COMPLETENESS_KINDS = ("TopologyRoutedExchange", "DcimVirtualInterface")
-
-
-def _dedicated(gen: Any) -> None:
-    """A dedicated pair already provisioned: the context flow starts at the legs."""
-    cluster = SimpleNamespace(
-        id="ded-cluster", name=SimpleNamespace(value="DC10-ded-ha"), capabilities=SimpleNamespace(peers=[])
-    )
-    members = [
-        SimpleNamespace(id="fw-1", name=SimpleNamespace(value="DC10-FW1-C005-p-dedicated"), hosting_device=None),
-        SimpleNamespace(id="fw-2", name=SimpleNamespace(value="DC10-FW2-C005-p-dedicated"), hosting_device=None),
-    ]
-    gen._ensure_dedicated_device_pair = AsyncMock(return_value=(cluster, members))
 
 
 def _create_nodes_that_know_only_what_they_wrote(world: _World) -> None:

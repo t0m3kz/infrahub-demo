@@ -6,14 +6,7 @@ compute layer expectations (test_61)."""
 # customer deployments + applications + interconnects), shared by every
 # test_59-test_63 module through the single branch below.
 # ---------------------------------------------------------------------------
-from tasks import (  # noqa: E402,F401 - re-exported for the test modules
-    ALL_DEMO_BRANCH,
-    ALL_DEMO_DATA,
-    ALL_DEMO_LOAD_STAGES,
-    ALL_DEMO_STAGE_MAX_ATTEMPTS,
-    ALL_DEMO_STAGE_POLL_INTERVAL,
-    ALL_DEMO_STAGE_STABLE_ZERO,
-)
+from tasks import ALL_DEMO_DATA
 
 from .demo_data import ROOT, Declared, created_dispatches, declared, distinct, name
 from .suite_constants import SCENARIO_ENDPOINT_APPLICATION

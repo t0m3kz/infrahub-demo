@@ -511,7 +511,7 @@ class TestHaUnit:
 
 
 class TestInlineAddresses:
-    """The pair's virtual IP and the secondary's own address on an inline-terminated segment."""
+    """The pair's virtual IP on an inline-terminated segment."""
 
     @staticmethod
     def _ha() -> dict:
@@ -533,42 +533,32 @@ class TestInlineAddresses:
             "terminate_inline": True,
             "inline_service": {"name": "fw-ha"},
             "gateway": {"address": "10.1.0.1/24"},
-            "capabilities": [
-                {"device": {"name": "fw-01"}, "ip_address": {"address": "10.1.0.2/24"}},
-                {"device": {"name": "fw-02"}, "ip_address": {"address": "10.1.0.3/24"}},
-            ],
         }
         segment.update(overrides)
         return segment
 
-    def test_virtual_ip_is_gateway_and_standby_is_secondary(self) -> None:
-        """Gateway becomes the virtual IP; the secondary member's address is the standby."""
-        assert inline_addresses([self._segment()], self._ha()) == {
-            "virtual_ip": "10.1.0.1/24",
-            "standby_ip": "10.1.0.3/24",
-        }
+    def test_virtual_ip_is_the_segment_gateway(self) -> None:
+        """The gateway becomes the virtual IP."""
+        assert inline_addresses([self._segment()], self._ha()) == {"virtual_ip": "10.1.0.1/24"}
 
     def test_segment_not_terminated_by_this_pair_has_none(self) -> None:
         """Another pair's segment, or one not terminated inline, gives no addresses."""
-        none = {"virtual_ip": None, "standby_ip": None}
+        none = {"virtual_ip": None}
         assert inline_addresses([self._segment(inline_service={"name": "lb-ha"})], self._ha()) == none
         assert inline_addresses([self._segment(terminate_inline=False)], self._ha()) == none
         assert inline_addresses([self._segment()], None) == none
 
-    def test_transit_leg_virtual_ip_and_standby_are_fixed_offsets_of_the_slash_29(self) -> None:
-        """Member A's own .5 gives the .4 VIP and member B's .6 as standby; no capability lookup."""
-        assert inline_addresses(None, self._ha(), "100.66.0.5/29") == {
-            "virtual_ip": "100.66.0.4/29",
-            "standby_ip": "100.66.0.6/29",
-        }
+    def test_transit_leg_virtual_ip_is_a_fixed_offset_of_the_slash_29(self) -> None:
+        """Member A's own .5 gives the .4 VIP; no capability lookup."""
+        assert inline_addresses(None, self._ha(), "100.66.0.5/29") == {"virtual_ip": "100.66.0.4/29"}
 
     def test_transit_leg_gives_the_same_pair_addresses_from_member_b(self) -> None:
-        """Both members' config is identical: the VIP and standby do not depend on which one renders."""
+        """Both members' config is identical: the VIP does not depend on which one renders."""
         assert inline_addresses(None, self._ha(), "100.66.0.6/29") == inline_addresses(
             None, self._ha(), "100.66.0.5/29"
         )
 
     def test_transit_leg_without_ha_or_ipv4_has_none(self) -> None:
-        none = {"virtual_ip": None, "standby_ip": None}
+        none = {"virtual_ip": None}
         assert inline_addresses(None, None, "100.66.0.5/29") == none
         assert inline_addresses(None, self._ha(), "fd00::5/127") == none

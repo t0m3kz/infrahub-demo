@@ -26,17 +26,11 @@ resource "aws_subnet" "prod_subnet_europe_west1" {
   tags = { Name = "prod-subnet-europe-west1", ManagedBy = "Infrahub" }
 }
 
-resource "aws_security_group" "prod_fw_rule" {
-  name   = "prod-fw-rule"
-  vpc_id = aws_vpc.prod_network.id
-  tags   = { Name = "prod-fw-rule", ManagedBy = "Infrahub" }
-}
-
 resource "aws_instance" "prod_instance_1" {
   ami                    = "debian-cloud/debian-11"
   instance_type          = "n1-standard-1"
   subnet_id              = aws_subnet.prod_subnet_europe_west1.id
-  vpc_security_group_ids = [aws_security_group.prod_fw_rule.id]
+  vpc_security_group_ids = []
   private_ip             = "10.0.1.10"
   tags                   = { Name = "prod-instance-1", ManagedBy = "Infrahub" }
 }

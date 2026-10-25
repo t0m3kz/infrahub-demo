@@ -14,15 +14,6 @@
             "node": {
               "name": {
                 "value": "netscaler"
-              },
-              "netmiko_device_type": {
-                "value": "netscaler"
-              },
-              "napalm_driver": {
-                "value": "netscaler"
-              },
-              "ansible_network_os": {
-                "value": "netscaler"
               }
             }
           },

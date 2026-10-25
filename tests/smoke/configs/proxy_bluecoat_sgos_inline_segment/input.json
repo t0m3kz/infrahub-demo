@@ -16,15 +16,6 @@
               "id": "plat-bluecoat_sgos",
               "name": {
                 "value": "bluecoat_sgos"
-              },
-              "netmiko_device_type": {
-                "value": "bluecoat_sgos"
-              },
-              "napalm_driver": {
-                "value": "bluecoat_sgos"
-              },
-              "ansible_network_os": {
-                "value": "bluecoat_sgos"
               }
             }
           },

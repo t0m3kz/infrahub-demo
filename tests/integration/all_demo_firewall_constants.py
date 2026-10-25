@@ -99,11 +99,6 @@ ALL_DEMO_DC_CUSTOMER_DEPLOYMENTS: dict[str, tuple[str, ...]] = {
 }
 
 
-# The bootstrap exchanges of the removed data/bootstrap/23_exchanges.yml. The
-# gateway is mandatory now, so every exchange is created per context.
-ALL_DEMO_LEGACY_EXCHANGES = ("PROD-INTERNET", "NON-PROD-INTERNET", "PROD-MANAGEMENT", "NON-PROD-MANAGEMENT")
-
-
 # Resource prefixes of the FW-Transit-<VRF>-IPv4 pools (data/bootstrap/20_dci_pools.yml).
 ALL_DEMO_TRANSIT_RESOURCES: dict[str, str] = {
     "PROD": "100.66.0.0/20",

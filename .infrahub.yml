@@ -635,30 +635,6 @@ python_transforms:
         - transforms/
         - templates/
         - utils/
-  - name: virt_cluster_total_cpu
-    class_name: VirtClusterTotalCpu
-    file_path: transforms/fields/virt_cluster_capacity.py
-    watch:
-      files:
-        - transforms/
-        - templates/
-        - utils/
-  - name: virt_cluster_total_memory_gb
-    class_name: VirtClusterTotalMemoryGb
-    file_path: transforms/fields/virt_cluster_capacity.py
-    watch:
-      files:
-        - transforms/
-        - templates/
-        - utils/
-  - name: virt_cluster_total_storage_gb
-    class_name: VirtClusterTotalStorageGb
-    file_path: transforms/fields/virt_cluster_capacity.py
-    watch:
-      files:
-        - transforms/
-        - templates/
-        - utils/
 
 graphql_fragments:
   - name: all_fragments
@@ -714,8 +690,6 @@ queries:
     file_path: queries/config/oob.gql
   - name: pod_decommission
     file_path: queries/topology/decomission/pod.gql
-  - name: virt_cluster_capacity
-    file_path: queries/topology/add/virt_cluster_capacity.gql
   - name: application
     file_path: queries/topology/add/application.gql
   - name: app_dependency
@@ -884,15 +858,6 @@ generator_definitions:
       files:
         - generators/
         - utils/
-  # - name: decommission_device
-  #   file_path: generators/decommission_device.py
-  #   targets: devices
-  #   query: device_decommission
-  #   class_name: DeviceDecommissionGenerator
-  #   execute_in_proposed_change: false
-  #   execute_after_merge: false
-  #   parameters:
-  #     name: name__value
   - name: add_rack
     file_path: generators/topology/rack.py
     targets: topologies_rack
@@ -1227,13 +1192,6 @@ generator_definitions:
       files:
         - generators/
         - utils/
-# - name: create_pop
-#   file_path: generators/generate_pop.py
-#   targets: topologies_pop
-#   query: topology_pop
-#   class_name: PopTopologyGenerator
-#   parameters:
-#     name: name__value
 
 # schemas:
 #   - schemas/

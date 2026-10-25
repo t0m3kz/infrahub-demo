@@ -1,9 +1,0 @@
-{#- Nokia SR OS Border-Leaf Configuration — flat MD-CLI form (every command
-    is a full path from "configure", no nested block/exit), consistent with
-    every common/nokia_sros_*.j2 fragment this file includes. Same VXLAN/EVPN
-    shape as leafs/nokia_sros.j2 (border-leaf is a leaf with EVPN relay), plus
-    the static routes of the inter-VRF exchange through a firewall context —
-    no zero-trust per-segment ACLs here, those are a leaf concern.
-    Routing identity communities (utils/routing_identity.py) are not rendered on this platform yet. -#}
-{%- set sros_border = true %}
-{%- include 'leafs/nokia_sros.j2' -%}

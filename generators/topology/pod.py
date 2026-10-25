@@ -6,8 +6,9 @@ from typing import Any, Literal, cast
 from typing_extensions import TypedDict
 
 from utils.data_cleaning import clean_data
+from utils.limits import BORDER_LEAF_WAIT, WAIT_FOR_PEER_GENERATOR
 
-from ..common import CablingOptions, CommonGenerator, DeviceOptions, RoutingOptions
+from ..common import CommonGenerator
 from ..connections import BORDER_ROLE_FOR_SERVICES, CablingMixin
 from ..devices import DeviceMixin
 from ..fabric_sizing import host_bits_to_prefix_length, max_sibling_spines, pod_loopback_bits, pod_technical_bits
@@ -25,21 +26,9 @@ from ..pod_config import (
 from ..pools import PoolMixin
 from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface
 from ..routing import RoutingMixin
-from ..types import naming_convention_of
+from ..types import CablingOptions, DeviceOptions, RoutingOptions, naming_convention_of
 from .fabric_shared import DC_GENERATORS, ServiceDevicesMixin
 from .pod_mesh import PodMeshMixin, mesh_slot_width, pod_routing_options
-
-_DC_READY_MAX_RETRIES = 10
-_DC_READY_RETRY_DELAY = 3.0
-# Short/bounded on purpose: most pods host zero border-leaf devices (only
-# the design-designated pod(s) do), so this fires on every pod's bootstrap —
-# a long retry here would slow down the common no-op case for every pod that
-# will never find any, just to bridge the rare, short residual lag on the one
-# that actually hosts them (border-leaf is created in the same add_dc pass as
-# super-spine, so it's usually already visible by the time _DC_READY_* above
-# is satisfied).
-_BORDER_LEAF_MAX_RETRIES = 3
-_BORDER_LEAF_RETRY_DELAY = 2.0
 
 # FW/LB "uplink" interfaces face border-spine; border-spine's "firewall"/
 # "load-balancer" interfaces are the dedicated counterpart ports — same
@@ -159,17 +148,17 @@ class PodTopologyGenerator(
                 RoutingStrategy.EBGP_EBGP.value,
                 RoutingStrategy.EBGP_IBGP.value,
             )
-            for attempt in range(_DC_READY_MAX_RETRIES):
+            for attempt in range(WAIT_FOR_PEER_GENERATOR.attempts):
                 asn_pool_ready = not needs_asn_pool or dc.get("fabric_asn_pool")
                 super_spines_expected = templates_by_role(dc.get("fabric_templates", []), "super-spine")
                 super_spine_ready = not super_spines_expected or dc.get("devices")
                 if asn_pool_ready and super_spine_ready:
                     break
-                if attempt < _DC_READY_MAX_RETRIES - 1:
-                    delay = self._retry_delay(_DC_READY_RETRY_DELAY, attempt)
+                if attempt < WAIT_FOR_PEER_GENERATOR.attempts - 1:
+                    delay = self._retry_delay(WAIT_FOR_PEER_GENERATOR.delay, attempt)
                     self.logger.info(
                         f"Pod {pod_name}: parent DC's fabric_asn_pool/super-spine devices not visible yet — "
-                        f"retrying in {delay:.2f}s (attempt {attempt + 1}/{_DC_READY_MAX_RETRIES})"
+                        f"retrying in {delay:.2f}s (attempt {attempt + 1}/{WAIT_FOR_PEER_GENERATOR.attempts})"
                     )
                     await asyncio.sleep(delay)
                     data = await self.collect_data()
@@ -488,20 +477,20 @@ class PodTopologyGenerator(
         and its racks failing: wait for the add_dc once it is visible, retry
         with backoff otherwise, and fail the run if the processes never land.
         """
-        for attempt in range(_DC_READY_MAX_RETRIES):
+        for attempt in range(WAIT_FOR_PEER_GENERATOR.attempts):
             if await self.bgp_processes_ready(super_spine_devices, "overlay"):
                 return True
             if await self.wait_for_parent_generator_and_refetch(DC_GENERATORS, dc_id) is not None:
                 continue
-            if attempt < _DC_READY_MAX_RETRIES - 1:
-                delay = self._retry_delay(_DC_READY_RETRY_DELAY, attempt)
+            if attempt < WAIT_FOR_PEER_GENERATOR.attempts - 1:
+                delay = self._retry_delay(WAIT_FOR_PEER_GENERATOR.delay, attempt)
                 self.logger.info(
                     f"Pod {pod_name}: parent DC super-spine overlay BGP not ready yet — "
-                    f"retrying in {delay:.2f}s (attempt {attempt + 1}/{_DC_READY_MAX_RETRIES})"
+                    f"retrying in {delay:.2f}s (attempt {attempt + 1}/{WAIT_FOR_PEER_GENERATOR.attempts})"
                 )
                 await asyncio.sleep(delay)
         self.logger.error(
-            f"Pod {pod_name}: parent DC super-spine overlay BGP never appeared after {_DC_READY_MAX_RETRIES} "
+            f"Pod {pod_name}: parent DC super-spine overlay BGP never appeared after {WAIT_FOR_PEER_GENERATOR.attempts} "
             "attempts — run add_dc for its DC first"
         )
         return False
@@ -590,20 +579,23 @@ class PodTopologyGenerator(
             quantity=max_border_leafs_per_fabric,
         )
         # Bounded retry: candidate_names is a live query (not the DC snapshot
-        # _DC_READY_* above already waited on), so a pod that *does* host
+        # WAIT_FOR_PEER_GENERATOR above already waited on), so a pod that *does* host
         # border-leaf can still read it before add_dc's write is visible here
         # — confirmed live: a border-leaf ended up with 0 underlay peerings
         # because this lookup found nothing and silently no-opped instead of
         # retrying, unlike every other "might not exist yet" lookup in this
         # file.
+        # BORDER_LEAF_WAIT is short on purpose: most pods host zero border-leaf devices, so this fires on every pod's
+        # bootstrap (border-leaf is created in the same add_dc pass as super-spine, so it is usually already visible
+        # once the DC is ready).
         border_leafs: list[Any] = []
-        for attempt in range(_BORDER_LEAF_MAX_RETRIES):
+        for attempt in range(BORDER_LEAF_WAIT.attempts):
             border_leafs = await self.client.filters(
                 kind=DcimPhysicalDevice, name__values=sorted(candidate_names), role__value="border-leaf"
             )
-            if border_leafs or attempt == _BORDER_LEAF_MAX_RETRIES - 1:
+            if border_leafs or attempt == BORDER_LEAF_WAIT.attempts - 1:
                 break
-            await asyncio.sleep(self._retry_delay(_BORDER_LEAF_RETRY_DELAY, attempt))
+            await asyncio.sleep(self._retry_delay(BORDER_LEAF_WAIT.delay, attempt))
         if not border_leafs:
             return
         border_leaf_names = sorted(bl.name.value for bl in border_leafs)

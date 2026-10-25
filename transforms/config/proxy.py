@@ -7,7 +7,7 @@ from transforms.helpers.proxy import proxy_rules
 
 
 def _build_proxy_interfaces(interfaces: list[dict[str, Any]], ha: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-    """Every interface, with the HA pair's virtual_ip/standby_ip on a segment
+    """Every interface, with the HA pair's virtual_ip on a segment
     it terminates inline (transforms.helpers.ha.inline_addresses)."""
     proxy_ifaces = []
     for iface in interfaces:

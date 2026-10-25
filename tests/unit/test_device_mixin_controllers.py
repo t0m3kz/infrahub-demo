@@ -10,9 +10,10 @@ import pytest
 import yaml
 from infrahub_sdk.protocols import CoreStandardGroup
 
-from generators.devices import ROLE_GROUP_NAMES, DeviceMixin
+from generators.devices import DeviceMixin
 from generators.protocols import DcimPhysicalDevice, ManagedController, ManagedStandaloneVlanDomain
 from tests.unit.device_mixin_helpers import _make_generator, _mock_created_device
+from utils.limits import ROLE_GROUP_NAMES
 
 
 def _controller_dict(controller_type: str, platform_id: str | None = None, id_: str = "ctrl-1") -> dict[str, Any]:
@@ -69,9 +70,9 @@ class TestResolveRoleController:
         assert controller is dnac
 
     def test_firewall_requires_platform_match_not_just_controller_type(self) -> None:
-        # security_manager controller for a DIFFERENT platform (panos) — must
+        # security_manager controller for a DIFFERENT platform (paloalto_panos) — must
         # not match a checkpoint_gaia firewall despite the same controller_type.
-        panorama = _controller_dict("security_manager", platform_id="plat-panos")
+        panorama = _controller_dict("security_manager", platform_id="plat-paloalto_panos")
         gen = self._gen(controllers=[panorama])
 
         controller = gen._resolve_role_controller(

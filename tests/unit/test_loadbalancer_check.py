@@ -50,7 +50,7 @@ def _device(contexts: list[dict[str, Any]] | None = None, **overrides: Any) -> d
     base: dict[str, Any] = {
         "name": "lb-1",
         "status": "active",
-        "platform": {"netmiko_device_type": "f5_tmsh"},
+        "platform": {"name": "f5_tmos"},
         "interfaces": [{"role": "uplink", "status": "active", "capabilities": []}],
         "capabilities": [
             {
@@ -87,7 +87,7 @@ class TestLoadBalancerCheck:
         )
         check = _check()
         check.validate({"DcimPhysicalDevice": [bad]})
-        assert any("no platform with netmiko_device_type" in error for error in check._captured_errors)
+        assert any("has no platform" in error for error in check._captured_errors)
         assert any("status is 'planned'" in error for error in check._captured_errors)
         assert any("none are active" in error for error in check._captured_errors)
         assert any("has no HA domain" in error for error in check._captured_errors)

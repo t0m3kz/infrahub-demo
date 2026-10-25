@@ -13,8 +13,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from utils.exchange_transit import EXCHANGE_PEERS, lb_leg_pool_name, lb_vip_pool_name, transit_pool_name
+from utils.limits import FW_CONTEXT_VLAN_END, FW_CONTEXT_VLAN_START, LB_CONTEXT_VLAN_END, LB_CONTEXT_VLAN_START
 
-from .helpers.pools import FW_CONTEXT_VLAN_END, FW_CONTEXT_VLAN_START, LB_CONTEXT_VLAN_END, LB_CONTEXT_VLAN_START
 from .lb_vip import APP_COMPONENT_GENERATOR, load_balanced_components_in
 from .protocols import ManagedFirewallContext, ManagedFirewallHA, ManagedLoadbalancerContext, ManagedLoadbalancerHA
 
@@ -167,8 +167,8 @@ class _TransitState:
 # variant per DC fabric design (e.g. "CloudGuard_EDGE_CUSTOMER_L").
 _VIRTUAL_TEMPLATE_PREFIX_BY_PLATFORM_AND_ROLE: dict[tuple[str, str], str] = {
     ("checkpoint_gaia", "firewall"): "CloudGuard_EDGE",
-    ("panos", "firewall"): "PA-VM_EDGE",
-    ("junos", "firewall"): "vSRX_EDGE",
+    ("paloalto_panos", "firewall"): "PA-VM_EDGE",
+    ("juniper_junos", "firewall"): "vSRX_EDGE",
     ("f5_tmos", "load-balancer"): "BIG-IP-VE_LOAD_BALANCER",
     ("netscaler", "load-balancer"): "NetScaler-ADC-VPX_LOAD_BALANCER",
 }

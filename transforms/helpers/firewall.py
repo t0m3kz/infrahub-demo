@@ -14,6 +14,7 @@ from utils.exchange_transit import (
     transit_vlan,
     transit_vni,
 )
+from utils.limits import ACL_CLOSING_SEQ, VLAN_NAME_MAX
 from utils.segment_addressing import segment_prefix
 
 
@@ -82,7 +83,7 @@ def get_firewall_static_routes(
             "destination": "10.99.0.0/24",     # zone member CIDR
             "nexthop":     "10.99.99.2",        # leaf /30 IP (.2 in the /30 link)
             "interface":   "eth0.99",           # FW sub-interface name
-            "zone":        "internal",          # its zone (ASA routes by nameif)
+            "zone":        "internal",          # its zone
           }
         ]
     """
@@ -138,9 +139,6 @@ LOADBALANCER_CONTEXT_KIND = "ManagedLoadbalancerContext"
 SERVICE_CONTEXT_ROLES: dict[str, str] = {FIREWALL_CONTEXT_KIND: "firewall", LOADBALANCER_CONTEXT_KIND: "load-balancer"}
 """Context kind -> the role of the border service port it is tagged on, which is also the role of the HA
 members holding its legs (generators/connections.py BORDER_ROLE_FOR_SERVICES)."""
-
-VLAN_NAME_MAX = 32
-"""Longest VLAN name NX-OS (and IOS XE, EOS) accepts."""
 
 
 def _transit_names(ctx: dict[str, Any], namespace: str) -> tuple[str, str]:
@@ -438,7 +436,7 @@ def get_zone_policies(policies_data: list[dict[str, Any]] | None = None) -> list
     the policies as one flat rule table (a context's, or the root one), so
     rules are numbered 10, 20, ... across the whole table in policy order,
     then rule index order: per-policy indexes collide (each policy starts
-    at the same index) and FortiOS `edit <seq>` / Check Point `position`
+    at the same index) and Check Point `position`
     would overwrite or reorder them. One implicit deny-all closes the table,
     on the last policy; one per policy would shadow every later policy.
 
@@ -553,7 +551,7 @@ def get_zone_policies(policies_data: list[dict[str, Any]] | None = None) -> list
         # Implicit deny-all (mirrors get_acls() behaviour)
         policies[-1]["rules"].append(
             {
-                "seq": max(seq + 10, 9990),
+                "seq": max(seq + 10, ACL_CLOSING_SEQ),
                 "name": "implicit-deny-all",
                 "action": "deny",
                 "protocol": "ip",

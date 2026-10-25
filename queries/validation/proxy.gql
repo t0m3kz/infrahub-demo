@@ -7,7 +7,6 @@ query proxy_validation($device: String!) {
         platform {
           node {
             name { value }
-            netmiko_device_type { value }
           }
         }
         ... on DcimCapabilities {

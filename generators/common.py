@@ -7,14 +7,11 @@ from infrahub_sdk.generator import InfrahubGenerator
 from infrahub_sdk.protocols import CoreGeneratorDefinition
 from infrahub_sdk.task.models import TaskFilter, TaskState
 
+from utils.limits import PARENT_GENERATOR_WAIT
+
 from .helpers.common import retry_delay
 from .logger import FailOnErrorLoggerMixin, GeneratorError
 
-# Re-export TypedDicts so existing imports (from .common import DeviceOptions, ...) keep working
-from .types import CablingOptions, ChainHop, DeviceOptions, RoutingOptions  # noqa: F401
-
-_PARENT_WAIT_TIMEOUT = 1800  # 30 min generator-wait timeout
-_PARENT_WAIT_POLL_INTERVAL = 3
 _IN_FLIGHT_STATES = [TaskState.PENDING, TaskState.RUNNING, TaskState.SCHEDULED]
 _FAILED_PARENT_STATES = [TaskState.FAILED, TaskState.CRASHED, TaskState.CANCELLED, TaskState.CANCELLING]
 
@@ -213,6 +210,6 @@ class CommonGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
 
         for task in in_flight:
             await self.client.task.wait_for_completion(
-                id=task.id, interval=_PARENT_WAIT_POLL_INTERVAL, timeout=_PARENT_WAIT_TIMEOUT
+                id=task.id, interval=PARENT_GENERATOR_WAIT.interval, timeout=PARENT_GENERATOR_WAIT.timeout
             )
         return bool(in_flight)

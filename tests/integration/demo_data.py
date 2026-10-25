@@ -2,7 +2,7 @@
 
 Expectations that echo the data (how many footprints, which segments, which
 applications) are computed from here instead of being typed into
-test_constants.py, so boarding a customer needs no constant edit. The unit
+the *_constants.py modules, so boarding a customer needs no constant edit. The unit
 tests read the same inventory (tests/unit/test_event_rules.py,
 tests/unit/test_demo_data.py).
 

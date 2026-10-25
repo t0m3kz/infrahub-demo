@@ -236,12 +236,11 @@ class TestPbrRuleNamespace:
 
 class TestLeafExtraConfig:
     def test_leaf_transit_becomes_vlan_and_vxlan_mapping(self) -> None:
-        """The PBR next hop's leg is rendered through vlans / vxlan, with the explicit VNI and L3 VNI."""
+        """The PBR next hop's leg is rendered through vlans / vxlan, with the explicit VNI."""
         device = _device([_context()], [_activation()])
         config = _transform()._extra_config(device, "cisco_nxos")
-        transit = next(v for v in config["vlans"] if v["vlan_id"] == 3000)
-        assert (transit["vni"], transit["l3_vni"]) == (64000, 50001)
-        assert 3000 in {m["vlan_id"] for m in config["vxlan"]["l2_vni_mappings"]}
+        assert 3000 in {v["vlan_id"] for v in config["vlans"]}
+        assert {m["vlan_id"]: m["vni"] for m in config["vxlan"]["l2_vni_mappings"]}[3000] == 64000
         assert config["leaf_transit_prefixes"] == ["100.66.0.0/29"]
 
     def test_transit_is_never_acl_or_pbr_input(self) -> None:
@@ -299,12 +298,6 @@ class TestLeafExtraConfig:
     def test_sonic_leaf_without_firewall_pbr_has_no_transit(self) -> None:
         config = _transform()._extra_config(_device([], [_activation()]), "sonic")
         assert config["leaf_transit_prefixes"] == []
-
-    def test_sr_os_leaf_with_firewall_pbr_refuses(self) -> None:
-        """SR OS keeps its PBR refusal once the leg is derivable."""
-        device = _device([_context()], [_activation()])
-        with pytest.raises(ValueError, match="cannot render PBR policy"):
-            _transform()._extra_config(device, "nokia_sros")
 
     def test_border_leaf_keeps_refusing_pbr_and_holds_no_leaf_transit(self) -> None:
         """The border-leaf refusal stays; border roles never derive leaf transits."""

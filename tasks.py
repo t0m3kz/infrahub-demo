@@ -6,7 +6,7 @@ Namespaces:
   data    — schema, menu, and object loading
 
 Every task is also available at the top level (e.g. `invoke start` is the
-same task as `invoke infra.start`) — use whichever you prefer.
+same task as `invoke start`) — use whichever you prefer.
 """
 
 import asyncio
@@ -100,8 +100,8 @@ def restart(context: Context, component: str = "") -> None:
     """Restart all (or a specific) container.
 
     Example:
-        uv run invoke infra.restart
-        uv run invoke infra.restart --component infrahub-server
+        uv run invoke restart
+        uv run invoke restart --component infrahub-server
     """
     context.run(f"{COMPOSE_COMMAND} restart {component}".strip(), pty=True)
 
@@ -117,7 +117,7 @@ def setup(context: Context) -> None:
     """Full environment setup: start containers, load schema, menu, and bootstrap data.
 
     Example:
-        uv run invoke infra.setup
+        uv run invoke setup
     """
     os.environ["INFRAHUB_ADDRESS"] = INFRAHUB_ADDRESS
     os.environ["INFRAHUB_API_TOKEN"] = INFRAHUB_API_TOKEN
@@ -159,8 +159,8 @@ def register_repo(context: Context, ref: str = "routing") -> None:
     """Register the local repository and load event actions.
 
     Example:
-        uv run invoke infra.register-repo
-        uv run invoke infra.register-repo --ref main
+        uv run invoke register-repo
+        uv run invoke register-repo --ref main
     """
     os.environ["INFRAHUB_ADDRESS"] = INFRAHUB_ADDRESS
     os.environ["INFRAHUB_API_TOKEN"] = INFRAHUB_API_TOKEN
@@ -224,7 +224,7 @@ def test_unit(context: Context, basetemp: str = ".pytest-tmp") -> None:
     Uses a repo-local basetemp to avoid bind-mount issues on macOS+Colima.
 
     Example:
-        uv run invoke dev.test-unit
+        uv run invoke test-unit
     """
     base = _ensure_pytest_basetemp(basetemp)
     context.run(f"uv run pytest -vv tests/unit --basetemp {base}", pty=True)
@@ -253,9 +253,9 @@ def test_integration(
     """Run all integration tests (requires Docker).
 
     Example:
-        uv run invoke dev.test-integration
-        uv run invoke dev.test-integration --server-port 8200
-        DC_DEPLOYMENT_TEST_DCS=dc6 uv run invoke dev.test-integration --tests "tests/integration/test_01_setup.py tests/integration/test_02_repository.py tests/integration/test_10_dc_deployment.py tests/integration/test_12_dc6_add_switch.py"
+        uv run invoke test-integration
+        uv run invoke test-integration --server-port 8200
+        DC_DEPLOYMENT_TEST_DCS=dc6 uv run invoke test-integration --tests "tests/integration/test_01_setup.py tests/integration/test_02_repository.py tests/integration/test_10_dc_deployment.py tests/integration/test_12_dc6_add_switch.py"
     """
     _run_integration_suite(context, tests=tests, basetemp=basetemp, server_port=server_port)
 
@@ -331,7 +331,7 @@ def test_integration_arista_mssg(
     EOS accepts the rendered lines (custom policies and the fallback policy are AVD-documented only).
 
     Example:
-        uv run invoke dev.test-integration-arista-mssg
+        uv run invoke test-integration-arista-mssg
     """
     _run_integration_suite(
         context,
@@ -385,10 +385,10 @@ def release(context: Context, increment: str = "") -> None:
     """Bump version, update CHANGELOG.md, commit, and tag using commitizen.
 
     Example:
-        uv run invoke dev.release              # auto-detect from commits
-        uv run invoke dev.release --increment patch
-        uv run invoke dev.release --increment minor
-        uv run invoke dev.release --increment major
+        uv run invoke release              # auto-detect from commits
+        uv run invoke release --increment patch
+        uv run invoke release --increment minor
+        uv run invoke release --increment major
     """
     bump_args = f"--increment {increment}" if increment else ""
     context.run(f"uv run cz bump {bump_args}", pty=True)
@@ -402,7 +402,7 @@ def upgrade(context: Context) -> None:
     to bump the rev: pins in .pre-commit-config.yaml to the latest tags.
 
     Example:
-        uv run invoke dev.upgrade
+        uv run invoke upgrade
     """
     log.info("Upgrading Python dependencies (uv lock --upgrade)...")
     context.run("uv lock --upgrade", pty=True)
@@ -433,8 +433,8 @@ def load_schema(context: Context, schema: str = "./schemas/", branch: str = "mai
     """Load base and extension schemas.
 
     Example:
-        uv run invoke data.load-schema
-        uv run invoke data.load-schema --branch my-branch
+        uv run invoke load-schema
+        uv run invoke load-schema --branch my-branch
     """
     context.run(f"uv run infrahubctl schema load {schema}/base --branch {branch}", pty=True)
     context.run(f"uv run infrahubctl schema load {schema}/extensions --branch {branch}", pty=True)
@@ -445,7 +445,7 @@ def load_menu(context: Context, menu: str = "menu", branch: str = "main") -> Non
     """Load the navigation menu.
 
     Example:
-        uv run invoke data.load-menu
+        uv run invoke load-menu
     """
     context.run(f"uv run infrahubctl menu load {menu} --branch {branch}", pty=True)
 
@@ -455,27 +455,17 @@ def load_objects(context: Context, path: str = "data/bootstrap/", branch: str = 
     """Load object YAML files from a path.
 
     Example:
-        uv run invoke data.load-objects
-        uv run invoke data.load-objects --path data/demos/100_full/01_dc/dc1
+        uv run invoke load-objects
+        uv run invoke load-objects --path data/demos/30_all/03_dc/dc10
     """
     context.run(f"uv run infrahubctl object load {path} --branch {branch}", pty=True)
-
-
-@_task(optional=["branch"])
-def load_data(context: Context, name: str = "bootstrap.py", branch: str = "main") -> None:
-    """Run a bootstrap Python script.
-
-    Example:
-        uv run invoke data.load-data --name bootstrap.py
-    """
-    context.run(f"uv run infrahubctl run bootstrap/{name} --branch {branch}", pty=True)
 
 
 # ---------------------------------------------------------------------------
 # 30_all — staged load of the everything demo (data/demos/30_all)
 #
 # The stage list is shared with the integration suite
-# (tests/integration/test_59_all_demo_load.py imports it via test_constants),
+# (tests/integration/test_59_all_demo_load.py imports it from tasks),
 # so `invoke load-all-demo` and the tests load the same files in the same order.
 # ---------------------------------------------------------------------------
 
@@ -666,8 +656,8 @@ def load_all_demo(context: Context, branch: str = "", from_stage: str = "") -> N
     generators fail; fix the cause and resume with --from-stage.
 
     Example:
-        uv run invoke data.load-all-demo
-        uv run invoke data.load-all-demo --from-stage applications
+        uv run invoke load-all-demo
+        uv run invoke load-all-demo --from-stage applications
     """
     branch = branch or ALL_DEMO_BRANCH
     try:
@@ -800,7 +790,7 @@ def reset_generator_groups(
     Example:
         uv run invoke reset-generator-groups --branch all-demo-scenario --dry-run
         uv run invoke reset-generator-groups --branch all-demo-scenario
-        uv run invoke data.reset-generator-groups --all-branches
+        uv run invoke reset-generator-groups --all-branches
     """
     if not branch and not all_branches:
         raise Exit("Pass --branch <name> or --all-branches", code=1)
@@ -826,38 +816,8 @@ def reset_generator_groups(
 
 
 # ---------------------------------------------------------------------------
-# Collections — each task is registered under its namespace AND at the root
+# Collection — every task is registered at the root
 # ---------------------------------------------------------------------------
-
-infra_ns = Collection("infra")
-infra_ns.add_task(cast(Task, start))
-infra_ns.add_task(cast(Task, stop))
-infra_ns.add_task(cast(Task, restart))
-infra_ns.add_task(cast(Task, destroy))
-infra_ns.add_task(cast(Task, setup))
-infra_ns.add_task(cast(Task, register_repo), name="register-repo")
-
-dev_ns = Collection("dev")
-dev_ns.add_task(cast(Task, setup_precommit), name="setup-precommit")
-dev_ns.add_task(cast(Task, validate))
-dev_ns.add_task(cast(Task, test_unit), name="test-unit")
-dev_ns.add_task(cast(Task, test_integration), name="test-integration")
-dev_ns.add_task(cast(Task, test_integration_fast), name="test-integration-fast")
-dev_ns.add_task(cast(Task, test_integration_routing), name="test-integration-routing")
-dev_ns.add_task(cast(Task, test_integration_all_demo), name="test-integration-all-demo")
-dev_ns.add_task(cast(Task, test_integration_arista_mssg), name="test-integration-arista-mssg")
-dev_ns.add_task(cast(Task, validate_queries), name="validate-queries")
-dev_ns.add_task(cast(Task, release))
-dev_ns.add_task(cast(Task, upgrade))
-dev_ns.add_task(cast(Task, clean_testcontainers), name="clean-testcontainers")
-
-data_ns = Collection("data")
-data_ns.add_task(cast(Task, load_schema), name="load-schema")
-data_ns.add_task(cast(Task, load_menu), name="load-menu")
-data_ns.add_task(cast(Task, load_objects), name="load-objects")
-data_ns.add_task(cast(Task, load_data), name="load-data")
-data_ns.add_task(cast(Task, load_all_demo), name="load-all-demo")
-data_ns.add_task(cast(Task, reset_generator_groups), name="reset-generator-groups")
 
 ns = Collection()
 ns.add_task(cast(Task, start))
@@ -881,9 +841,5 @@ ns.add_task(cast(Task, release))
 ns.add_task(cast(Task, load_schema), name="load-schema")
 ns.add_task(cast(Task, load_menu), name="load-menu")
 ns.add_task(cast(Task, load_objects), name="load-objects")
-ns.add_task(cast(Task, load_data), name="load-data")
 ns.add_task(cast(Task, load_all_demo), name="load-all-demo")
 ns.add_task(cast(Task, reset_generator_groups), name="reset-generator-groups")
-ns.add_collection(infra_ns)
-ns.add_collection(dev_ns)
-ns.add_collection(data_ns)

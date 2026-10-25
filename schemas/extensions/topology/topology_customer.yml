@@ -319,24 +319,6 @@ nodes:
           jinja2_template: "{{ owner__org_id__value|upper }}-OFFICE"
         read_only: true
         optional: false
-      - name: site_type
-        kind: Dropdown
-        optional: true
-        default_value: branch
-        order_weight: 400
-        choices:
-          - name: hq
-            label: Headquarters
-            color: "#2ECC71"
-          - name: regional
-            label: Regional Office
-            color: "#3498DB"
-          - name: branch
-            label: Branch Office
-            color: "#7F7FBF"
-          - name: campus
-            label: Campus
-            color: "#F39C12"
       # SD-WAN branch-to-branch mesh capability. Deliberately NOT a per-tunnel
       # object — dynamic mesh tunnels are negotiated on demand by the data
       # plane once enabled; modeling one object per potential edge pair would
@@ -362,10 +344,6 @@ nodes:
             label: "Hub Only"
             description: "All traffic transits the gateway — no direct edge-to-edge tunnels"
             color: "#95A5A6"
-          - name: on_demand
-            label: "On Demand"
-            description: "Direct edge-to-edge tunnels build dynamically once demand crosses a threshold"  # yamllint disable-line rule:line-length
-            color: "#3498DB"
     relationships:
       - name: owner
         peer: OrganizationEntity
@@ -531,17 +509,6 @@ nodes:
 
 extensions:
   nodes:
-    - kind: CloudInstance
-      relationships:
-        - name: node_pool
-          peer: VirtNodePool
-          cardinality: one
-          kind: Attribute
-          optional: true
-          identifier: "virt_pool__instances"
-          description: "Node pool / ASG that manages this instance."
-          order_weight: 2600
-
     - kind: OrganizationCustomer
       relationships:
         - name: deployments

@@ -113,7 +113,7 @@ ports (data center wide) in a documented-not-lab-verified comment on its enforce
 """
 
 from transforms.helpers.group_policy.dispatch import _BUILDERS, GPO_CONFIG_KEYS, GPO_RENDERERS, group_policy_device_view
-from transforms.helpers.group_policy.eos import MSSG_MAX_SEGMENTS, _MssgCatalog, segment_security_view
+from transforms.helpers.group_policy.eos import _MssgCatalog, segment_security_view
 from transforms.helpers.group_policy.model import (
     DEFAULT_ACTION,
     FALLBACK,
@@ -142,7 +142,6 @@ __all__ = [
     "FALLBACK",
     "GPO_CONFIG_KEYS",
     "GPO_RENDERERS",
-    "MSSG_MAX_SEGMENTS",
     "REPLIES",
     "UNAWARE",
     "UNCLASSIFIED",

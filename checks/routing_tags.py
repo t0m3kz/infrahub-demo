@@ -9,7 +9,8 @@ from infrahub_sdk.checks import InfrahubCheck
 
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import is_routed_tenant_segment
-from utils.routing_identity import ROUTING_TAG_MAX, ROUTING_TAG_MIN, customer_community, segment_community
+from utils.limits import ROUTING_TAG_MAX, ROUTING_TAG_MIN
+from utils.routing_identity import customer_community, segment_community
 
 CUSTOMER_KIND = "OrganizationCustomer"
 VLAN_SEGMENT_KIND = "ManagedVlanSegment"

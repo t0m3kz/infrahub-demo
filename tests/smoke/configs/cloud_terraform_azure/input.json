@@ -7,9 +7,6 @@
           "name": {
             "value": "prod-vnet"
           },
-          "is_default": {
-            "value": false
-          },
           "dns_support": {
             "value": true
           },
@@ -62,14 +59,8 @@
                   "name": {
                     "value": "prod-subnet-westeurope-1"
                   },
-                  "is_public": {
-                    "value": false
-                  },
                   "auto_assign_public_ip": {
                     "value": false
-                  },
-                  "segment_type": {
-                    "value": "azure_vnet_subnet"
                   },
                   "cidr_block": {
                     "value": "10.0.1.0/24"
@@ -89,25 +80,6 @@
       }
     ]
   },
-  "CloudSecurityGroup": {
-    "edges": [
-      {
-        "node": {
-          "id": "nsg-1",
-          "name": {
-            "value": "prod-nsg"
-          },
-          "virtual_network": {
-            "node": {
-              "name": {
-                "value": "prod-vnet"
-              }
-            }
-          }
-        }
-      }
-    ]
-  },
   "CloudInstance": {
     "edges": [
       {
@@ -115,9 +87,6 @@
           "id": "vm-1",
           "name": {
             "value": "prod-vm-1"
-          },
-          "cloud_id": {
-            "value": "vm-abc"
           },
           "instance_type": {
             "value": "Standard_D2s_v3"
@@ -154,80 +123,12 @@
                 "value": "westeurope-1"
               }
             }
-          },
-          "security_groups": {
-            "edges": [
-              {
-                "node": {
-                  "name": {
-                    "value": "prod-nsg"
-                  }
-                }
-              }
-            ]
           }
         }
       }
     ]
-  },
-  "CloudInternetGateway": {
-    "edges": []
-  },
-  "CloudNATGateway": {
-    "edges": []
-  },
-  "CloudRouteTable": {
-    "edges": [
-      {
-        "node": {
-          "id": "rt-1",
-          "name": {
-            "value": "prod-rt"
-          },
-          "is_main": {
-            "value": false
-          },
-          "virtual_network": {
-            "node": {
-              "name": {
-                "value": "prod-vnet"
-              }
-            }
-          },
-          "network_segments": {
-            "edges": [
-              {
-                "node": {
-                  "name": {
-                    "value": "prod-subnet-westeurope-1"
-                  }
-                }
-              }
-            ]
-          }
-        }
-      }
-    ]
-  },
-  "CloudRoute": {
-    "edges": []
-  },
-  "CloudPublicIP": {
-    "edges": []
-  },
-  "CloudNetworkACL": {
-    "edges": []
   },
   "CloudTransitGateway": {
-    "edges": []
-  },
-  "CloudVPNGateway": {
-    "edges": []
-  },
-  "CloudCustomerGateway": {
-    "edges": []
-  },
-  "CloudVirtualNetworkPeering": {
     "edges": []
   },
   "CloudDirectConnect": {

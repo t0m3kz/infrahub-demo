@@ -56,7 +56,6 @@ fragment NetworkSegmentFields on ManagedNetworkSegment {
     id
     name { value }
     description { value }
-    status { value }
     vlan_id { value }
     terminate_inline { value }
     customer_name { value }
@@ -83,7 +82,6 @@ fragment NetworkSegmentFields on ManagedNetworkSegment {
     id
     name { value }
     description { value }
-    status { value }
     customer_name { value }
     environment { value }
     arp_suppression { value }
@@ -92,7 +90,7 @@ fragment NetworkSegmentFields on ManagedNetworkSegment {
     # deployment.evpn_rt_as: a stretched segment's route-target must be the
     # same at every site it spans, so its admin field is anchored on the
     # lowest evpn_rt_as across all of them (transforms/helpers/vxlan.py).
-    segment_deployments(status__values: ["active", "provisioning"]) {
+    segment_deployments {
       edges {
         node {
           vni { value }
@@ -151,7 +149,7 @@ fragment NetworkSegmentFields on ManagedNetworkSegment {
 # (fragments/group_policy.gql, transforms/helpers/group_policy.group_policy_device_view;
 # schemas/extensions/security/security_tags.yml).
 fragment SegmentDeploymentsOnDeploymentFields on TopologySegmentHosting {
-  segment_deployments(status__values: ["active", "provisioning"]) {
+  segment_deployments {
     edges {
       node {
         vni { value }
@@ -214,7 +212,7 @@ fragment SegmentDeploymentsOnDeploymentFields on TopologySegmentHosting {
                   }
                 }
               }
-              segment_deployments(status__values: ["active", "provisioning"]) {
+              segment_deployments {
                 edges {
                   node {
                     vni { value }

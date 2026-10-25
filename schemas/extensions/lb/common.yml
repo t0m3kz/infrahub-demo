@@ -41,26 +41,6 @@ generics:
             label: Active
             description: "Load balancer is active and operational"
             color: "#7FBF7F"
-          - name: maintenance
-            label: Maintenance
-            description: "Load balancer is under maintenance"
-            color: "#FFF2CC"
-          - name: error
-            label: Error
-            description: "Load balancer is in an error state"
-            color: "#ff7f7f"
-          - name: disabled
-            label: Disabled
-            description: "Load balancer has been disabled"
-            color: "#D3D3D3"
-          - name: decommissioning
-            label: Decommissioning
-            description: "Load balancer is being decommissioned"
-            color: "#E8DAEF"
-          - name: retired
-            label: Retired
-            description: "Load balancer is retired and inactive"
-            color: "#BFBFBF"
         default_value: provisioning
       - name: lb_type
         kind: Dropdown
@@ -80,10 +60,6 @@ generics:
             label: L4 Hardware
             description: "Layer 4 hardware/virtual appliance (e.g., F5, Citrix, A10)"
             color: "#E67E22"
-          - name: l7_hardware
-            label: L7 Hardware
-            description: "Layer 7 hardware/virtual appliance (e.g., F5, Citrix, A10)"
-            color: "#E67E22"
           - name: l4_cloud
             label: L4 Cloud
             description: "Layer 4 cloud load balancer (e.g., AWS NLB, Azure LB, GCP LB)"
@@ -96,10 +72,6 @@ generics:
             label: Gateway
             description: "Gateway load balancer (e.g., AWS GWLB)"
             color: "#BF7FBF"
-          - name: service_mesh
-            label: Service Mesh
-            description: "Service mesh load balancer (e.g., Istio, Linkerd)"
-            color: "#466BB0"
           - name: classic
             label: Classic
             description: "Classic/legacy load balancer"
@@ -229,12 +201,6 @@ nodes:
           - name: active
             label: Active
             color: "#7FBF7F"
-          - name: maintenance
-            label: Maintenance
-            color: "#FFF2CC"
-          - name: disabled
-            label: Disabled
-            color: "#D3D3D3"
       - name: protocol
         kind: Dropdown
         optional: false
@@ -264,10 +230,6 @@ nodes:
         kind: Text
         optional: true
         order_weight: 320
-      - name: max_connections
-        kind: Number
-        optional: true
-        order_weight: 420
       - name: load_balancing_algorithm
         kind: Dropdown
         optional: true

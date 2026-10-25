@@ -8,7 +8,7 @@ Tests verify correct BGP session creation for different:
 
 import pytest
 
-from generators.helpers.routing import BGPSession, _BGPDevice
+from generators.helpers.routing import _BGPDevice
 from generators.helpers.routing import _BGPSessionPlanner as BGPSessionPlanner
 
 
@@ -59,9 +59,8 @@ class TestRouteReflectorTopology:
         assert len(sessions) == 2
 
         for session in sessions:
-            dev1_name, dev1_id, dev2_name, dev2_id, sess_type, af_types = session
+            dev1_name, _, dev2_name, _, sess_type = session
             assert sess_type == "ibgp"
-            assert af_types == ["evpn"]
             assert "leaf" in dev1_name
             assert "spine" in dev2_name
 
@@ -106,7 +105,7 @@ class TestRouteReflectorTopology:
         assert len(tor_sessions) == 4
 
         for session in tor_sessions:
-            dev1_name, _, dev2_name, _, sess_type, _ = session
+            dev1_name, _, dev2_name, _, sess_type = session
             assert "tor" in dev1_name
             assert "spine" in dev2_name
             assert sess_type == "ibgp"
@@ -152,7 +151,7 @@ class TestRouteReflectorTopology:
         assert len(access_leaf_sessions) == 4
 
         for session in access_leaf_sessions:
-            dev1_name, _, dev2_name, _, sess_type, _ = session
+            dev1_name, _, dev2_name, _, sess_type = session
             assert "access-leaf" in dev1_name
             assert "spine" in dev2_name
             assert sess_type == "ibgp"
@@ -196,7 +195,7 @@ class TestRouteReflectorTopology:
         assert len(sessions) == 2
 
         for session in sessions:
-            _, _, _, _, sess_type, _ = session
+            _, _, _, _, sess_type = session
             assert sess_type == "ebgp"
 
 
@@ -287,7 +286,7 @@ class TestEdgeCases:
         sessions = planner.build_session_plan(session_type="ibgp")
 
         assert len(sessions) == 1
-        assert {sessions[0].dev1_name, sessions[0].dev2_name} == {"spine-1", "spine-2"}
+        assert {sessions[0][0], sessions[0][2]} == {"spine-1", "spine-2"}
 
     def test_back_to_back_spines_full_mesh_four_spines(self) -> None:
         """Back-to-back design: 4 spines (2 pods × 2 spines) create a full mesh — 6 sessions."""
@@ -305,8 +304,7 @@ class TestEdgeCases:
         assert len(sessions) == 6
         # All sessions are ibgp
         for s in sessions:
-            assert s.session_type == "ibgp"
-            assert s.af_types == ["evpn"]
+            assert s[4] == "ibgp"
 
     def test_back_to_back_spines_full_mesh_ebgp(self) -> None:
         """Back-to-back: spines-only full mesh also works for eBGP overlay."""
@@ -319,7 +317,7 @@ class TestEdgeCases:
         sessions = planner.build_session_plan(session_type="ebgp")
 
         assert len(sessions) == 1
-        assert sessions[0].session_type == "ebgp"
+        assert sessions[0][4] == "ebgp"
 
     def test_super_spines_only_peer_together(self) -> None:
         """Super-spines without clients DO peer with each other.
@@ -335,7 +333,7 @@ class TestEdgeCases:
         sessions = planner.build_session_plan(session_type="ibgp")
 
         assert len(sessions) == 1
-        assert {sessions[0].dev1_name, sessions[0].dev2_name} == {"dc1-super-spine-01", "dc1-super-spine-02"}
+        assert {sessions[0][0], sessions[0][2]} == {"dc1-super-spine-01", "dc1-super-spine-02"}
 
     def test_single_device(self) -> None:
         devices = [
@@ -405,9 +403,10 @@ class TestMixedDeploymentScenarios:
 
 
 class TestSessionMetadata:
-    """Test session metadata (address families, session types)."""
+    """Test the shape of a session plan entry."""
 
-    def test_evpn_address_family_included(self) -> None:
+    def test_session_plan_entry_structure(self) -> None:
+        """A plan entry is (dev1_name, dev1_id, dev2_name, dev2_id, session_type): the client first."""
         devices = [
             _BGPDevice("spine-1", "s1", "spine"),
             _BGPDevice("leaf-1", "l1", "leaf"),
@@ -416,25 +415,4 @@ class TestSessionMetadata:
         planner = BGPSessionPlanner(devices=devices)
         sessions = planner.build_session_plan(session_type="ibgp")
 
-        for session in sessions:
-            _, _, _, _, _, af_types = session
-            assert "evpn" in af_types
-
-    def test_session_namedtuple_structure(self) -> None:
-        devices = [
-            _BGPDevice("spine-1", "s1", "spine"),
-            _BGPDevice("leaf-1", "l1", "leaf"),
-        ]
-
-        planner = BGPSessionPlanner(devices=devices)
-        sessions = planner.build_session_plan(session_type="ibgp")
-
-        session = sessions[0]
-
-        assert isinstance(session, BGPSession)
-        assert isinstance(session.dev1_name, str)
-        assert isinstance(session.dev1_id, str)
-        assert isinstance(session.dev2_name, str)
-        assert isinstance(session.dev2_id, str)
-        assert isinstance(session.session_type, str)
-        assert isinstance(session.af_types, list)
+        assert sessions == [("leaf-1", "l1", "spine-1", "s1", "ibgp")]

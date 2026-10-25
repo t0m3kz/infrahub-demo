@@ -102,9 +102,6 @@ query topology_virtual_colocation($name: String!) {
                   id
                   template_kind: __typename
                   ... on TemplateCloudNetworkAppliance {
-                    template_name {
-                      value
-                    }
                     platform {
                       node {
                         id

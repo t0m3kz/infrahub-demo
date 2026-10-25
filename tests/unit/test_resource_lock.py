@@ -10,6 +10,7 @@ Covers:
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -20,6 +21,7 @@ from infrahub_sdk.exceptions import GraphQLError
 from generators.common import CommonGenerator
 from generators.logger import GeneratorError
 from generators.pools import PoolMixin
+from utils.limits import RESOURCE_LOCK
 
 
 class _Gen(PoolMixin, CommonGenerator):
@@ -89,7 +91,7 @@ class TestAcquireResourceLock:
         gen.client.create = AsyncMock(side_effect=_uniqueness_error())
         gen.client.execute_graphql = AsyncMock(return_value={"CoreStandardGroup": {"edges": []}})
         monkeypatch.setattr("asyncio.sleep", AsyncMock())
-        monkeypatch.setattr("generators.pools._RESOURCE_LOCK_MAX_ATTEMPTS", 2)
+        monkeypatch.setattr("generators.pools.RESOURCE_LOCK", replace(RESOURCE_LOCK, attempts=2))
 
         with pytest.raises(GeneratorError):
             await gen.acquire_resource_lock("res-1")

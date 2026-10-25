@@ -30,6 +30,7 @@ from transforms.helpers.vxlan import get_interfaces, get_vxlan_config
 from utils.circuit_underlay import NETWORK_APPLIANCE_KIND
 from utils.data_cleaning import clean_data
 from utils.fabric_roles import BORDER_ROLES, OFFICE_LISP_ROLES
+from utils.limits import UNDERLAY_MTU
 
 _log = logging.getLogger(__name__)
 
@@ -260,7 +261,7 @@ class BaseDeviceTransform(InfrahubTransform):
 
         Those templates render the overlay (EVPN-VXLAN or LISP), BGP, OSPF, the gateway SVIs, the segment ACLs and
         the inter-VRF exchange statics. Dropping PBR, MLAG or Multi-Site would ship an unprotected or incomplete
-        config, so refuse instead, like SONiC and SR OS. What the ACLs and statics themselves cannot express is
+        config, so refuse instead, like SONiC. What the ACLs and statics themselves cannot express is
         refused by ``_cisco_xe_context``.
         """
         if platform_name != "cisco_xe":
@@ -326,7 +327,7 @@ class BaseDeviceTransform(InfrahubTransform):
 
     @staticmethod
     def _device_and_platform(data: Any) -> tuple[dict, dict, str | None]:
-        """Clean `data` and return (device, the other query roots, netmiko platform).
+        """Clean `data` and return (device, the other query roots, platform name).
 
         The device node is always the first query root.
         """
@@ -337,13 +338,13 @@ class BaseDeviceTransform(InfrahubTransform):
         first_value = cleaned[first_key]
         device = first_value[0] if isinstance(first_value, list) and first_value else (first_value or {})
         extra_roots = {k: v for k, v in cleaned.items() if k != first_key}
-        return device, extra_roots, (device.get("platform") or {}).get("netmiko_device_type")
+        return device, extra_roots, (device.get("platform") or {}).get("name")
 
     def _no_platform_config(self, device: dict) -> str:
-        """Placeholder config for a device without a netmiko platform."""
+        """Placeholder config for a device without a platform."""
         c = self.comment_char
         device_name = device.get("name", "Unknown Device")
-        return f"{c} Device {device_name} has no platform with netmiko_device_type defined.\n{c} No configuration generated.\n"
+        return f"{c} Device {device_name} has no platform defined.\n{c} No configuration generated.\n"
 
     def _render(self, platform_name: str, config: dict) -> str:
         return self._load_template(platform_name).render(**config)
@@ -375,6 +376,7 @@ class BaseDeviceTransform(InfrahubTransform):
             "ospf": get_ospf(device_capabilities, interfaces),
             "mlag": mlag,
             "capabilities": get_capabilities(data),
+            "underlay_mtu": UNDERLAY_MTU,
         }
         self._refuse_unfiltered_external_sessions(platform_name, config, data.get("typename"))
         if platform_name in {"sonic", "dell_sonic"}:
@@ -426,25 +428,12 @@ class BaseDeviceTransform(InfrahubTransform):
         # hops decide which transit legs it holds locally.
         leaf_pbr_rules, leaf_transits = self._firewall_pbr(data, routed)
 
-        if self.device_role in self._LEAF_ROLES:
-            # SONiC renders PBR (ConfigDB PBR ACL table); SR OS leafs do not.
-            # Refuse rather than ship a VLAN whose firewall steering silently vanished.
-            if platform_name == "nokia_sros" and leaf_pbr_rules:
-                raise ValueError(f"{platform_name} leaf cannot render PBR policy; refusing unprotected config")
-
         # Exchange transits (see transform()) and the leaf's local transit legs: they
         # only add VLANs, VNIs, VRFs and the anycast gateway; policy (ACL, PBR) stays
         # on real segments. They are not bound to any host port (get_interfaces only
         # binds a transit VLAN to a port carrying the context).
         transits = (data.get("exchange_transits") or []) + leaf_transits
         vlans = get_vlans(activations=(activations or []) + transits)
-        transit_by_vlan = {act["vlan_id"]: act for act in transits}
-        for vlan in vlans if transits else []:
-            if vlan["vlan_id"] in transit_by_vlan:
-                # Explicit VNI and VRF L3 VNI: SR OS's IRB fallback would use the VLAN id.
-                transit = transit_by_vlan[vlan["vlan_id"]]
-                namespace = transit["segment"]["gateway"]["ip_prefix"]["ip_namespace"]
-                vlan.update(vni=transit["vni"], l3_vni=namespace["l3_vni"])
 
         # Inter-VRF exchange routes through the firewall context(s) tagged on
         # this device's service ports (statics in the VRF, redistributed to EVPN).
@@ -484,12 +473,8 @@ class BaseDeviceTransform(InfrahubTransform):
                 fabric_rt_asn=_fabric_rt_asn(data.get("deployment")),
                 fabric_anycast_mac=_fabric_anycast_mac(data.get("deployment")),
             )
-        if self.device_role in self._LEAF_ROLES:
-            self._refuse_unbindable_sros_acls(platform_name, acls, vxlan)
-
         config = {
             "vlans": vlans,
-            "sros_irbs": self._sros_irbs(self.device_role, platform_name, vlans, vxlan),
             "vxlan": vxlan,
             "acls": acls,
             "vrf_routes": vrf_routes,
@@ -566,69 +551,6 @@ class BaseDeviceTransform(InfrahubTransform):
             )
 
     @staticmethod
-    def _refuse_unbindable_sros_acls(
-        platform_name: str, acls: list[dict[str, Any]], vxlan: dict[str, Any] | None
-    ) -> None:
-        """Raise when an SR OS leaf holds a segment ACL for a VLAN it renders no service for.
-
-        The SR OS leaf binds each ip-filter as a SAP ingress filter inside the vpls
-        of the segment's L2 VNI. A VLAN-only segment (no VNI) has no vpls, and the
-        template models no local L2 service, so its filter would stay unbound.
-        """
-        if platform_name != "nokia_sros" or not acls:
-            return
-        bound = {m["vlan_id"] for m in (vxlan or {}).get("l2_vni_mappings", [])}
-        unbound = sorted(acl["vlan_id"] for acl in acls if acl["vlan_id"] not in bound)
-        if unbound:
-            raise ValueError(
-                f"{platform_name} leaf cannot bind the segment ACL for VLANs {unbound} (no L2 VNI service "
-                "to attach the SAP filter to); refusing unprotected config"
-            )
-
-    @staticmethod
-    def _sros_irbs(
-        role: str, platform_name: str, vlans: list[dict[str, Any]], vxlan: dict[str, Any] | None
-    ) -> list[dict[str, Any]]:
-        """The SR OS IRB interfaces (anycast gateway) to render, one per gateway VLAN: [] on any other platform.
-
-        An IRB attaches the VLAN's bridged ``vpls-<vni>`` to a vprn: ``vprn`` is the VRF's L3 VNI
-        (the vprn service id), ``vni`` the L2 VNI (the vpls service id). get_vlans() carries no VNIs,
-        so they come from the VXLAN mapping of the same VLAN (a transit VLAN sets both itself).
-        A gateway VLAN with no L2 VNI has no vpls, and one whose namespace has no L3 VNI in the VXLAN
-        mappings has no vprn (vprn services come only from ``l3_vni_mappings``): the IRB would reference a
-        service nothing creates, so refuse instead of rendering it. Without VXLAN the template renders no
-        service at all.
-        """
-        if platform_name != "nokia_sros" or not vxlan:
-            return []
-        mappings = {mapping["vlan_id"]: mapping for mapping in vxlan.get("l2_vni_mappings") or []}
-        vprns = {mapping["l3_vni"] for mapping in vxlan.get("l3_vni_mappings") or []}
-        irbs: list[dict[str, Any]] = []
-        for vlan in vlans:
-            if not (vlan.get("gateway_ip") or vlan.get("gateway_ipv6")):
-                continue
-            mapping = mappings.get(vlan["vlan_id"]) or {}
-            vni = vlan.get("vni") or mapping.get("vni")
-            vprn = vlan.get("l3_vni") or mapping.get("l3_vni")
-            if not vni or vprn not in vprns:
-                raise ValueError(
-                    f"{platform_name} {role} cannot render the gateway of VLAN {vlan['vlan_id']} "
-                    "(no vpls/vprn to attach the IRB to); refusing incomplete config"
-                )
-            irbs.append(
-                {
-                    "vlan_id": vlan["vlan_id"],
-                    "vni": vni,
-                    "vprn": vprn,
-                    "gateway_ip": vlan.get("gateway_ip"),
-                    "gateway_ipv6": vlan.get("gateway_ipv6"),
-                }
-            )
-        return irbs
-
-    _ACTIVE_STATUSES = ("active", "provisioning")
-
-    @staticmethod
     def _resolve_own_vlan_domain_id(device_id: str | None, device_capabilities: list[dict]) -> str | None:
         """Return this device's own VLAN domain id: its ManagedMLAG's id if
         paired, else its ManagedStandaloneVlanDomain's id. Local VLAN ID is
@@ -687,8 +609,6 @@ class BaseDeviceTransform(InfrahubTransform):
                 if not seg_id or seg_id in seen:
                     continue
                 if cap.get("typename") == "ManagedVlanSegment":
-                    if cap.get("status") not in self._ACTIVE_STATUSES:
-                        continue
                     vlan_id = cap.get("vlan_id")
                     vni = None
                 else:

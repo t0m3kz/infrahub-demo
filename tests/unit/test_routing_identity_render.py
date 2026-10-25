@@ -16,11 +16,10 @@ from typing import Any
 
 import pytest
 
-from tests.smoke.fixture_builders.common import _edges, _v
+from tests.smoke.fixture_builders.common import _edges, _v, run_transform
 from tests.smoke.fixture_builders.edge import build_edge_external_vrf_peers_data
 from tests.smoke.fixture_builders.fabric import build_device_data
 from tests.smoke.fixture_builders.routing_identity import CUSTOMER_TAGS, build_edge_external_vrf_peers_tagged_data
-from tests.smoke.test_configs_smoke import _run_transform
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.edge import Edge
 from transforms.config.leaf import Leaf
@@ -43,7 +42,7 @@ def _leaf(platform: str, *, tagged: bool = True, role: str = "leaf", **kwargs: A
         routing_identity=tagged,
         **kwargs,
     )
-    return _run_transform(BorderLeaf if role == "border-leaf" else Leaf, data)
+    return run_transform(BorderLeaf if role == "border-leaf" else Leaf, data)
 
 
 def _lines(config: str, start: str) -> list[str]:
@@ -206,7 +205,7 @@ class TestSonicOrigination:
 
 def _edge(data: dict[str, Any]) -> str:
     """The rendered NX-OS edge."""
-    return _run_transform(Edge, data)
+    return run_transform(Edge, data)
 
 
 class TestEdgeExternalSessions:

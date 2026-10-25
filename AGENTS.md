@@ -111,6 +111,12 @@ Duplication here usually starts as "copy the sibling generator/template and edit
 - **No redundant round trips**: one `filters(ids=[...])` instead of `get()` in a loop; no `fetch()` after `include=`;
   filter by `name__value` instead of listing and scanning.
 - **Template refactors keep output byte-identical**; render the golden fixtures before and after and diff.
+- **A number or name used in more than one place is defined once in `utils/limits.py`**: design ranges and limits,
+  vendor limits, the pool and group names the bootstrap data must define, and the retry policy. The schema and
+  `data/bootstrap` stay the source of truth; a constant there is a mirror, and `tests/unit/test_limits_consistency.py`
+  names the one to change when they drift. A value used by one module (an algorithm internal) stays next to its code.
+- **A platform's config template is `templates/configs/<role>/<platform name>.j2`**: there is no separate template-key
+  attribute, so a new platform is a `DcimPlatform` record plus its templates (`tests/unit/test_platform_keys.py`).
 
 For a cleanup sweep, use the `infrahub-simplifying-code` skill (`.claude/skills/`). For change reviews, the review
 board includes a `simplification-reviewer`.
@@ -301,8 +307,8 @@ class MyCheck(InfrahubCheck):
   owners have on-prem or registered behind another external session of the namespace (an office LAN reaches the
   owner's VPC, its VPC block reaches the office), minus its own IN: the edge passes routes between two external
   sessions of the SAME owner, never across owners, and never back to the session a prefix was learned on (an
-  office-hosted segment is registered behind its gateway, so it is not local space). Exact match, retired segments
-  dropped, one helper `utils/ownership.py` `exchange_policies`. A prefix of two owners, or an owner's prefix behind
+  office-hosted segment is registered behind its gateway, so it is not local space). Exact match, one helper
+  `utils/ownership.py` `exchange_policies`. A prefix of two owners, or an owner's prefix behind
   two sessions, is a WARNING in the transform and an error of `checks/routing_invariants.py` rule 8. With no owner it
   accepts and announces nothing. Every destination prefix of an enabled `SecurityPolicyRule` must be on-prem space or
   registered behind an external session (VPC block, office LAN or hosted segment, tunnel range), in a namespace of the

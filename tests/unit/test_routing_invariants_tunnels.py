@@ -190,13 +190,8 @@ class TestOfficesRegisterSomething:
 
     def test_an_office_hosting_a_segment_passes(self) -> None:
         """A segment the office hosts registers its prefix (the office has no typed LAN)."""
-        office = _gateway_office("o", _GW1, _CUSTOMER, hosted=(("10.176.5.0/24", _CUSTOMER, "active"),))
+        office = _gateway_office("o", _GW1, _CUSTOMER, hosted=(("10.176.5.0/24", _CUSTOMER),))
         assert _errors_with(_run(TopologyCustomerOffice=[office]), "registers no prefix") == []
-
-    def test_an_office_whose_only_segment_is_retired_is_an_error(self) -> None:
-        """A retired hosted segment is no longer served, as on the edge."""
-        office = _gateway_office("o", _GW1, _CUSTOMER, hosted=(("10.176.5.0/24", _CUSTOMER, "retired"),))
-        assert len(_errors_with(_run(TopologyCustomerOffice=[office]), "registers no prefix")) == 1
 
     def test_an_office_without_a_gateway_is_not_held_to_it(self) -> None:
         """No sdwan_gateway: no SD-WAN session to feed."""

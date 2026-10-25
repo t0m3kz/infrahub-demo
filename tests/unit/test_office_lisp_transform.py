@@ -27,9 +27,8 @@ import yaml
 from graphql import parse
 from graphql.language import FieldNode, FragmentDefinitionNode, FragmentSpreadNode
 
-from generators.devices import ROLE_GROUP_NAMES
 from tests.integration.demo_data import attribute_names, relationship_names
-from tests.smoke.test_configs_smoke import _run_transform
+from tests.smoke.fixture_builders.common import run_transform
 from transforms.common import BaseDeviceTransform
 from transforms.config.access_switch import AccessSwitch
 from transforms.config.distribution_switch import DistributionSwitch
@@ -43,6 +42,7 @@ from utils.fabric_roles import (
     OFFICE_LISP_ROLES,
     VTEP_ROLES,
 )
+from utils.limits import ROLE_GROUP_NAMES
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIGS_DIR = ROOT / "tests" / "smoke" / "configs"
@@ -145,7 +145,7 @@ class TestRoleGate:
         data = {
             "name": "dev-1",
             "role": role,
-            "platform": {"netmiko_device_type": "cisco_xe"},
+            "platform": {"name": "cisco_xe"},
             "interfaces": [],
             "capabilities": [],
             "deployment": {"name": _OFFICE, "lisp_map_servers": _MAP_SERVERS, "lisp_site_key": {"password": "k"}}
@@ -274,7 +274,7 @@ class TestLispContext:
 
 class TestRenderedAccessSwitch:
     def test_it_is_the_lisp_edge_of_the_office_without_evpn_or_bgp(self) -> None:
-        text = _run_transform(AccessSwitch, _raw(ACCESS_INPUT))
+        text = run_transform(AccessSwitch, _raw(ACCESS_INPUT))
         lisp = _lisp_lines(text)
 
         assert text.splitlines()[2] == "! Cisco IOS-XE (Catalyst 9000) LISP access-switch"
@@ -284,14 +284,14 @@ class TestRenderedAccessSwitch:
         assert "router ospf 1" in text
 
     def test_it_registers_with_every_distribution_switch_sorted_by_name(self) -> None:
-        text = _run_transform(AccessSwitch, _raw(ACCESS_INPUT))
+        text = run_transform(AccessSwitch, _raw(ACCESS_INPUT))
 
         assert "  itr map-resolver 10.250.5.1\n  itr map-resolver 10.250.5.2\n" in text
         assert text.count("  etr map-server 10.250.5.1 key 0ff1c3-k3y") == 2  # service ipv4 and service ethernet
         assert text.count("  etr map-server 10.250.5.2 proxy-reply") == 2
 
     def test_its_tenant_svis_sit_in_a_vrf_with_the_mobility_binding(self) -> None:
-        text = _run_transform(AccessSwitch, _raw(ACCESS_INPUT))
+        text = run_transform(AccessSwitch, _raw(ACCESS_INPUT))
 
         for vlan in (100, 200):
             svi = text.split(f"interface Vlan{vlan}\n")[1].split("\n!\n")[0]
@@ -299,7 +299,7 @@ class TestRenderedAccessSwitch:
             assert " lisp mobility VRF_A-IPV4" in svi
 
     def test_the_mobility_bindings_follow_the_section_marker(self) -> None:
-        lines = _run_transform(AccessSwitch, _raw(ACCESS_INPUT)).splitlines()
+        lines = run_transform(AccessSwitch, _raw(ACCESS_INPUT)).splitlines()
         section = lines.index("! Gateway SVIs")
         first = next(i for i in range(section, len(lines)) if lines[i].strip().startswith("lisp mobility"))
 
@@ -315,7 +315,7 @@ class TestRenderedAccessSwitch:
 
 class TestRenderedDistributionSwitch:
     def test_it_is_the_co_located_map_server_and_resolver(self) -> None:
-        text = _run_transform(DistributionSwitch, _raw(DISTRIBUTION_INPUT))
+        text = run_transform(DistributionSwitch, _raw(DISTRIBUTION_INPUT))
         lisp = _lisp_lines(text)
 
         assert text.splitlines()[2] == "! Cisco IOS-XE (Catalyst 9000) LISP distribution-switch"
@@ -324,7 +324,7 @@ class TestRenderedDistributionSwitch:
         assert "  itr map-resolver 10.250.5.1" in lisp and "  itr map-resolver 10.250.5.2" in lisp
 
     def test_the_site_is_the_office_with_its_key_and_the_eid_records(self) -> None:
-        text = _run_transform(DistributionSwitch, _raw(DISTRIBUTION_INPUT))
+        text = run_transform(DistributionSwitch, _raw(DISTRIBUTION_INPUT))
 
         assert (
             f" site {_OFFICE}\n  authentication-key 0ff1c3-k3y\n"
@@ -334,7 +334,7 @@ class TestRenderedDistributionSwitch:
 
     @pytest.mark.parametrize(("cls", "directory"), OFFICE_SWITCHES)
     def test_every_lisp_stanza_sits_under_an_unverified_marker(self, cls: type, directory: str) -> None:
-        lines = _run_transform(cls, _raw(directory)).splitlines()
+        lines = run_transform(cls, _raw(directory)).splitlines()
         stanza = re.compile(r"^\s*(locator-table|service (ipv4|ethernet)|instance-id \d+|site \S+)")
         checked = 0
         for index, line in enumerate(lines):
@@ -357,7 +357,7 @@ class TestRefusals:
         _deployment(data)["lisp_map_servers"] = {"edges": []}
 
         with pytest.raises(ValueError, match=r"the fabric has no map-server \(distribution-switch\)"):
-            _run_transform(cls, data)
+            run_transform(cls, data)
 
     @pytest.mark.parametrize(("cls", "directory"), OFFICE_SWITCHES)
     def test_an_office_without_a_site_key_is_refused(self, cls: type, directory: str) -> None:
@@ -365,23 +365,23 @@ class TestRefusals:
         _deployment(data)["lisp_site_key"] = {"node": None}
 
         with pytest.raises(ValueError, match="the fabric has no LISP site key"):
-            _run_transform(cls, data)
+            run_transform(cls, data)
 
     def test_a_distribution_switch_without_an_office_name_is_refused(self) -> None:
         data = _raw(DISTRIBUTION_INPUT)
         _deployment(data)["name"] = {"value": None}
 
         with pytest.raises(ValueError, match="the fabric has no name for the LISP site"):
-            _run_transform(DistributionSwitch, data)
+            run_transform(DistributionSwitch, data)
 
     def test_a_map_server_without_a_loopback_is_refused(self) -> None:
         data = _raw(ACCESS_INPUT)
         _deployment(data)["lisp_map_servers"]["edges"][0]["node"]["interfaces"] = {"edges": []}
 
         with pytest.raises(ValueError, match="LISP map-server ds-c005-office02 has no loopback address"):
-            _run_transform(AccessSwitch, data)
+            run_transform(AccessSwitch, data)
 
-    @pytest.mark.parametrize("platform", ["cisco_nxos", "arista_eos", "nokia_sros"])
+    @pytest.mark.parametrize("platform", ["cisco_nxos", "arista_eos"])
     @pytest.mark.parametrize(
         ("cls", "directory", "role"),
         [
@@ -393,17 +393,17 @@ class TestRefusals:
         self, platform: str, cls: type, directory: str, role: str
     ) -> None:
         data = _raw(directory)
-        _node(data)["platform"]["node"]["netmiko_device_type"]["value"] = platform
+        _node(data)["platform"]["node"]["name"]["value"] = platform
 
         with pytest.raises(ValueError) as error:
-            _run_transform(cls, data)
+            run_transform(cls, data)
 
         assert str(error.value) == f"{platform} {role} cannot render the LISP overlay; refusing incomplete config"
 
     def test_pbr_is_still_refused_on_an_office_switch(self) -> None:
         with patch("transforms.common.get_customer_pbr_rules", return_value=[{"vlan_id": 100}]):
             with pytest.raises(ValueError, match=r"cisco_xe access-switch cannot render: leaf_pbr_rules"):
-                _run_transform(AccessSwitch, _raw(ACCESS_INPUT))
+                run_transform(AccessSwitch, _raw(ACCESS_INPUT))
 
 
 class TestSegmentsOutsideAVrf:
@@ -416,7 +416,7 @@ class TestSegmentsOutsideAVrf:
             namespace["l3_vni"]["value"] = None
 
         with pytest.raises(ValueError, match=r"the gateway of VLAN 200 is in no VRF with an L3 instance-id"):
-            _run_transform(AccessSwitch, data)
+            run_transform(AccessSwitch, data)
 
     def test_a_segment_in_a_vrf_without_an_l3_vni_is_refused(self) -> None:
         data = _raw(ACCESS_INPUT)
@@ -424,7 +424,7 @@ class TestSegmentsOutsideAVrf:
             namespace["l3_vni"]["value"] = None
 
         with pytest.raises(ValueError, match=r"the gateway of VLAN 200 is in no VRF with an L3 instance-id"):
-            _run_transform(AccessSwitch, data)
+            run_transform(AccessSwitch, data)
 
     def test_a_vni_segment_in_the_default_namespace_is_refused(self) -> None:
         activation = _activation(namespace={"name": "default"})

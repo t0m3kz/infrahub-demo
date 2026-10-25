@@ -1,4 +1,4 @@
-"""Unit tests for the exchange legs and ASA leg security levels of transforms/firewall.py."""
+"""Unit tests for the exchange legs of transforms/firewall.py."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from tests.unit.firewall_transform_helpers import _make_context_smoke_data, _make_fw, _make_smoke_data, _render_template
+from tests.unit.firewall_transform_helpers import _make_context_smoke_data, _make_fw, _make_smoke_data
 
 # ===========================================================================
 # Exchange transit legs (one VLAN sub-interface per VRF of a context)
@@ -67,7 +67,7 @@ def _leg_interface(ns_type: str, *, context_id: str = "ctx-shared") -> dict[str,
     }
 
 
-def _make_exchange_data(platform: str, *, ns_types: tuple[str, ...], ha: bool = True) -> dict[str, Any]:
+def _make_exchange_data(platform: str, *, ns_types: tuple[str, ...]) -> dict[str, Any]:
     """A shared context with a leg per namespace type, the firewall one member
     (``dc11-fw-01``) of an HA pair; served segments seg-prod 10.1.0.0/24 and
     seg-nonprod 10.2.0.0/24 sit in PROD-ZONE / NONPROD-ZONE."""
@@ -75,28 +75,27 @@ def _make_exchange_data(platform: str, *, ns_types: tuple[str, ...], ha: bool = 
     device = data["DcimPhysicalDevice"]["edges"][0]["node"]
     device["name"] = {"value": "dc11-fw-01"}
     device["interfaces"]["edges"] = [{"node": _leg_interface(ns)} for ns in ns_types]
-    if ha:
-        device["capabilities"] = {
-            "edges": [
-                {
-                    "node": {
-                        "__typename": "ManagedFirewallHA",
-                        "name": {"value": "dc11-fw-ha"},
-                        "group_id": {"value": 1},
-                        "mode": {"value": "active-passive"},
-                        "priority": {"value": 100},
-                        "preempt": {"value": False},
-                        "ha_timer": {"value": "standard"},
-                        "capabilities": {
-                            "edges": [
-                                {"node": {"name": {"value": "dc11-fw-01"}}},
-                                {"node": {"name": {"value": "dc11-fw-02"}}},
-                            ]
-                        },
-                    }
+    device["capabilities"] = {
+        "edges": [
+            {
+                "node": {
+                    "__typename": "ManagedFirewallHA",
+                    "name": {"value": "dc11-fw-ha"},
+                    "group_id": {"value": 1},
+                    "mode": {"value": "active-passive"},
+                    "priority": {"value": 100},
+                    "preempt": {"value": False},
+                    "ha_timer": {"value": "standard"},
+                    "capabilities": {
+                        "edges": [
+                            {"node": {"name": {"value": "dc11-fw-01"}}},
+                            {"node": {"name": {"value": "dc11-fw-02"}}},
+                        ]
+                    },
                 }
-            ]
-        }
+            }
+        ]
+    }
 
     def zone(name: str, segment_id: str, prefix: str) -> dict[str, Any]:
         segment = {
@@ -143,31 +142,6 @@ _LEG_MARKERS = {
         "set static-route default nexthop gateway address 100.66.32.1 on",
         'interfaces.add.1.name "eth1.3000" interfaces.add.1.interface-type "cluster" interfaces.add.1.ip-address "100.66.0.4"',
     ],
-    "fortinet_fortios": [
-        'edit "eth1.3000"',
-        "set vlanid 3000",
-        'set vdom "dc11-fw-shared"',
-        "set ip 100.66.0.4/29",
-        'edit "PROD-ZONE"',
-        'set interface "eth1.3000"',
-        "set dst 10.1.0.0/24",
-        "set gateway 100.66.0.1",
-        "set dst 0.0.0.0/0",
-        "set gateway 100.66.32.1",
-        'set device "eth1.3400"',
-    ],
-    "cisco_asa": [
-        "allocate-interface eth1.3000",
-        "interface eth1.3000",
-        " nameif prod",
-        " security-level 100",
-        " ip address 100.66.0.4 255.255.255.248 standby 100.66.0.6",
-        " nameif internet",
-        " security-level 0",
-        "route prod 10.1.0.0 255.255.255.0 100.66.0.1 1",
-        "route internet 0.0.0.0 0.0.0.0 100.66.32.1 1",
-        "access-group prod-in in interface prod",
-    ],
     "juniper_junos": [
         "set tenants dc11-fw-shared interfaces eth1 unit 3000 vlan-id 3000",
         "set tenants dc11-fw-shared interfaces eth1 unit 3000 family inet address 100.66.0.4/29",
@@ -189,16 +163,6 @@ _ISOLATION_MARKERS = {
         'add access-rule layer "Network" position top name "deny-PROD-ZONE-to-NONPROD-ZONE" action drop source PROD-ZONE destination NONPROD-ZONE service Any track Log',
         'name "deny-NONPROD-ZONE-to-PROD-ZONE" action drop source NONPROD-ZONE destination PROD-ZONE',
     ],
-    "fortinet_fortios": [
-        'set name "deny-PROD-ZONE-to-NONPROD-ZONE"',
-        'set srcintf "NONPROD-ZONE"',
-        "set action deny",
-        "set logtraffic all",
-    ],
-    "cisco_asa": [
-        "access-list prod-in extended deny ip any 10.2.0.0 255.255.255.0 log",
-        "access-list nonprod-in extended deny ip any 10.1.0.0 255.255.255.0 log",
-    ],
     "juniper_junos": [
         "policy deny-PROD-ZONE-to-NONPROD-ZONE then deny",
         "policy deny-NONPROD-ZONE-to-PROD-ZONE then log session-init",
@@ -219,7 +183,6 @@ class TestFirewallExchangeLegs:
     async def test_single_tenant_context_has_no_isolation_deny(self, platform: str) -> None:
         out = await _make_fw().transform(_make_exchange_data(platform, ns_types=("prod", "internet")))
         assert "deny-PROD-ZONE-to-NONPROD-ZONE" not in out
-        assert "deny ip any" not in out.replace("deny ip any any log", "")
 
     @pytest.mark.parametrize("platform", sorted(_ISOLATION_MARKERS))
     @pytest.mark.asyncio
@@ -252,20 +215,6 @@ class TestFirewallExchangeLegs:
         assert out.count("100.66.0.5") <= (1 if platform in ("checkpoint_gaia",) else 0)
 
     @pytest.mark.asyncio
-    async def test_without_ha_the_leg_keeps_the_members_own_address(self) -> None:
-        out = await _make_fw().transform(
-            _make_exchange_data("fortinet_fortios", ns_types=("prod", "internet"), ha=False)
-        )
-        assert "set ip 100.66.0.5/29" in out
-        assert "100.66.0.4" not in out
-
-    @pytest.mark.asyncio
-    async def test_asa_without_ha_has_no_standby_address(self) -> None:
-        out = await _make_fw().transform(_make_exchange_data("cisco_asa", ns_types=("prod", "internet"), ha=False))
-        assert " ip address 100.66.0.5 255.255.255.248\n" in out
-        assert "standby 100.66" not in out
-
-    @pytest.mark.asyncio
     async def test_cluster_context_without_legs_renders_its_policies(self) -> None:
         """A colocation context sits on the cluster only (no interface on a member):
         its vsys and the rules of the segments it serves still render."""
@@ -287,60 +236,3 @@ class TestFirewallExchangeLegs:
         assert "set vsys c005-dedicated rulebase security rules smoke-permit-rule" in out
         assert "virtual-router vr-" not in out
         assert "import network interface" not in out
-
-
-class TestAsaLegSecurityLevels:
-    @pytest.mark.parametrize("ns_type,level", [("prod", 100), ("non_prod", 50), ("internet", 0), ("management", 60)])
-    def test_every_exchange_namespace_type_has_a_security_level(self, ns_type: str, level: int) -> None:
-        leg = {
-            "ns_type": ns_type,
-            "nameif": "x",
-            "vlan": 3000,
-            "parent_interface": {"name": "Port-channel1"},
-            "own_ip": "100.66.0.5/29",
-            "virtual_ip": None,
-            "standby_ip": None,
-        }
-        context = {"name": "c1", "legs": [leg], "routes": [], "isolation": [], "policies": []}
-        out = _render_template("cisco_asa", name="fw1", contexts=[context])
-        assert f"security-level {level}" in out
-        # the internet leg takes no ACL (stateful return); management takes only denies
-        assert "access-list x-in" not in out or ns_type in ("prod", "non_prod", "management")
-
-    def test_management_leg_acl_is_isolation_denies_then_implicit_deny_without_the_context_rules(self) -> None:
-        legs = [
-            {
-                "ns_type": ns_type,
-                "zone": zone,
-                "nameif": nameif,
-                "vlan": 3000 + i,
-                "parent_interface": {"name": "Port-channel1"},
-                "own_ip": f"100.66.{i}.5/29",
-                "virtual_ip": None,
-                "standby_ip": None,
-                "interface": f"Port-channel1.{3000 + i}",
-                "prefixes": prefixes,
-            }
-            for i, (ns_type, zone, nameif, prefixes) in enumerate(
-                [
-                    ("prod", "PROD-ZONE", "prod", ["10.1.0.0/24"]),
-                    ("management", "MANAGEMENT-ZONE", "management", ["10.250.0.0/24"]),
-                ]
-            )
-        ]
-        rule = {"src_zone": "PROD-ZONE", "action": "permit", "protocol": "udp", "src": None, "dst": "10.250.0.0/24"}
-        context = {
-            "name": "c1",
-            "legs": legs,
-            "routes": [],
-            "isolation": [{"src_zone": "MANAGEMENT-ZONE", "dst_zone": "PROD-ZONE"}],
-            "policies": [{"rules": [{**rule, "dst_port": "eq 53", "log": False}]}],
-        }
-        out = _render_template("cisco_asa", name="fw1", contexts=[context])
-        mgmt_acl = [line for line in out.splitlines() if line.startswith("access-list management-in")]
-        assert mgmt_acl == [
-            "access-list management-in extended deny ip any 10.1.0.0 255.255.255.0 log",
-            "access-list management-in extended deny ip any any log",
-        ]
-        assert "access-group management-in in interface management" in out
-        assert "access-list prod-in extended permit udp any 10.250.0.0 255.255.255.0 eq 53" in out

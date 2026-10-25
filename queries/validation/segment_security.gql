@@ -10,7 +10,7 @@
 # generators are settled.
 #
 # The destination-prefix rule reads where a rule's destination_prefixes can be
-# reached: the on-prem segments (status, gateway prefix), and what is registered
+# reached: the on-prem segments (gateway prefix), and what is registered
 # behind an external session, selected as transforms/helpers/bgp_external.py
 # registered_by_attachment reads it (the same fields as routing_invariants.gql,
 # with each prefix's namespace_type): an office's lan_prefixes and hosted
@@ -23,7 +23,6 @@ query segment_security {
         # The fragment already selects the id, name, isolation mode, zone name
         # and gateway prefix; only what it lacks is added here.
         ...SegmentGroupPolicyFields
-        status { value }
         environment { value }
         security_zone { node { id } }
         gateway { node { ip_prefix { node { id } } } }
@@ -104,12 +103,11 @@ query segment_security {
         owner { node { __typename org_id { value } display_label } }
         sdwan_gateway { node { name { value } } }
         lan_prefixes { edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } } }
-        segment_deployments(status__values: ["active", "provisioning"]) {
+        segment_deployments {
           edges {
             node {
               segment {
                 node {
-                  status { value }
                   owner { node { __typename org_id { value } display_label } }
                   gateway { node { ip_prefix { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } } } }
                 }

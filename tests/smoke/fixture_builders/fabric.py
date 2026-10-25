@@ -418,24 +418,19 @@ def build_device_data(
                 **({"routing_identity": (12, 5)} if routing_identity else {}),
             }
         )
-        # SR OS models no VLAN-only service: it has no vpls/vprn to attach the gateway IRB
-        # to, so the transform refuses a VLAN-only gateway segment (transforms/common.py
-        # _sros_irbs; the refusal is covered by tests/unit/test_base_device_transform_sros.py)
-        # and binds a segment ACL only inside the vpls of an L2 VNI. The fixture omits it.
-        if platform != "nokia_sros":
-            segment_kwargs.append(
-                {
-                    "vlan_id": 200,
-                    "seg_name": "seg-200",
-                    "seg_type": "ManagedVlanSegment",
-                    "gateway_ip": "10.200.0.1/24",
-                    **({"ns_name": "VRF_A", "l3_vni": 50001} if vlan_segment_vrf else {}),
-                    "security_policy": policy_vlan,
-                    "isolation_mode": isolation_mode,
-                    "num_deployments": 1,
-                    **({"routing_identity": (13, None)} if routing_identity and vlan_segment_vrf else {}),
-                }
-            )
+        segment_kwargs.append(
+            {
+                "vlan_id": 200,
+                "seg_name": "seg-200",
+                "seg_type": "ManagedVlanSegment",
+                "gateway_ip": "10.200.0.1/24",
+                **({"ns_name": "VRF_A", "l3_vni": 50001} if vlan_segment_vrf else {}),
+                "security_policy": policy_vlan,
+                "isolation_mode": isolation_mode,
+                "num_deployments": 1,
+                **({"routing_identity": (13, None)} if routing_identity and vlan_segment_vrf else {}),
+            }
+        )
 
     # VXLAN/EVPN is rendered ONLY from capabilities, so the
     # customer-facing port must carry the segments. Attaching them solely to
@@ -466,9 +461,6 @@ def build_device_data(
             {
                 "id": f"plat-{platform}",
                 "name": _v(platform),
-                "netmiko_device_type": _v(platform),
-                "napalm_driver": _v(platform),
-                "ansible_network_os": _v(platform),
             }
         ),
         "primary_address": _node(
@@ -563,16 +555,15 @@ def build_inline_segment_data(*, device_name: str, role: str, platform: str) -> 
 # Device type × platform × scenario matrix
 # ============================================================================
 
-FABRIC_PLATFORMS = ["arista_eos", "cisco_nxos", "dell_sonic", "nokia_sros", "sonic"]
-# l2-leafs are pure L2 aggregation — no Nokia SROS template exists for this role
-# (not used by any l2-leaf design element in this project's data).
+FABRIC_PLATFORMS = ["arista_eos", "cisco_nxos", "dell_sonic", "sonic"]
+# l2-leafs are pure L2 aggregation
 L2_LEAF_PLATFORMS = ["arista_eos", "cisco_nxos", "dell_sonic", "sonic"]
 # ebgp_ebgp first: it is the schema default (schemas/extensions/topology/topology_dc.yml
 # routing_strategy) and the only scenario that yields an eBGP EVPN overlay.
 SCENARIOS = ["ebgp_ebgp", "ebgp_ibgp", "ospf_ibgp"]
 # ACL smoke tests: leaf only (ACLs are rendered on VLAN SVIs, a leaf concern)
 ACL_PLATFORMS = FABRIC_PLATFORMS
-FIREWALL_PLATFORMS = ["paloalto_panos", "cisco_asa", "fortinet_fortios", "checkpoint_gaia"]
+FIREWALL_PLATFORMS = ["paloalto_panos", "checkpoint_gaia"]
 
 # (transform, role, dir_prefix, platforms).
 #

@@ -103,7 +103,6 @@ class RackRolesHelper:
         self,
         *,
         allocate_loopback: bool,
-        group_name: str | None = None,
         mlag: bool = False,
         mlag_supports_virtual: bool = True,
     ) -> DeviceOptions:
@@ -122,8 +121,6 @@ class RackRolesHelper:
         if allocate_loopback:
             options["loopback_pool"] = self.ctx._loopback_pool_id
             options["loopback_prefix_length"] = self.ctx._loopback_prefix_length
-        if group_name:
-            options["group_name"] = group_name
         if mlag:
             options["mlag_create"] = self.ctx.data["pod"].get("mlag_create", "no")
             options["mlag_supports_virtual"] = mlag_supports_virtual

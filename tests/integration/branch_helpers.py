@@ -8,7 +8,7 @@ from typing import Any
 from infrahub_sdk import InfrahubClient
 from infrahub_sdk.task.models import TaskFilter
 
-from .test_constants import DATA_PROPAGATION_DELAY
+from .suite_constants import DATA_PROPAGATION_DELAY
 
 logger = logging.getLogger(__name__)
 

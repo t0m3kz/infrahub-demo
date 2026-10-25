@@ -102,9 +102,9 @@ def flatten_proxy_rules(policies: list[dict[str, Any]]) -> list[dict[str, Any]]:
 # `redirect` has none: the schema models no redirect target, so no renderer can express it.
 _VERDICTS = {"allow": "allow", "bypass": "allow", "inspect": "allow", "block": "block"}
 
-# Renderers (an on-prem proxy's netmiko platform, a cloud proxy's template name) whose config inspects TLS
+# Renderers (an on-prem proxy's platform name, a cloud proxy's template name) whose config inspects TLS
 # on every allowed flow, so an `inspect` rule is a plain allow there: squid bumps all (`ssl_bump bump all`).
-_TLS_INSPECTING_RENDERERS = frozenset({"squid_cache_linux"})
+_TLS_INSPECTING_RENDERERS = frozenset({"squid_cache"})
 
 # The destination types each renderer matches. Every one matches hostnames (fqdn, category entries);
 # squid also has ACL types for an address range (`dst`) and a URL regex (`url_regex`), and the generic
@@ -112,7 +112,7 @@ _TLS_INSPECTING_RENDERERS = frozenset({"squid_cache_linux"})
 # and a regex as a literal string.
 _HOSTNAME_DESTINATIONS = frozenset({"fqdn", "category"})
 _DESTINATION_TYPES: dict[str, frozenset[str]] = {
-    "squid_cache_linux": _HOSTNAME_DESTINATIONS | {"cidr", "regex"},
+    "squid_cache": _HOSTNAME_DESTINATIONS | {"cidr", "regex"},
     "generic": _HOSTNAME_DESTINATIONS | {"cidr"},
     "zscaler_zia": _HOSTNAME_DESTINATIONS | {"cidr"},
 }

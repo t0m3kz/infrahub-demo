@@ -15,12 +15,10 @@ import re
 from collections.abc import Iterable, Mapping
 from typing import Any
 
+from utils.limits import ROUTING_TAG_MAX, ROUTING_TAG_MIN
+
 CUSTOMER_COMMUNITY_ASN = 64496
 SEGMENT_COMMUNITY_ASN = 64497
-
-# The community value is a 16-bit field; 65535 is reserved, so a tag is 1..65534.
-ROUTING_TAG_MIN = 1
-ROUTING_TAG_MAX = 65534
 
 
 def customer_community(tag: int) -> str:
@@ -31,12 +29,6 @@ def customer_community(tag: int) -> str:
 def segment_community(tag: int) -> str:
     """The standard community that marks a route as belonging to the segment with ``tag``."""
     return f"{SEGMENT_COMMUNITY_ASN}:{_checked(tag)}"
-
-
-def is_routing_community(community: str) -> bool:
-    """True for a community this module derives (either ASN half): the ones a handoff strips and re-sets."""
-    asn, _, value = community.partition(":")
-    return asn in (str(CUSTOMER_COMMUNITY_ASN), str(SEGMENT_COMMUNITY_ASN)) and value.isdigit()
 
 
 # Characters a prefix-list name may keep on NX-OS, EOS and FRR; anything else becomes a hyphen.
@@ -92,7 +84,7 @@ def routing_community_regexes() -> list[str]:
     """One regular expression per ASN half, together matching every community this module derives.
 
     For a device community-list that selects them to strip (entries of a list are alternatives, so there is
-    no `|` in an expression); ``is_routing_community`` is the same test on one community string.
+    no `|` in an expression).
     """
     return [f"^{asn}:[0-9]+$" for asn in (CUSTOMER_COMMUNITY_ASN, SEGMENT_COMMUNITY_ASN)]
 

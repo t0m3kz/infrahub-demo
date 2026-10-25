@@ -1,4 +1,4 @@
-"""Firewall context helpers: the per-VDOM/vsys/context list of a firewall and where its policies are placed.
+"""Firewall context helpers: the per-vsys/context list of a firewall and where its policies are placed.
 
 Split out of ``transforms.helpers.firewall`` (zones, static routes and exchange transits stay there). The customer
 PBR rules that resolve their nexthop through a context live in ``transforms.helpers.firewall_pbr``.
@@ -38,7 +38,7 @@ def get_firewall_contexts(
     ha: dict[str, Any] | None = None,
     cluster_contexts: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
-    """Build the per-VDOM/vsys/context list from this firewall's own sub-interfaces.
+    """Build the per-vsys/context list from this firewall's own sub-interfaces.
 
     A ManagedFirewallContext shows up as an capabilities entry on
     the DcimVirtualInterface(s) generators/topology/customer_dc.py created for
@@ -51,8 +51,8 @@ def get_firewall_contexts(
     sub-interfaces whose address is in a VRF namespace of a known type
     (utils/exchange_transit.py ZONE_BY_NS_TYPE), ordered prod, non_prod,
     internet, management. A leg is {interface, parent_interface, vlan (the
-    transit VLAN), own_ip, virtual_ip / standby_ip (the HA pair's VIP and
-    standby, None without ``ha``), anycast / vip (the border leaves' gateway
+    transit VLAN), own_ip, virtual_ip (the HA pair's VIP, None
+    without ``ha``), anycast / vip (the border leaves' gateway
     and the firewall VIP, plain IPs of the /29), vrf, ns_type, zone, nameif}. A context holding none renders only its
     policies.
 

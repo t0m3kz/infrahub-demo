@@ -44,20 +44,12 @@ from transforms.config.border_leaf import BorderLeaf
 from transforms.config.leaf import Leaf
 from transforms.config.spine import Spine
 
+from .branch_helpers import fetch_generator_runs, fetch_object_counts
 from .conftest import TestInfrahubDockerWithClient
-from .test_helpers import (
-    compute_role_counts,
-    diff_snapshots,
-    fetch_dc_topology,
-    fetch_endpoint_cabling,
-    fetch_fabric_pools,
-    fetch_generator_runs,
-    fetch_object_counts,
-    find_fabric_design_errors,
-    find_fabric_pool_errors,
-    render_device_config,
-    snapshot_topology,
-)
+from .dc_topology_helpers import compute_role_counts, fetch_dc_topology
+from .endpoint_app_helpers import fetch_endpoint_cabling
+from .fabric_pool_helpers import fetch_fabric_pools, find_fabric_design_errors, find_fabric_pool_errors
+from .snapshot_helpers import diff_snapshots, render_device_config, snapshot_topology
 from .workflow_helpers import run_generator, verify_no_failed_tasks, wait_for_tasks_completion
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -127,7 +119,7 @@ query {{
             ip_prefix {{ node {{ prefix {{ value }} ip_namespace {{ node {{ name {{ value }} }} }} }} }}
           }}
         }}
-        segment_deployments(status__values: ["active", "provisioning"]) {{
+        segment_deployments {{
           edges {{ node {{ id vni {{ value }} deployment {{ node {{ name {{ value }} }} }} }} }}
         }}
       }}

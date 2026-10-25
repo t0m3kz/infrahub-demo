@@ -1,6 +1,6 @@
 """The circuit inventory parser and the test_62 circuit rules, offline over the shipped 30_all data.
 
-tests/integration/test_62 asserts, on a live stack, the virtual-circuit expectations of test_constants and the
+tests/integration/test_62 asserts, on a live stack, the virtual-circuit expectations of all_demo_circuit_constants and the
 per-kind placement rules. Nothing there can run without Infrahub, so a rule that cannot hold on the shipped data (or an
 inventory field the parser drops) would first show on a stack run. Here the same data is shaped like the response of
 ``tests/integration/queries/get_interconnect_inventory.gql`` (the simulator of the placement check, completed with what
@@ -24,14 +24,15 @@ from graphql import parse
 
 from tests.integration import circuit_helpers, interconnect_queries, interconnect_rules
 from tests.integration import test_62_all_demo_interconnects as interconnects
-from tests.integration.test_constants import (
+from tests.integration.all_demo_circuit_constants import (
     ALL_DEMO_HANDOFF_PARTY_ASNS,
     ALL_DEMO_VIRTUAL_CIRCUITS,
     HANDOFF_KIND,
     INTERCONNECT_KIND,
     TUNNEL_KIND,
 )
-from tests.integration.test_helpers import TOPOLOGY_SNAPSHOT_KINDS, fetch_interconnect_inventory, snapshot_query
+from tests.integration.circuit_helpers import fetch_interconnect_inventory
+from tests.integration.snapshot_helpers import TOPOLOGY_SNAPSHOT_KINDS, snapshot_query
 from tests.unit.simulators.circuit_inventory_payloads import inventory_payload
 
 _QUERIES = Path(__file__).parents[1] / "integration" / "queries"
@@ -322,7 +323,6 @@ _QUERIES_UNDER_TEST: dict[str, str] = {
     "sessions": interconnect_queries.SESSIONS_QUERY,
     "circuit_prefixes": interconnect_queries.CIRCUIT_PREFIXES_QUERY,
     "group_members": interconnect_queries.GROUP_MEMBERS_QUERY,
-    "address_count": interconnect_queries.ADDRESS_COUNT_QUERY,
     "interconnect_inventory": (_QUERIES / "get_interconnect_inventory.gql").read_text(),
     **{f"snapshot_{kind}": snapshot_query(kind, selection, 0) for kind, selection in TOPOLOGY_SNAPSHOT_KINDS.items()},
 }

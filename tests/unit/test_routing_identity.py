@@ -21,7 +21,6 @@ from utils.routing_identity import (
     customer_community,
     customer_tags,
     identity_in_use,
-    is_routing_community,
     list_name_part,
     routing_communities,
     routing_community_regexes,
@@ -86,16 +85,14 @@ class TestReaders:
         assert not identity_in_use({}, [{"routing_tag": None}, {}])
         assert not identity_in_use({}, None)
 
-    def test_the_strip_expressions_match_exactly_what_is_routing_community_says(self) -> None:
+    def test_the_strip_expressions_match_the_communities_this_module_derives(self) -> None:
         """One expression per ASN half (no alternation); together they select the communities this module derives."""
         import re
 
         regexes = [re.compile(expression.strip("^$").join(("^", "$"))) for expression in routing_community_regexes()]
         for community in (customer_community(1), customer_community(65534), segment_community(12)):
-            assert is_routing_community(community)
             assert any(regex.match(community) for regex in regexes)
         for other in ("65000:5", "64498:5", "64496:", "64496:x", "7224:5"):
-            assert not is_routing_community(other)
             assert not any(regex.match(other) for regex in regexes)
         assert all("|" not in expression for expression in routing_community_regexes())
 

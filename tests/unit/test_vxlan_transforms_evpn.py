@@ -8,14 +8,13 @@ from tests.unit.vxlan_transforms_helpers import _make_activation
 from transforms.common import _fabric_anycast_mac, _fabric_rt_asn
 from transforms.helpers.vxlan import (
     _DEFAULT_ANYCAST_GATEWAY_MAC,
-    _L3VNI_SVI_VLAN_BASE,
-    _L3VNI_SVI_VLAN_MAX,
     _collect_l3_vni_from_namespaces,
     _overlay_is_ebgp,
     _select_evpn_bgp_process,
     _warn_unencodable_vnis,
     get_vxlan_config,
 )
+from utils.limits import L3VNI_SVI_VLAN_BASE, L3VNI_SVI_VLAN_MAX
 
 # ===========================================================================
 # _select_evpn_bgp_process() — the EVPN discriminator
@@ -572,7 +571,7 @@ class TestL3VniSviVlanAssignment:
 
     def test_single_vrf_gets_the_base_vlan(self) -> None:
         mappings = _collect_l3_vni_from_namespaces([self._ns("production", 50001)])
-        assert [m["svi_vlan_id"] for m in mappings] == [_L3VNI_SVI_VLAN_BASE]
+        assert [m["svi_vlan_id"] for m in mappings] == [L3VNI_SVI_VLAN_BASE]
 
     def test_vlans_are_assigned_by_sorted_vrf_name(self) -> None:
         """Assignment must be stable for a given set of VRFs regardless of the
@@ -585,35 +584,35 @@ class TestL3VniSviVlanAssignment:
             [self._ns("staging", 50003), self._ns("production", 50001), self._ns("development", 50002)]
         )
         assert [(m["vrf_name"], m["svi_vlan_id"]) for m in forward] == [
-            ("development", _L3VNI_SVI_VLAN_BASE),
-            ("production", _L3VNI_SVI_VLAN_BASE + 1),
-            ("staging", _L3VNI_SVI_VLAN_BASE + 2),
+            ("development", L3VNI_SVI_VLAN_BASE),
+            ("production", L3VNI_SVI_VLAN_BASE + 1),
+            ("staging", L3VNI_SVI_VLAN_BASE + 2),
         ]
         assert forward == reversed_order
 
     def test_band_is_above_the_customer_vlan_ceiling(self) -> None:
         """The customer ceiling sits below the firewall-context and transit
         bands, which sit below this band, so none can collide."""
-        from generators.helpers.pools import CUSTOMER_VLAN_ID_MAX, FW_CONTEXT_VLAN_END
+        from utils.limits import CUSTOMER_VLAN_ID_MAX, FW_CONTEXT_VLAN_END
 
-        assert CUSTOMER_VLAN_ID_MAX < FW_CONTEXT_VLAN_END + 600 < _L3VNI_SVI_VLAN_BASE
+        assert CUSTOMER_VLAN_ID_MAX < FW_CONTEXT_VLAN_END + 600 < L3VNI_SVI_VLAN_BASE
 
     def test_band_is_below_the_nxos_reserved_range(self) -> None:
         """NX-OS reserves 3968-4094 for its own internal use."""
-        assert _L3VNI_SVI_VLAN_MAX < 3968
+        assert L3VNI_SVI_VLAN_MAX < 3968
 
     def test_exhausted_band_yields_none_and_warns(self, caplog: pytest.LogCaptureFixture) -> None:
         """None, not an out-of-range VLAN: the template filters these out rather
         than emitting `interface VlanNone`, so the VRF simply gets no symmetric
         IRB on NX-OS instead of a config the device rejects.
         """
-        count = _L3VNI_SVI_VLAN_MAX - _L3VNI_SVI_VLAN_BASE + 2
+        count = L3VNI_SVI_VLAN_MAX - L3VNI_SVI_VLAN_BASE + 2
         namespaces = [self._ns(f"vrf-{index:04d}", 50001 + index) for index in range(count)]
         with caplog.at_level(logging.WARNING):
             mappings = _collect_l3_vni_from_namespaces(namespaces)
 
         assert len(mappings) == count
-        assert mappings[-2]["svi_vlan_id"] == _L3VNI_SVI_VLAN_MAX
+        assert mappings[-2]["svi_vlan_id"] == L3VNI_SVI_VLAN_MAX
         assert mappings[-1]["svi_vlan_id"] is None
         assert mappings[-1]["vrf_name"] in caplog.text
 

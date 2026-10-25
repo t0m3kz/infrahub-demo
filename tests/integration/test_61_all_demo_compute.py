@@ -27,10 +27,9 @@ import pytest
 from infrahub_sdk import InfrahubClient
 
 from checks.pool_utilization import CheckPoolUtilization
+from tasks import ALL_DEMO_BRANCH
 
-from .conftest import TestInfrahubDockerWithClient
-from .test_constants import (
-    ALL_DEMO_BRANCH,
+from .all_demo_constants import (
     ALL_DEMO_CLOUD_APPLICATIONS,
     ALL_DEMO_COLO_HOST_SWITCHES,
     ALL_DEMO_COMPONENT_INSTANCE_COUNT,
@@ -44,16 +43,10 @@ from .test_constants import (
     ALL_DEMO_HOST_LINK_COUNT,
     ALL_DEMO_OUT_OF_SCOPE_APPLICATIONS,
 )
-from .test_helpers import (
-    compute_role_counts,
-    compute_routing_summary,
-    fetch_application_graph,
-    fetch_dc_topology,
-    fetch_endpoint_cabling,
-    fetch_fabric_pools,
-    find_fabric_design_errors,
-    find_fabric_pool_errors,
-)
+from .conftest import TestInfrahubDockerWithClient
+from .dc_topology_helpers import compute_role_counts, compute_routing_summary, fetch_dc_topology
+from .endpoint_app_helpers import fetch_application_graph, fetch_endpoint_cabling
+from .fabric_pool_helpers import fetch_fabric_pools, find_fabric_design_errors, find_fabric_pool_errors
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -390,7 +383,7 @@ class TestAllDemoCompute(TestInfrahubDockerWithClient):
     ) -> None:
         """Every DC pool and every pod pool slice has exactly the family and prefix length
         generators/fabric_sizing.py derives for its (DC design, pod design) and the DC's
-        underlay_protocol, from the bootstrap designs (test_constants.expected_*_pool_slices),
+        underlay_protocol, from the bootstrap designs (fabric_constants.expected_*_pool_slices),
         and every pod slice sits inside its DC's slice of the same pool.
         """
         logging.info("=== %s - Step 6: Fabric Pool Sizes ===", SCENARIO_NAME)

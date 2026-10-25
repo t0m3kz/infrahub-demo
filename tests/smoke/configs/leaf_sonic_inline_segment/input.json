@@ -16,15 +16,6 @@
               "id": "plat-sonic",
               "name": {
                 "value": "sonic"
-              },
-              "netmiko_device_type": {
-                "value": "sonic"
-              },
-              "napalm_driver": {
-                "value": "sonic"
-              },
-              "ansible_network_os": {
-                "value": "sonic"
               }
             }
           },
@@ -1003,9 +994,6 @@
                           "name": {
                             "value": "seg-inline-150"
                           },
-                          "status": {
-                            "value": "active"
-                          },
                           "customer_name": {
                             "value": "Customer-A"
                           },
@@ -1123,9 +1111,6 @@
                           "__typename": "ManagedVxlanSegment",
                           "name": {
                             "value": "seg-inline-150"
-                          },
-                          "status": {
-                            "value": "active"
                           },
                           "customer_name": {
                             "value": "Customer-A"

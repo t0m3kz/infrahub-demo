@@ -5,17 +5,17 @@ import ipaddress
 from typing import Any
 
 from utils.exchange_transit import PROD_TYPE, TENANT_NAMESPACE_TYPES
+from utils.limits import CIRCUIT_ENDS
 
-from .test_constants import (
+from .all_demo_circuit_constants import (
     ALL_DEMO_FACILITY_KINDS,
     ALL_DEMO_SDWAN_GATEWAY_PUBLIC_PORT,
-    ALL_DEMO_TRANSIT_RESOURCES,
     ALL_DEMO_VIRTUAL_CIRCUITS,
     HANDOFF_KIND,
     INTERCONNECT_KIND,
     TUNNEL_KIND,
-    transit_namespace_type,
 )
+from .all_demo_firewall_constants import ALL_DEMO_TRANSIT_RESOURCES, transit_namespace_type
 
 
 def _rules(result: dict) -> list[dict]:
@@ -49,16 +49,6 @@ def _rules(result: dict) -> list[dict]:
 # DCI-Technical-IPv6 (data/bootstrap/20_dci_pools.yml) — the DC fabrics run an IPv6 underlay.
 DCI_POOL_NETWORK = ipaddress.IPv6Network("fd00:2200::/40")
 
-# The MTU add_virtual_circuit sets on the two physical ports of a DCI.
-_DCI_MTU = 9214
-
-
-# What the handoffs were before add_virtual_circuit generated them: sessions and addresses authored in 30_all
-# (08_interconnects/04_sdwan and 05_cloud_endpoints). They must not come back.
-LEGACY_HANDOFF_PEERINGS = ("VRF-PROD-EQXFR2-AWS-EUC1", "VRF-PROD-EQXFR2-SDWAN")
-
-LEGACY_HANDOFF_ADDRESSES = ("10.255.5.5/30", "10.255.5.6/30", "10.255.5.0/31", "10.255.5.1/31")
-
 
 _TRANSIT_PEER_NAMES = {"internet": "INTERNET", "management": "MANAGEMENT"}
 
@@ -70,8 +60,6 @@ _OFFICE_KIND = "TopologyCustomerOffice"
 _ISP_KIND = "TopologyExternalProviders"
 
 _DECOMMISSIONED = "decommissioned"
-
-_CIRCUIT_ENDS = 2
 
 
 def _label(location: dict[str, Any]) -> str:
@@ -157,7 +145,7 @@ def _p2p_errors(
 ) -> list[str]:
     """Why two interface addresses are not one point-to-point /``length`` inside one of ``pools``, or why the circuit's
     own prefix (``prefixes``, found by description: exactly one) is not that network, a technical one."""
-    if len(addresses) != _CIRCUIT_ENDS or any(address is None for address in addresses):
+    if len(addresses) != CIRCUIT_ENDS or any(address is None for address in addresses):
         return [f"{label}: interface addresses {addresses} are not two"]
     first, second = (ipaddress.ip_interface(str(address)) for address in addresses)
     network: Any = first.network
@@ -282,9 +270,9 @@ def _interconnect_errors(circuit: dict[str, Any], physical_by_id: dict[str, dict
                 f"{fibre['circuit_id']}: a DCI is pure fibre"
             )
     hops = [[location["id"] for location in node["location_nodes"]] for node in carriers.values()]
-    if any(len(hop) != _CIRCUIT_ENDS for hop in hops):
-        errors.append(f"{name}: a carrier does not terminate on exactly {_CIRCUIT_ENDS} locations")
-    elif len(locations) == _CIRCUIT_ENDS:
+    if any(len(hop) != CIRCUIT_ENDS for hop in hops):
+        errors.append(f"{name}: a carrier does not terminate on exactly {CIRCUIT_ENDS} locations")
+    elif len(locations) == CIRCUIT_ENDS:
         first, second = (location["id"] for location in locations)
         if not (_contiguous(hops, first, second) or _contiguous(hops, second, first)):
             errors.append(

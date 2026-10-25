@@ -115,12 +115,6 @@ query ($name: String!) {
 """
 
 
-# Addresses that must not exist (the authored handoff addresses the generator replaced).
-ADDRESS_COUNT_QUERY = """
-query ($addresses: [String]) { IpamIPAddress(address__values: $addresses) { count } }
-"""
-
-
 # The interlink ports of the zone edge pairs: role and /127 address.
 EDGE_INTERLINK_INTERFACES_QUERY = """
 query ($devices: [String], $name: String) {

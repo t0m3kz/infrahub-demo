@@ -8,11 +8,12 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Callable, Literal
 
-from infrahub_sdk.exceptions import GraphQLError
 from infrahub_sdk.protocols import CoreIPAddressPool, CoreIPPrefixPool
 
 if TYPE_CHECKING:
     import logging
+
+from utils.limits import WAIT_FOR_PEER_GENERATOR
 
 from .helpers import CableTypeDetector, CablingPlanner
 from .helpers.cable_attributes import RackPosition, cable_attributes, endpoint_label
@@ -27,9 +28,6 @@ from .protocols import (
     LocationSuite,
 )
 from .types import CablingOptions, ChainHop
-
-_INTERFACE_READY_MAX_RETRIES = 10
-_INTERFACE_READY_RETRY_DELAY = 3.0
 
 # Default border_role_for for _cable_border_services: every bootstrap border
 # tier (N9K-C9336C-FX2_BORDER_LEAF's Ethernet1/[25-28]/[29-32], border-spine's
@@ -56,15 +54,6 @@ def tracked_save_kwargs(track: bool) -> dict[str, Any]:
 def _peer_id(rel: Any) -> str | None:
     """Id of a loaded relationship's peer, None when it is missing or unset."""
     return rel.id if rel is not None and rel.initialized else None
-
-
-def _address_lookup_filters(addresses: Sequence[str], namespace_id: str) -> dict[str, Any]:
-    """The IpamIPAddress filters that find several addresses of one namespace in a single read.
-
-    The one place the batch filter is spelled, so a server that does not accept it is a one-line change
-    (CablingMixin._find_addresses falls back to a get per address when the read is refused).
-    """
-    return {"address__values": list(addresses), "ip_namespace__ids": [namespace_id]}
 
 
 def _address_key(address: str) -> str:
@@ -140,7 +129,7 @@ class CablingMixin:
         # Templates are applied asynchronously; a fixed sleep is fragile under load.
         src_interfaces: list = []
         dst_interfaces: list = []
-        for _attempt in range(_INTERFACE_READY_MAX_RETRIES):
+        for _attempt in range(WAIT_FOR_PEER_GENERATOR.attempts):
             src_interfaces = await self.client.filters(
                 kind=DcimPhysicalInterface,
                 device__name__values=bottom_devices,
@@ -155,17 +144,17 @@ class CablingMixin:
             )
             if src_interfaces and dst_interfaces:
                 break
-            delay = self._retry_delay(_INTERFACE_READY_RETRY_DELAY, _attempt)
+            delay = self._retry_delay(WAIT_FOR_PEER_GENERATOR.delay, _attempt)
             self.logger.info(
                 f"Interfaces not ready yet (src={len(src_interfaces)}, dst={len(dst_interfaces)}) — "
-                f"retrying in {delay:.2f}s (attempt {_attempt + 1}/{_INTERFACE_READY_MAX_RETRIES})"
+                f"retrying in {delay:.2f}s (attempt {_attempt + 1}/{WAIT_FOR_PEER_GENERATOR.attempts})"
             )
-            if _attempt < _INTERFACE_READY_MAX_RETRIES - 1:
+            if _attempt < WAIT_FOR_PEER_GENERATOR.attempts - 1:
                 await asyncio.sleep(delay)
 
         if not src_interfaces or not dst_interfaces:
             self.logger.error(
-                f"Interfaces still not found after {_INTERFACE_READY_MAX_RETRIES} attempts "
+                f"Interfaces still not found after {WAIT_FOR_PEER_GENERATOR.attempts} attempts "
                 f"(src={len(src_interfaces)}, dst={len(dst_interfaces)}) — skipping cabling"
             )
             return []
@@ -452,28 +441,13 @@ class CablingMixin:
     async def _find_addresses(self, addresses: Sequence[str], namespace_id: str) -> dict[str, Any]:
         """The IpamIPAddress nodes that already exist among ``addresses`` in the namespace, by canonical address.
 
-        THE find-before-create read (the race guard of upsert_prefix_addresses()): one read for all the
-        addresses of a prefix, a single get for one. A server that refuses the batch filter falls back to a
-        get per address, so the guard never weakens.
+        THE find-before-create read (the race guard of upsert_prefix_addresses()): one filtered read for all the
+        addresses, however many.
         """
-        if len(addresses) > 1:
-            try:
-                nodes = await self.client.filters(
-                    kind=IpamIPAddress, **_address_lookup_filters(addresses, namespace_id)
-                )
-            except GraphQLError as exc:
-                reason = exc.errors[0].get("message") if exc.errors else "no detail"
-                self.logger.info(f"Batch address lookup refused ({reason}) — looking up one address at a time")
-            else:
-                return {_address_key(node.address.value): node for node in nodes}
-        found: dict[str, Any] = {}
-        for address in addresses:
-            node = await self.client.get(
-                kind=IpamIPAddress, address__value=address, ip_namespace__ids=[namespace_id], raise_when_missing=False
-            )
-            if node:
-                found[_address_key(address)] = node
-        return found
+        nodes = await self.client.filters(
+            kind=IpamIPAddress, address__values=list(addresses), ip_namespace__ids=[namespace_id]
+        )
+        return {_address_key(node.address.value): node for node in nodes}
 
     async def _save_address(
         self, *, address: str, ip_namespace: Any, existing: Any | None, description: str | None, track: bool

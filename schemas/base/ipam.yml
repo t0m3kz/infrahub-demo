@@ -49,8 +49,6 @@ nodes:
         choices:
           - name: active
             label: Active
-          - name: deprecated
-            label: Deprecated
           - name: reserved
             label: Reserved
         default_value: reserved

@@ -32,18 +32,17 @@ import pytest
 
 from generators.topology import virtual_circuit
 from generators.topology.virtual_circuit import SessionEnd, SessionPlan, VirtualCircuitSessionGenerator
-from tests.integration import circuit_helpers, interconnect_queries
+from tests.integration import circuit_helpers, interconnect_queries, query_files
 from tests.integration import test_62_all_demo_interconnects as interconnects
 from tests.integration import test_62c_all_demo_circuit_sessions as session_steps
-from tests.integration import test_helpers
-from tests.integration.demo_data import BOOTSTRAP, attribute, declared, name
-from tests.integration.test_constants import (
+from tests.integration.all_demo_circuit_constants import (
     ALL_DEMO_DCI_CIRCUITS,
     ALL_DEMO_HANDOFF_PARTY_ASNS,
     ALL_DEMO_VIRTUAL_CIRCUITS,
     HANDOFF_KIND,
     TUNNEL_KIND,
 )
+from tests.integration.demo_data import BOOTSTRAP, attribute, declared, name
 from tests.unit.simulators.circuit_fakes import FakeClient, session_generator
 from tests.unit.simulators.circuit_inventory_payloads import inventory_payload
 
@@ -333,7 +332,6 @@ class FakeStack:
         self.group_members: list[dict[str, Any]] = []
         self.roles: dict[str, int] = {}
         self.pool_resources: dict[str, list[str]] = {}
-        self.legacy_addresses = 0
         self.inventory: dict[str, Any] = {}
 
     @classmethod
@@ -419,7 +417,7 @@ class FakeStack:
     ) -> dict[str, Any]:
         """Answer the queries of the test_62 session tests from the generated state; any other query is a test bug."""
         variables = variables or {}
-        if query == test_helpers.QUERY_GET_INTERCONNECT_INVENTORY:
+        if query == query_files.QUERY_GET_INTERCONNECT_INVENTORY:
             return self.inventory
         if query == interconnect_queries.SESSIONS_QUERY:
             nodes = [self.sessions[n] for n in variables["names"] if n in self.sessions]
@@ -435,8 +433,6 @@ class FakeStack:
             ]
             node = {"name": _value(variables["name"]), "resources": {"edges": resources}}
             return {"CoreIPPrefixPool": {"edges": [{"node": node}] if resources else []}}
-        if query == interconnect_queries.ADDRESS_COUNT_QUERY:
-            return {"IpamIPAddress": {"count": self.legacy_addresses}}
         if query == interconnect_queries.GROUP_MEMBERS_QUERY:
             members = [{"node": member} for member in self.group_members]
             return {"CoreGroup": {"edges": [{"node": {"members": {"edges": members}}}]}}
@@ -515,16 +511,6 @@ async def test_a_dci_session_that_differs_from_the_plan_fails_naming_the_field(
         await _tests().test_06_verify_dci_sessions(_client(stack), "main")
 
 
-async def test_a_legacy_dci_session_per_fibre_fails(stack: FakeStack) -> None:
-    """A DCI-DF-* session per dark fibre, the model before circuits carried the sessions, must be gone."""
-    stack.sessions["DCI-DF-DC10-EQXFR2"] = {
-        **stack.sessions["ICX-DC10-EQXFR2-underlay"],
-        "name": _value("DCI-DF-DC10-EQXFR2"),
-    }
-    with pytest.raises(AssertionError, match=r"legacy session\(s\) \['DCI-DF-DC10-EQXFR2'\] still exist"):
-        await _tests().test_06_verify_dci_sessions(_client(stack), "main")
-
-
 async def test_a_dci_edge_with_the_higher_address_fails(stack: FakeStack) -> None:
     """The facility end takes the lower address: swap the two ports' addresses."""
     ports = _addresses(stack, "ICX-DC10-EQXFR2-underlay")
@@ -559,7 +545,6 @@ async def test_the_handoff_sessions_the_generator_plans_pass(stack: FakeStack) -
         ),
         (lambda s: s.sessions.pop("HANDOFF-PA4-MEGAPORT-PROD-bgp"), "no HANDOFF-PA4-MEGAPORT-PROD-bgp session"),
         (lambda s: s.prefixes.pop("Handoff HANDOFF-FR2-SDWAN-GW1-PROD"), "0 prefix object(s)"),
-        (lambda s: setattr(s, "legacy_addresses", 2), "2 authored handoff address"),
         (lambda s: s.pool_resources.update({"Handoff-PROD-IPv4": ["10.0.0.0/20"]}), "is not a /31 from"),
         (
             lambda s: _addresses(s, "HANDOFF-FR2-AWS-EUC1-PROD-bgp")[0]["ip_address"]["node"]["ip_namespace"]["node"][
@@ -572,17 +557,9 @@ async def test_the_handoff_sessions_the_generator_plans_pass(stack: FakeStack) -
 async def test_a_handoff_session_that_differs_from_the_plan_fails_naming_the_field(
     stack: FakeStack, mutate: Any, message: str
 ) -> None:
-    """Each single deviation from the plan (ttl, route limit, missing, legacy, pool) fails naming its field."""
+    """Each single deviation from the plan (ttl, route limit, missing, pool) fails naming its field."""
     mutate(stack)
     with pytest.raises(AssertionError, match=message.replace("(", r"\(").replace(")", r"\)")):
-        await _tests().test_06b_verify_handoff_sessions(_client(stack), "main")
-
-
-async def test_a_legacy_authored_session_still_present_fails(stack: FakeStack) -> None:
-    """A hand-authored VRF-* session that predates the generated one must be gone."""
-    stack.sessions["VRF-PROD-EQXFR2-SDWAN"] = stack.sessions["HANDOFF-FR2-SDWAN-GW1-PROD-bgp"]
-    stack.sessions["VRF-PROD-EQXFR2-SDWAN"]["name"] = _value("VRF-PROD-EQXFR2-SDWAN")
-    with pytest.raises(AssertionError, match=r"authored session\(s\) \['VRF-PROD-EQXFR2-SDWAN'\] still exist"):
         await _tests().test_06b_verify_handoff_sessions(_client(stack), "main")
 
 
@@ -693,7 +670,10 @@ def _drift_plan(kind: str, rewrite: Callable[[SessionPlan], SessionPlan]) -> Cal
             id="dci-maximum-routes",
         ),
         pytest.param(
-            _drift_constant("_DCI_MTU", 1500), "test_06_verify_dci_sessions", "MTU 1500, expected 9214", id="dci-mtu"
+            _drift_constant("UNDERLAY_MTU", 1500),
+            "test_06_verify_dci_sessions",
+            "MTU 1500, expected 9214",
+            id="dci-mtu",
         ),
         pytest.param(
             _drift_plan(virtual_circuit.INTERCONNECT_CIRCUIT, _peerings_with(ttl=64)),

@@ -42,7 +42,7 @@ spec:
     - template_name: PA-5260_FIREWALL
       owner: "P027"
       device_type: PA-5260
-      platform: panos
+      platform: paloalto_panos
       software_image: panos-11.1.3
       role: firewall
       status: provisioning

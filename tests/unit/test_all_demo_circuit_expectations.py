@@ -1,11 +1,10 @@
-"""The 30_all circuit expectations in tests/integration/test_constants.py are read from schemas/ and the data; this
+"""The 30_all circuit expectations in tests/integration/all_demo_circuit_constants.py are read from schemas/ and the data; this
 pins them so a schema or data change that moves a circuit end is a conscious edit (test_62 test_01/02)."""
 
 from __future__ import annotations
 
-from tests.integration.demo_data import ROOT, declared, distinct, name
-from tests.integration.test_constants import (
-    ALL_DEMO_DATA,
+from tasks import ALL_DEMO_DATA
+from tests.integration.all_demo_circuit_constants import (
     ALL_DEMO_DCI_CIRCUITS,
     ALL_DEMO_DECLARED_PHYSICAL_LOCATIONS,
     ALL_DEMO_DECLARED_PHYSICAL_PORTS,
@@ -20,6 +19,7 @@ from tests.integration.test_constants import (
     INTERCONNECT_KIND,
     TUNNEL_KIND,
 )
+from tests.integration.demo_data import ROOT, declared, distinct, name
 
 _ZONES = {name(zone) for zone in distinct(declared("TopologyColocationZone", ROOT / ALL_DEMO_DATA))}
 _ISPS = {name(isp) for isp in distinct(declared("TopologyExternalProviders", ROOT / ALL_DEMO_DATA))}

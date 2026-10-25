@@ -7,8 +7,8 @@ from infrahub_sdk import InfrahubClient
 
 from utils.data_cleaning import clean_data
 
+from .fabric_constants import DEFAULT_UNDERLAY_PROTOCOL, FabricSlice, expected_dc_pool_slices, expected_pod_pool_slices
 from .query_files import QUERY_GET_FABRIC_POOLS
-from .test_constants import DEFAULT_UNDERLAY_PROTOCOL, FabricSlice, expected_dc_pool_slices, expected_pod_pool_slices
 
 # ======================================================================
 # Fabric designs and the slices of the fabric pools (test_61, test_71)
@@ -155,7 +155,7 @@ def find_fabric_pool_errors(inventory: dict[str, list[dict[str, Any]]]) -> list[
 
     A DC's technical, loopback, management and fabric-loopback slices and a
     pod's technical and loopback slices must each be exactly the family and
-    prefix length test_constants' expected_*_pool_slices() derive from the
+    prefix length fabric_constants' expected_*_pool_slices() derive from the
     bootstrap designs and the DC's underlay_protocol, and a pod's slice must
     sit inside its DC's slice of the same pool. A DC or pod without a design
     is skipped (find_fabric_design_errors reports it).

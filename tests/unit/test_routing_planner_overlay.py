@@ -16,30 +16,11 @@ import pytest
 
 from generators.helpers.routing import RoutingPlan, RoutingPlanInput, RoutingPlanner
 from generators.types import RoutingOptions
+from tests.unit.routing_helpers import make_loopback, make_p2p_interface
 
 # ================================================================
 # Test Data Helpers
 # ================================================================
-
-
-def _make_loopback(name: str, device_id: str, role: str, ip: str) -> MagicMock:
-    lb = MagicMock()
-    lb.id = f"lb-{device_id}"
-    lb.device.peer.name.value = name
-    lb.device.peer.id = device_id
-    lb.device.peer.role.value = role
-    lb.ip_address.id = f"ip-{device_id}"
-    lb.ip_address.display_label = f"{ip}/32"
-    return lb
-
-
-def _make_p2p_interface(iface_id: str, iface_name: str, device_id: str, cable_id: str) -> MagicMock:
-    iface = MagicMock()
-    iface.id = iface_id
-    iface.name.value = iface_name
-    iface.cable.id = cable_id
-    iface.device.id = device_id
-    return iface
 
 
 def _device_map_entry(
@@ -587,21 +568,21 @@ class TestOverlayMissingPrerequisites:
 class TestOverlayIntegration:
     def test_ebgp_ebgp_creates_overlay_peerings(self) -> None:
         loopbacks = [
-            _make_loopback("spine-1", "s1", "spine", "10.0.0.1"),
-            _make_loopback("spine-2", "s2", "spine", "10.0.0.2"),
-            _make_loopback("leaf-1", "l1", "leaf", "10.0.1.1"),
-            _make_loopback("leaf-2", "l2", "leaf", "10.0.1.2"),
+            make_loopback("spine-1", "s1", "spine", "10.0.0.1"),
+            make_loopback("spine-2", "s2", "spine", "10.0.0.2"),
+            make_loopback("leaf-1", "l1", "leaf", "10.0.1.1"),
+            make_loopback("leaf-2", "l2", "leaf", "10.0.1.2"),
         ]
         pool = "pool-1"
         interfaces = [
-            _make_p2p_interface("if1", "Ethernet1/1", "s1", "c1"),
-            _make_p2p_interface("if2", "Ethernet1/1", "l1", "c1"),
-            _make_p2p_interface("if3", "Ethernet1/2", "s1", "c2"),
-            _make_p2p_interface("if4", "Ethernet1/1", "l2", "c2"),
-            _make_p2p_interface("if5", "Ethernet1/1", "s2", "c3"),
-            _make_p2p_interface("if6", "Ethernet1/2", "l1", "c3"),
-            _make_p2p_interface("if7", "Ethernet1/2", "s2", "c4"),
-            _make_p2p_interface("if8", "Ethernet1/2", "l2", "c4"),
+            make_p2p_interface("if1", "Ethernet1/1", "s1", "c1"),
+            make_p2p_interface("if2", "Ethernet1/1", "l1", "c1"),
+            make_p2p_interface("if3", "Ethernet1/2", "s1", "c2"),
+            make_p2p_interface("if4", "Ethernet1/1", "l2", "c2"),
+            make_p2p_interface("if5", "Ethernet1/1", "s2", "c3"),
+            make_p2p_interface("if6", "Ethernet1/2", "l1", "c3"),
+            make_p2p_interface("if7", "Ethernet1/2", "s2", "c4"),
+            make_p2p_interface("if8", "Ethernet1/2", "l2", "c4"),
         ]
 
         planner = RoutingPlanner(deployment_id="dc-1")
@@ -612,7 +593,6 @@ class TestOverlayIntegration:
                 loopback_interfaces=loopbacks,
                 options={"asn_pool": pool, "design": _design()},
                 routing_strategy="ebgp-ebgp",
-                deployment_name="dc1",
             )
         )
 
@@ -623,21 +603,21 @@ class TestOverlayIntegration:
 
     def test_ebgp_ibgp_creates_overlay_peerings(self) -> None:
         loopbacks = [
-            _make_loopback("spine-1", "s1", "spine", "10.0.0.1"),
-            _make_loopback("spine-2", "s2", "spine", "10.0.0.2"),
-            _make_loopback("leaf-1", "l1", "leaf", "10.0.1.1"),
-            _make_loopback("leaf-2", "l2", "leaf", "10.0.1.2"),
+            make_loopback("spine-1", "s1", "spine", "10.0.0.1"),
+            make_loopback("spine-2", "s2", "spine", "10.0.0.2"),
+            make_loopback("leaf-1", "l1", "leaf", "10.0.1.1"),
+            make_loopback("leaf-2", "l2", "leaf", "10.0.1.2"),
         ]
         pool = "pool-1"
         interfaces = [
-            _make_p2p_interface("if1", "Ethernet1/1", "s1", "c1"),
-            _make_p2p_interface("if2", "Ethernet1/1", "l1", "c1"),
-            _make_p2p_interface("if3", "Ethernet1/2", "s1", "c2"),
-            _make_p2p_interface("if4", "Ethernet1/1", "l2", "c2"),
-            _make_p2p_interface("if5", "Ethernet1/1", "s2", "c3"),
-            _make_p2p_interface("if6", "Ethernet1/2", "l1", "c3"),
-            _make_p2p_interface("if7", "Ethernet1/2", "s2", "c4"),
-            _make_p2p_interface("if8", "Ethernet1/2", "l2", "c4"),
+            make_p2p_interface("if1", "Ethernet1/1", "s1", "c1"),
+            make_p2p_interface("if2", "Ethernet1/1", "l1", "c1"),
+            make_p2p_interface("if3", "Ethernet1/2", "s1", "c2"),
+            make_p2p_interface("if4", "Ethernet1/1", "l2", "c2"),
+            make_p2p_interface("if5", "Ethernet1/1", "s2", "c3"),
+            make_p2p_interface("if6", "Ethernet1/2", "l1", "c3"),
+            make_p2p_interface("if7", "Ethernet1/2", "s2", "c4"),
+            make_p2p_interface("if8", "Ethernet1/2", "l2", "c4"),
         ]
 
         planner = RoutingPlanner(deployment_id="dc-1")
@@ -652,7 +632,6 @@ class TestOverlayIntegration:
                     "design": _design(),
                 },
                 routing_strategy="ebgp-ibgp",
-                deployment_name="dc1",
             )
         )
 
@@ -663,13 +642,13 @@ class TestOverlayIntegration:
 
     def test_no_design_skips_overlay(self) -> None:
         loopbacks = [
-            _make_loopback("spine-1", "s1", "spine", "10.0.0.1"),
-            _make_loopback("leaf-1", "l1", "leaf", "10.0.1.1"),
+            make_loopback("spine-1", "s1", "spine", "10.0.0.1"),
+            make_loopback("leaf-1", "l1", "leaf", "10.0.1.1"),
         ]
         pool = "pool-1"
         interfaces = [
-            _make_p2p_interface("if1", "Ethernet1/1", "s1", "c1"),
-            _make_p2p_interface("if2", "Ethernet1/1", "l1", "c1"),
+            make_p2p_interface("if1", "Ethernet1/1", "s1", "c1"),
+            make_p2p_interface("if2", "Ethernet1/1", "l1", "c1"),
         ]
 
         planner = RoutingPlanner(deployment_id="dc-1")
@@ -680,7 +659,6 @@ class TestOverlayIntegration:
                 loopback_interfaces=loopbacks,
                 options={"asn_pool": pool},
                 routing_strategy="ebgp-ebgp",
-                deployment_name="dc1",
             )
         )
 
@@ -689,21 +667,21 @@ class TestOverlayIntegration:
 
     def test_scoped_overlay_via_build_routing_plan(self) -> None:
         loopbacks = [
-            _make_loopback("spine-1", "s1", "spine", "10.0.0.1"),
-            _make_loopback("spine-2", "s2", "spine", "10.0.0.2"),
-            _make_loopback("leaf-1", "l1", "leaf", "10.0.1.1"),
-            _make_loopback("leaf-2", "l2", "leaf", "10.0.1.2"),
+            make_loopback("spine-1", "s1", "spine", "10.0.0.1"),
+            make_loopback("spine-2", "s2", "spine", "10.0.0.2"),
+            make_loopback("leaf-1", "l1", "leaf", "10.0.1.1"),
+            make_loopback("leaf-2", "l2", "leaf", "10.0.1.2"),
         ]
         pool = "pool-1"
         interfaces = [
-            _make_p2p_interface("if1", "Ethernet1/1", "s1", "c1"),
-            _make_p2p_interface("if2", "Ethernet1/1", "l1", "c1"),
-            _make_p2p_interface("if3", "Ethernet1/2", "s1", "c2"),
-            _make_p2p_interface("if4", "Ethernet1/1", "l2", "c2"),
-            _make_p2p_interface("if5", "Ethernet1/1", "s2", "c3"),
-            _make_p2p_interface("if6", "Ethernet1/2", "l1", "c3"),
-            _make_p2p_interface("if7", "Ethernet1/2", "s2", "c4"),
-            _make_p2p_interface("if8", "Ethernet1/2", "l2", "c4"),
+            make_p2p_interface("if1", "Ethernet1/1", "s1", "c1"),
+            make_p2p_interface("if2", "Ethernet1/1", "l1", "c1"),
+            make_p2p_interface("if3", "Ethernet1/2", "s1", "c2"),
+            make_p2p_interface("if4", "Ethernet1/1", "l2", "c2"),
+            make_p2p_interface("if5", "Ethernet1/1", "s2", "c3"),
+            make_p2p_interface("if6", "Ethernet1/2", "l1", "c3"),
+            make_p2p_interface("if7", "Ethernet1/2", "s2", "c4"),
+            make_p2p_interface("if8", "Ethernet1/2", "l2", "c4"),
         ]
 
         planner = RoutingPlanner(deployment_id="dc-1")
@@ -716,7 +694,6 @@ class TestOverlayIntegration:
                 loopback_interfaces=loopbacks,
                 options={"asn_pool": pool, "design": _design()},
                 routing_strategy="ebgp-ebgp",
-                deployment_name="dc1",
             )
         )
 
@@ -733,12 +710,12 @@ class TestOverlayIntegration:
 def _ospf_ibgp_plan(*, no_overlay: bool, overlay_as_id: str | None, existing_overlay: list | None = None):
     """Plan a two-device ospf-ibgp fabric, with or without the overlay half."""
     loopbacks = [
-        _make_loopback("spine-1", "s1", "spine", "10.0.0.1"),
-        _make_loopback("leaf-1", "l1", "leaf", "10.0.1.1"),
+        make_loopback("spine-1", "s1", "spine", "10.0.0.1"),
+        make_loopback("leaf-1", "l1", "leaf", "10.0.1.1"),
     ]
     interfaces = [
-        _make_p2p_interface("if1", "Ethernet1/1", "s1", "c1"),
-        _make_p2p_interface("if2", "Ethernet1/1", "l1", "c1"),
+        make_p2p_interface("if1", "Ethernet1/1", "s1", "c1"),
+        make_p2p_interface("if2", "Ethernet1/1", "l1", "c1"),
     ]
     options = RoutingOptions(ospf_area_id="area-0", design=_design())
     if overlay_as_id:
@@ -753,7 +730,6 @@ def _ospf_ibgp_plan(*, no_overlay: bool, overlay_as_id: str | None, existing_ove
             overlay=existing_overlay or [],
             options=options,
             routing_strategy="ospf-ibgp",
-            deployment_name="dc1",
         )
     )
 

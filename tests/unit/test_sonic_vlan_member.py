@@ -57,8 +57,6 @@ def _port(data: dict[str, Any], name: str) -> dict[str, Any]:
 def test_trunk_host_port_is_a_tagged_member_of_each_vlan(role: str, platform: str) -> None:
     """Ethernet10 carries VLANs 100 and 200: one tagged VLAN_MEMBER entry each."""
     name = f"{role}_{platform}_ebgp_ibgp"
-    if not (_CONFIGS / name).exists():
-        pytest.skip(f"no {name} fixture")
     configdb = _render(_TRANSFORMS[role], _load(name))
     assert configdb["VLAN_MEMBER"] == {"Vlan100|Ethernet10": _TAGGED, "Vlan200|Ethernet10": _TAGGED}
     assert set(configdb["VLAN"]) >= {"Vlan100", "Vlan200"}

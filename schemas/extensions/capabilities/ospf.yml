@@ -105,12 +105,6 @@ nodes:
           - name: stub
             label: Stub Area
             description: "Does not receive external routes"
-          - name: nssa
-            label: Not-So-Stubby Area
-            description: "Can import some external routes"
-          - name: totally_stubby
-            label: Totally Stubby Area
-            description: "Only receives default route"
         default_value: "standard"
         order_weight: 1200
       - name: description
@@ -144,20 +138,10 @@ nodes:
             label: OSPFv2
             description: "Open Shortest Path First version 2."
             color: "#E6E6FA"
-          - name: ospfv3
-            label: OSPFv3
-            description: "Open Shortest Path First version 3."
-            color: "#ECD6FA"
       - name: router_type
         kind: Dropdown
         description: "Type of OSPF router"
         choices:
-          - name: abr
-            label: Area Border Router
-            description: "Connects multiple OSPF areas"
-          - name: asbr
-            label: Autonomous System Border Router
-            description: "Connects to external routing domains"
           - name: internal
             label: Internal Router
             description: "Router within a single OSPF area"
@@ -227,10 +211,6 @@ nodes:
             label: "Broadcast"
             description: "Multi-access network with DR/BDR election"
             color: "#A29BFE"
-          - name: point-to-multipoint
-            label: "Point-to-Multipoint"
-            description: "Hub-and-spoke topology"
-            color: "#FDCB6E"
       - name: cost
         kind: Number
         optional: true

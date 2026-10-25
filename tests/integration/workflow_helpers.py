@@ -18,16 +18,18 @@ from infrahub_sdk.task.models import TaskFilter, TaskState
 
 from generators.protocols import TopologyDataCenter
 
-from .test_constants import (
+from .dc_topology_helpers import fetch_underlay_asn_drift
+from .suite_constants import (
     DATA_PROPAGATION_DELAY,
     DIFF_TASK_TIMEOUT,
     GENERATOR_TASK_TIMEOUT,
     MERGE_TASK_TIMEOUT,
     POST_MERGE_STABLE_ZERO,
+    SCENARIO_DC_NAME,
     VALIDATION_MAX_ATTEMPTS,
     VALIDATION_POLL_INTERVAL,
 )
-from .test_helpers import wait_for_condition, wait_for_condition_sync
+from .wait_helpers import wait_for_condition, wait_for_condition_sync
 
 logger = logging.getLogger(__name__)
 
@@ -718,3 +720,18 @@ async def run_full_dc_pipeline(
     logger.info("Full DC pipeline completed for %s on branch '%s'", dc_name, branch)
 
     return result
+
+
+async def assert_asn_stable(client: InfrahubClient, branch: str, asn_baseline: dict[str, dict[str, int]]) -> None:
+    """Fail unless every underlay ASN of the DC6 chain's DC still equals its baseline."""
+    errors = await fetch_underlay_asn_drift(
+        client=client, branch=branch, dc_name=SCENARIO_DC_NAME, baseline=asn_baseline
+    )
+    assert not errors, f"Underlay ASN stability check failed on branch '{branch}' in {SCENARIO_DC_NAME}:\n" + "\n".join(
+        f"  - {e}" for e in errors
+    )
+    logging.info(
+        "Underlay ASN stability verified on branch '%s': %s",
+        branch,
+        {role: len(entries) for role, entries in asn_baseline.items()},
+    )

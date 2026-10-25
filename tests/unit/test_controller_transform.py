@@ -120,7 +120,7 @@ class TestDnaCenterPayload:
 class TestSecurityManagerVendorDispatch:
     def test_panos_platform_builds_panorama_payload(self) -> None:
         data = _raw_controller(
-            "DC11-PANORAMA1", "security_manager", platform_name="panos", devices=[_raw_device("fw-dc1101")]
+            "DC11-PANORAMA1", "security_manager", platform_name="paloalto_panos", devices=[_raw_device("fw-dc1101")]
         )
         payload = json.loads(asyncio.run(_make_transform().transform(data)))
 
@@ -128,7 +128,7 @@ class TestSecurityManagerVendorDispatch:
         assert payload["devices"][0]["hostname"] == "fw-dc1101"
 
     def test_junos_platform_builds_security_director_payload(self) -> None:
-        data = _raw_controller("SD1", "security_manager", platform_name="junos", devices=[_raw_device("srx-1")])
+        data = _raw_controller("SD1", "security_manager", platform_name="juniper_junos", devices=[_raw_device("srx-1")])
         payload = json.loads(asyncio.run(_make_transform().transform(data)))
 
         assert "domain" in payload
@@ -167,7 +167,7 @@ class TestVelocloudVcoPayload:
         data = _raw_controller(
             "EQX-FR2-SDWAN-VCO1",
             "sdwan_orchestrator",
-            platform_name="velocloud",
+            platform_name="linux",
             devices=[
                 _raw_device("EQX-FR2-SDWAN-GW1", role="edge", address=None),
                 _raw_device("C002-OFFICE-EDGE1", role="edge", address=None, branch_to_branch="full_mesh"),
@@ -185,7 +185,7 @@ class TestVelocloudVcoPayload:
         data = _raw_controller(
             "VCO1",
             "sdwan_orchestrator",
-            platform_name="velocloud",
+            platform_name="linux",
             devices=[
                 _raw_device("EDGE-HUB-ONLY", branch_to_branch="hub_only"),
                 _raw_device("EDGE-FULL-MESH", branch_to_branch="full_mesh"),
@@ -198,9 +198,7 @@ class TestVelocloudVcoPayload:
 
     def test_gateway_with_no_deployment_has_no_branch_to_branch(self) -> None:
         """The Gateway itself has no office/deployment carrying the field."""
-        data = _raw_controller(
-            "VCO1", "sdwan_orchestrator", platform_name="velocloud", devices=[_raw_device("GATEWAY1")]
-        )
+        data = _raw_controller("VCO1", "sdwan_orchestrator", platform_name="linux", devices=[_raw_device("GATEWAY1")])
         payload = json.loads(asyncio.run(_make_transform().transform(data)))
 
         assert payload["edges"][0]["branch-to-branch"] is None
@@ -278,7 +276,7 @@ class TestVelocloudVrfHandoffs:
     the VCO payload — not a device-config transform — has to carry it."""
 
     def _payload(self, device: dict) -> dict[str, Any]:
-        data = _raw_controller("VCO1", "sdwan_orchestrator", platform_name="velocloud", devices=[device])
+        data = _raw_controller("VCO1", "sdwan_orchestrator", platform_name="linux", devices=[device])
         return json.loads(asyncio.run(_make_transform().transform(data)))
 
     def test_gateway_vrf_session_becomes_segment_handoff(self) -> None:
@@ -390,7 +388,7 @@ class TestVelocloudOfficeEdgeWanExit:
     from the one ManagedBGPPeering add_office_fabric generates (the border renders the other end)."""
 
     def _handoffs(self, device: dict) -> list[dict[str, Any]]:
-        data = _raw_controller("VCO1", "sdwan_orchestrator", platform_name="velocloud", devices=[device])
+        data = _raw_controller("VCO1", "sdwan_orchestrator", platform_name="linux", devices=[device])
         return json.loads(asyncio.run(_make_transform().transform(data)))["edges"][0]["handoffs"]
 
     def test_the_edge_hands_off_in_the_tenant_vrf_on_the_dot1q_sub_interface_to_the_switch(self) -> None:

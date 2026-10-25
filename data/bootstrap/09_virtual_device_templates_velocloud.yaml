@@ -7,7 +7,7 @@ spec:
     - template_name: VCG-VA_CLOUD
       owner: "P027"
       device_type: VCG-VA
-      platform: velocloud
+      platform: linux
       software_image: velocloud-6.0.0
       role: edge
       status: active

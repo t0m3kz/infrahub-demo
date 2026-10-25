@@ -201,14 +201,6 @@ nodes:
             label: Provisioning
             description: "Generator is pushing config to switches"
             color: "#F39C12"
-          - name: decommissioning
-            label: Decommissioning
-            description: "Being removed from service"
-            color: "#E67E22"
-          - name: decommissioned
-            label: Decommissioned
-            description: "Config removed from all switches"
-            color: "#95A5A6"
 
     relationships:
       - name: segment

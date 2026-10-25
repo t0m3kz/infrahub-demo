@@ -62,12 +62,11 @@ def _office(
     hosted: tuple[tuple[str, str], ...] = (),
     owner: dict[str, Any] | None = _C2,
     segment_owner: dict[str, Any] | None = _C2,
-    segment_status: str = "active",
 ) -> dict[str, Any]:
     """A cleaned TopologyCustomerOffice root entry: its SD-WAN gateway, (prefix, namespace) LANs and hosted segments.
 
     ``hosted`` are the (gateway prefix, namespace) of the segments the office hosts itself (segment_deployments),
-    all owned by ``segment_owner`` with ``segment_status``; the LANs are owned by the office's ``owner``.
+    all owned by ``segment_owner``; the LANs are owned by the office's ``owner``.
     """
     return {
         "owner": owner,
@@ -76,7 +75,6 @@ def _office(
         "segment_deployments": [
             {
                 "segment": {
-                    "status": segment_status,
                     "owner": segment_owner,
                     "gateway": {"ip_prefix": {"prefix": prefix, "ip_namespace": {"name": namespace}}},
                 }
@@ -567,19 +565,3 @@ class TestPeerPrefixOwners:
             tunnels=None,
         )
         assert found == {"Ethernet1/13.1900": {}}
-
-    def test_a_retired_hosted_segment_is_skipped(self) -> None:
-        """A retired segment's prefix is no longer served: not accepted, while the active sibling is."""
-        offices = [
-            _office(_GW1, hosted=(("10.176.6.0/24", "PROD"),), segment_status="retired"),
-            _office(_GW1, hosted=(("10.176.5.0/24", "PROD"),)),
-        ]
-        found = get_external_peer_prefixes(
-            [_subif("Ethernet1/13.1900", "PROD")],
-            None,
-            "eg-fr201",
-            device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
-            offices=offices,
-            tunnels=None,
-        )
-        assert found == {"Ethernet1/13.1900": {"C002": ["10.176.5.0/24"]}}

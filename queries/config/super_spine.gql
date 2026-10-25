@@ -10,7 +10,6 @@ query super_spine_config(
         platform {
           node {
             name { value }
-            netmiko_device_type { value }
           }
         }
         primary_address {

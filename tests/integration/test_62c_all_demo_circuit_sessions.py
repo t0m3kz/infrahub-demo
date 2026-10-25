@@ -12,12 +12,38 @@ import logging
 import pytest
 from infrahub_sdk import InfrahubClient
 
-from generators.helpers.pools import FW_CONTEXT_VLAN_END, FW_CONTEXT_VLAN_START
+from tasks import ALL_DEMO_BRANCH
 from utils.exchange_transit import transit_vlan, wan_exit_vlan
+from utils.limits import CIRCUIT_ENDS, FW_CONTEXT_VLAN_END, FW_CONTEXT_VLAN_START, UNDERLAY_MTU
 
+from .all_demo_circuit_constants import (
+    ALL_DEMO_COLOCATION_SERVED,
+    ALL_DEMO_COLOCATION_SERVING_ZONE,
+    ALL_DEMO_DCI_CIRCUITS,
+    ALL_DEMO_EDGE_INTERLINK_INTERFACE,
+    ALL_DEMO_EDGE_INTERLINKS,
+    ALL_DEMO_EDGE_PAIR_POOL_TEMPLATE,
+    ALL_DEMO_FABRIC_PEERINGS,
+    ALL_DEMO_HANDOFF_PARTY_ASNS,
+    ALL_DEMO_INTERNET_BGWS,
+    ALL_DEMO_INTERNET_TRANSIT_PEERINGS,
+    ALL_DEMO_INTERNET_UPSTREAM_BY_DC,
+    ALL_DEMO_OFFICE_WAN_EXITS,
+    ALL_DEMO_SDWAN_GATEWAY_PUBLIC_PORT,
+    ALL_DEMO_VIRTUAL_CIRCUITS,
+    ALL_DEMO_ZONE_SITE_VIPS,
+    HANDOFF_KIND,
+    TUNNEL_KIND,
+)
+from .all_demo_firewall_constants import (
+    ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS,
+    ALL_DEMO_FIREWALL_MEMBERS,
+    OFFICE_NAMESPACE,
+    transit_namespace_type,
+)
+from .circuit_helpers import fetch_interconnect_inventory
 from .conftest import TestInfrahubDockerWithClient
 from .interconnect_queries import (
-    ADDRESS_COUNT_QUERY,
     CIRCUIT_PREFIXES_QUERY,
     COLOCATION_CONTEXTS_QUERY,
     EDGE_INTERLINK_CABLES_QUERY,
@@ -30,11 +56,7 @@ from .interconnect_queries import (
     WAN_EXIT_SESSIONS_QUERY,
 )
 from .interconnect_rules import (
-    _CIRCUIT_ENDS,
-    _DCI_MTU,
     DCI_POOL_NETWORK,
-    LEGACY_HANDOFF_ADDRESSES,
-    LEGACY_HANDOFF_PEERINGS,
     _address,
     _address_namespace,
     _interfaces,
@@ -46,31 +68,6 @@ from .interconnect_rules import (
     _sessions_by_name,
     _vlan,
 )
-from .test_constants import (
-    ALL_DEMO_BRANCH,
-    ALL_DEMO_COLOCATION_SERVED,
-    ALL_DEMO_COLOCATION_SERVING_ZONE,
-    ALL_DEMO_DCI_CIRCUITS,
-    ALL_DEMO_EDGE_INTERLINK_INTERFACE,
-    ALL_DEMO_EDGE_INTERLINKS,
-    ALL_DEMO_EDGE_PAIR_POOL_TEMPLATE,
-    ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS,
-    ALL_DEMO_FABRIC_PEERINGS,
-    ALL_DEMO_FIREWALL_MEMBERS,
-    ALL_DEMO_HANDOFF_PARTY_ASNS,
-    ALL_DEMO_INTERNET_BGWS,
-    ALL_DEMO_INTERNET_TRANSIT_PEERINGS,
-    ALL_DEMO_INTERNET_UPSTREAM_BY_DC,
-    ALL_DEMO_OFFICE_WAN_EXITS,
-    ALL_DEMO_SDWAN_GATEWAY_PUBLIC_PORT,
-    ALL_DEMO_VIRTUAL_CIRCUITS,
-    ALL_DEMO_ZONE_SITE_VIPS,
-    HANDOFF_KIND,
-    OFFICE_NAMESPACE,
-    TUNNEL_KIND,
-    transit_namespace_type,
-)
-from .test_helpers import fetch_interconnect_inventory
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -204,18 +201,13 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         client = async_client_main
         errors: list[str] = []
         names = {f"{circuit}-{suffix}": circuit for circuit in ALL_DEMO_DCI_CIRCUITS for suffix in ("underlay", "evpn")}
-        # add_circuit used to build one DCI-<fibre> session per dark fibre (the fibre is DF-<x> where the circuit is ICX-<x>)
-        legacy = [f"DCI-{circuit.replace('ICX-', 'DF-', 1)}" for circuit in ALL_DEMO_DCI_CIRCUITS]
-        found = _sessions_by_name(
+        sessions = _sessions_by_name(
             await client.execute_graphql(
-                query=SESSIONS_QUERY, variables={"names": sorted([*names, *legacy])}, branch_name=scenario_branch
+                query=SESSIONS_QUERY, variables={"names": sorted(names)}, branch_name=scenario_branch
             )
         )
-        sessions = {session: node for session, node in found.items() if session in names}
         if sorted(sessions) != sorted(names):
             errors.append(f"DCI sessions {sorted(sessions)}, expected {sorted(names)}")
-        if set(found) & set(legacy):
-            errors.append(f"legacy session(s) {sorted(set(found) & set(legacy))} still exist: the circuit builds two")
         for role, expected_count in (("dci", len(ALL_DEMO_DCI_CIRCUITS)), ("dci-underlay", len(ALL_DEMO_DCI_CIRCUITS))):
             count = await client.execute_graphql(
                 query="query ($role: String) { ManagedBGPPeering(peering_role__value: $role) { count } }",
@@ -287,9 +279,9 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                 errors.append(f"{circuit}-underlay: on interfaces {sorted(ports)}, expected {sorted(ends)}")
                 continue
             for (device, port), node in sorted(ports.items()):
-                if node.get("mtu", {}).get("value") != _DCI_MTU:
+                if node.get("mtu", {}).get("value") != UNDERLAY_MTU:
                     errors.append(
-                        f"{circuit}-underlay: {device}:{port} MTU {node.get('mtu', {}).get('value')}, expected {_DCI_MTU}"
+                        f"{circuit}-underlay: {device}:{port} MTU {node.get('mtu', {}).get('value')}, expected {UNDERLAY_MTU}"
                     )
             addresses = {end: _address(node) for end, node in ports.items()}
             errors.extend(
@@ -342,15 +334,14 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify add_virtual_circuit built exactly one eBGP session on each Handoff circuit, and nothing authored.
+        """Verify add_virtual_circuit built exactly one eBGP session on each Handoff circuit.
 
         Per circuit `<name>`: one `<name>-bgp` (peering_role regular, EBGP, ttl 1, bfd, no extended communities, the
         circuit's maximum_routes, IPv4 unicast, the circuit's key) between the two devices' BGP processes, on the two
         `<port>.<vlan>` sub-interfaces. Both are addressed in the circuit's namespace from one /31 of the pool
         `Handoff-<namespace>-IPv4` (the overlay-process end the lower address, else the first device by name); the
         prefix is the one `Handoff <name>`. The party process's `local_as` is the data's ASN, ours differs, and the
-        VLAN is the same on both ends (and the VIF's). The authored addresses and sessions the generator replaced are
-        gone.
+        VLAN is the same on both ends (and the VIF's).
         """
         logging.info("=== %s - Step 6b: Handoff Sessions ===", SCENARIO_NAME)
 
@@ -365,20 +356,10 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         sessions = _sessions_by_name(
             await client.execute_graphql(
                 query=SESSIONS_QUERY,
-                variables={"names": sorted([f"{n}-bgp" for n in handoffs] + list(LEGACY_HANDOFF_PEERINGS))},
+                variables={"names": sorted(f"{n}-bgp" for n in handoffs)},
                 branch_name=scenario_branch,
             )
         )
-        gone = sorted(set(sessions) & set(LEGACY_HANDOFF_PEERINGS))
-        if gone:
-            errors.append(f"authored session(s) {gone} still exist: the generator builds <circuit>-bgp")
-        address_count = await client.execute_graphql(
-            query=ADDRESS_COUNT_QUERY,
-            variables={"addresses": list(LEGACY_HANDOFF_ADDRESSES)},
-            branch_name=scenario_branch,
-        )
-        if address_count["IpamIPAddress"]["count"]:
-            errors.append(f"{address_count['IpamIPAddress']['count']} authored handoff address(es) still exist")
         prefixes = _prefixes_by_description(
             await client.execute_graphql(
                 query=CIRCUIT_PREFIXES_QUERY,
@@ -526,7 +507,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         session_ports = {end["id"] for c in inventory["virtual"] if c["kind"] != TUNNEL_KIND for end in c["end_nodes"]}
         for tunnel in tunnels:
             gateway = [end for end in tunnel["end_nodes"] if end["interface"] == ALL_DEMO_SDWAN_GATEWAY_PUBLIC_PORT]
-            if len(gateway) != 1 or len(tunnel["end_nodes"]) != _CIRCUIT_ENDS:
+            if len(gateway) != 1 or len(tunnel["end_nodes"]) != CIRCUIT_ENDS:
                 errors.append(
                     f"{tunnel['name']}: ends {tunnel['ends']}, expected the gateway's '{ALL_DEMO_SDWAN_GATEWAY_PUBLIC_PORT}' and one more"
                 )

@@ -8,8 +8,9 @@
   but silently drops routed traffic.
 
   `svi_vlan_id` comes from the reserved 3900-3967 band allocated in
-  transforms/helpers/vxlan.py. It is None when that band is exhausted (a warning
+  transforms/helpers/overlay.py. It is None when that band is exhausted (a warning
   is logged there); skip those rather than emitting `interface VlanNone`.
+  `underlay_mtu` is UNDERLAY_MTU of utils/limits.py, set once in BaseDeviceTransform._build_config.
 
   Included by the leaf/border-leaf NX-OS templates from inside their
   `{% if vxlan and vxlan.enabled %}` guard, so `vxlan` is known non-empty here.
@@ -27,7 +28,7 @@ interface Vlan{{ mapping.svi_vlan_id }}
   description L3VNI transit SVI for VRF {{ mapping.vrf_name }}
   vrf member {{ mapping.vrf_name }}
   ip forward
-  mtu 9214
+  mtu {{ underlay_mtu }}
   no shutdown
 !
 {%- endfor %}

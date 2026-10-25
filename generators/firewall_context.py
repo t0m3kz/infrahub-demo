@@ -31,7 +31,8 @@ from typing import Any
 
 from infrahub_sdk.protocols import CoreNumberPool
 
-from utils.exchange_transit import INTERNET_TYPE, LB_VIP_PREFIXLEN, namespace_type_for_environment, transit_vlan
+from utils.exchange_transit import INTERNET_TYPE, namespace_type_for_environment, transit_vlan
+from utils.limits import LB_VIP_PREFIXLEN, SNAT_PREFIX_LENGTH
 
 from .connections import tracked_save_kwargs
 from .firewall_context_spec import (
@@ -48,7 +49,6 @@ from .types import DeviceOptions
 
 __all__ = ["FIREWALL_CONTEXT", "LOADBALANCER_CONTEXT", "ContextSpec", "FirewallContextMixin"]
 
-_SNAT_PREFIX_LENGTH = 32
 _VIP_POOL_KEY = "vip"  # _prefix_pools key of the VIP range pool, next to the leg types
 
 
@@ -389,7 +389,7 @@ class FirewallContextMixin(TransitLegsMixin):
                     resource_pool=pool,
                     kind=IpamIPAddress,
                     identifier=f"{context_obj.id}-snat",
-                    prefix_length=_SNAT_PREFIX_LENGTH,
+                    prefix_length=SNAT_PREFIX_LENGTH,
                     data={"description": f"SNAT address of {context_obj.name.value}"},
                 ),
                 track=track,

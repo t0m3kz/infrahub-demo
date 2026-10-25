@@ -111,8 +111,8 @@ def spine_downlink_layout(design: Mapping[str, Any]) -> dict[str, int]:
       tor pod, otherwise right after the leafs.
 
     Returns {"leaf", "tor", "border-leaf"} start ports and "total", the
-    downlink ports a spine of this design needs (the design's
-    spine_downlink_ports_per_spine when it has ToRs).
+    downlink ports a spine of this design needs, derived from the leafs, the
+    ToRs and the border-leafs the envelope allows.
     """
     leafs = pod_leafs(design)
     tors = design["max_rows"] * tor_rack_slots_per_row(design) * design["max_tors_per_compute_rack"]

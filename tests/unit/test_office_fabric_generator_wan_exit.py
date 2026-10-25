@@ -16,9 +16,9 @@ import pytest
 from generators.helpers.naming import sdwan_edge_name
 from generators.logger import GeneratorError
 from generators.protocols import DcimPhysicalDevice, DcimPhysicalInterface, DcimVirtualInterface, ManagedBGP
-from generators.topology.office_fabric import _EDGE_WAIT_ATTEMPTS
 from tests.unit.office_fabric_generator_helpers import _DISTRIBUTION_TEMPLATE, _make_generator, _office
 from utils.exchange_transit import wan_exit_vlan
+from utils.limits import OFFICE_EDGE_WAIT
 
 
 def _named(obj_id: str, name: str) -> MagicMock:
@@ -350,8 +350,8 @@ class TestWanExitSkips:
                 distribution_names=["ds-c005-office01"], distribution_template=_DISTRIBUTION_TEMPLATE
             )
 
-        assert exit_.gen.client.filters.await_count == _EDGE_WAIT_ATTEMPTS
-        assert sleep.await_count == _EDGE_WAIT_ATTEMPTS - 1
+        assert exit_.gen.client.filters.await_count == OFFICE_EDGE_WAIT.attempts
+        assert sleep.await_count == OFFICE_EDGE_WAIT.attempts - 1
         self._assert_nothing_written(exit_)
 
     @pytest.mark.asyncio

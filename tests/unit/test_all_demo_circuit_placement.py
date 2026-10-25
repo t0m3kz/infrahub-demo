@@ -14,7 +14,7 @@ from typing import Any, cast
 import pytest
 
 from checks.circuit_placement import CheckCircuitPlacement
-from tests.integration.test_constants import ALL_DEMO_VIRTUAL_CIRCUITS
+from tests.integration.all_demo_circuit_constants import ALL_DEMO_VIRTUAL_CIRCUITS
 from tests.unit.simulators.circuit_data_payloads import HANDOFF, INTERCONNECT, PHYSICAL, TUNNEL, build_payloads
 from utils.circuit_underlay import derived_underlay, has_carrier
 from utils.data_cleaning import clean_data

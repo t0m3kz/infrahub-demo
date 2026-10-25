@@ -14,7 +14,6 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 from generators.helpers.rules import RulesPlanner
-from generators.lb_vip import READ_ATTEMPTS, READ_INTERVAL
 from generators.protocols import SecurityPolicy
 from generators.segment_firewall import SegmentFirewallMixin
 from tests.unit.lb_vip_helpers import (
@@ -30,6 +29,7 @@ from tests.unit.lb_vip_helpers import (
     _vip_payloads,
     _web,
 )
+from utils.limits import LB_VIP_REREAD
 
 
 class TestVipProducer:
@@ -418,19 +418,19 @@ class TestConcurrentInputs:
         assert errors == []
         gen.wait_for_parent_generators.assert_awaited_once_with(("add_vxlan_segment",), "seg-web")
         assert _reads(gen) == [{"ids": ["seg-web"]}, {"ids": ["seg-web"]}]
-        gen.lb_reread_sleep.assert_awaited_once_with(READ_INTERVAL)
+        gen.lb_reread_sleep.assert_awaited_once_with(LB_VIP_REREAD.delay)
         assert _vip_payloads(gen)[0]["pool_members"] == ["ip:vm-1-seg-web-lb-member", "ip:vm-2-seg-web-lb-member"]
 
     def test_segment_prefix_that_never_lands_is_the_error_after_the_last_read(self) -> None:
-        """Bounded: READ_ATTEMPTS reads with a sleep between two, then the error the payload alone gave."""
+        """Bounded: LB_VIP_REREAD.attempts reads with a sleep between two, then the error the payload alone gave."""
         gen = _vip_gen()
         gen.client.execute_graphql = AsyncMock(return_value=_segment_read("seg-web", prefix=False))
 
         _vips, errors = _reconcile(gen, [_web(segment=_segment("seg-web", prefix=False))])
 
         assert errors == ["web.c001.example: segment seg-web-name has no gateway prefix for the pool members"]
-        assert gen.client.execute_graphql.await_count == READ_ATTEMPTS
-        assert gen.lb_reread_sleep.await_count == READ_ATTEMPTS - 1
+        assert gen.client.execute_graphql.await_count == LB_VIP_REREAD.attempts
+        assert gen.lb_reread_sleep.await_count == LB_VIP_REREAD.attempts - 1
         gen.client.create.assert_not_awaited()
 
     def test_two_components_on_one_segment_share_one_read(self) -> None:
