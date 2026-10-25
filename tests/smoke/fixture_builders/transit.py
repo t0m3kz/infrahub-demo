@@ -383,6 +383,59 @@ def build_firewall_exchange_data(*, device_name: str, platform: str) -> dict:
     return data
 
 
+_VIRTUAL_FW_MEMBERS = ("fw-dc10101-C007-p-dedicated", "fw-dc10102-C007-p-dedicated")
+
+
+def build_virtual_firewall_data() -> dict:
+    """A customer's dedicated virtual firewall (DcimVirtualDevice) in the raw firewall_config shape.
+
+    queries/config/firewall.gql roots at the DcimDevice generic, so the response key is `DcimDevice`
+    whatever the kind. The device is the first member of the customer's dedicated pair (hosted on the
+    shared physical pair, generators/firewall_context.py), sourced from the CloudGuard_EDGE_CUSTOMER_*
+    template: eth0 management, eth1-6 uplinks, eth7 HA sync. It serves one dedicated context (the
+    exchange fixture's PROD, INTERNET and MANAGEMENT legs on eth1) and none of the shared one, which
+    stays on the physical pair.
+    """
+    device_name = _VIRTUAL_FW_MEMBERS[0]
+    data = build_firewall_exchange_data(device_name=device_name, platform="checkpoint_gaia")
+    physical = data.pop("DcimPhysicalDevice")
+    device = physical["edges"][0]["node"]
+    dedicated = _XCHG_CONTEXTS["dedicated"]
+
+    def rename(name: str) -> str:
+        return name.replace("ethernet1/1", "eth1").replace("ethernet1/7", "eth7")
+
+    interfaces = []
+    for edge in device["interfaces"]["edges"]:
+        node = edge["node"]
+        caps = node["capabilities"]["edges"]
+        if caps and caps[0]["node"]["id"] != dedicated["id"]:
+            continue
+        node["name"] = _v(rename(node["name"]["value"]))
+        if caps:
+            context = caps[0]["node"]
+            context["name"] = _v("fw-C007-p-dedicated-context")
+            context["tenant"] = _node({"name": _v("C007-p")})
+        if node.get("parent_interface", {}).get("node"):
+            node["parent_interface"] = _node({"name": _v(rename(node["parent_interface"]["node"]["name"]["value"]))})
+        interfaces.append(edge)
+    management = _make_interface(
+        name="eth0",
+        device_name=device_name,
+        description="Management",
+        role="management",
+        ip_address="10.254.1.11/24",
+        ns_name="MANAGEMENT",
+    )
+    device["interfaces"] = _edges([management, *(edge["node"] for edge in interfaces)])
+
+    ha_cap = device["capabilities"]["edges"][0]["node"]
+    ha_cap["name"] = _v("fw-C007-p-dedicated-ha")
+    ha_cap["capabilities"] = _edges([{"name": _v(member)} for member in _VIRTUAL_FW_MEMBERS])
+    device["name"] = _v(device_name)
+    return {"DcimDevice": {"edges": [{"node": device}]}, **data}
+
+
 def write_fixtures() -> tuple[int, int]:
     """Write the inter-VRF exchange and load-balancer context fixtures of the border-leaf, edge and firewall."""
     generated = errors = 0
@@ -431,6 +484,12 @@ def write_fixtures() -> tuple[int, int]:
         )
         for platform in [*FIREWALL_PLATFORMS, "juniper_junos"]
     )
+    generated += g
+    errors += e
+
+    # A customer's dedicated virtual firewall: the same contexts, legs and HA pair as a physical one.
+    print("\nGenerating dedicated virtual firewall fixture:")
+    g, e = _write_data_fixture(Firewall, "firewall_checkpoint_gaia_virtual_dedicated", build_virtual_firewall_data())
     generated += g
     errors += e
     return generated, errors
