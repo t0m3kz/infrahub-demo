@@ -12,7 +12,8 @@ from __future__ import annotations
 
 import pytest
 
-from generators.helpers.pools import DEFAULT_ASN_BASE_START, calculate_fabric_asn_block_size, name_to_asn_range
+from generators.helpers.pools import calculate_fabric_asn_block_size, name_to_asn_range
+from utils.limits import PRIVATE_ASN32_START
 
 
 def test_block_size_small_fabric() -> None:
@@ -67,7 +68,7 @@ def test_name_to_asn_range_within_private_space() -> None:
     """All ranges stay within private 4-byte ASN space."""
     for name in ["DC1", "DC2", "NYC-PROD", "EMEA-DR-01"]:
         start, end = name_to_asn_range(name, max_pods=4)
-        assert start >= DEFAULT_ASN_BASE_START
+        assert start >= PRIVATE_ASN32_START
         assert end <= 4294967295
 
 

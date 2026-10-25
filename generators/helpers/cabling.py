@@ -84,17 +84,10 @@ class ConnectionValidator:
     """Validate connection plans before execution."""
 
     @staticmethod
-    def validate_plan(
-        plan: list[Any],
-        min_connections: int = 2,
-        max_connections: int | None = None,
-    ) -> tuple[bool, str]:
+    def validate_plan(plan: list[Any], min_connections: int) -> tuple[bool, str]:
         """Validate connection plan meets requirements."""
         if len(plan) < min_connections:
             return False, f"Insufficient connections: {len(plan)} < {min_connections}"
-
-        if max_connections and len(plan) > max_connections:
-            return False, f"Too many connections: {len(plan)} > {max_connections}"
 
         server_interfaces = [conn.server_interface for conn in plan]
         server_counts = Counter(server_interfaces)

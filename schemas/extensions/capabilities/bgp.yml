@@ -81,10 +81,6 @@ nodes:
             label: VPNv4
             description: "VPN IPv4 Address Family"
             color: "#f39c12"
-          - name: vpnv6
-            label: VPNv6
-            description: "VPN IPv6 Address Family"
-            color: "#9b59b6"
       - name: safi
         kind: Dropdown
         label: "SAFI"

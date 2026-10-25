@@ -44,9 +44,6 @@ def _routable_ipv4(prefix: str | None) -> bool:
     return bool(prefix) and ":" not in str(prefix) and str(prefix).split("/")[0] != "0.0.0.0"
 
 
-RETIRED_STATUS = "retired"
-
-
 def get_onprem_prefixes(segments: list[dict[str, Any]] | None) -> dict[str, dict[str, list[str]]]:
     """Tenant VRF name -> owner -> the IPv4 prefixes behind that owner's on-prem segment gateways, sorted.
 
@@ -55,9 +52,8 @@ def get_onprem_prefixes(segments: list[dict[str, Any]] | None) -> dict[str, dict
     checks/routing_invariants.py uses for the VPC overlap gate); a container
     (member_type prefix) is skipped. Only prod/non_prod namespaces qualify, each
     keeps its own lists, so an external peer in PROD is never offered a
-    NON-PROD prefix. A ``retired`` segment is skipped (its space is no longer
-    served), and so is a segment without a customer owner (customer_owner): the
-    owner registers the prefix, so an ownerless one is announced to nobody.
+    NON-PROD prefix. A segment without a customer owner (customer_owner) is skipped:
+    the owner registers the prefix, so an ownerless one is announced to nobody.
     What an external tenant-VRF peer is announced (get_external_session_policies).
     """
     by_vrf: dict[str, dict[str, set[str]]] = {}
@@ -67,7 +63,6 @@ def get_onprem_prefixes(segments: list[dict[str, Any]] | None) -> dict[str, dict
         namespace = prefix.get("ip_namespace") or {}
         if (
             owner
-            and segment.get("status") != RETIRED_STATUS
             and namespace.get("namespace_type") in EXCHANGE_PEERS
             and namespace.get("name")
             and prefix.get("member_type") != "prefix"
@@ -130,15 +125,15 @@ def office_registered(office: dict[str, Any]) -> list[tuple[str | None, dict[str
 
     The ``lan_prefixes`` are owned by the office's owner. Derived, the gateway prefix of every segment the office
     hosts itself (``segment_deployments``: an office with a fabric hosts its LAN as a VXLAN segment, whose prefix
-    comes from the tenant pool, not from the office) is owned by the segment's owner; a ``retired`` segment is
-    skipped. ``office`` is one cleaned TopologyCustomerOffice.
+    comes from the tenant pool, not from the office) is owned by the segment's owner.
+    ``office`` is one cleaned TopologyCustomerOffice.
     """
     office_owner = customer_owner(office.get("owner"))
     registered = [(office_owner, lan) for lan in office.get("lan_prefixes") or []]
     for deployment in office.get("segment_deployments") or []:
         segment = deployment.get("segment") or {}
         hosted = (segment.get("gateway") or {}).get("ip_prefix")
-        if hosted and segment.get("status") != RETIRED_STATUS:
+        if hosted:
             registered.append((customer_owner(segment.get("owner")), hosted))
     return registered
 

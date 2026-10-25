@@ -34,21 +34,18 @@ import pytest
 import yaml
 from infrahub_sdk import InfrahubClient, InfrahubClientSync
 
+from .branch_helpers import fetch_artifacts, fetch_proposed_change_diff
 from .conftest import TestInfrahubDockerWithClient
-from .test_constants import (
+from .dc_topology_helpers import snapshot_dc_device_counts_by_role
+from .endpoint_app_helpers import fetch_endpoint_cabling
+from .segment_helpers import fetch_vlan_domain_segments
+from .suite_constants import (
     DEMO_SERVERS_DATA,
     SCENARIO_DC_NAME,
     SCENARIO_ENDPOINT_APP_DATA,
     SCENARIO_ENDPOINT_COMPONENT_FQDN,
     SCENARIO_ENDPOINT_SEGMENT,
     SCENARIO_ENDPOINT_SERVER,
-)
-from .test_helpers import (
-    fetch_artifacts,
-    fetch_endpoint_cabling,
-    fetch_proposed_change_diff,
-    fetch_vlan_domain_segments,
-    snapshot_dc_device_counts_by_role,
 )
 from .workflow_helpers import (
     create_and_validate_proposed_change,

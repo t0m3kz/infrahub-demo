@@ -12,7 +12,6 @@ from unittest.mock import AsyncMock
 import pytest
 
 from generators.helpers.lb_vip import (
-    CLOUD_LB_NAME_MAX,
     cloud_lb_name,
     cloud_lb_scheme,
     cloud_members,
@@ -37,6 +36,7 @@ from tests.unit.lb_vip_helpers import (
     _vpc,
     _web,
 )
+from utils.limits import CLOUD_LB_NAME_MAX
 
 
 def _cloud_lb_payloads(gen: Any) -> list[dict[str, Any]]:

@@ -21,6 +21,7 @@ from collections.abc import Callable
 
 from tests.smoke.fixture_builders import (
     cisco_xe,
+    cloud,
     edge,
     fabric,
     firewall,
@@ -47,6 +48,7 @@ WRITERS: list[tuple[str | None, Callable[[], tuple[int, int]]]] = [
     (None, proxy_lb.write_fixtures),
     (None, group_policy.write_fixtures),
     (None, routing_identity.write_fixtures),
+    ("Cloud VPC Terraform fixtures", cloud.write_fixtures),
 ]
 
 
@@ -65,7 +67,7 @@ def main() -> int:
     print(f"\nDone: {generated} generated, {errors} errors")
     # A fixture that fails to render writes no file, so it leaves no diff for the
     # CI staleness check to catch — the failure has to surface here instead. That
-    # is how a broken `ipaddr` filter in cisco_wsa_asyncos.j2 went unnoticed.
+    # is how a broken `ipaddr` filter in cisco_wsa.j2 went unnoticed.
     return 1 if errors else 0
 
 

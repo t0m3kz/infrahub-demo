@@ -15,6 +15,8 @@ from typing import Any
 import pytest
 import yaml
 
+from tests.unit.demo_yaml_helpers import walk_objects
+
 _DATA = Path(__file__).parents[2] / "data"
 _SERVERS = _DATA / "demos" / "06_servers" / "servers"
 _RACK_FILES = [
@@ -26,32 +28,18 @@ _RACK_FILES = [
 _ACCESS_ROLES = {"tor", "l2-leaf", "access-leaf"}
 
 
-def _walk(node: Any, kind: str, found: list[tuple[str, dict[str, Any]]]) -> None:
-    """Collect (kind, entry) for every object, following nested kind/data blocks."""
-    if isinstance(node, dict):
-        if "kind" in node and "data" in node:
-            _walk(node["data"], node["kind"], found)
-            return
-        found.append((kind, node))
-        for value in node.values():
-            _walk(value, kind, found)
-    elif isinstance(node, list):
-        for item in node:
-            _walk(item, kind, found)
-
-
 def _objects(paths: list[Path]) -> list[tuple[str, dict[str, Any]]]:
     found: list[tuple[str, dict[str, Any]]] = []
     for path in paths:
         for doc in yaml.safe_load_all(path.read_text()):
             if doc and "spec" in doc:
-                _walk(doc["spec"]["data"], doc["spec"]["kind"], found)
+                walk_objects(doc["spec"]["data"], doc["spec"]["kind"], found)
     return found
 
 
 def _objects_of(entry: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
     found: list[tuple[str, dict[str, Any]]] = []
-    _walk(entry.get("interfaces"), "", found)
+    walk_objects(entry.get("interfaces"), "", found)
     return found
 
 

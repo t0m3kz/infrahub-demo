@@ -29,17 +29,16 @@ from typing import Any
 import pytest
 from infrahub_sdk import InfrahubClient, InfrahubClientSync
 
+from .branch_helpers import fetch_artifacts, fetch_proposed_change_diff
 from .conftest import TestInfrahubDockerWithClient
-from .test_constants import DEMO_POD_DATA, SCENARIO_DC_NAME, SCENARIO_FABRIC_ROLES, SCENARIO_UNDERLAY_ROLES
-from .test_helpers import (
-    fetch_artifacts,
-    fetch_proposed_change_diff,
-    fetch_underlay_asn_drift,
+from .dc_topology_helpers import (
     find_min_growth_shortfalls,
     snapshot_dc_device_counts_by_role,
     snapshot_underlay_asn_by_roles,
 )
+from .suite_constants import DEMO_POD_DATA, SCENARIO_DC_NAME, SCENARIO_FABRIC_ROLES, SCENARIO_UNDERLAY_ROLES
 from .workflow_helpers import (
+    assert_asn_stable,
     create_and_validate_proposed_change,
     merge_proposed_change,
     run_full_dc_pipeline,
@@ -65,20 +64,6 @@ def _assert_growth(branch: str, current: dict[str, int], baseline: dict[str, int
         f"  - {line}" for line in shortfalls
     )
     logging.info("Per-role DC6 device growth verified on branch '%s': %s -> %s", branch, baseline, current)
-
-
-async def _assert_asn_stable(client: InfrahubClient, branch: str, asn_baseline: dict[str, dict[str, int]]) -> None:
-    errors = await fetch_underlay_asn_drift(
-        client=client, branch=branch, dc_name=SCENARIO_DC_NAME, baseline=asn_baseline
-    )
-    assert not errors, f"Underlay ASN stability check failed on branch '{branch}' in {SCENARIO_DC_NAME}:\n" + "\n".join(
-        f"  - {e}" for e in errors
-    )
-    logging.info(
-        "Underlay ASN stability verified on branch '%s': %s",
-        branch,
-        {role: len(entries) for role, entries in asn_baseline.items()},
-    )
 
 
 class TestDC6AddPod(TestInfrahubDockerWithClient):
@@ -231,7 +216,7 @@ class TestDC6AddPod(TestInfrahubDockerWithClient):
             roles=list(baseline_counts.keys()),
         )
         _assert_growth(scenario_branch, current_counts, baseline_counts)
-        await _assert_asn_stable(async_client_main, scenario_branch, workflow_state["dc6_add_pod_asn_baseline"])
+        await assert_asn_stable(async_client_main, scenario_branch, workflow_state["dc6_add_pod_asn_baseline"])
 
     @pytest.mark.order(226)
     @pytest.mark.dependency(
@@ -356,6 +341,6 @@ class TestDC6AddPod(TestInfrahubDockerWithClient):
             roles=list(baseline_counts.keys()),
         )
         _assert_growth("main", current_counts, baseline_counts)
-        await _assert_asn_stable(async_client_main, "main", workflow_state["dc6_add_pod_asn_baseline"])
+        await assert_asn_stable(async_client_main, "main", workflow_state["dc6_add_pod_asn_baseline"])
 
         logging.info("=== %s - COMPLETED ===", SCENARIO_NAME)

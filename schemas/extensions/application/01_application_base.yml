@@ -104,10 +104,6 @@ nodes:
           - name: internet_exposed
             label: "Internet Exposed"
             color: "#EF6C00"
-      - name: cost_center
-        kind: Text
-        optional: true
-        order_weight: 700
       - name: fqdn
         kind: Text
         optional: false

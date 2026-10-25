@@ -150,24 +150,11 @@ class TestOspfAuthenticationRendering:
         assert "ip ospf message-digest-key 1 md5 s3cr3t" in _render_partial(source, _ospf_interface(mode="md5"))
         assert "ip ospf authentication-key s3cr3t" in _render_partial(source, _ospf_interface(mode=None))
 
-    def test_sros_renders_md5_as_a_message_digest_key(self) -> None:
-        """SR OS used to render every key as authentication-type password, whatever the mode."""
-        lines = _render_partial("{% include 'common/nokia_sros_ospf.j2' %}", _ospf_interface(mode="md5"))
-        assert 'configure router "Base" ospf 1 interface "Ethernet1" authentication-type message-digest' in lines
-        assert 'configure router "Base" ospf 1 interface "Ethernet1" message-digest-key 1 md5 "s3cr3t"' in lines
-        assert not any("authentication-type password" in line for line in lines)
-
-    def test_sros_without_a_mode_keeps_the_password_key(self) -> None:
-        """No mode is still the plain password key on SR OS."""
-        lines = _render_partial("{% include 'common/nokia_sros_ospf.j2' %}", _ospf_interface(mode=None))
-        assert 'configure router "Base" ospf 1 interface "Ethernet1" authentication-type password' in lines
-        assert 'configure router "Base" ospf 1 interface "Ethernet1" authentication-key "s3cr3t"' in lines
-
 
 class TestRefuseUnrenderableOspfAuth:
-    @pytest.mark.parametrize("platform", ["cisco_nxos", "cisco_ios", "cisco_xe", "nokia_sros", "sonic", "dell_sonic"])
+    @pytest.mark.parametrize("platform", ["cisco_nxos", "cisco_ios", "cisco_xe", "sonic", "dell_sonic"])
     def test_sha1_is_refused_where_the_partial_cannot_render_it(self, platform: str) -> None:
-        """NX-OS/IOS/SR OS need a key chain for HMAC-SHA and SONiC renders no OSPF interface: refuse."""
+        """NX-OS/IOS need a key chain for HMAC-SHA and SONiC renders no OSPF interface: refuse."""
         with pytest.raises(ValueError, match=r"Ethernet1 \(sha1\)"):
             refuse_unrenderable_ospf_auth(platform, [_ospf_interface(mode="sha1")])
 
@@ -184,7 +171,6 @@ class TestRefuseUnrenderableOspfAuth:
             ("arista_eos", "md5"),
             ("cisco_nxos", "md5"),
             ("cisco_xe", "md5"),
-            ("nokia_sros", "md5"),
         ],
     )
     def test_rendered_modes_pass(self, platform: str, mode: str) -> None:

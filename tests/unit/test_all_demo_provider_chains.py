@@ -15,15 +15,15 @@ from typing import Any
 
 import pytest
 
-from tests.integration.demo_data import ROOT, Declared, declared, distinct, name, object_templates
-from tests.integration.test_constants import (
-    ALL_DEMO_DATA,
+from tasks import ALL_DEMO_DATA
+from tests.integration.all_demo_circuit_constants import (
     ALL_DEMO_DECLARED_PHYSICAL_LOCATIONS,
     ALL_DEMO_DECLARED_PHYSICAL_PORTS,
     ALL_DEMO_PARTNER_ACCESS_CIRCUITS,
     ALL_DEMO_PARTNER_ACCESS_LOCATIONS,
     ALL_DEMO_VIRTUAL_CIRCUITS,
 )
+from tests.integration.demo_data import ROOT, Declared, declared, distinct, name, object_templates
 
 _ALL = ROOT / ALL_DEMO_DATA
 _MEGAPORT = "HANDOFF-PA4-MEGAPORT-PROD"
@@ -173,7 +173,6 @@ def test_the_partner_stub_is_owned_by_the_partner_organization_and_deployed_to_t
     assert not stub.groups()
     assert stub.item["deployment"] == name(topology)
     assert topology.item["parent"] == "Partners"
-    assert topology.item["provider_type"] == "partner"
     assert topology.item["provider"] == "P031"
 
 

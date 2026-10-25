@@ -5,12 +5,36 @@ The generator lives in generators/topology/endpoint.py; the target resolution is
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+import yaml
 
+from generators.topology.endpoint_targets import FREE_OR_CABLED_INTERFACE_STATUSES
 from tests.unit.endpoint_generator_helpers import _iface, _make_generator, _pod_rack
+
+# ===========================================================================
+# Interface status filters
+# ===========================================================================
+
+
+def test_interface_status_filter_values_are_dcim_interface_status_choices(root_dir: Path) -> None:
+    """Every status the endpoint generator filters ports by is a DcimInterface status choice of the schema.
+
+    The server filters by value without validating it: a name that is no choice (it was "planned") matches
+    nothing and is never noticed.
+    """
+    document = yaml.safe_load((root_dir / "schemas" / "base" / "dcim.yml").read_text())
+    interface = next(
+        node for node in document["generics"] if node["namespace"] == "Dcim" and node["name"] == "Interface"
+    )
+    status = next(attribute for attribute in interface["attributes"] if attribute["name"] == "status")
+    choices = {choice["name"] for choice in status["choices"]}
+
+    assert set(FREE_OR_CABLED_INTERFACE_STATUSES) <= choices
+
 
 # ===========================================================================
 # _resolve_target_interfaces() — dispatch
@@ -405,7 +429,7 @@ class TestQueryInterfacesByLocation:
         await gen._query_interfaces_by_location(rack_ids=["rack-1"], device_role="tor", endpoint_interfaces=[])
 
         second_call_kwargs = gen.client.filters.call_args_list[1].kwargs
-        assert second_call_kwargs["status__values"] == ["free", "planned", "active"]
+        assert second_call_kwargs["status__values"] == ["free", "active"]
         assert "status__value" not in second_call_kwargs
 
     @pytest.mark.asyncio

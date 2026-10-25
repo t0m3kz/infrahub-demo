@@ -97,6 +97,7 @@ from utils.circuit_underlay import (
     subinterface_vlan,
 )
 from utils.data_cleaning import clean_data
+from utils.limits import DCI_TECHNICAL_IPV4_POOL, DCI_TECHNICAL_IPV6_POOL, HANDOFF_POOL_TEMPLATE, UNDERLAY_MTU
 
 from ..common import CommonGenerator
 from ..connections import CablingMixin
@@ -106,10 +107,8 @@ from ..routing import EVPN_AF, IPV4_UNICAST_AF, IPV6_UNICAST_AF, RoutingMixin, _
 from .circuit import PHYSICAL_CIRCUIT_GENERATOR
 
 # DCI P2P pools (data/bootstrap/20_dci_pools.yml) by address family, with the prefix length allocated from them.
-_DCI_POOLS: dict[int, tuple[str, int]] = {4: ("DCI-Technical-IPv4", 31), 6: ("DCI-Technical-IPv6", 127)}
+_DCI_POOLS: dict[int, tuple[str, int]] = {4: (DCI_TECHNICAL_IPV4_POOL, 31), 6: (DCI_TECHNICAL_IPV6_POOL, 127)}
 _UNICAST_AF: dict[int, tuple[str, str]] = {4: IPV4_UNICAST_AF, 6: IPV6_UNICAST_AF}
-# One MTU every platform accepts: Arista EOS caps a routed port at 9214, NX-OS allows 9216, so the vendor-neutral model uses 9214.
-_DCI_MTU = 9214
 _DCI_UNDERLAY_MAXIMUM_ROUTES = 16
 # Loopback roles an EVPN session may source from, in order of preference. Never the multisite-vip, shared by every
 # border gateway of a site (the query does not select it either).
@@ -126,7 +125,7 @@ _INTERFACE_STATUS_FOR_CIRCUIT = {
 
 def handoff_pool_name(namespace: str) -> str:
     """The /31 pool of an environment namespace (data/bootstrap/26_handoff_pools.yml)."""
-    return f"Handoff-{namespace}-IPv4"
+    return HANDOFF_POOL_TEMPLATE.format(namespace=namespace)
 
 
 @dataclass(frozen=True)
@@ -532,7 +531,7 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, Comm
                 ),
             ),
             key_name=_dci_key_name(name),
-            mtu=_DCI_MTU,
+            mtu=UNDERLAY_MTU,
         )
 
     # Circuit kind -> its planner. Keys are exactly SESSION_CIRCUIT_KINDS (a test pins it).

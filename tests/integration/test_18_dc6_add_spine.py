@@ -33,15 +33,14 @@ from typing import Any
 import pytest
 from infrahub_sdk import InfrahubClient, InfrahubClientSync
 
+from .branch_helpers import fetch_artifacts, fetch_proposed_change_diff
 from .conftest import TestInfrahubDockerWithClient
-from .test_constants import SCENARIO_DC_NAME, SCENARIO_POD_1, SCENARIO_UNDERLAY_ROLES
-from .test_helpers import (
-    fetch_artifacts,
-    fetch_proposed_change_diff,
+from .dc_topology_helpers import (
     fetch_underlay_asn_drift,
     snapshot_dc_device_counts_by_role,
     snapshot_underlay_asn_by_roles,
 )
+from .suite_constants import SCENARIO_DC_NAME, SCENARIO_POD_1, SCENARIO_UNDERLAY_ROLES
 from .workflow_helpers import (
     create_and_validate_proposed_change,
     merge_proposed_change,

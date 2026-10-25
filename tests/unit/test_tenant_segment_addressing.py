@@ -25,7 +25,8 @@ from generators.protocols import IpamPrefix
 from generators.topology.application_security import AppApplicationGenerator
 from generators.topology.segment import VxlanSegmentGenerator, tenant_pool_name
 from tests.integration.demo_data import ROOT, declared, name
-from utils.exchange_transit import OFFSET_ANYCAST, namespace_type_for_environment
+from utils.exchange_transit import namespace_type_for_environment
+from utils.limits import OFFSET_ANYCAST
 
 _NAMESPACES = {"prod": ("ns-prod", "PROD"), "non_prod": ("ns-nonprod", "NON-PROD")}
 _PREFIXES = {"PROD": "10.176.0.0/24", "NON-PROD": "10.184.0.0/24"}

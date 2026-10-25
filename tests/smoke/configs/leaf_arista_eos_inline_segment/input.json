@@ -16,15 +16,6 @@
               "id": "plat-arista_eos",
               "name": {
                 "value": "arista_eos"
-              },
-              "netmiko_device_type": {
-                "value": "arista_eos"
-              },
-              "napalm_driver": {
-                "value": "arista_eos"
-              },
-              "ansible_network_os": {
-                "value": "arista_eos"
               }
             }
           },
@@ -1003,9 +994,6 @@
                           "name": {
                             "value": "seg-inline-150"
                           },
-                          "status": {
-                            "value": "active"
-                          },
                           "customer_name": {
                             "value": "Customer-A"
                           },
@@ -1123,9 +1111,6 @@
                           "__typename": "ManagedVxlanSegment",
                           "name": {
                             "value": "seg-inline-150"
-                          },
-                          "status": {
-                            "value": "active"
                           },
                           "customer_name": {
                             "value": "Customer-A"

@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 import pytest
 
-from tests.smoke.test_configs_smoke import _run_transform
+from tests.smoke.fixture_builders.common import run_transform
 from tests.unit.cisco_xe_platform_helpers import _golden_input, _make_transform
 from transforms.common import BaseDeviceTransform
 from transforms.config.access_leaf import AccessLeaf
@@ -292,7 +292,7 @@ class TestCiscoXeIpv6SviIsRefused:
         with pytest.raises(
             ValueError, match="cisco_xe leaf cannot render the segment ACL of VLAN 100: its gateway SVI"
         ):
-            _run_transform(Leaf, data)
+            run_transform(Leaf, data)
 
 
 # (golden, transform, device role): the EVPN leaf and the office's LISP access-switch both render the segment ACLs.
@@ -307,7 +307,7 @@ class TestCiscoXeAclRenderingThroughTransform:
         self, golden: str, transform_cls: type[BaseDeviceTransform], role: str
     ) -> None:
         """`ip access-list extended` precedes `interface Vlan<N>` and `ip access-group ... in` names the same ACL."""
-        output = _run_transform(transform_cls, _golden_input(golden))
+        output = run_transform(transform_cls, _golden_input(golden))
 
         for vlan in (100, 200):
             name = f"ACL-VLAN{vlan}-IN"
@@ -319,7 +319,7 @@ class TestCiscoXeAclRenderingThroughTransform:
         self, golden: str, transform_cls: type[BaseDeviceTransform], role: str
     ) -> None:
         """The shapes IOS-XE writes differently from NX-OS/EOS: wildcard masks, host, ranges, established, remarks."""
-        output = _run_transform(transform_cls, _golden_input(golden))
+        output = run_transform(transform_cls, _golden_input(golden))
 
         for expected in (
             " 20 permit tcp any any eq 443\n",
@@ -338,7 +338,7 @@ class TestCiscoXeAclRenderingThroughTransform:
         self, golden: str, transform_cls: type[BaseDeviceTransform], role: str
     ) -> None:
         """No lab has run an IOS-XE ACL: the ACL section and the SVI binding say so."""
-        output = _run_transform(transform_cls, _golden_input(golden))
+        output = run_transform(transform_cls, _golden_input(golden))
 
         section = output.split("! Zero-Trust ACLs", 1)[1].split("ip access-list extended", 1)[0]
         assert "! unverified-no-lab:" in section
@@ -355,17 +355,17 @@ class TestCiscoXeAclRenderingThroughTransform:
         self, golden: str, transform_cls: type[BaseDeviceTransform], plain: str
     ) -> None:
         """Same hosted segments, with and without a security policy: dropping the ACL lines gives the plain config."""
-        with_acl = _run_transform(transform_cls, _golden_input(golden))
+        with_acl = run_transform(transform_cls, _golden_input(golden))
         stripped = re.sub(r"! Zero-Trust ACLs.*?(?=! Interfaces)", "", with_acl, flags=re.S)
         stripped = re.sub(
             r"^ ip access-group .*\n|^! unverified-no-lab: `ip access-group.*\n", "", stripped, flags=re.M
         )
 
-        assert stripped == _run_transform(transform_cls, _golden_input(plain))
+        assert stripped == run_transform(transform_cls, _golden_input(plain))
 
     def test_the_lisp_path_still_renders_the_instances_of_the_hosted_segment(self) -> None:
         """Hosts behind an ACL are still registered: L3 instance-id for the VRF, L2 for the VNI, mobility on the SVI."""
-        output = _run_transform(AccessSwitch, _golden_input(ACL_LISP))
+        output = run_transform(AccessSwitch, _golden_input(ACL_LISP))
 
         assert re.search(r"^router lisp$", output, re.M)
         assert " instance-id 50001\n" in output
@@ -385,7 +385,7 @@ class TestCiscoXeAclRenderingThroughTransform:
         }
 
         with pytest.raises(ValueError) as excinfo:
-            _run_transform(transform_cls, data)
+            run_transform(transform_cls, data)
 
         assert str(excinfo.value).startswith(f"cisco_xe {role} cannot render ACL ACL-VLAN100-IN rule 'allow-https': ")
         assert "IPv6" in str(excinfo.value)
@@ -395,7 +395,7 @@ class TestCiscoXeAclRenderingThroughTransform:
         data = _golden_input(ACL_EVPN)
         data["DcimDevice"]["edges"][0]["node"]["role"]["value"] = "access-leaf"
 
-        output = _run_transform(AccessLeaf, data)
+        output = run_transform(AccessLeaf, data)
 
         assert "ip access-list extended ACL-VLAN100-IN\n" in output
         assert " ip access-group ACL-VLAN100-IN in\n" in output
@@ -406,7 +406,7 @@ class TestCiscoXeAclRenderingThroughTransform:
         data["DcimDevice"]["edges"][0]["node"]["role"]["value"] = "border-leaf"
 
         with pytest.raises(ValueError, match="cisco_xe border-leaf cannot render the SVI ACL for VLANs"):
-            _run_transform(BorderLeaf, data)
+            run_transform(BorderLeaf, data)
 
     def test_pbr_is_still_refused_with_acls_present(self) -> None:
         """Lifting the ACL refusal does not lift PBR: a PBR rule on a device with ACLs still raises."""
@@ -417,7 +417,7 @@ class TestCiscoXeAclRenderingThroughTransform:
 
         with patch.object(BaseDeviceTransform, "_template_context", with_pbr):
             with pytest.raises(ValueError, match="cisco_xe leaf cannot render: leaf_pbr_rules"):
-                _run_transform(Leaf, _golden_input(ACL_EVPN))
+                run_transform(Leaf, _golden_input(ACL_EVPN))
 
     def test_other_platforms_and_roles_get_no_cisco_xe_context(self) -> None:
         """The cisco_xe keys exist only on a cisco_xe fabric device; an IPv6 rule is not this guard's business elsewhere."""
@@ -433,7 +433,7 @@ class TestCiscoXeVrfStaticRendering:
 
     def test_statics_are_rendered_with_dotted_masks(self) -> None:
         """The exchange statics of the golden (PROD 0/0 to the shared context VIP, the SNAT /32s in INTERNET)."""
-        output = _run_transform(Leaf, _golden_input(EXCHANGE_ACL))
+        output = run_transform(Leaf, _golden_input(EXCHANGE_ACL))
 
         for expected in (
             "ip route vrf INTERNET 192.0.2.5 255.255.255.255 100.66.32.4\n",
@@ -445,7 +445,7 @@ class TestCiscoXeVrfStaticRendering:
 
     def test_exported_statics_are_redistributed_into_the_vrf_address_family_by_an_exact_match_route_map(self) -> None:
         """Exchange statics enter EVPN as type-5 routes, exact match only, only in the VRFs that have one."""
-        output = _run_transform(Leaf, _golden_input(EXCHANGE_ACL))
+        output = run_transform(Leaf, _golden_input(EXCHANGE_ACL))
 
         assert "ip prefix-list PL-VRF-STATIC-PROD seq 10 permit 0.0.0.0/0\n" in output
         assert (
@@ -470,7 +470,7 @@ class TestCiscoXeVrfStaticRendering:
             return config
 
         with patch.object(BaseDeviceTransform, "_template_context", local_only):
-            output = _run_transform(Leaf, _golden_input(EXCHANGE_ACL))
+            output = run_transform(Leaf, _golden_input(EXCHANGE_ACL))
 
         assert "ip route vrf PROD 0.0.0.0 0.0.0.0 100.66.0.4\n" in output
         assert "PL-VRF-STATIC" not in output
@@ -487,11 +487,11 @@ class TestCiscoXeVrfStaticRendering:
 
         with patch.object(BaseDeviceTransform, "_template_context", stray_vrf):
             with pytest.raises(ValueError, match="the VRF GHOST static .*: the VRF is not defined on this device"):
-                _run_transform(Leaf, _golden_input(EXCHANGE_ACL))
+                run_transform(Leaf, _golden_input(EXCHANGE_ACL))
 
     def test_border_leaf_renders_the_same_statics_without_an_acl(self) -> None:
         """The border-leaf golden has the statics and no security policy: no ACL, no access-group."""
-        output = _run_transform(BorderLeaf, _golden_input("border_leaf_cisco_xe_exchange_transit"))
+        output = run_transform(BorderLeaf, _golden_input("border_leaf_cisco_xe_exchange_transit"))
 
         assert "ip route vrf PROD 0.0.0.0 0.0.0.0 100.66.0.4\n" in output
         assert "ip access-list extended" not in output

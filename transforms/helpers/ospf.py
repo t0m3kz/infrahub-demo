@@ -23,14 +23,13 @@ def _reference_bandwidth_mbps(interfaces: list[dict[str, Any]]) -> int | None:
 
 # The RoutingOSPFInterface.authentication_mode values each platform's OSPF partial renders
 # (templates/configs/common/<platform>_ospf.j2); no mode is a plain-text key. EOS takes SHA-1 as a
-# message-digest key (`ip ospf message-digest-key 1 sha1`); NX-OS, IOS and SR OS only take HMAC-SHA
+# message-digest key (`ip ospf message-digest-key 1 sha1`); NX-OS and IOS only take HMAC-SHA
 # through a key chain the partials do not model, and SONiC renders no OSPF interface at all.
 OSPF_AUTH_MODES: dict[str, frozenset[str]] = {
     "arista_eos": frozenset({"md5", "sha1"}),
     "cisco_nxos": frozenset({"md5"}),
     "cisco_ios": frozenset({"md5"}),
     "cisco_xe": frozenset({"md5"}),
-    "nokia_sros": frozenset({"md5"}),
 }
 
 

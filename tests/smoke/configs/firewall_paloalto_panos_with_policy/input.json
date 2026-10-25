@@ -16,15 +16,6 @@
               "id": "plat-paloalto_panos",
               "name": {
                 "value": "paloalto_panos"
-              },
-              "netmiko_device_type": {
-                "value": "paloalto_panos"
-              },
-              "napalm_driver": {
-                "value": "paloalto_panos"
-              },
-              "ansible_network_os": {
-                "value": "paloalto_panos"
               }
             }
           },

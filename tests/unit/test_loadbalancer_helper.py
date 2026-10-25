@@ -70,7 +70,7 @@ def _caps(*contexts: dict[str, Any]) -> list[dict[str, Any]]:
     return [{"typename": "ManagedLoadbalancerHA", "name": "LB-01-LB-02-ha", "contexts": list(contexts)}]
 
 
-def _contexts(*contexts: dict[str, Any], platform: str = "f5_linux") -> list[dict[str, Any]]:
+def _contexts(*contexts: dict[str, Any], platform: str = "f5_tmos") -> list[dict[str, Any]]:
     return get_loadbalancer_contexts(_caps(*contexts), "LB-01", _HA, platform)
 
 
@@ -108,7 +108,7 @@ class TestLeg:
         """The member address follows the pair's name order."""
         context = _context(device="LB-02", own="6")
         context["capabilities"] = context["capabilities"][1:]
-        rendered = get_loadbalancer_contexts(_caps(context), "LB-02", _HA, "f5_linux")
+        rendered = get_loadbalancer_contexts(_caps(context), "LB-02", _HA, "f5_tmos")
         assert rendered[0]["leg"]["own_address"] == "100.66.64.6/29"
 
     def test_a_member_address_off_its_name_order_raises(self) -> None:
@@ -137,7 +137,7 @@ class TestLeg:
 class TestContexts:
     def test_no_cluster_context_renders_nothing(self) -> None:
         """A device whose cluster has no context yet gets no context section."""
-        assert get_loadbalancer_contexts(_caps(), "LB-01", _HA, "f5_linux") == []
+        assert get_loadbalancer_contexts(_caps(), "LB-01", _HA, "f5_tmos") == []
         assert get_loadbalancer_contexts([], "LB-01", None, "netscaler") == []
 
     def test_shared_context_partition_route_domain_and_vrf(self) -> None:
@@ -217,9 +217,9 @@ class TestVips:
             ("netscaler", "none", "NONE"),
             ("netscaler", None, "NONE"),
             ("netscaler", "source_ip", "SOURCEIP"),
-            ("f5_linux", "none", None),
-            ("f5_linux", "source_ip", "/Common/source_addr"),
-            ("haproxy_technologies_linux", "source_ip", "source_ip"),
+            ("f5_tmos", "none", None),
+            ("f5_tmos", "source_ip", "/Common/source_addr"),
+            ("haproxy_technologies", "source_ip", "source_ip"),
         ],
     )
     def test_persistence_none_is_no_persistence(
@@ -232,10 +232,10 @@ class TestVips:
     @pytest.mark.parametrize(
         ("platform", "algorithm", "expected"),
         [
-            ("f5_linux", None, "round-robin"),
-            ("f5_linux", "least_connections", "least-connections-member"),
+            ("f5_tmos", None, "round-robin"),
+            ("f5_tmos", "least_connections", "least-connections-member"),
             ("netscaler", "ip_hash", "SOURCEIPHASH"),
-            ("haproxy_technologies_linux", "random", "random"),
+            ("haproxy_technologies", "random", "random"),
         ],
     )
     def test_algorithm_tokens(self, platform: str, algorithm: str | None, expected: str) -> None:
@@ -243,7 +243,7 @@ class TestVips:
         vip = _contexts(_context(vips=[_vip(load_balancing_algorithm=algorithm)]), platform=platform)[0]["vips"][0]
         assert vip["tokens"]["method"] == expected
 
-    @pytest.mark.parametrize(("platform", "algorithm"), [("f5_linux", "ip_hash"), ("netscaler", "random")])
+    @pytest.mark.parametrize(("platform", "algorithm"), [("f5_tmos", "ip_hash"), ("netscaler", "random")])
     def test_an_algorithm_the_platform_lacks_raises(self, platform: str, algorithm: str) -> None:
         """Refused rather than rendered as some other method."""
         with pytest.raises(ValueError, match=f"load_balancing_algorithm '{algorithm}'"):
@@ -262,13 +262,13 @@ class TestVips:
     def test_haproxy_refuses_udp(self) -> None:
         """HAProxy (community) does not balance UDP."""
         with pytest.raises(ValueError, match="protocol udp"):
-            _contexts(_context(vips=[_vip(protocol="udp")]), platform="haproxy_technologies_linux")
+            _contexts(_context(vips=[_vip(protocol="udp")]), platform="haproxy_technologies")
 
     def test_haproxy_refuses_two_health_checks(self) -> None:
         """A server line holds one check."""
         checks = [{"check": "tcp"}, {"check": "http"}]
         with pytest.raises(ValueError, match="more than one health check"):
-            _contexts(_context(vips=[_vip(health_checks=checks)]), platform="haproxy_technologies_linux")
+            _contexts(_context(vips=[_vip(health_checks=checks)]), platform="haproxy_technologies")
 
     def test_https_with_a_certificate_terminates_and_re_encrypts(self) -> None:
         """ssl_certificate set: L7, F5 client-ssl profile + serverssl, NetScaler SSL, HAProxy `ssl crt`."""
@@ -283,7 +283,7 @@ class TestVips:
             "/Common/serverssl",
         ]
         assert _contexts(_context(vips=[raw]), platform="netscaler")[0]["vips"][0]["tokens"]["service_type"] == "SSL"
-        haproxy = _contexts(_context(vips=[raw]), platform="haproxy_technologies_linux")[0]["vips"][0]["tokens"]
+        haproxy = _contexts(_context(vips=[raw]), platform="haproxy_technologies")[0]["vips"][0]["tokens"]
         assert (haproxy["mode"], haproxy["certificate"]) == ("http", "/etc/haproxy/certs/web-c001.pem")
 
     def test_https_without_a_certificate_passes_tls_through(self) -> None:
@@ -293,10 +293,7 @@ class TestVips:
         assert not f5["l7"] and f5["tokens"]["client_ssl"] is None
         ns = _contexts(_context(vips=[raw]), platform="netscaler")[0]["vips"][0]["tokens"]
         assert ns["service_type"] == "SSL_BRIDGE"
-        assert (
-            _contexts(_context(vips=[raw]), platform="haproxy_technologies_linux")[0]["vips"][0]["tokens"]["mode"]
-            == "tcp"
-        )
+        assert _contexts(_context(vips=[raw]), platform="haproxy_technologies")[0]["vips"][0]["tokens"]["mode"] == "tcp"
 
 
 class TestHealthChecks:

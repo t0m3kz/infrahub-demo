@@ -13,12 +13,11 @@ from typing import Any
 
 from netutils.interface import sort_interface_list
 
-from ..common import CablingOptions
 from ..far_end import far_end_interfaces
 from ..helpers.cabling import pick_matched_switch_port_name
 from ..helpers.interface_naming import get_lag_name
 from ..protocols import DcimLAGInterface, DcimPhysicalDevice, DcimPhysicalInterface
-from ..types import ConnectionFingerprint
+from ..types import CablingOptions, ConnectionFingerprint
 from .endpoint_targets import interface_type_of
 
 

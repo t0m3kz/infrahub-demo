@@ -71,23 +71,6 @@ def test_pod_profile_row_dependent_rack_slots() -> None:
     assert middle_profile["row_dependent_rack_slots_per_row"] == 0
 
 
-@pytest.mark.parametrize("name", POD_DESIGN_NAMES)
-def test_designs_with_tors_declare_the_spine_downlinks_their_envelope_needs(name: str) -> None:
-    """spine_downlink_ports_per_spine is every downlink a spine of the design needs: one per
-    leaf, border-leaf and ToR slot (spine_downlink_layout); each ToR takes one uplink per spine.
-    Designs without ToRs declare no budget at all. The layout itself is checked against the
-    generators' real offsets in test_rack_offset_calculation.py."""
-    design = pod_design(name)
-    has_budget = design.get("spine_downlink_ports_per_spine") is not None or (
-        design.get("tor_uplinks_to_spine") is not None
-    )
-
-    assert has_budget == (design["max_tors_per_compute_rack"] > 0)
-    if has_budget:
-        assert design["spine_downlink_ports_per_spine"] == spine_downlink_layout(design)["total"]
-        assert design["tor_uplinks_to_spine"] == design["max_spines_per_pod"]
-
-
 @pytest.mark.parametrize(
     ("name", "expected"),
     [

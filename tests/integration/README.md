@@ -56,9 +56,9 @@ deployed for the chain, so `DC_DEPLOYMENT_TEST_DCS=dc6` cuts `test_10` down to t
 - `wait_for_validations()` - Wait for validation checks
 - `merge_proposed_change()` - Merge PC to main
 
-#### `test_helpers.py` - Generic Async Utilities
+#### Topic helper modules - Generic Async Utilities
 
-`test_helpers.py` re-exports the helpers, which live in topic modules: `wait_helpers.py`, `query_files.py`,
+The fetch helpers live in topic modules that tests import from directly: `wait_helpers.py`, `query_files.py`,
 `dc_topology_helpers.py`, `segment_helpers.py`, `branch_helpers.py`, `endpoint_app_helpers.py`,
 `circuit_helpers.py`, `service_inventory_helpers.py`, `fabric_pool_helpers.py` and `snapshot_helpers.py`. A fetcher
 sleeps `DATA_PROPAGATION_DELAY` in the module that defines it, so a unit test that skips the sleep patches that module.
@@ -74,16 +74,16 @@ sleeps `DATA_PROPAGATION_DELAY` in the module that defines it, so a unit test th
 
 #### Other Files
 
-- `test_constants.py` - Re-exports the constants, which live in `suite_constants.py` (data paths, DC6 chain,
-  timeout and delay constants), `all_demo_constants.py`, `all_demo_circuit_constants.py`,
-  `all_demo_firewall_constants.py`, `all_demo_loadbalancer_constants.py` (the 30_all expectations) and
-  `fabric_constants.py`. What echoes the data (generator floors, object counts, footprints, applications, segment
+- The constants live in `suite_constants.py` (data paths, DC6 chain, timeout and delay constants),
+  `all_demo_constants.py`, `all_demo_circuit_constants.py`, `all_demo_firewall_constants.py`,
+  `all_demo_loadbalancer_constants.py` (the 30_all expectations) and `fabric_constants.py`. The firewall and
+  load-balancer modules add their floors to `ALL_DEMO_EXPECTED_OBJECTS` when imported, so the code that reads it
+  (`test_59`) imports them. What echoes the data (generator floors, object counts, footprints, applications, segment
   legs) is computed from the YAML through `demo_data.py`, so boarding a customer needs no constant edit; design
   pins (DCI ports, MANAGEMENT_*, host rows) stay typed
 - `demo_data.py` - Reads the objects the demo files declare (nested ones included), renders computed names and
   counts the runs a load must dispatch; also used by the unit tests
 - `conftest.py` - Pytest fixtures and base test class
-- `git_repo.py` - Git repository utilities (deprecated - use `infrahub_sdk.testing.repository.GitRepo`)
 
 ## Test Data
 
@@ -174,7 +174,7 @@ The fast profile intentionally stops after setup and repository synchronization.
 | `test_65_all_demo_idempotency.py` | Two more runs of the security generators, then of the topology generators, leave rules, contexts, devices, cables, addresses, pools and allocated numbers unchanged |
 | `test_66_all_demo_circuit_lifecycle.py` | Runs after `test_65` because it mutates the branch. Decommissioning an Interconnect's carrier, and a Handoff itself, removes its BGP sessions, its `/31` (`/127`) and the port addresses (ports, key and other circuits' sessions untouched); setting it active again rebuilds them on the same key. Each test restores the status it changed |
 
-Only `test_59` loads data, and the load is deliberately staged — later stages reference objects that only exist once an earlier stage's generators have finished. `ALL_DEMO_LOAD_STAGES` in `tasks.py` (shared with `invoke load-all-demo`, re-exported by `test_constants.py`) documents which stage needs what. Running `test_60`-`test_66` on their own will skip: their session-scoped dependencies are unmet without `test_59`.
+Only `test_59` loads data, and the load is deliberately staged — later stages reference objects that only exist once an earlier stage's generators have finished. `ALL_DEMO_LOAD_STAGES` in `tasks.py` (shared with `invoke load-all-demo`, imported from `tasks` by the tests) documents which stage needs what. Running `test_60`-`test_66` on their own will skip: their session-scoped dependencies are unmet without `test_59`.
 
 ### The Arista MSS-G Suite
 
@@ -400,26 +400,6 @@ GENERATOR_TASK_TIMEOUT = 1800  # 30 minutes
 MERGE_TASK_TIMEOUT = 600       # 10 minutes
 VALIDATION_MAX_ATTEMPTS = 30   # 30 attempts × 30s = 15 minutes
 ```
-
-## Migration from Legacy Tests
-
-**Legacy monolithic test** (`test_worflow.py`):
-
-- ❌ Single test file with all steps
-- ❌ Single branch for all operations
-- ❌ Merge everything at once
-- ❌ Hard to debug failures
-- ❌ Doesn't mirror real workflows
-
-**New scenario-based tests**:
-
-- ✅ Modular test files by scenario
-- ✅ Each scenario has its own branch
-- ✅ Incremental merges after verification
-- ✅ Easy to debug specific scenarios
-- ✅ Mirrors real-world operations
-
-The legacy test has been renamed to `test_worflow_deprecated.py.bak` and should not be used.
 
 ## Quick Reference
 

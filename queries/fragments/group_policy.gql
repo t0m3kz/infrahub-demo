@@ -209,7 +209,7 @@ fragment SegmentGroupPolicyFields on ManagedNetworkSegment {
   ... on ManagedVxlanSegment {
     stretch_scope { value }
     inline_service { node { id name { value } } }
-    segment_deployments(status__values: ["active", "provisioning"]) {
+    segment_deployments {
       edges {
         node {
           vni { value }

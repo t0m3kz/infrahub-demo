@@ -9,7 +9,7 @@ from infrahub_sdk import InfrahubClient
 from utils.data_cleaning import clean_data
 
 from .query_files import QUERY_GET_APPLICATION_GRAPH, QUERY_GET_ENDPOINT_CABLING
-from .test_constants import DATA_PROPAGATION_DELAY
+from .suite_constants import DATA_PROPAGATION_DELAY
 
 logger = logging.getLogger(__name__)
 

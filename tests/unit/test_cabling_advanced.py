@@ -4,7 +4,7 @@ Covers untested classes and methods in generators/helpers/cabling.py:
 - InterfaceSpeedMatcher.extract_speed()         – type string → Gbps int
 - InterfaceSpeedMatcher.group_by_speed()         – matched speed groups
 - CableTypeDetector.detect_cable_type()          – copper/mmf/smf detection
-- ConnectionValidator.validate_plan()            – min/max/duplicate checks
+- ConnectionValidator.validate_plan()            – min/duplicate checks
 - PodCablingStrategy.build_plan()               – pod-to-pod with offset, overflow → CablingPlanError
 - RackCablingStrategy.build_plan()              – offset overflow → CablingPlanError
 - IntraRackMiddleCablingStrategy._create_leaf_pairs()      – even/odd counts
@@ -210,16 +210,6 @@ class TestConnectionValidator:
         assert ok is False
         assert "Insufficient" in msg
 
-    def test_too_many_connections(self) -> None:
-        plan = [
-            _make_connection("eth0", "leaf-01", "Eth1"),
-            _make_connection("eth1", "leaf-02", "Eth1"),
-            _make_connection("eth2", "leaf-03", "Eth1"),
-        ]
-        ok, msg = ConnectionValidator.validate_plan(plan, min_connections=1, max_connections=2)
-        assert ok is False
-        assert "Too many" in msg
-
     def test_duplicate_server_interfaces(self) -> None:
         plan = [
             _make_connection("eth0", "leaf-01", "Eth1"),
@@ -237,11 +227,6 @@ class TestConnectionValidator:
         ok, msg = ConnectionValidator.validate_plan(plan, min_connections=1)
         assert ok is False
         assert "Duplicate switch" in msg
-
-    def test_no_max_connections_no_upper_limit(self) -> None:
-        plan = [_make_connection(f"eth{i}", f"leaf-{i:02d}", "Eth1") for i in range(10)]
-        ok, msg = ConnectionValidator.validate_plan(plan, min_connections=1, max_connections=None)
-        assert ok is True
 
 
 # ---------------------------------------------------------------------------

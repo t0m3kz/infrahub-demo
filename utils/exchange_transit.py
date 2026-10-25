@@ -19,6 +19,19 @@ import ipaddress
 from typing import Any, TypedDict
 
 from utils.internet_space import NON_INTERNET_PREFIXES
+from utils.limits import (
+    FW_CONTEXT_VLAN_START,
+    FW_TRANSIT_POOL_TEMPLATE,
+    LB_CONTEXT_VLAN_END,
+    LB_LEG_POOL_TEMPLATE,
+    LB_VIP_POOL_TEMPLATE,
+    OFFSET_ANYCAST,
+    OFFSET_MEMBER_A,
+    OFFSET_MEMBER_B,
+    OFFSET_VIP,
+    TRANSIT_VLAN_BAND,
+    TRANSIT_VNI_BASE,
+)
 from utils.segment_addressing import segment_namespace
 
 PROD_TYPE = "prod"
@@ -33,31 +46,11 @@ MANAGEMENT_TYPE = "management"
 TRANSIT_SLOT: dict[str, int] = {PROD_TYPE: 0, "non_prod": 1, INTERNET_TYPE: 2, MANAGEMENT_TYPE: 3}
 """Namespace type -> VLAN slot; one slot per fixed VRF namespace."""
 
-TRANSIT_VLAN_BAND = 200
-"""VLAN distance between slots: context VLANs 3000-3199 map to 3000-3799."""
-
-CONTEXT_VLAN_MIN = 3000
-CONTEXT_VLAN_MAX = 3199
-"""Context VLANs of both service kinds; a firewall and a load-balancer context never share a tag."""
-
-FW_CONTEXT_VLAN_MIN = CONTEXT_VLAN_MIN
-FW_CONTEXT_VLAN_MAX = 3099
-LB_CONTEXT_VLAN_MIN = 3100
-LB_CONTEXT_VLAN_MAX = CONTEXT_VLAN_MAX
-"""The two halves of the context VLAN band. A leg is `context VLAN + 200 x slot`, so a firewall context's legs
-(3000-3099 + slot) and a load-balancer context's (3100-3199 + slot) never meet in the same slot or in another."""
-
-MAX_ENCODABLE_VNI = 65535
-"""A route-target or route-distinguisher built from a 4-byte private ASN leaves 16 bits for the VNI."""
-
-TRANSIT_PREFIXLEN = 29
-"""Prefix length of a firewall transit leg; the member offsets below index into it."""
-
-TRANSIT_VNI_BASE = 61000
-"""transit VNI = base + transit VLAN, i.e. 64000-64799 (<= 65535, RD/RT encodable)."""
-
-TRANSIT_VLAN_MIN = CONTEXT_VLAN_MIN
-TRANSIT_VLAN_MAX = CONTEXT_VLAN_MAX + TRANSIT_VLAN_BAND * max(TRANSIT_SLOT.values())
+# The VLAN and VNI bands and the prefix lengths of the plan are design limits of utils/limits.py: a leg is
+# `context VLAN + TRANSIT_VLAN_BAND x slot`, so a firewall context's legs (3000-3099 + slot) and a load-balancer
+# context's (3100-3199 + slot) never meet in the same slot or in another; transit VNI = TRANSIT_VNI_BASE + transit VLAN.
+TRANSIT_VLAN_MIN = FW_CONTEXT_VLAN_START
+TRANSIT_VLAN_MAX = LB_CONTEXT_VLAN_END + TRANSIT_VLAN_BAND * max(TRANSIT_SLOT.values())
 TRANSIT_VNI_MIN = TRANSIT_VNI_BASE + TRANSIT_VLAN_MIN
 TRANSIT_VNI_MAX = TRANSIT_VNI_BASE + TRANSIT_VLAN_MAX
 
@@ -88,13 +81,6 @@ ZONE_BY_NS_TYPE: dict[str, str] = {
     MANAGEMENT_TYPE: "MANAGEMENT-ZONE",
 }
 
-LB_VIP_PREFIXLEN = 26
-"""Prefix length of a load-balancer context's routed VIP range (behind the leg's floating .4)."""
-
-OFFSET_ANYCAST = 1
-OFFSET_VIP = 4
-OFFSET_MEMBER_A = 5
-OFFSET_MEMBER_B = 6
 TRANSIT_OFFSETS: tuple[int, ...] = (OFFSET_ANYCAST, OFFSET_VIP, OFFSET_MEMBER_A, OFFSET_MEMBER_B)
 """Host offsets that are allocated; .2/.3 stay reserved."""
 
@@ -113,17 +99,17 @@ class TransitAddresses(TypedDict):
 
 def transit_pool_name(namespace_name: str) -> str:
     """The bootstrap prefix pool of a VRF's transit space (data/bootstrap/23_transit_pools.yml), e.g. FW-Transit-PROD-IPv4."""
-    return f"FW-Transit-{namespace_name}-IPv4"
+    return FW_TRANSIT_POOL_TEMPLATE.format(namespace=namespace_name)
 
 
 def lb_leg_pool_name(namespace_name: str) -> str:
     """The bootstrap prefix pool of a load-balancer leg /29 in a tenant VRF, e.g. LB-Leg-PROD-IPv4 (23_transit_pools.yml)."""
-    return f"LB-Leg-{namespace_name}-IPv4"
+    return LB_LEG_POOL_TEMPLATE.format(namespace=namespace_name)
 
 
 def lb_vip_pool_name(namespace_name: str) -> str:
     """The bootstrap prefix pool of a load-balancer context's VIP /26 in a tenant VRF, e.g. LB-VIP-PROD-IPv4."""
-    return f"LB-VIP-{namespace_name}-IPv4"
+    return LB_VIP_POOL_TEMPLATE.format(namespace=namespace_name)
 
 
 def wan_exit_vlan(namespace_type: str) -> int:

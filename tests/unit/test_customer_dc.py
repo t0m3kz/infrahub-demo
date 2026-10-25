@@ -13,39 +13,15 @@ test_customer_office.py for that.
 from __future__ import annotations
 
 import dataclasses
-from typing import Any, TypeVar
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.common import CommonGenerator
 from generators.firewall_context import FIREWALL_CONTEXT, LOADBALANCER_CONTEXT
 from generators.lb_vip import load_balanced_components_in
 from generators.topology.customer_dc import CustomerDeploymentDCExchangeGenerator
-
-_T = TypeVar("_T", bound=CommonGenerator)
-
-
-def _make_generator(cls: type[_T]) -> Any:
-    gen = cls.__new__(cls)
-    gen.logger = MagicMock()
-    gen.client = MagicMock()
-    gen.client.filters = AsyncMock(return_value=[])
-    gen.client.get = AsyncMock()
-    gen.client.create = AsyncMock()
-    gen.client.execute_graphql = AsyncMock()
-    # generate() waits for an in-flight add_dc/dc_pod_cascade on the parent DC
-    # before reading firewall_devices/loadbalancer_devices (see pod.py's
-    # identical wait) — no in-flight parent in these unit tests, so no-op.
-    gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
-    # _resolve_parent_cluster waits for the parent's generators when the cluster is missing, without a re-collect.
-    gen.wait_for_parent_generators = AsyncMock(return_value=False)
-    # The shared FirewallContext is provisioned under a resource lock (a
-    # CoreStandardGroup mutex in Infrahub) — stub it out like test_dc_generator.
-    # setattr: not every generator built here mixes in PoolMixin.
-    setattr(gen, "acquire_resource_lock", AsyncMock(return_value="lock-id"))  # noqa: B010
-    setattr(gen, "release_resource_lock", AsyncMock())  # noqa: B010
-    return gen
+from tests.unit.customer_generator_helpers import make_generator
 
 
 def _dc_payload(*, customer_id: str = "cust-1") -> dict:
@@ -106,7 +82,7 @@ def _dc_payload_with_parent(
 class TestDCDeployment:
     @pytest.mark.asyncio
     async def test_dc_is_pure_noop(self) -> None:
-        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        gen = make_generator(CustomerDeploymentDCExchangeGenerator)
 
         await gen.generate(_dc_payload())
 
@@ -115,7 +91,7 @@ class TestDCDeployment:
 
     @pytest.mark.asyncio
     async def test_missing_id_logs_error(self) -> None:
-        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        gen = make_generator(CustomerDeploymentDCExchangeGenerator)
         payload = _dc_payload()
         payload["TopologyCustomerDC"][0]["id"] = ""
 
@@ -125,7 +101,7 @@ class TestDCDeployment:
 
     @pytest.mark.asyncio
     async def test_no_matching_kind_in_response_is_noop(self) -> None:
-        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        gen = make_generator(CustomerDeploymentDCExchangeGenerator)
 
         await gen.generate({"TopologyCustomerColocation": [{"id": "x"}]})
 
@@ -140,7 +116,7 @@ class TestWaitsForParentDcGenerator:
 
     @pytest.mark.asyncio
     async def test_waits_on_both_parent_generators_when_dc_id_present(self) -> None:
-        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        gen = make_generator(CustomerDeploymentDCExchangeGenerator)
 
         await gen.generate(_dc_payload_with_parent(fw_devices=[]))
 
@@ -150,7 +126,7 @@ class TestWaitsForParentDcGenerator:
 
     @pytest.mark.asyncio
     async def test_no_parent_id_skips_wait(self) -> None:
-        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        gen = make_generator(CustomerDeploymentDCExchangeGenerator)
 
         await gen.generate(_dc_payload())  # no "parent" key at all
 
@@ -161,7 +137,7 @@ class TestWaitsForParentDcGenerator:
         """If add_dc was in-flight, the refreshed data (now carrying
         firewall_devices that were missing the first time) replaces the
         original — not just logged and discarded."""
-        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        gen = make_generator(CustomerDeploymentDCExchangeGenerator)
         refreshed_payload = _dc_payload_with_parent(fw_devices=[_fw_device(id="fw-1", name="DC10-FW1")])
         gen.wait_for_parent_generator_and_refetch = AsyncMock(side_effect=[refreshed_payload, None])
         cluster = MagicMock(id="cluster-1")
@@ -179,7 +155,7 @@ class TestWaitsForParentDcGenerator:
 class TestFirewallContextNoFirewallOrCluster:
     @pytest.mark.asyncio
     async def test_no_parent_is_a_hard_error(self) -> None:
-        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        gen = make_generator(CustomerDeploymentDCExchangeGenerator)
 
         await gen.generate(_dc_payload())  # no "parent" key
 
@@ -188,7 +164,7 @@ class TestFirewallContextNoFirewallOrCluster:
 
     @pytest.mark.asyncio
     async def test_no_firewall_devices_on_parent_is_noop(self) -> None:
-        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        gen = make_generator(CustomerDeploymentDCExchangeGenerator)
 
         await gen.generate(_dc_payload_with_parent(fw_devices=[]))
 
@@ -200,7 +176,7 @@ class TestFirewallContextNoFirewallOrCluster:
         """Unpaired firewalls mean add_dc/dc_pod_cascade has not finished: the
         customer waits for it and re-queries — it never pairs the DC's
         firewalls itself (that would claim the DC's HA for this run's group)."""
-        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        gen = make_generator(CustomerDeploymentDCExchangeGenerator)
         cluster = MagicMock(id="cluster-1")
         cluster.name.value = "DC10-FW1-FW2-ha"
         cluster.capabilities.peers = [MagicMock(id="fw-1"), MagicMock(id="fw-2")]
@@ -225,7 +201,7 @@ class TestFirewallContextNoFirewallOrCluster:
     async def test_still_unpaired_after_waiting_fails_without_writing(self) -> None:
         """Still unpaired after the wait: logger.error (FailOnErrorLogger
         raises in a real run) and nothing is created, paired or saved."""
-        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        gen = make_generator(CustomerDeploymentDCExchangeGenerator)
         gen.client.filters = AsyncMock(side_effect=[[], []])
         gen._ensure_ha_pairs = AsyncMock()
         gen._ensure_transit_legs = AsyncMock()
@@ -251,7 +227,7 @@ class TestAllControllersWiring:
 
     @pytest.mark.asyncio
     async def test_merges_security_manager_and_lb_manager_controllers(self) -> None:
-        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        gen = make_generator(CustomerDeploymentDCExchangeGenerator)
         sec_controller = {"id": "ctrl-sec-1", "controller_type": "security_manager"}
         lb_controller = {"id": "ctrl-lb-1", "controller_type": "lb_manager"}
 
@@ -267,7 +243,7 @@ class TestAllControllersWiring:
 
     @pytest.mark.asyncio
     async def test_no_controllers_on_parent_yields_empty_list(self) -> None:
-        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        gen = make_generator(CustomerDeploymentDCExchangeGenerator)
 
         await gen.generate(_dc_payload_with_parent(fw_devices=[]))
 
@@ -276,7 +252,7 @@ class TestAllControllersWiring:
 
 class TestFirewallContextProvisioning:
     def _make_gen_with_cluster(self, *, cluster_name: str = "DC10-FW1-FW2-ha") -> Any:
-        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        gen = make_generator(CustomerDeploymentDCExchangeGenerator)
         fw_device = _fw_device(id="fw-1", name="DC10-FW1")
         cluster = MagicMock(id="cluster-1")
         cluster.name.value = cluster_name
@@ -370,7 +346,7 @@ class TestLinkServingContext:
     async def test_link_is_saved_untracked(self, spec: Any, field: str) -> None:
         """The deployment is the generator's target; tracking it would let
         delete_unused_nodes remove it on a later run."""
-        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        gen = make_generator(CustomerDeploymentDCExchangeGenerator)
         deployment = MagicMock()
         getattr(deployment, field).id = None
         deployment.save = AsyncMock()
@@ -386,7 +362,7 @@ class TestLinkServingContext:
     @pytest.mark.parametrize("spec", [FIREWALL_CONTEXT, LOADBALANCER_CONTEXT])
     async def test_link_the_query_found_is_neither_read_nor_rewritten(self, spec: Any) -> None:
         """The boarding query already shows the deployment linked to the context: no read, no write."""
-        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        gen = make_generator(CustomerDeploymentDCExchangeGenerator)
 
         await gen.link_serving_context(spec, customer_id="cust-1", context_id="ctx-1", current_id="ctx-1")
 
@@ -395,7 +371,7 @@ class TestLinkServingContext:
     @pytest.mark.asyncio
     async def test_link_the_server_has_but_the_query_missed_is_not_rewritten(self) -> None:
         """A payload without the link (a stale or older query) falls back to reading the deployment: still no write."""
-        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        gen = make_generator(CustomerDeploymentDCExchangeGenerator)
         deployment = MagicMock()
         deployment.serving_firewall_context.id = "ctx-1"
         deployment.save = AsyncMock()
@@ -409,7 +385,7 @@ class TestLinkServingContext:
     @pytest.mark.asyncio
     async def test_a_move_to_another_context_reads_and_saves(self) -> None:
         """The query shows another context: the deployment is read (the server decides the previous one) and saved."""
-        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        gen = make_generator(CustomerDeploymentDCExchangeGenerator)
         deployment = MagicMock()
         deployment.serving_firewall_context.id = "ctx-old"
         deployment.save = AsyncMock()
@@ -425,7 +401,7 @@ class TestLinkServingContext:
     @pytest.mark.asyncio
     async def test_save_failure_is_logged_not_raised(self) -> None:
         """A failed link does not abort the rest of the provisioning."""
-        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        gen = make_generator(CustomerDeploymentDCExchangeGenerator)
         gen.client.get = AsyncMock(side_effect=RuntimeError("boom"))
 
         await gen.link_serving_context(FIREWALL_CONTEXT, customer_id="cust-1", context_id="ctx-1", current_id=None)
@@ -437,7 +413,7 @@ class TestServingContextRelink:
     """A deployment moved to another load-balancer context re-runs the components whose VIPs sat on the old one."""
 
     def _gen(self, field: str, previous_id: str | None) -> tuple[Any, MagicMock]:
-        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        gen = make_generator(CustomerDeploymentDCExchangeGenerator)
         deployment = MagicMock()
         getattr(deployment, field).id = previous_id
         deployment.save = AsyncMock()
@@ -529,7 +505,7 @@ class TestEnsureDedicatedDevicePair:
     capacity — one virtual instance hosted on each physical peer."""
 
     def _make_gen(self) -> Any:
-        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        gen = make_generator(CustomerDeploymentDCExchangeGenerator)
         gen._ensure_ha_pairs = AsyncMock()
         return gen
 
@@ -715,7 +691,7 @@ class TestLoadbalancerContextTarget:
     _LBS = [_lb_device(id="lb-1", name="DC10-LB1"), _lb_device(id="lb-2", name="DC10-LB2")]
 
     def _make_gen(self) -> Any:
-        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        gen = make_generator(CustomerDeploymentDCExchangeGenerator)
         cluster = MagicMock(id="lb-cluster-1")
         cluster.name.value = "DC10-LB1-LB2-ha"
         cluster.capabilities.peers = [MagicMock(id="lb-1"), MagicMock(id="lb-2")]
@@ -815,7 +791,7 @@ class TestUplinksByDevice:
     @pytest.mark.asyncio
     async def test_one_query_for_every_device_first_uplink_per_device(self) -> None:
         """One filters() for all devices; a device's first uplink wins."""
-        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        gen = make_generator(CustomerDeploymentDCExchangeGenerator)
         first, second, other = _uplink("up-1a", "fw-1"), _uplink("up-1b", "fw-1"), _uplink("up-2", "fw-2")
         gen.client.filters = AsyncMock(return_value=[first, second, other])
 
@@ -830,7 +806,7 @@ class TestUplinksByDevice:
     @pytest.mark.asyncio
     async def test_lookup_exception_is_logged_per_member_and_returns_none(self) -> None:
         """A failing lookup is logged once per member, as a failing per-member lookup was, not raised."""
-        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        gen = make_generator(CustomerDeploymentDCExchangeGenerator)
         gen.client.filters = AsyncMock(side_effect=RuntimeError("boom"))
         members = [_fw_device(), _fw_device(id="fw-2", name="DC10-FW2")]
 
@@ -844,7 +820,7 @@ class TestUplinksByDevice:
 
     def test_missing_uplink_logs_error_and_returns_none(self) -> None:
         """No uplink on the device: error logged for the member, None returned."""
-        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        gen = make_generator(CustomerDeploymentDCExchangeGenerator)
 
         assert gen._uplink_of({}, "fw-1", device_name="DC10-FW1") is None
         gen.logger.error.assert_called_once_with(
@@ -853,7 +829,7 @@ class TestUplinksByDevice:
 
     def test_found_uplink_is_returned_without_logging(self) -> None:
         """The device's uplink is returned without logging."""
-        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        gen = make_generator(CustomerDeploymentDCExchangeGenerator)
         iface = _uplink("up-1", "fw-1")
 
         assert gen._uplink_of({"fw-1": iface}, "fw-1", device_name="DC10-FW1") is iface
@@ -868,7 +844,7 @@ class TestGetOrCreateContext:
     @pytest.mark.asyncio
     @pytest.mark.parametrize("spec", [FIREWALL_CONTEXT, LOADBALANCER_CONTEXT])
     async def test_creates_shared_context_of_the_spec_kind_without_tenant(self, spec: Any) -> None:
-        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        gen = make_generator(CustomerDeploymentDCExchangeGenerator)
         created = AsyncMock()
         gen.client.create = AsyncMock(return_value=created)
 
@@ -883,7 +859,7 @@ class TestGetOrCreateContext:
     @pytest.mark.asyncio
     async def test_shared_context_saved_untracked(self) -> None:
         """track=False: the shared context is written but claimed by no customer's group."""
-        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        gen = make_generator(CustomerDeploymentDCExchangeGenerator)
         created = AsyncMock()
         gen.client.create = AsyncMock(return_value=created)
 
@@ -893,7 +869,7 @@ class TestGetOrCreateContext:
 
     @pytest.mark.asyncio
     async def test_creates_dedicated_context_with_tenant(self) -> None:
-        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        gen = make_generator(CustomerDeploymentDCExchangeGenerator)
         created = AsyncMock()
         gen.client.create = AsyncMock(return_value=created)
 

@@ -19,8 +19,8 @@ from infrahub_sdk import InfrahubClient, InfrahubClientSync
 from infrahub_sdk.testing.repository import GitRepo
 
 from .conftest import PROJECT_DIRECTORY, TestInfrahubDockerWithClient
-from .test_constants import REPO_SYNC_MAX_ATTEMPTS, REPO_SYNC_POLL_INTERVAL, TRIGGER_ACTIVATION_DELAY
-from .test_helpers import wait_for_condition
+from .suite_constants import REPO_SYNC_MAX_ATTEMPTS, REPO_SYNC_POLL_INTERVAL, TRIGGER_ACTIVATION_DELAY
+from .wait_helpers import wait_for_condition
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 

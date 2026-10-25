@@ -16,15 +16,6 @@
               "id": "plat-checkpoint_gaia",
               "name": {
                 "value": "checkpoint_gaia"
-              },
-              "netmiko_device_type": {
-                "value": "checkpoint_gaia"
-              },
-              "napalm_driver": {
-                "value": "checkpoint_gaia"
-              },
-              "ansible_network_os": {
-                "value": "checkpoint_gaia"
               }
             }
           },

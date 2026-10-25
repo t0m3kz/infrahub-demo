@@ -16,11 +16,11 @@ from typing import Any
 import pytest
 import yaml
 
-from generators.helpers.pools import CUSTOMER_VLAN_ID_MAX, CUSTOMER_VLAN_ID_MIN
 from generators.logger import GeneratorError
 from generators.protocols import ManagedStandaloneVlanDomain, ManagedVlanDomainSegment
 from generators.vlan_domain import segment_lock_key, vlan_domain_lock_key
 from tests.unit.vlan_domain_helpers import VlanWorld, make_device
+from utils.limits import CUSTOMER_VLAN_ID_MAX, CUSTOMER_VLAN_ID_MIN
 
 _PORT = "DcimPhysicalInterface"
 

@@ -7,48 +7,7 @@ live device counts, so a re-run never produces a differently-sized pool).
 
 from __future__ import annotations
 
-from utils.exchange_transit import FW_CONTEXT_VLAN_MAX, FW_CONTEXT_VLAN_MIN, LB_CONTEXT_VLAN_MAX, LB_CONTEXT_VLAN_MIN
-
-DEFAULT_ASN_BASE_START = 4200000000
-
-# Customer-facing VLAN ID range for every local VLAN domain (MLAG pair or
-# standalone device). 802.1Q allows 1-4094, but the top of that space is not
-# usable here:
-#
-#   * 3968-4094 is Cisco NX-OS's default internally-reserved VLAN band
-#     (`system vlan reserve`), and 4094 is the conventional vPC peer-keepalive
-#     VLAN — a segment allocated there is rejected by the device.
-#   * 3000-3899 is not customer space either: 3000-3099 is the FirewallContext
-#     VLAN pool and 3100-3199 the LoadbalancerContext one (below), and the firewall's per-VRF
-#     transit VLANs (context VLAN + 200 per namespace slot) fill 3000-3799. A
-#     customer VLAN there would collide on a border leaf's service-port trunk,
-#     where get_vlans silently de-duplicates by VLAN ID.
-#   * 3900-3967 is reserved by this project for the per-VRF L3 VNI SVI that
-#     NX-OS requires to route between VNIs (symmetric IRB). That SVI carries
-#     no hosts and exists only to hang `ip forward` off, but it still consumes
-#     a local VLAN ID, so it must not collide with a customer segment. See
-#     _L3VNI_SVI_VLAN_BASE in transforms/helpers/vxlan.py.
-#
-# 2900 usable customer VLANs per domain is far beyond any real VLAN domain
-# (an MLAG leaf pair), so the narrower ceiling costs nothing.
-CUSTOMER_VLAN_ID_MIN = 100
-CUSTOMER_VLAN_ID_MAX = 2999
-
-# L2 VNI band of every site's own "{site}-vni-pool" (a DC's, a colocation metro's, an
-# office's). Why 39999: see the comment at dc.py's vni pool (16-bit RD/RT ceiling, disjoint
-# from the fixed L3 VNIs 60000-60003 and transit band 61000+, and from GLOBAL-L2VNI's 40000-49999).
-SITE_VNI_START = 10001
-SITE_VNI_END = 39999
-
-# FirewallContext VLAN pool of every fabric/colocation zone (one context = one VLAN on the
-# firewall uplink and the border-leaf service port).
-FW_CONTEXT_VLAN_START = FW_CONTEXT_VLAN_MIN
-FW_CONTEXT_VLAN_END = FW_CONTEXT_VLAN_MAX
-
-# LoadbalancerContext VLAN pool of every fabric (one context = one VLAN on the load balancer uplink and the
-# border-leaf service port); the other half of the context band, so the two kinds' legs never share a tag.
-LB_CONTEXT_VLAN_START = LB_CONTEXT_VLAN_MIN
-LB_CONTEXT_VLAN_END = LB_CONTEXT_VLAN_MAX
+from utils.limits import PRIVATE_ASN32_END, PRIVATE_ASN32_START
 
 
 def calculate_fabric_asn_block_size(
@@ -97,7 +56,6 @@ def name_to_asn_range(
     dc_name: str,
     max_pods: int,
     max_border_leafs_per_fabric: int = 0,
-    base_start: int = DEFAULT_ASN_BASE_START,
 ) -> tuple[int, int]:
     """Derive a deterministic, non-overlapping ASN range from DC name.
 
@@ -118,7 +76,6 @@ def name_to_asn_range(
         max_pods: Maximum pods in the DC design
         max_border_leafs_per_fabric: Maximum border-leaf switches from DC design
             (they draw from this same pool — see calculate_fabric_asn_block_size)
-        base_start: Start of private ASN space
 
     Returns:
         Tuple of (start_range, end_range)
@@ -129,7 +86,6 @@ def name_to_asn_range(
         >>> name_to_asn_range("DC2", max_pods=2)
         (4245882000, 4245882499)  # different offset, same block
     """
-    max_asn = 4294967295
     block = calculate_fabric_asn_block_size(max_pods, max_border_leafs_per_fabric)
 
     # Hash DC name to a deterministic offset
@@ -138,8 +94,8 @@ def name_to_asn_range(
         name_hash = name_hash * 31 + ord(c)
 
     # Use max block for grid spacing to prevent overlap between DCs
-    max_blocks = (max_asn - base_start) // _MAX_ASN_BLOCK
+    max_blocks = (PRIVATE_ASN32_END + 1 - PRIVATE_ASN32_START) // _MAX_ASN_BLOCK
     offset = name_hash % max_blocks
-    start = base_start + offset * _MAX_ASN_BLOCK
+    start = PRIVATE_ASN32_START + offset * _MAX_ASN_BLOCK
     end = start + min(block, _MAX_ASN_BLOCK - 1) - 1
     return start, end

@@ -1,6 +1,6 @@
 ---
 # AWS eu-central-1 region with both availability zones defined in one place.
-# Direct Connects, VPN Gateways, and Virtual Networks belong to the region.
+# Direct Connects and Virtual Networks belong to the region.
 # Network Segments (subnets) and Instances belong to the zone.
 apiVersion: infrahub.app/v1
 kind: Object

@@ -119,12 +119,6 @@ nodes:
           - name: clusterxl
             label: "ClusterXL"
             color: "#2ECC71"
-          - name: vsx
-            label: "VSX"
-            color: "#9B59B6"
-          - name: carp
-            label: "CARP"
-            color: "#E67E22"
           - name: keepalived
             label: "Keepalived"
             color: "#1ABC9C"
@@ -457,7 +451,7 @@ nodes:
     human_friendly_id:
       - "name__value"
     inherit_from:
-      - ManagedSaasService
+      - ManagedGeneric
       - ManagedInlineService
       - ManagedProxyService
       - CoreArtifactTarget

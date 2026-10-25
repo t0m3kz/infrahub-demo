@@ -22,7 +22,7 @@ from unittest.mock import patch
 import jinja2
 import pytest
 
-from tests.smoke.test_configs_smoke import _run_transform
+from tests.smoke.fixture_builders.common import run_transform
 from tests.unit.cisco_xe_platform_helpers import _golden_input, _make_transform
 from transforms.common import BaseDeviceTransform
 from transforms.config.access_leaf import AccessLeaf
@@ -96,7 +96,7 @@ RENDERED_KEYS = ["acls", "vrf_routes"]
 def _render(prefix: str, variant: str) -> str:
     """Render the cisco_xe golden input of ``<prefix>_cisco_xe_<variant>`` with its transform."""
     transform_cls = next(cls for pfx, cls, _role in FABRIC_TRANSFORMS if pfx == prefix)
-    return _run_transform(transform_cls, _golden_input(f"{prefix}_cisco_xe_{variant}"))
+    return run_transform(transform_cls, _golden_input(f"{prefix}_cisco_xe_{variant}"))
 
 
 def _clean_config() -> dict[str, Any]:
@@ -129,10 +129,10 @@ def _activation() -> dict[str, Any]:
     }
 
 
-def _with_platform(data: dict[str, Any], netmiko_device_type: str) -> dict[str, Any]:
-    """Re-point the first device of a golden input to another netmiko platform."""
+def _with_platform(data: dict[str, Any], platform: str) -> dict[str, Any]:
+    """Re-point the first device of a golden input to another platform."""
     device = data["DcimDevice"]["edges"][0]["node"]
-    device["platform"]["node"]["netmiko_device_type"]["value"] = netmiko_device_type
+    device["platform"]["node"]["name"]["value"] = platform
     return data
 
 
@@ -395,7 +395,7 @@ class TestRefuseCiscoXeUnrendered:
             "VXLAN without an EVPN BGP process; refusing incomplete config"
         )
 
-    @pytest.mark.parametrize("platform", ["arista_eos", "cisco_nxos", "cisco_ios", "nokia_sros"])
+    @pytest.mark.parametrize("platform", ["arista_eos", "cisco_nxos", "cisco_ios"])
     @pytest.mark.parametrize("role", FABRIC_ROLES)
     def test_guard_is_specific_to_cisco_xe(self, platform: str, role: str) -> None:
         """The same truthy keys that refuse a cisco_xe leaf do not raise on any other platform."""
@@ -449,13 +449,13 @@ class TestCiscoXeRefusalThroughTransform:
 
         with patch.object(BaseDeviceTransform, "_template_context", with_service):
             with pytest.raises(ValueError, match=rf"cisco_xe {role} cannot render: {key}; refusing incomplete config"):
-                _run_transform(transform_cls, _golden_input(f"{prefix}_cisco_xe_ebgp_ibgp"))
+                run_transform(transform_cls, _golden_input(f"{prefix}_cisco_xe_ebgp_ibgp"))
 
     def test_golden_input_is_not_refused(
         self, prefix: str, transform_cls: type[BaseDeviceTransform], role: str
     ) -> None:
         """The golden inputs need nothing the templates lack, so the guard lets them through."""
-        output = _run_transform(transform_cls, _golden_input(f"{prefix}_cisco_xe_ospf_ibgp"))
+        output = run_transform(transform_cls, _golden_input(f"{prefix}_cisco_xe_ospf_ibgp"))
 
         assert "interface nve1" in output
 
@@ -481,7 +481,7 @@ class TestUnsupportedCombinationsUnchanged:
     ) -> None:
         """Spine, SuperSpine and L2Leaf on a cisco_xe device: no template, so TemplateNotFound."""
         with pytest.raises(jinja2.TemplateNotFound, match=re.escape(missing)):
-            _run_transform(transform_cls, _golden_input("leaf_cisco_xe_ebgp_ibgp"))
+            run_transform(transform_cls, _golden_input("leaf_cisco_xe_ebgp_ibgp"))
 
     @pytest.mark.parametrize(
         ("prefix", "transform_cls", "subdir"),
@@ -494,7 +494,7 @@ class TestUnsupportedCombinationsUnchanged:
         data = _with_platform(_golden_input(f"{prefix}_cisco_xe_ebgp_ibgp"), "juniper_junos")
 
         with pytest.raises(jinja2.TemplateNotFound, match=f"{subdir}/juniper_junos.j2"):
-            _run_transform(transform_cls, data)
+            run_transform(transform_cls, data)
 
     def test_unsupported_platform_with_unrenderable_service_is_still_template_not_found(self) -> None:
         """The guard is keyed on the platform: a non-cisco_xe device reaches the template lookup, not the ValueError."""
@@ -506,7 +506,7 @@ class TestUnsupportedCombinationsUnchanged:
         data = _with_platform(_golden_input("leaf_cisco_xe_ebgp_ibgp"), "juniper_junos")
         with patch.object(BaseDeviceTransform, "_template_context", with_acls):
             with pytest.raises(jinja2.TemplateNotFound):
-                _run_transform(Leaf, data)
+                run_transform(Leaf, data)
 
     @pytest.mark.parametrize(("transform_cls", "role"), NON_FABRIC_TRANSFORMS)
     def test_non_fabric_role_declares_its_own_role(self, transform_cls: type[BaseDeviceTransform], role: str) -> None:
@@ -525,14 +525,14 @@ class TestUnsupportedCombinationsUnchanged:
 
     def test_tor_renders_the_leaf_template_on_cisco_xe(self) -> None:
         """ToR is a leaf-tier VTEP: it renders the cisco_xe leaf template."""
-        rendered = _run_transform(ToR, _golden_input("leaf_cisco_xe_ebgp_ibgp"))
+        rendered = run_transform(ToR, _golden_input("leaf_cisco_xe_ebgp_ibgp"))
 
         assert "interface nve1" in rendered
 
     def test_border_spine_on_cisco_xe_is_refused_through_transform(self) -> None:
         """BorderSpine must not silently render the border-leaf template without its route-reflector role."""
         with pytest.raises(ValueError, match="route-reflector"):
-            _run_transform(BorderSpine, _golden_input("leaf_cisco_xe_ebgp_ibgp"))
+            run_transform(BorderSpine, _golden_input("leaf_cisco_xe_ebgp_ibgp"))
 
 
 # ---------------------------------------------------------------------------
@@ -558,4 +558,4 @@ class TestCiscoXeLispRefusalThroughTransform:
 
         with patch.object(BaseDeviceTransform, "_template_context", with_service):
             with pytest.raises(ValueError, match=rf"cisco_xe {role} cannot render: {key}; refusing incomplete config"):
-                _run_transform(transform_cls, _golden_input(f"{prefix}_cisco_xe_{OFFICE_LISP_VARIANT}"))
+                run_transform(transform_cls, _golden_input(f"{prefix}_cisco_xe_{OFFICE_LISP_VARIANT}"))

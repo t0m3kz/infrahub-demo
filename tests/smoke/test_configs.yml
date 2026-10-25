@@ -39,16 +39,6 @@ infrahub_tests:
         spec:
           kind: python-transform-unit-process
           directory: configs/leaf_dell_sonic_ospf_ibgp
-      - name: nokia_sros_ebgp_ibgp
-        expect: PASS
-        spec:
-          kind: python-transform-unit-process
-          directory: configs/leaf_nokia_sros_ebgp_ibgp
-      - name: nokia_sros_ospf_ibgp
-        expect: PASS
-        spec:
-          kind: python-transform-unit-process
-          directory: configs/leaf_nokia_sros_ospf_ibgp
       - name: sonic_ebgp_ibgp
         expect: PASS
         spec:
@@ -74,11 +64,6 @@ infrahub_tests:
         spec:
           kind: python-transform-unit-process
           directory: configs/leaf_dell_sonic_with_acl
-      - name: nokia_sros_with_acl
-        expect: PASS
-        spec:
-          kind: python-transform-unit-process
-          directory: configs/leaf_nokia_sros_with_acl
       - name: sonic_with_acl
         expect: PASS
         spec:
@@ -99,11 +84,6 @@ infrahub_tests:
         spec:
           kind: python-transform-unit-process
           directory: configs/leaf_dell_sonic_mlag
-      - name: nokia_sros_mlag
-        expect: PASS
-        spec:
-          kind: python-transform-unit-process
-          directory: configs/leaf_nokia_sros_mlag
       - name: sonic_mlag
         expect: PASS
         spec:
@@ -212,16 +192,6 @@ infrahub_tests:
         spec:
           kind: python-transform-unit-process
           directory: configs/spine_dell_sonic_ospf_ibgp
-      - name: nokia_sros_ebgp_ibgp
-        expect: PASS
-        spec:
-          kind: python-transform-unit-process
-          directory: configs/spine_nokia_sros_ebgp_ibgp
-      - name: nokia_sros_ospf_ibgp
-        expect: PASS
-        spec:
-          kind: python-transform-unit-process
-          directory: configs/spine_nokia_sros_ospf_ibgp
       - name: sonic_ebgp_ibgp
         expect: PASS
         spec:
@@ -265,16 +235,6 @@ infrahub_tests:
         spec:
           kind: python-transform-unit-process
           directory: configs/super_spine_dell_sonic_ospf_ibgp
-      - name: nokia_sros_ebgp_ibgp
-        expect: PASS
-        spec:
-          kind: python-transform-unit-process
-          directory: configs/super_spine_nokia_sros_ebgp_ibgp
-      - name: nokia_sros_ospf_ibgp
-        expect: PASS
-        spec:
-          kind: python-transform-unit-process
-          directory: configs/super_spine_nokia_sros_ospf_ibgp
       - name: sonic_ebgp_ibgp
         expect: PASS
         spec:
@@ -318,16 +278,6 @@ infrahub_tests:
         spec:
           kind: python-transform-unit-process
           directory: configs/border_leaf_dell_sonic_ospf_ibgp
-      - name: nokia_sros_ebgp_ibgp
-        expect: PASS
-        spec:
-          kind: python-transform-unit-process
-          directory: configs/border_leaf_nokia_sros_ebgp_ibgp
-      - name: nokia_sros_ospf_ibgp
-        expect: PASS
-        spec:
-          kind: python-transform-unit-process
-          directory: configs/border_leaf_nokia_sros_ospf_ibgp
       - name: sonic_ebgp_ibgp
         expect: PASS
         spec:
@@ -353,11 +303,6 @@ infrahub_tests:
         spec:
           kind: python-transform-unit-process
           directory: configs/border_leaf_dell_sonic_mlag
-      - name: nokia_sros_mlag
-        expect: PASS
-        spec:
-          kind: python-transform-unit-process
-          directory: configs/border_leaf_nokia_sros_mlag
       - name: sonic_mlag
         expect: PASS
         spec:
@@ -403,11 +348,6 @@ infrahub_tests:
         spec:
           kind: python-transform-unit-process
           directory: configs/border_leaf_arista_eos_lb_context
-      - name: nokia_sros_lb_context
-        expect: PASS
-        spec:
-          kind: python-transform-unit-process
-          directory: configs/border_leaf_nokia_sros_lb_context
       - name: sonic_lb_context
         expect: PASS
         spec:
@@ -510,16 +450,6 @@ infrahub_tests:
         spec:
           kind: python-transform-unit-process
           directory: configs/tor_dell_sonic_ospf_ibgp
-      - name: nokia_sros_ebgp_ibgp
-        expect: PASS
-        spec:
-          kind: python-transform-unit-process
-          directory: configs/tor_nokia_sros_ebgp_ibgp
-      - name: nokia_sros_ospf_ibgp
-        expect: PASS
-        spec:
-          kind: python-transform-unit-process
-          directory: configs/tor_nokia_sros_ospf_ibgp
       - name: sonic_ebgp_ibgp
         expect: PASS
         spec:
@@ -545,11 +475,6 @@ infrahub_tests:
         spec:
           kind: python-transform-unit-process
           directory: configs/tor_dell_sonic_mlag
-      - name: nokia_sros_mlag
-        expect: PASS
-        spec:
-          kind: python-transform-unit-process
-          directory: configs/tor_nokia_sros_mlag
       - name: sonic_mlag
         expect: PASS
         spec:
@@ -586,16 +511,6 @@ infrahub_tests:
         spec:
           kind: python-transform-unit-process
           directory: configs/firewall_paloalto_panos_with_policy
-      - name: cisco_asa_with_policy
-        expect: PASS
-        spec:
-          kind: python-transform-unit-process
-          directory: configs/firewall_cisco_asa_with_policy
-      - name: fortinet_fortios_with_policy
-        expect: PASS
-        spec:
-          kind: python-transform-unit-process
-          directory: configs/firewall_fortinet_fortios_with_policy
       - name: checkpoint_gaia_with_policy
         expect: PASS
         spec:

@@ -21,8 +21,8 @@ def _build_fw_interfaces(
     The firewall has physical interfaces and virtual (sub-)interfaces.  Zone assignment
     lives on the segment, not the interface.  For each interface we look up the
     segment deployed on it (via activations, by segment id) and attach its security_zone.
-    On an HA pair terminating that segment inline, virtual_ip/standby_ip are the
-    pair's addresses on it (see transforms.helpers.ha.inline_addresses).
+    On an HA pair terminating that segment inline, virtual_ip is the
+    pair's address on it (see transforms.helpers.ha.inline_addresses).
 
     Only interfaces that have an ip_address are included — transit/management
     interfaces without an IP are skipped for zone rendering purposes.
@@ -80,7 +80,7 @@ def _segment_prefixes(zones_data: list[dict[str, Any]] | None) -> dict[str, tupl
 def apply_context_routes(context: dict[str, Any], segment_prefixes: dict[str, tuple[str | None, str]]) -> None:
     """Fill the routing table and isolation of a context that has transit legs.
 
-    One table per context (VDOM / ASA context / Check Point VS / Junos
+    One table per context (Check Point VS / Junos
     routing-instance / PAN-OS per-vsys virtual router): every served tenant
     segment prefix goes to the border leaves' anycast gateway (.1) of the
     tenant leg in its zone's VRF (a segment with no known zone takes the
@@ -171,14 +171,8 @@ def _nat_entries(
       interface address (``own_address`` false), so the services see one
       source and need no tenant return route.
 
-    ``open_egress`` says every tenant flow towards the egress zone is
-    permitted (the internet is not filtered per service; ASA gives that leg no
-    ACL); a MANAGEMENT flow is permitted only by the context's rules, which
-    then just need translating. Only FortiOS ties NAT to a policy, so only it
-    reads this.
-
     An entry is {suffix, egress (the leg), address (plain IP), own_address,
-    open_egress, tenant_legs}. ``suffix`` is appended to the vendor's object names so two
+    tenant_legs}. ``suffix`` is appended to the vendor's object names so two
     entries never collide; INTERNET's is empty (its names predate the list).
     """
     candidates = [
@@ -196,7 +190,6 @@ def _nat_entries(
                     "egress": egress,
                     "address": address,
                     "own_address": own_address,
-                    "open_egress": own_address,
                     "tenant_legs": tenant_legs,
                 }
             )

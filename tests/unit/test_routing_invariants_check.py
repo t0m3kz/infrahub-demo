@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, cast
 
 from checks.routing_invariants import CheckRoutingInvariants
-from tests.integration.demo_data import attribute_names, relationship_names
+from tests.integration.demo_data import relationship_names
 from tests.unit.test_circuit_query_shapes import _QUERIES, _selected_paths
 from utils.data_cleaning import clean_data
 
@@ -664,12 +664,11 @@ def _segment(
     prefix: str,
     owner: tuple[str, str, str] | None,
     *,
-    status: str = "active",
     ns_name: str = "PROD",
     ns_type: str = "prod",
 ) -> dict[str, Any]:
-    """An on-prem segment with its owner and status (what rule 8 reads next to the gateway prefix)."""
-    return {**_onprem(name, prefix, ns_name, ns_type), "status": _v(status), "owner": _owner(owner)}
+    """An on-prem segment with its owner (what rule 8 reads next to the gateway prefix)."""
+    return {**_onprem(name, prefix, ns_name, ns_type), "owner": _owner(owner)}
 
 
 def _gateway_office(
@@ -677,9 +676,9 @@ def _gateway_office(
     gateway: str | None,
     owner: tuple[str, str, str] | None,
     *lans: dict[str, Any],
-    hosted: tuple[tuple[str, tuple[str, str, str] | None, str], ...] = (),
+    hosted: tuple[tuple[str, tuple[str, str, str] | None], ...] = (),
 ) -> dict[str, Any]:
-    """An office behind an SD-WAN gateway with its LANs and hosted segments, (prefix, owner, status) each (PROD)."""
+    """An office behind an SD-WAN gateway with its LANs and hosted segments, (prefix, owner) each (PROD)."""
     return {
         **_office(name, *lans, owner=owner),
         "sdwan_gateway": {"node": {"name": _v(gateway)}} if gateway else {"node": None},
@@ -689,7 +688,6 @@ def _gateway_office(
                     "node": {
                         "segment": {
                             "node": {
-                                "status": _v(status),
                                 "owner": _owner(segment_owner),
                                 "gateway": {
                                     "node": {
@@ -705,7 +703,7 @@ def _gateway_office(
                         }
                     }
                 }
-                for prefix, segment_owner, status in hosted
+                for prefix, segment_owner in hosted
             ]
         },
     }
@@ -772,7 +770,7 @@ class TestOwnershipConflicts:
             "TopologyCustomerOffice": [
                 _gateway_office("C002-OFFICE", "GW1", _C002, _block("10.210.2.0/24")),
                 _gateway_office("C003-OFFICE", "GW1", _CUSTOMER, _block("10.210.3.0/24")),
-                _gateway_office("C005-OFFICE", "GW1", _C005, hosted=(("10.176.5.0/24", _C005, "active"),)),
+                _gateway_office("C005-OFFICE", "GW1", _C005, hosted=(("10.176.5.0/24", _C005),)),
             ],
             "CloudVirtualInterface": [
                 _transit_vif(
@@ -846,17 +844,6 @@ class TestOwnershipConflicts:
         ]
         assert _rule_eight(_run(TopologyCustomerOffice=offices)) == []
 
-    def test_a_retired_segment_does_not_conflict(self) -> None:
-        """A retired on-prem segment and a retired hosted segment are not registered any more."""
-        check = _run(
-            ManagedNetworkSegment=[_segment("old", "10.32.0.0/16", _CUSTOMER, status="retired")],
-            TopologyCustomerOffice=[
-                _gateway_office("C003-OFFICE", "GW1", _CUSTOMER, hosted=(("10.32.0.0/16", _CUSTOMER, "retired"),))
-            ],
-            CloudVirtualInterface=[_private_vif("direct", _vpc("c015", "p", _block("10.32.0.0/16"), owner=_C015))],
-        )
-        assert _rule_eight(check) == []
-
     def test_the_same_prefix_in_two_namespaces_does_not_conflict(self) -> None:
         """PROD and NON-PROD are separate routing domains: the rule runs per namespace."""
         check = _run(
@@ -909,18 +896,16 @@ class TestOwnershipConflicts:
 
 
 def test_the_query_selects_what_rule_eight_reads() -> None:
-    """Segment status and owner, the office gateway and hosted segments, and the VIF chain, on real fields."""
+    """Segment owner, the office gateway and hosted segments, and the VIF chain, on real fields."""
     path = _QUERIES / "validation" / "routing_invariants.gql"
     reads = {
         "ManagedNetworkSegment": [
-            "status",
             "owner.org_id",
             "gateway.ip_prefix.prefix",
             "gateway.ip_prefix.ip_namespace.name",
         ],
         "TopologyCustomerOffice": [
             "sdwan_gateway.name",
-            "segment_deployments.segment.status",
             "segment_deployments.segment.owner.org_id",
             "segment_deployments.segment.gateway.ip_prefix.prefix",
             "segment_deployments.segment.gateway.ip_prefix.ip_namespace.name",
@@ -942,7 +927,6 @@ def test_the_query_selects_what_rule_eight_reads() -> None:
         selected = _selected_paths(path, root)
         assert not [item for item in paths if item not in selected], root
     assert "owner" in relationship_names("ManagedNetworkSegment")
-    assert "status" in attribute_names("ManagedNetworkSegment")
     assert {"sdwan_gateway", "segment_deployments", "lan_prefixes"} <= relationship_names("TopologyCustomerOffice")
     assert {"transit_gateway_attachment", "virtual_circuit", "virtual_network"} <= relationship_names(
         "CloudVirtualInterface"

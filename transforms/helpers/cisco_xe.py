@@ -13,13 +13,13 @@ from collections.abc import Iterable
 from ipaddress import IPv4Address, IPv4Network, ip_address, ip_network
 from typing import Any
 
+from utils.limits import XE_REMARK_MAX
+
 # IOS-XE ACL protocols the neutral model uses: get_acls maps any/tcp/udp/icmp to ip/tcp/udp/icmp.
 _PROTOCOLS = frozenset({"ip", "tcp", "udp", "icmp"})
 _ACTIONS = frozenset({"permit", "deny"})
 # `eq N` or `range N M`, as _port_match (transforms/helpers/acl.py) writes it.
 _PORT = re.compile(r"^(?:eq (\d+)|range (\d+) (\d+))$")
-# An IOS `remark` holds at most 100 characters.
-_REMARK_MAX = 100
 # The entries are renumbered 10, 20, ... in list order, remarks included: a `remark` line needs its own
 # sequence number, and the neutral model's numbers (own rules from the policy index, return legs from 5000,
 # the closing rule at 9990) can sit one apart, leaving no free number between two entries.
@@ -64,7 +64,7 @@ def _port(value: str | None, role: str, where: str) -> str | None:
 
 def _remark(text: str) -> str:
     """A remark on one line, at most 100 characters (a name with a newline must not start a config line)."""
-    return " ".join(text.split())[:_REMARK_MAX]
+    return " ".join(text.split())[:XE_REMARK_MAX]
 
 
 def _rule_remarks(rule: dict[str, Any]) -> list[str]:

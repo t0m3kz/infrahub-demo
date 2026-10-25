@@ -29,6 +29,7 @@ from transforms.helpers.group_policy.model import (
     _entries,
     _entry_set,
 )
+from utils.limits import EOS_MSSG_MAX_SEGMENTS
 from utils.segment_addressing import classifier_prefix
 
 _COMPONENT_REASON = "a component group is not expressible by prefix (the row is not widened to its segment)"
@@ -146,9 +147,6 @@ def segment_security_view(
         "unsupported": sorted(unsupported, key=lambda item: (item["src"], item["dst"])),
     }
 
-
-MSSG_MAX_SEGMENTS = 60
-"""Segments one device can define across all VRFs (spec 1.4, D: the manual's limit)."""
 
 _MSSG_FORWARD_ALL = "policy-forward-all"
 _MSSG_DROP_ALL = "policy-drop-all"
@@ -277,7 +275,7 @@ def _segment_security_build(scope: _DeviceScope) -> dict[str, Any] | None:
 
     - every segment named by a ``from`` line defined, remote ones included, and, in a VRF with a
       fallback, every segment of the VRF (a fallback also catches a source in a segment without a
-      ``from`` line, so those get an explicit ``policy-drop-all``); at most ``MSSG_MAX_SEGMENTS``;
+      ``from`` line, so those get an explicit ``policy-drop-all``); at most ``EOS_MSSG_MAX_SEGMENTS``;
     - a VRF holding a segment with no gateway prefix not rendered at all (``skipped``): enforcement is
       box-wide, so a segment that cannot be classified would be dropped to, or from, wholesale;
     - the reply of every permitted flow as a mirrored policy on the source port (MSS-G is stateless),
@@ -323,10 +321,10 @@ def _segment_security_build(scope: _DeviceScope) -> dict[str, Any] | None:
     }
     rendered = {vrf: items for vrf, items in sorted(by_vrf.items()) if vrf not in skipped}
     count = sum(len(items) for items in rendered.values())
-    if count > MSSG_MAX_SEGMENTS:
+    if count > EOS_MSSG_MAX_SEGMENTS:
         raise _refuse(
             who,
-            f"{count} segments to define exceed the {MSSG_MAX_SEGMENTS} an EOS device holds across all VRFs "
+            f"{count} segments to define exceed the {EOS_MSSG_MAX_SEGMENTS} an EOS device holds across all VRFs "
             "(a VRF with a fallback defines every segment of the VRF)",
         )
 

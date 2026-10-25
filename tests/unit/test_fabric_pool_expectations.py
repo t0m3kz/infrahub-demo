@@ -1,7 +1,7 @@
 """The fabric-design and pool-size expectations tests/integration/test_61 and test_71 assert.
 
-test_constants.expected_*_pool_slices turn the bootstrap designs (via the unit-test simulator) and a DC's
-underlay_protocol into the slice every fabric pool must have; test_helpers.fetch_fabric_pools reads the live
+fabric_constants.expected_*_pool_slices turn the bootstrap designs (via the unit-test simulator) and a DC's
+underlay_protocol into the slice every fabric pool must have; fabric_pool_helpers.fetch_fabric_pools reads the live
 slices and find_fabric_design_errors / find_fabric_pool_errors compare them. A finder that silently returns
 no error would let a broken generator run green, so each rule is driven through a failing inventory here.
 
@@ -18,13 +18,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from tests.integration.test_constants import (
+from tests.integration.fabric_constants import (
     DEFAULT_UNDERLAY_PROTOCOL,
     FabricSlice,
     expected_dc_pool_slices,
     expected_pod_pool_slices,
 )
-from tests.integration.test_helpers import fetch_fabric_pools, find_fabric_design_errors, find_fabric_pool_errors
+from tests.integration.fabric_pool_helpers import fetch_fabric_pools, find_fabric_design_errors, find_fabric_pool_errors
 from tests.unit.simulators.fabric_designs import DC_DESIGN_NAMES, dc_design
 
 # ---------------------------------------------------------------------------

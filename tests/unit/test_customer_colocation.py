@@ -13,37 +13,15 @@ leg step as a DC; its legs face the edge pair's firewall ports.
 
 from __future__ import annotations
 
-from typing import Any, TypeVar
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.common import CommonGenerator
 from generators.firewall_context import FIREWALL_CONTEXT
 from generators.topology.customer_colocation import CustomerDeploymentColocationExchangeGenerator
 from generators.topology.customer_dc import CustomerDeploymentDCExchangeGenerator
-
-_T = TypeVar("_T", bound=CommonGenerator)
-
-
-def _make_generator(cls: type[_T]) -> Any:
-    gen = cls.__new__(cls)
-    gen.logger = MagicMock()
-    gen.client = MagicMock()
-    gen.client.filters = AsyncMock(return_value=[])
-    gen.client.get = AsyncMock()
-    gen.client.create = AsyncMock()
-    gen.client.execute_graphql = AsyncMock()
-    # generate() waits for an in-flight add_colocation_zone on the serving
-    # zone before reading firewall_devices — none in flight here, so no-op.
-    gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
-    # _resolve_parent_cluster waits for the zone's generator when the cluster is missing, without a re-collect.
-    gen.wait_for_parent_generators = AsyncMock(return_value=False)
-    # The shared FirewallContext is provisioned under a resource lock; the
-    # lock itself is PoolMixin's, tested in test_dc_firewall_lb.py.
-    setattr(gen, "acquire_resource_lock", AsyncMock(return_value="lock-id"))  # noqa: B010
-    setattr(gen, "release_resource_lock", AsyncMock())  # noqa: B010
-    return gen
+from tests.unit.customer_generator_helpers import make_generator
 
 
 def _colo_payload(*, customer_id: str = "cust-1") -> dict:
@@ -96,7 +74,7 @@ def _colo_payload_with_parent(
 class TestColocationDeployment:
     @pytest.mark.asyncio
     async def test_no_matching_kind_in_response_is_noop(self) -> None:
-        gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+        gen = make_generator(CustomerDeploymentColocationExchangeGenerator)
 
         await gen.generate({"TopologyCustomerDC": []})
 
@@ -104,7 +82,7 @@ class TestColocationDeployment:
 
     @pytest.mark.asyncio
     async def test_missing_id_logs_error(self) -> None:
-        gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+        gen = make_generator(CustomerDeploymentColocationExchangeGenerator)
 
         await gen.generate({"TopologyCustomerColocation": [{"name": "C001-P"}]})
 
@@ -115,7 +93,7 @@ class TestColocationDeployment:
         """ColocationMetro has no controllers to fetch (customer_colocation.gql
         has no security_manager_controllers/lb_manager_controllers aliases,
         unlike customer_dc.gql) — _all_controllers stays [] unconditionally."""
-        gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+        gen = make_generator(CustomerDeploymentColocationExchangeGenerator)
 
         await gen.generate(_colo_payload_with_parent(fw_devices=[]))
 
@@ -129,7 +107,7 @@ class TestWaitsForServingZoneGenerator:
     @pytest.mark.asyncio
     async def test_waits_on_add_colocation_zone_when_serving_zone_present(self) -> None:
         """The wait targets the serving zone's own generator by the zone id."""
-        gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+        gen = make_generator(CustomerDeploymentColocationExchangeGenerator)
 
         await gen.generate(_colo_payload_with_parent(fw_devices=[]))
 
@@ -140,7 +118,7 @@ class TestWaitsForServingZoneGenerator:
     @pytest.mark.asyncio
     async def test_no_parent_id_skips_wait(self) -> None:
         """No serving zone, nothing to wait for."""
-        gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+        gen = make_generator(CustomerDeploymentColocationExchangeGenerator)
 
         await gen.generate(_colo_payload())
 
@@ -149,7 +127,7 @@ class TestWaitsForServingZoneGenerator:
     @pytest.mark.asyncio
     async def test_refetched_data_is_reparsed_and_used(self) -> None:
         """Data refreshed after the wait (now with firewall_devices) replaces the original."""
-        gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+        gen = make_generator(CustomerDeploymentColocationExchangeGenerator)
         refreshed = _colo_payload_with_parent(fw_devices=[_fw_device()])
         gen.wait_for_parent_generator_and_refetch = AsyncMock(side_effect=[refreshed, None])
         cluster = MagicMock(id="cluster-1")
@@ -165,7 +143,7 @@ class TestWaitsForServingZoneGenerator:
     @pytest.mark.asyncio
     async def test_refetch_without_the_customer_is_a_hard_error(self) -> None:
         """A refetch that no longer carries the deployment fails rather than guessing."""
-        gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+        gen = make_generator(CustomerDeploymentColocationExchangeGenerator)
         gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value={"TopologyCustomerColocation": []})
 
         await gen.generate(_colo_payload_with_parent(fw_devices=[]))
@@ -178,7 +156,7 @@ class TestFirewallContextNoFirewallOrCluster:
     @pytest.mark.asyncio
     async def test_unset_serving_zone_is_an_info_not_an_error(self) -> None:
         """No serving_zone: the footprint has no context by design — info log, nothing written, no error."""
-        gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+        gen = make_generator(CustomerDeploymentColocationExchangeGenerator)
         gen._ensure_transit_legs = AsyncMock()
 
         await gen.generate(_colo_payload())  # no "parent" key
@@ -192,7 +170,7 @@ class TestFirewallContextNoFirewallOrCluster:
     @pytest.mark.asyncio
     async def test_null_serving_zone_from_graphql_is_also_unset(self) -> None:
         """The aliased `parent: serving_zone` arrives as None when unset (cleaned from {"node": null})."""
-        gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+        gen = make_generator(CustomerDeploymentColocationExchangeGenerator)
         payload = _colo_payload()
         payload["TopologyCustomerColocation"][0]["parent"] = None
         gen._ensure_transit_legs = AsyncMock()
@@ -215,7 +193,7 @@ class TestFirewallContextNoFirewallOrCluster:
     @pytest.mark.asyncio
     async def test_dc_footprint_without_a_parent_is_still_a_hard_error(self) -> None:
         """Counterpart to the unset serving_zone: a DC footprint with no parent DC is an ERROR, not an info."""
-        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        gen = make_generator(CustomerDeploymentDCExchangeGenerator)
 
         await gen.generate(
             {
@@ -231,7 +209,7 @@ class TestFirewallContextNoFirewallOrCluster:
 
     @pytest.mark.asyncio
     async def test_no_firewall_devices_on_parent_is_noop(self) -> None:
-        gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+        gen = make_generator(CustomerDeploymentColocationExchangeGenerator)
 
         await gen.generate(_colo_payload_with_parent(fw_devices=[]))
 
@@ -242,7 +220,7 @@ class TestFirewallContextNoFirewallOrCluster:
     async def test_unpaired_firewalls_wait_for_zone_then_use_its_cluster(self) -> None:
         """add_colocation_zone owns the zone's HA pair: the customer waits
         for it and re-queries, never pairing the firewalls itself."""
-        gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+        gen = make_generator(CustomerDeploymentColocationExchangeGenerator)
         cluster = MagicMock(id="cluster-1")
         cluster.name.value = "fw-fr201-fw-fr202-ha"
         cluster.capabilities.peers = [MagicMock(id="fw-1"), MagicMock(id="fw-2")]
@@ -265,7 +243,7 @@ class TestFirewallContextNoFirewallOrCluster:
     @pytest.mark.asyncio
     async def test_still_unpaired_after_waiting_fails_without_writing(self) -> None:
         """Still unpaired after the wait: error (raises in a real run), nothing created or paired."""
-        gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+        gen = make_generator(CustomerDeploymentColocationExchangeGenerator)
         gen.client.filters = AsyncMock(side_effect=[[], []])
         gen._ensure_ha_pairs = AsyncMock()
         gen._ensure_transit_legs = AsyncMock()
@@ -283,7 +261,7 @@ class TestFirewallContextNoFirewallOrCluster:
 
 class TestFirewallContextProvisioning:
     def _make_gen_with_cluster(self, *, cluster_name: str = "fw-fr201-fw-fr202-ha") -> Any:
-        gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+        gen = make_generator(CustomerDeploymentColocationExchangeGenerator)
         fw_device = _fw_device(id="fw-1", name="fw-fr201")
         cluster = MagicMock(id="cluster-1")
         cluster.name.value = cluster_name
@@ -359,7 +337,7 @@ class TestFirewallContextProvisioning:
     @pytest.mark.asyncio
     async def test_no_target_skips_the_leg_step(self) -> None:
         """A serving zone without firewalls gets no context and no legs."""
-        gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+        gen = make_generator(CustomerDeploymentColocationExchangeGenerator)
         gen._ensure_transit_legs = AsyncMock()
 
         await gen.generate(_colo_payload_with_parent(fw_devices=[]))
@@ -374,7 +352,7 @@ class TestLinkServingFirewallContext:
     async def test_link_is_saved_untracked(self) -> None:
         """The deployment is the generator's target; tracking it would let
         delete_unused_nodes remove it on a later run."""
-        gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+        gen = make_generator(CustomerDeploymentColocationExchangeGenerator)
         deployment = MagicMock()
         deployment.serving_firewall_context.id = None
         deployment.save = AsyncMock()
@@ -389,7 +367,7 @@ class TestLinkServingFirewallContext:
     @pytest.mark.asyncio
     async def test_link_the_query_found_is_neither_read_nor_rewritten(self) -> None:
         """The boarding query already shows the deployment linked to the context: no read, no write."""
-        gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+        gen = make_generator(CustomerDeploymentColocationExchangeGenerator)
 
         await gen.link_serving_context(FIREWALL_CONTEXT, customer_id="cust-1", context_id="ctx-1", current_id="ctx-1")
 
@@ -398,7 +376,7 @@ class TestLinkServingFirewallContext:
     @pytest.mark.asyncio
     async def test_link_the_server_has_but_the_query_missed_is_not_rewritten(self) -> None:
         """A payload without the link (a stale or older query) falls back to reading the deployment: still no write."""
-        gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+        gen = make_generator(CustomerDeploymentColocationExchangeGenerator)
         deployment = MagicMock()
         deployment.serving_firewall_context.id = "ctx-1"
         deployment.save = AsyncMock()
@@ -412,7 +390,7 @@ class TestLinkServingFirewallContext:
     @pytest.mark.asyncio
     async def test_save_failure_is_logged_not_raised(self) -> None:
         """A failed link does not abort the rest of the provisioning."""
-        gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+        gen = make_generator(CustomerDeploymentColocationExchangeGenerator)
         gen.client.get = AsyncMock(side_effect=RuntimeError("boom"))
 
         await gen.link_serving_context(FIREWALL_CONTEXT, customer_id="cust-1", context_id="ctx-1", current_id=None)
@@ -429,7 +407,7 @@ class TestNoLoadbalancerContext:
     @pytest.mark.asyncio
     async def test_load_balancers_on_the_zone_are_ignored(self) -> None:
         """Even load-balancer devices in the payload, dedicated or not, never reach a lookup or a write."""
-        gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+        gen = make_generator(CustomerDeploymentColocationExchangeGenerator)
         lbs = [
             {"id": f"lb-{n}", "name": f"lb-fr20{n}", "kind": "DcimPhysicalDevice", "platform": {"name": "f5_tmos"}}
             for n in (1, 2)
@@ -448,7 +426,7 @@ class TestContextLivesOnTheServingZone:
     @pytest.mark.asyncio
     async def test_target_parent_name_is_the_serving_zone(self) -> None:
         """The leg step receives the zone's name as parent_name, which names the zone's context VLAN pool."""
-        gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+        gen = make_generator(CustomerDeploymentColocationExchangeGenerator)
         cluster = MagicMock(id="cluster-1")
         cluster.name.value = "fw-fr201-fw-fr202-ha"
         cluster.capabilities.peers = [MagicMock(id="fw-1")]
@@ -464,7 +442,7 @@ class TestContextLivesOnTheServingZone:
     @pytest.mark.asyncio
     async def test_context_vlan_comes_from_the_zones_firewall_vlan_pool(self) -> None:
         """`{zone}-fw-context-vlan-pool`: the pool add_colocation_zone created with ensure_context_vlan_pool(name="fr2")."""
-        gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+        gen = make_generator(CustomerDeploymentColocationExchangeGenerator)
         context = MagicMock(id="ctx-1")
         context.name.value = "fw-fr201-ha-shared"
         context.vlan_id.value = None
@@ -487,7 +465,7 @@ class TestContextLivesOnTheServingZone:
         """C001 and C005 both name FR2 as serving zone: one shared context name, never one per footprint."""
         names: list[str] = []
         for footprint in ("C001-P-FR", "C005-P-FR"):
-            gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+            gen = make_generator(CustomerDeploymentColocationExchangeGenerator)
             cluster = MagicMock(id="cluster-1")
             cluster.name.value = "fw-fr201-fw-fr202-ha"
             cluster.capabilities.peers = [MagicMock(id="fw-1")]

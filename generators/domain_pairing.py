@@ -12,6 +12,8 @@ from infrahub_sdk.protocols import CoreStandardGroup
 if TYPE_CHECKING:
     import logging
 
+from utils.limits import GROUP_HA_DOMAINS, GROUP_MLAG_DOMAINS
+
 from .helpers.cable_attributes import cable_attributes, endpoint_label
 from .helpers.pairing import pair_device_names
 from .mlag import MLAGWiringMixin
@@ -149,7 +151,7 @@ class DomainPairingMixin(MLAGWiringMixin):
                         self.logger.error(f"HA pair {first}/{second}: could not resolve both devices.")
                         continue
 
-                    ha_group = await self._standard_group("ha_domains")
+                    ha_group = await self._standard_group(GROUP_HA_DOMAINS)
                     ha_obj = await self.client.create(
                         kind=ha_kind,
                         data={
@@ -401,7 +403,7 @@ class DomainPairingMixin(MLAGWiringMixin):
                 self.logger.error(f"MLAG pair {first}/{second}: could not resolve both devices.")
                 continue
 
-            mlag_group = await self._standard_group("mlag_domains")
+            mlag_group = await self._standard_group(GROUP_MLAG_DOMAINS)
 
             # Two overlapping runs (a rack's inline run and its own trigger) can
             # both find no domain and both create it: the lookup and the create

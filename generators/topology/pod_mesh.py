@@ -8,13 +8,12 @@ import logging
 from collections.abc import Mapping, Sequence
 from typing import Any, Callable
 
-from ..common import CablingOptions, RoutingOptions
+from utils.limits import WAIT_FOR_PEER_GENERATOR
+
 from ..helpers.routing import p2p_prefix_length
 from ..pod_config import spine_slot_device_names
 from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface
-
-_SIBLING_SPINE_MAX_RETRIES = 10
-_SIBLING_SPINE_RETRY_DELAY = 3.0
+from ..types import CablingOptions, RoutingOptions
 
 
 def pod_routing_options(dc: Any, asn_pool_id: str | None, shared_underlay_as_id: str | None = None) -> RoutingOptions:
@@ -143,7 +142,7 @@ class PodMeshMixin:
                 role=spine_role,
                 quantity=slot_width,
             )
-            for attempt in range(_SIBLING_SPINE_MAX_RETRIES):
+            for attempt in range(WAIT_FOR_PEER_GENERATOR.attempts):
                 sibling_spines_devices = await self.client.filters(
                     kind=DcimPhysicalDevice,
                     name__values=candidate_names,
@@ -159,11 +158,11 @@ class PodMeshMixin:
                     sibling_uplink_names = sorted({iface.name.value for iface in sibling_uplinks})
                     if sibling_uplink_names:
                         break
-                if attempt < _SIBLING_SPINE_MAX_RETRIES - 1:
-                    delay = self._retry_delay(_SIBLING_SPINE_RETRY_DELAY, attempt)
+                if attempt < WAIT_FOR_PEER_GENERATOR.attempts - 1:
+                    delay = self._retry_delay(WAIT_FOR_PEER_GENERATOR.delay, attempt)
                     self.logger.info(
                         f"Pod {pod_name}: sibling pod idx={sibling['index']} spines/uplinks not ready yet — "
-                        f"retrying in {delay:.2f}s (attempt {attempt + 1}/{_SIBLING_SPINE_MAX_RETRIES})"
+                        f"retrying in {delay:.2f}s (attempt {attempt + 1}/{WAIT_FOR_PEER_GENERATOR.attempts})"
                     )
                     await asyncio.sleep(delay)
 
@@ -172,7 +171,7 @@ class PodMeshMixin:
                 # leaves the pair uncabled for good — fail and let a re-run retry.
                 self.fail(
                     f"Pod {pod_name}: sibling pod idx={sibling['index']} still has no spine "
-                    f"devices/uplinks after {_SIBLING_SPINE_MAX_RETRIES} attempts — cannot mesh-cable this pair"
+                    f"devices/uplinks after {WAIT_FOR_PEER_GENERATOR.attempts} attempts — cannot mesh-cable this pair"
                 )
 
             # Each sibling-pod pair gets a deterministic local uplink slot: slot

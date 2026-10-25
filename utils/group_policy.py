@@ -153,8 +153,8 @@ def vteps_by_data_center(
 def segment_sites(segment: dict[str, Any]) -> set[str]:
     """Ids of the sites a segment is active in.
 
-    A VXLAN segment: the deployments of its active/provisioning segment
-    deployments (data centers, colocation metros). A VLAN segment: the parent
+    A VXLAN segment: the deployments of its segment deployments (data centers,
+    colocation metros). A VLAN segment: the parent
     of its footprint (the data center of a TopologyCustomerDC), else the
     footprint itself, which is never a data center.
     """

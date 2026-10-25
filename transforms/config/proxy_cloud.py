@@ -1,7 +1,7 @@
 """JSON policy payload for ManagedCloudProxy — one Jinja2 template per vendor.
 
 Same "one template per platform" pattern as BaseDeviceTransform._load_template (leaf/spine/tor/
-proxy CLI configs), just keyed on `provider` instead of netmiko_device_type: each vendor gets its
+proxy CLI configs), just keyed on `provider` instead of the device platform: each vendor gets its
 own template shaped like that vendor's actual Terraform module/API would expect. The underlying
 data (proxy_rules for egress; get_private_access_segments for private
 access) is vendor-independent and shared by every template — only the rendering differs per

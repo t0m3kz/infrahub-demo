@@ -12,7 +12,7 @@ from utils.data_cleaning import clean_data
 
 from .circuit_helpers import _deployed_dc_names
 from .query_files import QUERY_GET_LOADBALANCER_INVENTORY, QUERY_GET_TENANT_SERVICES, QUERY_GET_TRANSIT_INVENTORY
-from .test_constants import DATA_PROPAGATION_DELAY
+from .suite_constants import DATA_PROPAGATION_DELAY
 
 logger = logging.getLogger(__name__)
 

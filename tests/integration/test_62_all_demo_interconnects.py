@@ -49,25 +49,11 @@ import pytest
 from infrahub_sdk import InfrahubClient
 
 from generators.helpers.naming import sdwan_edge_name
+from tasks import ALL_DEMO_BRANCH
 from utils.data_cleaning import clean_data
+from utils.limits import CIRCUIT_ENDS
 
-from .conftest import TestInfrahubDockerWithClient
-from .interconnect_queries import CIRCUIT_LOCATIONS_QUERY, GROUP_MEMBERS_QUERY, SCENARIO_NAME
-from .interconnect_rules import (
-    _CIRCUIT_ENDS,
-    _OFFICE_KIND,
-    _ZONE_KINDS,
-    _deployments,
-    _environment_errors,
-    _expectation_errors,
-    _handoff_errors,
-    _interconnect_errors,
-    _label,
-    _session_port_errors,
-    _tunnel_errors,
-)
-from .test_constants import (
-    ALL_DEMO_BRANCH,
+from .all_demo_circuit_constants import (
     ALL_DEMO_DECLARED_PHYSICAL_LOCATIONS,
     ALL_DEMO_DECLARED_VIRTUAL_LOCATIONS,
     ALL_DEMO_FACILITY_KINDS,
@@ -84,7 +70,21 @@ from .test_constants import (
     INTERCONNECT_KIND,
     TUNNEL_KIND,
 )
-from .test_helpers import fetch_interconnect_inventory
+from .circuit_helpers import fetch_interconnect_inventory
+from .conftest import TestInfrahubDockerWithClient
+from .interconnect_queries import CIRCUIT_LOCATIONS_QUERY, GROUP_MEMBERS_QUERY, SCENARIO_NAME
+from .interconnect_rules import (
+    _OFFICE_KIND,
+    _ZONE_KINDS,
+    _deployments,
+    _environment_errors,
+    _expectation_errors,
+    _handoff_errors,
+    _interconnect_errors,
+    _label,
+    _session_port_errors,
+    _tunnel_errors,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -379,14 +379,14 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                     f"{sorted(ALL_DEMO_DECLARED_VIRTUAL_LOCATIONS[name])} (a virtual circuit derives none)"
                 )
             locations = {location["id"] for location in circuit["location_nodes"]}
-            allowed = (1, _CIRCUIT_ENDS) if circuit["kind"] == HANDOFF_KIND else (_CIRCUIT_ENDS,)
+            allowed = (1, CIRCUIT_ENDS) if circuit["kind"] == HANDOFF_KIND else (CIRCUIT_ENDS,)
             if len(locations) not in allowed:
                 errors.append(
                     f"{name}: terminates at {circuit['locations']}, expected {' or '.join(map(str, allowed))} distinct location(s)"
                 )
                 continue
-            if len({end["id"] for end in circuit["end_nodes"]}) != _CIRCUIT_ENDS:
-                errors.append(f"{name}: ends {circuit['ends']}, expected exactly {_CIRCUIT_ENDS} distinct ports")
+            if len({end["id"] for end in circuit["end_nodes"]}) != CIRCUIT_ENDS:
+                errors.append(f"{name}: ends {circuit['ends']}, expected exactly {CIRCUIT_ENDS} distinct ports")
                 continue
             if circuit["kind"] == TUNNEL_KIND:
                 errors.extend(_tunnel_errors(circuit, physical_by_id))

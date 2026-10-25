@@ -302,9 +302,6 @@ def build_firewall_data(*, device_name: str, platform: str) -> dict:
             {
                 "id": f"plat-{platform}",
                 "name": _v(platform),
-                "netmiko_device_type": _v(platform),
-                "napalm_driver": _v(platform),
-                "ansible_network_os": _v(platform),
             }
         ),
         "primary_address": _node(None),

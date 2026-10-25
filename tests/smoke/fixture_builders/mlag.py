@@ -76,13 +76,10 @@ def build_mlag_device_data(
     }
 
     # Determine interface names and LAG interface shape by platform
-    # cisco_nxos uses Ethernet1/N format; nokia_sros uses 1/1/N; others use EthernetN
+    # cisco_nxos uses Ethernet1/N format; others use EthernetN
     if platform == "cisco_nxos":
         uplink1, uplink2, member1, member2 = "Ethernet1/1", "Ethernet1/2", "Ethernet1/33", "Ethernet1/34"
         lag_name, lag_id_val = "port-channel100", 100
-    elif platform == "nokia_sros":
-        uplink1, uplink2, member1, member2 = "Ethernet1", "Ethernet2", "Ethernet33", "Ethernet34"
-        lag_name, lag_id_val = "lag-100", 100
     elif platform in {"sonic", "dell_sonic"}:
         uplink1, uplink2, member1, member2 = "Ethernet1", "Ethernet2", "Ethernet33", "Ethernet34"
         lag_name, lag_id_val = "PortChannel100", 100
@@ -188,9 +185,6 @@ def build_mlag_device_data(
             {
                 "id": f"plat-{platform}",
                 "name": _v(platform),
-                "netmiko_device_type": _v(platform),
-                "napalm_driver": _v(platform),
-                "ansible_network_os": _v(platform),
             }
         ),
         "primary_address": _node(
@@ -246,7 +240,7 @@ def build_mlag_virtual_peer_link_data(*, device_name: str, peer_name: str, role:
 def write_fixtures() -> tuple[int, int]:
     """Write the MLAG / vPC pair fixtures and the NX-OS virtual peer-link vPC fixture."""
     # MLAG/VPC scenarios: leaf, border_leaf, tor — platforms with MLAG templates
-    mlag_platforms = ["arista_eos", "cisco_nxos", "dell_sonic", "nokia_sros", "sonic"]
+    mlag_platforms = ["arista_eos", "cisco_nxos", "dell_sonic", "sonic"]
     # (transform, dir_prefix, role) — note the order differs from DEVICE_CONFIGS.
     # `role` is the schema dropdown value (hyphenated); dir_prefix keeps the
     # underscore so fixture directory names are unchanged.

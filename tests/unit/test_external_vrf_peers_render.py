@@ -99,8 +99,8 @@ class TestEdgeRender:
         assert "0.0.0.0/0" not in _run_edge(data)
 
     def test_sdwan_peer_accepts_what_the_offices_behind_its_gateway_registered(self) -> None:
-        """C005's hosted segment, C002's and C003's LANs and C001's tunnel range: not the retired segment, the
-        provider's LAN, another gateway's, the provider-owned and the NON-PROD tunnel's."""
+        """C005's hosted segment, C002's and C003's LANs and C001's tunnel range: not the provider's LAN, another
+        gateway's, the provider-owned and the NON-PROD tunnel's."""
         output = _run_edge(_fixture())
         assert _prefix_list(output, "PL-VRF-PROD-EQXFR2-SDWAN-IN") == [
             "10.176.5.0/24",
@@ -152,11 +152,11 @@ class TestEdgeRender:
         assert "        route-map RM-VRF-NONPROD-EQXFR2-AWS-EUC1-OUT out\n" in _neighbor_block(output, "10.255.6.6")
         assert "le " not in output and "ge " not in output
 
-    def test_unregistered_retired_and_ownerless_space_is_never_announced(self) -> None:
-        """C009 is behind no session; a retired, an ownerless and a NON-PROD segment of other owners stay home."""
+    def test_unregistered_and_ownerless_space_is_never_announced(self) -> None:
+        """C009 is behind no session; an ownerless and a NON-PROD segment of other owners stay home."""
         output = _run_edge(_fixture())
         out_lines = "\n".join(line for line in output.splitlines() if "-OUT seq" in line)
-        for never in ("10.9.9.0/24", "10.5.99.0/24", "10.5.77.0/24", "10.6.20.0/24", "10.6.30.0/24", "10.250.0.0/24"):
+        for never in ("10.9.9.0/24", "10.5.77.0/24", "10.6.20.0/24", "10.6.30.0/24", "10.250.0.0/24"):
             assert never not in out_lines
 
     def test_session_without_a_registered_owner_is_deny_all_both_ways(self) -> None:
@@ -236,14 +236,6 @@ class TestEdgeRender:
         assert len(re.findall(r"^route-map RM-VRF-PROD-EQXFR2-AWS-EUC1-OUT permit 10$", output, re.M)) == 1
         for third in ("10.8.2.0/24", "10.176.5.0/24", "10.9.1.0/24"):
             assert third not in out
-
-    def test_a_retired_segment_is_in_no_out_list(self) -> None:
-        """10.5.99.0/24 is C003's but retired: in no PL-*-OUT, and the active sibling prefixes still are."""
-        output = _run_edge(_fixture())
-        out_prefix_lists = [line for line in output.splitlines() if re.match(r"ip prefix-list PL-\S+-OUT ", line)]
-        assert out_prefix_lists
-        assert not [line for line in out_prefix_lists if "10.5.99.0/24" in line]
-        assert any("10.5.20.0/24" in line for line in out_prefix_lists)
 
     def test_peer_without_registered_prefixes_is_accepted_nothing(self) -> None:
         """No office footprint registered: the SD-WAN inbound map denies everything."""
@@ -343,13 +335,13 @@ def _run_transform(transform: type, data: dict[str, Any]) -> str:
         loop.close()
 
 
-def _on_platform(data: dict[str, Any], netmiko: str) -> dict[str, Any]:
-    data["DcimDevice"]["edges"][0]["node"]["platform"]["node"]["netmiko_device_type"] = {"value": netmiko}
+def _on_platform(data: dict[str, Any], platform: str) -> dict[str, Any]:
+    data["DcimDevice"]["edges"][0]["node"]["platform"]["node"]["name"] = {"value": platform}
     return data
 
 
 class TestRefusalWithoutOwnerFilters:
-    @pytest.mark.parametrize("platform", ["arista_eos", "cisco_xe", "sonic", "nokia_sros"])
+    @pytest.mark.parametrize("platform", ["arista_eos", "cisco_xe", "sonic"])
     def test_an_edge_that_cannot_filter_an_external_session_is_refused(self, platform: str) -> None:
         """No RM-<session>-* on these templates: refuse rather than render an open session."""
         data = _on_platform(_fixture(), platform)
@@ -409,7 +401,7 @@ _EXTERNAL_FAR_ENDS = ("EXT-AWS-DX-FR2", "EQX-FR2-SDWAN-GW1", "EXT-MEGAPORT-MCR1"
 class TestRefusalScope:
     """What is, and what is not, an external session for the refusal (cisco_xe: the platform without the maps)."""
 
-    @pytest.mark.parametrize("platform", ["arista_eos", "cisco_xe", "sonic", "nokia_sros"])
+    @pytest.mark.parametrize("platform", ["arista_eos", "cisco_xe", "sonic"])
     def test_the_message_names_device_platform_session_and_far_end(self, platform: str) -> None:
         """Every refused platform gets the same message: device, platform, role, each session with its far end."""
         with pytest.raises(ValueError) as err:

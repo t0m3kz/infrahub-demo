@@ -143,14 +143,6 @@ nodes:
             label: Provisioning
             description: "Being built or staged."
             color: "#FFFF7F"
-          - name: maintenance
-            label: Maintenance
-            description: "Temporarily under maintenance."
-            color: "#FFD27F"
-          - name: decommissioned
-            label: Decommissioned
-            description: "Removed from active service."
-            color: "#BFBFBF"
       - name: routing_strategy
         kind: Dropdown
         label: "Routing Strategy"
@@ -324,10 +316,6 @@ nodes:
             label: Provisioning
             description: "Being built or staged."
             color: "#FFFF7F"
-          - name: maintenance
-            label: Maintenance
-            description: "Temporarily under maintenance."
-            color: "#FFD27F"
           - name: decommissioned
             label: Decommissioned
             description: "Removed from active service."
@@ -568,22 +556,3 @@ nodes:
         parameters:
           min_value: 0
         order_weight: 360
-      # Downlink budget of a pod with ToRs, per spine: the leafs, then the border-leafs, then one
-      # ToR slot per rack position (generators/pod_config.py spine_downlink_layout); a unit test
-      # checks it against that layout. Set only on designs with ToRs.
-      - name: spine_downlink_ports_per_spine
-        kind: Number
-        label: "Spine Downlink Ports"
-        description: "Downlink ports per spine the ToR rack budget is computed from"
-        optional: true
-        parameters:
-          min_value: 1
-        order_weight: 500
-      - name: tor_uplinks_to_spine
-        kind: Number
-        label: "ToR Uplinks"
-        description: "Spine uplinks of each ToR (over all spines) in the ToR rack budget"
-        optional: true
-        parameters:
-          min_value: 1
-        order_weight: 510

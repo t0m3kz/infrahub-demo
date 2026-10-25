@@ -377,8 +377,7 @@ class TestReconcileApplicationRulesSegmentIsolationMode:
 
 class TestReconcileApplicationRulesCloudEndpoints:
     """A dependency with a CloudNetworkSegment on either side goes through the
-    same SecurityPolicyRule path as an on-prem one: the cloud flow is a rule,
-    never a CloudSecurityGroupRule."""
+    same SecurityPolicyRule path as an on-prem one."""
 
     def _make_gen_ready(self) -> Any:
         gen = _make_gen()

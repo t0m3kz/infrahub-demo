@@ -14,43 +14,25 @@ from typing import Any
 import pytest
 from infrahub_sdk import InfrahubClient
 
-from generators.helpers.pools import (
+from tasks import ALL_DEMO_BRANCH
+from utils.data_cleaning import clean_data
+from utils.exchange_transit import EXCHANGE_PEERS, TRANSIT_OFFSETS, transit_addresses, transit_vlan
+from utils.limits import (
     FW_CONTEXT_VLAN_END,
     FW_CONTEXT_VLAN_START,
     LB_CONTEXT_VLAN_END,
     LB_CONTEXT_VLAN_START,
+    LB_VIP_PREFIXLEN,
 )
-from utils.data_cleaning import clean_data
-from utils.exchange_transit import EXCHANGE_PEERS, LB_VIP_PREFIXLEN, TRANSIT_OFFSETS, transit_addresses, transit_vlan
 
-from .conftest import TestInfrahubDockerWithClient
-from .interconnect_queries import (
-    CLOUD_LOAD_BALANCERS_QUERY,
-    RULES_BY_POLICY_QUERY,
-    RULES_BY_SOURCE_SEGMENT_QUERY,
-    SCENARIO_NAME,
-)
-from .interconnect_rules import _TRANSIT_PEER_NAMES, _exchange_ends, _rules
-from .test_constants import (
+from .all_demo_circuit_constants import ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS
+from .all_demo_constants import ALL_DEMO_DC_NAMES
+from .all_demo_firewall_constants import (
     ALL_DEMO_BORDER_FIREWALL_PORTS,
-    ALL_DEMO_BRANCH,
-    ALL_DEMO_CLOUD_LOAD_BALANCED_COMPONENTS,
-    ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS,
-    ALL_DEMO_DC_NAMES,
     ALL_DEMO_DEDICATED_FIREWALL_TENANTS,
-    ALL_DEMO_DEDICATED_LOADBALANCER_TENANTS,
     ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS,
     ALL_DEMO_FIREWALL_MEMBERS,
-    ALL_DEMO_LB_CLIENT_DEPENDENCIES,
-    ALL_DEMO_LB_LEG_RESOURCES,
-    ALL_DEMO_LB_VIP_RESOURCES,
-    ALL_DEMO_LEGACY_EXCHANGES,
-    ALL_DEMO_LOAD_BALANCED_COMPONENTS,
-    ALL_DEMO_LOADBALANCER_CONTEXTS,
-    ALL_DEMO_LOADBALANCER_MEMBERS,
-    ALL_DEMO_SEGMENT_LEGS,
     ALL_DEMO_SHARED_FIREWALL_CONTEXTS,
-    ALL_DEMO_SHARED_LOADBALANCER_CONTEXTS,
     ALL_DEMO_SNAT_ADDRESSES,
     ALL_DEMO_SNAT_POOL_PREFIX,
     ALL_DEMO_TRANSIT_EXCHANGES,
@@ -62,7 +44,27 @@ from .test_constants import (
     deployment_namespace,
     transit_namespace_type,
 )
-from .test_helpers import (
+from .all_demo_loadbalancer_constants import (
+    ALL_DEMO_CLOUD_LOAD_BALANCED_COMPONENTS,
+    ALL_DEMO_DEDICATED_LOADBALANCER_TENANTS,
+    ALL_DEMO_LB_CLIENT_DEPENDENCIES,
+    ALL_DEMO_LB_LEG_RESOURCES,
+    ALL_DEMO_LB_VIP_RESOURCES,
+    ALL_DEMO_LOAD_BALANCED_COMPONENTS,
+    ALL_DEMO_LOADBALANCER_CONTEXTS,
+    ALL_DEMO_LOADBALANCER_MEMBERS,
+    ALL_DEMO_SEGMENT_LEGS,
+    ALL_DEMO_SHARED_LOADBALANCER_CONTEXTS,
+)
+from .conftest import TestInfrahubDockerWithClient
+from .interconnect_queries import (
+    CLOUD_LOAD_BALANCERS_QUERY,
+    RULES_BY_POLICY_QUERY,
+    RULES_BY_SOURCE_SEGMENT_QUERY,
+    SCENARIO_NAME,
+)
+from .interconnect_rules import _TRANSIT_PEER_NAMES, _exchange_ends, _rules
+from .service_inventory_helpers import (
     fetch_loadbalancer_inventory,
     fetch_tenant_services,
     fetch_transit_inventory,
@@ -305,16 +307,12 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                 ports_by_site.setdefault(expected["site"], {}).setdefault(str(port["id"]), set()).add(context_name)
                 port_devices_by_site.setdefault(expected["site"], set()).add(str(port["device"]))
 
-        # Exchanges whose gateway is not a context of the 30_all DCs: only the
-        # DC6 chain's own may exist; the legacy bootstrap ones must not.
+        # Every exchange has a gateway context.
         for exchange in inventory["exchanges"]:
             if not exchange["gateway_id"]:
                 errors.append(f"{exchange['name']}: exchange without a gateway context")
-        legacy = sorted(str(e["name"]) for e in inventory["exchanges"] if e["name"] in ALL_DEMO_LEGACY_EXCHANGES)
-        if legacy:
-            errors.append(f"legacy bootstrap exchange(s) still present: {legacy}")
 
-        # Totals, all derived from the customers' environments in test_constants.
+        # Totals, all derived from the customers' environments in all_demo_firewall_constants.
         if leg_count != ALL_DEMO_TRANSIT_LEGS:
             errors.append(f"{leg_count} leg(s), expected {ALL_DEMO_TRANSIT_LEGS}")
         if subinterface_count != ALL_DEMO_TRANSIT_SUBINTERFACES:

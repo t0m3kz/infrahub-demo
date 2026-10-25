@@ -63,7 +63,6 @@ EG_FR_END = _end("eg-fr201", "Ethernet1/13", FR2)  # the cross-connect's port
 EG_FR_DF10_END = _end("eg-fr201", "Ethernet1/10", FR2)  # the dark fibre to DC10 ends on another port of the edge
 EG_FR_DF11_END = _end("eg-fr201", "Ethernet1/11", FR2)
 EG_FR_METRO_END = _end("eg-fr01", "Ethernet1/13", FR)  # legacy: no device is deployed to a metro any more
-EG_PA_END = _end("eg-pa401", "Ethernet1/13", PA4)
 EG_AM_NE_END = _end("eg-am-ne01", "Ethernet1/13", AM_NE)  # a virtual edge deployed to the virtual colocation
 AWS_END = _end("EXT-AWS-DX-FR2", "et-0/0/0", EUC1)
 GW_END = _end("EQX-FR2-SDWAN-GW1", "eth1", FR2)  # the gateway's public port

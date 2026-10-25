@@ -11,7 +11,6 @@ first left behind — instead of a brittle list of canned return values.
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -25,6 +24,7 @@ from tests.unit.customer_dc_transit_helpers import (
     _SHARED,
     _TRACKED,
     _UNTRACKED,
+    _dedicated,
     _make_gen,
     _payload,
     _run,
@@ -245,21 +245,11 @@ class TestRerunAndSecondCustomer:
 
 
 class TestDedicatedContext:
-    def _dedicated(self, gen: Any) -> None:
-        cluster = SimpleNamespace(
-            id="ded-cluster", name=SimpleNamespace(value="DC10-ded-ha"), capabilities=SimpleNamespace(peers=[])
-        )
-        members = [
-            SimpleNamespace(id="fw-1", name=SimpleNamespace(value="DC10-FW1-C005-p-dedicated"), hosting_device=None),
-            SimpleNamespace(id="fw-2", name=SimpleNamespace(value="DC10-FW2-C005-p-dedicated"), hosting_device=None),
-        ]
-        gen._ensure_dedicated_device_pair = AsyncMock(return_value=(cluster, members))
-
     @pytest.mark.asyncio
     async def test_dedicated_context_writes_are_tracked_and_rerun_resaves_them(self) -> None:
         world = _World()
         gen, events = _make_gen(world)
-        self._dedicated(gen)
+        _dedicated(gen)
 
         await _run(gen, world, _payload(dedicated=True))
 
@@ -394,7 +384,7 @@ class TestSnatAddress:
     async def test_dedicated_context_snat_write_is_tracked(self) -> None:
         world = _World()
         gen, _ = _make_gen(world)
-        TestDedicatedContext()._dedicated(gen)
+        _dedicated(gen)
 
         await _run(gen, world, _payload(dedicated=True))
 

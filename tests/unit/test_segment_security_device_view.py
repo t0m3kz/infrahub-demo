@@ -37,7 +37,6 @@ from tests.smoke.fixture_builders.group_policy import (
     gpo_segment,
     gpo_view,
 )
-from tests.smoke.test_configs_smoke import _run_transform
 from transforms.common import BaseDeviceTransform
 from transforms.config.access_leaf import AccessLeaf
 from transforms.config.border_leaf import BorderLeaf
@@ -46,12 +45,12 @@ from transforms.helpers.group_policy import (
     _BUILDERS,
     GPO_CONFIG_KEYS,
     GPO_RENDERERS,
-    MSSG_MAX_SEGMENTS,
     group_policy_device_view,
 )
 from transforms.helpers.vxlan import get_interfaces
 from utils.data_cleaning import clean_data
 from utils.fabric_roles import DC_VTEP_ROLES
+from utils.limits import EOS_MSSG_MAX_SEGMENTS
 
 LEAF_SEGMENTS = ("web-np", "app-np", "pay-p", "portal-p")
 VRFS = ("NONPROD", "PROD")
@@ -199,7 +198,7 @@ class TestGate:
             is None
         )
 
-    @pytest.mark.parametrize("platform", ["cisco_nxos", "sonic", "nokia_sros", ""])
+    @pytest.mark.parametrize("platform", ["cisco_nxos", "sonic", ""])
     def test_a_platform_without_a_renderer_renders_nothing(self, platform: str) -> None:
         assert _view(_roots(), platform=platform) is None
 
@@ -234,7 +233,7 @@ class TestGate:
     def test_a_refusal_only_fires_on_a_rendering_reference_device(self) -> None:
         """61 segments are refused on an EOS VTEP, not on a device that renders none."""
         roots = _roots()
-        for index in range(MSSG_MAX_SEGMENTS):
+        for index in range(EOS_MSSG_MAX_SEGMENTS):
             _add_segment(roots, f"bulk-{index}", f"10.99.{index}.0/24", group_id=1000 + index)
         for overrides in ({"role": "spine"}, {"device_name": "ghost-01"}, {"platform": "sonic"}, {"vrfs": []}):
             assert _view(roots, **overrides) is None
@@ -492,17 +491,17 @@ class TestDefinitions:
 
     def test_sixty_segments_render_and_sixty_one_are_refused(self) -> None:
         roots = _roots()
-        for index in range(MSSG_MAX_SEGMENTS - 5):
+        for index in range(EOS_MSSG_MAX_SEGMENTS - 5):
             _add_segment(roots, f"bulk-{index}", f"10.99.{index}.0/24", group_id=1000 + index)
         view = _good(roots)
-        assert len(view["match_lists"]) == MSSG_MAX_SEGMENTS
+        assert len(view["match_lists"]) == EOS_MSSG_MAX_SEGMENTS
         _add_segment(roots, "bulk-last", "10.98.0.0/24", group_id=2000)
         with pytest.raises(ValueError, match=r"61 segments.*exceed the 60.*refusing unprotected config"):
             _view(roots)
 
     def test_a_skipped_vrf_does_not_count_against_the_limit(self) -> None:
         roots = _roots()
-        for index in range(MSSG_MAX_SEGMENTS):
+        for index in range(EOS_MSSG_MAX_SEGMENTS):
             segment = _add_segment(
                 roots, f"bulk-{index}", f"10.99.{index}.0/24", group_id=1000 + index, namespace=("BULK", "prod")
             )
@@ -743,7 +742,7 @@ class TestRendering:
     @staticmethod
     def _render(cls: type, **kwargs: Any) -> str:
         role, name, segments = VTEPS[cls.__name__]
-        return _run_transform(cls, _raw(role=role, name=name, segments=segments, **kwargs))
+        return run_transform(cls, _raw(role=role, name=name, segments=segments, **kwargs))
 
     @pytest.mark.parametrize("cls", [Leaf, BorderLeaf, AccessLeaf])
     def test_the_block_is_in_spec_order(self, cls: type) -> None:
@@ -846,7 +845,7 @@ class TestRendering:
         for edge in raw["ManagedNetworkSegment"]["edges"]:
             if edge["node"]["id"] == "seg-web-np":
                 edge["node"]["gateway"]["node"]["ip_prefix"]["node"]["prefix"]["value"] = "2001:db8:10::/64"
-        block = _block(_run_transform(Leaf, raw))
+        block = _block(run_transform(Leaf, raw))
         assert "match-list input prefix-ipv6 web-np\n   match prefix-ipv6 2001:db8:10::/64\n" in block
         assert "      segment web-np\n         definition\n            match prefix-ipv6 web-np\n" in block
         assert "match-list input prefix-ipv4 web-np" not in block
@@ -887,7 +886,7 @@ class TestRendering:
         for edge in raw["ManagedNetworkSegment"]["edges"]:
             if edge["node"]["id"] == "seg-app-np":
                 edge["node"]["gateway"]["node"]["ip_prefix"]["node"]["prefix"]["value"] = "10.10.0.0/16"
-        block = _block(_run_transform(Leaf, raw))
+        block = _block(run_transform(Leaf, raw))
         assert "      ! documented-not-lab-verified: this prefix overlaps 10.10.0.0/16 of segment app-np" in block
         assert block.index("! documented-not-lab-verified: this prefix overlaps") < block.index("      segment web-np")
 
@@ -933,14 +932,14 @@ class TestRendering:
             edge["node"] for edge in raw["ManagedNetworkSegment"]["edges"] if edge["node"]["id"] == "seg-app-np"
         )
         segment["gateway"]["node"]["ip_prefix"]["node"]["prefix"]["value"] = None
-        rendered = _run_transform(Leaf, raw)
+        rendered = run_transform(Leaf, raw)
         assert "! VRF NONPROD is not rendered: segment(s) app-np have no gateway prefix" in rendered
         assert "match-list input prefix-ipv4 web-np" not in rendered
         assert "! not expressible (left closed): portal-p -> web_pay_demo_local" in rendered
         assert "   vrf PROD\n" in _block(rendered) and "   vrf NONPROD\n" not in _block(rendered)
 
     def test_a_vtep_without_a_contract_vrf_renders_no_block(self) -> None:
-        rendered = _run_transform(Leaf, _raw(segments=()))
+        rendered = run_transform(Leaf, _raw(segments=()))
         assert "segment-security" not in rendered and "match-list" not in rendered
 
     def test_re_render_is_byte_identical(self) -> None:
@@ -956,14 +955,14 @@ class TestByteIdentity:
     def test_a_non_reference_eos_site_is_the_existing_golden(self, root_dir: Path) -> None:
         data = _gpo_golden_leaf_data(fleet=_GPO_EOS, version="4.36.2F", leaf_type="DCS-7050CX3-32C-R")
         assert "DcimGroupPolicyProfile" in data
-        assert _run_transform(Leaf, data) == self._golden(root_dir)
+        assert run_transform(Leaf, data) == self._golden(root_dir)
 
     def test_a_reference_leaf_carrying_no_contract_vrf_is_the_existing_golden(self, root_dir: Path) -> None:
         data = _gpo_golden_leaf_data(fleet=_GPO_EOS, version="4.36.2F")
-        assert _run_transform(Leaf, data) == self._golden(root_dir)
+        assert run_transform(Leaf, data) == self._golden(root_dir)
 
     def test_the_base_transform_has_no_segment_security_without_the_fleet_roots(self, root_dir: Path) -> None:
         data = _gpo_golden_leaf_data(fleet=_GPO_EOS, version="4.36.2F")
         bare = {key: value for key, value in data.items() if key in ("DcimDevice",)}
-        assert _run_transform(Leaf, bare) == self._golden(root_dir)
+        assert run_transform(Leaf, bare) == self._golden(root_dir)
         assert issubclass(Leaf, BaseDeviceTransform)

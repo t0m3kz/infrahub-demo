@@ -51,10 +51,11 @@ from typing import Any, cast
 from typing_extensions import TypedDict
 
 from utils.data_cleaning import clean_data
+from utils.limits import SITE_VNI_END, SITE_VNI_START
 
 from ..common import CommonGenerator
 from ..fabric_sizing import colo_metro_asn_units
-from ..helpers.pools import SITE_VNI_END, SITE_VNI_START, name_to_asn_range
+from ..helpers.pools import name_to_asn_range
 from ..pools import PoolMixin
 from ..protocols import TopologyColocationMetro
 from .colocation_pools import ATTACHED_SLOTS, COLO_POOL_SLOTS

@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, Callable
 from infrahub_sdk.protocols import CoreIPAddressPool
 
 from utils.data_cleaning import clean_data
+from utils.limits import GROUP_CLOUD_LOADBALANCERS, LB_VIP_REREAD
 from utils.ports import PortProfileHelper, PortSpec
 
 from .helpers.lb_vip import (
@@ -49,13 +50,11 @@ from .protocols import (
 
 # The artifact group of cloud load balancers (data/bootstrap/00_groups.yml,
 # target of the cloud_lb_terraform artifact definition).
-CLOUD_LB_GROUP = {"hfid": ["cloud_loadbalancers"], "kind": "CoreStandardGroup"}
+CLOUD_LB_GROUP = {"hfid": [GROUP_CLOUD_LOADBALANCERS], "kind": "CoreStandardGroup"}
 
 # What another generator of the same load can still be writing when this run
-# reads it is re-read at most READ_ATTEMPTS times, READ_INTERVAL seconds apart
+# reads it is re-read at most LB_VIP_REREAD.attempts times, LB_VIP_REREAD.delay seconds apart
 # (_await_lb_inputs), after waiting for that generator's run in flight.
-READ_ATTEMPTS = 12
-READ_INTERVAL = 5.0
 _QUERIES = Path(__file__).resolve().parents[1] / "queries/topology/add"
 _SEGMENT_GATEWAYS_QUERY = _QUERIES / "lb_segment_gateways.gql"
 _SERVING_CONTEXTS_QUERY = _QUERIES / "lb_serving_contexts.gql"
@@ -273,7 +272,7 @@ class LoadbalancerVipMixin:
         their ``field`` until ``ready``, into every dict of the node.
 
         One query per read for every node still not ready, at most
-        READ_ATTEMPTS reads READ_INTERVAL seconds apart; no-op without a node.
+        LB_VIP_REREAD.attempts reads LB_VIP_REREAD.delay seconds apart; no-op without a node.
         """
         if not dicts:
             return
@@ -283,9 +282,9 @@ class LoadbalancerVipMixin:
             await self.wait_for_parent_generators((owner,), node_id)
         text = query.read_text()
         pending = node_ids
-        for attempt in range(READ_ATTEMPTS):
+        for attempt in range(LB_VIP_REREAD.attempts):
             if attempt:
-                await self.lb_reread_sleep(READ_INTERVAL)
+                await self.lb_reread_sleep(LB_VIP_REREAD.delay)
             result = await self.client.execute_graphql(query=text, variables={"ids": pending})
             for node in clean_data(result).get(kind) or []:
                 for target in dicts.get(node.get("id") or "", []):
@@ -294,7 +293,7 @@ class LoadbalancerVipMixin:
                     pending = [node_id for node_id in pending if node_id != node["id"]]
             if not pending:
                 return
-        self.logger.warning("%s of %s still missing after %d reads", field, ", ".join(pending), READ_ATTEMPTS)
+        self.logger.warning("%s of %s still missing after %d reads", field, ", ".join(pending), LB_VIP_REREAD.attempts)
 
     async def _component_vips(
         self,

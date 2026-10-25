@@ -5,9 +5,10 @@ from __future__ import annotations
 from typing import Any
 
 from utils.data_cleaning import clean_data
+from utils.limits import CUSTOMER_ROUTING_TAG_POOL
 
 from ..common import CommonGenerator
-from ..helpers.routing_tag import CUSTOMER_TAG_POOL, ensure_routing_tag
+from ..helpers.routing_tag import ensure_routing_tag
 
 CUSTOMER_KIND = "OrganizationCustomer"
 
@@ -29,7 +30,9 @@ class CustomerRoutingTagGenerator(CommonGenerator):
             self.fail(f"No {self.graphql_root_key} data in GraphQL response")
         customer = customers[0]
         try:
-            tag = await ensure_routing_tag(self.client, kind=CUSTOMER_KIND, node=customer, pool_name=CUSTOMER_TAG_POOL)
+            tag = await ensure_routing_tag(
+                self.client, kind=CUSTOMER_KIND, node=customer, pool_name=CUSTOMER_ROUTING_TAG_POOL
+            )
         except LookupError as exc:
             self.fail(str(exc))
         self.logger.info(f"Customer {customer.get('name')}: routing tag {tag}")

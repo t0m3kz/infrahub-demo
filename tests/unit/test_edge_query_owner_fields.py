@@ -1,4 +1,4 @@
-"""The edge config query delivers the owner, status and process_role fields the external BGP filter reads.
+"""The edge config query delivers the owner and process_role fields the external BGP filter reads.
 
 transforms/helpers/bgp_external.py filters the external sessions of the NX-OS colocation edge per owner. It reads the cleaned
 response (utils/data_cleaning.clean_data: ``__typename`` -> ``typename``, ``{node}``/``{edges}`` flattened,
@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from graphql import FieldNode, FragmentDefinitionNode, OperationDefinitionNode, parse, print_ast
+from graphql import FieldNode, FragmentDefinitionNode, OperationDefinitionNode, parse
 
 from tests.integration import demo_data
 from utils.data_cleaning import clean_data
@@ -108,40 +108,27 @@ class TestChangedFilesParse:
 
 
 class TestSegmentRoot:
-    """ManagedNetworkSegment delivers status (unfiltered) and its owner."""
+    """ManagedNetworkSegment delivers its owner."""
 
-    def test_the_root_selects_status_and_the_owner(self) -> None:
-        """status { value } and owner { node { __typename org_id display_label } } sit next to the gateway."""
+    def test_the_root_selects_the_owner(self) -> None:
+        """owner { node { __typename org_id display_label } } sits next to the gateway."""
         node = _node(_root("ManagedNetworkSegment"))
         names = [c.name.value for c in _children(node)]
 
-        assert {"status", "owner", "gateway"} <= set(names)
+        assert {"owner", "gateway"} <= set(names)
         assert _owner_selection_names(_select_owner(node)) == list(_OWNER_FIELDS)
 
-    def test_the_root_has_no_server_side_status_filter(self) -> None:
-        """The transform drops retired in Python so the smoke fixtures exercise it."""
-        root = _root("ManagedNetworkSegment")
-
-        assert not root.arguments
-        assert "status__values" not in print_ast(root)
-
     def test_the_fields_exist_on_the_schema(self) -> None:
-        """status is an attribute, owner a relationship to OrganizationCustomer, which carries org_id."""
-        assert "status" in demo_data.attribute_names("ManagedNetworkSegment")
+        """owner is a relationship to OrganizationCustomer, which carries org_id."""
         assert _peer("ManagedNetworkSegment", "owner") == "OrganizationCustomer"
         assert "org_id" in demo_data.attribute_names("OrganizationCustomer")
 
     def test_a_raw_response_cleans_to_the_transform_shape(self) -> None:
-        """segment["status"] is a string, segment["owner"] the typename/org_id/display_label dict."""
-        raw = {
-            "ManagedNetworkSegment": {
-                "edges": [{"node": {"status": {"value": "active"}, "owner": _raw_owner(), "gateway": {"node": None}}}]
-            }
-        }
+        """segment["owner"] is the typename/org_id/display_label dict."""
+        raw = {"ManagedNetworkSegment": {"edges": [{"node": {"owner": _raw_owner(), "gateway": {"node": None}}}]}}
 
         segment = clean_data(raw)["ManagedNetworkSegment"][0]
 
-        assert segment["status"] == "active"
         assert segment["owner"] == _cleaned_owner()
 
 
@@ -211,7 +198,7 @@ class TestCloudVirtualInterfaceRoot:
 
 
 class TestOfficeRoot:
-    """TopologyCustomerOffice delivers its owner and each hosted segment's status and owner."""
+    """TopologyCustomerOffice delivers its owner and each hosted segment's owner."""
 
     def test_the_office_selects_its_owner(self) -> None:
         """owner sits on the office node next to sdwan_gateway and lan_prefixes."""
@@ -222,12 +209,12 @@ class TestOfficeRoot:
         }
         assert _owner_selection_names(_select_owner(node)) == list(_OWNER_FIELDS)
 
-    def test_the_hosted_segment_selects_status_and_owner(self) -> None:
-        """segment_deployments.segment carries status, owner and the gateway prefix."""
+    def test_the_hosted_segment_selects_the_owner(self) -> None:
+        """segment_deployments.segment carries the owner and the gateway prefix."""
         deployments = _child(_node(_root("TopologyCustomerOffice")), "segment_deployments")
         segment = _node(_child(_node(deployments), "segment"))
 
-        assert {"status", "owner", "gateway"} <= {c.name.value for c in _children(segment)}
+        assert {"owner", "gateway"} <= {c.name.value for c in _children(segment)}
         assert _owner_selection_names(_select_owner(segment)) == list(_OWNER_FIELDS)
 
     def test_the_fields_exist_on_the_schema(self) -> None:
@@ -235,10 +222,9 @@ class TestOfficeRoot:
         assert _peer("TopologyCustomerOffice", "owner") == "OrganizationEntity"
         assert _peer("TopologySegmentHosting", "segment_deployments") in demo_data.schema()
         assert "owner" in demo_data.relationship_names("ManagedNetworkSegment")
-        assert "status" in demo_data.attribute_names("ManagedNetworkSegment")
 
     def test_a_raw_response_cleans_to_the_transform_shape(self) -> None:
-        """office["owner"] and segment_deployments[i]["segment"]["status"/"owner"] are cleaned."""
+        """office["owner"] and segment_deployments[i]["segment"]["owner"] are cleaned."""
         raw = {
             "TopologyCustomerOffice": {
                 "edges": [
@@ -253,7 +239,6 @@ class TestOfficeRoot:
                                         "node": {
                                             "segment": {
                                                 "node": {
-                                                    "status": {"value": "retired"},
                                                     "owner": _raw_owner("C005"),
                                                     "gateway": {"node": None},
                                                 }
@@ -272,7 +257,6 @@ class TestOfficeRoot:
         segment = office["segment_deployments"][0]["segment"]
 
         assert office["owner"] == _cleaned_owner("C005")
-        assert segment["status"] == "retired"
         assert segment["owner"] == _cleaned_owner("C005")
 
 

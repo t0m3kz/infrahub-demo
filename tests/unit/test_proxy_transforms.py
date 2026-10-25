@@ -124,14 +124,14 @@ _PROXY_CLEAN_DATA_PATH = "transforms.common.clean_data"
 def _cleaned_device(
     proxy_type: str = "explicit",
     proxy_vendor: str = "haproxy",
-    platform: str = "haproxy_technologies_linux",
+    platform: str = "haproxy_technologies",
 ) -> dict:
     """Return a minimal already-cleaned DcimPhysicalDevice dict for Proxy tests."""
     return {
         "DcimPhysicalDevice": [
             {
                 "name": "DC3-PRX-01",
-                "platform": {"netmiko_device_type": platform},
+                "platform": {"name": platform},
                 "interfaces": [
                     {
                         "name": "eth0",
@@ -495,7 +495,5 @@ class TestProxyTransformUnrenderableRules:
             }
         ]
         with patch(_PROXY_CLEAN_DATA_PATH, return_value=cleaned):
-            with pytest.raises(
-                ValueError, match="haproxy_technologies_linux cannot render proxy rule 'inspect-stripe'"
-            ):
+            with pytest.raises(ValueError, match="haproxy_technologies cannot render proxy rule 'inspect-stripe'"):
                 await _make_proxy_transform().transform({})

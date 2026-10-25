@@ -31,7 +31,6 @@ AWS_CLEANED: dict = {
         {
             "id": "vpc-1",
             "name": "prod-vpc",
-            "is_default": False,
             "dns_support": True,
             "dns_hostnames": True,
             "account": AWS_ACCOUNT,
@@ -41,21 +40,17 @@ AWS_CLEANED: dict = {
                 {
                     "id": "sub-1",
                     "name": "prod-subnet-1a",
-                    "is_public": False,
                     "auto_assign_public_ip": False,
-                    "segment_type": "aws_vpc_subnet",
                     "cidr_block": "10.0.1.0/24",
                     "availability_zone": {"name": "eu-central-1a"},
                 }
             ],
         }
     ],
-    "CloudSecurityGroup": [{"id": "sg-1", "name": "prod-sg", "virtual_network": {"name": "prod-vpc"}}],
     "CloudInstance": [
         {
             "id": "i-1",
             "name": "prod-instance-1",
-            "cloud_id": "i-abc123",
             "instance_type": "t3.micro",
             "image": "ami-12345678",
             "os_type": "linux",
@@ -63,53 +58,9 @@ AWS_CLEANED: dict = {
             "public_ip": None,
             "network_segment": {"name": "prod-subnet-1a", "virtual_network": {"name": "prod-vpc"}},
             "availability_zone": {"name": "eu-central-1a"},
-            "security_groups": [{"name": "prod-sg"}],
-        }
-    ],
-    "CloudInternetGateway": [{"id": "igw-1", "name": "prod-igw", "virtual_network": {"name": "prod-vpc"}}],
-    "CloudNATGateway": [
-        {
-            "id": "nat-1",
-            "name": "prod-nat",
-            "virtual_network": {"name": "prod-vpc"},
-            "network_segments": [{"name": "prod-subnet-1a"}],
-            "public_ip": "1.2.3.4",
-        }
-    ],
-    "CloudRouteTable": [
-        {
-            "id": "rt-1",
-            "name": "prod-rt",
-            "is_main": True,
-            "virtual_network": {"name": "prod-vpc"},
-            "network_segments": [{"name": "prod-subnet-1a"}],
-        }
-    ],
-    "CloudRoute": [
-        {
-            "id": "route-1",
-            "name": "route-igw",
-            "route_table": {"name": "prod-rt"},
-            "destination": {"prefix": "0.0.0.0/0"},
-            "internet_gateway": {"name": "prod-igw"},
-            "nat_gateway": None,
-            "instance": None,
-            "network_interface": None,
-        }
-    ],
-    "CloudPublicIP": [],
-    "CloudNetworkACL": [
-        {
-            "id": "nacl-1",
-            "name": "prod-nacl",
-            "virtual_network": {"name": "prod-vpc"},
-            "network_segments": [{"name": "prod-subnet-1a"}],
         }
     ],
     "CloudTransitGateway": [],
-    "CloudVPNGateway": [],
-    "CloudCustomerGateway": [],
-    "CloudVirtualNetworkPeering": [],
     "CloudDirectConnect": [],
     "CloudVirtualInterface": [],
 }
@@ -125,7 +76,6 @@ def _azure_cleaned() -> dict:
     data = _aws_cleaned()
     data["CloudVirtualNetwork"][0]["account"]["provider"]["name"] = "Azure"
     data["CloudVirtualNetwork"][0]["region"]["name"] = "westeurope"
-    data["CloudVirtualNetwork"][0]["network_segments"][0]["segment_type"] = "azure_vnet_subnet"
     return data
 
 
@@ -134,7 +84,6 @@ def _gcp_cleaned() -> dict:
     data = _aws_cleaned()
     data["CloudVirtualNetwork"][0]["account"]["provider"]["name"] = "GCP"
     data["CloudVirtualNetwork"][0]["region"]["name"] = "europe-west1"
-    data["CloudVirtualNetwork"][0]["network_segments"][0]["segment_type"] = "gcp_vpc_subnet"
     return data
 
 
@@ -219,81 +168,11 @@ class TestPrepareCloudDataVpcs:
         assert len(ctx["vpcs"]) == 2
 
 
-class TestPrepareCloudDataFiltering:
-    def test_route_table_belonging_to_known_vpc_included(self) -> None:
-        ctx = prepare_cloud_data(_aws_cleaned())
-        rt_names = [rt["name"] for rt in ctx["route_tables"]]
-        assert "prod-rt" in rt_names
-
-    def test_route_table_belonging_to_unknown_vpc_excluded(self) -> None:
-        data = _aws_cleaned()
-        data["CloudRouteTable"].append(
-            {
-                "id": "rt-orphan",
-                "name": "orphan-rt",
-                "is_main": False,
-                "virtual_network": {"name": "other-vpc"},
-                "network_segments": [],
-            }
-        )
-        ctx = prepare_cloud_data(data)
-        rt_names = [rt["name"] for rt in ctx["route_tables"]]
-        assert "orphan-rt" not in rt_names
-
-    def test_route_belonging_to_known_route_table_included(self) -> None:
-        ctx = prepare_cloud_data(_aws_cleaned())
-        route_names = [r["name"] for r in ctx["routes"]]
-        assert "route-igw" in route_names
-
-    def test_route_belonging_to_unknown_route_table_excluded(self) -> None:
-        data = _aws_cleaned()
-        data["CloudRoute"].append(
-            {
-                "id": "route-orphan",
-                "name": "route-orphan",
-                "route_table": {"name": "nonexistent-rt"},
-                "destination": {"prefix": "10.0.0.0/8"},
-                "internet_gateway": None,
-                "nat_gateway": None,
-                "instance": None,
-                "network_interface": None,
-            }
-        )
-        ctx = prepare_cloud_data(data)
-        route_names = [r["name"] for r in ctx["routes"]]
-        assert "route-orphan" not in route_names
-
-
 class TestPrepareCloudDataGrouping:
-    def test_sgs_grouped_by_vpc(self) -> None:
-        ctx = prepare_cloud_data(_aws_cleaned())
-        assert "prod-vpc" in ctx["sgs_by_vpc"]
-        assert ctx["sgs_by_vpc"]["prod-vpc"][0]["name"] == "prod-sg"
-
     def test_instances_grouped_by_vpc(self) -> None:
         ctx = prepare_cloud_data(_aws_cleaned())
         assert "prod-vpc" in ctx["inst_by_vpc"]
         assert ctx["inst_by_vpc"]["prod-vpc"][0]["name"] == "prod-instance-1"
-
-    def test_igws_grouped_by_vpc(self) -> None:
-        ctx = prepare_cloud_data(_aws_cleaned())
-        assert "prod-vpc" in ctx["igws_by_vpc"]
-        assert ctx["igws_by_vpc"]["prod-vpc"][0]["name"] == "prod-igw"
-
-    def test_nats_grouped_by_vpc(self) -> None:
-        ctx = prepare_cloud_data(_aws_cleaned())
-        assert "prod-vpc" in ctx["nats_by_vpc"]
-        assert ctx["nats_by_vpc"]["prod-vpc"][0]["name"] == "prod-nat"
-
-    def test_route_tables_grouped_by_vpc(self) -> None:
-        ctx = prepare_cloud_data(_aws_cleaned())
-        assert "prod-vpc" in ctx["rts_by_vpc"]
-        assert ctx["rts_by_vpc"]["prod-vpc"][0]["name"] == "prod-rt"
-
-    def test_nacls_grouped_by_vpc(self) -> None:
-        ctx = prepare_cloud_data(_aws_cleaned())
-        assert "prod-vpc" in ctx["nacls_by_vpc"]
-        assert ctx["nacls_by_vpc"]["prod-vpc"][0]["name"] == "prod-nacl"
 
 
 class TestPrepareCloudDataEmpty:
@@ -308,22 +187,6 @@ class TestPrepareCloudDataEmpty:
     def test_empty_dict_has_empty_regions(self) -> None:
         ctx = prepare_cloud_data({})
         assert ctx["regions_seen"] == []
-
-    def test_empty_dict_has_empty_security_groups(self) -> None:
-        ctx = prepare_cloud_data({})
-        assert ctx["security_groups"] == []
-
-    def test_empty_dict_has_empty_instances(self) -> None:
-        ctx = prepare_cloud_data({})
-        assert ctx["instances"] == []
-
-    def test_empty_dict_has_empty_route_tables(self) -> None:
-        ctx = prepare_cloud_data({})
-        assert ctx["route_tables"] == []
-
-    def test_empty_dict_has_empty_routes(self) -> None:
-        ctx = prepare_cloud_data({})
-        assert ctx["routes"] == []
 
 
 # ===========================================================================
@@ -385,13 +248,6 @@ class TestTerraformAwsResources:
         assert 'availability_zone       = "eu-central-1a"' in result
 
     @pytest.mark.asyncio
-    async def test_security_group_resource_block(self) -> None:
-        tf = _make_terraform()
-        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_aws_cleaned()):
-            result = await tf.transform({})
-        assert 'resource "aws_security_group" "prod_sg"' in result
-
-    @pytest.mark.asyncio
     async def test_instance_resource_block(self) -> None:
         tf = _make_terraform()
         with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_aws_cleaned()):
@@ -404,42 +260,6 @@ class TestTerraformAwsResources:
         with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_aws_cleaned()):
             result = await tf.transform({})
         assert 'private_ip             = "10.0.1.10"' in result
-
-    @pytest.mark.asyncio
-    async def test_internet_gateway_resource_block(self) -> None:
-        tf = _make_terraform()
-        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_aws_cleaned()):
-            result = await tf.transform({})
-        assert 'resource "aws_internet_gateway" "prod_igw"' in result
-
-    @pytest.mark.asyncio
-    async def test_nat_gateway_eip_created_when_public_ip(self) -> None:
-        tf = _make_terraform()
-        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_aws_cleaned()):
-            result = await tf.transform({})
-        assert 'resource "aws_eip"' in result
-
-    @pytest.mark.asyncio
-    async def test_nat_gateway_resource_block(self) -> None:
-        tf = _make_terraform()
-        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_aws_cleaned()):
-            result = await tf.transform({})
-        assert 'resource "aws_nat_gateway" "prod_nat"' in result
-
-    @pytest.mark.asyncio
-    async def test_route_table_resource_block(self) -> None:
-        tf = _make_terraform()
-        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_aws_cleaned()):
-            result = await tf.transform({})
-        assert 'resource "aws_route_table" "prod_rt"' in result
-
-    @pytest.mark.asyncio
-    async def test_route_via_internet_gateway(self) -> None:
-        tf = _make_terraform()
-        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_aws_cleaned()):
-            result = await tf.transform({})
-        assert 'resource "aws_route"' in result
-        assert "gateway_id             = aws_internet_gateway.prod_igw.id" in result
 
 
 def _aws_with_direct_connects(*connections: tuple[str, str]) -> dict:
@@ -461,7 +281,6 @@ def _aws_with_direct_connects(*connections: tuple[str, str]) -> dict:
         {
             "id": f"vif-{name}",
             "name": f"{name}-vif",
-            "vif_type": "transit",
             "vlan_id": 1100,
             "direct_connect": {"name": name},
             "virtual_network": None,
@@ -637,8 +456,6 @@ class TestTerraformGcp:
 def _full_aws_cleaned() -> dict:
     """Multi-VPC, multi-region AWS fixture covering every resource type."""
     data = _multi_region_aws_cleaned()
-    # Second VPC SG
-    data["CloudSecurityGroup"].append({"id": "sg-2", "name": "west-sg", "virtual_network": {"name": "prod-vpc-west"}})
     # Transit gateway
     data["CloudTransitGateway"] = [
         {
@@ -650,29 +467,6 @@ def _full_aws_cleaned() -> dict:
             "account": data["CloudVirtualNetwork"][0]["account"],
             "region": {"name": "eu-central-1"},
             "attached_virtual_networks": [{"name": "prod-vpc"}, {"name": "prod-vpc-west"}],
-        }
-    ]
-    # Customer gateway
-    data["CloudCustomerGateway"] = [
-        {
-            "id": "cgw-1",
-            "name": "on-prem-cgw",
-            "account": data["CloudVirtualNetwork"][0]["account"],
-            "asn": {"asn": 65000},
-            "ip_address": {"address": "203.0.113.1/32"},
-            "device_type": "cisco",
-        }
-    ]
-    # VPC peering
-    data["CloudVirtualNetworkPeering"] = [
-        {
-            "id": "pcx-1",
-            "name": "prod-to-west-peering",
-            "peering_status": "active",
-            "requester_virtual_network": {"name": "prod-vpc"},
-            "accepter_virtual_network": {"name": "prod-vpc-west"},
-            "requester_route_table": None,
-            "accepter_route_table": None,
         }
     ]
     # Direct connect + VIF
@@ -690,7 +484,6 @@ def _full_aws_cleaned() -> dict:
         {
             "id": "vif-1",
             "name": "prod-vif",
-            "vif_type": "private",
             "vlan_id": 100,
             "direct_connect": {"name": "prod-dx"},
             "virtual_network": {"name": "prod-vpc"},
@@ -714,17 +507,9 @@ class TestSmokeCloudTransforms:
         expected_types = [
             'resource "aws_vpc"',
             'resource "aws_subnet"',
-            'resource "aws_security_group"',
             'resource "aws_instance"',
-            'resource "aws_internet_gateway"',
-            'resource "aws_eip"',
-            'resource "aws_nat_gateway"',
-            'resource "aws_route_table"',
-            'resource "aws_route"',
-            'resource "aws_network_acl"',
             'resource "aws_transit_gateway"',
-            'resource "aws_customer_gateway"',
-            'resource "aws_vpc_peering_connection"',
+            'resource "aws_dx_connection"',
         ]
         for rt in expected_types:
             assert rt in result, f"Missing resource type: {rt}"
@@ -742,7 +527,7 @@ class TestSmokeCloudTransforms:
 
     @pytest.mark.asyncio
     async def test_terraform_aws_smoke_cross_references_intact(self) -> None:
-        """VPC ID is correctly referenced by subnet, SG, IGW, and route table."""
+        """VPC ID is correctly referenced by its subnets."""
         tf = _make_terraform()
         with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_aws_cleaned()):
             result = await tf.transform({})
@@ -758,16 +543,6 @@ class TestSmokeCloudTransforms:
 
         assert 'cidr_block              = ""' not in result
         assert 'cidr_block           = ""' not in result
-
-    @pytest.mark.asyncio
-    async def test_terraform_aws_smoke_route_references_igw(self) -> None:
-        """Route with internet_gateway correctly references the IGW resource."""
-        tf = _make_terraform()
-        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_aws_cleaned()):
-            result = await tf.transform({})
-
-        assert "gateway_id" in result
-        assert "aws_internet_gateway.prod_igw.id" in result
 
     @pytest.mark.asyncio
     async def test_terraform_aws_smoke_both_vpcs_present(self) -> None:

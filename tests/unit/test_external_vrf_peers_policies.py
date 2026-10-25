@@ -18,10 +18,8 @@ def _segment(
     member_type: str = "address",
     *,
     owner: dict[str, Any] | None = _C3,
-    status: str = "active",
 ) -> dict[str, Any]:
     return {
-        "status": status,
         "owner": owner,
         "gateway": {"ip_prefix": {"prefix": prefix, "member_type": member_type, "ip_namespace": namespace}},
     }
@@ -45,7 +43,7 @@ class TestOnpremPrefixes:
             _segment("10.6.10.0/24", _NON_PROD),
             _segment("10.250.0.0/24", {"name": "MANAGEMENT", "namespace_type": "management"}),
             _segment("192.0.2.0/24", {"name": "INTERNET", "namespace_type": "internet"}),
-            {"gateway": None, "owner": _C3, "status": "active"},
+            {"gateway": None, "owner": _C3},
         ]
         assert get_onprem_prefixes(segments) == {
             "NON-PROD": {"C003": ["10.6.10.0/24"]},
@@ -67,20 +65,6 @@ class TestOnpremPrefixes:
             "PROD": {"C002": ["10.8.2.0/24"], "C003": ["10.5.9.0/24", "10.5.20.0/24"], "C015": ["10.7.10.0/24"]},
         }
         assert list(found["PROD"]) == ["C002", "C003", "C015"]
-
-    def test_retired_segments_are_skipped(self) -> None:
-        """Every other status still qualifies; retired does not, and an all-retired VRF is absent."""
-        segments = [
-            _segment("10.5.1.0/24", _PROD, status="active"),
-            _segment("10.5.2.0/24", _PROD, status="provisioning"),
-            _segment("10.5.3.0/24", _PROD, status="maintenance"),
-            _segment("10.5.4.0/24", _PROD, status="deprecated"),
-            _segment("10.5.5.0/24", _PROD, status="retired"),
-            _segment("10.6.5.0/24", _NON_PROD, status="retired"),
-        ]
-        assert get_onprem_prefixes(segments) == {
-            "PROD": {"C003": ["10.5.1.0/24", "10.5.2.0/24", "10.5.3.0/24", "10.5.4.0/24"]}
-        }
 
     @pytest.mark.parametrize("owner", [None, _PROVIDER], ids=["no-owner", "provider"])
     def test_a_segment_without_a_customer_owner_is_never_announced(self, owner: dict[str, Any] | None) -> None:

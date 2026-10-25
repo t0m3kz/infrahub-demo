@@ -6,8 +6,6 @@ spec:
   data:
     - name: cores
       description: Core Routers
-    - name: linux_devices
-      description: Linux Devices
     - name: leafs
       description: All leaf switches
     - name: tors
@@ -50,8 +48,6 @@ spec:
       description: Data Center Pod
     - name: topologies_rack
       description: Data Center Rack
-    - name: topologies_pop
-      description: POP Topologies
     - name: topologies_clab
       description: Containerlab Topologies
     - name: equinix_pop
@@ -64,8 +60,6 @@ spec:
       description: SaaS forwarding proxies (Zscaler, Prisma, Netskope, etc.)
     - name: onprem_proxies
       description: On-premises forwarding proxies (Squid, BlueCoat, Cisco WSA, etc.)
-    - name: sdwan_edges
-      description: VeloCloud SD-WAN branch edge appliances (VCE)
     - name: sdwan_gateways
       description: Arista SD-WAN hub gateways (VCG) deployed at colocation or cloud sites
     - name: provider_stubs

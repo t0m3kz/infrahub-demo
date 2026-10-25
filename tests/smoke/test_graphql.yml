@@ -75,14 +75,6 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
-    resource_name: console_config
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/config/console.gql
-          kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
     resource_name: firewall_config
     tests:
       - name: syntax_check
@@ -154,14 +146,6 @@ infrahub_tests:
           path: queries/placeholder.gql
           kind: graphql-query-smoke
 
-  - resource: GraphQLQuery
-    resource_name: device_decommission
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/config/device_decommission.gql
-          kind: graphql-query-smoke
-
   # ==================== TOPOLOGY QUERIES ====================
   - resource: GraphQLQuery
     resource_name: topology_dc
@@ -225,14 +209,6 @@ infrahub_tests:
       - name: syntax_check
         spec:
           path: queries/topology/add/rack.gql
-          kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
-    resource_name: virt_cluster_capacity
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/topology/add/virt_cluster_capacity.gql
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery

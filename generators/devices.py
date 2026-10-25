@@ -11,6 +11,8 @@ from infrahub_sdk.protocols import CoreIPAddressPool
 if TYPE_CHECKING:
     import logging
 
+from utils.limits import ROLE_GROUP_NAMES
+
 from .domain_pairing import DomainPairingMixin
 from .helpers import DeviceNameContext, DeviceNamingConfig, get_loopback_name
 from .protocols import (
@@ -63,7 +65,7 @@ _CONTROLLER_ALIASES = ("fabric_controllers", "security_manager_controllers", "lb
 
 # firewall/load-balancer route to a controller by controller_type AND a
 # platform match against the device's own template — a checkpoint_gaia
-# firewall must never route to a Panorama (panos) controller just because
+# firewall must never route to a Panorama (paloalto_panos) controller just because
 # both happen to be controller_type=security_manager.
 _ROLE_CONTROLLER_TYPE: dict[str, str] = {"firewall": "security_manager", "load-balancer": "lb_manager"}
 
@@ -72,17 +74,6 @@ _ROLE_CONTROLLER_TYPE: dict[str, str] = {"firewall": "security_manager", "load-b
 HA_KIND_BY_ROLE: dict[str, str] = {
     "firewall": "ManagedFirewallHA",
     "load-balancer": "ManagedLoadbalancerHA",
-}
-
-# device_role -> the bootstrap CoreStandardGroup its devices join
-# (data/bootstrap/00_groups.yml), for roles whose group does not follow the
-# f"{device_role}s" convention. One map for every create_devices() caller: a
-# group created on a branch because a caller missed it collides with every
-# other branch that creates it when both merge.
-ROLE_GROUP_NAMES: dict[str, str] = {
-    "load-balancer": "loadbalancers",
-    "access-switch": "access-switches",
-    "distribution-switch": "distribution-switches",
 }
 
 
@@ -230,7 +221,7 @@ class DeviceMixin(DomainPairingMixin):
 
         device_group = None
         if controller is None:
-            group_name = options.get("group_name") or ROLE_GROUP_NAMES.get(device_role) or f"{device_role}s"
+            group_name = ROLE_GROUP_NAMES.get(device_role) or f"{device_role}s"
             # Keep generators robust on branches where bootstrap groups were not
             # loaded yet (e.g. ad-hoc test branches): a missing group is created.
             device_group = await self._standard_group(
@@ -480,7 +471,7 @@ class DeviceMixin(DomainPairingMixin):
         alone (ACI APIC/DCNM/NSX/UCS aren't a 1:1 vendor pairing with the
         device's own platform). firewall/load-balancer match by
         controller_type AND platform, so e.g. a checkpoint_gaia firewall
-        never routes to a Panorama (panos) controller.
+        never routes to a Panorama (paloalto_panos) controller.
 
         Returns None (no controller — caller falls back to a
         CoreStandardGroup) when the role has no controller mapping, or no

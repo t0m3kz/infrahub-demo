@@ -16,15 +16,6 @@
               "id": "plat-dell_sonic",
               "name": {
                 "value": "dell_sonic"
-              },
-              "netmiko_device_type": {
-                "value": "dell_sonic"
-              },
-              "napalm_driver": {
-                "value": "dell_sonic"
-              },
-              "ansible_network_os": {
-                "value": "dell_sonic"
               }
             }
           },

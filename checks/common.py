@@ -9,14 +9,12 @@ from utils.data_cleaning import get_data
 from utils.exchange_transit import (
     EXCHANGE_PEERS,
     INTERNET_TYPE,
-    OFFSET_MEMBER_A,
-    OFFSET_MEMBER_B,
-    TRANSIT_PREFIXLEN,
     TRANSIT_SLOT,
     is_public_address,
     transit_addresses,
     transit_vlan,
 )
+from utils.limits import OFFSET_MEMBER_A, OFFSET_MEMBER_B, TRANSIT_PREFIXLEN
 
 from .base import WarningCheck
 
@@ -134,8 +132,8 @@ def validate_appliance(device: dict[str, Any], ha_kind: str, label: str) -> list
     device_name = device.get("name", "Unknown")
 
     platform = device.get("platform") or {}
-    if not platform.get("netmiko_device_type"):
-        errors.append(f"Device '{device_name}' has no platform with netmiko_device_type — config generation will fail")
+    if not platform.get("name"):
+        errors.append(f"Device '{device_name}' has no platform — config generation will fail")
 
     if device.get("status") != "active":
         errors.append(f"Device '{device_name}' status is '{device.get('status')}' — expected 'active'")

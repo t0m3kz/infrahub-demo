@@ -17,12 +17,10 @@ from infrahub_sdk.protocols import CoreIPAddressPool, CoreIPPrefixPool, IpamName
 
 from utils.exchange_transit import (
     INTERNET_TYPE,
-    OFFSET_MEMBER_A,
-    OFFSET_MEMBER_B,
     TRANSIT_OFFSETS,
-    TRANSIT_PREFIXLEN,
     transit_vlan,
 )
+from utils.limits import FW_SNAT_POOL, OFFSET_MEMBER_A, OFFSET_MEMBER_B, TRANSIT_PREFIXLEN
 
 from .connections import BORDER_ROLE_FOR_SERVICES, tracked_save_kwargs
 from .far_end import far_end_interfaces
@@ -30,7 +28,6 @@ from .firewall_context_spec import ContextSpec, _TransitMember, _TransitState
 from .protocols import DcimPhysicalInterface, DcimVirtualInterface, IpamIPAddress, IpamPrefix, TopologyRoutedExchange
 
 _MEMBER_OFFSETS = (OFFSET_MEMBER_A, OFFSET_MEMBER_B)
-_SNAT_POOL_NAME = "FW-SNAT-INTERNET-IPv4"
 _UPLINK_ROLE = "uplink"  # the member interface its context sub-interfaces sit on, cabled to a border service port
 
 
@@ -252,9 +249,9 @@ class TransitLegsMixin:
     async def _snat_pool(self) -> Any | None:
         """The FW-SNAT-INTERNET-IPv4 address pool (data/bootstrap); None (logged) when missing."""
         try:
-            return await self.client.get(kind=CoreIPAddressPool, name__value=_SNAT_POOL_NAME)
+            return await self.client.get(kind=CoreIPAddressPool, name__value=FW_SNAT_POOL)
         except Exception as exc:
-            self.logger.error(f"SNAT pool '{_SNAT_POOL_NAME}' not found — cannot allocate the SNAT address: {exc}")
+            self.logger.error(f"SNAT pool '{FW_SNAT_POOL}' not found — cannot allocate the SNAT address: {exc}")
             return None
 
     async def _ensure_context_allocation(

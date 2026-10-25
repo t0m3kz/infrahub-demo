@@ -178,17 +178,18 @@ def _build_dna_center(controller: dict[str, Any]) -> dict[str, Any]:
 
 # (controller_type, vendor) -> payload builder. `vendor` is the controller's own
 # platform name — None means "any platform" (fabric controller_types aren't tied to
-# one vendor platform the way firewall/lb managers are).
+# one vendor platform the way firewall/lb managers are; the one sdwan_orchestrator
+# modelled, VeloCloud, runs on the generic `linux` platform).
 _BUILDERS: dict[tuple[str, str | None], Any] = {
     ("aci_apic", None): _build_apic,
     ("dcnm", None): _build_dcnm,
     ("dna_center", None): _build_dna_center,
-    ("security_manager", "panos"): _build_panorama,
-    ("security_manager", "junos"): _build_security_director,
+    ("security_manager", "paloalto_panos"): _build_panorama,
+    ("security_manager", "juniper_junos"): _build_security_director,
     ("security_manager", "checkpoint_gaia"): _build_checkpoint_sms,
     ("lb_manager", "f5_tmos"): _build_big_iq,
     ("lb_manager", "netscaler"): _build_netscaler_adm,
-    ("sdwan_orchestrator", "velocloud"): _build_velocloud_vco,
+    ("sdwan_orchestrator", None): _build_velocloud_vco,
 }
 
 

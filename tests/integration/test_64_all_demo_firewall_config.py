@@ -27,7 +27,7 @@ CheckFirewall on a DC10 (Check Point), DC11 and FR2 (PAN-OS) member, the rendere
 firewall config of every site (leg interface, VIP, default route via the INTERNET
 leg, PROD/NON-PROD isolation), a DC11 border-leaf config carrying the
 transit VRF routes, and the FR edges' config carrying the zone's transit legs. Everything is derived from the loaded graph and from
-test_constants' environment-driven expectations.
+all_demo_firewall_constants' environment-driven expectations.
 
 A last step runs CheckLispFabric and renders every switch of the offices' LISP fabrics (add_office_fabric): the
 distribution-switches as map-servers and the access-switches as edges, with the WAN exit where the office has an
@@ -54,6 +54,7 @@ from infrahub_sdk import InfrahubClient
 
 from checks.firewall import CheckFirewall
 from generators.protocols import DcimPhysicalDevice
+from tasks import ALL_DEMO_BRANCH
 from transforms.config.access_leaf import AccessLeaf
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.edge import Edge
@@ -67,7 +68,21 @@ from utils.exchange_transit import (
 )
 from utils.internet_space import NON_INTERNET_PREFIXES
 
+from .all_demo_circuit_constants import (
+    ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS,
+    ALL_DEMO_DCI_CIRCUITS,
+    ALL_DEMO_INTERNET_BGWS,
+    INTERNET_L3_VNI,
+    INTERNET_ROUTE_TARGET,
+)
+from .all_demo_firewall_constants import (
+    ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS,
+    ALL_DEMO_INTERNET_EGRESS_RULES,
+    ALL_DEMO_SNAT_POOL_PREFIX,
+    transit_namespace_type,
+)
 from .conftest import TestInfrahubDockerWithClient
+from .dc_topology_helpers import fetch_dc_topology
 from .firewall_config_helpers import (
     _ACL_LINE,
     EXPECTED_DESTINATION_CIDRS,
@@ -87,19 +102,8 @@ from .firewall_config_helpers import (
     _segment_on_switches,
     _site_contexts,
 )
-from .test_constants import (
-    ALL_DEMO_BRANCH,
-    ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS,
-    ALL_DEMO_DCI_CIRCUITS,
-    ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS,
-    ALL_DEMO_INTERNET_BGWS,
-    ALL_DEMO_INTERNET_EGRESS_RULES,
-    ALL_DEMO_SNAT_POOL_PREFIX,
-    INTERNET_L3_VNI,
-    INTERNET_ROUTE_TARGET,
-    transit_namespace_type,
-)
-from .test_helpers import fetch_dc_topology, fetch_transit_inventory, render_device_config
+from .service_inventory_helpers import fetch_transit_inventory
+from .snapshot_helpers import render_device_config
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -252,7 +256,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
             rendered = await render_device_config(async_client_main, scenario_branch, device)
             if f"set vsys {context}" not in rendered:
                 errors.append(f"{device}: no vsys '{context}' rendered")
-            if platform_by_name.get(device) != "panos":
+            if platform_by_name.get(device) != "paloalto_panos":
                 errors.append(f"{device}: platform '{platform_by_name.get(device)}', the FR pair is expected PAN-OS")
                 continue
             if not any(leg["device"] == device for leg in inventory_context["legs"]):
@@ -346,7 +350,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
 
             for device in sorted({str(leg["device"]) for leg in context["legs"]}):
                 platform = platform_by_name.get(device)
-                if platform not in ("panos", "checkpoint_gaia"):
+                if platform not in ("paloalto_panos", "checkpoint_gaia"):
                     errors.append(f"{dc}/{device}: platform '{platform}' has no transit assertions in this test")
                     continue
                 rendered = await render_device_config(async_client_main, scenario_branch, device)
@@ -615,12 +619,12 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
             ]
             for device in sorted({str(leg["device"]) for leg in context["legs"]}):
                 platform = platform_by_name.get(device)
-                if platform not in ("panos", "checkpoint_gaia"):
+                if platform not in ("paloalto_panos", "checkpoint_gaia"):
                     errors.append(f"{dc}/{device}: platform '{platform}' has no SNAT assertions in this test")
                     continue
                 rendered = await render_device_config(async_client_main, scenario_branch, device)
                 rendered_by_platform[str(platform)] = rendered_by_platform.get(str(platform), 0) + 1
-                if platform == "panos":
+                if platform == "paloalto_panos":
                     for zone in zones:
                         base = f"set vsys {name} rulebase nat rules snat-{zone}"
                         if f"{base} source-translation dynamic-ip-and-port translated-address {snat}" not in rendered:
@@ -642,7 +646,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
                             f"{dc}/{device}: {len(nat_rules)} nat-rule line(s) for SNAT-{name}, {len(zones)} expected"
                         )
 
-        assert {"panos", "checkpoint_gaia"} <= set(rendered_by_platform), (
+        assert {"paloalto_panos", "checkpoint_gaia"} <= set(rendered_by_platform), (
             f"SNAT was rendered on {rendered_by_platform}, expected PAN-OS and Check Point"
         )
         assert not errors, f"Firewall SNAT on branch '{scenario_branch}' is wrong:\n" + "\n".join(

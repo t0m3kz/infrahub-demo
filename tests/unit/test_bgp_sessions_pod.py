@@ -35,7 +35,7 @@ class TestPodDeploymentSpinesTors:
         tor_names = {"pod1-tor-01", "pod1-tor-02", "pod1-tor-03", "pod1-tor-04"}
         spine_names = {"pod1-spine-01", "pod1-spine-02"}
 
-        for dev1_name, _, dev2_name, _, session_type, _ in sessions:
+        for dev1_name, _, dev2_name, _, session_type in sessions:
             assert (dev1_name in tor_names and dev2_name in spine_names) or (
                 dev1_name in spine_names and dev2_name in tor_names
             )
@@ -57,7 +57,7 @@ class TestPodDeploymentSpinesTors:
         assert len(sessions) == 4
 
         spine_name = "pod1-spine-01"
-        for dev1_name, _, dev2_name, _, _, _ in sessions:
+        for dev1_name, _, dev2_name, _, _ in sessions:
             assert spine_name in [dev1_name, dev2_name]
 
 
@@ -84,7 +84,7 @@ class TestPodMixedDeployment:
         spine_names = {"pod1-spine-01", "pod1-spine-02"}
         client_names = {"pod1-leaf-01", "pod1-leaf-02", "pod1-tor-01", "pod1-tor-02"}
 
-        for dev1_name, _, dev2_name, _, _, _ in sessions:
+        for dev1_name, _, dev2_name, _, _ in sessions:
             assert (dev1_name in spine_names and dev2_name in client_names) or (
                 dev1_name in client_names and dev2_name in spine_names
             )

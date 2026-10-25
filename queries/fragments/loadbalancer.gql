@@ -5,9 +5,6 @@ fragment LoadbalancerDeviceFields on DcimDevice {
   platform {
     node {
       name { value }
-      netmiko_device_type { value }
-      napalm_driver { value }
-      ansible_network_os { value }
     }
   }
   ... on DcimCapabilities {

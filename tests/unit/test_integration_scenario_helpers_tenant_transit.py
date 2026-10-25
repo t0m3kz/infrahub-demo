@@ -4,10 +4,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from tests.integration.test_helpers import (
+from tests.integration.segment_helpers import fetch_vlan_domain_segments
+from tests.integration.service_inventory_helpers import (
     fetch_tenant_services,
     fetch_transit_inventory,
-    fetch_vlan_domain_segments,
     match_transit_contexts,
     scope_tenant_services_to_dcs,
 )

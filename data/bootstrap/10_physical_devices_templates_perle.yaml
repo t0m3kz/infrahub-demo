@@ -7,7 +7,7 @@ spec:
     - template_name: SCG50R_CONSOLE
       owner: "P027"
       device_type: SCG50R
-      platform: perle_iolan
+      platform: linux
       software_image: perle_iolan-5.0
       role: edge
       status: provisioning

@@ -18,20 +18,24 @@ from utils.exchange_transit import (
 )
 from utils.internet_space import NON_INTERNET_PREFIXES
 
-from .test_constants import (
+from .all_demo_circuit_constants import (
     ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS,
-    ALL_DEMO_DC_NAMES,
     ALL_DEMO_DCI_CIRCUITS,
-    ALL_DEMO_DEDICATED_FIREWALL_TENANTS,
-    ALL_DEMO_DEDICATED_LOADBALANCER_TENANTS,
     ALL_DEMO_EDGE_INTERLINK_INTERFACE,
-    ALL_DEMO_LOAD_BALANCED_COMPONENTS,
+)
+from .all_demo_constants import ALL_DEMO_DC_NAMES
+from .all_demo_firewall_constants import (
+    ALL_DEMO_DEDICATED_FIREWALL_TENANTS,
     MANAGEMENT_NAMESPACE,
     ExpectedTransitContext,
-    LoadbalancerContextKey,
     transit_namespace_type,
 )
-from .test_helpers import fetch_loadbalancer_inventory, match_loadbalancer_contexts, match_transit_contexts
+from .all_demo_loadbalancer_constants import (
+    ALL_DEMO_DEDICATED_LOADBALANCER_TENANTS,
+    ALL_DEMO_LOAD_BALANCED_COMPONENTS,
+    LoadbalancerContextKey,
+)
+from .service_inventory_helpers import fetch_loadbalancer_inventory, match_loadbalancer_contexts, match_transit_contexts
 
 SCENARIO_NAME = "Scenario 30_all: Colo Cloud/Partner/SaaS Zone Policy"
 

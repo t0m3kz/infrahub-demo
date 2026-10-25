@@ -199,7 +199,7 @@ class LoadBalancerCloud(InfrahubTransform):
     Transform to generate Terraform HCL (.tf) for cloud load balancers.
 
     Same "one template per platform" pattern as BaseDeviceTransform._load_template (leaf/spine/tor
-    CLI configs), keyed on cloud provider instead of netmiko_device_type: each cloud gets its own
+    CLI configs), keyed on cloud provider instead of the device platform: each cloud gets its own
     template under templates/configs/loadbalancers_cloud/ shaped like that provider's actual
     Terraform resources (aws_lb/aws_lb_target_group/attachments, azurerm_lb/backend pool
     addresses/azurerm_lb_rule, google_compute_backend_service/network endpoints/forwarding_rule).

@@ -12,7 +12,6 @@ from generators.topology.office_fabric import OfficeFabricGenerator
 _ACCESS_TEMPLATE: dict[str, Any] = {
     "id": "tpl-access",
     "template_kind": "TemplateDcimPhysicalDevice",
-    "template_name": "C9300-48UXM_ACCESS_SWITCH",
     "platform": {"id": "plat-xe", "name": "cisco_xe"},
     "device_type": "dt-9300",
     "interfaces": [
@@ -25,7 +24,6 @@ _ACCESS_TEMPLATE: dict[str, Any] = {
 _DISTRIBUTION_TEMPLATE: dict[str, Any] = {
     "id": "tpl-dist",
     "template_kind": "TemplateDcimPhysicalDevice",
-    "template_name": "C9500-32C_DISTRIBUTION",
     "platform": {"id": "plat-xe", "name": "cisco_xe"},
     "device_type": "dt-9500",
     "interfaces": [
@@ -36,7 +34,7 @@ _DISTRIBUTION_TEMPLATE: dict[str, Any] = {
         {"name": "GigabitEthernet0/0", "role": "management"},
     ],
 }
-_VIRTUAL_TEMPLATE = {"id": "tpl-virtual", "template_kind": "TemplateDcimVirtualDevice", "template_name": "C8000V"}
+_VIRTUAL_TEMPLATE = {"id": "tpl-virtual", "template_kind": "TemplateDcimVirtualDevice"}
 
 _DISTRIBUTION_ENTRY = {"role": "distribution-switch", "quantity": 2, "template": _DISTRIBUTION_TEMPLATE}
 _ACCESS_ENTRY = {"role": "access-switch", "quantity": 2, "template": _ACCESS_TEMPLATE}

@@ -28,16 +28,11 @@ if TYPE_CHECKING:
 
     from .firewall_context_spec import ContextSpec
 
+from utils.limits import RESOURCE_LOCK, WAIT_FOR_PEER_GENERATOR
+
 from .helpers.routing import underlay_pool_is_ipv6
 from .logger import GeneratorError
 from .protocols import TopologyPod
-
-_PARENT_POOL_MAX_RETRIES = 10
-_PARENT_POOL_RETRY_DELAY = 3.0
-
-_RESOURCE_LOCK_MAX_ATTEMPTS = 20
-_RESOURCE_LOCK_RETRY_DELAY = 2.0
-_RESOURCE_LOCK_STALE_AFTER_SECONDS = 300  # longer than any single realistic cabling run
 
 
 class PoolMixin:
@@ -70,13 +65,13 @@ class PoolMixin:
         server-side mutex — two concurrent create() calls with the same name
         serialize; the loser gets a uniqueness-violation GraphQLError and
         retries with backoff. A lock older than
-        _RESOURCE_LOCK_STALE_AFTER_SECONDS is treated as abandoned and
+        RESOURCE_LOCK.stale_after is treated as abandoned and
         reclaimed.
 
         Returns the acquired lock's id — pass to release_resource_lock when done.
         """
         lock_name = f"lock-{resource_key}"
-        for attempt in range(_RESOURCE_LOCK_MAX_ATTEMPTS):
+        for attempt in range(RESOURCE_LOCK.attempts):
             try:
                 lock = await self.client.create(kind=CoreStandardGroup, data={"name": lock_name})
                 await lock.save(update_group_context=False)
@@ -85,14 +80,14 @@ class PoolMixin:
                 if not any("uniqueness constraint" in str(e.get("message", "")) for e in exc.errors):
                     raise
                 await self._reclaim_stale_lock(lock_name)
-                delay = self._retry_delay(_RESOURCE_LOCK_RETRY_DELAY, attempt, cap=10.0)
+                delay = self._retry_delay(RESOURCE_LOCK.delay, attempt, cap=10.0)
                 self.logger.info(
                     f"Resource '{resource_key}' is locked by another generator run — "
-                    f"retrying in {delay:.2f}s (attempt {attempt + 1}/{_RESOURCE_LOCK_MAX_ATTEMPTS})"
+                    f"retrying in {delay:.2f}s (attempt {attempt + 1}/{RESOURCE_LOCK.attempts})"
                 )
                 await asyncio.sleep(delay)
         raise GeneratorError(
-            f"Could not acquire lock for resource '{resource_key}' after {_RESOURCE_LOCK_MAX_ATTEMPTS} attempts"
+            f"Could not acquire lock for resource '{resource_key}' after {RESOURCE_LOCK.attempts} attempts"
         )
 
     async def _reclaim_stale_lock(self, lock_name: str) -> None:
@@ -122,7 +117,7 @@ class PoolMixin:
         lock_id = edges[0]["node"]["id"]
         created_at = edges[0]["node_metadata"]["created_at"]
         age_seconds = (datetime.now(timezone.utc) - datetime.fromisoformat(created_at)).total_seconds()
-        if age_seconds < _RESOURCE_LOCK_STALE_AFTER_SECONDS:
+        if age_seconds < RESOURCE_LOCK.stale_after:
             return
         self.logger.warning(f"Reclaiming stale lock '{lock_name}' (held for {age_seconds:.0f}s) — owner likely crashed")
         try:
@@ -269,18 +264,18 @@ class PoolMixin:
             node_attribute="asn",
         )
 
-    async def preload_parent_pools(self, names: Iterable[str], kind: type[Any] = CoreIPPrefixPool) -> None:
-        """Read the parent pools ``names`` of ``kind`` in one query for _get_parent_pool_with_retry to find.
+    async def preload_parent_pools(self, names: Iterable[str]) -> None:
+        """Read the parent prefix pools ``names`` in one query for _get_parent_pool_with_retry to find.
 
         A generator that slices several pools out of parent pools it knows up front (a colocation zone's five)
         reads them here once instead of one get per slice. A name the query does not return is simply not
         cached: its lookup keeps the retry that waits for another generator to create it.
         """
-        wanted = sorted({name for name in names if (kind, name) not in self._parent_pools()})
+        wanted = sorted({name for name in names if (CoreIPPrefixPool, name) not in self._parent_pools()})
         if not wanted:
             return
-        for pool in await self.client.filters(kind=kind, name__values=wanted):
-            self._parent_pools()[(kind, pool.name.value)] = pool
+        for pool in await self.client.filters(kind=CoreIPPrefixPool, name__values=wanted):
+            self._parent_pools()[(CoreIPPrefixPool, pool.name.value)] = pool
 
     def _parent_pools(self) -> dict[tuple[type[Any], str], Any]:
         """The parent pools this run has read (see preload_parent_pools), by (kind, name)."""
@@ -301,16 +296,16 @@ class PoolMixin:
         A pool read by preload_parent_pools() is returned from there, without a query."""
         if (cached := self._parent_pools().get((kind, parent_pool_name))) is not None:
             return cached
-        for attempt in range(_PARENT_POOL_MAX_RETRIES):
+        for attempt in range(WAIT_FOR_PEER_GENERATOR.attempts):
             try:
                 return await self.client.get(kind=kind, name__value=parent_pool_name)
             except NodeNotFoundError:
-                if attempt == _PARENT_POOL_MAX_RETRIES - 1:
+                if attempt == WAIT_FOR_PEER_GENERATOR.attempts - 1:
                     raise
-                delay = self._retry_delay(_PARENT_POOL_RETRY_DELAY, attempt)
+                delay = self._retry_delay(WAIT_FOR_PEER_GENERATOR.delay, attempt)
                 self.logger.info(
                     f"Parent pool '{parent_pool_name}' not found yet — "
-                    f"retrying in {delay:.2f}s (attempt {attempt + 1}/{_PARENT_POOL_MAX_RETRIES})"
+                    f"retrying in {delay:.2f}s (attempt {attempt + 1}/{WAIT_FOR_PEER_GENERATOR.attempts})"
                 )
                 await asyncio.sleep(delay)
         raise NodeNotFoundError(

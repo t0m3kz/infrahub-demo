@@ -143,7 +143,6 @@ query topology_dc($name: String!) {
                   node {
                     id
                     ... on TemplateDcimPhysicalDevice {
-                      template_name { value }
                       platform {
                         node {
                           id

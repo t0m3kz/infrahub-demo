@@ -260,8 +260,8 @@ class TestWanExitData:
             }, office
 
     def test_the_tenant_namespace_transit_pool_and_asn_pool_exist(self) -> None:
-        from generators.topology.office_fabric import _WAN_EXIT_ASN_POOL
         from utils.exchange_transit import transit_pool_name
+        from utils.limits import PRIVATE_ASN32_POOL
 
         namespaces = {entry["name"] for entry in _spec_data(BOOTSTRAP / "22_namespaces.yml")}
         pools = {entry["name"] for entry in _spec_data(BOOTSTRAP / "23_transit_pools.yml") if "resources" in entry}
@@ -269,7 +269,7 @@ class TestWanExitData:
         assert self._sdwan_fabric_offices()
         assert "PROD" in namespaces
         assert transit_pool_name("PROD") in pools
-        assert _WAN_EXIT_ASN_POOL in {entry["name"] for entry in _spec_data(BOOTSTRAP / "16_asn_pools.yml")}
+        assert PRIVATE_ASN32_POOL in {entry["name"] for entry in _spec_data(BOOTSTRAP / "16_asn_pools.yml")}
 
     def test_the_demo_office_hosts_one_derived_vxlan_segment_in_its_own_environment(self) -> None:
         """The border needs a VRF with an L3 instance-id to exit from: the office hosts a segment there."""
@@ -292,7 +292,7 @@ class TestWanExitData:
         assert office.item.get("sdwan_gateway")
 
     def test_the_test_constants_derive_the_offices_switches_from_the_fabric_templates(self) -> None:
-        from tests.integration.test_constants import ALL_DEMO_OFFICE_FABRICS, ALL_DEMO_OFFICE_WAN_EXITS
+        from tests.integration.all_demo_circuit_constants import ALL_DEMO_OFFICE_FABRICS, ALL_DEMO_OFFICE_WAN_EXITS
 
         assert ALL_DEMO_OFFICE_FABRICS == {
             "C005-OFFICE": {

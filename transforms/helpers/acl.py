@@ -5,6 +5,7 @@ from typing import Any
 from transforms.helpers.policy import is_unresolved_segment_endpoint, rule_endpoint, rule_zone, segment_flows
 from utils.group_policy import is_microsegmented
 from utils.internet_space import NON_INTERNET_PREFIXES
+from utils.limits import ACL_CLOSING_SEQ, ACL_INTERNET_BAND_SEQ_START, ACL_RETURN_LEG_SEQ_START
 from utils.segment_addressing import segment_prefix
 
 _PROTO_MAP = {"any": "ip", "tcp": "tcp", "udp": "udp", "icmp": "icmp"}
@@ -21,11 +22,9 @@ def _port_match(rule: dict[str, Any], acl_proto: str) -> str | None:
     return f"eq {port_start}"
 
 
-# Own rules sit below this index (the application generator hands out 100, 110,
-# ...), the return legs start at 5000, and the "outside" band of a permit to a
-# prefix-less external segment (the internet) follows the last return leg.
-RETURN_LEG_SEQ_START = 5000
-INTERNET_BAND_SEQ_START = 6000
+# Own rules sit below the return legs (the application generator hands out 100, 110, ...), and the "outside" band of
+# a permit to a prefix-less external segment (the internet) follows the last return leg: the bands are
+# ACL_RETURN_LEG_SEQ_START and ACL_INTERNET_BAND_SEQ_START of utils/limits.py.
 
 
 def _internet_band(rule: dict[str, Any], seen_denies: set[tuple[str, str]], seq: int) -> list[dict[str, Any]]:
@@ -270,7 +269,7 @@ def get_acls(activations: list[dict[str, Any]] | None = None) -> list[dict[str, 
         # Return legs of the permits into this segment
         own_prefix = segment_prefix(seg)
         own_max_seq = max((r["seq"] or 0 for r in rules), default=0)
-        seq = max(own_max_seq + 10, RETURN_LEG_SEQ_START)
+        seq = max(own_max_seq + 10, ACL_RETURN_LEG_SEQ_START)
         seen_returns: set[tuple[Any, ...]] = set()
         for inbound in _inbound_permits(seg):
             ret = _build_return_rule(inbound, own_prefix, segment_name, segment_environment)
@@ -287,15 +286,15 @@ def get_acls(activations: list[dict[str, Any]] | None = None) -> list[dict[str, 
         seen_denies: set[tuple[str, str]] = set()
         for rule in outside_permits:
             band_seq = max((r["seq"] or 0 for r in rules), default=0) + 10
-            rules.extend(_internet_band(rule, seen_denies, max(band_seq, INTERNET_BAND_SEQ_START)))
+            rules.extend(_internet_band(rule, seen_denies, max(band_seq, ACL_INTERNET_BAND_SEQ_START)))
 
         # Closing rule: the segment policy's default action (deny unless the
         # enabled policy says permit), for everything the rules above miss.
         if rules:
             last_seq = max(r["seq"] or 0 for r in rules)
-            implicit_seq = max(last_seq + 10, 9990)
+            implicit_seq = max(last_seq + 10, ACL_CLOSING_SEQ)
         else:
-            implicit_seq = 9990
+            implicit_seq = ACL_CLOSING_SEQ
         rules.append(
             {
                 "seq": implicit_seq,

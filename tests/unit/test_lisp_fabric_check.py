@@ -58,7 +58,7 @@ def _office(**overrides: Any) -> dict[str, Any]:
             _device("ds-c005-office01", "distribution-switch"),
             _device("ds-c005-office02", "distribution-switch"),
             _device("as-c005-office01", "access-switch"),
-            {**_device("C005-OFFICE-EDGE1", "edge", "velocloud"), "capabilities": [{"typename": "ManagedBGP"}]},
+            {**_device("C005-OFFICE-EDGE1", "edge", "linux"), "capabilities": [{"typename": "ManagedBGP"}]},
         ],
         "segment_deployments": [{"vni": 10100, "segment": {"name": "web", "gateway": _gateway()}}],
     }
@@ -104,7 +104,7 @@ class TestOfficeFabric:
 
     def test_an_sdwan_edge_without_a_bgp_process_means_the_wan_exit_is_missing(self) -> None:
         """The exit is built by add_office_fabric for the edge the office has; the edge's BGP process is its proof."""
-        bare = {**_device("C005-OFFICE-EDGE1", "edge", "velocloud"), "capabilities": [{"typename": "ManagedOSPF"}]}
+        bare = {**_device("C005-OFFICE-EDGE1", "edge", "linux"), "capabilities": [{"typename": "ManagedOSPF"}]}
         devices = [d for d in _office()["devices"] if d["role"] != "edge"]
 
         errors = _run_offices(_office(devices=[*devices, bare]))
@@ -115,7 +115,7 @@ class TestOfficeFabric:
     @pytest.mark.parametrize("capabilities", [None, []])
     def test_an_sdwan_edge_with_no_capabilities_at_all_is_the_same_error(self, capabilities: Any) -> None:
         devices = [d for d in _office()["devices"] if d["role"] != "edge"]
-        edge = {**_device("C005-OFFICE-EDGE1", "edge", "velocloud"), "capabilities": capabilities}
+        edge = {**_device("C005-OFFICE-EDGE1", "edge", "linux"), "capabilities": capabilities}
 
         errors = _run_offices(_office(devices=[*devices, edge]))
 
@@ -128,7 +128,7 @@ class TestOfficeFabric:
 
     def test_an_office_without_a_fabric_is_not_asked_for_an_exit(self) -> None:
         """C001-C003 and C015 are a single SD-WAN edge with no fabric: no LISP footprint, no rule."""
-        edge = {**_device("C001-OFFICE-EDGE1", "edge", "velocloud"), "capabilities": []}
+        edge = {**_device("C001-OFFICE-EDGE1", "edge", "linux"), "capabilities": []}
 
         assert _run_offices(_office(fabric_templates=[], devices=[edge])) == []
 

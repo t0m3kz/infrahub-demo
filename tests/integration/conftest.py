@@ -169,45 +169,8 @@ def client_main(infrahub_port: int) -> Generator[InfrahubClientSync, None, None]
 def workflow_state() -> dict[str, Any]:
     """Shared state across all workflow tests in the session."""
     return {
-        "pc_id": None,
-        "dc_id": None,
         "repository_id": None,
-        "generator_task_id": None,
-        "generator_task_state": None,
-        "failed_branches": set(),
     }
-
-
-@pytest.fixture(autouse=True)
-def fail_fast_on_task_failures(request: pytest.FixtureRequest, workflow_state: dict[str, Any]) -> None:
-    """Fail fast if any branch has recorded task failures.
-
-    This autouse fixture runs before every test. If a previous step detected
-    failed tasks (via verify_no_failed_tasks or run_full_dc_pipeline), the
-    branch is added to workflow_state["failed_branches"]. Subsequent tests
-    that use the same branch are immediately failed, preventing misleading
-    results from running against broken state.
-    """
-    failed_branches: set[str] = workflow_state.get("failed_branches", set())
-    if not failed_branches:
-        return
-
-    # Try to get the current test's branch from the scenario_branch fixture
-    branch = None
-    if hasattr(request, "cls") and request.cls:
-        # scenario_branch is defined as a class fixture — check if available
-        for fixture_name in ("scenario_branch",):
-            if fixture_name in request.fixturenames:
-                try:
-                    branch = request.getfixturevalue(fixture_name)
-                except Exception:
-                    pass
-
-    if branch and branch in failed_branches:
-        pytest.fail(
-            f"Skipping test: task failures previously detected on branch '{branch}'. "
-            f"Fix the failures before continuing."
-        )
 
 
 # ======================================================================

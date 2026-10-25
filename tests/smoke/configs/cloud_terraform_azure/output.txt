@@ -30,13 +30,6 @@ resource "azurerm_subnet" "prod_subnet_westeurope_1" {
   address_prefixes     = ["10.0.1.0/24"]
 }
 
-resource "azurerm_network_security_group" "prod_nsg" {
-  name                = "prod-nsg"
-  location            = "westeurope"
-  resource_group_name = var.resource_group_name
-  tags = { Name = "prod-nsg", ManagedBy = "Infrahub" }
-}
-
 resource "azurerm_linux_virtual_machine" "prod_vm_1" {
   name                  = "prod-vm-1"
   location              = "westeurope"
@@ -52,16 +45,4 @@ resource "azurerm_linux_virtual_machine" "prod_vm_1" {
     id = "UbuntuServer-18.04"
   }
   tags = { Name = "prod-vm-1", ManagedBy = "Infrahub" }
-}
-
-resource "azurerm_route_table" "prod_rt" {
-  name                = "prod-rt"
-  location            = "westeurope"
-  resource_group_name = var.resource_group_name
-  tags                = { Name = "prod-rt", ManagedBy = "Infrahub" }
-}
-
-resource "azurerm_subnet_route_table_association" "prod_subnet_westeurope_1_rt_assoc" {
-  subnet_id      = azurerm_subnet.prod_subnet_westeurope_1.id
-  route_table_id = azurerm_route_table.prod_rt.id
 }

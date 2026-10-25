@@ -13,7 +13,6 @@
     Bypass rules only exist alongside a firewall redirect, as on the CLI side.
 -#}
 {%- macro _ip_type(address) -%}{{ 'IPV6ANY' if ':' in address else 'IPV4ANY' }}{%- endmacro -%}
-{%- macro _host(address) -%}{{ address if '/' in address else address ~ ('/128' if ':' in address else '/32') }}{%- endmacro -%}
 {%- for rule in leaf_pbr_rules | default([]) -%}
 {%- set table = 'PBR-VLAN' ~ rule.vlan_id -%}
 {%- set _ = acl_table.update({

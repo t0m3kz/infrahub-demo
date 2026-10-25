@@ -14,9 +14,8 @@ from typing import Any
 from infrahub_sdk.protocols import CoreNumberPool
 
 from utils.exchange_transit import is_routed_tenant_segment
+from utils.limits import SEGMENT_ROUTING_TAG_POOL
 
-CUSTOMER_TAG_POOL = "Customer-Routing-Tag"
-SEGMENT_TAG_POOL = "Segment-Routing-Tag"
 POOLS_FILE = "data/bootstrap/19c_routing_tag_pools.yml"
 
 
@@ -50,4 +49,6 @@ async def ensure_segment_routing_tag(client: Any, *, segment: dict[str, Any]) ->
     """
     if not is_routed_tenant_segment(segment):
         return None
-    return await ensure_routing_tag(client, kind=str(segment.get("typename")), node=segment, pool_name=SEGMENT_TAG_POOL)
+    return await ensure_routing_tag(
+        client, kind=str(segment.get("typename")), node=segment, pool_name=SEGMENT_ROUTING_TAG_POOL
+    )

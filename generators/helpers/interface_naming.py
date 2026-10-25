@@ -10,7 +10,6 @@ _PLATFORM_NAMING: dict[str, tuple[str, str]] = {
     "cisco_nxos": ("port-channel", "loopback"),
     "dell_sonic": ("PortChannel", "Loopback"),
     "sonic": ("PortChannel", "Loopback"),
-    "nokia_sros": ("lag-", "loopback-"),
 }
 
 _DEFAULT_NAMING = ("Port-Channel", "Loopback")

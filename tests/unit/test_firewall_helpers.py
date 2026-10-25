@@ -539,34 +539,3 @@ class TestLeafPbrNexthopIsContextLegVip:
         act = _make_pbr_activation(deployment_id="dep-a", security_policies=[{"enabled": True, "rules": []}])
         act["segment"]["gateway"] = {"ip_prefix": {"prefix": "10.0.1.0/24", "ip_namespace": {"name": "NON-PROD"}}}
         assert get_customer_pbr_rules([act], [ctx]) == []
-
-
-# ===========================================================================
-# DC-wide segment activations (border leaf, exchange routes)
-# ===========================================================================
-
-
-def _make_dc_activation(
-    *,
-    vni: int = 10100,
-    seg_id: str = "seg-1",
-    customer_name: str = "web",
-    deployment_id: str | None = "dep-a",
-    gateway_prefix: str | None = "10.10.1.0/24",
-    environment: str | None = None,
-) -> dict:
-    """Models one _flatten_deployment_segment_activations() entry — border-leaf's
-    DC-wide segment_deployments traversal, NOT the per-interface
-    _collect_activations_from_interfaces() a leaf uses. Keyed by vni now
-    (not vlan_id — local VLAN ID is per-VLAN-domain, no longer DC-wide)."""
-    seg: dict = {
-        "id": seg_id,
-        "name": seg_id,
-        "customer_name": customer_name,
-        "customer_deployments": [{"id": deployment_id}] if deployment_id else [],
-    }
-    if gateway_prefix is not None:
-        seg["gateway"] = {"ip_prefix": {"prefix": gateway_prefix}}
-    if environment is not None:
-        seg["environment"] = environment
-    return {"vni": vni, "segment": seg}

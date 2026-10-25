@@ -155,7 +155,7 @@ class TestEnsureMlagWiring:
         the platform name is read without one fetch() per device."""
         gen = _gen()
         dev_1 = _mock_mlag_device("leaf-01", platform="arista_eos")
-        dev_2 = _mock_mlag_device("leaf-02", platform="nokia_sros")
+        dev_2 = _mock_mlag_device("leaf-02", platform="cisco_nxos")
         _pair_client(gen, [dev_1, dev_2], {})
         _create_returning_ids(gen)
 
@@ -168,7 +168,7 @@ class TestEnsureMlagWiring:
         assert device_query["include"] == ["deployment", "platform"]
         dev_1.platform.fetch.assert_not_awaited()
         loopback_names = [c.kwargs["data"]["name"] for c in gen.client.create.call_args_list]
-        assert loopback_names == ["Loopback100", "loopback-100"]
+        assert loopback_names == ["Loopback100", "loopback100"]
 
     @pytest.mark.asyncio
     async def test_wrong_member_count_logs_error_and_noops(self) -> None:

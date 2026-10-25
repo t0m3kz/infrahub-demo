@@ -251,7 +251,7 @@ class TestProxyRulesVerdict:
     """Every rule carries the access verdict its renderer prints; what it cannot express is refused."""
 
     @pytest.mark.parametrize(("action", "verdict"), [("allow", "allow"), ("bypass", "allow"), ("block", "block")])
-    @pytest.mark.parametrize("renderer", ["squid_cache_linux", "haproxy_technologies_linux", "zscaler_zia"])
+    @pytest.mark.parametrize("renderer", ["squid_cache", "haproxy_technologies", "zscaler_zia"])
     def test_allow_bypass_and_block_render_everywhere(self, renderer: str, action: str, verdict: str) -> None:
         """allow and bypass are allows, block is a block, on every renderer."""
         rules = proxy_rules(_shared(_fqdn_rule("r1", 10, "api.stripe.com", action=action)), None, renderer)
@@ -259,20 +259,18 @@ class TestProxyRulesVerdict:
 
     def test_inspect_is_an_allow_where_every_allowed_flow_is_inspected(self) -> None:
         """Squid bumps all TLS (ssl_bump bump all): an inspect rule is an allow, not the block it used to be."""
-        rules = proxy_rules(
-            _shared(_fqdn_rule("r1", 10, "api.stripe.com", action="inspect")), None, "squid_cache_linux"
-        )
+        rules = proxy_rules(_shared(_fqdn_rule("r1", 10, "api.stripe.com", action="inspect")), None, "squid_cache")
         assert rules[0]["verdict"] == "allow"
 
     @pytest.mark.parametrize(
-        "renderer", ["haproxy_technologies_linux", "bluecoat_sgos", "cisco_wsa_asyncos", "zscaler_zia", "generic"]
+        "renderer", ["haproxy_technologies", "bluecoat_sgos", "cisco_wsa", "zscaler_zia", "generic"]
     )
     def test_inspect_is_refused_where_the_config_inspects_nothing(self, renderer: str) -> None:
         """An allow without the inspection asked for would be weaker than the rule; the old block was wrong too."""
         with pytest.raises(ValueError, match="action 'inspect'"):
             proxy_rules(_shared(_fqdn_rule("r1", 10, "api.stripe.com", action="inspect")), None, renderer)
 
-    @pytest.mark.parametrize("renderer", ["squid_cache_linux", "haproxy_technologies_linux", "netskope"])
+    @pytest.mark.parametrize("renderer", ["squid_cache", "haproxy_technologies", "netskope"])
     def test_redirect_is_refused_everywhere(self, renderer: str) -> None:
         """The schema models no redirect target, so redirect never silently becomes a block."""
         with pytest.raises(ValueError, match=r"r1.*action 'redirect'"):
@@ -283,20 +281,20 @@ class TestProxyRulesVerdict:
         rules = proxy_rules(
             _shared(_typed_rule("regex", r"^https://.*\.example\.com/"), _typed_rule("cidr", "203.0.113.0/24")),
             None,
-            "squid_cache_linux",
+            "squid_cache",
         )
         assert [rule["destination_type"] for rule in rules] == ["regex", "cidr"]
 
     @pytest.mark.parametrize(
         "renderer",
-        ["haproxy_technologies_linux", "bluecoat_sgos", "cisco_wsa_asyncos", "zscaler_zia", "netskope", "generic"],
+        ["haproxy_technologies", "bluecoat_sgos", "cisco_wsa", "zscaler_zia", "netskope", "generic"],
     )
     def test_regex_destination_is_refused_where_it_would_match_literally(self, renderer: str) -> None:
         """These renderers print the destination as a hostname or a plain list entry, never as a pattern."""
         with pytest.raises(ValueError, match="destination_type 'regex'"):
             proxy_rules(_shared(_typed_rule("regex", r".*\.example\.com")), None, renderer)
 
-    @pytest.mark.parametrize("renderer", ["haproxy_technologies_linux", "bluecoat_sgos", "cloudflare_gateway"])
+    @pytest.mark.parametrize("renderer", ["haproxy_technologies", "bluecoat_sgos", "cloudflare_gateway"])
     def test_cidr_destination_is_refused_where_it_would_match_as_a_hostname(self, renderer: str) -> None:
         """A host-header or domain match never matches an address range."""
         with pytest.raises(ValueError, match="destination_type 'cidr'"):

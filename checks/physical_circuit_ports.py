@@ -21,10 +21,9 @@ from typing import Any
 from infrahub_sdk.checks import InfrahubCheck
 
 from utils.data_cleaning import clean_data
+from utils.limits import CIRCUIT_ENDS
 
 PHYSICAL_PORT_KIND = "DcimPhysicalInterface"
-CIRCUIT_ENDS = 2
-"""A physical circuit joins exactly two ports, one at each end."""
 
 
 def _port_label(end: dict[str, Any]) -> str:

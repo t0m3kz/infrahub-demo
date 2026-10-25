@@ -150,7 +150,7 @@ class TestWaitForParentGeneratorAndRefetch:
         result = await gen.wait_for_parent_generator_and_refetch("add_dc", "dc-1")
 
         gen.client.task.wait_for_completion.assert_awaited_once()
-        assert gen.client.task.wait_for_completion.call_args.kwargs["id"] == "t-1"
+        assert gen.client.task.wait_for_completion.call_args.kwargs == {"id": "t-1", "interval": 3, "timeout": 1800}
         gen.collect_data.assert_awaited_once()
         assert result == {"refetched": True}
 

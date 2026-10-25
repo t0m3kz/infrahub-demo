@@ -10,6 +10,7 @@ attributes a device to its pod, whichever deployment it sits in.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -20,6 +21,7 @@ from generators.protocols import DcimPhysicalDevice, DcimPhysicalInterface
 from generators.rack import RackMixin
 from generators.topology import pod_mesh as pod_mesh_module
 from generators.topology.pod import PodTopologyGenerator
+from utils.limits import WAIT_FOR_PEER_GENERATOR
 
 _DC_ID = "dc-7"
 _UPLINKS = [f"Ethernet{n}/1" for n in range(17, 25)]
@@ -203,7 +205,7 @@ class TestSiblingSpineLookup:
         pod_2 = _pod_spines(2, role="border-spine", deployment_id=_DC_ID)
         gen = _make_pod_gen(pod_index=2, devices=pod_1 + pod_2)
 
-        with patch.object(pod_mesh_module, "_SIBLING_SPINE_MAX_RETRIES", 1):
+        with patch.object(pod_mesh_module, "WAIT_FOR_PEER_GENERATOR", replace(WAIT_FOR_PEER_GENERATOR, attempts=1)):
             await _mesh(
                 gen,
                 siblings=[_sibling(1), _sibling(2)],
@@ -223,7 +225,7 @@ class TestSiblingSpineLookup:
         pod_3 = _pod_spines(3, role="border-spine", deployment_id=_DC_ID)
         gen = _make_pod_gen(pod_index=3, devices=pod_1 + pod_2 + pod_3)
 
-        with patch.object(pod_mesh_module, "_SIBLING_SPINE_MAX_RETRIES", 1):
+        with patch.object(pod_mesh_module, "WAIT_FOR_PEER_GENERATOR", replace(WAIT_FOR_PEER_GENERATOR, attempts=1)):
             await _mesh(
                 gen,
                 siblings=[_sibling(1), _sibling(2), _sibling(3)],
@@ -243,7 +245,7 @@ class TestSiblingSpineLookup:
         pod_2 = _pod_spines(2, role="spine", deployment_id="pod-2")
         gen = _make_pod_gen(pod_index=2, devices=pod_1 + pod_2)
 
-        with patch.object(pod_mesh_module, "_SIBLING_SPINE_MAX_RETRIES", 1):
+        with patch.object(pod_mesh_module, "WAIT_FOR_PEER_GENERATOR", replace(WAIT_FOR_PEER_GENERATOR, attempts=1)):
             await _mesh(
                 gen,
                 siblings=[_sibling(1), _sibling(2)],
@@ -275,7 +277,7 @@ class TestMeshPortSlots:
         pod_3 = _pod_spines(3, role="spine", deployment_id="pod-3")
         gen = _make_pod_gen(pod_index=3, devices=pod_1 + pod_2 + pod_3)
 
-        with patch.object(pod_mesh_module, "_SIBLING_SPINE_MAX_RETRIES", 1):
+        with patch.object(pod_mesh_module, "WAIT_FOR_PEER_GENERATOR", replace(WAIT_FOR_PEER_GENERATOR, attempts=1)):
             await _mesh(
                 gen,
                 siblings=[_sibling(1), _sibling(2), _sibling(3)],
@@ -293,7 +295,7 @@ class TestMeshPortSlots:
         pod_2 = _pod_spines(2, role="spine", deployment_id="pod-2")
         gen = _make_pod_gen(pod_index=3, devices=pod_1 + pod_2)
 
-        with patch.object(pod_mesh_module, "_SIBLING_SPINE_MAX_RETRIES", 1):
+        with patch.object(pod_mesh_module, "WAIT_FOR_PEER_GENERATOR", replace(WAIT_FOR_PEER_GENERATOR, attempts=1)):
             await _mesh(
                 gen,
                 siblings=[_sibling(1), _sibling(2)],
@@ -311,7 +313,7 @@ class TestMeshPortSlots:
         pod_2 = _pod_spines(2, role="spine", deployment_id="pod-2")
         gen = _make_pod_gen(pod_index=3, devices=pod_2)
 
-        with patch.object(pod_mesh_module, "_SIBLING_SPINE_MAX_RETRIES", 1):
+        with patch.object(pod_mesh_module, "WAIT_FOR_PEER_GENERATOR", replace(WAIT_FOR_PEER_GENERATOR, attempts=1)):
             await _mesh(gen, siblings=[_sibling(2), _sibling(3)], spines=["dc7.7.3.sp01"], spine_role="spine")
 
         assert self._slots(gen) == [(_UPLINKS[2:4], 2)]

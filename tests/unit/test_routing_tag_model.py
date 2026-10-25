@@ -24,7 +24,7 @@ from tests.integration.demo_data import (
     schema,
     trigger_rules,
 )
-from utils.routing_identity import ROUTING_TAG_MAX, ROUTING_TAG_MIN
+from utils.limits import ROUTING_TAG_MAX, ROUTING_TAG_MIN
 
 CUSTOMER_GROUP = "customers"
 BOOTSTRAP_UNTAGGED_ORG = "INTERNET"  # the only bootstrap customer; owns External segments only
@@ -99,9 +99,9 @@ class TestPools:
             assert (pool["start_range"], pool["end_range"]) == (ROUTING_TAG_MIN, ROUTING_TAG_MAX)
 
     def test_pool_names_are_the_ones_the_helper_draws_from(self) -> None:
-        from generators.helpers.routing_tag import CUSTOMER_TAG_POOL, SEGMENT_TAG_POOL
+        from utils.limits import CUSTOMER_ROUTING_TAG_POOL, SEGMENT_ROUTING_TAG_POOL
 
-        assert {CUSTOMER_TAG_POOL, SEGMENT_TAG_POOL} == set(POOLS)
+        assert {CUSTOMER_ROUTING_TAG_POOL, SEGMENT_ROUTING_TAG_POOL} == set(POOLS)
 
 
 class TestGeneratorWiring:

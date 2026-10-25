@@ -14,7 +14,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tests.smoke.fixture_builders.common import _edges, _make_interface, _node, _v
+from tests.smoke.fixture_builders.common import _edges, _make_interface, _node, _v, run_transform
 from tests.smoke.fixture_builders.group_policy import (
     _gp_instance,
     _gp_tag,
@@ -22,7 +22,6 @@ from tests.smoke.fixture_builders.group_policy import (
     build_gpo_device_data,
     gpo_segment,
 )
-from tests.smoke.test_configs_smoke import _run_transform
 from tests.unit.gpo_device_view_helpers import (
     LEAF_ACTIVATIONS,
     LEAF_SEGMENTS,
@@ -538,7 +537,7 @@ class TestComponentGate:
         assert listed == ", ".join(f"dc1-leaf-01 Ethernet{n}" for n in range(1, 9)) + " and 3 more"
 
     def test_the_rendered_enforce_line_says_what_it_relies_on_and_an_unenforced_vrf_does_not(self) -> None:
-        rendered = _run_transform(Leaf, _raw())
+        rendered = run_transform(Leaf, _raw())
         lines = rendered.splitlines()
         enforce = [i for i, line in enumerate(lines) if "security enforce tag" in line][-1]  # PROD, after NONPROD
         assert lines[enforce - 1].strip() == (
@@ -550,7 +549,7 @@ class TestComponentGate:
         raw = _raw()
         web_tag = next(edge["node"] for edge in raw["SecurityTag"]["edges"] if edge["node"]["id"] == "tag-pay-web")
         web_tag["components"]["edges"][0]["node"]["instances"] = _edges([_server("srv-lost")])
-        blocked = _run_transform(Leaf, raw)
+        blocked = run_transform(Leaf, raw)
         assert "! unenforced: component group web_pay_demo_local" in blocked
         assert "relies on native-VLAN frames" not in blocked
 
@@ -609,7 +608,7 @@ class TestHostTrunks:
         assert "native_vlan" not in found["Ethernet11"]
 
     def test_the_rendered_host_port_is_an_edge_trunk_with_a_native_vlan(self) -> None:
-        rendered = _run_transform(Leaf, _raw())
+        rendered = run_transform(Leaf, _raw())
         stanza = rendered.split("\ninterface Ethernet11\n")[1].split("\n!\n")[0].splitlines()
         assert [line.strip() for line in stanza if line.strip() and not line.strip().startswith("!")] == [
             "no shutdown",
@@ -641,7 +640,7 @@ class TestHostTrunks:
         web_tag = next(edge["node"] for edge in raw["SecurityTag"]["edges"] if edge["node"]["id"] == "tag-pay-web")
         member = _nic("srv-web", "eno1", "dc1-leaf-01", "Ethernet30", lag="port-channel30")
         web_tag["components"]["edges"][0]["node"]["instances"] = _edges([_server("srv-web", member)])
-        rendered = _run_transform(Leaf, raw)
+        rendered = run_transform(Leaf, raw)
         assert "  match vlan 210 interface port-channel30" in rendered
         assert "  match vlan 210 interface Ethernet30" not in rendered
         stanza = rendered.split("\ninterface port-channel30\n")[1].split("\n!\n")[0].splitlines()
@@ -655,7 +654,7 @@ class TestHostTrunks:
         ]
 
     def test_the_existing_trunk_gets_no_native_vlan_and_nothing_renders_the_global_native_tag(self) -> None:
-        rendered = _run_transform(Leaf, _raw())
+        rendered = run_transform(Leaf, _raw())
         trunk = rendered.split("\ninterface Ethernet10\n")[1].split("\n!\n")[0]
         assert "native vlan" not in trunk and "spanning-tree" not in trunk
         assert "switchport trunk allowed vlan 110,120,210,220" in trunk
@@ -668,7 +667,7 @@ class TestHostTrunks:
             segments=LEAF_SEGMENTS,
             host_ports={"Ethernet11": PAY_P, "Ethernet12": PAY_P},
         )
-        stanza = _run_transform(Leaf, raw).split("interface Ethernet12\n")[1].split("\n!\n")[0]
+        stanza = run_transform(Leaf, raw).split("interface Ethernet12\n")[1].split("\n!\n")[0]
         assert "switchport mode access" in stanza
         assert "switchport access vlan 210" in stanza
         assert "native vlan" not in stanza
@@ -741,6 +740,6 @@ class TestHostTrunks:
             host_ports={"Ethernet11": PAY_P},
             leaf_type="N9K-C9336C-FX2",
         )
-        rendered = _run_transform(Leaf, raw)
+        rendered = run_transform(Leaf, raw)
         assert "native vlan" not in rendered and "security-group" not in rendered
         assert "switchport mode access" in rendered

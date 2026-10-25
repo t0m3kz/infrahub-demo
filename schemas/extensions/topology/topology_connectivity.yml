@@ -172,22 +172,6 @@ nodes:
             label: "Cross Connect"
             description: "Physical cross-connect within facility"
             color: "#3498db"
-          - name: metro_ethernet
-            label: "Metro Ethernet"
-            description: "Layer 2 metro Ethernet service"
-            color: "#9b59b6"
-          - name: mpls
-            label: "MPLS"
-            description: "MPLS VPN circuit"
-            color: "#e74c3c"
-          - name: dia
-            label: "DIA"
-            description: "Dedicated Internet Access"
-            color: "#f39c12"
-          - name: wavelength
-            label: "Wavelength"
-            description: "DWDM wavelength service"
-            color: "#1abc9c"
 
     relationships:
       # Data authors only the end that cannot be derived (the colocation cage);
@@ -357,4 +341,4 @@ nodes:
         optional: true
         identifier: "handoff_circuit__cloud_endpoint"
         order_weight: 1400
-        description: "Cloud-side termination of this handoff (a VIF or VPN gateway); one endpoint has one handoff"
+        description: "Cloud-side termination of this handoff (a VIF); one endpoint has one handoff"

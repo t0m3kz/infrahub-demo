@@ -4,31 +4,10 @@ When strict=True, the planner raises ValueError instead of silently
 skipping devices with missing prerequisites.
 """
 
-from unittest.mock import MagicMock
-
 import pytest
 
 from generators.helpers.routing import RoutingPlan, RoutingPlanner
-
-
-def _make_loopback(name: str, device_id: str, role: str, ip: str) -> MagicMock:
-    lb = MagicMock()
-    lb.id = f"lb-{device_id}"
-    lb.device.peer.name.value = name
-    lb.device.peer.id = device_id
-    lb.device.peer.role.value = role
-    lb.ip_address.id = f"ip-{device_id}"
-    lb.ip_address.display_label = f"{ip}/32"
-    return lb
-
-
-def _make_p2p_interface(iface_id: str, iface_name: str, device_id: str, cable_id: str) -> MagicMock:
-    iface = MagicMock()
-    iface.id = iface_id
-    iface.name.value = iface_name
-    iface.cable.id = cable_id
-    iface.device.id = device_id
-    return iface
+from tests.unit.routing_helpers import make_p2p_interface
 
 
 def _device_map_no_router_id(name: str, device_id: str, role: str) -> dict[str, dict]:
@@ -48,8 +27,8 @@ class TestStrictUnderlayValidation:
         # Need a cable pair to trigger the underlay loop
         device_map.update(_device_map_with_router_id("spine-1", "s1", "spine", "10.0.0.1"))
         interfaces = [
-            _make_p2p_interface("if1", "Ethernet1/1", "l1", "c1"),
-            _make_p2p_interface("if2", "Ethernet1/1", "s1", "c1"),
+            make_p2p_interface("if1", "Ethernet1/1", "l1", "c1"),
+            make_p2p_interface("if2", "Ethernet1/1", "s1", "c1"),
         ]
         planner = RoutingPlanner(deployment_id="dc-1", strict=True)
         plan = RoutingPlan()
@@ -67,8 +46,8 @@ class TestStrictUnderlayValidation:
         device_map = _device_map_no_router_id("leaf-1", "l1", "leaf")
         device_map.update(_device_map_with_router_id("spine-1", "s1", "spine", "10.0.0.1"))
         interfaces = [
-            _make_p2p_interface("if1", "Ethernet1/1", "l1", "c1"),
-            _make_p2p_interface("if2", "Ethernet1/1", "s1", "c1"),
+            make_p2p_interface("if1", "Ethernet1/1", "l1", "c1"),
+            make_p2p_interface("if2", "Ethernet1/1", "s1", "c1"),
         ]
 
         planner = RoutingPlanner(deployment_id="dc-1", strict=False)
@@ -107,7 +86,6 @@ class TestStrictUnderlayValidation:
                 plan,
                 device_map=device_map,
                 interfaces=[],
-                deployment_name="dc1",
                 existing_area_id="area-0-id",
             )
 

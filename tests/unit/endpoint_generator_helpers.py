@@ -108,13 +108,6 @@ def _iface(
     return intf
 
 
-def _endpoint_device() -> MagicMock:
-    endpoint_device = MagicMock()
-    endpoint_device.deployment = MagicMock(id="pod-1")
-    endpoint_device.save = AsyncMock()
-    return endpoint_device
-
-
 def _bond(name: str, members: list[MagicMock]) -> dict:
     """A server bond as the payload carries it (endpoint.gql's BondFields): members by id."""
     return {

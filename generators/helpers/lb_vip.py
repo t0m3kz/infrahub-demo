@@ -14,15 +14,13 @@ import re
 from ipaddress import ip_interface, ip_network
 from typing import Any
 
+from utils.limits import CLOUD_LB_NAME_MAX
 from utils.ports import PortProfileHelper, PortSpec
 
 VIP_PREFIXLEN = 32
 """A VIP is one host address of its context's routed VIP range."""
 
 CLOUD_INSTANCE_KIND = "CloudInstance"
-
-CLOUD_LB_NAME_MAX = 32
-"""The shortest provider limit on a load balancer name (AWS ALB/NLB: 32)."""
 
 CLOUD_LB_TYPE = "l4_cloud"
 """A VIP's protocol is the tcp/udp of a component port (utils.ports), so a listener is layer 4."""

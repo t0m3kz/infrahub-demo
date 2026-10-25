@@ -77,11 +77,6 @@ nodes:
         optional: true
         order_weight: 650
         description: "Reason for approval/denial decision"
-      - name: decision_at
-        kind: DateTime
-        optional: true
-        order_weight: 700
-        description: "Timestamp when decision was taken"
       - name: access_expires_at
         kind: DateTime
         optional: true

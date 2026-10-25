@@ -16,15 +16,6 @@
               "id": "plat-dell_sonic",
               "name": {
                 "value": "dell_sonic"
-              },
-              "netmiko_device_type": {
-                "value": "dell_sonic"
-              },
-              "napalm_driver": {
-                "value": "dell_sonic"
-              },
-              "ansible_network_os": {
-                "value": "dell_sonic"
               }
             }
           },
@@ -1006,9 +997,6 @@
                           "name": {
                             "value": "seg-100"
                           },
-                          "status": {
-                            "value": "active"
-                          },
                           "customer_name": {
                             "value": "Customer-A"
                           },
@@ -1178,9 +1166,6 @@
                           "name": {
                             "value": "seg-200"
                           },
-                          "status": {
-                            "value": "active"
-                          },
                           "customer_name": {
                             "value": "Customer-A"
                           },
@@ -1325,9 +1310,6 @@
                           "__typename": "ManagedVxlanSegment",
                           "name": {
                             "value": "seg-100"
-                          },
-                          "status": {
-                            "value": "active"
                           },
                           "customer_name": {
                             "value": "Customer-A"
@@ -1510,9 +1492,6 @@
                           "__typename": "ManagedVlanSegment",
                           "name": {
                             "value": "seg-200"
-                          },
-                          "status": {
-                            "value": "active"
                           },
                           "customer_name": {
                             "value": "Customer-A"

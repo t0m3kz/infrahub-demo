@@ -16,10 +16,9 @@ from typing import Any
 
 from netutils.interface import sort_interface_list
 
-from .common import CablingOptions
 from .helpers.cabling import ConnectionValidator, InterfaceSpeedMatcher, pick_matched_switch_port_name
 from .protocols import DcimPhysicalInterface
-from .types import ConnectionFingerprint
+from .types import CablingOptions, ConnectionFingerprint
 
 
 class EndpointUplinkMixin:

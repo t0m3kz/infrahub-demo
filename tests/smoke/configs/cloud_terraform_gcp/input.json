@@ -7,9 +7,6 @@
           "name": {
             "value": "prod-network"
           },
-          "is_default": {
-            "value": false
-          },
           "dns_support": {
             "value": true
           },
@@ -62,14 +59,8 @@
                   "name": {
                     "value": "prod-subnet-europe-west1"
                   },
-                  "is_public": {
-                    "value": false
-                  },
                   "auto_assign_public_ip": {
                     "value": false
-                  },
-                  "segment_type": {
-                    "value": "gcp_vpc_subnet"
                   },
                   "cidr_block": {
                     "value": "10.0.1.0/24"
@@ -89,25 +80,6 @@
       }
     ]
   },
-  "CloudSecurityGroup": {
-    "edges": [
-      {
-        "node": {
-          "id": "fw-1",
-          "name": {
-            "value": "prod-fw-rule"
-          },
-          "virtual_network": {
-            "node": {
-              "name": {
-                "value": "prod-network"
-              }
-            }
-          }
-        }
-      }
-    ]
-  },
   "CloudInstance": {
     "edges": [
       {
@@ -115,9 +87,6 @@
           "id": "inst-1",
           "name": {
             "value": "prod-instance-1"
-          },
-          "cloud_id": {
-            "value": "projects/my-gcp-project/zones/europe-west1-b/instances/prod-instance-1"
           },
           "instance_type": {
             "value": "n1-standard-1"
@@ -154,50 +123,12 @@
                 "value": "europe-west1-b"
               }
             }
-          },
-          "security_groups": {
-            "edges": [
-              {
-                "node": {
-                  "name": {
-                    "value": "prod-fw-rule"
-                  }
-                }
-              }
-            ]
           }
         }
       }
     ]
   },
-  "CloudInternetGateway": {
-    "edges": []
-  },
-  "CloudNATGateway": {
-    "edges": []
-  },
-  "CloudRouteTable": {
-    "edges": []
-  },
-  "CloudRoute": {
-    "edges": []
-  },
-  "CloudPublicIP": {
-    "edges": []
-  },
-  "CloudNetworkACL": {
-    "edges": []
-  },
   "CloudTransitGateway": {
-    "edges": []
-  },
-  "CloudVPNGateway": {
-    "edges": []
-  },
-  "CloudCustomerGateway": {
-    "edges": []
-  },
-  "CloudVirtualNetworkPeering": {
     "edges": []
   },
   "CloudDirectConnect": {

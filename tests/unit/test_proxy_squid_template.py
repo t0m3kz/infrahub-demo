@@ -1,4 +1,4 @@
-"""Unit tests for the application-derived egress rules in templates/configs/proxies/squid_cache_linux.j2.
+"""Unit tests for the application-derived egress rules in templates/configs/proxies/squid_cache.j2.
 
 Renders the real template through Proxy._load_template, fed by the same
 proxy_rules() helper the Proxy transform uses, so ProxyPolicyRule.ports, action
@@ -42,14 +42,14 @@ def _render(rules: list[dict[str, Any]]) -> list[str]:
     """Render squid.conf for one policy holding ``rules`` and return its lines."""
     transform = Proxy.__new__(Proxy)
     transform.root_directory = str(_REPO_ROOT)
-    template = transform._load_template("squid_cache_linux")
+    template = transform._load_template("squid_cache")
     policies = [{"name": "egress", "enabled": True, "default_action": "block", "rules": rules}]
     config = template.render(
         name="DC3-PRX-01",
         proxy_type="explicit",
         ha=None,
         proxy_interfaces=[],
-        proxy_rules=proxy_rules(policies, None, "squid_cache_linux"),
+        proxy_rules=proxy_rules(policies, None, "squid_cache"),
     )
     return config.splitlines()
 

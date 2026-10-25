@@ -242,7 +242,7 @@ def test_task_ignores_failures_from_before_the_stage() -> None:
     assert len(_load_commands(context)) == len(STAGE_NAMES)
 
 
-def test_task_registered_in_data_and_root_namespaces() -> None:
-    """The task is reachable as both `load-all-demo` and `data.load-all-demo`."""
+def test_task_registered_at_the_root() -> None:
+    """The task is reachable as `load-all-demo`, with no namespaced duplicate."""
     assert "load-all-demo" in tasks.ns.task_names
-    assert "load-all-demo" in tasks.ns.collections["data"].task_names
+    assert not tasks.ns.collections

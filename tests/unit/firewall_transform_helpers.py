@@ -147,7 +147,7 @@ def _make_smoke_data(platform: str) -> dict[str, Any]:
                         "role": {"value": "firewall"},
                         "platform": {
                             "node": {
-                                "netmiko_device_type": {"value": platform},
+                                "name": {"value": platform},
                             }
                         },
                         "interfaces": {"edges": [{"node": fw_iface_node}]},

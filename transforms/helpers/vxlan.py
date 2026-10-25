@@ -11,18 +11,21 @@ from transforms.helpers.addressing import host_ip
 from transforms.helpers.firewall import FIREWALL_CONTEXT_KIND, SERVICE_CONTEXT_ROLES
 
 # The neutral overlay model owns these (transforms/helpers/overlay.py); they stay importable from here.
-from transforms.helpers.overlay import _DEFAULT_ANYCAST_GATEWAY_MAC, _INTERNET_NAMESPACE_TYPE
-from transforms.helpers.overlay import _L3VNI_SVI_VLAN_BASE as _L3VNI_SVI_VLAN_BASE
-from transforms.helpers.overlay import _L3VNI_SVI_VLAN_MAX as _L3VNI_SVI_VLAN_MAX
-from transforms.helpers.overlay import L2Instance, L3Instance, OverlayNode
+from transforms.helpers.overlay import (
+    _DEFAULT_ANYCAST_GATEWAY_MAC,
+    _INTERNET_NAMESPACE_TYPE,
+    L2Instance,
+    L3Instance,
+    OverlayNode,
+)
 from transforms.helpers.overlay import _collect_l3_vni_from_namespaces as _collect_l3_vni_from_namespaces
 from transforms.helpers.overlay import _interface_address, _is_multisite_segment
 from transforms.helpers.overlay import _l3_from_activations as _l3_from_activations
 from transforms.helpers.overlay import _select_vtep_interface as _select_vtep_interface
 from transforms.helpers.overlay import build_overlay_node, l2_instance, vni_activations
 from transforms.helpers.segments import _get_segment_namespace, segment_vlan_ids
-from utils.exchange_transit import MAX_ENCODABLE_VNI
 from utils.fabric_roles import BORDER_ROLES
+from utils.limits import MAX_ENCODABLE_VNI
 
 _log = logging.getLogger(__name__)
 

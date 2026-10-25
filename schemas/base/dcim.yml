@@ -47,10 +47,6 @@ generics:
             label: Edge Router
             description: Network boundary with external networks.
             color: "#bf7fbf"
-          - name: cpe
-            label: Customer Premise Equipment
-            description: Devices located at the customer's premises.
-            color: "#bf7f7f"
           - name: spine
             label: Spine Router
             description: Aggregation router part of a Pod.
@@ -166,10 +162,6 @@ generics:
             label: Maintenance
             description: Undergoing routine maintenance or repairs.
             color: "#ffd27f"
-          - name: drained
-            label: Drained
-            description: Temporarily taken out of service.
-            color: "#bfbfbf"
           - name: decommissioned
             label: Decommissioned
             description: Removed from service but retained for audit/history.
@@ -267,22 +259,10 @@ generics:
             label: Maintenance
             description: "Interface is under maintenance."
             color: "#FFF2CC"
-          - name: disabled
-            label: Disabled
-            description: "Interface has been disabled."
-            color: "#D3D3D3"
-          - name: deleted
-            label: Deleted
-            description: "Interface has been deleted."
-            color: "#FAD7A0"
           - name: outage
             label: Outage
             description: "Interface is currently experiencing an outage."
             color: "#F4CCCC"
-          - name: reserved
-            label: Reserved
-            description: "Interface is reserved for future use."
-            color: "#E0E0E0"
         default_value: "free"
         order_weight: 1200
       - name: role
@@ -411,11 +391,6 @@ nodes:
         kind: Text
         optional: true
         order_weight: 1100
-      - name: part_number
-        label: Part Number
-        optional: true
-        kind: Text
-        order_weight: 1200
       - name: height
         label: Height (U)
         optional: true
@@ -450,24 +425,6 @@ nodes:
         optional: true
         kind: Number
         order_weight: 1720
-      - name: storage_gb
-        label: Storage (GB)
-        description: "Internal storage capacity in GB (servers only)"
-        optional: true
-        kind: Number
-        order_weight: 1730
-      - name: max_routes
-        label: Max Routes
-        description: "Maximum routing table entries (network devices)"
-        optional: true
-        kind: Number
-        order_weight: 1740
-      - name: tcam_entries
-        label: TCAM Entries
-        description: "Hardware TCAM entries for ACL/FIB (network devices)"
-        optional: true
-        kind: Number
-        order_weight: 1750
     relationships:
       - name: manufacturer
         peer: OrganizationManufacturer
@@ -499,22 +456,11 @@ nodes:
         kind: Text
         unique: true
         order_weight: 1000
+        description: "The config template key (templates/configs/<role>/<name>.j2)"
       - name: description
         kind: Text
         optional: true
         order_weight: 1200
-      - name: napalm_driver
-        kind: Text
-        optional: true
-        order_weight: 1600
-      - name: netmiko_device_type
-        kind: Text
-        optional: true
-        order_weight: 1700
-      - name: ansible_network_os
-        kind: Text
-        optional: true
-        order_weight: 1800
       - name: containerlab_os
         kind: Text
         optional: true

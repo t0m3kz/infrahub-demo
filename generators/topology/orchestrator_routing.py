@@ -5,6 +5,11 @@ from typing import Any
 from infrahub_sdk.exceptions import NodeNotFoundError
 
 from utils.data_cleaning import clean_data
+from utils.limits import (
+    APPLICATION_ORCHESTRATOR_GROUPS,
+    TOPOLOGY_ORCHESTRATOR_GROUPS,
+    VIRTUAL_COLOCATION_ORCHESTRATOR_GROUPS,
+)
 
 from ..common import CommonGenerator
 
@@ -120,11 +125,7 @@ class ApplicationOrchestratorRoutingGenerator(BaseOrchestratorRoutingGenerator):
 
     query_roots = ("AppApplication",)
     orchestrator_field = "application_orchestrator"
-    routing_groups = {
-        "ansible_automation_platform": "application_ansible",
-        "github_actions": "application_github_actions",
-        "argocd": "application_argocd",
-    }
+    routing_groups = APPLICATION_ORCHESTRATOR_GROUPS
 
 
 class TopologyOrchestratorRoutingGenerator(BaseOrchestratorRoutingGenerator):
@@ -137,12 +138,7 @@ class TopologyOrchestratorRoutingGenerator(BaseOrchestratorRoutingGenerator):
         "TopologyCustomerCloud",
     )
     orchestrator_field = "infrastructure_orchestrator"
-    routing_groups = {
-        "ansible_automation_platform": "topology_ansible",
-        "github_actions": "topology_github_actions",
-        "terraform": "topology_terraform",
-        "argocd": "topology_argocd",
-    }
+    routing_groups = TOPOLOGY_ORCHESTRATOR_GROUPS
 
 
 class VirtualColocationOrchestratorRoutingGenerator(BaseOrchestratorRoutingGenerator):
@@ -154,5 +150,5 @@ class VirtualColocationOrchestratorRoutingGenerator(BaseOrchestratorRoutingGener
 
     query_roots = ("TopologyVirtualColocation",)
     orchestrator_field = "infrastructure_orchestrator"
-    routing_groups = {"terraform": "virtual_colocation_terraform"}
+    routing_groups = VIRTUAL_COLOCATION_ORCHESTRATOR_GROUPS
     unrouted_is_error = False

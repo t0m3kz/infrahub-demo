@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from tests.integration.test_helpers import (
+from tests.integration.dc_topology_helpers import (
     compute_role_counts,
     compute_underlay_asn_by_role,
     fetch_underlay_asn_drift,

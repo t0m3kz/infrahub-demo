@@ -29,26 +29,10 @@ nodes:
             label: Cisco
             description: Cisco SaaS (Webex, Umbrella)
             color: "#1BA0D7"
-          - name: zoom
-            label: Zoom
-            description: Zoom conferencing
-            color: "#2D8CFF"
           - name: zscaler
             label: Zscaler
             description: Zscaler cloud security
             color: "#0066CC"
-          - name: palo_alto
-            label: Palo Alto
-            description: Palo Alto (Prisma, other)
-            color: "#FA582D"
-          - name: microsoft
-            label: Microsoft
-            description: Microsoft cloud apps
-            color: "#6264A7"
-          - name: salesforce
-            label: Salesforce
-            description: Salesforce cloud services
-            color: "#00A1E0"
           - name: other
             label: Other
             description: Other provider
@@ -63,12 +47,6 @@ nodes:
           - name: sase
             label: SASE / SWG
             color: "#3498DB"
-          - name: conferencing
-            label: Conferencing
-            color: "#2ECC71"
-          - name: crm
-            label: CRM
-            color: "#9B59B6"
           - name: storage
             label: Storage
             color: "#F39C12"
@@ -149,14 +127,6 @@ nodes:
             label: Maintenance
             description: "Region is under maintenance"
             color: "#FFD27F"
-          - name: constrained
-            label: Constrained
-            description: "Region has capacity constraints"
-            color: "#F4CCCC"
-          - name: deprecated
-            label: Deprecated
-            description: "Region is deprecated"
-            color: "#BFBFBF"
     relationships:
       - name: location
         peer: LocationMetro

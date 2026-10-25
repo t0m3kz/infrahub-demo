@@ -39,10 +39,10 @@ from pathlib import Path
 from typing import Any, NoReturn
 
 from utils.data_cleaning import clean_data
+from utils.limits import CUSTOMER_VLAN_ID_MAX, CUSTOMER_VLAN_ID_MIN, GROUP_PROVIDER_STUBS, GROUP_SDWAN_GATEWAYS
 
 from .connections import BORDER_ROLE_FOR_SERVICES
 from .domain_pairing import standalone_vlan_domain_name
-from .helpers.pools import CUSTOMER_VLAN_ID_MAX, CUSTOMER_VLAN_ID_MIN
 from .protocols import DcimPhysicalDevice, ManagedStandaloneVlanDomain, ManagedVlanDomainSegment
 
 # Devices that act as a deployment's EVPN Multi-Site border gateway for a
@@ -55,7 +55,7 @@ BORDER_GATEWAY_ROLES = frozenset({"border-leaf", "edge"})
 # `provider_stubs`), also carries the `edge` role and is deployed into the same colocation zone as the on-ramp
 # router, so the zone lookup finds it. Neither terminates VXLAN segments and no generator gives it a VLAN domain,
 # so it is never a border gateway. (The missing-domain error for a real border gateway stays.)
-NON_BORDER_GATEWAY_GROUPS = frozenset({"sdwan_gateways", "provider_stubs"})
+NON_BORDER_GATEWAY_GROUPS = frozenset({GROUP_SDWAN_GATEWAYS, GROUP_PROVIDER_STUBS})
 # Interface kinds whose segment tag puts the device's VLAN domain in scope. A
 # DcimVirtualInterface carrying the segment is an inline sub-interface on a
 # firewall/LB HA pair, which takes the facing border leaf's VLAN instead.

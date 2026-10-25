@@ -16,7 +16,7 @@ GPO_RENDERERS: dict[str, frozenset[str]] = {
     "vxlan_gpo": frozenset({"cisco_nxos"}),
     "segment_security": frozenset({"arista_eos"}),
 }
-"""Group-policy kind -> the netmiko platforms whose device templates render it (like
+"""Group-policy kind -> the platforms whose device templates render it (like
 BaseDeviceTransform._BORDER_LEAF_ACL_PLATFORMS). A reference site of a kind with no
 renderer for the device's platform renders nothing on its devices."""
 

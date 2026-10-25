@@ -55,7 +55,8 @@ from typing import Any
 from infrahub_sdk.protocols import CoreIPPrefixPool, CoreNumberPool, IpamNamespace
 
 from utils.data_cleaning import clean_data
-from utils.exchange_transit import OFFSET_ANYCAST, namespace_type_for_environment
+from utils.exchange_transit import namespace_type_for_environment
+from utils.limits import OFFSET_ANYCAST, STRETCHED_VNI_POOL, TENANT_POOL_TEMPLATE
 
 from ..common import CommonGenerator
 from ..connections import CablingMixin
@@ -75,15 +76,11 @@ from ..protocols import (
 )
 from ..vlan_domain import SERVICE_PORT_ROLES, VlanDomainMixin, segment_lock_key
 
-# Bootstrap pool (data/bootstrap/18_vni_pools.yml) every stretched segment's
-# single VNI comes from — disjoint from the per-site {fabric}-vni-pool band.
-STRETCHED_VNI_POOL_NAME = "GLOBAL-L2VNI"
-
 
 def tenant_pool_name(namespace_name: str) -> str:
     """The bootstrap prefix pool tenant segments of VRF namespace ``namespace_name`` are addressed from
     (data/bootstrap/23b_tenant_pools.yml); its default_prefix_length is the segment's prefix length."""
-    return f"Tenant-{namespace_name}-IPv4"
+    return TENANT_POOL_TEMPLATE.format(namespace=namespace_name)
 
 
 class VxlanSegmentGenerator(PoolMixin, CablingMixin, VlanDomainMixin, CommonGenerator):
@@ -99,15 +96,13 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, VlanDomainMixin, CommonGene
     async def _get_stretched_vni_pool(self) -> dict[str, Any] | None:
         """Return the global stretched-segment VNI pool as {"id", "name"}, or None."""
         try:
-            pool = await self.client.get(
-                kind=CoreNumberPool, name__value=STRETCHED_VNI_POOL_NAME, raise_when_missing=False
-            )
+            pool = await self.client.get(kind=CoreNumberPool, name__value=STRETCHED_VNI_POOL, raise_when_missing=False)
         except Exception as exc:
-            self.logger.warning(f"Error looking up VNI pool {STRETCHED_VNI_POOL_NAME}: {exc}")
+            self.logger.warning(f"Error looking up VNI pool {STRETCHED_VNI_POOL}: {exc}")
             return None
         if pool is None:
             return None
-        return {"id": pool.id, "name": STRETCHED_VNI_POOL_NAME}
+        return {"id": pool.id, "name": STRETCHED_VNI_POOL}
 
     @staticmethod
     def _extract_existing_vni(existing_deployments: list[Any]) -> int | None:
@@ -197,7 +192,7 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, VlanDomainMixin, CommonGene
                 # Falling back to a site pool would reintroduce the collision
                 # this pool exists to prevent — fail instead.
                 self.logger.error(
-                    f"Segment {segment_name}: stretched VNI pool '{STRETCHED_VNI_POOL_NAME}' not found — "
+                    f"Segment {segment_name}: stretched VNI pool '{STRETCHED_VNI_POOL}' not found — "
                     "load data/bootstrap/18_vni_pools.yml"
                 )
                 return

@@ -8,17 +8,20 @@ speed-aware planner, and the back-to-back inter-pod mesh skipping a pair.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from generators.common import CablingOptions, CommonGenerator
+from generators.common import CommonGenerator
 from generators.connections import CablingMixin
 from generators.helpers import CablingPlanError
 from generators.logger import GeneratorError
 from generators.topology import pod_mesh as pod_mesh_module
 from generators.topology.pod import PodTopologyGenerator
+from generators.types import CablingOptions
+from utils.limits import WAIT_FOR_PEER_GENERATOR
 
 
 class _CablingGen(CablingMixin, CommonGenerator):
@@ -150,7 +153,7 @@ class TestBackToBackMesh:
         """Only the higher-index pod cables a pair, so a skipped pair stayed uncabled for good."""
         gen = _make_pod_gen(siblings=[_sibling(1), _sibling(2)])
 
-        with patch.object(pod_mesh_module, "_SIBLING_SPINE_MAX_RETRIES", 1):
+        with patch.object(pod_mesh_module, "WAIT_FOR_PEER_GENERATOR", replace(WAIT_FOR_PEER_GENERATOR, attempts=1)):
             with pytest.raises(GeneratorError, match="sibling pod idx=1 still has no spine"):
                 await _mesh(gen, spine_interfaces=["Ethernet1/33", "Ethernet1/34"])
 

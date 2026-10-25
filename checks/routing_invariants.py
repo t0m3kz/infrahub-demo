@@ -52,8 +52,8 @@ rendered config; each is a property of data that spans topologies.
    external sessions of the SAME owner and never across owners
    (utils/ownership.py exchange_policies), which only holds if a prefix has one
    owner and one attachment point. Per namespace this rule runs
-   ownership_conflicts over the registrations: the on-prem segments (owner and
-   status as on the edge; retired are skipped), the offices' `lan_prefixes` and
+   ownership_conflicts over the registrations: the on-prem segments (owner as
+   on the edge), the offices' `lan_prefixes` and
    hosted segments grouped by their `sdwan_gateway` (one attachment point per
    gateway) together with the `registered_prefixes` of the tunnels ending on
    that gateway, and the VPC blocks grouped by the handoff circuit their VIF

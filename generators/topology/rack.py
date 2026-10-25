@@ -4,7 +4,7 @@ from typing import Any, Literal, cast
 
 from typing_extensions import TypedDict
 
-from ..common import CablingOptions, CommonGenerator
+from ..common import CommonGenerator
 from ..connections import CablingMixin
 from ..devices import DeviceMixin
 from ..helpers.rack import RackRolesHelper, parse_rack_data, pod_row_racks
@@ -20,6 +20,7 @@ from ..rack import (
     spine_bgp_readiness_role,
 )
 from ..routing import RoutingMixin
+from ..types import CablingOptions
 
 
 class TopologyRackParentData(TypedDict, total=False):
@@ -460,7 +461,6 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         device_role: str,
         deployment_id: str,
         allocate_loopback: bool,
-        group_name: str | None = None,
         mlag: bool = False,
         mlag_supports_virtual: bool = True,
     ) -> list[str]:
@@ -478,7 +478,6 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
             naming_convention=self._naming_conv,
             options=self._roles.build_device_options(
                 allocate_loopback=allocate_loopback,
-                group_name=group_name,
                 mlag=mlag,
                 mlag_supports_virtual=mlag_supports_virtual,
             ),

@@ -16,15 +16,6 @@
               "id": "plat-sonic",
               "name": {
                 "value": "sonic"
-              },
-              "netmiko_device_type": {
-                "value": "sonic"
-              },
-              "napalm_driver": {
-                "value": "sonic"
-              },
-              "ansible_network_os": {
-                "value": "sonic"
               }
             }
           },

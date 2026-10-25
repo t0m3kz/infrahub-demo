@@ -7,7 +7,7 @@
 #
 # The partner is modelled the way the other parties are, as a stub the demo does not configure:
 #
-#   PARTNER-ACME     TopologyExternalProviders (provider_type partner) under the "Partners" label: the
+#   PARTNER-ACME     TopologyExternalProviders under the "Partners" label: the
 #                    facility the partner's device sits in, so that `deployment` is a derivable facility
 #                    for the internet circuit below.
 #   EXT-ACME-EDGE1   the partner's border router, a DcimPhysicalDevice on the generic provider-edge
@@ -43,7 +43,6 @@ spec:
   data:
     - name: PARTNER-ACME
       parent: "Partners"
-      provider_type: partner
       status: active
       provider: "P031"
 ---

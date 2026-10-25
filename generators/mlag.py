@@ -13,6 +13,8 @@ if TYPE_CHECKING:
 
     from infrahub_sdk import InfrahubClient
 
+from utils.limits import MLAG_CONTROL_IPV4_POOL, MLAG_CONTROL_IPV6_POOL
+
 from .connections import tracked_save_kwargs
 from .helpers import get_lag_name, get_loopback_name
 from .helpers.cable_attributes import RackPosition, cable_attributes, endpoint_label
@@ -38,8 +40,8 @@ _IPV4_CONTROL_PLATFORMS = frozenset({"sonic", "dell_sonic"})
 _NO_CONTROL_PLATFORMS = frozenset({"cisco_nxos"})
 # family → (pool name, peer-link prefix length, virtual loopback prefix length)
 _CONTROL_POOLS: dict[int, tuple[str, int, int]] = {
-    4: ("MLAG-Control-IPv4", 31, 32),
-    6: ("MLAG-Control-IPv6", 127, 128),
+    4: (MLAG_CONTROL_IPV4_POOL, 31, 32),
+    6: (MLAG_CONTROL_IPV6_POOL, 127, 128),
 }
 
 

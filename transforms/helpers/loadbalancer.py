@@ -132,7 +132,7 @@ _HAPROXY_PERSISTENCE: dict[str, str | None] = {"none": None, "source_ip": "sourc
 
 def _f5_vip(vip: dict[str, Any], partition: str) -> dict[str, Any]:
     """F5 TMOS: pool method, persistence profile, virtual-server profiles and the monitor types."""
-    platform = "f5_linux"
+    platform = "f5_tmos"
     client_ssl = f"/{partition}/{vip['name']}_clientssl" if vip["terminate_tls"] else None
     profiles = [{"name": "/Common/udp" if vip["protocol"] == "udp" else "/Common/tcp", "context": None}]
     if vip["l7"]:
@@ -177,7 +177,7 @@ def _haproxy_vip(vip: dict[str, Any], partition: str) -> dict[str, Any]:
 
     HAProxy has no partitions, so the frontend/backend names carry the partition to stay unique.
     """
-    platform = "haproxy_technologies_linux"
+    platform = "haproxy_technologies"
     if vip["protocol"] == "udp":
         raise _refuse(platform, vip, "protocol udp")
     if len(vip["health_checks"]) > 1:
@@ -193,11 +193,11 @@ def _haproxy_vip(vip: dict[str, Any], partition: str) -> dict[str, Any]:
 
 
 _VENDORS: dict[str, Callable[[dict[str, Any], str], dict[str, Any]]] = {
-    "f5_linux": _f5_vip,
+    "f5_tmos": _f5_vip,
     "netscaler": _netscaler_vip,
-    "haproxy_technologies_linux": _haproxy_vip,
+    "haproxy_technologies": _haproxy_vip,
 }
-"""netmiko platform -> VIP token builder; one per template in templates/configs/loadbalancers/."""
+"""platform name -> VIP token builder; one per template in templates/configs/loadbalancers/."""
 
 
 def _vip(raw: dict[str, Any], platform: str, partition: str) -> dict[str, Any]:

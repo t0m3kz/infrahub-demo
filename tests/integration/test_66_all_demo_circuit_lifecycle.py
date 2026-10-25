@@ -33,9 +33,11 @@ from typing import Any
 import pytest
 from infrahub_sdk import InfrahubClient
 
+from tasks import ALL_DEMO_BRANCH
+
+from .all_demo_circuit_constants import ALL_DEMO_VIRTUAL_CIRCUITS, HANDOFF_KIND, INTERCONNECT_KIND
 from .conftest import TestInfrahubDockerWithClient
-from .test_constants import ALL_DEMO_BRANCH, ALL_DEMO_VIRTUAL_CIRCUITS, HANDOFF_KIND, INTERCONNECT_KIND
-from .test_helpers import wait_for_condition
+from .wait_helpers import wait_for_condition
 from .workflow_helpers import verify_no_failed_tasks, wait_for_tasks_completion
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")

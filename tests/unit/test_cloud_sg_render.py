@@ -75,7 +75,6 @@ def _cleaned(provider: str, segments: list[dict], instance_segment: str = "app")
                 "id": "i-1",
                 "name": "vm",
                 "network_segment": {"name": instance_segment, "virtual_network": {"name": "vpc"}},
-                "security_groups": [],
             }
         ],
     }
@@ -158,12 +157,12 @@ def test_segment_without_policy_data_is_unchanged() -> None:
     assert policy_security_group(plain, "vpc") is None
     cleaned = _cleaned("AWS", [plain])
     ctx = prepare_cloud_data(copy.deepcopy(cleaned))
-    assert ctx["security_groups"] == []
-    assert ctx["instances"][0]["security_groups"] == []
+    assert ctx["sgs_by_vpc"] == {}
+    assert "security_groups" not in ctx["inst_by_vpc"]["vpc"][0]
 
 
 def test_instance_binds_through_its_network_segment() -> None:
-    """Only instances of the segment get its group, appended to their own."""
+    """Only instances of the segment get its group."""
     segments = [_segment([_rule(10, "r", APP, DB)], [], name="app"), {"id": "o", "name": "other", "cidr_block": "x"}]
     cleaned = _cleaned("AWS", segments)
     cleaned["CloudInstance"].append(
@@ -171,12 +170,12 @@ def test_instance_binds_through_its_network_segment() -> None:
             "id": "i-2",
             "name": "elsewhere",
             "network_segment": {"name": "other", "virtual_network": {"name": "vpc"}},
-            "security_groups": [{"name": "hand"}],
         }
     )
     ctx = prepare_cloud_data(cleaned)
-    assert [sg["name"] for sg in ctx["instances"][0]["security_groups"]] == ["app-sg"]
-    assert [sg["name"] for sg in ctx["instances"][1]["security_groups"]] == ["hand"]
+    bound, elsewhere = ctx["inst_by_vpc"]["vpc"]
+    assert [sg["name"] for sg in bound["security_groups"]] == ["app-sg"]
+    assert "security_groups" not in elsewhere
 
 
 @pytest.mark.asyncio
@@ -190,24 +189,6 @@ async def test_aws_renders_rules_and_attaches_group_without_any_fallback() -> No
     assert "vpc_security_group_ids = [aws_security_group.app_sg.id]" in out
     assert "0.0.0.0/0" not in out
     assert "to_nowhere" not in out
-
-
-@pytest.mark.asyncio
-async def test_aws_hand_managed_rule_without_peer_is_skipped_not_opened(caplog: pytest.LogCaptureFixture) -> None:
-    """A CloudSecurityGroup rule with no CIDR is skipped with a warning instead of 0.0.0.0/0."""
-    cleaned = _cleaned("AWS", [])
-    cleaned["CloudSecurityGroup"] = [
-        {
-            "name": "hand",
-            "virtual_network": {"name": "vpc"},
-            "rules": [{"name": "open", "direction": "ingress", "protocol": "tcp", "port_start": 22}],
-        }
-    ]
-    with caplog.at_level(logging.WARNING, logger="transforms.cloud.aws"):
-        out = await _render(cleaned)
-    assert 'resource "aws_security_group" "hand"' in out
-    assert "0.0.0.0/0" not in out
-    assert any("open" in message for message in caplog.messages)
 
 
 @pytest.mark.asyncio

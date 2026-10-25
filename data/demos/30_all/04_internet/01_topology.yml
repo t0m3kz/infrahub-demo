@@ -22,16 +22,13 @@ spec:
   data:
     - name: ISP-LUMEN
       parent: "Internet"
-      provider_type: internet
       status: active
       provider: "P014"
     - name: ISP-COGENT
       parent: "Internet"
-      provider_type: internet
       status: active
       provider: "P023"
     - name: ISP-ORANGE
       parent: "Internet"
-      provider_type: internet
       status: active
       provider: "P019"

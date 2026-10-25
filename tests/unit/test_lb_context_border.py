@@ -20,9 +20,9 @@ import pytest
 from graphql import parse, print_ast
 from graphql.language import FragmentDefinitionNode
 
+from tests.smoke.fixture_builders.common import run_transform
 from tests.smoke.fixture_builders.firewall import build_leaf_lb_client_data
 from tests.smoke.fixture_builders.transit import build_lb_context_bl_data
-from tests.smoke.test_configs_smoke import _run_transform
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.leaf import Leaf
 from transforms.helpers.firewall import _service_context_caps, get_exchange_routes, get_exchange_transits
@@ -200,7 +200,7 @@ class TestBorderLeafRender:
     """The border-leaf transform end to end (the smoke fixture's border leaf)."""
 
     def test_nxos_border_renders_both_legs_and_both_vip_statics(self) -> None:
-        config = _run_transform(BorderLeaf, build_lb_context_bl_data(device_name="dc1-bl-01", platform="cisco_nxos"))
+        config = run_transform(BorderLeaf, build_lb_context_bl_data(device_name="dc1-bl-01", platform="cisco_nxos"))
         assert "  name LB-dc1-lb-01-dc1-lb-02-ha-PROD\n" in config
         assert "  name LB-dc1-lb-01-dc1-lb-02-ha-N-7de0\n" in config
         assert "  description LB-dc1-lb-01-dc1-lb-02-ha-NON-PROD\n" in config
@@ -217,7 +217,7 @@ class TestLeafClientAndBackend:
     @pytest.fixture(scope="class")
     @classmethod
     def config(cls) -> str:
-        return _run_transform(Leaf, build_leaf_lb_client_data(device_name="dc1-leaf-01", platform="cisco_nxos"))
+        return run_transform(Leaf, build_leaf_lb_client_data(device_name="dc1-leaf-01", platform="cisco_nxos"))
 
     def test_client_permits_and_bypasses_the_vip(self, config: str) -> None:
         assert "  100 permit tcp 10.110.0.0/24 100.68.0.10/32 eq 443 ! web-to-app-vip-tcp-443" in config
