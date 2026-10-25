@@ -78,7 +78,7 @@ def _payload(*capabilities: dict[str, Any]) -> dict[str, Any]:
     interfaces = [
         {"name": _v(f"eth0.{i}"), "capabilities": _edges([capability])} for i, capability in enumerate(capabilities)
     ]
-    return {"DcimPhysicalDevice": _edges([{"name": _v("fw-1"), "interfaces": _edges(interfaces)}])}
+    return {"DcimDevice": _edges([{"name": _v("fw-1"), "interfaces": _edges(interfaces)}])}
 
 
 def _validate(*capabilities: dict[str, Any]) -> Any:
@@ -239,7 +239,7 @@ def _exchange_payload(internet_vlan: str, snat: str | None = "192.0.2.5/32") -> 
         _leg_interface("eth1.3005", "100.66.0.5/29", "PROD", "prod", exchange, context),
         _leg_interface(f"eth1.{internet_vlan}", "100.66.32.5/29", "INTERNET", "internet", exchange, context),
     ]
-    return {"DcimPhysicalDevice": _edges([{"name": _v("fw-1"), "interfaces": _edges(interfaces)}])}
+    return {"DcimDevice": _edges([{"name": _v("fw-1"), "interfaces": _edges(interfaces)}])}
 
 
 class TestFirewallExchangeLegs:

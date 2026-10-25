@@ -1,0 +1,51 @@
+!
+set hostname fw-dc10101-C007-p-dedicated
+!
+! --- Interfaces ---
+set interface eth0 state on
+set interface eth0 ipv4-address 10.254.1.11 mask-length 24
+set interface eth0 comments "Management"
+!
+!
+! --- Firewall Contexts (VSX Virtual Systems) — one per tenant, per ManagedFirewallContext ---
+!
+add virtual-system name fw-C007-p-dedicated-context
+set virtual-system fw-C007-p-dedicated-context comments "C007-p"
+set interface eth1.3001 vlan 3001
+set interface eth1.3001 state on
+set interface eth1.3001 ipv4-address 100.66.0.13 mask-length 29
+set interface eth1.3001 security-zone PROD-ZONE
+set virtual-system fw-C007-p-dedicated-context interface eth1.3001
+set interface eth1.3401 vlan 3401
+set interface eth1.3401 state on
+set interface eth1.3401 ipv4-address 100.66.32.13 mask-length 29
+set interface eth1.3401 security-zone INTERNET-ZONE
+set virtual-system fw-C007-p-dedicated-context interface eth1.3401
+set interface eth1.3601 vlan 3601
+set interface eth1.3601 state on
+set interface eth1.3601 ipv4-address 100.66.48.13 mask-length 29
+set interface eth1.3601 security-zone MANAGEMENT-ZONE
+set virtual-system fw-C007-p-dedicated-context interface eth1.3601
+set virtual-system fw-C007-p-dedicated-context
+set static-route 10.3.0.0/24 nexthop gateway address 100.66.0.9 on
+set static-route 10.250.0.0/24 nexthop gateway address 100.66.48.9 on
+set static-route default nexthop gateway address 100.66.32.9 on
+mgmt_cli add host name "SNAT-fw-C007-p-dedicated-context" ip-address "192.0.2.6"
+mgmt_cli add nat-rule package "fw-C007-p-dedicated-context" position "top" original-source "PROD-ZONE" original-destination "INTERNET-ZONE" translated-source "SNAT-fw-C007-p-dedicated-context" method "hide" install-on "fw-C007-p-dedicated-ha"
+mgmt_cli add host name "SNAT-fw-C007-p-dedicated-context-MANAGEMENT" ip-address "100.66.48.12"
+mgmt_cli add nat-rule package "fw-C007-p-dedicated-context" position "top" original-source "PROD-ZONE" original-destination "MANAGEMENT-ZONE" translated-source "SNAT-fw-C007-p-dedicated-context-MANAGEMENT" method "hide" install-on "fw-C007-p-dedicated-ha"
+!
+! --- Zone isolation (PROD <-> NON-PROD, MANAGEMENT -> tenants) in virtual system fw-C007-p-dedicated-context ---
+set virtual-system fw-C007-p-dedicated-context
+add access-rule layer "Network" position top name "deny-MANAGEMENT-ZONE-to-PROD-ZONE" action drop source MANAGEMENT-ZONE destination PROD-ZONE service Any track Log
+!
+!
+! --- ClusterXL ---
+set cluster member priority 100
+set cluster mode HighAvailability
+set interface eth7 ipv4-address 169.254.255.1 mask-length 30
+set cluster sync-interface eth7
+mgmt_cli set simple-cluster name "fw-C007-p-dedicated-ha" interfaces.add.1.name "eth1.3001" interfaces.add.1.interface-type "cluster" interfaces.add.1.ip-address "100.66.0.12" interfaces.add.1.network-mask "255.255.255.248"
+mgmt_cli set simple-cluster name "fw-C007-p-dedicated-ha" interfaces.add.2.name "eth1.3401" interfaces.add.2.interface-type "cluster" interfaces.add.2.ip-address "100.66.32.12" interfaces.add.2.network-mask "255.255.255.248"
+mgmt_cli set simple-cluster name "fw-C007-p-dedicated-ha" interfaces.add.3.name "eth1.3601" interfaces.add.3.interface-type "cluster" interfaces.add.3.ip-address "100.66.48.12" interfaces.add.3.network-mask "255.255.255.248"
+!

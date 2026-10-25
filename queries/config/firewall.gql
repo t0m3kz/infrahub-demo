@@ -1,7 +1,11 @@
+# A firewall is a physical appliance or a dedicated virtual instance of a
+# customer (DcimVirtualDevice, hosted on the shared pair): both are members of
+# the `firewalls` group and carry the same contexts, legs and HA pair, so the
+# root is the DcimDevice generic.
 query firewall_config(
   $device: String!
 ) {
-  DcimPhysicalDevice(name__value: $device) {
+  DcimDevice(name__value: $device) {
     edges {
       node {
         name { value }
