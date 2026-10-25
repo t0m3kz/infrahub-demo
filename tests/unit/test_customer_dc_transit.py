@@ -11,6 +11,7 @@ first left behind — instead of a brittle list of canned return values.
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -464,22 +465,18 @@ class TestTransitMemberResolution:
         assert sorted(world.contexts) == [_SHARED, _LB_PROD]
         gen.logger.error.assert_not_called()
 
-    @pytest.mark.asyncio
-    async def test_virtual_member_uses_its_own_uplink_and_its_hosts_cable(self) -> None:
-        """A hosted instance's sub-interfaces sit on its own uplink; its border port is the host uplink's far end."""
-        world = _World()
-        gen, _ = _make_gen(world)
+    @staticmethod
+    def _hosted_members(world: _World, *, pinned: bool = True) -> list[Any]:
+        """Two hosted instances: each has a virtual uplink NIC, pinned to the uplink of its host fw-1 / fw-2."""
         for host in ("fw-1", "fw-2"):
             world.uplinks[f"v{host}"] = SimpleNamespace(
                 id=f"up-v{host}",
+                typename="DcimVirtualInterface",
                 name=SimpleNamespace(value="eth1"),
                 device=SimpleNamespace(id=f"v{host}"),
-                cable=SimpleNamespace(id=None),
+                parent_interface=SimpleNamespace(id=f"up-{host}" if pinned else None),
             )
-        cluster = SimpleNamespace(
-            id="ded-cluster", name=SimpleNamespace(value="DC10-ded-ha"), capabilities=SimpleNamespace(peers=[])
-        )
-        members = [
+        return [
             SimpleNamespace(
                 id=f"v{host}",
                 name=SimpleNamespace(value=f"DC10-FW{index}-C005-p-dedicated"),
@@ -487,11 +484,21 @@ class TestTransitMemberResolution:
             )
             for index, host in ((1, "fw-1"), (2, "fw-2"))
         ]
+
+    @pytest.mark.asyncio
+    async def test_virtual_member_uses_its_own_uplink_and_the_host_port_it_is_pinned_to(self) -> None:
+        """A hosted instance's sub-interfaces sit on its own NIC; its border port is the far end of the host port."""
+        world = _World()
+        gen, _ = _make_gen(world)
+        members = self._hosted_members(world)
+        cluster = SimpleNamespace(
+            id="ded-cluster", name=SimpleNamespace(value="DC10-ded-ha"), capabilities=SimpleNamespace(peers=[])
+        )
         gen._ensure_dedicated_device_pair = AsyncMock(return_value=(cluster, members))
 
         await _run(gen, world, _payload(dedicated=True))
 
-        assert world.uplink_lookups == [["fw-1", "fw-2", "vfw-1", "vfw-2"]]
+        assert world.uplink_lookups == [["vfw-1", "vfw-2"]]
         context = world.contexts["DC10-ded-ha-context"]
         assert {key for key in world.sub_interfaces if key[1] == "eth1.3000"} == {
             ("vfw-1", "eth1.3000"),
@@ -499,6 +506,22 @@ class TestTransitMemberResolution:
         }
         assert world.tags == [(context.id, ["bl-port-fw-1", "bl-port-fw-2"])]
         gen.logger.error.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_virtual_uplink_not_pinned_to_a_host_port_is_an_error_without_writes(self) -> None:
+        """No parent_interface, no way to the border service port: nothing is created for the context."""
+        world = _World()
+        gen, _ = _make_gen(world)
+        members = self._hosted_members(world, pinned=False)
+        cluster = SimpleNamespace(
+            id="ded-cluster", name=SimpleNamespace(value="DC10-ded-ha"), capabilities=SimpleNamespace(peers=[])
+        )
+        gen._ensure_dedicated_device_pair = AsyncMock(return_value=(cluster, members))
+
+        await _run(gen, world, _payload(dedicated=True))
+
+        assert world.writes == 0
+        assert "not pinned to a physical port of its hosting device" in gen.logger.error.call_args_list[0].args[0]
 
     @pytest.mark.asyncio
     async def test_uncabled_uplink_is_an_error_without_writes(self) -> None:

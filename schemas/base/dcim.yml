@@ -352,6 +352,11 @@ generics:
           jinja2_template: "{{ \"%03d\"| format(name__value | split_interface | last | int) }}"  # yamllint disable rule:line-length
           kind: Jinja2
         order_weight: 20000
+      - name: mtu
+        label: MTU
+        kind: Number
+        default_value: 9000
+        order_weight: 1300
     relationships:
       - name: device
         peer: DcimDevice
@@ -622,11 +627,6 @@ nodes:
             color: "#D3D3D3"
         default_value: "other"
         order_weight: 1400
-      - name: mtu
-        label: MTU
-        kind: Number
-        default_value: 9000
-        order_weight: 1300
     relationships:
       - name: ip_address
         peer: IpamIPAddress
@@ -653,11 +653,21 @@ nodes:
     include_in_menu: false
     relationships:
       - name: parent_interface
-        peer: DcimPhysicalInterface
+        peer: DcimInterface
+        optional: true
         cardinality: one
         kind: Attribute
         identifier: "sub__interface"
-        description: "Parent physical interface to which this virtual interface belongs"
+        direction: outbound
+        description: "Interface this one rides on: a sub-interface's port, or the host port a virtual machine NIC is pinned to"
+      - name: sub_interfaces
+        peer: DcimVirtualInterface
+        optional: true
+        cardinality: many
+        kind: Generic
+        identifier: "sub__interface"
+        direction: inbound
+        description: "Interfaces riding on this one: the sub-interfaces of a virtual machine NIC (a NIC is pinned to a host port and carries many)"
       - name: ip_address
         peer: IpamIPAddress
         optional: true
@@ -697,12 +707,6 @@ nodes:
             label: Static (on)
             description: "No LACP negotiation"
             color: "#D3D3D3"
-      - name: mtu
-        kind: Number
-        label: MTU
-        default_value: 9000
-        optional: true
-        order_weight: 1500
       - name: minimum_links
         kind: Number
         label: "Minimum Links"

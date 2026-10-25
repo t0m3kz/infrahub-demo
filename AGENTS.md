@@ -351,6 +351,15 @@ class MyCheck(InfrahubCheck):
   gate and nothing filters on a community. A customer or segment without a tag renders no community.
   `checks/routing_tags.py` requires a tag on each routed tenant segment and its owner, in range and unique. Not
   `unique: true` in the schema: an optional attribute collides on the second unset value.
+- **Virtual NICs**: the base NICs of a hosted virtual device (a dedicated firewall or load balancer, built from a
+  `*_CUSTOMER_*` template) are `DcimVirtualInterface`, never `DcimPhysicalInterface`. Only the physical host is cabled:
+  `generators/virtual_nics.py` pins each NIC through `parent_interface` to the host port of its role (`management`,
+  `uplink`, `ha`; n-th by interface order; a NIC with no host port left stays unpinned), and a context sub-interface
+  rides on the NIC, so border leaf -> host port -> NIC -> sub-interface is a path in the graph.
+  `_resolve_transit_members` follows that link, not a name. `parent_interface` (outbound, one) pairs with
+  `sub_interfaces` (inbound, many): a NIC is both a child and a parent. `checks/virtual_nic_pinning.py` requires the
+  parent to be a port of the `hosting_device` and an uplink's host port to be cabled. A provider-hosted
+  `CloudNetworkAppliance` and a controller keep physical ports.
 - **Capability edges**: a capability reaches devices via `ManagedGenericDevice` and interfaces via
   `ManagedGenericInterfaces`. Inherit the second only when something reads the interface edge.
 

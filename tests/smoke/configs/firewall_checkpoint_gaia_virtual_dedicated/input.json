@@ -74,7 +74,7 @@
             "edges": [
               {
                 "node": {
-                  "__typename": "DcimPhysicalInterface",
+                  "__typename": "DcimVirtualInterface",
                   "name": {
                     "value": "eth0"
                   },
@@ -86,12 +86,6 @@
                   },
                   "role": {
                     "value": "management"
-                  },
-                  "interface_type": {
-                    "value": "10gbase-x-sfpp"
-                  },
-                  "mtu": {
-                    "value": 9000
                   },
                   "ip_address": {
                     "node": {
@@ -106,9 +100,6 @@
                         }
                       }
                     }
-                  },
-                  "cable": {
-                    "node": null
                   },
                   "capabilities": {
                     "edges": []
@@ -447,7 +438,7 @@
               },
               {
                 "node": {
-                  "__typename": "DcimPhysicalInterface",
+                  "__typename": "DcimVirtualInterface",
                   "name": {
                     "value": "eth7"
                   },

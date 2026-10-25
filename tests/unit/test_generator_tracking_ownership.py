@@ -314,41 +314,8 @@ class TestHaSyncPortOwnership:
         return gen
 
     @pytest.mark.asyncio
-    async def test_generated_eth7_is_resaved_on_every_run(self) -> None:
-        """The virtual eth7 _ensure_ha_interfaces creates for *_CUSTOMER_*
-        pairs is this run's output: re-upserted by id on a rerun that finds
-        it, or the rerun's cleanup would delete it (and the next run recreate it)."""
-        gen = self._gen()
-        ha_obj = MagicMock(id="ha-1")
-        ha_obj.capabilities.peers = [MagicMock(id="dev-1")]
-        device = _node("dev-1", "vfw-01")
-        existing_eth7 = _node("eth7-1", "eth7")
-        existing_eth7.device = MagicMock(id="dev-1")
-        existing_eth7.typename = DcimVirtualInterface.__name__
-        existing_eth7.status = MagicMock(value="active")
-
-        async def _filters(*, kind: Any, **kwargs: Any) -> list[Any]:  # noqa: ARG001
-            if kind is DcimVirtualDevice:
-                return [device]
-            if kind is DcimInterface:
-                return [existing_eth7]
-            return []
-
-        gen.client.filters = AsyncMock(side_effect=_filters)
-        resaved = _node("eth7-1", "eth7")
-        resaved.status = MagicMock(value="active")
-        gen.client.create = AsyncMock(return_value=resaved)
-
-        await gen._ensure_ha_interfaces(ha_obj, "vfw-01-vfw-02-ha", device_kind=DcimVirtualDevice)
-
-        eth7_call = gen.client.create.call_args_list[0]
-        assert eth7_call.kwargs["kind"] is DcimVirtualInterface
-        assert eth7_call.kwargs["data"]["id"] == "eth7-1"
-        resaved.save.assert_awaited_once_with(allow_upsert=True)
-
-    @pytest.mark.asyncio
     async def test_template_sync_port_is_not_claimed(self) -> None:
-        """A template-provided sync port (physical eth7 on a virtual device)
+        """A template-provided sync port (a virtual device's own NIC)
         belongs to the device's template: never re-upserted."""
         gen = self._gen()
         ha_obj = MagicMock(id="ha-1")
@@ -356,7 +323,7 @@ class TestHaSyncPortOwnership:
         device = _node("dev-1", "vfw-01")
         template_port = _node("eth7-1", "eth7")
         template_port.device = MagicMock(id="dev-1")
-        template_port.typename = DcimPhysicalInterface.__name__
+        template_port.typename = DcimVirtualInterface.__name__
         template_port.status = MagicMock(value="active")
 
         async def _filters(*, kind: Any, **kwargs: Any) -> list[Any]:  # noqa: ARG001

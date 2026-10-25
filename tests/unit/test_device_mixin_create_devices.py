@@ -77,6 +77,7 @@ class TestDeviceMixinCreateDevices:
         gen = _make_generator()
         created_device = _mock_created_device(DcimVirtualDevice.__name__, "dc1-vm-01")
         gen.client.create = AsyncMock(return_value=created_device)
+        gen._pin_virtual_nics = AsyncMock()
 
         hosting_device = MagicMock(id="host-1")
         await gen.create_devices(
@@ -92,6 +93,7 @@ class TestDeviceMixinCreateDevices:
         assert create_kwargs["kind"] is DcimVirtualDevice
         assert create_kwargs["data"]["owner"] == {"id": "owner-2"}
         assert create_kwargs["data"]["hosting_device"] == {"id": "host-1"}
+        gen._pin_virtual_nics.assert_awaited_once_with([created_device], "host-1")
 
     @pytest.mark.asyncio
     async def test_appliance_option_creates_provider_hosted_appliances(self) -> None:
@@ -103,6 +105,7 @@ class TestDeviceMixinCreateDevices:
         created_device = _mock_created_device(CloudNetworkAppliance.__name__, "eg-am-ne01")
         gen.client.create = AsyncMock(return_value=created_device)
         gen._ensure_standalone_vlan_domains = AsyncMock()
+        gen._pin_virtual_nics = AsyncMock()
 
         names = await gen.create_devices(
             device_role="edge",
@@ -119,6 +122,7 @@ class TestDeviceMixinCreateDevices:
         assert create_kwargs["data"]["deployment"] == {"id": "vc-1"}
         assert create_kwargs["data"]["object_template"] == {"id": "tpl-1"}
         gen._ensure_standalone_vlan_domains.assert_not_awaited()
+        gen._pin_virtual_nics.assert_not_awaited()
         assert gen.client.filters.await_args_list[0].kwargs["kind"] is CloudNetworkAppliance
 
     @pytest.mark.asyncio

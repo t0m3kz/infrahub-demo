@@ -141,7 +141,9 @@ fragment VirtualPort on DcimInterface {
   ... on DcimVirtualInterface {
     parent_interface {
       node {
-        cable { node { id } }
+        ... on DcimPhysicalInterface {
+          cable { node { id } }
+        }
         capabilities {
           edges {
             node {
