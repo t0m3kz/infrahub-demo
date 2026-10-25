@@ -16,7 +16,6 @@ from generators.protocols import (
     DcimPhysicalDevice,
     DcimPhysicalInterface,
     DcimVirtualDevice,
-    DcimVirtualInterface,
 )
 from tests.unit.device_mixin_helpers import _mock_device, _mock_group, _recording_lock
 
@@ -571,7 +570,8 @@ class TestEnsureHaInterfaces:
         gen.client.create.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_virtual_device_with_no_sync_iface_creates_eth7_on_demand(self) -> None:
+    async def test_virtual_device_with_no_sync_iface_is_an_error_and_none_is_invented(self) -> None:
+        """Every virtual template with an HA domain ships a role=ha NIC: a device without one is reported."""
         gen = self._gen()
         ha_obj = MagicMock(id="ha-1", capabilities=_mock_relmgr(["dev-1", "dev-2"]))
         dev_1 = MagicMock(id="dev-1", deployment=MagicMock(initialized=False))
@@ -579,41 +579,27 @@ class TestEnsureHaInterfaces:
         dev_2 = MagicMock(id="dev-2", deployment=MagicMock(initialized=False))
         dev_2.name = MagicMock(value="vfw-02")
 
-        created_sync_iface = MagicMock(id="new-iface", save=AsyncMock())
-        created_sync_iface.name = MagicMock(value="eth7")
-
         async def _filters(*, kind: Any, **kwargs: Any) -> list[Any]:
             if kind is DcimVirtualDevice:
                 return [dev_1, dev_2]
             return []  # no existing sync interface
 
         gen.client.filters = AsyncMock(side_effect=_filters)
-        gen.client.create = AsyncMock(
-            side_effect=[
-                created_sync_iface,
-                MagicMock(save=AsyncMock()),
-                created_sync_iface,
-                MagicMock(save=AsyncMock()),
-            ]
-        )
+        gen.client.create = AsyncMock()
 
         await gen._ensure_ha_interfaces(ha_obj, "vfw-01-vfw-02-ha", device_kind=DcimVirtualDevice)
 
-        virtual_iface_calls = [c for c in gen.client.create.call_args_list if c.kwargs["kind"] is DcimVirtualInterface]
-        assert len(virtual_iface_calls) == 2
-        assert virtual_iface_calls[0].kwargs["data"]["name"] == "eth7"
-        assert virtual_iface_calls[0].kwargs["data"]["role"] == "ha"
+        gen.client.create.assert_not_called()
+        assert [c.args[0] for c in gen.logger.error.call_args_list] == [
+            "[vfw-01] No HA sync interface found (expected role=ha)",
+            "[vfw-02] No HA sync interface found (expected role=ha)",
+        ]
 
     @pytest.mark.asyncio
-    async def test_virtual_device_with_physical_eth7_reuses_it_no_duplicate(self) -> None:
-        """Most virtual firewall/LB templates (CloudGuard/PANOS/NetScaler/etc,
-        every template except *_CUSTOMER_*) provision eth7 as a
-        TemplateDcimPhysicalInterface even on a virtual device. The lookup
-        must find it via the generic DcimInterface kind and reuse it —
-        querying DcimVirtualInterface alone would miss it and attempt to
-        create a colliding duplicate eth7 (live NODE_NOT_FOUND/uniqueness
-        failure on add_dc, since Interface's uniqueness_constraints span
-        both Physical and Virtual subtypes)."""
+    async def test_virtual_device_uses_the_sync_nic_its_template_provides(self) -> None:
+        """A virtual device's HA sync port is the role=ha NIC of its template, found through the generic
+        DcimInterface kind (a NIC is a DcimVirtualInterface, a physical device's port a DcimPhysicalInterface);
+        nothing is created for it, only its status is flipped to active."""
         gen = self._gen()
         ha_obj = MagicMock(id="ha-1", capabilities=_mock_relmgr(["dev-1", "dev-2"]))
         dev_1 = MagicMock(id="dev-1", deployment=MagicMock(initialized=False))
@@ -628,16 +614,14 @@ class TestEnsureHaInterfaces:
                 return [dev_1, dev_2]
             if kind is DcimInterface:
                 return [iface_1, iface_2]
-            return []  # DcimVirtualInterface must not be queried
+            return []
 
         gen.client.filters = AsyncMock(side_effect=_filters)
-        gen.client.create = AsyncMock(return_value=MagicMock(save=AsyncMock()))
 
         await gen._ensure_ha_interfaces(ha_obj, "vfw-01-vfw-02-ha", device_kind=DcimVirtualDevice)
 
-        # The existing eth7 is reused: nothing is created (no duplicate port, no cable).
-        gen.client.create.assert_not_called()
-        assert iface_1.status.value == "active"
+        gen.logger.error.assert_not_called()
+        assert iface_1.status.value == iface_2.status.value == "active"
 
     @pytest.mark.asyncio
     async def test_virtual_pairs_never_create_a_cable(self) -> None:
@@ -655,16 +639,18 @@ class TestEnsureHaInterfaces:
         async def _filters(*, kind: Any, **kwargs: Any) -> list[Any]:
             if kind is DcimVirtualDevice:
                 return [dev_1, dev_2]
-            if kind is DcimVirtualInterface:
+            if kind is DcimInterface:
                 return [iface_1, iface_2]
             return []
 
         gen.client.filters = AsyncMock(side_effect=_filters)
-        gen.client.create = AsyncMock(return_value=MagicMock(save=AsyncMock()))
         gen._ensure_ha_cable = AsyncMock()
 
         await gen._ensure_ha_interfaces(ha_obj, "vfw-01-vfw-02-ha", device_kind=DcimVirtualDevice)
 
+        # The sync NICs were found (a missing one would log an error and skip the pair for a different reason).
+        gen.logger.error.assert_not_called()
+        assert iface_1.status.value == iface_2.status.value == "active"
         gen._ensure_ha_cable.assert_not_awaited()
 
 

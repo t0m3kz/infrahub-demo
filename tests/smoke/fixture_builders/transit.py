@@ -412,6 +412,10 @@ def build_virtual_firewall_data() -> dict:
         if caps and caps[0]["node"]["id"] != dedicated["id"]:
             continue
         node["name"] = _v(rename(node["name"]["value"]))
+        if node["__typename"] == "DcimPhysicalInterface":  # a NIC of the virtual machine, not a port
+            node["__typename"] = "DcimVirtualInterface"
+            for physical_only in ("interface_type", "mtu", "cable", "lag"):
+                node.pop(physical_only, None)
         if caps:
             context = caps[0]["node"]
             context["name"] = _v("fw-C007-p-dedicated-context")
@@ -426,6 +430,7 @@ def build_virtual_firewall_data() -> dict:
         role="management",
         ip_address="10.254.1.11/24",
         ns_name="MANAGEMENT",
+        typename="DcimVirtualInterface",
     )
     device["interfaces"] = _edges([management, *(edge["node"] for edge in interfaces)])
 

@@ -177,9 +177,11 @@ query GetInterconnectInventory {
                       name {
                         value
                       }
-                      cable {
-                        node {
-                          id
+                      ... on DcimPhysicalInterface {
+                        cable {
+                          node {
+                            id
+                          }
                         }
                       }
                       capabilities {

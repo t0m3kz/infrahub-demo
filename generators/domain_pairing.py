@@ -23,7 +23,6 @@ from .protocols import (
     DcimInterface,
     DcimPhysicalDevice,
     DcimPhysicalInterface,
-    DcimVirtualInterface,
     ManagedMLAG,
     ManagedStandaloneVlanDomain,
 )
@@ -33,12 +32,6 @@ def standalone_vlan_domain_name(device_name: str) -> str:
     """The ManagedStandaloneVlanDomain name for a non-MLAG device: the lookup
     key segment generators use."""
     return f"{device_name}-vlan-domain"
-
-
-def _is_generated_sync_port(iface: Any) -> bool:
-    """Whether an HA sync interface is the eth7 _ensure_ha_interfaces creates
-    itself (a DcimVirtualInterface), not one the device's template provides."""
-    return getattr(iface, "typename", None) == DcimVirtualInterface.__name__ and iface.name.value == "eth7"
 
 
 class DomainPairingMixin(MLAGWiringMixin):
@@ -201,12 +194,8 @@ class DomainPairingMixin(MLAGWiringMixin):
                 kind=DcimPhysicalInterface, device__ids=member_ids, role__value="ha", include=["cable"]
             )
         else:
-            # Query the generic DcimInterface kind, not DcimVirtualInterface
-            # — most virtual firewall/LB templates (every CloudGuard/PANOS/
-            # NetScaler/etc. template except *_CUSTOMER_*) provision eth7 as
-            # a TemplateDcimPhysicalInterface even on a virtual device, so
-            # assuming "virtual device -> virtual iface" here missed it and
-            # tried to create a colliding duplicate.
+            # The generic kind: a virtual device's NICs are DcimVirtualInterface, a physical one's
+            # DcimPhysicalInterface.
             ha_ifaces = await self.client.filters(kind=DcimInterface, device__ids=member_ids, role__value="ha")
         first_ha_iface_by_device: dict[str, Any] = {}
         for iface in ha_ifaces:
@@ -216,25 +205,6 @@ class DomainPairingMixin(MLAGWiringMixin):
         sync_ifaces: list[Any] = []
         for device_obj in member_devices:
             sync_iface = first_ha_iface_by_device.get(device_obj.id)
-            if not is_physical and (sync_iface is None or _is_generated_sync_port(sync_iface)):
-                # Virtual devices from the *_CUSTOMER_* templates get a fixed
-                # eth7 HA sync port (see data/bootstrap's virtual device
-                # templates) — create it on demand rather than requiring
-                # every template author to remember one. Upserted on every
-                # run, not only the first: this run owns it, and a run that
-                # found it and skipped the save would delete it.
-                sync_iface = await self.client.create(
-                    kind=DcimVirtualInterface,
-                    data={
-                        **({"id": sync_iface.id} if sync_iface is not None else {}),
-                        "name": "eth7",
-                        "device": {"id": device_obj.id},
-                        "status": "active",
-                        "role": "ha",
-                        "description": f"HA sync — {device_obj.name.value}",
-                    },
-                )
-                await sync_iface.save(allow_upsert=True)
             if sync_iface is None:
                 self.logger.error(f"[{device_obj.name.value}] No HA sync interface found (expected role=ha)")
                 continue

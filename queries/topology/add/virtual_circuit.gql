@@ -54,7 +54,9 @@ query virtual_circuit_data($name: String!) {
                 ... on DcimVirtualInterface {
                   parent_interface {
                     node {
-                      cable { node { id } }
+                      ... on DcimPhysicalInterface {
+                        cable { node { id } }
+                      }
                       capabilities {
                         edges {
                           node {
