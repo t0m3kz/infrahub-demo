@@ -59,6 +59,7 @@ generics:
         optional: true
         direction: inbound
         identifier: capabilities
+        order_weight: 2400
 
   # Capabilities attached to device interfaces (segments, circuits, peerings, firewall-context legs, VIPs)
   - name: GenericInterfaces
@@ -74,6 +75,7 @@ generics:
         kind: Generic
         optional: true
         identifier: interface_capabilities
+        order_weight: 2400
 
 extensions:
   nodes:

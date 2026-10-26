@@ -82,7 +82,7 @@ def _cleaned(provider: str, segments: list[dict], instance_segment: str = "app")
 
 async def _render(cleaned: dict[str, Any]) -> str:
     """Run CloudVpcTerraform on already-cleaned data."""
-    tf = CloudVpcTerraform(client=MagicMock(), infrahub_node=MagicMock(), root_directory="/tmp")
+    tf = CloudVpcTerraform(client=MagicMock(), infrahub_node=MagicMock(), root_directory="/tmp", branch="main")
     with patch("transforms.cloud.vpc_terraform.clean_data", return_value=cleaned):
         return await tf.transform({})
 

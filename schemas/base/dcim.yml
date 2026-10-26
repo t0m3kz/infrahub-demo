@@ -179,12 +179,13 @@ generics:
         cardinality: many
         identifier: device__interface
         kind: Component
+        order_weight: 2500
       - name: tags
         peer: BuiltinTag
         optional: true
         cardinality: many
         kind: Attribute
-        order_weight: 2000
+        order_weight: 2010
       - name: primary_address
         peer: IpamIPAddress
         label: Primary IP Address
@@ -499,7 +500,7 @@ nodes:
       - name: serial
         kind: Text
         optional: true
-        order_weight: 1500
+        order_weight: 1510
       - name: rack_face
         label: Rack Face
         description: On which face of the rack the device is mounted.
@@ -534,7 +535,7 @@ nodes:
         label: CPU Number
         kind: Number
         optional: true
-        order_weight: 2000
+        order_weight: 2050
       - name: memory
         label: Memory Size (GB)
         kind: Number
@@ -551,6 +552,7 @@ nodes:
         kind: Attribute
         cardinality: one
         optional: true
+        order_weight: 1800
 
   - name: PhysicalInterface
     namespace: Dcim
@@ -634,6 +636,7 @@ nodes:
         cardinality: one
         kind: Component
         on_delete: cascade
+        order_weight: 1900
       - name: lag
         peer: DcimLAGInterface
         label: "LAG"
@@ -642,12 +645,12 @@ nodes:
         kind: Attribute
         optional: true
         identifier: "lag__members"
-        order_weight: 1400
+        order_weight: 1450
 
   - name: VirtualInterface
     namespace: Dcim
     label: Virtual Interface
-    description: "Virtual interface like VLAN or Loopback"
+    description: "Logical interface (loopback, SVI, sub-interface) or the NIC of a virtual machine, pinned to a host port"
     inherit_from:
       - DcimInterface
     include_in_menu: false
@@ -660,6 +663,10 @@ nodes:
         identifier: "sub__interface"
         direction: outbound
         description: "Interface this one rides on: a sub-interface's port, or the host port a virtual machine NIC is pinned to"
+        order_weight: 1400
+      # The other end of parent_interface (same identifier, opposite direction). Nothing reads it: it exists because a
+      # NIC is a child of a host port AND the parent of its sub-interfaces, and a lone cardinality-one parent_interface
+      # would cap the NIC at one sub-interface ("has 2 peers for sub__interface, maximum of 1 allowed").
       - name: sub_interfaces
         peer: DcimVirtualInterface
         optional: true
@@ -668,11 +675,13 @@ nodes:
         identifier: "sub__interface"
         direction: inbound
         description: "Interfaces riding on this one: the sub-interfaces of a virtual machine NIC (a NIC is pinned to a host port and carries many)"
+        order_weight: 1450
       - name: ip_address
         peer: IpamIPAddress
         optional: true
         cardinality: one
         kind: Attribute
+        order_weight: 1900
 
   - name: LAGInterface
     namespace: Dcim
@@ -687,7 +696,7 @@ nodes:
         label: "LAG ID"
         description: "Port-channel number (e.g. 1 for Port-Channel1)"
         optional: false
-        order_weight: 1300
+        order_weight: 1350
       - name: lacp_mode
         kind: Dropdown
         label: "LACP Mode"
@@ -730,6 +739,7 @@ nodes:
         cardinality: one
         kind: Component
         on_delete: cascade
+        order_weight: 1900
 
   # --------------------  Cables  --------------------
   - name: Cable
@@ -806,3 +816,4 @@ nodes:
         max_count: 2
         kind: Attribute
         on_delete: no-action
+        order_weight: 1300
