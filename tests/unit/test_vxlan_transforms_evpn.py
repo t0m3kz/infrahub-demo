@@ -44,7 +44,7 @@ class TestSelectEvpnBgpProcess:
 
     def test_non_bgp_capabilities_are_ignored(self) -> None:
         caps = [
-            {"typename": "ManagedStandaloneVlanDomain", "name": "vlan-domain"},
+            {"typename": "ManagedMLAG", "name": "mlag"},
             {"typename": "ManagedOSPF", "name": "ospf"},
         ]
         assert _select_evpn_bgp_process(caps) is None

@@ -29,9 +29,9 @@ def _make_gen() -> Any:
     gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
     # Inline termination has its own test classes below — no legs by default.
     gen._reconcile_inline_service_ports = AsyncMock(return_value=[])
-    # VLAN domain activation reconciliation has its own tests
-    # (tests/unit/test_vlan_domain_reconcile.py) — stubbed at the boundary.
-    gen.reconcile_segment_vlan_domains = AsyncMock()
+    # The port tag and VLAN row reconciliation has its own tests
+    # (tests/unit/test_vlan_domain_reconcile.py, test_app_instance_segment_generator.py) — stubbed at the boundary.
+    gen.reconcile_vxlan_segment = AsyncMock()
     # Tenant addressing has its own test class (TestEnsureSegmentAddressing).
     gen.ensure_segment_addressing = AsyncMock()
     return gen

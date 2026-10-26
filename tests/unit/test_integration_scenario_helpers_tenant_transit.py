@@ -119,18 +119,28 @@ def test_scope_tenant_services_keeps_unresolved_cluster() -> None:
 
 
 def _vlan_domain_client() -> MagicMock:
-    """A client returning one ManagedVlanDomainSegment record."""
+    """A client returning one segment deployment with one ManagedVlanDomainSegment row under it."""
     client = MagicMock()
     client.execute_graphql = AsyncMock(
         return_value={
-            "ManagedVlanDomainSegment": {
+            "ManagedSegmentDeployment": {
                 "edges": [
                     {
                         "node": {
-                            "id": "vds-1",
-                            "vlan_id": {"value": 100},
+                            "id": "sd-1",
+                            "vni": {"value": 10100},
                             "segment": {"node": {"id": "seg-1", "name": {"value": "web-app"}}},
-                            "vlan_domain": {"node": {"id": "dom-1", "display_label": "leaf-pair-mlag"}},
+                            "vlan_domain_segments": {
+                                "edges": [
+                                    {
+                                        "node": {
+                                            "id": "vds-1",
+                                            "vlan_id": {"value": 100},
+                                            "vlan_domain": {"node": {"id": "dom-1", "display_label": "leaf-pair-mlag"}},
+                                        }
+                                    }
+                                ]
+                            },
                         }
                     }
                 ]
@@ -155,6 +165,7 @@ async def test_fetch_vlan_domain_segments_unfiltered_declares_no_variable() -> N
             {
                 "id": "vds-1",
                 "vlan_id": 100,
+                "vni": 10100,
                 "segment_name": "web-app",
                 "vlan_domain_id": "dom-1",
                 "vlan_domain_label": "leaf-pair-mlag",
@@ -171,7 +182,7 @@ async def test_fetch_vlan_domain_segments_filtered_declares_and_uses_variable() 
 
     query = client.execute_graphql.await_args.kwargs["query"]
     assert "GetVlanDomainSegments($segment_id: [ID])" in query
-    assert "ManagedVlanDomainSegment(segment__ids: $segment_id)" in query
+    assert "ManagedSegmentDeployment(segment__ids: $segment_id)" in query
     assert client.execute_graphql.await_args.kwargs["variables"] == {"segment_id": ["seg-1"]}
 
 

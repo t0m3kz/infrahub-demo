@@ -308,20 +308,10 @@ class TestResolveOwnVlanDomainId:
         )
         assert resolved == "dev-leaf-01"
 
-    def test_standalone_vlan_domain_capability_is_the_domain(self) -> None:
-        """A non-MLAG switch's activations point at its ManagedStandaloneVlanDomain,
-        not at the device, so the domain id must win over the device id."""
+    def test_mlag_capability_wins_over_the_device(self) -> None:
+        """A member of an MLAG pair is never a domain itself: the MLAG is chosen first."""
         resolved = BaseDeviceTransform._resolve_own_vlan_domain_id(
-            "dev-leaf-01",
-            [{"typename": "ManagedBGP", "id": "bgp-1"}, {"typename": "ManagedStandaloneVlanDomain", "id": "svd-1"}],
-        )
-        assert resolved == "svd-1"
-
-    def test_mlag_capability_wins_over_a_standalone_domain(self) -> None:
-        """A device left with a stale standalone domain after pairing still uses its MLAG."""
-        resolved = BaseDeviceTransform._resolve_own_vlan_domain_id(
-            "dev-leaf-01",
-            [{"typename": "ManagedStandaloneVlanDomain", "id": "svd-1"}, {"typename": "ManagedMLAG", "id": "mlag-1"}],
+            "dev-leaf-01", [{"typename": "ManagedBGP", "id": "bgp-1"}, {"typename": "ManagedMLAG", "id": "mlag-1"}]
         )
         assert resolved == "mlag-1"
 
@@ -336,8 +326,8 @@ class TestResolveOwnVlanDomainId:
 
 
 class TestCollectActivationsVlanDomainMatching:
-    """A VXLAN segment's local vlan_id comes from the vlan_domain_segments entry
-    matching THIS device's own domain."""
+    """A VXLAN segment's local vlan_id comes from the row (under a segment deployment) matching THIS
+    device's own domain, and its VNI from that same deployment."""
 
     @staticmethod
     def _vxlan_iface(vlan_domain_id: str, vlan_id: int = 100) -> dict:
@@ -347,8 +337,12 @@ class TestCollectActivationsVlanDomainMatching:
                     "typename": "ManagedVxlanSegment",
                     "id": "seg-1",
                     "name": "tenant-a-web",
-                    "segment_deployments": [{"vni": 10100}],
-                    "vlan_domain_segments": [{"vlan_domain": {"id": vlan_domain_id}, "vlan_id": vlan_id}],
+                    "segment_deployments": [
+                        {
+                            "vni": 10100,
+                            "vlan_domain_segments": [{"vlan_domain": {"id": vlan_domain_id}, "vlan_id": vlan_id}],
+                        }
+                    ],
                 }
             ]
         }
@@ -370,6 +364,29 @@ class TestCollectActivationsVlanDomainMatching:
             device_capabilities=[],
         )
         assert [a["vlan_id"] for a in activations] == [110]
+
+    def test_vni_is_the_one_of_the_deployment_holding_the_row(self) -> None:
+        """A segment in two deployments: the row of this device's domain sits under one of them,
+        and the VNI is that deployment's, never the first one's."""
+        t = _make_transform("leaf")
+        iface = {
+            "capabilities": [
+                {
+                    "typename": "ManagedVxlanSegment",
+                    "id": "seg-1",
+                    "name": "tenant-a-web",
+                    "segment_deployments": [
+                        {"vni": 10100, "vlan_domain_segments": [{"vlan_domain": {"id": "other"}, "vlan_id": 100}]},
+                        {
+                            "vni": 20200,
+                            "vlan_domain_segments": [{"vlan_domain": {"id": "dev-leaf-01"}, "vlan_id": 120}],
+                        },
+                    ],
+                }
+            ]
+        }
+        activations = t._collect_activations_from_interfaces([iface], device_id="dev-leaf-01", device_capabilities=[])
+        assert [(a["vlan_id"], a["vni"]) for a in activations] == [(120, 20200)]
 
     def test_segment_with_no_entry_for_this_domain_is_skipped(self) -> None:
         """Allocation has not converged for this domain yet. Skipping beats

@@ -1028,22 +1028,22 @@
                                 "node": {
                                   "vni": {
                                     "value": 10110
-                                  }
-                                }
-                              }
-                            ]
-                          },
-                          "vlan_domain_segments": {
-                            "edges": [
-                              {
-                                "node": {
-                                  "vlan_id": {
-                                    "value": 110
                                   },
-                                  "vlan_domain": {
-                                    "node": {
-                                      "id": "dev-dc1-leaf-01"
-                                    }
+                                  "vlan_domain_segments": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "vlan_id": {
+                                            "value": 110
+                                          },
+                                          "vlan_domain": {
+                                            "node": {
+                                              "id": "dev-dc1-leaf-01"
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
                                   }
                                 }
                               }
@@ -1109,22 +1109,22 @@
                                 "node": {
                                   "vni": {
                                     "value": 10120
-                                  }
-                                }
-                              }
-                            ]
-                          },
-                          "vlan_domain_segments": {
-                            "edges": [
-                              {
-                                "node": {
-                                  "vlan_id": {
-                                    "value": 120
                                   },
-                                  "vlan_domain": {
-                                    "node": {
-                                      "id": "dev-dc1-leaf-01"
-                                    }
+                                  "vlan_domain_segments": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "vlan_id": {
+                                            "value": 120
+                                          },
+                                          "vlan_domain": {
+                                            "node": {
+                                              "id": "dev-dc1-leaf-01"
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
                                   }
                                 }
                               }
@@ -1190,22 +1190,22 @@
                                 "node": {
                                   "vni": {
                                     "value": 10210
-                                  }
-                                }
-                              }
-                            ]
-                          },
-                          "vlan_domain_segments": {
-                            "edges": [
-                              {
-                                "node": {
-                                  "vlan_id": {
-                                    "value": 210
                                   },
-                                  "vlan_domain": {
-                                    "node": {
-                                      "id": "dev-dc1-leaf-01"
-                                    }
+                                  "vlan_domain_segments": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "vlan_id": {
+                                            "value": 210
+                                          },
+                                          "vlan_domain": {
+                                            "node": {
+                                              "id": "dev-dc1-leaf-01"
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
                                   }
                                 }
                               }
@@ -1271,22 +1271,22 @@
                                 "node": {
                                   "vni": {
                                     "value": 10220
-                                  }
-                                }
-                              }
-                            ]
-                          },
-                          "vlan_domain_segments": {
-                            "edges": [
-                              {
-                                "node": {
-                                  "vlan_id": {
-                                    "value": 220
                                   },
-                                  "vlan_domain": {
-                                    "node": {
-                                      "id": "dev-dc1-leaf-01"
-                                    }
+                                  "vlan_domain_segments": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "vlan_id": {
+                                            "value": 220
+                                          },
+                                          "vlan_domain": {
+                                            "node": {
+                                              "id": "dev-dc1-leaf-01"
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
                                   }
                                 }
                               }
@@ -1385,22 +1385,22 @@
                                 "node": {
                                   "vni": {
                                     "value": 10210
-                                  }
-                                }
-                              }
-                            ]
-                          },
-                          "vlan_domain_segments": {
-                            "edges": [
-                              {
-                                "node": {
-                                  "vlan_id": {
-                                    "value": 210
                                   },
-                                  "vlan_domain": {
-                                    "node": {
-                                      "id": "dev-dc1-leaf-01"
-                                    }
+                                  "vlan_domain_segments": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "vlan_id": {
+                                            "value": 210
+                                          },
+                                          "vlan_domain": {
+                                            "node": {
+                                              "id": "dev-dc1-leaf-01"
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
                                   }
                                 }
                               }

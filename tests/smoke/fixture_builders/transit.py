@@ -6,6 +6,7 @@ import ipaddress
 from typing import Any
 
 from tests.smoke.fixture_builders.common import (
+    _deployment_record,
     _edges,
     _make_interface,
     _make_segment_node,
@@ -186,10 +187,7 @@ def build_exchange_transit_bl_data(
         customer_port = next(e["node"] for e in interfaces if e["node"]["name"]["value"] == "Ethernet10")
         customer_port["capabilities"] = _edges([shared])
     device_node["deployment"]["node"]["segment_deployments"] = _edges(
-        [
-            {"vni": _v(10100), "status": _v("active"), "segment": _node(shared)},
-            {"vni": _v(10110), "status": _v("active"), "segment": _node(acme)},
-        ]
+        [_deployment_record(shared, 10100), _deployment_record(acme, 10110)]
     )
     return data
 

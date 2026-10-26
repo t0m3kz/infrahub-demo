@@ -14,7 +14,6 @@ from generators.protocols import (
     DcimPhysicalDevice,
     DcimVirtualDevice,
     ManagedMLAG,
-    ManagedStandaloneVlanDomain,
 )
 from tests.unit.device_mixin_helpers import (
     _DummyBatch,
@@ -97,14 +96,11 @@ class TestDeviceMixinCreateDevices:
 
     @pytest.mark.asyncio
     async def test_appliance_option_creates_provider_hosted_appliances(self) -> None:
-        """options["appliance"] selects CloudNetworkAppliance: no hosting device, no standalone VLAN domain, no cabling.
-
-        An edge is a VLAN domain role for a physical device; a rented instance has no ports of ours to domain."""
+        """options["appliance"] selects CloudNetworkAppliance: no hosting device, no NIC pinning, no cabling."""
 
         gen = _make_generator()
         created_device = _mock_created_device(CloudNetworkAppliance.__name__, "eg-am-ne01")
         gen.client.create = AsyncMock(return_value=created_device)
-        gen._ensure_standalone_vlan_domains = AsyncMock()
         gen._pin_virtual_nics = AsyncMock()
 
         names = await gen.create_devices(
@@ -121,7 +117,6 @@ class TestDeviceMixinCreateDevices:
         assert create_kwargs["kind"] is CloudNetworkAppliance
         assert create_kwargs["data"]["deployment"] == {"id": "vc-1"}
         assert create_kwargs["data"]["object_template"] == {"id": "tpl-1"}
-        gen._ensure_standalone_vlan_domains.assert_not_awaited()
         gen._pin_virtual_nics.assert_not_awaited()
         assert gen.client.filters.await_args_list[0].kwargs["kind"] is CloudNetworkAppliance
 
@@ -334,13 +329,9 @@ class TestCreateDevicesPairingDispatch:
 
     @pytest.mark.asyncio
     async def test_mlag_create_no_does_not_pair(self) -> None:
-        """No MLAG domain; the unpaired leaf gets its standalone VLAN domain instead."""
+        """No MLAG domain, and no record for the unpaired leaf: it is its own VLAN domain."""
         gen = _make_generator()
-        created = [
-            _mock_created_device(DcimPhysicalDevice.__name__, "dc1-leaf-01"),
-            _mock_created_device(ManagedStandaloneVlanDomain.__name__, "dc1-leaf-01-vlan-domain"),
-        ]
-        gen.client.create = AsyncMock(side_effect=created)
+        gen.client.create = AsyncMock(side_effect=[_mock_created_device(DcimPhysicalDevice.__name__, "dc1-leaf-01")])
 
         await gen.create_devices(
             device_role="leaf",
@@ -351,7 +342,7 @@ class TestCreateDevicesPairingDispatch:
         )
 
         kinds = [call.kwargs["kind"] for call in gen.client.create.call_args_list]
-        assert kinds == [DcimPhysicalDevice, ManagedStandaloneVlanDomain]
+        assert kinds == [DcimPhysicalDevice]
 
 
 class TestRoleGroupLookup:

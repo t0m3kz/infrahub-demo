@@ -264,6 +264,11 @@ def _make_security_policy(*, name: str, rules: list[dict]) -> dict:
     }
 
 
+def _vlan_domain_rows(vlan_id: int, vlan_domain_id: str | None) -> dict:
+    """The ``vlan_domain_segments`` edges of one deployment: the row of this device's own VLAN domain, if any."""
+    return _edges([{"vlan_id": _v(vlan_id), "vlan_domain": _node({"id": vlan_domain_id})}] if vlan_domain_id else [])
+
+
 def _make_segment_node(
     *,
     vlan_id: int,
@@ -290,10 +295,10 @@ def _make_segment_node(
     looks for segments, and therefore the only path that produces VXLAN/EVPN
     output for leaf/tor/access-leaf roles.
 
-    For a VxlanSegment the VNI comes from ``segment_deployments`` (DC-wide) and
-    the LOCAL vlan_id from ``vlan_domain_segments``, matched to this device's own
-    VLAN domain — its ManagedMLAG if paired, else its own device id. A
-    VxlanSegment with no entry for the device's own domain is skipped entirely
+    For a VxlanSegment the VNI comes from ``segment_deployments`` and the LOCAL
+    vlan_id from the ``vlan_domain_segments`` rows under it, matched to this
+    device's own VLAN domain — its ManagedMLAG if paired, else its own device id.
+    A VxlanSegment with no row for the device's own domain is skipped entirely
     by the transform, so ``vlan_domain_id`` must match or no VXLAN is rendered.
 
     The VRF and its L3 VNI are reached ONLY via
@@ -340,20 +345,13 @@ def _make_segment_node(
                 "arp_suppression": _v(True),
                 "security_zone": security_zone_node,
                 "gateway": _node(gateway_node),
-                # DC-wide VNI. The transform takes segment_deployments[0]["vni"].
-                "segment_deployments": _edges([{"vni": _v(vni)}]),
-                # Per-VLAN-domain LOCAL vlan_id. Must carry an entry whose
-                # vlan_domain.id equals this device's own domain or the transform
-                # skips the segment and renders no VXLAN at all.
-                "vlan_domain_segments": _edges(
-                    [
-                        {
-                            "vlan_id": _v(vlan_id),
-                            "vlan_domain": _node({"id": vlan_domain_id}),
-                        }
-                    ]
-                    if vlan_domain_id
-                    else []
+                # The deployment the segment is realized in: its VNI and, under it, the
+                # per-VLAN-domain LOCAL vlan_id rows. The transform needs a row whose
+                # vlan_domain.id equals this device's own domain or it skips the segment
+                # and renders no VXLAN at all; the VNI is the one of the deployment holding
+                # that row.
+                "segment_deployments": _edges(
+                    [{"vni": _v(vni), "vlan_domain_segments": _vlan_domain_rows(vlan_id, vlan_domain_id)}]
                 ),
             }
         )
@@ -385,6 +383,17 @@ def _make_segment_node(
     return seg
 
 
+def _deployment_record(seg: dict, vni: int | None) -> dict:
+    """A ManagedSegmentDeployment record of a device's deployment for a segment node built by _make_segment_node:
+    its VNI and, under the record itself, the rows of the segment's own deployment (a border gateway's VLAN)."""
+    rows = (
+        seg["segment_deployments"]["edges"][0]["node"]["vlan_domain_segments"]
+        if seg.get("segment_deployments")
+        else _edges([])
+    )
+    return {"vni": _v(vni), "status": _v("active"), "vlan_domain_segments": rows, "segment": _node(seg)}
+
+
 def _make_segment_deployment(**kwargs: Any) -> dict:
     """Wrap a segment node in a ManagedSegmentDeployment record.
 
@@ -398,6 +407,8 @@ def _make_segment_deployment(**kwargs: Any) -> dict:
         "vlan_id": _v(kwargs.get("vlan_id")),
         "vni": _v(kwargs.get("vni")),
         "status": _v("active"),
+        # A border gateway's own row sits under the deployment record itself.
+        "vlan_domain_segments": _vlan_domain_rows(kwargs.get("vlan_id") or 0, kwargs.get("vlan_domain_id")),
         "segment": _node(seg),
     }
 
