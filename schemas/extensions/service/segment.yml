@@ -50,7 +50,7 @@ nodes:
         cardinality: one
         kind: Attribute
         order_weight: 110
-        optional: true
+        optional: false
         identifier: "segment__customer_deployments"
         description: "Customer deployment footprint this VLAN segment is activated in."
 
@@ -102,21 +102,21 @@ nodes:
         label: ARP Suppression
         optional: true
         default_value: true
-        order_weight: 3
+        order_weight: 10
         description: "EVPN ARP suppression for this VXLAN segment."
       - name: terminate_inline
         kind: Boolean
         label: Terminate Inline
         optional: true
         default_value: false
-        order_weight: 4
+        order_weight: 11
         description: "When true, the inline_service HA pair is the segment's gateway. Leaf is pure L2."
       - name: stretch_scope
         kind: Dropdown
         label: Stretch Scope
         optional: true
         default_value: local
-        order_weight: 5
+        order_weight: 12
         description: "Intended L2 stretch scope for this segment."
         choices:
           - name: local
@@ -144,10 +144,11 @@ nodes:
         peer: TopologyDeployment
         cardinality: many
         kind: Attribute
-        order_weight: 100
-        optional: true
+        order_weight: 110
+        optional: false
         identifier: "segment__customer_deployments"
         description: "Customer deployment footprints this VXLAN segment is activated in (stretch across DCs or single-site)."  # yamllint disable-line rule:line-length
+        min_count: 1
 
   # SegmentDeployment: per-DC realization of a VXLAN segment (VlanSegment has
   # no realization record — its vlan_id is a plain manual attribute).
@@ -242,7 +243,7 @@ nodes:
     label: VLAN Domain Segment
     icon: "carbon:network-overlay"
     include_in_menu: false
-    display_label: "{{ segment__customer_name__value }} vlan {{ vlan_id__value }}"
+    display_label: "{{ segment__customer_name__value }} vlan {{ vlan_id__value }} @ {{ vlan_domain__name__value }}"
     uniqueness_constraints:
       - [segment, vlan_domain]
       - [vlan_domain, vlan_id__value]
@@ -293,7 +294,7 @@ extensions:
           cardinality: many
           identifier: "vlandomainsegment__segment"
           order_weight: 9100
-          description: "Per-VLAN-domain local VLAN ID realizations for this segment"
+          description: "One row per VLAN domain with a port of the segment, plus a stretched segment's border gateways"
 
     - kind: TopologySegmentHosting
       relationships:

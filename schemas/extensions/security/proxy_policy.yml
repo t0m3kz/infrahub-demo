@@ -129,6 +129,7 @@ nodes:
         optional: true
         order_weight: 1000
         description: "Ordered rules in this policy"
+        identifier: "proxypolicyrule__policy"
 
   # ── Proxy Policy Rule ───────────────────────────────────────────────────────
   - name: PolicyRule
@@ -229,7 +230,7 @@ nodes:
         kind: Text
         label: Description
         optional: true
-        order_weight: 700
+        order_weight: 150
       - name: disabled
         kind: Boolean
         label: Disabled
@@ -265,7 +266,7 @@ extensions:
           cardinality: many
           kind: Generic
           optional: true
-          order_weight: 1000
+          order_weight: 1500
           identifier: proxyha__shared_policies
           description: "Base proxy policies applied to all tenants on this proxy"
 
@@ -277,7 +278,7 @@ extensions:
           cardinality: many
           kind: Generic
           optional: true
-          order_weight: 1000
+          order_weight: 1100
           identifier: cloudproxyha__shared_policies
           description: "Base proxy policies applied to all tenants on this SASE service"
 

@@ -57,7 +57,7 @@ generics:
         order_weight: 200
       - name: status
         kind: Dropdown
-        order_weight: 500
+        order_weight: 250
         default_value: provisioning
         choices:
           - name: provisioning
@@ -146,7 +146,7 @@ nodes:
         kind: Text
         label: "Circuit ID"
         description: "Provider circuit identifier"
-        order_weight: 50
+        order_weight: 110
 
       - name: bandwidth
         kind: Number
@@ -219,6 +219,21 @@ nodes:
     uniqueness_constraints:
       - [name__value]
     relationships:
+      # Re-declares ManagedGenericInterfaces.capabilities with a count, as PhysicalCircuit does: the two ports this
+      # circuit terminates on. The cap holds when the circuit side is written; checks/physical_circuit_ports.py
+      # and checks/circuit_placement.py hold the rest.
+      - name: capabilities
+        peer: DcimInterface
+        label: "Ends"
+        kind: Generic
+        cardinality: many
+        optional: false
+        min_count: 2
+        max_count: 2
+        identifier: interface_capabilities
+        order_weight: 1100
+        description: "The two ports this circuit terminates on, one at each end"
+
       - name: locations
         label: "Endpoint Locations"
         peer: TopologyConnectableLocation
@@ -228,6 +243,7 @@ nodes:
         identifier: "circuit__location"
         order_weight: 3000
         description: "Footprints where this tunnel terminates (the office and the gateway's facility)"
+        min_count: 2
 
       # The same concept as TopologyCustomerOffice.lan_prefixes (a PROD prefix a customer registers behind the
       # SD-WAN gateway, so the gateway's border session accepts it), for space the tunnel reaches that no office
@@ -261,6 +277,21 @@ nodes:
     uniqueness_constraints:
       - [name__value]
     relationships:
+      # Re-declares ManagedGenericInterfaces.capabilities with a count, as PhysicalCircuit does: the two ports this
+      # circuit terminates on. The cap holds when the circuit side is written; checks/physical_circuit_ports.py
+      # and checks/circuit_placement.py hold the rest.
+      - name: capabilities
+        peer: DcimInterface
+        label: "Ends"
+        kind: Generic
+        cardinality: many
+        optional: false
+        min_count: 2
+        max_count: 2
+        identifier: interface_capabilities
+        order_weight: 1100
+        description: "The two ports this circuit terminates on, one at each end"
+
       - name: locations
         label: "Endpoint Locations"
         peer: TopologyFacility
@@ -270,6 +301,7 @@ nodes:
         identifier: "circuit__location"
         order_weight: 3000
         description: "Facilities where this interconnect terminates"
+        min_count: 2
 
   # Our edge sub-interface <-> a party-owned device sub-interface (cloud on-ramp, SD-WAN gateway LAN handoff,
   # Equinix or Megaport provider) inside ONE environment namespace; an eBGP session is generated. An Equinix
@@ -302,6 +334,21 @@ nodes:
         order_weight: 600
         description: "Accepted-prefix limit of the session"
     relationships:
+      # Re-declares ManagedGenericInterfaces.capabilities with a count, as PhysicalCircuit does: the two ports this
+      # circuit terminates on. The cap holds when the circuit side is written; checks/physical_circuit_ports.py
+      # and checks/circuit_placement.py hold the rest.
+      - name: capabilities
+        peer: DcimInterface
+        label: "Ends"
+        kind: Generic
+        cardinality: many
+        optional: false
+        min_count: 2
+        max_count: 2
+        identifier: interface_capabilities
+        order_weight: 1100
+        description: "The two ports this circuit terminates on, one at each end"
+
       - name: locations
         label: "Endpoint Locations"
         peer: TopologyFacility

@@ -2,7 +2,7 @@
 
 A virtual machine has no cable of its own: its traffic leaves through the physical device that hosts
 it. Each base NIC the machine's template provides (a DcimVirtualInterface) therefore points, through
-``parent_interface``, to the host port it rides on, and the host port carries the cable. A context
+``host_interface``, to the host port it rides on, and the host port carries the cable. A context
 sub-interface sits on the NIC, so border leaf -> host port -> NIC -> sub-interface is a path in the graph.
 """
 
@@ -55,7 +55,7 @@ class VirtualNicMixin:
     _retry_delay: Callable[..., float]
 
     async def _pin_virtual_nics(self, devices: list[Any], host_id: str) -> None:
-        """Set parent_interface of every base NIC of devices to a port of the device host_id.
+        """Set host_interface of every base NIC of devices to a port of the device host_id.
 
         The server instantiates the template's NICs after the device is saved, so the read is retried
         until every device has some. Idempotent; the NICs belong to the template, not to this run, so
@@ -81,7 +81,7 @@ class VirtualNicMixin:
         for device in devices:
             device_nics = [nic for nic in nics if nic.device.id == device.id]
             for nic, host_port in pair_nics_with_host_ports(device_nics, host_ports):
-                if getattr(nic.parent_interface, "id", None) == host_port.id:
+                if getattr(nic.host_interface, "id", None) == host_port.id:
                     continue
                 pinned = await self.client.create(
                     kind=DcimVirtualInterface,
@@ -89,7 +89,7 @@ class VirtualNicMixin:
                         "id": nic.id,
                         "name": nic.name.value,
                         "device": {"id": device.id},
-                        "parent_interface": {"id": host_port.id},
+                        "host_interface": {"id": host_port.id},
                     },
                 )
                 await pinned.save(allow_upsert=True, update_group_context=False)
