@@ -243,7 +243,7 @@ nodes:
     label: VLAN Domain Segment
     icon: "carbon:network-overlay"
     include_in_menu: false
-    display_label: "{{ segment__customer_name__value }} vlan {{ vlan_id__value }}"
+    display_label: "{{ segment__customer_name__value }} vlan {{ vlan_id__value }} @ {{ vlan_domain__name__value }}"
     uniqueness_constraints:
       - [segment, vlan_domain]
       - [vlan_domain, vlan_id__value]
@@ -294,7 +294,7 @@ extensions:
           cardinality: many
           identifier: "vlandomainsegment__segment"
           order_weight: 9100
-          description: "Per-VLAN-domain local VLAN ID realizations for this segment"
+          description: "One row per VLAN domain with a port of the segment, plus a stretched segment's border gateways"
 
     - kind: TopologySegmentHosting
       relationships:
