@@ -201,6 +201,27 @@ generics:
         kind: Attribute
         order_weight: 1250
 
+  # Interfaces that can carry sub-interfaces: a physical port, a LAG and a virtual interface (the NIC of a virtual
+  # machine is the parent of its sub-interfaces and the child of a host port). It holds only the inverse of
+  # DcimVirtualInterface.parent_interface (same identifier, opposite direction); nothing reads it from the schema, the
+  # generators filter on parent_interface__ids. A generic cannot inherit a generic, so this one carries no name or
+  # device and parent_interface keeps DcimInterface as its peer.
+  - name: HasSubInterface
+    namespace: Dcim
+    label: Has Sub-Interface
+    description: "Interface that can be the parent of sub-interfaces"
+    include_in_menu: false
+    relationships:
+      - name: sub_interfaces
+        peer: DcimVirtualInterface
+        optional: true
+        cardinality: many
+        kind: Generic
+        identifier: "sub__interface"
+        direction: inbound
+        description: "Interfaces riding on this one: its sub-interfaces (a NIC pinned to a host port has many)"
+        order_weight: 1475
+
   - name: Endpoint
     namespace: Dcim
     description: Generic Endpoint to receive a connector.
@@ -561,6 +582,7 @@ nodes:
     inherit_from:
       - DcimInterface
       - DcimEndpoint
+      - DcimHasSubInterface
     include_in_menu: false
     attributes:
       - name: interface_type
@@ -653,6 +675,7 @@ nodes:
     description: "Logical interface (loopback, SVI, sub-interface) or the NIC of a virtual machine, pinned to a host port"
     inherit_from:
       - DcimInterface
+      - DcimHasSubInterface
     include_in_menu: false
     relationships:
       - name: parent_interface
@@ -664,18 +687,6 @@ nodes:
         direction: outbound
         description: "Interface this one rides on: a sub-interface's port, or the host port a virtual machine NIC is pinned to"
         order_weight: 1400
-      # The other end of parent_interface (same identifier, opposite direction). Nothing reads it: it exists because a
-      # NIC is a child of a host port AND the parent of its sub-interfaces, and a lone cardinality-one parent_interface
-      # would cap the NIC at one sub-interface ("has 2 peers for sub__interface, maximum of 1 allowed").
-      - name: sub_interfaces
-        peer: DcimVirtualInterface
-        optional: true
-        cardinality: many
-        kind: Generic
-        identifier: "sub__interface"
-        direction: inbound
-        description: "Interfaces riding on this one: the sub-interfaces of a virtual machine NIC (a NIC is pinned to a host port and carries many)"
-        order_weight: 1450
       - name: ip_address
         peer: IpamIPAddress
         optional: true
@@ -689,6 +700,7 @@ nodes:
     description: "Port-channel / bond aggregate interface"
     inherit_from:
       - DcimInterface
+      - DcimHasSubInterface
     include_in_menu: false
     attributes:
       - name: lag_id
