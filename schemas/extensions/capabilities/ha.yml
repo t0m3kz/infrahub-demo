@@ -249,7 +249,7 @@ nodes:
         cardinality: many
         optional: true
         identifier: loadbalancer_context__cluster
-        order_weight: 1000
+        order_weight: 1700
         description: "LoadbalancerContexts hosted on this HA cluster"
 
   # ── Load Balancer Context — tenant-scoped slice of a shared LB cluster ────
@@ -582,7 +582,7 @@ extensions:
           cardinality: many
           optional: true
           identifier: firewall_context__cluster
-          order_weight: 1000
+          order_weight: 1700
           description: "FirewallContexts (VDOMs/vsys) hosted on this HA cluster"
 
     # Deployment side of FirewallContext.served_deployments (above) — lets a

@@ -42,7 +42,7 @@ nodes:
       - name: access_status
         kind: Dropdown
         optional: true
-        order_weight: 200
+        order_weight: 450
         default_value: auto
         description: "Access decision state for cross-owner dependencies"
         choices:
@@ -71,7 +71,7 @@ nodes:
       - name: description
         kind: Text
         optional: true
-        order_weight: 600
+        order_weight: 110
       - name: decision_reason
         kind: Text
         optional: true

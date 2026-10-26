@@ -420,6 +420,12 @@ relationships:
   - 200-500: Classification and status
   - 500-1000: Technical attributes
   - 1000+: Relationships
+- The order a user sees is the merge of every generic a kind inherits plus its own fields, not the order of one file.
+  Weights are unique per kind after inheritance, `name` comes first, then `description` and `status`. Give every
+  attribute and relationship an explicit weight: the server numbers an unset one itself (1000, 2000, ...) and it ties.
+  `CoreArtifactTarget.artifacts` sits at 1000, so a kind that inherits it keeps its own fields off 1000 (`name` at 900).
+  When two generics declare the same field the first in `inherit_from` wins. A weight-only change loads in place on a
+  running stack (`uv run infrahubctl schema load schemas`); a changed relationship direction does not.
 
 **5. Selective Relationship Inheritance**:
 

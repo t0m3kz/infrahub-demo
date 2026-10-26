@@ -52,7 +52,7 @@ generics:
         kind: Generic
         cardinality: many
         identifier: "rack__pod"
-        order_weight: 1200
+        order_weight: 1150
         on_delete: cascade
 
   - name: DeviceHosting

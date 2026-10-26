@@ -57,7 +57,7 @@ generics:
         order_weight: 200
       - name: status
         kind: Dropdown
-        order_weight: 500
+        order_weight: 250
         default_value: provisioning
         choices:
           - name: provisioning
@@ -146,7 +146,7 @@ nodes:
         kind: Text
         label: "Circuit ID"
         description: "Provider circuit identifier"
-        order_weight: 50
+        order_weight: 110
 
       - name: bandwidth
         kind: Number

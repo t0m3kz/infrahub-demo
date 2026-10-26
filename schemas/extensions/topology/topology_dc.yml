@@ -198,7 +198,7 @@ nodes:
             description: Assign interfaces top-down.
             color: "#004E64"
         default_value: bottom_up
-        order_weight: 1200
+        order_weight: 1220
       - name: connectivity_mode
         label: "Firewall/LB Connectivity"
         description: "How border-leaf-attached firewalls/load-balancers are cabled"
@@ -235,7 +235,7 @@ nodes:
         kind: Attribute
         optional: false
         identifier: "dc__design"
-        order_weight: 1050
+        order_weight: 1040
       - name: fabric_templates
         peer: TopologyElement
         label: "Fabric Elements"
@@ -244,7 +244,7 @@ nodes:
         cardinality: many
         kind: Attribute
         identifier: "dc__fabric_templates"
-        order_weight: 1100
+        order_weight: 1110
       - name: loopback_pool
         peer: CoreIPPrefixPool
         kind: Attribute
@@ -267,7 +267,7 @@ nodes:
         cardinality: one
         optional: true
         identifier: "dc__management_pool"
-        order_weight: 7000
+        order_weight: 7100
         on_delete: cascade
       - name: fabric_asn_pool
         label: "Fabric ASN Pool"
@@ -329,6 +329,7 @@ nodes:
             index__value }}
         read_only: true
         optional: false
+        order_weight: 100
       - name: leaf_interface_sorting_method
         kind: Dropdown
         choices:

@@ -79,7 +79,7 @@ nodes:
         kind: Text
         label: Description
         optional: true
-        order_weight: 500
+        order_weight: 150
   - name: SaasRegion
     namespace: Topology
     inherit_from:
@@ -102,6 +102,7 @@ nodes:
             {{parent__name__value|upper}}-{{region_name__value|upper}}
         read_only: true
         optional: false
+        order_weight: 100
       - name: region_name
         kind: Text
         label: "Region Name"

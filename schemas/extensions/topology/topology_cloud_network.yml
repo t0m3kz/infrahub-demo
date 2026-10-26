@@ -20,7 +20,7 @@ nodes:
         label: "Default Route Table Association"
         optional: true
         default_value: true
-        order_weight: 350
+        order_weight: 360
       - name: dns_support
         kind: Boolean
         label: "DNS Support"
@@ -128,7 +128,7 @@ nodes:
       - name: attachment_type
         kind: Dropdown
         label: "Attachment Type"
-        order_weight: 300
+        order_weight: 280
         optional: false
         choices:
           - name: vpc
@@ -224,7 +224,7 @@ nodes:
         label: "Bandwidth"
         description: "Connection bandwidth (e.g., 1Gbps, 10Gbps)"
         optional: false
-        order_weight: 300
+        order_weight: 320
       - name: connection_type
         kind: Dropdown
         order_weight: 350
@@ -242,7 +242,7 @@ nodes:
         kind: Number
         label: "VLAN ID"
         optional: true
-        order_weight: 400
+        order_weight: 420
     relationships:
       - name: account
         peer: CloudAccount
@@ -287,7 +287,7 @@ nodes:
     attributes:
       - name: vif_type
         kind: Dropdown
-        order_weight: 300
+        order_weight: 280
         optional: false
         choices:
           - name: private
@@ -393,7 +393,7 @@ nodes:
         cardinality: one
         kind: Attribute
         optional: true
-        order_weight: 2500
+        order_weight: 2400
 
 # ==============================================================================
 # Extensions - Cloud resource graph edges

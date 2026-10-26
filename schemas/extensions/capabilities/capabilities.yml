@@ -27,7 +27,7 @@ generics:
         order_weight: 2
         description: "Resource description"
       - name: status
-        order_weight: 30
+        order_weight: 3
         optional: true
         kind: Dropdown
         choices:
@@ -59,7 +59,7 @@ generics:
         optional: true
         direction: inbound
         identifier: capabilities
-        order_weight: 2400
+        order_weight: 9500
 
   # Capabilities attached to device interfaces (segments, circuits, peerings, firewall-context legs, VIPs)
   - name: GenericInterfaces
@@ -75,7 +75,7 @@ generics:
         kind: Generic
         optional: true
         identifier: interface_capabilities
-        order_weight: 2400
+        order_weight: 9500
 
 extensions:
   nodes:

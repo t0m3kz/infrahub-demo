@@ -151,13 +151,13 @@ nodes:
         description: "Whether BGP multipath is enabled"
         default_value: false
         optional: true
-        order_weight: 1500
+        order_weight: 1520
       - name: graceful_restart
         kind: Boolean
         description: "Whether graceful restart is enabled"
         default_value: true
         optional: true
-        order_weight: 1600
+        order_weight: 1620
       - name: confederation_identifier
         kind: Number
         description: "BGP confederation identifier (if using confederation)"

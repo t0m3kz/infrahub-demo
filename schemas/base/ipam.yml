@@ -26,6 +26,7 @@ nodes:
         optional: true
         # https://stackoverflow.com/questions/11809631/fully-qualified-domain-name-validation
         regex: (?=^.{1,253}$)(^(((?!-)[a-zA-Z0-9-]{1,63}(?<!-))|((?!-)[a-zA-Z0-9-]{1,63}(?<!-)\.)+[a-zA-Z]{2,63})$)  # yamllint disable-line rule:line-length
+        order_weight: 1100
 
   - name: Prefix
     namespace: Ipam
@@ -52,6 +53,7 @@ nodes:
           - name: reserved
             label: Reserved
         default_value: reserved
+        order_weight: 1100
       - name: role
         kind: Dropdown
         optional: true
@@ -84,3 +86,4 @@ nodes:
             label: Loopback VTEP
             description: Virtualized network communications within loopback.
             color: "#CDB4DB"
+        order_weight: 1150

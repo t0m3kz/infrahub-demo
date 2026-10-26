@@ -57,7 +57,7 @@ extensions:
             EVPN L3VNI for this VRF namespace.
             Set by hand in data/bootstrap/22_namespaces.yml (fixed per namespace, no pool allocates it).
           optional: true
-          order_weight: 1000
+          order_weight: 1150
         - name: namespace_type
           kind: Dropdown
           label: Namespace Type
