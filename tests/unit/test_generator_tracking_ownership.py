@@ -22,7 +22,6 @@ from infrahub_sdk.exceptions import NodeNotFoundError
 
 from generators.decommission.pod import PodDecommissionGenerator
 from generators.devices import DeviceMixin
-from generators.domain_pairing import standalone_vlan_domain_name
 from generators.logger import GeneratorError
 from generators.mlag import MLAGWiringMixin
 from generators.pools import PoolMixin
@@ -36,7 +35,6 @@ from generators.protocols import (
     IpamIPAddress,
     IpamPrefix,
     ManagedMLAG,
-    ManagedStandaloneVlanDomain,
     RoutingBGPAddressFamily,
 )
 from generators.routing import RoutingMixin
@@ -207,54 +205,26 @@ class TestDeviceGroupOwnership:
         group.save.assert_awaited_once_with(**UNTRACKED_UPSERT)
 
 
-class TestStandaloneVlanDomains:
+class TestVlanDomains:
+    """A VLAN domain is an MLAG pair or a device on its own: only the pair is a record."""
+
     @pytest.mark.asyncio
     @pytest.mark.parametrize("role", ["leaf", "tor", "l2-leaf", "access-leaf", "border-leaf", "edge"])
-    async def test_unpaired_switch_gets_its_own_domain(self, role: str) -> None:
-        """A non-MLAG segment-carrying switch is its own VLAN domain, owned by
-        the run that creates the switch — named the way segment generators
-        look it up."""
+    async def test_unpaired_switch_is_its_own_domain_and_gets_no_record(self, role: str) -> None:
+        """A non-MLAG switch creates its device and nothing else: no MLAG, no per-device domain."""
         gen = _device_mixin()
 
-        names = await gen.create_devices(device_role=role, quantity=1, deployment_id="dep-1", template={})
+        await gen.create_devices(device_role=role, quantity=1, deployment_id="dep-1", template={})
 
-        domain_calls = [c for c in gen.client.create.call_args_list if c.kwargs["kind"] is ManagedStandaloneVlanDomain]
-        assert len(domain_calls) == 1
-        domain_name = standalone_vlan_domain_name(names[0])
-        assert domain_calls[0].kwargs["data"] == {
-            "name": domain_name,
-            "status": "active",
-            "capabilities": [{"id": f"id-{names[0]}"}],
-        }
+        assert ManagedMLAG not in _created_kinds(gen)
 
     @pytest.mark.asyncio
-    async def test_domain_is_upserted_tracked_on_every_run(self) -> None:
-        """Owned by the device run: a plain tracked upsert, so a switch that
-        later becomes MLAG-paired loses it to that run's cleanup."""
-        gen = _device_mixin()
-        domains: list[MagicMock] = []
-
-        async def _create(*, kind: Any, data: dict[str, Any]) -> MagicMock:
-            node = _node(f"id-{data['name']}", data["name"])
-            if kind is ManagedStandaloneVlanDomain:
-                domains.append(node)
-            return node
-
-        gen.client.create = AsyncMock(side_effect=_create)
-
-        await gen.create_devices(device_role="leaf", quantity=1, deployment_id="dep-1", template={})
-
-        assert len(domains) == 1
-        domains[0].save.assert_awaited_once_with(allow_upsert=True)
-
-    @pytest.mark.asyncio
-    async def test_mlag_paired_switches_get_no_standalone_domain(self) -> None:
-        """An MLAG pair shares the MLAG domain; only the odd one out of three
-        leafs is standalone."""
+    async def test_mlag_pair_is_one_domain_and_the_odd_leaf_has_none(self) -> None:
+        """Two of three leafs share one MLAG domain; the third creates no domain record."""
         gen = _device_mixin()
         template = {"interfaces": [{"name": "Ethernet1/49", "role": "mlag-peer"}]}
 
-        names = await gen.create_devices(
+        await gen.create_devices(
             device_role="leaf",
             quantity=3,
             deployment_id="dep-1",
@@ -262,39 +232,15 @@ class TestStandaloneVlanDomains:
             options={"mlag_create": "back-to-back"},
         )
 
-        kinds = _created_kinds(gen)
-        assert kinds.count(ManagedMLAG) == 1
-        domain_calls = [c for c in gen.client.create.call_args_list if c.kwargs["kind"] is ManagedStandaloneVlanDomain]
-        assert [c.kwargs["data"]["name"] for c in domain_calls] == [standalone_vlan_domain_name(names[2])]
+        assert _created_kinds(gen).count(ManagedMLAG) == 1
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("role", ["spine", "super-spine", "firewall", "load-balancer"])
-    async def test_other_roles_get_no_domain(self, role: str) -> None:
-        """Roles that never carry customer segments or act as border gateway get none."""
-        gen = _device_mixin()
-
-        await gen.create_devices(device_role=role, quantity=1, deployment_id="dep-1", template={})
-
-        assert ManagedStandaloneVlanDomain not in _created_kinds(gen)
-
-    @pytest.mark.asyncio
-    async def test_virtual_switch_gets_no_domain(self) -> None:
-        """Segment generators only realize VLAN domains on physical devices."""
-        gen = _device_mixin()
-
-        await gen.create_devices(
-            device_role="edge", quantity=1, deployment_id="dep-1", template={}, options={"virtual": True}
-        )
-
-        assert ManagedStandaloneVlanDomain not in _created_kinds(gen)
-
-    @pytest.mark.asyncio
-    async def test_ensure_mlag_pairs_returns_the_paired_names(self) -> None:
-        """The paired set is what create_devices excludes from standalone domains."""
+    async def test_ensure_mlag_pairs_pairs_two_at_a_time(self) -> None:
+        """Three names make one pair (the first two, sorted); the third stays unpaired."""
         gen = _device_mixin()
         devices = {name: _node(f"id-{name}", name) for name in ("a", "b", "c")}
 
-        paired = await gen._ensure_mlag_pairs(
+        await gen._ensure_mlag_pairs(
             ["a", "b", "c"],
             devices_by_name=devices,
             role_label="leaf",
@@ -302,7 +248,9 @@ class TestStandaloneVlanDomains:
             mlag_create="virtual",
         )
 
-        assert paired == {"a", "b"}
+        mlag_calls = [c for c in gen.client.create.call_args_list if c.kwargs["kind"] is ManagedMLAG]
+        assert [c.kwargs["data"]["name"] for c in mlag_calls] == ["a-b-mlag"]
+        assert mlag_calls[0].kwargs["data"]["capabilities"] == [{"id": "id-a"}, {"id": "id-b"}]
 
 
 class TestHaSyncPortOwnership:

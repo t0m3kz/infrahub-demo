@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from tests.smoke.fixture_builders.common import (
+    _deployment_record,
     _edges,
     _make_bgp_peering,
     _make_interface,
@@ -391,7 +392,7 @@ def build_device_data(
 
         # This device's own VLAN domain. build_device_data never builds a
         # ManagedMLAG capability, so _resolve_own_vlan_domain_id falls through to
-        # the device id — the vlan_domain_segments entry must use the same value
+        # the device id — the vlan_domain_segments row must use the same value
         # or the transform skips the VxlanSegment.
         vlan_domain_id = f"dev-{device_name}"
 
@@ -507,7 +508,7 @@ _INLINE_SEGMENT_KWARGS: dict[str, Any] = {
 
 
 def _make_inline_segment_node(vlan_domain_id: str) -> dict:
-    """The terminate_inline VXLAN segment, with this device's vlan_domain_segments row."""
+    """The terminate_inline VXLAN segment, with this device's vlan_domain_segments row under its deployment."""
     seg = _make_segment_node(**_INLINE_SEGMENT_KWARGS, vlan_domain_id=vlan_domain_id)
     seg["terminate_inline"] = _v(True)
     seg["inline_service"] = _node({"id": "fw-ha-dc1", "name": _v("dc1-fw-ha")})
@@ -546,7 +547,7 @@ def build_inline_segment_data(*, device_name: str, role: str, platform: str) -> 
         customer_port["capabilities"] = _edges([seg])
     # DC-wide view (border-leaf PBR / BGW): the same segment, still no PBR.
     device_node["deployment"]["node"]["segment_deployments"] = _edges(
-        [{"vni": _v(_INLINE_SEGMENT_KWARGS["vni"]), "status": _v("active"), "segment": _node(seg)}]
+        [_deployment_record(seg, _INLINE_SEGMENT_KWARGS["vni"])]
     )
     return data
 

@@ -464,14 +464,11 @@ class TestGetVxlanConfigMultisite:
 def _deployment_entry(seg_id: str, *, scope: str = "metro", vni: int | None = 10100, domain: str = "dev-1") -> dict:
     return {
         "vni": vni,
-        "segment": {
-            "id": seg_id,
-            "stretch_scope": scope,
-            "vlan_domain_segments": [
-                {"vlan_id": 200, "vlan_domain": {"id": "other"}},
-                {"vlan_id": 100, "vlan_domain": {"id": domain}},
-            ],
-        },
+        "vlan_domain_segments": [
+            {"vlan_id": 200, "vlan_domain": {"id": "other"}},
+            {"vlan_id": 100, "vlan_domain": {"id": domain}},
+        ],
+        "segment": {"id": seg_id, "stretch_scope": scope},
     }
 
 

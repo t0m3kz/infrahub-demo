@@ -30,7 +30,7 @@ assignment — there is intentionally no DC-wide fallback (see
 generators/topology/segment.py's module docstring).
 
 Both on-prem segment kinds are reconciled the same way; they differ only
-after the tags. A ManagedVxlanSegment then has its VLAN domain activations
+after the tags. A ManagedVxlanSegment then has its VLAN domain rows
 reconciled (its local VLAN is per switch). A ManagedVlanSegment has none: its
 vlan_id is the segment's own, so tagging its ports is the whole job — which is
 how a colocation cage's VLAN segment gets its switch ports from the cage's
@@ -40,12 +40,12 @@ on-prem port to tag.
 Reconciled per SEGMENT, not per component: the triggering component only
 names the segment. The desired tags are the union over every AppComponent
 on it (queries/topology/add/segment_components.gql); a port no instance
-lands on any more (an instance moved, a component left) is untagged, and
-the segment's VLAN domain activations follow (VlanDomainMixin). A component
+lands on any more (an instance moved, a component left, a port assigned to the
+segment by hand) is untagged, and the segment's VLAN domain rows follow
+(SegmentPortTagMixin, shared with add_vxlan_segment, which a change of the
+segment's ``capabilities`` triggers, data/events/99_actions.yml). A component
 that moves to ANOTHER segment leaves the old segment's tags until that
-segment is reconciled again (its own add_vxlan_segment run does not touch
-tags; the next add_app_component_segment run of any component still on it
-does).
+segment is reconciled again (the next run of either generator on it).
 
 An instance's physical device may not be cabled yet (add_endpoint has not
 run, or hasn't reached it) — nothing is tagged until it is. Once add_endpoint
@@ -56,33 +56,28 @@ _fan_out_component_segments), so the tags follow the cabling.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
-from utils.app_instances import physical_host
 from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator
-from ..far_end import far_end_interfaces
 from ..pools import PoolMixin
-from ..protocols import DcimPhysicalInterface, ManagedVlanSegment, ManagedVxlanSegment
-from ..vlan_domain import TAGGABLE_INTERFACE_KINDS, VlanDomainMixin, segment_lock_key
-from .endpoint import ENDPOINT_NIC_ROLES
-
-_SEGMENT_COMPONENTS_QUERY_PATH = Path(__file__).resolve().parents[2] / "queries/topology/add/segment_components.gql"
+from ..protocols import ManagedVlanSegment, ManagedVxlanSegment
+from ..vlan_domain import TAGGABLE_INTERFACE_KINDS, segment_lock_key
+from .segment_ports import SegmentPortTagMixin
 
 
-class AppInstanceSegmentGenerator(PoolMixin, VlanDomainMixin, CommonGenerator):
+class AppInstanceSegmentGenerator(PoolMixin, SegmentPortTagMixin, CommonGenerator):
     """Reconciles a segment's customer-facing switch-port tags from the
     instances of every AppComponent on it, then, for a VXLAN segment, the
-    segment's LOCAL VLAN ID activations on the VLAN domains (MLAG pair or
-    standalone) of the switches those ports belong to.
+    segment's LOCAL VLAN ID rows on the VLAN domains (MLAG pair or device
+    without MLAG) of the switches those ports belong to.
 
-    Ownership: a tagged switch port belongs to the device's generator and an
-    activation is shared by every component on the segment and by
-    add_vxlan_segment, so this run claims neither. Both are shared desired
-    state of the SEGMENT, written untracked and reconciled explicitly — tags
-    via RelationshipAdd/RelationshipRemove on the segment, activations via
+    Ownership: a tagged switch port belongs to the device's generator and a
+    row is shared by every component on the segment and by add_vxlan_segment,
+    so this run claims neither. Both are shared desired state of the SEGMENT,
+    written untracked and reconciled explicitly — tags via
+    RelationshipAdd/RelationshipRemove on the segment, rows via
     VlanDomainMixin — under the per-segment lock. This generator saves
     nothing into its own tracking group.
     """
@@ -124,22 +119,12 @@ class AppInstanceSegmentGenerator(PoolMixin, VlanDomainMixin, CommonGenerator):
             )
             return
 
-        async with self.resource_lock(segment_lock_key(segment_id)):
-            # None when the segment is gone or is no VXLAN segment: nothing to assign.
-            state = await self._fetch_segment_vlan_state(segment_id)
-            if state is None:
-                self.logger.info(f"Component {fqdn}: segment {segment_id} is not a VXLAN segment — nothing to assign")
-                return
-            added, removed = await self._reconcile_segment_interface_tags(
-                segment_id=segment_id,
-                segment_name=segment_name,
-                segment_kind=ManagedVxlanSegment,
-                current_ids=self.tagged_interface_ids(state["segment"]),
-            )
-            if added or removed:
-                state = await self._fetch_segment_vlan_state(segment_id)
-            await self._reconcile_segment_vlan_domains_locked(segment_id, segment_name, state)
-
+        tags = await self.reconcile_vxlan_segment(segment_id, segment_name)
+        if tags is None:
+            # The segment is gone or is no VXLAN segment: nothing to assign.
+            self.logger.info(f"Component {fqdn}: segment {segment_id} is not a VXLAN segment — nothing to assign")
+            return
+        added, removed = tags
         self.logger.info(
             f"Component {fqdn}: segment '{segment_name}' reconciled — tagged {added}, untagged {removed} interface(s)"
         )
@@ -176,117 +161,3 @@ class AppInstanceSegmentGenerator(PoolMixin, VlanDomainMixin, CommonGenerator):
                 current_ids=current_ids,
                 segment_obj=segment_obj,
             )
-
-    async def _segment_components(self, segment_id: str) -> list[dict[str, Any]]:
-        """Every AppComponent on the segment, with its instances (segment_components.gql)."""
-        result = await self.client.execute_graphql(
-            query=_SEGMENT_COMPONENTS_QUERY_PATH.read_text(), variables={"segment_id": segment_id}
-        )
-        return clean_data(result).get("AppComponent") or []
-
-    async def _reconcile_segment_interface_tags(
-        self,
-        *,
-        segment_id: str,
-        segment_name: str,
-        segment_kind: type[ManagedVxlanSegment] | type[ManagedVlanSegment],
-        current_ids: set[str],
-        segment_obj: Any | None = None,
-    ) -> tuple[int, int]:
-        """Make the segment's switch-port tags exactly the customer-facing
-        targets of the instances of EVERY component on the segment: tag the
-        missing ones, untag ports no instance lands on any more (an instance
-        that moved, or a component that left). ``current_ids`` are the
-        physical/port-channel interfaces tagged today. Written with
-        RelationshipAdd/RelationshipRemove on the segment's
-        capabilities — touches only this segment's edge on each
-        port and never enters this run's tracking group.
-
-        ``segment_obj`` is the segment node when the caller already holds it
-        (the VLAN path reads it for ``current_ids``); otherwise it is fetched
-        here, and only when there is a tag to add or remove.
-
-        Returns (interfaces tagged, interfaces untagged).
-        """
-        components = await self._segment_components(segment_id)
-        # Several components/virtual instances can resolve to the same host.
-        device_ids = list(
-            dict.fromkeys(
-                device_id
-                for component in components
-                for instance in component.get("instances") or []
-                if (device_id := self._resolve_physical_device_id(instance))
-            )
-        )
-        desired_ids = await self._customer_facing_target_ids(device_ids)
-
-        to_add = sorted(desired_ids - current_ids)
-        to_remove = sorted(current_ids - desired_ids)
-        if to_add or to_remove:
-            if segment_obj is None:
-                segment_obj = await self.client.get(kind=segment_kind, id=segment_id)
-            if to_add:
-                await segment_obj.add_relationships(relation_to_update="capabilities", related_nodes=to_add)
-            if to_remove:
-                await segment_obj.remove_relationships(relation_to_update="capabilities", related_nodes=to_remove)
-        self.logger.info(
-            f"Segment {segment_name}: {len(desired_ids)} customer-facing port(s) from {len(components)} "
-            f"component(s) — tagged {len(to_add)}, untagged {len(to_remove)}"
-        )
-        return len(to_add), len(to_remove)
-
-    @staticmethod
-    def _resolve_physical_device_id(instance: dict[str, Any]) -> str | None:
-        """The physical device id an AppInstance is actually cabled through.
-
-        A bare physical device/controller is used directly. A virtual
-        instance walks its hosting_device. Anything else (e.g. a cloud
-        instance) has no on-prem device to resolve. The resolution itself
-        (utils.app_instances.physical_host) is shared with the NX-OS GPO
-        transform that classifies the same ports."""
-        host = physical_host(instance)
-        return host.get("id") if host else None
-
-    async def _customer_facing_target_ids(self, device_ids: list[str]) -> set[str]:
-        """The ids of every switch interface the devices are cabled to: the far
-        end of a role=uplink NIC directly, a role=lag NIC's switch-side
-        port-channel. Several bond members resolving to the SAME port-channel
-        dedup to one id. Read-only: one query for the NICs of all the devices,
-        two for the far ends of all their cables."""
-        if not device_ids:
-            return set()
-        nics = await self.client.filters(
-            kind=DcimPhysicalInterface,
-            device__ids=device_ids,
-            role__values=list(ENDPOINT_NIC_ROLES),
-            include=["cable"],
-        )
-        cabled = [nic for nic in nics if nic.cable and nic.cable.id]
-        if not cabled:
-            self.logger.info(
-                f"  Device(s) {', '.join(device_ids)} have no cabled uplink/lag interface yet — nothing to tag"
-            )
-            return set()
-
-        far_ends = await far_end_interfaces(self.client, cabled, include=["lag"])
-        target_ids = {
-            target_id for far_end in far_ends.values() if (target_id := self._customer_facing_target_id(far_end))
-        }
-        if not target_ids:
-            self.logger.info(f"  Device(s) {', '.join(device_ids)}: cabled but no customer-facing switch port resolved")
-        return target_ids
-
-    def _customer_facing_target_id(self, far_end: Any) -> str | None:
-        """The id of the interface to tag for a NIC whose cable ends on `far_end`:
-        the far-end port itself for a plain uplink, or its own switch-side
-        port-channel when the far end is a role=lag member — the aggregate is
-        what carries the VLAN, not the raw member port. None if a lag far end
-        has no port-channel yet."""
-        if far_end.role.value != "lag":
-            return far_end.id
-
-        port_channel_peer = getattr(far_end.lag, "peer", None)
-        if not port_channel_peer:
-            self.logger.warning(f"  Far-end port {far_end.id} is role=lag but has no port-channel yet — skipping")
-            return None
-        return port_channel_peer.id

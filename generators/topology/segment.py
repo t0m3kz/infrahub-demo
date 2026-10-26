@@ -17,16 +17,16 @@ VxlanSegmentGenerator handles:
      colocation footprint, the footprint itself for an office (TopologyCustomerOffice).
   3. For each resolved parent, create (or upsert) a ManagedSegmentDeployment
      with a locally-allocated VNI from its pool range.
-  4. Reconcile the segment's LOCAL VLAN ID activations (one per VLAN domain
-     that needs it: every switch carrying it on a port, plus — for a
-     STRETCHED segment — every border gateway of each deployment, the EVPN
-     Multi-Site BGW plumbing: a BGW only re-originates a VNI it has
-     configured, and the activation is what the transform renders that
-     from). See VlanDomainMixin.reconcile_segment_vlan_domains (shared
-     with app_instance_segment.py, written untracked). Customer-facing
-     interface assignment is NOT
-     done here: it is driven by AppComponent.instances, one physical device
-     at a time, in generators/topology/app_instance_segment.py — a segment
+  4. Reconcile the segment's customer-facing port tags from its components
+     and its LOCAL VLAN ID rows (one per VLAN domain that needs it: every
+     switch carrying it on a port, plus — for a STRETCHED segment — every
+     border gateway of each deployment, the EVPN Multi-Site BGW plumbing: a
+     BGW only re-originates a VNI it has configured, and the row is what the
+     transform renders that from), each under the deployment its switch sits
+     in. See SegmentPortTagMixin.reconcile_vxlan_segment (shared with
+     app_instance_segment.py, written untracked). The tags are driven by
+     AppComponent.instances, one physical device at a time (see
+     generators/topology/app_instance_segment.py); a segment
      with no AppComponent referencing it gets no customer-port assignment at
      all. Independent VLAN domains may reuse the same numeric VLAN ID, since
      IEEE 802.1Q VLAN ID has only local significance (unlike VNI, which is
@@ -71,10 +71,10 @@ from ..protocols import (
     DcimVirtualInterface,
     IpamPrefix,
     ManagedSegmentDeployment,
-    ManagedVlanDomainSegment,
     ManagedVxlanSegment,
 )
-from ..vlan_domain import SERVICE_PORT_ROLES, VlanDomainMixin, segment_lock_key
+from ..vlan_domain import SERVICE_PORT_ROLES, segment_lock_key
+from .segment_ports import SegmentPortTagMixin
 
 
 def tenant_pool_name(namespace_name: str) -> str:
@@ -83,7 +83,7 @@ def tenant_pool_name(namespace_name: str) -> str:
     return TENANT_POOL_TEMPLATE.format(namespace=namespace_name)
 
 
-class VxlanSegmentGenerator(PoolMixin, CablingMixin, VlanDomainMixin, CommonGenerator):
+class VxlanSegmentGenerator(PoolMixin, CablingMixin, SegmentPortTagMixin, CommonGenerator):
     """VXLAN segment generator — allocates a VNI from the DC's pool,
     reconciles the segment's LOCAL VLAN ID activations (border gateways of a
     stretched segment included), and creates inline sub-interfaces when
@@ -265,12 +265,12 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, VlanDomainMixin, CommonGene
         # LOCAL VLAN ID per VLAN domain: shared desired state of the segment
         # (both this generator and add_app_component_segment reach it),
         # reconciled from scratch and written untracked — see
-        # VlanDomainMixin.reconcile_segment_vlan_domains.
+        # SegmentPortTagMixin.reconcile_vxlan_segment.
         # Inline termination tags the border-leaf ports facing the HA pair
         # first, so the reconciliation gives the segment a VLAN in their
         # domains; the HA members' sub-interfaces then take that VLAN.
         inline_legs = await self._reconcile_inline_service_ports(segment)
-        await self.reconcile_segment_vlan_domains(segment_id, segment_name)
+        await self.reconcile_vxlan_segment(segment_id, segment_name)
         await self._create_inline_sub_interfaces(segment, inline_legs)
 
     async def ensure_segment_addressing(self, segment: dict[str, Any]) -> None:
@@ -411,8 +411,8 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, VlanDomainMixin, CommonGene
         reusable_vni: int | None = None,
     ) -> bool:
         """Create or upsert one SegmentDeployment record (VNI-and-status only —
-        local VLAN ID realization is per VLAN domain, see
-        VlanDomainMixin.reconcile_segment_vlan_domains/ManagedVlanDomainSegment).
+        local VLAN ID realization is per VLAN domain, a ManagedVlanDomainSegment
+        under this record, see SegmentPortTagMixin.reconcile_vxlan_segment).
 
         VNI is allocated from vni_pool, a {"id": ..., "name": ...} dict: for a
         local segment the deployment's own pool, read straight from the
@@ -432,7 +432,8 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, VlanDomainMixin, CommonGene
             try:
                 await existing_deployment.save(allow_upsert=True)  # register with tracker
             except Exception as exc:
-                self.logger.warning(f"  [{deployment_name}] Failed to re-save existing activation: {exc}")
+                # Not registered, the record would be deleted by this run's cleanup and take its VLAN rows with it.
+                self.fail(f"  [{deployment_name}] Failed to re-save existing activation: {exc}")
             return True
 
         # --- VNI ---
@@ -554,7 +555,7 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, VlanDomainMixin, CommonGene
         """Make the segment's border-leaf service-port tags exactly the ports
         facing its inline_service members — none unless terminate_inline —
         and return those legs. The tags put the border leaves' VLAN domains
-        in scope (reconcile_segment_vlan_domains then allocates the VLAN the
+        in scope (reconcile_vxlan_segment then allocates the VLAN the
         HA members' sub-interfaces take) and make the border leaf render the
         port as a trunk carrying it. Written with RelationshipAdd/Remove,
         untracked, under the segment lock; customer-facing tags are
@@ -613,14 +614,8 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, VlanDomainMixin, CommonGene
         else:
             self.logger.warning(f"Segment '{segment_name}' has no gateway prefix — sub-interfaces get no address")
 
-        vlan_by_domain = {
-            activation.vlan_domain.id: activation.vlan_id.value
-            for activation in await self.client.filters(
-                kind=ManagedVlanDomainSegment, segment__ids=[segment_id], include=["vlan_domain"]
-            )
-        }
-
-        domain_by_device = await self._resolve_vlan_domains([leg["border_device"] for leg in legs])
+        vlan_by_domain = await self.segment_vlan_by_domain(segment_id)
+        domain_by_device = self._resolve_vlan_domains([leg["border_device"] for leg in legs])
         for leg in legs:
             port = leg["member_port"]
             device_id: str = leg["member_device_id"]

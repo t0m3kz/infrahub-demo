@@ -60,7 +60,7 @@ _GW1 = "EQX-FR2-SDWAN-GW1"
 def _bgp_facing(*ends: tuple[str, str]) -> list[dict[str, Any]]:
     """Cleaned device capabilities: one ManagedBGP whose peerings run eg-fr201 (local iface) -> remote device."""
     return [
-        {"typename": "ManagedStandaloneVlanDomain", "name": "vlan-domain"},
+        {"typename": "ManagedMLAG", "name": "mlag"},
         {
             "typename": "ManagedBGP",
             "peerings": [

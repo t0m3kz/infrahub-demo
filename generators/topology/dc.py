@@ -218,8 +218,8 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
         # VlanSegment.vlan_id is set manually — no pool involved (single-site,
         # no collision-tracking concern requiring automated allocation).
         # VxlanSegment's LOCAL VLAN ID is chosen per VLAN domain (MLAG pair
-        # or standalone device), not per-DC — see generators/devices.py's
-        # _ensure_mlag_pairs/_ensure_standalone_vlan_domains and
+        # or a device without MLAG), not per-DC — see generators/devices.py's
+        # _ensure_mlag_pairs and
         # generators/vlan_domain.py's per-domain ManagedVlanDomainSegment
         # allocation (no pool: the lowest id free on every domain the segment
         # lands on, so one segment keeps one id across the fabric).

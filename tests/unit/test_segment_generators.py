@@ -37,6 +37,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from generators.logger import GeneratorError
 from generators.protocols import ManagedSegmentDeployment
 from generators.topology.segment import VxlanSegmentGenerator
 from tests.unit import segment_generators_helpers
@@ -209,7 +210,7 @@ class TestVxlanSegmentGeneratorGenerate:
         asyncio.run(gen.generate(data))
 
         gen._activate_segment_in_deployment.assert_awaited_once()
-        gen.reconcile_segment_vlan_domains.assert_awaited_once_with("seg-3", "vxlan-2000")
+        gen.reconcile_vxlan_segment.assert_awaited_once_with("seg-3", "vxlan-2000")
         gen._create_inline_sub_interfaces.assert_awaited_once()
 
     def test_missing_vni_pool_waits_on_parent_dc_generators(self):
@@ -509,16 +510,17 @@ class TestActivateSegmentInDeployment:
         info_msgs = " ".join(str(c) for c in gen.logger.info.call_args_list)
         assert "already exists" in info_msgs
 
-    def test_existing_deployment_resave_failure_is_not_a_failed_activation(self):
-        """The tracker re-save of an existing record is best effort: it warns, the activation stands."""
+    def test_existing_deployment_resave_failure_stops_the_run(self):
+        """The tracker re-save of an existing record is what keeps it out of this run's cleanup, which would
+        delete it and, with it, the VLAN rows below it: a failed one fails the run."""
         gen = _make_gen()
         existing = _activation_node()
         existing.save = AsyncMock(side_effect=Exception("conflict"))
 
-        assert self._run(gen, existing_deployment=existing) is True
+        with pytest.raises(GeneratorError, match="Failed to re-save"):
+            self._run(gen, existing_deployment=existing)
 
         gen.client.create.assert_not_called()
-        assert "Failed to re-save" in gen.logger.warning.call_args[0][0]
 
     def test_creates_segment_deployment(self):
         """Happy path: no existing record → create() called with segment/deployment/status only."""

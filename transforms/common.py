@@ -553,30 +553,25 @@ class BaseDeviceTransform(InfrahubTransform):
     @staticmethod
     def _resolve_own_vlan_domain_id(device_id: str | None, device_capabilities: list[dict]) -> str | None:
         """Return this device's own VLAN domain id: its ManagedMLAG's id if
-        paired, else its ManagedStandaloneVlanDomain's id. Local VLAN ID is
-        allocated per VLAN domain, not DC-wide — see ManagedVlanDomainSegment
-        / generators/vlan_domain.py. Falls back to the device id when the
-        device carries neither."""
-        standalone_id: str | None = None
+        paired, else the device itself (a device without MLAG is its own
+        domain). Local VLAN ID is allocated per VLAN domain, not DC-wide — see
+        ManagedVlanDomainSegment / generators/vlan_domain.py."""
         for cap in device_capabilities:
-            typename = cap.get("typename")
-            if typename == "ManagedMLAG" and cap.get("id"):
+            if cap.get("typename") == "ManagedMLAG" and cap.get("id"):
                 return cap["id"]
-            if typename == "ManagedStandaloneVlanDomain" and cap.get("id"):
-                standalone_id = cap["id"]
-        return standalone_id or device_id
+        return device_id
 
     @staticmethod
-    def _own_vlan_domain_segment(segment: dict, own_domain_id: str | None) -> dict | None:
-        """The segment's vlan_domain_segments entry for this device's own VLAN domain."""
-        return next(
-            (
-                v
-                for v in segment.get("vlan_domain_segments") or []
-                if (v.get("vlan_domain") or {}).get("id") == own_domain_id
-            ),
-            None,
-        )
+    def _own_vlan_domain_row(deployments: list[dict], own_domain_id: str | None) -> tuple[dict, dict] | None:
+        """(row, segment deployment) of the segment's row for this device's own VLAN domain.
+
+        The row is a child of the deployment it sits in, so its VLAN ID and the
+        deployment's VNI come from one record."""
+        for deployment in deployments:
+            for row in deployment.get("vlan_domain_segments") or []:
+                if (row.get("vlan_domain") or {}).get("id") == own_domain_id:
+                    return row, deployment
+        return None
 
     def _collect_activations_from_interfaces(
         self,
@@ -591,11 +586,12 @@ class BaseDeviceTransform(InfrahubTransform):
         (single-site, no realization record). VxlanSegment.segment_deployments
         is cardinality:many (multi-site stretch — clean_data unwraps it to a
         list, already filtered to active/provisioning by the query) and
-        carries only vni now — the LOCAL vlan_id for a VxlanSegment comes from
-        vlan_domain_segments, resolved to THIS device's own VLAN domain (its
-        ManagedMLAG if paired, else itself) via _resolve_own_vlan_domain_id.
-        A VxlanSegment whose vlan_domain_segments has no entry for this
-        device's own domain yet (allocation not converged) is skipped.
+        carries the vni and, under it, the vlan_domain_segments rows — the LOCAL
+        vlan_id for a VxlanSegment is the row of THIS device's own VLAN domain
+        (its ManagedMLAG if paired, else itself, _resolve_own_vlan_domain_id)
+        and the vni is its deployment's, one record for both. A VxlanSegment
+        with no row for this device's own domain yet (allocation not
+        converged) is skipped.
         Without ``resolve_vlan_domain`` (a firewall is never part of a VLAN
         domain) a VxlanSegment takes the first segment_deployments entry as is.
         We deduplicate by segment id so each segment appears once.
@@ -615,14 +611,13 @@ class BaseDeviceTransform(InfrahubTransform):
                     seg_deps = cap.get("segment_deployments")
                     if not seg_deps:
                         continue
-                    vni = seg_deps[0].get("vni")
                     if self.resolve_vlan_domain:
-                        own_domain_seg = self._own_vlan_domain_segment(cap, own_domain_id)
-                        if own_domain_seg is None:
+                        own_row = self._own_vlan_domain_row(seg_deps, own_domain_id)
+                        if own_row is None:
                             continue
-                        vlan_id = own_domain_seg.get("vlan_id")
+                        vlan_id, vni = own_row[0].get("vlan_id"), own_row[1].get("vni")
                     else:
-                        vlan_id = seg_deps[0].get("vlan_id")
+                        vlan_id, vni = seg_deps[0].get("vlan_id"), seg_deps[0].get("vni")
                 seen.add(seg_id)
                 activations.append(
                     {
@@ -660,12 +655,12 @@ class BaseDeviceTransform(InfrahubTransform):
             seg_id = seg.get("id")
             if not seg_id or seg_id in seen or (seg.get("stretch_scope") or "local") == "local" or not dep.get("vni"):
                 continue
-            own_domain_seg = self._own_vlan_domain_segment(seg, own_domain_id)
-            if own_domain_seg is None or not own_domain_seg.get("vlan_id"):
+            own_row = self._own_vlan_domain_row([dep], own_domain_id)
+            if own_row is None or not own_row[0].get("vlan_id"):
                 continue
             seen.add(seg_id)
             activations.append(
-                {"vlan_id": own_domain_seg["vlan_id"], "vni": dep["vni"], "segment": seg, "border_gateway": True}
+                {"vlan_id": own_row[0]["vlan_id"], "vni": dep["vni"], "segment": seg, "border_gateway": True}
             )
         return activations
 

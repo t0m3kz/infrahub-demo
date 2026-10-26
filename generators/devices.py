@@ -50,16 +50,6 @@ _FABRIC_ROLES = frozenset(
     }
 )
 
-# Switch roles that carry customer segments (servers cable into leaf/tor/
-# l2-leaf/access-leaf, see generators/topology/endpoint.py; an office's
-# access-switch is the fabric edge its hosts attach to) or act as an EVPN
-# Multi-Site border gateway (border-leaf, edge — generators/topology/
-# segment.py's _BORDER_GATEWAY_ROLES). A physical one that is not MLAG-paired
-# is its own VLAN domain, created with the device — see
-# _ensure_standalone_vlan_domains.
-VLAN_DOMAIN_ROLES = frozenset({"leaf", "tor", "l2-leaf", "access-leaf", "access-switch", "border-leaf", "edge"})
-
-
 # A generator query's role-bucketed controller aliases (see queries/topology/
 # add/dc.gql), merged into one list by set_controllers_from.
 _CONTROLLER_ALIASES = ("fabric_controllers", "security_manager_controllers", "lb_manager_controllers")
@@ -387,20 +377,14 @@ class DeviceMixin(DomainPairingMixin, VirtualNicMixin):
             await self._ensure_ha_pairs(device_names, ha_kind=ha_kind, role_label=device_role, device_kind=device_kind)
 
         mlag_create = options.get("mlag_create", "no")
-        paired_names: set[str] = set()
         if mlag_create != "no":
-            paired_names = await self._ensure_mlag_pairs(
+            await self._ensure_mlag_pairs(
                 device_names,
                 devices_by_name={node.name.value: node for node in created_devices},
                 role_label=device_role,
                 template=template,
                 mlag_create=mlag_create,
                 supports_virtual=options.get("mlag_supports_virtual", True),
-            )
-
-        if device_role in VLAN_DOMAIN_ROLES and not virtual:
-            await self._ensure_standalone_vlan_domains(
-                [node for node in created_devices if node.name.value not in paired_names]
             )
 
         return device_names
