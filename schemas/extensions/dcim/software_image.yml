@@ -51,7 +51,7 @@ nodes:
       - name: description
         kind: Text
         optional: true
-        order_weight: 700
+        order_weight: 120
 
     relationships:
       - name: platform

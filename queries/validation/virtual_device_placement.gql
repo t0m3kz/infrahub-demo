@@ -1,24 +1,9 @@
-# validate_virtual_device_placement: every virtual device and every network appliance with the deployment it sits in.
+# validate_virtual_device_placement: every virtual device with the deployment it sits in.
 # The deployment is selected with the fields the TopologyDeployment generic declares (id, name) and __typename for the
 # concrete kind; a generic peer allows nothing else without an inline fragment. An unset deployment arrives as a null
 # node.
 query virtual_device_placement {
   DcimVirtualDevice {
-    edges {
-      node {
-        id
-        name { value }
-        deployment {
-          node {
-            id
-            __typename
-            name { value }
-          }
-        }
-      }
-    }
-  }
-  CloudNetworkAppliance {
     edges {
       node {
         id

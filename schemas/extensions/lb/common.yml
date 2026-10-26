@@ -30,7 +30,7 @@ generics:
       - name: status
         kind: Dropdown
         optional: true
-        order_weight: 200
+        order_weight: 220
         description: "Operational status of the load balancer"
         choices:
           - name: provisioning
@@ -163,6 +163,7 @@ nodes:
           jinja2_template: "{{ check__value }}-{{ rise__value }}-{{ fall__value }}-{{ timeout__value }}"  # yamllint disable-line rule:line-length
         read_only: true
         optional: false
+        order_weight: 1050
 
   # ── VIP / Listener ───────────────────────────────────────────────────────
   - name: VIP
@@ -226,6 +227,9 @@ nodes:
         optional: false
         order_weight: 310
         description: "Listening port for this service"
+        parameters:
+          min_value: 1
+          max_value: 65535
       - name: ssl_certificate
         kind: Text
         optional: true

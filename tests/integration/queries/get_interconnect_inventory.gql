@@ -383,16 +383,6 @@ fragment CircuitEndDevice on DcimDevice {
         name {
           value
         }
-        ... on TopologyColocationZone {
-          parent {
-            node {
-              id
-              name {
-                value
-              }
-            }
-          }
-        }
         ... on TopologyVirtualColocation {
           parent {
             node {

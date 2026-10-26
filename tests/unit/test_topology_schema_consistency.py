@@ -333,25 +333,43 @@ class TestCloudNetworkAppliance:
 
         assert (account["peer"], account["cardinality"], account["optional"]) == ("CloudAccount", "one", True)
 
-    def test_its_deployment_shares_the_identifier_and_peer_of_every_other_device_kind(self) -> None:
-        """TopologyDeviceHosting.devices lists the appliances through the shared identifier. The peer stays the generic
-        TopologyDeployment: narrowing it loads, but queries select `deployment` across the device kinds in one
-        selection and GraphQL refuses sibling fragments whose field types differ. checks/virtual_device_placement.py
-        holds an appliance to a virtual colocation."""
+    def test_its_deployment_peers_the_provider_hosting_generic_under_the_identifier_of_the_other_device_kinds(
+        self,
+    ) -> None:
+        """TopologyDeviceHosting.devices lists the appliances through the shared identifier. The peer is the generic
+        TopologyProviderHosting (the virtual colocation a provider function is rented in), so the schema refuses any
+        other deployment and the picker offers nothing else. A query that selects `deployment` across the device
+        kinds spreads fragments per kind, and a fragment for a kind that peer cannot be (a zone) is a schema error."""
         extensions = _document(_TOPOLOGY / "topology.yml")["extensions"]["nodes"]
+        device_kinds = {
+            "DcimPhysicalDevice",
+            "DcimVirtualDevice",
+            "ManagedControllerPhysical",
+            "ManagedControllerVirtual",
+        }
         deployments = {
             extension["kind"]: next(r for r in extension["relationships"] if r["name"] == "deployment")
             for extension in extensions
             if any(r["name"] == "deployment" for r in extension["relationships"])
         }
 
-        assert {"DcimPhysicalDevice", "DcimVirtualDevice", self._KIND} <= set(deployments)
-        reference = deployments["DcimVirtualDevice"]
-        assert (deployments[self._KIND]["peer"], deployments[self._KIND]["identifier"]) == (
-            reference["peer"],
-            reference["identifier"],
-        )
-        assert reference["identifier"] == "topology__devices"
+        assert device_kinds | {self._KIND} <= set(deployments)
+        assert deployments[self._KIND]["peer"] == "TopologyProviderHosting"
+        assert {deployments[k]["peer"] for k in device_kinds} == {"TopologyDeployment"}
+        assert {deployments[k]["identifier"] for k in device_kinds | {self._KIND}} == {"topology__devices"}
+
+    def test_the_provider_hosting_generic_is_a_valid_peer_and_only_the_virtual_colocation_inherits_it(self) -> None:
+        """A generic used as a relationship peer needs a name and an hfid, or an object file cannot reference it."""
+        generic = next(g for g in _document(_TOPOLOGY / "topology.yml")["generics"] if g["name"] == "ProviderHosting")
+        assert generic["human_friendly_id"] == ["name__value"]
+        assert [a["name"] for a in generic["attributes"]] == ["name"]
+        inheritors = [
+            node["name"]
+            for path in sorted(_TOPOLOGY.glob("*.yml"))
+            for node in _document(path).get("nodes") or []
+            if "TopologyProviderHosting" in (node.get("inherit_from") or [])
+        ]
+        assert inheritors == ["VirtualColocation"]
 
     def test_the_virtual_colocation_orders_under_an_account_and_has_no_order_fields_of_its_own(self) -> None:
         kind = "TopologyVirtualColocation"

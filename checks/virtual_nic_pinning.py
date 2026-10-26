@@ -1,14 +1,14 @@
 """Validate that the NICs of a virtual device ride on ports of the device hosting it.
 
 A virtual device has no cable of its own; its base NICs (a DcimVirtualInterface with the role management, uplink or
-ha, which generators/virtual_nics.py pins) point with ``parent_interface`` to a port of the hosting physical device,
+ha, which generators/virtual_nics.py pins) point with ``host_interface`` to a port of the hosting physical device,
 and that port carries the cable. The border leaf -> host port -> NIC path is therefore a path in the graph. The
 schema cannot say that the parent is a port of the hosting device, nor that a pinned uplink is on a cabled port:
 
-* the parent of a NIC is a port of the device's ``hosting_device``;
+* the host port of a NIC is a port of the device's ``hosting_device``;
 * the host port an uplink NIC is pinned to is cabled (otherwise nothing reaches the border leaf through it).
 
-A NIC without a parent is not reported: a machine can have more uplinks than its host. A device without a
+A NIC without a host port is not reported: a machine can have more uplinks than its host. A device without a
 ``hosting_device`` is not reported either (the field is optional).
 """
 
@@ -43,23 +43,23 @@ class CheckVirtualNicPinning(InfrahubCheck):
             for nic in device.get("interfaces") or []:
                 if nic.get("typename") != _VIRTUAL_INTERFACE or nic.get("role") not in PINNED_ROLES:
                     continue
-                parent = nic.get("parent_interface")
-                if not isinstance(parent, dict):
+                host_port = nic.get("host_interface")
+                if not isinstance(host_port, dict):
                     continue
-                parent_device = parent.get("device") or {}
-                if parent_device.get("id") != host.get("id"):
+                port_device = host_port.get("device") or {}
+                if port_device.get("id") != host.get("id"):
                     self.log_error(
                         message=(
-                            f"{_label(device)} {_label(nic)} is pinned to {_label(parent)} of "
-                            f"'{_label(parent_device)}', not of its hosting device '{_label(host)}'."
+                            f"{_label(device)} {_label(nic)} is pinned to {_label(host_port)} of "
+                            f"'{_label(port_device)}', not of its hosting device '{_label(host)}'."
                         ),
                         object_id=nic.get("id"),
                         object_type=_VIRTUAL_INTERFACE,
                     )
-                elif nic.get("role") == _UPLINK_ROLE and not parent.get("cable"):
+                elif nic.get("role") == _UPLINK_ROLE and not host_port.get("cable"):
                     self.log_error(
                         message=(
-                            f"{_label(device)} {_label(nic)} is pinned to {_label(parent)} of '{_label(host)}', "
+                            f"{_label(device)} {_label(nic)} is pinned to {_label(host_port)} of '{_label(host)}', "
                             f"which is not cabled: no border port reaches the virtual device through it."
                         ),
                         object_id=nic.get("id"),

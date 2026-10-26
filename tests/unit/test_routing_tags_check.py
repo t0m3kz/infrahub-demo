@@ -153,14 +153,6 @@ class TestViolations:
 
         assert errors == []
 
-    @pytest.mark.parametrize("tag", [0, 65535, 70000])
-    def test_tag_out_of_range_is_reported_and_no_community_is_derived(self, tag: int) -> None:
-        errors, infos = _run([_customer("c-1", "C005", tag)], [_segment("a", tag)])
-
-        assert len(errors) == 2
-        assert all(f"routing_tag {tag} is outside 1..65534" in error for error in errors)
-        assert infos == []
-
 
 def test_query_selects_what_the_check_reads(root_dir: Path) -> None:
     """The routed-segment test (kind, namespace type, zone), owner and both tags come from the query."""

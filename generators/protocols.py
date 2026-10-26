@@ -175,6 +175,10 @@ class AppInstance(CoreNode):
     name: String
 
 
+class DcimHasSubInterface(CoreNode):
+    sub_interfaces: RelationshipManager[DcimVirtualInterface]
+
+
 class DcimInterface(CoreNode):
     description: StringOptional
     index: StringOptional
@@ -599,7 +603,7 @@ class CloudInstance(CloudResource, DcimCapabilities, AppInstance):
     network_segment: RelationshipAttribute[CloudNetworkSegment]
 
 
-class DcimLAGInterface(DcimInterface):
+class DcimLAGInterface(DcimInterface, DcimHasSubInterface):
     lacp_mode: Dropdown
     lag_id: Integer
     minimum_links: Integer
@@ -721,7 +725,7 @@ class DcimPhysicalDevice(CoreArtifactTarget, DcimDevice, DcimCapabilities, AppIn
     serial: StringOptional
 
 
-class DcimPhysicalInterface(DcimInterface, DcimEndpoint):
+class DcimPhysicalInterface(DcimInterface, DcimEndpoint, DcimHasSubInterface):
     interface_type: Dropdown
     ip_address: RelationshipAttribute[IpamIPAddress]
     lag: RelationshipAttribute[DcimLAGInterface]
@@ -1007,7 +1011,8 @@ class DcimVirtualDevice(CoreArtifactTarget, DcimDevice, DcimCapabilities, AppIns
     hosting_device: RelationshipAttribute[DcimPhysicalDevice]
 
 
-class DcimVirtualInterface(DcimInterface):
+class DcimVirtualInterface(DcimInterface, DcimHasSubInterface):
+    host_interface: RelationshipAttribute[DcimPhysicalInterface]
     ip_address: RelationshipAttribute[IpamIPAddress]
     parent_interface: RelationshipAttribute[DcimInterface]
 

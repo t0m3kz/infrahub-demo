@@ -35,11 +35,11 @@ generics:
       - name: name
         kind: Text
         unique: true
-        order_weight: 1000
+        order_weight: 800
       - name: description
         kind: Text
         optional: true
-        order_weight: 1200
+        order_weight: 850
     relationships:
       - name: tags
         peer: BuiltinTag
@@ -112,7 +112,7 @@ nodes:
         kind: Number
         label: Routing Tag
         optional: true
-        order_weight: 1100
+        order_weight: 1050
         description: "Tag of the customer community 64496:<tag> on its routes (drawn from a pool, never typed)."
         parameters:
           min_value: 1

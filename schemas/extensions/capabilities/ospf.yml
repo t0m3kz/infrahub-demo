@@ -29,12 +29,15 @@ nodes:
         kind: Text
         optional: false
         description: "Name of the OSPF interface Profile."
-        order_weight: 1500
+        order_weight: 1
       - name: metric
         kind: Number
         optional: true
         description: "OSPF metric for the interface."
         order_weight: 1400
+        parameters:
+          min_value: 1
+          max_value: 65535
       - name: mode
         kind: Dropdown
         choices:
@@ -130,7 +133,7 @@ nodes:
         kind: Text
         description: "OSPF process ID on the device"
         default_value: "1"
-        order_weight: 1500
+        order_weight: 1450
       - name: version
         kind: Dropdown
         choices:
@@ -138,6 +141,7 @@ nodes:
             label: OSPFv2
             description: "Open Shortest Path First version 2."
             color: "#E6E6FA"
+        order_weight: 1750
       - name: router_type
         kind: Dropdown
         description: "Type of OSPF router"
@@ -216,6 +220,9 @@ nodes:
         optional: true
         order_weight: 1600
         description: "OSPF link cost override (lower = preferred)"
+        parameters:
+          min_value: 1
+          max_value: 65535
     relationships:
       - name: ospf_process
         peer: ManagedOSPF

@@ -29,11 +29,11 @@ generics:
       - name: name
         kind: Text
         unique: true
-        order_weight: 1000
+        order_weight: 900
       - name: description
         kind: Text
         optional: true
-        order_weight: 2000
+        order_weight: 950
       - name: role
         kind: Dropdown
         optional: true
@@ -179,12 +179,13 @@ generics:
         cardinality: many
         identifier: device__interface
         kind: Component
+        order_weight: 2500
       - name: tags
         peer: BuiltinTag
         optional: true
         cardinality: many
         kind: Attribute
-        order_weight: 2000
+        order_weight: 2010
       - name: primary_address
         peer: IpamIPAddress
         label: Primary IP Address
@@ -199,6 +200,28 @@ generics:
         cardinality: one
         kind: Attribute
         order_weight: 1250
+
+  # Interfaces that can carry sub-interfaces: a physical port, a LAG and a virtual interface (the NIC of a virtual
+  # machine is the parent of its own sub-interfaces). It holds only the inverse of DcimVirtualInterface.parent_interface
+  # (same identifier, opposite direction): with a cardinality-one parent_interface on the kind, the server would cap
+  # a NIC at one sub-interface. Nothing reads it; the generators filter on parent_interface__ids. A generic cannot
+  # inherit a generic, so this one carries no name or device and parent_interface keeps DcimInterface as its peer.
+  - name: HasSubInterface
+    namespace: Dcim
+    label: Has Sub-Interface
+    description: "Interface that can be the parent of sub-interfaces"
+    include_in_menu: false
+    relationships:
+      - name: sub_interfaces
+        peer: DcimVirtualInterface
+        optional: true
+        cardinality: many
+        kind: Generic
+        identifier: "sub__interface"
+        direction: inbound
+        common_parent: device
+        description: "Sub-interfaces riding on this one, always on the same device"
+        order_weight: 1475
 
   - name: Endpoint
     namespace: Dcim
@@ -233,7 +256,7 @@ generics:
       - name: name
         kind: Text
         description: "Name of the interface"
-        order_weight: 1000
+        order_weight: 900
       - name: description
         kind: Text
         optional: true
@@ -499,7 +522,7 @@ nodes:
       - name: serial
         kind: Text
         optional: true
-        order_weight: 1500
+        order_weight: 1510
       - name: rack_face
         label: Rack Face
         description: On which face of the rack the device is mounted.
@@ -534,7 +557,7 @@ nodes:
         label: CPU Number
         kind: Number
         optional: true
-        order_weight: 2000
+        order_weight: 2050
       - name: memory
         label: Memory Size (GB)
         kind: Number
@@ -551,6 +574,7 @@ nodes:
         kind: Attribute
         cardinality: one
         optional: true
+        order_weight: 1800
 
   - name: PhysicalInterface
     namespace: Dcim
@@ -559,6 +583,7 @@ nodes:
     inherit_from:
       - DcimInterface
       - DcimEndpoint
+      - DcimHasSubInterface
     include_in_menu: false
     attributes:
       - name: interface_type
@@ -634,6 +659,7 @@ nodes:
         cardinality: one
         kind: Component
         on_delete: cascade
+        order_weight: 1900
       - name: lag
         peer: DcimLAGInterface
         label: "LAG"
@@ -642,14 +668,16 @@ nodes:
         kind: Attribute
         optional: true
         identifier: "lag__members"
-        order_weight: 1400
+        common_parent: device
+        order_weight: 1450
 
   - name: VirtualInterface
     namespace: Dcim
     label: Virtual Interface
-    description: "Virtual interface like VLAN or Loopback"
+    description: "Logical interface (loopback, SVI, sub-interface) or the NIC of a virtual machine"
     inherit_from:
       - DcimInterface
+      - DcimHasSubInterface
     include_in_menu: false
     relationships:
       - name: parent_interface
@@ -659,20 +687,25 @@ nodes:
         kind: Attribute
         identifier: "sub__interface"
         direction: outbound
-        description: "Interface this one rides on: a sub-interface's port, or the host port a virtual machine NIC is pinned to"
-      - name: sub_interfaces
-        peer: DcimVirtualInterface
+        common_parent: device
+        description: "Port, LAG or NIC this sub-interface rides on, always on the same device"
+        order_weight: 1400
+      # A virtual machine NIC is not a sub-interface of its host's port: it sits on another device, so it cannot share
+      # parent_interface (common_parent: device refuses a parent on another device).
+      - name: host_interface
+        peer: DcimPhysicalInterface
         optional: true
-        cardinality: many
-        kind: Generic
-        identifier: "sub__interface"
-        direction: inbound
-        description: "Interfaces riding on this one: the sub-interfaces of a virtual machine NIC (a NIC is pinned to a host port and carries many)"
+        cardinality: one
+        kind: Attribute
+        identifier: "nic__host_port"
+        description: "Port of the hosting device a virtual machine NIC is pinned to (generators/virtual_nics.py)"
+        order_weight: 1425
       - name: ip_address
         peer: IpamIPAddress
         optional: true
         cardinality: one
         kind: Attribute
+        order_weight: 1900
 
   - name: LAGInterface
     namespace: Dcim
@@ -680,6 +713,7 @@ nodes:
     description: "Port-channel / bond aggregate interface"
     inherit_from:
       - DcimInterface
+      - DcimHasSubInterface
     include_in_menu: false
     attributes:
       - name: lag_id
@@ -687,7 +721,7 @@ nodes:
         label: "LAG ID"
         description: "Port-channel number (e.g. 1 for Port-Channel1)"
         optional: false
-        order_weight: 1300
+        order_weight: 1350
       - name: lacp_mode
         kind: Dropdown
         label: "LACP Mode"
@@ -723,6 +757,7 @@ nodes:
         kind: Generic
         optional: true
         identifier: "lag__members"
+        common_parent: device
         order_weight: 1700
       - name: ip_address
         peer: IpamIPAddress
@@ -730,6 +765,7 @@ nodes:
         cardinality: one
         kind: Component
         on_delete: cascade
+        order_weight: 1900
 
   # --------------------  Cables  --------------------
   - name: Cable
@@ -806,3 +842,4 @@ nodes:
         max_count: 2
         kind: Attribute
         on_delete: no-action
+        order_weight: 1300
