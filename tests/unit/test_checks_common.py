@@ -67,7 +67,7 @@ class TestValidateRoutingPasswordBgp:
 
     def test_non_bgp_capability_ignored(self):
         data = {
-            "capabilities": [{"typename": "ManagedStandaloneVlanDomain"}],
+            "capabilities": [{"typename": "ManagedMLAG"}],
         }
         assert validate_routing_password(data) == []
 

@@ -24,14 +24,7 @@ from .protocols import (
     DcimPhysicalDevice,
     DcimPhysicalInterface,
     ManagedMLAG,
-    ManagedStandaloneVlanDomain,
 )
-
-
-def standalone_vlan_domain_name(device_name: str) -> str:
-    """The ManagedStandaloneVlanDomain name for a non-MLAG device: the lookup
-    key segment generators use."""
-    return f"{device_name}-vlan-domain"
 
 
 class DomainPairingMixin(MLAGWiringMixin):
@@ -78,27 +71,6 @@ class DomainPairingMixin(MLAGWiringMixin):
                 self.logger.info(f"Created missing group '{name}'")
                 memo[name] = group
         return memo[name]
-
-    async def _ensure_standalone_vlan_domains(self, devices: list[Any]) -> None:
-        """Upsert each non-MLAG switch's own ManagedStandaloneVlanDomain, every run.
-
-        Created with the device rather than on first segment use: the device's
-        generator is the one run that owns the switch, so the domain lives and
-        dies with it. Segment generators reach a domain from many targets and
-        only look it up by standalone_vlan_domain_name. A device that becomes
-        MLAG-paired no longer gets one, so this run's cleanup removes it.
-        """
-        for device in devices:
-            domain_name = standalone_vlan_domain_name(device.name.value)
-            domain = await self.client.create(
-                kind=ManagedStandaloneVlanDomain,
-                data={
-                    "name": domain_name,
-                    "status": "active",
-                    "capabilities": [{"id": device.id}],
-                },
-            )
-            await domain.save(allow_upsert=True)
 
     async def _ensure_ha_pairs(
         self,
@@ -314,7 +286,7 @@ class DomainPairingMixin(MLAGWiringMixin):
         template: dict[str, Any],
         mlag_create: Literal["back-to-back", "virtual"],
         supports_virtual: bool = True,
-    ) -> set[str]:
+    ) -> None:
         """Pair same-role devices two-at-a-time (sorted, odd one unpaired) into MLAG
         domains, per pod.mlag_create ("back-to-back" / "virtual"), then ensure
         each pair's peer-link interfaces/cable in the same call — no separate
@@ -343,12 +315,10 @@ class DomainPairingMixin(MLAGWiringMixin):
         (L3) and l2-leaf (L2-only) roles must fall back for the L2-only ones
         regardless of what's configured for the pod.
 
-        Returns the names of the devices it paired, so create_devices gives
-        every other one its own standalone VLAN domain.
+        A device left unpaired is its own VLAN domain (no record is created for it).
         """
-        paired: set[str] = set()
         if len(device_names) < 2:
-            return paired
+            return
 
         if mlag_create == "virtual" and not supports_virtual:
             self.logger.info(
@@ -364,7 +334,7 @@ class DomainPairingMixin(MLAGWiringMixin):
                 f"template {template.get('id')} has no mlag-peer interface — "
                 f"cannot create back-to-back MLAG for {role_label}s."
             )
-            return paired
+            return
 
         for pair_index, (first, second) in enumerate(pair_device_names(device_names), start=1):
             mlag_name = f"{first}-{second}-mlag"
@@ -403,5 +373,3 @@ class DomainPairingMixin(MLAGWiringMixin):
             )
 
             await self.ensure_mlag_wiring(mlag_obj, mlag_name, member_ids=[first_dev.id, second_dev.id])
-            paired.update((first, second))
-        return paired

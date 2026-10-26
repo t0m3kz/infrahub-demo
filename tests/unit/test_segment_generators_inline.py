@@ -13,7 +13,6 @@ from generators.protocols import (
     DcimPhysicalDevice,
     DcimPhysicalInterface,
     DcimVirtualInterface,
-    ManagedVlanDomainSegment,
 )
 from tests.unit.segment_generators_helpers import _make_gen
 
@@ -189,12 +188,10 @@ class TestCreateInlineSubInterfaces:
 
     @staticmethod
     def _gen(vlan_domain: str = "mlag-bl") -> Any:
-        activation = MagicMock()
-        activation.vlan_domain.id = vlan_domain
-        activation.vlan_id.value = 210
-        gen = _inline_gen({ManagedVlanDomainSegment: [activation]})
+        gen = _inline_gen({})
         gen.client.get = AsyncMock()
-        gen._resolve_vlan_domains = AsyncMock(return_value={"bl-1": "mlag-bl"})
+        gen.segment_vlan_by_domain = AsyncMock(return_value={vlan_domain: 210})
+        gen._resolve_vlan_domains = MagicMock(return_value={"bl-1": "mlag-bl"})
         gen.ensure_prefix_address_pool = AsyncMock(return_value=MagicMock(id="pool-1"))
         gen.allocate_prefix_address = AsyncMock(return_value="ip-own-1")
         gen.ensure_vlan_subinterface = AsyncMock()

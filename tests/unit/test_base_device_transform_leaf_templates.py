@@ -253,13 +253,16 @@ class TestLeafPbrRules:
         transform = _make_transform("border-leaf")
         deployment = {
             "segment_deployments": [
-                {"vni": 10100, "segment": {"id": "seg-100", "stretch_scope": "dc_pair", "vlan_domain": None}}
+                {
+                    "vni": 10100,
+                    "vlan_domain_segments": [{"vlan_id": 100, "vlan_domain": {"id": "dev-1"}}],
+                    "segment": {"id": "seg-100", "stretch_scope": "dc_pair"},
+                }
             ]
         }
-        with patch.object(transform, "_own_vlan_domain_segment", return_value={"vlan_id": 100}):
-            found = transform._collect_border_gateway_activations(
-                deployment, device_id="dev-1", device_capabilities=[], seen=set()
-            )
+        found = transform._collect_border_gateway_activations(
+            deployment, device_id="dev-1", device_capabilities=[], seen=set()
+        )
 
         assert [(a["vlan_id"], a["border_gateway"]) for a in found] == [(100, True)]
 

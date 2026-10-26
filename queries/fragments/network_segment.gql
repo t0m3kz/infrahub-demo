@@ -90,23 +90,24 @@ fragment NetworkSegmentFields on ManagedNetworkSegment {
     # deployment.evpn_rt_as: a stretched segment's route-target must be the
     # same at every site it spans, so its admin field is anchored on the
     # lowest evpn_rt_as across all of them (transforms/helpers/vxlan.py).
+    # LOCAL VLAN ID is per VLAN domain (MLAG pair or device without MLAG), not
+    # DC-wide, and is a child of the deployment it sits in, so the VNI and the
+    # VLAN of a row come from one record — the rendering transform resolves the
+    # row whose vlan_domain matches THIS device's own domain (its MLAG if
+    # paired, else itself). See transforms/common.py's _own_vlan_domain_segment.
     segment_deployments {
       edges {
         node {
           vni { value }
           deployment { node { id evpn_rt_as { node { asn { value } } } } }
-        }
-      }
-    }
-    # LOCAL VLAN ID is per VLAN domain (MLAG pair or standalone device), not
-    # DC-wide — the rendering transform resolves the entry whose vlan_domain
-    # matches THIS device's own domain (its MLAG if paired, else itself).
-    # See transforms/common.py's _collect_activations_from_interfaces.
-    vlan_domain_segments {
-      edges {
-        node {
-          vlan_id { value }
-          vlan_domain { node { id } }
+          vlan_domain_segments {
+            edges {
+              node {
+                vlan_id { value }
+                vlan_domain { node { id } }
+              }
+            }
+          }
         }
       }
     }
@@ -153,6 +154,15 @@ fragment SegmentDeploymentsOnDeploymentFields on TopologySegmentHosting {
     edges {
       node {
         vni { value }
+        # The rows of this deployment: a border gateway's own domain is one of them.
+        vlan_domain_segments {
+          edges {
+            node {
+              vlan_id { value }
+              vlan_domain { node { id } }
+            }
+          }
+        }
         segment {
           node {
             id
@@ -202,16 +212,8 @@ fragment SegmentDeploymentsOnDeploymentFields on TopologySegmentHosting {
               terminate_inline { value }
               # EVPN Multi-Site border gateways carry every stretched segment
               # of their site without a customer-facing port, so they need the
-              # local VLAN (own vlan_domain) and the cross-site RT anchor here.
+              # cross-site RT anchor here (their local VLAN is on the row above).
               stretch_scope { value }
-              vlan_domain_segments {
-                edges {
-                  node {
-                    vlan_id { value }
-                    vlan_domain { node { id } }
-                  }
-                }
-              }
               segment_deployments {
                 edges {
                   node {

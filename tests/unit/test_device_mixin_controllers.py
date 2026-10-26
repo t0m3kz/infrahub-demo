@@ -11,7 +11,7 @@ import yaml
 from infrahub_sdk.protocols import CoreStandardGroup
 
 from generators.devices import DeviceMixin
-from generators.protocols import DcimPhysicalDevice, ManagedController, ManagedStandaloneVlanDomain
+from generators.protocols import DcimPhysicalDevice, ManagedController
 from tests.unit.device_mixin_helpers import _make_generator, _mock_created_device
 from utils.limits import ROLE_GROUP_NAMES
 
@@ -220,24 +220,16 @@ class TestCreateDevicesControllerRouting:
 
 
 class TestCampusRoles:
-    """The office fabric's roles: only the access-switch (the switch hosts attach to) is its own VLAN
-    domain, and neither role joins a derived "access-switchs"-style group."""
+    """The office fabric's roles create their device and nothing else (a switch is its own VLAN domain, with no
+    record of its own), and neither role joins a derived "access-switchs"-style group."""
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize(
-        ("role", "kinds"),
-        [
-            ("access-switch", [DcimPhysicalDevice, ManagedStandaloneVlanDomain]),
-            ("distribution-switch", [DcimPhysicalDevice]),
-        ],
-    )
-    async def test_only_the_access_switch_gets_a_standalone_vlan_domain(self, role: str, kinds: list[Any]) -> None:
+    @pytest.mark.parametrize("role", ["access-switch", "distribution-switch"])
+    async def test_a_campus_switch_is_created_without_a_vlan_domain_record(self, role: str) -> None:
+        """Only the device is created: no MLAG, no per-device VLAN domain."""
         gen = _make_generator()
         gen.client.create = AsyncMock(
-            side_effect=[
-                _mock_created_device(DcimPhysicalDevice.__name__, f"c005-office-{role}-01"),
-                _mock_created_device(ManagedStandaloneVlanDomain.__name__, f"c005-office-{role}-01-vlan-domain"),
-            ]
+            side_effect=[_mock_created_device(DcimPhysicalDevice.__name__, f"c005-office-{role}-01")]
         )
 
         await gen.create_devices(
@@ -247,7 +239,7 @@ class TestCampusRoles:
             template={"device_type": {"id": "dt-1"}, "platform": {"name": "cisco_xe"}},
         )
 
-        assert [call.kwargs["kind"] for call in gen.client.create.call_args_list] == kinds
+        assert [call.kwargs["kind"] for call in gen.client.create.call_args_list] == [DcimPhysicalDevice]
 
     def test_every_role_group_is_a_bootstrap_group(self, root_dir: Path) -> None:
         """A group the bootstrap does not load is created on whichever branch needs it first and then

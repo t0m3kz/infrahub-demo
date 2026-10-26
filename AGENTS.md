@@ -367,6 +367,21 @@ class MyCheck(InfrahubCheck):
   is declared once on the marker generic `DcimHasSubInterface` (a port, a LAG and a virtual interface inherit it): a
   NIC is the parent of several sub-interfaces, and without the many side the server caps it at one. Nothing reads
   `sub_interfaces`; the generators filter on `parent_interface__ids`.
+- **VLAN domains and rows**: a VLAN ID is local to a VLAN domain, which is a `ManagedMLAG` pair or a `DcimPhysicalDevice`
+  without MLAG (both carry the marker generic `ManagedGenericVlanDomain`, defined in `schemas/base/dcim.yml`; a device
+  that is an MLAG member is never a domain itself: the MLAG is chosen first). A switch has no record of its own as a
+  domain. The chain is segment -> `ManagedSegmentDeployment` (the realization in a DC, metro or office, with the VNI) ->
+  `ManagedVlanDomainSegment` (the realization on the switch, with the `vlan_id`): the row is a `Parent`-mandatory child
+  of the deployment its switch sits in (`device.deployment` is the hosting parent or one of its pods and zones) and goes
+  with it (`on_delete: cascade`), so the VLAN and the VNI of a port come from one lineage. The row is an output and has
+  no port: a port is given a SEGMENT (the segment's `capabilities`), never a VLAN, and the VLAN of a port is found by
+  port -> device -> domain -> row of the segment. The segment owns its port tags and its rows
+  (`generators/topology/segment_ports.py`): `add_vxlan_segment` and `add_app_component_segment` run the same reconcile,
+  and a change of the segment's `capabilities` re-runs `add_vxlan_segment` (`data/events/99_actions.yml`), so a port
+  assigned by hand is removed unless an `AppComponent` instance lands on it; a segment with no component keeps the ports
+  it has. A switch with no deployment of the segment, or a domain with devices in two deployments, is a WARNING and its
+  rows are left alone (the next run converges once the deployment exists). The rows are untracked and their deployment
+  tracked: a deployment that is not re-saved by its run is deleted with its rows.
 - **What the schema refuses, measured on a server (1.11.9)**: `parameters` (min/max of a Number) and `max_count` are
   enforced on create and on update; `min_count` only on update (a member removed below the minimum is refused, a
   domain created with one member of a `min_count: 2` is accepted); `optional: false` refuses an omitted relationship

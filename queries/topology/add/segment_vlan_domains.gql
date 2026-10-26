@@ -1,7 +1,13 @@
 # Per-segment desired state for ManagedVlanDomainSegment reconciliation
-# (generators/vlan_domain.py, VlanDomainMixin.reconcile_segment_vlan_domains),
+# (generators/vlan_domain.py, SegmentPortTagMixin.reconcile_vxlan_segment),
 # shared by add_vxlan_segment and add_app_component_segment. Read by id from
 # Python, not a generator definition's own query.
+#   - ManagedSegmentDeployment: the segment's realization in each DC or metro
+#     (deployment = the hosting parent, an office included) and, under it, the
+#     rows that exist today. A row is a child of the deployment its switch
+#     sits in, so a device is mapped to a deployment through its own
+#     `deployment` (the hosting parent or one of its children, see
+#     _device_deployment_ids).
 #   - capabilities: the switch ports carrying the segment; their
 #     devices' VLAN domains need it (DcimPhysicalInterface/DcimLAGInterface
 #     only — an inline DcimVirtualInterface sub-interface on a firewall/LB
@@ -9,7 +15,6 @@
 #     tells the customer-facing ports from the border-leaf service ports.
 #   - stretch_scope + customer_deployments' hosting parents: a stretched
 #     segment's border gateways need it too (same shape as vxlan_segment.gql)
-#   - ManagedVlanDomainSegment: the activations that exist today
 query segment_vlan_domains($segment_id: ID!) {
   ManagedVxlanSegment(ids: [$segment_id]) {
     edges {
@@ -69,11 +74,20 @@ query segment_vlan_domains($segment_id: ID!) {
       }
     }
   }
-  ManagedVlanDomainSegment(segment__ids: [$segment_id]) {
+  ManagedSegmentDeployment(segment__ids: [$segment_id]) {
     edges {
       node {
         id
-        vlan_domain { node { id } }
+        deployment { node { id } }
+        vlan_domain_segments {
+          edges {
+            node {
+              id
+              vlan_id { value }
+              vlan_domain { node { id } }
+            }
+          }
+        }
       }
     }
   }

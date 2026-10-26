@@ -773,6 +773,22 @@
                       "status": {
                         "value": "active"
                       },
+                      "vlan_domain_segments": {
+                        "edges": [
+                          {
+                            "node": {
+                              "vlan_id": {
+                                "value": 100
+                              },
+                              "vlan_domain": {
+                                "node": {
+                                  "id": "dev-ds-c005-office01"
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      },
                       "segment": {
                         "node": {
                           "id": "seg-seg-100",
@@ -822,22 +838,22 @@
                                 "node": {
                                   "vni": {
                                     "value": 10100
-                                  }
-                                }
-                              }
-                            ]
-                          },
-                          "vlan_domain_segments": {
-                            "edges": [
-                              {
-                                "node": {
-                                  "vlan_id": {
-                                    "value": 100
                                   },
-                                  "vlan_domain": {
-                                    "node": {
-                                      "id": "dev-ds-c005-office01"
-                                    }
+                                  "vlan_domain_segments": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "vlan_id": {
+                                            "value": 100
+                                          },
+                                          "vlan_domain": {
+                                            "node": {
+                                              "id": "dev-ds-c005-office01"
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
                                   }
                                 }
                               }
@@ -866,6 +882,9 @@
                       },
                       "status": {
                         "value": "active"
+                      },
+                      "vlan_domain_segments": {
+                        "edges": []
                       },
                       "segment": {
                         "node": {

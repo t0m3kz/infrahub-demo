@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from tests.smoke.fixture_builders.common import (
     _af_edges,
+    _deployment_record,
     _edges,
     _make_bgp_peering,
     _make_interface,
@@ -610,7 +611,7 @@ def build_edge_bgw_pair_data(*, device_name: str, platform: str) -> dict:
         }
     )
     device_node["deployment"]["node"]["segment_deployments"] = _edges(
-        [{"vni": _v(_INLINE_SEGMENT_KWARGS["vni"]), "status": _v("active"), "segment": _node(seg)}]
+        [_deployment_record(seg, _INLINE_SEGMENT_KWARGS["vni"])]
     )
     sibling = "dc1-edge-02"
     interfaces.append(

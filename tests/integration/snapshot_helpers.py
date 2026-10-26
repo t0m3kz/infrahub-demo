@@ -97,7 +97,6 @@ TOPOLOGY_SNAPSHOT_KINDS = {
     "ManagedFirewallContext": "name { value }",
     "ManagedLoadbalancerContext": "name { value }",
     "ManagedMLAG": "name { value }",
-    "ManagedStandaloneVlanDomain": "name { value }",
     "RoutingOSPFArea": "name { value } area { value }",
     # The office fabric's OSPF underlay (add_office_fabric): the only OSPF in 30_all.
     "ManagedOSPF": "name { value }",

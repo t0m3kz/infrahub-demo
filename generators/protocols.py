@@ -637,10 +637,6 @@ class ManagedMLAG(ManagedGeneric, ManagedGenericDevice, ManagedGenericVlanDomain
     virtual_peer_link: Boolean
 
 
-class ManagedStandaloneVlanDomain(ManagedGeneric, ManagedGenericDevice, ManagedGenericVlanDomain):
-    pass
-
-
 class OrganizationManufacturer(CoreNode):
     description: StringOptional
     name: String
@@ -719,7 +715,7 @@ class TopologyPhysicalCircuit(TopologyCircuit, ManagedGeneric, ManagedGenericInt
     locations: RelationshipManager[TopologyFacility]
 
 
-class DcimPhysicalDevice(CoreArtifactTarget, DcimDevice, DcimCapabilities, AppInstance):
+class DcimPhysicalDevice(CoreArtifactTarget, DcimDevice, DcimCapabilities, AppInstance, ManagedGenericVlanDomain):
     position: IntegerOptional
     rack_face: Dropdown
     serial: StringOptional
@@ -904,11 +900,12 @@ class ManagedSegmentDeployment(CoreNode):
     vni: IntegerOptional
     deployment: RelationshipAttribute[TopologySegmentHosting]
     segment: RelationshipAttribute[ManagedNetworkSegment]
+    vlan_domain_segments: RelationshipManager[ManagedVlanDomainSegment]
 
 
 class ManagedVlanDomainSegment(CoreNode):
     vlan_id: Integer
-    segment: RelationshipAttribute[ManagedVxlanSegment]
+    segment_deployment: RelationshipAttribute[ManagedSegmentDeployment]
     vlan_domain: RelationshipAttribute[ManagedGenericVlanDomain]
 
 
