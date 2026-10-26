@@ -68,7 +68,7 @@ jobs:
           uv run pytest -vv tests/smoke tests/unit --cov --cov-report=xml
       - name: Upload coverage to Codecov
         if: matrix.python-version == '3.12'
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           files: coverage.xml
           token: ${{ secrets.CODECOV_TOKEN }}
