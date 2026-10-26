@@ -480,6 +480,7 @@ nodes:
         optional: false
         identifier: "template_dc__pod_templates"
         order_weight: 1000
+        min_count: 1
 
   - name: TemplatePod
     namespace: Topology

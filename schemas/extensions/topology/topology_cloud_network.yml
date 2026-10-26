@@ -243,6 +243,9 @@ nodes:
         label: "VLAN ID"
         optional: true
         order_weight: 420
+        parameters:
+          min_value: 1
+          max_value: 4094
     relationships:
       - name: account
         peer: CloudAccount
@@ -307,6 +310,9 @@ nodes:
         label: "VLAN ID"
         optional: false
         order_weight: 350
+        parameters:
+          min_value: 1
+          max_value: 4094
     relationships:
       - name: direct_connect
         peer: CloudDirectConnect

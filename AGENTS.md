@@ -367,6 +367,15 @@ class MyCheck(InfrahubCheck):
   is declared once on the marker generic `DcimHasSubInterface` (a port, a LAG and a virtual interface inherit it): a
   NIC is the parent of several sub-interfaces, and without the many side the server caps it at one. Nothing reads
   `sub_interfaces`; the generators filter on `parent_interface__ids`.
+- **What the schema refuses, measured on a server (1.11.9)**: `parameters` (min/max of a Number) and `max_count` are
+  enforced on create and on update; `min_count` only on update (a member removed below the minimum is refused, a
+  domain created with one member of a `min_count: 2` is accepted); `optional: false` refuses an omitted relationship
+  but accepts an explicit empty list for a "many". So an exact pair (an HA domain, a circuit's two ends) is capped at
+  two and cannot be shrunk, and a check still has to catch the one-member create. Narrowing a relationship's `peer` to a
+  concrete kind makes `id` non-null in its GraphQL type (`String!`) while a sibling kind with a generic peer returns
+  `String`, and a query that selects that field across kinds is then refused at repository sync ("Fields ... conflict");
+  narrow to a generic instead (`TopologyProviderHosting` for an appliance's deployment). `invoke validate-queries`
+  does not see that conflict: the repository sync of `test-integration-fast` does.
 - **Capability edges**: a capability reaches devices via `ManagedGenericDevice` and interfaces via
   `ManagedGenericInterfaces`. Inherit the second only when something reads the interface edge.
 

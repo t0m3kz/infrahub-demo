@@ -34,6 +34,9 @@ nodes:
       - name: asn
         kind: Number
         description: "Autonomous System Number"
+        parameters:
+          min_value: 1
+          max_value: 4294967295
       - name: description
         kind: Text
         optional: true
@@ -163,6 +166,9 @@ nodes:
         description: "BGP confederation identifier (if using confederation)"
         optional: true
         order_weight: 1700
+        parameters:
+          min_value: 1
+          max_value: 4294967295
       - name: process_role
         kind: Dropdown
         label: Process Role
@@ -298,6 +304,9 @@ nodes:
         optional: true
         order_weight: 2300
         regex: "^[0-9]+$"
+        parameters:
+          min_value: 0
+          max_value: 255
       - name: route_reflector_client
         kind: Boolean
         label: Route Reflector Client

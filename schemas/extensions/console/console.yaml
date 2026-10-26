@@ -25,3 +25,6 @@ nodes:
         default_value: 1500
         kind: Number
         order_weight: 1450
+        parameters:
+          min_value: 1
+          max_value: 65535

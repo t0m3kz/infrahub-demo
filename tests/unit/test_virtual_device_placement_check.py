@@ -25,7 +25,7 @@ def _device(node_id: str, device_name: str, kind: str | None, deployment: str = 
     return {"id": node_id, "name": {"value": device_name}, "deployment": {"node": node}}
 
 
-def _run(devices: list[dict[str, Any]], appliances: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+def _run(devices: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Validate and return every logged finding (message, object_id, object_type)."""
     check = cast(Any, CheckVirtualDevicePlacement.__new__(CheckVirtualDevicePlacement))
     findings: list[dict[str, Any]] = []
@@ -33,7 +33,6 @@ def _run(devices: list[dict[str, Any]], appliances: list[dict[str, Any]] | None 
     check.validate(
         {
             "DcimVirtualDevice": {"edges": [{"node": device} for device in devices]},
-            "CloudNetworkAppliance": {"edges": [{"node": device} for device in appliances or []]},
         }
     )
     return findings
@@ -81,29 +80,6 @@ def test_empty_result_has_no_findings() -> None:
     assert _run([]) == []
     check = cast(Any, CheckVirtualDevicePlacement.__new__(CheckVirtualDevicePlacement))
     check.validate({})
-
-
-def test_appliance_in_a_virtual_colocation_passes() -> None:
-    assert _run([], [_device("app-1", "eg-am-ne01", "TopologyVirtualColocation", "AM-NE")]) == []
-
-
-@pytest.mark.parametrize(
-    "kind",
-    ["TopologyColocationZone", "TopologyDataCenter", "TopologyCustomerDC", "TopologyCustomerColocation", "TopologyPod"],
-)
-def test_appliance_outside_a_virtual_colocation_fails(kind: str) -> None:
-    """A provider-hosted function is rented in a virtual colocation; the schema's peer is the generic, so this is the rule."""
-    findings = _run([], [_device("app-1", "eg-fr201", kind, "FR2")])
-
-    assert len(findings) == 1
-    assert findings[0]["object_id"] == "app-1"
-    assert findings[0]["object_type"] == "CloudNetworkAppliance"
-    assert f"CloudNetworkAppliance 'eg-fr201' is deployed to {kind} 'FR2'" in findings[0]["message"]
-    assert "TopologyVirtualColocation" in findings[0]["message"]
-
-
-def test_appliance_without_a_deployment_is_not_reported() -> None:
-    assert _run([], [_device("app-1", "eg-am-ne01", None)]) == []
 
 
 def test_each_wrong_device_is_its_own_finding() -> None:

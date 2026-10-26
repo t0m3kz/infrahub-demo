@@ -227,6 +227,9 @@ nodes:
         optional: false
         order_weight: 310
         description: "Listening port for this service"
+        parameters:
+          min_value: 1
+          max_value: 65535
       - name: ssl_certificate
         kind: Text
         optional: true

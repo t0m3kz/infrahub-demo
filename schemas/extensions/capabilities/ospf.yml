@@ -35,6 +35,9 @@ nodes:
         optional: true
         description: "OSPF metric for the interface."
         order_weight: 1400
+        parameters:
+          min_value: 1
+          max_value: 65535
       - name: mode
         kind: Dropdown
         choices:
@@ -217,6 +220,9 @@ nodes:
         optional: true
         order_weight: 1600
         description: "OSPF link cost override (lower = preferred)"
+        parameters:
+          min_value: 1
+          max_value: 65535
     relationships:
       - name: ospf_process
         peer: ManagedOSPF

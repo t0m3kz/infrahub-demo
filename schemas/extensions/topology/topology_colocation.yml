@@ -252,6 +252,7 @@ nodes:
       - CoreArtifactTarget
       - TopologyDeployment
       - TopologyDeviceHosting
+      - TopologyProviderHosting
       - TopologyOrchestratorScoped
       - TopologyColocationFabric
       - TopologyConnectableLocation
@@ -327,6 +328,7 @@ nodes:
         optional: false
         identifier: "template_colocation_metro__zone_templates"
         order_weight: 1000
+        min_count: 1
 
   - name: TemplateColocationZone
     namespace: Topology

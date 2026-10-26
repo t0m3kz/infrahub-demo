@@ -105,6 +105,23 @@ nodes:
     display_label: "{{name__value}}"
     order_by:
       - name__value
+    relationships:
+      # Re-declares ManagedGenericDevice.capabilities (same peer, kind, direction and identifier) to cap the domain at
+      # exactly two devices, as ManagedMLAG does; domain_pairing creates the domain with both members in one save.
+      # The cap holds when the domain is written; a write from the device side skips it.
+      - name: capabilities
+        peer: DcimCapabilities
+        label: "Peer Devices"
+        description: "The two peer devices of this HA domain"
+        cardinality: many
+        kind: Generic
+        optional: false
+        min_count: 2
+        max_count: 2
+        direction: inbound
+        identifier: capabilities
+        order_weight: 500
+
     attributes:
       - name: ha_protocol
         kind: Dropdown
@@ -242,6 +259,22 @@ nodes:
     order_by:
       - name__value
     relationships:
+      # Re-declares ManagedGenericDevice.capabilities (same peer, kind, direction and identifier) to cap the domain at
+      # exactly two devices, as ManagedMLAG does; domain_pairing creates the domain with both members in one save.
+      # The cap holds when the domain is written; a write from the device side skips it.
+      - name: capabilities
+        peer: DcimCapabilities
+        label: "Peer Devices"
+        description: "The two peer devices of this HA domain"
+        cardinality: many
+        kind: Generic
+        optional: false
+        min_count: 2
+        max_count: 2
+        direction: inbound
+        identifier: capabilities
+        order_weight: 500
+
       - name: contexts
         label: "Load Balancer Contexts"
         peer: ManagedLoadbalancerContext
@@ -400,6 +433,23 @@ nodes:
     display_label: "{{name__value}}"
     order_by:
       - name__value
+    relationships:
+      # Re-declares ManagedGenericDevice.capabilities (same peer, kind, direction and identifier) to cap the domain at
+      # exactly two devices, as ManagedMLAG does; domain_pairing creates the domain with both members in one save.
+      # The cap holds when the domain is written; a write from the device side skips it.
+      - name: capabilities
+        peer: DcimCapabilities
+        label: "Peer Devices"
+        description: "The two peer devices of this HA domain"
+        cardinality: many
+        kind: Generic
+        optional: false
+        min_count: 2
+        max_count: 2
+        direction: inbound
+        identifier: capabilities
+        order_weight: 500
+
     attributes:
       - name: proxy_type
         kind: Dropdown
