@@ -474,7 +474,7 @@ class TestTransitMemberResolution:
                 typename="DcimVirtualInterface",
                 name=SimpleNamespace(value="eth1"),
                 device=SimpleNamespace(id=f"v{host}"),
-                parent_interface=SimpleNamespace(id=f"up-{host}" if pinned else None),
+                host_interface=SimpleNamespace(id=f"up-{host}" if pinned else None),
             )
         return [
             SimpleNamespace(
@@ -509,7 +509,7 @@ class TestTransitMemberResolution:
 
     @pytest.mark.asyncio
     async def test_virtual_uplink_not_pinned_to_a_host_port_is_an_error_without_writes(self) -> None:
-        """No parent_interface, no way to the border service port: nothing is created for the context."""
+        """No host_interface, no way to the border service port: nothing is created for the context."""
         world = _World()
         gen, _ = _make_gen(world)
         members = self._hosted_members(world, pinned=False)

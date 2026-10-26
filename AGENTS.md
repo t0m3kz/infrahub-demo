@@ -353,16 +353,20 @@ class MyCheck(InfrahubCheck):
   `unique: true` in the schema: an optional attribute collides on the second unset value.
 - **Virtual NICs**: the base NICs of a hosted virtual device (a dedicated firewall or load balancer, built from a
   `*_CUSTOMER_*` template) are `DcimVirtualInterface`, never `DcimPhysicalInterface`. Only the physical host is cabled:
-  `generators/virtual_nics.py` pins each NIC through `parent_interface` to the host port of its role (`management`,
+  `generators/virtual_nics.py` pins each NIC through `host_interface` to the host port of its role (`management`,
   `uplink`, `ha`; n-th by interface order; a NIC with no host port left stays unpinned), and a context sub-interface
-  rides on the NIC, so border leaf -> host port -> NIC -> sub-interface is a path in the graph.
-  `_resolve_transit_members` follows that link, not a name. `DcimVirtualInterface.parent_interface`
-  (outbound, one) pairs with `sub_interfaces` (inbound, many), declared once on the marker generic `DcimHasSubInterface`
-  that a physical port, a LAG and a virtual interface inherit (a NIC is both a child and a parent, which the server
-  accepts only with the many side declared; nothing reads `sub_interfaces`, the generators filter on
-  `parent_interface__ids`). `checks/virtual_nic_pinning.py` requires the
-  parent to be a port of the `hosting_device` and an uplink's host port to be cabled. A provider-hosted
+  rides on the NIC through `parent_interface`, so border leaf -> host port -> NIC -> sub-interface is a path in the
+  graph. `_resolve_transit_members` follows `host_interface`, not a name. `checks/virtual_nic_pinning.py` requires the
+  host port to be a port of the `hosting_device` and an uplink's host port to be cabled. A provider-hosted
   `CloudNetworkAppliance` and a controller keep physical ports.
+- **Interface parents on one device**: `parent_interface` (sub-interface -> port, LAG or NIC), its inverse
+  `sub_interfaces` and the LAG pair `lag` / `member_interfaces` carry `common_parent: device`, so the server refuses a
+  link across devices; `host_interface` is the one link that crosses devices (VM -> host) and is a relationship of its
+  own. `common_parent` works only on a node with a `kind: Parent` relationship and a peer with one: here the interfaces
+  (`device`) and `CloudNetworkSegment` (`virtual_network`); every other "same parent" rule is a check. `sub_interfaces`
+  is declared once on the marker generic `DcimHasSubInterface` (a port, a LAG and a virtual interface inherit it): a
+  NIC is the parent of several sub-interfaces, and without the many side the server caps it at one. Nothing reads
+  `sub_interfaces`; the generators filter on `parent_interface__ids`.
 - **Capability edges**: a capability reaches devices via `ManagedGenericDevice` and interfaces via
   `ManagedGenericInterfaces`. Inherit the second only when something reads the interface edge.
 

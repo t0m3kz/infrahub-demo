@@ -1,7 +1,6 @@
 # validate_virtual_nic_pinning: every virtual device with its hosting device and the base NICs it rides on.
-# A NIC is a DcimVirtualInterface of the device; its parent_interface (a DcimInterface generic peer) is the port of the
-# hosting device it is pinned to, with the cable of that port when it is a physical one. An unset parent arrives as a
-# null node.
+# A NIC is a DcimVirtualInterface of the device; its host_interface (a DcimPhysicalInterface) is the port of the hosting
+# device it is pinned to, with the cable of that port. An unset host_interface arrives as a null node.
 query virtual_nic_pinning {
   DcimVirtualDevice {
     edges {
@@ -22,7 +21,7 @@ query virtual_nic_pinning {
               name { value }
               role { value }
               ... on DcimVirtualInterface {
-                parent_interface {
+                host_interface {
                   node {
                     id
                     name { value }
@@ -32,9 +31,7 @@ query virtual_nic_pinning {
                         name { value }
                       }
                     }
-                    ... on DcimPhysicalInterface {
-                      cable { node { id } }
-                    }
+                    cable { node { id } }
                   }
                 }
               }

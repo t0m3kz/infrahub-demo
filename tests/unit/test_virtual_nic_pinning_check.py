@@ -11,22 +11,22 @@ from checks.virtual_nic_pinning import CheckVirtualNicPinning
 
 
 def _nic(
-    name: str, role: str, *, parent_device: str | None = None, cabled: bool = True, kind: str = "DcimVirtualInterface"
+    name: str, role: str, *, host_device: str | None = None, cabled: bool = True, kind: str = "DcimVirtualInterface"
 ) -> dict[str, Any]:
-    """A raw interface row; ``parent_device`` None is an unpinned NIC."""
+    """A raw interface row; ``host_device`` None is an unpinned NIC."""
     node: dict[str, Any] = {"id": f"nic-{name}", "__typename": kind, "name": {"value": name}, "role": {"value": role}}
     if kind == "DcimVirtualInterface":
-        parent = (
+        host_port = (
             {
                 "id": f"port-{name}",
                 "name": {"value": name},
-                "device": {"node": {"id": parent_device, "name": {"value": parent_device}}},
+                "device": {"node": {"id": host_device, "name": {"value": host_device}}},
                 "cable": {"node": {"id": f"cable-{name}"} if cabled else None},
             }
-            if parent_device
+            if host_device
             else None
         )
-        node["parent_interface"] = {"node": parent}
+        node["host_interface"] = {"node": host_port}
     return node
 
 
@@ -48,7 +48,7 @@ def _run(devices: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def test_nics_pinned_to_cabled_ports_of_the_host_pass() -> None:
-    nics = [_nic("eth0", "management", parent_device="fw-1"), _nic("eth1", "uplink", parent_device="fw-1")]
+    nics = [_nic("eth0", "management", host_device="fw-1"), _nic("eth1", "uplink", host_device="fw-1")]
 
     assert _run([_device(nics)]) == []
 
@@ -59,7 +59,7 @@ def test_unpinned_nic_passes() -> None:
 
 
 def test_nic_pinned_to_a_port_of_another_device_fails() -> None:
-    findings = _run([_device([_nic("eth1", "uplink", parent_device="fw-2")])])
+    findings = _run([_device([_nic("eth1", "uplink", host_device="fw-2")])])
 
     assert len(findings) == 1
     assert findings[0]["object_id"] == "nic-eth1"
@@ -67,7 +67,7 @@ def test_nic_pinned_to_a_port_of_another_device_fails() -> None:
 
 
 def test_uplink_pinned_to_an_uncabled_host_port_fails() -> None:
-    findings = _run([_device([_nic("eth1", "uplink", parent_device="fw-1", cabled=False)])])
+    findings = _run([_device([_nic("eth1", "uplink", host_device="fw-1", cabled=False)])])
 
     assert len(findings) == 1
     assert "which is not cabled" in findings[0]["message"]
@@ -75,13 +75,13 @@ def test_uplink_pinned_to_an_uncabled_host_port_fails() -> None:
 
 def test_management_nic_on_an_uncabled_host_port_passes() -> None:
     """Only an uplink must reach the border leaf; the management port needs no cable."""
-    assert _run([_device([_nic("eth0", "management", parent_device="fw-1", cabled=False)])]) == []
+    assert _run([_device([_nic("eth0", "management", host_device="fw-1", cabled=False)])]) == []
 
 
 def test_context_sub_interface_is_not_a_base_nic() -> None:
     """A tenant sub-interface (role service) rides on a NIC of its own device, not on a host port."""
-    assert _run([_device([_nic("eth1.3000", "service", parent_device="vm-1")])]) == []
+    assert _run([_device([_nic("eth1.3000", "service", host_device="vm-1")])]) == []
 
 
 def test_device_without_a_host_is_not_reported() -> None:
-    assert _run([_device([_nic("eth1", "uplink", parent_device="fw-2")], host=None)]) == []
+    assert _run([_device([_nic("eth1", "uplink", host_device="fw-2")], host=None)]) == []

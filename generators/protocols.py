@@ -1012,6 +1012,7 @@ class DcimVirtualDevice(CoreArtifactTarget, DcimDevice, DcimCapabilities, AppIns
 
 
 class DcimVirtualInterface(DcimInterface, DcimHasSubInterface):
+    host_interface: RelationshipAttribute[DcimPhysicalInterface]
     ip_address: RelationshipAttribute[IpamIPAddress]
     parent_interface: RelationshipAttribute[DcimInterface]
 

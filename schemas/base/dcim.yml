@@ -202,10 +202,10 @@ generics:
         order_weight: 1250
 
   # Interfaces that can carry sub-interfaces: a physical port, a LAG and a virtual interface (the NIC of a virtual
-  # machine is the parent of its sub-interfaces and the child of a host port). It holds only the inverse of
-  # DcimVirtualInterface.parent_interface (same identifier, opposite direction); nothing reads it from the schema, the
-  # generators filter on parent_interface__ids. A generic cannot inherit a generic, so this one carries no name or
-  # device and parent_interface keeps DcimInterface as its peer.
+  # machine is the parent of its own sub-interfaces). It holds only the inverse of DcimVirtualInterface.parent_interface
+  # (same identifier, opposite direction): with a cardinality-one parent_interface on the kind, the server would cap
+  # a NIC at one sub-interface. Nothing reads it; the generators filter on parent_interface__ids. A generic cannot
+  # inherit a generic, so this one carries no name or device and parent_interface keeps DcimInterface as its peer.
   - name: HasSubInterface
     namespace: Dcim
     label: Has Sub-Interface
@@ -219,7 +219,8 @@ generics:
         kind: Generic
         identifier: "sub__interface"
         direction: inbound
-        description: "Interfaces riding on this one: its sub-interfaces (a NIC pinned to a host port has many)"
+        common_parent: device
+        description: "Sub-interfaces riding on this one, always on the same device"
         order_weight: 1475
 
   - name: Endpoint
@@ -667,12 +668,13 @@ nodes:
         kind: Attribute
         optional: true
         identifier: "lag__members"
+        common_parent: device
         order_weight: 1450
 
   - name: VirtualInterface
     namespace: Dcim
     label: Virtual Interface
-    description: "Logical interface (loopback, SVI, sub-interface) or the NIC of a virtual machine, pinned to a host port"
+    description: "Logical interface (loopback, SVI, sub-interface) or the NIC of a virtual machine"
     inherit_from:
       - DcimInterface
       - DcimHasSubInterface
@@ -685,8 +687,19 @@ nodes:
         kind: Attribute
         identifier: "sub__interface"
         direction: outbound
-        description: "Interface this one rides on: a sub-interface's port, or the host port a virtual machine NIC is pinned to"
+        common_parent: device
+        description: "Port, LAG or NIC this sub-interface rides on, always on the same device"
         order_weight: 1400
+      # A virtual machine NIC is not a sub-interface of its host's port: it sits on another device, so it cannot share
+      # parent_interface (common_parent: device refuses a parent on another device).
+      - name: host_interface
+        peer: DcimPhysicalInterface
+        optional: true
+        cardinality: one
+        kind: Attribute
+        identifier: "nic__host_port"
+        description: "Port of the hosting device a virtual machine NIC is pinned to (generators/virtual_nics.py)"
+        order_weight: 1425
       - name: ip_address
         peer: IpamIPAddress
         optional: true
@@ -744,6 +757,7 @@ nodes:
         kind: Generic
         optional: true
         identifier: "lag__members"
+        common_parent: device
         order_weight: 1700
       - name: ip_address
         peer: IpamIPAddress
