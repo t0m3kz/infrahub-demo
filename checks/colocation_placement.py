@@ -427,7 +427,7 @@ def terraform_order_data_findings(cleaned: dict[str, Any]) -> list[Finding]:
         )
         appliances = {
             str(device["id"]): device
-            for device in node.get("devices") or []
+            for device in node.get("appliances") or []
             if isinstance(device, dict) and device.get("typename") == APPLIANCE and device.get("id")
         }
         for appliance in appliances.values():

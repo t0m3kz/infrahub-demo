@@ -18,7 +18,7 @@ import asyncio
 from collections.abc import AsyncGenerator, Iterable, Mapping
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Callable, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from infrahub_sdk.exceptions import GraphQLError, NodeNotFoundError
 from infrahub_sdk.protocols import CoreIPAddressPool, CoreIPPrefixPool, CoreNumberPool, CoreStandardGroup
@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     import logging
 
     from .firewall_context_spec import ContextSpec
+    from .common import CommonGenerator
 
 from utils.limits import RESOURCE_LOCK, WAIT_FOR_PEER_GENERATOR
 
@@ -49,9 +50,10 @@ class PoolMixin:
     branch_name: str
     fabric_name: str
     pod_name: str | None
-    # CommonGenerator._retry_delay — annotation only (no method body), so this
-    # mixin never shadows the real staticmethod at runtime via MRO.
-    _retry_delay: Callable[..., float]
+    # Type checking only: the real members of the host's other bases, aliased so nothing is defined at runtime and
+    # nothing shadows them in the MRO.
+    if TYPE_CHECKING:
+        _retry_delay = staticmethod(CommonGenerator._retry_delay)
     # Set on first use by _parent_pools, one per generator instance (= per run).
     _parent_pool_cache: dict[tuple[type[Any], str], Any] | None
 

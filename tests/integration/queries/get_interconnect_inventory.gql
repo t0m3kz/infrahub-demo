@@ -331,16 +331,6 @@ fragment CircuitEndDevice on DcimDevice {
             }
           }
         }
-        ... on TopologyVirtualColocation {
-          parent {
-            node {
-              id
-              name {
-                value
-              }
-            }
-          }
-        }
       }
     }
   }

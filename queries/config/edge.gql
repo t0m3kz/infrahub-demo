@@ -37,17 +37,15 @@ query edge_config($device: String!) {
           deployment {
             node {
               # An office edge is deployed to the SegmentHosting itself (direct spreads). A colocation edge
-              # is deployed to its zone or virtual colocation and the metro above it is the site, so both
-              # SegmentHosting fragments are selected in ONE `parent { node { ... } }` block per kind: a
+              # is deployed to its zone and the metro above it is the site (a virtual colocation holds
+              # appliances, not a physical edge), so both SegmentHosting fragments are selected in ONE
+              # `parent { node { ... } }` block per kind: a
               # second `parent` selection (as EvpnRtAsOnDeploymentFields adds) returns null for whichever
               # SegmentHosting fragment comes second (see the ORDER MATTERS note in fragments/evpn_fabric.gql).
               # Checked on the 30_all stack: eg-fr201 gets evpn_rt_as and segment_deployments from the metro.
               ...SegmentDeploymentsOnDeploymentFields
               ...EvpnRtAsOnSegmentHostingFields
               ... on TopologyColocationZone {
-                parent { node { ...SegmentDeploymentsOnDeploymentFields ...EvpnRtAsOnSegmentHostingFields } }
-              }
-              ... on TopologyVirtualColocation {
                 parent { node { ...SegmentDeploymentsOnDeploymentFields ...EvpnRtAsOnSegmentHostingFields } }
               }
             }

@@ -42,23 +42,27 @@ from tests.integration.all_demo_loadbalancer_constants import (
 
 
 def test_transit_totals_match_the_planning_estimate() -> None:
-    """DC10 3+3, DC11 3+3, DC12 4+3, FR2 3 legs (tenant VRFs + INTERNET + MANAGEMENT); 16 exchanges;
-    44 sub-interfaces; 7 SNAT /32s; 8 tagged ports (6 border-leaf + the FR2 edges' 2)."""
-    legs = {(c["site"], c["tenant"] is None): len(c["namespaces"]) for c in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS}
-    assert legs == {
-        ("DC10", True): 3,
-        ("DC10", False): 3,
-        ("DC11", True): 3,
-        ("DC11", False): 3,
-        ("DC12", True): 4,
-        ("DC12", False): 3,
-        ("FR2", True): 3,
+    """DC10 3+3, DC11 3+3, DC12 3 (PROD) + 3 (NON-PROD) + 3, FR2 3 legs (one tenant VRF + INTERNET + MANAGEMENT per
+    context); 16 exchanges; 48 sub-interfaces; 8 SNAT /32s; 8 tagged ports (6 border-leaf + the FR2 edges' 2)."""
+    legs = {
+        (c["site"], c["namespace"], c["tenant"] is None): len(c["namespaces"])
+        for c in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS
     }
-    assert ALL_DEMO_TRANSIT_LEGS == 22
+    assert legs == {
+        ("DC10", "PROD", True): 3,
+        ("DC10", "PROD", False): 3,
+        ("DC11", "PROD", True): 3,
+        ("DC11", "PROD", False): 3,
+        ("DC12", "PROD", True): 3,
+        ("DC12", "NON-PROD", True): 3,
+        ("DC12", "PROD", False): 3,
+        ("FR2", "PROD", True): 3,
+    }
+    assert ALL_DEMO_TRANSIT_LEGS == 24
     assert ALL_DEMO_TRANSIT_EXCHANGES == 16
-    assert ALL_DEMO_TRANSIT_SUBINTERFACES == 44
-    assert ALL_DEMO_TRANSIT_PREFIXES == {"PROD": 7, "NON-PROD": 1, "INTERNET": 7, "MANAGEMENT": 7}
-    assert ALL_DEMO_SNAT_ADDRESSES == 7
+    assert ALL_DEMO_TRANSIT_SUBINTERFACES == 48
+    assert ALL_DEMO_TRANSIT_PREFIXES == {"PROD": 7, "NON-PROD": 1, "INTERNET": 8, "MANAGEMENT": 8}
+    assert ALL_DEMO_SNAT_ADDRESSES == 8
     assert ALL_DEMO_BORDER_FIREWALL_PORTS == 8
     assert ALL_DEMO_EXPECTED_OBJECTS["TopologyRoutedExchange"] == 16
 
@@ -73,8 +77,9 @@ def test_serving_colocation_zone_has_one_shared_context_with_prod_legs() -> None
     assert colocation[0]["deployments"] == ("C001-P-FR", "C005-P-FR")
     assert colocation[0]["namespaces"] == ("PROD", "INTERNET", "MANAGEMENT")
     assert colocation[0]["exchanges"] == ("PROD-INTERNET", "PROD-MANAGEMENT")
-    # The colocation context is a cluster's shared context like the three DC ones.
-    assert ALL_DEMO_SHARED_FIREWALL_CONTEXTS == 4
+    # The colocation context is a cluster's shared context like the DC ones: one per (cluster, tenant namespace),
+    # so DC12, which has both PROD and NON-PROD footprints, has two.
+    assert ALL_DEMO_SHARED_FIREWALL_CONTEXTS == 5
 
 
 def test_only_footprints_with_a_firewall_serving_zone_are_served() -> None:
@@ -124,10 +129,12 @@ def test_environment_maps_to_vrf_namespace() -> None:
 
 
 def test_no_context_pairs_prod_with_non_prod() -> None:
-    """Every exchange of every context ends in INTERNET or MANAGEMENT, never in a tenant VRF."""
+    """Every exchange of every context ends in INTERNET or MANAGEMENT, never in a tenant VRF, and no context has
+    a leg in both PROD and NON-PROD."""
     assert all(
         x.endswith(("-INTERNET", "-MANAGEMENT")) for c in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS for x in c["exchanges"]
     )
+    assert not any({"PROD", "NON-PROD"} <= set(c["namespaces"]) for c in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS)
 
 
 def test_loadbalancer_contexts_match_the_boarded_footprints() -> None:
@@ -192,3 +199,13 @@ def test_cloud_load_balanced_component() -> None:
         }
     }
     assert not set(ALL_DEMO_CLOUD_LOAD_BALANCED_COMPONENTS) & set(ALL_DEMO_LOAD_BALANCED_COMPONENTS)
+
+
+def test_loadbalancer_context_names_follow_the_naming_scheme() -> None:
+    """A shared context is `shared-{cluster}-{namespace}`; a dedicated one is its pair's `{base}-ha-{class}` without
+    the `ha`, the owner first and the class last."""
+    from tests.integration.test_62b_all_demo_tenant_services import _expected_loadbalancer_context_name
+
+    assert _expected_loadbalancer_context_name("lb-a-lb-b", "PROD", None) == "shared-lb-a-lb-b-prod"
+    assert _expected_loadbalancer_context_name("lb-a-lb-b", "NON-PROD", None) == "shared-lb-a-lb-b-non-prod"
+    assert _expected_loadbalancer_context_name("c005-lb-a-lb-b-ha-prod", "PROD", "C005-P-DC12") == "c005-lb-a-lb-b-prod"

@@ -207,8 +207,14 @@ class TestColocationKit:
     def test_a_virtual_colocation_is_no_physical_deployment_and_hosts_no_racks(self) -> None:
         """Provider-hosted: nothing of ours to rack or cable."""
         inherited = set(_kind("TopologyVirtualColocation")["inherit_from"])
-        assert inherited.isdisjoint({"TopologyPhysicalDeployment", "TopologyRackHosting"})
-        assert {"TopologyDeployment", "TopologyDeviceHosting", _FABRIC} <= inherited
+        assert inherited.isdisjoint({"TopologyPhysicalDeployment", "TopologyRackHosting", "TopologyDeviceHosting"})
+        assert {"TopologyDeployment", "TopologyProviderHosting", _FABRIC} <= inherited
+
+    def test_the_metro_hosts_no_device_and_carries_no_cable(self) -> None:
+        """The kit is the zones' and the virtual colocations': the metro keeps the Multi-Site site, the pools and the
+        naming, nothing is deployed to it."""
+        inherited = set(_kind("TopologyColocationMetro")["inherit_from"])
+        assert inherited.isdisjoint({"TopologyDeviceHosting", "TopologyPhysicalDeployment", "TopologyRackHosting"})
 
     def test_the_zone_is_physical_and_hosts_racks(self) -> None:
         assert {"TopologyPhysicalDeployment", "TopologyRackHosting", _FABRIC} <= set(
@@ -336,10 +342,12 @@ class TestCloudNetworkAppliance:
     def test_its_deployment_peers_the_provider_hosting_generic_under_the_identifier_of_the_other_device_kinds(
         self,
     ) -> None:
-        """TopologyDeviceHosting.devices lists the appliances through the shared identifier. The peer is the generic
-        TopologyProviderHosting (the virtual colocation a provider function is rented in), so the schema refuses any
-        other deployment and the picker offers nothing else. A query that selects `deployment` across the device
-        kinds spreads fragments per kind, and a fragment for a kind that peer cannot be (a zone) is a schema error."""
+        """TopologyProviderHosting.appliances lists the appliances through the identifier of their own. The peer is the
+        generic TopologyProviderHosting (the virtual colocation or the customer cloud a provider function is rented
+        in), so the schema refuses any other deployment and the picker offers nothing else. A query that selects
+        `deployment` across the device kinds spreads fragments per kind, and a fragment for a kind that peer cannot
+        be (a zone) is a schema error. A physical device (and a physical controller) is deployed to a
+        TopologyDeviceHosting; a virtual one runs for a footprint, so its peer stays the TopologyDeployment generic."""
         extensions = _document(_TOPOLOGY / "topology.yml")["extensions"]["nodes"]
         device_kinds = {
             "DcimPhysicalDevice",
@@ -355,10 +363,16 @@ class TestCloudNetworkAppliance:
 
         assert device_kinds | {self._KIND} <= set(deployments)
         assert deployments[self._KIND]["peer"] == "TopologyProviderHosting"
-        assert {deployments[k]["peer"] for k in device_kinds} == {"TopologyDeployment"}
-        assert {deployments[k]["identifier"] for k in device_kinds | {self._KIND}} == {"topology__devices"}
+        assert {k: deployments[k]["peer"] for k in device_kinds} == {
+            "DcimPhysicalDevice": "TopologyDeviceHosting",
+            "ManagedControllerPhysical": "TopologyDeviceHosting",
+            "DcimVirtualDevice": "TopologyDeployment",
+            "ManagedControllerVirtual": "TopologyDeployment",
+        }
+        assert {deployments[k]["identifier"] for k in device_kinds} == {"topology__devices"}
+        assert deployments[self._KIND]["identifier"] == "topology__appliances"
 
-    def test_the_provider_hosting_generic_is_a_valid_peer_and_only_the_virtual_colocation_inherits_it(self) -> None:
+    def test_the_provider_hosting_generic_is_a_valid_peer_and_only_provider_hosted_deployments_inherit_it(self) -> None:
         """A generic used as a relationship peer needs a name and an hfid, or an object file cannot reference it."""
         generic = next(g for g in _document(_TOPOLOGY / "topology.yml")["generics"] if g["name"] == "ProviderHosting")
         assert generic["human_friendly_id"] == ["name__value"]
@@ -369,7 +383,58 @@ class TestCloudNetworkAppliance:
             for node in _document(path).get("nodes") or []
             if "TopologyProviderHosting" in (node.get("inherit_from") or [])
         ]
-        assert inheritors == ["VirtualColocation"]
+        assert sorted(inheritors) == ["CustomerCloud", "VirtualColocation"]
+        appliances = next(r for r in generic["relationships"] if r["name"] == "appliances")
+        assert (appliances["peer"], appliances["cardinality"], appliances["identifier"]) == (
+            "CloudNetworkAppliance",
+            "many",
+            "topology__appliances",
+        )
+
+    def test_the_cloud_hosting_generic_links_a_customer_cloud_to_its_instances(self) -> None:
+        """A cloud instance is a CloudResource, not a device: the footprint reads it through a generic of its own."""
+        generic = next(g for g in _document(_TOPOLOGY / "topology.yml")["generics"] if g["name"] == "CloudHosting")
+        assert generic["human_friendly_id"] == ["name__value"]
+        instances = next(r for r in generic["relationships"] if r["name"] == "instances")
+        assert (instances["peer"], instances["cardinality"], instances["identifier"]) == (
+            "CloudInstance",
+            "many",
+            "topology__cloud_instances",
+        )
+        extensions = _document(_TOPOLOGY / "topology.yml")["extensions"]["nodes"]
+        deployment = next(
+            r
+            for extension in extensions
+            if extension["kind"] == "CloudInstance"
+            for r in extension["relationships"]
+            if r["name"] == "deployment"
+        )
+        assert (deployment["peer"], deployment["identifier"]) == ("TopologyCloudHosting", "topology__cloud_instances")
+        assert "TopologyCloudHosting" in _kind("TopologyCustomerCloud")["inherit_from"]
+        assert {"TopologyCloudHosting", "TopologyDeviceHosting"}.isdisjoint(
+            set(_kind("TopologyVirtualColocation")["inherit_from"])
+        )
+
+    def test_a_rack_names_its_hosting_deployment_like_a_device_does(self) -> None:
+        """LocationRack.deployment (peer TopologyRackHosting: a pod or a colocation zone) pairs with
+        TopologyRackHosting.racks under one identifier."""
+        rack = next(
+            n
+            for path in sorted((_TOPOLOGY.parent / "location").glob("*.yml"))
+            for n in _document(path).get("nodes") or []
+            if n["name"] == "Rack"
+        )
+        deployment = next(r for r in rack["relationships"] if r["name"] == "deployment")
+        racks = next(
+            r
+            for g in _document(_TOPOLOGY / "topology.yml")["generics"]
+            if g["name"] == "RackHosting"
+            for r in g["relationships"]
+            if r["name"] == "racks"
+        )
+        assert deployment["peer"] == "TopologyRackHosting"
+        assert deployment["identifier"] == racks["identifier"] == "rack__deployment"
+        assert "pod" not in {r["name"] for r in rack["relationships"]}
 
     def test_the_virtual_colocation_orders_under_an_account_and_has_no_order_fields_of_its_own(self) -> None:
         kind = "TopologyVirtualColocation"

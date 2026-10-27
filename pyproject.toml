@@ -31,7 +31,7 @@ dev = [
     "pytest-dependency>=0.6.0",
     "pytest-order>=1.3.0",
     "ruff>=0.11.4,<0.16.0",
-    "ty>=0.0.7,<0.0.91",
+    "ty>=0.0.7,<0.0.93",
     "yamllint>=1.37.1",
 ]
 
@@ -114,8 +114,8 @@ GPL-3.0-or-later
 '''
 
 # generators/protocols.py mirrors the Infrahub schema, which narrows and widens attributes between a generic
-# and its nodes (e.g. a computed `name`, a required `segment_type` under an optional one). ty 0.0.87 reports
-# those child redeclarations as invalid overrides, but dropping them would lose the schema's own types.
+# and its nodes (e.g. a computed `name`, a required `segment_type` under an optional one). ty reports those
+# child redeclarations as invalid overrides, but dropping them would lose the schema's own types.
 [[tool.ty.overrides]]
 include = ["generators/protocols.py"]
 

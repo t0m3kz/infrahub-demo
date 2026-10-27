@@ -141,7 +141,7 @@ class TestWaitsForParentDcGenerator:
         refreshed_payload = _dc_payload_with_parent(fw_devices=[_fw_device(id="fw-1", name="DC10-FW1")])
         gen.wait_for_parent_generator_and_refetch = AsyncMock(side_effect=[refreshed_payload, None])
         cluster = MagicMock(id="cluster-1")
-        cluster.name.value = "DC10-FW1-ha"
+        cluster.name.value = "DC10-FW1"
         cluster.capabilities.peers = [MagicMock(id="fw-1")]
         gen.client.filters = AsyncMock(return_value=[cluster])
         gen._ensure_transit_legs = AsyncMock()
@@ -178,7 +178,7 @@ class TestFirewallContextNoFirewallOrCluster:
         firewalls itself (that would claim the DC's HA for this run's group)."""
         gen = make_generator(CustomerDeploymentDCExchangeGenerator)
         cluster = MagicMock(id="cluster-1")
-        cluster.name.value = "DC10-FW1-FW2-ha"
+        cluster.name.value = "DC10-FW1-FW2"
         cluster.capabilities.peers = [MagicMock(id="fw-1"), MagicMock(id="fw-2")]
         gen.client.filters = AsyncMock(side_effect=[[], [cluster]])
         gen._ensure_ha_pairs = AsyncMock()
@@ -251,7 +251,7 @@ class TestAllControllersWiring:
 
 
 class TestFirewallContextProvisioning:
-    def _make_gen_with_cluster(self, *, cluster_name: str = "DC10-FW1-FW2-ha") -> Any:
+    def _make_gen_with_cluster(self, *, cluster_name: str = "DC10-FW1-FW2") -> Any:
         gen = make_generator(CustomerDeploymentDCExchangeGenerator)
         fw_device = _fw_device(id="fw-1", name="DC10-FW1")
         cluster = MagicMock(id="cluster-1")
@@ -271,7 +271,8 @@ class TestFirewallContextProvisioning:
         kwargs = gen._ensure_transit_legs.call_args.kwargs
         target = kwargs["target"]
         assert target.spec is FIREWALL_CONTEXT
-        assert target.context_name("PROD") == target.context_name("NON-PROD") == f"{cluster.name.value}-shared"
+        assert target.context_name("PROD") == f"shared-{cluster.name.value}-prod"
+        assert target.context_name("NON-PROD") == f"shared-{cluster.name.value}-non-prod"
         assert (target.cluster_id, target.tenant_id, target.track) == (cluster.id, None, False)
         assert kwargs["customer"]["environment"] == "p"
 
@@ -280,14 +281,16 @@ class TestFirewallContextProvisioning:
         """A dedicated context sits on the customer's own dedicated cluster, tenant = the customer."""
         gen, _, _ = self._make_gen_with_cluster()
         dedicated_cluster = MagicMock(id="dedicated-cluster-1")
-        dedicated_cluster.name.value = "DC10-FW1-C005-p-dedicated-DC10-FW2-C005-p-dedicated-ha"
+        dedicated_cluster.name.value = "c005-DC10-FW1-DC10-FW2-ha-prod"
         dedicated_fws = [MagicMock(id="virt-1"), MagicMock(id="virt-2")]
         gen._ensure_dedicated_device_pair = AsyncMock(return_value=(dedicated_cluster, dedicated_fws))
 
         await gen.generate(_dc_payload_with_parent(customer_id="cust-1", dedicated_firewall=True))
 
         target = gen._ensure_transit_legs.call_args.kwargs["target"]
-        assert target.context_name("PROD") == f"{dedicated_cluster.name.value}-context"
+        assert target.context_name("PROD") == "c005-DC10-FW1-DC10-FW2-prod"
+        # The HA domain and its context are two nodes of one generic: they never share a name.
+        assert target.context_name("PROD") != dedicated_cluster.name.value
         assert (target.cluster_id, target.tenant_id, target.track) == ("dedicated-cluster-1", "cust-1", True)
         assert target.devices == dedicated_fws
 
@@ -300,7 +303,7 @@ class TestFirewallContextProvisioning:
         gen, _, cluster = self._make_gen_with_cluster()
         cluster.capabilities.peers = [MagicMock(id="fw-1"), MagicMock(id="fw-2")]
         gen._ensure_dedicated_device_pair = AsyncMock(return_value=None)
-        virtual = {"id": "virt-1", "name": "DC10-FW0-C001-p-dedicated", "kind": "DcimVirtualDevice"}
+        virtual = {"id": "virt-1", "name": "c001-DC10-FW0-prod", "kind": "DcimVirtualDevice"}
         fw2 = _fw_device(id="fw-2", name="DC10-FW2")
         fw1 = _fw_device(id="fw-1", name="DC10-FW1")
 
@@ -526,7 +529,7 @@ class TestEnsureDedicatedDevicePair:
             parent_id="dc-1",
             parent_name="DC10",
             dc_design=None,
-            customer_name="C005",
+            name_parts=("c005", "prod"),
         )
         assert result is None
         gen.logger.error.assert_called_once()
@@ -548,7 +551,7 @@ class TestEnsureDedicatedDevicePair:
             parent_id="dc-1",
             parent_name="DC10",
             dc_design="M",
-            customer_name="C005",
+            name_parts=("c005", "prod"),
         )
 
         assert result is None
@@ -570,7 +573,7 @@ class TestEnsureDedicatedDevicePair:
             parent_id="dc-1",
             parent_name="DC10",
             dc_design="M",
-            customer_name="C005",
+            name_parts=("c005", "prod"),
         )
 
         assert result is None
@@ -592,7 +595,7 @@ class TestEnsureDedicatedDevicePair:
             parent_id="dc-1",
             parent_name="DC10",
             dc_design="M",
-            customer_name="C005",
+            name_parts=("c005", "prod"),
         )
 
         assert result is None
@@ -610,8 +613,8 @@ class TestEnsureDedicatedDevicePair:
         virt1, virt2 = MagicMock(id="virt-1"), MagicMock(id="virt-2")
         virt1.hosting_device.id = "fw-1"
         virt2.hosting_device.id = "fw-2"
-        virt1.name.value = "DC10-FW1-DC10-FW2-C005-dedicated-DC10-FW1"
-        virt2.name.value = "DC10-FW1-DC10-FW2-C005-dedicated-DC10-FW2"
+        virt1.name.value = "c005-DC10-FW1-prod"
+        virt2.name.value = "c005-DC10-FW2-prod"
         dedicated_cluster = MagicMock(id="dedicated-cluster-1")
 
         gen.client.filters = AsyncMock(
@@ -630,7 +633,7 @@ class TestEnsureDedicatedDevicePair:
             parent_id="dc-1",
             parent_name="DC10",
             dc_design="M",
-            customer_name="C005",
+            name_parts=("c005", "prod"),
         )
 
         assert result == (dedicated_cluster, [virt1, virt2])
@@ -638,6 +641,32 @@ class TestEnsureDedicatedDevicePair:
         gen._ensure_ha_pairs.assert_awaited_once()
         assert gen._ensure_ha_pairs.call_args.kwargs["ha_kind"] == "ManagedFirewallHA"
         assert "tenant_id" not in gen._ensure_ha_pairs.call_args.kwargs
+
+    @pytest.mark.asyncio
+    async def test_members_and_ha_carry_the_owner_once_in_front_and_the_environment_class_last(self) -> None:
+        """`{owner}-{physical}-{class}` per member, `{owner}-{first}-{second}-{class}` for the HA domain."""
+        gen = self._make_gen()
+        virt1, virt2 = MagicMock(id="virt-1"), MagicMock(id="virt-2")
+        gen.client.filters = AsyncMock(
+            side_effect=[[MagicMock(id="tmpl-1")], [virt1, virt2], [MagicMock(id="dedicated-cluster-1")]]
+        )
+        gen.create_devices = AsyncMock(side_effect=[["c005-DC10-FW1-non-prod"], ["c005-DC10-FW2-non-prod"]])
+
+        await gen._ensure_dedicated_device_pair(
+            role="firewall",
+            ha_kind="ManagedFirewallHA",
+            physical_devices=list(reversed(self._physical_pair())),
+            parent_id="dc-1",
+            parent_name="DC10",
+            dc_design="M",
+            name_parts=("c005", "non-prod"),
+        )
+
+        assert [call.kwargs["options"]["name_override"] for call in gen.create_devices.await_args_list] == [
+            "c005-DC10-FW1-non-prod",
+            "c005-DC10-FW2-non-prod",
+        ]
+        assert gen._ensure_ha_pairs.call_args.kwargs["ha_name"] == "c005-DC10-FW1-DC10-FW2-ha-non-prod"
 
     @pytest.mark.asyncio
     async def test_load_balancer_pair_uses_the_lb_template_and_ha_kind(self) -> None:
@@ -669,7 +698,7 @@ class TestEnsureDedicatedDevicePair:
             parent_id="dc-1",
             parent_name="DC10",
             dc_design="M",
-            customer_name="C005",
+            name_parts=("c005", "prod"),
         )
 
         assert (
@@ -693,7 +722,7 @@ class TestLoadbalancerContextTarget:
     def _make_gen(self) -> Any:
         gen = make_generator(CustomerDeploymentDCExchangeGenerator)
         cluster = MagicMock(id="lb-cluster-1")
-        cluster.name.value = "DC10-LB1-LB2-ha"
+        cluster.name.value = "DC10-LB1-LB2"
         cluster.capabilities.peers = [MagicMock(id="lb-1"), MagicMock(id="lb-2")]
         gen.client.filters = AsyncMock(return_value=[cluster])
         gen._ensure_transit_legs = AsyncMock()
@@ -711,8 +740,8 @@ class TestLoadbalancerContextTarget:
 
         (target,) = self._lb_targets(gen)
         assert (target.cluster_id, target.tenant_id, target.track) == ("lb-cluster-1", None, False)
-        assert target.context_name("PROD") == "DC10-LB1-LB2-ha-PROD"
-        assert target.context_name("NON-PROD") == "DC10-LB1-LB2-ha-NON-PROD"
+        assert target.context_name("PROD") == "shared-DC10-LB1-LB2-prod"
+        assert target.context_name("NON-PROD") == "shared-DC10-LB1-LB2-non-prod"
         assert gen.client.filters.call_args.kwargs["capabilities__ids"] == ["lb-1"]
         assert gen.client.filters.call_args.kwargs["kind"].__name__ == "ManagedLoadbalancerHA"
 
@@ -731,7 +760,7 @@ class TestLoadbalancerContextTarget:
     async def test_dedicated_request_builds_the_pair_and_a_tracked_tenant_context(self) -> None:
         gen = self._make_gen()
         dedicated_cluster = MagicMock(id="ded-lb-cluster")
-        dedicated_cluster.name.value = "DC10-LB1-C005-p-dedicated-DC10-LB2-C005-p-dedicated-ha"
+        dedicated_cluster.name.value = "c005-DC10-LB1-DC10-LB2-ha-prod"
         dedicated_lbs = [MagicMock(id="virt-1"), MagicMock(id="virt-2")]
         gen._ensure_dedicated_device_pair = AsyncMock(return_value=(dedicated_cluster, dedicated_lbs))
 
@@ -744,11 +773,12 @@ class TestLoadbalancerContextTarget:
             parent_id="dc10-id",
             parent_name="DC10",
             dc_design="M",
-            customer_name="C005-p",
+            name_parts=("c005", "prod"),
         )
         (target,) = self._lb_targets(gen)
         assert (target.cluster_id, target.tenant_id, target.track) == ("ded-lb-cluster", "cust-1", True)
-        assert target.context_name("PROD") == f"{dedicated_cluster.name.value}-context"
+        assert target.context_name("PROD") == "c005-DC10-LB1-DC10-LB2-prod"
+        assert target.context_name("PROD") != dedicated_cluster.name.value
         assert target.devices == dedicated_lbs
 
     @pytest.mark.asyncio
@@ -757,7 +787,7 @@ class TestLoadbalancerContextTarget:
         gen = self._make_gen()
         lb_cluster = gen.client.filters.return_value[0]
         fw_cluster = MagicMock(id="fw-cluster-1")
-        fw_cluster.name.value = "DC10-FW1-ha"
+        fw_cluster.name.value = "DC10-FW1"
         fw_cluster.capabilities.peers = [MagicMock(id="fw-1")]
         gen.client.filters = AsyncMock(
             side_effect=lambda **kwargs: [fw_cluster if kwargs["kind"].__name__ == "ManagedFirewallHA" else lb_cluster]

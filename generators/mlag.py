@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
-from contextlib import AbstractAsyncContextManager
 from typing import TYPE_CHECKING, Any
 
 from infrahub_sdk.protocols import CoreIPPrefixPool
@@ -12,12 +10,14 @@ if TYPE_CHECKING:
     import logging
 
     from infrahub_sdk import InfrahubClient
+    from .connections import CablingMixin
+    from .pools import PoolMixin
 
 from utils.limits import MLAG_CONTROL_IPV4_POOL, MLAG_CONTROL_IPV6_POOL
 
 from .connections import tracked_save_kwargs
 from .helpers import get_lag_name, get_loopback_name
-from .helpers.cable_attributes import RackPosition, cable_attributes, endpoint_label
+from .helpers.cable_attributes import cable_attributes, endpoint_label
 from .protocols import (
     DcimCable,
     DcimLAGInterface,
@@ -60,10 +60,12 @@ class MLAGWiringMixin:
 
     client: InfrahubClient
     logger: logging.Logger
-    # Callable attributes, not stub methods, so they never shadow the real ones via the MRO.
-    upsert_p2p_addresses: Callable[..., Awaitable[list[Any]]]
-    _cable_layouts: Callable[..., Awaitable[dict[str, RackPosition | None]]]
-    resource_lock: Callable[[str], AbstractAsyncContextManager[None]]
+    # Type checking only: the real members of the host's other bases, aliased so nothing is defined at runtime and
+    # nothing shadows them in the MRO.
+    if TYPE_CHECKING:
+        _cable_layouts = CablingMixin._cable_layouts
+        resource_lock = PoolMixin.resource_lock
+        upsert_p2p_addresses = CablingMixin.upsert_p2p_addresses
 
     async def ensure_mlag_wiring(
         self, mlag_obj: Any, mlag_name: str, *, member_ids: list[str], track: bool = True

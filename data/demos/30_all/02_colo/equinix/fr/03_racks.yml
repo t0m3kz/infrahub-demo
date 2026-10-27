@@ -26,12 +26,12 @@ spec:
                 - shortname: fr2-s1-r-1
                   index: 1
                   row_index: 1
-                  pod: FR2
+                  deployment: FR2
                   member_of_groups: [topologies_rack]
                 - shortname: fr2-s1-r-2
                   index: 2
                   row_index: 1
-                  pod: FR2
+                  deployment: FR2
                   member_of_groups: [topologies_rack]
     - name: FR6
       shortname: fr6
@@ -50,10 +50,10 @@ spec:
                 - shortname: fr6-s1-r-1
                   index: 1
                   row_index: 1
-                  pod: FR6
+                  deployment: FR6
                   member_of_groups: [topologies_rack]
                 - shortname: fr6-s1-r-2
                   index: 2
                   row_index: 1
-                  pod: FR6
+                  deployment: FR6
                   member_of_groups: [topologies_rack]

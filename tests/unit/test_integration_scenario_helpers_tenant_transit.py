@@ -1,5 +1,6 @@
 """Unit tests for the tenant services, VLAN domain and transit inventory helpers of the integration scenarios."""
 
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -186,24 +187,65 @@ async def test_fetch_vlan_domain_segments_filtered_declares_and_uses_variable() 
     assert client.execute_graphql.await_args.kwargs["variables"] == {"segment_id": ["seg-1"]}
 
 
-def _context(name: str, *, tenant: str | None = None, dcs: tuple[str, ...] = (), served: tuple[str, ...] = ()) -> dict:
+def _context(
+    name: str,
+    *,
+    tenant: str | None = None,
+    dcs: tuple[str, ...] = (),
+    served: tuple[str, ...] = (),
+    namespaces: tuple[str, ...] = ("PROD", "INTERNET", "MANAGEMENT"),
+) -> dict:
     """One inventory context as fetch_transit_inventory returns it (only the keys the matcher reads)."""
-    return {"name": name, "tenant": tenant, "cluster_dcs": list(dcs), "served": [{"name": n} for n in served]}
+    return {
+        "name": name,
+        "tenant": tenant,
+        "cluster_dcs": list(dcs),
+        "served": [{"name": n} for n in served],
+        "legs": [{"namespace": namespace} for namespace in namespaces],
+    }
 
 
 def test_match_transit_contexts_keys_a_served_colocation_context_by_its_metro() -> None:
-    """A tenant-less, DC-less context serving exactly a metro's deployments is keyed (metro, None)."""
-    fr = _context("fw-fr-shared", served=("C001-P-FR", "C005-P-FR"))
+    """A tenant-less, DC-less context serving a metro's deployments is keyed (metro, namespace, None)."""
+    fr = _context("shared-fw-fr-prod", served=("C001-P-FR", "C005-P-FR"))
     by_key, colocation = match_transit_contexts(
-        [_context("fw-dc10-shared", dcs=("DC10",)), fr],
+        [_context("shared-fw-dc10-prod", dcs=("DC10",)), fr],
         ("DC10",),
         (),
         {"FR": ("C005-P-FR", "C001-P-FR")},
     )
 
-    assert by_key[("FR", None)] is fr
-    assert ("DC10", None) in by_key
+    assert by_key[("FR", "PROD", None)] is fr
+    assert ("DC10", "PROD", None) in by_key
     assert colocation == []
+
+
+def test_match_transit_contexts_keys_a_shared_context_per_tenant_namespace() -> None:
+    """A DC's PROD and NON-PROD shared contexts are two keys, a dedicated one a third."""
+    prod = _context("shared-fw-dc12-prod", dcs=("DC12",))
+    non_prod = _context("shared-fw-dc12-non-prod", dcs=("DC12",), namespaces=("NON-PROD", "INTERNET", "MANAGEMENT"))
+    dedicated = _context("c005-fw-dc12-prod", tenant="C005-P-DC12")
+
+    by_key, unmatched = match_transit_contexts([prod, non_prod, dedicated], ("DC12",), ("C005-P-DC12",))
+
+    assert by_key == {
+        ("DC12", "PROD", None): prod,
+        ("DC12", "NON-PROD", None): non_prod,
+        ("DC12", "PROD", "C005-P-DC12"): dedicated,
+    }
+    assert unmatched == []
+
+
+def test_match_transit_contexts_leaves_a_context_in_no_single_tenant_namespace_unmatched() -> None:
+    """A context with a leg in both PROD and NON-PROD, or a second one for a key, is not keyed."""
+    mixed = _context("fw-dc12-mixed", dcs=("DC12",), namespaces=("PROD", "NON-PROD", "INTERNET"))
+    first = _context("shared-fw-dc12-prod", dcs=("DC12",))
+    second = _context("shared-fw-dc12-prod-again", dcs=("DC12",))
+
+    by_key, unmatched = match_transit_contexts([mixed, first, second], ("DC12",), ())
+
+    assert by_key == {("DC12", "PROD", None): first}
+    assert unmatched == [mixed, second]
 
 
 def test_match_transit_contexts_leaves_an_unmatched_colocation_context_in_the_list() -> None:
@@ -254,3 +296,60 @@ async def test_fetch_transit_inventory_tags_edge_service_ports_like_border_leaf_
         ("p1", "eg-fr201"),
         ("p2", "eg-fr202"),
     ]
+
+
+def test_shared_contexts_of_a_site_are_listed_in_namespace_order_whatever_the_dedicated_ones() -> None:
+    """Dedicated contexts of the site share its (site, namespace) key prefix; sorting must not compare tenants."""
+    from tests.integration.firewall_config_helpers import _shared_contexts
+
+    contexts: dict[tuple[str, str, str | None], dict[str, Any]] = {
+        ("DC12", "PROD", None): {"name": "shared-prod"},
+        ("DC12", "PROD", "C005-P-DC12"): {"name": "dedicated"},
+        ("DC12", "NON-PROD", None): {"name": "shared-non-prod"},
+        ("DC10", "PROD", None): {"name": "other-site"},
+    }
+
+    assert [c["name"] for c in _shared_contexts(contexts, "DC12")] == ["shared-non-prod", "shared-prod"]
+
+
+_CHECKPOINT_TWO_CONTEXTS = """!
+add virtual-system name ctx-np
+set interface eth1.1 security-zone NONPROD-ZONE
+set virtual-system ctx-np interface eth1.1
+set virtual-system ctx-np
+mgmt_cli add host name "SNAT-ctx-np" ip-address "192.0.2.3"
+add virtual-system name ctx-p
+set virtual-system ctx-p interface eth1.2
+set virtual-system ctx-p
+!
+! --- Zone isolation ---
+set virtual-system ctx-np
+add access-rule layer "Network" position top name "deny-MANAGEMENT-ZONE-to-NONPROD-ZONE"
+!
+set virtual-system ctx-p
+add access-rule layer "Network" position top name "deny-MANAGEMENT-ZONE-to-PROD-ZONE"
+!
+set cluster mode HighAvailability
+"""
+
+
+def test_context_lines_of_a_check_point_member_hold_only_that_virtual_systems_rules() -> None:
+    """A member renders every context of its cluster; a rule is the context's when it follows its header."""
+    from tests.integration.firewall_config_helpers import _context_lines
+
+    non_prod = _context_lines(_CHECKPOINT_TWO_CONTEXTS, "checkpoint_gaia", "ctx-np")
+    prod = _context_lines(_CHECKPOINT_TWO_CONTEXTS, "checkpoint_gaia", "ctx-p")
+
+    assert "deny-MANAGEMENT-ZONE-to-NONPROD-ZONE" in non_prod
+    assert "deny-MANAGEMENT-ZONE-to-PROD-ZONE" not in non_prod
+    assert "deny-MANAGEMENT-ZONE-to-PROD-ZONE" in prod
+    assert "deny-MANAGEMENT-ZONE-to-NONPROD-ZONE" not in prod
+    assert "set cluster mode HighAvailability" not in prod
+
+
+def test_context_lines_of_a_pan_os_member_are_the_lines_of_its_vsys() -> None:
+    from tests.integration.firewall_config_helpers import _context_lines
+
+    rendered = "set vsys a rulebase x deny-1\nset vsys ab rulebase x deny-2\nset vsys a zone z"
+
+    assert _context_lines(rendered, "paloalto_panos", "a") == "set vsys a rulebase x deny-1\nset vsys a zone z"

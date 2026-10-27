@@ -250,7 +250,7 @@ query RackGenerator($name: String) {
             }
           }
         }
-        pod {
+        deployment {
           node {
             ...PodFields
           }

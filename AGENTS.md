@@ -391,6 +391,19 @@ class MyCheck(InfrahubCheck):
   `String`, and a query that selects that field across kinds is then refused at repository sync ("Fields ... conflict");
   narrow to a generic instead (`TopologyProviderHosting` for an appliance's deployment). `invoke validate-queries`
   does not see that conflict: the repository sync of `test-integration-fast` does.
+- **What a deployment hosts is typed by its kind**: a device's `deployment` is its host's, and each kind of host has a generic
+  of its own, so the picker and the schema refuse the rest. `TopologyDeviceHosting` (DC, pod, colocation zone, office,
+  external provider, cloud region for the provider routers) lists the physical devices and controllers;
+  `TopologyProviderHosting` (virtual colocation, customer cloud) lists its `appliances` (`CloudNetworkAppliance`, identifier
+  `topology__appliances`); `TopologyCloudHosting` (customer cloud) lists its `instances` (`CloudInstance`, the EC2 of the
+  tenant). A virtual device keeps `deployment` on the `TopologyDeployment` generic: it runs for a customer footprint. The
+  colocation metro hosts nothing and cables nothing. `LocationRack.deployment` (peer `TopologyRackHosting`: a pod or a colocation
+  zone) is named like the device one, and pairs with `TopologyRackHosting.racks`.
+- **Service context and HA names**: lowercase, the owner or `shared` first, the tenant namespace class (`prod`, `non-prod`) last.
+  A shared firewall or load-balancer context is one per (cluster, tenant namespace): `shared-{cluster}-{class}` on the physical
+  HA `{first}-{second}`, so PROD and NON-PROD never meet on one context. A dedicated pair is `{owner}-{first}-{second}-ha-{class}`
+  (HA domain) with the context `{owner}-{first}-{second}-{class}` on it, its members `{owner}-{physical}-{class}`. The HA and the
+  context are nodes of one generic and the server resolves an upsert by name, so they never share one.
 - **Capability edges**: a capability reaches devices via `ManagedGenericDevice` and interfaces via
   `ManagedGenericInterfaces`. Inherit the second only when something reads the interface edge.
 
@@ -1383,7 +1396,7 @@ spec:
 ```
 
 A generated VIP is referenced by its HFID `[load_balancer__name__value, hostname, protocol, port]`, where the
-load balancer is the `ManagedLoadbalancerContext` (for example `["DC10-LB1-LB2-ha-PROD", "api.payment-core.c005.demo.local", "tcp", "443"]`).
+load balancer is the `ManagedLoadbalancerContext` (for example `["shared-lb-dc10101-lb-dc10102-prod", "api.payment-core.c005.demo.local", "tcp", "443"]`).
 
 ### Range Expansion
 

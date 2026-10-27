@@ -104,7 +104,7 @@ class EndpointRackData(TypedDict, total=False):
     index: int
     row_index: int
     rack_type: str
-    pod: EndpointPodData
+    deployment: EndpointPodData
 
 
 class EndpointBondData(TypedDict):
@@ -208,9 +208,9 @@ class EndpointConnectivityGenerator(
 
         rack = self.data["rack"]
         assert rack is not None
-        pod = rack.get("pod") or {}
+        pod = rack.get("deployment") or {}
         if "design" not in pod:
-            # Same shape as RackGenerator's guard: LocationRack.pod takes any
+            # Same shape as RackGenerator's guard: LocationRack.deployment takes any
             # TopologyRackHosting peer, and endpoint.gql's PodFields fragment is on
             # TopologyPod, so a colocation cage rack (pod = TopologyColocationZone)
             # arrives as an empty pod dict. There is no fabric to dual-home into —

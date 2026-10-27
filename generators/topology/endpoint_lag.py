@@ -8,8 +8,7 @@ the plain uplink flow.
 from __future__ import annotations
 
 import logging
-from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from netutils.interface import sort_interface_list
 
@@ -20,24 +19,30 @@ from ..protocols import DcimLAGInterface, DcimPhysicalDevice, DcimPhysicalInterf
 from ..types import CablingOptions, ConnectionFingerprint
 from .endpoint_targets import interface_type_of
 
+if TYPE_CHECKING:
+    from ..connections import CablingMixin
+    from ..endpoint import EndpointUplinkMixin
+    from .endpoint_targets import EndpointTargetsMixin
+
 
 class EndpointLagMixin:
     """Mixin wiring a LAG-based endpoint's bond(s) to a switch pair's ManagedMLAG domain.
 
     Expects the host class to provide: ``client``, ``logger``, ``data``, ``planned_connections``,
     ``create_cabling``, ``_resolve_target_interfaces`` (EndpointTargetsMixin), ``_group_by_device``
-    and ``_select_switch_pair`` (EndpointUplinkMixin). The cross-mixin methods are declared as
-    plain Callable attributes, not ``def``s, so they cannot shadow the real ones in the MRO.
+    and ``_select_switch_pair`` (EndpointUplinkMixin). The cross-mixin methods are aliases of the real
+    ones, for the type checker only: nothing is defined at runtime, so nothing shadows them in the MRO.
     """
 
     client: Any
     logger: logging.Logger
     data: Any
     planned_connections: set[ConnectionFingerprint]
-    create_cabling: Callable[..., Awaitable[list[tuple[Any, Any]]]]
-    _resolve_target_interfaces: Callable[[str], Awaitable[list[DcimPhysicalInterface]]]
-    _group_by_device: Callable[[list[DcimPhysicalInterface]], dict[str, list[DcimPhysicalInterface]]]
-    _select_switch_pair: Callable[[list[str]], list[str]]
+    if TYPE_CHECKING:
+        _group_by_device = EndpointUplinkMixin._group_by_device
+        _resolve_target_interfaces = EndpointTargetsMixin._resolve_target_interfaces
+        _select_switch_pair = EndpointUplinkMixin._select_switch_pair
+        create_cabling = CablingMixin.create_cabling
 
     async def _process_lag_endpoint_connections(
         self, members_by_bond: dict[str, list[DcimPhysicalInterface]], deployment_type: str

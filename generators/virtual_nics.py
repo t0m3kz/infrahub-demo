@@ -19,7 +19,8 @@ from .protocols import DcimPhysicalInterface, DcimVirtualInterface
 
 if TYPE_CHECKING:
     import logging
-    from collections.abc import Callable
+
+    from .common import CommonGenerator
 
 # The roles of the base NICs a virtual template provides; a context sub-interface (role service) is not one.
 PINNED_ROLES = ("management", "uplink", "ha")
@@ -52,7 +53,8 @@ class VirtualNicMixin:
     client: Any
     logger: logging.Logger
     # CommonGenerator._retry_delay — annotation only, no method body.
-    _retry_delay: Callable[..., float]
+    if TYPE_CHECKING:
+        _retry_delay = staticmethod(CommonGenerator._retry_delay)
 
     async def _pin_virtual_nics(self, devices: list[Any], host_id: str) -> None:
         """Set host_interface of every base NIC of devices to a port of the device host_id.

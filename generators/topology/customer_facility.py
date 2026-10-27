@@ -11,12 +11,14 @@ generators/firewall_context.py's FirewallContextMixin, one run per ContextSpec.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from utils.data_cleaning import clean_data
 
 from ..firewall_context import FirewallContextMixin
+
+if TYPE_CHECKING:
+    from ..devices import DeviceMixin
 
 
 class CustomerFacilityMixin(FirewallContextMixin):
@@ -33,7 +35,8 @@ class CustomerFacilityMixin(FirewallContextMixin):
     _parent_required: bool = True
 
     # Provided by DeviceMixin.
-    set_controllers_from: Callable[[Mapping[str, Any]], None]
+    if TYPE_CHECKING:
+        set_controllers_from = DeviceMixin.set_controllers_from
 
     async def generate(self, data: dict[str, Any]) -> None:
         kind = self._customer_kind

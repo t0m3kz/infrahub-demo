@@ -4,7 +4,7 @@ The kit of a virtual colocation is its CloudNetworkAppliances, created by genera
 the presence's `fabric_templates`. Everything that is ordered lives on the appliance itself (service code, package
 code, software version, vCPUs, term), copied from its template when the generator created it. An appliance is a single
 Equinix device, an edge router included: no redundancy is expressed for routers. Only firewalls are paired, as the two
-members of one ManagedFirewallHA domain (mode `active-passive`) named `{first}-{second}-ha`, linked through the
+members of one ManagedFirewallHA domain (mode `active-passive`) named `{first}-{second}`, linked through the
 appliances' `capabilities` edge; that pair is one Equinix cluster. The `fabric_templates` entries are read for role and
 quantity only, to refuse a presence whose generator stopped midway.
 
@@ -143,7 +143,7 @@ def normalise_virtual_colocation(cleaned: dict[str, Any]) -> dict[str, Any]:
     if not metro.get("name") or not operator:
         raise ValueError(f"{vc_name}: has no parent metro with a colocation operator above it")
 
-    devices = cleaned_vc.get("devices") or []
+    devices = cleaned_vc.get("appliances") or []
     for device in devices:
         if device.get("typename") != _APPLIANCE_KIND:
             raise ValueError(

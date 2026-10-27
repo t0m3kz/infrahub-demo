@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
-from contextlib import AbstractAsyncContextManager
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import logging
+    from .pools import PoolMixin
 
 from utils.limits import WAIT_FOR_PEER_GENERATOR
 
@@ -60,8 +59,10 @@ class RoutingMixin(SharedRoutingObjectsMixin):
     logger: logging.Logger
     deployment_id: str
     fabric_name: str
-    # PoolMixin.resource_lock — a Callable attribute, not a stub, so it never shadows the real one.
-    resource_lock: Callable[[str], AbstractAsyncContextManager[None]]
+    # Type checking only: the real members of the host's other bases, aliased so nothing is defined at runtime and
+    # nothing shadows them in the MRO.
+    if TYPE_CHECKING:
+        resource_lock = PoolMixin.resource_lock
 
     async def create_routing(
         self,

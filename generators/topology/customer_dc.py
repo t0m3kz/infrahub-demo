@@ -7,8 +7,10 @@ A DC customer's segments live on the fabric's own L2 domain; what this
 generator adds is the customer's place on the parent DC's firewall and
 load-balancer pairs (FirewallContextMixin, generators/firewall_context.py):
 
-* a FirewallContext (vsys) on the DC's ManagedFirewallHA cluster: ONE
-  shared context per cluster (tenant unset) reused by every customer, or, when
+* a FirewallContext (vsys) on the DC's ManagedFirewallHA cluster: one
+  shared context per (cluster, tenant namespace), `shared-{cluster}-prod` /
+  `shared-{cluster}-non-prod` (tenant unset), reused by every customer of
+  that namespace, or, when
   the footprint's design (TopologyCustomerTemplateDC) sets dedicated_firewall,
   a dedicated virtual pair hosted on the physical peers with this customer as
   tenant;
@@ -17,8 +19,8 @@ load-balancer pairs (FirewallContextMixin, generators/firewall_context.py):
   MANAGEMENT), joined by a TopologyRoutedExchange `{context}-{A}-{Z}` per pair
   (never PROD <-> NON-PROD; see docs/exchange_gateway.md);
 * a LoadbalancerContext (partition) on the DC's ManagedLoadbalancerHA cluster:
-  one shared context per (cluster, tenant namespace), `{cluster}-PROD` /
-  `{cluster}-NON-PROD`, or a dedicated virtual pair when the design sets
+  one shared context per (cluster, tenant namespace), `shared-{cluster}-prod` /
+  `shared-{cluster}-non-prod`, or a dedicated virtual pair when the design sets
   dedicated_loadbalancer; one-arm, so a single leg in the tenant VRF and a
   routed VIP /26 (context.vip_prefix);
 * the footprint's serving_firewall_context and serving_loadbalancer_context

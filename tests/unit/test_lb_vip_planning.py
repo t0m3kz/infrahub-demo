@@ -95,12 +95,15 @@ def test_identifiers_follow_the_contract() -> None:
 
 
 def test_application_query_reads_the_serving_context_of_instances_and_targets(root_dir: Path) -> None:
-    """Both device kinds carry the path; the dependency targets read it through the same fragment."""
+    """Only a virtual device (it runs for a customer footprint) carries the path; the dependency targets read it
+    through the same fragment."""
     query = (root_dir / "queries/topology/add/application.gql").read_text()
     fragment = query.split("fragment AppInstanceFields", 1)[1].split("fragment AppComponentSecurityFields", 1)[0]
-    assert fragment.count("serving_loadbalancer_context") == 2
-    assert fragment.count("vip_prefix { node { id ip_namespace { node { id } } } }") == 2
-    assert fragment.count("ip_address { node { ip_prefix { node { id } } } }") == 2
+    assert fragment.count("serving_loadbalancer_context") == 1
+    assert fragment.count("vip_prefix { node { id ip_namespace { node { id } } } }") == 1
+    assert fragment.count("ip_address { node { ip_prefix { node { id } } } }") == 1
+    physical = fragment.split("... on DcimPhysicalDevice", 1)[1].split("... on DcimVirtualDevice", 1)[0]
+    assert "serving_loadbalancer_context" not in physical
     target = query.split("target {", 1)[1]
     assert "load_balanced { value }" in target
     assert "instances { edges { node { ...AppInstanceFields } } }" in target

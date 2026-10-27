@@ -26,5 +26,5 @@ spec:
                 - shortname: mcr-ams1-s1-r-1
                   index: 1
                   row_index: 1
-                  pod: MCR-AMS1
+                  deployment: MCR-AMS1
                   member_of_groups: [topologies_rack]

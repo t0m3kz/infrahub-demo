@@ -84,7 +84,7 @@ class TestGenerateGuardClauses:
         """
         gen = _make_generator()
 
-        await gen.generate(_endpoint_data(rack={"id": "rack-1", "name": "NY1-NY1-R1-1", "pod": {}}))
+        await gen.generate(_endpoint_data(rack={"id": "rack-1", "name": "NY1-NY1-R1-1", "deployment": {}}))
 
         gen.client.get.assert_not_awaited()
         gen.client.filters.assert_not_awaited()
@@ -93,7 +93,7 @@ class TestGenerateGuardClauses:
 
     @pytest.mark.asyncio
     async def test_rack_without_pod_returns_without_error(self) -> None:
-        """Same guard covers a rack whose `pod` relationship is unset."""
+        """Same guard covers a rack whose `deployment` relationship is unset."""
         gen = _make_generator()
 
         await gen.generate(_endpoint_data(rack={"id": "rack-1", "name": "ORPHAN-RACK"}))

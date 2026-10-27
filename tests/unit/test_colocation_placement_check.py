@@ -733,7 +733,7 @@ class TestTerraformOrderData:
             **AM_NE,
             "infrastructure_orchestrator": {"value": orchestrator},
             "account": self._account() if account is None else account,
-            "devices": _edges(_pair() if devices is None else devices),
+            "appliances": _edges(_pair() if devices is None else devices),
             "parent": {
                 "node": {
                     "id": "m-am",

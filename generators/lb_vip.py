@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable
-from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass, field
 from ipaddress import ip_network
 from pathlib import Path
@@ -61,6 +60,11 @@ _SERVING_CONTEXTS_QUERY = _QUERIES / "lb_serving_contexts.gql"
 
 if TYPE_CHECKING:
     import logging
+
+    from .common import CommonGenerator
+    from .connections import CablingMixin
+    from .pools import PoolMixin
+    from .segment_firewall import SegmentFirewallMixin
 
 Edge = tuple[dict[str, Any], dict[str, Any], dict[str, Any]]
 
@@ -139,13 +143,14 @@ class LoadbalancerVipMixin:
 
     client: Any
     logger: logging.Logger
-    wait_for_parent_generators: Callable[..., Awaitable[bool]]
-    resource_lock: Callable[[str], AbstractAsyncContextManager[None]]
-    ensure_prefix_address_pool: Callable[..., Awaitable[Any]]
-    allocate_prefix_address: Callable[..., Awaitable[str | None]]
-    upsert_ip_address: Callable[..., Awaitable[Any]]
+    if TYPE_CHECKING:
+        _upsert_policy_rule = SegmentFirewallMixin._upsert_policy_rule
+        allocate_prefix_address = CablingMixin.allocate_prefix_address
+        ensure_prefix_address_pool = CablingMixin.ensure_prefix_address_pool
+        resource_lock = PoolMixin.resource_lock
+        upsert_ip_address = CablingMixin.upsert_ip_address
+        wait_for_parent_generators = CommonGenerator.wait_for_parent_generators
     _get_or_create_by_name: Callable[..., Awaitable[Any]]
-    _upsert_policy_rule: Callable[..., Awaitable[int | None]]
 
     # Between two re-reads (_poll_until_ready); tests replace it.
     lb_reread_sleep = staticmethod(asyncio.sleep)

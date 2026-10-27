@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 from utils.limits import RULE_SAVE_ATTEMPTS
 from utils.ports import PortSpec
@@ -16,6 +16,8 @@ from .protocols import SecurityPolicy, SecurityPolicyRule, SecuritySecurityProfi
 
 if TYPE_CHECKING:
     import logging
+
+    from .common import CommonGenerator
 
 # Starting rule index - leaves room below 100 for manually-crafted high-priority rules
 RULE_INDEX_START = 100
@@ -69,7 +71,8 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
 
     client: Any
     logger: logging.Logger
-    _safe_rel_add: Callable[..., Any]
+    if TYPE_CHECKING:
+        _safe_rel_add = staticmethod(CommonGenerator._safe_rel_add)
 
     # policy id -> {rule name: rule}, as _read_policy_rules last read it (the selectors included). Valid only
     # while the policy is in the caller's rule_indexes: whoever drops it from there (lb_vip re-reads under its

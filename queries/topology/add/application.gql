@@ -34,9 +34,9 @@ fragment SegmentSecurityFields on ManagedNetworkSegment {
 # instances are served by, with those instances as pool members
 # (generators/lb_vip.py). The context's leg /29 is the prefix of the addresses
 # on its member sub-interfaces (`capabilities`; the border service port it also
-# tags has no address). The two device kinds carry `deployment` each, so the
-# block is spelled out per kind (plain fields: a named spread inside an inline
-# fragment would not resolve). A cloud instance has no deployment: a
+# tags has no address). Only a virtual device carries the customer footprint as its
+# `deployment`; a physical host is deployed to its DC, pod or zone (a TopologyDeviceHosting) and has no
+# serving context. A cloud instance's `deployment` is its customer cloud footprint, which has none either: a
 # load_balanced component of cloud instances gets a CloudLoadBalancer in the
 # virtual network of their subnets, with their private_ip, in the namespace of
 # the CIDR block holding it, as pool members.
@@ -46,24 +46,7 @@ fragment AppInstanceFields on AppInstance {
   __typename
   ... on DcimPhysicalDevice {
     role { value }
-    deployment {
-      node {
-        id
-        __typename
-        ... on TopologyCustomerDC {
-          serving_loadbalancer_context {
-            node {
-              id
-              name { value }
-              vip_prefix { node { id ip_namespace { node { id } } } }
-              capabilities {
-                edges { node { __typename ... on DcimVirtualInterface { ip_address { node { ip_prefix { node { id } } } } } } }
-              }
-            }
-          }
-        }
-      }
-    }
+    deployment { node { id __typename } }
   }
   ... on DcimVirtualDevice {
     role { value }

@@ -424,6 +424,8 @@ nodes:
       - TopologyCustomer
       - TopologyOrchestratorScoped
       - TopologyDeployment
+      - TopologyCloudHosting
+      - TopologyProviderHosting
       - TopologyConnectableLocation
     parent: TopologyCloudRegion
     children: ""
