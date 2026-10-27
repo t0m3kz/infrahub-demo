@@ -301,22 +301,7 @@
                                 }
                               },
                               "destination_segment": {
-                                "node": {
-                                  "id": "seg-internet",
-                                  "name": {
-                                    "value": "internet"
-                                  },
-                                  "security_zone": {
-                                    "node": {
-                                      "name": {
-                                        "value": "INTERNET-ZONE"
-                                      }
-                                    }
-                                  },
-                                  "gateway": {
-                                    "node": null
-                                  }
-                                }
+                                "node": null
                               },
                               "source_prefixes": {
                                 "edges": []
@@ -329,6 +314,13 @@
                               },
                               "destination_ip_addresses": {
                                 "edges": []
+                              },
+                              "destination_zone": {
+                                "node": {
+                                  "name": {
+                                    "value": "INTERNET-ZONE"
+                                  }
+                                }
                               }
                             }
                           }

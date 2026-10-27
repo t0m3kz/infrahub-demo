@@ -134,7 +134,7 @@ class TestUnreachableDestinations:
         assert _unreachable(_run([_dest_rule("r", "not-a-prefix")])) == []
 
     def test_a_rule_without_destination_prefixes_is_not_checked(self) -> None:
-        """A destination_segment rule (the internet segment, a tenant segment) has no prefix to reach."""
+        """A destination_segment or destination_zone rule (a tenant segment, the internet) has no prefix to reach."""
         rule = _rule("r", "src", "other")
         assert _unreachable(_run([rule], [_segment("other", prefix="10.9.0.0/24")])) == []
 

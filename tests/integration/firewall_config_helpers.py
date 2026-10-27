@@ -42,7 +42,7 @@ SCENARIO_NAME = "Scenario 30_all: Colo Cloud/Partner/SaaS Zone Policy"
 
 # The destination CIDRs of the prefix-selector rules of 07_zone_policies/05_security_policy.yml: the AWS rule's
 # VPC block (06_customer_boarding/c001/cloud) and the Acme extranet range (07_zone_policies/01_partner_tunnel.yml). The
-# Zscaler rule names the Internet segment, so it has no CIDR to render.
+# Zscaler rule names the internet zone, so it has no CIDR to render.
 EXPECTED_DESTINATION_CIDRS = ("10.10.0.0/16", "198.18.0.0/24")
 
 
@@ -53,23 +53,33 @@ EXPECTED_RULE_NAMES = ("nordix-prod-to-aws", "nordix-prod-to-partner-acme", "nor
 
 
 # The policy's source segment -> its colocation deployment -> the serving
-# context's HA cluster, plus the firewalls of the serving zone the deployment names.
+# contexts' HA clusters (one per zone of its metro with firewalls), plus the firewalls of the metro's zones.
 SOURCE_SEGMENT = "c001-nordix-prod-p"
 
 SERVING_CLUSTER_QUERY = """
 query ($segment: String!) {
-  ManagedVlanSegment(name__value: $segment) {
+  ManagedVxlanSegment(name__value: $segment) {
     edges {
       node {
-        customer_deployment {
-          node {
-            ... on ManagedTenantScoped {
-              serving_firewall_context { node { name { value } cluster { node { id } } } }
-            }
-            ... on TopologyCustomerColocation {
-              serving_zone {
-                node {
-                  devices(role__value: "firewall") { edges { node { name { value } } } }
+        customer_deployments {
+          edges {
+            node {
+              ... on TopologyCustomerColocation {
+                serving_firewall_contexts { edges { node { name { value } cluster { node { id } } } } }
+                parent {
+                  node {
+                    ... on TopologyColocationMetro {
+                      children {
+                        edges {
+                          node {
+                            ... on TopologyColocationZone {
+                              devices(role__value: "firewall") { edges { node { name { value } } } }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -91,16 +101,14 @@ query {
 """
 
 
-# A segment's prefix and its VLAN on each switch. A VLAN segment has one
-# vlan_id everywhere; a VXLAN segment's VLAN is local to each VLAN domain (an
-# MLAG pair, whose capabilities are its members, or a switch on its own),
-# and its prefix is allocated by add_vxlan_segment, so neither is typed here.
+# A segment's prefix and its VLAN on each switch. A segment's VLAN is local to each VLAN domain (an MLAG pair, whose
+# capabilities are its members, or a switch on its own), and its prefix is allocated by add_vxlan_segment (or
+# authored), so neither is typed here.
 SEGMENT_QUERY = """
 query ($name: String!) {
   ManagedNetworkSegment(name__value: $name) {
     edges {
       node {
-        ... on ManagedVlanSegment { vlan_id { value } }
         ... on ManagedVxlanSegment {
           segment_deployments {
             edges {
@@ -140,14 +148,12 @@ class _SegmentOnSwitches:
     """A segment's gateway prefix and the VLAN it has on each switch, read from the graph."""
 
     prefix: str
-    #: A VLAN segment's one VLAN, on every switch; None for a VXLAN segment.
-    vlan_id: int | None
-    #: A VXLAN segment's VLAN per switch, from its VLAN domain realizations.
+    #: The segment's VLAN per switch, from its VLAN domain realizations.
     vlans_by_device: dict[str, int]
 
     def vlan_on(self, device: str) -> int | None:
         """The segment's VLAN on ``device``; None when the switch has no VLAN for it."""
-        return self.vlans_by_device.get(device, self.vlan_id)
+        return self.vlans_by_device.get(device)
 
 
 async def _segment_on_switches(client: InfrahubClient, branch: str, segment_name: str) -> _SegmentOnSwitches:
@@ -172,12 +178,7 @@ async def _segment_on_switches(client: InfrahubClient, branch: str, segment_name
             vlans_by_device[domain["name"]["value"]] = vlan
         for member in (domain.get("capabilities") or {}).get("edges") or []:
             vlans_by_device[member["node"]["name"]["value"]] = vlan
-    vlan_id = (segment.get("vlan_id") or {}).get("value")
-    return _SegmentOnSwitches(
-        prefix=gateway["ip_prefix"]["node"]["prefix"]["value"],
-        vlan_id=int(vlan_id) if vlan_id is not None else None,
-        vlans_by_device=vlans_by_device,
-    )
+    return _SegmentOnSwitches(prefix=gateway["ip_prefix"]["node"]["prefix"]["value"], vlans_by_device=vlans_by_device)
 
 
 def _has_ip(rendered: str, ip: str) -> bool:

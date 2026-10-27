@@ -2,74 +2,6 @@
 version: "1.0"
 
 nodes:
-  # Traditional 802.1Q VLAN segment.
-  # Single-site by design (customer_deployment is cardinality:one), so the
-  # VLAN ID is a direct attribute — no separate SegmentDeployment realization
-  # record is needed (unlike VxlanSegment, which can stretch across sites).
-  - name: VlanSegment
-    namespace: Managed
-    description: "Traditional 802.1Q VLAN segment"
-    label: VLAN Segment
-    icon: "carbon:network-3"
-    include_in_menu: false
-    inherit_from:
-      - ManagedGeneric
-      - ManagedNetworkSegment
-      - ManagedGenericInterfaces
-    uniqueness_constraints:
-      - [owner, environment__value, customer_name__value]
-    attributes:
-      - name: segment_type
-        kind: Dropdown
-        default_value: vlan
-        read_only: true
-        choices:
-          - name: vlan
-            label: VLAN
-            description: "IEEE 802.1Q VLAN"
-            color: "#7FBF7F"
-      - name: vlan_id
-        kind: Number
-        label: VLAN ID
-        optional: true
-        order_weight: 15
-        description: "Local VLAN ID, set manually (single-site, no pool allocation)."
-        parameters:
-          min_value: 1
-          max_value: 4094
-      - name: terminate_inline
-        kind: Boolean
-        label: Terminate Inline
-        optional: true
-        default_value: false
-        order_weight: 16
-        description: "When true, the inline_service HA pair is the segment's gateway. Leaf is pure L2."
-    relationships:
-      - name: customer_deployment
-        peer: TopologyCustomer
-        cardinality: one
-        kind: Attribute
-        order_weight: 110
-        optional: false
-        identifier: "segment__customer_deployments"
-        description: "Customer deployment footprint this VLAN segment is activated in."
-
-  # A network outside every customer's control (the internet): classified into
-  # a zone and matched by policy rules like any segment. It has an owner (the
-  # Internet pseudo-customer) only because the segment name is computed from it
-  # (org_id == customer_name, so the name is just "internet"); it is never
-  # activated, gatewayed or terminated anywhere.
-  - name: ExternalSegment
-    namespace: Managed
-    description: "Network outside customer control (internet), matched by policy rules"
-    label: External Segment
-    icon: "carbon:cloud"
-    include_in_menu: false
-    inherit_from:
-      - ManagedNetworkSegment
-    uniqueness_constraints:
-      - [owner, environment__value, customer_name__value]
-
   # VXLAN overlay segment with EVPN multi-tenancy.
   # Zero trust: prefix → ip_namespace (VRF+l3_vni+owner) → tenant isolation.
   # For stretched segments, generator behavior is local-pool-first: first
@@ -150,8 +82,7 @@ nodes:
         description: "Customer deployment footprints this VXLAN segment is activated in (stretch across DCs or single-site)."  # yamllint disable-line rule:line-length
         min_count: 1
 
-  # SegmentDeployment: per-DC realization of a VXLAN segment (VlanSegment has
-  # no realization record — its vlan_id is a plain manual attribute).
+  # SegmentDeployment: per-DC realization of a VXLAN segment.
   #
   # Stores the locally-allocated VNI for a segment in a specific data
   # center, from the DC's vni_pool via idempotent allocation. The segment's
@@ -338,31 +269,53 @@ extensions:
           optional: true
           identifier: "network_segment__owner"
           order_weight: 2200
-          description: "VLAN/VXLAN/cloud network segments owned by this customer"
+          description: "VXLAN/cloud network segments owned by this customer"
 
-    # Reverse lookup for VlanSegment.customer_deployment / VxlanSegment.
-    # customer_deployments / CloudNetworkSegment.customer_deployment (all
-    # share this identifier) — lets any TopologyCustomer* deployment find
-    # its own activated segments in one hop.
-    - kind: TopologyCustomer
+    # Reverse lookup for VxlanSegment.customer_deployments / CloudNetworkSegment.customer_deployment (both share this
+    # identifier) — lets a footprint find its own activated segments in one hop. Declared per kind, not on the
+    # TopologyCustomer generic: the segments of a data center, a colocation and an office are VXLAN only and a cloud
+    # footprint's are CloudNetworkSegment, so each peer is the concrete kind.
+    - kind: TopologyCustomerDC
       relationships:
         - name: network_segments
           label: Network Segments
-          peer: ManagedNetworkSegment
+          peer: ManagedVxlanSegment
           kind: Generic
           cardinality: many
           optional: true
           identifier: "segment__customer_deployments"
           order_weight: 2100
-          description: "VLAN/VXLAN/cloud network segments activated in this customer deployment footprint"
+          description: "VXLAN segments activated in this data center footprint"
 
-    # The office is not a TopologyCustomer, so it carries the same reverse side
-    # itself: the VXLAN segments activated in the office.
+    - kind: TopologyCustomerColocation
+      relationships:
+        - name: network_segments
+          label: Network Segments
+          peer: ManagedVxlanSegment
+          kind: Generic
+          cardinality: many
+          optional: true
+          identifier: "segment__customer_deployments"
+          order_weight: 2100
+          description: "VXLAN segments activated in this colocation footprint"
+
+    - kind: TopologyCustomerCloud
+      relationships:
+        - name: network_segments
+          label: Network Segments
+          peer: CloudNetworkSegment
+          kind: Generic
+          cardinality: many
+          optional: true
+          identifier: "segment__customer_deployments"
+          order_weight: 2100
+          description: "Cloud network segments (subnets) of this cloud footprint"
+
     - kind: TopologyCustomerOffice
       relationships:
         - name: network_segments
           label: Network Segments
-          peer: ManagedNetworkSegment
+          peer: ManagedVxlanSegment
           kind: Generic
           cardinality: many
           optional: true

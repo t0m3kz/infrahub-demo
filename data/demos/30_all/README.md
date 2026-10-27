@@ -184,9 +184,10 @@ declared on the zone that holds it, `FR2` (edge pair `eg-fr201/02` plus firewall
 (`eg-pa401/02`), and device names carry the zone name. `FR6` and `PA6` are customer cages that declare nothing.
 Equinix Amsterdam is one `TopologyVirtualColocation`, `AM-NE` (see
 [Equinix Network Edge](#equinix-network-edge-am-ne)). A
-`TopologyCustomerColocation` footprint is still named after its metro (`C001-P-FR`); its optional `serving_zone`
-(`FR2` for `C001` and `C005`) says which zone's firewall pair hosts its firewall context (the shared context of that
-HA cluster). A footprint without a `serving_zone` gets no context.
+`TopologyCustomerColocation` footprint is still named after its metro (`C001-P-FR`) and names no zone: it is served by
+every zone of its metro that has a firewall pair, one shared firewall context per zone (only `FR2` has firewalls here,
+so `C001-P-FR` and `C005-P-FR` share the context of its HA cluster). A metro whose zones have no firewalls gives its
+footprints no context.
 
 ### Equinix Network Edge (AM-NE)
 
@@ -249,7 +250,7 @@ destination is one of these:
 | --- | --- | --- |
 | 10, `nordix-prod-to-aws` | `10.10.0.0/16` (PROD) | The block of C001's VPC `nordix-vpc-prod` in its account `nordix-aws-prod` (`06_customer_boarding/c001/cloud`), attached to the hub by `tgwa-vpc-nordix` (associated with and propagating into `rt-hub-shared`, the hybrid attachment's table), so the AWS handoff session accepts it for owner C001 |
 | 20, `nordix-prod-to-partner-acme` | `198.18.0.0/24` (PROD) | Registered by C001 behind the tunnel `C001-PARTNER-ACME-FR2` (`registered_prefixes`, `07_zone_policies/01_partner_tunnel.yml`) |
-| 30, `nordix-prod-to-saas-zscaler` | the `internet` segment | The Zscaler PoP is public space: nothing registers it, the rule goes to the Internet segment like C006's internet egress |
+| 30, `nordix-prod-to-saas-zscaler` | `destination_zone: INTERNET-ZONE` | The Zscaler PoP is public space: nothing registers it, the rule goes to the internet zone like C006's internet egress |
 
 No prefix object exists only for the policy: the VPC block and the Acme range are declared where they are registered.
 The C004 Azure VNet (`10.40.0.0/16`) stays a customer VPC of its own, with no handoff behind it, so nothing aims at it.

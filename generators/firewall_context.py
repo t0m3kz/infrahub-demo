@@ -3,9 +3,9 @@ by the customer boarding generators of every facility that owns a firewall or
 load-balancer pair.
 
 generators/topology/customer_dc.py (TopologyCustomerDC on a DataCenter) and
-generators/topology/customer_colocation.py (TopologyCustomerColocation on its
-serving ColocationZone) board a customer the same way: a shared or dedicated context
-on the parent's HA cluster, a VLAN-tagged sub-interface per member, a leg per
+generators/topology/customer_colocation.py (TopologyCustomerColocation, on every
+ColocationZone of its metro that has firewalls) board a customer the same way: a
+shared or dedicated context on the hosting facility's HA cluster, a VLAN-tagged sub-interface per member, a leg per
 VRF the context serves (utils/exchange_transit.py), and the deployment's
 serving link. One implementation for both kinds of context; a ContextSpec
 (FIREWALL_CONTEXT, LOADBALANCER_CONTEXT) holds what differs:
@@ -98,6 +98,9 @@ class FirewallContextMixin(TransitLegsMixin):
     _parent_label: str
     _parent_generators: tuple[str, ...]
     _context_specs: tuple[ContextSpec, ...]
+    # Whether the footprint has one serving context per hosting facility (a colocation footprint, one per zone of its
+    # metro: serving_field + "s", a many relationship) or the one serving it (a DC footprint: serving_field).
+    _serving_many: bool = False
 
     # Provided by the host class and its other mixins.
     client: Any
@@ -140,23 +143,36 @@ class FirewallContextMixin(TransitLegsMixin):
             "platform": {"id": template.platform.peer.id},
         }
 
+    def _serving_field(self, spec: ContextSpec) -> str:
+        """The deployment's relationship to its serving context(s) of spec's kind."""
+        return f"{spec.serving_field}s" if self._serving_many else spec.serving_field
+
+    def serving_context_ids(self, customer: dict[str, Any], spec: ContextSpec) -> list[str]:
+        """The ids of the contexts the boarding query found the customer linked to, none when unset."""
+        linked = customer.get(self._serving_field(spec)) or []
+        return [peer["id"] for peer in (linked if isinstance(linked, list) else [linked]) if peer.get("id")]
+
     async def link_serving_context(
-        self, spec: ContextSpec, *, customer_id: str, context_id: str, current_id: str | None
+        self, spec: ContextSpec, *, customer_id: str, context_id: str, current_ids: list[str]
     ) -> None:
         """Point this deployment at the context of spec's kind that serves it (spec.serving_field).
 
-        The firewall transform reads serving_firewall_context to place each
-        rule in the contexts of its two segments; the VIP producer reads
-        serving_loadbalancer_context to place a VIP. Only this deployment's own
-        run writes it, so boardings onto one shared context never race. Not
-        tracked: the deployment is the generator's target, not its output, and
-        tracking it would let delete_unused_nodes remove it.
+        The firewall transform reads the contexts' served_deployments (the other
+        end of serving_firewall_context(s)) to place each rule in the contexts of
+        its two segments; the VIP producer reads serving_loadbalancer_context to
+        place a VIP. Only this deployment's own run writes it, so boardings onto
+        one shared context never race. Not tracked: the deployment is the
+        generator's target, not its output, and tracking it would let
+        delete_unused_nodes remove it.
 
-        current_id is the context the boarding query (customer_dc.gql,
-        customer_colocation.gql) found the deployment linked to, None when it
-        was not linked. When it is already context_id nothing is read or
-        written; otherwise the deployment is read to take the previous context
-        from the server before the move.
+        current_ids are the contexts the boarding query (customer_dc.gql,
+        customer_colocation.gql) found the deployment linked to. When
+        context_id is among them nothing is read or written. A many field
+        (``_serving_many``) gets context_id added to the ones it has: the
+        footprint of a colocation metro is served by one context per zone, and
+        a stale one is removed by unlink_stale_serving_contexts once every zone
+        is done. A one field replaces its context; the deployment is read first
+        to take the previous context from the server before the move.
 
         A move from one context to another (a re-run after the design switched
         dedicated <-> shared) leaves what other runs generated on the previous
@@ -165,15 +181,19 @@ class FirewallContextMixin(TransitLegsMixin):
         the same load wait for this run before they read the context
         (generators/lb_vip.py, _await_lb_inputs).
         """
-        if current_id == context_id:
+        if context_id in current_ids:
             return
         try:
             deployment = await self.client.get(kind=self._customer_kind, id=customer_id)
-            previous_id = getattr(deployment, spec.serving_field).id
-            if previous_id == context_id:
-                return
-            setattr(deployment, spec.serving_field, context_id)
-            await deployment.save(update_group_context=False)
+            if self._serving_many:
+                await deployment.add_relationships(self._serving_field(spec), [context_id])
+                previous_id = None
+            else:
+                previous_id = getattr(deployment, spec.serving_field).id
+                if previous_id == context_id:
+                    return
+                setattr(deployment, spec.serving_field, context_id)
+                await deployment.save(update_group_context=False)
             self.logger.info(f"Deployment {customer_id} served by {spec.label} {context_id}")
         except Exception as exc:
             self.logger.error(f"Failed to link deployment {customer_id} to {spec.label} {context_id}: {exc}")
@@ -195,14 +215,34 @@ class FirewallContextMixin(TransitLegsMixin):
                 f"but {spec.relink_generator} could not be re-run: {exc}"
             )
 
-    async def _resolve_context_target(
-        self, spec: ContextSpec, customer: dict[str, Any], customer_id: str
-    ) -> _ContextTarget | None:
-        """The cluster and ownership of this customer's context of spec's kind; None (logged) when there is none.
+    async def unlink_stale_serving_contexts(
+        self, spec: ContextSpec, *, customer_id: str, current_ids: list[str], served_ids: list[str]
+    ) -> None:
+        """Drop the links of a many serving field to contexts this run did not serve the deployment from.
 
-        The caller guarantees customer.parent (CustomerFacilityMixin.generate).
+        A re-run converges the set: a colocation zone that no longer has firewalls would leave its context linked
+        otherwise, and the firewall transform would keep placing the deployment's rules in it. Only the link goes.
+        The context itself is a shared one, written untracked, so delete_unused_nodes never reclaims it: it stays,
+        with its legs, on its cluster. (A single serving field needs no pruning: link_serving_context replaces it.)
         """
-        parent = customer.get("parent") or {}
+        stale = [context_id for context_id in current_ids if context_id not in served_ids]
+        if not stale:
+            return
+        try:
+            deployment = await self.client.get(kind=self._customer_kind, id=customer_id)
+            await deployment.remove_relationships(self._serving_field(spec), stale)
+            self.logger.info(f"Deployment {customer_id} no longer served by {spec.label} {stale}")
+        except Exception as exc:
+            self.logger.error(f"Failed to unlink deployment {customer_id} from {spec.label} {stale}: {exc}")
+
+    async def _resolve_context_target(
+        self, spec: ContextSpec, customer: dict[str, Any], customer_id: str, parent: dict[str, Any]
+    ) -> _ContextTarget | None:
+        """The cluster and ownership of this customer's context of spec's kind on parent, the hosting facility
+        (the DC, or one zone of the metro); None (logged) when there is none.
+
+        The caller guarantees parent.id (CustomerFacilityMixin.generate).
+        """
         parent_id: str = parent.get("id", "")
         parent_name: str = parent.get("name", parent_id)
         skip_reason = spec.skip_reason(parent)
@@ -285,8 +325,8 @@ class FirewallContextMixin(TransitLegsMixin):
         customer: dict[str, Any],
         customer_id: str,
         target: _ContextTarget,
-    ) -> None:
-        """The context and its legs for the VRFs this customer is in.
+    ) -> str | None:
+        """The context and its legs for the VRFs this customer is in; the context's id, None when there is none.
 
         A leg is (context, namespace): every member's VLAN sub-interface
         `<uplink>.<transit_vlan>` addressed from a /29 in that VRF
@@ -314,7 +354,10 @@ class FirewallContextMixin(TransitLegsMixin):
         includes both, so a run heals a context that lacks one.
 
         Writes run under the context's lock; the completeness check repeats
-        inside it, so the run that waited on the lock finds the work done.
+        inside it, so the run that waited on the lock finds the work done. The
+        lock is per context, so the zones of one colocation metro, which have
+        one context each, are built one after the other with no lock held
+        across them, and two footprints boarding at once serialise per zone.
         """
         spec, track = target.spec, target.track
         tenant_type = namespace_type_for_environment(customer.get("environment") or "")
@@ -334,16 +377,16 @@ class FirewallContextMixin(TransitLegsMixin):
             for peer in leg_types[1:]
         ]
 
-        served_by = (customer.get(spec.serving_field) or {}).get("id")
+        served_by = self.serving_context_ids(customer, spec)
         if not track:
             state = await self._transit_state(
                 spec, context_name, members, namespaces, leg_types, exchange_specs, fresh_ports=False
             )
             if state.complete and state.context is not None:
                 await self.link_serving_context(
-                    spec, customer_id=customer_id, context_id=state.context.id, current_id=served_by
+                    spec, customer_id=customer_id, context_id=state.context.id, current_ids=served_by
                 )
-                return
+                return state.context.id
 
         async with self.resource_lock(f"{spec.key}-{context_name}"):
             # Re-read under the lock, the ports too: concurrent runs tag the same border ports. A dedicated
@@ -356,9 +399,9 @@ class FirewallContextMixin(TransitLegsMixin):
                 )
                 if state.complete and state.context is not None:
                     await self.link_serving_context(
-                        spec, customer_id=customer_id, context_id=state.context.id, current_id=served_by
+                        spec, customer_id=customer_id, context_id=state.context.id, current_ids=served_by
                     )
-                    return
+                    return state.context.id
             pool_names = {leg_type: spec.leg_pool_name(ns.name.value) for leg_type, ns in namespaces.items()}
             if spec.vip_pool_name is not None:
                 pool_names[_VIP_POOL_KEY] = spec.vip_pool_name(tenant_namespace.name.value)
@@ -375,9 +418,8 @@ class FirewallContextMixin(TransitLegsMixin):
             )
             if context_obj is None:
                 return
-            await self.link_serving_context(
-                spec, customer_id=customer_id, context_id=context_obj.id, current_id=served_by
-            )
+            context_id: str = context_obj.id
+            await self.link_serving_context(spec, customer_id=customer_id, context_id=context_id, current_ids=served_by)
             # The saved node knows only what it wrote. The context read under the lock (the same node, by name)
             # also carries its VLAN, SNAT address and VIP prefix: the steps below then find them done, with no
             # pool lookup, save or re-read. A context that does not exist yet has nothing to find.
@@ -385,7 +427,7 @@ class FirewallContextMixin(TransitLegsMixin):
                 context_obj = state.context
             context_obj = await self._ensure_context_vlan(spec, context_obj, target.parent_name, track=track)
             if context_obj is None:
-                return
+                return context_id
             vlan_id: int = context_obj.vlan_id.value
             if snat_pool is not None and not await self._ensure_context_allocation(
                 spec,
@@ -401,7 +443,7 @@ class FirewallContextMixin(TransitLegsMixin):
                 ),
                 track=track,
             ):
-                return
+                return context_id
             vip_pool = pools.get(_VIP_POOL_KEY)
             if vip_pool is not None and not await self._ensure_context_allocation(
                 spec,
@@ -418,7 +460,7 @@ class FirewallContextMixin(TransitLegsMixin):
                 ),
                 track=track,
             ):
-                return
+                return context_id
 
             addresses: dict[str, dict[int, Any]] = {}
             for leg_type in leg_types:
@@ -426,7 +468,7 @@ class FirewallContextMixin(TransitLegsMixin):
                     spec, context_obj=context_obj, namespace=namespaces[leg_type], pool=pools[leg_type], track=track
                 )
                 if leg_addresses is None:
-                    return
+                    return context_id
                 addresses[leg_type] = leg_addresses
 
             exchanges: dict[str, Any] = {}
@@ -445,7 +487,7 @@ class FirewallContextMixin(TransitLegsMixin):
                     await save_with_node_not_found_retry(exchange, self.logger, **tracked_save_kwargs(track))
                 except Exception as exc:
                     self.logger.error(f"Failed to upsert exchange '{exchange_name}': {exc}")
-                    return
+                    return context_id
                 exchanges[exchange_name] = exchange
 
             for leg_type in leg_types:
@@ -472,6 +514,7 @@ class FirewallContextMixin(TransitLegsMixin):
                     relation_to_update="capabilities", related_nodes=state.untagged_port_ids
                 )
                 self.logger.info(f"{context_name}: tagged {len(state.untagged_port_ids)} border service port(s)")
+            return context_id
 
     async def _resolve_parent_cluster(
         self, spec: ContextSpec, devices: list[Any], *, parent_id: str, parent_name: str

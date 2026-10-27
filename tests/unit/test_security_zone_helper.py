@@ -27,7 +27,7 @@ def _client(zone_id: str = "zone-1") -> Any:
 
 
 def _run(client: Any, **overrides: Any) -> str | None:
-    kwargs: dict[str, Any] = {"kind": "ManagedVlanSegment", "segment_id": "seg-1", "environment": "p"}
+    kwargs: dict[str, Any] = {"kind": "ManagedVxlanSegment", "segment_id": "seg-1", "environment": "p"}
     kwargs.update(overrides)
     return asyncio.run(ensure_security_zone(client, **kwargs))
 
@@ -35,9 +35,9 @@ def _run(client: Any, **overrides: Any) -> str | None:
 class TestEnsureSecurityZone:
     """The zone is derived from the segment's environment and written with its real kind."""
 
-    @pytest.mark.parametrize("kind", ["ManagedVlanSegment", "ManagedVxlanSegment", "CloudNetworkSegment"])
+    @pytest.mark.parametrize("kind", ["ManagedVxlanSegment", "CloudNetworkSegment"])
     def test_writes_the_zone_with_the_segments_own_kind_untracked(self, kind: str) -> None:
-        """Every non-External kind is written under its own typename, outside the run's group."""
+        """Every kind is written under its own typename, outside the run's group."""
         client = _client()
 
         assert _run(client, kind=kind) == "PROD-ZONE"
@@ -99,15 +99,6 @@ class TestEnsureSecurityZone:
         second.filters.assert_awaited_once()
         second.create.assert_awaited_once()
 
-    def test_external_segment_is_never_touched(self) -> None:
-        """An External segment's zone is data: no lookup, no write, no zone name."""
-        client = _client()
-
-        assert _run(client, kind="ManagedExternalSegment") is None
-
-        client.filters.assert_not_awaited()
-        client.create.assert_not_awaited()
-
     @pytest.mark.parametrize("zone", ["MANAGEMENT-ZONE", "INTERNET-ZONE"])
     @pytest.mark.parametrize("environment", ["p", "d", None])
     def test_segment_in_an_exchange_zone_keeps_it(self, zone: str, environment: str | None) -> None:
@@ -131,7 +122,7 @@ class TestEnsureSecurityZone:
         errors: list[str] = []
         check.log_error = lambda message: errors.append(message)
         check._validate_zone(
-            {"typename": "ManagedVlanSegment", "name": "s", "environment": "d", "security_zone": {"name": zone}}
+            {"typename": "ManagedVxlanSegment", "name": "s", "environment": "d", "security_zone": {"name": zone}}
         )
 
         kept = _run(_client(), current_zone=zone, environment="d") == zone

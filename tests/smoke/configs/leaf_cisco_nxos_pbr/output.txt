@@ -178,6 +178,9 @@ interface nve1
   member vni 10100
     suppress-arp
     ingress-replication protocol bgp
+  member vni 10200
+    suppress-arp
+    ingress-replication protocol bgp
   member vni 64000
     suppress-arp
     ingress-replication protocol bgp
@@ -192,6 +195,10 @@ evpn
     rd 10.0.0.1:10100
     route-target import 65000:10100
     route-target export 65000:10100
+  vni 10200 l2
+    rd 10.0.0.1:10200
+    route-target import 65000:10200
+    route-target export 65000:10200
   vni 64000 l2
     rd 10.0.0.1:64000
     route-target import 65000:64000
@@ -202,6 +209,8 @@ evpn
 !
 vlan 100
   vn-segment 10100
+vlan 200
+  vn-segment 10200
 vlan 3000
   vn-segment 64000
 !

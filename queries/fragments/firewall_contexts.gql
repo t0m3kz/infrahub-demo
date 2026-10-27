@@ -96,24 +96,20 @@ fragment FirewallContextConfigFields on ManagedFirewallContext {
     edges {
       node {
         id
-        ... on TopologyCustomer {
-          network_segments {
-            edges {
-              node {
-                id
-                ...SegmentRulesFields
-                # Own gateway prefix and zone: the context's
-                # routes (apply_context_routes) read these,
-                # not the SecurityZone root.
-                ... on ManagedNetworkSegment {
-                  gateway { node { ip_prefix { node { prefix { value } } } } }
-                  security_zone { node { name { value } } }
-                }
-              }
-            }
-          }
-        }
+        # network_segments is declared per footprint kind (schemas/extensions/service/segment.yml), not on the
+        # TopologyCustomer generic: a context serves a DC or a colocation footprint, both with VXLAN segments, so
+        # the two spreads select the same field of the same peer type.
+        ... on TopologyCustomerDC { network_segments { edges { node { id ...ContextServedSegmentFields } } } }
+        ... on TopologyCustomerColocation { network_segments { edges { node { id ...ContextServedSegmentFields } } } }
       }
     }
   }
+}
+
+# A segment a context serves: its rules, and its own gateway prefix and zone (the context's routes,
+# apply_context_routes, read these, not the SecurityZone root).
+fragment ContextServedSegmentFields on ManagedNetworkSegment {
+  ...SegmentRulesFields
+  gateway { node { ip_prefix { node { prefix { value } } } } }
+  security_zone { node { name { value } } }
 }

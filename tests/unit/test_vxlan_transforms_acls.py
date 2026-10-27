@@ -57,6 +57,7 @@ def _rule(
     disabled: bool = False,
     src_zone: str | None = None,
     dst_zone: str | None = None,
+    destination_zone: str | None = None,
 ) -> dict:
     rule: dict = {
         "index": index,
@@ -69,8 +70,9 @@ def _rule(
         "destination_segment": dst,
         "log": log,
         "disabled": disabled,
+        "destination_zone": {"name": destination_zone} if destination_zone else None,
     }
-    # A rule's zone is its segment's security_zone.
+    # A rule's zone is its segment's security_zone (or, to the internet, its own destination_zone).
     if src_zone is not None:
         rule["source_segment"] = {**(rule["source_segment"] or {}), "security_zone": {"name": src_zone}}
     if dst_zone is not None:
@@ -211,13 +213,13 @@ class TestAclRuleEndpointResolver:
         assert [(r["src"], r["dst"], r["src_port"]) for r in returns] == [("10.2.0.0/24", "10.9.0.0/24", "eq 5432")]
 
 
-def _internet_ref() -> dict:
-    """A rule end naming a prefix-less external segment (the Internet segment)."""
-    return {"id": "inet", "name": "internet", "security_zone": {"name": "INTERNET-ZONE"}}
+def _internet_rule(**kwargs) -> dict:
+    """A rule whose destination is the internet zone: no destination segment."""
+    return _rule(destination_zone="INTERNET-ZONE", **kwargs)
 
 
 class TestGetAclsInternetBand:
-    """A permit to a segment with no prefix must not render as `permit <src> any`."""
+    """A permit to the internet zone must not render as `permit <src> any`."""
 
     SRC = _seg_ref("10.1.0.0/24")
 
@@ -228,7 +230,7 @@ class TestGetAclsInternetBand:
         return get_acls(activations=[act])[0]["rules"]
 
     def test_denies_every_internal_range_before_the_permit_any(self) -> None:
-        rules = self._rules([_rule(src=self.SRC, dst=_internet_ref())])
+        rules = self._rules([_internet_rule(src=self.SRC)])
         permit_at = next(i for i, r in enumerate(rules) if r["action"] == "permit")
         assert [r["dst"] for r in rules[:permit_at]] == list(NON_INTERNET_PREFIXES)
         assert all(
@@ -247,7 +249,7 @@ class TestGetAclsInternetBand:
         assert rules[-1]["name"] == "implicit-deny-all"
 
     def test_no_unconditional_permit_any_at_the_rules_own_index(self) -> None:
-        rules = self._rules([_rule(index=10, src=self.SRC, dst=_internet_ref())])
+        rules = self._rules([_internet_rule(index=10, src=self.SRC)])
         assert 10 not in [r["seq"] for r in rules]
         seqs = [r["seq"] for r in rules]
         assert seqs == sorted(seqs)
@@ -257,7 +259,7 @@ class TestGetAclsInternetBand:
         rules = self._rules(
             [
                 _rule(index=10, src=self.SRC, dst=_seg_ref("10.2.0.0/24")),
-                _rule(index=20, src=self.SRC, dst=_internet_ref()),
+                _internet_rule(index=20, src=self.SRC),
             ]
         )
         internal = next(r for r in rules if r["dst"] == "10.2.0.0/24")
@@ -275,7 +277,7 @@ class TestGetAclsInternetBand:
         act = _make_acl_activation(
             seg_id="seg-a",
             prefix="10.1.0.0/24",
-            security_policies=[_policy(rules=[_rule(src=self.SRC, dst=_internet_ref())])],
+            security_policies=[_policy(rules=[_internet_rule(src=self.SRC)])],
             inbound_rules=[inbound],
         )
         rules = get_acls(activations=[act])[0]["rules"]
@@ -286,8 +288,8 @@ class TestGetAclsInternetBand:
     def test_denies_are_emitted_once_per_source(self) -> None:
         rules = self._rules(
             [
-                _rule(index=10, src=self.SRC, dst=_internet_ref()),
-                _rule(index=20, src=self.SRC, dst=_internet_ref(), port_start=80),
+                _internet_rule(index=10, src=self.SRC),
+                _internet_rule(index=20, src=self.SRC, port_start=80),
             ]
         )
         assert len([r for r in rules if r["action"] == "deny" and r["dst"] == "10.0.0.0/8"]) == 1
@@ -298,32 +300,27 @@ class TestGetAclsInternetBand:
         assert [(r["seq"], r["action"], r["dst"]) for r in rules[:1]] == [(10, "permit", "any")]
         assert len(rules) == 2
 
-    def test_selector_on_the_external_segment_keeps_the_rule_in_place(self) -> None:
+    def test_selector_next_to_the_internet_zone_keeps_the_rule_in_place(self) -> None:
         rule = {
-            **_rule(index=10, src=self.SRC, dst=_internet_ref()),
+            **_internet_rule(index=10, src=self.SRC),
             "destination_prefixes": [{"prefix": "8.8.8.0/24"}],
         }
         rules = self._rules([rule])
         assert [(r["seq"], r["dst"]) for r in rules[:1]] == [(10, "8.8.8.0/24")]
         assert len(rules) == 2
 
-    def test_deny_rule_to_the_external_segment_stays_in_place(self) -> None:
-        rules = self._rules([_rule(index=10, action="deny", src=self.SRC, dst=_internet_ref())])
+    def test_deny_rule_to_the_internet_zone_stays_in_place(self) -> None:
+        rules = self._rules([_internet_rule(index=10, action="deny", src=self.SRC)])
         assert [(r["seq"], r["action"], r["dst"]) for r in rules[:1]] == [(10, "deny", "any")]
 
     def test_default_permit_policy_needs_no_band(self) -> None:
-        rules = self._rules([_rule(src=self.SRC, dst=_internet_ref())], default_action="permit")
+        rules = self._rules([_internet_rule(src=self.SRC)], default_action="permit")
         assert [r["name"] for r in rules] == ["default-permit-all"]
 
-    def test_inbound_permit_from_the_external_segment_gets_no_return_leg(self) -> None:
-        inbound = {
-            **_rule(port_start=443),
-            "source_segment": _internet_ref(),
-            "destination_segment": {"id": "seg-a"},
-            "policy": {"enabled": True},
-        }
-        act = _make_acl_activation(seg_id="seg-a", prefix="10.1.0.0/24", security_policies=[], inbound_rules=[inbound])
-        assert [r["name"] for r in get_acls(activations=[act])[0]["rules"]] == ["implicit-deny-all"]
+    def test_a_rule_to_the_internet_zone_has_no_return_leg(self) -> None:
+        """It is in no segment's inbound_rules (no destination segment): inbound from outside is DNAT, out of scope."""
+        rules = self._rules([_internet_rule(src=self.SRC)])
+        assert not [r for r in rules if r["name"].startswith("return-to-")]
 
 
 class TestGetAclsDefaultAction:
@@ -402,8 +399,6 @@ def _inbound(
     src: dict = {"id": src_id, "name": src_name, "customer_name": src_name, "environment": "p"}
     if src_prefix is not None:
         src["gateway"] = {"ip_prefix": {"prefix": src_prefix}}
-    else:
-        src["security_zone"] = {"name": "INTERNET-ZONE"}  # a prefix-less source is the outside
     return {
         "index": index,
         "name": f"rule-{index}",
@@ -502,11 +497,6 @@ class TestGetAclsReturnRules:
         assert acl["rules"][0]["seq"] == 20
         assert acl["rules"][-1]["name"] == "implicit-deny-all"
         assert acl["rules"][-1]["seq"] == 9990
-
-    def test_source_without_prefix_gets_no_return_leg(self) -> None:
-        """A prefix-less source is the outside (DNAT, out of scope): no `permit ... any` reply."""
-        acl = get_acls(activations=[_segment_b([_inbound(src_prefix=None)])])[0]
-        assert _returns(acl) == []
 
     def test_return_leg_attribution_is_own_segment_to_rule_source(self) -> None:
         acl = get_acls(activations=[_segment_b([_inbound()])])[0]

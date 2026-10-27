@@ -398,6 +398,12 @@ check_definitions:
   - name: validate_virtual_nic_pinning
     class_name: CheckVirtualNicPinning
     file_path: checks/virtual_nic_pinning.py
+  # Targetless: a rule's source segment spans footprints, and the hardware that
+  # enforces it (firewall pair, legs, exchange, ports, SNAT) belongs to the
+  # contexts serving them.
+  - name: validate_internet_egress
+    class_name: CheckInternetEgress
+    file_path: checks/internet_egress.py
   # Targetless: a DC pool holds its pods' pools, so one query reads every
   # data center and pod with the slices of their pools.
   - name: validate_pool_utilization
@@ -756,6 +762,8 @@ queries:
     file_path: queries/validation/suite_capacity.gql
   - name: colocation_placement
     file_path: queries/validation/colocation_placement.gql
+  - name: internet_egress
+    file_path: queries/validation/internet_egress.gql
   - name: app_dependency_validation
     file_path: queries/validation/app_dependency.gql
   - name: hypervisor_environment

@@ -66,9 +66,6 @@ async def fetch_segment_deployments(
                     segment {{
                         node {{
                             id
-                            ... on ManagedVlanSegment {{
-                                name {{ value }}
-                            }}
                             ... on ManagedVxlanSegment {{
                                 name {{ value }}
                             }}

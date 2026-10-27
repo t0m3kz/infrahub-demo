@@ -106,14 +106,15 @@ class TestSchema:
 
     def test_a_vxlan_segment_can_name_an_office_and_the_office_has_the_reverse_side(self) -> None:
         """The office is not a TopologyCustomer, so the segment's peer is the generic it shares with the
-        customer footprints (TopologyDeployment) and the office carries the reverse relationship itself."""
+        customer footprints (TopologyDeployment) and the office carries the reverse relationship itself
+        (VXLAN segments only, like the data center and colocation footprints)."""
         forward = relationship("ManagedVxlanSegment", "customer_deployments")
         reverse = relationship("TopologyCustomerOffice", "network_segments")
         assert forward is not None and reverse is not None
         assert forward["peer"] == "TopologyDeployment"
         assert "TopologyDeployment" in schema()["TopologyCustomerOffice"].inherit_from
         assert forward["identifier"] == reverse["identifier"]
-        assert reverse["peer"] == "ManagedNetworkSegment"
+        assert reverse["peer"] == "ManagedVxlanSegment"
 
     def test_office_is_always_prod_and_owned_directly(self) -> None:
         """No environment, status or wrapper: the owner sits on the office, its parent is the campus label."""

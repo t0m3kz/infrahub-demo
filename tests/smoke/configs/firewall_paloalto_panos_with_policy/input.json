@@ -169,7 +169,7 @@
                                                   "source_segment": {
                                                     "node": {
                                                       "id": "seg-10-0-1-0-24",
-                                                      "__typename": "ManagedVlanSegment",
+                                                      "__typename": "ManagedVxlanSegment",
                                                       "name": {
                                                         "value": "seg-10-0-1-0-24"
                                                       },
@@ -191,15 +191,15 @@
                                                           }
                                                         }
                                                       },
-                                                      "customer_deployment": {
-                                                        "node": null
+                                                      "customer_deployments": {
+                                                        "edges": []
                                                       }
                                                     }
                                                   },
                                                   "destination_segment": {
                                                     "node": {
                                                       "id": "seg-10-0-2-0-24",
-                                                      "__typename": "ManagedVlanSegment",
+                                                      "__typename": "ManagedVxlanSegment",
                                                       "name": {
                                                         "value": "seg-10-0-2-0-24"
                                                       },
@@ -221,8 +221,8 @@
                                                           }
                                                         }
                                                       },
-                                                      "customer_deployment": {
-                                                        "node": null
+                                                      "customer_deployments": {
+                                                        "edges": []
                                                       }
                                                     }
                                                   },
@@ -285,7 +285,7 @@
                                               "source_segment": {
                                                 "node": {
                                                   "id": "seg-10-0-2-0-24",
-                                                  "__typename": "ManagedVlanSegment",
+                                                  "__typename": "ManagedVxlanSegment",
                                                   "name": {
                                                     "value": "seg-10-0-2-0-24"
                                                   },
@@ -307,15 +307,15 @@
                                                       }
                                                     }
                                                   },
-                                                  "customer_deployment": {
-                                                    "node": null
+                                                  "customer_deployments": {
+                                                    "edges": []
                                                   }
                                                 }
                                               },
                                               "destination_segment": {
                                                 "node": {
                                                   "id": "seg-10-0-1-0-24",
-                                                  "__typename": "ManagedVlanSegment",
+                                                  "__typename": "ManagedVxlanSegment",
                                                   "name": {
                                                     "value": "seg-10-0-1-0-24"
                                                   },
@@ -337,8 +337,8 @@
                                                       }
                                                     }
                                                   },
-                                                  "customer_deployment": {
-                                                    "node": null
+                                                  "customer_deployments": {
+                                                    "edges": []
                                                   }
                                                 }
                                               },
@@ -421,7 +421,7 @@
                                               "source_segment": {
                                                 "node": {
                                                   "id": "seg-10-0-2-0-24",
-                                                  "__typename": "ManagedVlanSegment",
+                                                  "__typename": "ManagedVxlanSegment",
                                                   "name": {
                                                     "value": "seg-10-0-2-0-24"
                                                   },
@@ -443,15 +443,15 @@
                                                       }
                                                     }
                                                   },
-                                                  "customer_deployment": {
-                                                    "node": null
+                                                  "customer_deployments": {
+                                                    "edges": []
                                                   }
                                                 }
                                               },
                                               "destination_segment": {
                                                 "node": {
                                                   "id": "seg-10-0-1-0-24",
-                                                  "__typename": "ManagedVlanSegment",
+                                                  "__typename": "ManagedVxlanSegment",
                                                   "name": {
                                                     "value": "seg-10-0-1-0-24"
                                                   },
@@ -473,8 +473,8 @@
                                                       }
                                                     }
                                                   },
-                                                  "customer_deployment": {
-                                                    "node": null
+                                                  "customer_deployments": {
+                                                    "edges": []
                                                   }
                                                 }
                                               },
@@ -711,7 +711,7 @@
                                                   "source_segment": {
                                                     "node": {
                                                       "id": "seg-10-0-2-0-24",
-                                                      "__typename": "ManagedVlanSegment",
+                                                      "__typename": "ManagedVxlanSegment",
                                                       "name": {
                                                         "value": "seg-10-0-2-0-24"
                                                       },
@@ -733,15 +733,15 @@
                                                           }
                                                         }
                                                       },
-                                                      "customer_deployment": {
-                                                        "node": null
+                                                      "customer_deployments": {
+                                                        "edges": []
                                                       }
                                                     }
                                                   },
                                                   "destination_segment": {
                                                     "node": {
                                                       "id": "seg-10-0-1-0-24",
-                                                      "__typename": "ManagedVlanSegment",
+                                                      "__typename": "ManagedVxlanSegment",
                                                       "name": {
                                                         "value": "seg-10-0-1-0-24"
                                                       },
@@ -763,8 +763,8 @@
                                                           }
                                                         }
                                                       },
-                                                      "customer_deployment": {
-                                                        "node": null
+                                                      "customer_deployments": {
+                                                        "edges": []
                                                       }
                                                     }
                                                   },
@@ -825,7 +825,7 @@
                                                   "source_segment": {
                                                     "node": {
                                                       "id": "seg-10-0-2-0-24",
-                                                      "__typename": "ManagedVlanSegment",
+                                                      "__typename": "ManagedVxlanSegment",
                                                       "name": {
                                                         "value": "seg-10-0-2-0-24"
                                                       },
@@ -847,15 +847,15 @@
                                                           }
                                                         }
                                                       },
-                                                      "customer_deployment": {
-                                                        "node": null
+                                                      "customer_deployments": {
+                                                        "edges": []
                                                       }
                                                     }
                                                   },
                                                   "destination_segment": {
                                                     "node": {
                                                       "id": "seg-10-0-1-0-24",
-                                                      "__typename": "ManagedVlanSegment",
+                                                      "__typename": "ManagedVxlanSegment",
                                                       "name": {
                                                         "value": "seg-10-0-1-0-24"
                                                       },
@@ -877,8 +877,8 @@
                                                           }
                                                         }
                                                       },
-                                                      "customer_deployment": {
-                                                        "node": null
+                                                      "customer_deployments": {
+                                                        "edges": []
                                                       }
                                                     }
                                                   },
@@ -941,7 +941,7 @@
                                               "source_segment": {
                                                 "node": {
                                                   "id": "seg-10-0-1-0-24",
-                                                  "__typename": "ManagedVlanSegment",
+                                                  "__typename": "ManagedVxlanSegment",
                                                   "name": {
                                                     "value": "seg-10-0-1-0-24"
                                                   },
@@ -963,15 +963,15 @@
                                                       }
                                                     }
                                                   },
-                                                  "customer_deployment": {
-                                                    "node": null
+                                                  "customer_deployments": {
+                                                    "edges": []
                                                   }
                                                 }
                                               },
                                               "destination_segment": {
                                                 "node": {
                                                   "id": "seg-10-0-2-0-24",
-                                                  "__typename": "ManagedVlanSegment",
+                                                  "__typename": "ManagedVxlanSegment",
                                                   "name": {
                                                     "value": "seg-10-0-2-0-24"
                                                   },
@@ -993,8 +993,8 @@
                                                       }
                                                     }
                                                   },
-                                                  "customer_deployment": {
-                                                    "node": null
+                                                  "customer_deployments": {
+                                                    "edges": []
                                                   }
                                                 }
                                               },
@@ -1225,7 +1225,7 @@
               {
                 "node": {
                   "id": "seg-10-0-1-0-24",
-                  "__typename": "ManagedVlanSegment",
+                  "__typename": "ManagedVxlanSegment",
                   "name": {
                     "value": "seg-10-0-1-0-24"
                   },
@@ -1245,7 +1245,7 @@
               {
                 "node": {
                   "id": "seg-10-0-10-0-24",
-                  "__typename": "ManagedVlanSegment",
+                  "__typename": "ManagedVxlanSegment",
                   "name": {
                     "value": "seg-10-0-10-0-24"
                   },
@@ -1282,7 +1282,7 @@
               {
                 "node": {
                   "id": "seg-10-0-2-0-24",
-                  "__typename": "ManagedVlanSegment",
+                  "__typename": "ManagedVxlanSegment",
                   "name": {
                     "value": "seg-10-0-2-0-24"
                   },

@@ -489,17 +489,6 @@ class TestConcurrentInputs:
         gen.wait_for_parent_generators.assert_not_awaited()
         gen.client.execute_graphql.assert_not_awaited()
 
-    def test_vlan_segment_without_prefix_is_an_error_without_a_re_read(self) -> None:
-        """No generator addresses a VLAN segment: its gateway is authored, waiting cannot bring it."""
-        gen = _vip_gen()
-        segment = {**_segment("seg-vlan", prefix=False), "typename": "ManagedVlanSegment"}
-
-        _vips, errors = _reconcile(gen, [_web(segment=segment)])
-
-        assert "no gateway prefix" in errors[0]
-        gen.client.execute_graphql.assert_not_awaited()
-        gen.wait_for_parent_generators.assert_not_awaited()
-
     def test_cloud_component_is_never_re_read(self) -> None:
         """A cloud segment has no gateway prefix and a cloud instance no context: nothing to wait for."""
         gen = _lb_gen()

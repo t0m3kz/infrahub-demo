@@ -27,7 +27,6 @@ _MINIMAL_KINDS = (
     "TopologyCustomerCloud",
     "TopologyCustomerOffice",
     "ManagedVxlanSegment",
-    "ManagedVlanSegment",
     "AppApplication",
     "AppComponent",
     "AppDependency",
@@ -85,7 +84,6 @@ def test_a_template_status_overrides_the_schema_default() -> None:
         "TopologyCustomerColocation",
         "AppApplication",
         "ManagedVxlanSegment",
-        "ManagedVlanSegment",
     ],
 )
 def test_environment_is_required_with_no_default(kind: str) -> None:
@@ -114,7 +112,7 @@ def _generator_zoned_segments() -> set[str]:
 
 
 def test_the_scan_finds_generator_zoned_segments() -> None:
-    """VXLAN segments, colocation VLAN segments with components, and cloud subnets with components."""
+    """VXLAN segments (a colocation cage's too) and cloud subnets with components."""
     zoned = _generator_zoned_segments()
     assert {"c005-web-frontend-local-dc10-p", "c011-nordix-prod-p", "c003-vaultex-subnet-prod-p"} <= zoned
 
@@ -126,7 +124,7 @@ def test_generator_zoned_segments_declare_no_tenant_zone() -> None:
     offenders = [
         f"{obj.path.relative_to(ROOT)}: {name(obj)} security_zone {obj.item['security_zone']}"
         for obj in declared_in(_ALL_DEMO)
-        if obj.kind in {"ManagedVxlanSegment", "ManagedVlanSegment", "CloudNetworkSegment"}
+        if obj.kind in {"ManagedVxlanSegment", "CloudNetworkSegment"}
         and obj.item.get("security_zone")
         and not is_exchange_zone(obj.item["security_zone"])
         and name(obj) in zoned
@@ -135,30 +133,12 @@ def test_generator_zoned_segments_declare_no_tenant_zone() -> None:
 
 
 def test_segments_no_generator_touches_keep_their_zone() -> None:
-    """A segment no generator zones (an L2-only colocation VLAN, a cloud subnet without an app) must state it,
+    """A segment no generator zones (a cloud subnet without an app) must state it,
     or checks/segment_security.py reports it zoneless."""
     zoned = _generator_zoned_segments()
     missing = [
         f"{obj.path.relative_to(ROOT)}: {name(obj)}"
         for obj in declared_in(_ALL_DEMO)
-        if obj.kind in {"ManagedVlanSegment", "CloudNetworkSegment"}
-        and name(obj) not in zoned
-        and not obj.item.get("security_zone")
+        if obj.kind == "CloudNetworkSegment" and name(obj) not in zoned and not obj.item.get("security_zone")
     ]
     assert not missing, "\n".join(missing)
-
-
-def test_no_tenant_vlan_segment_sits_in_a_data_center_footprint() -> None:
-    """Inside a DC every tenant segment is VXLAN (checks/segment_placement.py): only an exchange-zone
-    service segment (the MANAGEMENT services) may be a VLAN segment on a TopologyCustomerDC."""
-    dc_footprints = {name(obj) for obj in declared("TopologyCustomerDC", _ALL_DEMO)}
-    vlan_segments = declared("ManagedVlanSegment", _ALL_DEMO)
-    assert any(obj.item.get("customer_deployment") in dc_footprints for obj in vlan_segments), (
-        "the scan found no VLAN segment in a DC footprint (the MANAGEMENT services segment is one)"
-    )
-    offenders = [
-        f"{obj.path.relative_to(ROOT)}: {name(obj)} on {obj.item['customer_deployment']}"
-        for obj in vlan_segments
-        if obj.item.get("customer_deployment") in dc_footprints and not is_exchange_zone(obj.item.get("security_zone"))
-    ]
-    assert not offenders, "tenant VLAN segments in a DC footprint:\n" + "\n".join(offenders)

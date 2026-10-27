@@ -112,6 +112,15 @@ l2vpn evpn instance 100 vlan-based
 vlan configuration 100
  member evpn-instance 100 vni 10100
 !
+l2vpn evpn instance 200 vlan-based
+ encapsulation vxlan
+ rd 10.0.0.1:10200
+ route-target export 65000:10200
+ route-target import 65000:10200
+!
+vlan configuration 200
+ member evpn-instance 200 vni 10200
+!
 !
 ! L3 VNI transit SVIs (symmetric IRB — no host addressing, forwarding only)
 ! unverified-no-lab: `vlan configuration <vlan>` / `member vni <l3vni>` binds the L3 VNI to its SVI VLAN
@@ -138,6 +147,7 @@ interface nve1
  source-interface Loopback0
  host-reachability protocol bgp
  member vni 10100 ingress-replication
+ member vni 10200 ingress-replication
  member vni 50001 vrf VRF_A
  no shutdown
 !

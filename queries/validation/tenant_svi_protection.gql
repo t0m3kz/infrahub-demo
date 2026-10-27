@@ -19,7 +19,6 @@ query tenant_svi_protection {
             rules { count }
           }
         }
-        ... on ManagedVlanSegment { inline_service { node { id } } customer_deployment { node { id } } }
         ... on ManagedVxlanSegment { inline_service { node { id } } customer_deployments { edges { node { id } } } }
       }
     }

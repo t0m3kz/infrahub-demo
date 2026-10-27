@@ -10,7 +10,8 @@ states and Infrahub only rejects at load time (or never):
 - the colocation metro lost the kit (``deployment_type``, ``fabric_templates``); the zone and the virtual colocation
   get it from the one generic TopologyColocationFabric;
 - relationship identifiers are unique within topology_colocation.yml (two relationships sharing one are the two ends
-  of a single relationship, which is never what a copy-pasted block means), and ``serving_zone`` has its own.
+  of a single relationship, which is never what a copy-pasted block means), and a colocation footprint has no
+  ``serving_zone`` (it is served by every zone of its metro with firewalls).
 """
 
 from __future__ import annotations
@@ -284,27 +285,98 @@ class TestRelationshipIdentifiers:
             "colocation_metro__technical_pool",
         }
 
-    def test_serving_zone_has_its_own_identifier_across_all_schema_files(self) -> None:
-        """customer_colocation__serving_zone appears once in schemas/, on the one relationship that carries it."""
-        owners: list[str] = []
-        identifiers: Counter[str] = Counter()
-        for kind, (_, entry) in _all_entries().items():
-            for relationship in entry.get("relationships") or []:
-                identifiers[relationship.get("identifier") or ""] += 1
-                if relationship["name"] == "serving_zone":
-                    owners.append(f"{kind}: {relationship['peer']} ({relationship['identifier']})")
+    def test_no_relationship_names_a_serving_zone(self) -> None:
+        """A colocation footprint is served by every zone of its metro that has firewalls: no zone is chosen by data."""
+        owners = [
+            kind
+            for kind, (_, entry) in _all_entries().items()
+            for relationship in entry.get("relationships") or []
+            if relationship["name"] == "serving_zone"
+        ]
 
-        assert owners == ["TopologyCustomerColocation: TopologyColocationZone (customer_colocation__serving_zone)"]
-        assert identifiers["customer_colocation__serving_zone"] == 1
+        assert owners == []
+        assert "serving_zone" not in _relationship_names("TopologyCustomerColocation")
 
-    def test_serving_zone_is_an_optional_single_zone(self) -> None:
-        """Unset means no firewall context (an info log, not an error)."""
-        relationship = next(
-            r for r in _kind("TopologyCustomerColocation")["relationships"] if r["name"] == "serving_zone"
+    def test_serving_firewall_context_is_one_on_a_dc_and_many_on_a_colocation_footprint(self) -> None:
+        """Declared per kind, never on ManagedTenantScoped: a DC footprint has the one context serving it, a colocation
+        footprint one per zone of its metro. Both share the identifier of the context's served_deployments."""
+        ha = _document(_SCHEMAS / "extensions" / "capabilities" / "ha.yml")
+        extensions = {e["kind"]: e for e in ha["extensions"]["nodes"]}
+        served = next(r for r in _kind("ManagedFirewallContext")["relationships"] if r["name"] == "served_deployments")
+
+        def relationship(kind: str, name: str) -> dict[str, Any]:
+            return next(r for r in extensions[kind]["relationships"] if r["name"] == name)
+
+        dc = relationship("TopologyCustomerDC", "serving_firewall_context")
+        colocation = relationship("TopologyCustomerColocation", "serving_firewall_contexts")
+
+        assert (dc["cardinality"], dc["optional"], dc["peer"]) == ("one", True, "ManagedFirewallContext")
+        assert (colocation["cardinality"], colocation["optional"], colocation["peer"]) == (
+            "many",
+            True,
+            "ManagedFirewallContext",
         )
-        assert relationship["cardinality"] == "one"
-        assert relationship["optional"] is True
-        assert relationship["peer"] == "TopologyColocationZone"
+        assert dc["identifier"] == colocation["identifier"] == served["identifier"]
+        assert "ManagedTenantScoped" not in extensions
+        assert {r["name"] for r in extensions["TopologyCustomerDC"]["relationships"]} >= {"serving_firewall_context"}
+        assert "serving_firewall_context" not in {
+            r["name"] for r in extensions["TopologyCustomerColocation"]["relationships"]
+        }
+        assert {"ManagedTenantScoped"} <= set(_kind("TopologyCustomerColocation")["inherit_from"])
+        assert {"ManagedTenantScoped"} <= set(_kind("TopologyCustomerDC")["inherit_from"])
+
+    def test_footprint_segments_are_declared_per_kind_with_a_concrete_peer(self) -> None:
+        """The segments of a DC, colocation and office footprint are VXLAN only and a cloud footprint's are
+        CloudNetworkSegment: one network_segments per kind, none on the TopologyCustomer generic (a narrowed
+        peer next to a generic one would make `id` nullable in one kind and not in the other)."""
+        segment = _document(_SCHEMAS / "extensions" / "service" / "segment.yml")
+        declared: dict[str, list[dict[str, Any]]] = {}
+        for extension in segment["extensions"]["nodes"]:
+            for relationship in extension.get("relationships") or []:
+                if relationship.get("identifier") == "segment__customer_deployments":
+                    declared.setdefault(extension["kind"], []).append(relationship)
+
+        assert {kind: [r["peer"] for r in rels] for kind, rels in declared.items()} == {
+            "TopologyCustomerDC": ["ManagedVxlanSegment"],
+            "TopologyCustomerColocation": ["ManagedVxlanSegment"],
+            "TopologyCustomerOffice": ["ManagedVxlanSegment"],
+            "TopologyCustomerCloud": ["CloudNetworkSegment"],
+        }
+        for rels in declared.values():
+            (rel,) = rels
+            assert (rel["cardinality"], rel["optional"], rel["identifier"], rel["order_weight"]) == (
+                "many",
+                True,
+                "segment__customer_deployments",
+                2100,
+            )
+
+    def test_every_topology_customer_kind_declares_its_own_segment_edge(self) -> None:
+        """No kind inheriting TopologyCustomer is left without an edge now that the generic has none."""
+        kinds = {
+            kind for kind, (_, entry) in _all_entries().items() if "TopologyCustomer" in entry.get("inherit_from", [])
+        }
+        segment = _document(_SCHEMAS / "extensions" / "service" / "segment.yml")
+        declared = {
+            e["kind"]
+            for e in segment["extensions"]["nodes"]
+            if any(r.get("identifier") == "segment__customer_deployments" for r in e.get("relationships") or [])
+        }
+
+        assert kinds == {"TopologyCustomerDC", "TopologyCustomerColocation", "TopologyCustomerCloud"}
+        assert kinds <= declared
+        assert "TopologyCustomer" not in declared
+
+    def test_the_field_conflict_rule_holds_for_the_footprint_segment_queries(self, root_dir: Path) -> None:
+        """No query reaches network_segments through the TopologyCustomer generic any more: it would not parse
+        against the schema, and two kinds with different peers conflict in one selection (id String! vs String)."""
+        offenders = [
+            path.relative_to(root_dir).as_posix()
+            for path in sorted((root_dir / "queries").rglob("*.gql"))
+            if "on TopologyCustomer {" in path.read_text() and "network_segments" in path.read_text()
+        ]
+
+        assert offenders == []
 
 
 class TestCloudNetworkAppliance:

@@ -36,10 +36,7 @@ def _segment(
         "inline_service": {"node": {"id": "fw"} if inline else None},
         "security_policy": {"node": policy},
     }
-    if kind == "ManagedVxlanSegment":
-        node["customer_deployments"] = {"edges": [{"node": {"id": d}} for d in deployments or []]}
-    else:
-        node["customer_deployment"] = {"node": {"id": deployments[0]} if deployments else None}
+    node["customer_deployments"] = {"edges": [{"node": {"id": d}} for d in deployments or []]}
     return {"node": node}
 
 
@@ -100,11 +97,6 @@ class TestProtected:
         """PBR redirects a served customer deployment to its dedicated context."""
         assert _run([_segment(deployments=["dep-a"])], [_context(tenant="dep-x", served=["dep-a"])]) == []
 
-    def test_vlan_segment_with_a_dedicated_tenant_context_passes(self) -> None:
-        """customer_deployment (single) matches the context tenant."""
-        segment = _segment(kind="ManagedVlanSegment", deployments=["dep-a"])
-        assert _run([segment], [_context(tenant="dep-a")]) == []
-
     @pytest.mark.parametrize(
         "segment",
         [
@@ -112,10 +104,9 @@ class TestProtected:
             _segment(namespace_type="management"),
             _segment(namespace_type=None),
             _segment(zone="INTERNET-ZONE"),
-            _segment(kind="ManagedExternalSegment"),
             _segment(kind="CloudNetworkSegment"),
         ],
-        ids=["internet-vrf", "management-vrf", "l2-only", "exchange-zone", "external", "cloud"],
+        ids=["internet-vrf", "management-vrf", "l2-only", "exchange-zone", "cloud"],
     )
     def test_non_tenant_or_non_routed_segments_are_exempt(self, segment: dict[str, Any]) -> None:
         """Only routed PROD/NON-PROD tenant SVIs are in scope."""

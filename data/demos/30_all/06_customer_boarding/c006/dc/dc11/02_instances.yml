@@ -39,3 +39,15 @@ spec:
       object_template: LINUX-SVC
       hosting_device: dc11-pod1-server-2
       deployment: "C006-P-DC11"
+
+    # The DNS and NTP servers of the Infrastructure Services pseudo-customer (../../../../07_applications/infra), on the
+    # segment of C006's footprint in this DC.
+    - name: infra-core-dc11-1
+      object_template: LINUX-SVC
+      hosting_device: dc11-pod1-server-1
+      deployment: "C006-P-DC11"
+
+    - name: infra-core-dc11-2
+      object_template: LINUX-SVC
+      hosting_device: dc11-pod1-server-2
+      deployment: "C006-P-DC11"

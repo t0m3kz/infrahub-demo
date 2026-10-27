@@ -1,10 +1,5 @@
 """Generator for VXLAN segment deployment activations.
 
-VlanSegment has no generator — its vlan_id is a plain manual attribute
-(single-site, no pool allocation, no SegmentDeployment realization record).
-Overlap validation across VlanSegments on the same fabric is a device check,
-not generator logic.
-
 VxlanSegmentGenerator handles:
   0. Address a segment without a gateway: a prefix from the tenant pool of
      its environment's VRF namespace (Tenant-<namespace>-IPv4, keyed by the

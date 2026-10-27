@@ -336,6 +336,17 @@ nodes:
         order_weight: 2440
         identifier: policyrule_destination_prefixes
         description: "Destination prefix selectors for prefix- and hybrid-intent rules"
+      # The internet is a zone, not a segment: it has no prefix, gateway or owner. A rule to it names the zone
+      # (INTERNET-ZONE) and nothing else: checks/segment_security.py refuses a second destination.
+      - name: destination_zone
+        peer: SecurityZone
+        label: Destination Zone
+        cardinality: one
+        kind: Attribute
+        optional: true
+        order_weight: 2450
+        identifier: policyrule_destination_zone
+        description: "Destination zone with no address space of its own (the internet: INTERNET-ZONE); excludes every other destination"  # yamllint disable-line rule:line-length
       # Inspection profile
       - name: security_profile
         peer: SecuritySecurityProfile

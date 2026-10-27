@@ -540,12 +540,5 @@ class TestSites:
         segment = {"segment_deployments": [{"deployment": {"id": "dc10"}}, {"deployment": {"id": "fr"}}, {}]}
         assert segment_sites(segment) == {"dc10", "fr"}
 
-    def test_vlan_segment_is_active_in_its_footprints_data_center(self) -> None:
-        assert segment_sites({"customer_deployment": {"id": "fp-1", "parent": {"id": "dc11"}}}) == {"dc11"}
-
-    def test_vlan_segment_of_another_footprint_kind_is_active_in_the_footprint(self) -> None:
-        """An office or colocation footprint is its own site: never a data center."""
-        assert segment_sites({"customer_deployment": {"id": "fp-office"}}) == {"fp-office"}
-
     def test_segment_active_nowhere(self) -> None:
         assert segment_sites({}) == set()

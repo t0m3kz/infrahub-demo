@@ -235,19 +235,17 @@ class TestEnsureSecurityTag:
 class TestEnsureSegmentTag:
     """Every routed tenant segment, and nothing else, gets the group named after it."""
 
-    @pytest.mark.parametrize(
-        ("kind", "namespace_type"), [("ManagedVxlanSegment", "prod"), ("ManagedVlanSegment", "non_prod")]
-    )
-    def test_routed_tenant_segment_is_tagged_with_its_name(self, kind: str, namespace_type: str) -> None:
-        """VLAN and VXLAN alike, PROD and NON-PROD alike; attached on the segment's own kind."""
+    @pytest.mark.parametrize("namespace_type", ["prod", "non_prod"])
+    def test_routed_tenant_segment_is_tagged_with_its_name(self, namespace_type: str) -> None:
+        """PROD and NON-PROD alike; attached on the segment's own kind."""
         client, lock = _client(), _Lock()
 
-        assert _tag_segment(client, lock, _segment(kind=kind, namespace_type=namespace_type)) == "tag-new"
+        assert _tag_segment(client, lock, _segment(namespace_type=namespace_type)) == "tag-new"
 
         assert lock.keys == [f"sgt-{SEGMENT}"]
         (tag_kind, tag_data, _tag), (seg_kind, seg_data, seg) = client.created
         assert (tag_kind, tag_data["name"]) == (SecurityTag, SEGMENT)
-        assert (seg_kind, seg_data) == (kind, {"id": "seg-1", "security_tag": {"id": "tag-new"}})
+        assert (seg_kind, seg_data) == ("ManagedVxlanSegment", {"id": "seg-1", "security_tag": {"id": "tag-new"}})
         seg.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
 
     def test_segment_that_has_its_tag_writes_nothing(self) -> None:
@@ -266,13 +264,12 @@ class TestEnsureSegmentTag:
             _segment(namespace_type="internet", zone="INTERNET-ZONE"),
             _segment(zone="MANAGEMENT-ZONE"),
             _segment(namespace_type=None),
-            _segment(kind="ManagedExternalSegment"),
             _segment(kind="CloudNetworkSegment"),
         ],
-        ids=["management-vrf", "internet-vrf", "exchange-zone", "no-gateway", "external", "cloud"],
+        ids=["management-vrf", "internet-vrf", "exchange-zone", "no-gateway", "cloud"],
     )
     def test_any_other_segment_is_never_tagged(self, segment: dict[str, Any]) -> None:
-        """MANAGEMENT/INTERNET, an exchange zone, no gateway, External or Cloud: nothing looked up or written."""
+        """MANAGEMENT/INTERNET, an exchange zone, no gateway or Cloud: nothing looked up or written."""
         client, lock = _client(), _Lock()
 
         assert _tag_segment(client, lock, segment) is None

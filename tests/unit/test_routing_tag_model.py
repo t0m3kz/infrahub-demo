@@ -27,7 +27,6 @@ from tests.integration.demo_data import (
 from utils.limits import ROUTING_TAG_MAX, ROUTING_TAG_MIN
 
 CUSTOMER_GROUP = "customers"
-BOOTSTRAP_UNTAGGED_ORG = "INTERNET"  # the only bootstrap customer; owns External segments only
 GENERATOR = "add_customer_routing_tag"
 POOLS = {
     "Customer-Routing-Tag": ("OrganizationCustomer", "routing_tag"),
@@ -68,12 +67,11 @@ class TestSchemaAttribute:
         assert "routing_tag" in protocols.__dict__[kind].__annotations__
 
 
-@pytest.mark.parametrize("kind", ["VlanSegment", "VxlanSegment", "ExternalSegment"])
-def test_a_segment_node_does_not_redefine_the_generic_attribute(kind: str) -> None:
+def test_a_segment_node_does_not_redefine_the_generic_attribute() -> None:
     """A node may not redefine an attribute its generic provides (no allow_override): only the generic declares it,
     and the node reaches it through inheritance."""
-    assert "routing_tag" not in schema()[f"Managed{kind}"].attributes
-    assert attribute(f"Managed{kind}", "routing_tag") is not None
+    assert "routing_tag" not in schema()["ManagedVxlanSegment"].attributes
+    assert attribute("ManagedVxlanSegment", "routing_tag") is not None
 
 
 class TestPools:
@@ -140,19 +138,11 @@ class TestGeneratorWiring:
             {
                 str(obj.path.relative_to(ROOT))
                 for obj in declared("OrganizationCustomer", ROOT / "data", ROOT / "tests" / "integration" / "data")
-                if CUSTOMER_GROUP not in obj.groups() and obj.value("org_id") != BOOTSTRAP_UNTAGGED_ORG
+                if CUSTOMER_GROUP not in obj.groups()
             }
         )
 
         assert not outside, f"OrganizationCustomer objects not in '{CUSTOMER_GROUP}': {outside}"
-
-    def test_the_bootstrap_internet_customer_is_deliberately_outside_the_group(self) -> None:
-        """It is created on main, where the created-trigger never fires, and owns only External segments: a member
-        would be tagged by the first rerun and fail the idempotency snapshot."""
-        internet = [obj for obj in declared("OrganizationCustomer", ROOT / "data" / "bootstrap")]
-
-        assert [obj.value("org_id") for obj in internet] == [BOOTSTRAP_UNTAGGED_ORG]
-        assert CUSTOMER_GROUP not in internet[0].groups()
 
     def test_the_30_all_load_must_dispatch_once_per_distinct_customer(self) -> None:
         """The dispatch floor test_59 asserts: one run per customer, a re-declaration counted once."""
@@ -162,12 +152,11 @@ class TestGeneratorWiring:
         assert len(customers) > 1
         assert created_dispatches(GENERATOR, demo) == len(customers)
 
-    def test_30_all_customer_list_has_the_branch_created_customers_not_the_bootstrap_one(self) -> None:
-        """test_59 holds these to a tag; the Internet customer is created on main, where no trigger fires."""
+    def test_30_all_customer_list_has_the_branch_created_customers(self) -> None:
+        """test_59 holds these to a tag."""
         from tests.integration.all_demo_constants import ALL_DEMO_CUSTOMER_ORG_IDS
 
         assert {"C001", "C020", "INFRA"} <= set(ALL_DEMO_CUSTOMER_ORG_IDS)
-        assert "INTERNET" not in ALL_DEMO_CUSTOMER_ORG_IDS
 
     def test_check_is_registered_with_a_registered_query(self, root_dir: Path) -> None:
         config = _infrahub_config(root_dir)

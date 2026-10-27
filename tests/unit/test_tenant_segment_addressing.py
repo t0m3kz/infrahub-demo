@@ -25,7 +25,7 @@ from generators.protocols import IpamPrefix
 from generators.topology.application_security import AppApplicationGenerator
 from generators.topology.segment import VxlanSegmentGenerator, tenant_pool_name
 from tests.integration.demo_data import ROOT, declared, name
-from utils.exchange_transit import namespace_type_for_environment
+from utils.exchange_transit import is_exchange_zone, namespace_type_for_environment
 from utils.limits import OFFSET_ANYCAST
 
 _NAMESPACES = {"prod": ("ns-prod", "PROD"), "non_prod": ("ns-nonprod", "NON-PROD")}
@@ -368,12 +368,11 @@ class TestAppWaitsForSegmentAddressing:
         }
 
     def test_waits_only_for_gateway_less_vxlan_segments(self) -> None:
-        """A VLAN segment (no generator) and an addressed VXLAN segment are not waited for."""
+        """An addressed VXLAN segment is not waited for, a gateway-less one once."""
         gen = self._gen(None)
         app = self._app(
             {"id": "seg-new", "typename": "ManagedVxlanSegment", "gateway": None},
             {"id": "seg-done", "typename": "ManagedVxlanSegment", "gateway": {"id": "gw"}},
-            {"id": "seg-vlan", "typename": "ManagedVlanSegment", "gateway": None},
             {"id": "seg-new", "typename": "ManagedVxlanSegment", "gateway": None},
         )
 
@@ -415,9 +414,19 @@ class TestAppWaitsForSegmentAddressing:
         gen._reconcile_application_rules.assert_awaited_once_with({"id": "app-1", "name": "re-read"})
 
 
-def test_all_demo_vxlan_tenant_segments_declare_no_addressing() -> None:
-    """Every 30_all VXLAN segment's gateway and prefix are derived: none is typed."""
-    segments = declared("ManagedVxlanSegment", ROOT / "data" / "demos" / "30_all")
+def test_all_demo_dc_tenant_segments_declare_no_addressing() -> None:
+    """Every 30_all VXLAN segment in a data center footprint has its gateway and prefix derived: none is typed.
+    The authored gateway (kept by add_vxlan_segment) is for a colocation cage's segment and an exchange-zone
+    service segment (the MANAGEMENT services)."""
+    demo = ROOT / "data" / "demos" / "30_all"
+    dc_footprints = {name(obj) for obj in declared("TopologyCustomerDC", demo)}
+    segments = declared("ManagedVxlanSegment", demo)
     assert segments, "the scan found no VXLAN segment"
-    typed = [f"{obj.path.relative_to(ROOT)}: {name(obj)}" for obj in segments if "gateway" in obj.item]
-    assert not typed, "VXLAN segments with a hand-typed gateway:\n" + "\n".join(typed)
+    typed = [
+        f"{obj.path.relative_to(ROOT)}: {name(obj)}"
+        for obj in segments
+        if "gateway" in obj.item
+        and not is_exchange_zone(obj.item.get("security_zone"))
+        and dc_footprints & set(obj.item.get("customer_deployments") or [])
+    ]
+    assert not typed, "VXLAN segments in a DC footprint with a hand-typed gateway:\n" + "\n".join(typed)

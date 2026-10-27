@@ -582,8 +582,7 @@ class BaseDeviceTransform(InfrahubTransform):
     ) -> list[dict]:
         """Collect unique segment activations from capabilities.
 
-        VlanSegment.vlan_id is a plain manual attribute directly on the segment
-        (single-site, no realization record). VxlanSegment.segment_deployments
+        VxlanSegment.segment_deployments
         is cardinality:many (multi-site stretch — clean_data unwraps it to a
         list, already filtered to active/provisioning by the query) and
         carries the vni and, under it, the vlan_domain_segments rows — the LOCAL
@@ -604,20 +603,16 @@ class BaseDeviceTransform(InfrahubTransform):
                 seg_id = cap.get("id") or cap.get("name")
                 if not seg_id or seg_id in seen:
                     continue
-                if cap.get("typename") == "ManagedVlanSegment":
-                    vlan_id = cap.get("vlan_id")
-                    vni = None
-                else:
-                    seg_deps = cap.get("segment_deployments")
-                    if not seg_deps:
+                seg_deps = cap.get("segment_deployments")
+                if not seg_deps:
+                    continue
+                if self.resolve_vlan_domain:
+                    own_row = self._own_vlan_domain_row(seg_deps, own_domain_id)
+                    if own_row is None:
                         continue
-                    if self.resolve_vlan_domain:
-                        own_row = self._own_vlan_domain_row(seg_deps, own_domain_id)
-                        if own_row is None:
-                            continue
-                        vlan_id, vni = own_row[0].get("vlan_id"), own_row[1].get("vni")
-                    else:
-                        vlan_id, vni = seg_deps[0].get("vlan_id"), seg_deps[0].get("vni")
+                    vlan_id, vni = own_row[0].get("vlan_id"), own_row[1].get("vni")
+                else:
+                    vlan_id, vni = seg_deps[0].get("vlan_id"), seg_deps[0].get("vni")
                 seen.add(seg_id)
                 activations.append(
                     {

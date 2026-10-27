@@ -284,7 +284,7 @@ def _all_demo_vms() -> list[dict[str, Any]]:
 def test_the_scan_finds_the_all_demo_vms() -> None:
     """Every 30_all VM is placed on a host in a DC and deployed for a footprint with an environment."""
     vms = _all_demo_vms()
-    assert len(vms) == 38
+    assert len(vms) == 40
     assert all(vm["node"]["deployment"]["node"]["environment"]["value"] for vm in vms)
     assert all(vm["node"]["hosting_device"]["node"]["deployment"]["node"] for vm in vms)
 

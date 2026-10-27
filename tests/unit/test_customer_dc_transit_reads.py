@@ -180,19 +180,19 @@ class TestContextReadUnderTheLockIsReused:
 
 
 class TestServingLinkComesFromTheBoardingQuery:
-    """link_serving_context is told which context the query found the footprint linked to."""
+    """link_serving_context is told which contexts the query found the footprint linked to."""
 
     @pytest.mark.parametrize(
         ("serving", "expected"),
         [
-            ({"node": {"id": "ctx-found"}}, "ctx-found"),
-            ({"node": None}, None),  # an empty optional relationship
-            ({}, None),
-            (None, None),
+            ({"node": {"id": "ctx-found"}}, ["ctx-found"]),
+            ({"node": None}, []),  # an empty optional relationship
+            ({}, []),
+            (None, []),
         ],
     )
     @pytest.mark.asyncio
-    async def test_the_current_link_in_the_payload_is_passed_on(self, serving: Any, expected: str | None) -> None:
+    async def test_the_current_link_in_the_payload_is_passed_on(self, serving: Any, expected: list[str]) -> None:
         world = _World()
         gen, _ = _make_gen(world)
         payload = _payload()
@@ -201,7 +201,7 @@ class TestServingLinkComesFromTheBoardingQuery:
         await _run(gen, world, payload)
 
         gen.link_serving_context.assert_awaited_once_with(
-            FIREWALL_CONTEXT, customer_id="cust-1", context_id=world.contexts[_SHARED].id, current_id=expected
+            FIREWALL_CONTEXT, customer_id="cust-1", context_id=world.contexts[_SHARED].id, current_ids=expected
         )
 
     @pytest.mark.asyncio
@@ -211,7 +211,7 @@ class TestServingLinkComesFromTheBoardingQuery:
 
         await _run(gen, world, _payload())
 
-        assert gen.link_serving_context.await_args.kwargs["current_id"] is None
+        assert gen.link_serving_context.await_args.kwargs["current_ids"] == []
 
     @pytest.mark.parametrize(
         ("query", "fields"),
@@ -220,7 +220,7 @@ class TestServingLinkComesFromTheBoardingQuery:
                 "customer_dc.gql",
                 ["serving_firewall_context { node { id } }", "serving_loadbalancer_context { node { id } }"],
             ),
-            ("customer_colocation.gql", ["serving_firewall_context { node { id } }"]),
+            ("customer_colocation.gql", ["serving_firewall_contexts { edges { node { id } } }"]),
         ],
     )
     def test_the_boarding_queries_select_the_serving_links(self, root_dir: Path, query: str, fields: list[str]) -> None:

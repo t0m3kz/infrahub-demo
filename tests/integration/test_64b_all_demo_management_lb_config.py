@@ -41,9 +41,8 @@ from .all_demo_firewall_constants import (
     MANAGEMENT_NAMESPACE,
     MANAGEMENT_SERVICES_DC,
     MANAGEMENT_SERVICES_GATEWAY,
-    MANAGEMENT_SERVICES_LEAF,
     MANAGEMENT_SERVICES_PREFIX,
-    MANAGEMENT_SERVICES_VLAN,
+    MANAGEMENT_SERVICES_SEGMENT,
     transit_namespace_type,
 )
 from .all_demo_loadbalancer_constants import (
@@ -275,14 +274,16 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         """The services segment is never steered, and nothing bypasses the firewall towards it.
 
         Leaf/access-leaf carrying the c006 segment (its VLAN on that switch, read from the graph): the PBR
-        bypass ACL, if rendered, does not permit 10.250.0.0/24, so the flow goes to the firewall. The access-leaf pinned to the services segment
-        renders `interface Vlan250` in VRF MANAGEMENT with the anycast gateway 10.250.0.1/24 and no
-        PBR (no `ip policy route-map`, no RM-LEAF-PBR-VLAN250 / PBR-BYPASS-VLAN250).
+        bypass ACL, if rendered, does not permit 10.250.0.0/24, so the flow goes to the firewall. Every leaf that
+        carries the services segment (its VLAN on that switch, read from the graph: the segment's ports come from the
+        instances of the INFRA application) renders that VLAN's SVI in VRF MANAGEMENT with the anycast gateway
+        10.250.0.1/24 and no PBR (no `ip policy route-map`, no RM-LEAF-PBR-VLAN<n> / PBR-BYPASS-VLAN<n>).
         """
         logging.info("=== %s - Step 7: Leaf PBR and the services SVI ===", SCENARIO_NAME)
 
         errors: list[str] = []
         client = await _segment_on_switches(async_client_main, scenario_branch, MANAGEMENT_CLIENT_SEGMENT)
+        services = await _segment_on_switches(async_client_main, scenario_branch, MANAGEMENT_SERVICES_SEGMENT)
         topology = await fetch_dc_topology(async_client_main, scenario_branch, MANAGEMENT_SERVICES_DC)
         leaf_classes = {"leaf": Leaf, "access-leaf": AccessLeaf}
         carrying_client_vlan: list[str] = []
@@ -304,34 +305,34 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
                 bypass = _block(rendered, f"ip access-list PBR-BYPASS-VLAN{client_vlan}")
                 if bypass is not None and MANAGEMENT_SERVICES_PREFIX in bypass:
                     errors.append(f"{name}: PBR-BYPASS-VLAN{client_vlan} permits {MANAGEMENT_SERVICES_PREFIX}")
-            if name != MANAGEMENT_SERVICES_LEAF:
+            services_vlan = services.vlan_on(name)
+            if services_vlan is None:
                 continue
             services_leaf_rendered = True
-            svi = _block(rendered, f"interface Vlan{MANAGEMENT_SERVICES_VLAN}")
+            svi = _block(rendered, f"interface Vlan{services_vlan}")
             if svi is None:
-                errors.append(f"{name}: no 'interface Vlan{MANAGEMENT_SERVICES_VLAN}'")
+                errors.append(f"{name}: no 'interface Vlan{services_vlan}'")
             else:
                 if f"vrf member {MANAGEMENT_NAMESPACE}" not in svi:
-                    errors.append(f"{name}: Vlan{MANAGEMENT_SERVICES_VLAN} is not in VRF {MANAGEMENT_NAMESPACE}")
+                    errors.append(f"{name}: Vlan{services_vlan} is not in VRF {MANAGEMENT_NAMESPACE}")
                 if f"ip address {MANAGEMENT_SERVICES_GATEWAY}" not in svi:
-                    errors.append(
-                        f"{name}: Vlan{MANAGEMENT_SERVICES_VLAN} lacks 'ip address {MANAGEMENT_SERVICES_GATEWAY}'"
-                    )
+                    errors.append(f"{name}: Vlan{services_vlan} lacks 'ip address {MANAGEMENT_SERVICES_GATEWAY}'")
                 if "ip policy route-map" in svi:
-                    errors.append(f"{name}: Vlan{MANAGEMENT_SERVICES_VLAN} carries a PBR policy")
+                    errors.append(f"{name}: Vlan{services_vlan} carries a PBR policy")
             for pbr_object in (
-                f"RM-LEAF-PBR-VLAN{MANAGEMENT_SERVICES_VLAN}",
-                f"PBR-BYPASS-VLAN{MANAGEMENT_SERVICES_VLAN}",
+                f"RM-LEAF-PBR-VLAN{services_vlan}",
+                f"PBR-BYPASS-VLAN{services_vlan}",
             ):
                 if pbr_object in rendered:
                     errors.append(f"{name}: renders {pbr_object}")
 
         assert carrying_client_vlan, (
             f"no leaf of {MANAGEMENT_SERVICES_DC} carries {MANAGEMENT_CLIENT_SEGMENT} "
-            f"(its VLAN per switch: {client.vlans_by_device or client.vlan_id})"
+            f"(its VLAN per switch: {client.vlans_by_device})"
         )
         assert services_leaf_rendered, (
-            f"{MANAGEMENT_SERVICES_LEAF} is not a leaf or access-leaf of {MANAGEMENT_SERVICES_DC}"
+            f"no leaf or access-leaf of {MANAGEMENT_SERVICES_DC} carries {MANAGEMENT_SERVICES_SEGMENT} "
+            f"(its VLAN per switch: {services.vlans_by_device})"
         )
         assert not errors, (
             f"Leaf PBR towards the services segment on branch '{scenario_branch}' is wrong:\n"

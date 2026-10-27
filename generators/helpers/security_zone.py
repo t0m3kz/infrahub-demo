@@ -6,7 +6,6 @@ from typing import Any
 from weakref import WeakKeyDictionary
 
 from utils.exchange_transit import (
-    EXTERNAL_SEGMENT_KIND,
     is_exchange_zone,
     namespace_type_for_environment,
     zone_name_for_namespace_type,
@@ -40,10 +39,9 @@ async def ensure_security_zone(
     run's own TARGET, so a tracked save would put it in the run's group and a
     later run that skips the save would delete the segment. ``current_zone`` (the
     zone name the caller read from the segment) makes a second pass write
-    nothing. An External segment is never touched (returns None), and neither
-    is a segment already in an exchange zone (returns that zone): a shared
-    service segment such as the DC-local MANAGEMENT services sits there by
-    design, the same exemption checks/segment_security.py makes
+    nothing. A segment already in an exchange zone is never re-zoned (returns that
+    zone): a shared service segment such as the DC-local MANAGEMENT services sits
+    there by design, the same exemption checks/segment_security.py makes
     (utils.exchange_transit.is_exchange_zone), so an application with a
     component on it does not re-zone it to its environment's zone.
     """
@@ -51,8 +49,6 @@ async def ensure_security_zone(
         raise ValueError("ensure_security_zone needs the segment's typename (no default kind)")
     if not segment_id:
         raise ValueError("ensure_security_zone needs the segment id")
-    if kind == EXTERNAL_SEGMENT_KIND:
-        return None
     if is_exchange_zone(current_zone):
         return current_zone
     if not environment:

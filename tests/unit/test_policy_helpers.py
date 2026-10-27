@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from transforms.helpers.policy import rule_endpoint, rule_selector
+from transforms.helpers.policy import rule_endpoint, rule_selector, rule_zone
 
 
 def test_rule_selector_prefers_a_prefix_and_returns_its_namespace() -> None:
@@ -46,3 +46,22 @@ def test_rule_endpoint_uses_the_selector_cidr_when_the_segment_has_no_prefix() -
     assert rule_endpoint(selector_rule, "destination") == "10.40.0.0/16"
     assert rule_endpoint(segment_rule, "destination") == "10.1.0.0/24"
     assert rule_endpoint({}, "destination") is None
+
+
+def test_rule_zone_of_the_destination_is_the_rules_own_destination_zone() -> None:
+    """A rule to the internet has no destination segment: its zone is the rule's destination_zone."""
+    rule = {"source_segment": {"security_zone": {"name": "PROD-ZONE"}}, "destination_zone": {"name": "INTERNET-ZONE"}}
+
+    assert rule_zone(rule, "destination") == "INTERNET-ZONE"
+    assert rule_zone(rule, "source") == "PROD-ZONE"
+
+
+def test_rule_zone_falls_back_to_the_segments_zone_and_to_none() -> None:
+    """Without a destination_zone the segment's security_zone decides; neither means no zone."""
+    assert rule_zone({"destination_segment": {"security_zone": {"name": "PROD-ZONE"}}}, "destination") == "PROD-ZONE"
+    assert rule_zone({"destination_zone": None, "destination_segment": None}, "destination") is None
+
+
+def test_rule_endpoint_of_a_destination_zone_is_any() -> None:
+    """The zone names no address: the endpoint stays None (any), which is what the firewall table renders."""
+    assert rule_endpoint({"destination_zone": {"name": "INTERNET-ZONE"}}, "destination") is None

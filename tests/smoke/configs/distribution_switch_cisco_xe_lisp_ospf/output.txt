@@ -81,7 +81,9 @@ router lisp
  site C005-OFFICE
   authentication-key 0ff1c3-k3y
   eid-record instance-id 50001 10.100.0.0/24 accept-more-specifics
+  eid-record instance-id 50001 10.200.0.0/24 accept-more-specifics
   eid-record instance-id 10100 any-mac
+  eid-record instance-id 10200 any-mac
   exit-site
 !
 ! Management

@@ -3,7 +3,7 @@ version: "1.0"
 generics:
   - name: NetworkSegment
     namespace: Managed
-    description: "Base generic for all network segments (on-prem VLAN/VXLAN and cloud VPC subnets)"  # yamllint disable-line rule:line-length
+    description: "Base generic for all network segments (on-prem VXLAN and cloud VPC subnets)"  # yamllint disable-line rule:line-length
     label: Network Segment
     icon: "carbon:network-3"
     include_in_menu: false
@@ -17,13 +17,10 @@ generics:
         kind: Text
         order_weight: 100
         description: "Network segment identifier"
-        # {org_id}-{customer_name}-{environment}, except a segment named after
-        # its owner (org_id == customer_name, the Internet pseudo-customer's
-        # ManagedExternalSegment): just that token, e.g. "internet". No real
-        # customer's org_id (C005, P012, INFRA, ...) is one of its segment names.
+        # {org_id}-{customer_name}-{environment}, lowercased.
         computed_attribute:
           kind: Jinja2
-          jinja2_template: "{% if owner__org_id__value|lower == customer_name__value|lower|replace(' ', '-') %}{{owner__org_id__value|lower}}{% else %}{{owner__org_id__value|lower}}-{{customer_name__value|lower|replace(' ', '-')}}-{{environment__value}}{% endif %}"  # yamllint disable-line rule:line-length
+          jinja2_template: "{{owner__org_id__value|lower}}-{{customer_name__value|lower|replace(' ', '-')}}-{{environment__value}}"  # yamllint disable-line rule:line-length
         read_only: true
         optional: false
       - name: description
@@ -69,10 +66,6 @@ generics:
         order_weight: 250
         description: "Segmentation technology (cloud provider or on-prem)"
         choices:
-          - name: vlan
-            label: VLAN
-            description: "IEEE 802.1Q VLAN"
-            color: "#7FBF7F"
           - name: vxlan
             label: VXLAN
             description: "VXLAN overlay segment"

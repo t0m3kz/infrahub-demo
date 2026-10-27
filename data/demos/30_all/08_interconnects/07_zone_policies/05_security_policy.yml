@@ -3,7 +3,7 @@
 # Every destination is reachable: the AWS rule names the VPC block C001 registers behind the
 # AWS transit VIF session (nordix-vpc-prod, 06_customer_boarding/c001/cloud), the Acme rule
 # the prefix C001 registers behind the partner tunnel (01_partner_tunnel.yml), and the Zscaler rule
-# the Internet segment (a SaaS PoP is public space: nothing registers it). Both prefix objects
+# the internet zone (a SaaS PoP is public space: nothing registers it). Both prefix objects
 # live in PROD, declared where they are registered; no prefix is declared for the policy alone.
 # These are rules of C001's "nordix-prod" segment
 # (data/demos/30_all/07_applications/c001/00_segment.yml), so they live in that
@@ -11,14 +11,14 @@
 # policy per segment, shared with the rules the application generator writes
 # for the segment's AppDependencies (they take index >= 100; these hand-written
 # ones stay below). The destination is a registered prefix on the far side of the
-# interconnect, or the Internet segment, not a tenant segment.
+# interconnect, or the internet zone (destination_zone), not a tenant segment.
 #
 # default_action: deny means nothing beyond the explicit permits reaches
 # AWS/Acme/the internet from this segment. How each flow is enforced follows
 # leaf PBR (transforms/helpers/firewall_pbr.py::get_customer_pbr_rules): a permit to a
 # prefix in the segment's own VRF (the AWS VPC block and the Acme range, PROD prefixes the
 # tenant VRF routes because the border learns them) is bypassed — it stays on the fabric and
-# the leaf ACL enforces it; a permit to the Internet segment (the Zscaler rule) is never
+# the leaf ACL enforces it; a permit to the internet zone (the Zscaler rule) is never
 # bypassed and is redirected to the FR metro firewall context.
 apiVersion: infrahub.app/v1
 kind: Object
@@ -61,17 +61,17 @@ spec:
             protocol: tcp
             port_start: 443
             source_segment: "c001-nordix-prod-p"
-            # A SaaS security PoP is internet space: the Internet segment, not a registered prefix.
-            destination_segment: "internet"
+            # A SaaS security PoP is internet space: the internet zone, not a registered prefix.
+            destination_zone: "INTERNET-ZONE"
             apply_on_switch: false
             log: false
             description: "Nordix web tier to the Zscaler cloud security PoP, an internet destination"
 ---
 # Internet egress of DC11. C006's "nordix-prod" segment (a VXLAN segment in
-# DC11's shared PAN-OS firewall context) may open https to the Internet segment
-# (data/bootstrap/27_external_segments.yml): a segment with no prefix, in
-# INTERNET-ZONE. The firewall renders it as zone INTERNET-ZONE, destination
-# any. The leaf ACL cannot say "anything but internal", so it denies every
+# DC11's shared PAN-OS firewall context) may open https to the internet: a rule
+# whose destination is the zone INTERNET-ZONE (destination_zone), not a segment
+# (the internet has no prefix). The firewall renders it as zone INTERNET-ZONE,
+# destination any. The leaf ACL cannot say "anything but internal", so it denies every
 # NON_INTERNET_PREFIXES range first and only then permits any
 # (transforms/helpers/acl.py). apply_on_switch stays false: a switch-enforced
 # rule would pull the segment's whole ACL onto the leaf (_leaf_enforces).
@@ -94,7 +94,7 @@ spec:
             protocol: tcp
             port_start: 443
             source_segment: "c006-nordix-prod-p"
-            destination_segment: "internet"
+            destination_zone: "INTERNET-ZONE"
             apply_on_switch: false
             log: false
             description: "Lumivex ERP tier to the internet over https, through the DC11 firewall"

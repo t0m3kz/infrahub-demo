@@ -10,9 +10,4 @@ fragment InlineTerminationFields on ManagedNetworkSegment {
     inline_service { node { name { value } } }
     gateway { node { address { value } } }
   }
-  ... on ManagedVlanSegment {
-    terminate_inline { value }
-    inline_service { node { name { value } } }
-    gateway { node { address { value } } }
-  }
 }

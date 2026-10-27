@@ -220,9 +220,9 @@ class TestGetCustomerPbrRules:
         result = get_customer_pbr_rules(activations, contexts)
         assert result[0]["bypass_prefixes"] == []
 
-    def test_permit_to_a_prefix_less_external_segment_is_no_bypass(self) -> None:
-        """The internet segment has no prefix: the leaf keeps redirecting to the firewall."""
-        rule = {"action": "permit", "disabled": False, "destination_segment": {"name": "internet"}}
+    def test_permit_to_the_internet_zone_is_no_bypass(self) -> None:
+        """The internet has no prefix: the leaf keeps redirecting to the firewall."""
+        rule = {"action": "permit", "disabled": False, "destination_zone": {"name": "INTERNET-ZONE"}}
         policies = [{"enabled": True, "rules": [rule]}]
         activations = [_make_pbr_activation(security_policies=policies)]
         result = get_customer_pbr_rules(activations, [_make_context_leg()])

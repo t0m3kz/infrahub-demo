@@ -72,7 +72,7 @@ class TestFetchSegmentVlanState:
         assert gen.client.execute_graphql.call_args.kwargs["variables"] == {"segment_id": "seg-1"}
 
     def test_non_vxlan_segment_has_no_state(self) -> None:
-        """A VLAN segment id matches no ManagedVxlanSegment: None, nothing to reconcile."""
+        """An id that matches no ManagedVxlanSegment (a cloud segment, a deleted one): None, nothing to reconcile."""
         gen = make_gen()
         gen.client.execute_graphql = AsyncMock(
             return_value={"ManagedVxlanSegment": {"edges": []}, "ManagedSegmentDeployment": {"edges": []}}
@@ -427,7 +427,7 @@ class TestReconcileSegmentVlanDomains:
         assert "mlag-1" in gen.logger.warning.call_args.args[0]
 
     def test_non_vxlan_segment_does_nothing(self) -> None:
-        """A VLAN segment has no rows to reconcile."""
+        """An id that matches no ManagedVxlanSegment has no rows to reconcile."""
         gen = make_gen()
         gen.client.execute_graphql = AsyncMock(
             return_value={"ManagedVxlanSegment": {"edges": []}, "ManagedSegmentDeployment": {"edges": []}}

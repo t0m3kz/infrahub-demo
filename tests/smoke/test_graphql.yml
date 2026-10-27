@@ -574,6 +574,14 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
+    resource_name: internet_egress
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/internet_egress.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
     resource_name: pbr_firewall_reachability
     tests:
       - name: syntax_check

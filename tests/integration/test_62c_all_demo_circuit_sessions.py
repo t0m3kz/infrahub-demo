@@ -18,7 +18,7 @@ from utils.limits import CIRCUIT_ENDS, FW_CONTEXT_VLAN_END, FW_CONTEXT_VLAN_STAR
 
 from .all_demo_circuit_constants import (
     ALL_DEMO_COLOCATION_SERVED,
-    ALL_DEMO_COLOCATION_SERVING_ZONE,
+    ALL_DEMO_COLOCATION_SERVING_ZONES,
     ALL_DEMO_DCI_CIRCUITS,
     ALL_DEMO_EDGE_INTERLINK_INTERFACE,
     ALL_DEMO_EDGE_INTERLINKS,
@@ -72,6 +72,12 @@ from .interconnect_rules import (
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 
+def _cluster_members(context: dict) -> frozenset[str]:
+    """The ids of the devices of the cluster a serving context sits on."""
+    cluster = (context.get("cluster") or {}).get("node") or {}
+    return frozenset(edge["node"]["id"] for edge in (cluster.get("capabilities") or {}).get("edges", []))
+
+
 class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
     """Verify the circuit layer and the tenant-scoped services on top of it."""
 
@@ -87,14 +93,13 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify each colocation deployment is served by its serving zone's firewalls.
+        """Verify each colocation deployment is served by the firewalls of every zone of its metro.
 
-        A deployment whose serving_zone has a firewall pair (FR2) is served by that
-        pair's shared context. That context has a VLAN from the zone's pool and one
-        transit sub-interface per member per VRF leg (ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS;
-        test_03b checks their addresses and exchanges). A deployment with no
-        serving_zone has no context: pointing it at another zone's firewalls
-        would hairpin its traffic across the WAN.
+        A deployment is served by one shared context per zone of its metro that has a firewall pair (only FR2
+        in 30_all). That context sits on the zone's cluster and has a VLAN from the zone's pool and one transit
+        sub-interface per member per VRF leg (ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS; test_03b checks their
+        addresses and exchanges). A deployment whose metro has no zone with firewalls has no context:
+        pointing it at another metro's firewalls would hairpin its traffic across the WAN.
         """
         logging.info("=== %s - Step 5: Colocation Serving Contexts ===", SCENARIO_NAME)
 
@@ -113,62 +118,72 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             deployment = deployments.get(name)
             if deployment is None:
                 continue
-            zone = (deployment.get("serving_zone") or {}).get("node") or {}
-            zone_firewalls = {edge["node"]["id"] for edge in (zone.get("devices") or {}).get("edges", [])}
-            context = (deployment.get("serving_firewall_context") or {}).get("node")
-            serving_zone = ALL_DEMO_COLOCATION_SERVING_ZONE[name]
-            zone_name = (zone.get("name") or {}).get("value")
-            if zone_name != serving_zone:
-                errors.append(f"{name}: serving_zone '{zone_name}', expected '{serving_zone}'")
+            metro = (deployment.get("parent") or {}).get("node") or {}
+            # Zone name -> its firewall ids, for the metro's zones that have a firewall pair (a virtual colocation
+            # child arrives as an empty node).
+            firewall_zones = {
+                zone["name"]["value"]: {edge["node"]["id"] for edge in zone["devices"]["edges"]}
+                for zone in (edge["node"] for edge in (metro.get("children") or {}).get("edges", []))
+                if zone.get("name") and zone["devices"]["edges"]
+            }
+            contexts = [edge["node"] for edge in (deployment.get("serving_firewall_contexts") or {}).get("edges", [])]
+            serving_zones = ALL_DEMO_COLOCATION_SERVING_ZONES[name]
+            if sorted(firewall_zones) != sorted(serving_zones):
+                errors.append(
+                    f"{name}: the metro's zones with firewalls are {sorted(firewall_zones)}, expected {serving_zones}"
+                )
 
             if not served:
-                if zone_firewalls:
-                    errors.append(f"{name}: serving zone has firewalls, expected none (an unserved footprint)")
-                if context:
-                    errors.append(f"{name}: no serving zone with firewalls, but served by '{context['name']['value']}'")
+                if contexts:
+                    errors.append(
+                        f"{name}: no zone with firewalls, but served by {[c['name']['value'] for c in contexts]}"
+                    )
                 continue
 
-            if not context:
+            clusters = {_cluster_members(c) for c in contexts}
+            if len(contexts) != len(serving_zones) or clusters != {frozenset(ids) for ids in firewall_zones.values()}:
                 errors.append(
-                    f"{name}: zone {zone_name} has firewalls but the deployment has no serving_firewall_context"
+                    f"{name}: served by {[c['name']['value'] for c in contexts]}, expected one shared context on "
+                    f"the cluster of each of {sorted(firewall_zones)}"
                 )
                 continue
-            context_name = context["name"]["value"]
-            if (context.get("tenant") or {}).get("node"):
-                errors.append(f"{name}: served by tenant-dedicated '{context_name}', expected the zone's shared one")
-            cluster = (context.get("cluster") or {}).get("node") or {}
-            members = {edge["node"]["id"] for edge in (cluster.get("capabilities") or {}).get("edges", [])}
-            if not zone_firewalls or members != zone_firewalls:
-                errors.append(f"{name}: '{context_name}' is on cluster {sorted(members)}, not the zone's firewalls")
-
-            expected = next(
-                (
-                    e
-                    for e in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS
-                    if e["site"] == serving_zone and e["tenant"] is None and name in e["deployments"]
-                ),
-                None,
-            )
-            if expected is None:
-                errors.append(f"{name}: no expected transit context for the zone '{serving_zone}'")
-                continue
-            vlan = (context.get("vlan_id") or {}).get("value")
-            if not vlan or not FW_CONTEXT_VLAN_START <= int(vlan) <= FW_CONTEXT_VLAN_END:
-                errors.append(f"{name}: '{context_name}' VLAN {vlan}, expected one in the zone pool")
-                continue
-            # Sub-interfaces are `<uplink>.<vlan>`; the tagged edge ports (Ethernet1/15-16) have no dot.
-            sub_vlans = sorted(
-                str(edge["node"]["name"]["value"]).rsplit(".", 1)[-1]
-                for edge in (context.get("capabilities") or {}).get("edges", [])
-                if "." in str(edge["node"]["name"]["value"])
-            )
-            expected_vlans = sorted(
-                str(transit_vlan(int(vlan), transit_namespace_type(namespace)))
-                for namespace in expected["namespaces"]
-                for _ in range(ALL_DEMO_FIREWALL_MEMBERS)
-            )
-            if sub_vlans != expected_vlans:
-                errors.append(f"{name}: '{context_name}' sub-interface VLANs {sub_vlans}, expected {expected_vlans}")
+            for zone_name, zone_firewalls in sorted(firewall_zones.items()):
+                context = next(c for c in contexts if _cluster_members(c) == zone_firewalls)
+                context_name = context["name"]["value"]
+                if (context.get("tenant") or {}).get("node"):
+                    errors.append(
+                        f"{name}: served by tenant-dedicated '{context_name}', expected the zone's shared one"
+                    )
+                expected = next(
+                    (
+                        e
+                        for e in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS
+                        if e["site"] == zone_name and e["tenant"] is None and name in e["deployments"]
+                    ),
+                    None,
+                )
+                if expected is None:
+                    errors.append(f"{name}: no expected transit context for the zone '{zone_name}'")
+                    continue
+                vlan = (context.get("vlan_id") or {}).get("value")
+                if not vlan or not FW_CONTEXT_VLAN_START <= int(vlan) <= FW_CONTEXT_VLAN_END:
+                    errors.append(f"{name}: '{context_name}' VLAN {vlan}, expected one in the zone pool")
+                    continue
+                # Sub-interfaces are `<uplink>.<vlan>`; the tagged edge ports (Ethernet1/15-16) have no dot.
+                sub_vlans = sorted(
+                    str(edge["node"]["name"]["value"]).rsplit(".", 1)[-1]
+                    for edge in (context.get("capabilities") or {}).get("edges", [])
+                    if "." in str(edge["node"]["name"]["value"])
+                )
+                expected_vlans = sorted(
+                    str(transit_vlan(int(vlan), transit_namespace_type(namespace)))
+                    for namespace in expected["namespaces"]
+                    for _ in range(ALL_DEMO_FIREWALL_MEMBERS)
+                )
+                if sub_vlans != expected_vlans:
+                    errors.append(
+                        f"{name}: '{context_name}' sub-interface VLANs {sub_vlans}, expected {expected_vlans}"
+                    )
 
         assert not errors, f"30_all colocation serving contexts are wrong on branch '{scenario_branch}':\n" + "\n".join(
             f"  - {e}" for e in errors

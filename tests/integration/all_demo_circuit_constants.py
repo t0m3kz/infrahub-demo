@@ -1,12 +1,12 @@
 """30_all interconnect expectations (test_62): physical and virtual circuits, their ends and locations, the colocation
-serving zones."""
+serving zones (the zones of a footprint's metro that have a firewall pair)."""
 
 from typing import TypedDict
 
 from generators.helpers.naming import sdwan_edge_name
 
 from .all_demo_constants import ALL_DEMO_DC_NAMES, _all_demo
-from .demo_data import Declared, name, render, schema
+from .demo_data import Declared, name, parent_name, render, schema
 
 # ---------------------------------------------------------------------------
 # 30_all — interconnect and tenant-service expectations (test_62)
@@ -494,31 +494,36 @@ def _zone_has_firewalls(zone: Declared) -> bool:
     return any(template[1] == "firewall" for template in zone.item.get("fabric_templates") or [])
 
 
-_FIREWALL_ZONES = {name(zone) for zone in _all_demo("TopologyColocationZone") if _zone_has_firewalls(zone)}
+# Metro -> its zones that declare a firewall pair (a virtual colocation is never one). A colocation footprint is named
+# after its metro (`C001-P-FR`), names no zone, and is served by every such zone of its metro: one shared context each.
+def _firewall_zones_by_metro() -> dict[str, tuple[str, ...]]:
+    by_metro: dict[str, list[str]] = {}
+    for zone in _all_demo("TopologyColocationZone"):
+        if _zone_has_firewalls(zone):
+            by_metro.setdefault(str(parent_name(zone)), []).append(name(zone))
+    return {metro: tuple(sorted(zones)) for metro, zones in by_metro.items()}
 
 
-# Every 30_all colocation deployment -> the zone whose firewall pair serves it (its serving_zone), None when unset
-# (the footprint then has no context: an info log, not an error). A footprint is named after its metro
-# (`C001-P-FR`), the zone is a child of that metro.
-ALL_DEMO_COLOCATION_SERVING_ZONE: dict[str, str | None] = {
-    name(deployment): (str(deployment.item["serving_zone"]) if deployment.item.get("serving_zone") else None)
+_FIREWALL_ZONES_BY_METRO = _firewall_zones_by_metro()
+
+
+# Every 30_all colocation deployment -> the zones whose firewall pair serve it, none when its metro has no firewall
+# zone (the footprint then has no context: an info log, not an error).
+ALL_DEMO_COLOCATION_SERVING_ZONES: dict[str, tuple[str, ...]] = {
+    name(deployment): _FIREWALL_ZONES_BY_METRO.get(_site(deployment), ())
     for deployment in _all_demo("TopologyCustomerColocation")
 }
 
 
-# Every 30_all colocation deployment -> whether it has a serving context: its serving_zone declares a firewall
-# pair (FR2, 02_colo/equinix/fr). Footprints with no serving_zone, or a zone without firewalls, must stay unserved.
+# Every 30_all colocation deployment -> whether it has a serving context: its metro has a zone with a firewall pair
+# (FR2, 02_colo/equinix/fr). Footprints of a metro whose zones have no firewalls must stay unserved.
 ALL_DEMO_COLOCATION_SERVED: dict[str, bool] = {
-    deployment: zone in _FIREWALL_ZONES for deployment, zone in ALL_DEMO_COLOCATION_SERVING_ZONE.items()
+    deployment: bool(zones) for deployment, zones in ALL_DEMO_COLOCATION_SERVING_ZONES.items()
 }
 
 # Serving zone -> the deployments its shared context serves, keyed by zone name (`FR2`): the zone is the site of
 # a colocation firewall context (its pair, its VLAN pool `fr2-fw-context-vlan-pool`).
 ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS: dict[str, tuple[str, ...]] = {
-    zone: tuple(
-        deployment
-        for deployment, serving in ALL_DEMO_COLOCATION_SERVING_ZONE.items()
-        if serving == zone and ALL_DEMO_COLOCATION_SERVED[deployment]
-    )
-    for zone in sorted({z for z in ALL_DEMO_COLOCATION_SERVING_ZONE.values() if z in _FIREWALL_ZONES})
+    zone: tuple(deployment for deployment, serving in ALL_DEMO_COLOCATION_SERVING_ZONES.items() if zone in serving)
+    for zone in sorted({z for zones in _FIREWALL_ZONES_BY_METRO.values() for z in zones})
 }

@@ -42,7 +42,7 @@ class CheckReferenceFabric(WarningCheck):
       active on a reference fabric without its group tag (error): its hosts
       would be unclassified, outside every contract;
     - one that needs component group policy (utils/group_policy.gbp_required)
-      and is VLAN-only cannot carry a group tag: host-enforced (warning);
+      and is not a VXLAN segment cannot carry a group tag: host-enforced (warning);
     - one that needs component group policy is active in a single site
       (error), and that site is a reference fabric (error: its intra-segment
       flows would have no enforcement point);
@@ -120,13 +120,13 @@ class CheckReferenceFabric(WarningCheck):
     def _validate_required(
         self, segment: dict[str, Any], sites: list[tuple[str, str]], reasons: dict[str, str | None]
     ) -> None:
-        """A segment that needs group policy: VLAN-only warns, VXLAN must be single-site on a reference fabric."""
+        """A segment that needs group policy: a non-VXLAN one warns, VXLAN must be single-site on a reference fabric."""
         name = segment.get("name", segment.get("id"))
         if segment.get("typename") != VXLAN_KIND:
             self.log_warning(
                 message=(
                     f"segment '{name}' needs group policy (two or more tagged components) but is "
-                    "VLAN-only: its intra-segment flows are not network-enforceable (host-enforced)"
+                    "not a VXLAN segment: its intra-segment flows are not network-enforceable (host-enforced)"
                 )
             )
             return

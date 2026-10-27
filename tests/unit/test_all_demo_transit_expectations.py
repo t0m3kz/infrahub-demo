@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from tests.integration.all_demo_circuit_constants import (
     ALL_DEMO_COLOCATION_SERVED,
-    ALL_DEMO_COLOCATION_SERVING_ZONE,
+    ALL_DEMO_COLOCATION_SERVING_ZONES,
     ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS,
     ALL_DEMO_DCI_CIRCUITS,
     ALL_DEMO_EDGE_INTERLINKS,
@@ -68,8 +68,8 @@ def test_transit_totals_match_the_planning_estimate() -> None:
 
 
 def test_serving_colocation_zone_has_one_shared_context_with_prod_legs() -> None:
-    """C001-P-FR and C005-P-FR (both environment p, no design) name FR2 as serving_zone: one shared context on
-    FR2's firewall pair, never a dedicated one."""
+    """C001-P-FR and C005-P-FR (both environment p, no design) sit in metro FR, whose one zone with firewalls is FR2:
+    one shared context on FR2's firewall pair, never a dedicated one."""
     assert ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS == {"FR2": ("C001-P-FR", "C005-P-FR")}
     colocation = [c for c in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS if c["site"] in ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS]
     assert len(colocation) == 1
@@ -82,12 +82,12 @@ def test_serving_colocation_zone_has_one_shared_context_with_prod_legs() -> None
     assert ALL_DEMO_SHARED_FIREWALL_CONTEXTS == 5
 
 
-def test_only_footprints_with_a_firewall_serving_zone_are_served() -> None:
-    """A footprint is served when its serving_zone declares a firewall pair; the other five colocation footprints
-    (no serving_zone) have no context, even in a metro whose other zone has firewalls."""
-    assert ALL_DEMO_COLOCATION_SERVING_ZONE["C001-P-FR"] == "FR2"
-    assert ALL_DEMO_COLOCATION_SERVING_ZONE["C005-P-FR"] == "FR2"
-    assert {dep for dep, zone in ALL_DEMO_COLOCATION_SERVING_ZONE.items() if zone is None} == {
+def test_only_footprints_in_a_metro_with_a_firewall_zone_are_served() -> None:
+    """A footprint is served by every zone of its metro that declares a firewall pair; the other five colocation
+    footprints sit in metros whose zones have none, so they have no context (FR6 declares nothing either)."""
+    assert ALL_DEMO_COLOCATION_SERVING_ZONES["C001-P-FR"] == ("FR2",)
+    assert ALL_DEMO_COLOCATION_SERVING_ZONES["C005-P-FR"] == ("FR2",)
+    assert {dep for dep, zones in ALL_DEMO_COLOCATION_SERVING_ZONES.items() if not zones} == {
         "C002-P-PA",
         "C011-P-NY",
         "C012-P-VA",
