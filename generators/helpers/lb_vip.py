@@ -1,10 +1,12 @@
 """Pure planning for the load balancer VIP producer (generators/lb_vip.py).
 
 Inputs are cleaned application.gql data (utils.data_cleaning.clean_data): a
-component with ``ports``, ``instances`` (an on-prem device with ``deployment``
-and its ``serving_loadbalancer_context``; a cloud instance with ``private_ip``
-and ``network_segment`` -> ``virtual_network`` -> ``cidr_blocks``) and
-``network_segment``.
+component with ``ports``, ``instances`` (an on-prem device with ``deployment``,
+from which its data center is read; a cloud instance with ``private_ip`` and
+``network_segment`` -> ``virtual_network`` -> ``cidr_blocks``) and
+``network_segment``, whose customer footprints (``customer_deployments`` of a
+VXLAN segment, ``customer_deployment`` of a VLAN one) carry the
+``serving_loadbalancer_context`` of each data center the segment is activated in.
 """
 
 from __future__ import annotations
@@ -21,6 +23,8 @@ VIP_PREFIXLEN = 32
 """A VIP is one host address of its context's routed VIP range."""
 
 CLOUD_INSTANCE_KIND = "CloudInstance"
+
+CUSTOMER_DC_KIND = "TopologyCustomerDC"
 
 CLOUD_LB_TYPE = "l4_cloud"
 """A VIP's protocol is the tcp/udp of a component port (utils.ports), so a listener is layer 4."""
@@ -56,17 +60,52 @@ def vip_ports(component: dict[str, Any]) -> tuple[list[PortSpec], list[str]]:
     return ports, errors
 
 
+def segment_footprints(segment: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """The customer DC footprints a segment is activated in, by the id of the data center each sits in.
+
+    A VXLAN segment lists its footprints (``customer_deployments``, one per data center it is stretched to), a VLAN
+    segment has the one (``customer_deployment``). A colocation, an office or a cloud footprint serves no
+    load balancer context and is left out.
+    """
+    footprints = [*(segment.get("customer_deployments") or []), segment.get("customer_deployment")]
+    return {
+        footprint["parent"]["id"]: footprint
+        for footprint in footprints
+        if footprint and footprint.get("typename") == CUSTOMER_DC_KIND and (footprint.get("parent") or {}).get("id")
+    }
+
+
+def instance_dc_id(instance: dict[str, Any]) -> str | None:
+    """The id of the data center an on-prem instance runs in, whatever its device kind.
+
+    A physical host is deployed to its data center, or to a pod of it (the pod's parent); a virtual device runs for
+    a customer footprint, whose parent is the data center. So a shared physical host and a customer's virtual machine
+    resolve the same way, and neither says which customer the footprint is: the segment does.
+    """
+    deployment = instance.get("deployment") or {}
+    if deployment.get("typename") in (CUSTOMER_DC_KIND, "TopologyPod"):
+        deployment = deployment.get("parent") or {}
+    return deployment.get("id")
+
+
+def instance_footprint(component: dict[str, Any], instance: dict[str, Any]) -> dict[str, Any] | None:
+    """The footprint of the component's segment in the instance's data center, or None."""
+    dc_id = instance_dc_id(instance)
+    return segment_footprints(component.get("network_segment") or {}).get(dc_id) if dc_id else None
+
+
 def serving_contexts(
     component: dict[str, Any],
 ) -> tuple[dict[str, tuple[dict[str, Any], list[dict[str, Any]]]], list[str]]:
     """The load balancer contexts serving the component's instances, and the errors.
 
     Keyed by context id, each with the instances it serves (its pool members).
-    The context of an instance is the one serving its customer deployment;
-    an instance without one (a deployment that has not boarded, a provider
-    device, a cloud instance next to on-prem ones) is an error: strict load
-    balancing has no direct path to fall back on. A component whose instances
-    are all in the cloud never comes here (is_cloud_component).
+    The context of an instance is the one serving the footprint its segment is
+    activated in, in the instance's data center (instance_footprint); an instance
+    without one (a segment not activated there, a deployment that has not
+    boarded, a provider device, a cloud instance next to on-prem ones) is an
+    error: strict load balancing has no direct path to fall back on. A component
+    whose instances are all in the cloud never comes here (is_cloud_component).
     """
     contexts: dict[str, tuple[dict[str, Any], list[dict[str, Any]]]] = {}
     errors: list[str] = []
@@ -74,11 +113,11 @@ def serving_contexts(
     if not instances:
         errors.append(f"{component_ref(component)} is load_balanced but has no instances")
     for instance in instances:
-        context = ((instance.get("deployment") or {}).get("serving_loadbalancer_context")) or {}
+        context = ((instance_footprint(component, instance) or {}).get("serving_loadbalancer_context")) or {}
         if not context.get("id"):
             errors.append(
-                f"{component_ref(component)}: instance {instance.get('name', instance.get('id', '?'))} is in no deployment "
-                "with a serving load balancer context"
+                f"{component_ref(component)}: instance {instance.get('name', instance.get('id', '?'))} is in no data "
+                "center where its segment has a serving load balancer context"
             )
             continue
         contexts.setdefault(context["id"], (context, []))[1].append(instance)

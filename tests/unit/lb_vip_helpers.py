@@ -39,13 +39,48 @@ def _context(
     }
 
 
-def _instance(instance_id: str, context: dict[str, Any] | None) -> dict[str, Any]:
+def _instance(instance_id: str, context: dict[str, Any] | None, *, footprint: bool = True) -> dict[str, Any]:
+    """A virtual machine running for a customer footprint in the data center of ``context``.
+
+    The context is the one its segment's footprint in that data center serves (``_with_footprints`` builds the
+    footprint from it): None is a footprint with no context yet, and ``footprint=False`` a data center where the
+    segment is not activated at all. The default context ``ctx-1`` is the data center ``dc-c001`` of the footprint
+    ``dep-c001``.
+    """
+    key = context["id"] if context and context["id"] != "ctx-1" else "c001"
     return {
         "id": instance_id,
         "name": instance_id,
         "typename": "DcimVirtualDevice",
-        "deployment": {"id": "dep-c001", "typename": "TopologyCustomerDC", "serving_loadbalancer_context": context},
+        "deployment": {
+            "id": f"dep-{key}",
+            "typename": "TopologyCustomerDC",
+            "parent": {"id": f"dc-{key}" if footprint else "dc-elsewhere"},
+        },
+        "_context": context,
     }
+
+
+def _with_footprints(component: dict[str, Any]) -> dict[str, Any]:
+    """Activate the component's segment in the data center of each of its instances: one footprint per data center.
+
+    The context an instance was built with becomes the context its footprint serves, so a test says "this instance
+    is served by that context" and the payload has the cleaned application.gql shape: the context sits on the
+    segment's footprint, not on the instance. A data center set apart with ``footprint=False`` gets none.
+    """
+    footprints: dict[str, dict[str, Any]] = {}
+    for instance in component.get("instances") or []:
+        dc = instance["deployment"]["parent"]["id"]
+        if dc != "dc-elsewhere" and dc not in footprints:
+            footprints[dc] = {
+                "id": instance["deployment"]["id"],
+                "typename": "TopologyCustomerDC",
+                "parent": {"id": dc},
+                "serving_loadbalancer_context": instance.get("_context"),
+            }
+    segment = component.setdefault("network_segment", {})
+    segment["customer_deployments"] = list(footprints.values())
+    return component
 
 
 def _segment(seg_id: str, *, prefix: bool = True) -> dict[str, Any]:
@@ -73,17 +108,19 @@ def _web(
 ) -> dict[str, Any]:
     """The load-balanced backend: two instances on one context."""
     context = _context()
-    return {
-        "id": "comp-web",
-        "name": "web",
-        "fqdn": "web.c001.example",
-        "ports": ["tcp/443"] if ports is None else ports,
-        "component_type": "backend",
-        "load_balanced": load_balanced,
-        "instances": [_instance("vm-2", context), _instance("vm-1", context)] if instances is None else instances,
-        "health_checks": [{"id": "hc-1"}],
-        "network_segment": segment or _segment("seg-web"),
-    }
+    return _with_footprints(
+        {
+            "id": "comp-web",
+            "name": "web",
+            "fqdn": "web.c001.example",
+            "ports": ["tcp/443"] if ports is None else ports,
+            "component_type": "backend",
+            "load_balanced": load_balanced,
+            "instances": [_instance("vm-2", context), _instance("vm-1", context)] if instances is None else instances,
+            "health_checks": [{"id": "hc-1"}],
+            "network_segment": segment or _segment("seg-web"),
+        }
+    )
 
 
 def _client_comp(*deps: dict[str, Any]) -> dict[str, Any]:
