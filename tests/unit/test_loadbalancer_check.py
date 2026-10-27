@@ -21,7 +21,9 @@ def _vip(**overrides: Any) -> dict[str, Any]:
         "protocol": "tcp",
         "port": 443,
         "vip_ip": {"address": "100.66.96.1/32"},
-        "pool_members": [{"address": "10.1.1.5/24"}],
+        "pool_members": [
+            {"typename": "DcimVirtualDevice", "name": "vm-1", "primary_address": {"address": "10.1.1.5/24"}}
+        ],
     }
     base.update(overrides)
     return base

@@ -13,6 +13,9 @@
           "scheme": {
             "value": "internet_facing"
           },
+          "dns_names": {
+            "value": null
+          },
           "virtual_network": {
             "node": {
               "id": "vnet-azure",
@@ -100,14 +103,28 @@
             "edges": [
               {
                 "node": {
-                  "address": {
+                  "__typename": "CloudInstance",
+                  "name": {
+                    "value": "c003-frontend-prod-2"
+                  },
+                  "cloud_id": {
+                    "value": "i-0a1b2c3d4e5f60002"
+                  },
+                  "private_ip": {
                     "value": "10.20.2.11/24"
                   }
                 }
               },
               {
                 "node": {
-                  "address": {
+                  "__typename": "CloudInstance",
+                  "name": {
+                    "value": "c003-frontend-prod-1"
+                  },
+                  "cloud_id": {
+                    "value": "i-0a1b2c3d4e5f60001"
+                  },
+                  "private_ip": {
                     "value": "10.20.1.10/24"
                   }
                 }

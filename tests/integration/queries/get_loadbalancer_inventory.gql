@@ -66,19 +66,17 @@ query GetLoadbalancerInventory {
               protocol { value }
               port { value }
               vip_ip { node { address { value } } }
-              pool_members { edges { node { address { value } } } }
-              health_checks { edges { node { check { value } rise { value } fall { value } timeout { value } } } }
-              component {
-                node {
-                  fqdn { value }
-                  network_segment {
-                    node {
-                      name { value }
-                      gateway { node { ip_prefix { node { prefix { value } } } } }
-                    }
+              pool_members {
+                edges {
+                  node {
+                    __typename
+                    name { value }
+                    ... on DcimPhysicalDevice { primary_address { node { address { value } } } }
+                    ... on DcimVirtualDevice { primary_address { node { address { value } } } }
                   }
                 }
               }
+              health_checks { edges { node { check { value } rise { value } fall { value } timeout { value } } } }
             }
           }
         }

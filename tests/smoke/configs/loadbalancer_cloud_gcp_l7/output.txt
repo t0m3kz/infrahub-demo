@@ -1,0 +1,147 @@
+# endpoint: frontend-custody-api-c0-a9ea4206.lb.example.com
+# endpoint: frontend-custody-api-c0-a9ea4206-b.lb.example.com
+locals {
+  frontend_custody_api_c0_a9ea4206_labels = {
+    name = "frontend_custody_api_c0_a9ea4206"
+    managed_by = "terraform"
+    infrahub = "true"
+  }
+}
+
+resource "google_compute_health_check" "frontend_custody_api_c003_demo_local_http_80_health_check" {
+  name = "frontend.custody-api.c003.demo.local-http-80-health-check"
+
+  http_health_check {
+    port = 80
+    request_path = "/"
+  }
+
+  check_interval_sec  = 30
+  timeout_sec         = 5
+  healthy_threshold   = 2
+  unhealthy_threshold = 3
+}
+
+resource "google_compute_health_check" "frontend_custody_api_c003_demo_local_https_443_health_check" {
+  name = "frontend.custody-api.c003.demo.local-https-443-health-check"
+
+  tcp_health_check {
+    port = 443
+  }
+
+  check_interval_sec  = 30
+  timeout_sec         = 2
+  healthy_threshold   = 3
+  unhealthy_threshold = 3
+}
+
+
+resource "google_compute_network_endpoint_group" "frontend_custody_api_c003_demo_local_http_80" {
+  name                  = "frontend.custody-api.c003.demo.local-http-80-neg"
+  network               = data.google_compute_network.c003_vaultex_gcp_vpc_prod.id
+  network_endpoint_type = "NON_GCP_PRIVATE_IP_PORT"
+  default_port          = 80
+  zone                  = var.zone
+}
+
+resource "google_compute_network_endpoints" "frontend_custody_api_c003_demo_local_http_80" {
+  network_endpoint_group = google_compute_network_endpoint_group.frontend_custody_api_c003_demo_local_http_80.name
+  zone                   = var.zone
+
+  network_endpoints {
+    ip_address = "10.20.1.10"
+    port       = 80
+  }
+
+  network_endpoints {
+    ip_address = "10.20.2.11"
+    port       = 80
+  }
+}
+
+resource "google_compute_backend_service" "frontend_custody_api_c003_demo_local_http_80" {
+  name                  = "frontend.custody-api.c003.demo.local-http-80"
+  protocol              = "HTTP"
+  session_affinity      = "NONE"
+  health_checks         = [google_compute_health_check.frontend_custody_api_c003_demo_local_http_80_health_check.id]
+  load_balancing_scheme = "EXTERNAL_MANAGED"
+
+  backend {
+    group                 = google_compute_network_endpoint_group.frontend_custody_api_c003_demo_local_http_80.id
+    balancing_mode        = "RATE"
+    max_rate_per_endpoint = 100
+  }
+}
+
+resource "google_compute_network_endpoint_group" "frontend_custody_api_c003_demo_local_https_443" {
+  name                  = "frontend.custody-api.c003.demo.local-https-443-neg"
+  network               = data.google_compute_network.c003_vaultex_gcp_vpc_prod.id
+  network_endpoint_type = "NON_GCP_PRIVATE_IP_PORT"
+  default_port          = 443
+  zone                  = var.zone
+}
+
+resource "google_compute_network_endpoints" "frontend_custody_api_c003_demo_local_https_443" {
+  network_endpoint_group = google_compute_network_endpoint_group.frontend_custody_api_c003_demo_local_https_443.name
+  zone                   = var.zone
+
+  network_endpoints {
+    ip_address = "10.20.1.10"
+    port       = 443
+  }
+
+  network_endpoints {
+    ip_address = "10.20.2.11"
+    port       = 443
+  }
+}
+
+resource "google_compute_backend_service" "frontend_custody_api_c003_demo_local_https_443" {
+  name                  = "frontend.custody-api.c003.demo.local-https-443"
+  protocol              = "HTTP"
+  session_affinity      = "NONE"
+  health_checks         = [google_compute_health_check.frontend_custody_api_c003_demo_local_https_443_health_check.id]
+  load_balancing_scheme = "EXTERNAL_MANAGED"
+
+  backend {
+    group                 = google_compute_network_endpoint_group.frontend_custody_api_c003_demo_local_https_443.id
+    balancing_mode        = "RATE"
+    max_rate_per_endpoint = 100
+  }
+}
+
+
+resource "google_compute_url_map" "frontend_custody_api_c003_demo_local_http_80_url_map" {
+  name            = "frontend.custody-api.c003.demo.local-http-80-url-map"
+  default_service = google_compute_backend_service.frontend_custody_api_c003_demo_local_http_80.id
+}
+
+resource "google_compute_target_http_proxy" "frontend_custody_api_c003_demo_local_http_80_proxy" {
+  name    = "frontend.custody-api.c003.demo.local-http-80-proxy"
+  url_map = google_compute_url_map.frontend_custody_api_c003_demo_local_http_80_url_map.id
+}
+
+resource "google_compute_global_forwarding_rule" "frontend_custody_api_c003_demo_local_http_80" {
+  name                  = "frontend.custody-api.c003.demo.local-HTTP-80"
+  load_balancing_scheme = "EXTERNAL_MANAGED"
+  port_range            = "80"
+  target                = google_compute_target_http_proxy.frontend_custody_api_c003_demo_local_http_80_proxy.id
+}
+
+resource "google_compute_url_map" "frontend_custody_api_c003_demo_local_https_443_url_map" {
+  name            = "frontend.custody-api.c003.demo.local-https-443-url-map"
+  default_service = google_compute_backend_service.frontend_custody_api_c003_demo_local_https_443.id
+}
+
+resource "google_compute_target_https_proxy" "frontend_custody_api_c003_demo_local_https_443_proxy" {
+  name             = "frontend.custody-api.c003.demo.local-https-443-proxy"
+  url_map          = google_compute_url_map.frontend_custody_api_c003_demo_local_https_443_url_map.id
+  ssl_certificates = ["frontend-custody-api-cert"]
+}
+
+resource "google_compute_global_forwarding_rule" "frontend_custody_api_c003_demo_local_https_443" {
+  name                  = "frontend.custody-api.c003.demo.local-HTTPS-443"
+  load_balancing_scheme = "EXTERNAL_MANAGED"
+  port_range            = "443"
+  target                = google_compute_target_https_proxy.frontend_custody_api_c003_demo_local_https_443_proxy.id
+}

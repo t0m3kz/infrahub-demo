@@ -64,7 +64,7 @@ def test_match_loadbalancer_contexts_drops_other_suites_and_unkeys_the_ambiguous
 
 async def test_fetch_loadbalancer_inventory_parses_legs_ports_and_vips() -> None:
     """The leg sub-interfaces, the border-leaf load-balancer ports (with their role) and each VIP's
-    address, members, component and segment prefix come out flat; a port on another role's device is ignored."""
+    address, servers, member addresses and health checks come out flat; a port on another role's device is ignored."""
 
     def value(v: Any) -> dict:
         return {"value": v}
@@ -142,8 +142,18 @@ async def test_fetch_loadbalancer_inventory_parses_legs_ports_and_vips() -> None
                         "vip_ip": {"node": {"address": value("100.66.96.10/32")}},
                         "pool_members": {
                             "edges": [
-                                {"node": {"address": value("10.0.0.11/24")}},
-                                {"node": {"address": value("10.0.0.10/24")}},
+                                {
+                                    "node": {
+                                        "name": value("vm-2"),
+                                        "primary_address": {"node": {"address": value("10.0.0.11/24")}},
+                                    }
+                                },
+                                {
+                                    "node": {
+                                        "name": value("vm-1"),
+                                        "primary_address": {"node": {"address": value("10.0.0.10/24")}},
+                                    }
+                                },
                             ]
                         },
                         "health_checks": {
@@ -165,17 +175,6 @@ async def test_fetch_loadbalancer_inventory_parses_legs_ports_and_vips() -> None
                                     }
                                 },
                             ]
-                        },
-                        "component": {
-                            "node": {
-                                "fqdn": value("api.example"),
-                                "network_segment": {
-                                    "node": {
-                                        "name": value("web-p"),
-                                        "gateway": {"node": {"ip_prefix": {"node": {"prefix": value("10.0.0.0/24")}}}},
-                                    }
-                                },
-                            }
                         },
                     }
                 }
@@ -201,10 +200,8 @@ async def test_fetch_loadbalancer_inventory_parses_legs_ports_and_vips() -> None
             "protocol": "tcp",
             "port": 443,
             "address": "100.66.96.10/32",
+            "servers": ["vm-1", "vm-2"],
             "members": ["10.0.0.10/24", "10.0.0.11/24"],
             "health_checks": (("http", "3", "3", "2000"), ("tcp", "2", "3", "1000")),
-            "component": "api.example",
-            "segment": "web-p",
-            "segment_prefix": "10.0.0.0/24",
         }
     ]

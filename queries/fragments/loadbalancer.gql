@@ -117,7 +117,16 @@ fragment LoadbalancerContextConfigFields on ManagedLoadbalancerContext {
         session_persistence { value }
         ssl_certificate { value }
         vip_ip { node { address { value } } }
-        pool_members { edges { node { address { value } } } }
+        pool_members {
+          edges {
+            node {
+              __typename
+              name { value }
+              ... on DcimPhysicalDevice { primary_address { node { address { value } } } }
+              ... on DcimVirtualDevice { primary_address { node { address { value } } } }
+            }
+          }
+        }
         health_checks {
           edges {
             node {

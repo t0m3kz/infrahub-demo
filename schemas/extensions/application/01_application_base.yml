@@ -202,6 +202,28 @@ nodes:
         default_value: false
         order_weight: 550
         description: "Front this tier with a VIP per port on the load balancer of its segment"
+      - name: lb_layer
+        label: Load Balancer Layer
+        kind: Dropdown
+        optional: true
+        default_value: l4
+        order_weight: 555
+        description: "Cloud load balancer in front of this tier: l4 forwards the port, l7 terminates http/https (on-prem is l4)"  # yamllint disable-line rule:line-length
+        choices:
+          - name: l4
+            label: Layer 4
+            description: "TCP/UDP forwarding (AWS NLB, Azure Load Balancer, GCP network load balancer)"
+            color: "#7FA7FF"
+          - name: l7
+            label: Layer 7
+            description: "HTTP/HTTPS (AWS ALB, Azure Application Gateway, GCP HTTP(S) load balancer)"
+            color: "#7FBF7F"
+      - name: lb_certificate
+        label: Load Balancer Certificate
+        kind: Text
+        optional: true
+        order_weight: 556
+        description: "Certificate (ARN, key vault id or certificate name) of a layer 7 listener: set, it is https, else http"  # yamllint disable-line rule:line-length
     relationships:
       - name: network_segment
         peer: ManagedNetworkSegment

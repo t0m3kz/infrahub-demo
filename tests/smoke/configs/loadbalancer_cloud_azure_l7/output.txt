@@ -1,0 +1,139 @@
+# endpoint: frontend-custody-api-c0-a9ea4206.westeurope.cloudapp.azure.com
+resource "azurerm_application_gateway" "frontend_custody_api_c0_a9ea4206" {
+  name                = "frontend-custody-api-c0-a9ea4206"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+
+  identity {
+    type         = "UserAssigned"
+    identity_ids = [var.identity_id]
+  }
+
+  sku {
+    name     = "Standard_v2"
+    tier     = "Standard_v2"
+    capacity = 2
+  }
+
+  gateway_ip_configuration {
+    name      = "frontend_custody_api_c0_a9ea4206-gateway-ip"
+    subnet_id = data.azurerm_subnet.c003_vaultex_subnet_prod_1.id
+  }
+
+  frontend_ip_configuration {
+    name                 = "frontend_custody_api_c0_a9ea4206-frontend"
+    public_ip_address_id = azurerm_public_ip.frontend_custody_api_c0_a9ea4206.id
+  }
+
+  ssl_certificate {
+    name                = "frontend-custody-api-cert"
+    key_vault_secret_id = "https://c003-vaultex-kv.vault.azure.net/secrets/frontend-custody-api-cert/4f2a9c1e7b3d4e5f8a6b0c1d2e3f4a5b"
+  }
+
+  backend_address_pool {
+    name         = "frontend.custody-api.c003.demo.local-http-80"
+    ip_addresses = ["10.20.1.10", "10.20.2.11"]
+  }
+
+  probe {
+    name                                      = "frontend.custody-api.c003.demo.local-http-80-probe"
+    protocol                                  = "Http"
+    path                                      = "/"
+    interval                                  = 30
+    timeout                                   = 5
+    unhealthy_threshold                       = 3
+    pick_host_name_from_backend_http_settings = true
+
+    match {
+      status_code = ["200-399"]
+    }
+  }
+
+  backend_address_pool {
+    name         = "frontend.custody-api.c003.demo.local-https-443"
+    ip_addresses = ["10.20.1.10", "10.20.2.11"]
+  }
+
+  probe {
+    name                                      = "frontend.custody-api.c003.demo.local-https-443-probe"
+    protocol                                  = "Http"
+    path                                      = "/"
+    interval                                  = 30
+    timeout                                   = 2
+    unhealthy_threshold                       = 3
+    pick_host_name_from_backend_http_settings = true
+
+    match {
+      status_code = ["200-399"]
+    }
+  }
+
+  frontend_port {
+    name = "frontend.custody-api.c003.demo.local-http-80-rule-port"
+    port = 80
+  }
+
+  backend_http_settings {
+    name                                = "frontend.custody-api.c003.demo.local-http-80-rule-settings"
+    cookie_based_affinity               = "Disabled"
+    port                                = 80
+    protocol                            = "Http"
+    request_timeout                     = 30
+    pick_host_name_from_backend_address = true
+    probe_name                          = "frontend.custody-api.c003.demo.local-http-80-probe"
+  }
+
+  http_listener {
+    name                           = "frontend.custody-api.c003.demo.local-http-80-rule-listener"
+    frontend_ip_configuration_name = "frontend_custody_api_c0_a9ea4206-frontend"
+    frontend_port_name             = "frontend.custody-api.c003.demo.local-http-80-rule-port"
+    protocol                       = "Http"
+  }
+
+  request_routing_rule {
+    name                       = "frontend.custody-api.c003.demo.local-http-80-rule"
+    rule_type                  = "Basic"
+    priority                   = 1
+    http_listener_name         = "frontend.custody-api.c003.demo.local-http-80-rule-listener"
+    backend_address_pool_name  = "frontend.custody-api.c003.demo.local-http-80"
+    backend_http_settings_name = "frontend.custody-api.c003.demo.local-http-80-rule-settings"
+  }
+
+  frontend_port {
+    name = "frontend.custody-api.c003.demo.local-https-443-rule-port"
+    port = 443
+  }
+
+  backend_http_settings {
+    name                                = "frontend.custody-api.c003.demo.local-https-443-rule-settings"
+    cookie_based_affinity               = "Disabled"
+    port                                = 443
+    protocol                            = "Http"
+    request_timeout                     = 30
+    pick_host_name_from_backend_address = true
+    probe_name                          = "frontend.custody-api.c003.demo.local-https-443-probe"
+  }
+
+  http_listener {
+    name                           = "frontend.custody-api.c003.demo.local-https-443-rule-listener"
+    frontend_ip_configuration_name = "frontend_custody_api_c0_a9ea4206-frontend"
+    frontend_port_name             = "frontend.custody-api.c003.demo.local-https-443-rule-port"
+    protocol                       = "Https"
+    ssl_certificate_name           = "frontend-custody-api-cert"
+  }
+
+  request_routing_rule {
+    name                       = "frontend.custody-api.c003.demo.local-https-443-rule"
+    rule_type                  = "Basic"
+    priority                   = 2
+    http_listener_name         = "frontend.custody-api.c003.demo.local-https-443-rule-listener"
+    backend_address_pool_name  = "frontend.custody-api.c003.demo.local-https-443"
+    backend_http_settings_name = "frontend.custody-api.c003.demo.local-https-443-rule-settings"
+  }
+
+  tags = {
+    Name = "frontend-custody-api-c0-a9ea4206"
+    ManagedBy = "Terraform"
+    Infrahub = "true"
+  }
+}

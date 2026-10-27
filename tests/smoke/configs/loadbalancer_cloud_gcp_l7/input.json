@@ -1,0 +1,236 @@
+{
+  "CloudLoadBalancer": {
+    "edges": [
+      {
+        "node": {
+          "id": "lb-gcp",
+          "name": {
+            "value": "frontend-custody-api-c0-a9ea4206"
+          },
+          "lb_type": {
+            "value": "l7_cloud"
+          },
+          "scheme": {
+            "value": "internet_facing"
+          },
+          "dns_names": {
+            "value": [
+              "frontend-custody-api-c0-a9ea4206.lb.example.com",
+              "frontend-custody-api-c0-a9ea4206-b.lb.example.com"
+            ]
+          },
+          "virtual_network": {
+            "node": {
+              "id": "vnet-gcp",
+              "name": {
+                "value": "c003-vaultex-gcp-vpc-prod"
+              },
+              "account": {
+                "node": {
+                  "name": {
+                    "value": "c003-gcp-prod"
+                  },
+                  "provider": {
+                    "node": {
+                      "name": {
+                        "value": "Google Cloud"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "network_segments": {
+            "edges": [
+              {
+                "node": {
+                  "id": "seg-gcp-1",
+                  "name": {
+                    "value": "c003-vaultex-subnet-prod-1"
+                  },
+                  "availability_zone": {
+                    "node": {
+                      "name": {
+                        "value": "euc1-az1"
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "id": "seg-gcp-2",
+                  "name": {
+                    "value": "c003-vaultex-subnet-prod-2"
+                  },
+                  "availability_zone": {
+                    "node": {
+                      "name": {
+                        "value": "euc1-az2"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "LoadbalancerVIP": {
+    "edges": [
+      {
+        "node": {
+          "id": "vip-gcp-http-80",
+          "hostname": {
+            "value": "frontend.custody-api.c003.demo.local"
+          },
+          "protocol": {
+            "value": "http"
+          },
+          "port": {
+            "value": 80
+          },
+          "ssl_certificate": {
+            "value": null
+          },
+          "load_balancing_algorithm": {
+            "value": null
+          },
+          "session_persistence": {
+            "value": null
+          },
+          "pool_members": {
+            "edges": [
+              {
+                "node": {
+                  "__typename": "CloudInstance",
+                  "name": {
+                    "value": "c003-frontend-prod-2"
+                  },
+                  "cloud_id": {
+                    "value": "i-0a1b2c3d4e5f60002"
+                  },
+                  "private_ip": {
+                    "value": "10.20.2.11/24"
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "CloudInstance",
+                  "name": {
+                    "value": "c003-frontend-prod-1"
+                  },
+                  "cloud_id": {
+                    "value": "i-0a1b2c3d4e5f60001"
+                  },
+                  "private_ip": {
+                    "value": "10.20.1.10/24"
+                  }
+                }
+              }
+            ]
+          },
+          "health_checks": {
+            "edges": [
+              {
+                "node": {
+                  "check": {
+                    "value": "http"
+                  },
+                  "rise": {
+                    "value": 2
+                  },
+                  "fall": {
+                    "value": 3
+                  },
+                  "timeout": {
+                    "value": 5000
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "node": {
+          "id": "vip-gcp-https-443",
+          "hostname": {
+            "value": "frontend.custody-api.c003.demo.local"
+          },
+          "protocol": {
+            "value": "https"
+          },
+          "port": {
+            "value": 443
+          },
+          "ssl_certificate": {
+            "value": "frontend-custody-api-cert"
+          },
+          "load_balancing_algorithm": {
+            "value": null
+          },
+          "session_persistence": {
+            "value": null
+          },
+          "pool_members": {
+            "edges": [
+              {
+                "node": {
+                  "__typename": "CloudInstance",
+                  "name": {
+                    "value": "c003-frontend-prod-2"
+                  },
+                  "cloud_id": {
+                    "value": "i-0a1b2c3d4e5f60002"
+                  },
+                  "private_ip": {
+                    "value": "10.20.2.11/24"
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "CloudInstance",
+                  "name": {
+                    "value": "c003-frontend-prod-1"
+                  },
+                  "cloud_id": {
+                    "value": "i-0a1b2c3d4e5f60001"
+                  },
+                  "private_ip": {
+                    "value": "10.20.1.10/24"
+                  }
+                }
+              }
+            ]
+          },
+          "health_checks": {
+            "edges": [
+              {
+                "node": {
+                  "check": {
+                    "value": "tcp"
+                  },
+                  "rise": {
+                    "value": 3
+                  },
+                  "fall": {
+                    "value": 3
+                  },
+                  "timeout": {
+                    "value": 2000
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+}

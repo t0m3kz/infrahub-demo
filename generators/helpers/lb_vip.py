@@ -2,7 +2,7 @@
 
 Inputs are cleaned application.gql data (utils.data_cleaning.clean_data): a
 component with ``ports``, ``instances`` (an on-prem device with ``deployment``,
-from which its data center is read; a cloud instance with ``private_ip`` and
+from which its data center is read; a cloud instance with
 ``network_segment`` -> ``virtual_network`` -> ``cidr_blocks``) and
 ``network_segment``, whose customer footprints (``customer_deployments`` of a
 VXLAN segment, ``customer_deployment`` of a VLAN one) carry the
@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import hashlib
 import re
-from ipaddress import ip_interface, ip_network
 from typing import Any
 
 from utils.limits import CLOUD_LB_NAME_MAX
@@ -26,8 +25,36 @@ CLOUD_INSTANCE_KIND = "CloudInstance"
 
 CUSTOMER_DC_KIND = "TopologyCustomerDC"
 
-CLOUD_LB_TYPE = "l4_cloud"
-"""A VIP's protocol is the tcp/udp of a component port (utils.ports), so a listener is layer 4."""
+CLOUD_LB_TYPES = {"l4": "l4_cloud", "l7": "l7_cloud"}
+"""AppComponent.lb_layer -> ManagedLoadBalancer.lb_type of the cloud load balancer in front of it."""
+
+
+def lb_layer(component: dict[str, Any]) -> str:
+    """The layer of the cloud load balancer of a component: l7 when it says so, else l4 (on-prem is always l4)."""
+    return "l7" if component.get("lb_layer") == "l7" else "l4"
+
+
+def cloud_lb_type(component: dict[str, Any]) -> str:
+    """l4_cloud or l7_cloud, by the component's layer."""
+    return CLOUD_LB_TYPES[lb_layer(component)]
+
+
+def listener_protocol(component: dict[str, Any], port: PortSpec) -> tuple[str | None, str | None]:
+    """(protocol, error) of the listener of a component's port.
+
+    A layer 4 listener has the port's own tcp/udp. A layer 7 listener terminates http or https, so it needs a tcp port.
+    It is https when the component names a certificate (``lb_certificate``), except port 80, which is always http
+    (there is no listener to put a certificate on), and http when there is no certificate.
+    """
+    protocol = port[0]
+    if lb_layer(component) == "l4":
+        return protocol, None
+    if protocol != "tcp":
+        return (
+            None,
+            f"{component_ref(component)}: {protocol}/{port[1]} cannot be balanced at layer 7 (http/https is tcp)",
+        )
+    return ("https" if component.get("lb_certificate") and port[1] != 80 else "http"), None
 
 
 def component_ref(component: dict[str, Any]) -> str:
@@ -247,36 +274,3 @@ def cloud_placement(
     network = next(iter(networks.values()))
     in_network = [segment for segment in segments.values() if (segment.get("virtual_network") or {}).get("id")]
     return network, sorted(in_network, key=lambda item: str(item.get("name") or item["id"])), errors
-
-
-def cloud_members(component: dict[str, Any], network: dict[str, Any]) -> tuple[list[tuple[str, str, str]], list[str]]:
-    """(instance name, address, namespace id) of each cloud instance, sorted by name, and the errors.
-
-    The address is the instance's own private_ip, in the namespace of the
-    virtual network's CIDR block that holds it; an instance without one, or
-    outside every block, is an error.
-    """
-    fqdn = component_ref(component)
-    blocks = [
-        (ip_network(block["prefix"], strict=False), namespace_id)
-        for block in network.get("cidr_blocks") or []
-        if block.get("prefix") and (namespace_id := (block.get("ip_namespace") or {}).get("id"))
-    ]
-    members: list[tuple[str, str, str]] = []
-    errors: list[str] = []
-    for instance in sorted(component.get("instances") or [], key=lambda item: str(item.get("name") or item["id"])):
-        name = str(instance.get("name") or instance["id"])
-        address = instance.get("private_ip")
-        if not address:
-            errors.append(f"{fqdn}: cloud instance {name} has no private_ip for the pool members")
-            continue
-        host = ip_interface(address).ip
-        namespace_id = next((ns for block, ns in blocks if host in block), None)
-        if namespace_id is None:
-            errors.append(
-                f"{fqdn}: cloud instance {name} private_ip {address} is in no CIDR block of "
-                f"{network.get('name', network.get('id'))}"
-            )
-            continue
-        members.append((name, str(address), namespace_id))
-    return members, errors

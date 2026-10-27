@@ -400,6 +400,8 @@ class TopologyVirtualColocation(
 class AppComponent(AppGeneric):
     component_type: Dropdown
     fqdn: String
+    lb_certificate: StringOptional
+    lb_layer: DropdownOptional
     load_balanced: BooleanOptional
     name: String
     ports: ListAttributeOptional
@@ -623,6 +625,7 @@ class DcimLAGInterface(DcimInterface, DcimHasSubInterface):
 
 
 class CloudLoadBalancer(ManagedLoadBalancer, CloudResource, CoreArtifactTarget):
+    dns_names: ListAttributeOptional
     network_segments: RelationshipManager[CloudNetworkSegment]
     virtual_network: RelationshipAttribute[CloudVirtualNetwork]
 
@@ -988,10 +991,9 @@ class LoadbalancerVIP(CoreNode):
     session_persistence: DropdownOptional
     ssl_certificate: StringOptional
     status: Dropdown
-    component: RelationshipAttribute[AppComponent]
     health_checks: RelationshipManager[LoadbalancerHealthCheck]
     load_balancer: RelationshipAttribute[ManagedLoadBalancer]
-    pool_members: RelationshipManager[IpamIPAddress]
+    pool_members: RelationshipManager[AppInstance]
     vip_ip: RelationshipAttribute[IpamIPAddress]
 
 
