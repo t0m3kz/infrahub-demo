@@ -16,17 +16,17 @@ from utils.limits import GROUP_CLOUD_LOADBALANCERS, LB_VIP_REREAD
 from utils.ports import PortProfileHelper, PortSpec
 
 from .helpers.lb_vip import (
-    CLOUD_LB_TYPE,
     VIP_PREFIXLEN,
     cloud_lb_name,
     cloud_lb_scheme,
-    cloud_members,
+    cloud_lb_type,
     cloud_placement,
     component_ref,
     context_ready,
     instance_footprint,
     is_cloud_component,
     leg_prefix_id,
+    listener_protocol,
     member_identifier,
     member_pool_name,
     member_prefix,
@@ -136,8 +136,8 @@ class LoadbalancerVipMixin:
 
     Expects the host class to provide: ``client``, ``logger``,
     ``wait_for_parent_generators`` (CommonGenerator),
-    ``resource_lock`` (PoolMixin), ``ensure_prefix_address_pool``,
-    ``allocate_prefix_address`` and ``upsert_ip_address`` (CablingMixin),
+    ``resource_lock`` and ``attach_refs`` (PoolMixin), ``ensure_prefix_address_pool`` and
+    ``allocate_prefix_address`` (CablingMixin),
     ``_get_or_create_by_name`` (GetOrCreateByNameMixin) and
     ``_upsert_policy_rule`` (SegmentFirewallMixin).
     """
@@ -147,9 +147,9 @@ class LoadbalancerVipMixin:
     if TYPE_CHECKING:
         _upsert_policy_rule = SegmentFirewallMixin._upsert_policy_rule
         allocate_prefix_address = CablingMixin.allocate_prefix_address
+        attach_refs = PoolMixin.attach_refs
         ensure_prefix_address_pool = CablingMixin.ensure_prefix_address_pool
         resource_lock = PoolMixin.resource_lock
-        upsert_ip_address = CablingMixin.upsert_ip_address
         wait_for_parent_generators = CommonGenerator.wait_for_parent_generators
     _get_or_create_by_name: Callable[..., Awaitable[Any]]
 
@@ -390,10 +390,12 @@ class LoadbalancerVipMixin:
         pools: dict[str, Any],
         errors: list[str],
     ) -> list[str] | None:
-        """One address per instance in the component's segment prefix; None (an error) without a prefix.
+        """The ids of the servers the VIP balances across; None (an error) without a segment prefix.
 
-        Keyed by (instance, segment): two components on one host and segment
-        share the host's address.
+        A member is the server, not an address. Its address is its primary address; a server without one gets
+        the one it reserves in the component's segment prefix, keyed by (instance, segment), and keeps it as its
+        primary address, so a second component on the host and segment shares it. A server that has one already
+        keeps it, wherever it is.
         """
         fqdn = component_ref(component)
         prefix = member_prefix(segment)
@@ -406,61 +408,54 @@ class LoadbalancerVipMixin:
             return None
         member_ids: list[str] = []
         for instance in sorted(instances, key=lambda item: str(item.get("name") or item["id"])):
-            member_id = await self.allocate_prefix_address(
-                pool=pool,
-                identifier=member_identifier(instance["id"], segment["id"]),
-                prefix_length=prefix_length,
-                description=f"Load balancer pool member {instance.get('name', instance['id'])}",
-            )
-            if member_id is not None:
-                member_ids.append(member_id)
+            primary = (instance.get("primary_address") or {}).get("id")
+            if not primary:
+                primary = await self.allocate_prefix_address(
+                    pool=pool,
+                    identifier=member_identifier(instance["id"], segment["id"]),
+                    prefix_length=prefix_length,
+                    description=f"Address of {instance.get('name', instance['id'])} in {segment.get('name', segment['id'])}",
+                )
+                if primary is None:
+                    continue
+                await self.attach_refs(
+                    kind=str(instance["typename"]),
+                    node_id=instance["id"],
+                    refs={"primary_address": primary},
+                    current={"primary_address": (instance.get("primary_address") or {}).get("id")},
+                )
+                instance["primary_address"] = {"id": primary}
+            member_ids.append(instance["id"])
         return member_ids
 
     async def _cloud_component_vips(
         self, component: dict[str, Any], *, security_profile: str, errors: list[str]
     ) -> None:
-        """Upsert the component's CloudLoadBalancer and its VIPs, one per port, tracked by this run.
+        """Upsert the component's CloudLoadBalancer and its listeners, one per port, tracked by this run.
 
-        No load balancer without its one virtual network; a member that
-        cannot be addressed is an error and left out.
+        No load balancer without its one virtual network. The targets are the instances themselves; what a
+        target is (an instance id, an address) is the provider's template to decide when it renders.
         """
         ports, port_errors = vip_ports(component)
         network, segments, placement_errors = cloud_placement(component)
         errors.extend([*port_errors, *placement_errors])
         if network is None:
             return
-        member_ids = await self._cloud_pool_members(component, network, errors)
+        member_ids = [
+            instance["id"]
+            for instance in sorted(
+                component.get("instances") or [], key=lambda item: str(item.get("name") or item["id"])
+            )
+        ]
         load_balancer = await self._save_cloud_lb(component, network, segments, security_profile, errors)
         if load_balancer is None:
             return
         for port in ports:
-            await self._save_vip(component, load_balancer, port, member_ids)
-
-    async def _cloud_pool_members(
-        self, component: dict[str, Any], network: dict[str, Any], errors: list[str]
-    ) -> list[str]:
-        """The ids of the cloud instances' own addresses, each upserted untracked under its lock.
-
-        The address is the instance's, not the application's: two components
-        on one instance share it and no application run may delete it.
-        """
-        members, member_errors = cloud_members(component, network)
-        errors.extend(member_errors)
-        member_ids: list[str] = []
-        for instance_name, address, namespace_id in members:
-            try:
-                async with self.resource_lock(f"ip-address-{namespace_id}-{address}"):
-                    ip = await self.upsert_ip_address(
-                        address=address,
-                        ip_namespace={"id": namespace_id},
-                        description=f"Private address of cloud instance {instance_name}",
-                        track=False,
-                    )
-            except Exception as exc:
-                errors.append(f"{component_ref(component)}: address {address} of {instance_name}: {exc}")
+            protocol, protocol_error = listener_protocol(component, port)
+            if protocol is None:
+                errors.append(str(protocol_error))
                 continue
-            member_ids.append(ip.id)
-        return member_ids
+            await self._save_vip(component, load_balancer, port, member_ids, protocol=protocol)
 
     async def _save_cloud_lb(
         self,
@@ -483,7 +478,7 @@ class LoadbalancerVipMixin:
                         "name": name,
                         "description": f"Cloud load balancer of {component_ref(component)}",
                         "status": "active",
-                        "lb_type": CLOUD_LB_TYPE,
+                        "lb_type": cloud_lb_type(component),
                         "scheme": cloud_lb_scheme(security_profile),
                         "virtual_network": {"id": network["id"]},
                         "network_segments": [segment["id"] for segment in segments],
@@ -505,14 +500,17 @@ class LoadbalancerVipMixin:
         member_ids: list[str],
         *,
         vip_ip_id: str | None = None,
+        protocol: str | None = None,
     ) -> bool:
         """Upsert the LoadbalancerVIP of (component, port) on ``load_balancer``, tracked by this run;
         False (logged) on failure.
 
         ``load_balancer`` is a context or a CloudLoadBalancer (id and name); a
-        cloud VIP has no ``vip_ip_id``, the cloud assigns its address.
+        cloud VIP has no ``vip_ip_id``, the cloud assigns its address. ``protocol``
+        is the listener's (http/https on a layer 7 cloud listener), the port's own otherwise.
         """
-        protocol, port_start, _port_end = port
+        port_protocol, port_start, _port_end = port
+        protocol = protocol or port_protocol
         fqdn = component_ref(component)
         listener = f"{fqdn} {PortProfileHelper.format_port_spec(port)} on {load_balancer.get('name')}"
         try:
@@ -526,8 +524,8 @@ class LoadbalancerVipMixin:
                     "description": listener,
                     "load_balancer": {"id": load_balancer["id"]},
                     **({"vip_ip": {"id": vip_ip_id}} if vip_ip_id else {}),
-                    "component": {"id": component["id"]},
                     "pool_members": member_ids,
+                    **({"ssl_certificate": component["lb_certificate"]} if protocol == "https" else {}),
                     "health_checks": [check["id"] for check in component.get("health_checks") or [] if check.get("id")],
                 },
             )

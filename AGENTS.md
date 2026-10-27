@@ -404,6 +404,14 @@ class MyCheck(InfrahubCheck):
   HA `{first}-{second}`, so PROD and NON-PROD never meet on one context. A dedicated pair is `{owner}-{first}-{second}-ha-{class}`
   (HA domain) with the context `{owner}-{first}-{second}-{class}` on it, its members `{owner}-{physical}-{class}`. The HA and the
   context are nodes of one generic and the server resolves an upsert by name, so they never share one.
+- **Load balancer pool members are servers, not addresses**: `LoadbalancerVIP.pool_members` peers `AppInstance` (physical or
+  virtual device, cloud instance); a member's address is its `primary_address`, or the `private_ip` of a cloud instance.
+  An on-prem server with none gets one reserved in its component's segment prefix by the application generator (kept as its
+  primary address), a server that has one keeps it. The VIP has no link to the application: the generator derives it from
+  `AppComponent.instances`. A cloud component (`CloudLoadBalancer`) is layer 4 or layer 7 by `AppComponent.lb_layer`
+  (`l4_cloud` / `l7_cloud`); a layer 7 listener is `https` with `AppComponent.lb_certificate` (port 80 is always `http`), else
+  `http`, and only tcp can be layer 7. A cloud VIP has no `vip_ip` (the provider assigns the endpoint, `dns_names` of the load
+  balancer) and its targets are the instances themselves. `ManagedLoadBalancer.vips` lists the VIPs of every implementation.
 - **Capability edges**: a capability reaches devices via `ManagedGenericDevice` and interfaces via
   `ManagedGenericInterfaces`. Inherit the second only when something reads the interface edge.
 

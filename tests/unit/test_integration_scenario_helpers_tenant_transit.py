@@ -382,3 +382,18 @@ def test_health_check_hfids_are_sorted_four_part_strings() -> None:
 
     assert health_check_hfids(connection) == (("http", "3", "3", "2000"), ("tcp", "2", "3", "1000"))
     assert health_check_hfids(None) == ()
+
+
+async def test_fetch_segment_prefixes_maps_a_segment_name_to_its_gateway_prefix() -> None:
+    """The prefix the pool members of a VIP are addressed from, read by segment name."""
+    from tests.integration.service_inventory_helpers import fetch_segment_prefixes
+
+    node = {
+        "name": {"value": "web-p"},
+        "gateway": {"node": {"ip_prefix": {"node": {"prefix": {"value": "10.60.0.0/24"}}}}},
+    }
+    client = MagicMock()
+    client.execute_graphql = AsyncMock(return_value={"ManagedNetworkSegment": {"edges": [{"node": node}]}})
+
+    assert await fetch_segment_prefixes(client, "main", ["web-p", "web-p"]) == {"web-p": "10.60.0.0/24"}
+    assert client.execute_graphql.call_args.kwargs["variables"] == {"names": ["web-p"]}

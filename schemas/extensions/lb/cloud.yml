@@ -18,6 +18,13 @@ nodes:
       - ManagedLoadBalancer
       - CloudResource
       - CoreArtifactTarget
+    attributes:
+      - name: dns_names
+        label: DNS Names
+        kind: List
+        optional: true
+        order_weight: 2100
+        description: "Endpoints the provider assigned: the load balancer's, and one per zone or frontend (a result of provisioning)"  # yamllint disable-line rule:line-length
     relationships:
       - name: virtual_network
         peer: CloudVirtualNetwork

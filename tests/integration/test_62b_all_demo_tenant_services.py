@@ -66,6 +66,7 @@ from .interconnect_queries import (
 from .interconnect_rules import _TRANSIT_PEER_NAMES, _exchange_ends, _rules
 from .service_inventory_helpers import (
     fetch_loadbalancer_inventory,
+    fetch_segment_prefixes,
     fetch_tenant_services,
     fetch_transit_inventory,
     match_loadbalancer_contexts,
@@ -607,7 +608,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         segment to the VIP/32 on the port, and never directly to the
         component's segment on that port. A component on cloud instances
         (ALL_DEMO_CLOUD_LOAD_BALANCED_COMPONENTS) has one CloudLoadBalancer in
-        its instances' VPC instead, its VIPs without an address.
+        its instances' VPC instead (layer 4 or 7 by the component's lb_layer), its VIPs without an address.
         """
         logging.info("=== %s - Step 3e: Load-balancer VIPs and rules ===", SCENARIO_NAME)
 
@@ -641,16 +642,19 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         if extra:
             errors.append(f"unexpected VIP(s): {extra}")
 
+        segment_prefixes = await fetch_segment_prefixes(
+            async_client_main,
+            scenario_branch,
+            (component["segment"] for component in ALL_DEMO_LOAD_BALANCED_COMPONENTS.values()),
+        )
         vip_addresses: dict[tuple[str, str, int, Any], ipaddress.IPv4Interface] = {}
         for vip_key in sorted(expected & set(actual), key=repr):
             fqdn, _protocol, _port, _key = vip_key
             vip, context = actual[vip_key], actual[vip_key]["context"]
             label = f"VIP {fqdn} {vip['protocol']}/{vip['port']} on '{context['name']}'"
             component = ALL_DEMO_LOAD_BALANCED_COMPONENTS[fqdn]
-            if vip["component"] != fqdn or vip["segment"] != component["segment"]:
-                errors.append(
-                    f"{label}: fronts {vip['component']} in {vip['segment']}, expected {fqdn} in {component['segment']}"
-                )
+            if tuple(vip["servers"]) != component["servers"]:
+                errors.append(f"{label}: pool members {vip['servers']}, expected {list(component['servers'])}")
             if vip["health_checks"] != component["health_checks"]:
                 errors.append(f"{label}: health checks {vip['health_checks']}, expected {component['health_checks']}")
             if not vip["address"]:
@@ -662,13 +666,14 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                 errors.append(f"{label}: vip_ip {address} is not a /32")
             if not context["vip_prefix"] or address.ip not in ipaddress.IPv4Network(context["vip_prefix"]):
                 errors.append(f"{label}: vip_ip {address} is outside the context's VIP range {context['vip_prefix']}")
-            if not vip["members"]:
+            segment_prefix = segment_prefixes.get(component["segment"])
+            if not vip["servers"]:
                 errors.append(f"{label}: no pool member")
-            elif not vip["segment_prefix"] or any(
-                ipaddress.IPv4Interface(member).ip not in ipaddress.IPv4Network(vip["segment_prefix"])
+            elif not segment_prefix or any(
+                member == "None" or ipaddress.IPv4Interface(member).ip not in ipaddress.IPv4Network(segment_prefix)
                 for member in vip["members"]
             ):
-                errors.append(f"{label}: pool members {vip['members']} are not all in {vip['segment_prefix']}")
+                errors.append(f"{label}: pool member addresses {vip['members']} are not all in {segment_prefix}")
 
         # R_server: in lb-<context>, the leg /29 -> the component's segment on the VIP port.
         lb_policies = sorted({f"lb-{actual[vip_key]['context']['name']}" for vip_key in expected & set(actual)})
@@ -747,7 +752,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
 
         # Cloud (ALL_DEMO_CLOUD_LOAD_BALANCED_COMPONENTS): one CloudLoadBalancer per component in its instances'
         # VPC and subnets, in the cloud_loadbalancers artifact group; one VIP per port on it, without an address
-        # (the cloud assigns it), the instances' private addresses as pool members. No context, leg or rule.
+        # (the cloud assigns it), the instances themselves as pool members. No context, leg or rule.
         cloud = ALL_DEMO_CLOUD_LOAD_BALANCED_COMPONENTS
         result = await async_client_main.execute_graphql(
             query=CLOUD_LOAD_BALANCERS_QUERY,
@@ -769,7 +774,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                 (lb.get("virtual_network") or {}).get("name"),
                 tuple(sorted(str(segment["name"]) for segment in lb.get("network_segments") or [])),
             )
-            wanted = ("l4_cloud", component["scheme"], component["virtual_network"], component["segments"])
+            wanted = (component["lb_type"], component["scheme"], component["virtual_network"], component["segments"])
             if found != wanted:
                 errors.append(f"cloud load balancer {name}: (lb_type, scheme, VPC, subnets) {found}, expected {wanted}")
             if "cloud_loadbalancers" not in {group.get("name") for group in lb.get("member_of_groups") or []}:
@@ -791,11 +796,14 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                 )
                 if checks != component["health_checks"]:
                     errors.append(f"{label}: health checks {checks}, expected {component['health_checks']}")
-                if vip.get("hostname") != fqdn or (vip.get("component") or {}).get("fqdn") != fqdn:
-                    errors.append(f"{label}: hostname/component is not {fqdn}")
+                if vip.get("hostname") != fqdn:
+                    errors.append(f"{label}: hostname is not {fqdn}")
+                wanted_certificate = component["ssl_certificate"] if vip["protocol"] == "https" else None
+                if vip.get("ssl_certificate") != wanted_certificate:
+                    errors.append(f"{label}: certificate {vip.get('ssl_certificate')}, expected {wanted_certificate}")
                 if (vip.get("vip_ip") or {}).get("address"):
                     errors.append(f"{label}: has a vip_ip, the cloud assigns it")
-                members = tuple(sorted(str(member["address"]) for member in vip.get("pool_members") or []))
+                members = tuple(sorted(str(member["name"]) for member in vip.get("pool_members") or []))
                 if members != component["members"]:
                     errors.append(f"{label}: pool members {members}, expected {component['members']}")
 

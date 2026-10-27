@@ -317,12 +317,11 @@ async def fetch_loadbalancer_inventory(client: InfrahubClient, branch: str) -> l
         [{"id", "name", "vlan", "tenant", "cluster", "cluster_member_ids", "cluster_dcs",
           "served": [names], "vip_prefix", "vip_prefix_namespace",
           "legs": [...], "border_ports": [...],
-          "vips": [{"hostname", "protocol", "port", "address", "members": [addresses],
-                    "component", "segment", "segment_prefix"}]}]
+          "vips": [{"hostname", "protocol", "port", "address", "servers": [names],
+                    "members": [addresses], "health_checks"}]}]
 
         ``legs`` and ``border_ports`` as _context_legs_and_ports returns them;
-        ``component`` is the fronted AppComponent's fqdn, ``segment`` and
-        ``segment_prefix`` its network segment and that segment's gateway prefix.
+        ``servers`` are the pool members (names), ``members`` their primary addresses.
     """
     client.default_branch = branch
     await asyncio.sleep(DATA_PROPAGATION_DELAY)
@@ -335,23 +334,19 @@ async def fetch_loadbalancer_inventory(client: InfrahubClient, branch: str) -> l
         vip_prefix = _rel_node(node.get("vip_prefix"))
         vips = []
         for vip in _edge_nodes(node.get("vips")):
-            component = _rel_node(vip.get("component"))
-            segment = _rel_node(component.get("network_segment"))
+            members = _edge_nodes(vip.get("pool_members"))
             vips.append(
                 {
                     "hostname": _value(vip.get("hostname")),
                     "protocol": _value(vip.get("protocol")),
                     "port": _value(vip.get("port")),
                     "address": _value(_rel_node(vip.get("vip_ip")).get("address")),
+                    # The members are the servers; their address is their primary address.
+                    "servers": sorted(str(_value(member.get("name"))) for member in members),
                     "members": sorted(
-                        str(_value(member.get("address"))) for member in _edge_nodes(vip.get("pool_members"))
+                        str(_value(_rel_node(member.get("primary_address")).get("address"))) for member in members
                     ),
                     "health_checks": health_check_hfids(vip.get("health_checks")),
-                    "component": _value(component.get("fqdn")),
-                    "segment": _value(segment.get("name")),
-                    "segment_prefix": _value(
-                        _rel_node(_rel_node(segment.get("gateway")).get("ip_prefix")).get("prefix")
-                    ),
                 }
             )
         contexts.append(
@@ -422,3 +417,30 @@ def match_loadbalancer_contexts(
         else:
             by_key[key] = context
     return by_key, unkeyed
+
+
+SEGMENT_PREFIXES_QUERY = """
+query ($names: [String]) {
+  ManagedNetworkSegment(name__values: $names) {
+    edges {
+      node {
+        name { value }
+        gateway { node { ip_prefix { node { prefix { value } } } } }
+      }
+    }
+  }
+}
+"""
+
+
+async def fetch_segment_prefixes(client: InfrahubClient, branch: str, names: Iterable[str]) -> dict[str, str]:
+    """Segment name -> the gateway prefix its hosts (a VIP's pool members) are addressed from."""
+    result = await client.execute_graphql(
+        query=SEGMENT_PREFIXES_QUERY, variables={"names": sorted(set(names))}, branch_name=branch
+    )
+    return {
+        str(_value(node.get("name"))): str(
+            _value(_rel_node(_rel_node(node.get("gateway")).get("ip_prefix")).get("prefix"))
+        )
+        for node in _edge_nodes(result["ManagedNetworkSegment"])
+    }

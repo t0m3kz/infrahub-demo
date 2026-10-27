@@ -2,7 +2,7 @@
 
 from typing import TypedDict
 
-from generators.helpers.lb_vip import cloud_lb_name, cloud_lb_scheme
+from generators.helpers.lb_vip import cloud_lb_name, cloud_lb_scheme, cloud_lb_type, listener_protocol
 from utils.exchange_transit import TENANT_NAMESPACE_TYPES, lb_leg_pool_name, lb_vip_pool_name
 from utils.ports import PortProfileHelper
 
@@ -115,6 +115,8 @@ class LoadBalancedComponent(TypedDict):
     contexts: tuple[LoadbalancerContextKey, ...]
     #: Its health checks, each [check, rise, fall, timeout] as strings: every VIP of it carries them.
     health_checks: tuple[tuple[str, ...], ...]
+    #: Its instances' names: the pool members of every VIP (the servers; their address is their primary address).
+    servers: tuple[str, ...]
 
 
 _INSTANCE_DEPLOYMENTS = {
@@ -162,6 +164,7 @@ ALL_DEMO_LOAD_BALANCED_COMPONENTS: dict[str, LoadBalancedComponent] = {
             )
         ),
         "health_checks": _health_checks(component),
+        "servers": tuple(sorted(str(instance) for instance in component.item.get("instances") or [])),
     }
     for component in _LOAD_BALANCED
     if not _on_cloud(component)
@@ -179,9 +182,13 @@ class CloudLoadBalancedComponent(TypedDict):
     segments: tuple[str, ...]
     #: internet_facing for an internet_exposed application, else internal.
     scheme: str
-    #: (protocol, port) of every port it lists: one VIP each, without an address.
+    #: l4_cloud or l7_cloud, by the component's lb_layer.
+    lb_type: str
+    #: (protocol, port) of every listener: one VIP each, without an address (http / https at layer 7).
     ports: tuple[tuple[str, int], ...]
-    #: The instances' private_ip: the pool members of every VIP.
+    #: The certificate of an https listener (the component's lb_certificate), else None.
+    ssl_certificate: str | None
+    #: The instances' names: the pool members of every VIP (servers, their address stays on them).
     members: tuple[str, ...]
     #: Its health checks, each [check, rise, fall, timeout] as strings: every VIP of it carries them.
     health_checks: tuple[tuple[str, ...], ...]
@@ -201,8 +208,13 @@ def _cloud_load_balanced(component: Declared) -> CloudLoadBalancedComponent:
         "virtual_network": _CLOUD_SEGMENT_NETWORKS[segments[0]],
         "segments": segments,
         "scheme": cloud_lb_scheme(application.get("security_profile")),
-        "ports": _single_ports(component.item["ports"]),
-        "members": tuple(sorted(str(instance["private_ip"]) for instance in instances)),
+        "lb_type": cloud_lb_type(component.item),
+        "ports": tuple(
+            (str(listener_protocol(component.item, (protocol, port, None))[0]), port)
+            for protocol, port in _single_ports(component.item["ports"])
+        ),
+        "ssl_certificate": component.item.get("lb_certificate"),
+        "members": tuple(sorted(str(name) for name in component.item["instances"])),
         "health_checks": _health_checks(component),
     }
 

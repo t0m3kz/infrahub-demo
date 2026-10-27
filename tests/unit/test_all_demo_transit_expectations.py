@@ -170,12 +170,14 @@ def test_load_balanced_components_and_their_clients() -> None:
             "ports": (("tcp", 443),),
             "contexts": (("DC10", "PROD", None),),
             "health_checks": (("http", "3", "3", "2000"),),
+            "servers": ("c005-web-frontend-dc10-1", "c005-web-frontend-dc10-2"),
         },
         "ui.reporting-portal.c010.demo.local": {
             "segment": "c010-zindra-dev-d",
             "ports": (("tcp", 443),),
             "contexts": (("DC12", "NON-PROD", None),),
             "health_checks": (("http", "3", "3", "2000"),),
+            "servers": ("c010-portal-ui-dc12-1", "c010-portal-ui-dc12-2"),
         },
     }
     assert ALL_DEMO_LB_CLIENT_DEPENDENCIES == {
@@ -188,8 +190,8 @@ def test_load_balanced_components_and_their_clients() -> None:
 
 
 def test_cloud_load_balanced_component() -> None:
-    """c003 api-frontend: one internet-facing CloudLoadBalancer in its AWS VPC, its two instances' private
-    addresses as pool members and a health check like the on-prem components; it is neither an on-prem VIP
+    """c003 api-frontend: one internet-facing layer 7 CloudLoadBalancer in its AWS VPC with an https listener, its two
+    instances as pool members and a health check like the on-prem components; it is neither an on-prem VIP
     expectation nor anyone's R_client target."""
     assert ALL_DEMO_CLOUD_LOAD_BALANCED_COMPONENTS == {
         "frontend.custody-api.c003.demo.local": {
@@ -197,9 +199,11 @@ def test_cloud_load_balanced_component() -> None:
             "virtual_network": "vaultex-vpc-prod",
             "segments": ("c003-vaultex-subnet-prod-p",),
             "scheme": "internet_facing",
-            "ports": (("tcp", 443),),
-            "members": ("10.30.1.11/24", "10.30.1.12/24"),
-            "health_checks": (("tcp", "2", "3", "1000"),),
+            "lb_type": "l7_cloud",
+            "ports": (("https", 443),),
+            "ssl_certificate": "arn:aws:acm:eu-central-1:111122223333:certificate/c003-custody-api",
+            "members": ("c003-api-frontend-euc1-1", "c003-api-frontend-euc1-2"),
+            "health_checks": (("http", "3", "3", "2000"),),
         }
     }
     assert not set(ALL_DEMO_CLOUD_LOAD_BALANCED_COMPONENTS) & set(ALL_DEMO_LOAD_BALANCED_COMPONENTS)
