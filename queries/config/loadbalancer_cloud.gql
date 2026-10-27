@@ -6,6 +6,7 @@ query loadbalancer_cloud($instance: String!) {
         name { value }
         lb_type { value }
         scheme { value }
+        dns_names { value }
         virtual_network {
           node {
             id
@@ -45,7 +46,19 @@ query loadbalancer_cloud($instance: String!) {
         ssl_certificate { value }
         load_balancing_algorithm { value }
         session_persistence { value }
-        pool_members { edges { node { address { value } } } }
+        # The targets of a cloud listener are cloud instances (a physical or virtual device belongs to an on-prem VIP).
+        pool_members {
+          edges {
+            node {
+              __typename
+              ... on CloudInstance {
+                name { value }
+                cloud_id { value }
+                private_ip { value }
+              }
+            }
+          }
+        }
         health_checks {
           edges {
             node {

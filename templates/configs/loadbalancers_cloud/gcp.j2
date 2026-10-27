@@ -1,5 +1,8 @@
 {#- Representative Terraform HCL for a GCP load balancer — verify resource arguments
     against the google Terraform provider docs before real use. -#}
+{% for name in dns_names -%}
+# endpoint: {{ name }}
+{% endfor -%}
 locals {
   {{ lb_name | tf_id }}_labels = {
 {%- for key, value in (labels or {}).items() %}
@@ -50,22 +53,61 @@ resource "google_compute_network_endpoints" "{{ svc.name | tf_id }}" {
 
 {% endif -%}
 resource "google_compute_backend_service" "{{ svc.name | tf_id }}" {
+{%- if layer == 'l7' %}
+  name                  = "{{ svc.name }}"
+  protocol              = "{{ svc.protocol }}"
+  session_affinity      = "{{ svc.session_affinity }}"
+  health_checks         = [google_compute_health_check.{{ svc.health_check | tf_id }}.id]
+  load_balancing_scheme = "EXTERNAL_MANAGED"
+{%- else %}
   name             = "{{ svc.name }}"
   protocol         = "{{ svc.protocol }}"
   session_affinity = "{{ svc.session_affinity }}"
   health_checks    = [google_compute_health_check.{{ svc.health_check | tf_id }}.id]
+{%- endif %}
 {%- if svc.endpoints %}
 
   backend {
+{%- if layer == 'l7' %}
+    group                 = google_compute_network_endpoint_group.{{ svc.name | tf_id }}.id
+    balancing_mode        = "RATE"
+    max_rate_per_endpoint = 100
+{%- else %}
     group = google_compute_network_endpoint_group.{{ svc.name | tf_id }}.id
+{%- endif %}
   }
 {%- endif %}
 }
 {% endfor %}
 {% for rule in forwarding_rules %}
-resource "{{ 'google_compute_global_forwarding_rule' if rule.is_global else 'google_compute_forwarding_rule' }}" "{{ rule.name | tf_id }}" {
+{% if layer == 'l7' -%}
+resource "google_compute_url_map" "{{ rule.url_map | tf_id }}" {
+  name            = "{{ rule.url_map }}"
+  default_service = google_compute_backend_service.{{ rule.backend_service | tf_id }}.id
+}
+
+resource "google_compute_target_{{ rule.proxy_type }}_proxy" "{{ rule.proxy | tf_id }}" {
+{%- if rule.ssl_certificate %}
+  name             = "{{ rule.proxy }}"
+  url_map          = google_compute_url_map.{{ rule.url_map | tf_id }}.id
+  ssl_certificates = ["{{ rule.ssl_certificate }}"]
+{%- else %}
+  name    = "{{ rule.proxy }}"
+  url_map = google_compute_url_map.{{ rule.url_map | tf_id }}.id
+{%- endif %}
+}
+
+resource "google_compute_global_forwarding_rule" "{{ rule.name | tf_id }}" {
+  name                  = "{{ rule.name }}"
+  load_balancing_scheme = "EXTERNAL_MANAGED"
+  port_range            = "{{ rule.port_range }}"
+  target                = google_compute_target_{{ rule.proxy_type }}_proxy.{{ rule.proxy | tf_id }}.id
+}
+{% else -%}
+resource "google_compute_forwarding_rule" "{{ rule.name | tf_id }}" {
   name       = "{{ rule.name }}"
   port_range = "{{ rule.port_range }}"
   target     = google_compute_backend_service.{{ rule.backend_service | tf_id }}.id
 }
+{% endif -%}
 {% endfor -%}

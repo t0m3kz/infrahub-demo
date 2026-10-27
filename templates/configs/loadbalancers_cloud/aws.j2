@@ -1,5 +1,8 @@
 {#- Representative Terraform HCL for an AWS Application/Network Load Balancer — verify
     resource arguments against the aws Terraform provider docs before real use. -#}
+{% for name in dns_names -%}
+# endpoint: {{ name }}
+{% endfor -%}
 resource "aws_lb" "{{ lb_name | tf_id }}" {
   name               = "{{ lb_name }}"
   load_balancer_type = "{{ lb_type }}"
@@ -17,7 +20,7 @@ resource "aws_lb_target_group" "{{ pool.name | tf_id }}" {
   name        = "{{ pool.name }}"
   port        = {{ pool.port }}
   protocol    = "{{ pool.protocol }}"
-  target_type = "ip"
+  target_type = "{{ pool.target_type }}"
   vpc_id      = data.aws_vpc.{{ vpc_name | tf_id }}.id
 {%- if pool.health_check %}
 
@@ -26,7 +29,13 @@ resource "aws_lb_target_group" "{{ pool.name | tf_id }}" {
 {%- if pool.health_check.path %}
     path                = "{{ pool.health_check.path }}"
 {%- endif %}
+{%- if pool.health_check.matcher %}
+    matcher             = "{{ pool.health_check.matcher }}"
+{%- endif %}
     interval            = {{ pool.health_check.interval }}
+{%- if layer == 'l7' %}
+    timeout             = {{ pool.health_check.timeout }}
+{%- endif %}
     healthy_threshold   = {{ pool.health_check.healthy_threshold }}
     unhealthy_threshold = {{ pool.health_check.unhealthy_threshold }}
   }
@@ -49,6 +58,9 @@ resource "aws_lb_listener" "{{ (listener.hostname ~ '-' ~ listener.protocol ~ '-
   protocol          = "{{ listener.protocol | upper }}"
 {%- if listener.certificate_arn %}
   certificate_arn   = "{{ listener.certificate_arn }}"
+{%- endif %}
+{%- if listener.ssl_policy %}
+  ssl_policy        = "{{ listener.ssl_policy }}"
 {%- endif %}
 
   default_action {

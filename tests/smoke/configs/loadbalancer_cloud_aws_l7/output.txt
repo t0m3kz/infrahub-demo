@@ -1,0 +1,100 @@
+# endpoint: frontend-custody-api-c0-a9ea4206-1234567890.eu-central-1.elb.amazonaws.com
+resource "aws_lb" "frontend_custody_api_c0_a9ea4206" {
+  name               = "frontend-custody-api-c0-a9ea4206"
+  load_balancer_type = "application"
+  internal           = false
+  subnets            = ["c003-vaultex-subnet-prod-1", "c003-vaultex-subnet-prod-2"]
+
+  tags = {
+    Name = "frontend-custody-api-c0-a9ea4206"
+    ManagedBy = "Terraform"
+    Infrahub = "true"
+  }
+}
+
+resource "aws_lb_target_group" "frontend_custody_api_c003_demo_local_http_80" {
+  name        = "frontend.custody-api.c003.demo.local-http-80"
+  port        = 80
+  protocol    = "HTTP"
+  target_type = "instance"
+  vpc_id      = data.aws_vpc.c003_vaultex_aws_vpc_prod.id
+
+  health_check {
+    protocol            = "HTTP"
+    path                = "/"
+    matcher             = "200-399"
+    interval            = 30
+    timeout             = 5
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+  }
+}
+
+resource "aws_lb_target_group_attachment" "frontend_custody_api_c003_demo_local_http_80_i_0a1b2c3d4e5f60001" {
+  target_group_arn = aws_lb_target_group.frontend_custody_api_c003_demo_local_http_80.arn
+  target_id        = "i-0a1b2c3d4e5f60001"
+  port             = 80
+}
+
+resource "aws_lb_target_group_attachment" "frontend_custody_api_c003_demo_local_http_80_i_0a1b2c3d4e5f60002" {
+  target_group_arn = aws_lb_target_group.frontend_custody_api_c003_demo_local_http_80.arn
+  target_id        = "i-0a1b2c3d4e5f60002"
+  port             = 80
+}
+
+
+resource "aws_lb_target_group" "frontend_custody_api_c003_demo_local_https_443" {
+  name        = "frontend.custody-api.c003.demo.local-https-443"
+  port        = 443
+  protocol    = "HTTP"
+  target_type = "instance"
+  vpc_id      = data.aws_vpc.c003_vaultex_aws_vpc_prod.id
+
+  health_check {
+    protocol            = "HTTP"
+    path                = "/"
+    matcher             = "200-399"
+    interval            = 30
+    timeout             = 2
+    healthy_threshold   = 3
+    unhealthy_threshold = 3
+  }
+}
+
+resource "aws_lb_target_group_attachment" "frontend_custody_api_c003_demo_local_https_443_i_0a1b2c3d4e5f60001" {
+  target_group_arn = aws_lb_target_group.frontend_custody_api_c003_demo_local_https_443.arn
+  target_id        = "i-0a1b2c3d4e5f60001"
+  port             = 443
+}
+
+resource "aws_lb_target_group_attachment" "frontend_custody_api_c003_demo_local_https_443_i_0a1b2c3d4e5f60002" {
+  target_group_arn = aws_lb_target_group.frontend_custody_api_c003_demo_local_https_443.arn
+  target_id        = "i-0a1b2c3d4e5f60002"
+  port             = 443
+}
+
+
+
+resource "aws_lb_listener" "frontend_custody_api_c003_demo_local_http_80" {
+  load_balancer_arn = aws_lb.frontend_custody_api_c0_a9ea4206.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.frontend_custody_api_c003_demo_local_http_80.arn
+  }
+}
+
+resource "aws_lb_listener" "frontend_custody_api_c003_demo_local_https_443" {
+  load_balancer_arn = aws_lb.frontend_custody_api_c0_a9ea4206.arn
+  port              = 443
+  protocol          = "HTTPS"
+  certificate_arn   = "arn:aws:acm:eu-central-1:123456789012:certificate/0a1b2c3d-4e5f-6789-abcd-ef0123456789"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.frontend_custody_api_c003_demo_local_https_443.arn
+  }
+}
