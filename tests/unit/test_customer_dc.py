@@ -355,11 +355,19 @@ class TestLinkServingContext:
         deployment.save = AsyncMock()
         gen.client.get = AsyncMock(return_value=deployment)
 
-        await gen.link_serving_context(spec, customer_id="cust-1", context_id="ctx-1", current_id=None)
+        await gen.link_serving_context(spec, customer_id="cust-1", context_id="ctx-1", current_ids=[])
 
         assert gen.client.get.call_args.kwargs == {"kind": "TopologyCustomerDC", "id": "cust-1"}
         assert getattr(deployment, field) == "ctx-1"
         deployment.save.assert_awaited_once_with(update_group_context=False)
+
+    def test_a_dc_footprint_has_one_serving_context_of_each_kind(self) -> None:
+        """Only the colocation footprint (one context per zone) has the many relationship."""
+        gen = make_generator(CustomerDeploymentDCExchangeGenerator)
+
+        assert CustomerDeploymentDCExchangeGenerator._serving_many is False
+        assert gen._serving_field(FIREWALL_CONTEXT) == "serving_firewall_context"
+        assert gen._serving_field(LOADBALANCER_CONTEXT) == "serving_loadbalancer_context"
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("spec", [FIREWALL_CONTEXT, LOADBALANCER_CONTEXT])
@@ -367,7 +375,7 @@ class TestLinkServingContext:
         """The boarding query already shows the deployment linked to the context: no read, no write."""
         gen = make_generator(CustomerDeploymentDCExchangeGenerator)
 
-        await gen.link_serving_context(spec, customer_id="cust-1", context_id="ctx-1", current_id="ctx-1")
+        await gen.link_serving_context(spec, customer_id="cust-1", context_id="ctx-1", current_ids=["ctx-1"])
 
         gen.client.get.assert_not_awaited()
 
@@ -380,7 +388,7 @@ class TestLinkServingContext:
         deployment.save = AsyncMock()
         gen.client.get = AsyncMock(return_value=deployment)
 
-        await gen.link_serving_context(FIREWALL_CONTEXT, customer_id="cust-1", context_id="ctx-1", current_id=None)
+        await gen.link_serving_context(FIREWALL_CONTEXT, customer_id="cust-1", context_id="ctx-1", current_ids=[])
 
         gen.client.get.assert_awaited_once()
         deployment.save.assert_not_awaited()
@@ -395,7 +403,7 @@ class TestLinkServingContext:
         gen.client.get = AsyncMock(return_value=deployment)
 
         await gen.link_serving_context(
-            FIREWALL_CONTEXT, customer_id="cust-1", context_id="ctx-new", current_id="ctx-old"
+            FIREWALL_CONTEXT, customer_id="cust-1", context_id="ctx-new", current_ids=["ctx-old"]
         )
 
         gen.client.get.assert_awaited_once()
@@ -407,7 +415,7 @@ class TestLinkServingContext:
         gen = make_generator(CustomerDeploymentDCExchangeGenerator)
         gen.client.get = AsyncMock(side_effect=RuntimeError("boom"))
 
-        await gen.link_serving_context(FIREWALL_CONTEXT, customer_id="cust-1", context_id="ctx-1", current_id=None)
+        await gen.link_serving_context(FIREWALL_CONTEXT, customer_id="cust-1", context_id="ctx-1", current_ids=[])
 
         gen.logger.error.assert_called_once()
 
@@ -431,7 +439,7 @@ class TestServingContextRelink:
         consumers = AsyncMock(return_value=["comp-1", "comp-2"])
         spec = dataclasses.replace(LOADBALANCER_CONTEXT, relink_consumers=consumers)
 
-        await gen.link_serving_context(spec, customer_id="cust-1", context_id="ctx-shared", current_id=None)
+        await gen.link_serving_context(spec, customer_id="cust-1", context_id="ctx-shared", current_ids=[])
 
         deployment.save.assert_awaited_once_with(update_group_context=False)
         consumers.assert_awaited_once_with(gen.client, "cust-1")
@@ -453,7 +461,7 @@ class TestServingContextRelink:
             dataclasses.replace(LOADBALANCER_CONTEXT, relink_consumers=consumers),
             customer_id="cust-1",
             context_id="ctx-shared",
-            current_id=None,
+            current_ids=[],
         )
 
         deployment.save.assert_awaited_once()
@@ -469,7 +477,7 @@ class TestServingContextRelink:
             dataclasses.replace(LOADBALANCER_CONTEXT, relink_consumers=AsyncMock(return_value=[])),
             customer_id="cust-1",
             context_id="ctx-shared",
-            current_id=None,
+            current_ids=[],
         )
 
         gen.run_generator.assert_not_awaited()
@@ -479,7 +487,7 @@ class TestServingContextRelink:
         """The firewall rules are placed by the transform at render time: nothing to re-run."""
         gen, deployment = self._gen("serving_firewall_context", "fw-dedicated")
 
-        await gen.link_serving_context(FIREWALL_CONTEXT, customer_id="cust-1", context_id="fw-shared", current_id=None)
+        await gen.link_serving_context(FIREWALL_CONTEXT, customer_id="cust-1", context_id="fw-shared", current_ids=[])
 
         deployment.save.assert_awaited_once()
         gen.run_generator.assert_not_awaited()
@@ -494,7 +502,7 @@ class TestServingContextRelink:
             dataclasses.replace(LOADBALANCER_CONTEXT, relink_consumers=AsyncMock(return_value=["comp-1"])),
             customer_id="cust-1",
             context_id="ctx-shared",
-            current_id=None,
+            current_ids=[],
         )
 
         deployment.save.assert_awaited_once()

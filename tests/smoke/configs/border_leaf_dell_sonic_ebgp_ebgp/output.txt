@@ -180,6 +180,10 @@
       "vlan": "Vlan100",
       "vni": "10100"
     },
+    "vtep|map_10200_Vlan200": {
+      "vlan": "Vlan200",
+      "vni": "10200"
+    },
     "vtep|map_50001_Vlan3900": {
       "vlan": "Vlan3900",
       "vni": "50001"

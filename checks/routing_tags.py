@@ -12,7 +12,6 @@ from utils.exchange_transit import is_routed_tenant_segment
 from utils.routing_identity import customer_community, segment_community
 
 CUSTOMER_KIND = "OrganizationCustomer"
-VLAN_SEGMENT_KIND = "ManagedVlanSegment"
 
 
 class CheckRoutingTags(InfrahubCheck):
@@ -22,10 +21,8 @@ class CheckRoutingTags(InfrahubCheck):
     untagged segment renders no community and a tag given twice reads as the wrong customer or segment:
 
     - a routed VXLAN tenant segment (utils/exchange_transit.is_routed_tenant_segment) has a tag;
-      a VLAN segment is tagged by the application generator only, so one no application uses is reported untagged
-      (an info line), not an error;
     - the customer owning such a segment has a tag;
-    - a tag is on one customer at most, and on one segment at most (VLAN and VXLAN segments share one pool).
+    - a tag is on one customer at most, and on one segment at most.
 
     The range of a tag (1..65534, the 16-bit community value; 65535 is reserved) is the schema's: the server refuses
     a tag outside it when the customer or segment is written.
@@ -53,11 +50,7 @@ class CheckRoutingTags(InfrahubCheck):
             if live_routed:
                 owned[str((segment.get("owner") or {}).get("id"))].append(str(segment.get("name")))
             if tag is None:
-                if live_routed and segment.get("typename") == VLAN_SEGMENT_KIND:
-                    # Only the application generator tags a VLAN segment, so one no application uses is untagged by
-                    # design: reported, not an error (the check cannot tell it from a missed run without the usage).
-                    self.log_info(message=f"{label}: routed tenant segment is untagged (no application uses it)")
-                elif live_routed:
+                if live_routed:
                     self.log_error(
                         message=f"{label}: routed tenant segment has no routing_tag (rule: every routed segment is tagged)"
                     )

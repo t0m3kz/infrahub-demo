@@ -1563,9 +1563,7 @@
                         "node": null
                       },
                       "destination_segment": {
-                        "node": {
-                          "id": "seg-internet"
-                        }
+                        "node": null
                       },
                       "source_security_tag": {
                         "node": null
@@ -2282,54 +2280,6 @@
                 }
               }
             ]
-          }
-        }
-      },
-      {
-        "node": {
-          "id": "seg-internet",
-          "__typename": "ManagedExternalSegment",
-          "name": {
-            "value": "internet"
-          },
-          "isolation_mode": {
-            "value": "normal"
-          },
-          "owner": {
-            "node": {
-              "org_id": {
-                "value": "INTERNET"
-              }
-            }
-          },
-          "security_zone": {
-            "node": {
-              "name": {
-                "value": "INTERNET-ZONE"
-              }
-            }
-          },
-          "security_tag": {
-            "node": null
-          },
-          "gateway": {
-            "node": null
-          },
-          "security_policy": {
-            "node": {
-              "name": {
-                "value": "seg-internet-egress"
-              },
-              "enabled": {
-                "value": true
-              },
-              "default_action": {
-                "value": "deny"
-              },
-              "rules": {
-                "edges": []
-              }
-            }
           }
         }
       }

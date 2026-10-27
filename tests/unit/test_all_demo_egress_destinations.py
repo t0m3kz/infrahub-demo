@@ -7,7 +7,7 @@ is reachable only when it is one of:
 - a VPC block of an account owned by the source segment's owner, whose attachment propagates into the route table the
   hybrid (transit VIF) attachment is associated with (what ``vif_registered_blocks`` reads off the AWS handoff session),
 - a prefix in the ``registered_prefixes`` of a tunnel circuit owned by that owner (the Acme extranet), or
-- the Internet segment (a SaaS PoP is public space and registers nothing).
+- the internet zone, ``destination_zone: INTERNET-ZONE`` (a SaaS PoP is public space and registers nothing).
 """
 
 from __future__ import annotations
@@ -18,6 +18,7 @@ import pytest
 
 from tasks import ALL_DEMO_DATA
 from tests.integration.demo_data import BOOTSTRAP, ROOT, Declared, declared, distinct, name
+from utils.exchange_transit import INTERNET_ZONE
 
 _ALL = ROOT / ALL_DEMO_DATA
 _POLICY = "seg-c001-nordix-prod-p-egress"
@@ -41,9 +42,7 @@ def _by_name(kind: str) -> dict[str, Declared]:
 
 def _owner_of_segment(segment: str) -> str:
     """The owner (org_id) of the declared segment ``segment``."""
-    (found,) = [
-        s for kind in ("ManagedVlanSegment", "ManagedVxlanSegment") for s in declared(kind, _ALL) if name(s) == segment
-    ]
+    (found,) = [s for s in declared("ManagedVxlanSegment", _ALL) if name(s) == segment]
     return str(found.item.get("owner") or (found.enclosing.item["org_id"] if found.enclosing else None))
 
 
@@ -151,7 +150,7 @@ def test_the_source_segment_of_the_policy_is_owned_by_c001() -> None:
 
 @pytest.mark.parametrize("rule", _rules(), ids=lambda rule: rule["name"])
 def test_every_destination_of_a_c001_egress_rule_is_registered_or_the_internet(rule: dict[str, Any]) -> None:
-    """A destination prefix is a block C001 registers behind the AWS session or the tunnel; else the Internet segment."""
+    """A destination prefix is a block C001 registers behind the AWS session or the tunnel; else the internet zone."""
     owner = _owner_of_segment(rule["source_segment"])
     registered = _hub_registered_blocks(owner) | _tunnel_registered_prefixes(owner)
     destinations = [tuple(prefix) for prefix in rule.get("destination_prefixes") or []]
@@ -160,23 +159,25 @@ def test_every_destination_of_a_c001_egress_rule_is_registered_or_the_internet(r
         assert prefix in registered, f"{rule['name']}: {prefix} is registered behind no session"
         assert prefix in _declared_prefixes(), f"{rule['name']}: {prefix} is not a declared prefix"
     if not destinations:
-        assert rule["destination_segment"] == "internet"
+        assert rule["destination_zone"] == INTERNET_ZONE
+        assert "destination_segment" not in rule
 
 
 def test_the_rules_aim_at_the_vpc_block_the_acme_range_and_the_internet() -> None:
-    """Rule 10 the nordix VPC block, rule 20 the Acme range behind the tunnel, rule 30 the Internet segment."""
+    """Rule 10 the nordix VPC block, rule 20 the Acme range behind the tunnel, rule 30 the internet zone."""
     rules = {rule["index"]: rule for rule in _rules()}
 
     assert rules[10]["destination_prefixes"] == [_VPC_BLOCK]
     assert rules[20]["destination_prefixes"] == [_ACME_RANGE]
-    assert rules[30]["destination_segment"] == "internet"
+    assert rules[30]["destination_zone"] == INTERNET_ZONE
+    assert "destination_segment" not in rules[30]
     assert "destination_prefixes" not in rules[30]
     assert rules[30]["apply_on_switch"] is False
 
 
-def test_the_internet_segment_is_declared_in_the_bootstrap() -> None:
-    """Rule 30 names a segment that exists: the external segment of the Internet pseudo-customer."""
-    assert "internet" in {name(segment) for segment in declared("ManagedExternalSegment", BOOTSTRAP)}
+def test_the_internet_zone_is_declared_in_the_bootstrap() -> None:
+    """Rule 30 names a zone that exists."""
+    assert INTERNET_ZONE in {name(zone) for zone in declared("SecurityZone", BOOTSTRAP)}
 
 
 def test_a_destination_registered_behind_nothing_is_rejected_by_the_derivation() -> None:

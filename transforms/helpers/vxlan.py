@@ -204,7 +204,7 @@ def get_interfaces(
         vlans = [
             segment_vlan[s["name"]]
             for s in capabilities
-            if s.get("typename") in ("ManagedVlanSegment", "ManagedVxlanSegment") and s.get("name") in segment_vlan
+            if s.get("typename") == "ManagedVxlanSegment" and s.get("name") in segment_vlan
         ]
 
         # FirewallContext sub-interface (role="service", created by
@@ -621,7 +621,7 @@ def evpn_vxlan_context(node: OverlayNode, evpn_inputs: EvpnInputs, platform: str
         },
         # EVPN Multi-Site border gateway (None unless this device is a BGW).
         "multisite": multisite,
-        # L2 VNIs for VLAN segments
+        # L2 VNIs for segments
         "l2_vni_mappings": l2_vni_mappings,
         # L3 VNIs for VRF segments (microsegmentation)
         "l3_vni_mappings": l3_vni_mappings,

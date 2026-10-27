@@ -65,7 +65,6 @@ class ManagedController(CoreNode):
 
 class TopologyCustomer(CoreNode):
     name: String
-    network_segments: RelationshipManager[ManagedNetworkSegment]
     owner: RelationshipAttribute[OrganizationEntity]
 
 
@@ -255,7 +254,7 @@ class CloudHybridAttachment(CoreNode):
 
 
 class ManagedTenantScoped(CoreNode):
-    serving_firewall_context: RelationshipAttribute[ManagedFirewallContext]
+    pass
 
 
 class TopologySegmentHosting(CoreNode):
@@ -444,13 +443,15 @@ class TopologyCustomerCloud(
 ):
     customer_name: String
     name: StringOptional
+    network_segments: RelationshipManager[CloudNetworkSegment]
 
 
 class TopologyCustomerColocation(
     TopologyCustomer, TopologyEnvironmentScoped, TopologyDeployment, TopologyConnectableLocation, ManagedTenantScoped
 ):
     name: StringOptional
-    serving_zone: RelationshipAttribute[TopologyColocationZone]
+    network_segments: RelationshipManager[ManagedVxlanSegment]
+    serving_firewall_contexts: RelationshipManager[ManagedFirewallContext]
 
 
 class TopologyCustomerDC(
@@ -458,6 +459,8 @@ class TopologyCustomerDC(
 ):
     name: StringOptional
     design: RelationshipAttribute[TopologyCustomerTemplateDC]
+    network_segments: RelationshipManager[ManagedVxlanSegment]
+    serving_firewall_context: RelationshipAttribute[ManagedFirewallContext]
     serving_loadbalancer_context: RelationshipAttribute[ManagedLoadbalancerContext]
 
 
@@ -474,6 +477,7 @@ class TopologyCustomerOffice(
     fabric_templates: RelationshipManager[TopologyElement]
     locations: RelationshipManager[LocationFacility]
     lan_prefixes: RelationshipManager[IpamPrefix]
+    network_segments: RelationshipManager[ManagedVxlanSegment]
     owner: RelationshipAttribute[OrganizationEntity]
 
 
@@ -847,6 +851,7 @@ class SecurityPolicyRule(CoreNode):
     destination_prefixes: RelationshipManager[IpamPrefix]
     destination_security_tag: RelationshipAttribute[SecurityTag]
     destination_segment: RelationshipAttribute[ManagedNetworkSegment]
+    destination_zone: RelationshipAttribute[SecurityZone]
     policy: RelationshipAttribute[SecurityPolicy]
     security_profile: RelationshipAttribute[SecuritySecurityProfile]
     source_ip_addresses: RelationshipManager[IpamIPAddress]
@@ -1043,18 +1048,6 @@ class CloudVirtualNetwork(CloudResource):
     cidr_blocks: RelationshipManager[IpamPrefix]
     network_segments: RelationshipManager[CloudNetworkSegment]
     region: RelationshipAttribute[TopologyCloudRegion]
-
-
-class ManagedVlanSegment(ManagedGeneric, ManagedNetworkSegment, ManagedGenericInterfaces):
-    segment_type: Dropdown
-    terminate_inline: Boolean
-    vlan_id: IntegerOptional
-    customer_deployment: RelationshipAttribute[TopologyCustomer]
-    inline_service: RelationshipAttribute[ManagedGeneric]
-
-
-class ManagedExternalSegment(ManagedNetworkSegment):
-    pass
 
 
 class ManagedVxlanSegment(ManagedGeneric, ManagedNetworkSegment, ManagedGenericInterfaces):

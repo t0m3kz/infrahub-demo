@@ -1,26 +1,19 @@
 ---
-# Core infrastructure services (DNS/NTP) of DC11, an ordinary routed VLAN
-# segment in the MANAGEMENT VRF, owned by the Infrastructure Services
-# pseudo-customer (the pattern of the Internet segment in
-# data/bootstrap/27_external_segments.yml: a segment's name is computed from its
-# owner, here `infra-core-dns-ntp-p`).
+# Core infrastructure services (DNS/NTP) of DC11: a VXLAN segment in the MANAGEMENT VRF, owned by the Infrastructure
+# Services pseudo-customer (a segment's name is computed from its owner, here `infra-core-dns-ntp-p`).
 #
-# Tenants reach it through their firewall context's MANAGEMENT leg, source-NATed
-# to the leg VIP (nothing here initiates towards a tenant); the rules that name
-# it live in ../../08_interconnects/07_zone_policies/05_security_policy.yml.
+# Tenants reach it through their firewall context's MANAGEMENT leg, source-NATed to the leg VIP (nothing here
+# initiates towards a tenant); the rules that name it live in
+# ../../08_interconnects/07_zone_policies/05_security_policy.yml.
 #
-# customer_deployment is C006-P-DC11: a VLAN segment needs a deployment, and
-# INFRA has no footprint of its own. Reusing DC11's existing one adds no
-# context and no leg; the footprint only says which DC's fabric carries the
-# segment. It gets no tenant PBR redirect: its gateway namespace is of type
-# management (get_customer_pbr_rules). It is the one VLAN segment in a DC:
-# segment_placement allows a VLAN segment on a TopologyCustomerDC only in an
-# exchange zone (MANAGEMENT-ZONE here); every tenant segment there is VXLAN.
+# customer_deployments is C006-P-DC11: a segment needs a deployment, and INFRA has no footprint of its own. Reusing
+# DC11's existing one adds no context and no leg; the footprint only says which DC's fabric carries the segment. It gets
+# no tenant PBR redirect: its gateway namespace is of type management (get_customer_pbr_rules).
 #
-# ManagedVlanSegment has no generator, so its address, VLAN, zone and
-# access-leaf port are authored infra data: Ethernet1/2 of al-dc1111111501
-# (the dc11-pod1 hosts use Ethernet1/1). Its anycast SVI in VRF MANAGEMENT
-# advertises 10.250.0.0/24 to the border leaves as an EVPN type-5 route.
+# Like every segment its VLAN is generated per switch and its ports come from the instances of its components
+# (01_application.yml: two virtual machines hosted on the dc11-pod1 servers). The gateway is authored: the address
+# generator keeps it. Its anycast SVI in VRF MANAGEMENT advertises 10.250.0.0/24 to the border leaves as an EVPN
+# type-5 route.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -31,12 +24,11 @@ spec:
       member_of_groups:
         - customers
       network_segments:
-        - kind: ManagedVlanSegment
+        - kind: ManagedVxlanSegment
           data:
             customer_name: "core-dns-ntp"
             description: "DC11 core infrastructure services (DNS, NTP)"
             environment: "p"
-            vlan_id: 250
             gateway:
               data:
                 address: "10.250.0.1/24"
@@ -50,7 +42,8 @@ spec:
                     status: active
                     role: customer
                     ip_namespace: "MANAGEMENT"
-            customer_deployment: "C006-P-DC11"
+            customer_deployments:
+              - "C006-P-DC11"
+            member_of_groups:
+              - vxlan_segments
             security_zone: "MANAGEMENT-ZONE"
-            capabilities:
-              - ["al-dc1111111501", "Ethernet1/2"]

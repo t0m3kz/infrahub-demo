@@ -40,11 +40,7 @@ _FOOTPRINTS: dict[str, str] = {
 # An office footprint has no environment and no wrapper: it is named {owner}-OFFICE and is always PROD
 # (an office hosts its own segments, C005's office-lan).
 _FOOTPRINTS.update({f"{entry['owner']}-OFFICE": "p" for kind, entry in _OBJECTS if kind == "TopologyCustomerOffice"})
-_SEGMENTS = [
-    entry
-    for kind, entry in _OBJECTS
-    if kind in ("ManagedVxlanSegment", "ManagedVlanSegment") and "customer_deployments" in entry
-]
+_SEGMENTS = [entry for kind, entry in _OBJECTS if kind == "ManagedVxlanSegment" and "customer_deployments" in entry]
 _VMS: dict[str, str] = {
     entry["name"]: entry["deployment"]
     for kind, entry in _OBJECTS

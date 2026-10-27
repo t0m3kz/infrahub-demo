@@ -12,6 +12,5 @@ spec:
     - owner: "C005"
       environment: "p"
       parent: "FR"
-      # FR2 holds the metro's firewall pair, so this footprint's FirewallContext lives there
-      serving_zone: "FR2"
+      # Served by every zone of the FR metro that has a firewall pair (FR2): its FirewallContext lives there
       member_of_groups: [customer_deployments_colocation]

@@ -142,13 +142,11 @@ def test_every_footprint_design_is_a_declared_template(footprint: Declared) -> N
 def _segments_per_footprint() -> dict[str, set[str]]:
     """30_all DC footprint name -> the (non exchange-zone) segments naming it, as the quota check counts them."""
     counted: dict[str, set[str]] = {}
-    for kind, key in (("ManagedVxlanSegment", "customer_deployments"), ("ManagedVlanSegment", "customer_deployment")):
-        for segment in declared(kind, _DEMOS / "30_all"):
-            if is_exchange_zone(segment.item.get("security_zone")):
-                continue
-            named = segment.item.get(key) or []
-            for footprint in [named] if isinstance(named, str) else named:
-                counted.setdefault(str(footprint), set()).add(name(segment))
+    for segment in declared("ManagedVxlanSegment", _DEMOS / "30_all"):
+        if is_exchange_zone(segment.item.get("security_zone")):
+            continue
+        for footprint in segment.item.get("customer_deployments") or []:
+            counted.setdefault(str(footprint), set()).add(name(segment))
     return counted
 
 

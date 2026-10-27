@@ -1,7 +1,9 @@
-"""Validate the colocation tree: what each zone and virtual colocation hosts, who serves a footprint, and names.
+"""Validate the colocation tree: what each zone and virtual colocation hosts, and names.
 
-The schema holds the shape (a zone and a virtual colocation are children of a metro, a footprint's ``serving_zone``
-peers a zone); what it cannot hold is held here, on every metro, zone, virtual colocation and footprint at once.
+The schema holds the shape (a zone and a virtual colocation are children of a metro); what it cannot hold is held
+here, on every metro, zone and virtual colocation at once. A footprint names no zone: it is served by every zone of its
+metro that has a firewall pair (generators/topology/customer_colocation.py), so there is no placement to check.
+
 Each rule is a small function over the cleaned query result that returns its findings, so a new rule is one more
 entry in ``RULES``:
 
@@ -9,29 +11,25 @@ entry in ``RULES``:
    TemplateDcimPhysicalDevice; a virtual colocation is a provider-hosted presence (Equinix Network Edge, Megaport
    MCR), so every entry is a TemplateCloudNetworkAppliance (its devices are CloudNetworkAppliance, not
    DcimVirtualDevice). The peer is CoreObjectTemplate, so the schema accepts either.
-2. Serving zone. A footprint's ``serving_zone`` is a zone of the footprint's own metro (``parent``): the footprint
-   is parented by the metro, the firewall pair that serves it lives in one of its zones.
-3. Serving zone firewalls. A serving zone holds firewall devices, else the footprint gets no FirewallContext.
-   An unset ``serving_zone`` is not reported: it means no context by design.
-4. Unique names. Metro, zone and virtual colocation names are unique across all three kinds: they share the
+2. Unique names. Metro, zone and virtual colocation names are unique across all three kinds: they share the
    device-name space (a zone FR2 names ``eg-fr201``) and the pool-name space.
 
 Design rules (``design`` is optional: a zone, virtual colocation or metro without one is sized with the generator's
 fixed fallback, and is only held to these rules where the rule names the design):
 
-5. Kit needs a design. A zone or virtual colocation that declares ``fabric_templates`` has a ``design``: the design
+3. Kit needs a design. A zone or virtual colocation that declares ``fabric_templates`` has a ``design``: the design
    is the envelope its pools are sized for.
-6. Kit within the envelope. The quantities of a role, summed over the ``fabric_templates`` entries, stay within the
+4. Kit within the envelope. The quantities of a role, summed over the ``fabric_templates`` entries, stay within the
    design's ``max_edges`` (edge), ``max_firewalls`` (firewall) or ``max_load_balancers`` (load-balancer).
-7. Zone design in the metro envelope. When both the metro and the zone (or virtual colocation) have a design, the
+5. Zone design in the metro envelope. When both the metro and the zone (or virtual colocation) have a design, the
    zone's design is one of the metro design's ``zone_templates``.
-8. Zones within the metro envelope. A metro with a design holds at most the design's ``max_zones`` zones and
+6. Zones within the metro envelope. A metro with a design holds at most the design's ``max_zones`` zones and
    virtual colocations together.
 
 Order data (the presence's ``account`` with its ``owner``, and the appliances it hosts; not part of the design
 envelope):
 
-9. Terraform order data. A virtual colocation routed to terraform has what the Terraform artifact prints and cannot
+7. Terraform order data. A virtual colocation routed to terraform has what the Terraform artifact prints and cannot
    order without: an ``account`` whose ``account_id`` (the billing account number) is set, whose provider is the
    colocation operator above the metro (case-insensitive: operator "EQUINIX", provider "Equinix"), and whose owner has
    at least one notification address, each an e-mail address. Every appliance (CloudNetworkAppliance) of the presence
@@ -56,7 +54,6 @@ from utils.data_cleaning import clean_data
 METRO = "TopologyColocationMetro"
 ZONE = "TopologyColocationZone"
 VIRTUAL_COLOCATION = "TopologyVirtualColocation"
-FOOTPRINT = "TopologyCustomerColocation"
 TERRAFORM = "terraform"
 """The infrastructure_orchestrator value that makes a virtual colocation render its Terraform artifact."""
 
@@ -135,48 +132,8 @@ def template_kind_findings(cleaned: dict[str, Any]) -> list[Finding]:
     return findings
 
 
-def serving_zone_metro_findings(cleaned: dict[str, Any]) -> list[Finding]:
-    """Rule 2: the serving zone is a zone of the footprint's own metro."""
-    findings = []
-    for footprint in cleaned.get(FOOTPRINT) or []:
-        zone = footprint.get("serving_zone")
-        metro = footprint.get("parent") or {}
-        if not zone or not metro.get("id"):
-            continue
-        zone_metro = zone.get("parent") or {}
-        if zone_metro.get("id") != metro["id"]:
-            findings.append(
-                Finding(
-                    f"{FOOTPRINT} '{_name(footprint)}' is served by zone '{_name(zone)}' of metro "
-                    f"'{zone_metro.get('name') or '<no metro>'}' but is itself in metro '{_name(metro)}': its "
-                    "serving_zone is a zone of its own metro.",
-                    footprint.get("id"),
-                    FOOTPRINT,
-                )
-            )
-    return findings
-
-
-def serving_zone_firewall_findings(cleaned: dict[str, Any]) -> list[Finding]:
-    """Rule 3: a serving zone holds a firewall, else the footprint gets no FirewallContext."""
-    findings = []
-    for footprint in cleaned.get(FOOTPRINT) or []:
-        zone = footprint.get("serving_zone")
-        if zone and not zone.get("firewall_devices"):
-            findings.append(
-                Finding(
-                    f"{FOOTPRINT} '{_name(footprint)}' is served by zone '{_name(zone)}', which has no firewall "
-                    "device: the footprint would get no FirewallContext. Declare a firewall in the zone's "
-                    "fabric_templates or serve the footprint from a zone that has one.",
-                    footprint.get("id"),
-                    FOOTPRINT,
-                )
-            )
-    return findings
-
-
 def unique_name_findings(cleaned: dict[str, Any]) -> list[Finding]:
-    """Rule 4: metro, zone and virtual colocation names are unique across the three kinds (case-insensitive: the
+    """Rule 2: metro, zone and virtual colocation names are unique across the three kinds (case-insensitive: the
     device and pool names are lower-cased)."""
     by_name: dict[str, list[tuple[str, dict[str, Any]]]] = defaultdict(list)
     for kind in NAMESPACED_KINDS:
@@ -212,7 +169,7 @@ def _design_name(design: dict[str, Any]) -> str:
 
 
 def kit_without_design_findings(cleaned: dict[str, Any]) -> list[Finding]:
-    """Rule 5: a zone or virtual colocation that declares kit has a design."""
+    """Rule 3: a zone or virtual colocation that declares kit has a design."""
     findings = []
     for kind in FABRIC_KINDS:
         for node in cleaned.get(kind) or []:
@@ -230,7 +187,7 @@ def kit_without_design_findings(cleaned: dict[str, Any]) -> list[Finding]:
 
 
 def kit_within_design_findings(cleaned: dict[str, Any]) -> list[Finding]:
-    """Rule 6: the quantity of each role stays within the design's max."""
+    """Rule 4: the quantity of each role stays within the design's max."""
     findings = []
     for kind in FABRIC_KINDS:
         for node in cleaned.get(kind) or []:
@@ -257,7 +214,7 @@ def kit_within_design_findings(cleaned: dict[str, Any]) -> list[Finding]:
 
 
 def zone_design_in_metro_findings(cleaned: dict[str, Any]) -> list[Finding]:
-    """Rule 7: with a design on both the metro and the zone, the zone's design is one of the metro's zone_templates."""
+    """Rule 5: with a design on both the metro and the zone, the zone's design is one of the metro's zone_templates."""
     metros = {metro["id"]: metro for metro in cleaned.get(METRO) or [] if metro.get("id")}
     findings = []
     for kind in FABRIC_KINDS:
@@ -282,7 +239,7 @@ def zone_design_in_metro_findings(cleaned: dict[str, Any]) -> list[Finding]:
 
 
 def metro_zone_count_findings(cleaned: dict[str, Any]) -> list[Finding]:
-    """Rule 8: a metro with a design holds at most max_zones zones and virtual colocations together."""
+    """Rule 6: a metro with a design holds at most max_zones zones and virtual colocations together."""
     held: dict[str, list[str]] = defaultdict(list)
     for kind in FABRIC_KINDS:
         for node in cleaned.get(kind) or []:
@@ -413,7 +370,7 @@ def _ha_problems(appliances: dict[str, dict[str, Any]]) -> list[str]:
 
 
 def terraform_order_data_findings(cleaned: dict[str, Any]) -> list[Finding]:
-    """Rule 9: a virtual colocation routed to terraform has its account, owner e-mails and consistent appliances (HA domains)."""
+    """Rule 7: a virtual colocation routed to terraform has its account, owner e-mails and consistent appliances (HA domains)."""
     findings = []
     for node in cleaned.get(VIRTUAL_COLOCATION) or []:
         if node.get("infrastructure_orchestrator") != TERRAFORM:
@@ -448,8 +405,6 @@ def terraform_order_data_findings(cleaned: dict[str, Any]) -> list[Finding]:
 
 RULES: tuple[Callable[[dict[str, Any]], list[Finding]], ...] = (
     template_kind_findings,
-    serving_zone_metro_findings,
-    serving_zone_firewall_findings,
     unique_name_findings,
     kit_without_design_findings,
     kit_within_design_findings,
@@ -461,8 +416,8 @@ RULES: tuple[Callable[[dict[str, Any]], list[Finding]], ...] = (
 
 
 class CheckColocationPlacement(InfrahubCheck):
-    """Zones host physical kit, virtual colocations virtual kit; footprints are served by a firewall-holding zone of
-    their metro; colocation names are unique; kit fits the design envelope of its zone and metro."""
+    """Zones host physical kit, virtual colocations virtual kit; colocation names are unique; kit fits the design
+    envelope of its zone and metro."""
 
     query = "colocation_placement"
 

@@ -87,8 +87,8 @@ OFFSET_MEMBER_B = 6
 
 # Sequence numbers of a segment's leaf ACL (transforms/helpers/acl.py, transforms/helpers/firewall.py): its own rules
 # are numbered by rule index (generators/segment_firewall.py: 100, 110, ... below 4000), the return legs of the
-# permits into the segment start at ACL_RETURN_LEG_SEQ_START, the "outside" band of a permit to a prefix-less
-# external segment (the internet) follows at ACL_INTERNET_BAND_SEQ_START, and the closing rule never sits below
+# permits into the segment start at ACL_RETURN_LEG_SEQ_START, the "outside" band of a permit to the internet
+# zone (`destination_zone`) follows at ACL_INTERNET_BAND_SEQ_START, and the closing rule never sits below
 # ACL_CLOSING_SEQ.
 ACL_RETURN_LEG_SEQ_START = 5000
 ACL_INTERNET_BAND_SEQ_START = 6000

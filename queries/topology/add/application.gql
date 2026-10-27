@@ -29,7 +29,7 @@ fragment SegmentSecurityFields on ManagedNetworkSegment {
   # The customer DC footprints it is activated in and the load balancer context each serves (set when the
   # customer boards): the context of an instance is the one of its segment's footprint in the instance's data
   # center (generators/helpers/lb_vip.py instance_footprint), whatever the instance's device kind, so a
-  # physical host shared by customers is served too. A VXLAN segment lists its footprints, a VLAN one has the one.
+  # physical host shared by customers is served too. A segment lists its footprints.
   ... on ManagedVxlanSegment {
     customer_deployments {
       edges {
@@ -46,27 +46,6 @@ fragment SegmentSecurityFields on ManagedNetworkSegment {
                 capabilities {
                   edges { node { __typename ... on DcimVirtualInterface { ip_address { node { ip_prefix { node { id } } } } } } }
                 }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-  ... on ManagedVlanSegment {
-    customer_deployment {
-      node {
-        id
-        __typename
-        ... on TopologyCustomerDC {
-          parent { node { id __typename } }
-          serving_loadbalancer_context {
-            node {
-              id
-              name { value }
-              vip_prefix { node { id ip_namespace { node { id } } } }
-              capabilities {
-                edges { node { __typename ... on DcimVirtualInterface { ip_address { node { ip_prefix { node { id } } } } } } }
               }
             }
           }

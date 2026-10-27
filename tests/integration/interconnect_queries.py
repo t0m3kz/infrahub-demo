@@ -9,19 +9,31 @@ query {
     edges {
       node {
         name { value }
-        serving_zone {
+        parent {
           node {
-            name { value }
-            devices(role__value: "firewall") { edges { node { id } } }
+            ... on TopologyColocationMetro {
+              children {
+                edges {
+                  node {
+                    ... on TopologyColocationZone {
+                      name { value }
+                      devices(role__value: "firewall") { edges { node { id } } }
+                    }
+                  }
+                }
+              }
+            }
           }
         }
-        serving_firewall_context {
-          node {
-            name { value }
-            vlan_id { value }
-            tenant { node { id } }
-            cluster { node { ... on ManagedFirewallHA { capabilities { edges { node { id } } } } } }
-            capabilities { edges { node { name { value } } } }
+        serving_firewall_contexts {
+          edges {
+            node {
+              name { value }
+              vlan_id { value }
+              tenant { node { id } }
+              cluster { node { ... on ManagedFirewallHA { capabilities { edges { node { id } } } } } }
+              capabilities { edges { node { name { value } } } }
+            }
           }
         }
       }

@@ -181,9 +181,9 @@ def _managed_segment_kinds() -> set[str]:
     }
 
 
-def test_the_segment_kinds_requiring_an_environment_include_vxlan_and_vlan() -> None:
+def test_the_segment_kinds_requiring_an_environment_include_vxlan() -> None:
     """Guard for the scan below."""
-    assert {"ManagedVxlanSegment", "ManagedVlanSegment"} <= _managed_segment_kinds()
+    assert "ManagedVxlanSegment" in _managed_segment_kinds()
 
 
 def test_every_segment_object_in_the_data_sets_its_environment() -> None:

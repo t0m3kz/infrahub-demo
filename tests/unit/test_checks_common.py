@@ -100,7 +100,7 @@ class TestValidateRoutingPasswordOspf:
     def test_non_ospf_interface_capability_ignored(self):
         data = {
             "interfaces": [
-                {"name": "Ethernet1", "capabilities": [{"typename": "ManagedVlanSegment"}]},
+                {"name": "Ethernet1", "capabilities": [{"typename": "ManagedVxlanSegment"}]},
             ],
         }
         assert validate_routing_password(data) == []
@@ -267,12 +267,20 @@ class TestValidateExchangeGateways:
         assert "dc1-fw-01" in _validate(_good_legs()[:1])[0]
 
 
-def _segment_port(vlan: int | None, seg_id: str = "seg-1", name: str = "web") -> dict:
+def _segment_port(vlan: int, seg_id: str = "seg-1", name: str = "web") -> dict:
+    """A customer port of a VXLAN segment whose row for the device's own VLAN domain (``bl-1``) is ``vlan``."""
+    row = {"vlan_id": vlan, "vlan_domain": {"id": "bl-1"}}
     return {
         "name": "Ethernet1",
         "role": "customer",
         "capabilities": [
-            {"typename": "ManagedVlanSegment", "id": seg_id, "name": name, "status": "active", "vlan_id": vlan}
+            {
+                "typename": "ManagedVxlanSegment",
+                "id": seg_id,
+                "name": name,
+                "status": "active",
+                "segment_deployments": [{"vni": 10100, "vlan_domain_segments": [row]}],
+            }
         ],
     }
 
@@ -301,14 +309,14 @@ def validate_transit_vlans(request: pytest.FixtureRequest):
 
 class TestValidateTransitVlans:
     def test_no_transits_returns_no_errors(self, validate_transit_vlans):
-        assert validate_transit_vlans({"name": "bl-1", "interfaces": [_segment_port(3005)]}) == []
+        assert validate_transit_vlans({"id": "bl-1", "name": "bl-1", "interfaces": [_segment_port(3005)]}) == []
 
     def test_distinct_vlans_pass(self, validate_transit_vlans):
-        device = {"name": "bl-1", "interfaces": [_segment_port(100), _service_port()]}
+        device = {"id": "bl-1", "name": "bl-1", "interfaces": [_segment_port(100), _service_port()]}
         assert validate_transit_vlans(device) == []
 
     def test_collision_with_segment_vlan_reports_error(self, validate_transit_vlans):
-        device = {"name": "bl-1", "interfaces": [_segment_port(3005), _service_port()]}
+        device = {"id": "bl-1", "name": "bl-1", "interfaces": [_segment_port(3005), _service_port()]}
         errors = validate_transit_vlans(device)
         assert len(errors) == 1
         assert "VLAN 3005" in errors[0]

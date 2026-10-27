@@ -17,29 +17,40 @@ query customer_colocation($name: String!) {
             }
           }
         }
-        # The context the footprint is already linked to: generators/firewall_context.py's
-        # link_serving_context writes nothing, and reads nothing, when it is the one serving it.
-        serving_firewall_context { node { id } }
-        # Aliased `parent`: generators/firewall_context.py reads the facility that
-        # hosts the context from customer.parent (the DC for a TopologyCustomerDC),
-        # and for a colocation footprint that is the zone whose firewall pair serves
-        # it (serving_zone, a child of the footprint's real parent, the metro; see
-        # checks/colocation_placement.py), not the metro, which owns no devices.
-        # Unset serving_zone gives a null parent: no context
-        # (generators/topology/customer_colocation.py). No LoadbalancerContext on a
+        # The contexts the footprint is already linked to (one per serving zone):
+        # generators/firewall_context.py's link_serving_context writes nothing, and reads
+        # nothing, when they are the ones serving it; unlink_stale_serving_contexts drops the others.
+        serving_firewall_contexts { edges { node { id } } }
+        # The footprint's parent is its metro, which owns no devices: the zones below it do. The
+        # generator (generators/topology/customer_colocation.py) builds one FirewallContext on
+        # every zone that has firewalls, so each zone is read with its firewall devices. The
+        # metro's other child kind, TopologyVirtualColocation (provider-hosted appliances, no
+        # contexts of ours), is not selected and arrives empty. No LoadbalancerContext on a
         # colocation footprint, so no load-balancer devices are read.
-        parent: serving_zone {
+        parent {
           node {
             id
             name { value }
-            firewall_devices: devices(role__value: "firewall") {
-              edges {
-                node {
-                  id
-                  kind: __typename
-                  name { value }
-                  ... on DcimPhysicalDevice {
-                    platform { node { name { value } } }
+            ... on TopologyColocationMetro {
+              children {
+                edges {
+                  node {
+                    ... on TopologyColocationZone {
+                      id
+                      name { value }
+                      firewall_devices: devices(role__value: "firewall") {
+                        edges {
+                          node {
+                            id
+                            kind: __typename
+                            name { value }
+                            ... on DcimPhysicalDevice {
+                              platform { node { name { value } } }
+                            }
+                          }
+                        }
+                      }
+                    }
                   }
                 }
               }

@@ -338,7 +338,7 @@ class TestLispContext:
 
 class TestBuildLispInputs:
     def test_the_border_reads_the_eid_records_of_the_active_vni_segments(self) -> None:
-        """A VLAN-only segment has no instance, an inline-terminated one is L2 only, one outside a VRF has no record."""
+        """A segment without a VNI has no instance, an inline-terminated one is L2 only, one outside a VRF has no record."""
         deployment = {
             "name": "C005-OFFICE",
             "lisp_map_servers": _MAP_SERVERS,

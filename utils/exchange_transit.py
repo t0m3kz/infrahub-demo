@@ -68,11 +68,8 @@ EXCHANGE_PEERS: dict[str, tuple[str, ...]] = {
 TENANT_NAMESPACE_TYPES = frozenset(EXCHANGE_PEERS)
 """namespace_type of the shared tenant VRFs (PROD, NON-PROD): the namespaces customers' segments live in."""
 
-ROUTED_SEGMENT_KINDS = frozenset({"ManagedVlanSegment", "ManagedVxlanSegment"})
-"""Segment kinds the fabric routes with an anycast SVI (an External or Cloud segment never is)."""
-
-EXTERNAL_SEGMENT_KIND = "ManagedExternalSegment"
-"""Segment kind whose zone is authoritative data (always an exchange zone), never derived from an environment."""
+ROUTED_SEGMENT_KINDS = frozenset({"ManagedVxlanSegment"})
+"""Segment kinds the fabric routes with an anycast SVI (a Cloud segment never is)."""
 
 ZONE_BY_NS_TYPE: dict[str, str] = {
     PROD_TYPE: "PROD-ZONE",
@@ -80,6 +77,9 @@ ZONE_BY_NS_TYPE: dict[str, str] = {
     INTERNET_TYPE: "INTERNET-ZONE",
     MANAGEMENT_TYPE: "MANAGEMENT-ZONE",
 }
+
+INTERNET_ZONE = ZONE_BY_NS_TYPE[INTERNET_TYPE]
+"""The zone a rule names (`destination_zone`) to reach the internet: it has no segment, prefix or owner."""
 
 TRANSIT_OFFSETS: tuple[int, ...] = (OFFSET_ANYCAST, OFFSET_VIP, OFFSET_MEMBER_A, OFFSET_MEMBER_B)
 """Host offsets that are allocated; .2/.3 stay reserved."""

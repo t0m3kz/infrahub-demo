@@ -25,7 +25,7 @@ from generators.helpers.lb_vip import (
     vip_ports,
 )
 from generators.lb_vip import load_balanced_components_in
-from generators.protocols import AppComponent, ManagedVlanSegment, ManagedVxlanSegment
+from generators.protocols import AppComponent, ManagedVxlanSegment
 from tests.unit.lb_vip_helpers import _context, _instance, _with_footprints
 
 # ===========================================================================
@@ -116,12 +116,11 @@ class TestServingContexts:
 
 
 class TestSegmentFootprints:
-    def test_a_vxlan_segment_lists_its_footprints_by_data_center_and_a_vlan_one_has_the_one(self) -> None:
+    def test_a_segment_lists_its_footprints_by_data_center(self) -> None:
         dc10 = {"id": "fp-10", "typename": "TopologyCustomerDC", "parent": {"id": "dc-10"}}
         dc12 = {"id": "fp-12", "typename": "TopologyCustomerDC", "parent": {"id": "dc-12"}}
 
         assert segment_footprints({"customer_deployments": [dc10, dc12]}) == {"dc-10": dc10, "dc-12": dc12}
-        assert segment_footprints({"customer_deployment": dc10}) == {"dc-10": dc10}
 
     def test_colocation_office_and_parentless_footprints_serve_no_context(self) -> None:
         colocation = {"id": "fp-1", "typename": "TopologyCustomerColocation", "parent": {"id": "fr"}}
@@ -183,11 +182,10 @@ def test_application_query_reads_the_serving_context_from_the_segment_and_the_da
     assert "... on TopologyCustomerDC { parent { node { id __typename } } }" in virtual
     segment = query.split("fragment SegmentSecurityFields", 1)[1].split("# An instance and the data center", 1)[0]
     assert "... on ManagedVxlanSegment {\n    customer_deployments {" in segment
-    assert "... on ManagedVlanSegment {\n    customer_deployment {" in segment
-    assert segment.count("serving_loadbalancer_context") == 2
-    assert segment.count("vip_prefix { node { id ip_namespace { node { id } } } }") == 2
-    assert segment.count("ip_address { node { ip_prefix { node { id } } } }") == 2
-    assert segment.count("parent { node { id __typename } }") == 2
+    assert segment.count("serving_loadbalancer_context") == 1
+    assert segment.count("vip_prefix { node { id ip_namespace { node { id } } } }") == 1
+    assert segment.count("ip_address { node { ip_prefix { node { id } } } }") == 1
+    assert segment.count("parent { node { id __typename } }") == 1
     target = query.split("target {", 1)[1]
     assert "load_balanced { value }" in target
     assert "instances { edges { node { ...AppInstanceFields } } }" in target
@@ -213,28 +211,27 @@ class TestLoadBalancedComponentsIn:
     """The components a relinked deployment re-runs: load_balanced, on a segment activated in it."""
 
     @staticmethod
-    def _client(vxlan: list[str], vlan: list[str], component_ids: list[str]) -> MagicMock:
-        """``vxlan`` / ``vlan``: the segment ids filters(...customer_deployment(s)__ids=...) returns."""
+    def _client(segments: list[str], component_ids: list[str]) -> MagicMock:
+        """``segments``: the segment ids filters(...customer_deployments__ids=...) returns."""
 
         async def filters(*, kind: Any, **kwargs: Any) -> list[MagicMock]:
             if kind is AppComponent:
                 return [MagicMock(id=component_id) for component_id in component_ids]
-            return [MagicMock(id=segment_id) for segment_id in (vxlan if kind is ManagedVxlanSegment else vlan)]
+            return [MagicMock(id=segment_id) for segment_id in segments]
 
         client = MagicMock()
         client.filters = AsyncMock(side_effect=filters)
         return client
 
     def test_components_on_the_segments_of_the_deployment(self) -> None:
-        """VXLAN and VLAN segments of the footprint, then the load_balanced components on them; sorted, unique. The
+        """The segments of the footprint, then the load_balanced components on them; sorted, unique. The
         instances are not read: a shared physical host and a virtual machine are served the same way."""
-        client = self._client(["seg-2"], ["seg-1"], ["comp-b", "comp-a", "comp-b"])
+        client = self._client(["seg-2", "seg-1", "seg-2"], ["comp-b", "comp-a", "comp-b"])
 
         assert asyncio.run(load_balanced_components_in(client, "dep-1")) == ["comp-a", "comp-b"]
 
         calls = [call.kwargs for call in client.filters.await_args_list]
         assert {"kind": ManagedVxlanSegment, "customer_deployments__ids": ["dep-1"]} in calls
-        assert {"kind": ManagedVlanSegment, "customer_deployment__ids": ["dep-1"]} in calls
         assert calls[-1] == {
             "kind": AppComponent,
             "network_segment__ids": ["seg-1", "seg-2"],
@@ -242,7 +239,7 @@ class TestLoadBalancedComponentsIn:
         }
 
     def test_deployment_without_segments_reads_no_components(self) -> None:
-        client = self._client([], [], ["comp-a"])
+        client = self._client([], ["comp-a"])
 
         assert asyncio.run(load_balanced_components_in(client, "dep-1")) == []
 

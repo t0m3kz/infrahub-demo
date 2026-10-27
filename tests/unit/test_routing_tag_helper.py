@@ -147,13 +147,13 @@ class TestEnsureSegmentRoutingTag:
 
     def test_routed_tenant_segment_draws_from_the_segment_pool_as_its_own_kind(self) -> None:
         client = _client(drawn=7)
-        segment = _segment(kind="ManagedVlanSegment")
+        segment = _segment(kind="ManagedVxlanSegment")
 
         assert asyncio.run(ensure_segment_routing_tag(client, segment=segment)) == 7
 
         assert client.get.await_args.kwargs["name__value"] == SEGMENT_ROUTING_TAG_POOL
         ((kind, data, _),) = client.consumers
-        assert (kind, data["id"]) == ("ManagedVlanSegment", "seg-1")
+        assert (kind, data["id"]) == ("ManagedVxlanSegment", "seg-1")
         assert segment["routing_tag"] == 7
 
     def test_segment_that_has_its_tag_writes_nothing(self) -> None:
@@ -168,9 +168,8 @@ class TestEnsureSegmentRoutingTag:
         ("namespace_type", "kind", "zone"),
         [
             pytest.param(None, "ManagedVxlanSegment", "PROD-ZONE", id="no-gateway"),
-            pytest.param("management", "ManagedVlanSegment", "PROD-ZONE", id="management-namespace"),
+            pytest.param("management", "ManagedVxlanSegment", "PROD-ZONE", id="management-namespace"),
             pytest.param("prod", "ManagedVxlanSegment", "MANAGEMENT-ZONE", id="exchange-zone"),
-            pytest.param("prod", "ManagedExternalSegment", "PROD-ZONE", id="external-segment"),
             pytest.param("prod", "CloudNetworkSegment", "PROD-ZONE", id="cloud-segment"),
         ],
     )

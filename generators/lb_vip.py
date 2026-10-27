@@ -41,7 +41,6 @@ from .protocols import (
     AppComponent,
     CloudLoadBalancer,
     LoadbalancerVIP,
-    ManagedVlanSegment,
     ManagedVxlanSegment,
     SecurityPolicy,
     TopologyCustomerDC,
@@ -80,15 +79,12 @@ async def load_balanced_components_in(client: Any, deployment_id: str) -> list[s
     Their VIPs and R_server rules sit on the footprint's serving context (the one
     of the segment in the instance's data center, helpers.lb_vip.instance_footprint).
     A footprint lists neither its devices nor its components, so the segments
-    activated in it are read first (a VXLAN one lists its footprints, a VLAN one has
-    the one), then the components on them. A component also on a segment stretched
+    activated in it are read first (a segment lists its footprints), then the
+    components on them. A component also on a segment stretched
     to another data center is re-run too: its VIPs there are idempotent.
     """
-    vxlan, vlan = await asyncio.gather(
-        client.filters(kind=ManagedVxlanSegment, customer_deployments__ids=[deployment_id]),
-        client.filters(kind=ManagedVlanSegment, customer_deployment__ids=[deployment_id]),
-    )
-    segment_ids = sorted({segment.id for segment in [*vxlan, *vlan]})
+    segments = await client.filters(kind=ManagedVxlanSegment, customer_deployments__ids=[deployment_id])
+    segment_ids = sorted({segment.id for segment in segments})
     if not segment_ids:
         return []
     components = await client.filters(kind=AppComponent, network_segment__ids=segment_ids, load_balanced__value=True)
@@ -221,9 +217,8 @@ class LoadbalancerVipMixin:
 
         Only the application's own components need their segment prefix (the
         pool members); an edge target's contexts are re-read too, its VIPs
-        are this run's R_client rules. A VLAN segment (an authored gateway, no
-        generator writes it) and a cloud component (no prefix, no context) are
-        never re-read.
+        are this run's R_client rules. A cloud component (no prefix, no
+        context) is never re-read.
         """
         own_ids = {component.get("id") for component in components}
         segments: dict[str, list[dict[str, Any]]] = {}

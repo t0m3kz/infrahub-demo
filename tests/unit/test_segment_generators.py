@@ -1,9 +1,7 @@
 """Unit tests for VxlanSegmentGenerator.
 
-VlanSegment has no generator — vlan_id is a plain manual attribute
-(single-site, no pool allocation). Only VXLAN needs generator-driven
-per-deployment realization (SegmentDeployment) since it can stretch
-across multiple sites.
+A VXLAN segment needs generator-driven per-deployment realization
+(SegmentDeployment) since it can stretch across multiple sites.
 
 VxlanSegmentGenerator.generate() cleans GraphQL data, guards on missing
 id/name/customer_deployments, resolves each customer footprint to its

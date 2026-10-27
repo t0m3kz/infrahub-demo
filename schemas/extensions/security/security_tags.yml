@@ -7,7 +7,7 @@
 #              (generators/helpers/security_tag.py). Nothing assigns a tag by
 #              hand. What a tag groups is the relationship that holds it:
 #              - network_segments: the segment tag, named after the segment.
-#                Every routed tenant segment (VLAN/VXLAN, gateway in a
+#                Every routed tenant segment (VXLAN, gateway in a
 #                PROD/NON-PROD namespace) gets one, from VxlanSegmentGenerator
 #                and AppApplicationGenerator;
 #              - components: the component tag, named after the fqdn, from

@@ -255,21 +255,6 @@ nodes:
           jinja2_template: "{{ owner__org_id__value|upper }}-{{ environment__value|upper }}-{{ parent__name__value|upper }}"  # yamllint disable-line rule:line-length
         read_only: true
         optional: false
-    relationships:
-      # The zone of the parent metro whose firewall pair hosts this footprint's
-      # FirewallContext. Firewalls are per zone now (the metro owns none), so the
-      # footprint says which cage's pair serves it; unset means no context.
-      # checks/colocation_placement.py requires the zone to be a child of
-      # `parent`, which the schema cannot express.
-      - name: serving_zone
-        peer: TopologyColocationZone
-        label: "Serving Zone"
-        description: "Zone of the parent metro whose firewall pair serves this footprint (unset: no firewall context)"
-        cardinality: one
-        kind: Attribute
-        optional: true
-        identifier: "customer_colocation__serving_zone"
-        order_weight: 220
 
   # A customer's office: exactly one per customer, directly under TopologyLabel
   # ("Campus and Office") with no grouping node in between. Not a

@@ -276,6 +276,16 @@ def render(obj: Declared, template: str) -> str:
     return _JINJA.from_string(template).render(**context).strip()
 
 
+def parent_name(obj: Declared) -> str | None:
+    """The name of the object's parent: the object it is nested under, else its ``parent`` reference."""
+    if obj.enclosing is not None:
+        return name(obj.enclosing)
+    parent = obj.item.get("parent")
+    if isinstance(parent, list) and len(parent) == 1:
+        parent = parent[0]
+    return str(parent) if isinstance(parent, str) else None
+
+
 def name(obj: Declared) -> str:
     """The object's ``name``: declared, or rendered from its computed-attribute template."""
     return str(_resolve(obj, ["name"]))

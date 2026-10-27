@@ -1,5 +1,5 @@
 ---
-# VLAN segment activated in C001's colocation footprint (FR). Loaded before
+# VXLAN segment (local to one footprint) activated in C001's colocation footprint (FR). Loaded before
 # 01_application.yml since components there reference it by human_friendly_id.
 # Nested under OrganizationCustomer (owner) via the network_segments reverse
 # relationship — owner is set automatically from the parent, no need to
@@ -14,11 +14,10 @@ spec:
       member_of_groups:
         - customers
       network_segments:
-        - kind: ManagedVlanSegment
+        - kind: ManagedVxlanSegment
           data:
             customer_name: "nordix-prod"
             environment: "p"
-            vlan_id: 101
             gateway:
               data:
                 address: "10.1.101.1/24"
@@ -32,5 +31,7 @@ spec:
                     status: active
                     role: customer
                     ip_namespace: "PROD"
-            customer_deployment: "C001-P-FR"
-            security_zone: "PROD-ZONE"
+            customer_deployments:
+              - "C001-P-FR"
+            member_of_groups:
+              - vxlan_segments

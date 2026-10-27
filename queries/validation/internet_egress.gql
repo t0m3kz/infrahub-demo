@@ -1,0 +1,167 @@
+# Everything checks/internet_egress.py walks from a rule that names the internet to the hardware that enforces it:
+#
+#   SecurityPolicyRule (destination_zone, source_segment)
+#     -> TopologyCustomerDC / TopologyCustomerColocation (network_segments)
+#       -> serving_firewall_context (a DC) / serving_firewall_contexts (a colocation footprint, one per zone)
+#            cluster (ManagedFirewallHA) -> capabilities (the member devices)
+#            capabilities (interfaces): the member sub-interfaces (the legs, with address and namespace, and the
+#              exchange each leg is linked to) and the border service ports tagged with the context
+#            snat_address
+#     TopologyRoutedExchange (gateway, namespaces): the hop between the tenant VRF and INTERNET
+#   A colocation footprint's metro: TopologyColocationZone (parent, firewall devices) and
+#   TopologyVirtualColocation (parent, appliances, the firewall HA domain of the provider-hosted pair).
+#
+# The footprint kinds are separate roots, so the context fragment is selected under each of them. Every node selects
+# more than its id (clean_data() collapses an id-only dict to the bare id string); `__typename` becomes `typename`.
+fragment InternetEgressContext on ManagedFirewallContext {
+  id
+  name { value }
+  vlan_id { value }
+  snat_address { node { id address { value } } }
+  cluster {
+    node {
+      id
+      name { value }
+      capabilities {
+        edges {
+          node {
+            id
+            __typename
+            name { value }
+            ... on DcimDevice { role { value } }
+          }
+        }
+      }
+    }
+  }
+  capabilities {
+    edges {
+      node {
+        id
+        __typename
+        name { value }
+        role { value }
+        device { node { id name { value } role { value } } }
+        ... on DcimVirtualInterface {
+          ip_address {
+            node {
+              id
+              address { value }
+              ip_namespace { node { name { value } namespace_type { value } } }
+            }
+          }
+          capabilities {
+            edges {
+              node {
+                __typename
+                ... on TopologyRoutedExchange { id name { value } }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+query internet_egress {
+  SecurityPolicyRule {
+    edges {
+      node {
+        id
+        name { value }
+        disabled { value }
+        policy { node { id name { value } enabled { value } } }
+        source_segment { node { id name { value } } }
+        destination_zone { node { id name { value } } }
+      }
+    }
+  }
+
+  TopologyCustomerDC {
+    edges {
+      node {
+        id
+        name { value }
+        network_segments { edges { node { id name { value } } } }
+        serving_firewall_context { node { ...InternetEgressContext } }
+      }
+    }
+  }
+
+  TopologyCustomerColocation {
+    edges {
+      node {
+        id
+        name { value }
+        parent { node { id name { value } } }
+        network_segments { edges { node { id name { value } } } }
+        serving_firewall_contexts { edges { node { ...InternetEgressContext } } }
+      }
+    }
+  }
+
+  TopologyRoutedExchange {
+    edges {
+      node {
+        id
+        name { value }
+        gateway { node { id name { value } } }
+        namespace_a { node { id name { value } namespace_type { value } } }
+        namespace_z { node { id name { value } namespace_type { value } } }
+      }
+    }
+  }
+
+  TopologyColocationZone {
+    edges {
+      node {
+        id
+        name { value }
+        parent { node { id name { value } } }
+        devices(role__value: "firewall") {
+          edges { node { id __typename name { value } } }
+        }
+      }
+    }
+  }
+
+  TopologyVirtualColocation {
+    edges {
+      node {
+        id
+        name { value }
+        parent { node { id name { value } } }
+        appliances {
+          edges {
+            node {
+              id
+              name { value }
+              capabilities {
+                edges {
+                  node {
+                    id
+                    __typename
+                    ... on ManagedFirewallHA {
+                      name { value }
+                      capabilities {
+                        edges {
+                          node {
+                            id
+                            __typename
+                            name { value }
+                            ... on DcimDevice { role { value } status { value } }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

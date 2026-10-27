@@ -154,6 +154,9 @@ interface nve1
   member vni 10100
     suppress-arp
     ingress-replication protocol bgp
+  member vni 10200
+    suppress-arp
+    ingress-replication protocol bgp
   member vni 50001 associate-vrf
   no shutdown
 !
@@ -165,12 +168,18 @@ evpn
     rd 10.0.0.1:10100
     route-target import 65000:10100
     route-target export 65000:10100
+  vni 10200 l2
+    rd 10.0.0.1:10200
+    route-target import 65000:10200
+    route-target export 65000:10200
 !
 !
 ! VLAN to VNI mapping
 !
 vlan 100
   vn-segment 10100
+vlan 200
+  vn-segment 10200
 !
 ! L3 VNI Transit SVIs (symmetric IRB — no host addressing, forwarding only)
 !

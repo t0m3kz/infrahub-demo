@@ -5,7 +5,7 @@ from typing import Any
 from infrahub_sdk.checks import InfrahubCheck
 
 from transforms.config.firewall import Firewall
-from transforms.helpers.policy import is_unresolved_segment_endpoint
+from transforms.helpers.policy import is_internet_destination
 
 from .common import validate_exchange_gateways, validate_snat_addresses
 
@@ -15,10 +15,10 @@ class CheckFirewall(InfrahubCheck):
     (Firewall.collect_policies: its served segments' policies and the rules
     into them, per context). Every rule lives in its source segment's policy,
     so a rule whose source is another segment is an error, as is a rule with
-    no destination selector (segment, prefix or IP). A rule's zone is its
+    no destination (segment, prefix, IP or the internet zone). A rule's zone is its
     segment's security_zone; a segment without one is an error, since
     zone-based firewalls then match any zone on that side. A rule to a
-    segment without a prefix (the internet) must not be apply_on_switch. Its exchange legs
+    internet zone must not be apply_on_switch. Its exchange legs
     (checks/common.py validate_exchange_gateways) and SNAT addresses
     (validate_snat_addresses) are validated too."""
 
@@ -57,17 +57,19 @@ class CheckFirewall(InfrahubCheck):
                 )
             )
         destination = rule.get("destination_segment") or {}
-        if not (destination.get("id") or rule.get("destination_prefixes") or rule.get("destination_ip_addresses")):
+        if not (
+            destination.get("id")
+            or rule.get("destination_zone")
+            or rule.get("destination_prefixes")
+            or rule.get("destination_ip_addresses")
+        ):
             self.log_error(
-                message=(
-                    f"Policy '{policy_name}' rule '{rule_name}' has no destination selector (segment, IP, or prefix)"
-                )
+                message=(f"Policy '{policy_name}' rule '{rule_name}' has no destination (segment, zone, IP, or prefix)")
             )
-        if rule.get("apply_on_switch") and is_unresolved_segment_endpoint(rule, "destination"):
+        if rule.get("apply_on_switch") and is_internet_destination(rule):
             self.log_error(
                 message=(
-                    f"Policy '{policy_name}' rule '{rule_name}': apply_on_switch to destination segment "
-                    f"'{destination.get('name') or destination.get('id')}', which has no prefix (the internet) — "
+                    f"Policy '{policy_name}' rule '{rule_name}': apply_on_switch to the internet zone — "
                     "the leaf ACL can only approximate it by denying the internal ranges first, and it would "
                     "force the whole ACL of a firewalled segment onto the switch"
                 )

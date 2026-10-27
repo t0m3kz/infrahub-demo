@@ -124,6 +124,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
     ) -> dict[str, Any]:
         """The firewall cluster whose context serves the policy's source
         segment: {"members", "zone_firewalls", "outsider", "context"}, names sorted.
+        zone_firewalls are the firewalls of the metro's zones (30_all: FR2 is the one zone with a pair).
         outsider is a firewall outside the cluster on the members' platform,
         so its template renders rule names too. Function-scoped: an async
         fixture can't be class-scoped under this suite's function-scoped
@@ -131,14 +132,21 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         result = await async_client_main.execute_graphql(
             query=SERVING_CLUSTER_QUERY, variables={"segment": SOURCE_SEGMENT}, branch_name=scenario_branch
         )
-        segments = result["ManagedVlanSegment"]["edges"]
+        segments = result["ManagedVxlanSegment"]["edges"]
         assert segments, f"segment '{SOURCE_SEGMENT}' not found on branch '{scenario_branch}'"
-        deployment = (segments[0]["node"].get("customer_deployment") or {}).get("node") or {}
-        context = (deployment.get("serving_firewall_context") or {}).get("node") or {}
+        (deployment_edge,) = segments[0]["node"]["customer_deployments"]["edges"]
+        deployment = deployment_edge["node"]
+        contexts = [edge["node"] for edge in (deployment.get("serving_firewall_contexts") or {}).get("edges", [])]
+        assert len(contexts) == 1, f"expected one serving firewall context for '{SOURCE_SEGMENT}', got {contexts}"
+        context = contexts[0]
         cluster_id = ((context.get("cluster") or {}).get("node") or {}).get("id")
         assert cluster_id, f"no serving firewall context with a cluster for '{SOURCE_SEGMENT}'"
-        zone = (deployment.get("serving_zone") or {}).get("node") or {}
-        zone_firewalls = sorted(edge["node"]["name"]["value"] for edge in (zone.get("devices") or {}).get("edges", []))
+        metro = (deployment.get("parent") or {}).get("node") or {}
+        zone_firewalls = sorted(
+            device["node"]["name"]["value"]
+            for zone in (edge["node"] for edge in (metro.get("children") or {}).get("edges", []))
+            for device in (zone.get("devices") or {}).get("edges", [])
+        )
 
         devices = await async_client_main.filters(
             kind=DcimPhysicalDevice, role__value="firewall", capabilities__ids=[cluster_id], branch=scenario_branch
@@ -169,13 +177,13 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
     @pytest.mark.asyncio
     async def test_00_serving_cluster_is_the_zone_pair(self, serving_cluster: dict[str, Any]) -> None:
         """The context serving a colocation deployment lives on the firewall
-        pair of its serving zone, not on some DC's cluster."""
+        pair of its metro's zone, not on some DC's cluster."""
         logging.info("=== %s - Step 0: Serving Cluster ===", SCENARIO_NAME)
 
         assert len(serving_cluster["members"]) == 2, f"serving cluster is not a pair: {serving_cluster['members']}"
         assert serving_cluster["members"] == serving_cluster["zone_firewalls"], (
             f"'{SOURCE_SEGMENT}' is served by cluster {serving_cluster['members']}, "
-            f"expected its serving zone's firewalls {serving_cluster['zone_firewalls']}"
+            f"expected its metro's zone firewalls {serving_cluster['zone_firewalls']}"
         )
         logging.info("Serving cluster: %s", serving_cluster["members"])
 
@@ -474,7 +482,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """A permit to the prefix-less Internet segment (ALL_DEMO_INTERNET_EGRESS_RULES).
+        """A permit to the internet zone (destination_zone, ALL_DEMO_INTERNET_EGRESS_RULES).
 
         Firewall: every member of the DC's shared context renders the rule in
         that context's vsys from the source's zone to INTERNET-ZONE, source the
@@ -543,7 +551,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
             if not acls:
                 errors.append(
                     f"{dc}: no leaf or access-leaf renders the ACL of '{rule['source_segment']}' "
-                    f"(its VLAN per switch: {source.vlans_by_device or source.vlan_id}; devices carrying it: "
+                    f"(its VLAN per switch: {source.vlans_by_device}; devices carrying it: "
                     f"{with_vlan}; ACL names on the {dc} leafs: {sorted(seen_acls)})"
                 )
             for device, lines in acls.items():

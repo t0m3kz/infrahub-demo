@@ -241,8 +241,7 @@ class TestAllDemoLoad(TestInfrahubDockerWithClient):
 
         The customer tag comes from add_customer_routing_tag (a created-trigger on the `customers` group), the
         segment tag from the segment and application generators; both are Number pool draws, so a duplicate
-        would mean the pool was bypassed. Every declared customer is in the group, so every one is held to it
-        (the bootstrap Internet pseudo-customer is created on main, where no trigger fires, and is not).
+        would mean the pool was bypassed. Every declared customer is in the group, so every one is held to it.
         """
         logging.info("=== %s - Step 6: Routing Tags ===", SCENARIO_NAME)
 

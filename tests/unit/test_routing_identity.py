@@ -273,7 +273,7 @@ class TestQueriesSelectTheTags:
 
     def test_the_selected_fields_exist_on_the_schema(self) -> None:
         """routing_tag is a Number on the customer and on the segment generic (so on every segment kind)."""
-        for kind in ("OrganizationCustomer", "ManagedNetworkSegment", "ManagedVxlanSegment", "ManagedVlanSegment"):
+        for kind in ("OrganizationCustomer", "ManagedNetworkSegment", "ManagedVxlanSegment"):
             assert "routing_tag" in demo_data.attribute_names(kind)
         assert (demo_data.attribute("OrganizationCustomer", "routing_tag") or {}).get("kind") == "Number"
 

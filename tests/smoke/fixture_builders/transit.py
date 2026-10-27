@@ -84,7 +84,6 @@ def _xchg_segment(*, seg_name: str, vlan: int, vni: int, gateway_ip: str, deploy
         vlan_id=vlan,
         vni=vni,
         seg_name=seg_name,
-        seg_type="ManagedVxlanSegment",
         gateway_ip=gateway_ip,
         ns_name="PROD",
         l3_vni=_XCHG_NAMESPACES["prod"][1],

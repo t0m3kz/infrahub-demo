@@ -44,9 +44,7 @@ class AppApplicationGenerator(
     components and their R_server rules, or a cloud component's
     CloudLoadBalancer; CablingMixin for the addresses). Every routed tenant
     segment it touches gets its segment group tag, and each component of a
-    microsegmented segment its component tag (_ensure_component_tags; PoolMixin for the lock): this is the one
-    generator that sees a VLAN segment, which has no generator of its own. A
-    cloud flow is
+    microsegmented segment its component tag (_ensure_component_tags; PoolMixin for the lock). A cloud flow is
     a SecurityPolicyRule like any other;
     the former sg-{app} CloudSecurityGroup objects are no longer generated and
     are deleted by this application's tracking group on its next run (they
@@ -215,8 +213,7 @@ class AppApplicationGenerator(
         # has not run yet.
         segments = self._used_segments(components, edges)
         await self._ensure_segment_zones(segments)
-        # After the zones (the tenant test reads them); a VLAN segment gets its
-        # group tag and its routing tag only here. A segment without an id is a component without one.
+        # After the zones (the tenant test reads them). A segment without an id is a component without one.
         for segment in segments:
             if segment.get("id"):
                 await ensure_segment_tag(self.client, self.resource_lock, segment=segment)

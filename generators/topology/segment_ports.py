@@ -24,7 +24,7 @@ from utils.app_instances import physical_host
 from utils.data_cleaning import clean_data
 
 from ..far_end import far_end_interfaces
-from ..protocols import DcimPhysicalInterface, ManagedVlanSegment, ManagedVxlanSegment
+from ..protocols import DcimPhysicalInterface, ManagedVxlanSegment
 from ..vlan_domain import VlanDomainMixin, segment_lock_key
 from .endpoint import ENDPOINT_NIC_ROLES
 
@@ -49,7 +49,6 @@ class SegmentPortTagMixin(VlanDomainMixin):
             added, removed = await self._reconcile_segment_interface_tags(
                 segment_id=segment_id,
                 segment_name=segment_name,
-                segment_kind=ManagedVxlanSegment,
                 current_ids=self.tagged_interface_ids(state["segment"]),
             )
             if added or removed:
@@ -69,9 +68,7 @@ class SegmentPortTagMixin(VlanDomainMixin):
         *,
         segment_id: str,
         segment_name: str,
-        segment_kind: type[ManagedVxlanSegment] | type[ManagedVlanSegment],
         current_ids: set[str],
-        segment_obj: Any | None = None,
     ) -> tuple[int, int]:
         """Make the segment's switch-port tags exactly the customer-facing
         targets of the instances of EVERY component on the segment: tag the
@@ -82,9 +79,7 @@ class SegmentPortTagMixin(VlanDomainMixin):
         capabilities — touches only this segment's edge on each
         port and never enters this run's tracking group.
 
-        ``segment_obj`` is the segment node when the caller already holds it
-        (the VLAN path reads it for ``current_ids``); otherwise it is fetched
-        here, and only when there is a tag to add or remove.
+        The segment node is fetched only when there is a tag to add or remove.
 
         Returns (interfaces tagged, interfaces untagged).
         """
@@ -108,8 +103,7 @@ class SegmentPortTagMixin(VlanDomainMixin):
         to_add = sorted(desired_ids - current_ids)
         to_remove = sorted(current_ids - desired_ids)
         if to_add or to_remove:
-            if segment_obj is None:
-                segment_obj = await self.client.get(kind=segment_kind, id=segment_id)
+            segment_obj = await self.client.get(kind=ManagedVxlanSegment, id=segment_id)
             if to_add:
                 await segment_obj.add_relationships(relation_to_update="capabilities", related_nodes=to_add)
             if to_remove:

@@ -1,5 +1,5 @@
 ---
-# VLAN segment activated in C002's colocation footprint (PA). Loaded before
+# VXLAN segment (local to one footprint) activated in C002's colocation footprint (PA). Loaded before
 # 01_application.yml since components there reference it by human_friendly_id.
 # Nested under OrganizationCustomer (owner) via the network_segments reverse
 # relationship — owner is set automatically from the parent, no need to
@@ -14,10 +14,11 @@ spec:
       member_of_groups:
         - customers
       network_segments:
-        - kind: ManagedVlanSegment
+        - kind: ManagedVxlanSegment
           data:
             customer_name: "swiftgo-prod"
             environment: "p"
-            vlan_id: 102
-            customer_deployment: "C002-P-PA"
-            security_zone: "PROD-ZONE"
+            customer_deployments:
+              - "C002-P-PA"
+            member_of_groups:
+              - vxlan_segments
