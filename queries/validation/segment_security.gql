@@ -1,4 +1,4 @@
-# Every segment kind (Vlan, Vxlan, External, Cloud) with what the security
+# Every segment kind (Vxlan, Cloud) with what the security
 # invariants read: zone, environment, address (gateway prefix with its
 # namespace, or cidr_block), isolation mode, the policy rules that name a
 # segment (with their component group tags), the segment and tag of each app
@@ -43,6 +43,7 @@ query segment_security {
         policy { node { id name { value } enabled { value } } }
         source_segment { node { id name { value } } }
         destination_segment { node { id name { value } } }
+        destination_zone { node { name { value } } }
         source_prefixes { edges { node { id } } }
         destination_prefixes { edges { node { id prefix { value } } } }
         source_ip_addresses { edges { node { id } } }

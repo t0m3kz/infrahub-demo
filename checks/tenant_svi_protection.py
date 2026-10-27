@@ -55,7 +55,5 @@ class CheckTenantSviProtection(InfrahubCheck):
 
     @staticmethod
     def _deployment_ids(segment: dict[str, Any]) -> set[str]:
-        """The customer deployments the segment serves (single on VLAN, many on VXLAN)."""
-        single = segment.get("customer_deployment")
-        many = segment.get("customer_deployments") or []
-        return {dep["id"] for dep in [*many, single] if dep}
+        """The customer deployments the segment serves"""
+        return {dep["id"] for dep in segment.get("customer_deployments") or [] if dep}

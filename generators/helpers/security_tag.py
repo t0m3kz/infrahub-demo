@@ -117,7 +117,7 @@ async def ensure_segment_tag(client: Any, lock: Lock, *, segment: dict[str, Any]
     Every VLAN/VXLAN segment with a gateway in a PROD/NON-PROD namespace
     (utils/exchange_transit.is_routed_tenant_segment) is one group: the
     contracts between segment tags are its rules (transforms/helpers/
-    group_policy.py). MANAGEMENT/INTERNET, External, Cloud and gateway-less
+    group_policy.py). MANAGEMENT, Cloud and gateway-less
     segments are never tagged. Must not run under a segment lock
     (generators/vlan_domain.segment_lock_key): it takes its own.
     """

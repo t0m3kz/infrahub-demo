@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from transforms.helpers.policy import is_unresolved_segment_endpoint, rule_endpoint, rule_zone, segment_flows
+from transforms.helpers.policy import is_internet_destination, rule_endpoint, rule_zone, segment_flows
 from utils.group_policy import is_microsegmented
 from utils.internet_space import NON_INTERNET_PREFIXES
 from utils.limits import ACL_CLOSING_SEQ, ACL_INTERNET_BAND_SEQ_START, ACL_RETURN_LEG_SEQ_START
@@ -23,12 +23,12 @@ def _port_match(rule: dict[str, Any], acl_proto: str) -> str | None:
 
 
 # Own rules sit below the return legs (the application generator hands out 100, 110, ...), and the "outside" band of
-# a permit to a prefix-less external segment (the internet) follows the last return leg: the bands are
+# a permit to the internet zone follows the last return leg: the bands are
 # ACL_RETURN_LEG_SEQ_START and ACL_INTERNET_BAND_SEQ_START of utils/limits.py.
 
 
 def _internet_band(rule: dict[str, Any], seen_denies: set[tuple[str, str]], seq: int) -> list[dict[str, Any]]:
-    """The ACL lines of a permit whose destination is a prefix-less external segment.
+    """The ACL lines of a permit whose destination is the internet zone.
 
     `permit <proto> <src> any` alone would open every same-VRF destination at
     this leaf, the intra-zone enforcement point. First-match ACLs have no
@@ -134,14 +134,7 @@ def _build_return_rule(
 def _inbound_permits(seg: dict[str, Any]) -> list[dict[str, Any]]:
     """Active permit rules targeting this segment from another segment."""
     seg_id = seg.get("id")
-    permits = [
-        rule
-        for rule in segment_flows(seg)[1]
-        if (rule.get("source_segment") or {}).get("id") != seg_id
-        # A reply leg towards "the internet" would be `permit ... any`; inbound
-        # from outside is DNAT, which is out of scope.
-        and not is_unresolved_segment_endpoint(rule, "source")
-    ]
+    permits = [rule for rule in segment_flows(seg)[1] if (rule.get("source_segment") or {}).get("id") != seg_id]
     return sorted(
         permits,
         key=lambda r: (
@@ -183,12 +176,13 @@ def get_acls(activations: list[dict[str, Any]] | None = None) -> list[dict[str, 
        implicit deny drops B's answers to A. They are read from the segment
        itself, so they don't depend on A being on the same leaf.
 
-    3. **Internet band**: a permit whose destination is a segment without a
-       prefix (the internet) cannot be `permit <src> any`, that would open every
+    3. **Internet band**: a permit whose destination is the internet zone
+       (``destination_zone``) cannot be `permit <src> any`, that would open every
        same-VRF destination. It follows the return legs (seq 6000+) as a deny
        for each NON_INTERNET_PREFIXES entry, then the permit to any. Under a
-       default permit it is dropped as redundant. Permits *from* such a segment
-       get no return leg.
+       default permit it is dropped as redundant. A rule to the internet is in no
+       segment's ``inbound_rules``, so it has no return leg (inbound from
+       outside is DNAT, out of scope).
 
     4. **Zone support**: the source/destination segments' security_zone names are passed
        through as ``src_zone`` / ``dst_zone`` fields for templates to render as remarks/comments
@@ -255,12 +249,12 @@ def get_acls(activations: list[dict[str, Any]] | None = None) -> list[dict[str, 
 
         default_permit = egress["default_action"] == "permit"
 
-        # Own policies. A permit to a prefix-less external segment is held back
+        # Own policies. A permit to the internet zone is held back
         # for the band after the return legs; under a default permit it adds
         # nothing, and the denies of its band would close the internal space.
         outside_permits: list[dict[str, Any]] = []
         for rule in egress["rules"]:
-            if rule.get("action") == "permit" and is_unresolved_segment_endpoint(rule, "destination"):
+            if rule.get("action") == "permit" and is_internet_destination(rule):
                 if not default_permit:
                     outside_permits.append(rule)
             else:

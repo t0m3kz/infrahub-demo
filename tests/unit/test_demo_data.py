@@ -37,7 +37,7 @@ spec:
               data:
                 address: "10.8.10.1/24"
                 ip_namespace: "PROD"
-        - kind: ManagedVlanSegment
+        - kind: ManagedVxlanSegment
           data:
             customer_name: "Krafven Dev"
             environment: "d"
@@ -115,8 +115,10 @@ class TestWalk:
 
     def test_kind_and_data_list_entries_are_walked(self, demo: Path) -> None:
         """network_segments: [{kind, data: {...}}] yields one object per entry, a single-object data included."""
-        assert [obj.item["customer_name"] for obj in declared("ManagedVxlanSegment", demo)] == ["trade-portal"]
-        assert [obj.item["customer_name"] for obj in declared("ManagedVlanSegment", demo)] == ["Krafven Dev"]
+        assert [obj.item["customer_name"] for obj in declared("ManagedVxlanSegment", demo)] == [
+            "trade-portal",
+            "Krafven Dev",
+        ]
 
     def test_relationship_data_without_kind_takes_the_schema_peer(self, demo: Path) -> None:
         """gateway: {data: {...}} is an object of the gateway relationship's peer kind."""
@@ -151,7 +153,7 @@ class TestNames:
     def test_segment_name_takes_its_owner_from_the_enclosing_organization(self, demo: Path) -> None:
         """{{owner__org_id|lower}}-{{customer_name|lower|replace(' ', '-')}}-{{environment}}."""
         assert name(declared("ManagedVxlanSegment", demo)[0]) == "c008-trade-portal-p"
-        assert name(declared("ManagedVlanSegment", demo)[0]) == "c008-krafven-dev-d"
+        assert name(declared("ManagedVxlanSegment", demo)[1]) == "c008-krafven-dev-d"
 
     def test_office_name_is_computed_from_its_owner_alone(self, demo: Path) -> None:
         """An office has no environment and no wrapper: `{OWNER}-OFFICE`, whatever declaration it is."""
@@ -173,13 +175,13 @@ class TestNames:
             tmp_path,
             {
                 "s.yml": (
-                    "---\napiVersion: infrahub.app/v1\nkind: Object\nspec:\n  kind: ManagedVlanSegment\n"
+                    "---\napiVersion: infrahub.app/v1\nkind: Object\nspec:\n  kind: ManagedVxlanSegment\n"
                     "  data:\n    - customer_name: x\n      environment: p\n"
                 )
             },
         )
         with pytest.raises(LookupError, match="owner__org_id"):
-            name(declared("ManagedVlanSegment", directory)[0])
+            name(declared("ManagedVxlanSegment", directory)[0])
 
 
 class TestDistinct:
@@ -199,10 +201,10 @@ class TestDistinct:
     def test_kind_without_an_identity_counts_every_declaration(self, tmp_path: Path) -> None:
         """No hfid resolvable from the file: each declaration is its own object."""
         text = (
-            "---\napiVersion: infrahub.app/v1\nkind: Object\nspec:\n  kind: ManagedVlanSegment\n  data:\n"
+            "---\napiVersion: infrahub.app/v1\nkind: Object\nspec:\n  kind: ManagedVxlanSegment\n  data:\n"
             "    - customer_name: x\n    - customer_name: x\n"
         )
-        objects = declared("ManagedVlanSegment", _write(tmp_path, {"s.yml": text}))
+        objects = declared("ManagedVxlanSegment", _write(tmp_path, {"s.yml": text}))
         assert identity(objects[0]) != identity(objects[1])
         assert len(distinct(objects)) == 2
 

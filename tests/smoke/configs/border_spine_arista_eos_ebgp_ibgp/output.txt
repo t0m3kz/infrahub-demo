@@ -110,6 +110,7 @@ interface Vxlan1
    !
    ! L2 VNI Mappings (VLAN segments)
    vxlan vlan 100 vni 10100
+   vxlan vlan 200 vni 10200
    !
    ! L3 VNI Mappings (VRF segments for microsegmentation)
    vxlan vrf VRF_A vni 50001
@@ -132,6 +133,10 @@ router bgp 65000
    vlan 100
       rd 10.0.0.1:10100
       route-target both 65000:10100
+      redistribute learned
+   vlan 200
+      rd 10.0.0.1:10200
+      route-target both 65000:10200
       redistribute learned
    !
    ! L3 EVPN (VRF-based for microsegmentation)

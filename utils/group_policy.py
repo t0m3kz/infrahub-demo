@@ -15,7 +15,7 @@ the group tag helper (generators/helpers/security_tag.py) and the contract build
   supported on a site that has policy-aware and policy-unaware nodes");
 - ``site_vteps`` / ``vteps_by_data_center``: the devices of a data center that
   are VTEPs (its own and its pods');
-- ``segment_sites``: the sites (data center, colocation metro, footprint) a
+- ``segment_sites``: the sites (data center, colocation metro) a
   segment is active in;
 - ``gbp_required``: whether a segment needs component group policy.
 
@@ -153,20 +153,14 @@ def vteps_by_data_center(
 def segment_sites(segment: dict[str, Any]) -> set[str]:
     """Ids of the sites a segment is active in.
 
-    A VXLAN segment: the deployments of its segment deployments (data centers,
-    colocation metros). A VLAN segment: the parent
-    of its footprint (the data center of a TopologyCustomerDC), else the
-    footprint itself, which is never a data center.
+    The deployments of a VXLAN segment's segment deployments (data centers,
+    colocation metros).
     """
-    sites = {
+    return {
         str(deployment["id"])
         for activation in segment.get("segment_deployments") or []
         if (deployment := activation.get("deployment") or {}).get("id")
     }
-    footprint = segment.get("customer_deployment") or {}
-    if site := (footprint.get("parent") or {}).get("id") or footprint.get("id"):
-        sites.add(str(site))
-    return sites
 
 
 def _profile(device: dict[str, Any], profiles: Profiles) -> dict[str, Any] | None:

@@ -1,7 +1,6 @@
 # The rows of checks/colocation_placement.py: every colocation metro, zone (cage) and virtual colocation with its
 # parent, and the kit it declares (fabric_templates, with the kind of each template: the check wants a physical
-# template on a zone and a virtual one on a virtual colocation), plus every colocation footprint with the zone that
-# serves it (serving_zone), its parent and whether that zone holds a firewall. A virtual colocation also carries its
+# template on a zone and a virtual one on a virtual colocation). A virtual colocation also carries its
 # order data (the account with its provider and owner, the colocation operator above its metro) and its appliances
 # with their HA domain (the `capabilities` entry that has a `mode`, and its members), which rule 9 reads.
 #
@@ -11,7 +10,7 @@
 # null `design` is skipped by the rules that name it. `zone_templates` selects id and name so clean_data() keeps
 # each as a dict (an id-only selection would collapse to a string).
 #
-# `template_kind` and `firewall_devices` are aliases on purpose: clean_data() strips "__" out of any key, so a
+# `template_kind` is an alias on purpose: clean_data() strips "__" out of any key, so a
 # bare __typename would arrive as "typename", and the alias says what the field is for. Concrete kinds only, so
 # the query stays valid whichever generic a relationship peers.
 query colocation_placement {
@@ -132,26 +131,6 @@ query colocation_placement {
                   display_label
                 }
               }
-            }
-          }
-        }
-      }
-    }
-  }
-
-  TopologyCustomerColocation {
-    edges {
-      node {
-        id
-        name { value }
-        parent { node { id name { value } } }
-        serving_zone {
-          node {
-            id
-            name { value }
-            parent { node { id name { value } } }
-            firewall_devices: devices(role__value: "firewall") {
-              edges { node { id } }
             }
           }
         }

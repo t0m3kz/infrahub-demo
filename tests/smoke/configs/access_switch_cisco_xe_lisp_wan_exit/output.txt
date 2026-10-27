@@ -99,6 +99,7 @@ router lisp
  instance-id 50001
   dynamic-eid VRF_A-IPV4
    database-mapping 10.100.0.0/24 locator-set RLOC
+   database-mapping 10.200.0.0/24 locator-set RLOC
    exit-dynamic-eid
   service ipv4
    eid-table vrf VRF_A
@@ -109,6 +110,13 @@ router lisp
  instance-id 10100
   service ethernet
    eid-table vlan 100
+   database-mapping mac locator-set RLOC
+   exit-service-ethernet
+  exit-instance-id
+ ! unverified-no-lab: L2 instance-id 10200 for VLAN 200: Ethernet EID table and the local MAC database mapping
+ instance-id 10200
+  service ethernet
+   eid-table vlan 200
    database-mapping mac locator-set RLOC
    exit-service-ethernet
   exit-instance-id

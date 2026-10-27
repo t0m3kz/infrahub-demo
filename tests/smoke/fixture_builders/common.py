@@ -274,7 +274,6 @@ def _make_segment_node(
     vlan_id: int,
     vni: int | None = None,
     seg_name: str = "seg-100",
-    seg_type: str = "ManagedVlanSegment",
     gateway_ip: str | None = None,
     ns_name: str = "default",
     security_policy: dict | None = None,
@@ -285,7 +284,7 @@ def _make_segment_node(
     l3_vni: int | None = None,
     routing_identity: tuple[int | None, int | None] | None = None,
 ) -> dict:
-    """Build a ManagedNetworkSegment node, as the query returns it.
+    """Build a ManagedVxlanSegment node, as the query returns it.
 
     ``routing_identity`` is the (segment routing_tag, owner routing_tag) the fragment selects
     (queries/fragments/network_segment.gql); without it the node carries neither field, as before.
@@ -295,10 +294,10 @@ def _make_segment_node(
     looks for segments, and therefore the only path that produces VXLAN/EVPN
     output for leaf/tor/access-leaf roles.
 
-    For a VxlanSegment the VNI comes from ``segment_deployments`` and the LOCAL
+    The VNI comes from ``segment_deployments`` and the LOCAL
     vlan_id from the ``vlan_domain_segments`` rows under it, matched to this
     device's own VLAN domain — its ManagedMLAG if paired, else its own device id.
-    A VxlanSegment with no row for the device's own domain is skipped entirely
+    A segment with no row for the device's own domain is skipped entirely
     by the transform, so ``vlan_domain_id`` must match or no VXLAN is rendered.
 
     The VRF and its L3 VNI are reached ONLY via
@@ -336,38 +335,24 @@ def _make_segment_node(
             ),
         }
 
-    if seg_type == "ManagedVxlanSegment":
-        seg.update(
-            {
-                "__typename": seg_type,
-                "name": _v(seg_name),
-                "customer_name": _v("Customer-A"),
-                "arp_suppression": _v(True),
-                "security_zone": security_zone_node,
-                "gateway": _node(gateway_node),
-                # The deployment the segment is realized in: its VNI and, under it, the
-                # per-VLAN-domain LOCAL vlan_id rows. The transform needs a row whose
-                # vlan_domain.id equals this device's own domain or it skips the segment
-                # and renders no VXLAN at all; the VNI is the one of the deployment holding
-                # that row.
-                "segment_deployments": _edges(
-                    [{"vni": _v(vni), "vlan_domain_segments": _vlan_domain_rows(vlan_id, vlan_domain_id)}]
-                ),
-            }
-        )
-    else:
-        seg.update(
-            {
-                "__typename": seg_type,
-                "name": _v(seg_name),
-                "customer_name": _v("Customer-A"),
-                # A VlanSegment's vlan_id is a plain attribute on the segment —
-                # no realization record, no VNI (single-site, no overlay).
-                "vlan_id": _v(vlan_id),
-                "security_zone": security_zone_node,
-                "gateway": _node(gateway_node),
-            }
-        )
+    seg.update(
+        {
+            "__typename": "ManagedVxlanSegment",
+            "name": _v(seg_name),
+            "customer_name": _v("Customer-A"),
+            "arp_suppression": _v(True),
+            "security_zone": security_zone_node,
+            "gateway": _node(gateway_node),
+            # The deployment the segment is realized in: its VNI and, under it, the
+            # per-VLAN-domain LOCAL vlan_id rows. The transform needs a row whose
+            # vlan_domain.id equals this device's own domain or it skips the segment
+            # and renders no VXLAN at all; the VNI is the one of the deployment holding
+            # that row.
+            "segment_deployments": _edges(
+                [{"vni": _v(vni), "vlan_domain_segments": _vlan_domain_rows(vlan_id, vlan_domain_id)}]
+            ),
+        }
+    )
 
     if routing_identity is not None:
         segment_tag, owner_tag = routing_identity

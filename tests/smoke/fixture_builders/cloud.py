@@ -369,19 +369,19 @@ def build_aws_policy_rules() -> dict:
 
     The app subnet permits tcp/5432 out to the db subnet (also the db subnet's
     inbound rule), tcp/443 in from an on-prem segment (gateway prefix), a
-    disabled rule, and an egress rule to an internet segment with no address,
+    disabled rule, and an egress rule to the internet zone (no address),
     which must be skipped, never rendered as 0.0.0.0/0.
     """
     data = build_aws_single_region()
     app_end = _make_rule_end("prod-subnet-1a", cidr="10.0.1.0/24", zone="CLOUD-ZONE")
     db_end = _make_rule_end("db-subnet", cidr="10.0.2.0/24", zone="CLOUD-ZONE")
     onprem_end = _make_rule_end("onprem-web", gateway="172.16.10.1/24", zone="DMZ-ZONE")
-    internet_end = _make_rule_end("internet", zone="INTERNET-ZONE")
     to_db = _make_policy_rule(index=10, name="app-to-db", source=app_end, destination=db_end, port=5432)
     disabled = _make_policy_rule(
         index=20, name="app-to-db-old", source=app_end, destination=db_end, port=3306, disabled=True
     )
-    to_internet = _make_policy_rule(index=30, name="app-to-internet", source=app_end, destination=internet_end)
+    to_internet = _make_policy_rule(index=30, name="app-to-internet", source=app_end, destination=None)
+    to_internet["destination_zone"] = _node({"name": _v("INTERNET-ZONE")})
     from_onprem = _make_policy_rule(index=10, name="onprem-to-app", source=onprem_end, destination=app_end)
 
     vpc = data["CloudVirtualNetwork"]["edges"][0]["node"]

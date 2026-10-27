@@ -192,12 +192,20 @@ class TestInlineTermination:
     """terminate_inline needs an on-prem HA pair: the fabric drops the segment's gateway."""
 
     @staticmethod
-    def _vlan_segment(inline_service: dict[str, Any] | None, terminate_inline: bool = True) -> dict[str, Any]:
+    def _segment(inline_service: dict[str, Any] | None, terminate_inline: bool = True) -> dict[str, Any]:
         return {
-            "ManagedVlanSegment": [
+            "ManagedVxlanSegment": [
                 {
                     "name": "seg-web",
-                    "customer_deployment": {"typename": "TopologyCustomerColocation", "name": "C001-P-FR"},
+                    "stretch_scope": "local",
+                    "customer_deployments": [
+                        {
+                            "typename": "TopologyCustomerDC",
+                            "name": "C001-P-DC11",
+                            "parent": {"typename": "TopologyDataCenter", "name": "DC11"},
+                        }
+                    ],
+                    "segment_deployments": [],
                     "terminate_inline": terminate_inline,
                     "inline_service": inline_service,
                 }
@@ -208,7 +216,7 @@ class TestInlineTermination:
         """No inline_service means no gateway anywhere."""
         check = _check()
 
-        check.validate(self._vlan_segment(None))
+        check.validate(self._segment(None))
 
         assert len(check._captured_errors) == 1
         assert "no inline_service" in check._captured_errors[0]
@@ -217,7 +225,7 @@ class TestInlineTermination:
         """A firewall context (or anything but an FW/LB/proxy HA pair) cannot be the gateway."""
         check = _check()
 
-        check.validate(self._vlan_segment({"typename": "ManagedFirewallContext", "name": "ctx-1"}))
+        check.validate(self._segment({"typename": "ManagedFirewallContext", "name": "ctx-1"}))
 
         assert len(check._captured_errors) == 1
         assert "cannot be its gateway" in check._captured_errors[0]
@@ -226,22 +234,13 @@ class TestInlineTermination:
         """A ManagedFirewallHA terminating the segment passes; so does a segment not terminated inline."""
         check = _check()
 
-        check.validate(self._vlan_segment({"typename": "ManagedFirewallHA", "name": "fw-ha"}))
-        check.validate(self._vlan_segment(None, terminate_inline=False))
+        check.validate(self._segment({"typename": "ManagedFirewallHA", "name": "fw-ha"}))
+        check.validate(self._segment(None, terminate_inline=False))
 
         assert check._captured_errors == []
 
 
-class TestVlanSegmentDeployment:
-    def test_vlan_segment_without_deployment_is_an_error(self) -> None:
-        """Every segment needs its deployment — without one it terminates nowhere."""
-        check = _check()
-
-        check.validate({"ManagedVlanSegment": [{"name": "seg-orphan", "customer_deployment": None}]})
-
-        assert len(check._captured_errors) == 1
-        assert "has no customer_deployment" in check._captured_errors[0]
-
+class TestCloudSegmentDeployment:
     def test_cloud_segment_without_customer_deployment_is_an_error(self) -> None:
         """A cloud segment attached to no deployment is an error, not silently skipped."""
         check = _check()
@@ -259,64 +258,6 @@ class TestVlanSegmentDeployment:
         check.validate({"CloudNetworkSegment": [{"name": "c003-subnet-p", "customer_deployment": deployment}]})
 
         assert check._captured_errors == []
-
-
-class TestTenantVlanSegmentInDataCenter:
-    """A tenant segment inside a DC is VXLAN; only an exchange-zone service segment may be a VLAN there."""
-
-    @staticmethod
-    def _vlan_segment(deployment_kind: str, zone: str | None) -> dict[str, Any]:
-        """One VLAN segment on a footprint of ``deployment_kind``, in ``zone`` (None: unzoned)."""
-        return {
-            "ManagedVlanSegment": [
-                {
-                    "name": "c006-nordix-prod-p",
-                    "customer_deployment": {"typename": deployment_kind, "name": "C006-P-DC11"},
-                    "security_zone": {"name": zone} if zone else None,
-                }
-            ]
-        }
-
-    def test_tenant_vlan_segment_on_a_dc_footprint_is_an_error(self) -> None:
-        """A PROD-ZONE VLAN segment on a TopologyCustomerDC is a tenant segment of the wrong kind."""
-        check = _check()
-
-        check.validate(self._vlan_segment("TopologyCustomerDC", "PROD-ZONE"))
-
-        assert len(check._captured_errors) == 1
-        assert "is a ManagedVxlanSegment" in check._captured_errors[0]
-        assert "C006-P-DC11" in check._captured_errors[0]
-
-    def test_unzoned_vlan_segment_on_a_dc_footprint_is_an_error(self) -> None:
-        """No zone is no exemption: the rule fails closed."""
-        check = _check()
-
-        check.validate(self._vlan_segment("TopologyCustomerDC", None))
-
-        assert len(check._captured_errors) == 1
-
-    def test_exchange_zone_vlan_segment_on_a_dc_footprint_passes(self) -> None:
-        """The DC-local MANAGEMENT services segment is authored infra data in an exchange zone."""
-        check = _check()
-
-        check.validate(self._vlan_segment("TopologyCustomerDC", "MANAGEMENT-ZONE"))
-
-        assert check._captured_errors == []
-
-    def test_tenant_vlan_segment_on_a_colocation_footprint_passes(self) -> None:
-        """Cages and colocation metros keep their tenant VLAN segments."""
-        check = _check()
-
-        check.validate(self._vlan_segment("TopologyCustomerColocation", "PROD-ZONE"))
-
-        assert check._captured_errors == []
-
-    def test_query_selects_the_vlan_segment_zone(self) -> None:
-        """The exemption reads security_zone.name, so the check's query must select it on VLAN segments."""
-        query = (Path(__file__).parents[2] / "queries" / "validation" / "segment_placement.gql").read_text()
-        vlan_block = query[query.index("ManagedVlanSegment") : query.index("ManagedVxlanSegment")]
-
-        assert "security_zone { node { name { value } } }" in vlan_block
 
 
 def _owner(org_id: str, kind: str = "OrganizationCustomer") -> dict[str, Any]:
@@ -398,27 +339,6 @@ class TestEnvironmentAgreement:
 
         assert len(check._captured_errors) == 1
 
-    def test_vlan_segment_is_checked_too(self) -> None:
-        """A VLAN segment on a colocation footprint follows the same rule."""
-        check = _check()
-        colo = _footprint("TopologyCustomerColocation", "C005-P-FR", "p", "C005")
-
-        check.validate(
-            {
-                "ManagedVlanSegment": [
-                    {
-                        "name": "seg",
-                        "environment": "d",
-                        "owner": {"id": "id-C005", "org_id": "C005"},
-                        "customer_deployment": colo,
-                    }
-                ]
-            }
-        )
-
-        assert len(check._captured_errors) == 1
-        assert "environment 'd'" in check._captured_errors[0]
-
     def test_office_segment_must_be_prod(self) -> None:
         """An office has no environment: it is PROD, so a non-prod segment on it is an error."""
         check = _check()
@@ -443,7 +363,7 @@ class TestEnvironmentAgreement:
         check = _check()
         cloud = {"typename": "TopologyCustomerCloud", "name": "C003-VAULTEX-AWS", "owner": _owner("C003")}
 
-        check.validate({"ManagedVlanSegment": [{"name": "seg", "environment": "d", "customer_deployment": cloud}]})
+        check.validate(_vxlan("d", "C003", [cloud]))
 
         assert not any("shares the environment" in e for e in check._captured_errors)
 
@@ -504,14 +424,12 @@ class TestQueryShape:
 
     _QUERY = (Path(__file__).parents[2] / "queries" / "validation" / "segment_placement.gql").read_text()
 
-    def test_environment_and_owner_are_selected_on_both_segment_kinds(self) -> None:
-        """Both segment blocks select the segment's environment, owner and zone."""
-        vlan_block = self._QUERY[self._QUERY.index("ManagedVlanSegment") : self._QUERY.index("ManagedVxlanSegment")]
-        vxlan_block = self._QUERY[self._QUERY.index("ManagedVxlanSegment") : self._QUERY.index("CloudNetworkSegment")]
-        for block in (vlan_block, vxlan_block):
-            assert "environment { value }" in block
-            assert "owner { node { id org_id { value } } }" in block
-            assert "security_zone { node { name { value } } }" in block
+    def test_environment_and_owner_are_selected_on_the_segment(self) -> None:
+        """The segment block selects the segment's environment, owner and zone."""
+        block = self._QUERY[self._QUERY.index("ManagedVxlanSegment") : self._QUERY.index("CloudNetworkSegment")]
+        assert "environment { value }" in block
+        assert "owner { node { id org_id { value } } }" in block
+        assert "security_zone { node { name { value } } }" in block
 
     def test_footprint_environment_comes_from_the_scoped_generic(self) -> None:
         """Only TopologyEnvironmentScoped carries environment; the removed TopologyCustomer.environment is not read."""

@@ -15,8 +15,7 @@ from utils.segment_addressing import segment_prefix
 
 def _segment_deployment_ids(segment: dict[str, Any]) -> list[str]:
     """TopologyCustomer ids a segment serves: customer_deployment on a
-    VlanSegment or CloudNetworkSegment, customer_deployments on a VxlanSegment
-    (one relationship, split by cardinality)."""
+    CloudNetworkSegment, customer_deployments on a VxlanSegment."""
     deployment_ids: list[str] = []
     single_deployment = segment.get("customer_deployment")
     if single_deployment and single_deployment.get("id"):
@@ -149,9 +148,7 @@ def get_customer_pbr_rules(
     deployment footprint the dedicated_firewall flag was set on, e.g.
     C005-P-DC10), not the customer's org — segment.owner is an
     OrganizationCustomer and would never equal it. Segments carry their own
-    TopologyCustomer link via customer_deployment (VlanSegment, cardinality
-    one) / customer_deployments (VxlanSegment, cardinality many) — same
-    identifier, both sides of one relationship split by cardinality.
+    TopologyCustomer link via customer_deployments (VxlanSegment, cardinality many).
     """
     if not activations:
         return []

@@ -154,7 +154,7 @@ fragment GroupPolicyRuleFields on SecurityPolicyRule {
 # (transforms/helpers/group_policy.py): whether it is a routed tenant segment
 # (kind, gateway namespace type, zone) and its group tag, its owner (the
 # customer label), where it is active (utils/group_policy.segment_sites: the
-# VXLAN deployments, the VLAN footprint's data center), its classification
+# VXLAN deployments), its classification
 # (VLAN ID, prefix) and its own rules with the component tags they carry
 # (every rule lives in its source segment's policy). The rules into it
 # (inbound_rules) carry their policy's segment: a rule of a segment-less policy
@@ -193,16 +193,6 @@ fragment SegmentGroupPolicyFields on ManagedNetworkSegment {
       node {
         ...GroupPolicyRuleFields
         policy { node { enabled { value } segment { node { id } } } }
-      }
-    }
-  }
-  ... on ManagedVlanSegment {
-    vlan_id { value }
-    inline_service { node { id name { value } } }
-    customer_deployment {
-      node {
-        id
-        ... on TopologyCustomerDC { parent { node { id __typename } } }
       }
     }
   }

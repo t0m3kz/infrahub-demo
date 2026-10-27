@@ -147,7 +147,7 @@ class TestInternetVrf:
 
         def segment(ns_type: str) -> dict[str, Any]:
             return {
-                "__typename": "ManagedVlanSegment",
+                "__typename": "ManagedVxlanSegment",
                 "id": "s",
                 "name": _v("seg"),
                 "gateway": {
@@ -163,10 +163,10 @@ class TestInternetVrf:
         assert _run(ManagedNetworkSegment=[segment("prod")])._captured_errors == []
 
     def test_segment_without_gateway_passes(self) -> None:
-        """The External (internet) segment has no gateway and passes."""
+        """A segment with no gateway (L2-only) passes."""
         check = _run(
             ManagedNetworkSegment=[
-                {"__typename": "ManagedExternalSegment", "id": "s", "name": _v("i"), "gateway": {"node": None}}
+                {"__typename": "ManagedVxlanSegment", "id": "s", "name": _v("i"), "gateway": {"node": None}}
             ]
         )
         assert check._captured_errors == []
@@ -314,7 +314,7 @@ def _onprem(
 ) -> dict[str, Any]:
     """An on-prem segment whose gateway sits in the given prefix."""
     return {
-        "__typename": "ManagedVlanSegment",
+        "__typename": "ManagedVxlanSegment",
         "id": f"seg-{name}",
         "name": _v(name),
         "gateway": {

@@ -1,0 +1,43 @@
+---
+# The DNS and NTP services of DC11 as an application of the Infrastructure Services pseudo-customer: the two virtual
+# machines below (06_customer_boarding/c006/dc/dc11/02_instances.yml) are the instances, and the cabling of their hosts
+# gives the segment its switch ports, as for any tenant segment.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppApplication
+  data:
+    - label: core-services
+      environment: p
+      criticality: critical
+      fqdn: core-services.infra.demo.local
+      application_orchestrator: ansible_automation_platform
+      owner: INFRA
+      member_of_groups:
+        - app_applications
+      children:
+        kind: AppComponent
+        data:
+          - name: dns
+            fqdn: dns.core-services.infra.demo.local
+            component_type: backend
+            ports:
+              - udp/53
+            network_segment: infra-core-dns-ntp-p
+            instances:
+              - infra-core-dc11-1
+              - infra-core-dc11-2
+            member_of_groups:
+              - app_components
+
+          - name: ntp
+            fqdn: ntp.core-services.infra.demo.local
+            component_type: backend
+            ports:
+              - udp/123
+            network_segment: infra-core-dns-ntp-p
+            instances:
+              - infra-core-dc11-1
+              - infra-core-dc11-2
+            member_of_groups:
+              - app_components

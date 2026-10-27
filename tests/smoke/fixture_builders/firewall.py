@@ -100,7 +100,7 @@ def _make_zone(
         segments.append(
             {
                 "id": seg_name,
-                "__typename": "ManagedVlanSegment",
+                "__typename": "ManagedVxlanSegment",
                 "name": _v(seg_name),
                 "gateway": _node({"ip_prefix": _node({"prefix": _v(cidr)})}),
             }
@@ -117,11 +117,11 @@ def _make_rule_segment(*, cidr: str, zone_name: str) -> dict:
     """A rule's source/destination segment (PolicyRuleSegmentFields), carrying the zone the rule matches on."""
     return {
         "id": f"seg-{cidr.replace('/', '-').replace('.', '-')}",
-        "__typename": "ManagedVlanSegment",
+        "__typename": "ManagedVxlanSegment",
         "name": _v(f"seg-{cidr.replace('/', '-').replace('.', '-')}"),
         "security_zone": _node({"name": _v(zone_name)}),
         "gateway": _node({"ip_prefix": _node({"prefix": _v(cidr)})}),
-        "customer_deployment": _node(None),
+        "customer_deployments": _edges([]),
     }
 
 
@@ -136,11 +136,15 @@ def _make_segment_rule(
     port_end: int | None = None,
     src_segment: dict | None,
     dst_segment: dict | None = None,
+    dst_zone: str | None = None,
     log: bool = False,
     description: str = "",
     security_profile: str | None = None,
 ) -> dict:
-    """A SecurityPolicyRule (SecurityPolicyRuleFields) of ``policy``, the policy of ``src_segment``."""
+    """A SecurityPolicyRule (SecurityPolicyRuleFields) of ``policy``, the policy of ``src_segment``.
+
+    ``dst_zone`` is the rule's own ``destination_zone`` (the internet), set instead of ``dst_segment``.
+    """
     return {
         "id": f"rule-{policy}-{name}",
         "index": _v(index),
@@ -160,6 +164,7 @@ def _make_segment_rule(
         "source_ip_addresses": _edges([]),
         "destination_ip_addresses": _edges([]),
         "security_profile": _node({"name": _v(security_profile)} if security_profile else None),
+        **({"destination_zone": _node({"name": _v(dst_zone)})} if dst_zone else {}),
     }
 
 
@@ -341,20 +346,8 @@ def build_firewall_data(*, device_name: str, platform: str) -> dict:
     }
 
 
-def _make_internet_segment() -> dict:
-    """The Internet ManagedExternalSegment as a rule end: INTERNET-ZONE, no gateway, no prefix."""
-    return {
-        "id": "seg-internet",
-        "__typename": "ManagedExternalSegment",
-        "name": _v("internet"),
-        "security_zone": _node({"name": _v("INTERNET-ZONE")}),
-        "gateway": _node(None),
-        "customer_deployment": _node(None),
-    }
-
-
 def build_leaf_internet_permit_data(*, device_name: str, platform: str) -> dict:
-    """The with_acl leaf whose VXLAN segment (10.100.0.0/24) also permits https to the Internet segment.
+    """The with_acl leaf whose VXLAN segment (10.100.0.0/24) also permits https to the internet zone.
 
     Its ACL must deny every NON_INTERNET_PREFIXES range before the `permit tcp ... any eq 443`
     (a plain permit to any would open every same-VRF destination at the leaf).
@@ -376,7 +369,7 @@ def build_leaf_internet_permit_data(*, device_name: str, platform: str) -> dict:
     }
     dest = {
         "id": "seg-seg-200",
-        "__typename": "ManagedVlanSegment",
+        "__typename": "ManagedVxlanSegment",
         "name": _v("seg-200"),
         "security_zone": _node({"name": _v("PROD-ZONE")}),
         "gateway": _node({"ip_prefix": _node({"prefix": _v("10.200.0.0/24")})}),
@@ -387,7 +380,7 @@ def build_leaf_internet_permit_data(*, device_name: str, platform: str) -> dict:
     intra["destination_segment"] = _node(dest)
     rule = _make_policy_rule(index=20, name="allow-internet-https", protocol="tcp", port_start=443)
     rule["source_segment"] = _node(source)
-    rule["destination_segment"] = _node(_make_internet_segment())
+    rule["destination_zone"] = _node({"name": _v("INTERNET-ZONE")})
     patched: set[int] = set()
     stack: list[Any] = [data]
     while stack:
@@ -491,7 +484,6 @@ def build_leaf_lb_client_data(*, device_name: str, platform: str) -> dict:
             vlan_id=vlan,
             vni=10000 + vlan,
             seg_name=name,
-            seg_type="ManagedVxlanSegment",
             gateway_ip=gateway,
             ns_name="VRF_A",
             l3_vni=50001,
@@ -551,16 +543,15 @@ def build_leaf_lb_client_data(*, device_name: str, platform: str) -> dict:
 
 
 def build_firewall_internet_data(*, device_name: str, platform: str) -> dict:
-    """A firewall whose internal zone (10.0.1.0/24) permits https to the Internet segment.
+    """A firewall whose internal zone (10.0.1.0/24) permits https to the internet zone.
 
-    The rule table renders it to INTERNET-ZONE with destination any (the segment has no prefix).
+    The rule table renders it to INTERNET-ZONE with destination any (the zone names no address).
     """
     data = build_firewall_data(device_name=device_name, platform=platform)
     internal = _make_rule_segment(cidr="10.0.1.0/24", zone_name="internal")
-    internet = _make_internet_segment()
     header = _make_policy_header(name="internal-to-internet", segment=internal)
     segments = _make_rule_bearing_segments(
-        [internal, internet],
+        [internal],
         [
             (
                 header,
@@ -572,7 +563,7 @@ def build_firewall_internet_data(*, device_name: str, platform: str) -> dict:
                         protocol="tcp",
                         port_start=443,
                         src_segment=internal,
-                        dst_segment=internet,
+                        dst_zone="INTERNET-ZONE",
                         description="Allow HTTPS from Internal to the Internet",
                     )
                 ],
@@ -602,7 +593,6 @@ def build_firewall_internet_data(*, device_name: str, platform: str) -> dict:
                 vlan_id=30,
                 parent_interface_name="ethernet1/1",
                 namespace_name="VRF-EXTERNAL",
-                zone_members=[segments[internet["id"]]],
             ),
         ]
     )
@@ -696,7 +686,7 @@ def write_fixtures() -> tuple[int, int]:
     """Write the firewall fixtures, and the leaf fixtures of the firewall-context features (permit, PBR, LB client)."""
     generated = errors = 0
 
-    # A permit to the prefix-less Internet segment: the leaf denies every
+    # A permit to the internet zone: the leaf denies every
     # internal range before `permit ... any`, the firewall renders INTERNET-ZONE / any.
     print("\nGenerating internet-permit fixtures (leaf, firewall):")
     g, e = write_data_fixtures(

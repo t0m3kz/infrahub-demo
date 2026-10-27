@@ -287,8 +287,7 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
 
         The in-memory ``security_zone`` is updated here, before any rule is
         planned: otherwise the first run reads a stale missing zone and treats
-        every flow as cross-zone. External segments are skipped (their zone is
-        data); a segment without an id is skipped (a component with no segment).
+        every flow as cross-zone. A segment without an id is skipped (a component with no segment).
         """
         for segment in segments:
             if not segment.get("id"):

@@ -215,9 +215,7 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
             if asn_pool_obj:
                 fabric_asn_pool_id = asn_pool_obj.id
 
-        # VlanSegment.vlan_id is set manually — no pool involved (single-site,
-        # no collision-tracking concern requiring automated allocation).
-        # VxlanSegment's LOCAL VLAN ID is chosen per VLAN domain (MLAG pair
+        # A segment's LOCAL VLAN ID is chosen per VLAN domain (MLAG pair
         # or a device without MLAG), not per-DC — see generators/devices.py's
         # _ensure_mlag_pairs and
         # generators/vlan_domain.py's per-domain ManagedVlanDomainSegment

@@ -21,11 +21,11 @@ from tests.unit.app_application_generator_helpers import _app, _backend, _dep, _
 
 
 def _micro_segment(seg_id: str = "seg-m") -> dict[str, Any]:
-    return {**_segment(seg_id, "ManagedVlanSegment"), "isolation_mode": "microsegmented"}
+    return {**_segment(seg_id, "ManagedVxlanSegment"), "isolation_mode": "microsegmented"}
 
 
 def _c013_app(*, tagged: bool = False) -> dict[str, Any]:
-    """fraud-detection: scoring-api -> feature-cache on one microsegmented VLAN segment."""
+    """fraud-detection: scoring-api -> feature-cache on one microsegmented segment."""
     cache = {
         "id": "comp-cache",
         "name": "feature-cache",
@@ -195,8 +195,8 @@ class TestSegmentTags:
         return _app(frontend)
 
     def test_component_and_edge_target_segments_are_tagged_after_zones_before_rules(self) -> None:
-        """A VLAN segment has no generator: this is where it gets its group tag and its routing tag, with the
-        edge target's segment."""
+        """The application run gives each segment it touches its group tag and its routing tag, the edge
+        target's segment included."""
         gen = self._gen()
         order: list[str] = []
         gen._ensure_segment_zones = AsyncMock(side_effect=lambda segments: order.append("zones"))

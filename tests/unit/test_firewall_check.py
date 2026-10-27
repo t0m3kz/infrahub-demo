@@ -45,6 +45,7 @@ def _rule(name: str, src: str | None = "seg-a", dst: str | None = "seg-b", **ext
         "disabled": _v(False),
         "source_segment": _node(_ref(src) if src else None),
         "destination_segment": _node(_ref(dst) if dst else None),
+        "destination_zone": _node(None),
         "destination_prefixes": _edges([]),
         "destination_ip_addresses": _edges([]),
         **extra,
@@ -64,11 +65,11 @@ def _policy(rules: list[dict[str, Any]], owner: str = "seg-a", enabled: bool = T
 def _carried(seg_id: str, policy: dict[str, Any] | None, inbound: list[dict[str, Any]] | None = None) -> dict:
     """A segment on a firewall interface (NetworkSegmentFields + SegmentRulesFields)."""
     return {
-        "__typename": "ManagedVlanSegment",
+        "__typename": "ManagedVxlanSegment",
         "id": seg_id,
         "name": _v(seg_id),
         "status": _v("active"),
-        "vlan_id": _v(10),
+        "segment_deployments": _edges([{"vlan_id": _v(10), "vni": _v(10010)}]),
         "security_policy": _node(policy),
         "inbound_rules": _edges(inbound or []),
     }
@@ -120,22 +121,32 @@ class TestFirewallCheck:
     def test_missing_destination_selector_raises_error(self) -> None:
         check = _validate(_carried("seg-a", _policy([_rule("rule-1", dst=None)])))
         assert len(check._captured_errors) == 1
-        assert "has no destination selector" in check._captured_errors[0]
+        assert "has no destination" in check._captured_errors[0]
 
-    def test_apply_on_switch_to_a_prefix_less_segment_raises_error(self) -> None:
-        dst = {**_ref("seg-b"), "security_zone": _node({"name": _v("INTERNET-ZONE")})}
-        rule = _rule("rule-1", apply_on_switch=_v(True), destination_segment=_node(dst))
+    def test_apply_on_switch_to_the_internet_zone_raises_error(self) -> None:
+        rule = _rule(
+            "rule-1", dst=None, apply_on_switch=_v(True), destination_zone=_node({"name": _v("INTERNET-ZONE")})
+        )
         check = _validate(_carried("seg-a", _policy([rule])))
         assert len(check._captured_errors) == 1
-        assert "apply_on_switch to destination segment 'seg-b'" in check._captured_errors[0]
+        assert "apply_on_switch to the internet zone" in check._captured_errors[0]
+
+    def test_rule_to_the_internet_zone_is_a_complete_destination(self) -> None:
+        """A zone is a destination of its own: no segment, prefix or address needed."""
+        rule = _rule("rule-1", dst=None, destination_zone=_node({"name": _v("INTERNET-ZONE")}))
+        check = _validate(_carried("seg-a", _policy([rule])))
+        assert check._captured_errors == []
 
     def test_apply_on_switch_to_a_segment_with_a_prefix_passes(self) -> None:
         dst = {**_ref("seg-b"), "gateway": _node({"ip_prefix": _node({"prefix": _v("10.2.0.0/24")})})}
         rule = _rule("rule-1", apply_on_switch=_v(True), destination_segment=_node(dst))
         assert _validate(_carried("seg-a", _policy([rule])))._captured_errors == []
 
-    def test_permit_to_a_prefix_less_segment_without_apply_on_switch_passes(self) -> None:
-        check = _validate(_carried("seg-a", _policy([_rule("rule-1", apply_on_switch=_v(False))])))
+    def test_permit_to_the_internet_zone_without_apply_on_switch_passes(self) -> None:
+        rule = _rule(
+            "rule-1", dst=None, apply_on_switch=_v(False), destination_zone=_node({"name": _v("INTERNET-ZONE")})
+        )
+        check = _validate(_carried("seg-a", _policy([rule])))
         assert check._captured_errors == []
 
     def test_prefix_destination_counts_as_selector(self) -> None:
@@ -203,7 +214,7 @@ class TestFirewallCheck:
         }
         check = _validate(context)
         assert len(check._captured_errors) == 1
-        assert "has no destination selector" in check._captured_errors[0]
+        assert "has no destination" in check._captured_errors[0]
 
 
 def _leg_interface(name: str, address: str, namespace: str, ns_type: str, exchange: dict, context: dict) -> dict:

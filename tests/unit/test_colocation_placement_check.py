@@ -1,15 +1,15 @@
 """Unit tests for CheckColocationPlacement (checks/colocation_placement.py).
 
 The payloads are raw GraphQL responses shaped like queries/validation/colocation_placement.gql; ``validate`` runs
-them through ``clean_data`` (which collapses a dict whose only key is ``id`` into the id string, so a serving zone's
-``firewall_devices`` arrive as a list of ids). Each rule is also tested directly on the cleaned shape.
+them through ``clean_data`` (which collapses a dict whose only key is ``id`` into the id string). Each rule is also
+tested directly on the cleaned shape.
 
 The design rules (kit needs a design, kit within the envelope, zone design in the metro envelope, zones within the
 metro envelope) read the optional ``design`` of a metro, zone and virtual colocation; ``_hosting`` gives every zone
 a roomy design (4 of each role) unless a test sets another or ``NO_DESIGN``.
 
 The places mirror data/demos/30_all: the Equinix metros FR (zones FR2 with the edge pair and the firewalls, FR6
-with nothing) and AM (virtual colocation AM-NE), the footprints C001-P-FR and C005-P-FR.
+with nothing) and AM (virtual colocation AM-NE). A footprint names no zone, so none is checked here.
 """
 
 from __future__ import annotations
@@ -25,8 +25,6 @@ from checks.colocation_placement import (
     kit_within_design_findings,
     kit_without_design_findings,
     metro_zone_count_findings,
-    serving_zone_firewall_findings,
-    serving_zone_metro_findings,
     template_kind_findings,
     terraform_order_data_findings,
     unique_name_findings,
@@ -109,26 +107,6 @@ def _hosting(
     }
 
 
-def _footprint(
-    node_id: str, name: str, metro: dict[str, Any], serving_zone: dict[str, Any] | None = None
-) -> dict[str, Any]:
-    """A colocation footprint; serving_zone is a raw zone node (with parent and firewall_devices) or unset."""
-    return {
-        **_node(node_id, name),
-        "parent": {"node": {"id": metro["id"], "name": metro["name"]}},
-        "serving_zone": {"node": serving_zone},
-    }
-
-
-def _serving(node_id: str, name: str, metro: dict[str, Any], firewalls: list[str]) -> dict[str, Any]:
-    """The serving_zone selection: the zone, its parent metro, and its firewall device ids."""
-    return {
-        **_node(node_id, name),
-        "parent": {"node": {"id": metro["id"], "name": metro["name"]}},
-        "firewall_devices": _edges([{"id": firewall} for firewall in firewalls]),
-    }
-
-
 FR = _metro("m-fr", "FR")
 AM = _metro("m-am", "AM")
 PA = _metro("m-pa", "PA")
@@ -141,22 +119,16 @@ FR2 = _hosting("z-fr2", "FR2", FR, [EDGE, FIREWALL])
 FR6 = _hosting("z-fr6", "FR6", FR, [])
 AM_NE = _hosting("vc-am-ne", "AM-NE", AM, [VEDGE])
 
-FR2_SERVING = _serving("z-fr2", "FR2", FR, ["fw-1", "fw-2"])
-FR6_SERVING = _serving("z-fr6", "FR6", FR, [])
-PA4_SERVING = _serving("z-pa4", "PA4", PA, ["fw-3"])
-
 
 def _payload(
     metros: list[dict[str, Any]] | None = None,
     zones: list[dict[str, Any]] | None = None,
     virtual: list[dict[str, Any]] | None = None,
-    footprints: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     return {
         "TopologyColocationMetro": _edges([FR, AM] if metros is None else metros),
         "TopologyColocationZone": _edges([FR2, FR6] if zones is None else zones),
         "TopologyVirtualColocation": _edges([AM_NE] if virtual is None else virtual),
-        "TopologyCustomerColocation": _edges(footprints or []),
     }
 
 
@@ -268,100 +240,8 @@ class TestTemplateKind:
         assert findings[0].object_type == "TopologyColocationZone"
 
 
-class TestServingZoneMetro:
-    """Rule 2: the serving zone is a zone of the footprint's own metro."""
-
-    def test_zone_of_the_footprints_metro_passes(self) -> None:
-        footprint = _footprint("fp-1", "C001-P-FR", FR, FR2_SERVING)
-
-        assert _run(_payload(footprints=[footprint])) == []
-
-    def test_zone_of_another_metro_fails(self) -> None:
-        footprint = _footprint("fp-1", "C001-P-FR", FR, PA4_SERVING)
-
-        findings = _run(_payload(footprints=[footprint]))
-
-        assert len(findings) == 1
-        assert findings[0]["object_id"] == "fp-1"
-        assert findings[0]["object_type"] == "TopologyCustomerColocation"
-        message = findings[0]["message"]
-        assert "TopologyCustomerColocation 'C001-P-FR' is served by zone 'PA4' of metro 'PA'" in message
-        assert "is itself in metro 'FR'" in message
-
-    def test_serving_zone_without_a_parent_fails_naming_no_metro(self) -> None:
-        serving = {
-            **_node("z-orphan", "ORPHAN"),
-            "parent": {"node": None},
-            "firewall_devices": _edges([{"id": "fw-9"}]),
-        }
-        footprint = _footprint("fp-1", "C001-P-FR", FR, serving)
-
-        findings = _run(_payload(footprints=[footprint]))
-
-        assert len(findings) == 1
-        assert "of metro '<no metro>'" in findings[0]["message"]
-
-    def test_unset_serving_zone_is_silent(self) -> None:
-        """Unset serving_zone means no context by design: not an error."""
-        footprint = _footprint("fp-1", "C001-P-FR", FR, None)
-
-        assert _run(_payload(footprints=[footprint])) == []
-
-    def test_footprint_without_a_parent_id_is_skipped(self) -> None:
-        """No parent to compare against: the schema requires one, this rule does not guess."""
-        footprint = {**_footprint("fp-1", "C001-P-FR", FR, FR2_SERVING), "parent": {"node": None}}
-
-        assert serving_zone_metro_findings(clean_data(_payload(footprints=[footprint]))) == []
-
-
-class TestServingZoneFirewalls:
-    """Rule 3: a serving zone holds a firewall, else the footprint gets no FirewallContext."""
-
-    def test_zone_with_firewalls_passes(self) -> None:
-        footprint = _footprint("fp-1", "C001-P-FR", FR, FR2_SERVING)
-
-        assert _run(_payload(footprints=[footprint])) == []
-
-    def test_zone_without_firewalls_fails(self) -> None:
-        footprint = _footprint("fp-1", "C001-P-FR", FR, FR6_SERVING)
-
-        findings = _run(_payload(footprints=[footprint]))
-
-        assert len(findings) == 1
-        assert findings[0]["object_id"] == "fp-1"
-        message = findings[0]["message"]
-        assert "TopologyCustomerColocation 'C001-P-FR' is served by zone 'FR6', which has no firewall device" in message
-        assert "FirewallContext" in message
-
-    def test_unset_serving_zone_is_silent(self) -> None:
-        footprint = _footprint("fp-1", "C001-P-FR", FR, None)
-
-        assert serving_zone_firewall_findings(clean_data(_payload(footprints=[footprint]))) == []
-
-    def test_two_footprints_report_independently(self) -> None:
-        """C001 is served by a firewall zone, C005 by a bare one: only C005 is reported."""
-        findings = _run(
-            _payload(
-                footprints=[
-                    _footprint("fp-1", "C001-P-FR", FR, FR2_SERVING),
-                    _footprint("fp-5", "C005-P-FR", FR, FR6_SERVING),
-                ]
-            )
-        )
-
-        assert [f["object_id"] for f in findings] == ["fp-5"]
-
-    def test_wrong_metro_and_no_firewall_are_two_findings(self) -> None:
-        """Rules are independent: a zone of another metro with no firewalls trips both rules."""
-        serving = _serving("z-pa9", "PA9", PA, [])
-
-        findings = _run(_payload(footprints=[_footprint("fp-1", "C001-P-FR", FR, serving)]))
-
-        assert len(findings) == 2
-
-
 class TestUniqueNames:
-    """Rule 4: metro, zone and virtual colocation names are unique across the three kinds, case-insensitive."""
+    """Rule 2: metro, zone and virtual colocation names are unique across the three kinds, case-insensitive."""
 
     def test_distinct_names_pass(self) -> None:
         assert _run(_payload()) == []
@@ -409,15 +289,9 @@ class TestUniqueNames:
 
         assert len(findings) == 3
 
-    def test_footprint_names_are_not_part_of_the_namespace(self) -> None:
-        """A footprint is named after its metro (C001-P-FR); it shares no device or pool name with a zone."""
-        footprint = _footprint("fp-1", "FR2", FR, FR2_SERVING)
-
-        assert _run(_payload(footprints=[footprint])) == []
-
 
 class TestKitNeedsDesign:
-    """Rule 5: a zone or virtual colocation that declares kit has a design."""
+    """Rule 3: a zone or virtual colocation that declares kit has a design."""
 
     def test_kit_with_a_design_passes(self) -> None:
         assert _run(_payload()) == []
@@ -460,7 +334,7 @@ class TestKitNeedsDesign:
 
 
 class TestKitWithinDesign:
-    """Rule 6: the quantity of each role, summed over its entries, stays within the design's max."""
+    """Rule 4: the quantity of each role, summed over its entries, stays within the design's max."""
 
     def test_kit_at_the_maximum_passes(self) -> None:
         design = _zone_design("EDGE_FW", edges=2, firewalls=2, load_balancers=0)
@@ -525,7 +399,7 @@ class TestKitWithinDesign:
 
 
 class TestZoneDesignInMetroDesign:
-    """Rule 7: with a design on both, the zone's design is one of the metro design's zone_templates."""
+    """Rule 5: with a design on both, the zone's design is one of the metro design's zone_templates."""
 
     EDGE_FW = _zone_design("EDGE_FW")
     EDGE_ONLY = _zone_design("EDGE")
@@ -588,7 +462,7 @@ class TestZoneDesignInMetroDesign:
 
 
 class TestMetroZoneCount:
-    """Rule 8: a metro with a design holds at most max_zones zones and virtual colocations together."""
+    """Rule 6: a metro with a design holds at most max_zones zones and virtual colocations together."""
 
     def _fr(self, max_zones: int) -> dict[str, Any]:
         return _metro("m-fr", "FR", _metro_design("S", max_zones, [_zone_design()]))
@@ -691,7 +565,7 @@ def _pair(mode: str | None = "active-passive", **domain: Any) -> list[dict[str, 
 
 
 class TestTerraformOrderData:
-    """Rule 9: a virtual colocation routed to terraform has its account, the owner's e-mails and HA-wired appliances."""
+    """Rule 7: a virtual colocation routed to terraform has its account, the owner's e-mails and HA-wired appliances."""
 
     def _account(
         self,
@@ -946,8 +820,6 @@ class TestRegistry:
     def test_every_rule_is_registered_once(self) -> None:
         assert RULES == (
             template_kind_findings,
-            serving_zone_metro_findings,
-            serving_zone_firewall_findings,
             unique_name_findings,
             kit_without_design_findings,
             kit_within_design_findings,
@@ -960,18 +832,17 @@ class TestRegistry:
         assert _run({}) == []
 
     def test_findings_from_different_rules_all_surface(self) -> None:
-        """One run reports every violated rule: bad template, wrong metro and a name collision together."""
+        """One run reports every violated rule: a bad template and a name collision together."""
         zone = _hosting("z-fr2", "FR2", FR, [_entry("edge", 2, APPLIANCE_TEMPLATE, "C8000V_EDGE")])
         payload = _payload(
             zones=[zone],
             virtual=[_hosting("vc-fr2", "fr2", AM, [])],
-            footprints=[_footprint("fp-1", "C001-P-FR", FR, PA4_SERVING)],
         )
 
         findings = _run(payload)
 
-        # template kind, serving zone metro, and two name-collision findings
-        assert len(findings) == 4
+        # template kind and two name-collision findings
+        assert len(findings) == 3
 
     @pytest.mark.parametrize("rule", RULES)
     def test_every_rule_tolerates_an_empty_cleaned_input(self, rule: Any) -> None:

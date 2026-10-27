@@ -12,6 +12,10 @@ BORDER_ROLES = frozenset({"border-leaf", "border-spine"})
 """Roles rendered from the border_leafs/* templates: the DC border and its collapsed spine+border-leaf
 (micro-fabric) form. They carry the tenant SVIs, the firewall transit legs and the same refusals/checks."""
 
+CARRIER_ROLES = BORDER_ROLES | {"edge"}
+"""Devices that terminate the firewall transit legs (get_exchange_transits): the DC border and, in a colocation
+zone, the edge. A collapsed border-spine carries them like a border-leaf."""
+
 OVERLAY_ROLES = RR_ROLES | RR_CLIENT_ROLES
 """Roles that run an overlay BGP process."""
 

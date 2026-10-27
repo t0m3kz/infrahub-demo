@@ -18,14 +18,6 @@ fragment SegmentSecurityPolicyFields on ManagedNetworkSegment {
       }
     }
   }
-  ... on ManagedVlanSegment {
-    inline_service {
-      node { id name { value } }
-    }
-    customer_deployment {
-      node { id }
-    }
-  }
   isolation_mode { value }
   # routing_tag: the segment's and its owner's tag, rendered as the standard communities
   # 64497:<segment tag> and 64496:<customer tag> on the routes the leaf originates
@@ -52,32 +44,6 @@ fragment NetworkSegmentFields on ManagedNetworkSegment {
   # on a leaf while the same fields read directly were populated).
   ...SegmentSecurityZoneFields
   ...SegmentSecurityPolicyFields
-  ... on ManagedVlanSegment {
-    id
-    name { value }
-    description { value }
-    vlan_id { value }
-    terminate_inline { value }
-    customer_name { value }
-    environment { value }
-    gateway {
-      node {
-        address { value }
-        ip_prefix {
-          node {
-            prefix { value }
-            ip_namespace {
-              node {
-                name { value }
-                l3_vni { value }
-                namespace_type { value }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
   ... on ManagedVxlanSegment {
     id
     name { value }
@@ -121,6 +87,7 @@ fragment NetworkSegmentFields on ManagedNetworkSegment {
               node {
                 name { value }
                 l3_vni { value }
+                namespace_type { value }
               }
             }
           }
@@ -170,38 +137,6 @@ fragment SegmentDeploymentsOnDeploymentFields on TopologySegmentHosting {
             # (transforms/helpers/routing_identity.py); selected on the generic, never inside a `... on` block.
             routing_tag { value }
             owner { node { routing_tag { value } } }
-            ... on ManagedVlanSegment {
-              customer_name { value }
-              environment { value }
-              # terminate_inline: routed by its HA pair, so no border-leaf PBR.
-              terminate_inline { value }
-              gateway { node { ip_prefix { node { prefix { value } } } } }
-              customer_deployment { node { id } }
-              security_policy {
-                node {
-                  enabled { value }
-                  rules {
-                    edges {
-                      node {
-                        action { value }
-                        disabled { value }
-                        destination_segment {
-                          node {
-                            id
-                            ... on ManagedVlanSegment {
-                              gateway { node { ip_prefix { node { prefix { value } } } } }
-                            }
-                            ... on ManagedVxlanSegment {
-                              gateway { node { ip_prefix { node { prefix { value } } } } }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
             ... on ManagedVxlanSegment {
               name { value }
               customer_name { value }
@@ -230,7 +165,7 @@ fragment SegmentDeploymentsOnDeploymentFields on TopologySegmentHosting {
                   ip_prefix {
                     node {
                       prefix { value }
-                      ip_namespace { node { name { value } l3_vni { value } } }
+                      ip_namespace { node { name { value } l3_vni { value } namespace_type { value } } }
                     }
                   }
                 }
@@ -247,9 +182,6 @@ fragment SegmentDeploymentsOnDeploymentFields on TopologySegmentHosting {
                         destination_segment {
                           node {
                             id
-                            ... on ManagedVlanSegment {
-                              gateway { node { ip_prefix { node { prefix { value } } } } }
-                            }
                             ... on ManagedVxlanSegment {
                               gateway { node { ip_prefix { node { prefix { value } } } } }
                             }

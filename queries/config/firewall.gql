@@ -97,7 +97,6 @@ query firewall_config(
           edges {
             node {
               id
-              ... on ManagedVlanSegment { name { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
               ... on ManagedVxlanSegment { name { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
             }
           }

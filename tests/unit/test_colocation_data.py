@@ -10,7 +10,8 @@ a zone and a virtual colocation declare their kit in ``fabric_templates``. The g
   device-name space (zone FR2 names ``eg-fr201``) and the pool-name space;
 - there is no ``deployment_type``: the node kind says what the kit is;
 - a zone's templates are physical, a virtual colocation's virtual;
-- a footprint's ``serving_zone`` is a zone of the footprint's own metro;
+- a footprint names no zone (it has no ``serving_zone``): every zone of its metro that declares a firewall pair
+  serves it;
 - the designs (data/bootstrap/14c_colocation_templates.yml): a zone or virtual colocation that declares kit has a
   ``design`` and so does a metro whose children do, every design name is a bootstrap row, a child's design is one of its
   metro design's ``zone_templates``, the kit stays within the design's ``max_*`` and a metro holds no more children
@@ -29,7 +30,15 @@ from typing import Any
 import pytest
 import yaml
 
-from tests.integration.demo_data import ROOT, Declared, attribute_names, declared_in, name, object_templates
+from tests.integration.demo_data import (
+    ROOT,
+    Declared,
+    attribute_names,
+    declared_in,
+    name,
+    object_templates,
+    parent_name,
+)
 from tests.unit.simulators.fabric_designs import (
     COLO_METRO_DESIGN_NAMES,
     COLO_ZONE_DESIGN_NAMES,
@@ -81,16 +90,6 @@ def _template_names(obj: Declared) -> list[str]:
     return names
 
 
-def _metro_of(obj: Declared) -> str | None:
-    """The metro a zone or virtual colocation sits in: the object it is nested under, else its ``parent`` reference."""
-    if obj.enclosing is not None and obj.enclosing.kind == _METRO:
-        return name(obj.enclosing)
-    parent = obj.item.get("parent")
-    if isinstance(parent, list) and len(parent) == 1:
-        parent = parent[0]
-    return str(parent) if isinstance(parent, str) else None
-
-
 _MAX_BY_ROLE = {"edge": "max_edges", "firewall": "max_firewalls", "load-balancer": "max_load_balancers"}
 
 
@@ -114,7 +113,7 @@ def _children(demo: str) -> dict[str, list[Declared]]:
     """Distinct zones and virtual colocations per metro name (a re-declared child counts once)."""
     by_metro: dict[str, dict[str, Declared]] = defaultdict(dict)
     for obj in _objects(demo, _ZONE, _VIRTUAL):
-        metro = _metro_of(obj)
+        metro = parent_name(obj)
         assert metro is not None, _label(obj)
         by_metro[metro].setdefault(name(obj), obj)
     return {metro: list(children.values()) for metro, children in by_metro.items()}
@@ -171,7 +170,7 @@ class TestColocationDataset:
         """The same zone name under two metros would be one object with two parents."""
         parents: dict[tuple[str, str], set[str | None]] = defaultdict(set)
         for obj in _objects(demo, _ZONE, _VIRTUAL):
-            parents[(obj.kind, name(obj))].add(_metro_of(obj))
+            parents[(obj.kind, name(obj))].add(parent_name(obj))
         assert {key: sorted(map(str, metros)) for key, metros in parents.items() if len(metros) > 1} == {}
         assert all(None not in metros for metros in parents.values())
 
@@ -201,25 +200,9 @@ class TestColocationDataset:
                     offenders.append(f"{_label(obj)}: {template} is {known.get(template, 'not a known template')}")
         assert offenders == []
 
-    def test_serving_zone_is_a_zone_of_the_footprints_own_metro(self, demo: str) -> None:
-        """``serving_zone: FR2`` on a footprint of metro FR names a TopologyColocationZone nested under FR."""
-        zones: dict[str, set[str | None]] = defaultdict(set)
-        for obj in _objects(demo, _ZONE):
-            zones[name(obj)].add(_metro_of(obj))
-        offenders = []
-        for footprint in _objects(demo, _FOOTPRINT):
-            serving = footprint.item.get("serving_zone")
-            if serving is None:
-                continue
-            metro = footprint.item.get("parent")
-            if str(serving) not in zones:
-                offenders.append(f"{_label(footprint)}: serving_zone {serving} is not a declared zone")
-            elif metro not in zones[str(serving)]:
-                offenders.append(
-                    f"{_label(footprint)}: serving_zone {serving} is in {sorted(map(str, zones[str(serving)]))}, "
-                    f"the footprint in {metro}"
-                )
-        assert offenders == []
+    def test_a_footprint_names_no_zone(self, demo: str) -> None:
+        """It is served by every zone of its metro that has a firewall pair: nothing in data picks one."""
+        assert [_label(f) for f in _objects(demo, _FOOTPRINT) if "serving_zone" in f.item] == []
 
 
 @pytest.mark.parametrize("demo", sorted(_DEMO_SETS))
@@ -311,30 +294,33 @@ class TestColocationDesigns:
 class TestAllDemoServingZones:
     """The 30_all customers that share the Frankfurt firewall pair."""
 
-    def test_c001_and_c005_are_served_by_fr2(self) -> None:
-        """FR2 carries the edge pair and the firewalls; both footprints name it, so they share one context."""
-        served = {
-            str(footprint.item.get("owner")): footprint.item.get("serving_zone")
-            for footprint in _objects("30_all", _FOOTPRINT)
-            if footprint.item.get("parent") == "FR"
-        }
-        assert served == {"C001": "FR2", "C005": "FR2"}
+    @staticmethod
+    def _firewall_zones() -> dict[str, list[str]]:
+        """Metro -> its zones that declare a firewall pair."""
+        zones: dict[str, list[str]] = defaultdict(list)
+        for zone in _objects("30_all", _ZONE):
+            if "firewall" in [row[1] for row in zone.item.get("fabric_templates") or []]:
+                zones[str(parent_name(zone))].append(name(zone))
+        return dict(zones)
 
-    def test_the_serving_zone_declares_a_firewall(self) -> None:
-        """A serving zone without a firewall gets its footprints no FirewallContext (checks/colocation_placement.py)."""
-        zones = {name(zone): zone for zone in _objects("30_all", _ZONE)}
-        for footprint in _objects("30_all", _FOOTPRINT):
-            serving = footprint.item.get("serving_zone")
-            if serving is None:
-                continue
-            roles = [row[1] for row in zones[str(serving)].item.get("fabric_templates") or []]
-            assert "firewall" in roles, f"{_label(footprint)}: zone {serving} declares no firewall"
+    def test_only_frankfurt_has_a_zone_with_a_firewall_pair(self) -> None:
+        """FR2 carries the edge pair and the firewalls: the one zone that serves footprints (FR6 declares nothing)."""
+        assert self._firewall_zones() == {"FR": ["FR2"]}
+
+    def test_c001_and_c005_are_in_frankfurt_and_share_its_firewall_zone(self) -> None:
+        """Both footprints sit in metro FR, so both are served by FR2 and share its one context."""
+        in_fr = {
+            str(footprint.item.get("owner")): footprint.item.get("parent")
+            for footprint in _objects("30_all", _FOOTPRINT)
+            if footprint.item.get("parent") in self._firewall_zones()
+        }
+        assert in_fr == {"C001": "FR", "C005": "FR"}
 
     def test_equinix_amsterdam_is_one_virtual_colocation(self) -> None:
         """Decision 6: the Amsterdam presence is AM-NE under metro AM; the old zones AM1/AM4 are gone."""
         virtual = {name(obj): obj for obj in _objects("30_all", _VIRTUAL)}
         assert "AM-NE" in virtual
-        assert _metro_of(virtual["AM-NE"]) == "AM"
+        assert parent_name(virtual["AM-NE"]) == "AM"
         assert {"AM1", "AM4"}.isdisjoint({name(obj) for obj in _objects("30_all", _ZONE)})
 
 

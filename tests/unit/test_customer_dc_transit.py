@@ -151,7 +151,7 @@ class TestFreshSharedBoarding:
 
         assert events == [f"acquire:fw-context-{_SHARED}", "release"]
         gen.link_serving_context.assert_awaited_once_with(
-            FIREWALL_CONTEXT, customer_id="cust-1", context_id=world.contexts[_SHARED].id, current_id=None
+            FIREWALL_CONTEXT, customer_id="cust-1", context_id=world.contexts[_SHARED].id, current_ids=[]
         )
 
     @pytest.mark.asyncio
@@ -162,6 +162,46 @@ class TestFreshSharedBoarding:
         await _run(gen, world, _payload())
 
         assert events == [f"acquire:fw-context-{_SHARED}", "release"]
+
+
+class TestDcServingLinkIsReplacedNotPruned:
+    """A DC footprint has one serving firewall context: link_serving_context replaces it, nothing is unlinked."""
+
+    @pytest.mark.asyncio
+    async def test_a_previous_context_is_never_removed_by_a_relationship_mutation(self) -> None:
+        world = _World()
+        gen, _ = _make_gen(world)
+        gen.unlink_stale_serving_contexts = AsyncMock()
+        payload = _payload()
+        payload["TopologyCustomerDC"][0]["serving_firewall_context"] = {"node": {"id": "ctx-dedicated"}}
+
+        await _run(gen, world, payload)
+
+        gen.link_serving_context.assert_awaited_once_with(
+            FIREWALL_CONTEXT,
+            customer_id="cust-1",
+            context_id=world.contexts[_SHARED].id,
+            current_ids=["ctx-dedicated"],
+        )
+        gen.unlink_stale_serving_contexts.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_the_leg_step_returns_the_context_it_built_and_the_one_it_found(self) -> None:
+        world = _World()
+        gen, _ = _make_gen(world)
+        built: list[Any] = []
+        real = gen._ensure_transit_legs
+
+        async def _spy(**kwargs: Any) -> Any:
+            built.append(await real(**kwargs))
+            return built[-1]
+
+        gen._ensure_transit_legs = _spy
+
+        await _run(gen, world, _payload(customer_id="cust-1"))
+        await _run(gen, world, _payload(customer_id="cust-2"))
+
+        assert built == [world.contexts[_SHARED].id] * 2
 
 
 class TestRerunAndSecondCustomer:
@@ -192,7 +232,7 @@ class TestRerunAndSecondCustomer:
         assert world.writes == before
         assert events == []
         gen.link_serving_context.assert_awaited_with(
-            FIREWALL_CONTEXT, customer_id="cust-2", context_id=world.contexts[_SHARED].id, current_id=None
+            FIREWALL_CONTEXT, customer_id="cust-2", context_id=world.contexts[_SHARED].id, current_ids=[]
         )
 
     @pytest.mark.asyncio

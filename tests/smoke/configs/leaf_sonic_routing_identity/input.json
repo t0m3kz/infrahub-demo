@@ -1080,15 +1080,15 @@
                           "inline_service": {
                             "node": null
                           },
-                          "__typename": "ManagedVlanSegment",
+                          "__typename": "ManagedVxlanSegment",
                           "name": {
                             "value": "seg-200"
                           },
                           "customer_name": {
                             "value": "Customer-A"
                           },
-                          "vlan_id": {
-                            "value": 200
+                          "arp_suppression": {
+                            "value": true
                           },
                           "security_zone": {
                             "node": null
@@ -1116,6 +1116,33 @@
                                 }
                               }
                             }
+                          },
+                          "segment_deployments": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "vni": {
+                                    "value": 10200
+                                  },
+                                  "vlan_domain_segments": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "vlan_id": {
+                                            "value": 200
+                                          },
+                                          "vlan_domain": {
+                                            "node": {
+                                              "id": "dev-dc1-leaf-01"
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
                           },
                           "routing_tag": {
                             "value": 13
@@ -1293,13 +1320,26 @@
                         "value": 200
                       },
                       "vni": {
-                        "value": null
+                        "value": 10200
                       },
                       "status": {
                         "value": "active"
                       },
                       "vlan_domain_segments": {
-                        "edges": []
+                        "edges": [
+                          {
+                            "node": {
+                              "vlan_id": {
+                                "value": 200
+                              },
+                              "vlan_domain": {
+                                "node": {
+                                  "id": "dev-dc1-leaf-01"
+                                }
+                              }
+                            }
+                          }
+                        ]
                       },
                       "segment": {
                         "node": {
@@ -1307,15 +1347,15 @@
                           "inline_service": {
                             "node": null
                           },
-                          "__typename": "ManagedVlanSegment",
+                          "__typename": "ManagedVxlanSegment",
                           "name": {
                             "value": "seg-200"
                           },
                           "customer_name": {
                             "value": "Customer-A"
                           },
-                          "vlan_id": {
-                            "value": 200
+                          "arp_suppression": {
+                            "value": true
                           },
                           "security_zone": {
                             "node": null
@@ -1343,6 +1383,33 @@
                                 }
                               }
                             }
+                          },
+                          "segment_deployments": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "vni": {
+                                    "value": 10200
+                                  },
+                                  "vlan_domain_segments": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "vlan_id": {
+                                            "value": 200
+                                          },
+                                          "vlan_domain": {
+                                            "node": {
+                                              "id": "dev-dc1-leaf-01"
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
                           },
                           "routing_tag": {
                             "value": 13

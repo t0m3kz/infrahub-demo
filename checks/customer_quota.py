@@ -27,8 +27,7 @@ class CheckCustomerQuota(InfrahubCheck):
 
     What is counted, for every TopologyCustomerDC that has a `design`:
 
-    - segments: the ManagedVxlanSegments (customer_deployments) and ManagedVlanSegments (customer_deployment)
-      that name the footprint, against ``max_segments``. A segment stretched over two DCs counts for each
+    - segments: the ManagedVxlanSegments (customer_deployments) that name the footprint, against ``max_segments``. A segment stretched over two DCs counts for each
       footprint it names.
     - host-facing ports: the switch ports tagged with those segments (their `capabilities`: add_app_component_segment
       tags the far end of the uplink NICs of every AppComponent instance's physical host, a role=lag NIC's far end
@@ -55,10 +54,7 @@ class CheckCustomerQuota(InfrahubCheck):
         ports: dict[str, dict[str, int]] = defaultdict(dict)  # footprint id -> port id -> speed (Gbps)
 
         for segment in cleaned.get("ManagedVxlanSegment") or []:
-            self._collect(segment, segment.get("customer_deployments") or [], footprints, segments, ports)
-        for segment in cleaned.get("ManagedVlanSegment") or []:
-            deployment = segment.get("customer_deployment")
-            self._collect(segment, [deployment] if deployment else [], footprints, segments, ports)
+            self._collect(segment, footprints, segments, ports)
 
         for footprint_id, footprint in footprints.items():
             self._validate_footprint(footprint, len(segments[footprint_id]), ports[footprint_id])
@@ -66,7 +62,6 @@ class CheckCustomerQuota(InfrahubCheck):
     @staticmethod
     def _collect(
         segment: dict[str, Any],
-        deployments: list[dict[str, Any]],
         footprints: dict[str, dict[str, Any]],
         segments: dict[str, set[str]],
         ports: dict[str, dict[str, int]],
@@ -75,7 +70,7 @@ class CheckCustomerQuota(InfrahubCheck):
         if is_exchange_zone((segment.get("security_zone") or {}).get("name")):
             return
         host_ports = [port for interface in segment.get("capabilities") or [] for port in _host_facing_ports(interface)]
-        for deployment in deployments:
+        for deployment in segment.get("customer_deployments") or []:
             footprint = footprints.get(deployment.get("id", ""))
             if footprint is None:
                 continue

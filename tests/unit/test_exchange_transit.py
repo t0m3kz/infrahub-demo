@@ -199,19 +199,18 @@ def test_management_transit_pool_and_zone(root_dir: Path) -> None:
 
 
 def test_services_segment_and_its_policy_rules(root_dir: Path) -> None:
-    """The INFRA services segment: routed in MANAGEMENT, zoned, pinned to one leaf port; PROD permits name it."""
+    """The INFRA services segment: routed in MANAGEMENT, zoned, on one DC footprint; PROD permits name it."""
     spec = yaml.safe_load((root_dir / "data/demos/30_all/07_applications/infra/00_segment.yml").read_text())["spec"]
     customer = spec["data"][0]
     segment = customer["network_segments"][0]["data"]
     gateway = segment["gateway"]["data"]
     assert customer["org_id"] == "INFRA"
     assert (segment["environment"], segment["security_zone"]) == ("p", "MANAGEMENT-ZONE")
-    assert segment["customer_deployment"] == "C006-P-DC11"
+    assert segment["customer_deployments"] == ["C006-P-DC11"]
     assert (gateway["ip_namespace"], gateway["ip_prefix"]["data"]["ip_namespace"]) == ("MANAGEMENT", "MANAGEMENT")
     assert ipaddress.ip_interface(gateway["address"]).network == ipaddress.ip_network(
         gateway["ip_prefix"]["data"]["prefix"]
     )
-    assert len(segment["capabilities"]) == 1
     # Computed segment name: {owner org_id}-{customer_name}-{environment}, lowercased.
     name = f"{customer['org_id']}-{segment['customer_name']}-{segment['environment']}".lower()
 
@@ -301,18 +300,17 @@ def _segment(kind: str, namespace_type: str | None, zone: str | None) -> dict:
     ("segment", "tenant"),
     [
         (_segment("ManagedVxlanSegment", "prod", "PROD-ZONE"), True),
-        (_segment("ManagedVlanSegment", "non_prod", None), True),
-        (_segment("ManagedVlanSegment", "management", "MANAGEMENT-ZONE"), False),
+        (_segment("ManagedVxlanSegment", "non_prod", None), True),
+        (_segment("ManagedVxlanSegment", "management", "MANAGEMENT-ZONE"), False),
         (_segment("ManagedVxlanSegment", "internet", "INTERNET-ZONE"), False),
         (_segment("ManagedVxlanSegment", "prod", "MANAGEMENT-ZONE"), False),
         (_segment("ManagedVxlanSegment", None, "PROD-ZONE"), False),
-        (_segment("ManagedExternalSegment", "prod", "PROD-ZONE"), False),
         (_segment("CloudNetworkSegment", "prod", "PROD-ZONE"), False),
     ],
-    ids=["vxlan-prod", "vlan-nonprod", "management", "internet", "exchange-zone", "no-gateway", "external", "cloud"],
+    ids=["vxlan-prod", "vxlan-nonprod", "management", "internet", "exchange-zone", "no-gateway", "cloud"],
 )
 def test_routed_tenant_segment(segment: dict, tenant: bool) -> None:
-    """The one tenant-SVI test of L0 and the group tags: VLAN/VXLAN, PROD/NON-PROD gateway, no exchange zone."""
+    """The one tenant-SVI test of L0 and the group tags: VXLAN, PROD/NON-PROD gateway, no exchange zone."""
     assert is_routed_tenant_segment(segment) is tenant
 
 

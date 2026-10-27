@@ -115,6 +115,7 @@ query {
         policy { node { id } }
         source_segment { node { id } }
         destination_segment { node { id } }
+        destination_zone { node { id } }
         security_profile { node { id } }
         source_security_tag { node { id } }
         destination_security_tag { node { id } }
@@ -242,6 +243,7 @@ def _snapshot(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
                 _peer_id(n, "policy"),
                 _peer_id(n, "source_segment"),
                 _peer_id(n, "destination_segment"),
+                _peer_id(n, "destination_zone"),
                 _peer_id(n, "security_profile"),
                 _peer_id(n, "source_security_tag"),
                 _peer_id(n, "destination_security_tag"),

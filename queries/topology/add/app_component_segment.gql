@@ -4,7 +4,7 @@
 # AppInstanceSegmentGenerator can tag the exact switch interface it lands
 # on — see generators/topology/app_instance_segment.py. The segment's
 # __typename picks the reconcile: a VXLAN segment's tags and VLAN domain
-# activations, a VLAN segment's tags only, nothing for a cloud segment.
+# activations, nothing for a cloud segment.
 query app_component_segment($fqdn: String!) {
   AppComponent(fqdn__value: $fqdn) {
     edges {

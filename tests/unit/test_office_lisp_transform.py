@@ -329,7 +329,9 @@ class TestRenderedDistributionSwitch:
         assert (
             f" site {_OFFICE}\n  authentication-key 0ff1c3-k3y\n"
             "  eid-record instance-id 50001 10.100.0.0/24 accept-more-specifics\n"
-            "  eid-record instance-id 10100 any-mac\n  exit-site\n"
+            "  eid-record instance-id 50001 10.200.0.0/24 accept-more-specifics\n"
+            "  eid-record instance-id 10100 any-mac\n"
+            "  eid-record instance-id 10200 any-mac\n  exit-site\n"
         ) in text
 
     @pytest.mark.parametrize(("cls", "directory"), OFFICE_SWITCHES)

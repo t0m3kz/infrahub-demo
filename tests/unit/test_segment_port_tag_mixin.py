@@ -16,7 +16,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.protocols import ManagedVxlanSegment
 from generators.topology.app_instance_segment import AppInstanceSegmentGenerator
 from generators.topology.segment import VxlanSegmentGenerator
 from generators.topology.segment_ports import SegmentPortTagMixin
@@ -67,14 +66,9 @@ class TestHandAssignedPorts:
 
     @staticmethod
     def _reconcile(gen: Any, current: set[str], segment_obj: MagicMock) -> tuple[int, int]:
+        gen.client.get = AsyncMock(return_value=segment_obj)
         return asyncio.run(
-            gen._reconcile_segment_interface_tags(
-                segment_id="seg-1",
-                segment_name="seg",
-                segment_kind=ManagedVxlanSegment,
-                current_ids=current,
-                segment_obj=segment_obj,
-            )
+            gen._reconcile_segment_interface_tags(segment_id="seg-1", segment_name="seg", current_ids=current)
         )
 
     def test_port_no_instance_lands_on_is_untagged(self) -> None:
@@ -175,7 +169,7 @@ class TestReconcileVxlanSegment:
         assert gen._reconcile_segment_interface_tags.await_args.kwargs["current_ids"] == {"if-a"}
 
     def test_a_segment_that_is_no_vxlan_segment_is_left_alone(self) -> None:
-        """No state (a VLAN segment id, or a deleted segment): None, no tag, no row."""
+        """No state (a cloud segment id, or a deleted segment): None, no tag, no row."""
         gen = _gen()
         gen._fetch_segment_vlan_state = AsyncMock(return_value=None)
         gen._reconcile_segment_interface_tags = AsyncMock()

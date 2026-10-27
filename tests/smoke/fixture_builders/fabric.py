@@ -404,7 +404,6 @@ def build_device_data(
                 # 10100 is inside the per-site L2 pool range (10001-39999).
                 "vni": 10100,
                 "seg_name": "seg-100",
-                "seg_type": "ManagedVxlanSegment",
                 "gateway_ip": "10.100.0.1/24",
                 "ns_name": "VRF_A",
                 # Non-default namespace + l3_vni is what makes this a symmetric-IRB
@@ -422,13 +421,14 @@ def build_device_data(
         segment_kwargs.append(
             {
                 "vlan_id": 200,
+                "vni": 10200,
                 "seg_name": "seg-200",
-                "seg_type": "ManagedVlanSegment",
                 "gateway_ip": "10.200.0.1/24",
                 **({"ns_name": "VRF_A", "l3_vni": 50001} if vlan_segment_vrf else {}),
                 "security_policy": policy_vlan,
                 "isolation_mode": isolation_mode,
                 "num_deployments": 1,
+                "vlan_domain_id": vlan_domain_id,
                 **({"routing_identity": (13, None)} if routing_identity and vlan_segment_vrf else {}),
             }
         )
@@ -500,7 +500,6 @@ _INLINE_SEGMENT_KWARGS: dict[str, Any] = {
     "vlan_id": 150,
     "vni": 10150,
     "seg_name": "seg-inline-150",
-    "seg_type": "ManagedVxlanSegment",
     "gateway_ip": "10.150.0.1/24",
     "ns_name": "VRF_A",
     "l3_vni": 50001,

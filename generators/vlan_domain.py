@@ -233,7 +233,7 @@ class VlanDomainMixin:
         {"segment": cleaned segment, "deployments": [{"id", "deployment_id",
         "rows": {domain id: {"id", "vlan_id"}}}]}, one entry per
         ManagedSegmentDeployment; None when ``segment_id`` is not a
-        ManagedVxlanSegment (a VLAN segment has a manual vlan_id and no rows)."""
+        ManagedVxlanSegment."""
         result = await self.client.execute_graphql(
             query=_SEGMENT_VLAN_DOMAINS_QUERY_PATH.read_text(), variables={"segment_id": segment_id}
         )

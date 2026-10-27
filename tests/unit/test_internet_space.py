@@ -1,4 +1,4 @@
-"""Unit tests for the "outside" address space and the unresolved-endpoint rule check."""
+"""Unit tests for the "outside" address space and the internet-destination rule check."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import ipaddress
 
 import pytest
 
-from transforms.helpers.policy import is_unresolved_segment_endpoint
+from transforms.helpers.policy import is_internet_destination
 from utils.exchange_transit import is_public_address
 from utils.internet_space import NON_INTERNET_PREFIXES
 
@@ -59,32 +59,23 @@ class TestNonInternetPrefixes:
         assert not hasattr(exchange_transit, "NON_PUBLIC_PREFIXES")
 
 
-_INTERNET = {"id": "inet", "security_zone": {"name": "INTERNET-ZONE"}}
+_INTERNET_ZONE = {"name": "INTERNET-ZONE"}
 
 
-class TestIsUnresolvedSegmentEndpoint:
-    def test_segment_without_prefix_is_unresolved(self) -> None:
-        assert is_unresolved_segment_endpoint({"destination_segment": _INTERNET}, "destination")
+class TestIsInternetDestination:
+    """The internet is the zone INTERNET-ZONE named by `destination_zone`, never a segment."""
 
-    def test_zoned_elsewhere_prefix_less_segment_is_not_the_internet(self) -> None:
-        """A cloud segment (cidr_block, no gateway prefix) must not be taken for the outside."""
-        cloud = {"id": "c", "security_zone": {"name": "PROD-ZONE"}}
-        assert not is_unresolved_segment_endpoint({"destination_segment": cloud}, "destination")
-        assert not is_unresolved_segment_endpoint({"destination_segment": {"id": "c"}}, "destination")
+    def test_the_internet_zone_is_the_internet(self) -> None:
+        assert is_internet_destination({"destination_zone": _INTERNET_ZONE})
 
-    def test_segment_with_prefix_is_resolved(self) -> None:
-        segment = {"id": "x", "gateway": {"ip_prefix": {"prefix": "10.0.0.0/24"}}}
-        assert not is_unresolved_segment_endpoint({"destination_segment": segment}, "destination")
+    def test_another_zone_is_not_the_internet(self) -> None:
+        assert not is_internet_destination({"destination_zone": {"name": "PROD-ZONE"}})
 
-    def test_no_segment_is_any_not_outside(self) -> None:
-        assert not is_unresolved_segment_endpoint({"destination_segment": None}, "destination")
-        assert not is_unresolved_segment_endpoint({}, "source")
+    def test_a_segment_in_the_internet_zone_is_not_the_internet(self) -> None:
+        """A segment is addressed: the zone of a segment never makes it the outside."""
+        segment = {"id": "x", "security_zone": _INTERNET_ZONE}
+        assert not is_internet_destination({"destination_segment": segment})
 
-    def test_selector_resolves_the_side(self) -> None:
-        rule = {"destination_segment": _INTERNET, "destination_prefixes": [{"prefix": "8.8.8.0/24"}]}
-        assert not is_unresolved_segment_endpoint(rule, "destination")
-
-    def test_sides_are_independent(self) -> None:
-        rule = {"source_segment": _INTERNET, "destination_segment": None}
-        assert is_unresolved_segment_endpoint(rule, "source")
-        assert not is_unresolved_segment_endpoint(rule, "destination")
+    def test_no_zone_is_any_not_outside(self) -> None:
+        assert not is_internet_destination({"destination_zone": None})
+        assert not is_internet_destination({})

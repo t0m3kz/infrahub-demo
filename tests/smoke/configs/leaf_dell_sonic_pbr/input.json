@@ -1118,7 +1118,7 @@
                                       "destination_segment": {
                                         "node": {
                                           "id": "seg-seg-200",
-                                          "__typename": "ManagedVlanSegment",
+                                          "__typename": "ManagedVxlanSegment",
                                           "name": {
                                             "value": "seg-200"
                                           },
@@ -1198,24 +1198,12 @@
                                         }
                                       },
                                       "destination_segment": {
+                                        "node": null
+                                      },
+                                      "destination_zone": {
                                         "node": {
-                                          "id": "seg-internet",
-                                          "__typename": "ManagedExternalSegment",
                                           "name": {
-                                            "value": "internet"
-                                          },
-                                          "security_zone": {
-                                            "node": {
-                                              "name": {
-                                                "value": "INTERNET-ZONE"
-                                              }
-                                            }
-                                          },
-                                          "gateway": {
-                                            "node": null
-                                          },
-                                          "customer_deployment": {
-                                            "node": null
+                                            "value": "INTERNET-ZONE"
                                           }
                                         }
                                       }
@@ -1242,15 +1230,15 @@
                           "inline_service": {
                             "node": null
                           },
-                          "__typename": "ManagedVlanSegment",
+                          "__typename": "ManagedVxlanSegment",
                           "name": {
                             "value": "seg-200"
                           },
                           "customer_name": {
                             "value": "Customer-A"
                           },
-                          "vlan_id": {
-                            "value": 200
+                          "arp_suppression": {
+                            "value": true
                           },
                           "security_zone": {
                             "node": null
@@ -1278,6 +1266,33 @@
                                 }
                               }
                             }
+                          },
+                          "segment_deployments": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "vni": {
+                                    "value": 10200
+                                  },
+                                  "vlan_domain_segments": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "vlan_id": {
+                                            "value": 200
+                                          },
+                                          "vlan_domain": {
+                                            "node": {
+                                              "id": "dev-dc1-leaf-01"
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
                           },
                           "security_policy": {
                             "node": {
@@ -1528,7 +1543,7 @@
                                       "destination_segment": {
                                         "node": {
                                           "id": "seg-seg-200",
-                                          "__typename": "ManagedVlanSegment",
+                                          "__typename": "ManagedVxlanSegment",
                                           "name": {
                                             "value": "seg-200"
                                           },
@@ -1608,24 +1623,12 @@
                                         }
                                       },
                                       "destination_segment": {
+                                        "node": null
+                                      },
+                                      "destination_zone": {
                                         "node": {
-                                          "id": "seg-internet",
-                                          "__typename": "ManagedExternalSegment",
                                           "name": {
-                                            "value": "internet"
-                                          },
-                                          "security_zone": {
-                                            "node": {
-                                              "name": {
-                                                "value": "INTERNET-ZONE"
-                                              }
-                                            }
-                                          },
-                                          "gateway": {
-                                            "node": null
-                                          },
-                                          "customer_deployment": {
-                                            "node": null
+                                            "value": "INTERNET-ZONE"
                                           }
                                         }
                                       }
@@ -1654,13 +1657,26 @@
                         "value": 200
                       },
                       "vni": {
-                        "value": null
+                        "value": 10200
                       },
                       "status": {
                         "value": "active"
                       },
                       "vlan_domain_segments": {
-                        "edges": []
+                        "edges": [
+                          {
+                            "node": {
+                              "vlan_id": {
+                                "value": 200
+                              },
+                              "vlan_domain": {
+                                "node": {
+                                  "id": "dev-dc1-leaf-01"
+                                }
+                              }
+                            }
+                          }
+                        ]
                       },
                       "segment": {
                         "node": {
@@ -1668,15 +1684,15 @@
                           "inline_service": {
                             "node": null
                           },
-                          "__typename": "ManagedVlanSegment",
+                          "__typename": "ManagedVxlanSegment",
                           "name": {
                             "value": "seg-200"
                           },
                           "customer_name": {
                             "value": "Customer-A"
                           },
-                          "vlan_id": {
-                            "value": 200
+                          "arp_suppression": {
+                            "value": true
                           },
                           "security_zone": {
                             "node": null
@@ -1704,6 +1720,33 @@
                                 }
                               }
                             }
+                          },
+                          "segment_deployments": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "vni": {
+                                    "value": 10200
+                                  },
+                                  "vlan_domain_segments": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "vlan_id": {
+                                            "value": 200
+                                          },
+                                          "vlan_domain": {
+                                            "node": {
+                                              "id": "dev-dc1-leaf-01"
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
                           },
                           "security_policy": {
                             "node": {

@@ -340,3 +340,36 @@ class TestPlacePoliciesInContexts:
         place_policies_in_contexts([_ctx("ctx-a", segs["s1"])], [segs["s2"]])
         assert [rule["id"] for rule in segs["s1"]["security_policy"]["rules"]] == ["r1"]
         assert [rule["id"] for rule in segs["s1"]["inbound_rules"]] == ["r2"]
+
+
+class TestFootprintServedByTwoColocationZones:
+    """A colocation footprint is served by one shared context per zone with a firewall pair: each zone's firewall
+    renders its own context (served_deployments is the other end of serving_firewall_contexts) and places the
+    footprint's full policy in it."""
+
+    @staticmethod
+    def _zone_firewall(context_id: str, segments: list[dict]) -> list[dict]:
+        """get_firewall_contexts() of one zone's firewall: its cluster's context, serving the footprint."""
+        served = [{"id": "footprint-1", "network_segments": segments}]
+        cap = {"typename": "ManagedFirewallContext", "id": context_id, "name": f"shared-{context_id}", "vlan_id": None}
+        return get_firewall_contexts([], cluster_contexts=[{**cap, "served_deployments": served}])
+
+    def test_each_zones_context_holds_the_same_rules_in_its_own_table(self) -> None:
+        segs = _segments(_placement_rule("a-to-b", "s1", "s2"), _placement_rule("b-to-a", "s2", "s1", index=20))
+        footprint_segments = [segs["s1"], segs["s2"]]
+
+        tables = {}
+        for zone, context_id in (("FR2", "ctx-fr2"), ("FR3", "ctx-fr3")):
+            contexts = self._zone_firewall(context_id, footprint_segments)
+            assert [c["id"] for c in contexts] == [context_id]
+            root, by_ctx = place_policies_in_contexts(contexts, [])
+            assert root == []
+            tables[zone] = _table(by_ctx[context_id])
+
+        assert tables["FR2"] == tables["FR3"] == [("seg-s1-egress", ["a-to-b"]), ("seg-s2-egress", ["b-to-a"])]
+
+    def test_a_zone_with_no_context_of_the_footprint_places_nothing_of_it(self) -> None:
+        """FR6 has no firewall pair, hence no context: the footprint's rules are not in its (empty) config."""
+        root, by_ctx = place_policies_in_contexts([], [])
+
+        assert (root, by_ctx) == ([], {})

@@ -129,25 +129,13 @@ def _vxlan(segment: dict[str, Any]) -> dict[str, Any]:
     return {"node": {**node, "customer_deployments": {"edges": named}}}
 
 
-def _vlan(segment: dict[str, Any]) -> dict[str, Any]:
-    """The segment as a ManagedVlanSegment row naming its (single) footprint."""
-    node = {k: v for k, v in segment["node"].items() if k != "_footprints"}
-    name = segment["node"]["_footprints"][0]
-    return {"node": {**node, "customer_deployment": {"node": {"id": f"fp-{name}", "name": _v(name)}}}}
-
-
-def _run(
-    footprints: list[dict[str, Any]],
-    vxlan: list[dict[str, Any]] | None = None,
-    vlan: list[dict[str, Any]] | None = None,
-) -> list[dict[str, Any]]:
+def _run(footprints: list[dict[str, Any]], vxlan: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     """Validate and return the logged findings."""
     check = _check()
     check.validate(
         {
             "TopologyCustomerDC": {"edges": footprints},
             "ManagedVxlanSegment": {"edges": [_vxlan(s) for s in vxlan or []]},
-            "ManagedVlanSegment": {"edges": [_vlan(s) for s in vlan or []]},
         }
     )
     return check._captured
@@ -176,13 +164,6 @@ class TestSegmentQuota:
         assert "'M_DC'" in message and "max_segments" in message
         assert findings[0]["object_type"] == "TopologyCustomerDC"
         assert findings[0]["object_id"] == "fp-C005-P-DC10"
-
-    def test_vlan_and_vxlan_segments_both_count(self) -> None:
-        """A VLAN segment on the footprint is a segment of the quota too."""
-        findings = _run(
-            [_footprint(max_segments=1)], [_segment("s1", ["C005-P-DC10"])], [_segment("s2", ["C005-P-DC10"])]
-        )
-        assert len(findings) == 1 and "2 segments" in findings[0]["message"]
 
     def test_stretched_segment_counts_for_each_footprint(self) -> None:
         """A segment naming two footprints is one segment of each."""
@@ -315,11 +296,6 @@ class TestPortQuota:
         segments = [_segment("s1", ["C005-P-DC10"], _port("a", dc=None), _port("b", dc=None))]
         assert len(_run([_footprint(ports_25g=1)], segments)) == 1
 
-    def test_vlan_segment_ports_count(self) -> None:
-        """A VLAN segment's tagged ports are the footprint's too."""
-        findings = _run([_footprint(ports_25g=1)], None, [_segment("s1", ["C005-P-DC10"], _port("a"), _port("b"))])
-        assert len(findings) == 1
-
     def test_exchange_zone_segment_ports_are_not_counted(self) -> None:
         """The operator's infra servers' ports are not the customer's."""
         segments = [_segment("infra", ["C005-P-DC10"], _port("a"), _port("b"), zone="MANAGEMENT-ZONE")]
@@ -423,23 +399,21 @@ def _all_demo_payload() -> dict[str, Any]:
             if host in host_dc:
                 hosts_by_segment.setdefault(component.item["network_segment"], set()).add(host)
 
-    vxlan, vlan = [], []
-    for kind, rows in (("ManagedVxlanSegment", vxlan), ("ManagedVlanSegment", vlan)):
-        for segment in distinct(declared(kind, _ALL_DEMO)):
-            seg_name = name(segment)
-            deployments = segment.item.get("customer_deployments") or [segment.item.get("customer_deployment")]
-            ports = [
-                _port(f"{host}-{nic}", nic_type, host_dc[host])
-                for host in sorted(hosts_by_segment.get(seg_name, ()))
-                for nic, nic_type in enumerate(_server_nic_types())
-            ]
-            zone = segment.item.get("security_zone")
-            row = _segment(seg_name, [str(d) for d in deployments if d], *ports, zone=zone)
-            rows.append(row)
+    vxlan = []
+    for segment in distinct(declared("ManagedVxlanSegment", _ALL_DEMO)):
+        seg_name = name(segment)
+        ports = [
+            _port(f"{host}-{nic}", nic_type, host_dc[host])
+            for host in sorted(hosts_by_segment.get(seg_name, ()))
+            for nic, nic_type in enumerate(_server_nic_types())
+        ]
+        zone = segment.item.get("security_zone")
+        vxlan.append(
+            _segment(seg_name, [str(d) for d in segment.item.get("customer_deployments") or []], *ports, zone=zone)
+        )
     return {
         "TopologyCustomerDC": {"edges": footprint_rows},
         "ManagedVxlanSegment": {"edges": [_vxlan(s) for s in vxlan]},
-        "ManagedVlanSegment": {"edges": [_vlan(s) for s in vlan if s["node"]["_footprints"]]},
     }
 
 

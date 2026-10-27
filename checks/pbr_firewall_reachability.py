@@ -8,11 +8,8 @@ from infrahub_sdk.checks import InfrahubCheck
 
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import TENANT_NAMESPACE_TYPES
-from utils.fabric_roles import BORDER_ROLES
+from utils.fabric_roles import CARRIER_ROLES
 
-# Devices that terminate the firewall transit legs (get_exchange_transits). A
-# collapsed border-spine carries them like a border-leaf.
-CARRIER_ROLES = BORDER_ROLES | {"edge"}
 PORT_KEYS = ("FirewallPhysicalPorts", "FirewallVirtualPorts")
 
 

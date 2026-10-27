@@ -46,11 +46,13 @@ class ContextSpec:
     the tenant namespace type to the namespace types of the context's legs,
     tenant first; the others are exchanged with it. leg_identifier ends a
     leg's allocation identifier (`{context_id}-{namespace}-{leg_identifier}`).
-    vlan_range bounds the parent's VLAN pool. skip_reason reads the parent
-    (customer.parent of the boarding query) and returns why it gets no
+    vlan_range bounds the parent's VLAN pool. skip_reason reads the hosting
+    facility (the DC, or a zone of the metro) and returns why it gets no
     context of this kind, or None. vip_pool_name, when set, gives the context
-    a VIP prefix from that pool of the tenant namespace. relink_consumers,
-    when set, lists the nodes whose generated output sits on the context a
+    a VIP prefix from that pool of the tenant namespace. serving_field names the
+    deployment's relationship to the context serving it (the many one of a
+    colocation footprint, served by each zone of its metro, takes an `s`: the
+    host's ``_serving_many``). relink_consumers, when set, lists the nodes whose generated output sits on the context a
     deployment is served by (client, deployment id -> node ids):
     link_serving_context runs relink_generator for them when the deployment
     moves from one context to another.

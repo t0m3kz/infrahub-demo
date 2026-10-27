@@ -10,7 +10,7 @@ from .all_demo_constants import _ALL_DEMO_ROOT, ALL_DEMO_DC_NAMES, ALL_DEMO_EXPE
 from .demo_data import ROOT, declared, name
 
 # One shared (tenant-less) firewall context per (firewall cluster, tenant namespace): per DC and per serving
-# colocation zone, whose pair every footprint naming that serving_zone shares (a colocation has no design, so
+# colocation zone with a firewall pair, which every footprint of the zone's metro shares (a colocation has no design, so
 # never a dedicated context), one for each of PROD and NON-PROD that has a footprint. PROD and NON-PROD never meet
 # on one context (`shared-{cluster}-prod`, `shared-{cluster}-non-prod`). The colocation context carries transit
 # legs like a DC one (its legs face the zone's two edges, whose firewall ports are tagged with the context) ...
@@ -39,20 +39,19 @@ ALL_DEMO_DEDICATED_FIREWALL_TENANTS: dict[str, str] = _dedicated_tenants("dedica
 # ---------------------------------------------------------------------------
 # 30_all — internet egress rules (07_zone_policies/05_security_policy.yml)
 #
-# A hand-written permit from a tenant segment to the Internet segment
-# (data/bootstrap/27_external_segments.yml: no prefix, INTERNET-ZONE). The
+# A hand-written permit from a tenant segment to the internet: a rule whose
+# destination_zone is INTERNET-ZONE (no segment, no prefix). The
 # firewall renders it to INTERNET-ZONE with destination any; the source leaf's
 # ACL denies every NON_INTERNET_PREFIXES range before the permit to any.
 # ---------------------------------------------------------------------------
 
 
 class InternetEgressRule(TypedDict):
-    """One permit to the Internet segment."""
+    """One permit to the internet zone."""
 
     #: DC whose shared firewall context serves `source_segment`.
     dc: str
     source_segment: str
-    destination_segment: str
     destination_zone: str
     protocol: str
     port: int
@@ -62,7 +61,6 @@ ALL_DEMO_INTERNET_EGRESS_RULES: dict[str, InternetEgressRule] = {
     "nordix-prod-to-internet-https": {
         "dc": "DC11",
         "source_segment": "c006-nordix-prod-p",
-        "destination_segment": "internet",
         "destination_zone": "INTERNET-ZONE",
         "protocol": "tcp",
         "port": 443,
@@ -110,14 +108,13 @@ ALL_DEMO_TRANSIT_RESOURCES: dict[str, str] = {
 MANAGEMENT_NAMESPACE = "MANAGEMENT"
 
 # DC11's core-services segment (07_applications/infra/00_segment.yml): INFRA-owned, in VRF MANAGEMENT,
-# pinned to al-dc1111111501 Ethernet1/2, reached by the c006 udp/53 and udp/123 rules (05_security_policy.yml).
+# its ports and VLAN come from the instances of the INFRA application (07_applications/infra/01_application.yml), reached
+# by the c006 udp/53 and udp/123 rules (05_security_policy.yml).
 MANAGEMENT_SERVICES_PREFIX = "10.250.0.0/24"
 
 MANAGEMENT_SERVICES_GATEWAY = "10.250.0.1/24"
 
-MANAGEMENT_SERVICES_VLAN = 250
-
-MANAGEMENT_SERVICES_LEAF = "al-dc1111111501"
+MANAGEMENT_SERVICES_SEGMENT = "infra-core-dns-ntp-p"
 
 MANAGEMENT_SERVICES_DC = "DC11"
 

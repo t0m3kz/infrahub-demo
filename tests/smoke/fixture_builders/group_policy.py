@@ -71,13 +71,12 @@ def _gp_segment(
     rules: list[dict] | None = None,
     tag: tuple[str, int] | None = None,
     sites: tuple[str, ...] = ("dc10",),
-    kind: str = "ManagedVxlanSegment",
     inline: str | None = None,
 ) -> dict:
-    """One SegmentGroupPolicyFields segment; a VXLAN one is active in ``sites``, a VLAN one in its footprint's DC."""
+    """One SegmentGroupPolicyFields VXLAN segment, active in ``sites``."""
     segment: dict[str, Any] = {
         "id": seg_id,
-        "__typename": kind,
+        "__typename": "ManagedVxlanSegment",
         "name": _v(name),
         "isolation_mode": _v(isolation_mode),
         "owner": _node({"org_id": _v(owner)}),
@@ -104,21 +103,14 @@ def _gp_segment(
             }
         ),
     }
-    if kind == "ManagedVxlanSegment":
-        segment["stretch_scope"] = _v("local" if len(sites) == 1 else "dc_pair")
-        segment["inline_service"] = _node({"id": f"svc-{inline}", "name": _v(inline)} if inline else None)
-        segment["segment_deployments"] = _edges(
-            [
-                {"vni": _v(10000 + n), "deployment": _node({"id": site, "name": _v(site.upper())})}
-                for n, site in enumerate(sites)
-            ]
-        )
-    elif kind == "ManagedVlanSegment":
-        segment["vlan_id"] = _v(250)
-        segment["inline_service"] = _node(None)
-        segment["customer_deployment"] = _node(
-            {"id": f"fp-{seg_id}", "parent": _node({"id": sites[0], "__typename": "TopologyDataCenter"})}
-        )
+    segment["stretch_scope"] = _v("local" if len(sites) == 1 else "dc_pair")
+    segment["inline_service"] = _node({"id": f"svc-{inline}", "name": _v(inline)} if inline else None)
+    segment["segment_deployments"] = _edges(
+        [
+            {"vni": _v(10000 + n), "deployment": _node({"id": site, "name": _v(site.upper())})}
+            for n, site in enumerate(sites)
+        ]
+    )
     return segment
 
 
@@ -294,7 +286,7 @@ def _gpo_fleet_roots(
             rules=[
                 _gp_rule("web-np-to-app-np-tcp-443", "seg-app-np", 443),
                 _gp_rule("web-np-to-app-np-tcp-8000-8010", "seg-app-np", 8000, index=110, port_end=8010),
-                _gp_rule("web-np-to-internet-tcp-443", "seg-internet", 443, index=120),
+                _gp_rule("web-np-to-internet-tcp-443", None, 443, index=120),
             ],
             tag=("web-np", 40),
         ),
@@ -346,15 +338,6 @@ def _gpo_fleet_roots(
             namespace=("PROD", "prod"),
             rules=[_gp_rule("portal-to-pay-web-tcp-443", "seg-pay-p", 443, dst_tag="tag-pay-web")],
             tag=("portal-p", 44),
-        ),
-        _gp_segment(
-            "seg-internet",
-            "internet",
-            "INTERNET",
-            prefix=None,
-            zone="INTERNET-ZONE",
-            kind="ManagedExternalSegment",
-            sites=(),
         ),
     ]
     if lb:
@@ -416,7 +399,6 @@ def _gpo_segment_nodes(device_name: str, segments: tuple[str, ...]) -> list[dict
             vlan_id=vlan,
             vni=vni,
             seg_name=name,
-            seg_type="ManagedVxlanSegment",
             gateway_ip=gateway,
             ns_name=vrf,
             l3_vni=l3_vni,

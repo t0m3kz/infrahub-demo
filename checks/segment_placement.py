@@ -16,15 +16,7 @@ OFFICE_ENVIRONMENT = "p"
 class CheckSegmentPlacement(WarningCheck):
     """Validate deployment-type compatibility and VXLAN stretch constraints.
 
-    A tenant segment inside a data center is a VXLAN segment: only
-    add_vxlan_segment derives its VNI, local VLANs, leaf ports and address,
-    while a VLAN segment there would be a second, generator-less kind whose
-    ports and VLAN are typed by hand. So a VLAN segment on a
-    TopologyCustomerDC is an error unless it sits in an exchange zone (the
-    DC-local MANAGEMENT services, authored infra data), the exemption
-    checks/segment_security.py makes with the same predicate.
-
-    A segment also agrees with every footprint it names. Its environment must
+    A segment agrees with every footprint it names. Its environment must
     be the footprint's (an ERROR: the environment picks the segment's
     namespace, zone and firewall leg, so a segment in another environment than
     its footprint lands in the wrong VRF): DC and Colocation footprints state
@@ -38,11 +30,6 @@ class CheckSegmentPlacement(WarningCheck):
 
     query = "segment_placement"
 
-    # A VLAN segment on a TopologyCustomerDC must also be in an exchange zone.
-    _VLAN_ALLOWED_DEPLOYMENTS = {
-        "TopologyCustomerDC",
-        "TopologyCustomerColocation",
-    }
     # Footprints that state the environment they represent (TopologyEnvironmentScoped).
     _ENVIRONMENT_SCOPED_DEPLOYMENTS = {"TopologyCustomerDC", "TopologyCustomerColocation"}
     _VXLAN_ALLOWED_DEPLOYMENTS = {
@@ -70,13 +57,8 @@ class CheckSegmentPlacement(WarningCheck):
 
     def validate(self, data: Any) -> None:
         cleaned = clean_data(data)
-        self._validate_vlan_segments(cleaned.get("ManagedVlanSegment") or [])
         self._validate_vxlan_segments(cleaned.get("ManagedVxlanSegment") or [])
         self._validate_cloud_segments(cleaned.get("CloudNetworkSegment") or [])
-        for segment in cleaned.get("ManagedVlanSegment") or []:
-            deployment = segment.get("customer_deployment")
-            self._validate_deployment_agreement(segment, [deployment] if isinstance(deployment, dict) else [])
-            self._validate_inline_termination(segment)
         for segment in cleaned.get("ManagedVxlanSegment") or []:
             self._validate_deployment_agreement(segment, segment.get("customer_deployments") or [])
             self._validate_inline_termination(segment)
@@ -140,39 +122,6 @@ class CheckSegmentPlacement(WarningCheck):
                     f"'{kind}', which cannot be its gateway. Allowed: {sorted(self._INLINE_SERVICE_KINDS)}"
                 )
             )
-
-    def _validate_vlan_segments(self, segments: list[dict[str, Any]]) -> None:
-        for segment in segments:
-            seg_name = segment.get("name", "<unnamed-vlan-segment>")
-            deployment = segment.get("customer_deployment")
-            if not isinstance(deployment, dict):
-                # A segment with no deployment terminates nowhere: no leaf
-                # carries it and no firewall context serves it.
-                self.log_error(
-                    message=f"VLAN segment '{seg_name}' has no customer_deployment. Attach it to its deployment."
-                )
-                continue
-
-            dep_kind = deployment.get("typename")
-            dep_name = deployment.get("name", "<unknown>")
-            if dep_kind not in self._VLAN_ALLOWED_DEPLOYMENTS:
-                self.log_error(
-                    message=(
-                        f"VLAN segment '{seg_name}' is attached to unsupported deployment type "
-                        f"'{dep_kind}' ({dep_name}). Allowed: "
-                        f"{sorted(self._VLAN_ALLOWED_DEPLOYMENTS)}"
-                    )
-                )
-            elif dep_kind == "TopologyCustomerDC" and not is_exchange_zone(
-                (segment.get("security_zone") or {}).get("name")
-            ):
-                self.log_error(
-                    message=(
-                        f"VLAN segment '{seg_name}' is a tenant segment in data center footprint '{dep_name}': "
-                        "a tenant segment inside a DC is a ManagedVxlanSegment (its VNI, VLANs, ports and "
-                        "address are derived); only an exchange-zone service segment may be a VLAN segment there"
-                    )
-                )
 
     def _validate_vxlan_segments(self, segments: list[dict[str, Any]]) -> None:
         for segment in segments:

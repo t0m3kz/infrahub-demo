@@ -123,7 +123,7 @@ class TestEnsureSegmentIsolationMode:
         """The tags and rules of the same run are planned against the mode just written."""
         gen = _make_gen()
         gen.client.create = AsyncMock(return_value=MagicMock(save=AsyncMock()))
-        segment = {"id": "seg-1", "name": "seg-1", "typename": "ManagedVlanSegment", "isolation_mode": "normal"}
+        segment = {"id": "seg-1", "name": "seg-1", "typename": "ManagedVxlanSegment", "isolation_mode": "normal"}
 
         asyncio.run(gen._ensure_segment_isolation_mode(segment, "fintech_strict"))
 
@@ -133,7 +133,7 @@ class TestEnsureSegmentIsolationMode:
         """A mode that was not written is not recorded either."""
         gen = _make_gen()
         gen.client.create = AsyncMock(side_effect=Exception("boom"))
-        segment = {"id": "seg-1", "name": "seg-1", "typename": "ManagedVlanSegment", "isolation_mode": "normal"}
+        segment = {"id": "seg-1", "name": "seg-1", "typename": "ManagedVxlanSegment", "isolation_mode": "normal"}
 
         asyncio.run(gen._ensure_segment_isolation_mode(segment, "fintech_strict"))
 
@@ -810,7 +810,7 @@ class TestEnsureSegmentZones:
     """Zones are set on every kind and recorded in the dict before rules are planned."""
 
     @staticmethod
-    def _segment(typename: str = "ManagedVlanSegment", **extra: Any) -> dict[str, Any]:
+    def _segment(typename: str = "ManagedVxlanSegment", **extra: Any) -> dict[str, Any]:
         return {"id": "seg-1", "name": "seg-1", "typename": typename, "environment": "p", **extra}
 
     @staticmethod
@@ -832,7 +832,7 @@ class TestEnsureSegmentZones:
 
         assert segment["security_zone"]["name"] == "PROD-ZONE"
         assert RulesPlanner.zone_context(segment, dict(segment))[2] is False
-        assert gen.client.create.call_args.kwargs["kind"] == "ManagedVlanSegment"
+        assert gen.client.create.call_args.kwargs["kind"] == "ManagedVxlanSegment"
 
     def test_cloud_segment_is_zoned_with_its_own_kind(self) -> None:
         gen = self._gen()
@@ -840,15 +840,6 @@ class TestEnsureSegmentZones:
         asyncio.run(gen._ensure_segment_zones([self._segment("CloudNetworkSegment")]))
 
         assert gen.client.create.call_args.kwargs["kind"] == "CloudNetworkSegment"
-
-    def test_external_segment_is_left_alone(self) -> None:
-        gen = self._gen()
-        segment = self._segment("ManagedExternalSegment", security_zone={"name": "INTERNET-ZONE"})
-
-        asyncio.run(gen._ensure_segment_zones([segment]))
-
-        assert segment["security_zone"] == {"name": "INTERNET-ZONE"}
-        gen.client.create.assert_not_awaited()
 
     def test_second_pass_writes_nothing(self) -> None:
         gen = self._gen()

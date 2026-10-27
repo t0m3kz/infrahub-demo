@@ -246,9 +246,13 @@ class MyCheck(InfrahubCheck):
 | Routing | Shared routing objects (`RoutingAutonomousSystem`, `RoutingOSPFArea`, `RoutingPassword`) |
 | Security, Loadbalancer, Proxy, App, Virt | Functional domains |
 
-- **One Managed generic per concept, with an implementation per technology**: `ManagedVlanSegment`,
-  `ManagedVxlanSegment` and `CloudNetworkSegment` inherit `ManagedNetworkSegment`; `ManagedLoadbalancerHA` and
-  `CloudLoadBalancer` inherit `ManagedLoadBalancer`.
+- **One Managed generic per concept, with an implementation per technology**: `ManagedVxlanSegment` and
+  `CloudNetworkSegment` inherit `ManagedNetworkSegment`; `ManagedLoadbalancerHA` and `CloudLoadBalancer` inherit
+  `ManagedLoadBalancer`.
+- **Segments are VXLAN only**: there is no VLAN segment kind. The VLAN of a port is generated per VLAN domain (see
+  **VLAN domains and rows**), a segment has no manual `vlan_id` and lists its footprints in `customer_deployments`.
+  An infrastructure VLAN that must have a fixed number on a device is not a segment (a future `ManagedVlan`
+  capability, not built).
 - **Topology.Customer**: Per-facility tenant footprints (`TopologyCustomerDC`, `TopologyCustomerColocation`,
   `TopologyCustomerCloud`) — not a separate `Customer.*` namespace; these inherit `TopologyConnectableLocation`
   alongside the facility nodes so a circuit endpoint is one shared relationship, not a duplicated model. The
@@ -313,7 +317,7 @@ class MyCheck(InfrahubCheck):
   accepts and announces nothing. Every destination prefix of an enabled `SecurityPolicyRule` must be on-prem space or
   registered behind an external session (VPC block, office LAN or hosted segment, tunnel range), in a namespace of the
   source segment's environment: otherwise `checks/segment_security.py` reports "not reachable: no session accepts it"
-  (a `destination_segment` rule is not checked; the internet is a segment, not a prefix).
+  (a `destination_segment` or `destination_zone` rule is not checked; the internet is a zone, not a prefix).
   Only the NX-OS edge renders these maps; anywhere else a transform refuses an external session
   (`BaseDeviceTransform.external_policy_platforms`), except a hosted `CloudNetworkAppliance` on cisco_ios/cisco_xe
   (`UNFILTERED_BANNER_PLATFORMS`): it renders an `UNFILTERED` comment above the session and logs a WARNING, because a
@@ -321,6 +325,11 @@ class MyCheck(InfrahubCheck):
   edge each external session's `RM-<session>-IN` deletes our two routing communities and then sets the owner's customer
   community (the owner of a prefix, above), and `RM-<session>-OUT` strips ours, so an internal tag never leaves and an
   outside party cannot forge one (see **Routing identity**).
+- **Internet egress**: an enabled rule to `INTERNET-ZONE` must be enforced by hardware on every DC and colocation
+  footprint of its source segment: `checks/internet_egress.py` requires a complete firewall pair, an INTERNET leg with
+  an address per member, the exchange to INTERNET, the tagged border service ports and a `snat_address` per serving
+  context (a colocation metro: each zone with firewalls, or a complete provider-hosted pair of its virtual colocation).
+  Cloud and office egress is an accepted gap, not checked.
 - **DC service tier**: `TopologyCustomerTemplateDC` (referenced by the footprint's `design`, for example `M_DC`)
   holds `dedicated_firewall`, `dedicated_loadbalancer`, `max_segments`, `ports_25g` and `ports_100g` (0 = no
   host-facing ports of that speed). `checks/customer_quota.py` enforces the segment and port numbers; a footprint
@@ -328,6 +337,23 @@ class MyCheck(InfrahubCheck):
   `serving_loadbalancer_context`; when a re-run moves it to another context (dedicated <-> shared), it re-runs
   `add_app_component` for the footprint's load-balanced components, so their VIPs, R_server and callers' R_client
   rules follow. A `design` change alone re-runs nothing, and a hand edit of the link is not followed up.
+- **Colocation firewall service**: a `TopologyCustomerColocation` footprint stays a child of its METRO and names no
+  zone. `add_customer_deployment_colocation` builds one shared `ManagedFirewallContext` (with its transit legs and
+  exchanges) on the firewall pair of EVERY `TopologyColocationZone` of the metro that has `devices(role: firewall)`; a
+  zone without firewalls does nothing and a `TopologyVirtualColocation` (provider-hosted appliances) is never a
+  serving zone, so two firewall zones mean two contexts and each zone's firewall enforces the footprint's full policy.
+  The footprint links them all in `serving_firewall_contexts` (many); a DC footprint has ONE,
+  `serving_firewall_context` (its dedicated or the shared one). Both are declared per kind in
+  `schemas/extensions/capabilities/ha.yml` on the identifier of the context's `served_deployments`, and the host
+  generator's `_serving_many` picks the flow. A re-run converges the colocation set: a link to a context it no longer
+  serves from is removed, the shared context itself stays (untracked, so `delete_unused_nodes` never reclaims it). The transform
+  reads the other end, `FirewallContext.served_deployments`, so each firewall places the footprint's rules in its own
+  contexts. Locks are per context and a run holds one at a time.
+- **Footprint segments**: `network_segments` (the reverse of `segment__customer_deployments`) is declared per kind in
+  `schemas/extensions/service/segment.yml`: `ManagedVxlanSegment` on `TopologyCustomerDC`, `TopologyCustomerColocation`
+  and `TopologyCustomerOffice`, `CloudNetworkSegment` on `TopologyCustomerCloud`, never on the `TopologyCustomer`
+  generic. A query reaches it through a per-kind inline fragment (`... on TopologyCustomerDC { network_segments }`),
+  not through a generic one.
 - **Fabric design**: `TopologyDataCenter.design` (`TopologyTemplateDC`: S, M, L, XL) and `TopologyPod.design`
   (`TopologyTemplatePod`: S_MIDDLE, S_TOR, ...) are required and hold only the envelope (`max_*`); the rows live in
   `data/bootstrap/14b_fabric_templates.yml`. Every fabric pool size is derived from them by
@@ -346,7 +372,7 @@ class MyCheck(InfrahubCheck):
   drawn from the Number pools `Customer-Routing-Tag` and `Segment-Routing-Tag`
   (`data/bootstrap/19c_routing_tag_pools.yml`) by generators, never typed in data: `add_customer_routing_tag`
   (created-trigger on the `customers` group, which every customer object declares) and, for a routed tenant segment,
-  `add_vxlan_segment` or the application generator (a VLAN segment is tagged only there, with its group tag). A
+  `add_vxlan_segment` or the application generator. A
   community is a tag for reading the routing table, NOT a security control: the model-derived prefix-lists stay the
   gate and nothing filters on a community. A customer or segment without a tag renders no community.
   `checks/routing_tags.py` requires a tag on each routed tenant segment and its owner, in range and unique. Not
@@ -412,6 +438,11 @@ class MyCheck(InfrahubCheck):
   (`l4_cloud` / `l7_cloud`); a layer 7 listener is `https` with `AppComponent.lb_certificate` (port 80 is always `http`), else
   `http`, and only tcp can be layer 7. A cloud VIP has no `vip_ip` (the provider assigns the endpoint, `dns_names` of the load
   balancer) and its targets are the instances themselves. `ManagedLoadBalancer.vips` lists the VIPs of every implementation.
+- **Rule destinations**: a `SecurityPolicyRule` targets a segment (`destination_segment`, narrowed by prefixes or
+  addresses), prefixes, addresses, a group tag or a zone (`destination_zone`). The internet is the `INTERNET-ZONE`, not a
+  segment: a rule to it has `destination_zone: INTERNET-ZONE` and nothing else (the firewall renders `to INTERNET-ZONE`,
+  destination any; the leaf ACL denies `NON_INTERNET_PREFIXES` before the permit to any). Only that zone is accepted,
+  and `checks/segment_security.py` refuses a zone next to any other destination.
 - **Capability edges**: a capability reaches devices via `ManagedGenericDevice` and interfaces via
   `ManagedGenericInterfaces`. Inherit the second only when something reads the interface edge.
 

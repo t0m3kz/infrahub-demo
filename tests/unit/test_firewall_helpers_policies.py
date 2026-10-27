@@ -35,6 +35,7 @@ def _make_rule(
     dst_zone: str | None = None,
     src_segment: dict | None = None,
     dst_segment: dict | None = None,
+    destination_zone: str | None = None,
     src_prefixes: list[dict] | None = None,
     dst_prefixes: list[dict] | None = None,
     src_ip_addresses: list[dict] | None = None,
@@ -53,6 +54,7 @@ def _make_rule(
         "port_end": port_end,
         "source_segment": src_segment,
         "destination_segment": dst_segment,
+        "destination_zone": {"name": destination_zone} if destination_zone else None,
         "source_prefixes": src_prefixes,
         "destination_prefixes": dst_prefixes,
         "source_ip_addresses": src_ip_addresses,
@@ -61,7 +63,7 @@ def _make_rule(
         "disabled": disabled,
         "description": description or "",
     }
-    # A rule's zone is its segment's security_zone.
+    # A rule's zone is its segment's security_zone (or, to the internet, its own destination_zone).
     if src_zone is not None:
         rule["source_segment"] = {**(rule["source_segment"] or {}), "security_zone": {"name": src_zone}}
     if dst_zone is not None:
@@ -100,14 +102,13 @@ class TestGetZonePoliciesDefaultAction:
         assert [rule["name"] for rule in rules] == ["rule-10", "implicit-deny-all"]
 
 
-class TestGetZonePoliciesExternalSegment:
-    def test_permit_to_a_prefix_less_segment_renders_zone_with_destination_any(self) -> None:
+class TestGetZonePoliciesInternetZone:
+    def test_permit_to_the_internet_zone_renders_zone_with_destination_any(self) -> None:
         rule = _make_rule(
             index=10,
             name="to-internet",
             src_zone="PROD-ZONE",
-            dst_segment={"name": "internet"},
-            dst_zone="INTERNET-ZONE",
+            destination_zone="INTERNET-ZONE",
             src_segment={"gateway": {"ip_prefix": {"prefix": "10.1.0.0/24"}}},
         )
         result = get_zone_policies([_make_policy(rules=[rule])])

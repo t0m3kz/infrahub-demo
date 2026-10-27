@@ -10,13 +10,19 @@ spec:
       member_of_groups:
         - customers
       network_segments:
-        - kind: ManagedVlanSegment
+        - kind: ManagedVxlanSegment
           data:
             customer_name: "checkout-frontend"
             environment: p
-            vlan_id: 201
-        - kind: ManagedVlanSegment
+            customer_deployments:
+              - "C005-P-DC10"
+            member_of_groups:
+              - vxlan_segments
+        - kind: ManagedVxlanSegment
           data:
             customer_name: "checkout-backend"
             environment: p
-            vlan_id: 202
+            customer_deployments:
+              - "C005-P-DC10"
+            member_of_groups:
+              - vxlan_segments

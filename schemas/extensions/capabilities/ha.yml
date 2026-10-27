@@ -217,7 +217,7 @@ nodes:
         order_weight: 950
       # Every deployment this context filters for, dedicated (the tenant) and
       # shared alike. Written only from the deployment side (its own
-      # serving_firewall_context, set by customer_dc.py/customer_colocation.py),
+      # serving_firewall_context(s), set by customer_dc.py/customer_colocation.py),
       # so concurrent boardings onto one shared context never race on a list.
       - name: served_deployments
         peer: ManagedTenantScoped
@@ -600,17 +600,6 @@ extensions:
           order_weight: 3100
           identifier: network_segment__inline_service
           description: "Inline service (firewall or load balancer HA) terminating this segment."
-    - kind: ManagedVlanSegment
-      relationships:
-        - name: inline_service
-          peer: ManagedGeneric
-          label: Inline Service
-          cardinality: one
-          kind: Attribute
-          optional: true
-          order_weight: 3100
-          identifier: network_segment__inline_service
-          description: "Inline service (firewall or load balancer HA) terminating this segment."
     # Reverse lookup for FirewallContext.cluster (above) — lets a device
     # query find every context (shared + dedicated) on its own cluster in
     # one hop, without a name-based lookup.
@@ -626,10 +615,25 @@ extensions:
           order_weight: 1700
           description: "FirewallContexts (VDOMs/vsys) hosted on this HA cluster"
 
-    # Deployment side of FirewallContext.served_deployments (above) — lets a
-    # TopologyCustomerDC/Colocation query find the FirewallContext its segments
-    # terminate on in one hop.
-    - kind: ManagedTenantScoped
+    # Deployment side of FirewallContext.served_deployments (above), declared per kind because the cardinality
+    # differs (the identifier is shared): a DC footprint has ONE serving context (its dedicated one, else the shared
+    # one), a colocation footprint one per zone of its metro that has a firewall pair. Lets a footprint query find
+    # the FirewallContexts its segments terminate on in one hop.
+    - kind: TopologyCustomerColocation
+      relationships:
+        - name: serving_firewall_contexts
+          label: "Serving Firewall Contexts"
+          peer: ManagedFirewallContext
+          kind: Generic
+          cardinality: many
+          optional: true
+          identifier: firewall_context__served_deployments
+          order_weight: 925
+          description: "FirewallContexts its segments terminate on: the shared one of each zone with a firewall pair."
+
+    # Deployment side of LoadbalancerContext.served_deployments. Only a DC footprint is load balanced:
+    # a colocation metro has no LB uplinks (generators/topology/customer_colocation.py).
+    - kind: TopologyCustomerDC
       relationships:
         - name: serving_firewall_context
           label: "Serving Firewall Context"
@@ -640,11 +644,6 @@ extensions:
           identifier: firewall_context__served_deployments
           order_weight: 925
           description: "FirewallContext its segments terminate on: its dedicated one, else the shared one."
-
-    # Deployment side of LoadbalancerContext.served_deployments. Only a DC footprint is load balanced:
-    # a colocation metro has no LB uplinks (generators/topology/customer_colocation.py).
-    - kind: TopologyCustomerDC
-      relationships:
         - name: serving_loadbalancer_context
           label: "Serving Load Balancer Context"
           peer: ManagedLoadbalancerContext

@@ -2,11 +2,13 @@
 service contexts on their parent facility's firewall and load-balancer pairs.
 
 customer_dc.py (TopologyCustomerDC on a DataCenter) and customer_colocation.py
-(TopologyCustomerColocation on its serving ColocationZone) differ only in the
-customer kind, the parent's label, whether a parent is required, the parent
-generators to wait for and the context kinds they provision — class attributes
-the host sets (see FirewallContextMixin). The provisioning itself is
-generators/firewall_context.py's FirewallContextMixin, one run per ContextSpec.
+(TopologyCustomerColocation on every ColocationZone of its metro) differ only in
+the customer kind, the hosting facilities (``_hosting_parents``: the DC, or the
+zones of the metro), whether a facility is required, the parent generators to
+wait for and the context kinds they provision — class attributes the host sets
+(see FirewallContextMixin). The provisioning itself is
+generators/firewall_context.py's FirewallContextMixin, one run per ContextSpec
+and per hosting facility.
 """
 
 from __future__ import annotations
@@ -29,14 +31,21 @@ class CustomerFacilityMixin(FirewallContextMixin):
     ``_parent_label``, ``_parent_generators`` and ``_context_specs``.
     """
 
-    # A footprint whose parent is optional (a colocation footprint's serving_zone)
-    # simply has no contexts when it is unset: an info log and a clean return. A
-    # required parent (a DC footprint's DC) that is missing is an error.
+    # A footprint with no hosting facility (a colocation metro without a zone) simply has no
+    # contexts: an info log. A required one (a DC footprint's DC) that is missing is an error.
     _parent_required: bool = True
 
     # Provided by DeviceMixin.
     if TYPE_CHECKING:
         set_controllers_from = DeviceMixin.set_controllers_from
+
+    def _hosting_parents(self, customer: dict[str, Any]) -> list[dict[str, Any]]:
+        """The facilities whose firewall and load-balancer pairs host this footprint's contexts: its parent.
+
+        A host whose parent owns no devices (a colocation metro: its zones do) overrides it.
+        """
+        parent = customer.get("parent")
+        return [parent] if isinstance(parent, dict) and parent.get("id") else []
 
     async def generate(self, data: dict[str, Any]) -> None:
         kind = self._customer_kind
@@ -55,16 +64,16 @@ class CustomerFacilityMixin(FirewallContextMixin):
 
         self.logger.info(f"Processing {kind} deployment {customer.get('name', customer_id)}")
 
-        # This reads parent-level data (firewall_devices, loadbalancer_devices)
-        # written by the parent's own generator (the only owner of its HA
+        # This reads facility-level data (firewall_devices, loadbalancer_devices)
+        # written by the facility's own generator (the only owner of its HA
         # pairs). A customer can board concurrently with (or immediately
-        # after) its parent's creation — e.g. a bulk load — so wait for an
-        # in-flight parent generator and re-parse rather than risk provisioning
-        # against a parent that has no firewall/LB devices yet (see pod.py's
-        # identical wait for the same reason).
-        parent_id = (customer.get("parent") or {}).get("id")
-        if parent_id:
-            refreshed = await self.wait_for_parent_generator_and_refetch(self._parent_generators, parent_id)
+        # after) its facility's creation — e.g. a bulk load — so wait for each
+        # in-flight facility generator and re-parse rather than risk provisioning
+        # against a facility that has no firewall/LB devices yet (see pod.py's
+        # identical wait for the same reason). Every hosting facility is waited
+        # for, one with no firewall yet included: it may be about to get them.
+        for facility in self._hosting_parents(customer):
+            refreshed = await self.wait_for_parent_generator_and_refetch(self._parent_generators, facility["id"])
             if refreshed is not None:
                 entries = clean_data(refreshed).get(kind, [])
                 if not entries:
@@ -74,24 +83,43 @@ class CustomerFacilityMixin(FirewallContextMixin):
 
         # Read synchronously by create_devices() — see
         # generators/devices.py's _resolve_role_controller. A parent without
-        # controller aliases in its query (a colocation zone declares none)
+        # controller aliases in its query (a colocation metro declares none)
         # contributes nothing, leaving the list empty.
         parent = customer.get("parent")
         self.set_controllers_from(parent if isinstance(parent, dict) else {})
-        if not (parent or {}).get("id"):
+        facilities = self._hosting_parents(customer)
+        if not facilities:
             message = (
-                f"Deployment {customer.get('name', customer_id)}: no parent {self._parent_label} — "
-                "cannot provision its service contexts"
+                f"Deployment {customer.get('name', customer_id)}: no {self._parent_label} to provision its "
+                "service contexts"
             )
             if self._parent_required:
                 self.logger.error(message)
-            else:
-                self.logger.info(message)
-            return
+                return
+            self.logger.info(message)
 
-        # One run per context kind, independent of each other: a parent with
-        # load balancers and no firewalls (or the reverse) still gets the one.
+        # One run per context kind and hosting facility, independent of each other: a facility with
+        # load balancers and no firewalls (or the reverse) still gets the one, and a metro with two firewall
+        # zones gets a context on each. The contexts' locks are per context, so the runs are sequential.
         for spec in self._context_specs:
-            target = await self._resolve_context_target(spec, customer, customer_id)
-            if target is not None:
-                await self._ensure_transit_legs(customer=customer, customer_id=customer_id, target=target)
+            served: list[str] = []
+            complete = True
+            for facility in facilities:
+                target = await self._resolve_context_target(spec, customer, customer_id, facility)
+                if target is None:
+                    continue
+                context_id = await self._ensure_transit_legs(customer=customer, customer_id=customer_id, target=target)
+                if context_id is None:
+                    complete = False
+                else:
+                    served.append(context_id)
+            # A single serving link is replaced by link_serving_context; a many one is converged here. Only a run
+            # that built every context it set out to may drop a link (a failed one raises under the generator
+            # logger before this point).
+            if self._serving_many and complete:
+                await self.unlink_stale_serving_contexts(
+                    spec,
+                    customer_id=customer_id,
+                    current_ids=self.serving_context_ids(customer, spec),
+                    served_ids=served,
+                )

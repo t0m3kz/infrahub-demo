@@ -69,8 +69,7 @@ ALL_DEMO_EXPECTED_GENERATORS: dict[str, int] = {
 
 
 # The customers 30_all declares, by org_id: each is created on the branch, so the created-trigger of
-# add_customer_routing_tag fires for it and it must end up with a routing tag. Not the bootstrap Internet
-# pseudo-customer: it is created on main, where no trigger fires.
+# add_customer_routing_tag fires for it and it must end up with a routing tag.
 ALL_DEMO_CUSTOMER_ORG_IDS: tuple[str, ...] = tuple(
     sorted(str(customer.item["org_id"]) for customer in _all_demo("OrganizationCustomer"))
 )
@@ -91,7 +90,6 @@ ALL_DEMO_EXPECTED_OBJECTS: dict[str, int] = {
         "TopologyCustomerCloud",
         "TopologyCustomerOffice",
         "ManagedVxlanSegment",
-        "ManagedVlanSegment",
         "AppApplication",
         "AppComponent",
         "AppDependency",

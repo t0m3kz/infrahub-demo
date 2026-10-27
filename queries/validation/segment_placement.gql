@@ -1,35 +1,12 @@
 query segment_placement {
-  ManagedVlanSegment {
-    edges {
-      node {
-        id
-        name { value }
-        # An exchange-zone VLAN segment may sit on a TopologyCustomerDC; a tenant one may not.
-        security_zone { node { name { value } } }
-        # environment/owner: the segment agrees with the footprint it names (environment ERROR, owner WARNING).
-        environment { value }
-        owner { node { id org_id { value } } }
-        terminate_inline { value }
-        inline_service { node { id __typename name { value } } }
-        customer_deployment {
-          node {
-            id
-            __typename
-            name { value }
-            ... on TopologyEnvironmentScoped { environment { value } }
-            ... on TopologyCustomer { owner { node { id __typename org_id { value } } } }
-          }
-        }
-      }
-    }
-  }
-
   ManagedVxlanSegment {
     edges {
       node {
         id
         name { value }
+        # An exchange-zone segment may sit on a TopologyCustomerDC; a tenant one may not.
         security_zone { node { name { value } } }
+        # environment/owner: the segment agrees with the footprint it names (environment ERROR, owner WARNING).
         environment { value }
         owner { node { id org_id { value } } }
         stretch_scope { value }

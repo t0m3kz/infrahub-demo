@@ -32,11 +32,10 @@ def tmp_path() -> Iterator[Path]:
     base.mkdir(exist_ok=True)
     path = Path(tempfile.mkdtemp(dir=base))
     yield path
+    # Only the test's own directory goes: the shared parent is git-ignored and stays, because two pytest processes
+    # on one checkout (a second terminal, a hook run next to a test run) would otherwise remove it under each other
+    # between `mkdir` and `mkdtemp`.
     shutil.rmtree(path, ignore_errors=True)
-    try:
-        base.rmdir()
-    except OSError:
-        pass
 
 
 # ============================================================================

@@ -2,14 +2,15 @@
 
 Each rule is stored once, in its source segment's policy (``security_policy``,
 which also holds the segment's egress ``default_action``). ``inbound_rules`` is
-only the schema reverse index of ``destination_segment``. ``segment_flows``
+only the schema reverse index of ``destination_segment``. A rule to the internet has no destination
+segment: its ``destination_zone`` is INTERNET-ZONE (``is_internet_destination``). ``segment_flows``
 is the one view of both; every consumer builds on it according to whether its
 enforcement point tracks sessions:
 
 | Consumer | Egress view (own rules) | Ingress view (rules into the segment) |
 | -------- | ----------------------- | ------------------------------------- |
 | Stateful: firewall rule table (``segment_rule_policies``), cloud SG | Own rules as written | Inbound rules as plain rules, no reply legs (the session carries the reply); none from a segment-less (LB context) policy |
-| Stateless: leaf ACL (``acl.py``), PBR bypass (``firewall.py``); later cloud NACL / edge VIF ACL | Own rules + ``default_action`` | Reply legs only. Leaf: seq >= 5000, tcp ``established``, excluding self-sourced and internet-sourced rules. A NACL would need ephemeral 1024-65535 |
+| Stateless: leaf ACL (``acl.py``), PBR bypass (``firewall.py``); later cloud NACL / edge VIF ACL | Own rules + ``default_action`` | Reply legs only. Leaf: seq >= 5000, tcp ``established``, excluding self-sourced rules. A NACL would need ephemeral 1024-65535 |
 | Stateless: group contracts (``group_policy.py``) | Own permit rules: segment tag to segment tag, component tag to component tag inside one segment, and the same entries on the unclassified service legs; deny by default | None: forward rows only, replies are the renderer's (NX-OS ``bidir``) |
 
 Known limit: stateless reply legs for udp/any/icmp are plain reverse matches,
@@ -20,7 +21,7 @@ is the answer for sensitive flows.
 from collections.abc import Iterable
 from typing import Any
 
-from utils.exchange_transit import zone_name_for_namespace_type
+from utils.exchange_transit import INTERNET_ZONE
 from utils.segment_addressing import segment_prefix
 
 
@@ -46,6 +47,11 @@ def enabled_policies(policies: list[dict[str, Any]] | None) -> list[dict[str, An
     return [policy for policy in policies or [] if policy.get("enabled", True)]
 
 
+def rule_enabled(rule: dict[str, Any]) -> bool:
+    """Whether a rule counts: not disabled itself and in an enabled policy (`enabled` defaults to True)."""
+    return not rule.get("disabled") and (rule.get("policy") or {}).get("enabled", True)
+
+
 def active_rules(policy: dict[str, Any], order_by: str = "index") -> list[dict[str, Any]]:
     """The policy's non-disabled rules, sorted by `order_by`."""
     rules = sorted(policy.get("rules") or [], key=lambda rule: rule.get(order_by) or 0)
@@ -53,9 +59,12 @@ def active_rules(policy: dict[str, Any], order_by: str = "index") -> list[dict[s
 
 
 def rule_zone(rule: dict[str, Any], side: str) -> str | None:
-    """Zone a rule matches on `side` ("source"/"destination"): its segment's security_zone."""
-    zone = (rule.get(f"{side}_segment") or {}).get("security_zone") or {}
-    return zone.get("name") or None
+    """Zone a rule matches on `side` ("source"/"destination"): the rule's own ``destination_zone`` (the internet),
+    else its segment's security_zone."""
+    zone = (rule.get("destination_zone") if side == "destination" else None) or (
+        (rule.get(f"{side}_segment") or {}).get("security_zone")
+    )
+    return (zone or {}).get("name") or None
 
 
 def _first_selector(
@@ -95,18 +104,15 @@ def rule_endpoint(rule: dict[str, Any], side: str) -> str | None:
     return (segment_prefix(segment) if segment else None) or (selector[0] if selector else None)
 
 
-def is_unresolved_segment_endpoint(rule: dict[str, Any], side: str) -> bool:
-    """Whether `side` ("source"/"destination") names the internet: a segment in
-    the INTERNET-ZONE that resolves to no endpoint (no prefix, no selector).
-    rule_endpoint returns None (any) for it, but unlike a rule with no segment
-    at all it means "outside", not "everything". Keyed on the zone so a cloud
-    segment (addressed by cidr_block, no gateway prefix) is never taken for it.
+def is_internet_destination(rule: dict[str, Any]) -> bool:
+    """Whether the rule's destination is the internet: ``destination_zone`` is INTERNET-ZONE and no
+    selector narrows it.
+
+    rule_endpoint returns None (any) for it, but unlike a rule with no destination
+    at all it means "outside", not "everything".
     """
-    return (
-        bool(rule.get(f"{side}_segment"))
-        and rule_endpoint(rule, side) is None
-        and rule_zone(rule, side) == zone_name_for_namespace_type("internet")
-    )
+    zone = (rule.get("destination_zone") or {}).get("name")
+    return zone == INTERNET_ZONE and rule_endpoint(rule, "destination") is None
 
 
 def segment_flows(segment: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:

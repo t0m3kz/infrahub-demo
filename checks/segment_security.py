@@ -7,13 +7,12 @@ from typing import Any
 
 from transforms.helpers.bgp_external import registered_by_attachment
 from transforms.helpers.group_policy import get_vrf_contracts, rule_groups, segment_groups
-from transforms.helpers.policy import segment_flows
+from transforms.helpers.policy import rule_enabled, segment_flows
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import (
     EXCHANGE_PEERS,
-    EXTERNAL_SEGMENT_KIND,
+    INTERNET_ZONE,
     ROUTED_SEGMENT_KINDS,
-    exchange_peer_zones,
     is_exchange_zone,
     namespace_type_for_environment,
     zone_name_for_namespace_type,
@@ -22,8 +21,6 @@ from utils.group_policy import MICROSEGMENTED, RESERVED_GROUPS, tag_pool
 from utils.segment_addressing import segment_prefix
 
 from .base import WarningCheck
-
-INTERNET_ZONE = zone_name_for_namespace_type("internet")
 
 _Network = ipaddress.IPv4Network | ipaddress.IPv6Network
 _Space = list[tuple[_Network, str | None]]
@@ -37,14 +34,17 @@ class CheckSegmentSecurity(WarningCheck):
 
     - every segment has a security_zone;
     - a tenant segment's zone follows its environment (p -> PROD-ZONE, else
-      NONPROD-ZONE); an External segment sits in an exchange zone;
+      NONPROD-ZONE), an exchange-zone segment is exempt;
     - a routed (VLAN/VXLAN) tenant segment's gateway prefix sits in a
       namespace of its environment's type (p -> prod, else non_prod);
       exchange-zone segments are exempt from both environment rules;
     - computed segment names are unique across kinds;
     - a rule endpoint segment resolves to a prefix (or the rule has an explicit
-      selector), unless it is the internet: otherwise it would render as any
-      (a warning: L2-only segments have no gateway by design);
+      selector): otherwise it would render as any (a warning: L2-only segments
+      have no gateway by design);
+    - a rule has one kind of destination: ``destination_zone`` (the internet,
+      INTERNET-ZONE and no other zone) excludes a destination segment, prefix,
+      address and group tag;
     - an app component's environment should match its segment's (warning);
     - every component of a microsegmented segment has a group tag; a tag groups
       exactly one component or exactly one segment, never both (an orphan is
@@ -58,7 +58,8 @@ class CheckSegmentSecurity(WarningCheck):
       handoff circuit, an office ``lan_prefixes`` or hosted segment and a tunnel's ``registered_prefixes``, behind
       an SD-WAN gateway; transforms/helpers/bgp_external.py registered_by_attachment), in a namespace of the
       source segment's environment (or an exchange peer of it); otherwise no session accepts it and the rule
-      aims at nothing (a ``destination_segment`` rule is not checked here);
+      aims at nothing (a ``destination_segment`` or ``destination_zone`` rule is not checked here: the internet
+      needs no registered prefix);
     - every permit rule between two groups is a contract row of the group
       contract builder (transforms/helpers/group_policy.py): a rule the
       builder dropped would be denied by group policy while L0 permits it; a
@@ -79,6 +80,7 @@ class CheckSegmentSecurity(WarningCheck):
             self._validate_gateway_namespace(segment)
         self._validate_unique_names(segments)
         self._validate_rule_endpoints(segments, rules)
+        self._validate_rule_destinations(rules)
         self._validate_destination_prefixes(cleaned, segments, rules)
         self._warn_component_environment(components)
         self._validate_component_tags(segments, components)
@@ -87,7 +89,7 @@ class CheckSegmentSecurity(WarningCheck):
         self._validate_contracts(segments, tags)
 
     def _validate_zone(self, segment: dict[str, Any]) -> None:
-        """Zone present; tenant zone == f(environment); External in an exchange zone."""
+        """Zone present; tenant zone == f(environment); an exchange-zone segment is exempt."""
         seg_name = segment.get("name", "<unnamed-segment>")
         kind = segment.get("typename")
         zone = (segment.get("security_zone") or {}).get("name")
@@ -95,15 +97,6 @@ class CheckSegmentSecurity(WarningCheck):
             self.log_error(
                 message=(f"{kind} '{seg_name}' has no security_zone — zone-based firewalls match any zone on that side")
             )
-            return
-        if kind == EXTERNAL_SEGMENT_KIND:
-            if not is_exchange_zone(zone):
-                self.log_error(
-                    message=(
-                        f"External segment '{seg_name}' is in zone '{zone}', which is not an exchange zone. "
-                        f"Allowed: {sorted(exchange_peer_zones())}"
-                    )
-                )
             return
         if is_exchange_zone(zone):
             # A shared service segment (e.g. the DC-local MANAGEMENT services) sits in an exchange zone by
@@ -158,25 +151,56 @@ class CheckSegmentSecurity(WarningCheck):
                 self.log_error(message=f"Segment name '{name}' is used by {len(kinds)} segments ({sorted(kinds)})")
 
     def _validate_rule_endpoints(self, segments: list[dict[str, Any]], rules: list[dict[str, Any]]) -> None:
-        """A rule endpoint segment with no prefix and no selector renders as `any` (warning), unless it is the internet."""
+        """A rule endpoint segment with no prefix and no selector renders as `any` (warning)."""
         by_id = {segment["id"]: segment for segment in segments if segment.get("id")}
         for rule in rules:
-            if not _enabled(rule):
+            if not rule_enabled(rule):
                 continue
             for side in ("source", "destination"):
                 endpoint = rule.get(f"{side}_segment") or {}
                 if not endpoint.get("id") or rule.get(f"{side}_prefixes") or rule.get(f"{side}_ip_addresses"):
                     continue
                 segment = by_id.get(endpoint["id"], endpoint)
-                zone = (segment.get("security_zone") or {}).get("name")
-                if zone == INTERNET_ZONE or segment_prefix(segment):
+                if segment_prefix(segment):
                     continue
                 self.log_warning(
                     message=(
                         f"rule '{rule.get('name', rule.get('id'))}': {side} segment "
-                        f"'{segment.get('name', endpoint['id'])}' resolves to no prefix and is not in "
-                        f"{INTERNET_ZONE} — it would render as any"
+                        f"'{segment.get('name', endpoint['id'])}' resolves to no prefix — it would render as any"
                     )
+                )
+
+    def _validate_rule_destinations(self, rules: list[dict[str, Any]]) -> None:
+        """A ``destination_zone`` is the internet and the rule's only destination.
+
+        The leaf ACL and the cloud security group cannot enumerate any other zone (they would render as any),
+        and a zone next to a segment, selector or tag would be read by some consumers and ignored by others.
+        """
+        for rule in rules:
+            zone = (rule.get("destination_zone") or {}).get("name")
+            if not zone or not rule_enabled(rule):
+                continue
+            name = rule.get("name", rule.get("id"))
+            if zone != INTERNET_ZONE:
+                self.log_error(
+                    message=(
+                        f"rule '{name}': destination_zone '{zone}' is not {INTERNET_ZONE} — only the internet has no "
+                        "address space to name, any other zone is made of segments: name the segment"
+                    )
+                )
+            others = [
+                field
+                for field in (
+                    "destination_segment",
+                    "destination_security_tag",
+                    "destination_prefixes",
+                    "destination_ip_addresses",
+                )
+                if rule.get(field)
+            ]
+            if others:
+                self.log_error(
+                    message=f"rule '{name}': destination_zone '{zone}' excludes every other destination, found {others}"
                 )
 
     def _validate_destination_prefixes(
@@ -191,7 +215,7 @@ class CheckSegmentSecurity(WarningCheck):
         )
         environments = {segment["id"]: segment.get("environment") for segment in segments if segment.get("id")}
         for rule in rules:
-            if not _enabled(rule):
+            if not rule_enabled(rule):
                 continue
             environment = environments.get((rule.get("source_segment") or {}).get("id"))
             types = _reachable_types(environment)
@@ -344,11 +368,6 @@ class CheckSegmentSecurity(WarningCheck):
                     self.log_error(
                         message=f"Rule '{name}' between groups {pair[0]} -> {pair[1]} has no group contract row"
                     )
-
-
-def _enabled(rule: dict[str, Any]) -> bool:
-    """Whether a rule counts: not disabled itself and in an enabled policy."""
-    return not rule.get("disabled") and (rule.get("policy") or {}).get("enabled", True)
 
 
 def _network(cidr: str | None) -> _Network | None:

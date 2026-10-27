@@ -5,7 +5,7 @@ component with ``ports``, ``instances`` (an on-prem device with ``deployment``,
 from which its data center is read; a cloud instance with
 ``network_segment`` -> ``virtual_network`` -> ``cidr_blocks``) and
 ``network_segment``, whose customer footprints (``customer_deployments`` of a
-VXLAN segment, ``customer_deployment`` of a VLAN one) carry the
+VXLAN segment) carry the
 ``serving_loadbalancer_context`` of each data center the segment is activated in.
 """
 
@@ -90,14 +90,12 @@ def vip_ports(component: dict[str, Any]) -> tuple[list[PortSpec], list[str]]:
 def segment_footprints(segment: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """The customer DC footprints a segment is activated in, by the id of the data center each sits in.
 
-    A VXLAN segment lists its footprints (``customer_deployments``, one per data center it is stretched to), a VLAN
-    segment has the one (``customer_deployment``). A colocation, an office or a cloud footprint serves no
-    load balancer context and is left out.
+    A VXLAN segment lists its footprints (``customer_deployments``, one per data center it is stretched to). A
+    colocation, an office or a cloud footprint serves no load balancer context and is left out.
     """
-    footprints = [*(segment.get("customer_deployments") or []), segment.get("customer_deployment")]
     return {
         footprint["parent"]["id"]: footprint
-        for footprint in footprints
+        for footprint in segment.get("customer_deployments") or []
         if footprint and footprint.get("typename") == CUSTOMER_DC_KIND and (footprint.get("parent") or {}).get("id")
     }
 
