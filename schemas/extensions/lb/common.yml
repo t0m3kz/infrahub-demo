@@ -299,22 +299,14 @@ nodes:
         optional: true
         order_weight: 600
         identifier: vip_service__ip
-      - name: component
-        peer: AppComponent
-        cardinality: one
-        kind: Attribute
-        optional: true
-        order_weight: 650
-        identifier: vip_service__component
-        description: "Application tier this VIP fronts; its instances are the pool members"
       - name: pool_members
-        peer: IpamIPAddress
+        peer: AppInstance
         cardinality: many
         kind: Attribute
         optional: true
         order_weight: 700
         identifier: vip_service__pool_members
-        description: "Instance addresses (in the component's segment) the VIP balances across"
+        description: "Servers (physical, virtual or cloud instances) the VIP balances across; their address is the primary address or the private_ip"  # yamllint disable-line rule:line-length
       - name: health_checks
         peer: LoadbalancerHealthCheck
         cardinality: many

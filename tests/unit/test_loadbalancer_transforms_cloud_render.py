@@ -1,6 +1,7 @@
 """Unit tests for ``LoadBalancerCloud.transform()``.
 
 Covers provider detection, HCL output format, Terraform identifiers and the producer's data (schema choices, pool members).
+The layer 7 rendering is in test_loadbalancer_transforms_cloud_layers.py.
 """
 
 from __future__ import annotations
@@ -11,7 +12,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tests.unit.loadbalancer_transforms_helpers import _lb, _vips
+from tests.unit.loadbalancer_transforms_helpers import _lb, _lb_l4, _vips, _vips_l4
 from transforms.cloud.terraform_common import tf_id
 from transforms.config.loadbalancer_cloud import (
     LoadBalancerCloud,
@@ -34,12 +35,13 @@ def _make_cloud_transform() -> LoadBalancerCloud:
 _CLEAN_DATA_PATH = "transforms.config.loadbalancer_cloud.clean_data"
 
 
-def _cleaned_cloud(provider: str = "aws", vips: list | None = None) -> dict:
-    lb = _lb()
+def _cleaned_cloud(provider: str = "aws", vips: list | None = None, *, layer: str = "l7") -> dict:
+    """The cleaned query result: a layer 7 load balancer with its https listener, or a layer 4 one (tcp and udp)."""
+    lb = _lb() if layer == "l7" else _lb_l4()
     lb["virtual_network"]["account"]["provider"]["name"] = provider
     return {
         "CloudLoadBalancer": [lb],
-        "LoadbalancerVIP": vips if vips is not None else _vips(),
+        "LoadbalancerVIP": vips if vips is not None else (_vips() if layer == "l7" else _vips_l4()),
     }
 
 
@@ -111,7 +113,7 @@ class TestLoadBalancerCloudOutputFormat:
     @pytest.mark.asyncio
     async def test_azure_output_contains_lb_rules(self) -> None:
         transform = _make_cloud_transform()
-        with patch(_CLEAN_DATA_PATH, return_value=_cleaned_cloud("azure")):
+        with patch(_CLEAN_DATA_PATH, return_value=_cleaned_cloud("azure", layer="l4")):
             result = await transform.transform({})
         assert 'resource "azurerm_lb_rule"' in result
 
@@ -140,11 +142,12 @@ class TestLoadBalancerCloudTerraformIdentifiers:
     """The tf_id Jinja filter is the shared transforms.cloud.terraform_common.tf_id."""
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("layer", ["l4", "l7"])
     @pytest.mark.parametrize("provider", ["aws", "azure", "gcp"])
-    async def test_mixed_case_spaced_names_render_valid_identifiers(self, provider: str) -> None:
+    async def test_mixed_case_spaced_names_render_valid_identifiers(self, provider: str, layer: str) -> None:
         """Spaces, dots, dashes and upper case in names never reach a resource label or reference."""
         transform = _make_cloud_transform()
-        cleaned = _cleaned_cloud(provider)
+        cleaned = _cleaned_cloud(provider, layer=layer)
         lb = cleaned["CloudLoadBalancer"][0]
         lb["name"] = "Prod ALB.One-A"
         lb["virtual_network"]["name"] = "Prod VPC"
@@ -159,15 +162,17 @@ class TestLoadBalancerCloudTerraformIdentifiers:
             assert re.fullmatch(r"[a-z0-9_]+", identifier), identifier
 
     @pytest.mark.asyncio
-    async def test_azure_frontend_name_uses_normalised_lb_name(self) -> None:
-        """Azure frontend name and the lb_rule reference to it use the same normalised identifier."""
+    @pytest.mark.parametrize(("layer", "kind"), [("l4", "azurerm_lb"), ("l7", "azurerm_application_gateway")])
+    async def test_azure_frontend_name_uses_normalised_lb_name(self, layer: str, kind: str) -> None:
+        """Azure frontend name and the rule / listener reference to it use the same normalised identifier."""
         transform = _make_cloud_transform()
-        cleaned = _cleaned_cloud("azure")
+        cleaned = _cleaned_cloud("azure", layer=layer)
+        cleaned["LoadbalancerVIP"] = cleaned["LoadbalancerVIP"][:1]
         cleaned["CloudLoadBalancer"][0]["name"] = "Prod ALB.One-A"
         with patch(_CLEAN_DATA_PATH, return_value=cleaned):
             result = await transform.transform({})
         assert result.count('"prod_alb_one_a-frontend"') == 2
-        assert 'resource "azurerm_lb" "prod_alb_one_a"' in result
+        assert f'resource "{kind}" "prod_alb_one_a"' in result
 
     def test_filter_is_shared_tf_id(self) -> None:
         """The registered filter is the shared normaliser and copes with non-str input."""
@@ -179,15 +184,6 @@ class TestLoadBalancerCloudTerraformIdentifiers:
 # ===========================================================================
 # The producer's data: schema lb_type/scheme choices, one VIP per port, pool_members
 # ===========================================================================
-
-
-def _l4_vips() -> list:
-    """Two VIPs of one component as generators/lb_vip.py writes them: tcp and udp on the same port."""
-    members = [{"address": "10.0.1.20/24"}, {"address": "10.0.1.3/24"}]
-    return [
-        {"hostname": "app.example.com", "protocol": protocol, "port": 443, "pool_members": members, "health_checks": []}
-        for protocol in ("tcp", "udp")
-    ]
 
 
 class TestCloudLbSchemaChoices:
@@ -223,33 +219,30 @@ class TestCloudLbSchemaChoices:
 
     def test_gcp_l4_udp_backend_service_is_udp(self) -> None:
         """An l4_cloud udp VIP gets a UDP backend service and a regional forwarding rule."""
-        lb = _lb()
-        lb["lb_type"] = "l4_cloud"
-        result = prepare_gcp_data(lb, _l4_vips())
+        result = prepare_gcp_data(_lb_l4(), _vips_l4())
         assert [svc["protocol"] for svc in result["backend_services"]] == ["TCP", "UDP"]
-        assert not any(rule["is_global"] for rule in result["forwarding_rules"])
+        assert not any("proxy" in rule for rule in result["forwarding_rules"])
 
 
 class TestCloudLbPoolMembers:
-    def test_aws_targets_are_member_ips_in_address_order(self) -> None:
-        """pool_members become the target IPs, without prefix length, sorted by address."""
-        assert prepare_aws_data(_lb(), _vips())["backend_pools"][0]["targets"] == ["10.0.1.3", "10.0.1.20"]
+    def test_aws_targets_are_instance_ids_sorted(self) -> None:
+        """AWS registers the instances by cloud_id, not by IP."""
+        pool = prepare_aws_data(_lb(), _vips())["backend_pools"][0]
+        assert (pool["target_type"], pool["targets"]) == ("instance", ["i-0aaa", "i-0bbb"])
 
     def test_aws_target_group_uses_vip_port_and_protocol(self) -> None:
-        pool = prepare_aws_data(_lb(), _l4_vips())["backend_pools"][1]
+        pool = prepare_aws_data(_lb_l4(), _vips_l4())["backend_pools"][1]
         assert (pool["port"], pool["protocol"]) == (443, "UDP")
 
     def test_aws_tcp_health_check_has_no_path(self) -> None:
         """Only an http/https check carries a request path."""
-        vips = _vips()
-        vips[0]["health_checks"][0]["check"] = "tcp"
-        assert "path" not in prepare_aws_data(_lb(), vips)["backend_pools"][0]["health_check"]
+        assert "path" not in prepare_aws_data(_lb_l4(), _vips_l4())["backend_pools"][0]["health_check"]
 
     def test_azure_pool_addresses_are_member_ips(self) -> None:
         assert prepare_azure_data(_lb(), _vips())["backend_pools"][0]["addresses"] == ["10.0.1.3", "10.0.1.20"]
 
     def test_azure_probe_and_gcp_health_check_use_vip_port(self) -> None:
-        assert prepare_azure_data(_lb(), _vips())["backend_pools"][0]["health_probe"]["port"] == 443
+        assert prepare_azure_data(_lb_l4(), _vips_l4())["backend_pools"][0]["health_probe"]["port"] == 443
         assert prepare_gcp_data(_lb(), _vips())["health_checks"][0]["port"] == 443
 
     def test_gcp_endpoints_are_member_ips(self) -> None:
@@ -263,14 +256,14 @@ class TestCloudLbPoolMembers:
 
 class TestCloudLbRendering:
     @pytest.mark.asyncio
-    async def test_aws_renders_ip_target_group_and_attachments(self) -> None:
+    async def test_aws_renders_instance_target_group_and_attachments(self) -> None:
         transform = _make_cloud_transform()
-        with patch(_CLEAN_DATA_PATH, return_value=_cleaned_cloud("aws")):
+        with patch(_CLEAN_DATA_PATH, return_value=_cleaned_cloud("aws", vips=_vips_l4()[:1], layer="l4")):
             result = await transform.transform({})
-        assert 'target_type = "ip"' in result
-        assert '  port        = 443\n  protocol    = "HTTPS"' in result
+        assert 'target_type = "instance"' in result
+        assert '  port        = 443\n  protocol    = "TCP"' in result
         assert result.count('resource "aws_lb_target_group_attachment"') == 2
-        assert 'target_id        = "10.0.1.3"' in result
+        assert 'target_id        = "i-0aaa"' in result
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -279,7 +272,7 @@ class TestCloudLbRendering:
     async def test_tcp_and_udp_on_one_port_get_distinct_labels(self, provider: str, kind: str) -> None:
         """One VIP per port spec: tcp/443 and udp/443 never share a resource label."""
         transform = _make_cloud_transform()
-        with patch(_CLEAN_DATA_PATH, return_value=_cleaned_cloud(provider, vips=_l4_vips())):
+        with patch(_CLEAN_DATA_PATH, return_value=_cleaned_cloud(provider, layer="l4")):
             result = await transform.transform({})
         labels = re.findall(rf'^resource "[a-z_]*{kind}" "([^"]+)"', result, re.MULTILINE)
         assert len(labels) == 2
@@ -288,7 +281,7 @@ class TestCloudLbRendering:
     @pytest.mark.asyncio
     async def test_azure_renders_backend_pool_addresses(self) -> None:
         transform = _make_cloud_transform()
-        with patch(_CLEAN_DATA_PATH, return_value=_cleaned_cloud("azure")):
+        with patch(_CLEAN_DATA_PATH, return_value=_cleaned_cloud("azure", vips=_vips_l4()[:1], layer="l4")):
             result = await transform.transform({})
         assert result.count('resource "azurerm_lb_backend_address_pool_address"') == 2
         assert 'ip_address              = "10.0.1.20"' in result
@@ -297,7 +290,7 @@ class TestCloudLbRendering:
     @pytest.mark.asyncio
     async def test_gcp_renders_neg_endpoints_as_backend(self) -> None:
         transform = _make_cloud_transform()
-        with patch(_CLEAN_DATA_PATH, return_value=_cleaned_cloud("gcp")):
+        with patch(_CLEAN_DATA_PATH, return_value=_cleaned_cloud("gcp", vips=_vips_l4()[:1], layer="l4")):
             result = await transform.transform({})
         assert 'resource "google_compute_network_endpoint_group"' in result
         assert result.count("  network_endpoints {") == 2
@@ -306,9 +299,9 @@ class TestCloudLbRendering:
     @pytest.mark.asyncio
     async def test_gcp_without_members_renders_no_neg(self) -> None:
         transform = _make_cloud_transform()
-        vips = _vips()
+        vips = _vips_l4()[:1]
         vips[0]["pool_members"] = []
-        with patch(_CLEAN_DATA_PATH, return_value=_cleaned_cloud("gcp", vips=vips)):
+        with patch(_CLEAN_DATA_PATH, return_value=_cleaned_cloud("gcp", vips=vips, layer="l4")):
             result = await transform.transform({})
         assert "network_endpoint" not in result
         assert "backend {" not in result
@@ -316,9 +309,7 @@ class TestCloudLbRendering:
     @pytest.mark.asyncio
     async def test_gcp_tcp_health_check_renders_tcp_block(self) -> None:
         transform = _make_cloud_transform()
-        vips = _vips()
-        vips[0]["health_checks"][0]["check"] = "tcp"
-        with patch(_CLEAN_DATA_PATH, return_value=_cleaned_cloud("gcp", vips=vips)):
+        with patch(_CLEAN_DATA_PATH, return_value=_cleaned_cloud("gcp", vips=_vips_l4()[:1], layer="l4")):
             result = await transform.transform({})
         assert "  tcp_health_check {\n    port = 443\n  }" in result
         assert "request_path" not in result

@@ -591,7 +591,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
                 str(ipaddress.IPv4Interface(vip["address"]).ip)
                 for key in ALL_DEMO_LOAD_BALANCED_COMPONENTS[client["target"]]["contexts"]
                 for vip in contexts[key]["vips"]
-                if vip["component"] == client["target"] and (vip["protocol"], vip["port"]) in client["ports"]
+                if vip["hostname"] == client["target"] and (vip["protocol"], vip["port"]) in client["ports"]
             ]
             assert vips, f"{dependency}: no VIP of {client['target']} on {client['ports']}"
             source = await _segment_on_switches(async_client_main, scenario_branch, client["source_segment"])

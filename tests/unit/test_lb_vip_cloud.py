@@ -14,9 +14,11 @@ import pytest
 from generators.helpers.lb_vip import (
     cloud_lb_name,
     cloud_lb_scheme,
-    cloud_members,
+    cloud_lb_type,
     cloud_placement,
     is_cloud_component,
+    lb_layer,
+    listener_protocol,
 )
 from generators.lb_vip import CLOUD_LB_GROUP
 from generators.protocols import CloudLoadBalancer, LoadbalancerVIP
@@ -33,7 +35,6 @@ from tests.unit.lb_vip_helpers import (
     _subnet,
     _vip_gen,
     _vip_payloads,
-    _vpc,
     _web,
 )
 from utils.limits import CLOUD_LB_NAME_MAX
@@ -119,22 +120,24 @@ class TestCloudPlanning:
             f"{_CLOUD_FQDN}: no virtual network for the cloud load balancer",
         ]
 
-    def test_members_are_the_private_ips_in_the_namespace_of_their_cidr_block(self) -> None:
-        members, errors = cloud_members(_cloud_frontend(), _vpc())
+    def test_a_component_is_layer_4_unless_it_says_layer_7(self) -> None:
+        assert (lb_layer({}), lb_layer({"lb_layer": "l4"}), lb_layer({"lb_layer": "l7"})) == ("l4", "l4", "l7")
+        assert cloud_lb_type({"lb_layer": "l7"}) == "l7_cloud"
+        assert cloud_lb_type({}) == "l4_cloud"
 
-        assert errors == []
-        assert members == [("i-1", "10.30.1.11/24", "ns-prod"), ("i-2", "10.30.1.12/24", "ns-prod")]
-
-    def test_member_without_private_ip_or_outside_every_block_is_an_error(self) -> None:
-        component = _cloud_frontend(
-            instances=[_cloud_instance("i-1", None), _cloud_instance("i-2", "192.0.2.10/24"), _cloud_instance("i-3")]
+    def test_layer_4_listener_keeps_the_port_protocol_and_layer_7_is_http_or_https(self) -> None:
+        assert listener_protocol({}, ("udp", 53, None)) == ("udp", None)
+        assert listener_protocol({"lb_layer": "l7"}, ("tcp", 80, None)) == ("http", None)
+        assert listener_protocol({"lb_layer": "l7", "lb_certificate": "arn:cert"}, ("tcp", 443, None)) == (
+            "https",
+            None,
         )
 
-        members, errors = cloud_members(component, _vpc())
+    def test_udp_cannot_be_balanced_at_layer_7(self) -> None:
+        protocol, error = listener_protocol({"fqdn": "web", "lb_layer": "l7"}, ("udp", 53, None))
 
-        assert members == [("i-3", "10.30.1.11/24", "ns-prod")]
-        assert "i-1 has no private_ip" in errors[0]
-        assert "i-2 private_ip 192.0.2.10/24 is in no CIDR block of vpc-1-name" in errors[1]
+        assert protocol is None
+        assert error == "web: udp/53 cannot be balanced at layer 7 (http/https is tcp)"
 
 
 class TestCloudProducer:
@@ -166,9 +169,8 @@ class TestCloudProducer:
         assert first["hostname"] == _CLOUD_FQDN
         assert first["load_balancer"] == {"id": f"id-{_CLOUD_LB}"}
         assert "vip_ip" not in first
-        assert first["component"] == {"id": "comp-frontend"}
         assert first["health_checks"] == ["hc-1"]
-        assert first["pool_members"] == ["ip:10.30.1.11/24", "ip:10.30.1.12/24"]
+        assert first["pool_members"] == ["i-1", "i-2"]
         assert f"cloud-lb-{_CLOUD_LB}" in gen.locks
 
     def test_no_context_pool_or_rule_for_a_cloud_component(self) -> None:
@@ -198,18 +200,40 @@ class TestCloudProducer:
         for node in gen.created:
             node.save.assert_awaited_once_with(allow_upsert=True)
 
-    def test_member_addresses_are_the_instances_and_untracked_under_their_lock(self) -> None:
+    def test_the_targets_are_the_instances_and_nothing_is_written_to_ipam(self) -> None:
         gen = _lb_gen()
 
         _reconcile(gen, [_cloud_frontend()])
 
-        calls = [call.kwargs for call in gen.upsert_ip_address.await_args_list]
-        assert [(c["address"], c["ip_namespace"], c["track"]) for c in calls] == [
-            ("10.30.1.11/24", {"id": "ns-prod"}, False),
-            ("10.30.1.12/24", {"id": "ns-prod"}, False),
-        ]
-        assert calls[0]["description"] == "Private address of cloud instance i-1"
-        assert "ip-address-ns-prod-10.30.1.11/24" in gen.locks
+        assert _vip_payloads(gen)[0]["pool_members"] == ["i-1", "i-2"]
+        gen.allocate_prefix_address.assert_not_awaited()
+        gen.attach_refs.assert_not_awaited()
+
+    def test_layer_7_component_gets_a_layer_7_load_balancer_and_http_listeners(self) -> None:
+        gen = _lb_gen()
+
+        _reconcile(gen, [_cloud_frontend(ports=["tcp/80", "tcp/443"], lb_layer="l7", lb_certificate="arn:cert/1")])
+
+        assert _cloud_lb_payloads(gen)[0]["lb_type"] == "l7_cloud"
+        payloads = _vip_payloads(gen)
+        assert [(p["protocol"], p["port"]) for p in payloads] == [("http", 80), ("https", 443)]
+        assert [p.get("ssl_certificate") for p in payloads] == [None, "arn:cert/1"]
+
+    def test_layer_7_component_without_a_certificate_is_http(self) -> None:
+        gen = _lb_gen()
+
+        _reconcile(gen, [_cloud_frontend(lb_layer="l7")])
+
+        payload = _vip_payloads(gen)[0]
+        assert (payload["protocol"], "ssl_certificate" in payload) == ("http", False)
+
+    def test_udp_port_of_a_layer_7_component_is_an_error_and_gets_no_listener(self) -> None:
+        gen = _lb_gen()
+
+        _vips, errors = _reconcile(gen, [_cloud_frontend(ports=["tcp/443", "udp/53"], lb_layer="l7")])
+
+        assert [p["port"] for p in _vip_payloads(gen)] == [443]
+        assert errors == [f"{_CLOUD_FQDN}: udp/53 cannot be balanced at layer 7 (http/https is tcp)"]
 
     def test_second_run_writes_the_same_load_balancer_and_vips(self) -> None:
         first, second = _lb_gen(), _lb_gen()
@@ -228,7 +252,6 @@ class TestCloudProducer:
 
         assert f"{_CLOUD_FQDN}: no virtual network for the cloud load balancer" in errors
         gen.client.create.assert_not_awaited()
-        gen.upsert_ip_address.assert_not_awaited()
 
     def test_range_is_refused_and_the_single_ports_still_get_their_vip(self) -> None:
         gen = _lb_gen()
@@ -239,15 +262,16 @@ class TestCloudProducer:
         assert len(errors) == 1
         assert "udp/30000-30010" in errors[0]
 
-    def test_unaddressable_member_is_an_error_and_left_out(self) -> None:
+    def test_an_instance_without_an_address_is_still_a_member(self) -> None:
+        """What a target is (an id, an address) is the provider's template to decide; the generator only links."""
         gen = _lb_gen()
 
         _vips, errors = _reconcile(
             gen, [_cloud_frontend(instances=[_cloud_instance("i-1", None), _cloud_instance("i-2", "10.30.1.12/24")])]
         )
 
-        assert "i-1 has no private_ip" in errors[0]
-        assert _vip_payloads(gen)[0]["pool_members"] == ["ip:10.30.1.12/24"]
+        assert errors == []
+        assert _vip_payloads(gen)[0]["pool_members"] == ["i-1", "i-2"]
 
     def test_failed_load_balancer_save_is_an_error_and_gets_no_vip(self) -> None:
         gen = _vip_gen()
@@ -267,4 +291,3 @@ class TestCloudProducer:
 
         assert (vips, errors) == ({}, [])
         gen.client.create.assert_not_awaited()
-        gen.upsert_ip_address.assert_not_awaited()

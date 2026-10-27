@@ -1,5 +1,126 @@
-{#- Representative Terraform HCL for an Azure Load Balancer — verify resource arguments
-    against the azurerm Terraform provider docs before real use. -#}
+{#- Representative Terraform HCL for an Azure Load Balancer (layer 4) or Application Gateway (layer 7) — verify
+    resource arguments against the azurerm Terraform provider docs before real use. -#}
+{% for name in dns_names -%}
+# endpoint: {{ name }}
+{% endfor -%}
+{% if layer == 'l7' -%}
+resource "azurerm_application_gateway" "{{ lb_name | tf_id }}" {
+  name                = "{{ lb_name }}"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+{%- if ssl_certificates %}
+
+  identity {
+    type         = "UserAssigned"
+    identity_ids = [var.identity_id]
+  }
+{%- endif %}
+
+  sku {
+    name     = "{{ sku }}"
+    tier     = "{{ sku }}"
+    capacity = 2
+  }
+{%- if subnet_names %}
+
+  gateway_ip_configuration {
+    name      = "{{ lb_name | tf_id }}-gateway-ip"
+    subnet_id = data.azurerm_subnet.{{ subnet_names[0] | tf_id }}.id
+  }
+{%- endif %}
+
+  frontend_ip_configuration {
+{%- if type == 'Public' %}
+    name                 = "{{ lb_name | tf_id }}-frontend"
+    public_ip_address_id = azurerm_public_ip.{{ lb_name | tf_id }}.id
+{%- elif subnet_names %}
+    name                          = "{{ lb_name | tf_id }}-frontend"
+    subnet_id                     = data.azurerm_subnet.{{ subnet_names[0] | tf_id }}.id
+    private_ip_address_allocation = "Dynamic"
+{%- else %}
+    name = "{{ lb_name | tf_id }}-frontend"
+{%- endif %}
+  }
+{%- for cert in ssl_certificates %}
+
+  ssl_certificate {
+    name                = "{{ cert.name }}"
+{%- if cert.secret_id %}
+    key_vault_secret_id = "{{ cert.secret_id }}"
+{%- else %}
+    key_vault_secret_id = data.azurerm_key_vault_certificate.{{ cert.name | tf_id }}.secret_id
+{%- endif %}
+  }
+{%- endfor %}
+{%- for pool in backend_pools %}
+
+  backend_address_pool {
+    name         = "{{ pool.name }}"
+    ip_addresses = [{% for address in pool.addresses %}"{{ address }}"{{ ", " if not loop.last }}{% endfor %}]
+  }
+{%- if pool.health_probe %}
+
+  probe {
+    name                                      = "{{ pool.name }}-probe"
+    protocol                                  = "{{ pool.health_probe.protocol }}"
+    path                                      = "{{ pool.health_probe.request_path }}"
+    interval                                  = {{ pool.health_probe.interval_in_seconds }}
+    timeout                                   = {{ pool.health_probe.timeout_in_seconds }}
+    unhealthy_threshold                       = {{ pool.health_probe.number_of_probes }}
+    pick_host_name_from_backend_http_settings = true
+
+    match {
+      status_code = ["{{ pool.health_probe.status_codes }}"]
+    }
+  }
+{%- endif %}
+{%- endfor %}
+{%- for rule in lb_rules %}
+
+  frontend_port {
+    name = "{{ rule.name }}-port"
+    port = {{ rule.frontend_port }}
+  }
+
+  backend_http_settings {
+    name                                = "{{ rule.name }}-settings"
+    cookie_based_affinity               = "Disabled"
+    port                                = {{ rule.backend_port }}
+    protocol                            = "Http"
+    request_timeout                     = 30
+    pick_host_name_from_backend_address = true
+{%- if rule.probe_name %}
+    probe_name                          = "{{ rule.probe_name }}"
+{%- endif %}
+  }
+
+  http_listener {
+    name                           = "{{ rule.name }}-listener"
+    frontend_ip_configuration_name = "{{ lb_name | tf_id }}-frontend"
+    frontend_port_name             = "{{ rule.name }}-port"
+    protocol                       = "{{ rule.protocol | capitalize }}"
+{%- if rule.ssl_certificate %}
+    ssl_certificate_name           = "{{ rule.ssl_certificate }}"
+{%- endif %}
+  }
+
+  request_routing_rule {
+    name                       = "{{ rule.name }}"
+    rule_type                  = "Basic"
+    priority                   = {{ rule.priority }}
+    http_listener_name         = "{{ rule.name }}-listener"
+    backend_address_pool_name  = "{{ rule.backend_pool_name }}"
+    backend_http_settings_name = "{{ rule.name }}-settings"
+  }
+{%- endfor %}
+
+  tags = {
+{%- for key, value in (tags or {}).items() %}
+    {{ key }} = "{{ value }}"
+{%- endfor %}
+  }
+}
+{% else -%}
 resource "azurerm_lb" "{{ lb_name | tf_id }}" {
   name                = "{{ lb_name }}"
   sku                 = "{{ sku }}"
@@ -60,3 +181,4 @@ resource "azurerm_lb_rule" "{{ rule.name | tf_id }}" {
   backend_address_pool_ids       = [azurerm_lb_backend_address_pool.{{ rule.backend_pool_name | tf_id }}.id]
 }
 {% endfor -%}
+{% endif -%}

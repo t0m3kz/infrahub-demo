@@ -89,6 +89,7 @@ fragment AppInstanceFields on AppInstance {
   __typename
   ... on DcimPhysicalDevice {
     role { value }
+    primary_address { node { id address { value } } }
     deployment {
       node {
         id
@@ -99,6 +100,7 @@ fragment AppInstanceFields on AppInstance {
   }
   ... on DcimVirtualDevice {
     role { value }
+    primary_address { node { id address { value } } }
     hosting_device {
       node {
         id
@@ -137,6 +139,8 @@ fragment AppComponentSecurityFields on AppComponent {
   fqdn { value }
   ports { value }
   load_balanced { value }
+  lb_layer { value }
+  lb_certificate { value }
   component_type { value }
   # The group tag of a component in a microsegmented segment: present means
   # the generator writes nothing for it (generators/helpers/security_tag.py).

@@ -244,15 +244,31 @@
                                     "edges": [
                                       {
                                         "node": {
-                                          "address": {
-                                            "value": "10.10.1.11/24"
+                                          "__typename": "DcimVirtualDevice",
+                                          "name": {
+                                            "value": "srv-10-10-1-11"
+                                          },
+                                          "primary_address": {
+                                            "node": {
+                                              "address": {
+                                                "value": "10.10.1.11/24"
+                                              }
+                                            }
                                           }
                                         }
                                       },
                                       {
                                         "node": {
-                                          "address": {
-                                            "value": "10.10.1.10/24"
+                                          "__typename": "DcimVirtualDevice",
+                                          "name": {
+                                            "value": "srv-10-10-1-10"
+                                          },
+                                          "primary_address": {
+                                            "node": {
+                                              "address": {
+                                                "value": "10.10.1.10/24"
+                                              }
+                                            }
                                           }
                                         }
                                       }
@@ -451,15 +467,31 @@
                                     "edges": [
                                       {
                                         "node": {
-                                          "address": {
-                                            "value": "10.20.1.10/24"
+                                          "__typename": "DcimVirtualDevice",
+                                          "name": {
+                                            "value": "srv-10-20-1-10"
+                                          },
+                                          "primary_address": {
+                                            "node": {
+                                              "address": {
+                                                "value": "10.20.1.10/24"
+                                              }
+                                            }
                                           }
                                         }
                                       },
                                       {
                                         "node": {
-                                          "address": {
-                                            "value": "10.20.1.11/24"
+                                          "__typename": "DcimVirtualDevice",
+                                          "name": {
+                                            "value": "srv-10-20-1-11"
+                                          },
+                                          "primary_address": {
+                                            "node": {
+                                              "address": {
+                                                "value": "10.20.1.11/24"
+                                              }
+                                            }
                                           }
                                         }
                                       }

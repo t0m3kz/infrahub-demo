@@ -35,7 +35,15 @@ def _onprem_vip(**overrides: object) -> dict:
         "session_persistence": _v("none"),
         "ssl_certificate": _v(None),
         "vip_ip": {"node": {"address": _v("100.66.96.10/32")}},
-        "pool_members": _edges([{"address": _v("10.0.0.10/24")}]),
+        "pool_members": _edges(
+            [
+                {
+                    "__typename": "DcimVirtualDevice",
+                    "name": _v("vm-1"),
+                    "primary_address": {"node": {"address": _v("10.0.0.10/24")}},
+                }
+            ]
+        ),
         "health_checks": _edges([]),
     }
     vip.update(overrides)

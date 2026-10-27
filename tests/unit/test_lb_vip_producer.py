@@ -51,10 +51,14 @@ class TestVipProducer:
         assert first["hostname"] == "web.c001.example"
         assert first["load_balancer"] == {"id": "ctx-1"}
         assert first["vip_ip"] == {"id": "ip:comp-web-tcp-443-vip"}
-        assert first["component"] == {"id": "comp-web"}
+        assert "component" not in first
         assert first["health_checks"] == ["hc-1"]
-        # One member per instance, sorted by name, reserved in the segment prefix.
-        assert first["pool_members"] == ["ip:vm-1-seg-web-lb-member", "ip:vm-2-seg-web-lb-member"]
+        # The members are the servers, sorted by name; each got its address in the segment prefix as primary address.
+        assert first["pool_members"] == ["vm-1", "vm-2"]
+        assert [(c.kwargs["node_id"], c.kwargs["refs"]) for c in gen.attach_refs.await_args_list] == [
+            ("vm-1", {"primary_address": "ip:vm-1-seg-web-lb-member"}),
+            ("vm-2", {"primary_address": "ip:vm-2-seg-web-lb-member"}),
+        ]
         member_calls = [
             c.kwargs for c in gen.allocate_prefix_address.await_args_list if "member" in c.kwargs["identifier"]
         ]
@@ -63,6 +67,33 @@ class TestVipProducer:
             c.kwargs for c in gen.allocate_prefix_address.await_args_list if c.kwargs["identifier"].endswith("-vip")
         ]
         assert {c["prefix_length"] for c in vip_calls} == {32}
+
+    def test_server_with_a_primary_address_keeps_it_and_reserves_nothing(self) -> None:
+        """The member is the server and its address its primary address, wherever that is: nothing is reserved."""
+        gen = _vip_gen()
+        instances = [
+            {**_instance("vm-1", _context()), "primary_address": {"id": "ip-existing-1"}},
+            _instance("vm-2", _context()),
+        ]
+
+        _vips, errors = _reconcile(gen, [_web(instances=instances)])
+
+        assert errors == []
+        assert _vip_payloads(gen)[0]["pool_members"] == ["vm-1", "vm-2"]
+        assert [c.kwargs["node_id"] for c in gen.attach_refs.await_args_list] == ["vm-2"]
+        reserved = [c.kwargs["identifier"] for c in gen.allocate_prefix_address.await_args_list]
+        assert "vm-1-seg-web-lb-member" not in reserved and "vm-2-seg-web-lb-member" in reserved
+
+    def test_a_server_that_cannot_get_an_address_is_not_a_member(self) -> None:
+        gen = _vip_gen()
+        real = gen.allocate_prefix_address.side_effect
+        gen.allocate_prefix_address = AsyncMock(
+            side_effect=lambda **kw: None if kw["identifier"].startswith("vm-1-") else real(**kw)
+        )
+
+        _vips, _errors = _reconcile(gen, [_web()])
+
+        assert _vip_payloads(gen)[0]["pool_members"] == ["vm-2"]
 
     def test_vip_is_tracked_by_the_run(self) -> None:
         """Saved as a plain upsert: the run's group claims it, so it is deleted once no longer produced."""
@@ -191,7 +222,7 @@ class TestVipProducer:
             "dc12-lb-PROD": "ip:comp-web-tcp-443-vip",
         }
         by_context = {p["load_balancer"]["id"]: p["pool_members"] for p in _vip_payloads(gen)}
-        assert by_context == {"ctx-a": ["ip:vm-a-seg-web-lb-member"], "ctx-b": ["ip:vm-b-seg-web-lb-member"]}
+        assert by_context == {"ctx-a": ["vm-a"], "ctx-b": ["vm-b"]}
 
     def test_target_of_another_application_only_resolves_its_vip_addresses(self) -> None:
         """No VIP object, member or R_server: those belong to the target's own application run."""
@@ -420,7 +451,7 @@ class TestConcurrentInputs:
         gen.wait_for_parent_generators.assert_awaited_once_with(("add_vxlan_segment",), "seg-web")
         assert _reads(gen) == [{"ids": ["seg-web"]}, {"ids": ["seg-web"]}]
         gen.lb_reread_sleep.assert_awaited_once_with(LB_VIP_REREAD.delay)
-        assert _vip_payloads(gen)[0]["pool_members"] == ["ip:vm-1-seg-web-lb-member", "ip:vm-2-seg-web-lb-member"]
+        assert _vip_payloads(gen)[0]["pool_members"] == ["vm-1", "vm-2"]
 
     def test_segment_prefix_that_never_lands_is_the_error_after_the_last_read(self) -> None:
         """Bounded: LB_VIP_REREAD.attempts reads with a sleep between two, then the error the payload alone gave."""

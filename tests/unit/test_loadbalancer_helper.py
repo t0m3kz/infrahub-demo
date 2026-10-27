@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from transforms.helpers.loadbalancer import get_loadbalancer_contexts
+from transforms.helpers.loadbalancer import get_loadbalancer_contexts, member_address, pool_member_ips
 
 _NAMESPACES = {
     "PROD": {"name": "PROD", "namespace_type": "prod", "l3_vni": 60000},
@@ -33,7 +33,11 @@ def _vip(**overrides: Any) -> dict[str, Any]:
         "port": 443,
         "status": "active",
         "vip_ip": {"address": "100.66.96.10/32"},
-        "pool_members": [{"address": "10.0.0.11/24"}, {"address": "10.0.0.10/24"}, {"address": "10.0.0.10/24"}],
+        "pool_members": [
+            {"typename": "DcimVirtualDevice", "name": "vm-2", "primary_address": {"address": "10.0.0.11/24"}},
+            {"typename": "DcimPhysicalDevice", "name": "srv-1", "primary_address": {"address": "10.0.0.10/24"}},
+            {"typename": "CloudInstance", "name": "inst-1", "private_ip": "10.0.0.10/24"},
+        ],
         "health_checks": [],
     }
     vip.update(overrides)
@@ -190,6 +194,17 @@ class TestVips:
         vip = _contexts(_context())[0]["vips"][0]
         assert vip["members"] == ["10.0.0.10", "10.0.0.11"]
         assert (vip["address"], vip["name"], vip["enabled"]) == ("100.66.96.10", "web_c001_example_com_tcp_443", True)
+
+    def test_member_is_a_server_address_of_any_kind_and_a_server_without_one_is_dropped(self) -> None:
+        """A device gives its primary address, a cloud instance its private_ip; a server with neither adds no member."""
+        members = [
+            {"typename": "DcimPhysicalDevice", "name": "srv-1", "primary_address": {"address": "10.0.0.5/24"}},
+            {"typename": "DcimVirtualDevice", "name": "vm-1", "primary_address": None},
+            {"typename": "CloudInstance", "name": "inst-1", "private_ip": "10.0.0.4/24"},
+            {"typename": "CloudInstance", "name": "inst-2", "private_ip": None},
+        ]
+        assert pool_member_ips({"pool_members": members}) == ["10.0.0.4", "10.0.0.5"]
+        assert [member_address(m) for m in members] == ["10.0.0.5", None, "10.0.0.4", None]
 
     def test_vip_without_members_has_an_empty_pool(self) -> None:
         """A component without instances yet still renders its VIP, with no member."""

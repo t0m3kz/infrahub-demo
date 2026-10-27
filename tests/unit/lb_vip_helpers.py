@@ -168,7 +168,7 @@ def _vip_gen() -> Any:
     gen.resource_lock = _lock
     gen.ensure_prefix_address_pool = AsyncMock(side_effect=lambda **kw: MagicMock(name=kw["pool_name"]))
     gen.allocate_prefix_address = AsyncMock(side_effect=lambda **kw: f"ip:{kw['identifier']}")
-    gen.upsert_ip_address = AsyncMock(side_effect=lambda **kw: MagicMock(id=f"ip:{kw['address']}"))
+    gen.attach_refs = AsyncMock()
     gen._get_or_create_by_name = AsyncMock(return_value=MagicMock(id="pol-lb"))
     gen._upsert_policy_rule = AsyncMock(return_value=100)
     # Nothing in flight, nothing more on a re-read, and no real sleep between re-reads.
@@ -226,10 +226,15 @@ def _cloud_instance(
 
 
 def _cloud_frontend(
-    *, ports: list[str] | None = None, instances: list[dict[str, Any]] | None = None, load_balanced: bool = True
+    *,
+    ports: list[str] | None = None,
+    instances: list[dict[str, Any]] | None = None,
+    load_balanced: bool = True,
+    lb_layer: str | None = None,
+    lb_certificate: str | None = None,
 ) -> dict[str, Any]:
     """c003's api-frontend: two AWS instances in one subnet of one VPC."""
-    return {
+    component = {
         "id": "comp-frontend",
         "name": "api-frontend",
         "fqdn": _CLOUD_FQDN,
@@ -249,6 +254,11 @@ def _cloud_frontend(
             "environment": "p",
         },
     }
+    if lb_layer:
+        component["lb_layer"] = lb_layer
+    if lb_certificate:
+        component["lb_certificate"] = lb_certificate
+    return component
 
 
 def _lb_gen() -> Any:

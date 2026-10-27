@@ -288,10 +288,10 @@ query ($names: [String]) {
         hostname { value }
         protocol { value }
         port { value }
+        ssl_certificate { value }
         load_balancer { node { name { value } } }
         vip_ip { node { address { value } } }
-        component { node { fqdn { value } } }
-        pool_members { edges { node { address { value } } } }
+        pool_members { edges { node { ... on CloudInstance { name { value } } } } }
         health_checks { edges { node { check { value } rise { value } fall { value } timeout { value } } } }
       }
     }

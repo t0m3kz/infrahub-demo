@@ -46,10 +46,16 @@ HC_HTTP_PATH = "/health"
 _TLS_PROTOCOLS = frozenset({"https", "tls"})
 
 
+def member_address(member: dict[str, Any]) -> str | None:
+    """The address of a pool member, a server: its primary address (physical or virtual device) or its private_ip (cloud
+    instance), without prefix length. None for a server that has neither."""
+    return host_ip((member.get("primary_address") or {}).get("address") or member.get("private_ip"))
+
+
 def pool_member_ips(vip: dict[str, Any]) -> list[str]:
-    """The distinct pool member IPs of a cleaned LoadbalancerVIP (no prefix length), in address order."""
+    """The distinct addresses of the pool members of a cleaned LoadbalancerVIP, in address order."""
     return sorted(
-        {ip for member in vip.get("pool_members") or [] if (ip := host_ip(member.get("address")))},
+        {ip for member in vip.get("pool_members") or [] if (ip := member_address(member))},
         key=ipaddress.ip_address,
     )
 

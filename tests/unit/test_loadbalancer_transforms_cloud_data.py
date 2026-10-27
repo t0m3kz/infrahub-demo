@@ -1,14 +1,16 @@
 """Unit tests for the cloud load balancer data helpers.
 
-Covers:
+Covers (``_lb()``/``_vips()`` are a layer 7 load balancer and its https listener, ``_lb_l4()``/``_vips_l4()`` a
+layer 4 one):
 - prepare_aws_data()   — listeners, backend pools, health checks, tags
 - prepare_azure_data() — lb_rules, backend addresses, health probe, tags
 - prepare_gcp_data()   — forwarding rules, backend services, health checks
+The layer 7 shaping and the layer/protocol refusals are in test_loadbalancer_transforms_cloud_layers.py.
 """
 
 from __future__ import annotations
 
-from tests.unit.loadbalancer_transforms_helpers import _lb, _vips
+from tests.unit.loadbalancer_transforms_helpers import _lb, _lb_l4, _vips, _vips_l4
 from transforms.config.loadbalancer_cloud import prepare_aws_data, prepare_azure_data, prepare_gcp_data
 
 # pool_name derived from hostname-protocol-port
@@ -81,9 +83,7 @@ class TestPrepareAwsDataListeners:
         assert "arn:aws:acm" in listener["certificate_arn"]
 
     def test_listener_without_ssl_cert_has_no_certificate_arn(self) -> None:
-        vips = _vips()
-        vips[0]["ssl_certificate"] = None
-        assert "certificate_arn" not in prepare_aws_data(_lb(), vips)["listeners"][0]
+        assert "certificate_arn" not in prepare_aws_data(_lb_l4(), _vips_l4())["listeners"][0]
 
     def test_two_vips_produce_two_listeners(self) -> None:
         assert len(prepare_aws_data(_lb(), _vips_two())["listeners"]) == 2
@@ -111,8 +111,11 @@ class TestPrepareAwsDataHealthChecks:
     def test_health_check_attached_to_pool(self) -> None:
         assert "health_check" in prepare_aws_data(_lb(), _vips())["backend_pools"][0]
 
-    def test_health_check_protocol_from_check_field(self) -> None:
-        assert prepare_aws_data(_lb(), _vips())["backend_pools"][0]["health_check"]["protocol"] == "https"
+    def test_l4_health_check_protocol_from_check_field(self) -> None:
+        assert prepare_aws_data(_lb_l4(), _vips_l4())["backend_pools"][0]["health_check"]["protocol"] == "tcp"
+
+    def test_l7_health_check_is_http(self) -> None:
+        assert prepare_aws_data(_lb(), _vips())["backend_pools"][0]["health_check"]["protocol"] == "HTTP"
 
     def test_health_check_timeout_ms_to_seconds(self) -> None:
         assert prepare_aws_data(_lb(), _vips())["backend_pools"][0]["health_check"]["timeout"] == 5
@@ -206,21 +209,22 @@ class TestPrepareAzureDataHealthProbe:
     def test_health_probe_attached(self) -> None:
         assert "health_probe" in prepare_azure_data(_lb(), _vips())["backend_pools"][0]
 
-    def test_health_probe_protocol_uppercased(self) -> None:
-        assert prepare_azure_data(_lb(), _vips())["backend_pools"][0]["health_probe"]["protocol"] == "HTTPS"
+    def test_l4_health_probe_protocol_uppercased(self) -> None:
+        assert prepare_azure_data(_lb_l4(), _vips_l4())["backend_pools"][0]["health_probe"]["protocol"] == "TCP"
+
+    def test_l7_health_probe_is_http(self) -> None:
+        assert prepare_azure_data(_lb(), _vips())["backend_pools"][0]["health_probe"]["protocol"] == "Http"
 
     def test_health_probe_number_of_probes_from_fall(self) -> None:
         assert prepare_azure_data(_lb(), _vips())["backend_pools"][0]["health_probe"]["number_of_probes"] == 5
 
-    def test_health_probe_http_has_request_path(self) -> None:
-        vips = _vips()
+    def test_l4_health_probe_http_has_request_path(self) -> None:
+        vips = _vips_l4()
         vips[0]["health_checks"][0]["check"] = "http"
-        assert "request_path" in prepare_azure_data(_lb(), vips)["backend_pools"][0]["health_probe"]
+        assert "request_path" in prepare_azure_data(_lb_l4(), vips)["backend_pools"][0]["health_probe"]
 
-    def test_health_probe_tcp_has_no_request_path(self) -> None:
-        vips = _vips()
-        vips[0]["health_checks"][0]["check"] = "tcp"
-        assert "request_path" not in prepare_azure_data(_lb(), vips)["backend_pools"][0]["health_probe"]
+    def test_l4_health_probe_tcp_has_no_request_path(self) -> None:
+        assert "request_path" not in prepare_azure_data(_lb_l4(), _vips_l4())["backend_pools"][0]["health_probe"]
 
     def test_no_health_checks_no_health_probe_key(self) -> None:
         assert "health_probe" not in prepare_azure_data(_lb(), _vips_no_health_checks())["backend_pools"][0]
@@ -283,15 +287,18 @@ class TestPrepareGcpDataForwardingRules:
     def test_forwarding_rule_port_range_is_string(self) -> None:
         assert prepare_gcp_data(_lb(), _vips())["forwarding_rules"][0]["port_range"] == "443"
 
-    def test_forwarding_rule_is_global_for_l7_https(self) -> None:
-        assert prepare_gcp_data(_lb(), _vips())["forwarding_rules"][0]["is_global"] is True
+    def test_l7_forwarding_rule_fronts_a_url_map_and_proxy(self) -> None:
+        rule = prepare_gcp_data(_lb(), _vips())["forwarding_rules"][0]
+        assert (rule["url_map"], rule["proxy"], rule["proxy_type"]) == (
+            f"{_POOL_NAME}-url-map",
+            f"{_POOL_NAME}-proxy",
+            "https",
+        )
+        assert rule["ssl_certificate"] == "arn:aws:acm:us-east-1:123:certificate/abc"
 
-    def test_forwarding_rule_not_global_for_l4_tcp(self) -> None:
-        lb = _lb()
-        lb["lb_type"] = "l4_cloud"
-        vips = _vips()
-        vips[0]["protocol"] = "tcp"
-        assert prepare_gcp_data(lb, vips)["forwarding_rules"][0]["is_global"] is False
+    def test_l4_forwarding_rule_has_no_proxy(self) -> None:
+        rule = prepare_gcp_data(_lb_l4(), _vips_l4())["forwarding_rules"][0]
+        assert not {"url_map", "proxy", "proxy_type", "ssl_certificate"} & rule.keys()
 
     def test_forwarding_rule_backend_service_name_set(self) -> None:
         assert prepare_gcp_data(_lb(), _vips())["forwarding_rules"][0]["backend_service"] == _POOL_NAME
@@ -311,9 +318,7 @@ class TestPrepareGcpDataBackendServices:
         assert prepare_gcp_data(_lb(), _vips())["backend_services"][0]["protocol"] == "HTTP"
 
     def test_backend_service_protocol_tcp_for_l4_lb(self) -> None:
-        lb = _lb()
-        lb["lb_type"] = "l4_cloud"
-        assert prepare_gcp_data(lb, _vips())["backend_services"][0]["protocol"] == "TCP"
+        assert prepare_gcp_data(_lb_l4(), _vips_l4())["backend_services"][0]["protocol"] == "TCP"
 
     def test_backend_service_references_health_check_name(self) -> None:
         result = prepare_gcp_data(_lb(), _vips())
@@ -329,7 +334,8 @@ class TestPrepareGcpDataHealthChecks:
         assert result["health_checks"][0]["name"] == result["backend_services"][0]["health_check"]
 
     def test_health_check_protocol_uppercased(self) -> None:
-        assert prepare_gcp_data(_lb(), _vips())["health_checks"][0]["protocol"] == "HTTPS"
+        assert prepare_gcp_data(_lb(), _vips())["health_checks"][0]["protocol"] == "HTTP"
+        assert prepare_gcp_data(_lb_l4(), _vips_l4())["health_checks"][0]["protocol"] == "TCP"
 
     def test_health_check_timeout_ms_to_seconds(self) -> None:
         assert prepare_gcp_data(_lb(), _vips())["health_checks"][0]["timeout_sec"] == 5
@@ -341,14 +347,10 @@ class TestPrepareGcpDataHealthChecks:
         assert prepare_gcp_data(_lb(), _vips())["health_checks"][0]["unhealthy_threshold"] == 5
 
     def test_health_check_http_has_request_path(self) -> None:
-        vips = _vips()
-        vips[0]["health_checks"][0]["check"] = "http"
-        assert "request_path" in prepare_gcp_data(_lb(), vips)["health_checks"][0]
+        assert prepare_gcp_data(_lb(), _vips())["health_checks"][0]["request_path"] == "/"
 
     def test_health_check_tcp_has_no_request_path(self) -> None:
-        vips = _vips()
-        vips[0]["health_checks"][0]["check"] = "tcp"
-        assert "request_path" not in prepare_gcp_data(_lb(), vips)["health_checks"][0]
+        assert "request_path" not in prepare_gcp_data(_lb_l4(), _vips_l4())["health_checks"][0]
 
     def test_no_health_checks_no_health_check_entries(self) -> None:
         assert prepare_gcp_data(_lb(), _vips_no_health_checks())["health_checks"] == []
