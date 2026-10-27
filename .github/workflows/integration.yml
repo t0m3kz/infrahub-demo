@@ -26,7 +26,7 @@ concurrency:
 jobs:
   integration:
     name: Integration (${{ inputs.scope }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 60
     env:
       INFRAHUB_TESTING_LOG_LEVEL: INFO
