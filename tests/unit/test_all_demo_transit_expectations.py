@@ -169,11 +169,13 @@ def test_load_balanced_components_and_their_clients() -> None:
             "segment": "c005-web-frontend-local-dc10-p",
             "ports": (("tcp", 443),),
             "contexts": (("DC10", "PROD", None),),
+            "health_checks": (("http", "3", "3", "2000"),),
         },
         "ui.reporting-portal.c010.demo.local": {
             "segment": "c010-zindra-dev-d",
             "ports": (("tcp", 443),),
             "contexts": (("DC12", "NON-PROD", None),),
+            "health_checks": (("http", "3", "3", "2000"),),
         },
     }
     assert ALL_DEMO_LB_CLIENT_DEPENDENCIES == {
@@ -187,7 +189,8 @@ def test_load_balanced_components_and_their_clients() -> None:
 
 def test_cloud_load_balanced_component() -> None:
     """c003 api-frontend: one internet-facing CloudLoadBalancer in its AWS VPC, its two instances' private
-    addresses as pool members; it is neither an on-prem VIP expectation nor anyone's R_client target."""
+    addresses as pool members and a health check like the on-prem components; it is neither an on-prem VIP
+    expectation nor anyone's R_client target."""
     assert ALL_DEMO_CLOUD_LOAD_BALANCED_COMPONENTS == {
         "frontend.custody-api.c003.demo.local": {
             "load_balancer": "frontend-custody-api-c0-a9ea4206",
@@ -196,6 +199,7 @@ def test_cloud_load_balanced_component() -> None:
             "scheme": "internet_facing",
             "ports": (("tcp", 443),),
             "members": ("10.30.1.11/24", "10.30.1.12/24"),
+            "health_checks": (("tcp", "2", "3", "1000"),),
         }
     }
     assert not set(ALL_DEMO_CLOUD_LOAD_BALANCED_COMPONENTS) & set(ALL_DEMO_LOAD_BALANCED_COMPONENTS)

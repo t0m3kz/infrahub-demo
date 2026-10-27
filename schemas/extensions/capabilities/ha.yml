@@ -359,15 +359,6 @@ nodes:
         optional: true
         identifier: loadbalancer_context__vip_prefix
         order_weight: 1100
-      - name: vips
-        peer: LoadbalancerVIP
-        label: "VIPs"
-        description: "VIPs served by this context (reverse of LoadbalancerVIP.load_balancer)"
-        cardinality: many
-        kind: Generic
-        optional: true
-        identifier: load_balancer__vip_services
-        order_weight: 1200
 
   # ── Cloud Firewall HA ─────────────────────────────────────────────────────
   - name: CloudFirewallHA

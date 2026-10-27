@@ -478,3 +478,29 @@ def test_every_schema_kind_fits_the_infrahub_profile_name_limit() -> None:
     )
 
     assert too_long == []
+
+
+class TestLoadBalancerVips:
+    """Every load balancer lists the VIPs it hosts: the reverse of LoadbalancerVIP.load_balancer is defined once."""
+
+    def test_the_reverse_of_the_vip_load_balancer_is_on_the_generic_only(self) -> None:
+        owners = [
+            kind
+            for kind in _all_entries()
+            if any(
+                r["name"] == "vips" and r.get("peer") == "LoadbalancerVIP"
+                for r in _kind(kind).get("relationships") or []
+            )
+        ]
+        assert owners == ["ManagedLoadBalancer"]
+
+    def test_the_implementations_inherit_it(self) -> None:
+        for kind in ("ManagedLoadbalancerHA", "ManagedLoadbalancerContext", "CloudLoadBalancer"):
+            assert "ManagedLoadBalancer" in _kind(kind)["inherit_from"], kind
+
+    def test_it_pairs_with_the_vip_under_one_identifier(self) -> None:
+        vips = next(r for r in _kind("ManagedLoadBalancer")["relationships"] if r["name"] == "vips")
+        load_balancer = next(r for r in _kind("LoadbalancerVIP")["relationships"] if r["name"] == "load_balancer")
+
+        assert vips["identifier"] == load_balancer["identifier"] == "load_balancer__vip_services"
+        assert load_balancer["peer"] == "ManagedLoadBalancer"

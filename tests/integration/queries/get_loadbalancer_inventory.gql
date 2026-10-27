@@ -67,6 +67,7 @@ query GetLoadbalancerInventory {
               port { value }
               vip_ip { node { address { value } } }
               pool_members { edges { node { address { value } } } }
+              health_checks { edges { node { check { value } rise { value } fall { value } timeout { value } } } }
               component {
                 node {
                   fqdn { value }

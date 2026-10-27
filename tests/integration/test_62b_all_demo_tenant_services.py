@@ -651,6 +651,8 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                 errors.append(
                     f"{label}: fronts {vip['component']} in {vip['segment']}, expected {fqdn} in {component['segment']}"
                 )
+            if vip["health_checks"] != component["health_checks"]:
+                errors.append(f"{label}: health checks {vip['health_checks']}, expected {component['health_checks']}")
             if not vip["address"]:
                 errors.append(f"{label}: no vip_ip")
                 continue
@@ -776,8 +778,19 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             ports = sorted((str(vip["protocol"]), int(vip["port"])) for vip in vips)
             if ports != sorted(component["ports"]):
                 errors.append(f"cloud load balancer {name}: VIPs on {ports}, expected {sorted(component['ports'])}")
+            # The reverse of LoadbalancerVIP.load_balancer (ManagedLoadBalancer.vips): the load balancer lists its own.
+            if len(lb.get("vips") or []) != len(vips):
+                errors.append(f"cloud load balancer {name}: lists {len(lb.get('vips') or [])} VIP(s), has {len(vips)}")
             for vip in vips:
                 label = f"cloud VIP {fqdn} {vip['protocol']}/{vip['port']} on {name}"
+                checks = tuple(
+                    sorted(
+                        tuple(str(check[field]) for field in ("check", "rise", "fall", "timeout"))
+                        for check in vip.get("health_checks") or []
+                    )
+                )
+                if checks != component["health_checks"]:
+                    errors.append(f"{label}: health checks {checks}, expected {component['health_checks']}")
                 if vip.get("hostname") != fqdn or (vip.get("component") or {}).get("fqdn") != fqdn:
                     errors.append(f"{label}: hostname/component is not {fqdn}")
                 if (vip.get("vip_ip") or {}).get("address"):

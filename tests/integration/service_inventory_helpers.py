@@ -116,6 +116,16 @@ def _value(attribute: dict[str, Any] | None) -> Any:
     return (attribute or {}).get("value")
 
 
+def health_check_hfids(connection: dict[str, Any] | None) -> tuple[tuple[str, ...], ...]:
+    """The health checks of a raw `{edges: [{node}]}` connection as sorted [check, rise, fall, timeout] strings."""
+    return tuple(
+        sorted(
+            tuple(str(_value(check.get(field))) for field in ("check", "rise", "fall", "timeout"))
+            for check in _edge_nodes(connection)
+        )
+    )
+
+
 #: Device roles whose service ports (firewall- or load-balancer-facing) a context is tagged on: a DC's border
 #: leaf, a colocation metro's edge.
 _SERVICE_PORT_DEVICE_ROLES = frozenset({"border-leaf", "edge"})
@@ -336,6 +346,7 @@ async def fetch_loadbalancer_inventory(client: InfrahubClient, branch: str) -> l
                     "members": sorted(
                         str(_value(member.get("address"))) for member in _edge_nodes(vip.get("pool_members"))
                     ),
+                    "health_checks": health_check_hfids(vip.get("health_checks")),
                     "component": _value(component.get("fqdn")),
                     "segment": _value(segment.get("name")),
                     "segment_prefix": _value(

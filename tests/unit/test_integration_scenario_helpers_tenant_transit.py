@@ -353,3 +353,32 @@ def test_context_lines_of_a_pan_os_member_are_the_lines_of_its_vsys() -> None:
     rendered = "set vsys a rulebase x deny-1\nset vsys ab rulebase x deny-2\nset vsys a zone z"
 
     assert _context_lines(rendered, "paloalto_panos", "a") == "set vsys a rulebase x deny-1\nset vsys a zone z"
+
+
+def test_health_check_hfids_are_sorted_four_part_strings() -> None:
+    """The HFID of a health check, as the data files write it: [check, rise, fall, timeout], all strings."""
+    from tests.integration.service_inventory_helpers import health_check_hfids
+
+    connection = {
+        "edges": [
+            {
+                "node": {
+                    "check": {"value": "tcp"},
+                    "rise": {"value": 2},
+                    "fall": {"value": 3},
+                    "timeout": {"value": 1000},
+                }
+            },
+            {
+                "node": {
+                    "check": {"value": "http"},
+                    "rise": {"value": 3},
+                    "fall": {"value": 3},
+                    "timeout": {"value": 2000},
+                }
+            },
+        ]
+    }
+
+    assert health_check_hfids(connection) == (("http", "3", "3", "2000"), ("tcp", "2", "3", "1000"))
+    assert health_check_hfids(None) == ()
