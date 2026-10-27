@@ -63,11 +63,11 @@ class TestEnsureHaPairs:
         await gen._ensure_ha_pairs(["fw-02", "fw-01"], ha_kind="ManagedFirewallHA", role_label="firewall")
 
         assert events == [
-            "acquire:ha-domain-fw-01-fw-02-ha",
+            "acquire:ha-domain-fw-01-fw-02",
             "query:ManagedFirewallHA",
             f"query:{DcimPhysicalDevice}",
             "create-save",
-            "release:ha-domain-fw-01-fw-02-ha",
+            "release:ha-domain-fw-01-fw-02",
         ]
 
     @pytest.mark.asyncio
@@ -77,7 +77,7 @@ class TestEnsureHaPairs:
 
         await gen._ensure_ha_pairs(["fw-01", "fw-02"], ha_kind="ManagedFirewallHA", role_label="firewall")
 
-        assert gen.lock_events == ["acquire:ha-domain-fw-01-fw-02-ha", "release:ha-domain-fw-01-fw-02-ha"]
+        assert gen.lock_events == ["acquire:ha-domain-fw-01-fw-02", "release:ha-domain-fw-01-fw-02"]
         gen.client.create.assert_not_awaited()
 
     @pytest.mark.asyncio
@@ -103,9 +103,35 @@ class TestEnsureHaPairs:
         gen.client.create.assert_awaited_once()
         create_kwargs = gen.client.create.call_args.kwargs
         assert create_kwargs["kind"] == "ManagedFirewallHA"
-        assert create_kwargs["data"]["name"] == "fw-01-fw-02-ha"
+        assert create_kwargs["data"]["name"] == "fw-01-fw-02"
         assert create_kwargs["data"]["capabilities"] == [{"id": "id-fw-01"}, {"id": "id-fw-02"}]
         ha_obj.save.assert_awaited_once_with(allow_upsert=True)
+
+    @pytest.mark.asyncio
+    async def test_ha_name_overrides_the_default_name_of_a_single_pair(self) -> None:
+        gen = self._gen()
+        gen.client.filters = AsyncMock(side_effect=[[], [_mock_device("fw-01"), _mock_device("fw-02")]])
+        gen.client.get = AsyncMock(return_value=_mock_group())
+        ha_obj = MagicMock(id="ha-1", save=AsyncMock())
+        gen.client.create = AsyncMock(return_value=ha_obj)
+
+        await gen._ensure_ha_pairs(
+            ["fw-01", "fw-02"], ha_kind="ManagedFirewallHA", role_label="firewall", ha_name="c005-fw-prod"
+        )
+
+        assert gen.client.create.call_args.kwargs["data"]["name"] == "c005-fw-prod"
+        assert gen.lock_events == ["acquire:ha-domain-c005-fw-prod", "release:ha-domain-c005-fw-prod"]
+        assert gen._ensure_ha_interfaces.await_args.args[1] == "c005-fw-prod"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("device_names", [[], ["fw-01"], ["fw-01", "fw-02", "fw-03", "fw-04"]])
+    async def test_ha_name_for_anything_but_one_pair_is_refused(self, device_names: list[str]) -> None:
+        gen = self._gen()
+
+        with pytest.raises(ValueError, match="names one pair"):
+            await gen._ensure_ha_pairs(device_names, ha_kind="ManagedFirewallHA", role_label="firewall", ha_name="x")
+
+        gen.client.create.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_fresh_domain_passes_its_devices_skipping_capabilities_fetch(self) -> None:
@@ -128,7 +154,7 @@ class TestEnsureHaPairs:
         await gen._ensure_ha_pairs(["fw-02", "fw-01"], ha_kind="ManagedFirewallHA", role_label="firewall")
 
         gen._ensure_ha_interfaces.assert_awaited_once_with(
-            ha_obj, "fw-01-fw-02-ha", device_kind=DcimPhysicalDevice, members=devices
+            ha_obj, "fw-01-fw-02", device_kind=DcimPhysicalDevice, members=devices
         )
 
     @pytest.mark.asyncio
@@ -144,7 +170,7 @@ class TestEnsureHaPairs:
         await gen._ensure_ha_pairs(["fw-01", "fw-02"], ha_kind="ManagedFirewallHA", role_label="firewall")
 
         gen._ensure_ha_interfaces.assert_awaited_once_with(
-            existing, "fw-01-fw-02-ha", device_kind=DcimPhysicalDevice, members=None
+            existing, "fw-01-fw-02", device_kind=DcimPhysicalDevice, members=None
         )
 
     @pytest.mark.asyncio
@@ -331,7 +357,7 @@ class TestHaMemberDevices:
         ha_obj, devices, ifaces = _stored_pair()
         gen = self._gen(ifaces, devices)
 
-        await gen._ensure_ha_interfaces(ha_obj, "fw-01-fw-02-ha")
+        await gen._ensure_ha_interfaces(ha_obj, "fw-01-fw-02")
 
         kinds = [c.kwargs["kind"] for c in gen.client.filters.call_args_list]
         assert DcimPhysicalDevice not in kinds
@@ -347,7 +373,7 @@ class TestHaMemberDevices:
         ha_obj, devices, ifaces = _stored_pair(stored=False)
         gen = self._gen(ifaces, devices)
 
-        await gen._ensure_ha_interfaces(ha_obj, "fw-01-fw-02-ha")
+        await gen._ensure_ha_interfaces(ha_obj, "fw-01-fw-02")
 
         device_calls = [c.kwargs for c in gen.client.filters.call_args_list if c.kwargs["kind"] is DcimPhysicalDevice]
         assert device_calls == [{"kind": DcimPhysicalDevice, "ids": ["dev-1", "dev-2"]}]
@@ -359,7 +385,7 @@ class TestHaMemberDevices:
         ha_obj, devices, ifaces = _stored_pair(typename="DcimVirtualDevice")
         gen = self._gen(ifaces, devices[:1])
 
-        await gen._ensure_ha_interfaces(ha_obj, "fw-01-fw-02-ha")
+        await gen._ensure_ha_interfaces(ha_obj, "fw-01-fw-02")
 
         device_calls = [c.kwargs for c in gen.client.filters.call_args_list if c.kwargs["kind"] is DcimPhysicalDevice]
         assert device_calls == [{"kind": DcimPhysicalDevice, "ids": ["dev-1", "dev-2"]}]
@@ -373,7 +399,7 @@ class TestHaMemberDevices:
         ha_obj.capabilities.peers[0]._node = nameless
         gen = self._gen(ifaces, devices)
 
-        await gen._ensure_ha_interfaces(ha_obj, "fw-01-fw-02-ha")
+        await gen._ensure_ha_interfaces(ha_obj, "fw-01-fw-02")
 
         assert DcimPhysicalDevice in [c.kwargs["kind"] for c in gen.client.filters.call_args_list]
 
@@ -401,7 +427,7 @@ class TestEnsureHaInterfaces:
         gen = self._gen()
         ha_obj = MagicMock(id="ha-1", capabilities=_mock_relmgr([]))
 
-        await gen._ensure_ha_interfaces(ha_obj, "fw-01-fw-02-ha")
+        await gen._ensure_ha_interfaces(ha_obj, "fw-01-fw-02")
 
         gen.client.filters.assert_not_called()
 
@@ -433,7 +459,7 @@ class TestEnsureHaInterfaces:
         gen.client.filters = AsyncMock(side_effect=_filters)
         gen.client.create = AsyncMock(return_value=MagicMock(save=AsyncMock()))
 
-        await gen._ensure_ha_interfaces(ha_obj, "fw-01-fw-02-ha", members=[dev_1, dev_2])
+        await gen._ensure_ha_interfaces(ha_obj, "fw-01-fw-02", members=[dev_1, dev_2])
 
         caps.fetch.assert_not_awaited()
         assert DcimPhysicalDevice not in [c.kwargs["kind"] for c in gen.client.filters.call_args_list]
@@ -462,13 +488,13 @@ class TestEnsureHaInterfaces:
         gen.client.filters = AsyncMock(side_effect=_filters)
         gen.client.create = AsyncMock(return_value=MagicMock(save=AsyncMock()))
 
-        await gen._ensure_ha_interfaces(ha_obj, "fw-01-fw-02-ha")
+        await gen._ensure_ha_interfaces(ha_obj, "fw-01-fw-02")
 
         assert iface_1.status.value == "active"
         assert iface_2.status.value == "active"
         created = [(c.kwargs["kind"], c.kwargs["data"]) for c in gen.client.create.call_args_list]
         assert [kind for kind, _ in created] == [DcimCable]
-        assert created[0][1]["name"] == "CBL-fw-01-fw-02-ha-SYNC"
+        assert created[0][1]["name"] == "CBL-fw-01-fw-02-SYNC"
         assert created[0][1]["endpoints"] == ["iface-1", "iface-2"]
 
     @pytest.mark.asyncio
@@ -500,7 +526,7 @@ class TestEnsureHaInterfaces:
         gen.client.filters = AsyncMock(side_effect=_filters)
         gen._ensure_ha_cable = AsyncMock()
 
-        await gen._ensure_ha_interfaces(ha_obj, "fw-01-fw-02-ha", device_kind=device_kind)
+        await gen._ensure_ha_interfaces(ha_obj, "fw-01-fw-02", device_kind=device_kind)
 
         iface_calls = [c.kwargs for c in gen.client.filters.call_args_list if c.kwargs["kind"] is iface_kind]
         assert len(iface_calls) == 1
@@ -510,7 +536,7 @@ class TestEnsureHaInterfaces:
         assert device_call == {"kind": device_kind, "ids": ["dev-1", "dev-2"]}
         if device_kind is DcimPhysicalDevice:
             assert iface_calls[0]["include"] == ["cable"]
-            gen._ensure_ha_cable.assert_awaited_once_with("fw-01-fw-02-ha", [(dev_1, iface_1), (dev_2, iface_2)])
+            gen._ensure_ha_cable.assert_awaited_once_with("fw-01-fw-02", [(dev_1, iface_1), (dev_2, iface_2)])
         else:
             gen.client.create.assert_not_called()
 
@@ -540,7 +566,7 @@ class TestEnsureHaInterfaces:
         gen.client.filters = AsyncMock(side_effect=_filters)
         gen.client.create = AsyncMock(return_value=MagicMock(save=AsyncMock()))
 
-        await gen._ensure_ha_interfaces(ha_obj, "fw-01-fw-02-ha")
+        await gen._ensure_ha_interfaces(ha_obj, "fw-01-fw-02")
 
         assert iface_1.status.value == "active"
         # update_group_context=False: the port belongs to the device's
@@ -564,7 +590,7 @@ class TestEnsureHaInterfaces:
 
         gen.client.filters = AsyncMock(side_effect=_filters)
 
-        await gen._ensure_ha_interfaces(ha_obj, "fw-01-fw-02-ha")
+        await gen._ensure_ha_interfaces(ha_obj, "fw-01-fw-02")
 
         assert gen.logger.error.call_count == 2
         gen.client.create.assert_not_called()
@@ -683,7 +709,7 @@ class TestEnsureHaCable:
         iface_1 = _mock_iface("iface-1", device_id="dev-1", name="sync0")
         iface_2 = _mock_iface("iface-2", device_id="dev-2", name="sync0")
 
-        await gen._ensure_ha_cable("fw-01-fw-02-ha", [(dev_1, iface_1), (dev_2, iface_2)])
+        await gen._ensure_ha_cable("fw-01-fw-02", [(dev_1, iface_1), (dev_2, iface_2)])
 
         gen.client.create.assert_not_called()
         assert gen.client.group_context.related_node_ids == ["existing-cbl"]
@@ -700,7 +726,7 @@ class TestEnsureHaCable:
         iface_1 = _mock_iface("iface-1", device_id="dev-1", name="sync0", cable_id="orphan-cbl")
         iface_2 = _mock_iface("iface-2", device_id="dev-2", name="sync0")
 
-        await gen._ensure_ha_cable("fw-01-fw-02-ha", [(dev_1, iface_1), (dev_2, iface_2)])
+        await gen._ensure_ha_cable("fw-01-fw-02", [(dev_1, iface_1), (dev_2, iface_2)])
 
         gen.client.create.assert_not_called()
 
@@ -717,11 +743,11 @@ class TestEnsureHaCable:
         iface_1 = _mock_iface("iface-1", device_id="dev-1", name="sync0")
         iface_2 = _mock_iface("iface-2", device_id="dev-2", name="sync0")
 
-        await gen._ensure_ha_cable("fw-01-fw-02-ha", [(dev_2, iface_2), (dev_1, iface_1)])
+        await gen._ensure_ha_cable("fw-01-fw-02", [(dev_2, iface_2), (dev_1, iface_1)])
 
         call_kwargs = gen.client.create.call_args.kwargs
         assert call_kwargs["kind"] is DcimCable
-        assert call_kwargs["data"]["name"] == "CBL-fw-01-fw-02-ha-SYNC"
+        assert call_kwargs["data"]["name"] == "CBL-fw-01-fw-02-SYNC"
         assert call_kwargs["data"]["endpoints"] == ["iface-1", "iface-2"]
         assert call_kwargs["data"]["deployment"] == {"id": "dep-1"}
 
@@ -743,7 +769,7 @@ class TestEnsureHaCable:
         iface_1 = _mock_iface("iface-1", device_id="dev-1", name="sync0")
         iface_2 = _mock_iface("iface-2", device_id="dev-2", name="sync0")
 
-        await gen._ensure_ha_cable("fw-01-fw-02-ha", [(dev_2, iface_2), (dev_1, iface_1)])
+        await gen._ensure_ha_cable("fw-01-fw-02", [(dev_2, iface_2), (dev_1, iface_1)])
 
         call_kwargs = gen.client.create.call_args.kwargs
         assert call_kwargs["data"]["deployment"] == {"id": "dc-7"}

@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import secrets
-from collections.abc import Callable
-from contextlib import AbstractAsyncContextManager
 from typing import TYPE_CHECKING, Any, NamedTuple
 
 if TYPE_CHECKING:
     import logging
+
+    from .pools import PoolMixin
 
 from .helpers import RoutingStrategy
 from .protocols import RoutingAutonomousSystem, RoutingOSPFArea, RoutingPassword
@@ -66,8 +66,8 @@ class SharedRoutingObjectsMixin:
     logger: logging.Logger
     fabric_name: str
     data: Any
-    # PoolMixin.resource_lock — a Callable attribute, not a stub, so it never shadows the real one.
-    resource_lock: Callable[[str], AbstractAsyncContextManager[None]]
+    if TYPE_CHECKING:
+        resource_lock = PoolMixin.resource_lock
     # Shared RoutingPassword ids this run has found, by name (_resolve_shared_passwords).
     _shared_password_ids: dict[str, str]
 

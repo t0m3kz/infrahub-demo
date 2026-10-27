@@ -81,7 +81,7 @@ query colocation_placement {
             owner { node { id display_label notification_emails { value } } }
           }
         }
-        devices {
+        appliances {
           edges {
             node {
               id

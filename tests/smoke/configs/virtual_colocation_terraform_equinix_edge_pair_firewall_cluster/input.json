@@ -79,7 +79,7 @@
               }
             ]
           },
-          "devices": {
+          "appliances": {
             "edges": [
               {
                 "node": {

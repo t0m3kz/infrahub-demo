@@ -3,11 +3,13 @@ that own a DC-scoped or pod-scoped service chain (dc.py, pod.py)."""
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from ..pod_config import templates_by_role
 from ..types import NamingConvention
+
+if TYPE_CHECKING:
+    from ..devices import DeviceMixin
 
 # The generator definitions (.infrahub.yml) that write a DC's own data — the ones
 # a consumer of DC-level data (a pod, a customer boarding) waits out.
@@ -20,7 +22,8 @@ class ServiceDevicesMixin:
     """Firewall + load-balancer creation for a fabric_templates list."""
 
     # Provided by DeviceMixin.
-    create_ha_role_devices: Callable[..., Awaitable[list[tuple[dict[str, Any], list[str]]]]]
+    if TYPE_CHECKING:
+        create_ha_role_devices = DeviceMixin.create_ha_role_devices
 
     async def create_firewall_and_load_balancer_devices(
         self,

@@ -24,7 +24,7 @@ query suite_capacity {
             }
           }
         }
-        pod {
+        deployment {
           node {
             id
             name { value }

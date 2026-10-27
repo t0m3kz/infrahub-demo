@@ -108,18 +108,14 @@ nodes:
   # many zones carry edge routers: add_colocation_zone / add_virtual_colocation
   # peer every edge pair with that one AS.
   #
-  # TopologyDeviceHosting and TopologyPhysicalDeployment stay inherited from the
-  # time the metro owned the kit. Nothing reads them on the metro any more (no
-  # query, generator or data deploys a device to it), so they are the first thing
-  # to delete; they stay only until a schema load on a live stack has confirmed
-  # that dropping them is accepted.
+  # The metro hosts no device and carries no cable: the kit is the zones' and the
+  # virtual colocations', so it inherits neither TopologyDeviceHosting nor
+  # TopologyPhysicalDeployment.
   - name: ColocationMetro
     namespace: Topology
     inherit_from:
       - CoreArtifactTarget
       - TopologyDeployment
-      - TopologyPhysicalDeployment
-      - TopologyDeviceHosting
       - TopologyDeviceNaming
       - TopologySegmentHosting
     uniqueness_constraints:
@@ -251,7 +247,6 @@ nodes:
     inherit_from:
       - CoreArtifactTarget
       - TopologyDeployment
-      - TopologyDeviceHosting
       - TopologyProviderHosting
       - TopologyOrchestratorScoped
       - TopologyColocationFabric

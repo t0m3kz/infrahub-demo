@@ -9,13 +9,12 @@ from .all_demo_circuit_constants import ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS, _s
 from .all_demo_constants import _ALL_DEMO_ROOT, ALL_DEMO_DC_NAMES, ALL_DEMO_EXPECTED_OBJECTS, _all_demo
 from .demo_data import ROOT, declared, name
 
-# One shared (tenant-less) firewall context per firewall cluster: one per DC
-# and one per serving colocation zone, whose pair every footprint naming that
-# serving_zone shares (a colocation has no design, so never a dedicated
-# context). The colocation context carries transit legs like a DC one (its
-# legs face the zone's two edges, whose firewall ports are tagged with the
-# context) ...
-ALL_DEMO_SHARED_FIREWALL_CONTEXTS = len(ALL_DEMO_DC_NAMES) + len(ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS)
+# One shared (tenant-less) firewall context per (firewall cluster, tenant namespace): per DC and per serving
+# colocation zone, whose pair every footprint naming that serving_zone shares (a colocation has no design, so
+# never a dedicated context), one for each of PROD and NON-PROD that has a footprint. PROD and NON-PROD never meet
+# on one context (`shared-{cluster}-prod`, `shared-{cluster}-non-prod`). The colocation context carries transit
+# legs like a DC one (its legs face the zone's two edges, whose firewall ports are tagged with the context) ...
+# The count, ALL_DEMO_SHARED_FIREWALL_CONTEXTS, is derived below from ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS.
 
 
 _BOOTSTRAP_ROOT = ROOT / "data" / "bootstrap"
@@ -151,8 +150,10 @@ class ExpectedTransitContext(TypedDict):
 
     #: The DC (`DC10`) or the serving colocation zone (`FR2`) the context's firewalls sit in.
     site: str
-    #: Tenant deployment of a dedicated context, None for the DC's shared one.
+    #: Tenant deployment of a dedicated context, None for the site's shared one.
     tenant: str | None
+    #: The tenant namespace (PROD or NON-PROD) the context's tenant leg is in: a shared context is one per namespace.
+    namespace: str
     #: Deployments the context serves.
     deployments: tuple[str, ...]
     #: Namespace names with a leg, in ALL_DEMO_TRANSIT_NAMESPACES order.
@@ -181,6 +182,15 @@ def transit_namespace_type(namespace_name: str) -> str:
     return next(ns_type for ns_type, name in _TRANSIT_NAMESPACE_BY_TYPE.items() if name == namespace_name)
 
 
+def _by_namespace(deployments: tuple[str, ...]) -> dict[str, tuple[str, ...]]:
+    """The deployments grouped by their tenant namespace, in ALL_DEMO_TRANSIT_NAMESPACES order."""
+    return {
+        namespace: tuple(d for d in deployments if deployment_namespace(d) == namespace)
+        for namespace in ("PROD", "NON-PROD")
+        if any(deployment_namespace(d) == namespace for d in deployments)
+    }
+
+
 def _expected_transit_context(site: str, tenant: str | None, deployments: tuple[str, ...]) -> ExpectedTransitContext:
     tenant_types = {namespace_type_for_environment(deployment_environment(d)) for d in deployments}
     exchanges = [
@@ -196,6 +206,7 @@ def _expected_transit_context(site: str, tenant: str | None, deployments: tuple[
     return {
         "site": site,
         "tenant": tenant,
+        "namespace": deployment_namespace(deployments[0]),
         "deployments": deployments,
         "namespaces": namespaces,
         "exchanges": tuple(exchanges),
@@ -203,16 +214,17 @@ def _expected_transit_context(site: str, tenant: str | None, deployments: tuple[
 
 
 def expected_transit_contexts() -> list[ExpectedTransitContext]:
-    """The shared context of every 30_all DC, then its dedicated ones (ALL_DEMO_DEDICATED_FIREWALL_TENANTS),
-    then the shared context of every serving colocation zone (never a dedicated one: no design)."""
+    """The shared contexts of every 30_all DC (one per tenant namespace), then its dedicated ones
+    (ALL_DEMO_DEDICATED_FIREWALL_TENANTS), then the shared contexts of every serving colocation zone (never a
+    dedicated one: no design)."""
     contexts: list[ExpectedTransitContext] = []
     for dc, deployments in ALL_DEMO_DC_CUSTOMER_DEPLOYMENTS.items():
         dedicated = tuple(d for d in deployments if d in ALL_DEMO_DEDICATED_FIREWALL_TENANTS)
         shared = tuple(d for d in deployments if d not in ALL_DEMO_DEDICATED_FIREWALL_TENANTS)
-        contexts.append(_expected_transit_context(dc, None, shared))
+        contexts.extend(_expected_transit_context(dc, None, group) for group in _by_namespace(shared).values())
         contexts.extend(_expected_transit_context(dc, tenant, (tenant,)) for tenant in dedicated)
     for site, deployments in ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS.items():
-        contexts.append(_expected_transit_context(site, None, deployments))
+        contexts.extend(_expected_transit_context(site, None, group) for group in _by_namespace(deployments).values())
     return contexts
 
 
@@ -249,6 +261,8 @@ ALL_DEMO_BORDER_FIREWALL_PORTS = (
 # Declared nowhere: the customer boarding generators create them, so the floors
 # join ALL_DEMO_EXPECTED_OBJECTS here. Contexts = the shared ones + one per
 # dedicated tenant; `>=` because the DC6 chain's own boarding merges into main.
+ALL_DEMO_SHARED_FIREWALL_CONTEXTS = sum(e["tenant"] is None for e in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS)
+
 ALL_DEMO_EXPECTED_OBJECTS["ManagedFirewallContext"] = ALL_DEMO_SHARED_FIREWALL_CONTEXTS + len(
     ALL_DEMO_DEDICATED_FIREWALL_TENANTS
 )

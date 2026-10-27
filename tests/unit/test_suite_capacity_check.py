@@ -62,7 +62,7 @@ def _rack(
         "row_index": {"value": row},
         "index": {"value": index},
         "parent": {"node": suite},
-        "pod": {"node": pod},
+        "deployment": {"node": pod},
     }
 
 

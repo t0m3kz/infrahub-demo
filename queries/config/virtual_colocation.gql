@@ -76,7 +76,7 @@ query virtual_colocation_config($instance: String!) {
             }
           }
         }
-        devices {
+        appliances {
           edges {
             node {
               id

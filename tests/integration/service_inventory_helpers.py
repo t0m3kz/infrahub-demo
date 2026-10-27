@@ -116,6 +116,16 @@ def _value(attribute: dict[str, Any] | None) -> Any:
     return (attribute or {}).get("value")
 
 
+def health_check_hfids(connection: dict[str, Any] | None) -> tuple[tuple[str, ...], ...]:
+    """The health checks of a raw `{edges: [{node}]}` connection as sorted [check, rise, fall, timeout] strings."""
+    return tuple(
+        sorted(
+            tuple(str(_value(check.get(field))) for field in ("check", "rise", "fall", "timeout"))
+            for check in _edge_nodes(connection)
+        )
+    )
+
+
 #: Device roles whose service ports (firewall- or load-balancer-facing) a context is tagged on: a DC's border
 #: leaf, a colocation metro's edge.
 _SERVICE_PORT_DEVICE_ROLES = frozenset({"border-leaf", "edge"})
@@ -243,47 +253,61 @@ async def fetch_transit_inventory(client: InfrahubClient, branch: str) -> dict[s
     return {"contexts": contexts, "exchanges": exchanges}
 
 
+def _tenant_namespace(context: dict[str, Any]) -> str | None:
+    """The one of PROD / NON-PROD a firewall context has a leg in (INTERNET and MANAGEMENT are its peers), else None."""
+    namespaces = {str(leg["namespace"]) for leg in context["legs"]} & {"PROD", "NON-PROD"}
+    return next(iter(namespaces)) if len(namespaces) == 1 else None
+
+
 def match_transit_contexts(
     contexts: list[dict[str, Any]],
     dc_names: Iterable[str],
     dedicated_tenants: Iterable[str],
     colocation_sites: Mapping[str, Iterable[str]] | None = None,
-) -> tuple[dict[tuple[str, str | None], dict[str, Any]], list[dict[str, Any]]]:
+) -> tuple[dict[tuple[str, str, str | None], dict[str, Any]], list[dict[str, Any]]]:
     """Split the contexts into the ones the suite owns, keyed by site, and the other colocation ones.
 
-    Returns ({(site, tenant): context}, [unmatched colocation contexts]). A shared
-    context is keyed (dc, None) by the DC its member firewalls are deployed in; a
-    dedicated one (its members are virtual, so carry no deployment) by the tenant's
-    own trailing DC (`C007-P-DC10` -> DC10) and the tenant name. Contexts of a DC
-    outside ``dc_names`` (the DC6 chain's) and dedicated contexts of tenants outside
-    ``dedicated_tenants`` are dropped. A colocation context is one with neither
-    tenant nor DC: when its served deployments are exactly those of a metro in
-    ``colocation_sites`` (serving zone -> deployment names) it is keyed (zone, None),
-    otherwise it is returned in the list.
+    Returns ({(site, namespace, tenant): context}, [unmatched contexts]). The namespace is the context's
+    tenant VRF (PROD or NON-PROD, see _tenant_namespace): a shared context is one per (cluster, namespace). A
+    shared context is keyed (dc, namespace, None) by the DC its member firewalls are deployed in; a dedicated
+    one (its members are virtual, so carry no deployment) by the tenant's own trailing DC (`C007-P-DC10` -> DC10)
+    and the tenant name. Contexts of a DC outside ``dc_names`` (the DC6 chain's) and dedicated contexts of
+    tenants outside ``dedicated_tenants`` are dropped. A colocation context is one with neither tenant nor DC:
+    when the deployments it serves are all among those of a metro in ``colocation_sites`` (serving zone ->
+    deployment names) it is keyed (zone, namespace, None), otherwise it is returned in the list. So is a
+    context whose legs are in no single tenant namespace, or whose key another context already holds.
     """
     allowed = set(dc_names)
     tenants = set(dedicated_tenants)
     sites = {site: frozenset(names) for site, names in (colocation_sites or {}).items()}
-    by_key: dict[tuple[str, str | None], dict[str, Any]] = {}
-    colocation: list[dict[str, Any]] = []
+    by_key: dict[tuple[str, str, str | None], dict[str, Any]] = {}
+    unmatched: list[dict[str, Any]] = []
+
+    def keep(site: str, tenant: str | None, context: dict[str, Any]) -> None:
+        namespace = _tenant_namespace(context)
+        if namespace is None or (site, namespace, tenant) in by_key:
+            unmatched.append(context)
+        else:
+            by_key[(site, namespace, tenant)] = context
+
     for context in contexts:
         tenant = context["tenant"]
         if tenant:
             dc = str(tenant).rsplit("-", 1)[-1]
             if tenant in tenants and dc in allowed:
-                by_key[(dc, str(tenant))] = context
+                keep(dc, str(tenant), context)
             continue
         dcs = sorted(set(context["cluster_dcs"]) & allowed)
         if dcs:
-            by_key[(dcs[0], None)] = context
+            keep(dcs[0], None, context)
         elif not context["cluster_dcs"]:
             served = frozenset(str(d["name"]) for d in context.get("served", []))
-            site = next((name for name, deployments in sites.items() if deployments == served), None)
+            site = next((name for name, deployments in sites.items() if served and served <= deployments), None)
             if site is None:
-                colocation.append(context)
+                unmatched.append(context)
             else:
-                by_key[(site, None)] = context
-    return by_key, colocation
+                keep(site, None, context)
+    return by_key, unmatched
 
 
 async def fetch_loadbalancer_inventory(client: InfrahubClient, branch: str) -> list[dict[str, Any]]:
@@ -322,6 +346,7 @@ async def fetch_loadbalancer_inventory(client: InfrahubClient, branch: str) -> l
                     "members": sorted(
                         str(_value(member.get("address"))) for member in _edge_nodes(vip.get("pool_members"))
                     ),
+                    "health_checks": health_check_hfids(vip.get("health_checks")),
                     "component": _value(component.get("fqdn")),
                     "segment": _value(segment.get("name")),
                     "segment_prefix": _value(

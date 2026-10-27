@@ -234,8 +234,9 @@ def _management_border_leaf_errors(device: str, rendered: str, contexts: list[di
     return errors
 
 
-def _site_contexts(inventory: dict[str, list[dict[str, Any]]]) -> dict[tuple[str, str | None], dict[str, Any]]:
-    """The 30_all firewall contexts keyed (site, tenant): a DC or a serving colocation zone (FR2), tenant None for the shared one."""
+def _site_contexts(inventory: dict[str, list[dict[str, Any]]]) -> dict[tuple[str, str, str | None], dict[str, Any]]:
+    """The 30_all firewall contexts keyed (site, namespace, tenant): a DC or a serving colocation zone (FR2), the
+    tenant namespace (PROD / NON-PROD), tenant None for a shared one."""
     by_key, _ = match_transit_contexts(
         inventory["contexts"],
         ALL_DEMO_DC_NAMES,
@@ -243,6 +244,36 @@ def _site_contexts(inventory: dict[str, list[dict[str, Any]]]) -> dict[tuple[str
         ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS,
     )
     return by_key
+
+
+def _context_lines(rendered: str, platform: str | None, context: str) -> str:
+    """The lines of a rendered firewall config that belong to one context: its `set vsys <context>` lines (PAN-OS), or
+    the lines under its `set|add virtual-system <context>` header up to the next `!` comment (Check Point)."""
+    if platform == "paloalto_panos":
+        return "\n".join(line for line in rendered.splitlines() if f"set vsys {context} " in line)
+    own: list[str] = []
+    current: str | None = None
+    for line in rendered.splitlines():
+        words = line.split()
+        if line.startswith("!"):
+            current = None
+        elif words[:2] == ["set", "virtual-system"] and len(words) == 3:
+            current = words[2]
+        elif words[:3] == ["add", "virtual-system", "name"]:
+            current = words[3]
+        if current == context:
+            own.append(line)
+    return "\n".join(own)
+
+
+def _shared_contexts(contexts: dict[tuple[str, str, str | None], dict[str, Any]], site: str) -> list[dict[str, Any]]:
+    """The shared (tenant-less) contexts of a site, one per tenant namespace, in namespace order."""
+    shared = [
+        (namespace, context)
+        for (key_site, namespace, tenant), context in contexts.items()
+        if key_site == site and tenant is None
+    ]
+    return [context for _, context in sorted(shared, key=lambda item: item[0])]
 
 
 def _leg_network(context: dict[str, Any], namespace: str) -> ipaddress.IPv4Network:

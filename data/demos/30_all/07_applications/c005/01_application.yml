@@ -30,6 +30,8 @@ spec:
             ports:
               - tcp/443
             load_balanced: true
+            health_checks:
+              - ["http", "3", "3", "2000"]
             network_segment: c005-web-frontend-local-dc10-p
             instances:
               - c005-web-frontend-dc10-1

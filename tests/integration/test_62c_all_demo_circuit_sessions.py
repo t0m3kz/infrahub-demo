@@ -142,7 +142,11 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                 errors.append(f"{name}: '{context_name}' is on cluster {sorted(members)}, not the zone's firewalls")
 
             expected = next(
-                (e for e in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS if e["site"] == serving_zone and e["tenant"] is None),
+                (
+                    e
+                    for e in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS
+                    if e["site"] == serving_zone and e["tenant"] is None and name in e["deployments"]
+                ),
                 None,
             )
             if expected is None:

@@ -138,7 +138,7 @@ class TestSpineSlotDeviceNames:
         gen.fabric_name = "dc7"
         gen.data = {
             "name": "ams-1-s-2-r-1-1",
-            "pod": {
+            "deployment": {
                 "index": 2,
                 "parent": _DC,
                 "fabric_templates": [
@@ -190,7 +190,7 @@ class TestPodSpineSlotDeviceNames:
             "quantity": 2,
             "template": {"interfaces": [{"name": "Ethernet1/1", "role": "downlink"}]},
         }
-        gen.data = {"name": "r", "pod": {"index": 1, "parent": _DC, "fabric_templates": [entry, entry]}}
+        gen.data = {"name": "r", "deployment": {"index": 1, "parent": _DC, "fabric_templates": [entry, entry]}}
 
         device_names, _ = gen._derive_spine_info()
 

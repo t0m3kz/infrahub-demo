@@ -6,12 +6,13 @@ import asyncio
 import ipaddress
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from infrahub_sdk.protocols import CoreIPAddressPool, CoreIPPrefixPool
 
 if TYPE_CHECKING:
     import logging
+    from .common import CommonGenerator
 
 from utils.limits import WAIT_FOR_PEER_GENERATOR
 
@@ -88,7 +89,8 @@ class CablingMixin:
     deployment_id: str
     # CommonGenerator._resolve_pool / _retry_delay — annotation only.
     _resolve_pool: Any
-    _retry_delay: Callable[..., float]
+    if TYPE_CHECKING:
+        _retry_delay = staticmethod(CommonGenerator._retry_delay)
     # CommonGenerator._safe_rel_add — annotation only, needed by ensure_vlan_subinterface.
     _safe_rel_add: Any
     # Set on first use by _cable_layouts, one per generator instance (= per run).

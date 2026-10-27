@@ -12,10 +12,10 @@ serving link. One implementation for both kinds of context; a ContextSpec
 
 * firewall: a leg in the tenant VRF and in each of its EXCHANGE_PEERS
   (INTERNET, MANAGEMENT), joined by a TopologyRoutedExchange per pair, one
-  public SNAT /32 per context; one shared context per cluster.
+  public SNAT /32 per context; one shared context per (cluster, tenant namespace).
 * load balancer (one-arm): a single leg in the tenant VRF, no exchanges, no
   SNAT, a routed VIP /26 behind the leg's .4; one shared context per (cluster,
-  tenant namespace), since the LB never joins PROD and NON-PROD.
+  tenant namespace) as well. Neither kind ever joins PROD and NON-PROD.
 
 The legs face the border leaf on a DC and the edge on a colocation zone. The
 customer kind, the parent's label and the specs to run are class attributes
@@ -26,8 +26,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Awaitable, Callable
-from contextlib import AbstractAsyncContextManager
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from infrahub_sdk.protocols import CoreNumberPool
 
@@ -47,6 +46,13 @@ from .helpers.common import save_with_node_not_found_retry
 from .protocols import DcimPhysicalDevice, DcimVirtualDevice, IpamIPAddress, IpamPrefix, TopologyRoutedExchange
 from .types import DeviceOptions
 
+if TYPE_CHECKING:
+    from .common import CommonGenerator
+    from .connections import CablingMixin
+    from .devices import DeviceMixin
+    from .domain_pairing import DomainPairingMixin
+    from .pools import PoolMixin
+
 __all__ = ["FIREWALL_CONTEXT", "LOADBALANCER_CONTEXT", "ContextSpec", "FirewallContextMixin"]
 
 _VIP_POOL_KEY = "vip"  # _prefix_pools key of the VIP range pool, next to the leg types
@@ -63,17 +69,16 @@ def _physical_devices(devices: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return sorted((d for d in devices if d.get("kind") == DcimPhysicalDevice.__name__), key=_dev_name)
 
 
-def _customer_short_id(customer: dict[str, Any], customer_id: str) -> str:
-    """{org_id}-{environment} (e.g. "C009-p") — used for dedicated device/
-    context naming instead of customer["name"] (the full computed
-    {org_id}-{environment}-{parent}, e.g. "C009-P-DC11"). The parent segment
-    is redundant here: physical_name already identifies which cluster a
-    dedicated instance belongs to, so keeping it in the customer portion too
-    only stacks up length once _ensure_ha_pairs joins both instance names."""
+def _dedicated_name_parts(customer: dict[str, Any], customer_id: str) -> tuple[str, str]:
+    """(owner, environment class) a dedicated device, HA and context are named from: ("c009", "prod").
+
+    The owner's org_id opens the name and the class of the footprint's namespace (prod / non-prod, as
+    namespace_type_for_environment) closes it, both lowercase. The parent is not part of it:
+    the physical device names already say which cluster a dedicated pair belongs to.
+    """
     owner = customer.get("owner") or {}
     org_id = owner.get("org_id") or customer.get("name", customer_id)
-    environment = customer.get("environment")
-    return f"{org_id}-{environment}" if environment else org_id
+    return org_id.lower(), namespace_type_for_environment(customer.get("environment") or "").lower()
 
 
 class FirewallContextMixin(TransitLegsMixin):
@@ -94,18 +99,20 @@ class FirewallContextMixin(TransitLegsMixin):
     _parent_generators: tuple[str, ...]
     _context_specs: tuple[ContextSpec, ...]
 
-    # Provided by the host class and its other mixins. Callable attributes,
-    # not stub methods, so they never shadow the real ones via the MRO.
+    # Provided by the host class and its other mixins.
     client: Any
     logger: logging.Logger
     fabric_name: str
-    resource_lock: Callable[[str], AbstractAsyncContextManager[None]]
-    ensure_vlan_subinterface: Callable[..., Awaitable[Any]]
-    create_devices: Callable[..., Awaitable[list[str]]]
-    _ensure_ha_pairs: Callable[..., Awaitable[None]]
+    # Type checking only: the real members of the host's other bases, aliased so nothing is defined at runtime and
+    # nothing shadows them in the MRO.
+    if TYPE_CHECKING:
+        _ensure_ha_pairs = DomainPairingMixin._ensure_ha_pairs
+        create_devices = DeviceMixin.create_devices
+        ensure_vlan_subinterface = CablingMixin.ensure_vlan_subinterface
+        resource_lock = PoolMixin.resource_lock
+        run_generator = CommonGenerator.run_generator
+        wait_for_parent_generators = CommonGenerator.wait_for_parent_generators
     wait_for_parent_generator_and_refetch: Callable[..., Awaitable[dict | None]]  # CustomerFacilityMixin.generate
-    wait_for_parent_generators: Callable[..., Awaitable[bool]]
-    run_generator: Callable[..., Awaitable[None]]
 
     async def resolve_virtual_template(
         self, *, platform: str | None, role: str, size_suffix: str
@@ -239,13 +246,14 @@ class FirewallContextMixin(TransitLegsMixin):
         if not dedicated:
             return _ContextTarget(
                 spec=spec,
-                cluster_name=cluster.name.value,
+                name_base=cluster.name.value,
                 cluster_id=cluster.id,
                 tenant_id=None,
                 track=False,
                 devices=devices,
                 parent_name=parent_name,
             )
+        name_parts = _dedicated_name_parts(customer, customer_id)
         dedicated_result = await self._ensure_dedicated_device_pair(
             role=spec.role,
             ha_kind=spec.ha_kind.__name__,
@@ -253,17 +261,17 @@ class FirewallContextMixin(TransitLegsMixin):
             parent_id=parent_id,
             parent_name=parent_name,
             dc_design=(parent.get("design") or {}).get("name"),
-            customer_name=_customer_short_id(customer, customer_id),
+            name_parts=name_parts,
         )
         if dedicated_result is None:
             return None
         cluster, devices = dedicated_result
-        # cluster.name.value already carries customer_name (see
-        # _ensure_dedicated_device_pair's instance_name) — the context name
-        # only appends "-context" to it.
+        # The dedicated cluster's name is `{owner}-{first}-{second}-ha-{class}` (see _ensure_dedicated_device_pair):
+        # the context name takes it without `-ha-{class}`, and _ContextTarget.context_name puts the class last.
+        _, env_class = name_parts
         return _ContextTarget(
             spec=spec,
-            cluster_name=cluster.name.value,
+            name_base=cluster.name.value.removesuffix(f"-ha-{env_class}"),
             cluster_id=cluster.id,
             tenant_id=customer_id,
             track=True,
@@ -288,10 +296,9 @@ class FirewallContextMixin(TransitLegsMixin):
         other legs (EXCHANGE_PEERS: INTERNET, MANAGEMENT) are joined to it by
         one TopologyRoutedExchange `{context}-{A}-{Z}` per pair, so PROD is
         never paired with NON-PROD. A load-balancer context has the tenant leg
-        only. Legs and exchanges are created lazily: a shared firewall context
-        serving PROD and NON-PROD customers grows the NON-PROD leg when the
-        first NON-PROD customer boards; a shared load-balancer context is per
-        tenant namespace, so the first NON-PROD customer creates its own.
+        only. Legs and exchanges are created lazily: a shared context is per
+        tenant namespace, so the first NON-PROD customer of a cluster creates
+        its own context.
 
         Shared context (track=False): a re-run, or a second customer on a
         context that is already complete, finds that out by reads alone
@@ -517,7 +524,7 @@ class FirewallContextMixin(TransitLegsMixin):
         parent_id: str,
         parent_name: str,
         dc_design: str | None,
-        customer_name: str,
+        name_parts: tuple[str, str],
     ) -> tuple[Any, list[Any]] | None:
         """Provision a dedicated virtual HA pair (firewall or load-balancer)
         for this customer, one virtual instance hosted on each of the shared
@@ -531,7 +538,14 @@ class FirewallContextMixin(TransitLegsMixin):
         the parent has no design, does not have exactly 2 physical peers, the
         physical template's platform has no dedicated variant mapped, or the
         *_CUSTOMER_* template itself doesn't exist.
+
+        name_parts is (owner, environment class), see _dedicated_name_parts: a member is
+        `{owner}-{physical}-{class}` and the HA domain `{owner}-{first physical}-{second physical}-ha-{class}`,
+        the owner once, in front. The context on it is `{owner}-{first physical}-{second physical}-{class}`
+        (_ContextTarget.context_name); the HA domain is the one with `ha`, as the two cannot share a name.
         """
+        owner, env_class = name_parts
+        customer_name = f"{owner}-{env_class}"
         if not dc_design:
             self.logger.error(f"{parent_name}: no design set — cannot resolve dedicated {role} template size")
             return None
@@ -564,7 +578,7 @@ class FirewallContextMixin(TransitLegsMixin):
             physical_name = _dev_name(physical_device)
             # physical_name alone keeps this unique — it's already the
             # specific host device in the pair.
-            instance_name = f"{physical_name}-{customer_name}-dedicated"
+            instance_name = f"{owner}-{physical_name}-{env_class}"
             names = await self.create_devices(
                 deployment_id=parent_id,
                 device_role=role,
@@ -575,8 +589,10 @@ class FirewallContextMixin(TransitLegsMixin):
             )
             instance_names.extend(names)
 
+        first, second = (_dev_name(device) for device in sorted(physical_pair, key=_dev_name))
         await self._ensure_ha_pairs(
             instance_names,
+            ha_name=f"{owner}-{first}-{second}-ha-{env_class}",
             ha_kind=ha_kind,
             role_label=f"{role} (dedicated {customer_name})",
             device_kind=DcimVirtualDevice,

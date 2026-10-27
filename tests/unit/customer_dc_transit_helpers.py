@@ -11,9 +11,10 @@ from generators.topology.customer_dc import CustomerDeploymentDCExchangeGenerato
 
 _UNTRACKED = {"allow_upsert": True, "update_group_context": False}
 _TRACKED = {"allow_upsert": True}
-_SHARED = "DC10-FW1-FW2-ha-shared"
-_LB_PROD = "DC10-LB1-LB2-ha-PROD"
-_LB_NON_PROD = "DC10-LB1-LB2-ha-NON-PROD"
+_SHARED = "shared-DC10-FW1-FW2-prod"
+_SHARED_NON_PROD = "shared-DC10-FW1-FW2-non-prod"
+_LB_PROD = "shared-DC10-LB1-LB2-prod"
+_LB_NON_PROD = "shared-DC10-LB1-LB2-non-prod"
 
 _NAMESPACES = {
     "prod": ("PROD", "ns-prod", "100.66.0.0"),
@@ -82,12 +83,12 @@ class _World:
         )
         self.cluster = SimpleNamespace(
             id="cluster-1",
-            name=SimpleNamespace(value="DC10-FW1-FW2-ha"),
+            name=SimpleNamespace(value="DC10-FW1-FW2"),
             capabilities=SimpleNamespace(peers=[SimpleNamespace(id="fw-1"), SimpleNamespace(id="fw-2")]),
         )
         self.lb_cluster = SimpleNamespace(
             id="lb-cluster-1",
-            name=SimpleNamespace(value="DC10-LB1-LB2-ha"),
+            name=SimpleNamespace(value="DC10-LB1-LB2"),
             capabilities=SimpleNamespace(peers=[SimpleNamespace(id="lb-1"), SimpleNamespace(id="lb-2")]),
         )
         self.bl_ports = {
@@ -406,10 +407,10 @@ def _make_gen(world: _World) -> tuple[Any, list[str]]:
 def _dedicated(gen: Any) -> None:
     """A dedicated pair already provisioned: the context flow starts at the legs."""
     cluster = SimpleNamespace(
-        id="ded-cluster", name=SimpleNamespace(value="DC10-ded-ha"), capabilities=SimpleNamespace(peers=[])
+        id="ded-cluster", name=SimpleNamespace(value="DC10-ded-ha-prod"), capabilities=SimpleNamespace(peers=[])
     )
     members = [
-        SimpleNamespace(id="fw-1", name=SimpleNamespace(value="DC10-FW1-C005-p-dedicated"), hosting_device=None),
+        SimpleNamespace(id="fw-1", name=SimpleNamespace(value="c005-DC10-FW1-prod"), hosting_device=None),
         SimpleNamespace(id="fw-2", name=SimpleNamespace(value="DC10-FW2-C005-p-dedicated"), hosting_device=None),
     ]
     gen._ensure_dedicated_device_pair = AsyncMock(return_value=(cluster, members))

@@ -64,7 +64,7 @@ fragment RackFields on LocationRack {
   index { value }
   row_index { value }
   rack_type { value }
-  pod {
+  deployment {
     node {
       ...PodFields
     }

@@ -59,7 +59,7 @@ class PodRackCascadeGenerator(PodTopologyGenerator):
         pod_id = pod_data["id"]
         racks = await self.client.filters(
             kind=LocationRack,
-            pod__ids=[pod_id],
+            deployment__ids=[pod_id],
             rack_type__values=["network", "tor", "compute"],
         )
 

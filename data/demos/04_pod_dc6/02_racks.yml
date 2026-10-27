@@ -15,7 +15,7 @@ spec:
       row_index: 1
       shortname: ktw-1-s-4-r-1-1
       rack_type: network
-      pod: DC6-1-POD-4
+      deployment: DC6-1-POD-4
       parent: ktw-1-s-4
       member_of_groups: [topologies_rack]
       fabric_templates:
@@ -27,7 +27,7 @@ spec:
       row_index: 2
       shortname: ktw-1-s-4-r-2-1
       rack_type: network
-      pod: DC6-1-POD-4
+      deployment: DC6-1-POD-4
       parent: ktw-1-s-4
       member_of_groups: [topologies_rack]
       fabric_templates:

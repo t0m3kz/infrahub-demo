@@ -55,7 +55,7 @@ def _build_gen(*, deployment_type: Literal["middle_rack", "tor", "mixed"] = "mix
         "rack_type": rack_type,
         "row_index": 2,
         "parent": suite,
-        "pod": pod,
+        "deployment": pod,
         "leafs": [{"role": "leaf", "quantity": 2, "template": leaf_template}],
         "tors": [{"role": "tor", "quantity": 2, "template": tor_template}],
     }
@@ -176,7 +176,7 @@ class TestRackMixinAdditional:
         generator task instead, and nothing has been created yet at this point.
         """
         gen = _build_gen()
-        gen.data["pod"]["loopback_pool"] = None
+        gen.data["deployment"]["loopback_pool"] = None
         gen.client.get = AsyncMock(return_value=_mock_pod_pools(loopback_id=None, prefix_id=None))
         monkeypatch.setattr("generators.rack.asyncio.sleep", AsyncMock())
 
@@ -189,8 +189,8 @@ class TestRackMixinAdditional:
     async def test_prepare_generation_context_pools_recover_after_retry(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Pools missing on the first refetch, present on the second — no error, ids updated."""
         gen = _build_gen()
-        gen.data["pod"]["loopback_pool"] = None
-        gen.data["pod"]["prefix_pool"] = None
+        gen.data["deployment"]["loopback_pool"] = None
+        gen.data["deployment"]["prefix_pool"] = None
         gen.client.get = AsyncMock(
             side_effect=[
                 _mock_pod_pools(loopback_id=None, prefix_id=None),
@@ -214,7 +214,7 @@ class TestRackMixinAdditional:
         """Pools missing while add_pod is in flight: the rack waits for that run
         instead of spending a blind retry, then reads the pools it wrote."""
         gen = _build_gen()
-        gen.data["pod"]["loopback_pool"] = None
+        gen.data["deployment"]["loopback_pool"] = None
         gen.client.get = AsyncMock(
             side_effect=[
                 _mock_pod_pools(loopback_id=None, prefix_id="p2p-pool"),
@@ -256,7 +256,7 @@ class TestRackMixinAdditional:
         pools are already visible here, so only the DC is fetched.
         """
         gen = _build_gen()
-        gen.data["pod"]["parent"]["fabric_asn_pool"] = None
+        gen.data["deployment"]["parent"]["fabric_asn_pool"] = None
         gen.client.get = _kind_dispatch(
             TopologyDataCenter=[_mock_dc_pool(asn_id=None), _mock_dc_pool(asn_id="asn-pool-late")]
         )
@@ -276,8 +276,8 @@ class TestRackMixinAdditional:
     ) -> None:
         """Pod pools and the DC ASN pool both stale: one retry resolves both."""
         gen = _build_gen()
-        gen.data["pod"]["loopback_pool"] = None
-        gen.data["pod"]["parent"]["fabric_asn_pool"] = None
+        gen.data["deployment"]["loopback_pool"] = None
+        gen.data["deployment"]["parent"]["fabric_asn_pool"] = None
         gen.client.get = _kind_dispatch(
             TopologyPod=_mock_pod_pools(loopback_id="lo-pool-late", prefix_id="p2p-pool"),
             TopologyDataCenter=_mock_dc_pool(asn_id="asn-pool-late"),
@@ -295,8 +295,8 @@ class TestRackMixinAdditional:
         """An OSPF underlay allocates no per-device ASN, so a missing DC
         fabric_asn_pool is neither waited on nor an error."""
         gen = _build_gen()
-        gen.data["pod"]["parent"]["routing_strategy"] = "ospf-ibgp"
-        gen.data["pod"]["parent"]["fabric_asn_pool"] = None
+        gen.data["deployment"]["parent"]["routing_strategy"] = "ospf-ibgp"
+        gen.data["deployment"]["parent"]["fabric_asn_pool"] = None
         gen.client.get = AsyncMock()
 
         await gen._prepare_generation_context()
@@ -316,7 +316,7 @@ class TestRackMixinAdditional:
         unable to route. The refusal points at the DC generator, not the pod's.
         """
         gen = _build_gen()
-        gen.data["pod"]["parent"]["fabric_asn_pool"] = None
+        gen.data["deployment"]["parent"]["fabric_asn_pool"] = None
         gen.client.get = _kind_dispatch(TopologyDataCenter=_mock_dc_pool(asn_id=None))
         monkeypatch.setattr("generators.rack.asyncio.sleep", AsyncMock())
 
@@ -333,7 +333,7 @@ class TestRackMixinAdditional:
     ) -> None:
         """A missing pod pool still says to run the pod generator, and not the DC's."""
         gen = _build_gen()
-        gen.data["pod"]["loopback_pool"] = None
+        gen.data["deployment"]["loopback_pool"] = None
         gen.client.get = _kind_dispatch(TopologyPod=_mock_pod_pools(loopback_id=None, prefix_id="p2p-pool"))
         monkeypatch.setattr("generators.rack.asyncio.sleep", AsyncMock())
 
@@ -352,7 +352,7 @@ class TestRackMixinAdditional:
         asserts on.
         """
         gen = _build_gen()
-        gen.data["pod"]["fabric_templates"] = []  # makes _derive_spine_info raise
+        gen.data["deployment"]["fabric_templates"] = []  # makes _derive_spine_info raise
 
         with pytest.raises(RuntimeError, match="Cannot derive spine info"):
             await gen._prepare_generation_context()
@@ -369,7 +369,7 @@ class TestRackMixinAdditional:
         empty and generation continues.
         """
         gen = _build_gen()
-        gen.data["pod"]["fabric_templates"] = []  # makes _derive_spine_info raise
+        gen.data["deployment"]["fabric_templates"] = []  # makes _derive_spine_info raise
         gen.data["leafs"] = []
         gen.data["tors"] = []
         gen.data["l2_leafs"] = [{"role": "l2_leaf", "quantity": 2, "template": {"id": "tmpl-l2", "interfaces": []}}]
@@ -403,7 +403,7 @@ class TestRackMixinAdditional:
     ) -> None:
         """Dual-stack: P2P comes from the IPv6 technical pool (/127), the loopback from the IPv4 pool (/32)."""
         gen = _build_gen()
-        gen.data["pod"]["parent"]["underlay_protocol"] = protocol
+        gen.data["deployment"]["parent"]["underlay_protocol"] = protocol
 
         await gen._prepare_generation_context()
 

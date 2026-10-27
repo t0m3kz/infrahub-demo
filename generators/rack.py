@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     import logging
+    from .common import CommonGenerator
 
 from utils.limits import WAIT_FOR_PEER_GENERATOR
 
@@ -98,15 +99,14 @@ class RackMixin:
     logger: logging.Logger
     data: Any
     deployment_id: str
-    pod_name: str
+    pod_name: str | None
     fabric_name: str
-    # CommonGenerator._retry_delay — annotation only (no method body), so this
-    # mixin never shadows the real staticmethod at runtime via MRO.
-    _retry_delay: Callable[..., float]
-    # CommonGenerator.wait_for_parent_generator_and_refetch — annotation only.
-    wait_for_parent_generator_and_refetch: Callable[..., Awaitable[dict | None]]
-    # CommonGenerator.run_generator — annotation only.
-    run_generator: Callable[..., Awaitable[Any]]
+    # Type checking only: the real members of the host's other bases, aliased so nothing is defined at runtime and
+    # nothing shadows them in the MRO.
+    if TYPE_CHECKING:
+        _retry_delay = staticmethod(CommonGenerator._retry_delay)
+        run_generator = CommonGenerator.run_generator
+        wait_for_parent_generator_and_refetch = CommonGenerator.wait_for_parent_generator_and_refetch
 
     def _present_roles(self) -> set[str]:
         """Implemented by RackGenerator; declared here for static type checking."""
@@ -127,7 +127,7 @@ class RackMixin:
         Returns:
             Tuple of (device_names, interface_names) for create_cabling
         """
-        pod = self.data["pod"]
+        pod = self.data["deployment"]
         spine_entries = spine_slot_templates(pod.get("fabric_templates", []))
 
         if not spine_entries:
@@ -169,7 +169,7 @@ class RackMixin:
         pod lists none. Only the existing ones: spines that are not there yet
         do not hold the rack back here (create_cabling waits for their ports).
         """
-        pod = self.data["pod"]
+        pod = self.data["deployment"]
         names = pod_spine_slot_device_names(pod)
         if not names:
             return []
@@ -235,7 +235,7 @@ class RackMixin:
 
     async def _prepare_generation_context(self) -> None:
         """Compute and store shared context needed by every per-role generation method."""
-        pod = self.data["pod"]
+        pod = self.data["deployment"]
         dc = pod["parent"]
         self.deployment_id = dc["id"]
         self.pod_name = pod["name"].lower()
@@ -333,7 +333,7 @@ class RackMixin:
         generator name on both sides). Blocking here would keep this task RUNNING,
         which that guard would see as "still in flight" and wait on — deadlock.
         """
-        deployment_type = pod_deployment_type(self.data["pod"]["design"])
+        deployment_type = pod_deployment_type(self.data["deployment"]["design"])
 
         # Only network racks in mixed deployment feed row-dependent racks.
         if deployment_type != "mixed" or self.data["rack_type"] != "network":
@@ -347,7 +347,7 @@ class RackMixin:
 
         # The pod projection of the query carries every rack of the pod: racks are data, never this
         # run's output, and one created after the query ran has its own created-trigger run.
-        row_dependent_racks = pod_row_racks(self.data["pod"], self.data["row_index"], ROW_DEPENDENT_RACK_TYPES)
+        row_dependent_racks = pod_row_racks(self.data["deployment"], self.data["row_index"], ROW_DEPENDENT_RACK_TYPES)
 
         await self.run_generator("add_rack", [rack["id"] for rack in row_dependent_racks], wait=False)
 
@@ -364,7 +364,7 @@ class RackMixin:
         # The racks are data: the pod projection of the query has them. Only a row whose network rack
         # is missing from it (created in the same load, after the query ran) is re-read per attempt,
         # which is the race this loop waits out.
-        row_racks = pod_row_racks(self.data["pod"], row_index)
+        row_racks = pod_row_racks(self.data["deployment"], row_index)
         rack_ids = [rack["id"] for rack in row_racks]
         network_rack_known = any(rack["rack_type"] == "network" for rack in row_racks)
         leaf_devices: list[Any] = []
@@ -376,7 +376,7 @@ class RackMixin:
                     rack.id
                     for rack in await self.client.filters(
                         kind=LocationRack,
-                        pod__ids=[pod_id],
+                        deployment__ids=[pod_id],
                         row_index__value=row_index,
                     )
                 ]
@@ -461,7 +461,7 @@ class RackMixin:
             return created_leaf_devices, leaf_interfaces, 0, "intra_rack_middle"
 
         # Compute rack (mixed deployment): cable to middle-rack leafs in same row
-        pod = self.data["pod"]
+        pod = self.data["deployment"]
         effective_rack_index = max(0, self.data["index"] - 1)
         cabling_offset = effective_rack_index * devices_per_rack
 

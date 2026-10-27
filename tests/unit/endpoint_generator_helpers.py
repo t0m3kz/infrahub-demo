@@ -24,7 +24,7 @@ def _rack(*, rack_id: str = "rack-1", row_index: int = 1, rack_type: str = "comp
         "index": 1,
         "row_index": row_index,
         "rack_type": rack_type,
-        "pod": {
+        "deployment": {
             "id": "pod-1",
             "name": "POD1",
             "index": 1,

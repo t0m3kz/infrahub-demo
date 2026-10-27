@@ -222,7 +222,9 @@ WAIT_FOR_PEER_GENERATOR = RetryPolicy(attempts=10, delay=3.0)
 PARENT_GENERATOR_WAIT = PollPolicy(interval=3, timeout=1800)
 
 # The resource lock node of the cabling and IP allocation; stale after longer than any single realistic cabling run.
-RESOURCE_LOCK = ResourceLockPolicy(attempts=20, delay=2.0, stale_after=300)
+# A waiter backs off to 10 s (generators/pools.py), so it must keep trying for longer than stale_after: a lock whose
+# release failed is only reclaimed once it is that old, and waiters that gave up sooner would all fail on it.
+RESOURCE_LOCK = ResourceLockPolicy(attempts=40, delay=2.0, stale_after=300)
 
 # A save that races a write onto the same shared node (NODE_NOT_FOUND) is retried.
 NODE_SAVE_RETRY = RetryPolicy(attempts=5, delay=2.0)

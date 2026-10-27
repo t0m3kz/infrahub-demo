@@ -26,5 +26,5 @@ spec:
                 - shortname: mcr-par1-s1-r-1
                   index: 1
                   row_index: 1
-                  pod: MCR-PAR1
+                  deployment: MCR-PAR1
                   member_of_groups: [topologies_rack]

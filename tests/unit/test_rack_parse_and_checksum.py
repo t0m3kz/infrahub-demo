@@ -55,7 +55,7 @@ def _build_rack_generator(
         "rack_type": rack_type,
         "row_index": row_index,
         "parent": suite,
-        "pod": pod,
+        "deployment": pod,
         "leafs": leafs if leafs is not None else [_DEFAULT_LEAF],
     }
     gen = RackGenerator.__new__(RackGenerator)
@@ -114,7 +114,7 @@ class TestParseRackData:
             "rack_type": "network",
             "row_index": 1,
             "parent": {"index": 1},
-            "pod": {
+            "deployment": {
                 "id": "pod-1",
                 "name": "pod-1",
                 "index": 1,
@@ -154,7 +154,7 @@ class TestParseRackData:
                             "rack_type": {"value": "tor"},
                             "row_index": {"value": 2},
                             "parent": {"node": {"id": "suite-2", "index": {"value": 2}}},
-                            "pod": {
+                            "deployment": {
                                 "node": {
                                     "id": "pod-2",
                                     "name": {"value": "pod-2"},
@@ -201,10 +201,10 @@ class TestDeriveSpineInfo:
         """Spine interface names come from template; GQL pre-filters to downlink role."""
         gen = _build_rack_generator(deployment_type="tor", rack_type="tor")
         gen.fabric_name = "dc1"
-        gen.data["pod"]["index"] = 3
-        gen.data["pod"]["parent"]["index"] = 1
-        gen.data["pod"]["parent"]["naming_convention"] = "standard"
-        gen.data["pod"]["fabric_templates"][0]["template"]["interfaces"] = [
+        gen.data["deployment"]["index"] = 3
+        gen.data["deployment"]["parent"]["index"] = 1
+        gen.data["deployment"]["parent"]["naming_convention"] = "standard"
+        gen.data["deployment"]["fabric_templates"][0]["template"]["interfaces"] = [
             {"name": "Ethernet1/1"},
             {"name": "Ethernet1/2"},
             {"name": "Ethernet1/3"},
@@ -219,10 +219,10 @@ class TestDeriveSpineInfo:
         """RuntimeError raised when there are no spine fabric_templates entries."""
         gen = _build_rack_generator(deployment_type="tor", rack_type="tor")
         gen.fabric_name = "dc1"
-        gen.data["pod"]["index"] = 1
-        gen.data["pod"]["parent"]["index"] = 1
-        gen.data["pod"]["parent"]["naming_convention"] = "standard"
-        gen.data["pod"]["fabric_templates"] = []
+        gen.data["deployment"]["index"] = 1
+        gen.data["deployment"]["parent"]["index"] = 1
+        gen.data["deployment"]["parent"]["naming_convention"] = "standard"
+        gen.data["deployment"]["fabric_templates"] = []
 
         with pytest.raises(RuntimeError, match="Cannot derive spine info"):
             gen._derive_spine_info()
@@ -238,10 +238,10 @@ class TestDeriveSpineInfo:
         """
         gen = _build_rack_generator(deployment_type="tor", rack_type="tor")
         gen.fabric_name = "dc1"
-        gen.data["pod"]["index"] = 1
-        gen.data["pod"]["parent"]["index"] = 1
-        gen.data["pod"]["parent"]["naming_convention"] = "standard"
-        gen.data["pod"]["fabric_templates"][0]["quantity"] = 0
+        gen.data["deployment"]["index"] = 1
+        gen.data["deployment"]["parent"]["index"] = 1
+        gen.data["deployment"]["parent"]["naming_convention"] = "standard"
+        gen.data["deployment"]["fabric_templates"][0]["quantity"] = 0
 
         with pytest.raises(RuntimeError, match="no spine/border-spine fabric_templates entries"):
             gen._derive_spine_info()
@@ -250,10 +250,10 @@ class TestDeriveSpineInfo:
         """All template interfaces are returned (GQL pre-filters, no role check needed)."""
         gen = _build_rack_generator(deployment_type="tor", rack_type="tor")
         gen.fabric_name = "dc1"
-        gen.data["pod"]["index"] = 1
-        gen.data["pod"]["parent"]["index"] = 1
-        gen.data["pod"]["parent"]["naming_convention"] = "standard"
-        gen.data["pod"]["fabric_templates"][0]["template"]["interfaces"] = [
+        gen.data["deployment"]["index"] = 1
+        gen.data["deployment"]["parent"]["index"] = 1
+        gen.data["deployment"]["parent"]["naming_convention"] = "standard"
+        gen.data["deployment"]["fabric_templates"][0]["template"]["interfaces"] = [
             {"name": "Ethernet1/1"},
             {"name": "Ethernet1/2"},
         ]
@@ -267,10 +267,10 @@ class TestDeriveSpineInfo:
         """No dynamic fallback anymore — every template must declare its own interfaces."""
         gen = _build_rack_generator(deployment_type="tor", rack_type="tor")
         gen.fabric_name = "dc1"
-        gen.data["pod"]["index"] = 1
-        gen.data["pod"]["parent"]["index"] = 1
-        gen.data["pod"]["parent"]["naming_convention"] = "standard"
-        gen.data["pod"]["fabric_templates"][0]["template"]["interfaces"] = []
+        gen.data["deployment"]["index"] = 1
+        gen.data["deployment"]["parent"]["index"] = 1
+        gen.data["deployment"]["parent"]["naming_convention"] = "standard"
+        gen.data["deployment"]["fabric_templates"][0]["template"]["interfaces"] = []
 
         with pytest.raises(RuntimeError, match="Spine template has no downlink interfaces"):
             gen._derive_spine_info()
@@ -321,7 +321,7 @@ class TestFanOutToRowDependentRacks:
         compute_rack = _pod_rack("COMP-RACK-1", "compute", index=2)
         network_rack = _pod_rack("NET-RACK-2", "network")  # sibling network rack, not fanned out to
         other_row_rack = _pod_rack("TOR-RACK-9", "tor", row_index=2)  # another row's rack, not fanned out to
-        gen.data["pod"]["racks"] = [compute_rack, other_row_rack, network_rack, tor_rack]
+        gen.data["deployment"]["racks"] = [compute_rack, other_row_rack, network_rack, tor_rack]
         gen.client.filters = AsyncMock()
         gen.run_generator = AsyncMock()
 
@@ -342,7 +342,7 @@ class TestFanOutToRowDependentRacks:
     @pytest.mark.asyncio
     async def test_no_row_dependent_racks_calls_with_empty_list(self) -> None:
         gen = _build_rack_generator(deployment_type="mixed", rack_type="network")
-        gen.data["pod"]["racks"] = [_pod_rack("NET-RACK-1", "network")]
+        gen.data["deployment"]["racks"] = [_pod_rack("NET-RACK-1", "network")]
         gen.run_generator = AsyncMock()
 
         await gen._fan_out_to_row_dependent_racks()
@@ -372,9 +372,9 @@ class TestGenerateRackGating:
 
     @pytest.mark.asyncio
     async def test_colocation_rack_stops_before_reading_pod_id(self) -> None:
-        """A rack whose `pod` is not a TopologyPod must no-op, not raise.
+        """A rack whose `deployment` is not a TopologyPod must no-op, not raise.
 
-        LocationRack.pod accepts any TopologyRackHosting peer, so a colocation
+        LocationRack.deployment accepts any TopologyRackHosting peer, so a colocation
         rack's pod is a TopologyColocationZone. rack.gql's PodFields fragment is
         on TopologyPod, so such a pod arrives as an empty dict — the guard has to
         fire before wait_for_parent_generator_and_refetch(…, pod["id"]) reads it.
@@ -382,7 +382,7 @@ class TestGenerateRackGating:
         fires on the node kind and cannot filter on the parent topology.
         """
         gen = _build_rack_generator(deployment_type="mixed", rack_type="network")
-        gen.data["pod"] = {}
+        gen.data["deployment"] = {}
         gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
         gen._prepare_generation_context = MagicMock()
 
@@ -398,7 +398,7 @@ class TestGenerateRackGating:
     async def test_missing_pod_key_stops_without_error(self) -> None:
         """Same guard covers a pod key that is absent or explicitly null."""
         gen = _build_rack_generator(deployment_type="mixed", rack_type="network")
-        gen.data["pod"] = None  # type: ignore[typeddict-item]
+        gen.data["deployment"] = None  # type: ignore[typeddict-item]
         gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
 
         with patch("generators.topology.rack.parse_rack_data", return_value=gen.data):
@@ -425,7 +425,7 @@ class TestGenerateRackGating:
         rack of such a fabric forever.
         """
         gen = _build_rack_generator(deployment_type="mixed", rack_type="network")
-        gen.data["pod"]["parent"]["routing_strategy"] = strategy
+        gen.data["deployment"]["parent"]["routing_strategy"] = strategy
         gen.client.filters = AsyncMock(return_value=[_device("spine-2"), _device("spine-1")])
         gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
         gen.bgp_processes_ready = AsyncMock(return_value=False)
@@ -446,7 +446,7 @@ class TestGenerateRackGating:
         gen.data["tors"] = []
         gen.data["l2_leafs"] = []
         gen.data["access_leafs"] = []
-        gen.data["pod"]["parent"]["routing_strategy"] = "ospf-ibgp"
+        gen.data["deployment"]["parent"]["routing_strategy"] = "ospf-ibgp"
         gen.client.filters = AsyncMock(return_value=[_device("spine-1")])
         gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
         gen.bgp_processes_ready = AsyncMock(return_value=True)
@@ -468,7 +468,7 @@ class TestGenerateRackGating:
         gen.data["tors"] = []
         gen.data["l2_leafs"] = []
         gen.data["access_leafs"] = []
-        gen.data["pod"]["racks"] = [
+        gen.data["deployment"]["racks"] = [
             _pod_rack("NET-1", "network"),
             _pod_rack("NET-9", "network", row_index=2),
             _pod_rack("TOR-1", "tor"),
@@ -490,11 +490,11 @@ class TestGenerateRackGating:
         """A border-spine is deployed to the DC, so the pod's own device list never holds it and
         the gate used to be skipped silently. The spine-slot names are looked up instead."""
         gen = _build_rack_generator(deployment_type="mixed", rack_type="network")
-        gen.data["pod"]["fabric_templates"] = [
+        gen.data["deployment"]["fabric_templates"] = [
             {"role": "border-spine", "quantity": 2, "template": {"id": "tmpl-bs"}},
         ]
-        gen.data["pod"]["parent"]["routing_strategy"] = "ebgp-ebgp"
-        expected = pod_spine_slot_device_names(gen.data["pod"])
+        gen.data["deployment"]["parent"]["routing_strategy"] = "ebgp-ebgp"
+        expected = pod_spine_slot_device_names(gen.data["deployment"])
         gen.client.filters = AsyncMock(return_value=[_device(name) for name in expected])
         gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
         gen.bgp_processes_ready = AsyncMock(return_value=False)

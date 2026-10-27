@@ -113,6 +113,8 @@ class LoadBalancedComponent(TypedDict):
     ports: tuple[tuple[str, int], ...]
     #: The contexts serving the deployments of its instances: one VIP per port on each.
     contexts: tuple[LoadbalancerContextKey, ...]
+    #: Its health checks, each [check, rise, fall, timeout] as strings: every VIP of it carries them.
+    health_checks: tuple[tuple[str, ...], ...]
 
 
 _INSTANCE_DEPLOYMENTS = {
@@ -120,6 +122,11 @@ _INSTANCE_DEPLOYMENTS = {
     for device in _all_demo("DcimVirtualDevice")
     if device.item.get("deployment")
 }
+
+
+def _health_checks(component: Declared) -> tuple[tuple[str, ...], ...]:
+    """The component's health checks as declared (four-part HFIDs), sorted."""
+    return tuple(sorted(tuple(str(part) for part in check) for check in component.item.get("health_checks") or []))
 
 
 def _single_ports(specs: list[str]) -> tuple[tuple[str, int], ...]:
@@ -154,6 +161,7 @@ ALL_DEMO_LOAD_BALANCED_COMPONENTS: dict[str, LoadBalancedComponent] = {
                 key=repr,
             )
         ),
+        "health_checks": _health_checks(component),
     }
     for component in _LOAD_BALANCED
     if not _on_cloud(component)
@@ -175,6 +183,8 @@ class CloudLoadBalancedComponent(TypedDict):
     ports: tuple[tuple[str, int], ...]
     #: The instances' private_ip: the pool members of every VIP.
     members: tuple[str, ...]
+    #: Its health checks, each [check, rise, fall, timeout] as strings: every VIP of it carries them.
+    health_checks: tuple[tuple[str, ...], ...]
 
 
 _CLOUD_SEGMENT_NETWORKS = {
@@ -193,6 +203,7 @@ def _cloud_load_balanced(component: Declared) -> CloudLoadBalancedComponent:
         "scheme": cloud_lb_scheme(application.get("security_profile")),
         "ports": _single_ports(component.item["ports"]),
         "members": tuple(sorted(str(instance["private_ip"]) for instance in instances)),
+        "health_checks": _health_checks(component),
     }
 
 

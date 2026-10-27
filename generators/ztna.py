@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 from utils.dependency_access import dependency_access_status
 from utils.ports import PortProfileHelper
@@ -13,6 +13,8 @@ from .protocols import ProxyPolicy, ProxyPolicyRule
 
 if TYPE_CHECKING:
     import logging
+
+    from .common import CommonGenerator
 
 
 class ZtnaMixin(GetOrCreateByNameMixin):
@@ -26,7 +28,8 @@ class ZtnaMixin(GetOrCreateByNameMixin):
 
     client: Any
     logger: logging.Logger
-    _safe_rel_add: Callable[..., Any]
+    if TYPE_CHECKING:
+        _safe_rel_add = staticmethod(CommonGenerator._safe_rel_add)
 
     async def _reconcile_proxy_rule(
         self,

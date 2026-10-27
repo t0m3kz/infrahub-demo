@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from contextlib import AbstractAsyncContextManager
 from typing import TYPE_CHECKING, Any, Literal
 
 from infrahub_sdk.exceptions import NodeNotFoundError
@@ -11,6 +9,7 @@ from infrahub_sdk.protocols import CoreStandardGroup
 
 if TYPE_CHECKING:
     import logging
+    from .pools import PoolMixin
 
 from utils.limits import GROUP_HA_DOMAINS, GROUP_MLAG_DOMAINS
 
@@ -43,9 +42,11 @@ class DomainPairingMixin(MLAGWiringMixin):
     # device's own `deployment` relationship: pod.py's border-spine pods scope their firewall/load-balancer
     # *devices* to the pod on purpose (see test_pod_border_services.py), but DcimCable.deployment's peer
     # type has no TopologyPod — confirmed live on DC7.
-    deployment_id: str | None
-    # PoolMixin.resource_lock — a Callable attribute, not a stub, so it never shadows the real one.
-    resource_lock: Callable[[str], AbstractAsyncContextManager[None]]
+    deployment_id: str
+    # Type checking only: the real members of the host's other bases, aliased so nothing is defined at runtime and
+    # nothing shadows them in the MRO.
+    if TYPE_CHECKING:
+        resource_lock = PoolMixin.resource_lock
 
     async def _standard_group(self, name: str, *, create_description: str | None = None) -> Any:
         """The CoreStandardGroup called ``name``, read once per run.
@@ -79,6 +80,7 @@ class DomainPairingMixin(MLAGWiringMixin):
         ha_kind: str,
         role_label: str,
         device_kind: type[Any] = DcimPhysicalDevice,
+        ha_name: str | None = None,
     ) -> None:
         """Pair same-role devices two-at-a-time (sorted, odd one unpaired) into
         HA domains, then ensure each pair's HA sync interfaces/cable in the
@@ -96,16 +98,21 @@ class DomainPairingMixin(MLAGWiringMixin):
         non-production virtual instances dc.py provisions per physical HA
         pair — same pairing logic, no physical cabling involved (mirrors the
         skip _ensure_ha_interfaces itself applies for non-physical devices).
+        ha_name overrides the default `{first}-{second}` for a single pair (a customer's dedicated pair is named
+        from the owner, not from its two member names).
         An HA domain carries no tenant, not even a customer's dedicated pair:
         the tenant is recorded one level down, on the dedicated
         ManagedFirewallContext/ManagedLoadbalancerContext on it."""
-        for first, second in pair_device_names(device_names):
-            ha_name = f"{first}-{second}-ha"
+        pairs = pair_device_names(device_names)
+        if ha_name is not None and len(pairs) != 1:
+            raise ValueError(f"ha_name {ha_name!r} names one pair, got {len(pairs)} from {device_names}")
+        for first, second in pairs:
+            name = ha_name or f"{first}-{second}"
             # Two overlapping runs (e.g. add_dc and dc_pod_cascade) can both
             # find no pair and both create it: the lookup and the create sit
             # inside one per-pair lock, so the second finds the first's domain.
-            async with self.resource_lock(f"ha-domain-{ha_name}"):
-                existing = await self.client.filters(kind=ha_kind, name__value=ha_name, include=["capabilities"])
+            async with self.resource_lock(f"ha-domain-{name}"):
+                existing = await self.client.filters(kind=ha_kind, name__value=name, include=["capabilities"])
                 members: list[Any] | None = None
                 if existing:
                     ha_obj = existing[0]
@@ -120,18 +127,18 @@ class DomainPairingMixin(MLAGWiringMixin):
                     ha_obj = await self.client.create(
                         kind=ha_kind,
                         data={
-                            "name": ha_name,
+                            "name": name,
                             "status": "active",
                             "capabilities": [{"id": dev.id} for dev in devices],
                             "member_of_groups": [{"id": ha_group.id}],
                         },
                     )
                     await ha_obj.save(allow_upsert=True)
-                    self.logger.info(f"Created HA domain {ha_name} for {role_label}s")
+                    self.logger.info(f"Created HA domain {name} for {role_label}s")
                     members = devices
 
             if device_kind is not CloudNetworkAppliance:
-                await self._ensure_ha_interfaces(ha_obj, ha_name, device_kind=device_kind, members=members)
+                await self._ensure_ha_interfaces(ha_obj, name, device_kind=device_kind, members=members)
 
     async def _ensure_ha_interfaces(
         self,

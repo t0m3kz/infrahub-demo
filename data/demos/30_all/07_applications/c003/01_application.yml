@@ -26,6 +26,8 @@ spec:
             # (internet-facing, the application is internet_exposed), not by an
             # on-prem load balancer context (generators/lb_vip.py).
             load_balanced: true
+            health_checks:
+              - ["tcp", "2", "3", "1000"]
             network_segment: c003-vaultex-subnet-prod-p
             instances:
               - c003-api-frontend-euc1-1

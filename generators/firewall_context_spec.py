@@ -46,8 +46,6 @@ class ContextSpec:
     the tenant namespace type to the namespace types of the context's legs,
     tenant first; the others are exchanged with it. leg_identifier ends a
     leg's allocation identifier (`{context_id}-{namespace}-{leg_identifier}`).
-    shared_suffix names a shared context from the tenant namespace name
-    (`{cluster}-{suffix}`); a dedicated one is always `{cluster}-context`.
     vlan_range bounds the parent's VLAN pool. skip_reason reads the parent
     (customer.parent of the boarding query) and returns why it gets no
     context of this kind, or None. vip_pool_name, when set, gives the context
@@ -69,7 +67,6 @@ class ContextSpec:
     leg_types: Callable[[str], tuple[str, ...]]
     leg_pool_name: Callable[[str], str]
     leg_identifier: str
-    shared_suffix: Callable[[str], str]
     vlan_range: tuple[int, int]
     skip_reason: Callable[[dict[str, Any]], str | None] = _no_skip
     vip_pool_name: Callable[[str], str] | None = None
@@ -89,7 +86,6 @@ FIREWALL_CONTEXT = ContextSpec(
     leg_types=_firewall_leg_types,
     leg_pool_name=transit_pool_name,
     leg_identifier="transit",
-    shared_suffix=lambda _namespace: "shared",
     vlan_range=(FW_CONTEXT_VLAN_START, FW_CONTEXT_VLAN_END),
 )
 
@@ -105,7 +101,6 @@ LOADBALANCER_CONTEXT = ContextSpec(
     leg_types=lambda tenant_type: (tenant_type,),
     leg_pool_name=lb_leg_pool_name,
     leg_identifier="lb-leg",
-    shared_suffix=lambda namespace: namespace,
     vlan_range=(LB_CONTEXT_VLAN_START, LB_CONTEXT_VLAN_END),
     skip_reason=_inline_parent,
     vip_pool_name=lb_vip_pool_name,
@@ -122,7 +117,7 @@ class _ContextTarget:
     """Where a customer's context lives and who owns its writes."""
 
     spec: ContextSpec
-    cluster_name: str
+    name_base: str
     cluster_id: str
     tenant_id: str | None
     track: bool
@@ -130,10 +125,16 @@ class _ContextTarget:
     parent_name: str
 
     def context_name(self, tenant_namespace: str) -> str:
-        """The context's name: `{cluster}-context` when dedicated (track), else the spec's shared name."""
-        if self.track:
-            return f"{self.cluster_name}-context"
-        return f"{self.cluster_name}-{self.spec.shared_suffix(tenant_namespace)}"
+        """The context's name: `{name_base}-{namespace}` (track), else `shared-{name_base}-{namespace}`.
+
+        Lowercase, like every other name here, the environment class last and the owner (dedicated, in name_base)
+        or `shared` first. A shared context is per (cluster, tenant namespace), for a firewall as for a load
+        balancer, so PROD and NON-PROD tenants never meet on one context. A dedicated pair's HA domain is
+        `{name_base}-ha-{namespace}`: the two are nodes of one generic and must not share a name (the server
+        resolves an upsert by name).
+        """
+        scope = "" if self.track else "shared-"
+        return f"{scope}{self.name_base}-{tenant_namespace.lower()}"
 
 
 @dataclass(frozen=True)

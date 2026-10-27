@@ -71,7 +71,7 @@ class EndpointTargetsMixin:
         )
 
         # Query interfaces directly on ToR, l2-leaf/access-leaf, or Leaf devices in network rack
-        racks = pod_row_racks(rack["pod"], rack["row_index"], {"network"})
+        racks = pod_row_racks(rack["deployment"], rack["row_index"], {"network"})
 
         if not racks:
             self.logger.error(
@@ -152,7 +152,7 @@ class EndpointTargetsMixin:
                 f"No ToR interfaces in same rack for {self.data['name']}, searching same row {rack['row_index']}"
             )
 
-            racks = pod_row_racks(rack["pod"], rack["row_index"])
+            racks = pod_row_racks(rack["deployment"], rack["row_index"])
 
             if racks:
                 all_target_interfaces = await self._query_interfaces_by_location(
@@ -205,7 +205,7 @@ class EndpointTargetsMixin:
                 f"trying middle rack switches in same row {rack['row_index']}"
             )
 
-            racks = pod_row_racks(rack["pod"], rack["row_index"], {"network"})
+            racks = pod_row_racks(rack["deployment"], rack["row_index"], {"network"})
 
             if racks:
                 network_rack_ids = [r["id"] for r in racks]

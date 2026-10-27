@@ -101,10 +101,10 @@ class _Inventory:
         }
 
     def hosting(self, rack: Declared) -> dict[str, Any] | None:
-        """The pod (or zone) hosting a rack: its ``pod`` name or the pod it is nested under; None for neither."""
+        """The pod (or zone) hosting a rack: its ``deployment`` name or the pod it is nested under; None for neither."""
         enclosing_pod = _enclosing(rack, POD)
-        if rack.item.get("pod"):
-            return self.pods[str(rack.item["pod"])]
+        if rack.item.get("deployment"):
+            return self.pods[str(rack.item["deployment"])]
         return self.pods[self.pod_name(enclosing_pod)] if enclosing_pod else None
 
 
@@ -122,7 +122,7 @@ def build_payloads(*roots: Path) -> dict[str, Any]:
                 "row_index": _value(rack.item["row_index"]),
                 "index": _value(rack.item["index"]),
                 "parent": {"node": inventory.suite(rack)},
-                "pod": {"node": hosting},
+                "deployment": {"node": hosting},
             }
         )
     return {RACK: _edges(nodes)}

@@ -72,7 +72,7 @@ Run `uv run invoke test-integration` for the full rack lifecycle. If the change 
 Pod 1 is a middle_rack pod, so a network rack carries its own leafs:
 
 1. **Rack generator runs** (automatic trigger on create — the rack is in `topologies_rack`)
-2. **Resolves the pod's spines** through `pod: DC6-1-POD-1`
+2. **Resolves the pod's spines** through `deployment: DC6-1-POD-1`
 3. **Creates and cables the leafs** to the spines, then the L2 leafs to those leafs
 4. **No spine regeneration needed** - the CablingPlanner picks the next free spine ports
 

@@ -184,11 +184,11 @@ nodes:
         optional: true
         cardinality: many
         kind: Attribute
-      - name: pod
+      - name: deployment
         peer: TopologyRackHosting
         kind: Attribute
         cardinality: one
-        identifier: "rack__pod"
+        identifier: "rack__deployment"
         optional: true
       - name: devices
         peer: DcimPhysicalDevice

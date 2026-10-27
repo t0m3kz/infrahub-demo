@@ -101,6 +101,16 @@ class TopologyDeviceHosting(CoreNode):
     devices: RelationshipManager[DcimDevice]
 
 
+class TopologyProviderHosting(CoreNode):
+    name: String
+    appliances: RelationshipManager[CloudNetworkAppliance]
+
+
+class TopologyCloudHosting(CoreNode):
+    name: String
+    instances: RelationshipManager[CloudInstance]
+
+
 class TopologyColocationFabric(CoreNode):
     design: RelationshipAttribute[TopologyTemplateColocationZone]
     fabric_templates: RelationshipManager[TopologyElement]
@@ -338,7 +348,7 @@ class ManagedCloudProxy(ManagedGeneric, ManagedInlineService, ManagedProxyServic
     region: StringOptional
 
 
-class TopologyCloudRegion(TopologyDeployment, TopologyConnectableLocation, TopologyFacility):
+class TopologyCloudRegion(TopologyDeployment, TopologyDeviceHosting, TopologyConnectableLocation, TopologyFacility):
     status: Dropdown
     location: RelationshipAttribute[LocationMetro]
 
@@ -354,8 +364,6 @@ class TopologyColocation(CoreArtifactTarget, TopologyDeployment):
 class TopologyColocationMetro(
     CoreArtifactTarget,
     TopologyDeployment,
-    TopologyPhysicalDeployment,
-    TopologyDeviceHosting,
     TopologyDeviceNaming,
     TopologySegmentHosting,
 ):
@@ -381,7 +389,7 @@ class TopologyColocationZone(
 
 class TopologyVirtualColocation(
     TopologyDeployment,
-    TopologyDeviceHosting,
+    TopologyProviderHosting,
     TopologyColocationFabric,
     TopologyConnectableLocation,
     TopologyFacility,
@@ -429,7 +437,9 @@ class OrganizationCustomer(OrganizationGeneric, OrganizationEntity):
     routing_tag: IntegerOptional
 
 
-class TopologyCustomerCloud(TopologyCustomer, TopologyDeployment, TopologyConnectableLocation):
+class TopologyCustomerCloud(
+    TopologyCustomer, TopologyDeployment, TopologyCloudHosting, TopologyProviderHosting, TopologyConnectableLocation
+):
     customer_name: String
     name: StringOptional
 
@@ -601,6 +611,7 @@ class CloudInstance(CloudResource, DcimCapabilities, AppInstance):
     account: RelationshipAttribute[CloudAccount]
     availability_zone: RelationshipAttribute[TopologyCloudZone]
     network_segment: RelationshipAttribute[CloudNetworkSegment]
+    deployment: RelationshipAttribute[TopologyCloudHosting]
 
 
 class DcimLAGInterface(DcimInterface, DcimHasSubInterface):
@@ -655,7 +666,7 @@ class CloudNetworkAppliance(CoreArtifactTarget, DcimDevice, DcimCapabilities):
     software_version: StringOptional
     term_length: IntegerOptional
     account: RelationshipAttribute[CloudAccount]
-    deployment: RelationshipAttribute[TopologyDeployment]
+    deployment: RelationshipAttribute[TopologyProviderHosting]
 
 
 class CloudNetworkSegment(CloudResource, ManagedNetworkSegment):
@@ -865,7 +876,7 @@ class LocationRack(LocationGeneric, CoreArtifactTarget):
     devices: RelationshipManager[DcimPhysicalDevice]
     fabric_templates: RelationshipManager[TopologyElement]
     owner: RelationshipAttribute[OrganizationGeneric]
-    pod: RelationshipAttribute[TopologyRackHosting]
+    deployment: RelationshipAttribute[TopologyRackHosting]
 
 
 class LocationRegion(LocationGeneric):

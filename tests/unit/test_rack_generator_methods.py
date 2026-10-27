@@ -56,7 +56,7 @@ def _build_gen() -> Any:
         "rack_type": "network",
         "row_index": 1,
         "parent": suite,
-        "pod": pod,
+        "deployment": pod,
         "leafs": [{"role": "leaf", "quantity": 2, "template": leaf_t}],
         "tors": [{"role": "tor", "quantity": 1, "template": tor_t}],
         "l2_leafs": [],
@@ -99,20 +99,20 @@ class TestRackGeneratorMethods:
 
         gen.data["row_index"] = 3
         # 8 compute + 1 network rack positions per row: a mixed row numbers both.
-        gen.data["pod"]["design"] = pod_design("S_MIXED")
+        gen.data["deployment"]["design"] = pod_design("S_MIXED")
         assert gen._planned_previous_row_rack_slots() == 18
 
         gen.data["row_index"] = 3
-        gen.data["pod"]["design"] = pod_design("S_TOR")  # compute_racks_per_row = 8
+        gen.data["deployment"]["design"] = pod_design("S_TOR")  # compute_racks_per_row = 8
         assert gen._planned_previous_row_rack_slots() == 16
 
         gen.data["row_index"] = 3
-        gen.data["pod"]["design"] = pod_design("S_MIDDLE")
+        gen.data["deployment"]["design"] = pod_design("S_MIDDLE")
         assert gen._planned_previous_row_rack_slots() == 0
 
     def test_validate_profile_capacity_limits_accepts_valid_network_rack(self) -> None:
         gen = _build_gen()
-        gen.data["pod"]["design"] = pod_design("S_MIXED")
+        gen.data["deployment"]["design"] = pod_design("S_MIXED")
         gen.data["rack_type"] = "network"
         gen.data["row_index"] = 1
         gen.data["index"] = 1
@@ -126,7 +126,7 @@ class TestRackGeneratorMethods:
 
     def test_validate_profile_capacity_limits_rejects_excess_tors_per_compute_rack(self) -> None:
         gen = _build_gen()
-        gen.data["pod"]["design"] = pod_design("S_MIXED")  # max_tors_per_compute_rack = 2
+        gen.data["deployment"]["design"] = pod_design("S_MIXED")  # max_tors_per_compute_rack = 2
         gen.data["rack_type"] = "compute"
         gen.data["tors"] = [
             {"role": "tor", "quantity": 3, "template": {"id": "tmpl-tor"}},
@@ -138,7 +138,7 @@ class TestRackGeneratorMethods:
 
     def test_validate_profile_capacity_limits_rejects_row_overflow(self) -> None:
         gen = _build_gen()
-        gen.data["pod"]["design"] = pod_design("S_MIXED")  # rows = 2
+        gen.data["deployment"]["design"] = pod_design("S_MIXED")  # rows = 2
         gen.data["row_index"] = 3
 
         errors = gen._validate_profile_capacity_limits()
@@ -166,7 +166,7 @@ class TestRackGeneratorMethods:
         """With the row's network rack in the pod projection the racks are not read at all,
         not even once per retry attempt: only the devices and their interfaces are."""
         gen = _build_gen()
-        gen.data["pod"]["racks"] = [
+        gen.data["deployment"]["racks"] = [
             {"id": "rack-net", "name": "NET", "index": 1, "row_index": 1, "rack_type": "network"},
             {"id": "rack-c1", "name": "C1", "index": 2, "row_index": 1, "rack_type": "compute"},
             {"id": "rack-other", "name": "NET-2", "index": 1, "row_index": 2, "rack_type": "network"},
@@ -190,7 +190,9 @@ class TestRackGeneratorMethods:
         """The row's network rack missing from the payload (created in the same load, after the
         query ran) is the race the retry loop waits out: the racks are re-read per attempt."""
         gen = _build_gen()
-        gen.data["pod"]["racks"] = [{"id": "rack-c1", "name": "C1", "index": 2, "row_index": 1, "rack_type": "compute"}]
+        gen.data["deployment"]["racks"] = [
+            {"id": "rack-c1", "name": "C1", "index": 2, "row_index": 1, "rack_type": "compute"}
+        ]
         leaf_dev = MagicMock()
         leaf_dev.name = MagicMock(value="leaf-01")
         leaf_if = MagicMock()
@@ -328,7 +330,7 @@ class TestRackGeneratorMethods:
     async def test_generate_tors_uses_planned_slots_without_live_sibling_query(self) -> None:
         gen = _build_gen()
         gen.data["row_index"] = 2
-        gen.data["pod"]["design"] = pod_design("S_MIXED")  # 8 compute + 1 network rack positions per row
+        gen.data["deployment"]["design"] = pod_design("S_MIXED")  # 8 compute + 1 network rack positions per row
         gen._spine_device_names = ["spine-01"]
 
         gen.client.filters = AsyncMock(side_effect=AssertionError("live sibling query should not be used"))

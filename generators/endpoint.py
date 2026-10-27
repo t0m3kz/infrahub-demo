@@ -11,14 +11,17 @@ topology/endpoint_lag.py) shares with it.
 from __future__ import annotations
 
 import logging
-from collections.abc import Awaitable, Callable
-from typing import Any
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 from netutils.interface import sort_interface_list
 
 from .helpers.cabling import ConnectionValidator, InterfaceSpeedMatcher, pick_matched_switch_port_name
 from .protocols import DcimPhysicalInterface
 from .types import CablingOptions, ConnectionFingerprint
+
+if TYPE_CHECKING:
+    from .connections import CablingMixin
 
 
 class EndpointUplinkMixin:
@@ -29,16 +32,10 @@ class EndpointUplinkMixin:
     (all present on EndpointConnectivityGenerator / CommonGenerator).
     """
 
-    # Attribute declarations for the type checker — provided by the host class
-    # (same convention as RackMixin/RoutingMixin). The cross-mixin methods
-    # (_extract_device_name/create_cabling) are declared as plain Callable
-    # attributes, not `def`s: a method body defined on this mixin — even a
-    # stub raising NotImplementedError — would sit ahead of CommonGenerator
-    # in the MRO and shadow the real implementation, since
-    # EndpointConnectivityGenerator subclasses (EndpointUplinkMixin,
-    # CommonGenerator) in that order. A Callable-typed attribute is a pure
-    # type hint with no entry in this class's __dict__, so it can't shadow
-    # anything.
+    # Attribute declarations for the type checker — provided by the host class (same convention as
+    # RackMixin/RoutingMixin). `_extract_device_name` is a plain Callable attribute: a method body defined here, even
+    # a stub, would sit ahead of the host's own in the MRO and shadow it. `create_cabling` is the real
+    # CablingMixin member, aliased for the type checker only.
     client: Any
     logger: logging.Logger
     data: Any
@@ -46,7 +43,8 @@ class EndpointUplinkMixin:
     _free_interfaces: list[DcimPhysicalInterface]
     _existing_switch_names: set[str]
     _extract_device_name: Callable[[Any], str | None]
-    create_cabling: Callable[..., Awaitable[list[tuple[Any, Any]]]]
+    if TYPE_CHECKING:
+        create_cabling = CablingMixin.create_cabling
 
     def _group_by_device(self, interfaces: list[DcimPhysicalInterface]) -> dict[str, list[DcimPhysicalInterface]]:
         """Interfaces keyed by device name, in input order; unresolvable ones are dropped with a warning."""

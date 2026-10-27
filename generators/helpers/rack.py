@@ -17,7 +17,7 @@ def pod_row_racks(
     idempotent selections. ``rack_types`` narrows them; None keeps every type.
 
     Racks are data, never a generator's output, so the payload read at the start of the run
-    replaces a ``filters(LocationRack, pod__ids=..., row_index__value=...)`` round trip.
+    replaces a ``filters(LocationRack, deployment__ids=..., row_index__value=...)`` round trip.
     """
     return sorted(
         (
@@ -122,7 +122,7 @@ class RackRolesHelper:
             options["loopback_pool"] = self.ctx._loopback_pool_id
             options["loopback_prefix_length"] = self.ctx._loopback_prefix_length
         if mlag:
-            options["mlag_create"] = self.ctx.data["pod"].get("mlag_create", "no")
+            options["mlag_create"] = self.ctx.data["deployment"].get("mlag_create", "no")
             options["mlag_supports_virtual"] = mlag_supports_virtual
         return options
 

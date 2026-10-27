@@ -222,7 +222,7 @@ class TestFirewallContextNoFirewallOrCluster:
         for it and re-queries, never pairing the firewalls itself."""
         gen = make_generator(CustomerDeploymentColocationExchangeGenerator)
         cluster = MagicMock(id="cluster-1")
-        cluster.name.value = "fw-fr201-fw-fr202-ha"
+        cluster.name.value = "fw-fr201-fw-fr202"
         cluster.capabilities.peers = [MagicMock(id="fw-1"), MagicMock(id="fw-2")]
         gen.client.filters = AsyncMock(side_effect=[[], [cluster]])
         gen._ensure_ha_pairs = AsyncMock()
@@ -260,7 +260,7 @@ class TestFirewallContextNoFirewallOrCluster:
 
 
 class TestFirewallContextProvisioning:
-    def _make_gen_with_cluster(self, *, cluster_name: str = "fw-fr201-fw-fr202-ha") -> Any:
+    def _make_gen_with_cluster(self, *, cluster_name: str = "fw-fr201-fw-fr202") -> Any:
         gen = make_generator(CustomerDeploymentColocationExchangeGenerator)
         fw_device = _fw_device(id="fw-1", name="fw-fr201")
         cluster = MagicMock(id="cluster-1")
@@ -279,7 +279,7 @@ class TestFirewallContextProvisioning:
 
         target = gen._ensure_transit_legs.await_args_list[-1].kwargs["target"]
         assert (target.context_name("PROD"), target.cluster_id, target.tenant_id, target.track) == (
-            f"{cluster.name.value}-shared",
+            f"shared-{cluster.name.value}-prod",
             cluster.id,
             None,
             False,
@@ -291,7 +291,7 @@ class TestFirewallContextProvisioning:
         gen, _, _ = self._make_gen_with_cluster()
         gen._ensure_transit_legs = AsyncMock()
         dedicated_cluster = MagicMock(id="dedicated-cluster-1")
-        dedicated_cluster.name.value = "fw-fr201-C005-p-dedicated-ha"
+        dedicated_cluster.name.value = "c005-fw-fr201-fw-fr202-ha-prod"
         gen._ensure_dedicated_device_pair = AsyncMock(
             return_value=(dedicated_cluster, [MagicMock(id="virt-1"), MagicMock(id="virt-2")])
         )
@@ -300,7 +300,7 @@ class TestFirewallContextProvisioning:
 
         target = gen._ensure_transit_legs.await_args_list[-1].kwargs["target"]
         assert (target.context_name("PROD"), target.cluster_id, target.tenant_id, target.track) == (
-            f"{dedicated_cluster.name.value}-context",
+            "c005-fw-fr201-fw-fr202-prod",
             "dedicated-cluster-1",
             "cust-1",
             True,
@@ -331,7 +331,7 @@ class TestFirewallContextProvisioning:
         kwargs = gen._ensure_transit_legs.await_args_list[-1].kwargs
         assert kwargs["customer_id"] == "cust-1"
         assert kwargs["customer"]["id"] == "cust-1"
-        assert kwargs["target"].context_name("PROD").endswith("-shared")
+        assert kwargs["target"].context_name("PROD").startswith("shared-")
         assert not hasattr(gen, "_ensure_policy_only_context")
 
     @pytest.mark.asyncio
@@ -428,7 +428,7 @@ class TestContextLivesOnTheServingZone:
         """The leg step receives the zone's name as parent_name, which names the zone's context VLAN pool."""
         gen = make_generator(CustomerDeploymentColocationExchangeGenerator)
         cluster = MagicMock(id="cluster-1")
-        cluster.name.value = "fw-fr201-fw-fr202-ha"
+        cluster.name.value = "fw-fr201-fw-fr202"
         cluster.capabilities.peers = [MagicMock(id="fw-1")]
         gen.client.filters = AsyncMock(return_value=[cluster])
         gen._ensure_transit_legs = AsyncMock()
@@ -444,7 +444,7 @@ class TestContextLivesOnTheServingZone:
         """`{zone}-fw-context-vlan-pool`: the pool add_colocation_zone created with ensure_context_vlan_pool(name="fr2")."""
         gen = make_generator(CustomerDeploymentColocationExchangeGenerator)
         context = MagicMock(id="ctx-1")
-        context.name.value = "fw-fr201-ha-shared"
+        context.name.value = "shared-fw-fr201-prod"
         context.vlan_id.value = None
         pool = MagicMock(id="pool-1")
         pool.name.value = "fr2-fw-context-vlan-pool"
@@ -467,7 +467,7 @@ class TestContextLivesOnTheServingZone:
         for footprint in ("C001-P-FR", "C005-P-FR"):
             gen = make_generator(CustomerDeploymentColocationExchangeGenerator)
             cluster = MagicMock(id="cluster-1")
-            cluster.name.value = "fw-fr201-fw-fr202-ha"
+            cluster.name.value = "fw-fr201-fw-fr202"
             cluster.capabilities.peers = [MagicMock(id="fw-1")]
             gen.client.filters = AsyncMock(return_value=[cluster])
             gen._ensure_transit_legs = AsyncMock()
@@ -478,4 +478,4 @@ class TestContextLivesOnTheServingZone:
 
             names.append(gen._ensure_transit_legs.await_args_list[-1].kwargs["target"].context_name("PROD"))
 
-        assert names == ["fw-fr201-fw-fr202-ha-shared"] * 2
+        assert names == ["shared-fw-fr201-fw-fr202-prod"] * 2

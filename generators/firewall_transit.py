@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from infrahub_sdk.protocols import CoreIPAddressPool, CoreIPPrefixPool, IpamNamespace
 
@@ -26,6 +26,9 @@ from .connections import BORDER_ROLE_FOR_SERVICES, tracked_save_kwargs
 from .far_end import far_end_interfaces
 from .firewall_context_spec import ContextSpec, _TransitMember, _TransitState
 from .protocols import DcimPhysicalInterface, DcimVirtualInterface, IpamIPAddress, IpamPrefix, TopologyRoutedExchange
+
+if TYPE_CHECKING:
+    from .connections import CablingMixin
 
 _MEMBER_OFFSETS = (OFFSET_MEMBER_A, OFFSET_MEMBER_B)
 _UPLINK_ROLE = "uplink"  # the member interface its context sub-interfaces sit on, cabled to a border service port
@@ -69,11 +72,13 @@ class TransitLegsMixin:
     # namespace_type -> IpamNamespace, bootstrap data that a run never changes.
     _namespaces_by_type: dict[str, Any] | None = None
 
-    # Provided by the host class and its other mixins. Callable attributes,
-    # not stub methods, so they never shadow the real ones via the MRO.
+    # Provided by the host class and its other mixins.
     client: Any
     logger: logging.Logger
-    upsert_prefix_addresses: Callable[..., Awaitable[dict[int, Any]]]
+    # Type checking only: the real members of the host's other bases, aliased so nothing is defined at runtime and
+    # nothing shadows them in the MRO.
+    if TYPE_CHECKING:
+        upsert_prefix_addresses = CablingMixin.upsert_prefix_addresses
 
     async def _transit_namespaces(self, leg_types: tuple[str, ...]) -> dict[str, Any] | None:
         """The VRF namespace of each leg type by namespace_type; None (logged) when one is missing.

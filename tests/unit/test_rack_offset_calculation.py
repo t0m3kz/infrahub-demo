@@ -59,7 +59,7 @@ def _build_generator(
         "rack_type": "network",
         "row_index": row_index,
         "parent": suite,
-        "pod": pod,
+        "deployment": pod,
     }
 
     generator = RackGenerator.__new__(RackGenerator)

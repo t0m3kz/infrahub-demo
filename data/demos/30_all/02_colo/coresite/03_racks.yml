@@ -7,7 +7,7 @@
 # (C011's cage) and VA1 (C012's cage). NY2/VA2/SV1 stay location-only until
 # something is installed in them.
 #
-# These racks deliberately carry no rack_type/fabric_templates: LocationRack.pod
+# These racks deliberately carry no rack_type/fabric_templates: LocationRack.deployment
 # here is a colocation zone, not a TopologyPod, so the rack generator has nothing
 # to build (it bails out on the missing pod design — see
 # generators/topology/rack.py's generate()).
@@ -39,7 +39,7 @@ spec:
                 - shortname: ny1-s1-r-1
                   index: 1
                   row_index: 1
-                  pod: NY1
+                  deployment: NY1
                   member_of_groups: [topologies_rack]
 
     - name: VA1
@@ -59,5 +59,5 @@ spec:
                 - shortname: va1-s1-r-1
                   index: 1
                   row_index: 1
-                  pod: VA1
+                  deployment: VA1
                   member_of_groups: [topologies_rack]

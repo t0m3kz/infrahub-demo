@@ -38,16 +38,19 @@ one domain never pick the same id.
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
-from contextlib import AbstractAsyncContextManager, AsyncExitStack
+from contextlib import AsyncExitStack
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import TYPE_CHECKING, Any
 
 from utils.data_cleaning import clean_data
 from utils.limits import CUSTOMER_VLAN_ID_MAX, CUSTOMER_VLAN_ID_MIN, GROUP_PROVIDER_STUBS, GROUP_SDWAN_GATEWAYS
 
 from .connections import BORDER_ROLE_FOR_SERVICES
 from .protocols import DcimPhysicalDevice, ManagedVlanDomainSegment
+
+if TYPE_CHECKING:
+    from .common import CommonGenerator
+    from .pools import PoolMixin
 
 # Devices that act as a deployment's EVPN Multi-Site border gateway for a
 # stretched segment: the DC's border leaves and the colocation edges. `edge` is
@@ -93,12 +96,11 @@ class VlanDomainMixin:
 
     client: Any
     logger: logging.Logger
-    # PoolMixin.resource_lock — declared as a plain Callable attribute, not a
-    # method, so it never shadows the real implementation via MRO (same
-    # convention as EndpointUplinkMixin's cross-mixin attributes).
-    resource_lock: Callable[[str], AbstractAsyncContextManager[Any]]
-    # CommonGenerator.fail — same convention.
-    fail: Callable[[str], NoReturn]
+    # Type checking only: the real members of the host's other bases, aliased so nothing is defined at runtime and
+    # nothing shadows them in the MRO.
+    if TYPE_CHECKING:
+        fail = CommonGenerator.fail
+        resource_lock = PoolMixin.resource_lock
 
     @staticmethod
     def _resolve_vlan_domains(devices: list[Any]) -> dict[str, str]:

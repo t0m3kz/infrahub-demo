@@ -59,7 +59,7 @@ def _build_gen(*, mlag_create: Literal["no", "back-to-back", "virtual"] = "no") 
         "rack_type": "compute",
         "row_index": 1,
         "parent": suite,
-        "pod": pod,
+        "deployment": pod,
         "l2_leafs": [],
         "access_leafs": [],
     }

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable
-from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass, field
 from ipaddress import ip_network
 from pathlib import Path
@@ -25,6 +24,7 @@ from .helpers.lb_vip import (
     cloud_placement,
     component_ref,
     context_ready,
+    instance_footprint,
     is_cloud_component,
     leg_prefix_id,
     member_identifier,
@@ -40,9 +40,8 @@ from .helpers.rules import RulesPlanner
 from .protocols import (
     AppComponent,
     CloudLoadBalancer,
-    DcimPhysicalDevice,
-    DcimVirtualDevice,
     LoadbalancerVIP,
+    ManagedVlanSegment,
     ManagedVxlanSegment,
     SecurityPolicy,
     TopologyCustomerDC,
@@ -62,6 +61,11 @@ _SERVING_CONTEXTS_QUERY = _QUERIES / "lb_serving_contexts.gql"
 if TYPE_CHECKING:
     import logging
 
+    from .common import CommonGenerator
+    from .connections import CablingMixin
+    from .pools import PoolMixin
+    from .segment_firewall import SegmentFirewallMixin
+
 Edge = tuple[dict[str, Any], dict[str, Any], dict[str, Any]]
 
 # Re-derives a component's application and every application calling it
@@ -71,22 +75,23 @@ APP_COMPONENT_GENERATOR = "add_app_component"
 
 
 async def load_balanced_components_in(client: Any, deployment_id: str) -> list[str]:
-    """Ids of the load_balanced AppComponents with an instance deployed to the customer DC ``deployment_id``.
+    """Ids of the load_balanced AppComponents on a segment activated in the customer DC ``deployment_id``.
 
-    Their VIPs and R_server rules sit on the deployment's serving context. The
-    two device kinds carry ``deployment`` each (a footprint lists no devices
-    of its own), read together, then the components running on them.
+    Their VIPs and R_server rules sit on the footprint's serving context (the one
+    of the segment in the instance's data center, helpers.lb_vip.instance_footprint).
+    A footprint lists neither its devices nor its components, so the segments
+    activated in it are read first (a VXLAN one lists its footprints, a VLAN one has
+    the one), then the components on them. A component also on a segment stretched
+    to another data center is re-run too: its VIPs there are idempotent.
     """
-    devices = await asyncio.gather(
-        *(
-            client.filters(kind=kind, deployment__ids=[deployment_id])
-            for kind in (DcimPhysicalDevice, DcimVirtualDevice)
-        )
+    vxlan, vlan = await asyncio.gather(
+        client.filters(kind=ManagedVxlanSegment, customer_deployments__ids=[deployment_id]),
+        client.filters(kind=ManagedVlanSegment, customer_deployment__ids=[deployment_id]),
     )
-    device_ids = sorted({device.id for kind_devices in devices for device in kind_devices})
-    if not device_ids:
+    segment_ids = sorted({segment.id for segment in [*vxlan, *vlan]})
+    if not segment_ids:
         return []
-    components = await client.filters(kind=AppComponent, instances__ids=device_ids, load_balanced__value=True)
+    components = await client.filters(kind=AppComponent, network_segment__ids=segment_ids, load_balanced__value=True)
     return sorted({component.id for component in components})
 
 
@@ -139,13 +144,14 @@ class LoadbalancerVipMixin:
 
     client: Any
     logger: logging.Logger
-    wait_for_parent_generators: Callable[..., Awaitable[bool]]
-    resource_lock: Callable[[str], AbstractAsyncContextManager[None]]
-    ensure_prefix_address_pool: Callable[..., Awaitable[Any]]
-    allocate_prefix_address: Callable[..., Awaitable[str | None]]
-    upsert_ip_address: Callable[..., Awaitable[Any]]
+    if TYPE_CHECKING:
+        _upsert_policy_rule = SegmentFirewallMixin._upsert_policy_rule
+        allocate_prefix_address = CablingMixin.allocate_prefix_address
+        ensure_prefix_address_pool = CablingMixin.ensure_prefix_address_pool
+        resource_lock = PoolMixin.resource_lock
+        upsert_ip_address = CablingMixin.upsert_ip_address
+        wait_for_parent_generators = CommonGenerator.wait_for_parent_generators
     _get_or_create_by_name: Callable[..., Awaitable[Any]]
-    _upsert_policy_rule: Callable[..., Awaitable[int | None]]
 
     # Between two re-reads (_poll_until_ready); tests replace it.
     lb_reread_sleep = staticmethod(asyncio.sleep)
@@ -234,13 +240,13 @@ class LoadbalancerVipMixin:
             ):
                 segments.setdefault(segment["id"], []).append(segment)
             for instance in component.get("instances") or []:
-                deployment = instance.get("deployment") or {}
+                footprint = instance_footprint(component, instance)
                 if (
-                    deployment.get("id")
-                    and deployment.get("typename") == TopologyCustomerDC.__name__
-                    and not context_ready(deployment.get("serving_loadbalancer_context"))
+                    footprint
+                    and footprint.get("id")
+                    and not context_ready(footprint.get("serving_loadbalancer_context"))
                 ):
-                    deployments.setdefault(deployment["id"], []).append(deployment)
+                    deployments.setdefault(footprint["id"], []).append(footprint)
         await self._reread_until_ready(
             segments,
             owner="add_vxlan_segment",

@@ -23,6 +23,8 @@ spec:
             ports:
               - tcp/443
             load_balanced: true
+            health_checks:
+              - ["http", "3", "3", "2000"]
             network_segment: c010-zindra-dev-d
             instances:
               - c010-portal-ui-dc12-1

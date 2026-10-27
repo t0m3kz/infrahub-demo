@@ -46,7 +46,7 @@ class TestResolveTargetInterfaces:
     async def test_middle_rack_dispatches(self) -> None:
         gen = _make_generator()
         gen.data = {
-            "rack": {"id": "rack-1", "rack_type": "network", "row_index": 1, "pod": {"id": "pod-1"}},
+            "rack": {"id": "rack-1", "rack_type": "network", "row_index": 1, "deployment": {"id": "pod-1"}},
             "name": "server-1",
         }
         gen._connect_middle_rack_deployment = AsyncMock(return_value=["x"])
@@ -95,7 +95,7 @@ class TestConnectMiddleRackDeployment:
                 "id": "rack-1",
                 "rack_type": "compute",
                 "row_index": 1,
-                "pod": {"id": "pod-1", "racks": [NETWORK_RACK] if pod_racks is None else pod_racks},
+                "deployment": {"id": "pod-1", "racks": [NETWORK_RACK] if pod_racks is None else pod_racks},
             },
         }
         gen._free_interfaces = []
@@ -226,7 +226,7 @@ class TestConnectTorDeployment:
             "rack": {
                 "id": "rack-1",
                 "row_index": 2,
-                "pod": {
+                "deployment": {
                     "id": "pod-1",
                     "racks": [_pod_rack("rack-2", rack_type="tor", row_index=2)] if pod_racks is None else pod_racks,
                 },
@@ -299,7 +299,7 @@ class TestConnectMixedDeployment:
             "rack": {
                 "id": "rack-1",
                 "row_index": 1,
-                "pod": {"id": "pod-1", "racks": [NETWORK_RACK] if pod_racks is None else pod_racks},
+                "deployment": {"id": "pod-1", "racks": [NETWORK_RACK] if pod_racks is None else pod_racks},
             },
         }
         return gen

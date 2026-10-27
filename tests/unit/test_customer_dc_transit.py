@@ -23,6 +23,7 @@ from tests.unit.customer_dc_transit_helpers import (
     _LB_DEVICES,
     _LB_PROD,
     _SHARED,
+    _SHARED_NON_PROD,
     _TRACKED,
     _UNTRACKED,
     _dedicated,
@@ -195,16 +196,17 @@ class TestRerunAndSecondCustomer:
         )
 
     @pytest.mark.asyncio
-    async def test_non_prod_customer_grows_its_own_leg_and_exchange_never_pairing_with_prod(self) -> None:
+    async def test_non_prod_customer_gets_its_own_context_and_never_pairs_with_prod(self) -> None:
         world = _World()
         gen, _ = _make_gen(world)
         await _run(gen, world, _payload(customer_id="cust-1", environment="p"))
 
         await _run(gen, world, _payload(customer_id="cust-2", environment="d"))
 
+        assert {_SHARED, _SHARED_NON_PROD} <= set(world.contexts)
         assert sorted(world.exchanges) == [
-            f"{_SHARED}-NON-PROD-INTERNET",
-            f"{_SHARED}-NON-PROD-MANAGEMENT",
+            f"{_SHARED_NON_PROD}-NON-PROD-INTERNET",
+            f"{_SHARED_NON_PROD}-NON-PROD-MANAGEMENT",
             f"{_SHARED}-PROD-INTERNET",
             f"{_SHARED}-PROD-MANAGEMENT",
         ]
@@ -215,19 +217,22 @@ class TestRerunAndSecondCustomer:
                 {"ns-nonprod", "ns-internet"},
                 {"ns-nonprod", "ns-management"},
             ), name
-        vlan = world.contexts[_SHARED].vlan_id.value
-        non_prod_sub = world.sub_interfaces[("fw-1", f"Ethernet1/25.{transit_vlan(vlan, 'non_prod')}")]
-        internet_sub = world.sub_interfaces[("fw-1", f"Ethernet1/25.{transit_vlan(vlan, 'internet')}")]
-        prod_sub = world.sub_interfaces[("fw-1", f"Ethernet1/25.{transit_vlan(vlan, 'prod')}")]
-        non_prod_exchange = world.exchanges[f"{_SHARED}-NON-PROD-INTERNET"].id
+        prod_vlan = world.contexts[_SHARED].vlan_id.value
+        non_prod_vlan = world.contexts[_SHARED_NON_PROD].vlan_id.value
+        assert prod_vlan != non_prod_vlan
+        prod_internet_sub = world.sub_interfaces[("fw-1", f"Ethernet1/25.{transit_vlan(prod_vlan, 'internet')}")]
+        non_prod_internet_sub = world.sub_interfaces[
+            ("fw-1", f"Ethernet1/25.{transit_vlan(non_prod_vlan, 'internet')}")
+        ]
         prod_exchange = world.exchanges[f"{_SHARED}-PROD-INTERNET"].id
-        assert non_prod_exchange in {peer.id for peer in non_prod_sub.capabilities.peers}
-        assert prod_exchange not in {peer.id for peer in non_prod_sub.capabilities.peers}
-        assert {non_prod_exchange, prod_exchange} <= {peer.id for peer in internet_sub.capabilities.peers}
-        assert non_prod_exchange not in {peer.id for peer in prod_sub.capabilities.peers}
-        # The INTERNET and MANAGEMENT /29s are the ones allocated for the first customer, not a second.
-        assert len([k for k in world.allocated if k.endswith("-INTERNET-transit")]) == 1
-        assert len([k for k in world.allocated if k.endswith("-MANAGEMENT-transit")]) == 1
+        non_prod_exchange = world.exchanges[f"{_SHARED_NON_PROD}-NON-PROD-INTERNET"].id
+        prod_peers = {peer.id for peer in prod_internet_sub.capabilities.peers}
+        non_prod_peers = {peer.id for peer in non_prod_internet_sub.capabilities.peers}
+        assert prod_exchange in prod_peers and non_prod_exchange not in prod_peers
+        assert non_prod_exchange in non_prod_peers and prod_exchange not in non_prod_peers
+        # Each context takes its own INTERNET and MANAGEMENT /29: nothing is shared across the two environments.
+        assert len([k for k in world.allocated if k.endswith("-INTERNET-transit")]) == 2
+        assert len([k for k in world.allocated if k.endswith("-MANAGEMENT-transit")]) == 2
 
     @pytest.mark.asyncio
     async def test_non_prod_customer_alone_uses_non_prod_and_the_peers_only(self) -> None:
@@ -236,7 +241,10 @@ class TestRerunAndSecondCustomer:
 
         await _run(gen, world, _payload(environment="t"))
 
-        assert sorted(world.exchanges) == [f"{_SHARED}-NON-PROD-INTERNET", f"{_SHARED}-NON-PROD-MANAGEMENT"]
+        assert sorted(world.exchanges) == [
+            f"{_SHARED_NON_PROD}-NON-PROD-INTERNET",
+            f"{_SHARED_NON_PROD}-NON-PROD-MANAGEMENT",
+        ]
         assert {ns for _, ns in world.addresses} == {"ns-nonprod", "ns-internet", "ns-management"}
         assert {name for _, name in world.sub_interfaces} == {
             "Ethernet1/25.3200",
@@ -254,8 +262,8 @@ class TestDedicatedContext:
 
         await _run(gen, world, _payload(dedicated=True))
 
-        assert "DC10-ded-ha-context" in world.contexts
-        assert world.contexts["DC10-ded-ha-context"].tenant_id == "cust-1"
+        assert "DC10-ded-prod" in world.contexts
+        assert world.contexts["DC10-ded-prod"].tenant_id == "cust-1"
         for kind, label, kwargs in world.saves:
             assert kwargs == _TRACKED, (kind, label)
         first_run_saves = len(world.saves)
@@ -267,16 +275,16 @@ class TestDedicatedContext:
         # No lock-free fast path for a tracked context: delete_unused_nodes
         # reclaims whatever the run does not save again.
         assert first_run_saves > 0
-        assert world.saved("ManagedFirewallContext") == ["DC10-ded-ha-context"]
+        assert world.saved("ManagedFirewallContext") == ["DC10-ded-prod"]
         assert len(world.saved("IpamIPAddress")) == 12
         assert len(world.saved("DcimVirtualInterface")) == 6
         assert sorted(world.saved("TopologyRoutedExchange")) == [
-            "DC10-ded-ha-context-PROD-INTERNET",
-            "DC10-ded-ha-context-PROD-MANAGEMENT",
+            "DC10-ded-prod-PROD-INTERNET",
+            "DC10-ded-prod-PROD-MANAGEMENT",
         ]
         for kind, label, kwargs in world.saves:
             assert kwargs == _TRACKED, (kind, label)
-        assert events == ["acquire:fw-context-DC10-ded-ha-context", "release"]
+        assert events == ["acquire:fw-context-DC10-ded-prod", "release"]
 
 
 class TestHealingAndFailures:
@@ -368,18 +376,18 @@ class TestSnatAddress:
     """One public SNAT /32 per context with an INTERNET leg (FW-SNAT-INTERNET-IPv4)."""
 
     @pytest.mark.asyncio
-    async def test_shared_context_gets_one_untracked_snat_shared_by_all_tenant_vrfs(self) -> None:
+    async def test_each_shared_context_gets_one_untracked_snat(self) -> None:
         world = _World()
         gen, _ = _make_gen(world)
 
         await _run(gen, world, _payload(customer_id="cust-1", environment="p"))
         await _run(gen, world, _payload(customer_id="cust-2", environment="d"))
 
-        context = world.contexts[_SHARED]
-        assert list(world.snat_allocations) == [f"{context.id}-snat"]
-        assert context.snat_address.id == "snat-0"
+        prod, non_prod = world.contexts[_SHARED], world.contexts[_SHARED_NON_PROD]
+        assert list(world.snat_allocations) == [f"{prod.id}-snat", f"{non_prod.id}-snat"]
+        assert (prod.snat_address.id, non_prod.snat_address.id) == ("snat-0", "snat-1")
         snat_saves = [kwargs for kind, label, kwargs in world.saves if label == "snat_address"]
-        assert snat_saves == [_UNTRACKED]
+        assert snat_saves == [_UNTRACKED, _UNTRACKED]
 
     @pytest.mark.asyncio
     async def test_dedicated_context_snat_write_is_tracked(self) -> None:
@@ -390,7 +398,7 @@ class TestSnatAddress:
         await _run(gen, world, _payload(dedicated=True))
 
         assert [kwargs for _, label, kwargs in world.saves if label == "snat_address"] == [_TRACKED]
-        assert world.contexts["DC10-ded-ha-context"].snat_address.id == "snat-0"
+        assert world.contexts["DC10-ded-prod"].snat_address.id == "snat-0"
 
     @pytest.mark.asyncio
     async def test_rerun_with_snat_set_writes_nothing(self) -> None:
@@ -492,14 +500,14 @@ class TestTransitMemberResolution:
         gen, _ = _make_gen(world)
         members = self._hosted_members(world)
         cluster = SimpleNamespace(
-            id="ded-cluster", name=SimpleNamespace(value="DC10-ded-ha"), capabilities=SimpleNamespace(peers=[])
+            id="ded-cluster", name=SimpleNamespace(value="DC10-ded-ha-prod"), capabilities=SimpleNamespace(peers=[])
         )
         gen._ensure_dedicated_device_pair = AsyncMock(return_value=(cluster, members))
 
         await _run(gen, world, _payload(dedicated=True))
 
         assert world.uplink_lookups == [["vfw-1", "vfw-2"]]
-        context = world.contexts["DC10-ded-ha-context"]
+        context = world.contexts["DC10-ded-prod"]
         assert {key for key in world.sub_interfaces if key[1] == "eth1.3000"} == {
             ("vfw-1", "eth1.3000"),
             ("vfw-2", "eth1.3000"),
@@ -514,7 +522,7 @@ class TestTransitMemberResolution:
         gen, _ = _make_gen(world)
         members = self._hosted_members(world, pinned=False)
         cluster = SimpleNamespace(
-            id="ded-cluster", name=SimpleNamespace(value="DC10-ded-ha"), capabilities=SimpleNamespace(peers=[])
+            id="ded-cluster", name=SimpleNamespace(value="DC10-ded-ha-prod"), capabilities=SimpleNamespace(peers=[])
         )
         gen._ensure_dedicated_device_pair = AsyncMock(return_value=(cluster, members))
 

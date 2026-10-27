@@ -60,6 +60,7 @@ from .firewall_config_helpers import (
     SCENARIO_NAME,
     _block,
     _border_leaf_lb_leg_errors,
+    _context_lines,
     _f5_block,
     _f5_blocks,
     _leg_network,
@@ -113,9 +114,9 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
             if expected["tenant"] is not None:
                 continue  # a dedicated context's members are virtual: not a firewall_config device
             dc = expected["site"]
-            context = contexts.get((dc, None))
+            context = contexts.get((dc, expected["namespace"], None))
             if context is None:
-                errors.append(f"{dc}: no shared context")
+                errors.append(f"{dc}/{expected['namespace']}: no shared context")
                 continue
             name = str(context["name"])
             network = _leg_network(context, MANAGEMENT_NAMESPACE)
@@ -203,8 +204,11 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
                     )
                     if route not in rendered:
                         errors.append(f"{dc}/{device}: '{route}' missing")
+                # A member renders every context of its cluster (DC12's PROD and NON-PROD ones), so the zones this
+                # context does not hold are looked for in its own vsys / virtual system only.
+                own = _context_lines(rendered, platform, name)
                 for zone in other_zones:
-                    if f"deny-{management_zone}-to-{zone}" in rendered:
+                    if f"deny-{management_zone}-to-{zone}" in own:
                         errors.append(f"{dc}/{device}: deny towards {zone}, which the context does not hold")
 
         assert {"paloalto_panos", "checkpoint_gaia"} <= set(rendered_by_platform), (
@@ -236,7 +240,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
             await _segment_on_switches(async_client_main, scenario_branch, MANAGEMENT_CLIENT_SEGMENT)
         ).prefix
         context = _site_contexts(await fetch_transit_inventory(client=async_client_main, branch=scenario_branch))[
-            (MANAGEMENT_SERVICES_DC, None)
+            (MANAGEMENT_SERVICES_DC, "PROD", None)  # the client segment is a PROD one
         ]
         members = sorted({str(leg["device"]) for leg in context["legs"]})
         assert members, f"{MANAGEMENT_SERVICES_DC}: the shared context has no firewall member"

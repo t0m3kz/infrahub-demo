@@ -100,6 +100,7 @@ from .firewall_config_helpers import (
     _panos_context_leg_errors,
     _platform_by_name,
     _segment_on_switches,
+    _shared_contexts,
     _site_contexts,
 )
 from .service_inventory_helpers import fetch_transit_inventory
@@ -238,18 +239,22 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         context = serving_cluster["context"]
         assert context, "serving context has no name"
         site_contexts = _site_contexts(await fetch_transit_inventory(client=async_client_main, branch=scenario_branch))
-        site, inventory_context = next(
+        site, namespace, inventory_context = next(
             (
-                (site, candidate)
-                for (site, tenant), candidate in site_contexts.items()
+                (site, namespace, candidate)
+                for (site, namespace, tenant), candidate in site_contexts.items()
                 if tenant is None and candidate["name"] == context
             ),
-            ("", None),
+            ("", "", None),
         )
         assert inventory_context is not None and site in ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS, (
             f"serving context '{context}' is not a serving colocation zone's shared context"
         )
-        expected = next(e for e in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS if e["site"] == site and e["tenant"] is None)
+        expected = next(
+            e
+            for e in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS
+            if e["site"] == site and e["namespace"] == namespace and e["tenant"] is None
+        )
         platform_by_name = await _platform_by_name(async_client_main, scenario_branch)
         errors: list[str] = []
         for device in serving_cluster["members"]:
@@ -294,9 +299,9 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         transit VLAN."""
         logging.info("=== %s - Step 3: CheckFirewall (%s transit legs) ===", SCENARIO_NAME, dc)
 
-        shared = _site_contexts(await fetch_transit_inventory(client=async_client_main, branch=scenario_branch))[
-            (dc, None)
-        ]
+        (shared, *_) = _shared_contexts(
+            _site_contexts(await fetch_transit_inventory(client=async_client_main, branch=scenario_branch)), dc
+        )
         member = sorted({str(leg["device"]) for leg in shared["legs"]})[0]
 
         check = CheckFirewall(branch=scenario_branch, client=async_client_main, params={"device": member})
@@ -317,13 +322,13 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Every physical member of each DC's shared context renders its legs.
+        """Every physical member of each site's shared contexts renders their legs.
 
         Per leg: the sub-interface, the firewall VIP (/29 .4) and, per vendor,
         the member address (Check Point) and the default route 0.0.0.0/0 via the
-        INTERNET leg's border-leaf anycast (/29 .1). A context that holds both
-        PROD and NON-PROD (DC12's shared one) gets the logged PROD<->NON-PROD
-        deny; the others must not.
+        INTERNET leg's border-leaf anycast (/29 .1). No context holds both PROD and
+        NON-PROD (each tenant namespace has its own), so no PROD<->NON-PROD deny
+        is rendered anywhere.
         """
         logging.info("=== %s - Step 4: Render transit legs ===", SCENARIO_NAME)
 
@@ -336,9 +341,9 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
             if expected["tenant"] is not None:
                 continue  # a dedicated context's members are virtual: not a firewall_config device
             dc = expected["site"]
-            context = contexts.get((dc, None))
+            context = contexts.get((dc, expected["namespace"], None))
             if context is None:
-                errors.append(f"{dc}: no shared context")
+                errors.append(f"{dc}/{expected['namespace']}: no shared context")
                 continue
             internet_net = _leg_network(context, "INTERNET")
             internet_anycast = transit_addresses(str(internet_net))["anycast"]
@@ -346,7 +351,6 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
                 f"deny-{zone_name_for_namespace_type(a)}-to-{zone_name_for_namespace_type(b)}"
                 for a, b in (("prod", "non_prod"), ("non_prod", "prod"))
             ]
-            isolated = {"PROD", "NON-PROD"} <= set(expected["namespaces"])
 
             for device in sorted({str(leg["device"]) for leg in context["legs"]}):
                 platform = platform_by_name.get(device)
@@ -374,11 +378,8 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
                         f"{dc}/{device}: no 0.0.0.0/0 via the INTERNET leg {internet_anycast} ({default_route})"
                     )
                 for name in deny_names:
-                    if (name in rendered) != isolated:
-                        errors.append(
-                            f"{dc}/{device}: '{name}' {'missing' if isolated else 'present'}, "
-                            f"VRFs {sorted(expected['namespaces'])}"
-                        )
+                    if name in rendered:
+                        errors.append(f"{dc}/{device}: '{name}' present, no context holds both PROD and NON-PROD")
 
         assert rendered_count, "no firewall config was rendered"
         assert not errors, f"rendered transit legs on branch '{scenario_branch}' are wrong:\n" + "\n".join(
@@ -409,8 +410,8 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
 
         contexts = _site_contexts(await fetch_transit_inventory(client=async_client_main, branch=scenario_branch))
         dc = "DC11"
-        dc_contexts = [context for (context_dc, _), context in contexts.items() if context_dc == dc]
-        shared = contexts[(dc, None)]
+        dc_contexts = [context for (context_dc, _, _), context in contexts.items() if context_dc == dc]
+        shared = contexts[(dc, "PROD", None)]
         prod_vip = transit_addresses(str(_leg_network(shared, "PROD")))["vip"]
         transit_vnis = sorted(
             {
@@ -492,7 +493,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
             prefix = source.prefix
 
             # --- firewall: the shared context of the DC ---
-            context = contexts[(dc, None)]
+            context = contexts[(dc, "PROD", None)]  # the rule's source segment is a PROD one
             members = sorted({str(leg["device"]) for leg in context["legs"]})
             assert members, f"{dc}: the shared context has no firewall member"
             base = rf"^set vsys {re.escape(str(context['name']))} rulebase security rules {re.escape(rule_name)}"
@@ -606,9 +607,9 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
             if expected["tenant"] is not None:
                 continue  # a dedicated context's members are virtual: not a firewall_config device
             dc = expected["site"]
-            context = contexts.get((dc, None))
+            context = contexts.get((dc, expected["namespace"], None))
             if context is None or not context["snat"]:
-                errors.append(f"{dc}: no shared context with a snat_address")
+                errors.append(f"{dc}/{expected['namespace']}: no shared context with a snat_address")
                 continue
             name = str(context["name"])
             snat = str(ipaddress.IPv4Interface(str(context["snat"])).ip)
@@ -755,16 +756,17 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         errors: list[str] = []
         served_edges: set[str] = set()
         for site in ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS:
-            context = contexts.get((site, None))
-            assert context is not None, f"{site}: no shared firewall context"
-            edges = sorted({str(port["device"]) for port in context["border_ports"]})
-            assert len(edges) == 2, f"{site}: service ports on {edges}, expected both edges of the zone"
-            served_edges.update(edges)
-            for device in edges:
-                rendered = await render_device_config(
-                    async_client_main, scenario_branch, device, query="edge_config", transform_cls=Edge
-                )
-                errors.extend(_edge_transit_errors(device, rendered, context))
+            site_shared = _shared_contexts(contexts, site)
+            assert site_shared, f"{site}: no shared firewall context"
+            for context in site_shared:
+                edges = sorted({str(port["device"]) for port in context["border_ports"]})
+                assert len(edges) == 2, f"{site}: service ports on {edges}, expected both edges of the zone"
+                served_edges.update(edges)
+                for device in edges:
+                    rendered = await render_device_config(
+                        async_client_main, scenario_branch, device, query="edge_config", transform_cls=Edge
+                    )
+                    errors.extend(_edge_transit_errors(device, rendered, context))
 
         for device in sorted(set(ALL_DEMO_INTERNET_BGWS) - served_edges):
             rendered = await render_device_config(

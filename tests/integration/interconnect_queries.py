@@ -278,6 +278,7 @@ query ($names: [String]) {
         virtual_network { node { name { value } } }
         network_segments { edges { node { name { value } } } }
         member_of_groups { edges { node { name { value } } } }
+        vips { edges { node { id } } }
       }
     }
   }
@@ -291,6 +292,7 @@ query ($names: [String]) {
         vip_ip { node { address { value } } }
         component { node { fqdn { value } } }
         pool_members { edges { node { address { value } } } }
+        health_checks { edges { node { check { value } rise { value } fall { value } timeout { value } } } }
       }
     }
   }
