@@ -8,9 +8,7 @@ FABRIC). A mixin so the generator file keeps the pools, the validation and the d
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
-from contextlib import AbstractAsyncContextManager
-from typing import TYPE_CHECKING, Any, ClassVar, NoReturn
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from infrahub_sdk.exceptions import NodeNotFoundError
 from infrahub_sdk.protocols import CoreNumberPool
@@ -21,6 +19,13 @@ from ..protocols import DcimVirtualInterface, ManagedBGP
 from ..routing import EVPN_AF
 from ..types import CablingOptions
 from .colocation_pools import TECHNICAL_IPV6_SLOT, ColocationFabricData, ColoPoolSlot
+
+if TYPE_CHECKING:
+    from ..common import CommonGenerator
+    from ..connections import CablingMixin
+    from ..pools import PoolMixin
+    from ..routing import RoutingMixin
+    from ..shared_routing import SharedRoutingObjectsMixin
 
 # EVPN Multi-Site border gateway (see _ensure_evpn). Every DC fabric this
 # demo builds runs an IPv6 underlay, and a Multi-Site tunnel only forms between
@@ -45,7 +50,8 @@ class ColocationEvpnMixin:
     methods of PoolMixin, CablingMixin, RoutingMixin and CommonGenerator it is mixed into.
     """
 
-    # Annotation only (callable attributes, not stub methods), so nothing shadows the real ones via the MRO.
+    # Annotations, and aliases of the real members of the host's other bases under TYPE_CHECKING: nothing is
+    # defined at runtime, so nothing shadows them in the MRO.
     client: Any
     logger: Any
     data: ColocationFabricData
@@ -53,16 +59,17 @@ class ColocationEvpnMixin:
     _label: ClassVar[str]
     _edge_devices: dict[str, str]
     _vtep_pool: Any
-    fail: Callable[[str], NoReturn]
-    ensure_shared_as: Callable[..., Awaitable[str | None]]
-    attach_refs: Callable[..., Awaitable[None]]
-    wait_for_parent_generators: Callable[..., Awaitable[bool]]
-    _get_parent_pool_with_retry: Callable[..., Awaitable[Any]]
-    resource_lock: Callable[[str], AbstractAsyncContextManager[None]]
-    create_chain_cabling: Callable[..., Awaitable[list[list[tuple[Any, Any]]]]]
-    upsert_bgp_peering: Callable[..., Awaitable[Any]]
-    ensure_address_family: Callable[[str, str], Awaitable[str]]
-    _ensure_routing_password: Callable[..., Awaitable[str | None]]
+    if TYPE_CHECKING:
+        _ensure_routing_password = SharedRoutingObjectsMixin._ensure_routing_password
+        _get_parent_pool_with_retry = PoolMixin._get_parent_pool_with_retry
+        attach_refs = PoolMixin.attach_refs
+        create_chain_cabling = CablingMixin.create_chain_cabling
+        ensure_address_family = RoutingMixin.ensure_address_family
+        ensure_shared_as = SharedRoutingObjectsMixin.ensure_shared_as
+        fail = CommonGenerator.fail
+        resource_lock = PoolMixin.resource_lock
+        upsert_bgp_peering = RoutingMixin.upsert_bgp_peering
+        wait_for_parent_generators = CommonGenerator.wait_for_parent_generators
 
     if TYPE_CHECKING:
         # The generator's own method (it knows the metro's pools); a stub seen only by the type checker.

@@ -76,6 +76,15 @@ from .service_inventory_helpers import (
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 
+def _expected_loadbalancer_context_name(cluster: str, namespace: str, tenant: str | None) -> str:
+    """`shared-{cluster}-{namespace}` for a shared context; for a dedicated one the pair's `{base}-ha-{class}` named
+    `{base}-{class}` (generators/firewall_context_spec.py _ContextTarget.context_name), all lowercase."""
+    scope = namespace.lower()
+    if not tenant:
+        return f"shared-{cluster}-{scope}"
+    return f"{cluster.removesuffix(f'-ha-{scope}')}-{scope}"
+
+
 class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
     """Verify the circuit layer and the tenant-scoped services on top of it."""
 
@@ -118,7 +127,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         if len(shared) != ALL_DEMO_SHARED_FIREWALL_CONTEXTS:
             errors.append(
                 f"{len(shared)} shared (tenant-less) firewall context(s), "
-                f"expected {ALL_DEMO_SHARED_FIREWALL_CONTEXTS} — one per firewall cluster"
+                f"expected {ALL_DEMO_SHARED_FIREWALL_CONTEXTS} — one per firewall cluster and tenant namespace"
             )
 
         dedicated = {str(context["tenant"]): context for context in contexts if context["tenant"]}
@@ -188,8 +197,8 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         port_devices_by_site: dict[str, set[str]] = {}  # site -> devices holding the tagged ports
 
         for expected in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS:
-            label = f"{expected['site']}/{expected['tenant'] or 'shared'}"
-            context = by_key.get((expected["site"], expected["tenant"]))
+            label = f"{expected['site']}/{expected['tenant'] or 'shared'}/{expected['namespace']}"
+            context = by_key.get((expected["site"], expected["namespace"], expected["tenant"]))
             if context is None:
                 errors.append(f"{label}: no firewall context")
                 continue
@@ -383,8 +392,8 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         errors: list[str] = []
         seen: dict[str, str] = {}
         for expected in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS:
-            label = f"{expected['site']}/{expected['tenant'] or 'shared'}"
-            context = by_key.get((expected["site"], expected["tenant"]))
+            label = f"{expected['site']}/{expected['tenant'] or 'shared'}/{expected['namespace']}"
+            context = by_key.get((expected["site"], expected["namespace"], expected["tenant"]))
             if context is None:
                 errors.append(f"{label}: no firewall context")
                 continue
@@ -422,8 +431,8 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         """Verify the load-balancer contexts, their one-arm leg, service ports and VIP range.
 
         One shared context per (DC cluster, tenant namespace) a non-dedicated
-        footprint of the DC is in, `{cluster}-{NAMESPACE}`, and one dedicated
-        `{cluster}-context` per footprint whose design sets
+        footprint of the DC is in, `shared-{cluster}-{namespace}`, and one dedicated
+        `{owner}-{first}-{second}-{class}` per footprint whose design sets
         dedicated_loadbalancer (ALL_DEMO_LOADBALANCER_CONTEXTS), each serving
         exactly those footprints. Per context: a VLAN from the DC's
         lb-context pool (3100-3199), unique in the DC; one leg in the tenant VRF,
@@ -475,7 +484,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             name = str(context["name"])
             if not context["cluster"]:
                 errors.append(f"{label}: '{name}' is on no load-balancer cluster")
-            elif name != (f"{context['cluster']}-context" if tenant else f"{context['cluster']}-{namespace}"):
+            elif name != _expected_loadbalancer_context_name(str(context["cluster"]), namespace, tenant):
                 errors.append(f"{label}: named '{name}', expected the {'dedicated' if tenant else 'shared'} name")
             if context["served"] != sorted(served):
                 errors.append(f"{label}: '{name}' serves {context['served']}, expected {sorted(served)}")
@@ -642,6 +651,8 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                 errors.append(
                     f"{label}: fronts {vip['component']} in {vip['segment']}, expected {fqdn} in {component['segment']}"
                 )
+            if vip["health_checks"] != component["health_checks"]:
+                errors.append(f"{label}: health checks {vip['health_checks']}, expected {component['health_checks']}")
             if not vip["address"]:
                 errors.append(f"{label}: no vip_ip")
                 continue
@@ -767,8 +778,19 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             ports = sorted((str(vip["protocol"]), int(vip["port"])) for vip in vips)
             if ports != sorted(component["ports"]):
                 errors.append(f"cloud load balancer {name}: VIPs on {ports}, expected {sorted(component['ports'])}")
+            # The reverse of LoadbalancerVIP.load_balancer (ManagedLoadBalancer.vips): the load balancer lists its own.
+            if len(lb.get("vips") or []) != len(vips):
+                errors.append(f"cloud load balancer {name}: lists {len(lb.get('vips') or [])} VIP(s), has {len(vips)}")
             for vip in vips:
                 label = f"cloud VIP {fqdn} {vip['protocol']}/{vip['port']} on {name}"
+                checks = tuple(
+                    sorted(
+                        tuple(str(check[field]) for field in ("check", "rise", "fall", "timeout"))
+                        for check in vip.get("health_checks") or []
+                    )
+                )
+                if checks != component["health_checks"]:
+                    errors.append(f"{label}: health checks {checks}, expected {component['health_checks']}")
                 if vip.get("hostname") != fqdn or (vip.get("component") or {}).get("fqdn") != fqdn:
                     errors.append(f"{label}: hostname/component is not {fqdn}")
                 if (vip.get("vip_ip") or {}).get("address"):

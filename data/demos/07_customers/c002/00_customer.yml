@@ -1,0 +1,10 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: OrganizationCustomer
+  data:
+    - name: "SwiftGo GmbH"
+      org_id: "C002"
+      member_of_groups:
+        - customers

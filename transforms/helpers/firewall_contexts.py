@@ -158,7 +158,7 @@ def _flatten_deployment_firewall_contexts(deployment: dict[str, Any] | None) -> 
     (pre-filtered to role="firewall") -> each device's capabilities (keep
     typename == "ManagedFirewallHA") -> contexts -> [ManagedFirewallContext, ...].
     Pod-tier devices (leaf/tor/access-leaf) have their deployment set to the
-    POD, not the DC — deployment_id=self.data["pod"]["id"] in
+    POD, not the DC — deployment_id=self.data["deployment"]["id"] in
     generators/topology/rack.py vs deployment_id=dc_id in
     generators/topology/dc.py — so the fragment also nests one `parent` hop
     for that case; both paths are flattened here, deduped by context id.

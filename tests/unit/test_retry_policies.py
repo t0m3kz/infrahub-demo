@@ -62,7 +62,7 @@ class TestPolicyValues:
             pytest.param(LB_VIP_REREAD, 12, 5.0, id="lb-vip-reread"),
             pytest.param(OFFICE_EDGE_WAIT, 8, 3.0, id="office-edge-wait"),
             pytest.param(BORDER_LEAF_WAIT, 3, 2.0, id="border-leaf-wait"),
-            pytest.param(RESOURCE_LOCK, 20, 2.0, id="resource-lock"),
+            pytest.param(RESOURCE_LOCK, 40, 2.0, id="resource-lock"),
         ],
     )
     def test_retry_policy_values(self, policy: RetryPolicy, attempts: int, delay: float) -> None:
@@ -72,6 +72,13 @@ class TestPolicyValues:
     def test_resource_lock_is_stale_after_five_minutes(self) -> None:
         """A lock older than 300 s is treated as abandoned."""
         assert RESOURCE_LOCK.stale_after == 300
+
+    def test_a_waiter_outlasts_a_lock_that_is_still_to_become_stale(self) -> None:
+        """A lock whose release failed stays until it is stale_after old; the waiters, backing off to the cap of
+        generators/pools.py (10 s), must still be trying then, or every one of them fails on it."""
+        waited = sum(min(RESOURCE_LOCK.delay * 2**attempt, 10.0) for attempt in range(RESOURCE_LOCK.attempts))
+
+        assert waited > RESOURCE_LOCK.stale_after
 
     def test_parent_generator_wait_polls_every_three_seconds_for_half_an_hour(self) -> None:
         """The wait for a parent generator run in flight: interval 3 s, timeout 1800 s."""

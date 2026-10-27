@@ -191,11 +191,13 @@ class TestLoadbalancerSharedContext:
 class TestLoadbalancerDedicatedContext:
     def _dedicated(self, gen: Any) -> None:
         cluster = SimpleNamespace(
-            id="ded-lb-cluster", name=SimpleNamespace(value="DC10-LB-ded-ha"), capabilities=SimpleNamespace(peers=[])
+            id="ded-lb-cluster",
+            name=SimpleNamespace(value="DC10-LB-ded-ha-prod"),
+            capabilities=SimpleNamespace(peers=[]),
         )
         members = [
-            SimpleNamespace(id="lb-1", name=SimpleNamespace(value="DC10-LB1-C005-p-dedicated"), hosting_device=None),
-            SimpleNamespace(id="lb-2", name=SimpleNamespace(value="DC10-LB2-C005-p-dedicated"), hosting_device=None),
+            SimpleNamespace(id="lb-1", name=SimpleNamespace(value="c005-DC10-LB1-prod"), hosting_device=None),
+            SimpleNamespace(id="lb-2", name=SimpleNamespace(value="c005-DC10-LB2-prod"), hosting_device=None),
         ]
         gen._ensure_dedicated_device_pair = AsyncMock(return_value=(cluster, members))
 
@@ -210,7 +212,7 @@ class TestLoadbalancerDedicatedContext:
         assert gen._ensure_dedicated_device_pair.call_args.kwargs["role"] == "load-balancer"
         assert gen._ensure_dedicated_device_pair.call_args.kwargs["ha_kind"] == "ManagedLoadbalancerHA"
         assert "tenant_id" not in gen._ensure_dedicated_device_pair.call_args.kwargs
-        context = world.contexts["DC10-LB-ded-ha-context"]
+        context = world.contexts["DC10-LB-ded-prod"]
         assert context.tenant_id == "cust-1"
         assert context.vip_prefix.id is not None
         for kind, label, kwargs in world.saves:
@@ -220,12 +222,12 @@ class TestLoadbalancerDedicatedContext:
 
         await _run(gen, world, _lb_payload(dedicated_loadbalancer=True))
 
-        assert world.saved("ManagedLoadbalancerContext") == ["DC10-LB-ded-ha-context"]
+        assert world.saved("ManagedLoadbalancerContext") == ["DC10-LB-ded-prod"]
         assert len(world.saved("IpamIPAddress")) == 4
         assert len(world.saved("DcimVirtualInterface")) == 2
         for kind, label, kwargs in world.saves:
             assert kwargs == _TRACKED, (kind, label)
-        assert events == ["acquire:lb-context-DC10-LB-ded-ha-context", "release"]
+        assert events == ["acquire:lb-context-DC10-LB-ded-prod", "release"]
 
     @pytest.mark.asyncio
     async def test_dedicated_request_without_a_pair_provisions_no_context(self) -> None:

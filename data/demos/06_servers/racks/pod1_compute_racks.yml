@@ -12,7 +12,7 @@ spec:
       row_index: 1
       shortname: ktw-1-s-1-r-1-1
       rack_type: compute
-      pod: DC6-1-POD-1
+      deployment: DC6-1-POD-1
       parent: ktw-1-s-1
       member_of_groups: [topologies_rack]
 
@@ -20,6 +20,6 @@ spec:
       row_index: 2
       shortname: ktw-1-s-1-r-2-1
       rack_type: compute
-      pod: DC6-1-POD-1
+      deployment: DC6-1-POD-1
       parent: ktw-1-s-1
       member_of_groups: [topologies_rack]

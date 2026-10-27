@@ -73,10 +73,14 @@ def test_the_payloads_hold_the_racks_the_data_declares(label: str) -> None:
 def test_the_dc_demos_have_pods_with_a_design_to_judge() -> None:
     """The DC payloads are not vacuous: pods with their designs host racks in suites (colocation racks have none)."""
     racks = clean_data(build_payloads(*_roots("01_data_center")))["LocationRack"]
-    designs = {rack["pod"]["design"]["name"] for rack in racks if rack["pod"] and rack["pod"].get("design")}
+    designs = {
+        rack["deployment"]["design"]["name"]
+        for rack in racks
+        if rack["deployment"] and rack["deployment"].get("design")
+    }
     assert {"S_MIDDLE", "M_MIDDLE", "S_TOR", "S_MIXED", "M_MIXED", "S_BORDER_SPINE_POD"} <= designs
     colocation = clean_data(build_payloads(*_roots("30_all")))["LocationRack"]
-    assert any(rack["pod"] and not rack["pod"].get("design") for rack in colocation)
+    assert any(rack["deployment"] and not rack["deployment"].get("design") for rack in colocation)
 
 
 @pytest.mark.parametrize(
@@ -141,11 +145,11 @@ def test_the_query_selects_what_the_check_reads_and_nothing_else() -> None:
         "parent.name",
         "parent.rows",
         "parent.racks_per_row",
-        "pod.id",
-        "pod.name",
-        "pod.design.id",
-        "pod.design.name",
-        *(f"pod.design.{field}" for field in DESIGN_FIELDS),
+        "deployment.id",
+        "deployment.name",
+        "deployment.design.id",
+        "deployment.design.name",
+        *(f"deployment.design.{field}" for field in DESIGN_FIELDS),
     }
     selected = _selected_paths(QUERY, "LocationRack")
     leaves = {path for path in selected if not any(other.startswith(f"{path}.") for other in selected)}

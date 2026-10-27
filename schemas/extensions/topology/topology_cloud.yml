@@ -63,6 +63,7 @@ nodes:
     icon: mdi:earth
     inherit_from:
       - TopologyDeployment
+      - TopologyDeviceHosting
       - TopologyConnectableLocation
       - TopologyFacility
     parent: TopologyCloud

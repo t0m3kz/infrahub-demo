@@ -111,7 +111,7 @@ def _vc(
                 },
                 "parent": {"id": "m-1", "name": "AM", "parent": {"id": "c-1", "name": operator}},
                 "fabric_templates": entries,
-                "devices": devices,
+                "appliances": devices,
             }
         ]
     }
@@ -142,7 +142,7 @@ def _edges_and_firewall_cluster() -> dict[str, Any]:
 
 
 def _devices(cleaned: dict[str, Any]) -> list[dict[str, Any]]:
-    return cleaned["TopologyVirtualColocation"][0]["devices"]
+    return cleaned["TopologyVirtualColocation"][0]["appliances"]
 
 
 def _raw(cleaned: dict[str, Any]) -> dict[str, Any]:
@@ -221,7 +221,7 @@ def _raw(cleaned: dict[str, Any]) -> dict[str, Any]:
                                 for entry in vc["fabric_templates"]
                             ]
                         },
-                        "devices": {"edges": [node(device(item)) for item in vc["devices"]]},
+                        "appliances": {"edges": [node(device(item)) for item in vc["appliances"]]},
                     }
                 )
             ]
@@ -446,7 +446,7 @@ def test_member_outside_the_presence_is_refused() -> None:
     """The partner named by the domain must be a device of this presence."""
     cleaned = _firewall_pair()
     vc = cleaned["TopologyVirtualColocation"][0]
-    vc["devices"] = vc["devices"][:1]
+    vc["appliances"] = vc["appliances"][:1]
     vc["fabric_templates"] = [_entry("edge", 1)]
 
     with pytest.raises(ValueError, match="fw-am-ne01 is in HA domain .* with fw-am-ne02, which is not a device"):
@@ -505,7 +505,7 @@ def test_devices_fewer_than_the_declared_quantity_are_refused() -> None:
 
 def test_quantities_of_two_entries_of_one_role_add_up() -> None:
     """Two entries of one role (1 + 1) declare two edges, not a mismatch."""
-    cleaned = _vc([_entry("edge", 1), _entry("edge", 1)], _two_edges()["TopologyVirtualColocation"][0]["devices"])
+    cleaned = _vc([_entry("edge", 1), _entry("edge", 1)], _two_edges()["TopologyVirtualColocation"][0]["appliances"])
 
     assert len(normalise_virtual_colocation(cleaned)["devices"]) == 2
 

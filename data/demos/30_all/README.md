@@ -256,7 +256,7 @@ The C004 Azure VNet (`10.40.0.0/16`) stays a customer VPC of its own, with no ha
 
 The ISP devices are in no group, so no artifact or check targets them. Their configuration is the carrier's
 business. Inter-VRF routing is not wired to these edges yet. The DCs reach `INTERNET` through one
-`TopologyRoutedExchange` per firewall context (`dc11-fw-shared-PROD-INTERNET`, ...), created when a customer is
+`TopologyRoutedExchange` per firewall context (`shared-dc11-fw-prod-PROD-INTERNET`, ...), created when a customer is
 boarded: a hop through that context, whose legs are its member sub-interfaces in the tenant VRF and in `INTERNET`
 (a /29 transit per context and VRF). The border leaves carry the `INTERNET` return routes but no default route
 there; the upstream arrives with the internet change. The colocation cages keep the default-namespace P2P path

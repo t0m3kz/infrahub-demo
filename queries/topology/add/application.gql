@@ -26,31 +26,40 @@ fragment SegmentSecurityFields on ManagedNetworkSegment {
   # The segment's one egress policy, whoever created it (this generator or a
   # hand-written data file): its rules are added there, never to a second one.
   security_policy { node { id name { value } } }
-}
-
-# An instance and the load balancer context serving its customer deployment
-# (TopologyCustomerDC.serving_loadbalancer_context, set when the customer
-# boards): a load_balanced component gets one VIP per port on each context its
-# instances are served by, with those instances as pool members
-# (generators/lb_vip.py). The context's leg /29 is the prefix of the addresses
-# on its member sub-interfaces (`capabilities`; the border service port it also
-# tags has no address). The two device kinds carry `deployment` each, so the
-# block is spelled out per kind (plain fields: a named spread inside an inline
-# fragment would not resolve). A cloud instance has no deployment: a
-# load_balanced component of cloud instances gets a CloudLoadBalancer in the
-# virtual network of their subnets, with their private_ip, in the namespace of
-# the CIDR block holding it, as pool members.
-fragment AppInstanceFields on AppInstance {
-  id
-  name { value }
-  __typename
-  ... on DcimPhysicalDevice {
-    role { value }
-    deployment {
+  # The customer DC footprints it is activated in and the load balancer context each serves (set when the
+  # customer boards): the context of an instance is the one of its segment's footprint in the instance's data
+  # center (generators/helpers/lb_vip.py instance_footprint), whatever the instance's device kind, so a
+  # physical host shared by customers is served too. A VXLAN segment lists its footprints, a VLAN one has the one.
+  ... on ManagedVxlanSegment {
+    customer_deployments {
+      edges {
+        node {
+          id
+          __typename
+          ... on TopologyCustomerDC {
+            parent { node { id __typename } }
+            serving_loadbalancer_context {
+              node {
+                id
+                name { value }
+                vip_prefix { node { id ip_namespace { node { id } } } }
+                capabilities {
+                  edges { node { __typename ... on DcimVirtualInterface { ip_address { node { ip_prefix { node { id } } } } } } }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  ... on ManagedVlanSegment {
+    customer_deployment {
       node {
         id
         __typename
         ... on TopologyCustomerDC {
+          parent { node { id __typename } }
           serving_loadbalancer_context {
             node {
               id
@@ -62,6 +71,29 @@ fragment AppInstanceFields on AppInstance {
             }
           }
         }
+      }
+    }
+  }
+}
+
+# An instance and the data center it runs in. A load_balanced component gets one VIP per port on each load
+# balancer context its instances are served by, with those instances as pool members (generators/lb_vip.py); the
+# context is the one of the component's segment in the instance's data center (SegmentSecurityFields), so it does not
+# depend on the device kind: a physical host is deployed to its DC or pod, a virtual device runs for a customer
+# footprint whose parent is the DC. A cloud instance's `deployment` is its customer cloud footprint, which has no
+# context: a load_balanced component of cloud instances gets a CloudLoadBalancer in the virtual network of their
+# subnets, with their private_ip, in the namespace of the CIDR block holding it, as pool members.
+fragment AppInstanceFields on AppInstance {
+  id
+  name { value }
+  __typename
+  ... on DcimPhysicalDevice {
+    role { value }
+    deployment {
+      node {
+        id
+        __typename
+        ... on TopologyPod { parent { node { id __typename } } }
       }
     }
   }
@@ -77,18 +109,7 @@ fragment AppInstanceFields on AppInstance {
       node {
         id
         __typename
-        ... on TopologyCustomerDC {
-          serving_loadbalancer_context {
-            node {
-              id
-              name { value }
-              vip_prefix { node { id ip_namespace { node { id } } } }
-              capabilities {
-                edges { node { __typename ... on DcimVirtualInterface { ip_address { node { ip_prefix { node { id } } } } } } }
-              }
-            }
-          }
-        }
+        ... on TopologyCustomerDC { parent { node { id __typename } } }
       }
     }
   }

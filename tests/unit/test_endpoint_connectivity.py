@@ -40,7 +40,7 @@ _RACK_BASE = {
     "index": 1,
     "row_index": 1,
     "rack_type": "compute",
-    "pod": _POD_DATA,
+    "deployment": _POD_DATA,
 }
 
 
@@ -68,7 +68,7 @@ def _make_endpoint_data(
     rack = {
         **_RACK_BASE,
         "rack_type": rack_type,
-        "pod": pod,
+        "deployment": pod,
         "devices": rack_devices or [],
     }
     return {
@@ -100,7 +100,7 @@ class TestEndpointDataParsing:
         assert data["name"] == "server-111101"
         assert data["rack"] is not None
         assert data["rack"]["rack_type"] == "compute"
-        assert data["rack"]["pod"]["design"]["name"] == "S_MIDDLE"
+        assert data["rack"]["deployment"]["design"]["name"] == "S_MIDDLE"
         assert len(data["rack"]["devices"]) == 0
         assert len(data["interfaces"]) == 4
 
@@ -129,7 +129,7 @@ class TestEndpointDataParsing:
         data = clean_data(_make_endpoint_data(rack_devices=tor_devices, deployment_type="tor"))
 
         assert data["rack"] is not None
-        assert data["rack"]["pod"]["design"]["name"] == "S_TOR"
+        assert data["rack"]["deployment"]["design"]["name"] == "S_TOR"
         assert len(data["rack"]["devices"]) == 2
         assert data["rack"]["devices"][0]["name"] == "tor-01"
         assert len(data["rack"]["devices"][0]["interfaces"]) == 2
@@ -204,7 +204,7 @@ class TestEndpointDataParsing:
         data = clean_data(_make_endpoint_data(rack_devices=devices, deployment_type="mixed"))
 
         assert data["rack"] is not None
-        assert data["rack"]["pod"]["design"]["name"] == "S_MIXED"
+        assert data["rack"]["deployment"]["design"]["name"] == "S_MIXED"
         assert len(data["rack"]["devices"]) == 2
         assert data["rack"]["devices"][0]["role"] == "leaf"
         assert data["rack"]["devices"][1]["role"] == "tor"

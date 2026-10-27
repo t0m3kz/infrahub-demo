@@ -103,6 +103,17 @@ generics:
         peer: BuiltinTag
         cardinality: many
         description: "Tags for automation, RBAC, and grouping"
+      # The reverse of LoadbalancerVIP.load_balancer, once for every implementation: a context lists the VIPs of its
+      # on-prem tenant, a cloud load balancer the listeners it fronts.
+      - name: vips
+        peer: LoadbalancerVIP
+        label: "VIPs"
+        description: "VIPs served by this load balancer (reverse of LoadbalancerVIP.load_balancer)"
+        cardinality: many
+        kind: Generic
+        optional: true
+        identifier: load_balancer__vip_services
+        order_weight: 1200
 
 nodes:
   # ── Health check ─────────────────────────────────────────────────────────

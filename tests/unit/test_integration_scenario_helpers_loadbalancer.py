@@ -146,6 +146,26 @@ async def test_fetch_loadbalancer_inventory_parses_legs_ports_and_vips() -> None
                                 {"node": {"address": value("10.0.0.10/24")}},
                             ]
                         },
+                        "health_checks": {
+                            "edges": [
+                                {
+                                    "node": {
+                                        "check": value("tcp"),
+                                        "rise": value(2),
+                                        "fall": value(3),
+                                        "timeout": value(1000),
+                                    }
+                                },
+                                {
+                                    "node": {
+                                        "check": value("http"),
+                                        "rise": value(3),
+                                        "fall": value(3),
+                                        "timeout": value(2000),
+                                    }
+                                },
+                            ]
+                        },
                         "component": {
                             "node": {
                                 "fqdn": value("api.example"),
@@ -182,6 +202,7 @@ async def test_fetch_loadbalancer_inventory_parses_legs_ports_and_vips() -> None
             "port": 443,
             "address": "100.66.96.10/32",
             "members": ["10.0.0.10/24", "10.0.0.11/24"],
+            "health_checks": (("http", "3", "3", "2000"), ("tcp", "2", "3", "1000")),
             "component": "api.example",
             "segment": "web-p",
             "segment_prefix": "10.0.0.0/24",

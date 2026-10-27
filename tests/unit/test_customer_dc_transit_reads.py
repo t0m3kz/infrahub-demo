@@ -49,7 +49,7 @@ class TestTrackedContextSkipsTheCompletenessReads:
 
         await _run(gen, world, _payload(dedicated=True))
 
-        assert world.saved("ManagedFirewallContext") == ["DC10-ded-ha-context"]
+        assert world.saved("ManagedFirewallContext") == ["DC10-ded-prod"]
         assert not set(_COMPLETENESS_KINDS) & set(world.executed_filters)
         assert "ManagedFirewallContext" in world.executed_filters  # the context itself is still read
 

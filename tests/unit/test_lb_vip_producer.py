@@ -210,7 +210,8 @@ class TestVipProducer:
         """A misconfigured target fails its own run; its callers only miss the VIPs it cannot have."""
         gen = _vip_gen()
         web = _web(
-            ports=["tcp/443", "udp/30000-30010"], instances=[_instance("vm-1", _context()), _instance("vm-2", None)]
+            ports=["tcp/443", "udp/30000-30010"],
+            instances=[_instance("vm-1", _context()), _instance("vm-2", None, footprint=False)],
         )
 
         vips, errors = _reconcile(gen, [_client_comp(_dep(web))], edges=[({}, {}, web)])

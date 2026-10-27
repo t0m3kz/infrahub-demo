@@ -116,7 +116,7 @@ def _suites_by_pod(racks: list[dict[str, Any]]) -> dict[str, tuple[dict[str, Any
     """Pod id -> (the pod, the suites hosting a rack of it, each once) for every pod that has a design and racks."""
     pods: dict[str, tuple[dict[str, Any], dict[str, dict[str, Any]]]] = {}
     for rack in racks:
-        pod, suite = rack.get("pod"), rack.get("parent")
+        pod, suite = rack.get("deployment"), rack.get("parent")
         if not pod or not pod.get("design") or not suite:
             continue
         pods.setdefault(str(pod.get("id")), (pod, {}))[1].setdefault(str(suite.get("id")), suite)

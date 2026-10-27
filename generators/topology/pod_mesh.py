@@ -6,7 +6,7 @@ Split out of generators/topology/pod.py for size/coherence, same pattern as the 
 import asyncio
 import logging
 from collections.abc import Mapping, Sequence
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from utils.limits import WAIT_FOR_PEER_GENERATOR
 
@@ -14,6 +14,9 @@ from ..helpers.routing import p2p_prefix_length
 from ..pod_config import spine_slot_device_names
 from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface
 from ..types import CablingOptions, RoutingOptions
+
+if TYPE_CHECKING:
+    from ..common import CommonGenerator
 
 
 def pod_routing_options(dc: Any, asn_pool_id: str | None, shared_underlay_as_id: str | None = None) -> RoutingOptions:
@@ -58,8 +61,8 @@ class PodMeshMixin:
 
     Expects the host class to provide: ``client``, ``logger``, ``data``, ``fabric_name``,
     ``create_cabling``, ``create_routing``, ``fail`` and ``_retry_delay`` (all present on
-    PodTopologyGenerator). The cross-mixin methods are declared as plain annotations, not ``def``s,
-    so they cannot shadow the real ones in the MRO.
+    PodTopologyGenerator). Those of CommonGenerator are aliases of the real ones, for the type checker
+    only: nothing is defined at runtime, so nothing shadows them in the MRO.
     """
 
     client: Any
@@ -68,8 +71,9 @@ class PodMeshMixin:
     fabric_name: str
     create_cabling: Callable[..., Any]
     create_routing: Callable[..., Any]
-    fail: Callable[[str], Any]
-    _retry_delay: Callable[..., float]
+    if TYPE_CHECKING:
+        fail = CommonGenerator.fail
+        _retry_delay = staticmethod(CommonGenerator._retry_delay)
 
     async def _cable_to_existing_sibling_pods(
         self,

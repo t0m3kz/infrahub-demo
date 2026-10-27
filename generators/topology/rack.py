@@ -55,7 +55,7 @@ class TopologyRackPodRackData(TypedDict):
 
 
 class TopologyRackPodData(TypedDict, total=False):
-    """Shape of the nested TopologyPod projection under LocationRack.pod (see
+    """Shape of the nested TopologyPod projection under LocationRack.deployment (see
     queries/topology/add/rack.gql's PodFields fragment)."""
 
     id: str
@@ -100,7 +100,7 @@ class TopologyRackData(TypedDict, total=False):
     tors: list[dict[str, Any]]
     l2_leafs: list[dict[str, Any]]
     access_leafs: list[dict[str, Any]]
-    pod: TopologyRackPodData
+    deployment: TopologyRackPodData
 
 
 class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, CommonGenerator):
@@ -186,7 +186,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         fewer racks per row than its design allows)."""
         data = self.data
         current_index = data["index"]
-        pod = data["pod"]
+        pod = data["deployment"]
         deployment_type = pod_deployment_type(pod["design"])
         effective_rack_index = max(0, current_index - 1)
 
@@ -233,7 +233,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
 
     def _pod_profile(self) -> dict[str, Any]:
         """This rack's pod's rack grid, from the pod's design."""
-        return pod_profile(self.data["pod"]["design"])
+        return pod_profile(self.data["deployment"]["design"])
 
     def _planned_previous_row_rack_slots(self) -> int:
         """Deterministic count of row-dependent rack slots before this row.
@@ -349,7 +349,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         shape = "direct node data" if "name" in data and isinstance(data.get("name"), dict) else "query result"
         self.logger.info(f"Processing {shape}")
 
-        # LocationRack.pod accepts any TopologyRackHosting peer, not just TopologyPod
+        # LocationRack.deployment accepts any TopologyRackHosting peer, not just TopologyPod
         # (e.g. a colocation rack's pod is a TopologyColocationZone). Those don't carry
         # DC-fabric fields like design — nothing for this generator to build.
         # Checked before anything reads pod["id"]: rack.gql's PodFields fragment is on
@@ -357,7 +357,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         # later access raises. Every LocationRack reaches this generator, since
         # trigger-rack-generator-on-created (data/events/99_actions.yml) fires on the
         # node kind and cannot filter on which topology the rack hangs off.
-        pod = self.data.get("pod") or {}
+        pod = self.data.get("deployment") or {}
         if "design" not in pod:
             self.logger.info(
                 "Rack %s: parent %s is not a DC-fabric pod, nothing to generate",
@@ -373,7 +373,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
             if not self._load_rack_data(refreshed):
                 return
 
-        pod = self.data["pod"]
+        pod = self.data["deployment"]
         spine_names = await self._existing_spine_slot_names()
         spine_bgp_role = spine_bgp_readiness_role(pod.get("parent") or {})
         if spine_names and not await self.bgp_processes_ready(spine_names, spine_bgp_role):
@@ -398,7 +398,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
                 if refreshed is not None:
                     if not self._load_rack_data(refreshed):
                         return
-                    pod = self.data["pod"]
+                    pod = self.data["deployment"]
                     deployment_type = pod_deployment_type(pod["design"])
 
         self.logger.info(
@@ -502,7 +502,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         compute them differently — see their own methods) and are passed in
         rather than recomputed here.
         """
-        pod = self.data["pod"]
+        pod = self.data["deployment"]
         devices = await self._create_devices_for_role(
             role, device_role=device_role, deployment_id=deployment_id, allocate_loopback=True, mlag=mlag
         )
@@ -536,7 +536,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
             leaf_devices = await self._generate_spine_attached_role(
                 leaf_role,
                 device_role="leaf",
-                deployment_id=self.data["pod"]["id"],
+                deployment_id=self.data["deployment"]["id"],
                 bottom_interfaces=template_interface_names_by_role(
                     interfaces=leaf_role["template"].get("interfaces", []), role="uplink"
                 ),
@@ -550,7 +550,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
 
         L2-only aggregation switches below leafs use role "l2-leaf"/"access-leaf" instead.
         """
-        pod = self.data["pod"]
+        pod = self.data["deployment"]
         if not (tor_roles := self.data.get("tors", [])):
             return
 
@@ -608,7 +608,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         devices = await self._create_devices_for_role(
             role,
             device_role=device_role,
-            deployment_id=self.data["pod"]["id"],
+            deployment_id=self.data["deployment"]["id"],
             allocate_loopback=allocate_loopback,
             mlag=True,
             mlag_supports_virtual=allocate_loopback,

@@ -164,7 +164,7 @@ class TestDC6AddRack(TestInfrahubDockerWithClient):
                 edges {
                     node {
                         id
-                        pod { node { name { value } } }
+                        deployment { node { name { value } } }
                         member_of_groups { edges { node { name { value } } } }
                     }
                 }
@@ -176,7 +176,7 @@ class TestDC6AddRack(TestInfrahubDockerWithClient):
         assert len(racks) == 1, f"Expected exactly 1 rack '{NEW_RACK_SHORTNAME}' on branch, found {len(racks)}"
 
         rack = racks[0]["node"]
-        pod_name = ((rack.get("pod") or {}).get("node") or {}).get("name", {}).get("value")
+        pod_name = ((rack.get("deployment") or {}).get("node") or {}).get("name", {}).get("value")
         groups = {edge["node"]["name"]["value"] for edge in rack["member_of_groups"]["edges"]}
         assert pod_name == SCENARIO_POD_1, f"Rack '{NEW_RACK_SHORTNAME}' is in pod '{pod_name}', not {SCENARIO_POD_1}"
         assert "topologies_rack" in groups, (
