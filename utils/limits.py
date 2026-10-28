@@ -21,8 +21,6 @@ from dataclasses import dataclass
 
 # VLAN bands of a border leaf's VLAN table (get_vlans de-duplicates by VLAN ID, so no two bands may overlap):
 #
-#   2-99        infrastructure VLANs of a VLAN domain (ManagedVlan, hand-authored with a fixed ID; no generator draws
-#               from it, so it can never collide with a customer VLAN row of the same domain). VLAN 1 is the default.
 #   100-2999    customer VLANs of every local VLAN domain (generators/vlan_domain.py). 3968-4094 is NX-OS's default
 #               internally reserved band (4094 the conventional vPC peer-keepalive VLAN), so the space above 2999
 #               is not customer space.
@@ -32,8 +30,6 @@ from dataclasses import dataclass
 #   3800-3803   the WAN exit tags of an office (utils/exchange_transit.py WAN_EXIT_VLAN_BASE)
 #   3900-3967   the local VLAN of the per-VRF L3 VNI SVI NX-OS needs for symmetric IRB (transforms/helpers/overlay.py);
 #               above all of the above and below NX-OS's reserved 3968-4094
-INFRA_VLAN_ID_MIN = 2
-INFRA_VLAN_ID_MAX = 99
 CUSTOMER_VLAN_ID_MIN = 100
 CUSTOMER_VLAN_ID_MAX = 2999
 FW_CONTEXT_VLAN_START = 3000

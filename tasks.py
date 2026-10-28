@@ -313,7 +313,6 @@ def test_integration_all_demo(
         "tests/integration/test_62c_all_demo_circuit_sessions.py "
         "tests/integration/test_64_all_demo_firewall_config.py "
         "tests/integration/test_64b_all_demo_management_lb_config.py "
-        "tests/integration/test_64c_all_demo_infra_vlan.py "
         "tests/integration/test_65_all_demo_idempotency.py "
         "tests/integration/test_66_all_demo_circuit_lifecycle.py",
         basetemp=basetemp,
