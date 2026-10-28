@@ -251,8 +251,11 @@ class MyCheck(InfrahubCheck):
   `ManagedLoadBalancer`.
 - **Segments are VXLAN only**: there is no VLAN segment kind. The VLAN of a port is generated per VLAN domain (see
   **VLAN domains and rows**), a segment has no manual `vlan_id` and lists its footprints in `customer_deployments`.
-  An infrastructure VLAN that must have a fixed number on a device is not a segment (a future `ManagedVlan`
-  capability, not built).
+  An infrastructure VLAN (a transfer or management L2 link) is a segment too: a `ManagedVxlanSegment` with no
+  `gateway`, owned by the `INFRA` pseudo-customer, given to its ports as a capability like any segment. The fabric
+  renders it pure L2 (VLAN and L2 VNI, no SVI, VRF or ACL) and its VLAN is chosen per domain like any other; a firewall
+  sub-interface takes the facing leaf's VLAN. A fixed VLAN number is only needed towards an outside party, and that is
+  a handoff circuit's `<port>.<vlan>` sub-interface, not a segment.
 - **Topology.Customer**: Per-facility tenant footprints (`TopologyCustomerDC`, `TopologyCustomerColocation`,
   `TopologyCustomerCloud`) — not a separate `Customer.*` namespace; these inherit `TopologyConnectableLocation`
   alongside the facility nodes so a circuit endpoint is one shared relationship, not a duplicated model. The
@@ -408,16 +411,6 @@ class MyCheck(InfrahubCheck):
   it has. A switch with no deployment of the segment, or a domain with devices in two deployments, is a WARNING and its
   rows are left alone (the next run converges once the deployment exists). The rows are untracked and their deployment
   tracked: a deployment that is not re-saved by its run is deleted with its rows.
-- **Infrastructure VLANs**: `ManagedVlan` (`schemas/extensions/service/vlan.yml`) is a VLAN with a FIXED ID in a VLAN
-  domain that is not a tenant segment (a transfer or management VLAN). It is a child (`Parent`, `on_delete: cascade`) of
-  the same `ManagedGenericVlanDomain` as the segment rows (`vlans` beside `vlan_domain_segments`) and a capability of the
-  ports that carry it (`ManagedGenericInterfaces`), exactly as a segment is. Its `vlan_id` is in the infrastructure band
-  2-99 (`utils/limits.py` `INFRA_VLAN_ID_MIN/MAX`, mirrored by the schema `parameters`), which no generator draws from, so
-  it never collides with a customer row of the domain: uniqueness is per kind and the disjoint bands are what keeps the
-  two apart. It is L2 only (no VNI, gateway or VRF): `get_vlans` declares it as a `terminate_inline`-style pure L2 VLAN
-  and the port lists it in `interface.vlans`; `checks/vlan_domain_membership.py` requires every port to sit on a device of
-  the VLAN's domain (an MLAG member is never a domain). The firewall/load-balancer/transit VLANs of `utils/limits.py` are
-  not `ManagedVlan`: they stay derived by their generators.
 - **What the schema refuses, measured on a server (1.11.9)**: `parameters` (min/max of a Number) and `max_count` are
   enforced on create and on update; `min_count` only on update (a member removed below the minimum is refused, a
   domain created with one member of a `min_count: 2` is accepted); `optional: false` refuses an omitted relationship
@@ -695,7 +688,7 @@ uv run pytest --cov=.
 
 Integration runs go through `uv run invoke test-integration` (see the `infrahub-running-integration-tests` skill), one
 stack at a time. The full 30_all subset is `test_01, 02, 59, 60, 61, 62, 64, 65, 66` (`62` is `test_62`, `62b`, `62c`;
-`64` is `test_64`, `64b`, `64c`); `test_65` (idempotency) is the last ~20 of its ~55 minutes, `test_66` (circuit lifecycle, mutates the branch) runs after it. Match the run to the change:
+`64` is `test_64`, `64b`); `test_65` (idempotency) is the last ~20 of its ~55 minutes, `test_66` (circuit lifecycle, mutates the branch) runs after it. Match the run to the change:
 
 | Change touches | Run |
 | --- | --- |
