@@ -44,6 +44,7 @@ from typing import TYPE_CHECKING, Any
 
 from utils.data_cleaning import clean_data
 from utils.limits import CUSTOMER_VLAN_ID_MAX, CUSTOMER_VLAN_ID_MIN, GROUP_PROVIDER_STUBS, GROUP_SDWAN_GATEWAYS
+from utils.vlan_domain import vlan_domain_id
 
 from .connections import BORDER_ROLE_FOR_SERVICES
 from .protocols import DcimPhysicalDevice, ManagedVlanDomainSegment
@@ -106,9 +107,8 @@ class VlanDomainMixin:
     def _resolve_vlan_domains(devices: list[Any]) -> dict[str, str]:
         """{device id: VLAN domain id} for every device, capabilities included.
 
-        An MLAG-paired device's domain is its ManagedMLAG (chosen first, so a
-        member is never a domain itself); every other device is its own domain.
-        Never saves a domain: a ManagedMLAG is created and owned by the generator
+        The rule is utils/vlan_domain.vlan_domain_id (the MLAG first, else the
+        device). Never saves a domain: a ManagedMLAG is created and owned by the generator
         that creates the device (rack/pod/dc/colocation), and a save here would
         claim it for this segment's run, whose cleanup would then delete it for
         every other segment on the device.
@@ -116,12 +116,10 @@ class VlanDomainMixin:
         domain_by_device: dict[str, str] = {}
         for device in devices:
             capabilities = getattr(device, "capabilities", None)
-            mlag = (
-                next((peer for peer in capabilities.peers if peer.typename == "ManagedMLAG"), None)
-                if capabilities
-                else None
+            peers = capabilities.peers if capabilities else []
+            domain_by_device[device.id] = (
+                vlan_domain_id(device.id, ((peer.typename, peer.id) for peer in peers)) or device.id
             )
-            domain_by_device[device.id] = mlag.id if mlag else device.id
         return domain_by_device
 
     def _choose_vlan_ids(

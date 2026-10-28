@@ -243,50 +243,8 @@ class TestTransformDataRouting:
 
 
 # ---------------------------------------------------------------------------
-# _resolve_own_vlan_domain_id / _collect_activations_from_interfaces
+# _collect_activations_from_interfaces (the domain rule itself: tests/unit/test_vlan_domain_rule.py)
 # ---------------------------------------------------------------------------
-
-
-class TestResolveOwnVlanDomainId:
-    """A local VLAN ID is allocated per VLAN DOMAIN, not DC-wide. An MLAG pair is
-    one domain — both members must resolve to the ManagedMLAG id, or each half
-    picks a different local VLAN for the same stretched segment and the
-    port-channel between them carries mismatched tags.
-    """
-
-    def test_mlag_capability_wins_over_the_device_id(self) -> None:
-        resolved = BaseDeviceTransform._resolve_own_vlan_domain_id(
-            "dev-leaf-01", [{"typename": "ManagedMLAG", "id": "mlag-domain-1"}]
-        )
-        assert resolved == "mlag-domain-1"
-
-    def test_both_members_of_a_pair_resolve_to_the_same_domain(self) -> None:
-        caps = [{"typename": "ManagedMLAG", "id": "mlag-domain-1"}]
-        assert BaseDeviceTransform._resolve_own_vlan_domain_id(
-            "dev-leaf-01", caps
-        ) == BaseDeviceTransform._resolve_own_vlan_domain_id("dev-leaf-02", caps)
-
-    def test_standalone_device_is_its_own_domain(self) -> None:
-        resolved = BaseDeviceTransform._resolve_own_vlan_domain_id(
-            "dev-leaf-01", [{"typename": "ManagedBGP", "id": "bgp-1"}]
-        )
-        assert resolved == "dev-leaf-01"
-
-    def test_mlag_capability_wins_over_the_device(self) -> None:
-        """A member of an MLAG pair is never a domain itself: the MLAG is chosen first."""
-        resolved = BaseDeviceTransform._resolve_own_vlan_domain_id(
-            "dev-leaf-01", [{"typename": "ManagedBGP", "id": "bgp-1"}, {"typename": "ManagedMLAG", "id": "mlag-1"}]
-        )
-        assert resolved == "mlag-1"
-
-    def test_no_capabilities_falls_back_to_the_device_id(self) -> None:
-        assert BaseDeviceTransform._resolve_own_vlan_domain_id("dev-leaf-01", []) == "dev-leaf-01"
-
-    def test_mlag_capability_without_an_id_is_ignored(self) -> None:
-        """An MLAG capability the query did not select an id for would otherwise
-        resolve the domain to None and silently drop every VXLAN segment."""
-        resolved = BaseDeviceTransform._resolve_own_vlan_domain_id("dev-leaf-01", [{"typename": "ManagedMLAG"}])
-        assert resolved == "dev-leaf-01"
 
 
 class TestCollectActivationsVlanDomainMatching:

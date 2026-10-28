@@ -391,7 +391,7 @@ def build_device_data(
             )
 
         # This device's own VLAN domain. build_device_data never builds a
-        # ManagedMLAG capability, so _resolve_own_vlan_domain_id falls through to
+        # ManagedMLAG capability, so utils/vlan_domain.vlan_domain_id falls through to
         # the device id — the vlan_domain_segments row must use the same value
         # or the transform skips the VxlanSegment.
         vlan_domain_id = f"dev-{device_name}"
