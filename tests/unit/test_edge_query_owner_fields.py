@@ -98,7 +98,7 @@ class TestChangedFilesParse:
 
     @pytest.mark.parametrize("path", [_EDGE, _FRAGMENT], ids=lambda p: p.name)
     def test_the_gql_file_parses(self, path: Path) -> None:
-        """graphql-core parses the file (fragment spreads are validated by invoke validate-queries)."""
+        """graphql-core parses the file (fragment spreads are validated by the repository sync of test-integration-fast)."""
         assert parse(path.read_text()).definitions
 
     def test_the_edge_operation_keeps_its_four_extra_roots(self) -> None:

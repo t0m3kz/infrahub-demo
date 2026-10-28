@@ -9,7 +9,6 @@ Every task is also available at the top level (e.g. `invoke start` is the
 same task as `invoke start`) — use whichever you prefer.
 """
 
-import asyncio
 import logging
 import os
 import re
@@ -17,22 +16,11 @@ import time
 from pathlib import Path
 from typing import cast
 
-from infrahub_sdk import Config, InfrahubClient, InfrahubClientSync
+from infrahub_sdk import Config, InfrahubClientSync
 from infrahub_sdk.node import InfrahubNodeSync
 from infrahub_sdk.task.models import TaskFilter, TaskState
 from invoke import Collection, Context, Exit, Task
 from invoke import task as _task
-
-from utils.query_validation import (
-    FRAGMENTS_DIR,
-    ToolingError,
-    collect_queries,
-    exit_code,
-    format_result,
-    load_fragments,
-    run_queries,
-    summarize,
-)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(levelname)-8s  %(message)s")
 log = logging.getLogger("tasks")
@@ -340,44 +328,6 @@ def test_integration_arista_mssg(
         basetemp=basetemp,
         server_port=server_port,
     )
-
-
-@_task(optional=["address", "token", "branch"])
-def validate_queries(
-    context: Context,
-    address: str = "http://localhost:8100",
-    token: str = "06438eb2-8019-4776-878c-0941b1f1d1ec",
-    branch: str = "main",
-) -> None:
-    """Run every .gql under queries/ and tests/ against a running Infrahub and fail on schema errors.
-
-    Catches `Cannot query field`, `Unknown type`, `Unknown argument` and friends in minutes instead of
-    after a full integration run. Runtime errors caused by the dummy variables are ignored. The defaults
-    point at the testcontainers stack of `test-integration-fast` (kept with INFRAHUB_TESTING_KEEP_STACK=1);
-    pass --address for any other server. Exit code 1: a query has a schema error; 2: the run itself failed
-    (server unreachable, bad token, unknown branch).
-
-    Not the smoke `syntax_check` (tests/smoke/test_graphql.yml): that is an offline parse with no schema and runs
-    in `invoke validate`; this task is the live schema check and needs a stack.
-
-    Example:
-        uv run invoke validate-queries
-        uv run invoke validate-queries --address http://localhost:8000 --branch my-branch
-    """
-    root = Path(__file__).resolve().parent
-    files = collect_queries(root)
-    fragments = load_fragments(root / FRAGMENTS_DIR)
-    client = InfrahubClient(address=address, config=Config(api_token=token, retry_on_failure=False))
-    try:
-        results = asyncio.run(run_queries(client, files, fragments, branch))
-    except ToolingError as error:
-        raise Exit(f"TOOLING ERROR (not a query failure): {error}", code=2) from error
-    for result in results:
-        print(format_result(result, root))
-    print(summarize(results))
-    code = exit_code(results)
-    if code:
-        raise Exit(code=code)
 
 
 @_task(optional=["increment"])
@@ -834,7 +784,6 @@ ns.add_task(cast(Task, test_integration_fast), name="test-integration-fast")
 ns.add_task(cast(Task, test_integration_routing), name="test-integration-routing")
 ns.add_task(cast(Task, test_integration_all_demo), name="test-integration-all-demo")
 ns.add_task(cast(Task, test_integration_arista_mssg), name="test-integration-arista-mssg")
-ns.add_task(cast(Task, validate_queries), name="validate-queries")
 ns.add_task(cast(Task, clean_testcontainers), name="clean-testcontainers")
 ns.add_task(cast(Task, upgrade))
 ns.add_task(cast(Task, release))

@@ -209,35 +209,18 @@ uv run invoke test-integration-fast
 
 ### Validate the Queries First
 
-For any schema, query or generator change, run the fast loop before the full `30_all` subset. Keep the stack alive
-after the fast profile, then check every query against its live schema:
+Queries are validated by the smoke tests: every query under `queries/` has a `syntax_check` entry in
+`tests/smoke/test_graphql.yml`, run by `uv run invoke validate`. For any schema, query or generator change, run the
+fast loop before the full `30_all` subset:
 
 ```bash
-INFRAHUB_TESTING_KEEP_STACK=1 uv run invoke test-integration-fast
-uv run invoke validate-queries
+uv run invoke test-integration-fast
 ```
 
-The smoke `syntax_check` entries (`tests/smoke/test_graphql.yml`) are an offline parse with no schema and run in
-`uv run invoke validate`; `validate-queries` is the live schema check and needs a stack.
-
-`validate-queries` runs every `.gql` under `queries/` and `tests/` (rglob) against the running server and prints
-`OK file` or `FAIL file -> message` per file plus a summary. A query that spreads fragments it does not define gets
-the ones it needs from `queries/fragments/` appended, variables are filled with dummy values from the operation's
-variable definitions, and only GraphQL validation errors (`Cannot query field`, `Unknown type`, `Unknown argument`,
-`Unknown fragment`, a missing required argument) fail a file. Runtime errors caused by the dummy values (node not
-found, permission, value errors) are ignored.
-
-| Exit code | Meaning |
-| --- | --- |
-| 0 | No schema error in any query |
-| 1 | At least one query has a schema error |
-| 2 | Tooling error: server unreachable, bad token or unknown branch. No query was judged |
-
-The defaults are `--address http://localhost:8100` (the test stack's port, moved by `--server-port`), the testcontainers
-demo token and `--branch main`. Point `--address` at another server with `uv run invoke validate-queries --address
-http://localhost:8000 --token <token> --branch <branch>`. Clean the kept stack with `uv run invoke
-clean-testcontainers` before the next run. The logic lives in `utils/query_validation.py` and is unit-tested with a
-fake client in `tests/unit/test_query_validation.py`.
+Its repository sync (`test_02`) registers every query of `.infrahub.yml` against the live schema, so a field the schema
+rejects (`Cannot query field`, `Unknown type`, a "Fields ... conflict") fails there in minutes; the task worker log
+(`docker logs <project>-task-worker-1`) names the field. A query under `tests/` is not registered: the test that runs
+it is its check.
 
 ### Run Specific Scenario
 
