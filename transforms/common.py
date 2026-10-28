@@ -31,6 +31,7 @@ from utils.circuit_underlay import NETWORK_APPLIANCE_KIND
 from utils.data_cleaning import clean_data
 from utils.fabric_roles import BORDER_ROLES, OFFICE_LISP_ROLES
 from utils.limits import UNDERLAY_MTU
+from utils.vlan_domain import vlan_domain_id
 
 _log = logging.getLogger(__name__)
 
@@ -551,17 +552,6 @@ class BaseDeviceTransform(InfrahubTransform):
             )
 
     @staticmethod
-    def _resolve_own_vlan_domain_id(device_id: str | None, device_capabilities: list[dict]) -> str | None:
-        """Return this device's own VLAN domain id: its ManagedMLAG's id if
-        paired, else the device itself (a device without MLAG is its own
-        domain). Local VLAN ID is allocated per VLAN domain, not DC-wide — see
-        ManagedVlanDomainSegment / generators/vlan_domain.py."""
-        for cap in device_capabilities:
-            if cap.get("typename") == "ManagedMLAG" and cap.get("id"):
-                return cap["id"]
-        return device_id
-
-    @staticmethod
     def _own_vlan_domain_row(deployments: list[dict], own_domain_id: str | None) -> tuple[dict, dict] | None:
         """(row, segment deployment) of the segment's row for this device's own VLAN domain.
 
@@ -587,7 +577,7 @@ class BaseDeviceTransform(InfrahubTransform):
         list, already filtered to active/provisioning by the query) and
         carries the vni and, under it, the vlan_domain_segments rows — the LOCAL
         vlan_id for a VxlanSegment is the row of THIS device's own VLAN domain
-        (its ManagedMLAG if paired, else itself, _resolve_own_vlan_domain_id)
+        (its ManagedMLAG if paired, else itself, utils/vlan_domain.vlan_domain_id)
         and the vni is its deployment's, one record for both. A VxlanSegment
         with no row for this device's own domain yet (allocation not
         converged) is skipped.
@@ -595,7 +585,7 @@ class BaseDeviceTransform(InfrahubTransform):
         domain) a VxlanSegment takes the first segment_deployments entry as is.
         We deduplicate by segment id so each segment appears once.
         """
-        own_domain_id = self._resolve_own_vlan_domain_id(device_id, device_capabilities or [])
+        own_domain_id = vlan_domain_id(device_id, ((c.get("typename"), c.get("id")) for c in device_capabilities or []))
         seen: set[str] = set()
         activations: list[dict] = []
         for iface in interfaces:
@@ -643,7 +633,7 @@ class BaseDeviceTransform(InfrahubTransform):
         to border-leaf/edge devices for stretched segments); a segment without
         one has not converged yet and is skipped, same as on a leaf.
         """
-        own_domain_id = self._resolve_own_vlan_domain_id(device_id, device_capabilities)
+        own_domain_id = vlan_domain_id(device_id, ((c.get("typename"), c.get("id")) for c in device_capabilities))
         activations: list[dict[str, Any]] = []
         for dep in (deployment or {}).get("segment_deployments") or []:
             seg = dep.get("segment") or {}
