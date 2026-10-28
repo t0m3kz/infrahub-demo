@@ -398,10 +398,6 @@ check_definitions:
   - name: validate_virtual_nic_pinning
     class_name: CheckVirtualNicPinning
     file_path: checks/virtual_nic_pinning.py
-  # Targetless: the rule is per port carrying an infrastructure VLAN.
-  - name: validate_vlan_domain_membership
-    class_name: CheckVlanDomainMembership
-    file_path: checks/vlan_domain_membership.py
   # Targetless: a rule's source segment spans footprints, and the hardware that
   # enforces it (firewall pair, legs, exchange, ports, SNAT) belongs to the
   # contexts serving them.
@@ -776,8 +772,6 @@ queries:
     file_path: queries/validation/virtual_device_placement.gql
   - name: virtual_nic_pinning
     file_path: queries/validation/virtual_nic_pinning.gql
-  - name: vlan_domain_membership
-    file_path: queries/validation/vlan_domain_membership.gql
   - name: pool_utilization
     file_path: queries/validation/pool_utilization.gql
   - name: loadbalancer_validation

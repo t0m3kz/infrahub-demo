@@ -462,14 +462,6 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
-    resource_name: vlan_domain_membership
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/validation/vlan_domain_membership.gql
-          kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
     resource_name: loadbalancer_validation
     tests:
       - name: syntax_check

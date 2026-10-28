@@ -433,7 +433,7 @@ class BaseDeviceTransform(InfrahubTransform):
         # on real segments. They are not bound to any host port (get_interfaces only
         # binds a transit VLAN to a port carrying the context).
         transits = (data.get("exchange_transits") or []) + leaf_transits
-        vlans = get_vlans(activations=(activations or []) + transits, interfaces=data.get("interfaces"))
+        vlans = get_vlans(activations=(activations or []) + transits)
 
         # Inter-VRF exchange routes through the firewall context(s) tagged on
         # this device's service ports (statics in the VRF, redistributed to EVPN).

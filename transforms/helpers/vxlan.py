@@ -23,7 +23,7 @@ from transforms.helpers.overlay import _interface_address, _is_multisite_segment
 from transforms.helpers.overlay import _l3_from_activations as _l3_from_activations
 from transforms.helpers.overlay import _select_vtep_interface as _select_vtep_interface
 from transforms.helpers.overlay import build_overlay_node, l2_instance, vni_activations
-from transforms.helpers.segments import INFRA_VLAN_KIND, _get_segment_namespace, segment_vlan_ids
+from transforms.helpers.segments import _get_segment_namespace, segment_vlan_ids
 from utils.fabric_roles import BORDER_ROLES
 from utils.limits import MAX_ENCODABLE_VNI
 
@@ -206,8 +206,6 @@ def get_interfaces(
             for s in capabilities
             if s.get("typename") == "ManagedVxlanSegment" and s.get("name") in segment_vlan
         ]
-        # An infrastructure VLAN carries its own fixed ID (no segment activation to resolve it from).
-        vlans += [c["vlan_id"] for c in by_type.get(INFRA_VLAN_KIND, []) if c.get("vlan_id")]
 
         # FirewallContext sub-interface (role="service", created by
         # generators/topology/customer_dc.py's _create_context_subinterface)
