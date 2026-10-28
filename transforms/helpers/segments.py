@@ -4,6 +4,8 @@ from typing import Any
 
 from utils.segment_addressing import segment_namespace
 
+INFRA_VLAN_KIND = "ManagedVlan"
+
 
 def is_inline_terminated(seg: dict) -> bool:
     """True when the segment's L3 gateway is its inline_service HA pair, not the fabric.
@@ -95,11 +97,46 @@ def segment_vlan_ids(activations: list[dict[str, Any]] | None) -> dict[str, int]
 
 def get_vlans(
     activations: list[dict[str, Any]] | None = None,
+    interfaces: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
-    """Return VLAN list unique per vlan_id with gateway_ip, gateway_ipv6, arp_suppression, vrf."""
-    if not activations:
-        return []
-    return _vlans_from_activations(activations)
+    """Return VLAN list unique per vlan_id with gateway_ip, gateway_ipv6, arp_suppression, vrf.
+
+    ``interfaces`` are the device's ports: the infrastructure VLANs (ManagedVlan) their capabilities carry are
+    added as pure-L2 VLANs, after the segment ones (the two share no VLAN ID: utils/limits.py bands).
+    """
+    vlans = _vlans_from_activations(activations) if activations else []
+    taken = {vlan["vlan_id"] for vlan in vlans}
+    for vlan in _infra_vlans(interfaces):
+        if vlan["vlan_id"] not in taken:
+            vlans.append(vlan)
+            taken.add(vlan["vlan_id"])
+    vlans.sort(key=lambda v: v["vlan_id"])
+    return vlans
+
+
+def _infra_vlans(interfaces: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    """The infrastructure VLANs (ManagedVlan capabilities) carried by the ports: L2 only, no SVI, no VRF, no VNI.
+
+    ``terminate_inline`` is the existing "pure L2 on the fabric" flag, so a template emits no SVI for them.
+    """
+    vlans: dict[int, dict[str, Any]] = {}
+    for iface in interfaces or []:
+        for cap in iface.get("capabilities") or []:
+            vlan_id = cap.get("vlan_id")
+            if cap.get("typename") != INFRA_VLAN_KIND or not vlan_id or vlan_id in vlans:
+                continue
+            vlans[vlan_id] = {
+                "vlan_id": vlan_id,
+                "name": cap["name"],
+                "description": cap.get("description") or cap["name"],
+                "gateway_ip": None,
+                "gateway_ipv6": None,
+                "arp_suppression": False,
+                "vrf": None,
+                "isolation_mode": "normal",
+                "terminate_inline": True,
+            }
+    return list(vlans.values())
 
 
 def _vlans_from_activations(activations: list[dict[str, Any]]) -> list[dict[str, Any]]:

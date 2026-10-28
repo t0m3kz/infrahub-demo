@@ -123,6 +123,19 @@ class TestRangesMirrorTheData:
             "(schemas/base/organization.yml, schemas/base/network_segment.yml)"
         )
 
+    def test_infra_vlan_range_is_the_schema_parameters(self) -> None:
+        """Change ``INFRA_VLAN_ID_MIN``/``INFRA_VLAN_ID_MAX`` in utils/limits.py, or the ``parameters`` in the schema."""
+        definition = attribute("ManagedVlan", "vlan_id")
+
+        assert definition is not None
+        assert definition["parameters"] == {
+            "min_value": limits.INFRA_VLAN_ID_MIN,
+            "max_value": limits.INFRA_VLAN_ID_MAX,
+        }, (
+            "utils/limits.py INFRA_VLAN_ID_MIN/INFRA_VLAN_ID_MAX differ from the vlan_id parameters of ManagedVlan "
+            "(schemas/extensions/service/vlan.yml)"
+        )
+
     def test_the_transit_prefix_lengths_are_the_pool_defaults(self, prefix_pools: dict[str, dict[str, Any]]) -> None:
         """Change ``TRANSIT_PREFIXLEN``/``LB_VIP_PREFIXLEN`` in utils/limits.py, or default_prefix_length in 23_transit_pools.yml."""
         for namespace in ("PROD", "NON-PROD", "INTERNET", "MANAGEMENT"):
@@ -253,6 +266,7 @@ class TestBandsDoNotOverlap:
     def test_vlan_bands_are_ordered_and_disjoint(self) -> None:
         """customer < firewall contexts < load-balancer contexts; their transit legs and the WAN exit end below the SVI band."""
         slots = max(TRANSIT_SLOT.values())
+        assert 1 < limits.INFRA_VLAN_ID_MIN <= limits.INFRA_VLAN_ID_MAX < limits.CUSTOMER_VLAN_ID_MIN
         assert limits.CUSTOMER_VLAN_ID_MIN < limits.CUSTOMER_VLAN_ID_MAX < limits.FW_CONTEXT_VLAN_START
         assert limits.FW_CONTEXT_VLAN_START <= limits.FW_CONTEXT_VLAN_END < limits.LB_CONTEXT_VLAN_START
         assert limits.LB_CONTEXT_VLAN_START <= limits.LB_CONTEXT_VLAN_END

@@ -20,5 +20,5 @@ class L2Leaf(BaseDeviceTransform):
 
     def _extra_config(self, data: dict, platform_name: str, extra_roots: dict | None = None) -> dict[str, Any]:
         return {
-            "vlans": get_vlans(activations=data.get("segment_deployments")),
+            "vlans": get_vlans(activations=data.get("segment_deployments"), interfaces=data.get("interfaces")),
         }
