@@ -26,6 +26,7 @@ from tests.smoke.fixture_builders import (
     fabric,
     firewall,
     group_policy,
+    infra_vlan,
     mlag,
     office,
     proxy_lb,
@@ -48,6 +49,7 @@ WRITERS: list[tuple[str | None, Callable[[], tuple[int, int]]]] = [
     (None, proxy_lb.write_fixtures),
     (None, group_policy.write_fixtures),
     (None, routing_identity.write_fixtures),
+    (None, infra_vlan.write_fixtures),
     ("Cloud VPC Terraform fixtures", cloud.write_fixtures),
 ]
 

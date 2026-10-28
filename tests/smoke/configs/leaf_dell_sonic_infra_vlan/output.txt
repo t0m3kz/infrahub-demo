@@ -1,0 +1,223 @@
+
+
+{
+  "ACL_RULE": {},
+  "ACL_TABLE": {},
+  "BGP_GLOBALS": {
+    "VRF_A": {
+      "local_asn": 65000,
+      "router_id": "10.0.0.1"
+    },
+    "default": {
+      "graceful_restart_enable": "true",
+      "local_asn": 65000,
+      "max_paths": "64",
+      "router_id": "10.0.0.1"
+    }
+  },
+  "BGP_GLOBALS_AF": {
+    "VRF_A|ipv4_unicast": {
+      "admin_status": "true",
+      "redistribute_connected": "true"
+    },
+    "VRF_A|l2vpn_evpn": {
+      "admin_status": "true",
+      "advertise-ipv4-unicast": "true"
+    },
+    "default|ipv4_unicast": {
+      "admin_status": "true",
+      "redistribute_connected": "true",
+      "route_map_redistribute_connected": "RM-CONN-2-BGP"
+    },
+    "default|ipv4_unicast|UNDERLAY-PEERS": {
+      "admin_status": "true"
+    },
+    "default|l2vpn_evpn": {
+      "admin_status": "true"
+    },
+    "default|l2vpn_evpn|EVPN-PEERS": {
+      "admin_status": "true"
+    }
+  },
+  "BGP_GLOBALS_EVPN_RT": {},
+  "BGP_NEIGHBOR": {
+    "10.0.0.100": {
+      "admin_status": "true",
+      "asn": "65000",
+      "description": "spine-01",
+      "holdtime": "180",
+      "keepalive": "60",
+      "local_addr": "10.0.0.1",
+      "name": "EVPN-PEERS"
+    },
+    "10.0.0.101": {
+      "admin_status": "true",
+      "asn": "65000",
+      "description": "spine-02",
+      "holdtime": "180",
+      "keepalive": "60",
+      "local_addr": "10.0.0.1",
+      "name": "EVPN-PEERS"
+    },
+    "10.1.0.0": {
+      "admin_status": "true",
+      "asn": "65100",
+      "description": "spine-01",
+      "holdtime": "180",
+      "keepalive": "60",
+      "local_addr": "10.1.0.1",
+      "local_asn": "65001",
+      "local_asn_no_prepend_replace_as": "UNSUPPORTED_IN_CONFIGDB \u2014 set via FRR vtysh",
+      "name": "UNDERLAY-PEERS"
+    },
+    "10.1.0.2": {
+      "admin_status": "true",
+      "asn": "65101",
+      "description": "spine-02",
+      "holdtime": "180",
+      "keepalive": "60",
+      "local_addr": "10.1.0.3",
+      "local_asn": "65001",
+      "local_asn_no_prepend_replace_as": "UNSUPPORTED_IN_CONFIGDB \u2014 set via FRR vtysh",
+      "name": "UNDERLAY-PEERS"
+    }
+  },
+  "BGP_PEER_GROUP": {
+    "EVPN-PEERS": {
+      "asn": "65000",
+      "local_addr": "10.0.0.1",
+      "send_community": "standard"
+    },
+    "UNDERLAY-PEERS": {
+      "bfd": "true",
+      "send_community": "standard"
+    }
+  },
+  "DEVICE_METADATA": {
+    "localhost": {
+      "bgp_asn": 65000,
+      "hostname": "dc1-leaf-01",
+      "type": "LeafRouter"
+    }
+  },
+  "EVPN_NVO": {
+    "nvo1": {
+      "source_vtep": "vtep"
+    }
+  },
+  "INTERFACE": {
+    "Ethernet1": {
+      "admin_status": "up",
+      "description": "to spine-01",
+      "mtu": "9000"
+    },
+    "Ethernet10": {
+      "admin_status": "up",
+      "description": "to server-01",
+      "mtu": "9000"
+    },
+    "Ethernet11": {
+      "admin_status": "up",
+      "description": "to firewall transfer",
+      "mtu": "9000"
+    },
+    "Ethernet12": {
+      "admin_status": "up",
+      "description": "to oob switch",
+      "mtu": "9000"
+    },
+    "Ethernet2": {
+      "admin_status": "up",
+      "description": "to spine-02",
+      "mtu": "9000"
+    }
+  },
+  "INTERFACE_IP": {
+    "Ethernet1|10.1.0.1/31": {},
+    "Ethernet2|10.1.0.3/31": {}
+  },
+  "LOOPBACK_INTERFACE": {
+    "Loopback0|10.0.0.1/32": {}
+  },
+  "NTP_SERVER": {},
+  "OSPF_ROUTER": {},
+  "SAG": {
+    "GLOBAL": {
+      "gateway_mac": "00:1c:73:00:dc:01"
+    }
+  },
+  "STATIC_ROUTE": {},
+  "SYSLOG_SERVER": {},
+  "VLAN": {
+    "Vlan100": {
+      "vlanid": "100"
+    },
+    "Vlan20": {
+      "vlanid": "20"
+    },
+    "Vlan200": {
+      "vlanid": "200"
+    },
+    "Vlan30": {
+      "vlanid": "30"
+    },
+    "Vlan3900": {
+      "vlanid": "3900"
+    }
+  },
+  "VLAN_INTERFACE": {
+    "Vlan100": {
+      "static_anycast_gateway": "true",
+      "vrf_name": "VRF_A"
+    },
+    "Vlan100|10.100.0.1/24": {},
+    "Vlan200": {
+      "static_anycast_gateway": "true"
+    },
+    "Vlan200|10.200.0.1/24": {},
+    "Vlan3900": {
+      "vrf_name": "VRF_A"
+    }
+  },
+  "VLAN_MEMBER": {
+    "Vlan100|Ethernet10": {
+      "tagging_mode": "tagged"
+    },
+    "Vlan200|Ethernet10": {
+      "tagging_mode": "tagged"
+    },
+    "Vlan20|Ethernet11": {
+      "tagging_mode": "untagged"
+    },
+    "Vlan20|Ethernet12": {
+      "tagging_mode": "tagged"
+    },
+    "Vlan30|Ethernet12": {
+      "tagging_mode": "tagged"
+    }
+  },
+  "VRF": {
+    "VRF_A": {
+      "vni": "50001"
+    }
+  },
+  "VXLAN_TUNNEL": {
+    "vtep": {
+      "src_ip": "10.0.0.1"
+    }
+  },
+  "VXLAN_TUNNEL_MAP": {
+    "vtep|map_10100_Vlan100": {
+      "vlan": "Vlan100",
+      "vni": "10100"
+    },
+    "vtep|map_10200_Vlan200": {
+      "vlan": "Vlan200",
+      "vni": "10200"
+    },
+    "vtep|map_50001_Vlan3900": {
+      "vlan": "Vlan3900",
+      "vni": "50001"
+    }
+  }
+}

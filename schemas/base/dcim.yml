@@ -410,6 +410,8 @@ generics:
     description: "Marker for node kinds that anchor a local VLAN ID allocation domain (an MLAG pair, or a device without MLAG)"  # yamllint disable-line rule:line-length
     label: "VLAN Domain"
     include_in_menu: false
+    human_friendly_id:
+      - name__value
     attributes:
       # Every inheritor has a name (ManagedGeneric, DcimDevice); declared here so a relationship to this generic
       # can show it (the display_label of ManagedVlanDomainSegment).

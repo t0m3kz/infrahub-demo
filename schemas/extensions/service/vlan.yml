@@ -1,0 +1,77 @@
+---
+version: "1.0"
+
+nodes:
+  # Infrastructure VLAN: a VLAN with a FIXED number in a VLAN domain that is not a tenant segment (a transfer VLAN, a
+  # management VLAN). A tenant network is a ManagedVxlanSegment whose VLAN is generated per domain
+  # (ManagedVlanDomainSegment, generators/vlan_domain.py); this is the hand-authored counterpart, a capability of the
+  # ports that carry it, exactly as a segment is. It is L2 only: no VNI, no gateway, no VRF.
+  #
+  # The number is in the INFRA band (utils/limits.py INFRA_VLAN_ID_MIN-MAX), which no generator draws from, so it can
+  # never collide with a segment row of the same domain; the per-domain uniqueness is this node's own.
+  # `checks/vlan_domain_membership.py` requires every port carrying it to sit on a device of the domain.
+  - name: Vlan
+    namespace: Managed
+    description: "Infrastructure VLAN with a fixed ID in a VLAN domain (not a tenant segment)"
+    label: Infrastructure VLAN
+    icon: "carbon:network-2"
+    include_in_menu: false
+    inherit_from:
+      - ManagedGeneric
+      - ManagedGenericInterfaces
+    human_friendly_id:
+      - vlan_domain__name__value
+      - name__value
+    display_label: "vlan {{ vlan_id__value }} {{ name__value }} @ {{ vlan_domain__name__value }}"
+    uniqueness_constraints:
+      - [vlan_domain, vlan_id__value]
+      - [vlan_domain, name__value]
+    attributes:
+      - name: vlan_id
+        kind: Number
+        label: VLAN ID
+        optional: false
+        order_weight: 1000
+        description: "Fixed IEEE 802.1Q VLAN ID, unique within the VLAN domain, in the infrastructure band."
+        parameters:
+          min_value: 2
+          max_value: 99
+      - name: role
+        kind: Dropdown
+        label: Role
+        optional: false
+        order_weight: 1100
+        choices:
+          - name: transfer
+            label: Transfer
+            description: "L2 link between two devices of the domain that is not a tenant network"
+            color: "#3498DB"
+          - name: management
+            label: Management
+            description: "Out-of-band or in-band management VLAN of the domain"
+            color: "#7FBF7F"
+    relationships:
+      - name: vlan_domain
+        peer: ManagedGenericVlanDomain
+        label: VLAN Domain
+        cardinality: one
+        kind: Parent
+        optional: false
+        order_weight: 2000
+        identifier: "vlan__vlan_domain"
+        description: "The MLAG pair or device in which this VLAN ID is unique"
+
+extensions:
+  nodes:
+    - kind: ManagedGenericVlanDomain
+      relationships:
+        - name: vlans
+          label: Infrastructure VLANs
+          peer: ManagedVlan
+          kind: Component
+          cardinality: many
+          optional: true
+          identifier: "vlan__vlan_domain"
+          order_weight: 7900
+          on_delete: cascade
+          description: "Infrastructure VLANs with a fixed ID in this VLAN domain"

@@ -119,6 +119,16 @@ fragment LoadbalancerContextInterfaceCapabilityFields on ManagedLoadbalancerCont
   }
 }
 
+# An infrastructure VLAN (ManagedVlan) carried by the port: a fixed ID, L2 only. `role` is left out on purpose:
+# a Dropdown here would conflict with a sibling capability's field of the same name.
+fragment InfraVlanInterfaceCapabilityFields on ManagedVlan {
+  id
+  name { value }
+  description { value }
+  vlan_id { value }
+  vlan_domain { node { id } }
+}
+
 fragment InterfaceCapabilitiesWithSegmentFields on DcimInterface {
   capabilities {
     edges {
@@ -126,6 +136,7 @@ fragment InterfaceCapabilitiesWithSegmentFields on DcimInterface {
         __typename
         ...OspfInterfaceCapabilityFields
         ...NetworkSegmentFields
+        ...InfraVlanInterfaceCapabilityFields
         ...ExchangeGatewayInterfaceCapabilityFields
         ...FirewallContextInterfaceCapabilityFields
         ...LoadbalancerContextInterfaceCapabilityFields
