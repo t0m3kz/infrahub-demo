@@ -167,6 +167,7 @@ class ManagedGenericInterfaces(CoreNode):
 
 class ManagedGenericVlanDomain(CoreNode):
     vlan_domain_segments: RelationshipManager[ManagedVlanDomainSegment]
+    vlans: RelationshipManager[ManagedVlan]
 
 
 class ManagedHA(CoreNode):
@@ -925,6 +926,12 @@ class ManagedSegmentDeployment(CoreNode):
 class ManagedVlanDomainSegment(CoreNode):
     vlan_id: Integer
     segment_deployment: RelationshipAttribute[ManagedSegmentDeployment]
+    vlan_domain: RelationshipAttribute[ManagedGenericVlanDomain]
+
+
+class ManagedVlan(ManagedGeneric, ManagedGenericInterfaces):
+    role: Dropdown
+    vlan_id: Integer
     vlan_domain: RelationshipAttribute[ManagedGenericVlanDomain]
 
 
