@@ -8,6 +8,7 @@ from typing import Any
 from netutils.interface import sort_interface_list
 
 from transforms.helpers.addressing import host_ip, sub_interface_parent
+from transforms.helpers.mlag import CHANNEL_GROUP_MODE
 
 # The neutral overlay model owns these (transforms/helpers/overlay.py); they stay importable from here.
 from transforms.helpers.overlay import (
@@ -135,6 +136,20 @@ def _l3_route_target(mapping: dict[str, Any], rt_asn: int | None) -> str | None:
     if mapping.get("namespace_type") == _INTERNET_NAMESPACE_TYPE:
         return f"{vni}:{vni}"
     return f"{rt_asn}:{vni}" if rt_asn else None
+
+
+def _bind_lag_members(name_to_interface: dict[str, dict[str, Any]]) -> None:
+    """Give each member port of a LAG the `channel_group` (the LAG's lag_id) and `channel_group_mode` the
+    switch templates render as `channel-group <id> mode <mode>`. A LAG without members binds nothing."""
+    for lag in list(name_to_interface.values()):
+        if lag.get("lag_id") is None:
+            continue
+        mode = CHANNEL_GROUP_MODE.get(lag.get("lacp_mode") or "active", "active")
+        lag["channel_group_mode"] = mode
+        for member_name in lag.get("member_interfaces") or []:
+            if member := name_to_interface.get(member_name):
+                member["channel_group"] = lag["lag_id"]
+                member["channel_group_mode"] = mode
 
 
 def get_interfaces(
@@ -282,6 +297,11 @@ def get_interfaces(
             iface_dict["lag_id"] = iface.get("lag_id")
             iface_dict["lacp_mode"] = iface.get("lacp_mode")
             iface_dict["minimum_links"] = iface.get("minimum_links")
+            # The multi-chassis id of a host-facing port-channel: both peers of one bond carry the same lag_id
+            # (generators/topology/endpoint_lag.py) and checks/mlag_domains.py M5 pairs them, so the lag_id is
+            # the `mlag <id>` / `vpc <id>`. The peer-link is bound by the domain block, never by an id.
+            if (iface.get("mlag_domain") or {}).get("id") and iface.get("role") != "mlag-peer":
+                iface_dict["mlag_id"] = iface.get("lag_id")
             member_interfaces = iface.get("member_interfaces") or []
             iface_dict["member_interfaces"] = [m.get("name") for m in member_interfaces if m.get("name")]
 
@@ -299,6 +319,7 @@ def get_interfaces(
 
         name_to_interface[name] = iface_dict
 
+    _bind_lag_members(name_to_interface)
     return [name_to_interface[name] for name in sorted_names if name in name_to_interface]
 
 

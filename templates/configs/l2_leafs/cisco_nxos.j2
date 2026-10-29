@@ -20,6 +20,7 @@ vlan {{ vlan.vlan_id }}
 {%- for interface in interfaces if interface.role != 'mlag-peer' %}
 interface {{ interface.name }}
 {%- include 'common/cisco_nxos_routed_port.j2' %}
+{%- include 'common/cisco_nxos_channel_group.j2' %}
 {%- if interface.status == 'active' %}
   no shutdown
 {%- endif %}
@@ -27,6 +28,7 @@ interface {{ interface.name }}
 {%- if interface.vlans %}
 {%- include 'common/cisco_nxos_switchport.j2' %}
 {%- endif %}
+{%- include 'common/cisco_nxos_vpc_id.j2' %}
 !
 {%- endfor %}
 !

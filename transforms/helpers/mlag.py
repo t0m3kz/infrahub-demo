@@ -5,6 +5,9 @@ from typing import Any
 
 from transforms.helpers.addressing import host_ip
 
+# lacp_mode -> the `channel-group ... mode` keyword of EOS and NX-OS (a static LAG has no LACP: `on`).
+CHANNEL_GROUP_MODE = {"active": "active", "passive": "passive", "static": "on"}
+
 
 def _control_address(member: dict[str, Any]) -> tuple[str | None, str | None]:
     """Return (interface name, address with prefix length) of the member's
@@ -56,6 +59,7 @@ def get_mlag(
         virtual_peer_link = False
         peer_link_lag_id = None
         peer_link_lacp_mode = None
+        peer_link_channel_group_mode = None
         peer_link_members: list[str] = []
         peer_interfaces = [iface for iface in interfaces or [] if iface.get("role") == "mlag-peer"]
         for iface in sorted(peer_interfaces, key=lambda iface: iface.get("lag_id") is None):
@@ -66,6 +70,7 @@ def get_mlag(
                 peer_link = iface_name
                 peer_link_lag_id = lag_id
                 peer_link_lacp_mode = iface.get("lacp_mode", "active")
+                peer_link_channel_group_mode = CHANNEL_GROUP_MODE.get(peer_link_lacp_mode, "active")
                 peer_link_members = [m.get("name") for m in (iface.get("member_interfaces") or []) if m.get("name")]
             else:
                 peer_link = iface_name
@@ -104,6 +109,7 @@ def get_mlag(
             "virtual_peer_link": virtual_peer_link,
             "peer_link_lag_id": peer_link_lag_id,
             "peer_link_lacp_mode": peer_link_lacp_mode,
+            "peer_link_channel_group_mode": peer_link_channel_group_mode,
             "peer_link_members": peer_link_members,
             "mclag_interfaces": mclag_interfaces,
         }

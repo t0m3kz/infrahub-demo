@@ -16,7 +16,7 @@ interface {{ mlag.peer_link }}
 {%- if mlag.peer_link_members %}
 {%- for member in mlag.peer_link_members %}
 interface {{ member }}
-   channel-group {{ mlag.peer_link_lag_id }} mode {{ mlag.peer_link_lacp_mode | default('active') }}
+   channel-group {{ mlag.peer_link_lag_id }} mode {{ mlag.peer_link_channel_group_mode | default('active') }}
    no shutdown
 !
 {%- endfor %}

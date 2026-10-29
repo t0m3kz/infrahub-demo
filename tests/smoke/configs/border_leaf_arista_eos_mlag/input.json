@@ -438,6 +438,159 @@
                     "edges": []
                   }
                 }
+              },
+              {
+                "node": {
+                  "__typename": "DcimLAGInterface",
+                  "name": {
+                    "value": "Port-Channel10"
+                  },
+                  "description": {
+                    "value": "host-01:bond0"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "lag"
+                  },
+                  "lag_id": {
+                    "value": 10
+                  },
+                  "lacp_mode": {
+                    "value": "active"
+                  },
+                  "mtu": {
+                    "value": 9000
+                  },
+                  "minimum_links": {
+                    "value": 1
+                  },
+                  "ip_address": {
+                    "node": null
+                  },
+                  "mlag_domain": {
+                    "node": {
+                      "id": "mlag-dom-1",
+                      "name": {
+                        "value": "DC1-POD1-L1-L2-MLAG"
+                      }
+                    }
+                  },
+                  "member_interfaces": {
+                    "edges": [
+                      {
+                        "node": {
+                          "name": {
+                            "value": "Ethernet10"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "capabilities": {
+                    "edges": []
+                  },
+                  "segments": {
+                    "edges": [
+                      {
+                        "node": {
+                          "id": "seg-seg-100",
+                          "inline_service": {
+                            "node": null
+                          },
+                          "__typename": "ManagedVxlanSegment",
+                          "name": {
+                            "value": "seg-100"
+                          },
+                          "customer_name": {
+                            "value": "Customer-A"
+                          },
+                          "arp_suppression": {
+                            "value": true
+                          },
+                          "security_zone": {
+                            "node": null
+                          },
+                          "gateway": {
+                            "node": null
+                          },
+                          "segment_deployments": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "vni": {
+                                    "value": 10100
+                                  },
+                                  "vlan_domain_segments": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "vlan_id": {
+                                            "value": 100
+                                          },
+                                          "device": {
+                                            "node": {
+                                              "id": "dev-DC1-POD1-L1"
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "deployments": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "id": "fake-dc-0"
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimPhysicalInterface",
+                  "name": {
+                    "value": "Ethernet10"
+                  },
+                  "description": {
+                    "value": "MLAG host member"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "customer"
+                  },
+                  "interface_type": {
+                    "value": "10gbase-x-sfpp"
+                  },
+                  "mtu": {
+                    "value": 9000
+                  },
+                  "ip_address": {
+                    "node": null
+                  },
+                  "cable": {
+                    "node": null
+                  },
+                  "segments": {
+                    "edges": []
+                  },
+                  "capabilities": {
+                    "edges": []
+                  }
+                }
               }
             ]
           },

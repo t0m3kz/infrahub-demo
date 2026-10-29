@@ -10,6 +10,9 @@ feature interface-vlan
 feature lacp
 feature vpc
 feature lldp
+feature nv overlay
+feature vn-segment-vlan-based
+feature nve
 !
 !
 ! vPC Configuration
@@ -35,6 +38,9 @@ interface Ethernet1/34
 !
 
 ! VLANs
+vlan 100
+  name Customer-A
+!
 !
 !
 ! Interfaces
@@ -50,10 +56,23 @@ interface Ethernet1/2
   ip address 10.1.2.3/31
 
 !
+interface Ethernet1/10
+  channel-group 10 mode active
+  no shutdown
+
+!
 interface Loopback0
   no shutdown
   ip address 10.0.2.1/32
 
+!
+interface port-channel10
+  no shutdown
+
+  switchport
+  switchport mode access
+  switchport access vlan 100
+  vpc 10
 !
 ! Route-maps
 route-map RM-CONN-2-BGP permit 10
@@ -68,6 +87,22 @@ route-map RM-CONN-2-BGP permit 10
 
 ! BGP disabled by capability profile
 
+!
+!
+! VXLAN Configuration (netlab-style multivendor)
+!
+interface nve1
+  source-interface Loopback0
+  member vni 10100
+    suppress-arp
+  no shutdown
+!
+!
+! VLAN to VNI mapping
+!
+vlan 100
+  vn-segment 10100
+! VLAN SVI Configuration
 !
 !
 
