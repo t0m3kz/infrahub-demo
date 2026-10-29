@@ -16,6 +16,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from tests.smoke.fixture_builders.vrf import with_vrf_objects
 from transforms.config.access_leaf import AccessLeaf
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.border_spine import BorderSpine
@@ -44,7 +45,7 @@ def _load(name: str) -> dict[str, Any]:
 
 def _render(transform_cls: type, data: dict[str, Any]) -> dict[str, Any]:
     transform = transform_cls(client=MagicMock(), infrahub_node=MagicMock(), root_directory=str(_PROJECT_ROOT))
-    return json.loads(asyncio.run(transform.transform(data)))
+    return json.loads(asyncio.run(transform.transform(with_vrf_objects(transform, data))))
 
 
 def _port(data: dict[str, Any], name: str) -> dict[str, Any]:

@@ -187,9 +187,6 @@ spec:
             value_previous: active
             # match_type: exact
 
-    # VRF namespace: generator auto-triggers via group membership (execute_in_proposed_change: true)
-    # No deployment-based trigger needed — L3 VNI comes from global pool
-
     # A customer gets its routing tag when it is created, and every customer
     # object file declares the `customers` group (tests/unit/test_event_rules.py
     # requires it: a trigger for a non-member raises). No update trigger: the

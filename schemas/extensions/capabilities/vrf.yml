@@ -1,0 +1,70 @@
+---
+version: "1.0"
+
+# ============================================================================
+# Routing — VRF instance schema
+# A ManagedVRF is one device's instance of one environment namespace (IpamNamespace is this project's VRF). It is
+# demand-driven: a device has an instance exactly for the namespaces it routes in (utils/vrf_demand.py, the one
+# derivation), written untracked by generators/helpers/vrf.py and checked by checks/vrf_instances.py. Nothing about
+# the VRF is stored here: the RD, the RT, the L3 VNI, the L3 VNI SVI VLAN and whether it is realized as EVPN or
+# VRF-lite are derived from the namespace and the device (transforms/helpers/overlay.py). A firewall or a load
+# balancer never has one: its VRF is the context.
+# ============================================================================
+
+nodes:
+  - name: VRF
+    namespace: Managed
+    description: "A device's instance of one environment namespace; RD, RT, L3 VNI and SVI VLAN are derived"
+    label: VRF Instance
+    icon: "mdi:routes"
+    include_in_menu: false
+    inherit_from:
+      - ManagedGeneric
+      - ManagedGenericDevice
+    human_friendly_id:
+      - "name__value"
+    # The name is {device}-vrf-{namespace lower} (generators/helpers/vrf.py); one instance per (device, namespace)
+    # is a check rule (checks/vrf_instances.py): the device edge is a many relationship and cannot be constrained.
+    uniqueness_constraints:
+      - ["name__value"]
+    display_label: "{{name__value}}"
+    order_by:
+      - name__value
+    relationships:
+      # Re-declares the generic's `capabilities` (same name, peer and identifier), like ManagedBGP.
+      - name: capabilities
+        peer: DcimCapabilities
+        label: "Device"
+        description: "The device this instance runs on: one by construction (a many rel cannot be capped at 1)"
+        cardinality: many
+        optional: true
+        kind: Attribute
+        direction: inbound
+        identifier: capabilities
+        order_weight: 800
+      # Not `ip_namespace`: that field name already peers two different kinds (BuiltinIPNamespace on the IPAM nodes,
+      # IpamNamespace on TopologyHandoffCircuit), and a third would risk a GraphQL "Fields ... conflict".
+      - name: namespace
+        peer: IpamNamespace
+        label: "Namespace"
+        description: "The environment namespace (VRF) this instance realizes on its device"
+        cardinality: one
+        optional: false
+        kind: Attribute
+        on_delete: no-action
+        identifier: vrf__namespace
+        order_weight: 1050
+
+extensions:
+  nodes:
+    - kind: DcimVirtualInterface
+      relationships:
+        - name: vrf
+          peer: ManagedVRF
+          label: "VRF Instance"
+          description: "VRF instance this SVI routes in (role svi only); the transform renders `vrf member` from it"
+          cardinality: one
+          optional: true
+          kind: Attribute
+          identifier: vrf__svis
+          order_weight: 1440

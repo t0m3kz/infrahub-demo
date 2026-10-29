@@ -23,3 +23,12 @@ def vlan_domain_id(device_id: str | None, capabilities: Iterable[tuple[str | Non
         if typename == MLAG_KIND and capability_id:
             return capability_id
     return device_id
+
+
+def mlag_peer_devices(names: Iterable[str]) -> str:
+    """The value of ``ManagedMLAG.peer_devices``: the member device names, sorted and joined with a comma.
+
+    The attribute mirrors the many ``capabilities`` edge into one unique Text, because a uniqueness constraint cannot
+    use a many relationship. The generator writes it and ``checks/mlag_domains.py`` compares against it.
+    """
+    return ",".join(sorted(names))

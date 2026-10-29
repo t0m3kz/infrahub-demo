@@ -208,39 +208,39 @@ vlan configuration 3601
 ! L3 VNI transit SVIs (symmetric IRB — no host addressing, forwarding only)
 ! unverified-no-lab: `vlan configuration <vlan>` / `member vni <l3vni>` binds the L3 VNI to its SVI VLAN
 ! unverified-no-lab: `ip unnumbered Loopback0` and `no autostate` on the L3 VNI SVI
-vlan 3900
+vlan 3902
  name L3VNI_INTERNET
 !
-vlan configuration 3900
+vlan configuration 3902
  member vni 50003
 !
-interface Vlan3900
+interface Vlan3902
  description L3VNI transit SVI for VRF INTERNET
  vrf forwarding INTERNET
  ip unnumbered Loopback0
  no autostate
  no shutdown
 !
-vlan 3901
+vlan 3903
  name L3VNI_MANAGEMENT
 !
-vlan configuration 3901
+vlan configuration 3903
  member vni 50004
 !
-interface Vlan3901
+interface Vlan3903
  description L3VNI transit SVI for VRF MANAGEMENT
  vrf forwarding MANAGEMENT
  ip unnumbered Loopback0
  no autostate
  no shutdown
 !
-vlan 3902
+vlan 3900
  name L3VNI_PROD
 !
-vlan configuration 3902
+vlan configuration 3900
  member vni 50001
 !
-interface Vlan3902
+interface Vlan3900
  description L3VNI transit SVI for VRF PROD
  vrf forwarding PROD
  ip unnumbered Loopback0

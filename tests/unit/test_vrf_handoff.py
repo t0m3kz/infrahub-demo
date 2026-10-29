@@ -176,6 +176,9 @@ class TestMultisiteVrfImports:
         device = {
             "name": "eg-fr201",
             "interfaces": [{"name": "loopback1", "role": "loopback-vtep", "ip_address": {"address": "fd00::1/128"}}],
+            "capabilities": [
+                {"typename": "ManagedVRF", "namespace": {"name": "PROD", "l3_vni": 60000, "namespace_type": "prod"}}
+            ],
         }
         acts = [{"vlan_id": 100, "vni": 10100, "segment": _stretched_segment()}]
         config = get_vxlan_config(device, "cisco_nxos", device_role="edge", activations=acts, fabric_rt_asn=65100)
@@ -372,7 +375,10 @@ class TestImportRouteTargetRendering:
 
 
 class TestSonicImportRouteTargets:
-    def _render(self, env: jinja2.Environment, mapping: dict[str, Any]) -> dict[str, Any]:
+    def _render(
+        self, env: jinja2.Environment, mapping: dict[str, Any], bgp: list[dict[str, Any]] | None = None
+    ) -> dict[str, Any]:
+        bgp = [{"local_as": {"asn": 65100}}] if bgp is None else bgp
         vxlan = {
             "enabled": True,
             "interface": "vtep",
@@ -380,19 +386,31 @@ class TestSonicImportRouteTargets:
             "evpn": {"enabled": True},
             "l3_vni_mappings": [mapping],
         }
-        return _render_sonic(env, part="common/sonic_vxlan.j2", vxlan=vxlan)
+        return _render_sonic(env, part="common/sonic_vxlan.j2", vxlan=vxlan, bgp=bgp)
 
     def test_remote_rt_imported_and_own_rt_kept(self, env: jinja2.Environment) -> None:
         rts = self._render(env, _l3_mapping())["BGP_GLOBALS_EVPN_RT"]
+        # frrcfgd keys: <vrf>|<afi_safi, lower case>|<rt> (sonic-buildimage 77eafbef, bgp_table_key_parts)
         assert rts == {
-            "PROD|L2VPN_EVPN|65100:60000": {"route-target-type": "both"},
-            "PROD|L2VPN_EVPN|65010:60000": {"route-target-type": "import"},
+            "PROD|l2vpn_evpn|65100:60000": {"route-target-type": "both"},
+            "PROD|l2vpn_evpn|65010:60000": {"route-target-type": "import"},
         }
 
-    def test_no_imports_no_rt_entries(self, env: jinja2.Environment) -> None:
+    def test_no_imports_still_the_vrfs_own_rt_as_both(self, env: jinja2.Environment) -> None:
         mapping = _l3_mapping()
         del mapping["import_route_targets"]
+        assert self._render(env, mapping)["BGP_GLOBALS_EVPN_RT"] == {
+            "PROD|l2vpn_evpn|65100:60000": {"route-target-type": "both"}
+        }
+
+    def test_no_route_target_no_rt_entries(self, env: jinja2.Environment) -> None:
+        """A None route-target is left to the platform to derive: no entry is rendered, never `auto`."""
+        mapping = {**_l3_mapping(), "route_target": None, "import_route_targets": []}
         assert self._render(env, mapping)["BGP_GLOBALS_EVPN_RT"] == {}
+
+    def test_no_bgp_no_rt_entries(self, env: jinja2.Environment) -> None:
+        """A VRF without BGP globals (no BGP process) never gets an RT."""
+        assert self._render(env, _l3_mapping(), bgp=[])["BGP_GLOBALS_EVPN_RT"] == {}
 
 
 class TestNxosFabricForwardingFeature:
@@ -459,7 +477,7 @@ class TestEdgeTemplate:
 
     def test_vrf_context_declared_for_bgp_only_vrf(self, env: jinja2.Environment) -> None:
         """A VRF used only by BGP sessions (no L3 VNI) gets a vrf context before the interfaces."""
-        rendered = self._render(env, bgp=_bgp_with_vrf_session())
+        rendered = self._render(env, bgp=_bgp_with_vrf_session(), plain_vrfs=["PROD"])
         assert "vrf context PROD\n  address-family ipv4 unicast\n" in rendered
         assert rendered.index("vrf context PROD") < rendered.index("! Interfaces")
 
@@ -468,7 +486,7 @@ class TestEdgeTemplate:
         bgp = _bgp_with_vrf_session()
         bgp[0]["sessions"].append({**bgp[0]["sessions"][1], "remote_ip": {"address": "10.255.5.3/31"}})
         add_template_fields(bgp[0])
-        rendered = self._render(env, bgp=bgp)
+        rendered = self._render(env, bgp=bgp, plain_vrfs=["PROD"])
         assert rendered.count("vrf context PROD") == 1
 
     def test_no_plain_vrf_context_for_evpn_vrf(self, env: jinja2.Environment) -> None:
@@ -482,10 +500,10 @@ class TestEdgeTemplate:
             "l2_vni_mappings": [],
             "l3_vni_mappings": [{"vrf_name": "PROD", "l3_vni": 50001}],
         }
-        enabled = self._render(env, bgp=_bgp_with_vrf_session(), vxlan={**vxlan, "enabled": True})
+        enabled = self._render(env, bgp=_bgp_with_vrf_session(), vxlan={**vxlan, "enabled": True}, plain_vrfs=[])
         assert "BGP handoffs without an L3 VNI" not in enabled
         assert enabled.count("vrf context PROD") == 1
-        disabled = self._render(env, bgp=_bgp_with_vrf_session(), vxlan=vxlan)
+        disabled = self._render(env, bgp=_bgp_with_vrf_session(), vxlan=vxlan, plain_vrfs=["PROD"])
         assert "vrf context PROD" in disabled
 
     def test_no_vrf_context_without_vrf_sessions(self, env: jinja2.Environment) -> None:

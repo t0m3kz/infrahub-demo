@@ -50,7 +50,8 @@ TOPOLOGY_SNAPSHOT_KINDS = {
     "DcimInterface": (
         "name { value } capabilities { edges { node { id } } } "
         "... on DcimPhysicalInterface { ip_address { node { id address { value } } } } "
-        "... on DcimVirtualInterface { ip_address { node { id address { value } } } } "
+        "... on DcimVirtualInterface { ip_address { node { id address { value } } } "
+        "role { value } vrf { node { id } } vlan_domain_segment { node { id } } } "
         "... on DcimLAGInterface { ip_address { node { id address { value } } } }"
     ),
     # cable_id, color and length_cm are derived by the cabling, HA and MLAG sites from the endpoints, the type and
@@ -74,7 +75,10 @@ TOPOLOGY_SNAPSHOT_KINDS = {
     ),
     "ManagedHA": "group_id { value }",
     "ManagedSegmentDeployment": "vni { value }",
-    "ManagedVlanDomainSegment": "vlan_id { value }",
+    "ManagedVlanDomainSegment": "vlan_id { value } svis { edges { node { id } } }",
+    # The VRF instances and the segment SVIs are untracked and converged by generators/helpers/vrf.py: a rerun that
+    # rebuilt an instance (new id), moved it to another namespace or device, or re-pointed an SVI is a diff.
+    "ManagedVRF": "name { value } namespace { node { id } } capabilities { edges { node { id } } }",
     "LocationRack": "name { value }",
     "TopologyPod": "name { value }",
     "TopologyDataCenter": "name { value }",
@@ -96,7 +100,7 @@ TOPOLOGY_SNAPSHOT_KINDS = {
     "ManagedFirewallHA": "name { value }",
     "ManagedFirewallContext": "name { value }",
     "ManagedLoadbalancerContext": "name { value }",
-    "ManagedMLAG": "name { value }",
+    "ManagedMLAG": "name { value } peer_devices { value }",
     "RoutingOSPFArea": "name { value } area { value }",
     # The office fabric's OSPF underlay (add_office_fabric): the only OSPF in 30_all.
     "ManagedOSPF": "name { value }",

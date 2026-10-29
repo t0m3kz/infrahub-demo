@@ -3,8 +3,8 @@
 A terminate_inline segment is gatewayed by its inline_service HA pair (its
 `gateway` is the pair's VIP), so every fabric switch carries it as pure L2:
 
-  - gateway suppression — _get_segment_gateways / _get_segment_namespace hide
-    the gateway, so no SVI, no VRF, no L3 VNI (get_vlans, _l2/_l3_from_activations,
+  - gateway suppression — _get_segment_gateways / routed_segment_namespace hide
+    the gateway, so no SVI, no VRF, no L3 VNI (get_vlans, _l2_from_activations, _l3_instances,
     get_vxlan_config's anycast gateway)
   - PBR / SVI-ACL skip — BaseDeviceTransform._extra_config and BorderLeaf feed
     their PBR and ACL helpers routed_activations() only
@@ -20,14 +20,14 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from transforms.common import BaseDeviceTransform
+from transforms.helpers.overlay import _l3_instances
 from transforms.helpers.segments import (
     _get_segment_gateways,
-    _get_segment_namespace,
     _vlans_from_activations,
-    is_inline_terminated,
     routed_activations,
 )
-from transforms.helpers.vxlan import _l2_from_activations, _l3_from_activations, get_interfaces, get_vxlan_config
+from transforms.helpers.vxlan import _l2_from_activations, get_interfaces, get_vxlan_config
+from utils.segment_addressing import is_inline_terminated, routed_segment_namespace
 
 # ---------------------------------------------------------------------------
 # Helpers (cleaned-data shapes, as clean_data() leaves them)
@@ -83,16 +83,16 @@ class TestGatewaySuppression:
     def test_segment_gateways_are_hidden_for_inline_segment(self) -> None:
         """The HA pair's VIP never becomes a fabric gateway, VRF or L3 VNI."""
         assert _get_segment_gateways(_inline_segment()) == (None, None, None, None)
-        assert _get_segment_namespace(_inline_segment()) == {}
+        assert routed_segment_namespace(_inline_segment()) == {}
 
     def test_routed_segment_keeps_its_gateway(self) -> None:
         """A normal segment still resolves gateway, VRF and L3 VNI."""
         assert _get_segment_gateways(_routed_segment()) == ("10.100.0.1/24", None, "VRF_A", 50001)
-        assert _get_segment_namespace(_routed_segment())["name"] == "VRF_A"
+        assert routed_segment_namespace(_routed_segment())["name"] == "VRF_A"
 
     def test_vlan_list_keeps_inline_vlan_without_gateway(self) -> None:
         """The VLAN stays (it is still bridged) but has no gateway/VRF and is flagged."""
-        vlans = {v["vlan_id"]: v for v in _vlans_from_activations(_activations())}
+        vlans = {v["vlan_id"]: v for v in _vlans_from_activations(_activations(), {100: "VRF_A"})}
 
         assert vlans[150]["gateway_ip"] is None
         assert vlans[150]["vrf"] is None
@@ -112,7 +112,9 @@ class TestGatewaySuppression:
 
     def test_inline_segment_contributes_no_l3_vni(self) -> None:
         """Only the routed segment's VRF becomes an L3 VNI mapping."""
-        assert [m["vrf_name"] for m in _l3_from_activations(_activations())] == ["VRF_A"]
+        # the inline segment's own namespace has an instance too (e.g. a stale one): never carried as an L3 instance
+        vrfs = [{"name": "VRF_A", "l3_vni": 50001}, {"name": "VRF_INLINE", "l3_vni": 50002}]
+        assert [i.vrf for i in _l3_instances(vrfs, _activations(), frozenset())] == ["VRF_A"]
 
     def test_vxlan_config_for_inline_only_device_is_pure_l2(self) -> None:
         """A VTEP carrying only an inline segment has an L2 VNI and no anycast gateway or VRF."""
@@ -145,8 +147,10 @@ def _device_data(deployment: dict | None = None) -> dict:
     return {
         "name": "dev-01",
         "role": "leaf",
-        "interfaces": [],
-        "capabilities": [],
+        "interfaces": [{"name": "Vlan100", "role": "svi", "vrf": {"namespace": {"name": "VRF_A"}}}],
+        "capabilities": [
+            {"typename": "ManagedVRF", "namespace": {"name": "VRF_A", "l3_vni": 50001, "namespace_type": "prod"}}
+        ],
         "segment_deployments": _activations(),
         "deployment": deployment,
     }

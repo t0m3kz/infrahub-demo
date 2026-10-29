@@ -725,6 +725,81 @@
                     ]
                   }
                 }
+              },
+              {
+                "node": {
+                  "__typename": "ManagedVRF",
+                  "id": "vrf-dc1-border-leaf-01-INTERNET",
+                  "name": {
+                    "value": "dc1-border-leaf-01-vrf-internet"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "namespace": {
+                    "node": {
+                      "name": {
+                        "value": "INTERNET"
+                      },
+                      "l3_vni": {
+                        "value": 50003
+                      },
+                      "namespace_type": {
+                        "value": "internet"
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "ManagedVRF",
+                  "id": "vrf-dc1-border-leaf-01-MANAGEMENT",
+                  "name": {
+                    "value": "dc1-border-leaf-01-vrf-management"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "namespace": {
+                    "node": {
+                      "name": {
+                        "value": "MANAGEMENT"
+                      },
+                      "l3_vni": {
+                        "value": 50004
+                      },
+                      "namespace_type": {
+                        "value": "management"
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "ManagedVRF",
+                  "id": "vrf-dc1-border-leaf-01-PROD",
+                  "name": {
+                    "value": "dc1-border-leaf-01-vrf-prod"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "namespace": {
+                    "node": {
+                      "name": {
+                        "value": "PROD"
+                      },
+                      "l3_vni": {
+                        "value": 50001
+                      },
+                      "namespace_type": {
+                        "value": "prod"
+                      }
+                    }
+                  }
+                }
               }
             ]
           },
@@ -1827,6 +1902,74 @@
                         "node": {
                           "name": {
                             "value": "default"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "capabilities": {
+                    "edges": []
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimVirtualInterface",
+                  "name": {
+                    "value": "Vlan100"
+                  },
+                  "description": {
+                    "value": ""
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "svi"
+                  },
+                  "ip_address": {
+                    "node": null
+                  },
+                  "vrf": {
+                    "node": {
+                      "namespace": {
+                        "node": {
+                          "name": {
+                            "value": "PROD"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "capabilities": {
+                    "edges": []
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimVirtualInterface",
+                  "name": {
+                    "value": "Vlan110"
+                  },
+                  "description": {
+                    "value": ""
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "svi"
+                  },
+                  "ip_address": {
+                    "node": null
+                  },
+                  "vrf": {
+                    "node": {
+                      "namespace": {
+                        "node": {
+                          "name": {
+                            "value": "PROD"
                           }
                         }
                       }

@@ -229,8 +229,8 @@ class VlanDomainMixin:
     async def _fetch_segment_vlan_state(self, segment_id: str) -> dict[str, Any] | None:
         """The segment's reconciliation inputs (segment_vlan_domains.gql), as
         {"segment": cleaned segment, "deployments": [{"id", "deployment_id",
-        "rows": {domain id: {"id", "vlan_id"}}}]}, one entry per
-        ManagedSegmentDeployment; None when ``segment_id`` is not a
+        "rows": {domain id: {"id", "vlan_id"}}}], "domain_devices": {domain id:
+        [device ids]}}, one entry per ManagedSegmentDeployment; None when ``segment_id`` is not a
         ManagedVxlanSegment."""
         result = await self.client.execute_graphql(
             query=_SEGMENT_VLAN_DOMAINS_QUERY_PATH.read_text(), variables={"segment_id": segment_id}
@@ -240,12 +240,15 @@ class VlanDomainMixin:
         if not segments:
             return None
         deployments: list[dict[str, Any]] = []
+        domain_devices: dict[str, list[str]] = {}
         for segment_deployment in cleaned.get("ManagedSegmentDeployment") or []:
-            rows = {
-                domain_id: {"id": row["id"], "vlan_id": row.get("vlan_id")}
-                for row in segment_deployment.get("vlan_domain_segments") or []
-                if (domain_id := (row.get("vlan_domain") or {}).get("id"))
-            }
+            rows = {}
+            for row in segment_deployment.get("vlan_domain_segments") or []:
+                domain = row.get("vlan_domain") or {}
+                if domain_id := domain.get("id"):
+                    rows[domain_id] = {"id": row["id"], "vlan_id": row.get("vlan_id")}
+                    members = domain.get("capabilities") if domain.get("typename") == "ManagedMLAG" else [domain]
+                    domain_devices[domain_id] = [member["id"] for member in members or [] if member.get("id")]
             deployments.append(
                 {
                     "id": segment_deployment["id"],
@@ -253,7 +256,7 @@ class VlanDomainMixin:
                     "rows": rows,
                 }
             )
-        return {"segment": segments[0], "deployments": deployments}
+        return {"segment": segments[0], "deployments": deployments, "domain_devices": domain_devices}
 
     async def segment_vlan_by_domain(self, segment_id: str) -> dict[str, int]:
         """{VLAN domain id: vlan_id} of the segment's rows, whatever deployment they sit under."""
@@ -337,7 +340,7 @@ class VlanDomainMixin:
 
     async def _reconcile_segment_vlan_domains_locked(
         self, segment_id: str, segment_name: str, state: dict[str, Any] | None = None
-    ) -> None:
+    ) -> bool:
         """Desired rows = the VLAN domain of every switch with a port carrying
         the segment, plus every border gateway's domain when the segment is
         stretched, each under the segment's deployment its switch sits in.
@@ -354,12 +357,14 @@ class VlanDomainMixin:
 
         The caller must hold the segment lock (segment_lock_key). ``state``
         is a fresh _fetch_segment_vlan_state result, or None to read it here.
+
+        Returns whether it created or deleted a row.
         """
         if state is None:
             state = await self._fetch_segment_vlan_state(segment_id)
         if state is None:
             self.logger.info(f"Segment {segment_name}: not a VXLAN segment — no VLAN domain rows")
-            return
+            return False
 
         devices = await self._segment_vlan_devices(state["segment"])
         domain_by_device = self._resolve_vlan_domains(devices)
@@ -413,3 +418,4 @@ class VlanDomainMixin:
             f"Segment {segment_name}: {len(desired)} VLAN domain(s) need it across {len(devices)} device(s) — "
             f"created {len(new)}, removed {len(stale)} row(s)"
         )
+        return bool(new or stale)

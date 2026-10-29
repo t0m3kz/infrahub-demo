@@ -120,6 +120,10 @@ fragment LoadbalancerContextInterfaceCapabilityFields on ManagedLoadbalancerCont
 }
 
 fragment InterfaceCapabilitiesWithSegmentFields on DcimInterface {
+  # A segment SVI (role svi): its VRF instance is the `vrf member` the transform renders.
+  ... on DcimVirtualInterface {
+    vrf { node { namespace { node { name { value } } } } }
+  }
   capabilities {
     edges {
       node {

@@ -343,6 +343,15 @@ check_definitions:
   - name: validate_routing_tags
     class_name: CheckRoutingTags
     file_path: checks/routing_tags.py
+  # Targetless: a device is in one domain across the whole instance.
+  - name: validate_mlag_domains
+    class_name: CheckMlagDomains
+    file_path: checks/mlag_domains.py
+  # Targetless: a device's VRF instances and SVIs are derived from its VLAN domain,
+  # interfaces and service contexts; the check reads every device with no variables.
+  - name: validate_vrf_instances
+    class_name: CheckVrfInstances
+    file_path: checks/vrf_instances.py
   # Targetless: the invariants span topologies (namespaces, the INTERNET VRF,
   # cloud Transit Gateways and virtual interfaces), not one device.
   - name: validate_routing_invariants
@@ -720,8 +729,6 @@ queries:
     file_path: queries/topology/add/segment_vlan_domains.gql
   - name: vxlan_segment_data
     file_path: queries/topology/add/vxlan_segment.gql
-  - name: vrf_namespace_data
-    file_path: queries/topology/add/vrf_namespace.gql
   - name: colocation_metro_data
     file_path: queries/topology/add/colocation_metro.gql
   - name: colocation_zone_data
@@ -748,6 +755,10 @@ queries:
     file_path: queries/validation/reference_fabric.gql
   - name: routing_tags
     file_path: queries/validation/routing_tags.gql
+  - name: mlag_domains
+    file_path: queries/validation/mlag_domains.gql
+  - name: vrf_instances
+    file_path: queries/validation/vrf_instances.gql
   - name: routing_invariants
     file_path: queries/validation/routing_invariants.gql
   - name: evpn_fabric

@@ -133,7 +133,11 @@ class TestReconcileVxlanSegment:
         gen._reconcile_segment_interface_tags = AsyncMock(
             side_effect=lambda **_: gen.events.append("tags") or ((1, 0) if changed else (0, 0))
         )
-        gen._reconcile_segment_vlan_domains_locked = AsyncMock(side_effect=lambda *_a, **_k: gen.events.append("rows"))
+        gen._reconcile_segment_vlan_domains_locked = AsyncMock(
+            side_effect=lambda *_a, **_k: gen.events.append("rows") or False
+        )
+        # The VRF pass over the domains' devices has its own tests (test_vrf_callers.py).
+        gen.reconcile_vrfs = AsyncMock()
         return gen
 
     def test_tags_then_rows_under_one_segment_lock(self) -> None:

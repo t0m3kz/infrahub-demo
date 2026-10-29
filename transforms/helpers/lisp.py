@@ -25,9 +25,10 @@ from typing import Any
 from transforms.helpers.addressing import host_ip
 from transforms.helpers.overlay import _DEFAULT_ANYCAST_GATEWAY_MAC, build_overlay_node, select_locator
 from transforms.helpers.segments import _get_segment_gateways
-from transforms.helpers.segments import _get_segment_namespace as segment_namespace
-from transforms.helpers.segments import is_inline_terminated
+from transforms.helpers.vrf import device_vrfs
 from utils.fabric_roles import LISP_BORDER_ROLES
+from utils.segment_addressing import is_inline_terminated
+from utils.segment_addressing import routed_segment_namespace as segment_namespace
 from utils.segment_addressing import segment_prefix
 
 
@@ -163,21 +164,6 @@ def _refuse_unroutable_gateways(device_role: str, activations: list[dict[str, An
             raise _refuse(device_role, f"the gateway of VLAN {act.get('vlan_id')} is in no VRF with an L3 instance-id")
 
 
-def _with_exit_vrfs(l3_instances: list[dict[str, Any]], site_records: Iterable[EidRecord]) -> list[dict[str, Any]]:
-    """The border's L3 instances plus one per VRF of the site it is the exit for, by instance-id.
-
-    A distribution-switch hosts no segment port, so its own activations name no VRF; yet as the way out of the
-    site it is the proxy-ETR/ITR of every VRF the site registers (``site_records``) and runs the BGP session to
-    the WAN edge in one of them. Added with no prefixes: no host of this device is learned dynamically.
-    """
-    known = {instance["vrf"] for instance in l3_instances}
-    added = {record.vrf: record for record in site_records if record.vrf not in known}
-    return sorted(
-        [*l3_instances, *({"instance_id": r.instance_id, "vrf": r.vrf, "prefixes": []} for r in added.values())],
-        key=lambda instance: instance["instance_id"],
-    )
-
-
 def get_lisp_config(
     data: dict[str, Any],
     device_role: str,
@@ -197,11 +183,14 @@ def get_lisp_config(
             the fabric has no map-server or no site key, or a border has no site name.
     """
     border = _is_border(device_role)
+    vrfs = device_vrfs(data)
     node = build_overlay_node(
         data.get("interfaces", []),
         device_role,
         activations or [],
-        [],
+        vrfs,
+        # The way out of the site: a border with a WAN exit is the proxy-ETR/ITR of every VRF it has.
+        frozenset(ns["name"] for ns in vrfs) if lisp_inputs.wan_exit and border else frozenset(),
         fabric_anycast_mac or _DEFAULT_ANYCAST_GATEWAY_MAC,
     )
     if not lisp_inputs.map_servers:
@@ -220,12 +209,12 @@ def get_lisp_config(
     l3s = node.l3 if node else ()
     prefixes: dict[str, set[str]] = {l3.vrf: set() for l3 in l3s}
     for l2 in l2s:
-        if l2.gateway_ip and l2.vrf:
+        if l2.gateway_ip and l2.vrf in prefixes:
             prefixes[l2.vrf].add(_eid_prefix(l2.gateway_ip))
 
     l3_instances = [{"instance_id": l3.instance_id, "vrf": l3.vrf, "prefixes": sorted(prefixes[l3.vrf])} for l3 in l3s]
     if lisp_inputs.wan_exit and border:
-        l3_instances = _with_exit_vrfs(l3_instances, lisp_inputs.l3_records)
+        l3_instances.sort(key=lambda instance: instance["instance_id"])
 
     gateway = node.gateway if node else None
     return {

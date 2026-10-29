@@ -20,8 +20,10 @@ from typing import Any, TypedDict
 
 from utils.internet_space import NON_INTERNET_PREFIXES
 from utils.limits import (
+    DEFAULT_NAMESPACE,
     FW_CONTEXT_VLAN_START,
     FW_TRANSIT_POOL_TEMPLATE,
+    L3VNI_SVI_VLAN_BASE,
     LB_CONTEXT_VLAN_END,
     LB_LEG_POOL_TEMPLATE,
     LB_VIP_POOL_TEMPLATE,
@@ -67,6 +69,13 @@ EXCHANGE_PEERS: dict[str, tuple[str, ...]] = {
 
 TENANT_NAMESPACE_TYPES = frozenset(EXCHANGE_PEERS)
 """namespace_type of the shared tenant VRFs (PROD, NON-PROD): the namespaces customers' segments live in."""
+
+FIREWALL_CONTEXT_KIND = "ManagedFirewallContext"
+LOADBALANCER_CONTEXT_KIND = "ManagedLoadbalancerContext"
+
+SERVICE_CONTEXT_ROLES: dict[str, str] = {FIREWALL_CONTEXT_KIND: "firewall", LOADBALANCER_CONTEXT_KIND: "load-balancer"}
+"""Context kind -> the role of the border service port it is tagged on, which is also the role of the HA
+members holding its legs (generators/connections.py BORDER_ROLE_FOR_SERVICES)."""
 
 ROUTED_SEGMENT_KINDS = frozenset({"ManagedVxlanSegment"})
 """Segment kinds the fabric routes with an anycast SVI (a Cloud segment never is)."""
@@ -115,6 +124,16 @@ def lb_vip_pool_name(namespace_name: str) -> str:
 def wan_exit_vlan(namespace_type: str) -> int:
     """The dot1q tag of an office's WAN exit in a tenant VRF (3800 PROD, 3801 NON-PROD)."""
     return WAN_EXIT_VLAN_BASE + TRANSIT_SLOT[namespace_type]
+
+
+def l3vni_svi_vlan(namespace_type: str | None) -> int | None:
+    """The local VLAN of a VRF's L3 VNI SVI (NX-OS, Cisco XE and SONiC symmetric IRB), fixed per namespace type.
+
+    ``L3VNI_SVI_VLAN_BASE + TRANSIT_SLOT[namespace type]`` (3900 PROD, 3901 NON-PROD, 3902 INTERNET, 3903 MANAGEMENT):
+    a VRF keeps its VLAN whatever other VRFs the device carries. None for a namespace type without a slot.
+    """
+    slot = TRANSIT_SLOT.get(namespace_type or "")
+    return None if slot is None else L3VNI_SVI_VLAN_BASE + slot
 
 
 def namespace_type_for_environment(environment: str) -> str:
@@ -167,6 +186,50 @@ def is_routed_tenant_segment(segment: dict[str, Any]) -> bool:
     namespace_type = segment_namespace(segment).get("namespace_type")
     zone = (segment.get("security_zone") or {}).get("name")
     return namespace_type in TENANT_NAMESPACE_TYPES and not is_exchange_zone(zone)
+
+
+def service_context_caps(interfaces: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    """The service-context capabilities on a device's service ports (SERVICE_CONTEXT_ROLES).
+
+    On a border leaf these are the ports facing the HA members: a firewall-role
+    port is tagged with the firewall contexts, a load-balancer-role port with the
+    load-balancer contexts whose legs the leaf has to carry. De-duplicated by id.
+    ``interfaces`` is cleaned query data (config queries, queries/validation/vrf_instances.gql).
+    """
+    found: dict[str, dict[str, Any]] = {}
+    for iface in interfaces or []:
+        for cap in iface.get("capabilities") or []:
+            role = SERVICE_CONTEXT_ROLES.get(cap.get("typename") or "")
+            if role is None or role != iface.get("role"):
+                continue
+            key = cap.get("id") or cap.get("name")
+            if key:
+                found.setdefault(key, cap)
+    return list(found.values())
+
+
+def transit_leg_namespace(context_vlan: int | None, leg: dict[str, Any]) -> dict[str, Any] | None:
+    """The VRF namespace of one context leg, or None when the leg is no transit leg.
+
+    A transit leg is a sub-interface of an HA member (a firewall or a load balancer) with an address in a
+    non-default namespace whose type has a slot, on a context with a VLAN. The one rule for the transform's
+    transit legs (transforms/helpers/firewall.py transit_legs) and the border device's VRF demand
+    (utils/vrf_demand.py); ``leg`` is a cleaned interface of the context's ``capabilities``.
+    """
+    if (leg.get("device") or {}).get("role") not in SERVICE_CONTEXT_ROLES.values():
+        return None
+    ip_address = leg.get("ip_address") or {}
+    namespace = ip_address.get("ip_namespace") or {}
+    name, ns_type = namespace.get("name"), namespace.get("namespace_type")
+    if (
+        not ip_address.get("address")
+        or not context_vlan
+        or not name
+        or name == DEFAULT_NAMESPACE
+        or ns_type not in TRANSIT_SLOT
+    ):
+        return None
+    return namespace
 
 
 def transit_vlan(context_vlan: int, ns_type: str) -> int:

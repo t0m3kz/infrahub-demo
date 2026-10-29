@@ -568,6 +568,17 @@ def make_generator(cls: Any, client: FakeClient) -> Any:
     gen.resource_lock = _lock
     gen.run_generator = AsyncMock()
     gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
+    # The VRF pass (generators/helpers/vrf.py) is tested on its own: here it only records its calls.
+    gen.reconcile_vrfs = AsyncMock()
+    gen._vrf_device_ids = set()  # __init__ is bypassed
+    gen.vrfs_held_calls = []
+
+    @asynccontextmanager
+    async def _held(needs: dict[str, set[str]]):  # noqa: ANN202
+        gen.vrfs_held_calls.append(needs)
+        yield
+
+    gen.vrfs_held = _held
     return gen
 
 

@@ -33,10 +33,10 @@ from transforms.helpers.group_policy.model import (
     _entry_set,
     segment_vrf,
 )
-from transforms.helpers.segments import is_inline_terminated
 from utils.app_instances import HOSTED_INSTANCE_TYPENAMES, physical_host
 from utils.exchange_transit import is_routed_tenant_segment
 from utils.group_policy import reserved_groups
+from utils.segment_addressing import is_inline_terminated
 
 
 def vxlan_gpo_view(

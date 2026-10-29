@@ -649,10 +649,15 @@ class ManagedLoadbalancerContext(ManagedGeneric, ManagedGenericInterfaces, Manag
 
 
 class ManagedMLAG(ManagedGeneric, ManagedGenericDevice, ManagedGenericVlanDomain):
+    peer_devices: String
     domain_id: Integer
     reload_delay: Integer
     reload_delay_non_mlag: Integer
     virtual_peer_link: Boolean
+
+
+class ManagedVRF(ManagedGeneric, ManagedGenericDevice):
+    namespace: RelationshipAttribute[IpamNamespace]
 
 
 class OrganizationManufacturer(CoreNode):
@@ -714,7 +719,6 @@ class RoutingOSPFInterface(ManagedGeneric, ManagedGenericInterfaces):
 class ManagedOSPFPeering(ManagedGeneric, ManagedPeering, ManagedGenericInterfaces):
     cost: IntegerOptional
     network_type: Dropdown
-    namespace: RelationshipAttribute[IpamNamespace]
     ospf_area: RelationshipAttribute[RoutingOSPFArea]
     ospf_interface: RelationshipManager[RoutingOSPFInterface]
     ospf_process: RelationshipManager[ManagedOSPF]
@@ -925,6 +929,7 @@ class ManagedSegmentDeployment(CoreNode):
 class ManagedVlanDomainSegment(CoreNode):
     vlan_id: Integer
     segment_deployment: RelationshipAttribute[ManagedSegmentDeployment]
+    svis: RelationshipManager[DcimVirtualInterface]
     vlan_domain: RelationshipAttribute[ManagedGenericVlanDomain]
 
 
@@ -1030,6 +1035,8 @@ class DcimVirtualInterface(DcimInterface, DcimHasSubInterface):
     host_interface: RelationshipAttribute[DcimPhysicalInterface]
     ip_address: RelationshipAttribute[IpamIPAddress]
     parent_interface: RelationshipAttribute[DcimInterface]
+    vlan_domain_segment: RelationshipAttribute[ManagedVlanDomainSegment]
+    vrf: RelationshipAttribute[ManagedVRF]
 
 
 class CloudVirtualInterface(CloudResource, CloudHybridAttachment):

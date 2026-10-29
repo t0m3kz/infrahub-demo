@@ -99,7 +99,10 @@ class TestFetchSegmentVlanState:
         assert "... on TopologyDataCenter { children { edges { node { ... on TopologyPod { id } } } } }" in compact
         assert "capabilities { edges { node { id __typename role { value } device { node { id } } } } }" in compact
         assert "ManagedSegmentDeployment(segment__ids: [$segment_id])" in compact
-        assert "vlan_domain_segments { edges { node { id vlan_id { value } vlan_domain { node { id } } } } }" in compact
+        assert (
+            "vlan_domain_segments { edges { node { id vlan_id { value } vlan_domain { node { id __typename" in compact
+        )
+        assert "... on ManagedMLAG { capabilities { edges { node { id } } } }" in compact
 
 
 class TestTaggedInterfaceIds:

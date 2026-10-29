@@ -20,23 +20,13 @@ vlan {{ vlan.vlan_id }}
 !
 {%- endfor %}
 {%- endif %}
-{#- A VRF that only carries eBGP neighbours has no L3 VNI, so
-    cisco_nxos_vxlan_vrf.j2 never declares it and it gets a plain stanza here
-    (NX-OS needs the `vrf context` before `vrf member` can reference it).
-    INTERNET on a border-gateway edge is in _evpn_vrfs (vxlan.py maps its
-    transit session's namespace to an L3 VNI), so it is declared by the shared
-    VXLAN VRF partial instead: vni, RD/RT, `advertise l2vpn evpn`. -#}
-{%- set _evpn_vrfs = (vxlan.l3_vni_mappings | map(attribute='vrf_name') | list) if (vxlan and vxlan.enabled and vxlan.l3_vni_mappings) else [] %}
-{%- set _plain_vrfs = namespace(names=[]) %}
-{%- for bgp_config in bgp or [] %}
-{%- for session in bgp_config.sessions or [] if session.get('vrf') and session.vrf not in _evpn_vrfs and session.vrf not in _plain_vrfs.names %}
-{%- set _plain_vrfs.names = _plain_vrfs.names + [session.vrf] %}
-{%- endfor %}
-{%- endfor %}
-{%- if _plain_vrfs.names %}
+{#- A VRF instance without an L3 VNI is VRF-lite: it gets a plain stanza here (NX-OS needs the `vrf context`
+    before `vrf member` can reference it). INTERNET on a border-gateway edge has an L3 VNI, so the shared VXLAN VRF
+    partial (cisco_nxos_vxlan_vrf.j2) declares it instead: vni, RD/RT, `advertise l2vpn evpn`. -#}
+{%- if plain_vrfs %}
 !
 ! VRF Contexts (BGP handoffs without an L3 VNI)
-{%- for vrf_name in _plain_vrfs.names %}
+{%- for vrf_name in plain_vrfs %}
 vrf context {{ vrf_name }}
   address-family ipv4 unicast
 !

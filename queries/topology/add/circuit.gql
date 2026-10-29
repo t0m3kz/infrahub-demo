@@ -39,6 +39,7 @@ fragment CircuitEndpoint on DcimInterface {
   name { value }
   device {
     node {
+      id
       name { value }
       ... on DcimPhysicalDevice {
         deployment { node { ...CircuitDeployment } }

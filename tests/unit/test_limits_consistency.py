@@ -26,6 +26,7 @@ from utils.exchange_transit import (
     TRANSIT_VNI_MAX,
     TRANSIT_VNI_MIN,
     WAN_EXIT_VLAN_BASE,
+    l3vni_svi_vlan,
     lb_leg_pool_name,
     lb_vip_pool_name,
     transit_pool_name,
@@ -266,6 +267,18 @@ class TestBandsDoNotOverlap:
         """Raise ``CUSTOMER_VLAN_ID_MAX`` and it would collide with the L3 VNI SVI band."""
         assert limits.CUSTOMER_VLAN_ID_MAX < limits.L3VNI_SVI_VLAN_BASE <= limits.L3VNI_SVI_VLAN_MAX
         assert limits.L3VNI_SVI_VLAN_MAX < NXOS_RESERVED_VLAN_START <= NXOS_RESERVED_VLAN_END
+
+    def test_every_l3vni_svi_slot_lies_in_the_band_and_the_slots_are_distinct(self) -> None:
+        """The L3 VNI SVI VLAN is ``L3VNI_SVI_VLAN_BASE + TRANSIT_SLOT[namespace type]``: one fixed VLAN per type."""
+        vlans = {ns_type: l3vni_svi_vlan(ns_type) for ns_type in TRANSIT_SLOT}
+
+        assert all(
+            vlan is not None and limits.L3VNI_SVI_VLAN_BASE <= vlan <= limits.L3VNI_SVI_VLAN_MAX
+            for vlan in vlans.values()
+        ), f"a slot of TRANSIT_SLOT leaves the L3 VNI SVI band {limits.L3VNI_SVI_VLAN_BASE}-{limits.L3VNI_SVI_VLAN_MAX}"
+        assert len(set(vlans.values())) == len(vlans), "two namespace types would share one L3 VNI SVI VLAN"
+        assert l3vni_svi_vlan("no-such-type") is None
+        assert l3vni_svi_vlan(None) is None
 
     def test_vni_bands_are_ordered_and_encodable(
         self, number_pools: dict[str, dict[str, Any]], namespaces: list[dict[str, Any]]

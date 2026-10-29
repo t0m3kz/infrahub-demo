@@ -1,21 +1,9 @@
 """Segment / VLAN configuration helpers for device transforms."""
 
+from collections.abc import Mapping
 from typing import Any
 
-from utils.segment_addressing import segment_namespace
-
-
-def is_inline_terminated(seg: dict) -> bool:
-    """True when the segment's L3 gateway is its inline_service HA pair, not the fabric.
-
-    terminate_inline segments still carry a `gateway` — the HA pair's virtual
-    IP, rendered by the firewall/LB/proxy transforms — but on every fabric
-    switch (leaf, ToR, border-leaf) they are pure L2: VLAN + L2 VNI only, no
-    SVI, no VRF, no L3 VNI, no PBR or SVI ACL. _get_segment_gateways and
-    _get_segment_namespace hide the gateway behind this check, so every fabric
-    consumer of them drops the L3 side at once.
-    """
-    return bool(seg.get("terminate_inline"))
+from utils.segment_addressing import is_inline_terminated, routed_segment_namespace
 
 
 def routed_activations(activations: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
@@ -51,23 +39,11 @@ def _get_segment_gateways(seg: dict) -> tuple[str | None, str | None, str | None
         else:
             gateway_ip = gw_addr
 
-    ns = _get_segment_namespace(seg)
+    ns = routed_segment_namespace(seg)
     ns_name = ns.get("name")
     vrf = ns_name if ns_name and ns_name != "default" else None
     l3_vni = ns.get("l3_vni")
     return gateway_ip, gateway_ipv6, vrf, l3_vni
-
-
-def _get_segment_namespace(seg: dict) -> dict:
-    """Return the ip_namespace (VRF) the fabric routes the segment in.
-
-    Empty for a terminate_inline segment: the fabric does not route it, so it
-    contributes no VRF / L3 VNI (_l3_from_activations) and no multi-site VRF
-    import (_multisite_vrf_site_asns).
-    """
-    if is_inline_terminated(seg):
-        return {}
-    return segment_namespace(seg)
 
 
 def segment_hosting_candidates(deployment: Any) -> list[dict]:
@@ -94,16 +70,25 @@ def segment_vlan_ids(activations: list[dict[str, Any]] | None) -> dict[str, int]
 
 
 def get_vlans(
-    activations: list[dict[str, Any]] | None = None,
+    activations: list[dict[str, Any]] | None = None, svi_vrfs: Mapping[int, str | None] | None = None
 ) -> list[dict[str, Any]]:
-    """Return VLAN list unique per vlan_id with gateway_ip, gateway_ipv6, arp_suppression, vrf."""
+    """Return VLAN list unique per vlan_id with gateway_ip, gateway_ipv6, arp_suppression, vrf.
+
+    ``svi_vrfs``: VLAN -> VRF name of the device's segment SVI objects (transforms/helpers/vrf.py svi_vrfs).
+    """
     if not activations:
         return []
-    return _vlans_from_activations(activations)
+    return _vlans_from_activations(activations, svi_vrfs or {})
 
 
-def _vlans_from_activations(activations: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Build VLAN list from SegmentDeployment records."""
+def _vlans_from_activations(
+    activations: list[dict[str, Any]], svi_vrfs: Mapping[int, str | None]
+) -> list[dict[str, Any]]:
+    """Build VLAN list from SegmentDeployment records.
+
+    The VRF of a segment's SVI is the ``vrf`` of the device's SVI object of that VLAN; the gateway, ACL and
+    description stay the segment's. A transit leg (``transit_context``) has no SVI object: its VRF is its leg's.
+    """
     vlans: list[dict[str, Any]] = []
     seen: set[int] = set()
     for act in activations:
@@ -112,6 +97,8 @@ def _vlans_from_activations(activations: list[dict[str, Any]]) -> list[dict[str,
             continue
         seg = act["segment"]
         gateway_ip, gateway_ipv6, vrf, _ = _get_segment_gateways(seg)
+        if not act.get("transit_context"):
+            vrf = svi_vrfs.get(vlan_id)
         vlans.append(
             {
                 "vlan_id": vlan_id,

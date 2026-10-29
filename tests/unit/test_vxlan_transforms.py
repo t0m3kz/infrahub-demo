@@ -3,10 +3,10 @@
 import pytest
 
 from tests.unit.vxlan_transforms_helpers import _make_activation
+from transforms.helpers.overlay import _l3_instances
 from transforms.helpers.segments import _vlans_from_activations, get_vlans
 from transforms.helpers.vxlan import (
     _l2_from_activations,
-    _l3_from_activations,
     _platform_vxlan_config,
     get_vxlan_config,
 )
@@ -29,6 +29,19 @@ class TestGetVlans:
         assert len(result) == 1
         assert result[0]["vlan_id"] == 60
 
+    def test_the_vrf_of_a_segment_is_its_svi_objects(self) -> None:
+        """The SVI object's VRF is the `vrf member` of the rendered SVI; the gateway stays the segment's."""
+        acts = [_make_activation(vlan_id=60, gateway_ip="10.0.60.1/24", ns_name="tenant_a", l3_vni=50001)]
+        (vlan,) = get_vlans(activations=acts, svi_vrfs={60: "tenant_a"})
+        assert vlan["vrf"] == "tenant_a"
+        assert vlan["gateway_ip"] == "10.0.60.1/24"
+
+    def test_a_segment_without_an_svi_object_has_no_vrf(self) -> None:
+        """The segment's namespace is no longer read for the VRF (the transform refuses the missing SVI first)."""
+        acts = [_make_activation(vlan_id=60, gateway_ip="10.0.60.1/24", ns_name="tenant_a", l3_vni=50001)]
+        (vlan,) = get_vlans(activations=acts, svi_vrfs={})
+        assert vlan["vrf"] is None
+
 
 # ===========================================================================
 # _vlans_from_activations()
@@ -37,43 +50,48 @@ class TestGetVlans:
 
 class TestVlansFromActivations:
     def test_empty_returns_empty(self) -> None:
-        assert _vlans_from_activations([]) == []
+        assert _vlans_from_activations([], {}) == []
 
     def test_basic_activation(self) -> None:
         acts = [_make_activation(vlan_id=10, customer_name="web")]
-        result = _vlans_from_activations(acts)
+        result = _vlans_from_activations(acts, {})
         assert len(result) == 1
         assert result[0]["vlan_id"] == 10
         assert result[0]["name"] == "web"
 
     def test_gateway_ip_from_segment_prefix(self) -> None:
         acts = [_make_activation(vlan_id=20, gateway_ip="10.0.20.1/24")]
-        result = _vlans_from_activations(acts)
+        result = _vlans_from_activations(acts, {})
         assert result[0]["gateway_ip"] == "10.0.20.1/24"
 
     def test_gateway_ip_none_when_no_gateway(self) -> None:
         acts = [_make_activation(vlan_id=20)]
-        result = _vlans_from_activations(acts)
+        result = _vlans_from_activations(acts, {})
         assert result[0]["gateway_ip"] is None
 
     def test_arp_suppression_from_segment(self) -> None:
         acts = [_make_activation(vlan_id=25, arp_suppression=False)]
-        result = _vlans_from_activations(acts)
+        result = _vlans_from_activations(acts, {})
         assert result[0]["arp_suppression"] is False
 
     def test_arp_suppression_default_true(self) -> None:
         acts = [_make_activation(vlan_id=26)]
-        result = _vlans_from_activations(acts)
+        result = _vlans_from_activations(acts, {})
         assert result[0]["arp_suppression"] is True
 
-    def test_vrf_from_non_default_namespace(self) -> None:
+    def test_vrf_from_the_svi_object(self) -> None:
         acts = [_make_activation(vlan_id=30, ns_name="tenant_a", l3_vni=50001)]
-        result = _vlans_from_activations(acts)
+        result = _vlans_from_activations(acts, {30: "tenant_a"})
         assert result[0]["vrf"] == "tenant_a"
+
+    def test_a_transit_leg_keeps_its_derived_vrf(self) -> None:
+        """A firewall / load-balancer leg has no SVI object: its VRF is the leg's namespace."""
+        act = {**_make_activation(vlan_id=3000, ns_name="PROD", l3_vni=50001), "transit_context": "dc1-fw-shared"}
+        assert _vlans_from_activations([act], {})[0]["vrf"] == "PROD"
 
     def test_vrf_none_for_default_namespace(self) -> None:
         acts = [_make_activation(vlan_id=40)]
-        result = _vlans_from_activations(acts)
+        result = _vlans_from_activations(acts, {})
         assert result[0]["vrf"] is None
 
     def test_deduplication_by_vlan_id(self) -> None:
@@ -81,7 +99,7 @@ class TestVlansFromActivations:
             _make_activation(vlan_id=50, customer_name="first"),
             _make_activation(vlan_id=50, customer_name="second"),
         ]
-        result = _vlans_from_activations(acts)
+        result = _vlans_from_activations(acts, {})
         assert len(result) == 1
         assert result[0]["name"] == "first"
 
@@ -131,48 +149,57 @@ class TestL2FromActivations:
 
 
 # ===========================================================================
-# _l3_from_activations()
+# _l3_instances(): the realization rule
 # ===========================================================================
 
 
-class TestL3FromActivations:
-    def test_empty_returns_empty(self) -> None:
-        assert _l3_from_activations([]) == []
+def _vrf(name: str, l3_vni: int | None, namespace_type: str = "prod") -> dict:
+    return {"name": name, "l3_vni": l3_vni, "namespace_type": namespace_type}
 
-    def test_extracts_vrf_from_namespace(self) -> None:
+
+class TestL3Instances:
+    def test_empty_returns_empty(self) -> None:
+        assert _l3_instances([], [], frozenset()) == ()
+
+    def test_extracts_the_vrf_of_a_routed_activation_from_the_instances(self) -> None:
         acts = [_make_activation(ns_name="customer_a", l3_vni=50001)]
-        result = _l3_from_activations(acts)
-        assert len(result) == 1
-        assert result[0]["vrf_name"] == "customer_a"
-        assert result[0]["l3_vni"] == 50001
+        result = _l3_instances([_vrf("customer_a", 50001)], acts, frozenset())
+        assert [(i.vrf, i.instance_id) for i in result] == [("customer_a", 50001)]
 
     def test_excludes_default_namespace(self) -> None:
         acts = [_make_activation(ns_name="default")]
-        result = _l3_from_activations(acts)
-        assert result == []
+        assert _l3_instances([_vrf("default", 1)], acts, frozenset({"default"})) == ()
 
     def test_excludes_namespace_without_l3_vni(self) -> None:
         acts = [_make_activation(ns_name="no_vni_ns", l3_vni=None)]
-        result = _l3_from_activations(acts)
-        assert result == []
+        assert _l3_instances([_vrf("no_vni_ns", None)], acts, frozenset()) == ()
 
     def test_deduplicates_by_namespace(self) -> None:
         acts = [
             _make_activation(vlan_id=10, ns_name="tenant_x", l3_vni=50002),
             _make_activation(vlan_id=20, ns_name="tenant_x", l3_vni=50002),
         ]
-        result = _l3_from_activations(acts)
-        assert len(result) == 1
+        assert len(_l3_instances([_vrf("tenant_x", 50002), _vrf("tenant_x", 50002)], acts, frozenset())) == 1
 
-    def test_multiple_namespaces(self) -> None:
+    def test_multiple_namespaces_are_sorted_by_name(self) -> None:
         acts = [
-            _make_activation(vlan_id=10, ns_name="ns_a", l3_vni=50001),
             _make_activation(vlan_id=20, ns_name="ns_b", l3_vni=50002),
+            _make_activation(vlan_id=10, ns_name="ns_a", l3_vni=50001),
         ]
-        result = _l3_from_activations(acts)
-        assert len(result) == 2
-        names = {e["vrf_name"] for e in result}
-        assert names == {"ns_a", "ns_b"}
+        result = _l3_instances([_vrf("ns_b", 50002), _vrf("ns_a", 50001)], acts, frozenset())
+        assert [i.vrf for i in result] == ["ns_a", "ns_b"]
+
+    def test_an_activation_without_an_instance_is_not_carried(self) -> None:
+        """The device's VRF set is its instances: the transform refuses the missing one before it gets here."""
+        acts = [_make_activation(ns_name="ns_a", l3_vni=50001)]
+        assert _l3_instances([], acts, frozenset()) == ()
+
+    def test_an_instance_without_activation_or_exit_stays_vrf_lite(self) -> None:
+        assert _l3_instances([_vrf("ns_a", 50001)], [], frozenset()) == ()
+
+    def test_an_exit_is_carried_without_an_activation(self) -> None:
+        result = _l3_instances([_vrf("ns_a", 50001)], [], frozenset({"ns_a"}))
+        assert [i.vrf for i in result] == ["ns_a"]
 
 
 # ===========================================================================
@@ -320,21 +347,21 @@ class TestVlansFromActivationsIsolationMode:
 
     def test_isolation_mode_normal_propagated(self) -> None:
         acts = [_make_iso_activation(vlan_id=100, isolation_mode="normal")]
-        result = _vlans_from_activations(acts)
+        result = _vlans_from_activations(acts, {})
         assert result[0]["isolation_mode"] == "normal"
 
     def test_isolation_mode_isolated_propagated(self) -> None:
         acts = [_make_iso_activation(vlan_id=101, isolation_mode="isolated")]
-        result = _vlans_from_activations(acts)
+        result = _vlans_from_activations(acts, {})
         assert result[0]["isolation_mode"] == "isolated"
 
     def test_isolation_mode_microsegmented_propagated(self) -> None:
         acts = [_make_iso_activation(vlan_id=102, isolation_mode="microsegmented")]
-        result = _vlans_from_activations(acts)
+        result = _vlans_from_activations(acts, {})
         assert result[0]["isolation_mode"] == "microsegmented"
 
     def test_isolation_mode_missing_defaults_to_normal(self) -> None:
         """When segment dict has no isolation_mode key the VLAN dict gets 'normal'."""
         acts = [_make_iso_activation(vlan_id=103, isolation_mode=None)]
-        result = _vlans_from_activations(acts)
+        result = _vlans_from_activations(acts, {})
         assert result[0]["isolation_mode"] == "normal"

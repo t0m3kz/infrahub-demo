@@ -20,6 +20,9 @@ set address addr-10-0-1-0-24 description "Zone: internal"
 set address-group ag-internal static [ addr-10-0-1-0-24 ]
 set address-group ag-INTERNET-ZONE static [ any ]
 #
+# --- Virtual router interfaces ---
+set network virtual-router default interface ethernet1/1.10
+set network virtual-router default interface ethernet1/1.30
 #
 # --- Static Routes (return path to leaf per zone) ---
 set network virtual-router default routing-table ip static-route VRF-INTERNAL-1 destination 10.0.1.0/24

@@ -25,10 +25,11 @@ from tests.smoke.fixture_builders.firewall import build_leaf_lb_client_data
 from tests.smoke.fixture_builders.transit import build_lb_context_bl_data
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.leaf import Leaf
-from transforms.helpers.firewall import _service_context_caps, get_exchange_routes, get_exchange_transits
+from transforms.helpers.firewall import get_exchange_routes, get_exchange_transits
 from transforms.helpers.firewall_pbr import get_customer_pbr_rules
 from transforms.helpers.group_policy import UNCLASSIFIED, get_vrf_contracts
 from transforms.helpers.vxlan import get_interfaces
+from utils.exchange_transit import service_context_caps
 
 _PROD = {"name": "PROD", "namespace_type": "prod", "l3_vni": 60000}
 _NONPROD = {"name": "NON-PROD", "namespace_type": "non_prod", "l3_vni": 60001}
@@ -77,20 +78,20 @@ class TestServiceContextCaps:
 
     def test_load_balancer_context_on_a_load_balancer_port_is_carried(self) -> None:
         ctx = _lb_context()
-        assert _service_context_caps([_port("load-balancer", ctx)]) == [ctx]
+        assert service_context_caps([_port("load-balancer", ctx)]) == [ctx]
 
     @pytest.mark.parametrize("role", ["firewall", "server", None])
     def test_load_balancer_context_on_any_other_port_is_not(self, role: str | None) -> None:
-        assert _service_context_caps([_port(role, _lb_context())]) == []
+        assert service_context_caps([_port(role, _lb_context())]) == []
 
     def test_firewall_context_on_a_load_balancer_port_is_not(self) -> None:
         firewall = {"typename": "ManagedFirewallContext", "id": "fw-1", "name": "dc10-fw", "vlan_id": 3000}
-        assert _service_context_caps([_port("load-balancer", firewall)]) == []
+        assert service_context_caps([_port("load-balancer", firewall)]) == []
 
     def test_a_context_on_both_member_ports_is_carried_once(self) -> None:
         ctx = _lb_context()
         ports = [_port("load-balancer", ctx, name="Ethernet21"), _port("load-balancer", ctx, name="Ethernet22")]
-        assert _service_context_caps(ports) == [ctx]
+        assert service_context_caps(ports) == [ctx]
 
 
 class TestLoadBalancerLeg:
@@ -98,7 +99,7 @@ class TestLoadBalancerLeg:
 
     @staticmethod
     def _transits(*contexts: dict[str, Any]) -> list[dict[str, Any]]:
-        return get_exchange_transits(_service_context_caps([_port("load-balancer", *contexts)]))
+        return get_exchange_transits(service_context_caps([_port("load-balancer", *contexts)]))
 
     def test_prod_leg_is_the_context_vlan_and_its_transit_vni(self) -> None:
         (transit,) = self._transits(_lb_context())
@@ -153,7 +154,7 @@ class TestLoadBalancerLeg:
         prod = _lb_context()
         nonprod = _lb_context(name="dc10-lb-01-NON-PROD", vlan=3101, namespace=_NONPROD, leg="100.67.16.0/29")
         port = _port("load-balancer", prod, nonprod)
-        transits = get_exchange_transits(_service_context_caps([port]))
+        transits = get_exchange_transits(service_context_caps([port]))
         (iface,) = get_interfaces([port], activations=transits)
         assert (iface["mode"], iface["vlans"], iface["dot1q_vlan"]) == ("trunk", [3100, 3301], None)
 

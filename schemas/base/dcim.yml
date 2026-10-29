@@ -342,6 +342,10 @@ generics:
             label: MLAG Control
             description: "Peer-link SVI carrying the MLAG control session address"
             color: "#FCD34D"
+          - name: svi
+            label: SVI
+            description: "Routed VLAN interface of a segment on a fabric switch, generated from its VLAN-domain row"
+            color: "#FBBF24"
           - name: firewall
             label: Firewall
             description: "Dedicated port for firewall attachment on a border-leaf"

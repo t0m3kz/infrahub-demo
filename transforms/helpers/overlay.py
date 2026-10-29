@@ -29,6 +29,7 @@ L2Instance.stretched            Multi-Site stretched VNI     (no counterpart; ig
 L3Instance.instance_id          L3 VNI                       L3 instance-id
 L3Instance.vrf                  tenant VRF                   VRF holding the EID prefixes
 L3Instance.svi_vlan_id          local `ip forward` SVI VLAN  (no counterpart; ignored)
+                                (fixed slot of the namespace type: utils/exchange_transit.py l3vni_svi_vlan)
 L3Instance.default_exit         upstream-transit VRF         proxy-ETR / default-exit VRF
 AnycastGateway.enabled, .mac    fabric anycast-gateway MAC   anycast-gateway MAC
 ==============================  ===========================  ================================================
@@ -46,9 +47,12 @@ from dataclasses import dataclass
 from typing import Any
 
 from transforms.helpers.addressing import host_ip
-from transforms.helpers.segments import _get_segment_gateways, _get_segment_namespace
+from transforms.helpers.segments import _get_segment_gateways
+from utils.exchange_transit import l3vni_svi_vlan
 from utils.fabric_roles import OFFICE_LISP_ROLES, VTEP_ROLES
 from utils.limits import L3VNI_SVI_VLAN_BASE, L3VNI_SVI_VLAN_MAX
+from utils.segment_addressing import routed_segment_namespace
+from utils.vrf_demand import realized_l3
 
 _log = logging.getLogger(__name__)
 
@@ -68,22 +72,25 @@ OVERLAY_CONFIG_KEYS: dict[str, str] = {"bgp_evpn": "vxlan", "lisp": "lisp"}
 # vendor-neutral or site-specific MAC is wanted. Both control planes use it.
 _DEFAULT_ANYCAST_GATEWAY_MAC = "00:1c:73:00:dc:01"
 
-# Local VLAN ID band for the per-VRF L3 VNI SVI.
+# Local VLAN ID for the per-VRF L3 VNI SVI.
 #
-# Symmetric IRB on Cisco NX-OS needs an SVI per L3 VNI carrying `ip forward` —
+# Symmetric IRB on Cisco NX-OS needs an SVI per L3 VNI carrying `ip forward` -
 # the VLAN it sits on is the local handle for the tenant's transit VNI. It
 # carries no hosts and is never trunked, but it does consume a VLAN ID in the
 # device's own VLAN space, so it must not collide with a customer segment.
 #
-# The band is deliberately NOT modelled data and NOT drawn from a pool: a VLAN
-# ID has only local significance and this SVI never appears on a wire, so no two
-# devices need to agree on the number (only on the L3 VNI itself, which IS
+# The VLAN is a pure function of the VRF's namespace type, NOT modelled data and NOT
+# drawn from a pool: L3VNI_SVI_VLAN_BASE + TRANSIT_SLOT[namespace_type]
+# (utils/exchange_transit.py l3vni_svi_vlan; 3900 PROD, 3901 NON-PROD, 3902 INTERNET,
+# 3903 MANAGEMENT), so a VRF keeps its VLAN whatever other VRFs the device carries.
+# A VLAN ID has only local significance and this SVI never appears on a wire, so no
+# two devices need to agree on the number (only on the L3 VNI itself, which IS
 # modelled, on IpamNamespace.l3_vni). Arista EOS and FRR/SONiC need no such SVI
-# at all — they bind the VRF to the VNI directly — so this is NX-OS-only.
-#
-# 3900-3967 (L3VNI_SVI_VLAN_BASE..L3VNI_SVI_VLAN_MAX in utils/limits.py) sits above the customer VLAN ceiling
-# (CUSTOMER_VLAN_ID_MAX, which is capped at 2999 so the firewall-context and transit bands fit below)
-# and below NX-OS's own internally-reserved 3968-4094.
+# at all - they bind the VRF to the VNI directly - so this is NX-OS-only.
+# The slots lie in L3VNI_SVI_VLAN_BASE..L3VNI_SVI_VLAN_MAX (utils/limits.py), above the
+# customer VLAN ceiling (CUSTOMER_VLAN_ID_MAX, capped at 2999 so the firewall-context and
+# transit bands fit below) and below NX-OS's own internally-reserved 3968-4094.
+# The L3 VNI SVI stays derived: it is never an object (the segment SVIs are, role svi).
 
 # namespace_type of the INTERNET VRF. It is one VRF for the whole network, so
 # its L3 route-target is global rather than per fabric (_l3_route_target).
@@ -142,51 +149,44 @@ class OverlayNode:
     gateway: AnycastGateway
 
 
-def _collect_l3_vni_from_namespaces(namespaces) -> list[dict[str, Any]]:
-    """Collect unique L3 VNI (VRF) mappings from an iterable of namespace dicts.
+def _l3_instances(
+    vrfs: list[dict[str, Any]], activations: list[dict[str, Any]], exits: frozenset[str]
+) -> tuple[L3Instance, ...]:
+    """The device's VRF instances that the overlay carries as L3 instances, sorted by VRF name.
 
-    Each mapping also carries ``svi_vlan_id``: the local VLAN the NX-OS
-    templates hang the L3 VNI's `ip forward` SVI on. Assigned by position in the
-    VRF-name-sorted list so it is stable for a given set of VRFs on a given
-    device — see L3VNI_SVI_VLAN_BASE for why local stability is sufficient.
+    The realization rule: an instance (``vrfs``, the device's ManagedVRF namespaces) is an L3 instance when its
+    namespace is not ``default``, has an ``l3_vni``, and the device either routes a segment or a transit leg in it
+    (an activation: it has the anycast SVI) or the caller names it an ``exits`` VRF (carried with no SVI of its own).
+    Every other instance is VRF-lite: the templates render it as a plain VRF with no overlay identity.
+
+    The local VLAN of the L3 VNI SVI is the namespace type's fixed slot (``l3vni_svi_vlan``), so a VRF keeps it
+    whatever else the device carries; a namespace type without a slot gets no SVI (warned, NX-OS symmetric IRB is
+    then not rendered for it).
     """
-    seen: dict[str, dict] = {}
-    for ns in namespaces:
-        ns_name = ns.get("name")
-        l3_vni = ns.get("l3_vni")
-        if ns_name and ns_name != "default" and l3_vni and ns_name not in seen:
-            seen[ns_name] = {
-                "vrf_name": ns_name,
-                "l3_vni": l3_vni,
-            }
-            if ns.get("namespace_type") == _INTERNET_NAMESPACE_TYPE:
-                seen[ns_name]["namespace_type"] = _INTERNET_NAMESPACE_TYPE
-    mappings = sorted(seen.values(), key=lambda v: v.get("vrf_name", ""))
-    for index, mapping in enumerate(mappings):
-        svi_vlan_id = L3VNI_SVI_VLAN_BASE + index
-        if svi_vlan_id > L3VNI_SVI_VLAN_MAX:
+    routed = {name for act in activations if (name := routed_segment_namespace(act.get("segment") or {}).get("name"))}
+    realized = {ns["name"]: ns for ns in vrfs if realized_l3(ns, routed, exits)}
+    instances = []
+    for name in sorted(realized):
+        namespace = realized[name]
+        svi_vlan_id = l3vni_svi_vlan(namespace.get("namespace_type"))
+        if svi_vlan_id is None:
             _log.warning(
-                "VRF %s: no local VLAN left in the L3 VNI SVI band %s-%s (%s VRFs on this "
-                "device). NX-OS symmetric IRB will not be rendered for it; widen the band "
-                "and lower CUSTOMER_VLAN_ID_MAX to match.",
-                mapping["vrf_name"],
+                "VRF %s: namespace type %r has no L3 VNI SVI slot (%s-%s). NX-OS symmetric IRB will not be "
+                "rendered for it.",
+                name,
+                namespace.get("namespace_type"),
                 L3VNI_SVI_VLAN_BASE,
                 L3VNI_SVI_VLAN_MAX,
-                len(mappings),
             )
-            mapping["svi_vlan_id"] = None
-        else:
-            mapping["svi_vlan_id"] = svi_vlan_id
-    return mappings
-
-
-def _l3_from_activations(
-    activations: list[dict[str, Any]], extra_namespaces: list[dict[str, Any]] | None = None
-) -> list[dict[str, Any]]:
-    """Build L3 VNI (VRF) mappings from SegmentDeployment records plus extra namespaces."""
-    return _collect_l3_vni_from_namespaces(
-        [*(_get_segment_namespace(act.get("segment") or {}) for act in activations), *(extra_namespaces or [])]
-    )
+        instances.append(
+            L3Instance(
+                instance_id=namespace["l3_vni"],
+                vrf=name,
+                svi_vlan_id=svi_vlan_id,
+                default_exit=namespace.get("namespace_type") == _INTERNET_NAMESPACE_TYPE,
+            )
+        )
+    return tuple(instances)
 
 
 def _is_multisite_segment(segment: dict[str, Any]) -> bool:
@@ -271,7 +271,8 @@ def build_overlay_node(
     interfaces: list[dict[str, Any]],
     device_role: str,
     activations: list[dict[str, Any]],
-    default_exit_namespaces: list[dict[str, Any]],
+    vrfs: list[dict[str, Any]],
+    exits: frozenset[str],
     anycast_mac: str,
 ) -> OverlayNode | None:
     """The overlay this device terminates, or None when it terminates none.
@@ -280,9 +281,11 @@ def build_overlay_node(
         interfaces: the device's interfaces (the locator is picked among them)
         device_role: only VTEP roles terminate an overlay
         activations: SegmentDeployment dicts for this deployment
-        default_exit_namespaces: namespaces to carry as default-exit L3 instances even when
-            no segment of the device sits in them (the caller decides which; a namespace_type
-            internet namespace is flagged ``default_exit``)
+        vrfs: the namespaces (name, l3_vni, namespace_type) of the device's ManagedVRF instances
+            (transforms/helpers/vrf.py device_vrfs): the device's VRF set
+        exits: names of the instances to carry as L3 instances even when no segment of the device
+            sits in them (the caller decides which: a BGW's internet exit, an office border's WAN exit);
+            a namespace_type internet instance is flagged ``default_exit``
         anycast_mac: the fabric's anycast-gateway MAC, defaulted by the caller
     """
     # Spine/super-spine/hyper-spine are underlay+route-reflector only — never VTEPs.
@@ -293,15 +296,7 @@ def build_overlay_node(
         return None
 
     l2 = tuple(l2_instance(act) for act in vni_activations(activations))
-    l3 = tuple(
-        L3Instance(
-            instance_id=m["l3_vni"],
-            vrf=m["vrf_name"],
-            svi_vlan_id=m["svi_vlan_id"],
-            default_exit=m.get("namespace_type") == _INTERNET_NAMESPACE_TYPE,
-        )
-        for m in _l3_from_activations(activations, default_exit_namespaces)
-    )
+    l3 = _l3_instances(vrfs, activations, exits)
     if not l2 and not l3:
         return None
 

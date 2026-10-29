@@ -222,9 +222,33 @@ nodes:
         order_weight: 2100
         identifier: "vlandomainsegment__vlan_domain"
         description: "The MLAG pair or device this VLAN ID realization belongs to"
+      # A routed row is realized on each switch of its domain as an SVI (DcimVirtualInterface role svi, no address:
+      # the anycast gateway is the segment's), written by generators/helpers/svi.py and deleted with the row.
+      - name: svis
+        peer: DcimVirtualInterface
+        label: SVIs
+        cardinality: many
+        kind: Component
+        optional: true
+        on_delete: cascade
+        order_weight: 2200
+        identifier: "vlandomainsegment__svis"
+        description: "The routed SVI of this segment on each switch of the domain (role svi); deleted with the row"
 
 extensions:
   nodes:
+    - kind: DcimVirtualInterface
+      relationships:
+        - name: vlan_domain_segment
+          peer: ManagedVlanDomainSegment
+          label: VLAN Domain Segment
+          cardinality: one
+          kind: Attribute
+          optional: true
+          order_weight: 1460
+          identifier: "vlandomainsegment__svis"
+          description: "The VLAN-domain row this SVI realizes (role svi only)"
+
     - kind: ManagedVxlanSegment
       relationships:
         - name: segment_deployments

@@ -59,6 +59,8 @@ def _edge(*, bgw: bool = True, namespace: dict[str, Any] | None = _INTERNET_NS) 
     capabilities = []
     if namespace:
         capabilities.append({"typename": "ManagedBGP", "peerings": [_transit_peering(namespace)]})
+        # the VRF generator's instance of the session's namespace: the device's only VRF set
+        capabilities.append({"typename": "ManagedVRF", "namespace": namespace})
     return {"name": "eg-fr201", "interfaces": interfaces, "capabilities": capabilities}
 
 
@@ -130,6 +132,10 @@ class TestInternetVniMapping:
         device = {
             "name": "dc1-border-01",
             "interfaces": [{"name": "Loopback0", "role": "loopback", "ip_address": {"address": "10.0.0.1/32"}}],
+            "capabilities": [
+                {"typename": "ManagedVRF", "namespace": {"name": "PROD", "l3_vni": 50001, "namespace_type": "prod"}},
+                {"typename": "ManagedVRF", "namespace": _INTERNET_NS},
+            ],
         }
         config = get_vxlan_config(
             device, "cisco_nxos", device_role="border-leaf", activations=activations, fabric_rt_asn=65000
@@ -172,6 +178,8 @@ class TestEdgeTemplate:
             ospf=[],
             bgp=_bgp(namespace),
             vxlan=vxlan,
+            # The transform's plain_vrf_names: the instances without an L3 VNI (a border gateway has INTERNET's).
+            plain_vrfs=[] if vxlan else [namespace["name"]],
         )
 
     def _vxlan(self) -> dict[str, Any]:

@@ -25,8 +25,8 @@
 {%- endif -%}
 {#- Symmetric IRB: SONiC binds an L3 VNI to its VRF through a VLAN — the VNI
     maps to that VLAN, the VLAN's SVI sits in the VRF, and VRF.vni names the
-    L3 VNI. The VLAN is the mapping's svi_vlan_id (the per-VRF band reserved
-    for this SVI, see transforms/helpers/overlay.py); a VRF past the band has
+    L3 VNI. The VLAN is the mapping's svi_vlan_id (the namespace type's fixed
+    slot, see transforms/helpers/overlay.py); a VRF whose type has no slot has
     none, and like NX-OS it gets no symmetric IRB. -#}
 {%- if vxlan.l3_vni_mappings -%}
 {%- for mapping in vxlan.l3_vni_mappings if mapping.svi_vlan_id -%}
@@ -51,28 +51,39 @@
 }) -%}
 {%- endfor -%}
 {%- endif -%}
-{#- Remote-site route-target imports (EVPN Multi-Site stretched segments, see
-    transforms/helpers/vxlan.py _multisite_vrf_site_asns). FRR drops its auto
-    import RT once an explicit one is configured, so this site's own RT is
-    listed too (as `both`) — otherwise the VRF stops importing its own fabric.
-    NOTE: BGP_GLOBALS_EVPN_RT key/field names unverified against real SONiC
-    config-DB schema — best-effort guess. -#}
-{%- if vxlan and vxlan.enabled and vxlan.l3_vni_mappings -%}
-{%- for mapping in vxlan.l3_vni_mappings if mapping.import_route_targets -%}
+{#- Per-VRF EVPN route-distinguisher and route-targets, explicit (never `auto`: FRR has no such keyword, and the
+    route-target of a VRF must be the same on every VTEP of the fabric, see transforms/helpers/vxlan.py).
+    Verified against sonic-net/sonic-buildimage master, src/sonic-frr-mgmt-framework/frrcfgd/frrcfgd.py at commit
+    77eafbef0132e2c7f997637b658d7f0ba18ba2fa:
+    - table keys: BGP_GLOBALS_AF is `<vrf>|<afi_safi>` (2 parts), BGP_GLOBALS_EVPN_RT is `<vrf>|<afi_safi>|<rt>`
+      (3 parts, bgp_table_key_parts); the afi_safi part must be one of ipv4_unicast, ipv6_unicast, l2vpn_evpn,
+      lower case (bgp_afi_safi_values, __normalize_bgp_table_key); tests/test_config.py (commit 93657da9) asserts
+      normalize_key('BGP_GLOBALS_AF', 'default|l2vpn_evpn');
+    - BGP_GLOBALS_AF field `route-distinguisher` is rendered `rd <value>` under `router bgp <local_asn> vrf <vrf>` /
+      `address-family l2vpn evpn` (global_af_key_map); the BGP_GLOBALS_EVPN_RT handler renders
+      `route-target <route-target-type> <rt>` (route-target-type: import, export or both).
+    The handlers run `router bgp <local_asn> vrf <vrf>`, so every such VRF needs its BGP_GLOBALS|<vrf> entry
+    (local_asn), and sonic_tenant_l3.j2 renders the route-distinguisher into the VRF's BGP_GLOBALS_AF l2vpn_evpn entry
+    next to that BGP_GLOBALS entry, for every L3 VNI mapping. The VRF's own RT is `both`; the remote
+    sites' (EVPN Multi-Site stretched segments, _multisite_vrf_site_asns) are imports. FRR drops its auto import RT
+    once an explicit one is configured, so the own RT is always listed. Not rendered when the RD or RT is None
+    (the platform derives it). -#}
+{%- if bgp and (capabilities is not defined or capabilities.bgp_enabled is not defined or capabilities.bgp_enabled) and vxlan and vxlan.enabled and vxlan.l3_vni_mappings -%}
+{%- for mapping in vxlan.l3_vni_mappings -%}
 {%- if mapping.route_target and mapping.route_target != 'auto' -%}
 {%- set _ = bgp_evpn_rt.update({
-  (mapping.vrf_name ~ '|L2VPN_EVPN|' ~ mapping.route_target): {
+  (mapping.vrf_name ~ '|l2vpn_evpn|' ~ mapping.route_target): {
     'route-target-type': 'both'
   }
 }) -%}
-{%- endif -%}
 {%- for rt in mapping.import_route_targets -%}
 {%- set _ = bgp_evpn_rt.update({
-  (mapping.vrf_name ~ '|L2VPN_EVPN|' ~ rt): {
+  (mapping.vrf_name ~ '|l2vpn_evpn|' ~ rt): {
     'route-target-type': 'import'
   }
 }) -%}
 {%- endfor -%}
+{%- endif -%}
 {%- endfor -%}
 {%- endif -%}
 {%- if vxlan and vxlan.enabled and vxlan.evpn and vxlan.evpn.enabled -%}

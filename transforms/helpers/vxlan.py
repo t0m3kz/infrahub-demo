@@ -8,7 +8,6 @@ from typing import Any
 from netutils.interface import sort_interface_list
 
 from transforms.helpers.addressing import host_ip
-from transforms.helpers.firewall import FIREWALL_CONTEXT_KIND, SERVICE_CONTEXT_ROLES
 
 # The neutral overlay model owns these (transforms/helpers/overlay.py); they stay importable from here.
 from transforms.helpers.overlay import (
@@ -17,15 +16,18 @@ from transforms.helpers.overlay import (
     L2Instance,
     L3Instance,
     OverlayNode,
+    _interface_address,
+    _is_multisite_segment,
 )
-from transforms.helpers.overlay import _collect_l3_vni_from_namespaces as _collect_l3_vni_from_namespaces
-from transforms.helpers.overlay import _interface_address, _is_multisite_segment
-from transforms.helpers.overlay import _l3_from_activations as _l3_from_activations
 from transforms.helpers.overlay import _select_vtep_interface as _select_vtep_interface
 from transforms.helpers.overlay import build_overlay_node, l2_instance, vni_activations
-from transforms.helpers.segments import _get_segment_namespace, segment_vlan_ids
+from transforms.helpers.segments import segment_vlan_ids
+from transforms.helpers.vrf import device_vrfs
+from utils.exchange_transit import FIREWALL_CONTEXT_KIND, SERVICE_CONTEXT_ROLES
 from utils.fabric_roles import BORDER_ROLES
 from utils.limits import MAX_ENCODABLE_VNI
+from utils.segment_addressing import routed_segment_namespace
+from utils.vrf_demand import internet_exits
 
 _log = logging.getLogger(__name__)
 
@@ -77,7 +79,7 @@ def _multisite_vrf_site_asns(activations: list[dict[str, Any]]) -> dict[str, set
         seg = act.get("segment") or {}
         if not _is_multisite_segment(seg):
             continue
-        vrf = _get_segment_namespace(seg).get("name")
+        vrf = routed_segment_namespace(seg).get("name")
         if not vrf or vrf == "default":
             continue
         by_vrf.setdefault(vrf, set()).update(_segment_site_asns(seg))
@@ -119,28 +121,6 @@ def _l2_from_activations(activations: list[dict[str, Any]]) -> list[dict[str, An
 def _is_bgw(data: dict[str, Any], fabric_rt_asn: int | None) -> bool:
     """True when the device is an EVPN Multi-Site border gateway (see _get_multisite_config)."""
     return bool(fabric_rt_asn) and any(iface.get("role") == "multisite-vip" for iface in data.get("interfaces") or [])
-
-
-def _internet_session_namespaces(data: dict[str, Any]) -> list[dict[str, Any]]:
-    """Internet-type namespaces of this device's own BGP sessions.
-
-    A BGP peering whose local address sits in a namespace_type internet
-    namespace is the upstream transit handoff (bgp.py flags it ``transit``);
-    the VRF needs an L3 VNI on a BGW to export what it learns as EVPN type-5.
-    """
-    device_name = data.get("name")
-    found: dict[str, dict[str, Any]] = {}
-    for cap in data.get("capabilities") or []:
-        if cap.get("typename") != "ManagedBGP":
-            continue
-        for peering in cap.get("peerings") or []:
-            for iface in peering.get("capabilities") or []:
-                if (iface.get("device") or {}).get("name") != device_name:
-                    continue
-                ns = (iface.get("ip_address") or {}).get("ip_namespace") or {}
-                if ns.get("namespace_type") == _INTERNET_NAMESPACE_TYPE and ns.get("name"):
-                    found.setdefault(ns["name"], ns)
-    return list(found.values())
 
 
 def _l3_route_target(mapping: dict[str, Any], rt_asn: int | None) -> str | None:
@@ -697,14 +677,16 @@ def get_vxlan_config(
     Returns:
         VXLAN configuration dict or None if VXLAN not needed
     """
-    # A BGW with an upstream transit session also needs the INTERNET L3 VNI, with
-    # or without stretched segments (an edge usually has none).
-    default_exit_namespaces = _internet_session_namespaces(data) if _is_bgw(data, fabric_rt_asn) else []
+    # A BGW carries its INTERNET instance as an L3 VNI (the upstream transit it exports as EVPN type-5),
+    # with or without stretched segments (an edge usually has none).
+    vrfs = device_vrfs(data)
+    exits = internet_exits(vrfs, border_gateway=_is_bgw(data, fabric_rt_asn))
     node = build_overlay_node(
         data.get("interfaces", []),
         device_role,
         activations or [],
-        default_exit_namespaces,
+        vrfs,
+        exits,
         fabric_anycast_mac or _DEFAULT_ANYCAST_GATEWAY_MAC,
     )
     if node is None:

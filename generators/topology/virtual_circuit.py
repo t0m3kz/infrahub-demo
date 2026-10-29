@@ -101,6 +101,7 @@ from utils.limits import DCI_TECHNICAL_IPV4_POOL, DCI_TECHNICAL_IPV6_POOL, HANDO
 
 from ..common import CommonGenerator
 from ..connections import CablingMixin
+from ..helpers.vrf import VrfMixin
 from ..pools import PoolMixin
 from ..protocols import DcimPhysicalInterface, DcimVirtualInterface
 from ..routing import EVPN_AF, IPV4_UNICAST_AF, IPV6_UNICAST_AF, RoutingMixin, _dci_key_name
@@ -259,16 +260,47 @@ class SessionPlan:
     prefix_length: int
     process_ids: tuple[str, str]
     peerings: tuple[PeeringPlan, ...]
+    # The environment namespace the /31 lives in when it is not ``default`` (a handoff's): both ends need an instance
+    # of it before the addresses are written.
+    namespace: str | None = None
     # Interconnect: the per-circuit key to ensure. Handoff: the circuit's own optional key, by id.
     key_name: str | None = None
     password_id: str | None = None
     mtu: int | None = None
 
 
-class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, CommonGenerator):
+class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfMixin, CommonGenerator):
     """add_virtual_circuit: the BGP session(s) of an interconnect or handoff circuit."""
 
     client: Any
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        # Devices on the ends of a handoff circuit, now or before: their VRF instances are converged once the run's
+        # tracked cleanup has removed what the circuit no longer holds (see run()). One instance is one run.
+        self._vrf_device_ids: set[str] = set()
+
+    async def run(self, identifier: str, data: dict[str, Any] | None = None) -> None:
+        """Run the generator, then converge the VRF instances of the handoff's end devices.
+
+        The /31 a decommissioned or shrunk circuit held is deleted by the run's cleanup, after ``generate()``; only
+        then does the device no longer demand its namespace, so the pass that prunes the instance runs here. It also
+        follows a circuit whose namespace changed. An interconnect is in ``default``: no demand, no pass. Accepted
+        gap: a port taken off the circuit is no longer listed, so its device is reconciled by its next pass
+        (a segment run, or a handoff) and the check reports the leftover instance until then.
+        """
+        await super().run(identifier, data)
+        await self.reconcile_vrfs(self._vrf_device_ids)
+
+    def _note_end_devices(self, circuit: dict[str, Any]) -> None:
+        """Remember the devices on the circuit's listed ports (a handoff only)."""
+        if circuit.get("typename") != HANDOFF_CIRCUIT:
+            return
+        self._vrf_device_ids.update(
+            device_id
+            for port in circuit.get("capabilities") or []
+            if isinstance(port, dict) and (device_id := (port.get("device") or {}).get("id"))
+        )
 
     async def generate(self, data: dict[str, Any]) -> None:
         circuits = clean_data(data).get("TopologyVirtualCircuit") or []
@@ -290,6 +322,7 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, Comm
             f"carrier: {self._carrier_label(circuit)}"
         )
 
+        self._note_end_devices(circuit)
         ends = self._ends_or_none(circuit, name)
         if ends is None:
             self._track_circuit(circuit["id"])
@@ -309,6 +342,7 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, Comm
                 self.logger.error(f"{name}: not found when refetched after its carrier's generator ran")
                 return
             circuit = circuits[0]
+            self._note_end_devices(circuit)
             ends = self._ends_or_none(circuit, name)
             if ends is None:
                 self._track_circuit(circuit["id"])
@@ -454,6 +488,7 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, Comm
             pool_name=handoff_pool_name(namespace["name"]),
             prefix_length=31,
             process_ids=self._process_ids(name, first, second),
+            namespace=namespace["name"],
             peerings=(
                 PeeringPlan(
                     suffix="bgp",
@@ -573,35 +608,39 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, Comm
             if missing:
                 self.fail(f"{name}: interface(s) {', '.join(missing)} not found")
 
-            # Every precondition holds - the writes start here.
-            prefix = await self.client.allocate_next_ip_prefix(
-                resource_pool=pool,
-                identifier=f"vc-p2p__{circuit['id']}",
-                prefix_length=plan.prefix_length,
-                member_type="address",
-                data={"role": "technical", "is_pool": True, "description": f"{plan.label} {name}"},
-            )
-            if prefix is None:
-                self.fail(f"{name}: pool '{plan.pool_name}' returned no prefix - exhausted?")
-            # Owned by this circuit. allocate_next_ip_prefix() is a pool mutation, not a save(), so the prefix joins
-            # the run's tracking group only here.
-            self.client.group_context.related_node_ids.append(prefix.id)
-            self.logger.info(f"  {plan.label} prefix {prefix.prefix.value} for {name}")
-
-            addresses = await self.upsert_p2p_addresses(prefix, description=f"{plan.label} {name}")
-            interface_status = _INTERFACE_STATUS_FOR_CIRCUIT.get(status, "provisioning")
-            for end, peer, address in (
-                (plan.first, plan.second, addresses[0]),
-                (plan.second, plan.first, addresses[1]),
-            ):
-                await self._update_interface(
-                    nodes[end.port_id],
-                    address_id=address.id,
-                    description=f"{plan.label} {name} to {peer.device_name} {peer.port_name}",
-                    status=interface_status,
-                    mtu=plan.mtu,
+            # Every precondition holds - the writes start here. The instance comes first and its device locks are held
+            # until the addresses are saved: the transforms refuse a session in a VRF its device lacks, and a pruning
+            # pass must not see the instance without its demand.
+            needs = {end.device_id: {plan.namespace} for end in (plan.first, plan.second)} if plan.namespace else {}
+            async with self.vrfs_held(needs):
+                prefix = await self.client.allocate_next_ip_prefix(
+                    resource_pool=pool,
+                    identifier=f"vc-p2p__{circuit['id']}",
+                    prefix_length=plan.prefix_length,
+                    member_type="address",
+                    data={"role": "technical", "is_pool": True, "description": f"{plan.label} {name}"},
                 )
-                self.logger.info(f"  {end.label} = {address.address.value}")
+                if prefix is None:
+                    self.fail(f"{name}: pool '{plan.pool_name}' returned no prefix - exhausted?")
+                # Owned by this circuit. allocate_next_ip_prefix() is a pool mutation, not a save(), so the prefix joins
+                # the run's tracking group only here.
+                self.client.group_context.related_node_ids.append(prefix.id)
+                self.logger.info(f"  {plan.label} prefix {prefix.prefix.value} for {name}")
+
+                addresses = await self.upsert_p2p_addresses(prefix, description=f"{plan.label} {name}")
+                interface_status = _INTERFACE_STATUS_FOR_CIRCUIT.get(status, "provisioning")
+                for end, peer, address in (
+                    (plan.first, plan.second, addresses[0]),
+                    (plan.second, plan.first, addresses[1]),
+                ):
+                    await self._update_interface(
+                        nodes[end.port_id],
+                        address_id=address.id,
+                        description=f"{plan.label} {name} to {peer.device_name} {peer.port_name}",
+                        status=interface_status,
+                        mtu=plan.mtu,
+                    )
+                    self.logger.info(f"  {end.label} = {address.address.value}")
 
             password_id = plan.password_id
             if plan.key_name:

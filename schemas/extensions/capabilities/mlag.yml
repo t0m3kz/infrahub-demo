@@ -33,11 +33,11 @@ nodes:
       - name__value
     relationships:
       # Re-declares the generic's `capabilities` (same name, peer, kind, direction and
-      # identifier) to cap it at exactly two peer devices.
+      # identifier) to cap it at exactly two member devices.
       - name: capabilities
         peer: DcimCapabilities
-        label: "Peer Devices"
-        description: "The two peer devices of this MLAG domain"
+        label: "Member Devices"
+        description: "The two member devices of this MLAG domain"
         cardinality: many
         kind: Generic
         optional: false
@@ -47,6 +47,14 @@ nodes:
         identifier: capabilities
         order_weight: 1000
     attributes:
+      - name: peer_devices
+        kind: Text
+        label: "Peer Devices"
+        description: "The two member device names, sorted and comma-joined; unique, so a peer pair has one domain"
+        optional: false
+        unique: true
+        read_only: false
+        order_weight: 1050
       - name: domain_id
         kind: Number
         label: "Domain ID"

@@ -22,6 +22,7 @@ from tests.smoke.fixture_builders.group_policy import (
     build_gpo_device_data,
     gpo_segment,
 )
+from tests.smoke.fixture_builders.vrf import with_vrf_objects
 from tests.unit.gpo_device_view_helpers import (
     LEAF_ACTIVATIONS,
     LEAF_SEGMENTS,
@@ -678,7 +679,7 @@ class TestHostTrunks:
         get_interfaces spy of that one call."""
         transform = Leaf.__new__(Leaf)
         transform.root_directory = str(root_dir)
-        device, roots, platform = transform._device_and_platform(copy.deepcopy(raw))
+        device, roots, platform = transform._device_and_platform(with_vrf_objects(transform, raw))
         device["segment_deployments"] = transform._device_activations(device)
         with patch("transforms.common.get_interfaces", wraps=get_interfaces) as spy:
             return transform._template_context(device, platform or "", roots), spy

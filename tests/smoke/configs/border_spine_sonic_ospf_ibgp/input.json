@@ -411,6 +411,31 @@
                     }
                   }
                 }
+              },
+              {
+                "node": {
+                  "__typename": "ManagedVRF",
+                  "id": "vrf-dc1-border-spine-01-VRF_A",
+                  "name": {
+                    "value": "dc1-border-spine-01-vrf-vrf_a"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "namespace": {
+                    "node": {
+                      "name": {
+                        "value": "VRF_A"
+                      },
+                      "l3_vni": {
+                        "value": 50001
+                      },
+                      "namespace_type": {
+                        "value": "prod"
+                      }
+                    }
+                  }
+                }
               }
             ]
           },
@@ -968,6 +993,66 @@
                         }
                       }
                     ]
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimVirtualInterface",
+                  "name": {
+                    "value": "Vlan100"
+                  },
+                  "description": {
+                    "value": ""
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "svi"
+                  },
+                  "ip_address": {
+                    "node": null
+                  },
+                  "vrf": {
+                    "node": {
+                      "namespace": {
+                        "node": {
+                          "name": {
+                            "value": "VRF_A"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "capabilities": {
+                    "edges": []
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimVirtualInterface",
+                  "name": {
+                    "value": "Vlan200"
+                  },
+                  "description": {
+                    "value": ""
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "svi"
+                  },
+                  "ip_address": {
+                    "node": null
+                  },
+                  "vrf": {
+                    "node": null
+                  },
+                  "capabilities": {
+                    "edges": []
                   }
                 }
               }

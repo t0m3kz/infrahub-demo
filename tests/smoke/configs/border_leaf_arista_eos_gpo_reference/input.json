@@ -725,6 +725,56 @@
                     ]
                   }
                 }
+              },
+              {
+                "node": {
+                  "__typename": "ManagedVRF",
+                  "id": "vrf-dc1-border-leaf-01-NONPROD",
+                  "name": {
+                    "value": "dc1-border-leaf-01-vrf-nonprod"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "namespace": {
+                    "node": {
+                      "name": {
+                        "value": "NONPROD"
+                      },
+                      "l3_vni": {
+                        "value": 50011
+                      },
+                      "namespace_type": {
+                        "value": "non_prod"
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "ManagedVRF",
+                  "id": "vrf-dc1-border-leaf-01-PROD",
+                  "name": {
+                    "value": "dc1-border-leaf-01-vrf-prod"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "namespace": {
+                    "node": {
+                      "name": {
+                        "value": "PROD"
+                      },
+                      "l3_vni": {
+                        "value": 50012
+                      },
+                      "namespace_type": {
+                        "value": "prod"
+                      }
+                    }
+                  }
+                }
               }
             ]
           },
@@ -1385,6 +1435,176 @@
                         }
                       }
                     ]
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimVirtualInterface",
+                  "name": {
+                    "value": "Vlan110"
+                  },
+                  "description": {
+                    "value": ""
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "svi"
+                  },
+                  "ip_address": {
+                    "node": null
+                  },
+                  "vrf": {
+                    "node": {
+                      "namespace": {
+                        "node": {
+                          "name": {
+                            "value": "NONPROD"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "capabilities": {
+                    "edges": []
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimVirtualInterface",
+                  "name": {
+                    "value": "Vlan120"
+                  },
+                  "description": {
+                    "value": ""
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "svi"
+                  },
+                  "ip_address": {
+                    "node": null
+                  },
+                  "vrf": {
+                    "node": {
+                      "namespace": {
+                        "node": {
+                          "name": {
+                            "value": "NONPROD"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "capabilities": {
+                    "edges": []
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimVirtualInterface",
+                  "name": {
+                    "value": "Vlan130"
+                  },
+                  "description": {
+                    "value": ""
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "svi"
+                  },
+                  "ip_address": {
+                    "node": null
+                  },
+                  "vrf": {
+                    "node": {
+                      "namespace": {
+                        "node": {
+                          "name": {
+                            "value": "NONPROD"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "capabilities": {
+                    "edges": []
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimVirtualInterface",
+                  "name": {
+                    "value": "Vlan210"
+                  },
+                  "description": {
+                    "value": ""
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "svi"
+                  },
+                  "ip_address": {
+                    "node": null
+                  },
+                  "vrf": {
+                    "node": {
+                      "namespace": {
+                        "node": {
+                          "name": {
+                            "value": "PROD"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "capabilities": {
+                    "edges": []
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimVirtualInterface",
+                  "name": {
+                    "value": "Vlan220"
+                  },
+                  "description": {
+                    "value": ""
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "svi"
+                  },
+                  "ip_address": {
+                    "node": null
+                  },
+                  "vrf": {
+                    "node": {
+                      "namespace": {
+                        "node": {
+                          "name": {
+                            "value": "PROD"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "capabilities": {
+                    "edges": []
                   }
                 }
               }

@@ -401,6 +401,8 @@ def _make_gen(world: _World) -> tuple[Any, list[str]]:
     gen.release_resource_lock = AsyncMock(side_effect=lambda lock_id: events.append("release"))
     gen.link_serving_context = AsyncMock()
     gen.set_controllers_from = MagicMock()
+    # The border devices' VRF instances follow the legs (tests/unit/test_customer_border_vrfs.py): not these tests'.
+    gen._reconcile_border_vrfs = AsyncMock()
     return gen, events
 
 

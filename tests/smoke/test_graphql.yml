@@ -284,14 +284,6 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
-    resource_name: vrf_namespace_data
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/topology/add/vrf_namespace.gql
-          kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
     resource_name: circuit_data
     tests:
       - name: syntax_check
@@ -547,6 +539,22 @@ infrahub_tests:
       - name: syntax_check
         spec:
           path: queries/validation/routing_tags.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: mlag_domains
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/mlag_domains.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: vrf_instances
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/vrf_instances.gql
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery

@@ -18,12 +18,15 @@ from typing import TYPE_CHECKING, Any
 from utils.data_cleaning import clean_data
 
 from ..firewall_context import FirewallContextMixin
+from ..helpers.vrf import VrfMixin
+from ..protocols import DcimInterface
+from ..vlan_domain import TAGGABLE_INTERFACE_KINDS
 
 if TYPE_CHECKING:
     from ..devices import DeviceMixin
 
 
-class CustomerFacilityMixin(FirewallContextMixin):
+class CustomerFacilityMixin(FirewallContextMixin, VrfMixin):
     """``generate()`` for a customer boarding generator on a facility with service pairs.
 
     The host class also mixes in PoolMixin, DeviceMixin and CablingMixin (see
@@ -46,6 +49,19 @@ class CustomerFacilityMixin(FirewallContextMixin):
         """
         parent = customer.get("parent")
         return [parent] if isinstance(parent, dict) and parent.get("id") else []
+
+    async def _reconcile_border_vrfs(self, context_id: str) -> None:
+        """Converge the VRF instances of the border devices whose service ports are tagged with the context.
+
+        A leg puts an address on the firewall or load balancer, never on the border leaf or edge: the border's demand
+        is the leg's namespace, read through the context tagged on its service port. The leg writes run under the
+        context's lock (``fw-context-*``/``lb-context-*``), which ``_ensure_transit_legs`` has released by now, and a
+        VRF lock is never taken under it; so the instance follows the leg, it does not precede it.
+        """
+        # One read on the generic: a service port is a physical port or a LAG; the context may also be tagged on the
+        # hosted firewall's sub-interfaces, whose devices carry no instance (TAGGABLE_INTERFACE_KINDS leaves them out).
+        ports = await self.client.filters(kind=DcimInterface, capabilities__ids=[context_id], include=["device"])
+        await self.reconcile_vrfs({port.device.id for port in ports if port.get_kind() in TAGGABLE_INTERFACE_KINDS})
 
     async def generate(self, data: dict[str, Any]) -> None:
         kind = self._customer_kind
@@ -113,6 +129,7 @@ class CustomerFacilityMixin(FirewallContextMixin):
                     complete = False
                 else:
                     served.append(context_id)
+                    await self._reconcile_border_vrfs(context_id)
             # A single serving link is replaced by link_serving_context; a many one is converged here. Only a run
             # that built every context it set out to may drop a link (a failed one raises under the generator
             # logger before this point).

@@ -13,6 +13,8 @@
 #     only — an inline DcimVirtualInterface sub-interface on a firewall/LB
 #     HA pair takes the facing border leaf's VLAN, it has no domain). role
 #     tells the customer-facing ports from the border-leaf service ports.
+#   - each row's vlan_domain: a device, or a ManagedMLAG with its member devices
+#     (the devices whose VRF instances and SVIs follow the rows).
 #   - stretch_scope + customer_deployments' hosting parents: a stretched
 #     segment's border gateways need it too (same shape as vxlan_segment.gql)
 query segment_vlan_domains($segment_id: ID!) {
@@ -84,7 +86,14 @@ query segment_vlan_domains($segment_id: ID!) {
             node {
               id
               vlan_id { value }
-              vlan_domain { node { id } }
+              vlan_domain {
+                node {
+                  id
+                  __typename
+                  # The devices of the domain, for the VRF pass (a domain is a device or a ManagedMLAG of two).
+                  ... on ManagedMLAG { capabilities { edges { node { id } } } }
+                }
+              }
             }
           }
         }

@@ -946,6 +946,31 @@
                     ]
                   }
                 }
+              },
+              {
+                "node": {
+                  "__typename": "ManagedVRF",
+                  "id": "vrf-dc1-edge-01-INTERNET",
+                  "name": {
+                    "value": "dc1-edge-01-vrf-internet"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "namespace": {
+                    "node": {
+                      "name": {
+                        "value": "INTERNET"
+                      },
+                      "l3_vni": {
+                        "value": 60002
+                      },
+                      "namespace_type": {
+                        "value": "internet"
+                      }
+                    }
+                  }
+                }
               }
             ]
           },

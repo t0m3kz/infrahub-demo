@@ -66,6 +66,14 @@ def _inputs(**overrides: Any) -> LispInputs:
     return LispInputs(**values)
 
 
+_PROD = {"name": "PROD", "l3_vni": 50001, "namespace_type": "prod"}
+
+
+def _vrf_cap(namespace: dict[str, Any]) -> dict[str, Any]:
+    """A ManagedVRF instance of the device, as the cleaned config query returns it."""
+    return {"typename": "ManagedVRF", "name": f"dev-vrf-{namespace['name'].lower()}", "namespace": namespace}
+
+
 def _activation(
     vlan_id: int = 100,
     vni: int | None = 10100,
@@ -88,6 +96,7 @@ def _device() -> dict[str, Any]:
             {"name": "Loopback0", "role": "loopback", "ip_address": {"address": "10.0.0.1/32"}},
             {"name": "Ethernet1", "role": "uplink"},
         ],
+        "capabilities": [_vrf_cap(_PROD)],
     }
 
 
@@ -111,7 +120,7 @@ def _office_data(role: str, platform: str = "cisco_xe") -> dict[str, Any]:
         "role": role,
         "platform": {"name": platform},
         "interfaces": [],
-        "capabilities": [],
+        "capabilities": [_vrf_cap(_PROD)],
         "deployment": deployment,
     }
 
@@ -251,7 +260,7 @@ class TestLispContext:
         assert config["site"] is None
 
     def test_prefixes_are_grouped_per_vrf_deduplicated_and_sorted(self) -> None:
-        other = {"name": "DEV", "l3_vni": 50002}
+        other = {"name": "DEV", "l3_vni": 50002, "namespace_type": "non_prod"}
         activations = [
             _activation(100, 10100, "10.1.1.1/24"),
             _activation(101, 10101, "10.1.0.1/24"),
@@ -259,7 +268,9 @@ class TestLispContext:
             _activation(103, 10103, "10.9.0.1/24", namespace=other),
         ]
 
-        config = get_lisp_config(_device(), "access-switch", activations, _inputs())
+        device = _device()
+        device["capabilities"].append(_vrf_cap(other))
+        config = get_lisp_config(device, "access-switch", activations, _inputs())
 
         assert config is not None
         assert {l3["vrf"]: l3["prefixes"] for l3 in config["l3_instances"]} == {

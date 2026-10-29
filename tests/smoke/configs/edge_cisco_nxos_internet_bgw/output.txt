@@ -170,11 +170,11 @@ evpn
 !
 ! L3 VNI Transit SVIs (symmetric IRB — no host addressing, forwarding only)
 !
-vlan 3900
+vlan 3902
   name L3VNI_INTERNET
   vn-segment 60002
 !
-interface Vlan3900
+interface Vlan3902
   description L3VNI transit SVI for VRF INTERNET
   vrf member INTERNET
   ip forward

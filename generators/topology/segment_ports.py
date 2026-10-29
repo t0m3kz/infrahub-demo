@@ -13,6 +13,18 @@ them, so the same reconcile runs from both directions that change the answer:
 
 Writes RelationshipAdd/RelationshipRemove on the segment's ``capabilities``
 only, untracked: a tagged port belongs to the device's generator, not to a run.
+
+The rows decide which switches route the segment, so the same reconcile ends with the VRF instances and SVIs of every
+switch of every VLAN domain the segment's rows were on before or are on after (a switch that lost its row included):
+generators/helpers/vrf.py, inside the segment lock (lock order: segment, then the device locks).
+
+A deleted segment is not reconciled (nothing to read its rows from, and no trigger runs on a delete). Its rows and
+SVIs go by the schema's cascade, not by this code: ``SegmentDeployment.vlan_domain_segments`` is ``on_delete: cascade``
+and so is the row's ``svis``; whether the server also removes the deployment with the segment is not proven (its
+``segment`` is a mandatory attribute-kind relationship with no cascade of its own). What can linger converges later:
+the next ``reconcile_vrfs`` of each switch (any segment, circuit or context run that touches it) deletes an SVI whose
+row is no longer routed (role ``svi`` and not desired) and then the instance with no demand left, in the same pass;
+until then checks/vrf_instances.py reports the instance as a WARNING.
 """
 
 from __future__ import annotations
@@ -24,6 +36,7 @@ from utils.app_instances import physical_host
 from utils.data_cleaning import clean_data
 
 from ..far_end import far_end_interfaces
+from ..helpers.vrf import VrfMixin
 from ..protocols import DcimPhysicalInterface, ManagedVxlanSegment
 from ..vlan_domain import VlanDomainMixin, segment_lock_key
 from .endpoint import ENDPOINT_NIC_ROLES
@@ -31,14 +44,15 @@ from .endpoint import ENDPOINT_NIC_ROLES
 _SEGMENT_COMPONENTS_QUERY_PATH = Path(__file__).resolve().parents[2] / "queries/topology/add/segment_components.gql"
 
 
-class SegmentPortTagMixin(VlanDomainMixin):
-    """Mixin providing the segment's port tags and, for a VXLAN segment, its VLAN rows.
+class SegmentPortTagMixin(VrfMixin, VlanDomainMixin):
+    """Mixin providing the segment's port tags and, for a VXLAN segment, its VLAN rows and what routes on them.
 
     Expects the host class to provide what VlanDomainMixin does.
     """
 
     async def reconcile_vxlan_segment(self, segment_id: str, segment_name: str) -> tuple[int, int] | None:
-        """Tag the segment's ports from its components, then reconcile its VLAN rows, under the segment lock.
+        """Tag the segment's ports from its components, reconcile its VLAN rows, then the VRFs and SVIs of the
+        switches they touch, under the segment lock.
 
         Returns (ports tagged, ports untagged); None when the segment is gone or is no VXLAN segment.
         """
@@ -53,8 +67,26 @@ class SegmentPortTagMixin(VlanDomainMixin):
             )
             if added or removed:
                 state = await self._fetch_segment_vlan_state(segment_id)
-            await self._reconcile_segment_vlan_domains_locked(segment_id, segment_name, state)
+            before = self._row_device_ids(state)
+            if await self._reconcile_segment_vlan_domains_locked(segment_id, segment_name, state):
+                state = await self._fetch_segment_vlan_state(segment_id)
+            await self.reconcile_vrfs(before | self._row_device_ids(state))
         return added, removed
+
+    @staticmethod
+    def _row_device_ids(state: dict[str, Any] | None) -> set[str]:
+        """The devices of the VLAN domains the segment has a row on, whatever deployment the row sits under.
+
+        A domain is a device or a ``ManagedMLAG`` of two (utils/vlan_domain.py); the query returns its devices with
+        the row (segment_vlan_domains.gql), so no read follows.
+        """
+        state = state or {}
+        return {
+            device_id
+            for item in state.get("deployments", [])
+            for domain_id in item["rows"]
+            for device_id in state.get("domain_devices", {}).get(domain_id, [])
+        }
 
     async def _segment_components(self, segment_id: str) -> list[dict[str, Any]]:
         """Every AppComponent on the segment, with its instances (segment_components.gql)."""

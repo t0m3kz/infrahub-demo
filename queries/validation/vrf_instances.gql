@@ -1,0 +1,125 @@
+# The VRF facts of every device (or of $device_ids): what it routes in, the ManagedVRF instances it has and its
+# segment SVIs. One query for two readers that must agree, read through ONE gatherer
+# (utils/vrf_demand.py device_vrf_facts):
+#   - checks/vrf_instances.py (registered, no variables: every device);
+#   - generators/helpers/vrf.py (executed by path with $device_ids: the devices a run touched).
+# Self-contained: its two fragments are defined in this file (no repository fragment), because the generator
+# executes the file text as is.
+#   - IpamNamespace: the four environment namespaces, by name (an instance is created by namespace id).
+#   - member_of_groups / deployment: a provider stub or a device of a cloud region or an external provider is a
+#     party device and never carries an instance (utils/vrf_demand.py carries_vrfs).
+#   - vlan_domain_segments: the rows of the device's VLAN domain, its own or its MLAG's (utils/vlan_domain.py), with
+#     the segment's gateway namespace: a routed row needs the namespace and an SVI.
+#   - interfaces: the addresses of the device's own interfaces (their namespaces are demand; a BGP session's local
+#     address is one of them), its SVIs (role svi) with their VRF and row, and the firewall / load-balancer contexts
+#     tagged on its service ports with their legs.
+query vrf_instances($device_ids: [ID]) {
+  IpamNamespace {
+    edges {
+      node {
+        id
+        name { value }
+        l3_vni { value }
+        namespace_type { value }
+      }
+    }
+  }
+  DcimDevice(ids: $device_ids) {
+    edges {
+      node {
+        __typename
+        id
+        name { value }
+        role { value }
+        member_of_groups { edges { node { name { value } } } }
+        ... on DcimPhysicalDevice {
+          deployment { node { __typename id } }
+          vlan_domain_segments { edges { node { ...VrfDemandRowFields } } }
+        }
+        ... on DcimCapabilities {
+          capabilities {
+            edges {
+              node {
+                __typename
+                id
+                ... on ManagedVRF {
+                  name { value }
+                  namespace { node { name { value } l3_vni { value } namespace_type { value } } }
+                }
+                ... on ManagedMLAG {
+                  vlan_domain_segments { edges { node { ...VrfDemandRowFields } } }
+                }
+              }
+            }
+          }
+        }
+        interfaces {
+          edges {
+            node {
+              __typename
+              id
+              name { value }
+              role { value }
+              ... on DcimPhysicalInterface {
+                ip_address { node { address { value } ip_namespace { node { name { value } } } } }
+              }
+              ... on DcimLAGInterface {
+                ip_address { node { address { value } ip_namespace { node { name { value } } } } }
+              }
+              ... on DcimVirtualInterface {
+                ip_address { node { address { value } ip_namespace { node { name { value } } } } }
+                vrf { node { id namespace { node { name { value } } } } }
+                vlan_domain_segment { node { id } }
+              }
+              capabilities {
+                edges {
+                  node {
+                    __typename
+                    id
+                    ... on ManagedFirewallContext {
+                      vlan_id { value }
+                      capabilities { edges { node { ...VrfDemandLegFields } } }
+                    }
+                    ... on ManagedLoadbalancerContext {
+                      vlan_id { value }
+                      capabilities { edges { node { ...VrfDemandLegFields } } }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+# A row of the device's VLAN domain with its segment's gateway namespace (a routed row needs it and an SVI).
+fragment VrfDemandRowFields on ManagedVlanDomainSegment {
+  id
+  vlan_id { value }
+  segment_deployment {
+    node {
+      segment {
+        node {
+          __typename
+          id
+          ... on ManagedVxlanSegment {
+            name { value }
+            terminate_inline { value }
+          }
+          gateway { node { address { value } ip_prefix { node { ip_namespace { node { name { value } } } } } } }
+        }
+      }
+    }
+  }
+}
+
+# A leg of a firewall or load-balancer context: a member's sub-interface and its address namespace.
+fragment VrfDemandLegFields on DcimInterface {
+  device { node { role { value } } }
+  ... on DcimVirtualInterface {
+    ip_address { node { address { value } ip_namespace { node { name { value } namespace_type { value } } } } }
+  }
+}

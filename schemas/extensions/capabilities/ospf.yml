@@ -251,15 +251,6 @@ nodes:
         identifier: "ospfpeering__interface"
         order_weight: 3175
         description: "Interface-level OSPF configs participating in this peering (1-2 devices)"
-      - name: namespace
-        peer: IpamNamespace
-        label: "IP Namespace"
-        kind: Attribute
-        cardinality: one
-        optional: true
-        identifier: "ospfpeering__namespace"
-        order_weight: 3200
-        description: "IP namespace (VRF) for VRF-aware OSPF instances"
 
 extensions:
   nodes:

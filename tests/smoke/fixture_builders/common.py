@@ -10,6 +10,9 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+from tests.smoke.fixture_builders.vrf import with_vrf_objects
+from transforms.common import BaseDeviceTransform
+
 # ============================================================================
 # GraphQL response builders (raw format, before clean_data)
 # ============================================================================
@@ -301,7 +304,7 @@ def _make_segment_node(
     by the transform, so ``vlan_domain_id`` must match or no VXLAN is rendered.
 
     The VRF and its L3 VNI are reached ONLY via
-    ``gateway.ip_prefix.ip_namespace`` (see _get_segment_namespace and
+    ``gateway.ip_prefix.ip_namespace`` (see utils.segment_addressing.routed_segment_namespace and
     _get_segment_gateways in transforms/helpers/segments.py). A flat
     ``segment.prefix`` key — which this generator used to emit — is read by
     nothing, which is why no fixture ever rendered a VRF or an L3 VNI.
@@ -398,19 +401,22 @@ def _make_segment_deployment(**kwargs: Any) -> dict:
     }
 
 
-def run_transform(transform_cls: type, data: dict) -> str:
+def make_transform(transform_cls: type) -> Any:
+    """An instance of `transform_cls` with a mocked SDK client (no server), rooted at the repository."""
     mock_client = MagicMock()
     mock_client.clone.return_value = mock_client  # SDK clones client in __init__
     mock_client.schema = MagicMock()
     mock_client.schema.get = AsyncMock(return_value=MagicMock())
     mock_client.execute_graphql = AsyncMock(side_effect=Exception("no server"))
 
-    instance = transform_cls(
+    return transform_cls(
         client=mock_client,
         infrahub_node=MagicMock(),
         root_directory=str(PROJECT_ROOT),
     )
 
+
+def _render(instance: Any, data: dict) -> str:
     loop = asyncio.new_event_loop()
     try:
         return loop.run_until_complete(instance.transform(data))
@@ -418,10 +424,34 @@ def run_transform(transform_cls: type, data: dict) -> str:
         loop.close()
 
 
+def run_transform(transform_cls: type, data: dict) -> str:
+    """Render `data` with `transform_cls`; a device's config is given the VRF instances and SVIs it demands first.
+
+    The unit tests that build their own device data go through here too (the hook is idempotent).
+    """
+    instance = make_transform(transform_cls)
+    if isinstance(instance, BaseDeviceTransform):
+        data = with_vrf_objects(instance, data)
+    return _render(instance, data)
+
+
 def _write_data_fixture(transform_cls: type, dir_name: str, data: dict) -> tuple[int, int]:
-    """Write `data` as input.json and its rendered config as output.txt."""
+    """Write `data` as input.json and its rendered config as output.txt.
+
+    The one hook every writer goes through: a device that carries VRFs gets the ManagedVRF instances and SVI
+    objects its config demands appended to the input first (tests/smoke/fixture_builders/vrf.py), the way the
+    VRF generator leaves them in the model.
+    """
     test_dir = SMOKE_DIR / dir_name
     test_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        instance = make_transform(transform_cls)
+        if isinstance(instance, BaseDeviceTransform):
+            data = with_vrf_objects(instance, data)
+    except Exception as e:
+        print(f"  ✗ {dir_name}: {e}")
+        return 0, 1
 
     input_path = test_dir / "input.json"
     with open(input_path, "w") as f:
@@ -429,7 +459,7 @@ def _write_data_fixture(transform_cls: type, dir_name: str, data: dict) -> tuple
         f.write("\n")
 
     try:
-        output = run_transform(transform_cls, data)
+        output = _render(instance, data)
         with open(test_dir / "output.txt", "w") as f:
             # Match end-of-file-fixer's normalization (exactly one trailing
             # newline) so the pre-commit hook never re-touches this file.

@@ -28,4 +28,6 @@ def make_generator(cls: type[_T]) -> Any:
     # test_dc_firewall_lb.py): stub it out. setattr: not every generator built here mixes in PoolMixin.
     setattr(gen, "acquire_resource_lock", AsyncMock(return_value="lock-id"))  # noqa: B010
     setattr(gen, "release_resource_lock", AsyncMock())  # noqa: B010
+    # The border devices' VRF instances follow the legs (tests/unit/test_vrf_callers.py): not these tests'.
+    setattr(gen, "_reconcile_border_vrfs", AsyncMock())  # noqa: B010
     return gen

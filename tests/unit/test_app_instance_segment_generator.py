@@ -100,7 +100,10 @@ class TestGenerate:
             return_value={"segment": {"id": "seg-1", "capabilities": []}, "activations": {}}
         )
         gen._reconcile_segment_interface_tags = AsyncMock(return_value=(added, removed))
-        gen._reconcile_segment_vlan_domains_locked = AsyncMock()
+        gen._reconcile_segment_vlan_domains_locked = AsyncMock(return_value=False)
+        # The VRF pass over the domains' devices has its own tests (test_vrf_callers.py).
+        gen.reconcile_vrfs = AsyncMock()
+        gen._domain_member_device_ids = AsyncMock(return_value=[])
         return gen
 
     def test_no_component_data_logs_error_and_returns(self) -> None:

@@ -11,6 +11,20 @@ from utils.segment_addressing import segment_prefix
 DEFAULT_ROUTE = "0.0.0.0/0"
 
 
+def _default_vr_interfaces(fw_interfaces: list[dict[str, Any]]) -> list[str]:
+    """Names of the L3 interfaces (those with a namespace) that belong to the single ``default`` virtual router.
+
+    Includes the inline-terminated ones that have no static route (``get_firewall_static_routes`` skips them).
+    """
+    return sorted(
+        {
+            i["name"]
+            for i in fw_interfaces
+            if i.get("name") and ((i.get("ip_address") or {}).get("ip_namespace") or {}).get("name")
+        }
+    )
+
+
 def _build_fw_interfaces(
     interfaces: list[dict[str, Any]],
     activations: list[dict[str, Any]],
@@ -247,6 +261,7 @@ class Firewall(BaseDeviceTransform):
                 "zones": zones,
                 "zone_policies": get_zone_policies(root_policies_data),
                 "static_routes": get_firewall_static_routes(fw_interfaces, zones),
+                "default_vr_interfaces": [] if contexts else _default_vr_interfaces(fw_interfaces),
                 "ha": ha,
                 "contexts": contexts,
             }

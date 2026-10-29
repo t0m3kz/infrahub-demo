@@ -33,10 +33,10 @@ from transforms.helpers.overlay import (
     build_overlay_node,
     select_locator,
 )
+from transforms.helpers.vrf import device_vrfs
 from transforms.helpers.vxlan import (
     _DEFAULT_ANYCAST_GATEWAY_MAC,
     EvpnInputs,
-    _internet_session_namespaces,
     _is_bgw,
     build_evpn_inputs,
     evpn_vxlan_context,
@@ -48,7 +48,7 @@ _MODEL_CLASSES = (Locator, AnycastGateway, L2Instance, L3Instance, OverlayNode)
 # so `address` or `arp_suppression` are fine but `rt_anchor` / `local_asn` / `rd_format` are not.
 _CONTROL_PLANE_TOKENS = {"rt", "rd", "asn", "as", "evpn", "bgp", "capabilities", "capability", "peering", "peerings"}
 _INTERNET_NS = {"name": "INTERNET", "l3_vni": 60002, "namespace_type": "internet"}
-_PROD_NS = {"name": "PROD", "l3_vni": 50001}
+_PROD_NS = {"name": "PROD", "l3_vni": 50001, "namespace_type": "prod"}
 
 
 def _tokens(name: str) -> set[str]:
@@ -91,6 +91,11 @@ def _bgp_cap(asn: int = 4245880501, router_id: str = "10.0.0.7/32", role: str = 
     }
 
 
+def _vrf_cap(namespace: dict[str, Any]) -> dict[str, Any]:
+    """A ManagedVRF instance of the device, as the cleaned config query returns it."""
+    return {"typename": "ManagedVRF", "name": f"dev-vrf-{namespace['name'].lower()}", "namespace": namespace}
+
+
 def _leaf(capabilities: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     return {
         "name": "dc1-leaf-1",
@@ -98,7 +103,7 @@ def _leaf(capabilities: list[dict[str, Any]] | None = None) -> dict[str, Any]:
             {"name": "Loopback0", "role": "loopback", "ip_address": {"address": "10.0.0.1/32"}},
             {"name": "Ethernet1", "role": "uplink"},
         ],
-        "capabilities": [_bgp_cap()] if capabilities is None else capabilities,
+        "capabilities": [_bgp_cap(), _vrf_cap(_PROD_NS)] if capabilities is None else capabilities,
     }
 
 
@@ -146,7 +151,11 @@ def _bgw_edge() -> dict[str, Any]:
             {"name": "Ethernet1/1", "role": "uplink"},
             {"name": "loopback100", "role": "multisite-vip", "ip_address": {"address": "fd00:1ff::1/128"}},
         ],
-        "capabilities": [{"typename": "ManagedBGP", "name": "bgp", "peerings": [_transit_peering()]}],
+        "capabilities": [
+            {"typename": "ManagedBGP", "name": "bgp", "peerings": [_transit_peering()]},
+            _vrf_cap(_INTERNET_NS),
+            _vrf_cap(_PROD_NS),
+        ],
     }
 
 
@@ -169,9 +178,14 @@ def _compose(
     mac: str | None,
 ) -> dict | None:
     """The documented composition get_vxlan_config is a thin wrapper around."""
-    default_exit = _internet_session_namespaces(data) if _is_bgw(data, fabric_rt_asn) else []
+    vrfs = device_vrfs(data)
+    exits = (
+        frozenset(ns["name"] for ns in vrfs if ns["namespace_type"] == "internet")
+        if _is_bgw(data, fabric_rt_asn)
+        else frozenset()
+    )
     node = build_overlay_node(
-        data["interfaces"], role, activations or [], default_exit, mac or _DEFAULT_ANYCAST_GATEWAY_MAC
+        data["interfaces"], role, activations or [], vrfs, exits, mac or _DEFAULT_ANYCAST_GATEWAY_MAC
     )
     if node is None:
         return None
@@ -261,7 +275,8 @@ class TestBuildOverlayNode:
             "interfaces": _leaf()["interfaces"],
             "device_role": "leaf",
             "activations": _leaf_activations(),
-            "default_exit_namespaces": [],
+            "vrfs": [_PROD_NS],
+            "exits": frozenset(),
             "anycast_mac": "00:00:22:22:33:33",
         }
         kwargs.update(overrides)
@@ -287,19 +302,53 @@ class TestBuildOverlayNode:
         assert [i.stretched for i in node.l2] == [False, False, True]
 
     def test_l3_instances_are_per_vrf_and_flag_the_default_exit(self) -> None:
-        node = self._build(default_exit_namespaces=[_INTERNET_NS])
+        node = self._build(vrfs=[_PROD_NS, _INTERNET_NS], exits=frozenset({"INTERNET"}))
         assert node is not None
         assert [(i.vrf, i.instance_id, i.default_exit) for i in node.l3] == [
             ("INTERNET", 60002, True),
             ("PROD", 50001, False),
         ]
-        assert [i.svi_vlan_id for i in node.l3] == [3900, 3901]
+
+    def test_l3_svi_vlan_is_the_fixed_slot_of_the_namespace_type(self) -> None:
+        """A VRF keeps its VLAN whatever else the device carries (3900 + TRANSIT_SLOT)."""
+        both = self._build(vrfs=[_PROD_NS, _INTERNET_NS], exits=frozenset({"INTERNET"}))
+        only_internet = self._build(activations=[], vrfs=[_INTERNET_NS], exits=frozenset({"INTERNET"}))
+        assert both is not None and only_internet is not None
+        assert {i.vrf: i.svi_vlan_id for i in both.l3} == {"INTERNET": 3902, "PROD": 3900}
+        assert [i.svi_vlan_id for i in only_internet.l3] == [3902]
+
+    def test_a_namespace_type_without_a_slot_has_no_svi_vlan(self, caplog: pytest.LogCaptureFixture) -> None:
+        odd = {"name": "ODD", "l3_vni": 50009, "namespace_type": "lab"}
+        activation = _activation(100, 10100, _segment(name="web", gateway="10.0.100.1/24", namespace=odd))
+        node = self._build(activations=[activation], vrfs=[odd])
+        assert node is not None
+        assert [(i.vrf, i.svi_vlan_id) for i in node.l3] == [("ODD", None)]
+        assert "no L3 VNI SVI slot" in caplog.text
 
     def test_default_exit_alone_is_enough_to_have_an_overlay(self) -> None:
-        node = self._build(activations=[], default_exit_namespaces=[_INTERNET_NS])
+        node = self._build(activations=[], vrfs=[_INTERNET_NS], exits=frozenset({"INTERNET"}))
         assert node is not None
         assert node.l2 == ()
         assert [i.vrf for i in node.l3] == ["INTERNET"]
+
+    def test_an_instance_without_a_routed_activation_or_exit_stays_vrf_lite(self) -> None:
+        """The realization rule: the INTERNET instance of an edge with an overlay process is not an L3 instance."""
+        node = self._build(vrfs=[_PROD_NS, _INTERNET_NS])
+        assert node is not None
+        assert [i.vrf for i in node.l3] == ["PROD"]
+
+    def test_an_activation_in_a_namespace_with_no_instance_is_not_an_l3_instance(self) -> None:
+        """The device's VRF set is its instances only (the transform refuses the missing one before this)."""
+        node = self._build(vrfs=[])
+        assert node is not None
+        assert node.l3 == ()
+
+    def test_the_default_namespace_and_a_namespace_without_l3_vni_are_never_l3_instances(self) -> None:
+        no_vni = {"name": "NOVNI", "l3_vni": None, "namespace_type": "prod"}
+        default = {"name": "default", "l3_vni": 1, "namespace_type": "prod"}
+        node = self._build(vrfs=[no_vni, default], exits=frozenset({"NOVNI", "default"}))
+        assert node is not None
+        assert node.l3 == ()
 
     def test_locator_prefers_the_dedicated_vtep_loopback(self) -> None:
         node = self._build(interfaces=_bgw_edge()["interfaces"], device_role="edge")
@@ -437,7 +486,9 @@ class TestPurity:
 
     def test_evpn_context_mutates_neither_the_model_nor_its_inputs_and_is_repeatable(self) -> None:
         data, activations = _leaf(), _leaf_activations()
-        node = build_overlay_node(data["interfaces"], "leaf", activations, [], _DEFAULT_ANYCAST_GATEWAY_MAC)
+        node = build_overlay_node(
+            data["interfaces"], "leaf", activations, device_vrfs(data), frozenset(), _DEFAULT_ANYCAST_GATEWAY_MAC
+        )
         inputs = build_evpn_inputs(data, activations, 65100)
         assert node is not None
         node_before, inputs_before = copy.deepcopy(node), copy.deepcopy(inputs)
@@ -455,7 +506,9 @@ class TestPurity:
         assert second["l2_vni_mappings"][0]["vni"] == 10100
 
     def test_model_instances_cannot_be_reassigned(self) -> None:
-        node = build_overlay_node(_leaf()["interfaces"], "leaf", _leaf_activations(), [], "00:00:22:22:33:33")
+        node = build_overlay_node(
+            _leaf()["interfaces"], "leaf", _leaf_activations(), [_PROD_NS], frozenset(), "00:00:22:22:33:33"
+        )
         assert node is not None
         with pytest.raises(dataclasses.FrozenInstanceError):
             setattr(node, "role", "spine")  # noqa: B010

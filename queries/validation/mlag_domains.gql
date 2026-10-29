@@ -1,0 +1,23 @@
+# validate_mlag_domains (checks/mlag_domains.py): every MLAG domain with its member
+# devices (the `capabilities` edge) and its `peer_devices` mirror, to check that a device
+# is in at most one domain, that a domain has exactly two distinct members and that
+# `peer_devices` names them.
+query mlag_domains {
+  ManagedMLAG {
+    edges {
+      node {
+        id
+        name { value }
+        peer_devices { value }
+        capabilities {
+          edges {
+            node {
+              id
+              name { value }
+            }
+          }
+        }
+      }
+    }
+  }
+}

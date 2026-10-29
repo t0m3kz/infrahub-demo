@@ -15,6 +15,10 @@ every device). Every producer sets it at device creation, before any circuit nam
 reported by checks/circuit_placement.py, and a re-run of this generator adds a deployment that was missing but never
 moves a derived location.
 
+The end devices' VRF instances (generators/helpers/vrf.py) are converged as well: a physical port's address in a
+non-default namespace (the INTERNET address of a cage edge, authored in data) demands an instance, and this is the
+generator that runs on the circuit loaded right after it.
+
 The derived locations are written untracked: the circuit is the run's target, not its output (tracked, the cleanup
 could delete it). Nothing else is written.
 
@@ -44,6 +48,8 @@ from utils.circuit_underlay import session_circuits_on
 from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator
+from ..helpers.vrf import VrfMixin
+from ..pools import PoolMixin
 from ..protocols import DcimVirtualInterface, TopologyPhysicalCircuit
 
 PHYSICAL_CIRCUIT_GENERATOR = "add_circuit"
@@ -100,6 +106,7 @@ class CircuitEndpoint:
     device_name: str
     # The device's deployment, whatever its kind; None when it has none.
     deployment: CircuitLocation | None
+    device_id: str = ""
 
     @property
     def label(self) -> str:
@@ -116,6 +123,7 @@ class CircuitEndpoint:
             interface_name=interface.get("name") or "?",
             device_name=device.get("name") or "?",
             deployment=CircuitLocation.parse(device.get("deployment")),
+            device_id=device.get("id") or "",
         )
 
 
@@ -165,7 +173,7 @@ def plan_locations(
     return missing, None
 
 
-class PhysicalCircuitGenerator(CommonGenerator):
+class PhysicalCircuitGenerator(PoolMixin, VrfMixin, CommonGenerator):
     """add_circuit — a TopologyPhysicalCircuit's derived facility locations."""
 
     client: Any
@@ -190,6 +198,9 @@ class PhysicalCircuitGenerator(CommonGenerator):
             return
 
         await self._add_locations(circuit["id"], circuit_name, missing_locations)
+        # The INTERNET addresses of a cage edge are authored data, loaded just before the circuit they ride: this run
+        # is the one that sees them, so it converges the end devices' VRF instances (nothing else writes them).
+        await self.reconcile_vrfs({endpoint.device_id for endpoint in endpoints if endpoint.device_id})
         await self._fan_out_sessions(endpoints, circuit_name)
         self.logger.info(f"Physical circuit {circuit_name} — completed")
 

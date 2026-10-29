@@ -121,6 +121,11 @@
 {%- set evpn_key = vrf ~ '|l2vpn_evpn' -%}
 {%- set evpn_entry = dict(bgp_globals_af.get(evpn_key) or {}) -%}
 {%- set _ = evpn_entry.update({'admin_status': 'true', 'advertise-ipv4-unicast': 'true'}) -%}
+{#- The explicit EVPN route-distinguisher (frrcfgd BGP_GLOBALS_AF `route-distinguisher`, evidence in sonic_vxlan.j2);
+    omitted when the device has no overlay router-id. -#}
+{%- if vxlan.evpn and vxlan.evpn.rd_format -%}
+{%- set _ = evpn_entry.update({'route-distinguisher': vxlan.evpn.rd_format | replace('{vni}', mapping.l3_vni | string)}) -%}
+{%- endif -%}
 {%- if has_ipv6 -%}
 {%- set _ = evpn_entry.update({'advertise-ipv6-unicast': 'true'}) -%}
 {%- endif -%}

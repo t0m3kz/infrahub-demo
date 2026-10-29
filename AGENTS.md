@@ -239,7 +239,7 @@ class MyCheck(InfrahubCheck):
 
 | Namespace | Holds |
 | --------- | ----- |
-| Managed | On-prem services and the shared generics `ManagedGeneric` (name, description, status), `ManagedGenericDevice` (the device `capabilities` edge), `ManagedGenericInterfaces` (the interface-side `capabilities` edge; its identifier stays `interface_capabilities`), `ManagedNetworkSegment` and `ManagedLoadBalancer` |
+| Managed | On-prem services and the shared generics `ManagedGeneric` (name, description, status), `ManagedGenericDevice` (the device `capabilities` edge), `ManagedGenericInterfaces` (the interface-side `capabilities` edge; its identifier stays `interface_capabilities`), `ManagedNetworkSegment` and `ManagedLoadBalancer`, and the per-device `ManagedVRF` (a device's VRF instance) |
 | Cloud | Provider-hosted resources (public cloud and provider-hosted network services); every resource inherits `CloudResource`, except `CloudNetworkAppliance`, a provider-hosted network function (Equinix Network Edge) that inherits the device generics (`DcimDevice`, `DcimCapabilities`) so its interfaces, BGP and HA stay device-shaped |
 | Topology | Deployments (`TopologyDataCenter`, `TopologyPod`, `TopologyColocationMetro`, ...), design elements, circuits (`TopologyPhysicalCircuit` and the virtual-circuit kinds `TopologyTunnelCircuit`, `TopologyInterconnectCircuit`, `TopologyHandoffCircuit`) and the tenant footprints `TopologyCustomer*` |
 | Dcim, Ipam, Location, Organization | Devices/interfaces/cables, prefixes/addresses/namespaces, geography, providers/customers |
@@ -410,7 +410,41 @@ class MyCheck(InfrahubCheck):
   assigned by hand is removed unless an `AppComponent` instance lands on it; a segment with no component keeps the ports
   it has. A switch with no deployment of the segment, or a domain with devices in two deployments, is a WARNING and its
   rows are left alone (the next run converges once the deployment exists). The rows are untracked and their deployment
-  tracked: a deployment that is not re-saved by its run is deleted with its rows.
+  tracked: a deployment that is not re-saved by its run is deleted with its rows. A routed row (a gateway, not
+  `terminate_inline`) is realized on each VRF-carrying switch of its domain as an SVI: a `DcimVirtualInterface` with role
+  `svi` named `Vlan<vlan_id>`, a Component of the row (`svis`, `on_delete: cascade`), with no address (the anycast
+  gateway is `segment.gateway`) and with `vrf` pointing at the device's `ManagedVRF`; the SVI is not a port.
+  `generators/helpers/svi.py` writes it in the VRF pass of the segment reconcile, upserted by (device, `Vlan<id>`), and
+  the transform renders `vrf member` from it. The L3 VNI SVI (`ip forward`, `3900 + TRANSIT_SLOT[namespace_type]`,
+  `utils/exchange_transit.py` `l3vni_svi_vlan`) and the transit-leg SVIs of the firewall and load-balancer contexts stay
+  derived, not objects.
+- **VRF instances (`ManagedVRF`)**: one per (device, namespace), named `{device}-vrf-{namespace lower}`, linked to the
+  device through `capabilities` and to its `IpamNamespace` through `namespace`; nothing else is stored (RD, RT, L3 VNI,
+  SVI VLAN and EVPN vs VRF-lite are derived). Demand-driven, never pre-provisioned: a device has an instance exactly for
+  the non-`default` namespaces it routes in (`utils/vrf_demand.py`, the one derivation): the gateway namespace of each
+  routed row of its VLAN domain, its SVIs' VRFs, the namespaces of the addresses on its own interfaces (handoff /31s, WAN
+  exit sub-interfaces, an upstream transit address) and the legs of the contexts tagged on its border service ports.
+  Only our routing devices carry one (`carries_vrfs`: leaf, tor, access-leaf, border-leaf, border-spine, edge,
+  access-switch, distribution-switch, physical or a `CloudNetworkAppliance`): never a spine, an L2 leaf, a firewall or a
+  load balancer (their VRF is the context), a controller, or a party's device (a provider stub, a device of a cloud
+  region or an external provider). `generators/helpers/vrf.py` is the only writer (untracked, a lock per device after
+  the segment lock and never under a context lock): the segment reconcile, the context legs (`customer_facility`),
+  `add_virtual_circuit`, the office WAN exit and `add_circuit` (the data-authored internet addresses of the cage edges)
+  call it; it creates before the dependent write and deletes only when no demand remains (after the SVIs), because on
+  NX-OS `no vrf context` moves the member addresses to the default table. A device's VRF set in the transforms is its
+  instances; one is realized as an L3 VNI (LISP instance-id) when it has an SVI on the device or is its default exit (a
+  border gateway's INTERNET, an office border's WAN exit), else VRF-lite. A routed segment, SVI, address, session or leg
+  in a namespace the device has no instance of raises `VrfRealizationError` (a hosted `CloudNetworkAppliance` on
+  cisco_ios/cisco_xe renders a `VRF-UNREALIZED` banner and logs a WARNING instead). A caller writes the dependent
+  address inside `vrfs_held(needs)`, which ensures the instances and keeps the device locks (not re-entrant) until the
+  write is done, so a concurrent pruning pass cannot delete a fresh instance. An SVI is never written over an interface
+  of another role: a desired `Vlan<id>` whose name is taken (the MLAG `Vlan4094`, a hand-made VlanN) is skipped with a
+  WARNING. Accepted gaps, converged by the next `reconcile_vrfs` of the device (any segment, circuit or context run that
+  touches it) and meanwhile reported by `checks/vrf_instances.py` as an instance without demand (WARNING): a deleted
+  segment is not reconciled (its deployments, rows and SVIs go by the schema cascade), a footprint removed from a
+  segment loses its deployment in the cleanup after the segment's own reconcile, and an edit of a device's
+  `deployment` or `role`, or a port taken off a handoff circuit, re-runs nothing. The check also reports demand
+  without an instance (ERROR) and the SVI rules.
 - **What the schema refuses, measured on a server (1.11.9)**: `parameters` (min/max of a Number) and `max_count` are
   enforced on create and on update; `min_count` only on update (a member removed below the minimum is refused, a
   domain created with one member of a `min_count: 2` is accepted); `optional: false` refuses an omitted relationship
@@ -420,6 +454,12 @@ class MyCheck(InfrahubCheck):
   `String`, and a query that selects that field across kinds is then refused at repository sync ("Fields ... conflict");
   narrow to a generic instead (`TopologyProviderHosting` for an appliance's deployment). The repository sync of
   `test-integration-fast` catches that conflict.
+- **MLAG peer pair uniqueness is an attribute, the rest are checks**: a uniqueness constraint cannot use a many
+  relationship, so the pair is mirrored into the unique Text attribute `ManagedMLAG.peer_devices` (the sorted member
+  names joined with a comma, `mlag_peer_devices` in `utils/vlan_domain.py`), written by `generators/domain_pairing.py`.
+  `checks/mlag_domains.py` enforces M1 (a device is in at most one domain: the attribute alone does not stop a-b plus
+  a-c), M2 (exactly two distinct members: `min_count` is only enforced on update) and M3 (`peer_devices` equals the
+  sorted member names).
 - **What a deployment hosts is typed by its kind**: a device's `deployment` is its host's, and each kind of host has a generic
   of its own, so the picker and the schema refuse the rest. `TopologyDeviceHosting` (DC, pod, colocation zone, office,
   external provider, cloud region for the provider routers) lists the physical devices and controllers;
@@ -447,7 +487,9 @@ class MyCheck(InfrahubCheck):
   destination any; the leaf ACL denies `NON_INTERNET_PREFIXES` before the permit to any). Only that zone is accepted,
   and `checks/segment_security.py` refuses a zone next to any other destination.
 - **Capability edges**: a capability reaches devices via `ManagedGenericDevice` and interfaces via
-  `ManagedGenericInterfaces`. Inherit the second only when something reads the interface edge.
+  `ManagedGenericInterfaces`. Inherit the second only when something reads the interface edge. `ManagedVRF` reaches its
+  device via `ManagedGenericDevice`; its SVIs reach it through their own `DcimVirtualInterface.vrf` (a kind cannot
+  inherit both edges, both are named `capabilities`).
 
 #### Schema Best Practices
 
