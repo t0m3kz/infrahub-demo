@@ -16,7 +16,7 @@
 #   - shared_capabilities: the shared objects the device is a member of (the shared device edge); the ManagedVRF
 #     ones are its instances (utils/vrf_demand.py device_memberships). Declared on DcimCapabilities, so it sits
 #     inside `... on DcimCapabilities`.
-#   - vlan_domain_segments: the rows of the device's VLAN domain, its own or its MLAG's (utils/vlan_domain.py), with
+#   - vlan_domain_segments: the rows of the device (one per segment on this switch; no domain object), with
 #     the segment's gateway namespace: a routed row needs the namespace and an SVI.
 #   - interfaces: the addresses of the device's own interfaces (their namespaces are demand; a BGP session's local
 #     address is one of them), its SVIs (role svi) with their VRF and row, and the firewall / load-balancer contexts
@@ -61,17 +61,6 @@ query vrf_instances($device_ids: [ID], $with_instances: Boolean = true) {
         }
         ... on DcimCapabilities {
           shared_capabilities { edges { node { __typename ...VrfDemandInstanceFields } } }
-          capabilities {
-            edges {
-              node {
-                __typename
-                id
-                ... on ManagedMLAG {
-                  vlan_domain_segments { edges { node { ...VrfDemandRowFields } } }
-                }
-              }
-            }
-          }
         }
         interfaces {
           edges {

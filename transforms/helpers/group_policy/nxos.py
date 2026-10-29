@@ -522,7 +522,7 @@ def _vxlan_gpo_build(scope: _DeviceScope) -> dict[str, Any]:
 
     The scope's ``contracts`` are the cleaned fleet roots' contracts of the device's data center,
     ``activations`` the device's segment activations (``vlan_id`` and ``segment.id``: the VLAN
-    ID of a group's segment here, which is per VLAN domain), ``vrfs`` the
+    ID of a group's segment here, which is per device), ``vrfs`` the
     VRFs it carries (``vxlan.l3_vni_mappings``): a segment's VRF is its
     gateway namespace, the ``vrf_name`` of its L3 VNI mapping, and ``interfaces``
     its own cleaned interfaces (the host ports a component selector names must be

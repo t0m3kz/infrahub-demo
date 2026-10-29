@@ -55,14 +55,7 @@ fragment LoadbalancerDeviceFields on DcimDevice {
         ... on DcimVirtualInterface {
           ip_address { node { address { value } ip_namespace { node { name { value } } } } }
           parent_interface { node { name { value } } }
-        }
-        capabilities {
-          edges {
-            node {
-              __typename
-              ...InlineTerminationFields
-            }
-          }
+          inline_segment { node { __typename ...InlineTerminationFields } }
         }
       }
     }

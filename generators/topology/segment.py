@@ -13,8 +13,8 @@ VxlanSegmentGenerator handles:
   3. For each resolved parent, create (or upsert) a ManagedSegmentDeployment
      with a locally-allocated VNI from its pool range.
   4. Reconcile the segment's customer-facing port tags from its components
-     and its LOCAL VLAN ID rows (one per VLAN domain that needs it: every
-     switch carrying it on a port, plus — for a STRETCHED segment — every
+     and its LOCAL VLAN ID rows (one per device that needs it: every
+     switch carrying it on a port, its MLAG peer, plus — for a STRETCHED segment — every
      border gateway of each deployment, the EVPN Multi-Site BGW plumbing: a
      BGW only re-originates a VNI it has configured, and the row is what the
      transform renders that from), each under the deployment its switch sits
@@ -23,13 +23,14 @@ VxlanSegmentGenerator handles:
      AppComponent.instances, one physical device at a time (see
      generators/topology/app_instance_segment.py); a segment
      with no AppComponent referencing it gets no customer-port assignment at
-     all. Independent VLAN domains may reuse the same numeric VLAN ID, since
+     all. Independent devices may reuse the same numeric VLAN ID, since
      IEEE 802.1Q VLAN ID has only local significance (unlike VNI, which is
      the real DC-wide/fabric-wide segment identifier).
   5. Terminate the segment inline when terminate_inline is set: tag the
      border-leaf ports facing the inline_service HA pair, then give each
      member a <port>.<vlan> sub-interface with its own address (the gateway
-     is the pair's virtual IP).
+     is the pair's virtual IP). The segment is the sub-interface's one-sided
+     ``inline_segment``, not an entry of its capabilities.
 
 VNIs are allocated via from_pool. A local segment draws from its parent's
 own vni_pool, independently in every parent. A stretched segment draws ONE VNI
@@ -256,13 +257,13 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, SegmentPortTagMixin, Common
                 "State may be partially applied."
             )
 
-        # LOCAL VLAN ID per VLAN domain: shared desired state of the segment
+        # LOCAL VLAN ID per device: shared desired state of the segment
         # (both this generator and add_app_component_segment reach it),
         # reconciled from scratch and written untracked — see
         # SegmentPortTagMixin.reconcile_vxlan_segment.
         # Inline termination tags the border-leaf ports facing the HA pair
-        # first, so the reconciliation gives the segment a VLAN in their
-        # domains; the HA members' sub-interfaces then take that VLAN.
+        # first, so the reconciliation gives the segment a VLAN on
+        # them; the HA members' sub-interfaces then take that VLAN.
         inline_legs = await self._reconcile_inline_service_ports(segment)
         await self.reconcile_vxlan_segment(segment_id, segment_name)
         await self._create_inline_sub_interfaces(segment, inline_legs)
@@ -405,7 +406,7 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, SegmentPortTagMixin, Common
         reusable_vni: int | None = None,
     ) -> bool:
         """Create or upsert one SegmentDeployment record (VNI-and-status only —
-        local VLAN ID realization is per VLAN domain, a ManagedVlanDomainSegment
+        local VLAN ID realization is per device, a ManagedVlanDomainSegment
         under this record, see SegmentPortTagMixin.reconcile_vxlan_segment).
 
         VNI is allocated from vni_pool, a {"id": ..., "name": ...} dict: for a
@@ -538,7 +539,7 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, SegmentPortTagMixin, Common
     async def _reconcile_inline_service_ports(self, segment: dict[str, Any]) -> list[dict[str, Any]]:
         """Make the segment's border-leaf service-port tags exactly the ports
         facing its inline_service members — none unless terminate_inline —
-        and return those legs. The tags put the border leaves' VLAN domains
+        and return those legs. The tags put the border leaves
         in scope (reconcile_vxlan_segment then allocates the VLAN the
         HA members' sub-interfaces take) and make the border leaf render the
         port as a trunk carrying it. Written with RelationshipAdd/Remove,
@@ -571,10 +572,10 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, SegmentPortTagMixin, Common
 
     async def _create_inline_sub_interfaces(self, segment: dict[str, Any], legs: list[dict[str, Any]]) -> None:
         """One <member port>.<vlan> DcimVirtualInterface per inline leg,
-        carrying the segment, owned by this run (dropped legs are cleaned up
+        pointing at the segment through ``inline_segment``, owned by this run (dropped legs are cleaned up
         with it).
 
-        - VLAN: the segment's VLAN ID in the facing border leaf's VLAN domain,
+        - VLAN: the segment's VLAN ID on the facing border leaf,
           so both ends of the cable tag it the same.
         - Address: the member's OWN address, reserved from the segment's
           prefix (per-port identifier, so a re-run keeps it). The segment
@@ -600,17 +601,15 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, SegmentPortTagMixin, Common
         else:
             self.logger.warning(f"Segment '{segment_name}' has no gateway prefix — sub-interfaces get no address")
 
-        vlan_by_domain = await self.segment_vlan_by_domain(segment_id)
-        domain_by_device = self._resolve_vlan_domains([leg["border_device"] for leg in legs])
+        vlan_by_device = await self.segment_vlan_by_device(segment_id)
         for leg in legs:
             port = leg["member_port"]
             device_id: str = leg["member_device_id"]
-            domain_id = domain_by_device[leg["border_device"].id]
-            vlan_id = vlan_by_domain.get(domain_id)
+            vlan_id = vlan_by_device.get(leg["border_device"].id)
             if vlan_id is None:
                 self.logger.error(
-                    f"Segment '{segment_name}': no VLAN in border leaf {leg['border_device'].name.value}'s "
-                    f"VLAN domain — cannot terminate it on {port.name.value}"
+                    f"Segment '{segment_name}': no VLAN on border leaf {leg['border_device'].name.value} "
+                    f"— cannot terminate it on {port.name.value}"
                 )
                 continue
             ip_id = None
@@ -626,6 +625,6 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, SegmentPortTagMixin, Common
                 device_name=leg["member_device_name"],
                 trunk_iface=port,
                 vlan_id_value=vlan_id,
-                capability_ids=[segment_id],
+                inline_segment_id=segment_id,
                 ip_address_id=ip_id,
             )

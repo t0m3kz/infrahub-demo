@@ -41,7 +41,7 @@ def _everything() -> dict[str, Any]:
         "d1",
         "leaf-1",
         rows=[row],
-        capabilities=[raw_mlag("m1", row)],
+        capabilities=[raw_mlag("m1")],
         vrfs=[raw_instance("v1", "leaf-1", "PROD")],
         shared_others=["ManagedSNMP"],
         interfaces=interfaces,

@@ -137,7 +137,7 @@ def _vlan_domain_client() -> MagicMock:
                                         "node": {
                                             "id": "vds-1",
                                             "vlan_id": {"value": 100},
-                                            "vlan_domain": {"node": {"id": "dom-1", "display_label": "leaf-pair-mlag"}},
+                                            "device": {"node": {"id": "dev-1", "display_label": "leaf-01"}},
                                         }
                                     }
                                 ]
@@ -168,8 +168,8 @@ async def test_fetch_vlan_domain_segments_unfiltered_declares_no_variable() -> N
                 "vlan_id": 100,
                 "vni": 10100,
                 "segment_name": "web-app",
-                "vlan_domain_id": "dom-1",
-                "vlan_domain_label": "leaf-pair-mlag",
+                "device_id": "dev-1",
+                "device_label": "leaf-01",
             }
         ],
     }

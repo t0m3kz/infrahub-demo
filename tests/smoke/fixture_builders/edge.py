@@ -598,7 +598,7 @@ def build_edge_bgw_pair_data(*, device_name: str, platform: str) -> dict:
     )
     # One segment on a firewall-role port gives the BGW its VXLAN block (an edge
     # without a stretched segment or an INTERNET session renders none).
-    seg = _make_inline_segment_node(vlan_domain_id=device_node["id"])
+    seg = _make_inline_segment_node(row_device_id=device_node["id"])
     interfaces.append(
         {
             "node": _make_interface(

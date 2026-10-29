@@ -14,13 +14,14 @@ them, so the same reconcile runs from both directions that change the answer:
 Writes RelationshipAdd/RelationshipRemove on the segment's ``switched_interfaces``
 only, untracked: a tagged port belongs to the device's generator, not to a run.
 
-The rows decide which switches route the segment, so the same reconcile ends with the VRF instances and SVIs of every
-switch of every VLAN domain the segment's rows were on before or are on after (a switch that lost its row included):
-generators/helpers/vrf.py, inside the segment lock (lock order: segment, then the device locks).
+The rows (one per device, the MLAG peers of a tagged device included even with no port of the segment, so a dual-homed
+port-channel is tagged on both; generators/vlan_domain.py) decide which switches route the segment, so the same reconcile
+ends with the VRF instances and SVIs of every device the segment's rows were on before or are on after (a switch that
+lost its row included): generators/helpers/vrf.py, inside the segment lock (lock order: segment, then the device locks).
 
 A deleted segment is not reconciled (nothing to read its rows from, and no trigger runs on a delete). Its rows and
 SVIs go by the schema's cascade, not by this code: ``SegmentDeployment.vlan_domain_segments`` is ``on_delete: cascade``
-and so is the row's ``svis``; whether the server also removes the deployment with the segment is not proven (its
+and so is the row's ``svi``; whether the server also removes the deployment with the segment is not proven (its
 ``segment`` is a mandatory attribute-kind relationship with no cascade of its own). What can linger converges later:
 the next ``reconcile_vrfs`` of each switch (any segment, circuit or context run that touches it) deletes an SVI whose
 row is no longer routed (role ``svi`` and not desired) and then the instance with no demand left, in the same pass;
@@ -75,18 +76,8 @@ class SegmentPortTagMixin(VrfMixin, VlanDomainMixin):
 
     @staticmethod
     def _row_device_ids(state: dict[str, Any] | None) -> set[str]:
-        """The devices of the VLAN domains the segment has a row on, whatever deployment the row sits under.
-
-        A domain is a device or a ``ManagedMLAG`` of two (utils/vlan_domain.py); the query returns its devices with
-        the row (segment_vlan_domains.gql), so no read follows.
-        """
-        state = state or {}
-        return {
-            device_id
-            for item in state.get("deployments", [])
-            for domain_id in item["rows"]
-            for device_id in state.get("domain_devices", {}).get(domain_id, [])
-        }
+        """The devices the segment has a row on, whatever deployment the row sits under (the keys of the state rows)."""
+        return {device_id for item in (state or {}).get("deployments", []) for device_id in item["rows"]}
 
     async def _segment_components(self, segment_id: str) -> list[dict[str, Any]]:
         """Every AppComponent on the segment, with its instances (segment_components.gql)."""

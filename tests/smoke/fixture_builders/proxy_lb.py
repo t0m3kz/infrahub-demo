@@ -93,8 +93,8 @@ def build_proxy_data(
     return {"DcimPhysicalDevice": _edges([device_node])}
 
 
-def _inline_segment_cap(*, ha_name: str, gateway: str, members: dict[str, str]) -> dict:
-    """A terminate_inline segment capability gatewayed by the HA pair ``ha_name``;
+def _inline_segment(*, ha_name: str, gateway: str, members: dict[str, str]) -> dict:
+    """A terminate_inline segment (an ``inline_segment``) gatewayed by the HA pair ``ha_name``;
     ``members`` maps each member device to its own address on the segment."""
     return {
         "__typename": "ManagedVxlanSegment",
@@ -122,14 +122,15 @@ def _inline_member_interface(*, name: str, address: str, segment: dict) -> dict:
         "role": _v("service"),
         "ip_address": _node({"address": _v(address)}),
         "parent_interface": _node({"name": _v(name.split(".")[0])}),
-        "capabilities": _edges([segment]),
+        "inline_segment": _node(segment),
+        "capabilities": _edges([]),
     }
 
 
 def build_proxy_inline_data(*, device_name: str, platform: str) -> dict:
     """Proxy HA pair (device = primary member) terminating a segment inline on eth1.210."""
     data = build_proxy_data(device_name=device_name, platform=platform, proxy_type="transparent")
-    segment = _inline_segment_cap(
+    segment = _inline_segment(
         ha_name=f"{device_name}-HA",
         gateway="10.2.0.1/24",
         members={device_name: "10.2.0.2/24", device_name.replace("01", "02"): "10.2.0.3/24"},
@@ -164,7 +165,7 @@ def build_lb_inline_data(*, device_name: str, platform: str) -> dict:
         "preempt": _v(False),
         "capabilities": _edges(_lb_members(device_name, peer_name)),
     }
-    segment = _inline_segment_cap(
+    segment = _inline_segment(
         ha_name=f"{device_name}-{peer_name}-ha",
         gateway="10.3.0.1/24",
         members={device_name: "10.3.0.2/24", peer_name: "10.3.0.3/24"},

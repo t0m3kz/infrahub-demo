@@ -82,9 +82,9 @@ def raw_root_instance(instance: dict[str, Any], *member_ids: str) -> dict[str, A
     return root
 
 
-def raw_mlag(mlag_id: str, *rows: dict[str, Any]) -> dict[str, Any]:
-    """A ManagedMLAG capability carrying the domain's rows."""
-    return {"__typename": "ManagedMLAG", "id": mlag_id, "vlan_domain_segments": edges(*rows)}
+def raw_mlag(mlag_id: str) -> dict[str, Any]:
+    """A ManagedMLAG capability (the query selects no rows on it: rows sit on the device)."""
+    return {"__typename": "ManagedMLAG", "id": mlag_id}
 
 
 def raw_interface(
@@ -180,7 +180,7 @@ def raw_device(
 ) -> dict[str, Any]:
     """One DcimDevice node of the query. ``vrfs`` are its memberships (``raw_instance``), emitted as
     ``shared_capabilities``; a ManagedVRF passed in ``capabilities`` is taken as a membership too (the pre-r3
-    spelling); ``shared_others`` are foreign shared kinds (a ``__typename`` only). The device sits in a pod of the DC
+    spelling), any other capability is dropped (the query selects no device ``capabilities``); ``shared_others`` are foreign shared kinds (a ``__typename`` only). The device sits in a pod of the DC
     ``hosting_id`` (None: a deployment with no hosting parent)."""
     caps = capabilities or []
     members = [*(vrfs or []), *(cap for cap in caps if cap.get("__typename") == VRF_KIND)]
@@ -193,7 +193,6 @@ def raw_device(
         "shared_capabilities": edges(*members, *({"__typename": kind} for kind in shared_others or [])),
         "deployment": raw_deployment(deployment_kind, hosting_id),
         "vlan_domain_segments": edges(*(rows or [])),
-        "capabilities": edges(*(cap for cap in caps if cap.get("__typename") != VRF_KIND)),
         "interfaces": edges(*(interfaces or [])),
     }
     if status:

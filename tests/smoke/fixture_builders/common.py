@@ -226,10 +226,11 @@ def _make_interface(
                 ),
             }
         )
-    # A switch port or LAG carries its segments on `segments` (DcimSwitchedInterface); a sub-interface keeps the
-    # inline L3 termination of a segment on `capabilities` (transforms/helpers/segments.py interface_segments).
+    # A switch port or LAG carries its segments on `segments` (DcimSwitchedInterface); a sub-interface carries the
+    # inline L3 termination of one segment on `inline_segment` (transforms/helpers/segments.py interface_segments).
     if typename == "DcimVirtualInterface":
-        services.extend(segments or [])
+        assert len(segments or []) <= 1, "a sub-interface terminates at most one segment inline"
+        iface["inline_segment"] = _node(segments[0] if segments else None)
     else:
         iface["segments"] = _edges(segments or [])
     iface["capabilities"] = _edges(services)
@@ -269,9 +270,9 @@ def _make_security_policy(*, name: str, rules: list[dict]) -> dict:
     }
 
 
-def _vlan_domain_rows(vlan_id: int, vlan_domain_id: str | None) -> dict:
-    """The ``vlan_domain_segments`` edges of one deployment: the row of this device's own VLAN domain, if any."""
-    return _edges([{"vlan_id": _v(vlan_id), "vlan_domain": _node({"id": vlan_domain_id})}] if vlan_domain_id else [])
+def _vlan_rows(vlan_id: int, row_device_id: str | None) -> dict:
+    """The ``vlan_domain_segments`` edges of one deployment: the row of the rendering device, if any."""
+    return _edges([{"vlan_id": _v(vlan_id), "device": _node({"id": row_device_id})}] if row_device_id else [])
 
 
 def _make_segment_node(
@@ -285,7 +286,7 @@ def _make_segment_node(
     num_deployments: int = 1,
     isolation_mode: str | None = None,
     has_firewall: bool = False,
-    vlan_domain_id: str | None = None,
+    row_device_id: str | None = None,
     l3_vni: int | None = None,
     routing_identity: tuple[int | None, int | None] | None = None,
 ) -> dict:
@@ -301,9 +302,9 @@ def _make_segment_node(
 
     The VNI comes from ``segment_deployments`` and the LOCAL
     vlan_id from the ``vlan_domain_segments`` rows under it, matched to this
-    device's own VLAN domain — its ManagedMLAG if paired, else its own device id.
-    A segment with no row for the device's own domain is skipped entirely
-    by the transform, so ``vlan_domain_id`` must match or no VXLAN is rendered.
+    device (``row.device.id``; a paired device uses its own row).
+    A segment with no row for the device is skipped entirely
+    by the transform, so ``row_device_id`` must match or no VXLAN is rendered.
 
     The VRF and its L3 VNI are reached ONLY via
     ``gateway.ip_prefix.ip_namespace`` (see utils.segment_addressing.routed_segment_namespace and
@@ -349,12 +350,12 @@ def _make_segment_node(
             "security_zone": security_zone_node,
             "gateway": _node(gateway_node),
             # The deployment the segment is realized in: its VNI and, under it, the
-            # per-VLAN-domain LOCAL vlan_id rows. The transform needs a row whose
-            # vlan_domain.id equals this device's own domain or it skips the segment
+            # per-device LOCAL vlan_id rows. The transform needs a row whose
+            # device.id equals this device's id or it skips the segment
             # and renders no VXLAN at all; the VNI is the one of the deployment holding
             # that row.
             "segment_deployments": _edges(
-                [{"vni": _v(vni), "vlan_domain_segments": _vlan_domain_rows(vlan_id, vlan_domain_id)}]
+                [{"vni": _v(vni), "vlan_domain_segments": _vlan_rows(vlan_id, row_device_id)}]
             ),
         }
     )
@@ -398,7 +399,7 @@ def _make_segment_deployment(**kwargs: Any) -> dict:
         "vni": _v(kwargs.get("vni")),
         "status": _v("active"),
         # A border gateway's own row sits under the deployment record itself.
-        "vlan_domain_segments": _vlan_domain_rows(kwargs.get("vlan_id") or 0, kwargs.get("vlan_domain_id")),
+        "vlan_domain_segments": _vlan_rows(kwargs.get("vlan_id") or 0, kwargs.get("row_device_id")),
         "segment": _node(seg),
     }
 

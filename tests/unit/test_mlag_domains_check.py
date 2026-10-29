@@ -2,9 +2,18 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, cast
 
-from checks.mlag_domains import CheckMlagDomains, device_domain_errors, member_count_errors, peer_devices_errors
+from checks.mlag_domains import (
+    CheckMlagDomains,
+    device_domain_errors,
+    member_count_errors,
+    mlag_lag_errors,
+    pair_row_errors,
+    peer_devices_errors,
+)
+from tests.unit.query_shape_helpers import query_tree, unselected
 from utils.data_cleaning import clean_data
 from utils.vlan_domain import mlag_peer_devices
 
@@ -25,9 +34,60 @@ def _domain(name: str, *devices: str, peer_devices: str | None = None) -> dict[s
     }
 
 
-def _raw(*domains: dict[str, Any]) -> dict[str, Any]:
+def _row(row_id: str, device: str, vlan_id: int, deployment: str = "sd-web", segment: str = "web") -> dict[str, Any]:
+    """One raw ManagedVlanDomainSegment edge."""
+    return {
+        "node": {
+            "id": row_id,
+            "vlan_id": {"value": vlan_id},
+            "segment_deployment": {"node": {"id": deployment, "segment": {"node": {"name": {"value": segment}}}}},
+            "device": {"node": {"id": f"id-{device}", "name": {"value": device}}},
+        }
+    }
+
+
+def _lag(
+    lag_id: int,
+    device: str,
+    lacp: str = "active",
+    min_links: int = 1,
+    role: str = "leaf",
+    mlag: str | None = "a-b-mlag",
+) -> dict[str, Any]:
+    """One raw DcimLAGInterface edge; ``mlag`` is the MLAG name (its id is 'id-<name>') or None."""
+    return {
+        "node": {
+            "id": f"lag-{device}-{lag_id}",
+            "name": {"value": f"Port-Channel{lag_id}"},
+            "lag_id": {"value": lag_id},
+            "lacp_mode": {"value": lacp},
+            "minimum_links": {"value": min_links},
+            "role": {"value": role},
+            "device": {"node": {"id": f"id-{device}", "name": {"value": device}}},
+            "mlag_domain": {"node": {"id": f"id-{mlag}"}} if mlag else {"node": None},
+        }
+    }
+
+
+def _raw(
+    *domains: dict[str, Any], rows: tuple[dict[str, Any], ...] = (), lags: tuple[dict[str, Any], ...] = ()
+) -> dict[str, Any]:
     """The raw query response."""
-    return {"ManagedMLAG": {"edges": list(domains)}}
+    return {
+        "ManagedMLAG": {"edges": list(domains)},
+        "ManagedVlanDomainSegment": {"edges": list(rows)},
+        "DcimLAGInterface": {"edges": list(lags)},
+    }
+
+
+def _rows(*rows: dict[str, Any]) -> list[dict[str, Any]]:
+    """The rows as the check sees them, after clean_data."""
+    return clean_data(_raw(rows=rows))["ManagedVlanDomainSegment"]
+
+
+def _lags(*lags: dict[str, Any]) -> list[dict[str, Any]]:
+    """The LAGs as the check sees them, after clean_data."""
+    return clean_data(_raw(lags=lags))["DcimLAGInterface"]
 
 
 def _cleaned(*domains: dict[str, Any]) -> list[dict[str, Any]]:
@@ -35,12 +95,14 @@ def _cleaned(*domains: dict[str, Any]) -> list[dict[str, Any]]:
     return clean_data(_raw(*domains))["ManagedMLAG"]
 
 
-def _run(*domains: dict[str, Any]) -> list[str]:
+def _run(
+    *domains: dict[str, Any], rows: tuple[dict[str, Any], ...] = (), lags: tuple[dict[str, Any], ...] = ()
+) -> list[str]:
     """Run the check against canned data; return the logged errors."""
     check = cast(Any, CheckMlagDomains.__new__(CheckMlagDomains))
     errors: list[str] = []
     check.log_error = lambda message: errors.append(message)
-    check.validate(_raw(*domains))
+    check.validate(_raw(*domains, rows=rows, lags=lags))
     return errors
 
 
@@ -134,3 +196,88 @@ def test_check_logs_m3_error() -> None:
     errors = _run(_domain("a-b-mlag", "a", "b", peer_devices="a,c"))
     assert len(errors) == 1
     assert "peer_devices" in errors[0]
+
+
+_PAIR = _domain("a-b-mlag", "a", "b")
+
+
+def test_m4_passes_with_equal_ids_and_when_neither_member_has_a_row() -> None:
+    """Equal ids on both members raise nothing; a deployment with no row on either member is not looked at."""
+    rows = _rows(_row("r1", "a", 100), _row("r2", "b", 100), _row("r3", "c", 300, deployment="sd-other"))
+    assert pair_row_errors(_cleaned(_PAIR), rows) == []
+    assert pair_row_errors(_cleaned(_PAIR), []) == []
+
+
+def test_m4_fails_on_different_ids_the_late_pairing_case() -> None:
+    """A row id 100 on A and 101 on B for one segment deployment names the segment, both devices and both ids."""
+    errors = pair_row_errors(_cleaned(_PAIR), _rows(_row("r1", "a", 100), _row("r2", "b", 101)))
+    assert len(errors) == 1
+    for text in ("'a-b-mlag'", "'web'", "VLAN 100 on 'a'", "VLAN 101 on 'b'"):
+        assert text in errors[0]
+
+
+def test_m4_fails_when_a_member_has_no_row_where_its_peer_has_one() -> None:
+    """A member without a row is reported with the segment and the peer's id, whichever member holds the row."""
+    for holder, other in (("a", "b"), ("b", "a")):
+        errors = pair_row_errors(_cleaned(_PAIR), _rows(_row("r1", holder, 100)))
+        assert len(errors) == 1
+        assert f"'{other}' has no row" in errors[0]
+        assert "'web'" in errors[0] and "VLAN 100" in errors[0]
+
+
+def test_m4_ignores_a_domain_that_m2_reports_and_non_members() -> None:
+    """A one-member domain is M2's; rows of devices outside a domain raise nothing."""
+    assert pair_row_errors(_cleaned(_domain("a-mlag", "a")), _rows(_row("r1", "a", 100))) == []
+    assert pair_row_errors(_cleaned(_PAIR), _rows(_row("r1", "x", 100), _row("r2", "y", 101))) == []
+
+
+def test_m5_passes_for_a_mirrored_pair_of_port_channels() -> None:
+    """One port-channel per member with equal attributes; the peer-link and a plain LAG are skipped."""
+    lags = _lags(
+        _lag(1, "a"),
+        _lag(1, "b"),
+        _lag(100, "a", role="mlag-peer", lacp="on"),
+        _lag(100, "b", role="mlag-peer", min_links=9),
+        _lag(7, "a", mlag=None),
+    )
+    assert mlag_lag_errors(_cleaned(_PAIR), lags) == []
+
+
+def test_m5_fails_with_a_single_port_channel() -> None:
+    """A lag_id on one member only is reported with the lag_id and the MLAG."""
+    errors = mlag_lag_errors(_cleaned(_PAIR), _lags(_lag(1, "a")))
+    assert len(errors) == 1
+    assert "'a-b-mlag'" in errors[0] and "lag_id 1" in errors[0] and "1 port-channel" in errors[0]
+
+
+def test_m5_fails_with_two_port_channels_on_one_member_or_a_third() -> None:
+    """Two on one device, or three in all, is not one per member."""
+    assert len(mlag_lag_errors(_cleaned(_PAIR), _lags(_lag(1, "a"), _lag(1, "a")))) == 1
+    assert len(mlag_lag_errors(_cleaned(_PAIR), _lags(_lag(1, "a"), _lag(1, "b"), _lag(1, "b")))) == 1
+
+
+def test_m5_fails_when_lacp_mode_or_minimum_links_differ() -> None:
+    """Each differing attribute is named with both values."""
+    errors = mlag_lag_errors(_cleaned(_PAIR), _lags(_lag(1, "a"), _lag(1, "b", lacp="passive", min_links=2)))
+    assert len(errors) == 2
+    assert any("lacp_mode differs (a=active, b=passive)" in error for error in errors)
+    assert any("minimum_links differs (a=1, b=2)" in error for error in errors)
+
+
+def test_check_logs_m4_and_m5_errors() -> None:
+    """The check class runs both new rules on the raw response."""
+    errors = _run(_PAIR, rows=(_row("r1", "a", 100), _row("r2", "b", 101)), lags=(_lag(1, "a"),))
+    assert len(errors) == 2
+    assert _run(_PAIR, rows=(_row("r1", "a", 100), _row("r2", "b", 100)), lags=(_lag(1, "a"), _lag(1, "b"))) == []
+
+
+def test_the_fixtures_only_emit_fields_the_query_selects() -> None:
+    """Query-shape pin: the raw fixtures stay inside queries/validation/mlag_domains.gql."""
+    tree = query_tree(Path(__file__).parents[2] / "queries" / "validation" / "mlag_domains.gql")
+    raw = _raw(_PAIR, rows=(_row("r1", "a", 100),), lags=(_lag(1, "a"),))
+    assert unselected(raw, tree) == []
+    # the pair rule needs the segment deployment, the row's device and the LAG's MLAG
+    assert {"segment_deployment", "device", "vlan_id"} <= set(tree["ManagedVlanDomainSegment"]["edges"]["node"])
+    assert {"lag_id", "lacp_mode", "minimum_links", "role", "mlag_domain"} <= set(
+        tree["DcimLAGInterface"]["edges"]["node"]
+    )

@@ -49,22 +49,21 @@ def _segment_gen() -> Any:
     return gen
 
 
-def _state(*domains: str, members: dict[str, list[str]] | None = None) -> dict[str, Any]:
+def _state(*devices: str) -> dict[str, Any]:
     return {
-        "domain_devices": members or {d: [d] for d in domains},
         "segment": {"id": "seg-1", "capabilities": []},
         "deployments": [
-            {"id": "sd-1", "deployment_id": "dc", "rows": {d: {"id": f"row-{d}", "vlan_id": 100} for d in domains}}
+            {"id": "sd-1", "deployment_id": "dc", "rows": {d: {"id": f"row-{d}", "vlan_id": 100} for d in devices}}
         ],
     }
 
 
 class TestSegmentReconcile:
-    def test_the_vrf_pass_covers_the_domains_the_rows_were_on_before_and_are_on_after(self) -> None:
-        """A switch that lost its row (its domain is only in the 'before' state) is reconciled with the others."""
+    def test_the_vrf_pass_covers_the_devices_the_rows_were_on_before_and_are_on_after(self) -> None:
+        """A switch that lost its row (it is only in the 'before' state) is reconciled with the others."""
         gen = _segment_gen()
         gen._fetch_segment_vlan_state = AsyncMock(
-            side_effect=[_state("dom-lost", "dom-kept"), _state("dom-kept", "dom-new")]
+            side_effect=[_state("dev-lost", "dev-kept"), _state("dev-kept", "dev-new")]
         )
         gen._reconcile_segment_vlan_domains_locked = AsyncMock(
             side_effect=lambda *_a: gen.events.append("rows") or True
@@ -75,14 +74,14 @@ class TestSegmentReconcile:
 
         gen.reconcile_vrfs.assert_awaited_once()
         (device_ids,) = gen.reconcile_vrfs.call_args.args
-        assert sorted(device_ids) == ["dom-kept", "dom-lost", "dom-new"]
+        assert sorted(device_ids) == ["dev-kept", "dev-lost", "dev-new"]
         key = segment_lock_key("seg-1")
         assert gen.events == [f"lock:{key}", "rows", "vrfs", f"unlock:{key}"]
 
     def test_unchanged_rows_reuse_the_state(self) -> None:
         """No row written: the state read before serves as the 'after' too (one read)."""
         gen = _segment_gen()
-        gen._fetch_segment_vlan_state = AsyncMock(return_value=_state("dom-1", members={"dom-1": ["d1"]}))
+        gen._fetch_segment_vlan_state = AsyncMock(return_value=_state("d1"))
         gen._reconcile_segment_vlan_domains_locked = AsyncMock(return_value=False)
         gen.reconcile_vrfs = AsyncMock()
 
@@ -91,9 +90,9 @@ class TestSegmentReconcile:
         assert gen._fetch_segment_vlan_state.await_count == 1
         gen.reconcile_vrfs.assert_awaited_once_with({"d1"})
 
-    def test_a_domain_is_a_device_or_an_mlag_of_two(self) -> None:
-        """The state carries the devices of each domain; an MLAG's are its two members, a device's is itself."""
-        state = _state("solo", "mlag-1", members={"solo": ["solo"], "mlag-1": ["m1", "m2"]})
+    def test_the_devices_are_the_row_devices_of_every_deployment(self) -> None:
+        """The state rows are keyed by device: the devices of the VRF pass are exactly those keys."""
+        state = _state("solo", "m1", "m2")
 
         assert SegmentPortTagMixin._row_device_ids(state) == {"solo", "m1", "m2"}
 
@@ -102,20 +101,12 @@ class TestSegmentReconcile:
         assert SegmentPortTagMixin._row_device_ids(_state()) == set()
         assert SegmentPortTagMixin._row_device_ids(None) == set()
 
-    def test_the_state_reads_the_members_off_the_query(self) -> None:
-        """segment_vlan_domains.gql returns the MLAG's capabilities with the row: no further read."""
+    def test_the_state_reads_the_row_device_off_the_query(self) -> None:
+        """segment_vlan_domains.gql returns the device with the row: no further read."""
         gen = _segment_gen()
-        domain = {
-            "node": {
-                "id": "mlag-1",
-                "__typename": "ManagedMLAG",
-                "capabilities": {"edges": [{"node": {"id": "m1"}}, {"node": {"id": "m2"}}]},
-            }
-        }
-        solo = {"node": {"id": "solo", "__typename": "DcimPhysicalDevice"}}
         rows = [
-            {"node": {"id": "r1", "vlan_id": {"value": 100}, "vlan_domain": domain}},
-            {"node": {"id": "r2", "vlan_id": {"value": 100}, "vlan_domain": solo}},
+            {"node": {"id": "r1", "vlan_id": {"value": 100}, "device": {"node": {"id": "m1"}}}},
+            {"node": {"id": "r2", "vlan_id": {"value": 100}, "device": {"node": {"id": "solo"}}}},
         ]
         gen.client.execute_graphql = AsyncMock(
             return_value={
@@ -137,7 +128,7 @@ class TestSegmentReconcile:
         state = asyncio.run(gen._fetch_segment_vlan_state("seg-1"))
 
         assert state is not None
-        assert state["domain_devices"] == {"mlag-1": ["m1", "m2"], "solo": ["solo"]}
+        assert SegmentPortTagMixin._row_device_ids(state) == {"m1", "solo"}
 
     def test_a_deleted_segment_reconciles_nothing(self) -> None:
         """No state: the rows and SVIs go by the schema cascade, a leftover instance by the device's next pass."""

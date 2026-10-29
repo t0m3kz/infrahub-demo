@@ -260,14 +260,12 @@ class TestLeafPbrRules:
             "segment_deployments": [
                 {
                     "vni": 10100,
-                    "vlan_domain_segments": [{"vlan_id": 100, "vlan_domain": {"id": "dev-1"}}],
+                    "vlan_domain_segments": [{"vlan_id": 100, "device": {"id": "dev-1"}}],
                     "segment": {"id": "seg-100", "stretch_scope": "dc_pair"},
                 }
             ]
         }
-        found = transform._collect_border_gateway_activations(
-            deployment, device_id="dev-1", device_capabilities=[], seen=set()
-        )
+        found = transform._collect_border_gateway_activations(deployment, device_id="dev-1", seen=set())
 
         assert [(a["vlan_id"], a["border_gateway"]) for a in found] == [(100, True)]
 

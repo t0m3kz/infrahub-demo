@@ -1,4 +1,4 @@
-"""Rule (e) of CheckVrfInstances over every device role and kind, and the S3 / S5 passing cases (shared MLAG rows)."""
+"""Rule (e) of CheckVrfInstances over every device role and kind, and the S3 / S5 passing cases (a pair's rows are each on their own device)."""
 
 from __future__ import annotations
 
@@ -103,16 +103,16 @@ def test_s3_a_default_gateway_row_whose_svi_has_no_vrf_passes() -> None:
     _no_findings(raw_device("d1", "leaf-1", rows=[row], interfaces=[raw_svi("s1", 100, "r1")]))
 
 
-def test_s5_rows_shared_through_an_mlag_domain_pass_with_an_svi_on_each_member() -> None:
-    """S5: both members of a pair see the domain's rows; each holds its own SVI and is a member of the one instance."""
-    row = raw_row("r1", 100, "PROD", segment="web")
+def test_s5_each_member_of_a_pair_holds_an_svi_on_its_own_row() -> None:
+    """S5: both members of a pair have a row of their own (same VLAN id); each SVI sits on its own device's row."""
     members = [
         raw_device(
             f"d{i}",
             f"leaf-{i}",
-            capabilities=[raw_mlag("mlag-1", row)],
+            rows=[raw_row(f"r{i}", 100, "PROD", segment="web")],
+            capabilities=[raw_mlag("mlag-1")],
             vrfs=[raw_instance("v1", f"leaf-{i}", "PROD")],
-            interfaces=[raw_svi(f"s{i}", 100, "r1", "v1", "PROD")],
+            interfaces=[raw_svi(f"s{i}", 100, f"r{i}", "v1", "PROD")],
         )
         for i in (1, 2)
     ]

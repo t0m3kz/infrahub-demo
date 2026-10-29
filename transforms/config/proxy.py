@@ -4,6 +4,7 @@ from transforms.common import BaseDeviceTransform
 from transforms.helpers.addressing import management_ip
 from transforms.helpers.ha import get_ha, inline_addresses
 from transforms.helpers.proxy import proxy_rules
+from transforms.helpers.segments import interface_segments
 
 
 def _build_proxy_interfaces(interfaces: list[dict[str, Any]], ha: dict[str, Any] | None = None) -> list[dict[str, Any]]:
@@ -19,7 +20,7 @@ def _build_proxy_interfaces(interfaces: list[dict[str, Any]], ha: dict[str, Any]
                 "status": iface.get("status"),
                 "role": iface.get("role"),
                 "ip_address": ip_obj if ip_obj.get("address") else None,
-                **inline_addresses(iface.get("capabilities"), ha),
+                **inline_addresses(interface_segments(iface), ha),
             }
         )
     return proxy_ifaces

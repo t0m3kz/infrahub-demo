@@ -169,10 +169,6 @@ class ManagedGenericInterfaces(CoreNode):
     capabilities: RelationshipManager[DcimInterface]
 
 
-class ManagedGenericVlanDomain(CoreNode):
-    vlan_domain_segments: RelationshipManager[ManagedVlanDomainSegment]
-
-
 class ManagedHA(CoreNode):
     group_id: IntegerOptional
     mode: Dropdown
@@ -660,7 +656,7 @@ class ManagedLoadbalancerContext(ManagedGeneric, ManagedGenericInterfaces, Manag
     vips: RelationshipManager[LoadbalancerVIP]
 
 
-class ManagedMLAG(ManagedGeneric, ManagedGenericDevice, ManagedGenericVlanDomain):
+class ManagedMLAG(ManagedGeneric, ManagedGenericDevice):
     peer_devices: String
     domain_id: Integer
     reload_delay: Integer
@@ -751,7 +747,8 @@ class TopologyPhysicalCircuit(TopologyCircuit, ManagedGeneric, ManagedGenericInt
     locations: RelationshipManager[TopologyFacility]
 
 
-class DcimPhysicalDevice(CoreArtifactTarget, DcimDevice, DcimCapabilities, AppInstance, ManagedGenericVlanDomain):
+class DcimPhysicalDevice(CoreArtifactTarget, DcimDevice, DcimCapabilities, AppInstance):
+    vlan_domain_segments: RelationshipManager[ManagedVlanDomainSegment]
     position: IntegerOptional
     rack_face: Dropdown
     serial: StringOptional
@@ -942,8 +939,8 @@ class ManagedSegmentDeployment(CoreNode):
 class ManagedVlanDomainSegment(CoreNode):
     vlan_id: Integer
     segment_deployment: RelationshipAttribute[ManagedSegmentDeployment]
-    svis: RelationshipManager[DcimVirtualInterface]
-    vlan_domain: RelationshipAttribute[ManagedGenericVlanDomain]
+    device: RelationshipAttribute[DcimPhysicalDevice]
+    svi: RelationshipAttribute[DcimVirtualInterface]
 
 
 class DcimSoftwareImage(CoreNode):
@@ -1045,6 +1042,7 @@ class DcimVirtualDevice(CoreArtifactTarget, DcimDevice, DcimCapabilities, AppIns
 
 
 class DcimVirtualInterface(DcimInterface, DcimHasSubInterface, DcimHasIPAddress):
+    inline_segment: RelationshipAttribute[ManagedVxlanSegment]
     parent_interface: RelationshipAttribute[DcimInterface]
     vlan_domain_segment: RelationshipAttribute[ManagedVlanDomainSegment]
     vrf: RelationshipAttribute[ManagedVRF]
@@ -1068,7 +1066,7 @@ class CloudVirtualNetwork(CloudResource):
     region: RelationshipAttribute[TopologyCloudRegion]
 
 
-class ManagedVxlanSegment(ManagedGeneric, ManagedNetworkSegment, ManagedGenericInterfaces):
+class ManagedVxlanSegment(ManagedGeneric, ManagedNetworkSegment):
     arp_suppression: Boolean
     segment_type: Dropdown
     terminate_inline: Boolean

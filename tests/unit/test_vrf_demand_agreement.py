@@ -18,7 +18,6 @@ import pytest
 from transforms.common import BaseDeviceTransform
 from transforms.helpers.vrf import vrf_requirements
 from utils.limits import DEFAULT_NAMESPACE
-from utils.vlan_domain import vlan_domain_id
 from utils.vrf_demand import device_vrf_facts
 
 CONFIGS = Path(__file__).resolve().parents[1] / "smoke" / "configs"
@@ -36,17 +35,14 @@ def _prepared(path: Path) -> dict[str, Any] | None:
 
 
 def _as_vrf_instances_node(device: dict[str, Any]) -> dict[str, Any]:
-    """The device in the cleaned vrf_instances.gql shape: its activations become the rows of its own VLAN domain."""
+    """The device in the cleaned vrf_instances.gql shape: its activations become its own rows."""
     rows = [
         {"id": f"row-{act['vlan_id']}", "vlan_id": act["vlan_id"], "segment_deployment": {"segment": act["segment"]}}
         for act in device.get("segment_deployments") or []
         if act.get("vlan_id")
     ]
     capabilities = [dict(cap) for cap in device.get("capabilities") or []]
-    domain = vlan_domain_id(device.get("id"), ((cap.get("typename"), cap.get("id")) for cap in capabilities))
-    node = {**device, "capabilities": capabilities, "member_of_groups": [], "vlan_domain_segments": []}
-    owner = next((cap for cap in capabilities if domain and cap.get("id") == domain), node)
-    owner["vlan_domain_segments"] = rows
+    node = {**device, "capabilities": capabilities, "member_of_groups": [], "vlan_domain_segments": rows}
     return node
 
 

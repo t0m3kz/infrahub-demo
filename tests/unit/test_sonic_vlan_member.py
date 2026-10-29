@@ -101,9 +101,12 @@ def test_mlag_peer_link_membership_is_merged_not_replaced() -> None:
     host = copy.deepcopy(_port(_load("leaf_sonic_ebgp_ibgp"), "Ethernet10"))
     node_interfaces = data["DcimDevice"]["edges"][0]["node"]["interfaces"]["edges"]
     index = next(i for i, e in enumerate(node_interfaces) if e["node"]["name"]["value"] == "Ethernet10")
-    # The segments' local VLAN is allocated per VLAN domain: this device's is its MLAG.
+    # The segments' local VLAN is this device's own row: point the host fixture's rows at the MLAG fixture's device.
+    own_id = data["DcimDevice"]["edges"][0]["node"]["id"]
     node_interfaces[index]["node"]["segments"] = json.loads(
-        json.dumps(host["segments"]).replace("dev-dc1-leaf-01", "mlag-dom-1")
+        json.dumps(host["segments"]).replace(
+            _load("leaf_sonic_ebgp_ibgp")["DcimDevice"]["edges"][0]["node"]["id"], own_id
+        )
     )
     members = _render(Leaf, data)["VLAN_MEMBER"]
     assert members["Vlan4094|PortChannel100"] == _TAGGED

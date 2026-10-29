@@ -249,11 +249,11 @@ class MyCheck(InfrahubCheck):
 - **One Managed generic per concept, with an implementation per technology**: `ManagedVxlanSegment` and
   `CloudNetworkSegment` inherit `ManagedNetworkSegment`; `ManagedLoadbalancerHA` and `CloudLoadBalancer` inherit
   `ManagedLoadBalancer`.
-- **Segments are VXLAN only**: there is no VLAN segment kind. The VLAN of a port is generated per VLAN domain (see
-  **VLAN domains and rows**), a segment has no manual `vlan_id` and lists its footprints in `customer_deployments`.
+- **Segments are VXLAN only**: there is no VLAN segment kind. The VLAN of a port is generated per switch (see
+  **VLAN rows**), a segment has no manual `vlan_id` and lists its footprints in `customer_deployments`.
   An infrastructure VLAN (a transfer or management L2 link) is a segment too: a `ManagedVxlanSegment` with no
   `gateway`, owned by the `INFRA` pseudo-customer, given to its ports (`switched_interfaces`) like any segment. The fabric
-  renders it pure L2 (VLAN and L2 VNI, no SVI, VRF or ACL) and its VLAN is chosen per domain like any other; a firewall
+  renders it pure L2 (VLAN and L2 VNI, no SVI, VRF or ACL) and its VLAN is chosen per switch like any other; a firewall
   sub-interface takes the facing leaf's VLAN. A fixed VLAN number is only needed towards an outside party, and that is
   a handoff circuit's `<port>.<vlan>` sub-interface, not a segment.
 - **Topology.Customer**: Per-facility tenant footprints (`TopologyCustomerDC`, `TopologyCustomerColocation`,
@@ -404,29 +404,43 @@ class MyCheck(InfrahubCheck):
   multisite VIP is one address on two loopbacks), so an address goes with its run's tracking or with decommission's
   explicit deletes, never with its port; a hand-deleted device leaves its port addresses behind. A switch port's L2
   membership is the typed edge `segments` (on the marker generic `DcimSwitchedInterface`, a physical port or a LAG;
-  peer `ManagedVxlanSegment`, reverse `switched_interfaces`); only the inline L3 termination of a segment on an HA
-  member's `<port>.<vlan>` sub-interface stays on `capabilities`. The layer of a port is its content, not its kind: a
+  peer `ManagedVxlanSegment`, reverse `switched_interfaces`: the segment's ONE interface list, physical ports and LAGs
+  only; a virtual interface is never assigned to a segment by anyone). The inline L3 termination of a segment
+  (`terminate_inline`) on an HA member's `<port>.<vlan>` sub-interface is the one-sided `DcimVirtualInterface.inline_segment`
+  (Attribute, one, no reverse field, written only by `generators/topology/segment.py`; the sub-interface takes the facing
+  border leaf's VLAN and is never a customer port). A segment is on no interface's `capabilities`. The layer of a port is its content, not its kind: a
   segment or a firewall/load-balancer context means switchport, an address, sub-interfaces or a routed capability
   (BGP or OSPF peering, routed exchange, interconnect, tunnel or handoff circuit) means routed;
   `checks/interface_layers.py` refuses both on one port (R1), either on a LAG member (R2), an inline termination not
-  named `<parent>.<vlan>` (R4) and a segment in a switch port's `capabilities`.
-- **VLAN domains and rows**: a VLAN ID is local to a VLAN domain, which is a `ManagedMLAG` pair or a `DcimPhysicalDevice`
-  without MLAG (both carry the marker generic `ManagedGenericVlanDomain`, defined in `schemas/base/dcim.yml`; a device
-  that is an MLAG member is never a domain itself: the MLAG is chosen first). A switch has no record of its own as a
-  domain. The chain is segment -> `ManagedSegmentDeployment` (the realization in a DC, metro or office, with the VNI) ->
-  `ManagedVlanDomainSegment` (the realization on the switch, with the `vlan_id`): the row is a `Parent`-mandatory child
-  of the deployment its switch sits in (`device.deployment` is the hosting parent or one of its pods and zones) and goes
-  with it (`on_delete: cascade`), so the VLAN and the VNI of a port come from one lineage. The row is an output and has
-  no port: a port is given a SEGMENT (the segment's `switched_interfaces`), never a VLAN, and the VLAN of a port is found by
-  port -> device -> domain -> row of the segment. The segment owns its port tags and its rows
+  named `<parent>.<vlan>` (R4, `checks/interface_parents.py`, tested on `inline_segment`); a segment on a switch port's `capabilities` is
+  impossible by schema (`ManagedVxlanSegment` is not on the interface edge).
+- **VLAN rows**: a VLAN ID is local to a switch. There is no VLAN domain object and no marker generic: the row
+  points straight at its device. The chain is segment -> `ManagedSegmentDeployment` (the realization in a DC, metro or
+  office, with the VNI) -> `ManagedVlanDomainSegment` (the realization on ONE switch, with the `vlan_id`): the row is a
+  `Parent`-mandatory child of the deployment its switch sits in (`device.deployment` is the hosting parent or one of its
+  pods and zones) and goes with it (`on_delete: cascade`), so the VLAN and the VNI of a port come from one lineage; its
+  `device` is an Attribute (mandatory), unique on [segment_deployment, device] and [device, vlan_id]. The row is an
+  output and has no port: a port is given a SEGMENT (the segment's `switched_interfaces`), never a VLAN, and the VLAN of
+  a port is found by port -> device -> row of the segment. **MLAG pairs**: the two peers of a `ManagedMLAG` each have
+  their own row for a segment and MUST carry the same `vlan_id` (a dual-homed port-channel is one L2 broadcast domain).
+  The allocator holds it: the segment reconcile gives every device with a port of the segment AND its MLAG peers (even
+  a peer with no port of the segment: a dual-homed LAG needs the tag on both) a row, takes the pair's locks in sorted
+  order and gives the pair one id (the peer's existing id when it is free, else the lowest id free on both); a row's id
+  is never re-chosen. A late pairing whose two rows already differ is NOT renumbered: the reconcile logs a WARNING and
+  `checks/mlag_domains.py` M4 fails until a person fixes it. M4 also reports a peer without a row where its partner has
+  one; M5 requires, for each `lag_id` of an MLAG, exactly two port-channels, one per member, with equal `lacp_mode`
+  and `minimum_links` (the bond's grouping is the pair (MLAG, `lag_id`); the peer-link is excluded). The templates render
+  no `mlag <id>` / `vpc <id>` on the host-facing port-channels today (only the domain-level block and the peer-link).
+  Deleting an MLAG never orphans a row. The segment owns its port tags and its rows
   (`generators/topology/segment_ports.py`): `add_vxlan_segment` and `add_app_component_segment` run the same reconcile,
   and a change of the segment's `switched_interfaces` re-runs `add_vxlan_segment` (`data/events/99_actions.yml`), so a port
   assigned by hand is removed unless an `AppComponent` instance lands on it; a segment with no component keeps the ports
-  it has. A switch with no deployment of the segment, or a domain with devices in two deployments, is a WARNING and its
+  it has. A switch with no deployment of the segment, or a pair whose members map to two deployments, is a WARNING and its
   rows are left alone (the next run converges once the deployment exists). The rows are untracked and their deployment
-  tracked: a deployment that is not re-saved by its run is deleted with its rows. A routed row (a gateway, not
-  `terminate_inline`) is realized on each VRF-carrying switch of its domain as an SVI: a `DcimVirtualInterface` with role
-  `svi` named `Vlan<vlan_id>`, a Component of the row (`svis`, `on_delete: cascade`), with no address (the anycast
+  tracked: a deployment that is not re-saved by its run is deleted with its rows; the rows of a device that is gone or
+  no longer needs the segment are deleted by the next reconcile (check rule S2 reports them meanwhile). A routed row (a gateway, not
+  `terminate_inline`) is realized on its switch as ONE SVI: a `DcimVirtualInterface` with role
+  `svi` named `Vlan<vlan_id>`, a Component of the row (`svi`, `on_delete: cascade`), with no address (the anycast
   gateway is `segment.gateway`) and with `vrf` pointing at the `ManagedVRF` of its device's topology; the SVI is not a
   port. `generators/helpers/svi.py` writes it in the VRF pass of the segment reconcile, upserted by (device, `Vlan<id>`), and
   the transform renders `vrf member` from it. The L3 VNI SVI (`ip forward`, `3900 + TRANSIT_SLOT[namespace_type]`,
@@ -444,7 +458,7 @@ class MyCheck(InfrahubCheck):
   and the instance only shows it (a read-only computed attribute nothing reads); RD, RT, SVI VLAN and EVPN vs VRF-lite
   are derived. Membership is demand-driven, never pre-provisioned: a device is a member for exactly the non-`default`
   namespaces it routes in (`utils/vrf_demand.py`, the one derivation): the gateway namespace of each
-  routed row of its VLAN domain, its SVIs' VRFs, the namespaces of the addresses on its own interfaces (handoff /31s, WAN
+  routed row of its own, its SVIs' VRFs, the namespaces of the addresses on its own interfaces (handoff /31s, WAN
   exit sub-interfaces, an upstream transit address) and the legs of the contexts tagged on its border service ports.
   Only our routing devices carry one (`carries_vrfs`: leaf, tor, access-leaf, border-leaf, border-spine, edge,
   access-switch, distribution-switch, physical or a `CloudNetworkAppliance`): never a spine, an L2 leaf, a firewall or a
@@ -485,8 +499,10 @@ class MyCheck(InfrahubCheck):
   relationship, so the pair is mirrored into the unique Text attribute `ManagedMLAG.peer_devices` (the sorted member
   names joined with a comma, `mlag_peer_devices` in `utils/vlan_domain.py`), written by `generators/domain_pairing.py`.
   `checks/mlag_domains.py` enforces M1 (a device is in at most one domain: the attribute alone does not stop a-b plus
-  a-c), M2 (exactly two distinct members: `min_count` is only enforced on update) and M3 (`peer_devices` equals the
-  sorted member names).
+  a-c), M2 (exactly two distinct members: `min_count` is only enforced on update), M3 (`peer_devices` equals the
+  sorted member names), M4 (both members have a VLAN row with the same `vlan_id` for every segment either has one for,
+  see **VLAN rows**) and M5 (each `lag_id` has exactly one port-channel per member with equal `lacp_mode` and
+  `minimum_links`).
 - **What a deployment hosts is typed by its kind**: a device's `deployment` is its host's, and each kind of host has a generic
   of its own, so the picker and the schema refuse the rest. `TopologyDeviceHosting` (DC, pod, colocation zone, office,
   external provider, cloud region for the provider routers) lists the physical devices and controllers;
@@ -528,8 +544,9 @@ class MyCheck(InfrahubCheck):
     `Parent`, like `ManagedVRF.deployment`, or a data file); the transforms and checks read
     `shared_capabilities { __typename ... on <Kind> {...} }` once, inside `... on DcimCapabilities` (the field is not on
     `DcimDevice`), in `DeviceCapabilitiesOnDeviceFields`, and filter on the typename (`device_memberships`).
-  - `ManagedVRF`'s SVIs reach it through `DcimVirtualInterface.vrf`. A switch port's segment membership is not a
-    capability either (`segments`, see **Interface addresses and layers**).
+  - `ManagedVRF`'s SVIs reach it through `DcimVirtualInterface.vrf`. A segment is not on the interface edge: a switch
+    port's membership is `segments` and an inline termination is `inline_segment` (see **Interface addresses and
+    layers**); the kinds left on `ManagedGenericInterfaces` are circuits, contexts, the routed exchange, peerings and OSPF.
 
 #### Schema Best Practices
 

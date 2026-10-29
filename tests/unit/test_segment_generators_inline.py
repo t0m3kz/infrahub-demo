@@ -175,11 +175,10 @@ class TestCreateInlineSubInterfaces:
     """Each leg gets <member port>.<border VLAN> with the member's own address; the gateway stays the VIP."""
 
     @staticmethod
-    def _gen(vlan_domain: str = "mlag-bl") -> Any:
+    def _gen(vlan_device: str = "bl-1") -> Any:
         gen = _inline_gen({})
         gen.client.get = AsyncMock()
-        gen.segment_vlan_by_domain = AsyncMock(return_value={vlan_domain: 210})
-        gen._resolve_vlan_domains = MagicMock(return_value={"bl-1": "mlag-bl"})
+        gen.segment_vlan_by_device = AsyncMock(return_value={vlan_device: 210})
         gen.ensure_prefix_address_pool = AsyncMock(return_value=MagicMock(id="pool-1"))
         gen.allocate_prefix_address = AsyncMock(return_value="ip-own-1")
         gen.ensure_vlan_subinterface = AsyncMock()
@@ -198,7 +197,7 @@ class TestCreateInlineSubInterfaces:
         }
 
     def test_sub_interface_takes_border_vlan_and_own_address(self) -> None:
-        """VLAN from the border leaf's domain, address reserved in the segment prefix at its length."""
+        """VLAN of the border leaf's own row, address reserved in the segment prefix at its length."""
         gen = self._gen()
 
         asyncio.run(gen._create_inline_sub_interfaces(_INLINE_SEGMENT, [self._leg()]))
@@ -212,15 +211,16 @@ class TestCreateInlineSubInterfaces:
         sub = gen.ensure_vlan_subinterface.await_args.kwargs
         assert sub["vlan_id_value"] == 210
         assert sub["ip_address_id"] == "ip-own-1"
-        # The segment is linked by id: its node is not read for it.
-        assert sub["capability_ids"] == ["seg-1"]
+        # The segment is the one-sided inline_segment, by id: never a capability, its node is not read.
+        assert sub["inline_segment_id"] == "seg-1"
+        assert "capability_ids" not in sub
         assert "capability_obj" not in sub
         gen.client.get.assert_not_awaited()
         assert sub["device_name"] == "fw-01"
 
     def test_missing_border_vlan_is_an_error(self) -> None:
-        """No VLAN in the facing domain means the leg cannot be terminated."""
-        gen = self._gen(vlan_domain="other-domain")
+        """No VLAN on the facing border leaf means the leg cannot be terminated."""
+        gen = self._gen(vlan_device="other-device")
 
         asyncio.run(gen._create_inline_sub_interfaces(_INLINE_SEGMENT, [self._leg()]))
 

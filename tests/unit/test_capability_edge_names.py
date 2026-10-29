@@ -200,3 +200,43 @@ def test_old_name_only_remains_on_identifier_lines(root_dir: Path) -> None:
     assert result.returncode in (0, 1), result.stderr
     leftovers = [line for line in result.stdout.splitlines() if not IDENTIFIER_LINE.search(line)]
     assert not leftovers, "\n".join(leftovers[:20])
+
+
+def test_a_segment_is_not_on_the_interface_edge(schema: SchemaModel) -> None:
+    """One interface list on a segment: `switched_interfaces`, the typed L2 membership of physical and LAG ports.
+
+    The "Assigned Interfaces" tab (`capabilities` of ManagedGenericInterfaces) is gone, which also makes a segment in the
+    `capabilities` of a switch port impossible by schema (it was rule R5 of checks/interface_layers.py).
+    """
+    segment = "ManagedVxlanSegment"
+    lineage = schema.ancestors(segment) | {segment}
+    assert INTERFACE_EDGE_GENERIC not in lineage
+    assert not [
+        (kind, rel["name"])
+        for kind in lineage
+        for rel in schema.relationships.get(kind, [])
+        if rel["name"] == NEW_NAME or rel.get("identifier") == OLD_NAME
+    ]
+    interface_lists = {
+        rel["name"]: rel["peer"]
+        for kind in lineage
+        for rel in schema.relationships.get(kind, [])
+        if "Interface" in rel["peer"]
+    }
+    assert interface_lists == {"switched_interfaces": "DcimSwitchedInterface"}, interface_lists
+
+
+def test_inline_segment_is_a_one_sided_relationship_on_the_sub_interface(schema: SchemaModel) -> None:
+    """The inline termination is `DcimVirtualInterface.inline_segment`, with no reverse field on the segment."""
+    sub = "DcimVirtualInterface"
+    inline = [rel for rel in schema.relationships[sub] if rel["name"] == "inline_segment"]
+    assert len(inline) == 1
+    rel = inline[0]
+    assert rel["peer"] == "ManagedVxlanSegment"
+    assert rel["kind"] == "Attribute"
+    assert rel["cardinality"] == "one"
+    assert rel["optional"] is True
+    assert rel.get("description")
+    assert isinstance(rel.get("order_weight"), int)
+    assert not [r for r in schema.relationships["ManagedVxlanSegment"] if r.get("identifier") == rel["identifier"]]
+    assert "DcimSwitchedInterface" not in schema.ancestors(sub) | {sub}

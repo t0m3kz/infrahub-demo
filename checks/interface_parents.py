@@ -16,9 +16,9 @@ Rules:
 3. the host port of an uplink NIC is cabled (otherwise nothing reaches the border leaf through it);
 4. a NIC without a parent is not reported: a machine can have more uplinks than its host;
 5. the parent of a NIC is a DcimPhysicalInterface (a host port, not a LAG, a NIC or a sub-interface);
-6. a ManagedVxlanSegment in the ``capabilities`` of a virtual interface is the inline termination, which sits on the
-   sub-interface ``<parent name>.<vlan>`` (generators/connections.py ``ensure_vlan_subinterface``). A segment on a
-   switch port is ``segments`` (checks/interface_layers.py, R5).
+6. an ``inline_segment`` on a virtual interface is the inline termination, which sits on the sub-interface
+   ``<parent name>.<vlan>`` (generators/connections.py ``ensure_vlan_subinterface``). A segment on a switch port is
+   ``segments``; the schema gives it no ``capabilities`` edge.
 """
 
 from __future__ import annotations
@@ -28,7 +28,6 @@ from typing import Any
 
 from infrahub_sdk.checks import InfrahubCheck
 
-from checks.interface_layers import SEGMENT_KIND, capability_kinds
 from generators.virtual_nics import PINNED_ROLES
 from utils.data_cleaning import clean_data
 
@@ -80,14 +79,14 @@ def interface_parent_errors(iface: dict[str, Any]) -> list[str]:
 
 
 def inline_termination_errors(iface: dict[str, Any]) -> list[str]:
-    """Rule 6 of one cleaned DcimVirtualInterface node: a segment termination sits on ``<parent name>.<vlan>``."""
-    if SEGMENT_KIND not in capability_kinds(iface):
+    """Rule 6 of one cleaned DcimVirtualInterface node: an inline_segment sits on ``<parent name>.<vlan>``."""
+    if not iface.get("inline_segment"):
         return []
     parent = (iface.get("parent_interface") or {}).get("name")
     if parent and re.fullmatch(re.escape(parent) + r"\.\d+", str(iface.get("name"))):
         return []
     return [
-        f"{_label(iface.get('device') or {})} {_label(iface)} carries a {SEGMENT_KIND} but is not the sub-interface "
+        f"{_label(iface.get('device') or {})} {_label(iface)} has an inline_segment but is not the sub-interface "
         f"'<parent>.<vlan>' of its parent_interface ({parent or 'none'}): an inline termination rides on a "
         "sub-interface of a port."
     ]

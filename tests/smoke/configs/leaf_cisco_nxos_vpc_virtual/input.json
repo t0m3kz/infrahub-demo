@@ -133,6 +133,9 @@
                       }
                     }
                   },
+                  "inline_segment": {
+                    "node": null
+                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -246,6 +249,9 @@
                     "value": "mlag-peer"
                   },
                   "ip_address": {
+                    "node": null
+                  },
+                  "inline_segment": {
                     "node": null
                   },
                   "capabilities": {

@@ -20,7 +20,7 @@ device, ``hosting_deployment``); every device of that topology that routes in th
 - (g) ERROR: the device needs an instance but has no hosting deployment (its ``deployment`` is neither a DC, a metro
   or an office, nor a pod or zone of one).
 
-Segment SVIs (``DcimVirtualInterface`` with role ``svi``, a Component of its VLAN-domain row):
+Segment SVIs (``DcimVirtualInterface`` with role ``svi``, a Component of its row, one per row):
 
 - S1 ERROR: each routed row of the domain has exactly one SVI named ``Vlan<vlan_id>`` linked to it;
 - S2 WARNING: an SVI with no row or whose row is not routed, or any SVI left on a decommissioned device (the generator
@@ -28,7 +28,7 @@ Segment SVIs (``DcimVirtualInterface`` with role ``svi``, a Component of its VLA
 - S3 ERROR: its ``vrf`` is the instance of (the device's hosting deployment, the row's namespace) and the device is
   one of its members (``vrf`` may be unset only for a ``default`` row);
 - S4 ERROR: it has no address (the anycast gateway is ``segment.gateway``) and no capabilities;
-- S5 ERROR: its row is one of the device's own VLAN-domain rows (``common_parent`` cannot say so).
+- S5 ERROR: its row is one of the device's own rows (``common_parent`` cannot say so: the row has two parents).
 """
 
 from __future__ import annotations
@@ -257,14 +257,14 @@ def svi_content_errors(facts: DeviceVrfFacts) -> list[str]:
 
 
 def svi_domain_errors(facts: DeviceVrfFacts) -> list[str]:
-    """S5 the SVI's row is one of the device's own VLAN-domain rows (a decommissioned device's leftovers: S2)."""
+    """S5 the SVI's row is one of the device's own rows (a decommissioned device's leftovers: S2)."""
     if _decommissioned(facts):
         return []
     return [
-        f"SVI (S5): svi interface '{svi.name}' on device '{facts.name}' is linked to a row outside the device's "
-        "VLAN domain (its MLAG's when paired, else its own). Re-run add_vxlan_segment, which deletes it."
+        f"SVI (S5): svi interface '{svi.name}' on device '{facts.name}' is linked to a row of another device. "
+        "Re-run add_vxlan_segment, which deletes it."
         for svi in facts.svis
-        if svi.row_id is not None and svi.row_id not in facts.domain_row_ids
+        if svi.row_id is not None and svi.row_id not in facts.row_ids
     ]
 
 

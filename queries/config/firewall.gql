@@ -53,6 +53,20 @@ query firewall_config(
               ... on DcimVirtualInterface {
                 ip_address { node { address { value } ip_namespace { node { name { value } namespace_type { value } } } } }
                 parent_interface { node { name { value } } }
+                # The segment a sub-interface terminates inline. A context-less firewall also enforces the rules of
+                # every segment in a zone bound on one of its interfaces: it routes that zone's CIDRs through the
+                # leg (transforms/helpers/firewall_contexts.py place_policies_in_contexts).
+                inline_segment {
+                  node {
+                    __typename
+                    ...NetworkSegmentFields
+                    security_zone {
+                      node {
+                        network_segments { edges { node { id ...SegmentRulesFields } } }
+                      }
+                    }
+                  }
+                }
               }
               ... on DcimLAGInterface {
                 ip_address { node { address { value } ip_namespace { node { name { value } namespace_type { value } } } } }
@@ -61,18 +75,6 @@ query firewall_config(
                 edges {
                   node {
                     __typename
-                    ...NetworkSegmentFields
-                    # A context-less firewall also enforces the rules of
-                    # every segment in a zone bound on one of its interfaces:
-                    # it routes that zone's CIDRs through the leg
-                    # (transforms/helpers/firewall_contexts.py place_policies_in_contexts).
-                    ... on ManagedNetworkSegment {
-                      security_zone {
-                        node {
-                          network_segments { edges { node { id ...SegmentRulesFields } } }
-                        }
-                      }
-                    }
                     ...ExchangeGatewayInterfaceCapabilityFields
                     ...FirewallContextConfigFields
                   }

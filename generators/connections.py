@@ -559,6 +559,7 @@ class CablingMixin:
         capability_obj: Any | None = None,
         extra_capability_objs: Sequence[Any] = (),
         capability_ids: Sequence[str] = (),
+        inline_segment_id: str | None = None,
         ip_address_id: str | None = None,
         track: bool = True,
         role: str = "service",
@@ -567,10 +568,14 @@ class CablingMixin:
         trunk_iface, linked to capability_obj (and any extra_capability_objs,
         e.g. the exchanges a firewall-context leg belongs to, and any
         capability_ids a caller holds without the node) via capabilities.
-        Capabilities are only ever added, never removed — shared by
-        customer_dc.py/customer_colocation.py's FirewallContext sub-interfaces
-        and segment.py's inline VxlanSegment termination. Trunk-interface
-        resolution stays with the caller since the fallback behavior differs.
+        Capabilities are only ever added, never removed, and carry CONTEXTS only
+        (customer_dc.py/customer_colocation.py's FirewallContext sub-interfaces).
+        segment.py's inline VxlanSegment termination passes inline_segment_id
+        instead: the one-sided ``inline_segment`` relationship of the
+        sub-interface, written with the upsert itself (a re-run with the same
+        segment writes the same value, a changed segment replaces it; omitted,
+        an existing value is left alone). Trunk-interface resolution stays with
+        the caller since the fallback behavior differs.
 
         No capability: a sub-interface the caller links itself (an office's WAN
         exit, which the BGP peering names as its interface), with its own ``role``.
@@ -591,6 +596,7 @@ class CablingMixin:
             "status": "active",
             "role": role,
             **({"ip_address": {"id": ip_address_id}} if ip_address_id else {}),
+            **({"inline_segment": {"id": inline_segment_id}} if inline_segment_id else {}),
         }
 
         try:

@@ -11,8 +11,10 @@ Rules:
 
 * R1 a physical or LAG port (not a LAG member) has both an L2 tag and an L3 signal;
 * R2 a LAG member (``lag`` set) has an L2 tag or an L3 signal: its LAG carries them;
-* R5 a ManagedVxlanSegment in the ``capabilities`` of a physical or LAG port is an ERROR: switchport membership is
-  ``segments``. (The inline termination on a virtual sub-interface is rule 6 of checks/interface_parents.py.)
+
+A segment cannot sit in the ``capabilities`` of a port: ManagedVxlanSegment does not inherit the interface-edge generic
+(tests/unit/test_capability_edge_names.py), so switchport membership is only ``segments``. The inline termination on a
+virtual sub-interface is ``inline_segment`` (rule 6 of checks/interface_parents.py).
 """
 
 from __future__ import annotations
@@ -23,7 +25,6 @@ from infrahub_sdk.checks import InfrahubCheck
 
 from utils.data_cleaning import clean_data
 
-SEGMENT_KIND = "ManagedVxlanSegment"
 L2_TAG_KINDS = frozenset({"ManagedFirewallContext", "ManagedLoadbalancerContext"})
 """Capabilities that make a switch port an L2 port besides ``segments``."""
 L3_SIGNAL_KINDS = frozenset(
@@ -66,15 +67,10 @@ def _where(port: dict[str, Any]) -> str:
 
 
 def switch_port_errors(port: dict[str, Any]) -> list[str]:
-    """R1, R2 and R5 of one cleaned DcimPhysicalInterface or DcimLAGInterface node."""
+    """R1 and R2 of one cleaned DcimPhysicalInterface or DcimLAGInterface node."""
     errors = []
     tags, signals = l2_tags(port), l3_signals(port)
     where = _where(port)
-    if SEGMENT_KIND in capability_kinds(port):
-        errors.append(
-            f"{where} has a {SEGMENT_KIND} in its capabilities: a segment on a switch port is its `segments` "
-            "(only a sub-interface carries the inline termination)."
-        )
     if port.get("lag"):
         if tags or signals:
             errors.append(
@@ -89,7 +85,7 @@ def switch_port_errors(port: dict[str, Any]) -> list[str]:
 
 
 class CheckInterfaceLayers(InfrahubCheck):
-    """A port is a switchport or a routed port, a LAG member carries neither, and `segments` is its only segment edge."""
+    """A port is a switchport or a routed port, a LAG member carries neither."""
 
     query = "interface_layers"
 

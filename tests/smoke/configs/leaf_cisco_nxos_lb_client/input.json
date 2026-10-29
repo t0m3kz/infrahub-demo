@@ -759,6 +759,9 @@
                       }
                     }
                   },
+                  "inline_segment": {
+                    "node": null
+                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -1077,7 +1080,7 @@
                                           "vlan_id": {
                                             "value": 110
                                           },
-                                          "vlan_domain": {
+                                          "device": {
                                             "node": {
                                               "id": "dev-dc1-leaf-01"
                                             }
@@ -1295,7 +1298,7 @@
                                           "vlan_id": {
                                             "value": 120
                                           },
-                                          "vlan_domain": {
+                                          "device": {
                                             "node": {
                                               "id": "dev-dc1-leaf-01"
                                             }

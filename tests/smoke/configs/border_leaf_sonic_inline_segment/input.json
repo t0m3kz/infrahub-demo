@@ -759,6 +759,9 @@
                       }
                     }
                   },
+                  "inline_segment": {
+                    "node": null
+                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -1082,7 +1085,7 @@
                                           "vlan_id": {
                                             "value": 150
                                           },
-                                          "vlan_domain": {
+                                          "device": {
                                             "node": {
                                               "id": "dev-dc1-border-leaf-01"
                                             }
@@ -1148,7 +1151,7 @@
                               "vlan_id": {
                                 "value": 150
                               },
-                              "vlan_domain": {
+                              "device": {
                                 "node": {
                                   "id": "dev-dc1-border-leaf-01"
                                 }
@@ -1219,7 +1222,7 @@
                                           "vlan_id": {
                                             "value": 150
                                           },
-                                          "vlan_domain": {
+                                          "device": {
                                             "node": {
                                               "id": "dev-dc1-border-leaf-01"
                                             }

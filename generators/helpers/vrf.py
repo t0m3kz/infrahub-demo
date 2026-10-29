@@ -38,7 +38,7 @@ changed writes nothing. A device that cannot carry instances (a spine, a firewal
 whatever a caller asks for.
 
 Deviation from the SVI design: the SVI upsert key is (device, ``Vlan<id>``), not its row link, so a row moving
-between domains needs no delete-before-create ordering (generators/helpers/svi.py).
+between rows needs no delete-before-create ordering (generators/helpers/svi.py).
 """
 
 from __future__ import annotations

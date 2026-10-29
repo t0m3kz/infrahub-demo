@@ -90,7 +90,7 @@ def vrf_requirements(data: dict[str, Any]) -> VrfRequirements:
     ``data`` is the cleaned device with its ``segment_deployments`` (segment activations) set, as
     ``BaseDeviceTransform.prepared_device`` leaves it. The demand is ``utils.vrf_demand.vrf_demand`` over the same
     inputs the generators read (``address_namespaces``, ``leg_namespaces`` of the contexts on its service ports); the
-    rows are its routed segment activations, the config's view of the routed rows of its VLAN domain.
+    rows are its routed segment activations, the config's view of the routed rows of the device.
     """
     deployment = data.get("deployment") if isinstance(data.get("deployment"), dict) else {}
     interfaces = data.get("interfaces") or []

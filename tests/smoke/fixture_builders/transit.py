@@ -87,7 +87,7 @@ def _xchg_segment(*, seg_name: str, vlan: int, vni: int, gateway_ip: str, deploy
         gateway_ip=gateway_ip,
         ns_name="PROD",
         l3_vni=_XCHG_NAMESPACES["prod"][1],
-        vlan_domain_id=domain,
+        row_device_id=domain,
     )
     ns = seg["gateway"]["node"]["ip_prefix"]["node"]["ip_namespace"]["node"]
     ns["namespace_type"] = _v("prod")

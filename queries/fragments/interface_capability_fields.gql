@@ -119,9 +119,10 @@ fragment LoadbalancerContextInterfaceCapabilityFields on ManagedLoadbalancerCont
   }
 }
 
-# The VXLAN segments a switch port or LAG carries (DcimSwitchedInterface.segments: its L2 membership, one VLAN each).
-# __typename: transforms/helpers/segments.py interface_segments. A sub-interface's inline L3 termination of a segment
-# stays on its `capabilities` edge (NetworkSegmentFields below). Spread under a field, never inside an inline fragment.
+# The VXLAN segments an interface carries: a switch port or LAG its L2 membership (DcimSwitchedInterface.segments, one
+# VLAN each), a sub-interface its single inline L3 termination (DcimVirtualInterface.inline_segment).
+# __typename: transforms/helpers/segments.py interface_segments. Never on the `capabilities` edge. Spread under a field,
+# never directly inside an inline fragment.
 fragment InterfaceSegmentsFields on DcimInterface {
   ... on DcimSwitchedInterface {
     segments {
@@ -130,6 +131,14 @@ fragment InterfaceSegmentsFields on DcimInterface {
           __typename
           ...NetworkSegmentFields
         }
+      }
+    }
+  }
+  ... on DcimVirtualInterface {
+    inline_segment {
+      node {
+        __typename
+        ...NetworkSegmentFields
       }
     }
   }
@@ -146,7 +155,6 @@ fragment InterfaceCapabilitiesWithSegmentFields on DcimInterface {
       node {
         __typename
         ...OspfInterfaceCapabilityFields
-        ...NetworkSegmentFields
         ...ExchangeGatewayInterfaceCapabilityFields
         ...FirewallContextInterfaceCapabilityFields
         ...LoadbalancerContextInterfaceCapabilityFields

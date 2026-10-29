@@ -206,9 +206,12 @@ def test_s4_svi_with_address_or_capabilities_is_an_error() -> None:
 
 
 def test_s5_svi_row_must_be_in_the_devices_domain() -> None:
-    """S5 a row of another domain."""
+    """S5 an SVI linked to a row of another device (a peer's row included) is an error; its own row is fine."""
     foreign = raw_svi("s1", 100, "r-elsewhere", "v1", "PROD")
-    assert len(svi_domain_errors(facts_of(_leaf(interfaces=[foreign])))) == 1
+    errors = svi_domain_errors(facts_of(_leaf(interfaces=[foreign])))
+    assert len(errors) == 1
+    assert "row of another device" in errors[0]
+    assert svi_domain_errors(facts_of(_leaf(interfaces=[raw_svi("s1", 100, "r1", "v1", "PROD")]))) == []
 
 
 def _run(*devices: dict[str, Any]) -> tuple[list[str], list[str]]:

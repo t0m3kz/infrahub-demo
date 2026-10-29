@@ -33,7 +33,6 @@ from utils.exchange_transit import service_context_caps
 from utils.fabric_roles import BORDER_ROLES, OFFICE_LISP_ROLES
 from utils.limits import UNDERLAY_MTU
 from utils.segment_addressing import segment_hosting_candidates
-from utils.vlan_domain import vlan_domain_id
 from utils.vrf_demand import SVI_ROLE
 
 _log = logging.getLogger(__name__)
@@ -160,8 +159,8 @@ class BaseDeviceTransform(InfrahubTransform):
     export_tenant_default_to_evpn: bool = True
     # Comment character of the "no platform" stub config.
     comment_char: str = "!"
-    # Resolve a VxlanSegment's local VLAN through this device's own VLAN domain.
-    resolve_vlan_domain: bool = True
+    # Resolve a VxlanSegment's local VLAN from this device's own row of the segment deployment.
+    resolve_vlan_row: bool = True
     # The platforms whose template defines the RM-<session>-IN/-OUT maps of an external BGP session
     # (transforms/helpers/bgp.py). Any other platform would render that session with no policy.
     external_policy_platforms: ClassVar[frozenset[str]] = frozenset()
@@ -170,10 +169,7 @@ class BaseDeviceTransform(InfrahubTransform):
         """Segment activations of one device: from its interface capabilities, plus the
         stretched segments its multi-site border gateway carries."""
         interfaces = device.get("interfaces") or []
-        capabilities = device.get("capabilities") or []
-        activations = self._collect_activations_from_interfaces(
-            interfaces, device_id=device.get("id"), device_capabilities=capabilities
-        )
+        activations = self._collect_activations_from_interfaces(interfaces, device_id=device.get("id"))
         if any(iface.get("role") == "multisite-vip" for iface in interfaces):
             # The site hosting the segments: the DC for a border-leaf, the metro (one `parent` hop
             # above the zone the edge is deployed to) for a colocation edge.
@@ -192,7 +188,6 @@ class BaseDeviceTransform(InfrahubTransform):
                 self._collect_border_gateway_activations(
                     site,
                     device_id=device.get("id"),
-                    device_capabilities=capabilities,
                     seen={(act.get("segment") or {}).get("id") for act in activations},
                 )
             )
@@ -592,14 +587,15 @@ class BaseDeviceTransform(InfrahubTransform):
             )
 
     @staticmethod
-    def _own_vlan_domain_row(deployments: list[dict], own_domain_id: str | None) -> tuple[dict, dict] | None:
-        """(row, segment deployment) of the segment's row for this device's own VLAN domain.
+    def _own_vlan_row(deployments: list[dict], device_id: str | None) -> tuple[dict, dict] | None:
+        """(row, segment deployment) of the segment's row of this device.
 
-        The row is a child of the deployment it sits in, so its VLAN ID and the
+        A row points straight at its device (a paired device has its own row, a peer's row is
+        ignored). The row is a child of the deployment it sits in, so its VLAN ID and the
         deployment's VNI come from one record."""
         for deployment in deployments:
             for row in deployment.get("vlan_domain_segments") or []:
-                if (row.get("vlan_domain") or {}).get("id") == own_domain_id:
+                if device_id and (row.get("device") or {}).get("id") == device_id:
                     return row, deployment
         return None
 
@@ -608,7 +604,6 @@ class BaseDeviceTransform(InfrahubTransform):
         interfaces: list[dict],
         *,
         device_id: str | None = None,
-        device_capabilities: list[dict] | None = None,
     ) -> list[dict]:
         """Collect unique segment activations from the interfaces' segments (interface_segments).
 
@@ -616,16 +611,15 @@ class BaseDeviceTransform(InfrahubTransform):
         is cardinality:many (multi-site stretch — clean_data unwraps it to a
         list, already filtered to active/provisioning by the query) and
         carries the vni and, under it, the vlan_domain_segments rows — the LOCAL
-        vlan_id for a VxlanSegment is the row of THIS device's own VLAN domain
-        (its ManagedMLAG if paired, else itself, utils/vlan_domain.vlan_domain_id)
+        vlan_id for a VxlanSegment is the row of THIS device (``row.device.id``;
+        a paired device uses its own row, never its peer's)
         and the vni is its deployment's, one record for both. A VxlanSegment
-        with no row for this device's own domain yet (allocation not
+        with no row for this device yet (allocation not
         converged) is skipped.
-        Without ``resolve_vlan_domain`` (a firewall is never part of a VLAN
-        domain) a VxlanSegment takes the first segment_deployments entry as is.
+        Without ``resolve_vlan_row`` (a firewall has no VLAN rows)
+        a VxlanSegment takes the first segment_deployments entry as is.
         We deduplicate by segment id so each segment appears once.
         """
-        own_domain_id = vlan_domain_id(device_id, ((c.get("typename"), c.get("id")) for c in device_capabilities or []))
         seen: set[str] = set()
         activations: list[dict] = []
         for iface in interfaces:
@@ -636,8 +630,8 @@ class BaseDeviceTransform(InfrahubTransform):
                 seg_deps = cap.get("segment_deployments")
                 if not seg_deps:
                     continue
-                if self.resolve_vlan_domain:
-                    own_row = self._own_vlan_domain_row(seg_deps, own_domain_id)
+                if self.resolve_vlan_row:
+                    own_row = self._own_vlan_row(seg_deps, device_id)
                     if own_row is None:
                         continue
                     vlan_id, vni = own_row[0].get("vlan_id"), own_row[1].get("vni")
@@ -658,7 +652,6 @@ class BaseDeviceTransform(InfrahubTransform):
         deployment: dict[str, Any] | None,
         *,
         device_id: str | None,
-        device_capabilities: list[dict[str, Any]],
         seen: set[str | None],
     ) -> list[dict[str, Any]]:
         """Activations for every stretched VXLAN segment of an EVPN Multi-Site BGW's site.
@@ -669,18 +662,17 @@ class BaseDeviceTransform(InfrahubTransform):
         site's own TopologySegmentHosting.segment_deployments instead (queries/
         fragments/network_segment.gql SegmentDeploymentsOnDeploymentFields),
         keeping only stretch_scope != local. The local VLAN still has to be the
-        BGW's own vlan_domain entry (generators/topology/segment.py assigns one
+        BGW's own row (generators/topology/segment.py assigns one
         to border-leaf/edge devices for stretched segments); a segment without
         one has not converged yet and is skipped, same as on a leaf.
         """
-        own_domain_id = vlan_domain_id(device_id, ((c.get("typename"), c.get("id")) for c in device_capabilities))
         activations: list[dict[str, Any]] = []
         for dep in (deployment or {}).get("segment_deployments") or []:
             seg = dep.get("segment") or {}
             seg_id = seg.get("id")
             if not seg_id or seg_id in seen or (seg.get("stretch_scope") or "local") == "local" or not dep.get("vni"):
                 continue
-            own_row = self._own_vlan_domain_row([dep], own_domain_id)
+            own_row = self._own_vlan_row([dep], device_id)
             if own_row is None or not own_row[0].get("vlan_id"):
                 continue
             seen.add(seg_id)

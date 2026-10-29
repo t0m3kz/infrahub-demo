@@ -9,13 +9,12 @@
 #     `deployment` (the hosting parent or one of its children, see
 #     _device_deployment_ids).
 #   - switched_interfaces: the switch ports carrying the segment; their
-#     devices' VLAN domains need it. The edge's peer is DcimSwitchedInterface
+#     devices need a row. The edge's peer is DcimSwitchedInterface
 #     (a physical port or a LAG), so an inline DcimVirtualInterface
 #     sub-interface on a firewall/LB HA pair (it takes the facing border
-#     leaf's VLAN, it has no domain) is never in it. role tells the
+#     leaf's VLAN, it has no row) is never in it. role tells the
 #     customer-facing ports from the border-leaf service ports.
-#   - each row's vlan_domain: a device, or a ManagedMLAG with its member devices
-#     (the devices whose VRF instances and SVIs follow the rows).
+#   - each row's device (the devices whose VRF instances and SVIs follow the rows).
 #   - stretch_scope + customer_deployments' hosting parents: a stretched
 #     segment's border gateways need it too (same shape as vxlan_segment.gql)
 query segment_vlan_domains($segment_id: ID!) {
@@ -88,14 +87,7 @@ query segment_vlan_domains($segment_id: ID!) {
             node {
               id
               vlan_id { value }
-              vlan_domain {
-                node {
-                  id
-                  __typename
-                  # The devices of the domain, for the VRF pass (a domain is a device or a ManagedMLAG of two).
-                  ... on ManagedMLAG { capabilities { edges { node { id } } } }
-                }
-              }
+              device { node { id } }
             }
           }
         }

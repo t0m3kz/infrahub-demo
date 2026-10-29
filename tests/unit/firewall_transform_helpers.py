@@ -95,7 +95,7 @@ def _make_smoke_data(platform: str) -> dict[str, Any]:
         },
     }
 
-    # FW interface with IP — zone and policies come from capabilities segment
+    # FW interface with IP — zone and policies come from the inline_segment
     fw_iface_node: dict[str, Any] = {
         "__typename": {"value": "DcimVirtualInterface"},
         "name": {"value": "eth0.100"},
@@ -110,7 +110,8 @@ def _make_smoke_data(platform: str) -> dict[str, Any]:
             }
         },
         "ha_domain": {"node": None},
-        "capabilities": {"edges": [{"node": seg_node}]},
+        "inline_segment": {"node": seg_node},
+        "capabilities": {"edges": []},
     }
 
     # Zone also exposed as a top-level SecurityZone root
@@ -163,7 +164,7 @@ def _make_smoke_data(platform: str) -> dict[str, Any]:
 def _smoke_segment(data: dict[str, Any]) -> dict[str, Any]:
     """The segment the smoke firewall carries on eth0.100."""
     iface = data["DcimPhysicalDevice"]["edges"][0]["node"]["interfaces"]["edges"][0]["node"]
-    return iface["capabilities"]["edges"][0]["node"]
+    return iface["inline_segment"]["node"]
 
 
 def _add_segment_rule(data: dict[str, Any], rule_node: dict[str, Any]) -> None:

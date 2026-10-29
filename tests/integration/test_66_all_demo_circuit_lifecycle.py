@@ -19,6 +19,8 @@ skips the whole tracked cleanup when a run tracked nothing, so the sessions of a
   * test_04 does the same for a segment: the SVIs a segment's rows demand on a switch go, and so does the switch's
     membership of the DC's instance, when the segment no longer lands there (see the module-level constants of that
     test); the instance survives through the other switches, and the switches rejoin it with the segment.
+  * test_05 deletes the ManagedMLAG of an access-leaf pair and builds it again (add_rack): a VLAN row hangs off its
+    DEVICE, so no row, VLAN id, SVI or VLAN/SVI line of the rendered config may change either way.
 
 A Tunnel is not covered: it has no trigger rule and is not in the generator's group, so setting its status starts
 nothing (tests/unit/test_event_rules.py pins both), and "no peering appeared" is true of every tunnel anyway.
@@ -41,6 +43,7 @@ import pytest
 from infrahub_sdk import InfrahubClient
 
 from tasks import ALL_DEMO_BRANCH
+from transforms.config.access_leaf import AccessLeaf
 
 from .all_demo_circuit_constants import ALL_DEMO_VIRTUAL_CIRCUITS, HANDOFF_KIND, INTERCONNECT_KIND
 from .circuit_lifecycle_helpers import (
@@ -60,6 +63,17 @@ from .circuit_lifecycle_helpers import (
     vrf_gone_errors,
 )
 from .conftest import TestInfrahubDockerWithClient
+from .mlag_lifecycle_helpers import (
+    artifact_errors,
+    fetch_candidates,
+    fetch_mlag_findings,
+    fetch_rows,
+    new_findings,
+    pick_candidate,
+    snapshot_errors,
+    vlan_lines,
+)
+from .snapshot_helpers import render_device_config
 from .wait_helpers import wait_for_condition
 from .workflow_helpers import run_generator, verify_no_failed_tasks, wait_for_tasks_completion
 
@@ -606,6 +620,8 @@ SEGMENT_COMPONENT_FQDNS = (
 KEPT_HOST = "dc11-pod1-server-1"
 REMOVED_INSTANCE = "infra-core-dc11-2"
 REMOVED_HOST = "dc11-pod1-server-2"
+# DeviceMixin._ensure_mlag_pairs, called by rack.py for the access-leaf pairs of a rack
+MLAG_REBUILD_GENERATOR = "add_rack"
 COMPONENT_SEGMENT_GENERATOR = "add_app_component_segment"
 SEGMENT_GENERATOR = "add_vxlan_segment"
 
@@ -838,3 +854,85 @@ class TestAllDemoCircuitLifecycle(TestInfrahubDockerWithClient):
             assert after[device]["vrf"] == before[device]["vrf"], f"{device}: the instance was re-created"
         await verify_no_failed_tasks(client=client, branch=branch)
         logging.info("=== %s - COMPLETED ===", SCENARIO_NAME)
+
+    @pytest.mark.order(424)
+    @pytest.mark.dependency(
+        scope="session",
+        name="all_demo_mlag_remove_readd",
+        depends=["all_demo_segment_vrf_lifecycle"],
+    )
+    @pytest.mark.asyncio
+    async def test_05_rows_survive_removing_and_readding_an_mlag(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """Deleting the ManagedMLAG of an access-leaf pair changes no row, VLAN id or SVI of its members, nor the VLAN
+        and SVI lines of their rendered config; add_rack builds the MLAG again and the rows are still the same, none
+        created or deleted, and validate_mlag_domains (M4 / M5) has no new finding.
+
+        The full render DOES differ while the MLAG is gone: the mlag / vPC domain block and the peer-link are the MLAG's
+        own config. Only the lines of the segments' VLANs and SVIs (``vlan_lines``) are compared, plus the rows.
+        """
+        client, branch = async_client_main, scenario_branch
+        logging.info("=== %s - Step 5: remove and re-add an MLAG ===", SCENARIO_NAME)
+
+        await wait_for_tasks_completion(client, branch)
+        candidates = await fetch_candidates(client, branch)
+        every_device = [member["id"] for candidate in candidates for member in candidate["members"]]
+        all_rows, _ = await fetch_rows(client, branch, every_device)
+        mlag, reasons = pick_candidate(candidates, all_rows)
+        assert mlag is not None, "no access-leaf MLAG can show the property:\n  - " + "\n  - ".join(reasons)
+        mlag_name = mlag["name"]
+        names = {member["id"]: member["name"] for member in mlag["members"]}
+        racks = sorted({member["rack_id"] for member in mlag["members"]})
+        logging.info("MLAG %s (%s), racks %s", mlag["name"], sorted(names.values()), racks)
+
+        async def snapshot() -> tuple[Any, dict[str, list[str]]]:
+            state = await fetch_rows(client, branch, list(names))
+            vlan_ids = {row["vlan_id"] for rows in state[0].values() for row in rows.values()}
+            lines = {
+                name: vlan_lines(
+                    await render_device_config(client, branch, name, query="leaf_config", transform_cls=AccessLeaf),
+                    vlan_ids,
+                )
+                for name in names.values()
+            }
+            return state, lines
+
+        async def exists() -> bool:
+            return any(c["name"] == mlag_name for c in await fetch_candidates(client, branch))
+
+        before_state, before_lines = await snapshot()
+        findings_before = await fetch_mlag_findings(client, branch)
+        assert all(before_lines.values()), f"a member renders no VLAN line, nothing to compare: {before_lines}"
+
+        await (await client.get(kind="ManagedMLAG", branch=branch, id=mlag["id"])).delete()
+        outcome: dict[str, Any] = {"success": False, "task_state": "not run: the MLAG was not deleted"}
+        try:
+            await wait_for_tasks_completion(client, branch)
+            assert not await exists(), f"{mlag['name']} still exists after its delete"
+            gone_state, gone_lines = await snapshot()
+            errors = snapshot_errors(before_state, gone_state, names) + artifact_errors(before_lines, gone_lines)
+            assert not errors, "MLAG deleted, but rows / SVIs / VLAN lines changed:\n  - " + "\n  - ".join(errors)
+        finally:
+            if not await exists():
+                outcome = await run_generator(
+                    client=client, generator_name=MLAG_REBUILD_GENERATOR, node_ids=racks, branch=branch
+                )
+            await wait_for_tasks_completion(client, branch)
+            logging.info("%s rebuilt by %s: %s", mlag["name"], MLAG_REBUILD_GENERATOR, outcome)
+
+        assert outcome["success"], f"{MLAG_REBUILD_GENERATOR} failed: {outcome}"
+        rebuilt = [c for c in await fetch_candidates(client, branch) if c["name"] == mlag_name]
+        assert rebuilt, f"{MLAG_REBUILD_GENERATOR} did not build {mlag['name']} again"
+        assert {m["id"] for m in rebuilt[0]["members"]} == set(names), f"{mlag['name']} has other members: {rebuilt}"
+        after_state, after_lines = await snapshot()
+        errors = snapshot_errors(before_state, after_state, names) + artifact_errors(before_lines, after_lines)
+        assert not errors, "MLAG re-added, but rows / SVIs / VLAN lines changed:\n  - " + "\n  - ".join(errors)
+        findings = new_findings(findings_before, await fetch_mlag_findings(client, branch))
+        assert not findings, "validate_mlag_domains has new finding(s) after the re-add:\n  - " + "\n  - ".join(
+            findings
+        )
+        await verify_no_failed_tasks(client=client, branch=branch)
+        logging.info("=== %s - MLAG step COMPLETED ===", SCENARIO_NAME)

@@ -759,6 +759,9 @@
                       }
                     }
                   },
+                  "inline_segment": {
+                    "node": null
+                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -1042,7 +1045,7 @@
                                           "vlan_id": {
                                             "value": 110
                                           },
-                                          "vlan_domain": {
+                                          "device": {
                                             "node": {
                                               "id": "dev-dc1-border-leaf-01"
                                             }
@@ -1123,7 +1126,7 @@
                                           "vlan_id": {
                                             "value": 120
                                           },
-                                          "vlan_domain": {
+                                          "device": {
                                             "node": {
                                               "id": "dev-dc1-border-leaf-01"
                                             }
@@ -1204,7 +1207,7 @@
                                           "vlan_id": {
                                             "value": 130
                                           },
-                                          "vlan_domain": {
+                                          "device": {
                                             "node": {
                                               "id": "dev-dc1-border-leaf-01"
                                             }
@@ -1285,7 +1288,7 @@
                                           "vlan_id": {
                                             "value": 210
                                           },
-                                          "vlan_domain": {
+                                          "device": {
                                             "node": {
                                               "id": "dev-dc1-border-leaf-01"
                                             }
@@ -1366,7 +1369,7 @@
                                           "vlan_id": {
                                             "value": 220
                                           },
-                                          "vlan_domain": {
+                                          "device": {
                                             "node": {
                                               "id": "dev-dc1-border-leaf-01"
                                             }

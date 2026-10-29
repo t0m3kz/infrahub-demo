@@ -31,7 +31,6 @@ from typing import Any
 from utils.exchange_transit import INTERNET_TYPE, service_context_caps, transit_leg_namespace
 from utils.limits import DEFAULT_NAMESPACE, GROUP_PROVIDER_STUBS
 from utils.segment_addressing import hosting_deployment, routed_segment_namespace
-from utils.vlan_domain import vlan_domain_id
 
 VRF_KIND = "ManagedVRF"
 SVI_ROLE = "svi"
@@ -206,7 +205,7 @@ class DeviceVrfFacts:
     id: str
     name: str
     inputs: VrfDemandInputs
-    domain_row_ids: frozenset[str]
+    row_ids: frozenset[str]
     routed_rows: tuple[RoutedRow, ...]
     unrouted_row_ids: frozenset[str]
     svis: tuple[SviFacts, ...]
@@ -235,16 +234,6 @@ class DeviceVrfFacts:
         if not self.carries_vrfs:
             return {}
         return {svi_name(row.vlan_id): row for row in sorted(self.routed_rows, key=lambda row: row.vlan_id)}
-
-
-def _domain_rows(device: dict[str, Any]) -> list[dict[str, Any]]:
-    """The rows of the device's VLAN domain: its MLAG's when paired, else its own (utils/vlan_domain.py)."""
-    capabilities = device.get("capabilities") or []
-    domain = vlan_domain_id(device.get("id"), ((cap.get("typename"), cap.get("id")) for cap in capabilities))
-    if domain != device.get("id"):
-        mlag = next((cap for cap in capabilities if cap.get("id") == domain), {})
-        return mlag.get("vlan_domain_segments") or []
-    return device.get("vlan_domain_segments") or []
 
 
 def _routed_row(row: dict[str, Any]) -> RoutedRow | None:
@@ -296,7 +285,7 @@ def instance_facts(vrf: dict[str, Any]) -> InstanceFacts:
 def device_vrf_facts(device: dict[str, Any]) -> DeviceVrfFacts:
     """The facts of one cleaned ``DcimDevice`` node of queries/validation/vrf_instances.gql."""
     interfaces = device.get("interfaces") or []
-    rows = _domain_rows(device)
+    rows = device.get("vlan_domain_segments") or []
     row_facts = [(row, _routed_row(row)) for row in rows]
     routed = [routed_row for _, routed_row in row_facts if routed_row]
     svis = tuple(_svi(iface) for iface in interfaces if iface.get("role") == SVI_ROLE)
@@ -316,7 +305,7 @@ def device_vrf_facts(device: dict[str, Any]) -> DeviceVrfFacts:
         id=device.get("id") or "",
         name=device.get("name") or "",
         inputs=inputs,
-        domain_row_ids=frozenset(row["id"] for row in rows if row.get("id")),
+        row_ids=frozenset(row["id"] for row in rows if row.get("id")),
         routed_rows=tuple(routed),
         unrouted_row_ids=frozenset(row["id"] for row, routed_row in row_facts if row.get("id") and routed_row is None),
         svis=svis,

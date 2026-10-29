@@ -101,8 +101,7 @@ query {
 """
 
 
-# A segment's prefix and its VLAN on each switch. A segment's VLAN is local to each VLAN domain (an MLAG pair, whose
-# capabilities are its members, or a switch on its own), and its prefix is allocated by add_vxlan_segment (or
+# A segment's prefix and its VLAN on each switch. A segment's VLAN is a row per switch (the row's ``device``), and its prefix is allocated by add_vxlan_segment (or
 # authored), so neither is typed here.
 SEGMENT_QUERY = """
 query ($name: String!) {
@@ -117,12 +116,7 @@ query ($name: String!) {
                   edges {
                     node {
                       vlan_id { value }
-                      vlan_domain {
-                        node {
-                          ... on ManagedMLAG { capabilities { edges { node { name { value } } } } }
-                          ... on DcimPhysicalDevice { name { value } }
-                        }
-                      }
+                      device { node { name { value } } }
                     }
                   }
                 }
@@ -148,7 +142,7 @@ class _SegmentOnSwitches:
     """A segment's gateway prefix and the VLAN it has on each switch, read from the graph."""
 
     prefix: str
-    #: The segment's VLAN per switch, from its VLAN domain realizations.
+    #: The segment's VLAN per switch, from its rows.
     vlans_by_device: dict[str, int]
 
     def vlan_on(self, device: str) -> int | None:
@@ -172,12 +166,9 @@ async def _segment_on_switches(client: InfrahubClient, branch: str, segment_name
         for row in deployment["node"]["vlan_domain_segments"]["edges"]
     ]
     for realization in realizations:
-        domain = (realization.get("vlan_domain") or {}).get("node") or {}
-        vlan = int(realization["vlan_id"]["value"])
-        if domain.get("name"):
-            vlans_by_device[domain["name"]["value"]] = vlan
-        for member in (domain.get("capabilities") or {}).get("edges") or []:
-            vlans_by_device[member["node"]["name"]["value"]] = vlan
+        device = (realization.get("device") or {}).get("node") or {}
+        if device.get("name"):
+            vlans_by_device[device["name"]["value"]] = int(realization["vlan_id"]["value"])
     return _SegmentOnSwitches(prefix=gateway["ip_prefix"]["node"]["prefix"]["value"], vlans_by_device=vlans_by_device)
 
 

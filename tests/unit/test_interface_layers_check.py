@@ -109,12 +109,6 @@ def test_r2_lag_member_with_a_segment_or_a_signal_fails() -> None:
     assert _run([_port(lag=True)]) == []
 
 
-def test_segment_capability_on_a_switch_port_fails() -> None:
-    """C+: switchport membership is `segments`, never the `capabilities` edge (physical and LAG)."""
-    errors = _run([_port(caps=("ManagedVxlanSegment",))], lags=[_port("Port-Channel1", caps=("ManagedVxlanSegment",))])
-    assert len(errors) == 2 and all("`segments`" in message for message in errors)
-
-
 def test_r2_lag_member_carrying_a_firewall_context_fails() -> None:
     """R2: the context tag belongs to the LAG, not to its member; R1 does not repeat it."""
     errors = _run([_port(lag=True, caps=("ManagedFirewallContext",))])
@@ -126,16 +120,6 @@ def test_r1_firewall_context_with_an_address_fails_on_a_non_member() -> None:
     """R1: a context port (L2 tag) with an address is both layers."""
     errors = _run([_port(ip=True, caps=("ManagedFirewallContext",))])
     assert len(errors) == 1 and "both a switchport (ManagedFirewallContext)" in errors[0]
-
-
-def test_segment_in_segments_and_in_capabilities_is_not_counted_twice() -> None:
-    """C+: the capability is one R5 error; the L2 tag stays ``segments`` once, so R1 names it once and counts one."""
-    errors = _run([_port(segments=1, caps=("ManagedVxlanSegment",))])
-    assert len(errors) == 1 and "`segments`" in errors[0]
-    both = _run([_port(segments=1, ip=True, caps=("ManagedVxlanSegment",))])
-    assert len(both) == 2
-    r1 = next(message for message in both if "both a switchport" in message)
-    assert "(segments)" in r1 and "ManagedVxlanSegment" not in r1
 
 
 def test_the_fixtures_emit_only_fields_the_query_selects_and_the_layer_fields_are_selected() -> None:

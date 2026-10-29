@@ -12,7 +12,7 @@
 #   end devices are deployed, so every end port's device carries its deployment.
 #
 # A virtual circuit's end port (VirtualPort) carries the physical circuits terminating on it (its own
-# `capabilities`, which also hold segments and peerings: only TopologyPhysicalCircuit is selected) and, for a
+# `capabilities`, which also hold peerings and contexts: only TopologyPhysicalCircuit is selected) and, for a
 # sub-interface, the same on its parent interface: a handoff VLAN rides the circuit that terminates on the parent.
 # A hop inside one facility is a DcimCable, not a circuit, so the port (a physical interface has the relationship)
 # and its parent carry their `cable` too: a Handoff is carried by a cable (the Interconnect and Tunnel rules read

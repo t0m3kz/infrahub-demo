@@ -11,12 +11,10 @@ def interface_segments(iface: dict[str, Any]) -> list[dict[str, Any]]:
     """The VXLAN segments an interface carries.
 
     A switch port or LAG carries them on ``segments`` (DcimSwitchedInterface); the inline L3 termination of a segment
-    on a DcimVirtualInterface sub-interface stays on its ``capabilities`` edge.
+    on a DcimVirtualInterface sub-interface is its single ``inline_segment``. Nothing is read from ``capabilities``.
     """
-    return [
-        *(iface.get("segments") or []),
-        *(cap for cap in iface.get("capabilities") or [] if cap.get("typename") == "ManagedVxlanSegment"),
-    ]
+    inline = iface.get("inline_segment")
+    return [*(iface.get("segments") or []), *([inline] if inline else [])]
 
 
 def routed_activations(activations: list[dict[str, Any]] | None) -> list[dict[str, Any]]:

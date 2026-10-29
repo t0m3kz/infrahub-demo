@@ -86,20 +86,19 @@ def test_leg_of_a_non_member_role_or_default_namespace_is_ignored() -> None:
     assert facts_of(raw_device("d1", "bl-1", role="border-leaf", interfaces=[port])).demand == frozenset()
 
 
-def test_mlag_domain_rows_are_used_for_a_paired_device() -> None:
-    """A paired device reads its MLAG's rows, not its own."""
-    mlag = raw_mlag("m1", raw_row("r-mlag", 200, "NON-PROD"))
-    device = raw_device("d1", "leaf-1", rows=[raw_row("r-own", 100, "PROD")], capabilities=[mlag])
+def test_a_paired_device_reads_only_its_own_rows() -> None:
+    """The MLAG carries no rows; a paired device's facts come from the rows on the device itself."""
+    device = raw_device("d1", "leaf-1", rows=[raw_row("r-own", 100, "NON-PROD")], capabilities=[raw_mlag("m1")])
     facts = facts_of(device)
     assert facts.demand == frozenset({"NON-PROD"})
-    assert facts.domain_row_ids == frozenset({"r-mlag"})
+    assert facts.row_ids == frozenset({"r-own"})
 
 
 def test_own_rows_are_used_for_a_standalone_device() -> None:
-    """A device with no MLAG is its own domain."""
+    """A standalone device reads its own rows."""
     vrf = raw_instance("v1", "leaf-1", "PROD")
     facts = facts_of(raw_device("d1", "leaf-1", rows=[raw_row("r-own", 100, "PROD")], vrfs=[vrf]))
-    assert facts.domain_row_ids == frozenset({"r-own"})
+    assert facts.row_ids == frozenset({"r-own"})
     assert [instance.namespace for instance in facts.instances] == ["PROD"]
 
 

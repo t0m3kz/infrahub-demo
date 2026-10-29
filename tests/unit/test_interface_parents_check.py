@@ -38,9 +38,9 @@ def _parent(
 
 
 def _iface(
-    name: str, role: str, device: dict[str, Any], parent: dict[str, Any] | None = None, *caps: str
+    name: str, role: str, device: dict[str, Any], parent: dict[str, Any] | None = None, segment: bool = False
 ) -> dict[str, Any]:
-    """A raw DcimVirtualInterface row; ``parent`` None is an unset parent_interface, ``caps`` the capability kinds."""
+    """A raw DcimVirtualInterface row; ``parent`` None is an unset parent_interface, ``segment`` a set inline_segment."""
     return {
         "id": f"nic-{name}",
         "__typename": "DcimVirtualInterface",
@@ -48,7 +48,7 @@ def _iface(
         "role": {"value": role},
         "device": device,
         "parent_interface": parent if parent is not None else {"node": None},
-        "capabilities": {"edges": [{"node": {"__typename": kind}} for kind in caps]},
+        "inline_segment": {"node": {"id": "segment-1"} if segment else None},
     }
 
 
@@ -147,38 +147,38 @@ def test_nic_of_a_device_without_a_host_is_not_reported_on_its_own_device() -> N
     assert len(_run(elsewhere)) == 1
 
 
-def _termination(name: str, parent: str | None, *caps: str) -> dict[str, Any]:
+def _termination(name: str, parent: str | None, segment: bool = False) -> dict[str, Any]:
     """A sub-interface of the physical device bl-1 whose parent is ``parent`` on the same device."""
     return _iface(
-        name, "service", _device("bl-1", "DcimPhysicalDevice"), _parent(parent, "bl-1") if parent else None, *caps
+        name, "service", _device("bl-1", "DcimPhysicalDevice"), _parent(parent, "bl-1") if parent else None, segment
     )
 
 
 def test_rule_6_inline_termination_on_the_dotted_sub_interface_passes() -> None:
-    """Rule 6: <parent name>.<vlan> carrying the segment."""
-    assert _run(_termination("Ethernet5.100", "Ethernet5", "ManagedVxlanSegment")) == []
+    """Rule 6: <parent name>.<vlan> carrying the inline_segment."""
+    assert _run(_termination("Ethernet5.100", "Ethernet5", True)) == []
 
 
 def test_rule_6_segment_on_a_nic_or_a_misnamed_sub_interface_fails() -> None:
     """Rule 6: no parent, a name that is not the parent's, or a non-numeric vlan."""
     for bad in (
-        _termination("eth1", None, "ManagedVxlanSegment"),
-        _termination("Ethernet6.100", "Ethernet5", "ManagedVxlanSegment"),
-        _termination("Ethernet5.x", "Ethernet5", "ManagedVxlanSegment"),
+        _termination("eth1", None, True),
+        _termination("Ethernet6.100", "Ethernet5", True),
+        _termination("Ethernet5.x", "Ethernet5", True),
     ):
         findings = _run(bad)
         assert len(findings) == 1 and "inline termination" in findings[0]["message"]
 
 
-def test_rule_6_ignores_virtual_interfaces_without_a_segment() -> None:
-    """Rule 6: a context leg, an SVI or a NIC without a segment is not its concern."""
-    assert _run(_termination("eth1", None, "ManagedFirewallContext"), _termination("Vlan100", None)) == []
+def test_rule_6_ignores_virtual_interfaces_without_an_inline_segment() -> None:
+    """Rule 6: a context leg, an SVI or a NIC without an inline_segment is not its concern."""
+    assert _run(_termination("eth1", None), _termination("Vlan100", None)) == []
 
 
 def test_the_fixtures_emit_only_fields_the_query_selects_and_the_parent_fields_are_selected() -> None:
-    """The builders match interface_parents.gql, which must select parent_interface, its cable and the capability kinds."""
+    """The builders match interface_parents.gql, which must select parent_interface, its cable and the inline_segment."""
     node = query_tree(QUERY)["DcimVirtualInterface"]["edges"]["node"]
-    assert {"parent_interface", "capabilities", "role", "device"} <= set(node)
+    assert {"parent_interface", "inline_segment", "role", "device"} <= set(node)
     assert "cable" in node["parent_interface"]["node"]
-    fixtures = [_nic("eth1", "uplink", "fw-1"), _termination("Ethernet5.100", "Ethernet5", "ManagedVxlanSegment")]
+    fixtures = [_nic("eth1", "uplink", "fw-1"), _termination("Ethernet5.100", "Ethernet5", True)]
     assert unselected(fixtures, node) == []
