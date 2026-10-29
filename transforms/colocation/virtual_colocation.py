@@ -28,13 +28,6 @@ _KIND = "TopologyVirtualColocation"
 _APPLIANCE_KIND = "CloudNetworkAppliance"
 _ORCHESTRATOR = "terraform"
 _CLUSTER = "active-passive"
-# renderer ordering field -> the CloudNetworkAppliance attribute it is read from
-_APPLIANCE_FIELDS = {
-    "type_code": "service_code",
-    "package_code": "package_code",
-    "version": "software_version",
-    "term_length": "term_length",
-}
 
 
 def _virtual_colocation(cleaned: dict[str, Any]) -> dict[str, Any]:
@@ -115,10 +108,15 @@ def _render_device(
 ) -> dict[str, Any]:
     """The renderer's dict of one appliance: ordering parameters, plus `cluster` from its HA domain."""
     result = {"name": device["name"], "metro_code": metro_code}
-    result.update({field: device.get(attribute) for field, attribute in _APPLIANCE_FIELDS.items()})
-    # The device type carries the vCPU count (DcimDeviceType.cpu_count, 4 for a C8000V): it is what the order's
-    # core_count is, so the appliance has no field of its own for it.
-    result["core_count"] = (device.get("device_type") or {}).get("cpu_count")
+    # The offer is structured data: the device type names it (type_code, C8000V) and carries the vCPU count
+    # (core_count), the software image holds the licence package and the version. A missing value stays None.
+    device_type = device.get("device_type") or {}
+    image = device.get("software_image") or {}
+    result["type_code"] = device_type.get("name")
+    result["package_code"] = image.get("package")
+    result["version"] = image.get("version")
+    result["term_length"] = device.get("term_length")
+    result["core_count"] = device_type.get("cpu_count")
     result.update(_ha_of(vc_name, device, presence))
     return result
 

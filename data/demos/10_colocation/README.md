@@ -133,14 +133,16 @@ There is no `deployment_type` any more: the node kind says what the kit is.
 Frankfurt and Paris zones name an N9K. Equinix Amsterdam is one virtual colocation, `AM-NE` (the metro is `AM`; metro,
 zone and virtual colocation names share the device-name and pool-name space, so they must differ), and names
 `C8000V_EDGE`, so it gets `CloudNetworkAppliance`s — an Equinix Network Edge instance, not hardware, with interfaces,
-BGP and a config like any device, but consumed like a cloud resource — and a physical
-template there would be rejected.
+BGP and a config like any device, but consumed like a cloud resource. It has no hardware, so the template's ports are
+virtual NICs (`TemplateDcimVirtualInterface`, no cable, no host) and a physical template there would be rejected.
 
 `AM-NE` is routed to Terraform (`infrastructure_orchestrator: terraform`) and ordered under one `CloudAccount`,
 `equinix-network-edge` (`equinix/am/02_account.yml`): its `account_id` is the Equinix billing account number (a demo
 value), its provider is Equinix (P016) and its owner Internal (P028), whose `notification_emails` are the people the
-provider notifies. The ordering parameters of each appliance (`service_code`, `package_code`, `software_version`,
-`term_length`, `cpu_count`) come from its template. The generated `virtual-colocation-terraform` artifact prints all of
+provider notifies. The ordering parameters of each appliance come from structured models, through its template: `type_code`
+is the Device Type name (`C8000V`) and `core_count` its `cpu_count`; `package_code` and `version` are the Software
+Image's `package` and `version` (`cisco_xe-17.12.01a`: `network-essentials`, `17.12.01a`); `term_length` is the
+appliance's. The generated `virtual-colocation-terraform` artifact prints all of
 it; licence tokens are Terraform variables and never live in Infrahub.
 
 ### Zones with no kit

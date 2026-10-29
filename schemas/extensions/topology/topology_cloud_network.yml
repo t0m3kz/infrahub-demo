@@ -335,7 +335,11 @@ nodes:
   # --------------------  Network Appliance  --------------------
   # A network function a provider hosts for us (Equinix Network Edge, Megaport MVE;
   # later a cloud marketplace NVA): an instance with interfaces, BGP and a config,
-  # but no rack, no chassis and no hypervisor of ours. Every provider models it the
+  # but no rack, no chassis and no hypervisor of ours. Its ports are virtual NICs
+  # (DcimVirtualInterface, no cable, no host): the template declares no physical
+  # interface. What the provider's catalogue calls the offer is structured data,
+  # not attributes here: type_code is the Device Type name, package_code and
+  # version are the Software Image's `package` and `version`. Every provider models it the
   # same way: an instance whose routing is a resource of the provider's service.
   # The function stays a device (DcimDevice: interfaces, capabilities such as
   # ManagedBGP, owner, platform), only its consumption is cloud-like, so it
@@ -365,26 +369,6 @@ nodes:
         optional: true
         description: "The provider's identifier of the instance"
         order_weight: 2300
-      # How the provider's catalogue names the offer; set on the template.
-      # Accounts, notification lists and licence tokens are never stored here.
-      - name: service_code
-        label: Service Code
-        kind: Text
-        optional: true
-        description: "The provider's code of the function (Equinix Network Edge type_code, e.g. C8000V, PA-VM)"
-        order_weight: 2310
-      - name: package_code
-        label: Package Code
-        kind: Text
-        optional: true
-        description: "The provider's software package (Equinix Network Edge package_code, e.g. network-essentials)"
-        order_weight: 2320
-      - name: software_version
-        label: Software Version
-        kind: Text
-        optional: true
-        description: "Software version as the provider names it (Equinix Network Edge version, e.g. 17.12.01a)"
-        order_weight: 2330
       - name: term_length
         label: Term (months)
         kind: Number

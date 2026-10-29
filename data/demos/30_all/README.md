@@ -193,7 +193,8 @@ footprints no context.
 
 `AM-NE` hosts two `CloudNetworkAppliance` routers, `eg-am-ne01` and `eg-am-ne02` (template `C8000V_EDGE`, Cisco
 IOS XE): instances we rent from Equinix, not hardware we rack, so there are no cages, cables or edge-pair
-interlink. It is routed to Terraform (`infrastructure_orchestrator: terraform`) and ordered under the
+interlink, and their ports are virtual NICs (`DcimVirtualInterface`). The Terraform order reads the Device Type name
+(`C8000V`) and the Software Image `cisco_xe-17.12.01a` (`version`, `package`). It is routed to Terraform (`infrastructure_orchestrator: terraform`) and ordered under the
 `CloudAccount` `equinix-network-edge` (`02_colo/equinix/am/02_account.yml`), which sorts before the topology
 file that names it. `AM` is a Multi-Site site like the other metros, so its edges also get a VTEP loopback and an
 overlay `ManagedBGP` process in the metro's site AS (`evpn_rt_as`).

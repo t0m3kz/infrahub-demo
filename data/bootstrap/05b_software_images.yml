@@ -107,6 +107,12 @@ spec:
       platform: cisco_xe
       description: "IOS XE 17.12 (Dublin) — current recommended release for ISR4451-X and C8000V"
 
+    - name: cisco_xe-17.12.01a
+      version: "17.12.01a"
+      platform: cisco_xe
+      package: network-essentials
+      description: "IOS XE 17.12 as Equinix Network Edge names the release (the version string of the Terraform order), licence package network-essentials"  # yamllint disable-line rule:line-length
+
     # ── Cisco NX-OS (Nexus 9000 spine/leaf/border-leaf) ───────────────────────
     - name: cisco_nxos-9.3.11
       version: "9.3(11)"

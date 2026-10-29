@@ -699,9 +699,6 @@ class LocationMetro(LocationGeneric):
 
 class CloudNetworkAppliance(CoreArtifactTarget, DcimDevice, DcimCapabilities):
     cloud_id: StringOptional
-    package_code: StringOptional
-    service_code: StringOptional
-    software_version: StringOptional
     term_length: IntegerOptional
     account: RelationshipAttribute[CloudAccount]
     deployment: RelationshipAttribute[TopologyProviderHosting]
@@ -963,6 +960,7 @@ class ManagedVlanDomainSegment(CoreNode):
 class DcimSoftwareImage(CoreNode):
     description: StringOptional
     name: String
+    package: StringOptional
     version: String
     devices: RelationshipManager[DcimDevice]
     platform: RelationshipAttribute[DcimPlatform]

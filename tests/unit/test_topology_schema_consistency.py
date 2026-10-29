@@ -394,11 +394,20 @@ class TestCloudNetworkAppliance:
         assert "AppInstance" not in inherited
         assert _kind(self._KIND)["generate_template"] is True
 
-    def test_it_declares_cloud_id_itself_and_the_provider_offer(self) -> None:
-        assert {"cloud_id", "service_code", "package_code", "software_version", "term_length"} <= (
-            _attribute_names(self._KIND)
-        )
+    def test_it_declares_cloud_id_and_term_length_and_no_catalogue_codes(self) -> None:
+        """The offer is structured data (Device Type name, Software Image package and version), not attributes."""
+        assert {"cloud_id", "term_length"} <= _attribute_names(self._KIND)
+        assert {"service_code", "package_code", "software_version"}.isdisjoint(_attribute_names(self._KIND))
         assert "cpu_count" not in _attribute_names(self._KIND)  # the vCPU count is DcimDeviceType.cpu_count
+
+    def test_the_software_image_carries_the_licence_package_outside_its_uniqueness(self) -> None:
+        """DcimSoftwareImage.package is the order's package_code: optional text, not part of the image identity."""
+        image = _kind("DcimSoftwareImage")
+        package = next(a for a in image["attributes"] if a["name"] == "package")
+
+        assert package["kind"] == "Text"
+        assert package["optional"] is True
+        assert not any("package" in str(constraint) for constraint in image.get("uniqueness_constraints") or [])
 
     def test_it_has_no_hypervisor_and_no_redundancy_fields_of_its_own(self) -> None:
         """No hosting_device (nothing of ours runs it); redundancy is an HA domain, not a field or a self-relationship."""
