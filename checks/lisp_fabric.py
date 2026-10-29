@@ -18,6 +18,7 @@ from infrahub_sdk.checks import InfrahubCheck
 
 from utils.data_cleaning import clean_data
 from utils.fabric_roles import CAMPUS_FABRIC_ROLES, LISP_BORDER_ROLES
+from utils.limits import DEFAULT_NAMESPACE
 
 LISP_PLATFORM = "cisco_xe"
 OFFICE_FABRIC_ROLES = CAMPUS_FABRIC_ROLES | LISP_BORDER_ROLES
@@ -52,7 +53,7 @@ def _vrf_problems(activations: list[dict[str, Any]]) -> list[str]:
             continue  # no gateway: _gateway_problems reports it
         namespace = ((gateway.get("ip_prefix") or {}).get("ip_namespace") or {}) if isinstance(gateway, dict) else {}
         vrf = namespace.get("name")
-        if not vrf or vrf == "default":
+        if not vrf or vrf == DEFAULT_NAMESPACE:
             problems.append(
                 f"segment '{segment.get('name')}' (VNI {activation.get('vni')}) has its gateway in the default "
                 "namespace, LISP needs a VRF namespace with an l3_vni"

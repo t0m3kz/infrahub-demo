@@ -24,6 +24,7 @@ from generators.protocols import (
     CoreIPPrefixPool,
     DcimPhysicalDevice,
     DcimPhysicalInterface,
+    DcimVirtualInterface,
     IpamIPAddress,
     IpamPrefix,
 )
@@ -122,6 +123,7 @@ def _payload(
                         },
                         "parent": {
                             "node": {
+                                "id": "dc-7",
                                 "name": {"value": _DC["name"]},
                                 "index": {"value": _DC["index"]},
                                 "naming_convention": {"value": _DC["naming_convention"]},
@@ -142,6 +144,9 @@ def _gen(*, slices: dict[str, MagicMock] | None = None) -> Any:
     gen.client = MagicMock()
     gen.client.create_batch = AsyncMock(side_effect=lambda: _Batch())
     gen.client.delete = AsyncMock()
+    gen.vrf_calls = MagicMock()
+    gen.reconcile_vrfs = gen.vrf_calls.reconcile_vrfs = AsyncMock()
+    gen.prune_empty_vrfs = gen.vrf_calls.prune_empty_vrfs = AsyncMock()
     gen.filter_calls = []
     known_slices: dict[str, MagicMock] = slices or {}
 
@@ -289,3 +294,69 @@ class TestPoolRelease:
 
         gen.client.delete.assert_not_awaited()
         assert not [call for call in gen.filter_calls if call[0] is IpamPrefix and call[2]]
+
+
+class TestVrfSweep:
+    @pytest.mark.asyncio
+    async def test_the_pod_devices_are_reconciled_then_the_dc_is_swept_last(self) -> None:
+        """The reconcile (device locks) drops the decommissioned devices' SVIs and memberships; the DC sweep is last."""
+        devices = [_device("spine-1", "sp1", "spine", []), _device("leaf-1", "lf1", "leaf", [])]
+        gen = _gen()
+
+        await gen.generate(_payload(devices=devices, pools=False))
+
+        assert [c[0] for c in gen.vrf_calls.mock_calls] == ["reconcile_vrfs", "prune_empty_vrfs"]
+        gen.reconcile_vrfs.assert_awaited_once_with(["spine-1", "leaf-1"])
+        gen.prune_empty_vrfs.assert_awaited_once_with(["dc-7"])
+
+    @pytest.mark.asyncio
+    async def test_the_sweep_comes_after_the_pools_are_released(self) -> None:
+        gen = _gen(slices={"lo-slice": _node("lo-slice"), "p2p-slice": _node("p2p-slice")})
+        gen.client.delete.side_effect = lambda **_: gen.vrf_calls.deleted()
+
+        await gen.generate(_payload(devices=[_device("spine-1", "sp1", "spine", [])]))
+
+        assert [c[0] for c in gen.vrf_calls.mock_calls] == ["reconcile_vrfs", "deleted", "deleted", "prune_empty_vrfs"]
+
+    @pytest.mark.asyncio
+    async def test_a_rerun_on_decommissioned_devices_still_reconciles_them(self) -> None:
+        device = _device("spine-1", "sp1", "spine", [])
+        device["node"]["status"] = {"value": "decommissioned"}
+        gen = _gen()
+
+        await gen.generate(_payload(devices=[device], pools=False))
+
+        assert _ids(gen, DcimPhysicalDevice) == []
+        gen.reconcile_vrfs.assert_awaited_once_with(["spine-1"])
+
+    @pytest.mark.asyncio
+    async def test_a_pod_without_a_parent_dc_reconciles_but_sweeps_nothing(self) -> None:
+        payload = _payload(devices=[_device("spine-1", "sp1", "spine", [])], pools=False)
+        payload["TopologyPod"]["edges"][0]["node"]["parent"] = {"node": None}
+        gen = _gen()
+
+        await gen.generate(payload)
+
+        gen.reconcile_vrfs.assert_awaited_once_with(["spine-1"])
+        gen.prune_empty_vrfs.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_an_svi_is_left_to_the_reconcile_and_other_virtual_interfaces_are_deleted(self) -> None:
+        """The SVI is deleted under the device locks by the reconcile, not by the pod's own interface delete."""
+        svi = {
+            "__typename": "DcimVirtualInterface",
+            "id": "vif-svi",
+            "status": {"value": "active"},
+            "role": {"value": "svi"},
+        }
+        loopback = {
+            "__typename": "DcimVirtualInterface",
+            "id": "vif-lo",
+            "status": {"value": "active"},
+            "role": {"value": "loopback"},
+        }
+        gen = _gen()
+
+        await gen.generate(_payload(devices=[_device("leaf-1", "lf1", "leaf", [svi, loopback])], pools=False))
+
+        assert _ids(gen, DcimVirtualInterface) == ["vif-lo"]

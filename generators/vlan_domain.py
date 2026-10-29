@@ -64,10 +64,6 @@ BORDER_GATEWAY_ROLES = frozenset({"border-leaf", "edge"})
 # router, so the zone lookup finds it. Neither terminates VXLAN segments and no generator gives it a VLAN domain,
 # so it is never a border gateway. (The missing-domain error for a real border gateway stays.)
 NON_BORDER_GATEWAY_GROUPS = frozenset({GROUP_SDWAN_GATEWAYS, GROUP_PROVIDER_STUBS})
-# Interface kinds whose segment tag puts the device's VLAN domain in scope. A
-# DcimVirtualInterface carrying the segment is an inline sub-interface on a
-# firewall/LB HA pair, which takes the facing border leaf's VLAN instead.
-TAGGABLE_INTERFACE_KINDS = frozenset({"DcimPhysicalInterface", "DcimLAGInterface"})
 # Border-leaf ports facing a firewall/load-balancer: tagged with a segment
 # only by its inline termination (segment.py), never by its AppComponents.
 SERVICE_PORT_ROLES = frozenset(BORDER_ROLE_FOR_SERVICES.values())
@@ -290,10 +286,8 @@ class VlanDomainMixin:
         border-leaf ports facing its inline-terminating HA pair."""
         return {
             iface["id"]
-            for iface in segment.get("capabilities") or []
-            if iface.get("typename") in TAGGABLE_INTERFACE_KINDS
-            and iface.get("id")
-            and (iface.get("role") in SERVICE_PORT_ROLES) == service_ports
+            for iface in segment.get("switched_interfaces") or []
+            if iface.get("id") and (iface.get("role") in SERVICE_PORT_ROLES) == service_ports
         }
 
     async def _segment_vlan_devices(self, segment: dict[str, Any]) -> list[Any]:
@@ -303,9 +297,8 @@ class VlanDomainMixin:
         tagged_device_ids = sorted(
             {
                 device_id
-                for iface in segment.get("capabilities") or []
-                if iface.get("typename") in TAGGABLE_INTERFACE_KINDS
-                and (device_id := (iface.get("device") or {}).get("id"))
+                for iface in segment.get("switched_interfaces") or []
+                if (device_id := (iface.get("device") or {}).get("id"))
             }
         )
         devices: dict[str, Any] = {}

@@ -433,6 +433,21 @@ def build_device_data(
             }
         )
 
+    # An l2-leaf is pure L2 (generators/topology/rack.py _generate_l2_leafs): its uplinks are 802.1Q trunks to the
+    # leaf pair, cabled with no pool, so they hold no address, no routing and no segments
+    # (SegmentPortTagMixin tags only customer-facing host ports, never leaf-to-leaf trunks).
+    if role == "l2-leaf":
+        interfaces[1:3] = [
+            _make_interface(
+                name=f"Ethernet{port}",
+                device_name=device_name,
+                description=f"to leaf-0{port}",
+                role="uplink",
+                ip_address=None,
+            )
+            for port in (1, 2)
+        ]
+
     # VXLAN/EVPN is rendered ONLY from capabilities, so the
     # customer-facing port must carry the segments. Attaching them solely to
     # deployment.segment_deployments (as this generator used to) left every
@@ -543,7 +558,8 @@ def build_inline_segment_data(*, device_name: str, role: str, platform: str) -> 
         )
     else:
         customer_port = next(e["node"] for e in interfaces if e["node"]["name"]["value"] == "Ethernet10")
-        customer_port["capabilities"] = _edges([seg])
+        customer_port["capabilities"] = _edges([])
+        customer_port["segments"] = _edges([seg])
     # DC-wide view (border-leaf PBR / BGW): the same segment, still no PBR.
     device_node["deployment"]["node"]["segment_deployments"] = _edges(
         [_deployment_record(seg, _INLINE_SEGMENT_KWARGS["vni"])]

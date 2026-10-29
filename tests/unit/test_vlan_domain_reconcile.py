@@ -97,7 +97,10 @@ class TestFetchSegmentVlanState:
         query = (root_dir / "queries" / "topology" / "add" / "segment_vlan_domains.gql").read_text()
         compact = " ".join(query.split())
         assert "... on TopologyDataCenter { children { edges { node { ... on TopologyPod { id } } } } }" in compact
-        assert "capabilities { edges { node { id __typename role { value } device { node { id } } } } }" in compact
+        assert (
+            "switched_interfaces { edges { node { id ... on DcimInterface { role { value } device { node { id } } } } } }"
+            in compact
+        )
         assert "ManagedSegmentDeployment(segment__ids: [$segment_id])" in compact
         assert (
             "vlan_domain_segments { edges { node { id vlan_id { value } vlan_domain { node { id __typename" in compact
@@ -106,21 +109,15 @@ class TestFetchSegmentVlanState:
 
 
 class TestTaggedInterfaceIds:
-    def test_only_physical_and_port_channel_ports_count(self) -> None:
-        """An inline DcimVirtualInterface sub-interface is not a switch port carrying the segment."""
-        segment = {
-            "capabilities": [
-                {"id": "if-1", "typename": "DcimPhysicalInterface"},
-                {"id": "po-1", "typename": "DcimLAGInterface"},
-                {"id": "sub-1", "typename": "DcimVirtualInterface"},
-            ]
-        }
+    def test_physical_and_port_channel_ports_count(self) -> None:
+        """Every peer of the typed edge is a switch port carrying the segment."""
+        segment = {"switched_interfaces": [{"id": "if-1"}, {"id": "po-1"}]}
         assert VlanDomainMixin.tagged_interface_ids(segment) == {"if-1", "po-1"}
 
     def test_service_ports_are_kept_apart_from_customer_ports(self) -> None:
         """Border-leaf firewall/load-balancer ports belong to inline termination, not to AppComponents."""
         segment = {
-            "capabilities": [
+            "switched_interfaces": [
                 {"id": "if-1", "typename": "DcimPhysicalInterface", "role": "customer"},
                 {"id": "fw-1", "typename": "DcimPhysicalInterface", "role": "firewall"},
                 {"id": "lb-1", "typename": "DcimPhysicalInterface", "role": "load-balancer"},
@@ -144,11 +141,10 @@ class TestSegmentVlanDevices:
         segment = {
             "stretch_scope": "local",
             "customer_deployments": [{"id": "cust-1", "parent": {"id": "dc-1"}}],
-            "capabilities": [
+            "switched_interfaces": [
                 {"id": "if-1", "typename": "DcimPhysicalInterface", "device": {"id": "sw-2"}},
                 {"id": "po-1", "typename": "DcimLAGInterface", "device": {"id": "sw-1"}},
                 {"id": "if-2", "typename": "DcimPhysicalInterface", "device": {"id": "sw-1"}},
-                {"id": "sub-1", "typename": "DcimVirtualInterface", "device": {"id": "fw-1"}},
             ],
         }
 
@@ -170,7 +166,7 @@ class TestSegmentVlanDevices:
                 {"id": "cust-1", "parent": {"id": "dc-1", "children": [{"id": "pod-1"}, {}]}},
                 {"id": "cust-2", "parent": {"id": "metro-1"}},
             ],
-            "capabilities": [],
+            "switched_interfaces": [],
         }
 
         devices = asyncio.run(gen._segment_vlan_devices(segment))
@@ -188,7 +184,7 @@ class TestSegmentVlanDevices:
         segment = {
             "stretch_scope": "global",
             "customer_deployments": [{"id": "cust-1", "parent": {"id": "metro-1"}}],
-            "capabilities": [{"id": "if-1", "typename": "DcimPhysicalInterface", "device": {"id": "edge-1"}}],
+            "switched_interfaces": [{"id": "if-1", "typename": "DcimPhysicalInterface", "device": {"id": "edge-1"}}],
         }
 
         assert asyncio.run(gen._segment_vlan_devices(segment)) == [edge]
@@ -204,7 +200,7 @@ class TestSegmentVlanDevices:
         segment = {
             "stretch_scope": "global",
             "customer_deployments": [{"id": "cust-1", "parent": {"id": "metro-1", "children": [{"id": "zone-1"}]}}],
-            "capabilities": [],
+            "switched_interfaces": [],
         }
 
         assert asyncio.run(gen._segment_vlan_devices(segment)) == [onramp]
@@ -222,7 +218,7 @@ class TestSegmentVlanDevices:
         segment = {
             "stretch_scope": "global",
             "customer_deployments": [{"id": "cust-1", "parent": {"id": "metro-1", "children": [{"id": "zone-1"}]}}],
-            "capabilities": [],
+            "switched_interfaces": [],
         }
 
         assert asyncio.run(gen._segment_vlan_devices(segment)) == [onramp]
@@ -236,7 +232,7 @@ class TestSegmentVlanDevices:
         segment = {
             "stretch_scope": "global",
             "customer_deployments": [{"id": "cust-1", "parent": {"id": "metro-1", "children": [{"id": "zone-1"}]}}],
-            "capabilities": [],
+            "switched_interfaces": [],
         }
 
         assert asyncio.run(gen._segment_vlan_devices(segment)) == [stray]

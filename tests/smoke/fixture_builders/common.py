@@ -226,10 +226,12 @@ def _make_interface(
                 ),
             }
         )
-    # Segments are interface capabilities too — this is the only path the
-    # rendering transform reads them from (_collect_activations_from_interfaces).
-    if segments:
-        services.extend(segments)
+    # A switch port or LAG carries its segments on `segments` (DcimSwitchedInterface); a sub-interface keeps the
+    # inline L3 termination of a segment on `capabilities` (transforms/helpers/segments.py interface_segments).
+    if typename == "DcimVirtualInterface":
+        services.extend(segments or [])
+    else:
+        iface["segments"] = _edges(segments or [])
     iface["capabilities"] = _edges(services)
     return iface
 
@@ -438,7 +440,7 @@ def run_transform(transform_cls: type, data: dict) -> str:
 def _write_data_fixture(transform_cls: type, dir_name: str, data: dict) -> tuple[int, int]:
     """Write `data` as input.json and its rendered config as output.txt.
 
-    The one hook every writer goes through: a device that carries VRFs gets the ManagedVRF instances and SVI
+    The one hook every writer goes through: a device that carries VRFs gets the ManagedVRF memberships (`vrfs`) and SVI
     objects its config demands appended to the input first (tests/smoke/fixture_builders/vrf.py), the way the
     VRF generator leaves them in the model.
     """

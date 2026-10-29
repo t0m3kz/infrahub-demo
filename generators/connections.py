@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     import logging
     from .common import CommonGenerator
 
-from utils.limits import WAIT_FOR_PEER_GENERATOR
+from utils.limits import DEFAULT_NAMESPACE, WAIT_FOR_PEER_GENERATOR
 
 from .helpers import CableTypeDetector, CablingPlanner
 from .helpers.cable_attributes import RackPosition, cable_attributes, endpoint_label
@@ -642,7 +642,7 @@ class CablingMixin:
                     "name": pool_name,
                     "default_address_type": "IpamIPAddress",
                     "default_prefix_length": prefix_length,
-                    "ip_namespace": {"id": namespace_id} if namespace_id else {"hfid": ["default"]},
+                    "ip_namespace": {"id": namespace_id} if namespace_id else {"hfid": [DEFAULT_NAMESPACE]},
                     "identifier": pool_name,
                     "resources": [prefix_id],
                 },

@@ -27,6 +27,7 @@ from transforms.helpers.overlay import _DEFAULT_ANYCAST_GATEWAY_MAC, build_overl
 from transforms.helpers.segments import _get_segment_gateways
 from transforms.helpers.vrf import device_vrfs
 from utils.fabric_roles import LISP_BORDER_ROLES
+from utils.limits import DEFAULT_NAMESPACE
 from utils.segment_addressing import is_inline_terminated
 from utils.segment_addressing import routed_segment_namespace as segment_namespace
 from utils.segment_addressing import segment_prefix
@@ -111,7 +112,7 @@ def _border_records(segment_deployments: Iterable[dict[str, Any]]) -> tuple[tupl
             )
         namespace = segment_namespace(segment)
         prefix = segment_prefix(segment, "ipv4")
-        if prefix and namespace.get("name") not in (None, "default") and namespace.get("l3_vni"):
+        if prefix and namespace.get("name") not in (None, DEFAULT_NAMESPACE) and namespace.get("l3_vni"):
             l3_records.add(EidRecord(instance_id=namespace["l3_vni"], vrf=namespace["name"], prefix=prefix))
     return (
         tuple(sorted(l3_records, key=lambda r: (r.instance_id, r.prefix))),

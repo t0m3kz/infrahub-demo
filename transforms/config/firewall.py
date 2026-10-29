@@ -1,6 +1,7 @@
 from typing import Any
 
 from transforms.common import BaseDeviceTransform
+from transforms.helpers.addressing import sub_interface_parent
 from transforms.helpers.firewall import get_firewall_static_routes, get_firewall_zones, get_zone_policies
 from transforms.helpers.firewall_contexts import get_firewall_contexts, place_policies_in_contexts
 from transforms.helpers.ha import get_ha, inline_addresses
@@ -69,7 +70,7 @@ def _build_fw_interfaces(
                 "description": iface.get("description"),
                 "status": iface.get("status"),
                 "vlan_id": vlan_id,
-                "parent_interface": iface.get("parent_interface"),
+                "parent_interface": sub_interface_parent(iface),
                 "ip_address": ip_obj,
                 "security_zone": zone,
                 **inline_addresses(capabilities, ha),

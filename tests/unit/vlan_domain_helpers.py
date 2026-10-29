@@ -70,7 +70,7 @@ def raw_state(
                         "id": segment_id,
                         "stretch_scope": {"value": stretch_scope},
                         "customer_deployments": {"edges": customer_deployments or []},
-                        "capabilities": {
+                        "switched_interfaces": {
                             "edges": [
                                 {"node": {"id": i, "__typename": t, "device": {"node": {"id": d}}}}
                                 for i, t, d in interfaces

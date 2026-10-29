@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+import pytest
+
 from checks.evpn_fabric import (
     CheckEvpnFabric,
     duplicate_rt_as_errors,
@@ -40,9 +42,9 @@ def _segment(name: str, scope: str | None, ns_type: str | None) -> dict[str, Any
 
 
 def _vrf(namespace: str, l3_vni: int | None = 5000, ns_type: str | None = "prod") -> dict[str, Any]:
-    """A raw ManagedVRF capability."""
+    """A raw ManagedVRF membership (``device.vrfs``)."""
     ns = {"name": {"value": namespace}, "l3_vni": {"value": l3_vni}, "namespace_type": {"value": ns_type}}
-    return {"__typename": "ManagedVRF", "namespace": {"node": ns}}
+    return {"namespace": {"node": ns}}
 
 
 def _overlay(router_id: str | None) -> dict[str, Any]:
@@ -94,15 +96,18 @@ def _device(
     router_id: str | None = None,
     interfaces: tuple[dict[str, Any], ...] = (),
     site_asn: int | None = None,
+    process: bool = True,
 ) -> dict[str, Any]:
-    """A cleaned DcimDevice node of queries/validation/evpn_fabric.gql."""
-    capabilities = [*vrfs, *([_overlay(router_id)] if router_id else [])]
+    """A cleaned DcimDevice node of queries/validation/evpn_fabric.gql; ``process`` False has no overlay BGP process
+    (``router_id`` None with a process is a process without a router_id)."""
+    capabilities = [_overlay(router_id)] if process else []
     return clean_data(
         {
             "id": f"id-{name}",
             "name": {"value": name},
             "role": {"value": role},
             "deployment": {"node": {"evpn_rt_as": _rt_as(site_asn)}},
+            "vrfs": edges(*vrfs),
             "capabilities": edges(*capabilities),
             "interfaces": edges(*interfaces),
         }
@@ -145,6 +150,25 @@ def test_vtep_with_a_realized_l3_vni_needs_a_router_id() -> None:
     assert vtep_router_id_errors([_vtep("spine-1", None, role="spine")]) == []
 
 
+def test_access_leaf_without_a_bgp_process_needs_no_router_id() -> None:
+    """A routed-SVI dell_sonic access leaf (CS-NY1-SW1, CS-VA1-SW1, MCR-AMS1-SW1) has no BGP: skipped, never colliding."""
+    leaves = [
+        _device(f"sw-{i}", "access-leaf", (_vrf("PROD"),), None, (_iface("svi", "PROD"),), process=False)
+        for i in (1, 2)
+    ]
+    assert vtep_router_id_errors(leaves) == []
+    with_process = _vtep("leaf-3", None)
+    assert len(vtep_router_id_errors([*leaves, with_process])) == 1
+
+
+@pytest.mark.parametrize("role", ["leaf", "border-leaf", "tor", "border-spine", "edge"])
+def test_other_vtep_roles_that_lost_their_bgp_process_are_an_error(role: str) -> None:
+    """Every VTEP role but access-leaf gets its overlay process from a generator: none left is reported."""
+    lost = _device("vtep-1", role, (_vrf("PROD"),), None, (_iface("svi", "PROD"),), process=False)
+    errors = vtep_router_id_errors([lost])
+    assert len(errors) == 1 and "no BGP process at all" in errors[0] and f"role '{role}'" in errors[0]
+
+
 def test_instance_without_an_l3_vni_or_in_default_is_not_realized() -> None:
     """An SVI in a namespace without an l3_vni, or an instance of default, has no RD."""
     no_vni = _device("leaf-1", "leaf", (_vrf("PROD", l3_vni=None),), None, (_iface("svi", "PROD"),))
@@ -181,7 +205,8 @@ def test_site_rt_as_is_read_from_the_parent_of_a_pod() -> None:
         "name": {"value": "edge-1"},
         "role": {"value": "edge"},
         "deployment": {"node": {"evpn_rt_as": None, "parent": {"node": {"evpn_rt_as": _rt_as(65001)}}}},
-        "capabilities": edges(internet),
+        "vrfs": edges(internet),
+        "capabilities": edges(_overlay(None)),
         "interfaces": edges(_iface("multisite-vip")),
     }
     assert len(vtep_router_id_errors([clean_data(raw)])) == 1
@@ -212,7 +237,8 @@ def test_check_class_reports_the_new_rules() -> None:
         "name": {"value": "leaf-1"},
         "role": {"value": "leaf"},
         "deployment": {"node": {"evpn_rt_as": None}},
-        "capabilities": edges(_vrf("PROD")),
+        "vrfs": edges(_vrf("PROD")),
+        "capabilities": edges(_overlay(None)),
         "interfaces": edges(_iface("svi", "PROD")),
     }
     check.validate(

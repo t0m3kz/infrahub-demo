@@ -5,11 +5,10 @@ from __future__ import annotations
 from typing import Any
 
 from transforms.helpers.vrf import plain_vrf_names
-from utils.vrf_demand import VRF_KIND
 
 
 def _device(*names: str) -> dict[str, Any]:
-    return {"capabilities": [{"typename": VRF_KIND, "namespace": {"name": name}} for name in names]}
+    return {"vrfs": [{"namespace": {"name": name}} for name in names]}
 
 
 def _bgp(*vrfs: str) -> list[dict[str, Any]]:

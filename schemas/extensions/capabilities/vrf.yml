@@ -3,60 +3,121 @@ version: "1.0"
 
 # ============================================================================
 # Routing — VRF instance schema
-# A ManagedVRF is one device's instance of one environment namespace (IpamNamespace is this project's VRF). It is
-# demand-driven: a device has an instance exactly for the namespaces it routes in (utils/vrf_demand.py, the one
-# derivation), written untracked by generators/helpers/vrf.py and checked by checks/vrf_instances.py. Nothing about
-# the VRF is stored here: the RD, the RT, the L3 VNI, the L3 VNI SVI VLAN and whether it is realized as EVPN or
-# VRF-lite are derived from the namespace and the device (transforms/helpers/overlay.py). A firewall or a load
-# balancer never has one: its VRF is the context.
+# A ManagedVRF is one environment namespace (IpamNamespace is this project's VRF) realized in one topology: the
+# hosting deployment (a DC, a colocation metro or an office, TopologySegmentHosting) its member devices sit in, the
+# same level as a segment's realization (ManagedSegmentDeployment) and the scope of the route-target
+# (`{evpn_rt_as}:{l3_vni}`). One per (deployment, namespace), named `{deployment lower}-vrf-{namespace lower}`
+# (dc10-vrf-prod). Its members are the devices of the topology that route in the namespace, demand-driven
+# (utils/vrf_demand.py, the one derivation), written edge by edge by generators/helpers/vrf.py and checked by
+# checks/vrf_instances.py. Nothing else is stored: the RD, the RT, the L3 VNI SVI VLAN and whether a member realizes
+# it as EVPN or VRF-lite are derived (transforms/helpers/overlay.py); the L3 VNI stays on the namespace and is only
+# shown here. A firewall or a load balancer is never a member: its VRF is the context.
 # ============================================================================
 
 nodes:
   - name: VRF
     namespace: Managed
-    description: "A device's instance of one environment namespace; RD, RT, L3 VNI and SVI VLAN are derived"
+    description: "One environment namespace realized in one topology (DC, metro, office); its members route in it"
     label: VRF Instance
     icon: "mdi:routes"
     include_in_menu: false
+    # No ManagedGenericDevice: its device edge (DcimCapabilities.capabilities) cascades, and deleting one member would
+    # delete the topology's VRF. Membership is `devices`, with no cascade.
     inherit_from:
       - ManagedGeneric
-      - ManagedGenericDevice
     human_friendly_id:
-      - "name__value"
-    # The name is {device}-vrf-{namespace lower} (generators/helpers/vrf.py); one instance per (device, namespace)
-    # is a check rule (checks/vrf_instances.py): the device edge is a many relationship and cannot be constrained.
+      - "deployment__name__value"
+      - "namespace__name__value"
     uniqueness_constraints:
-      - ["name__value"]
-    display_label: "{{name__value}}"
+      - ["deployment", "namespace"]
+    display_label: "{{ name__value }}"
     order_by:
       - name__value
-    relationships:
-      # Re-declares the generic's `capabilities` (same name, peer and identifier), like ManagedBGP.
-      - name: capabilities
-        peer: DcimCapabilities
-        label: "Device"
-        description: "The device this instance runs on: one by construction (a many rel cannot be capped at 1)"
-        cardinality: many
+    attributes:
+      # Display only, derived by the server from the namespace (the one source; nothing in code reads it).
+      - name: l3_vni
+        kind: Text
+        label: L3 VNI
+        read_only: true
         optional: true
-        kind: Attribute
-        direction: inbound
-        identifier: capabilities
-        order_weight: 800
+        computed_attribute:
+          kind: Jinja2
+          jinja2_template: "{{ namespace__l3_vni__value }}"
+        order_weight: 1100
+    relationships:
+      - name: deployment
+        peer: TopologySegmentHosting
+        label: Deployment
+        description: "The DC, colocation metro or office this VRF is realized in (its members' hosting deployment)"
+        cardinality: one
+        optional: false
+        kind: Parent
+        identifier: vrf__deployment
+        order_weight: 1000
       # Not `ip_namespace`: that field name already peers two different kinds (BuiltinIPNamespace on the IPAM nodes,
       # IpamNamespace on TopologyHandoffCircuit), and a third would risk a GraphQL "Fields ... conflict".
       - name: namespace
         peer: IpamNamespace
-        label: "Namespace"
-        description: "The environment namespace (VRF) this instance realizes on its device"
+        label: Namespace
+        description: "The environment namespace (VRF) this instance realizes in its topology"
         cardinality: one
         optional: false
         kind: Attribute
         on_delete: no-action
         identifier: vrf__namespace
         order_weight: 1050
+      - name: devices
+        peer: DcimDevice
+        label: Members
+        description: "The devices of this topology that route in the namespace (utils/vrf_demand.py); written edge by edge"  # yamllint disable-line rule:line-length
+        cardinality: many
+        optional: true
+        kind: Generic
+        on_delete: no-action
+        identifier: vrf__devices
+        order_weight: 1200
 
 extensions:
   nodes:
+    # Deleting a DC, metro or office deletes its VRF instances.
+    - kind: TopologySegmentHosting
+      relationships:
+        - name: vrfs
+          label: VRF Instances
+          peer: ManagedVRF
+          cardinality: many
+          optional: true
+          kind: Component
+          on_delete: cascade
+          identifier: vrf__deployment
+          order_weight: 7900
+          description: "The environment namespaces realized in this topology"
+    # The transforms' read of a device's VRF set (transforms/helpers/vrf.py device_vrfs).
+    - kind: DcimDevice
+      relationships:
+        - name: vrfs
+          label: VRF Instances
+          peer: ManagedVRF
+          cardinality: many
+          optional: true
+          kind: Generic
+          on_delete: no-action
+          identifier: vrf__devices
+          order_weight: 1950
+          description: "The VRF instances of its topology this device is a member of"
+    # So the namespace page lists its instances; written from the VRF side (ManagedVRF.namespace).
+    - kind: IpamNamespace
+      relationships:
+        - name: vrfs
+          label: VRF Instances
+          peer: ManagedVRF
+          cardinality: many
+          optional: true
+          kind: Generic
+          on_delete: no-action
+          identifier: vrf__namespace
+          order_weight: 5000
+          description: "The topologies this namespace is realized in"
     - kind: DcimVirtualInterface
       relationships:
         - name: vrf

@@ -6,10 +6,11 @@ from typing import Any, cast
 
 from checks.vrf_instances import (
     CheckVrfInstances,
-    duplicate_instance_errors,
+    empty_instance_warnings,
+    membership_errors,
     missing_instance_errors,
     namespace_errors,
-    shared_instance_errors,
+    no_hosting_errors,
     svi_content_errors,
     svi_domain_errors,
     svi_missing_errors,
@@ -25,9 +26,12 @@ from tests.unit.vrf_instances_helpers import (
     raw_instance,
     raw_interface,
     raw_response,
+    raw_root_instance,
     raw_row,
     raw_svi,
 )
+from utils.data_cleaning import clean_data
+from utils.vrf_demand import all_instances
 
 ROW = raw_row("r1", 100, "PROD", segment="web")
 
@@ -48,7 +52,8 @@ def test_clean_device_has_no_findings() -> None:
     for rule in (
         missing_instance_errors,
         unneeded_instance_warnings,
-        duplicate_instance_errors,
+        no_hosting_errors,
+        membership_errors,
         namespace_errors,
         uncarried_instance_errors,
         svi_missing_errors,
@@ -87,20 +92,41 @@ def test_unneeded_instance_on_a_non_carrying_device_is_left_to_rule_e() -> None:
     assert unneeded_instance_warnings(facts) == []
 
 
-def test_two_instances_of_a_namespace_on_a_device_is_an_error() -> None:
-    """(c) duplicates on one device."""
+def test_a_demand_without_a_membership_in_the_hosting_instance_is_an_error() -> None:
+    """(a) a membership in the instance of another deployment does not satisfy the demand."""
+    elsewhere = raw_instance("v1", "leaf-1", "PROD", deployment_id="dc-2")
+    errors = missing_instance_errors(facts_of(_leaf(capabilities=[elsewhere])))
+    assert len(errors) == 1 and "'DC1'" in errors[0]
+
+
+def test_a_member_of_another_deployments_instance_is_an_error() -> None:
+    """(c) a moved device or a hand edit: the instance belongs to another deployment."""
+    elsewhere = raw_instance("v9", "leaf-1", "NON-PROD", 200, "non_prod", deployment_id="dc-2")
+    errors = membership_errors(facts_of(_leaf(capabilities=[raw_instance("v1", "leaf-1", "PROD"), elsewhere])))
+    assert len(errors) == 1 and "another deployment" in errors[0]
+
+
+def test_a_member_of_two_instances_of_a_namespace_is_an_error() -> None:
+    """(c) two instances of one namespace on a device."""
     twin = raw_instance("v9", "leaf-1", "PROD")
-    errors = duplicate_instance_errors(facts_of(_leaf(capabilities=[raw_instance("v1", "leaf-1", "PROD"), twin])))
+    errors = membership_errors(facts_of(_leaf(capabilities=[raw_instance("v1", "leaf-1", "PROD"), twin])))
     assert len(errors) == 1 and "2 ManagedVRF" in errors[0]
 
 
-def test_an_instance_on_two_devices_is_an_error() -> None:
-    """(c) the same instance id under two devices."""
-    shared = raw_instance("v1", "leaf-1", "PROD")
-    a, b = facts_of(_leaf(capabilities=[shared])), facts_of(raw_device("d2", "leaf-2", capabilities=[shared]))
-    errors = shared_instance_errors([a, b])
-    assert len(errors) == 1 and "leaf-1, leaf-2" in errors[0]
-    assert shared_instance_errors([a, facts_of(raw_device("d2", "leaf-2"))]) == []
+def test_demand_without_a_hosting_deployment_is_an_error_g() -> None:
+    """(g) a leaf whose deployment is not under a DC, metro or office; (a) stays silent, there is nothing to name."""
+    facts = facts_of(_leaf(capabilities=[], hosting_id=None))
+    assert len(no_hosting_errors(facts)) == 1 and "VRF (g)" in no_hosting_errors(facts)[0]
+    assert missing_instance_errors(facts) == []
+    assert no_hosting_errors(facts_of(raw_device("d1", "spine-1", role="spine", hosting_id=None))) == []
+
+
+def test_an_instance_with_no_member_is_a_warning() -> None:
+    """(f) read from the ManagedVRF root, which lists members; a populated instance is silent."""
+    empty = raw_root_instance(raw_instance("v2", "x", "NON-PROD", 200, "non_prod"))
+    response = clean_data(raw_response(_leaf(), instances=(empty,)))
+    warnings = empty_instance_warnings(all_instances(response))
+    assert len(warnings) == 1 and "dc1-vrf-non-prod" in warnings[0]
 
 
 def test_instance_namespace_without_l3_vni_type_or_default_is_an_error() -> None:
@@ -158,13 +184,15 @@ def test_s2_svi_without_row_or_on_unrouted_row_is_a_warning() -> None:
     assert len(svi_orphan_warnings(unrouted)) == 1
 
 
-def test_s3_vrf_must_be_an_own_instance_in_the_rows_namespace() -> None:
-    """S3 unset, foreign, and wrong namespace; default rows may leave it unset."""
+def test_s3_vrf_must_be_the_hosting_instance_of_the_rows_namespace() -> None:
+    """S3 unset, not a member, wrong namespace, other deployment; default rows may leave it unset."""
     assert len(svi_vrf_errors(facts_of(_leaf(interfaces=[raw_svi("s1", 100, "r1")])))) == 1
     assert len(svi_vrf_errors(facts_of(_leaf(interfaces=[raw_svi("s1", 100, "r1", "foreign", "PROD")])))) == 1
     wrong = raw_instance("v2", "leaf-1", "NON-PROD", 200, "non_prod")
     leaf = _leaf(capabilities=[wrong], interfaces=[raw_svi("s1", 100, "r1", "v2", "NON-PROD")])
     assert len(svi_vrf_errors(facts_of(leaf))) == 1
+    other = raw_svi("s1", 100, "r1", "v5", "PROD", vrf_deployment_id="dc-2")
+    assert len(svi_vrf_errors(facts_of(_leaf(interfaces=[other])))) == 1
     default = _leaf(rows=[raw_row("r1", 100, "default")], capabilities=[], interfaces=[raw_svi("s1", 100, "r1")])
     assert svi_vrf_errors(facts_of(default)) == []
 
@@ -205,6 +233,8 @@ def test_check_logs_errors_and_warnings_end_to_end() -> None:
     errors, warnings = _run(broken)
     assert any("(a)" in message for message in errors) and any("S1" in message for message in errors)
     assert len(warnings) == 1 and "S2" in warnings[0]
-    shared = raw_instance("v1", "leaf-1", "PROD")
-    errors, _ = _run(_leaf(capabilities=[shared]), raw_device("d2", "leaf-2", role="spine", capabilities=[shared]))
-    assert any("linked to 2 devices" in message for message in errors)
+    elsewhere = raw_instance("v1", "leaf-1", "PROD", deployment_id="dc-2")
+    errors, _ = _run(_leaf(capabilities=[elsewhere], interfaces=[]), raw_device("d2", "leaf-2", hosting_id=None))
+    assert any("VRF (c)" in message for message in errors)
+    _, warnings = _run(_leaf(), raw_device("d9", "spine-1", role="spine"))
+    assert warnings == []

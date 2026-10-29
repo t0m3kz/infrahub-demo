@@ -215,7 +215,7 @@ def test_parse_state_of_an_empty_result_has_nothing() -> None:
     """No peering, key, prefix, address or port: every reader falls back to empty rather than raising."""
     state = lifecycle.parse_state({}, DCI)
     assert state == {
-        "vrfs": {"instances": {}, "others": {}, "other_demand": []},
+        "vrfs": {"all": {}, "memberships": {}, "other_demand": []},
         "peerings": {},
         "bystanders": {},
         "key": None,
@@ -546,24 +546,38 @@ def test_the_module_follows_test_65_and_runs_in_the_30_all_task() -> None:
 
 
 # ---------------------------------------------------------------------------
-# The VRF instances of the end devices
+# The VRF memberships of the end devices
 # ---------------------------------------------------------------------------
 
 AMNE = lifecycle.subject_for(lifecycle.SOLE_DEMAND_HANDOFF, key=lifecycle.SOLE_DEMAND_KEY)
+AM_PROD = "am-vrf-prod"
+OTHER_PROD = "dc10-vrf-prod"
 
 
 def _vrf_result(
     subject: Subject,
     *,
-    instances: dict[str, str],
-    others: dict[str, str] | None = None,
+    instances: dict[str, tuple[str, list[str]]],
+    namespace: str = "PROD",
     demand: tuple[str, ...] | list[str] = (),
 ) -> dict[str, Any]:
-    """A ``state_query`` result reduced to the VRF part: ``instances`` is {name: id}; ``demand`` lists the devices
-    with an address in the circuit's namespace on an interface that is not the circuit's own port."""
-    names = {**instances, **(others or {})}
+    """A ``state_query`` result reduced to the VRF part: ``instances`` is {name: (id, member device names)}, all in
+    ``namespace``; ``demand`` lists the devices with an address in the circuit's namespace on an interface that is not
+    the circuit's own port."""
     return {
-        "vrfs": {"edges": [{"node": {"id": vrf_id, "name": {"value": name}}} for name, vrf_id in names.items()]},
+        "vrfs": {
+            "edges": [
+                {
+                    "node": {
+                        "id": vrf_id,
+                        "name": {"value": name},
+                        "namespace": {"node": {"name": {"value": namespace}}},
+                        "devices": {"edges": [{"node": {"name": {"value": member}}} for member in members]},
+                    }
+                }
+                for name, (vrf_id, members) in instances.items()
+            ]
+        },
         "addressed_physical": {
             "edges": [
                 {
@@ -593,60 +607,88 @@ def _vrf_result(
     }
 
 
-def test_parse_vrfs_finds_the_end_instances_the_others_and_the_other_demand() -> None:
-    """The circuit's own port is not demand; an address on another interface of an end device is."""
-    result = _vrf_result(
-        AMNE, instances={"eg-am-ne02-vrf-prod": "v1"}, others={"leaf-1-vrf-prod": "v2"}, demand=["eg-am-ne02"]
-    )
-
-    assert lifecycle.parse_vrfs(result, AMNE) == {
-        "instances": {"eg-am-ne02": "v1"},
-        "others": {"leaf-1-vrf-prod": "v2"},
-        "other_demand": ["eg-am-ne02"],
-    }
-    assert lifecycle.parse_vrfs(_vrf_result(AMNE, instances={"eg-am-ne02-vrf-prod": "v1"}), AMNE)["other_demand"] == []
-
-
 def _vrf_state(**kwargs: Any) -> State:
     return {"vrfs": lifecycle.parse_vrfs(_vrf_result(AMNE, **kwargs), AMNE)}
 
 
-def test_an_instance_with_no_other_demand_must_go_with_the_session() -> None:
-    """Sole demand: still there after the teardown is an error; gone is right."""
-    before = _vrf_state(instances={"eg-am-ne02-vrf-prod": "v1"}, others={"x-vrf-prod": "v9"})
+def test_parse_vrfs_finds_every_instance_the_end_memberships_and_the_other_demand() -> None:
+    """The circuit's own port is not demand; an address on another interface of an end device is."""
+    result = _vrf_result(
+        AMNE,
+        instances={AM_PROD: ("v1", ["eg-am-ne01", "eg-am-ne02"]), OTHER_PROD: ("v2", ["leaf-1"])},
+        demand=["eg-am-ne02"],
+    )
 
-    assert lifecycle.vrf_down_errors(before, _vrf_state(instances={}, others={"x-vrf-prod": "v9"})) == []
+    assert lifecycle.parse_vrfs(result, AMNE) == {
+        "all": {
+            AM_PROD: {"id": "v1", "devices": frozenset({"eg-am-ne01", "eg-am-ne02"})},
+            OTHER_PROD: {"id": "v2", "devices": frozenset({"leaf-1"})},
+        },
+        "memberships": {"eg-am-ne02": AM_PROD},
+        "other_demand": ["eg-am-ne02"],
+    }
+    quiet = _vrf_result(AMNE, instances={AM_PROD: ("v1", ["eg-am-ne02"])})
+    assert lifecycle.parse_vrfs(quiet, AMNE)["other_demand"] == []
+
+
+def test_an_interconnect_has_instances_but_no_membership_to_judge() -> None:
+    """The default namespace has no instance of its own: nothing of the circuit's ends is a member."""
+    state = lifecycle.parse_vrfs(_vrf_result(DCI, instances={OTHER_PROD: ("v2", ["leaf-1"])}), DCI)
+
+    assert state["memberships"] == {}
+    assert set(state["all"]) == {OTHER_PROD}
+
+
+def test_a_member_with_no_other_demand_leaves_and_the_instance_stays_for_the_others() -> None:
+    """Sole demand, other members: the device is gone from the instance, which keeps its id."""
+    before = _vrf_state(instances={AM_PROD: ("v1", ["eg-am-ne01", "eg-am-ne02"])})
+    left = _vrf_state(instances={AM_PROD: ("v1", ["eg-am-ne01"])})
+
+    assert lifecycle.vrf_down_errors(before, left) == []
+    assert "members" in lifecycle.vrf_down_errors(before, before)[0]
+
+
+def test_the_instance_goes_with_its_last_member() -> None:
+    """The last member leaves: the instance is deleted, and still existing is an error."""
+    before = _vrf_state(instances={AM_PROD: ("v1", ["eg-am-ne02"])})
+
+    assert lifecycle.vrf_down_errors(before, _vrf_state(instances={})) == []
     assert "still exists" in lifecycle.vrf_down_errors(before, before)[0]
 
 
-def test_an_instance_with_other_demand_must_stay_with_the_same_id() -> None:
-    """Other demand: deleted or re-created is an error."""
-    before = _vrf_state(instances={"eg-am-ne02-vrf-prod": "v1"}, demand=["eg-am-ne02"])
+def test_a_member_with_other_demand_stays_a_member_of_the_same_instance() -> None:
+    """Other demand: leaving, or the instance deleted or re-created, is an error."""
+    before = _vrf_state(instances={AM_PROD: ("v1", ["eg-am-ne02"])}, demand=["eg-am-ne02"])
 
     assert lifecycle.vrf_down_errors(before, before) == []
     assert "went" in lifecycle.vrf_down_errors(before, _vrf_state(instances={}, demand=["eg-am-ne02"]))[0]
+    recreated = _vrf_state(instances={AM_PROD: ("v9", ["eg-am-ne02"])}, demand=["eg-am-ne02"])
+    assert "re-created" in lifecycle.vrf_down_errors(before, recreated)[0]
 
 
-def test_another_devices_instance_changing_is_reported_both_ways() -> None:
-    """A bystander instance deleted or re-created during the teardown or the rebuild."""
-    before = _vrf_state(instances={"eg-am-ne02-vrf-prod": "v1"}, others={"x-vrf-prod": "v9"})
-    changed = _vrf_state(instances={}, others={"x-vrf-prod": "v10"})
+def test_another_instances_change_is_reported_both_ways() -> None:
+    """A bystander instance whose members changed or that went during the teardown or the rebuild."""
+    before = _vrf_state(instances={AM_PROD: ("v1", ["eg-am-ne02"]), OTHER_PROD: ("v2", ["leaf-1", "leaf-2"])})
+    changed = _vrf_state(instances={OTHER_PROD: ("v2", ["leaf-1"])})
 
-    assert "other devices" in lifecycle.vrf_down_errors(before, changed)[0]
-    assert "other devices" in lifecycle.vrf_up_errors(before, changed)[-1]
-
-
-def test_the_rebuild_brings_the_deleted_instance_back_under_a_new_id_but_keeps_a_survivor() -> None:
-    """Back (any id) when it was deleted; the same id when other demand kept it alive."""
-    deleted = _vrf_state(instances={"eg-am-ne02-vrf-prod": "v1"})
-    kept = _vrf_state(instances={"eg-am-ne02-vrf-prod": "v1"}, demand=["eg-am-ne02"])
-
-    assert lifecycle.vrf_up_errors(deleted, _vrf_state(instances={"eg-am-ne02-vrf-prod": "v2"})) == []
-    assert "did not come back" in lifecycle.vrf_up_errors(deleted, _vrf_state(instances={}))[0]
-    assert "re-created" in lifecycle.vrf_up_errors(kept, _vrf_state(instances={"eg-am-ne02-vrf-prod": "v2"}))[0]
+    assert any(OTHER_PROD in error for error in lifecycle.vrf_down_errors(before, changed))
+    assert any(OTHER_PROD in error for error in lifecycle.vrf_up_errors(before, changed, changed))
 
 
-def test_the_party_end_of_a_handoff_has_no_instance_to_judge() -> None:
-    """An Interconnect (default namespace) has no instances at all: the judges find nothing."""
-    assert DCI.instances == {}
-    assert AMNE.instances == {"eg-am-ne02": "eg-am-ne02-vrf-prod", "EXT-AWS-DX-FR2": "EXT-AWS-DX-FR2-vrf-prod"}
+def test_the_rebuild_restores_the_deleted_instance_under_a_new_id_and_keeps_a_survivor() -> None:
+    """Back (any id) when it was deleted; the same id when it survived the decommission."""
+    before = _vrf_state(instances={AM_PROD: ("v1", ["eg-am-ne02"])})
+    gone = _vrf_state(instances={})
+    survived = _vrf_state(instances={AM_PROD: ("v1", ["eg-am-ne01"])})
+    rebuilt = _vrf_state(instances={AM_PROD: ("v2", ["eg-am-ne02"])})
+
+    assert lifecycle.vrf_up_errors(before, gone, rebuilt) == []
+    assert "did not come back" in lifecycle.vrf_up_errors(before, gone, gone)[0]
+    assert "re-created" in lifecycle.vrf_up_errors(before, survived, rebuilt)[0]
+    assert "members" in lifecycle.vrf_up_errors(before, survived, survived)[0]
+
+
+def test_the_end_devices_of_a_circuit_are_its_ports_devices() -> None:
+    """A party's device is an end too; it is simply never a member."""
+    assert DCI.end_devices == tuple(sorted({device for device, _ in DCI.ports}))
+    assert AMNE.end_devices == ("EXT-AWS-DX-FR2", "eg-am-ne02")

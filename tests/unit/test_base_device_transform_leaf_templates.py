@@ -194,10 +194,8 @@ class TestLeafPbrRules:
         """A BGW's hostless stitched segments keep their VLAN, VNI and SVI but are no ACL/PBR input."""
         data = _device_data(
             interfaces=[{"name": "Vlan100", "role": "svi", "vrf": {"namespace": {"name": "PROD"}}}],
-            device_capabilities=[
-                {"typename": "ManagedVRF", "namespace": {"name": "PROD", "l3_vni": 50000, "namespace_type": "prod"}}
-            ],
         )
+        data["vrfs"] = [{"namespace": {"name": "PROD", "l3_vni": 50000, "namespace_type": "prod"}}]
         data["segment_deployments"] = [self._gateway_activation(100, border_gateway=True)]
         pbr, acl = self._policy_for_every_activation()
 

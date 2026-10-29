@@ -351,11 +351,11 @@ def test_the_session_generator_is_registered_in_infrahub_yml() -> None:
 def test_a_change_of_the_segment_ports_runs_the_segment_generator() -> None:
     """A port assigned to (or taken from) a VXLAN segment re-runs add_vxlan_segment, which reconciles the
     segment's tags and VLAN rows (generators/topology/segment_ports.py)."""
-    rules = [rule for rule in trigger_rules() if rule["name"] == "trigger-vxlan-segment-capabilities-updated"]
+    rules = [rule for rule in trigger_rules() if rule["name"] == "trigger-vxlan-segment-switched-interfaces-updated"]
 
     assert len(rules) == 1
     rule = rules[0]
     assert rule["node_kind"] == "ManagedVxlanSegment"
     assert rule["mutation_action"] == "updated"
     assert action_generators()[rule["action"]] == "add_vxlan_segment"
-    assert _match_fields(rule) == [("CoreNodeTriggerRelationshipMatch", "capabilities")]
+    assert _match_fields(rule) == [("CoreNodeTriggerRelationshipMatch", "switched_interfaces")]

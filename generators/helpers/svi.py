@@ -55,10 +55,10 @@ def desired_vrf_id(row: RoutedRow, instance_ids: Mapping[str, str]) -> str | Non
 def plan_svis(facts: DeviceVrfFacts, instance_ids: Mapping[str, str]) -> SviPlan:
     """The writes that make the device's role-svi interfaces exactly its desired ones.
 
-    ``instance_ids`` maps a namespace name to the id of the device's instance of it (every non-default namespace of a
-    desired SVI must be in it). An SVI that differs only in its row or in a VRF it still has is updated in place; one
-    that would have to lose its VRF is deleted and created again (a relationship cannot be cleared through a save of
-    a node read without it).
+    ``instance_ids`` maps a namespace name to the id of the instance of it in the device's hosting deployment (every
+    non-default namespace of a desired SVI must be in it). An SVI that differs only in its row, or whose VRF changes
+    to another instance, is updated in place. One that would have to lose its VRF is deleted and created again,
+    because a relationship cannot be cleared through a save of a node read without it.
     """
     desired = facts.desired_svis()
     existing = {svi.name: svi for svi in facts.svis}
@@ -92,8 +92,8 @@ class SviMixin:
     client: Any
     logger: logging.Logger
 
-    async def sync_svis(self, facts: DeviceVrfFacts, instance_ids: Mapping[str, str]) -> SviPlan:
-        """Create, move and delete the device's SVIs; returns the plan it applied (falsy when nothing changed).
+    async def sync_svis(self, facts: DeviceVrfFacts, instance_ids: Mapping[str, str]) -> None:
+        """Create, move and delete the device's SVIs (nothing when they already match).
 
         The caller holds the device's VRF lock and has created the instances ``instance_ids`` names.
         """
@@ -128,4 +128,3 @@ class SviMixin:
             self.logger.info(
                 f"  {facts.name}: SVIs written {len(plan.writes)}, deleted {len(plan.recreate_ids) + len(plan.stale_ids)}"
             )
-        return plan

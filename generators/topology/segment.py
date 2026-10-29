@@ -63,7 +63,6 @@ from ..pools import PoolMixin
 from ..protocols import (
     DcimPhysicalDevice,
     DcimPhysicalInterface,
-    DcimVirtualInterface,
     IpamPrefix,
     ManagedSegmentDeployment,
     ManagedVxlanSegment,
@@ -372,7 +371,7 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, SegmentPortTagMixin, Common
         is only the "Campus and Office" label, which hosts nothing). The query selects
         ``vni_pool`` on the footprint only where the footprint hosts itself —
         its presence is the signal, whether the pool is set yet or not — the
-        same rule as transforms/helpers/segments.py's segment_hosting_candidates.
+        same rule as utils/segment_addressing.py's segment_hosting_candidates.
         Either way the node must be in the GraphQL response (the ``... on
         TopologyCustomer*`` fragments of the vxlan_segment query) — no fallback fetch.
         """
@@ -484,9 +483,7 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, SegmentPortTagMixin, Common
         A member port counts when its cable lands on a border-leaf port whose
         role is a service role (firewall/load-balancer, BORDER_ROLE_FOR_SERVICES):
         in pbr mode that is the firewall's "uplink", in inline mode the chain
-        end toward the border leaf. A border port that already parents routed
-        sub-interfaces (pbr mode's FirewallContext P2P legs) cannot also be the
-        segment's L2 trunk, so that leg is an error and is skipped.
+        end toward the border leaf.
         """
         segment_name: str = segment.get("name", "")
         inline_service = segment.get("inline_service") or {}
@@ -514,8 +511,6 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, SegmentPortTagMixin, Common
             )
             return []
 
-        routed = await self.client.filters(kind=DcimVirtualInterface, parent_interface__ids=sorted(border_ports))
-        routed_parents = {getattr(sub, "parent_interface").id for sub in routed}
         border_device_ids = sorted({port.device.id for port in border_ports.values()})
         border_devices = {
             device.id: device
@@ -528,12 +523,6 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, SegmentPortTagMixin, Common
         for port in sorted(cabled, key=lambda p: (p.device.id, p.name.value)):
             border_port = far_end_by_port.get(port.id)
             if border_port is None or border_port.id not in border_ports:
-                continue
-            if border_port.id in routed_parents:
-                self.logger.error(
-                    f"Segment '{segment_name}': border port {border_port.name.value} is a routed parent "
-                    f"(pbr-mode FirewallContext legs) — it cannot also carry the segment; use connectivity_mode inline"
-                )
                 continue
             legs.append(
                 {
@@ -569,9 +558,11 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, SegmentPortTagMixin, Common
             if to_add or to_remove:
                 segment_obj = await self.client.get(kind=ManagedVxlanSegment, id=segment_id)
                 if to_add:
-                    await segment_obj.add_relationships(relation_to_update="capabilities", related_nodes=to_add)
+                    await segment_obj.add_relationships(relation_to_update="switched_interfaces", related_nodes=to_add)
                 if to_remove:
-                    await segment_obj.remove_relationships(relation_to_update="capabilities", related_nodes=to_remove)
+                    await segment_obj.remove_relationships(
+                        relation_to_update="switched_interfaces", related_nodes=to_remove
+                    )
         if to_add or to_remove:
             self.logger.info(
                 f"Segment {segment_name}: border service ports — tagged {len(to_add)}, untagged {len(to_remove)}"

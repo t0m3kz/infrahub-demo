@@ -5,7 +5,12 @@ from __future__ import annotations
 from typing import Any
 
 from utils.data_cleaning import clean_data
-from utils.vrf_demand import DeviceVrfFacts, device_vrf_facts
+from utils.segment_addressing import HOSTING_KINDS
+from utils.vrf_demand import VRF_KIND, DeviceVrfFacts, device_vrf_facts, instance_name
+
+HOSTING_ID = "dc-1"
+HOSTING_NAME = "DC1"
+HOSTING_KIND = "TopologyDataCenter"
 
 
 def edges(*nodes: dict[str, Any]) -> dict[str, Any]:
@@ -48,18 +53,33 @@ def raw_row(
 
 
 def raw_instance(
-    instance_id: str, device: str, namespace: str, l3_vni: int | None = 100, ns_type: str | None = "prod"
-) -> dict:
-    """A ManagedVRF capability."""
+    instance_id: str,
+    device: str,
+    namespace: str,
+    l3_vni: int | None = 100,
+    ns_type: str | None = "prod",
+    deployment_id: str | None = HOSTING_ID,
+    hosting_name: str = HOSTING_NAME,
+) -> dict[str, Any]:
+    """A ManagedVRF as the device's ``vrfs`` membership (VrfDemandInstanceFields); ``device`` is unused and kept for
+    the callers that pass the member's name. ``deployment_id`` None means an instance with no deployment node."""
     ns: dict[str, Any] = {"name": {"value": namespace}}
     ns["l3_vni"] = {"value": l3_vni}
     ns["namespace_type"] = {"value": ns_type}
     return {
-        "__typename": "ManagedVRF",
+        "__typename": VRF_KIND,
         "id": instance_id,
-        "name": {"value": f"{device}-vrf-{namespace.lower()}"},
+        "name": {"value": instance_name(hosting_name, namespace)},
+        "deployment": {"node": {"id": deployment_id}} if deployment_id else None,
         "namespace": {"node": ns},
     }
+
+
+def raw_root_instance(instance: dict[str, Any], *member_ids: str) -> dict[str, Any]:
+    """A node of the ``ManagedVRF`` root: the membership shape plus its ``devices``."""
+    root = {key: value for key, value in instance.items() if key != "__typename"}
+    root["devices"] = edges(*({"id": member} for member in member_ids))
+    return root
 
 
 def raw_mlag(mlag_id: str, *rows: dict[str, Any]) -> dict[str, Any]:
@@ -97,10 +117,21 @@ def raw_svi(
     addr: dict[str, Any] | None = None,
     capabilities: list[dict[str, Any]] | None = None,
     name: str | None = None,
+    vrf_deployment_id: str | None = HOSTING_ID,
 ) -> dict[str, Any]:
     """A role-svi DcimVirtualInterface."""
     node = raw_interface(svi_id, name or f"Vlan{vlan_id}", "svi", addr, capabilities, "DcimVirtualInterface")
-    node["vrf"] = {"node": {"id": vrf_id, "namespace": namespace_ref(vrf_namespace or "")}} if vrf_id else None
+    node["vrf"] = (
+        {
+            "node": {
+                "id": vrf_id,
+                "deployment": {"node": {"id": vrf_deployment_id}},
+                "namespace": namespace_ref(vrf_namespace or ""),
+            }
+        }
+        if vrf_id
+        else None
+    )
     node["vlan_domain_segment"] = {"node": {"id": row_id}} if row_id else None
     return node
 
@@ -119,6 +150,19 @@ def raw_context(kind: str, vlan_id: int, *legs: tuple[str, str, str]) -> dict[st
     }
 
 
+def raw_deployment(
+    kind: str = "TopologyPod", hosting_id: str | None = HOSTING_ID, hosting_name: str = HOSTING_NAME
+) -> dict[str, Any]:
+    """A device's ``deployment`` (VrfDemandHostingFields). A hosting kind is the hosting deployment itself; a pod, zone
+    or virtual colocation names it as ``parent``; any other kind (or ``hosting_id`` None) has no hosting deployment."""
+    if kind in HOSTING_KINDS:
+        return {"node": {"__typename": kind, "id": hosting_id or "dep-1", "name": {"value": hosting_name}}}
+    node: dict[str, Any] = {"__typename": kind, "id": "dep-1", "name": {"value": "dep-1"}}
+    if hosting_id and kind in {"TopologyPod", "TopologyColocationZone", "TopologyVirtualColocation"}:
+        node["parent"] = {"node": {"__typename": HOSTING_KIND, "id": hosting_id, "name": {"value": hosting_name}}}
+    return {"node": node}
+
+
 def raw_device(
     device_id: str,
     name: str,
@@ -129,24 +173,43 @@ def raw_device(
     interfaces: list[dict[str, Any]] | None = None,
     groups: tuple[str, ...] = (),
     deployment_kind: str = "TopologyPod",
+    vrfs: list[dict[str, Any]] | None = None,
+    hosting_id: str | None = HOSTING_ID,
+    status: str | None = None,
 ) -> dict[str, Any]:
-    """One DcimDevice node of the query."""
-    return {
+    """One DcimDevice node of the query. ``vrfs`` are its memberships (``raw_instance``); a ManagedVRF passed in
+    ``capabilities`` is taken as a membership too (the pre-r3 spelling). The device sits in a pod of the DC
+    ``hosting_id`` (None: a deployment with no hosting parent)."""
+    caps = capabilities or []
+    members = [*(vrfs or []), *(cap for cap in caps if cap.get("__typename") == VRF_KIND)]
+    node: dict[str, Any] = {
         "__typename": typename,
         "id": device_id,
         "name": {"value": name},
         "role": {"value": role},
         "member_of_groups": edges(*({"name": {"value": group}} for group in groups)),
-        "deployment": {"node": {"__typename": deployment_kind, "id": "dep-1"}},
+        "vrfs": edges(*({k: v for k, v in vrf.items() if k != "__typename"} for vrf in members)),
+        "deployment": raw_deployment(deployment_kind, hosting_id),
         "vlan_domain_segments": edges(*(rows or [])),
-        "capabilities": edges(*(capabilities or [])),
+        "capabilities": edges(*(cap for cap in caps if cap.get("__typename") != VRF_KIND)),
         "interfaces": edges(*(interfaces or [])),
     }
+    if status:
+        node["status"] = {"value": status}
+    return node
 
 
-def raw_response(*devices: dict[str, Any]) -> dict[str, Any]:
-    """The whole query response."""
-    return {"IpamNamespace": edges(), "DcimDevice": edges(*devices)}
+def raw_response(*devices: dict[str, Any], instances: tuple[dict[str, Any], ...] = ()) -> dict[str, Any]:
+    """The whole query response. The ``ManagedVRF`` root lists every instance the devices are members of (with those
+    members) plus the extra ``instances`` (raw_root_instance nodes, for instances with no member)."""
+    members: dict[str, list[str]] = {}
+    shapes: dict[str, dict[str, Any]] = {}
+    for device in devices:
+        for edge in device["vrfs"]["edges"]:
+            members.setdefault(edge["node"]["id"], []).append(device["id"])
+            shapes[edge["node"]["id"]] = edge["node"]
+    roots = [raw_root_instance(shapes[vrf_id], *ids) for vrf_id, ids in members.items()]
+    return {"IpamNamespace": edges(), VRF_KIND: edges(*roots, *instances), "DcimDevice": edges(*devices)}
 
 
 def facts_of(device: dict[str, Any]) -> DeviceVrfFacts:

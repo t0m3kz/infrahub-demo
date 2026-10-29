@@ -645,6 +645,9 @@ class TestPodDecommission:
         gen.batches = _Batches()
         gen.client.create_batch = gen.batches
         gen.filter_calls = []
+        # The VRF pass has its own tests (test_pod_decommission.py, test_vrf_reconcile.py).
+        gen.reconcile_vrfs = AsyncMock()
+        gen.prune_empty_vrfs = AsyncMock()
 
         async def _filters(*, kind: Any, ids: list[str], **kwargs: Any) -> list[Any]:
             gen.filter_calls.append((kind, ids, kwargs))

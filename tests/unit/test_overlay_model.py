@@ -91,9 +91,9 @@ def _bgp_cap(asn: int = 4245880501, router_id: str = "10.0.0.7/32", role: str = 
     }
 
 
-def _vrf_cap(namespace: dict[str, Any]) -> dict[str, Any]:
-    """A ManagedVRF instance of the device, as the cleaned config query returns it."""
-    return {"typename": "ManagedVRF", "name": f"dev-vrf-{namespace['name'].lower()}", "namespace": namespace}
+def _vrf(namespace: dict[str, Any]) -> dict[str, Any]:
+    """A ManagedVRF membership of the device (``device.vrfs``), as the cleaned config query returns it."""
+    return {"namespace": namespace}
 
 
 def _leaf(capabilities: list[dict[str, Any]] | None = None) -> dict[str, Any]:
@@ -103,7 +103,8 @@ def _leaf(capabilities: list[dict[str, Any]] | None = None) -> dict[str, Any]:
             {"name": "Loopback0", "role": "loopback", "ip_address": {"address": "10.0.0.1/32"}},
             {"name": "Ethernet1", "role": "uplink"},
         ],
-        "capabilities": [_bgp_cap(), _vrf_cap(_PROD_NS)] if capabilities is None else capabilities,
+        "capabilities": [_bgp_cap()] if capabilities is None else capabilities,
+        "vrfs": [_vrf(_PROD_NS)] if capabilities is None else [],
     }
 
 
@@ -153,9 +154,8 @@ def _bgw_edge() -> dict[str, Any]:
         ],
         "capabilities": [
             {"typename": "ManagedBGP", "name": "bgp", "peerings": [_transit_peering()]},
-            _vrf_cap(_INTERNET_NS),
-            _vrf_cap(_PROD_NS),
         ],
+        "vrfs": [_vrf(_INTERNET_NS), _vrf(_PROD_NS)],
     }
 
 

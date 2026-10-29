@@ -446,11 +446,19 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
-    resource_name: virtual_nic_pinning
+    resource_name: interface_parents
     tests:
       - name: syntax_check
         spec:
-          path: queries/validation/virtual_nic_pinning.gql
+          path: queries/validation/interface_parents.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: interface_layers
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/interface_layers.gql
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery

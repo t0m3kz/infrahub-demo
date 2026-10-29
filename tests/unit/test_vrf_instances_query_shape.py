@@ -5,16 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from graphql import (
-    FieldNode,
-    FragmentDefinitionNode,
-    FragmentSpreadNode,
-    InlineFragmentNode,
-    OperationDefinitionNode,
-    SelectionSetNode,
-    parse,
-)
-
+from tests.unit.query_shape_helpers import Tree as _Tree
+from tests.unit.query_shape_helpers import query_tree
+from tests.unit.query_shape_helpers import unselected as _unselected
 from tests.unit.vrf_instances_helpers import (
     address,
     raw_context,
@@ -23,52 +16,16 @@ from tests.unit.vrf_instances_helpers import (
     raw_interface,
     raw_mlag,
     raw_response,
+    raw_root_instance,
     raw_row,
     raw_svi,
 )
 
 QUERY = Path(__file__).resolve().parents[2] / "queries" / "validation" / "vrf_instances.gql"
-_Tree = dict[str, "_Tree"]
-
-
-def _merge(into: _Tree, other: _Tree) -> None:
-    for name, subtree in other.items():
-        _merge(into.setdefault(name, {}), subtree)
-
-
-def _selection_tree(selection_set: SelectionSetNode | None, fragments: dict[str, FragmentDefinitionNode]) -> _Tree:
-    """The field names selected under a selection set (inline fragments and spreads resolved and merged)."""
-    tree: _Tree = {}
-    for selection in selection_set.selections if selection_set else ():
-        if isinstance(selection, FieldNode):
-            _merge(tree.setdefault(selection.name.value, {}), _selection_tree(selection.selection_set, fragments))
-        elif isinstance(selection, InlineFragmentNode):
-            _merge(tree, _selection_tree(selection.selection_set, fragments))
-        elif isinstance(selection, FragmentSpreadNode):
-            _merge(tree, _selection_tree(fragments[selection.name.value].selection_set, fragments))
-    return tree
 
 
 def _query_tree() -> _Tree:
-    document = parse(QUERY.read_text())
-    fragments = {d.name.value: d for d in document.definitions if isinstance(d, FragmentDefinitionNode)}
-    operation = next(d for d in document.definitions if isinstance(d, OperationDefinitionNode))
-    return _selection_tree(operation.selection_set, fragments)
-
-
-def _unselected(emitted: Any, tree: _Tree, path: str = "") -> list[str]:
-    """The paths of the keys of a raw payload the query tree does not select."""
-    if isinstance(emitted, list):
-        return [miss for item in emitted for miss in _unselected(item, tree, path)]
-    if not isinstance(emitted, dict):
-        return []
-    missing = []
-    for key, value in emitted.items():
-        if key not in tree:
-            missing.append(f"{path}.{key}")
-        else:
-            missing.extend(_unselected(value, tree[key], f"{path}.{key}"))
-    return missing
+    return query_tree(QUERY)
 
 
 def _everything() -> dict[str, Any]:
@@ -84,11 +41,16 @@ def _everything() -> dict[str, Any]:
         "d1",
         "leaf-1",
         rows=[row],
-        capabilities=[raw_instance("v1", "leaf-1", "PROD"), raw_mlag("m1", row)],
+        capabilities=[raw_mlag("m1", row)],
+        vrfs=[raw_instance("v1", "leaf-1", "PROD")],
         interfaces=interfaces,
         groups=("provider_stubs",),
     )
-    return raw_response(device)
+    border = raw_device("d2", "bl-1", role="border-leaf", deployment_kind="TopologyDataCenter")
+    zone = raw_device("d3", "sw-1", deployment_kind="TopologyColocationZone")
+    old = raw_device("d4", "old-1", status="decommissioned")
+    empty = raw_root_instance(raw_instance("v2", "x", "NON-PROD", 200, "non_prod"))
+    return raw_response(device, border, zone, old, instances=(empty,))
 
 
 def test_the_query_tree_resolves_the_in_file_fragments() -> None:
@@ -99,6 +61,16 @@ def test_the_query_tree_resolves_the_in_file_fragments() -> None:
         "ip_address"
         in device["interfaces"]["edges"]["node"]["capabilities"]["edges"]["node"]["capabilities"]["edges"]["node"]
     )
+
+
+def test_the_query_selects_memberships_hosting_and_the_vrf_root() -> None:
+    """Round 3: the device ``vrfs``, the deployment with its parent, the ``ManagedVRF`` root and the SVI's VRF topology."""
+    tree = _query_tree()
+    device = tree["DcimDevice"]["edges"]["node"]
+    assert {"namespace", "deployment"} <= set(device["vrfs"]["edges"]["node"])
+    assert "parent" in device["deployment"]["node"]
+    assert {"deployment", "namespace", "devices"} <= set(tree["ManagedVRF"]["edges"]["node"])
+    assert "deployment" in device["interfaces"]["edges"]["node"]["vrf"]["node"]
 
 
 def test_the_raw_builders_emit_only_fields_the_query_selects() -> None:

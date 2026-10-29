@@ -20,7 +20,7 @@ def _port(port_id: str, name: str, role: str, *, device_id: str = "vm-1", parent
         name=SimpleNamespace(value=name),
         role=SimpleNamespace(value=role),
         device=SimpleNamespace(id=device_id),
-        host_interface=SimpleNamespace(id=parent_id),
+        parent_interface=SimpleNamespace(id=parent_id),
     )
 
 
@@ -43,7 +43,7 @@ def _nics(device_id: str = "vm-1", **pinned: str) -> list[Any]:
         _port(f"{device_id}-eth7", "eth7", "ha", device_id=device_id),
     ]
     for nic in nics:
-        nic.host_interface = SimpleNamespace(id=pinned.get(nic.name.value))
+        nic.parent_interface = SimpleNamespace(id=pinned.get(nic.name.value))
     return nics
 
 
@@ -104,13 +104,13 @@ def _client(nics_by_call: list[list[Any]], host_ports: list[Any]) -> Any:
 
 
 @pytest.mark.asyncio
-async def test_pin_sets_host_interface_of_every_paired_nic_untracked() -> None:
+async def test_pin_sets_parent_interface_of_every_paired_nic_untracked() -> None:
     client = _client([_nics()], _host_ports())
     gen: Any = _Gen(client)
 
     await gen._pin_virtual_nics([SimpleNamespace(id="vm-1", name=SimpleNamespace(value="vm"))], "host")
 
-    assert {data["name"]: data["host_interface"] for data, _ in client.saved} == {
+    assert {data["name"]: data["parent_interface"] for data, _ in client.saved} == {
         "eth0": {"id": "h-mgmt"},
         "eth1": {"id": "h-eth1"},
         "eth2": {"id": "h-eth2"},

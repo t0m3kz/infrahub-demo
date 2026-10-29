@@ -65,15 +65,8 @@ def _render(transform_cls: type, data: dict[str, Any]) -> str:
 
 
 def _without_instance(data: dict[str, Any], namespace: str) -> dict[str, Any]:
-    edges = _node(data)["capabilities"]["edges"]
-    edges[:] = [
-        edge
-        for edge in edges
-        if not (
-            edge["node"].get("__typename") == "ManagedVRF"
-            and edge["node"]["namespace"]["node"]["name"]["value"] == namespace
-        )
-    ]
+    edges = _node(data)["vrfs"]["edges"]
+    edges[:] = [edge for edge in edges if edge["node"]["namespace"]["node"]["name"]["value"] != namespace]
     return data
 
 
@@ -84,11 +77,7 @@ def _without_svi(data: dict[str, Any], name: str) -> dict[str, Any]:
 
 
 def _instances(data: dict[str, Any]) -> list[str]:
-    return [
-        edge["node"]["namespace"]["node"]["name"]["value"]
-        for edge in _node(data)["capabilities"]["edges"]
-        if edge["node"].get("__typename") == "ManagedVRF"
-    ]
+    return [edge["node"]["namespace"]["node"]["name"]["value"] for edge in _node(data)["vrfs"]["edges"]]
 
 
 def _svis(data: dict[str, Any]) -> dict[str, str | None]:
@@ -313,3 +302,25 @@ class TestFixtureHook:
         assert _svis(restored) == _svis(golden)
         assert with_vrf_objects(transform, restored) == restored
         assert _render(cls, restored)
+
+
+class TestMembershipOfAnotherDeployment:
+    def test_the_transform_renders_the_vrf_set_as_given(self) -> None:
+        """A membership whose deployment is not the device's is rendered like any other: the check reports it."""
+        data = _raw(_EDGE_PEERS)
+        stray = {
+            "node": {
+                "namespace": {
+                    "node": {
+                        "name": {"value": "OTHER-DC"},
+                        "l3_vni": {"value": 50009},
+                        "namespace_type": {"value": "prod"},
+                    }
+                },
+                "deployment": {"node": {"name": {"value": "some-other-dc"}}},
+            }
+        }
+        _node(data)["vrfs"]["edges"].append(stray)
+
+        assert "OTHER-DC" not in _render(Edge, _raw(_EDGE_PEERS))
+        assert "vrf context OTHER-DC" in _render(Edge, data)

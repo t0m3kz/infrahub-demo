@@ -20,16 +20,13 @@ def _edge(
     ]
     if bgw:
         interfaces.append({"name": "Loopback1", "role": "multisite-vip", "ip_address": {"address": "10.0.0.50/32"}})
-    # the edge's VRF instances (ManagedVRF): the upstream transit is its instance of an internet namespace
-    capabilities = (
-        [{"typename": "ManagedVRF", "name": f"eg-fr201-vrf-{namespace['name'].lower()}", "namespace": namespace}]
-        if namespace
-        else []
-    )
+    # the edge's VRF memberships (device.vrfs): the upstream transit is its instance of an internet namespace
+    vrfs = [{"namespace": namespace}] if namespace else []
     return {
         "name": "eg-fr201",
         "interfaces": interfaces,
-        "capabilities": capabilities,
+        "capabilities": [],
+        "vrfs": vrfs,
         "deployment": {"evpn_rt_as": {"asn": rt_as}} if rt_as else {},
     }
 

@@ -17,7 +17,7 @@ from utils.exchange_transit import (
     transit_vlan,
     transit_vni,
 )
-from utils.limits import ACL_CLOSING_SEQ, VLAN_NAME_MAX
+from utils.limits import ACL_CLOSING_SEQ, DEFAULT_NAMESPACE, VLAN_NAME_MAX
 from utils.segment_addressing import segment_prefix
 
 
@@ -213,7 +213,7 @@ def _context_leg_ip(ctx: dict[str, Any], namespace: str | None = None) -> str | 
         except ValueError:
             continue
         ns_name = (ip_obj.get("ip_namespace") or {}).get("name")
-        if namespace and ns_name == namespace and ns_name != "default":
+        if namespace and ns_name == namespace and ns_name != DEFAULT_NAMESPACE:
             return transit_addresses(str(interface.network))["vip"]
     return None
 

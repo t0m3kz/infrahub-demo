@@ -771,13 +771,13 @@
                     "value": "Ethernet1"
                   },
                   "description": {
-                    "value": "to spine-01"
+                    "value": "to leaf-01"
                   },
                   "status": {
                     "value": "active"
                   },
                   "role": {
-                    "value": "spine"
+                    "value": "uplink"
                   },
                   "interface_type": {
                     "value": "10gbase-x-sfpp"
@@ -786,71 +786,13 @@
                     "value": 9000
                   },
                   "ip_address": {
-                    "node": {
-                      "address": {
-                        "value": "10.1.0.1/31"
-                      },
-                      "ip_namespace": {
-                        "node": {
-                          "name": {
-                            "value": "default"
-                          }
-                        }
-                      }
-                    }
+                    "node": null
                   },
                   "cable": {
-                    "node": {
-                      "id": "cable-Ethernet1",
-                      "endpoints": {
-                        "edges": [
-                          {
-                            "node": {
-                              "__typename": "DcimPhysicalInterface",
-                              "name": {
-                                "value": "Ethernet1"
-                              },
-                              "ip_address": {
-                                "node": {
-                                  "address": {
-                                    "value": "10.1.0.1/31"
-                                  }
-                                }
-                              },
-                              "device": {
-                                "node": {
-                                  "name": {
-                                    "value": "dc1-l2-leaf-01"
-                                  }
-                                }
-                              }
-                            }
-                          },
-                          {
-                            "node": {
-                              "__typename": "DcimPhysicalInterface",
-                              "name": {
-                                "value": "Ethernet1/1"
-                              },
-                              "ip_address": {
-                                "node": {
-                                  "address": {
-                                    "value": "10.1.0.0/31"
-                                  }
-                                }
-                              },
-                              "device": {
-                                "node": {
-                                  "name": {
-                                    "value": "spine-01"
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        ]
-                      }
-                    }
+                    "node": null
+                  },
+                  "segments": {
+                    "edges": []
                   },
                   "capabilities": {
                     "edges": []
@@ -864,13 +806,13 @@
                     "value": "Ethernet2"
                   },
                   "description": {
-                    "value": "to spine-02"
+                    "value": "to leaf-02"
                   },
                   "status": {
                     "value": "active"
                   },
                   "role": {
-                    "value": "spine"
+                    "value": "uplink"
                   },
                   "interface_type": {
                     "value": "10gbase-x-sfpp"
@@ -879,71 +821,13 @@
                     "value": 9000
                   },
                   "ip_address": {
-                    "node": {
-                      "address": {
-                        "value": "10.1.0.3/31"
-                      },
-                      "ip_namespace": {
-                        "node": {
-                          "name": {
-                            "value": "default"
-                          }
-                        }
-                      }
-                    }
+                    "node": null
                   },
                   "cable": {
-                    "node": {
-                      "id": "cable-Ethernet2",
-                      "endpoints": {
-                        "edges": [
-                          {
-                            "node": {
-                              "__typename": "DcimPhysicalInterface",
-                              "name": {
-                                "value": "Ethernet2"
-                              },
-                              "ip_address": {
-                                "node": {
-                                  "address": {
-                                    "value": "10.1.0.3/31"
-                                  }
-                                }
-                              },
-                              "device": {
-                                "node": {
-                                  "name": {
-                                    "value": "dc1-l2-leaf-01"
-                                  }
-                                }
-                              }
-                            }
-                          },
-                          {
-                            "node": {
-                              "__typename": "DcimPhysicalInterface",
-                              "name": {
-                                "value": "Ethernet1/2"
-                              },
-                              "ip_address": {
-                                "node": {
-                                  "address": {
-                                    "value": "10.1.0.2/31"
-                                  }
-                                }
-                              },
-                              "device": {
-                                "node": {
-                                  "name": {
-                                    "value": "spine-02"
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        ]
-                      }
-                    }
+                    "node": null
+                  },
+                  "segments": {
+                    "edges": []
                   },
                   "capabilities": {
                     "edges": []
@@ -977,7 +861,7 @@
                   "cable": {
                     "node": null
                   },
-                  "capabilities": {
+                  "segments": {
                     "edges": [
                       {
                         "node": {
@@ -1142,6 +1026,9 @@
                         }
                       }
                     ]
+                  },
+                  "capabilities": {
+                    "edges": []
                   }
                 }
               }

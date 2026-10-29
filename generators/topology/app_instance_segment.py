@@ -39,7 +39,7 @@ on it (queries/topology/add/segment_components.gql); a port no instance
 lands on any more (an instance moved, a component left, a port assigned to the
 segment by hand) is untagged, and the segment's VLAN domain rows follow
 (SegmentPortTagMixin, shared with add_vxlan_segment, which a change of the
-segment's ``capabilities`` triggers, data/events/99_actions.yml). A component
+segment's ``switched_interfaces`` triggers, data/events/99_actions.yml). A component
 that moves to ANOTHER segment leaves the old segment's tags until that
 segment is reconciled again (the next run of either generator on it).
 

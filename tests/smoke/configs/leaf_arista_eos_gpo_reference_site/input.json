@@ -725,56 +725,6 @@
                     ]
                   }
                 }
-              },
-              {
-                "node": {
-                  "__typename": "ManagedVRF",
-                  "id": "vrf-dc1-leaf-01-NONPROD",
-                  "name": {
-                    "value": "dc1-leaf-01-vrf-nonprod"
-                  },
-                  "status": {
-                    "value": "active"
-                  },
-                  "namespace": {
-                    "node": {
-                      "name": {
-                        "value": "NONPROD"
-                      },
-                      "l3_vni": {
-                        "value": 50011
-                      },
-                      "namespace_type": {
-                        "value": "non_prod"
-                      }
-                    }
-                  }
-                }
-              },
-              {
-                "node": {
-                  "__typename": "ManagedVRF",
-                  "id": "vrf-dc1-leaf-01-PROD",
-                  "name": {
-                    "value": "dc1-leaf-01-vrf-prod"
-                  },
-                  "status": {
-                    "value": "active"
-                  },
-                  "namespace": {
-                    "node": {
-                      "name": {
-                        "value": "PROD"
-                      },
-                      "l3_vni": {
-                        "value": 50012
-                      },
-                      "namespace_type": {
-                        "value": "prod"
-                      }
-                    }
-                  }
-                }
               }
             ]
           },
@@ -902,6 +852,9 @@
                       }
                     }
                   },
+                  "segments": {
+                    "edges": []
+                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -995,6 +948,9 @@
                       }
                     }
                   },
+                  "segments": {
+                    "edges": []
+                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -1027,7 +983,7 @@
                   "cable": {
                     "node": null
                   },
-                  "capabilities": {
+                  "segments": {
                     "edges": [
                       {
                         "node": {
@@ -1354,6 +1310,9 @@
                         }
                       }
                     ]
+                  },
+                  "capabilities": {
+                    "edges": []
                   }
                 }
               },
@@ -1384,7 +1343,7 @@
                   "cable": {
                     "node": null
                   },
-                  "capabilities": {
+                  "segments": {
                     "edges": [
                       {
                         "node": {
@@ -1468,6 +1427,9 @@
                         }
                       }
                     ]
+                  },
+                  "capabilities": {
+                    "edges": []
                   }
                 }
               },
@@ -1626,6 +1588,44 @@
                 "edges": []
               }
             }
+          },
+          "vrfs": {
+            "edges": [
+              {
+                "node": {
+                  "namespace": {
+                    "node": {
+                      "name": {
+                        "value": "NONPROD"
+                      },
+                      "l3_vni": {
+                        "value": 50011
+                      },
+                      "namespace_type": {
+                        "value": "non_prod"
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "namespace": {
+                    "node": {
+                      "name": {
+                        "value": "PROD"
+                      },
+                      "l3_vni": {
+                        "value": 50012
+                      },
+                      "namespace_type": {
+                        "value": "prod"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
           }
         }
       }
@@ -2994,7 +2994,7 @@
                                                   }
                                                 }
                                               },
-                                              "capabilities": {
+                                              "segments": {
                                                 "edges": [
                                                   {
                                                     "node": {
@@ -3132,7 +3132,7 @@
                                                       }
                                                     }
                                                   },
-                                                  "capabilities": {
+                                                  "segments": {
                                                     "edges": [
                                                       {
                                                         "node": {
@@ -3202,7 +3202,7 @@
                                                       }
                                                     }
                                                   },
-                                                  "capabilities": {
+                                                  "segments": {
                                                     "edges": [
                                                       {
                                                         "node": {

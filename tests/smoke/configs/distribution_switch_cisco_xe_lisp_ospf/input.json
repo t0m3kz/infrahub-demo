@@ -194,6 +194,9 @@
                       }
                     }
                   },
+                  "segments": {
+                    "edges": []
+                  },
                   "capabilities": {
                     "edges": [
                       {
@@ -356,6 +359,9 @@
                         ]
                       }
                     }
+                  },
+                  "segments": {
+                    "edges": []
                   },
                   "capabilities": {
                     "edges": [

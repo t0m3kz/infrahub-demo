@@ -725,81 +725,6 @@
                     ]
                   }
                 }
-              },
-              {
-                "node": {
-                  "__typename": "ManagedVRF",
-                  "id": "vrf-dc1-border-leaf-01-INTERNET",
-                  "name": {
-                    "value": "dc1-border-leaf-01-vrf-internet"
-                  },
-                  "status": {
-                    "value": "active"
-                  },
-                  "namespace": {
-                    "node": {
-                      "name": {
-                        "value": "INTERNET"
-                      },
-                      "l3_vni": {
-                        "value": 50003
-                      },
-                      "namespace_type": {
-                        "value": "internet"
-                      }
-                    }
-                  }
-                }
-              },
-              {
-                "node": {
-                  "__typename": "ManagedVRF",
-                  "id": "vrf-dc1-border-leaf-01-MANAGEMENT",
-                  "name": {
-                    "value": "dc1-border-leaf-01-vrf-management"
-                  },
-                  "status": {
-                    "value": "active"
-                  },
-                  "namespace": {
-                    "node": {
-                      "name": {
-                        "value": "MANAGEMENT"
-                      },
-                      "l3_vni": {
-                        "value": 50004
-                      },
-                      "namespace_type": {
-                        "value": "management"
-                      }
-                    }
-                  }
-                }
-              },
-              {
-                "node": {
-                  "__typename": "ManagedVRF",
-                  "id": "vrf-dc1-border-leaf-01-PROD",
-                  "name": {
-                    "value": "dc1-border-leaf-01-vrf-prod"
-                  },
-                  "status": {
-                    "value": "active"
-                  },
-                  "namespace": {
-                    "node": {
-                      "name": {
-                        "value": "PROD"
-                      },
-                      "l3_vni": {
-                        "value": 50001
-                      },
-                      "namespace_type": {
-                        "value": "prod"
-                      }
-                    }
-                  }
-                }
               }
             ]
           },
@@ -927,6 +852,9 @@
                       }
                     }
                   },
+                  "segments": {
+                    "edges": []
+                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -1020,6 +948,9 @@
                       }
                     }
                   },
+                  "segments": {
+                    "edges": []
+                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -1052,7 +983,7 @@
                   "cable": {
                     "node": null
                   },
-                  "capabilities": {
+                  "segments": {
                     "edges": [
                       {
                         "node": {
@@ -1148,6 +1079,9 @@
                         }
                       }
                     ]
+                  },
+                  "capabilities": {
+                    "edges": []
                   }
                 }
               },
@@ -2264,6 +2198,61 @@
                 ]
               }
             }
+          },
+          "vrfs": {
+            "edges": [
+              {
+                "node": {
+                  "namespace": {
+                    "node": {
+                      "name": {
+                        "value": "INTERNET"
+                      },
+                      "l3_vni": {
+                        "value": 50003
+                      },
+                      "namespace_type": {
+                        "value": "internet"
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "namespace": {
+                    "node": {
+                      "name": {
+                        "value": "MANAGEMENT"
+                      },
+                      "l3_vni": {
+                        "value": 50004
+                      },
+                      "namespace_type": {
+                        "value": "management"
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "namespace": {
+                    "node": {
+                      "name": {
+                        "value": "PROD"
+                      },
+                      "l3_vni": {
+                        "value": 50001
+                      },
+                      "namespace_type": {
+                        "value": "prod"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
           }
         }
       }

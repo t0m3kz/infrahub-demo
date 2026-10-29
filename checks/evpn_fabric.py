@@ -39,12 +39,13 @@ from typing import Any
 
 from infrahub_sdk.checks import InfrahubCheck
 
+from transforms.helpers.vrf import device_vrfs
 from transforms.helpers.vxlan import _select_evpn_bgp_process
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import MANAGEMENT_TYPE, TRANSIT_VNI_MAX, TRANSIT_VNI_MIN
 from utils.fabric_roles import VTEP_ROLES
 from utils.limits import MAX_ENCODABLE_VNI
-from utils.vrf_demand import SVI_ROLE, VRF_KIND, internet_exits, leg_namespaces, realized_l3
+from utils.vrf_demand import SVI_ROLE, internet_exits, leg_namespaces, realized_l3
 
 # A type-2 route-target (4-byte admin ASN + 2-byte assigned number) and a type-1
 # route-distinguisher (4-byte IP + 2-byte assigned number) both leave 16 bits for
@@ -54,6 +55,13 @@ from utils.vrf_demand import SVI_ROLE, VRF_KIND, internet_exits, leg_namespaces,
 # Strategies whose OVERLAY ASN is per-device rather than fabric-wide. Only for
 # these does a missing evpn_rt_as actually break forwarding.
 _PER_DEVICE_OVERLAY_ASN_STRATEGIES = frozenset({"ebgp-ebgp"})
+
+_NO_OVERLAY_PROCESS_ROLES = frozenset({"access-leaf"})
+"""VTEP roles that may legitimately have no BGP process. The overlay templates render an RD only when the transform
+found an overlay process (transforms/helpers/vxlan.py ``build_evpn_inputs``: ``evpn_enabled = bool(process)``, read by
+templates/configs/common/sonic_vxlan.j2). generators/helpers/routing.py plans the processes of a DC fabric only, so an
+access-leaf outside one (the hand-placed dell_sonic cage switches CS-NY1-SW1, CS-VA1-SW1, MCR-AMS1-SW1) is a routed-SVI
+switch with no BGP. Every other VTEP role gets its process from a generator: a missing one is a lost process."""
 
 _LOCAL_SCOPE = "local"
 _MULTISITE_ROLE = "multisite-vip"
@@ -100,7 +108,7 @@ def _site_rt_asn(device: dict[str, Any]) -> int | None:
     return None
 
 
-def _has_l3_instance(device: dict[str, Any], capabilities: list[dict[str, Any]]) -> bool:
+def _has_l3_instance(device: dict[str, Any]) -> bool:
     """Whether one of the device's VRF instances is realized as an L3 VNI (utils/vrf_demand.py ``realized_l3``).
 
     The same inputs as the overlay transform: it routed in an instance's namespace when it has an anycast SVI there
@@ -108,7 +116,7 @@ def _has_l3_instance(device: dict[str, Any], capabilities: list[dict[str, Any]])
     site ``evpn_rt_as``, transforms/helpers/vxlan.py ``_is_bgw``) for the internet-type exits.
     """
     interfaces = device.get("interfaces") or []
-    namespaces = [cap.get("namespace") or {} for cap in capabilities if cap.get("typename") == VRF_KIND]
+    namespaces = device_vrfs(device)
     routed = {
         name
         for iface in interfaces
@@ -120,19 +128,28 @@ def _has_l3_instance(device: dict[str, Any], capabilities: list[dict[str, Any]])
 
 
 def vtep_router_id_errors(devices: list[dict[str, Any]]) -> list[str]:
-    """Every VTEP with an instance realized as an L3 VNI has an overlay router_id, unique among such VTEPs.
+    """Every VTEP that renders an RD for an L3 VNI instance has an overlay router_id, unique among such VTEPs.
 
     A VRF-lite instance (a session or address only, no anycast SVI and no default exit) has no RD, so a VRF-lite edge
-    needs none.
+    needs none; neither does a device with no overlay BGP process (a routed-SVI access leaf without BGP renders no
+    RD), so an ``access-leaf`` is skipped. Any other VTEP role without a process is an error.
     """
     errors = []
     holders: dict[str, list[str]] = defaultdict(list)
     for device in sorted(devices, key=lambda item: str(item.get("name"))):
         capabilities = device.get("capabilities") or []
-        if device.get("role") not in VTEP_ROLES or not _has_l3_instance(device, capabilities):
+        if device.get("role") not in VTEP_ROLES or not _has_l3_instance(device):
             continue
         process = _select_evpn_bgp_process(capabilities)
-        address = ((process or {}).get("router_id") or {}).get("address")
+        if process is None:
+            if device.get("role") not in _NO_OVERLAY_PROCESS_ROLES:
+                errors.append(
+                    f"VTEP '{device.get('name')}' (role '{device.get('role')}') has a VRF instance realized as an L3 "
+                    "VNI but no BGP process at all, so it renders no RD. Re-run the routing generator of its "
+                    "deployment to recreate its overlay ManagedBGP process."
+                )
+            continue
+        address = (process.get("router_id") or {}).get("address")
         if not address:
             errors.append(
                 f"VTEP '{device.get('name')}' has a VRF instance realized as an L3 VNI but no EVPN BGP process "

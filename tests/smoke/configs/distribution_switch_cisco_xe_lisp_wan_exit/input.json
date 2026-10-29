@@ -308,31 +308,6 @@
                     ]
                   }
                 }
-              },
-              {
-                "node": {
-                  "__typename": "ManagedVRF",
-                  "id": "vrf-ds-c005-office01-VRF_A",
-                  "name": {
-                    "value": "ds-c005-office01-vrf-vrf_a"
-                  },
-                  "status": {
-                    "value": "active"
-                  },
-                  "namespace": {
-                    "node": {
-                      "name": {
-                        "value": "VRF_A"
-                      },
-                      "l3_vni": {
-                        "value": 50001
-                      },
-                      "namespace_type": {
-                        "value": "prod"
-                      }
-                    }
-                  }
-                }
               }
             ]
           },
@@ -459,6 +434,9 @@
                         ]
                       }
                     }
+                  },
+                  "segments": {
+                    "edges": []
                   },
                   "capabilities": {
                     "edges": [
@@ -623,6 +601,9 @@
                       }
                     }
                   },
+                  "segments": {
+                    "edges": []
+                  },
                   "capabilities": {
                     "edges": [
                       {
@@ -724,6 +705,9 @@
                   },
                   "cable": {
                     "node": null
+                  },
+                  "segments": {
+                    "edges": []
                   },
                   "capabilities": {
                     "edges": []
@@ -1076,6 +1060,27 @@
                 ]
               }
             }
+          },
+          "vrfs": {
+            "edges": [
+              {
+                "node": {
+                  "namespace": {
+                    "node": {
+                      "name": {
+                        "value": "VRF_A"
+                      },
+                      "l3_vni": {
+                        "value": 50001
+                      },
+                      "namespace_type": {
+                        "value": "prod"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
           }
         }
       }

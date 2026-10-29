@@ -57,11 +57,12 @@ def _edge(*, bgw: bool = True, namespace: dict[str, Any] | None = _INTERNET_NS) 
     if bgw:
         interfaces.append({"name": "Loopback1", "role": "multisite-vip", "ip_address": {"address": "10.0.0.50/32"}})
     capabilities = []
+    vrfs = []
     if namespace:
         capabilities.append({"typename": "ManagedBGP", "peerings": [_transit_peering(namespace)]})
-        # the VRF generator's instance of the session's namespace: the device's only VRF set
-        capabilities.append({"typename": "ManagedVRF", "namespace": namespace})
-    return {"name": "eg-fr201", "interfaces": interfaces, "capabilities": capabilities}
+        # the VRF generator's membership of the session's namespace: the device's only VRF set
+        vrfs.append({"namespace": namespace})
+    return {"name": "eg-fr201", "interfaces": interfaces, "capabilities": capabilities, "vrfs": vrfs}
 
 
 class TestTransitFlag:
@@ -132,9 +133,9 @@ class TestInternetVniMapping:
         device = {
             "name": "dc1-border-01",
             "interfaces": [{"name": "Loopback0", "role": "loopback", "ip_address": {"address": "10.0.0.1/32"}}],
-            "capabilities": [
-                {"typename": "ManagedVRF", "namespace": {"name": "PROD", "l3_vni": 50001, "namespace_type": "prod"}},
-                {"typename": "ManagedVRF", "namespace": _INTERNET_NS},
+            "vrfs": [
+                {"namespace": {"name": "PROD", "l3_vni": 50001, "namespace_type": "prod"}},
+                {"namespace": _INTERNET_NS},
             ],
         }
         config = get_vxlan_config(

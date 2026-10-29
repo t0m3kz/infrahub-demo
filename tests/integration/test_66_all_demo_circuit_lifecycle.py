@@ -13,9 +13,12 @@ skips the whole tracked cleanup when a run tracked nothing, so the sessions of a
   * test_02 does the same for a Handoff through the circuit's OWN status (its rule runs add_virtual_circuit
     directly): the sub-interfaces, the circuit, both BGP processes and the data-loaded key stay.
 
-  * test_03 (and the sole-demand handoff it uses) proves the VRF instance of a handoff follows its only demand.
-  * test_04 does the same for a segment: the instance and SVIs a segment's rows demand on a switch go when the
-    segment no longer lands there (see the module-level constants of that test), and come back with it.
+  * test_03 (and the sole-demand handoff it uses) proves the VRF membership of a handoff follows its only demand: the
+    device leaves the topology's instance (one per hosting deployment and namespace), which survives while other
+    members remain and goes with its last one.
+  * test_04 does the same for a segment: the SVIs a segment's rows demand on a switch go, and so does the switch's
+    membership of the DC's instance, when the segment no longer lands there (see the module-level constants of that
+    test); the instance survives through the other switches, and the switches rejoin it with the segment.
 
 A Tunnel is not covered: it has no trigger rule and is not in the generator's group, so setting its status starts
 nothing (tests/unit/test_event_rules.py pins both), and "no peering appeared" is true of every tunnel anyway.
@@ -40,6 +43,22 @@ from infrahub_sdk import InfrahubClient
 from tasks import ALL_DEMO_BRANCH
 
 from .all_demo_circuit_constants import ALL_DEMO_VIRTUAL_CIRCUITS, HANDOFF_KIND, INTERCONNECT_KIND
+from .circuit_lifecycle_helpers import (
+    _HOST_CABLES_QUERY,
+    _SWITCH_VRF_QUERY,
+    SEGMENT_NAME,
+    SEGMENT_NAMESPACE,
+    _edges,
+    _namespace_name,
+    _value,
+    back_errors,
+    parse_switch_vrf_state,
+    precondition_errors,
+    sole_demand_instance_errors,
+    svis_gone_errors,
+    switches_of_host,
+    vrf_gone_errors,
+)
 from .conftest import TestInfrahubDockerWithClient
 from .wait_helpers import wait_for_condition
 from .workflow_helpers import run_generator, verify_no_failed_tasks, wait_for_tasks_completion
@@ -66,11 +85,13 @@ HANDOFF_CIRCUIT = "HANDOFF-FR2-AWS-EUC1-PROD"
 HANDOFF_KEY = "eqx-fr2-aws-vif-key"
 # The second AWS VIF, held by the Network Edge router eg-am-ne02. That router is on no other circuit of 30_all (data:
 # 05_cloud_endpoints/00_vif_handoff_am_ne.yml; no segment, no other handoff, no transit), so the /31 of this handoff is
-# the only thing that demands its PROD VRF instance: decommissioning the circuit must delete the instance, and the
-# rebuild must bring it back. (eg-fr201, the end of HANDOFF_CIRCUIT, has other PROD handoffs and segments: there the
-# instance must stay, with the same id.)
+# the only thing that demands its PROD VRF membership: decommissioning the circuit must remove the device from the AM
+# metro's PROD instance (which stays: eg-am-ne01 is still a member), and the rebuild must add it back. (eg-fr201, the
+# end of HANDOFF_CIRCUIT, has other PROD handoffs and segments: there it must stay a member.)
 SOLE_DEMAND_HANDOFF = "HANDOFF-AMNE-AWS-EUC1-PROD"
 SOLE_DEMAND_DEVICE = "eg-am-ne02"
+# The other router of the AM metro's PROD instance: it keeps the instance alive when SOLE_DEMAND_DEVICE leaves.
+SOLE_DEMAND_PEER = "eg-am-ne01"
 SOLE_DEMAND_KEY = "eqx-am-ne-aws-vif-key"
 
 _PORT_KINDS = {INTERCONNECT_KIND: "DcimPhysicalInterface", HANDOFF_KIND: "DcimVirtualInterface"}
@@ -84,11 +105,21 @@ State = dict[str, Any]
 # they are untouched), the keys, the circuit's prefix and addresses (found by the description the generator writes, "DCI
 # <name>" / "Handoff <name>"), and the two ports with the address they carry.
 #
-# Also the VRF instances (ManagedVRF, every one: the ones of other devices are the bystanders) and what else on the
-# circuit's devices demands an instance of the circuit's namespace: an address on another interface, an SVI.
+# Also the VRF instances (ManagedVRF, every one, with its topology and members: the ones of other devices are the
+# bystanders) and what else on the circuit's devices demands the circuit's namespace: an address on another interface,
+# an SVI.
 _STATE_QUERY = """
 query ($peerings: [String], $keys: [String], $descriptions: [String], $devices: [String], $ports: [String]) {
-  vrfs: ManagedVRF { edges { node { id name { value } } } }
+  vrfs: ManagedVRF {
+    edges {
+      node {
+        id
+        name { value }
+        namespace { node { name { value } } }
+        devices { edges { node { name { value } } } }
+      }
+    }
+  }
   addressed_physical: DcimPhysicalInterface(device__name__values: $devices) {
     edges {
       node {
@@ -177,12 +208,9 @@ class Subject:
         return ALL_DEMO_VIRTUAL_CIRCUITS[self.circuit]["ip_namespace"]
 
     @property
-    def instances(self) -> dict[str, str]:
-        """device name -> the name of its ManagedVRF of the circuit's namespace, for each end device (a party's
-        device has none: the state simply does not find it)."""
-        if not self.namespace:
-            return {}
-        return {device: f"{device}-vrf-{self.namespace.lower()}" for device in sorted({d for d, _ in self.ports})}
+    def end_devices(self) -> tuple[str, ...]:
+        """The devices at the circuit's two ends (a party's device is never a member of an instance)."""
+        return tuple(sorted({device for device, _ in self.ports}))
 
     @property
     def bystanders(self) -> tuple[str, ...]:
@@ -207,14 +235,6 @@ def subject_for(circuit: str, key: str | None = None) -> Subject:
 # ----------------------------------------------------------------------------------------------------------------------
 # Reading the state (pure: GraphQL result -> comparable dict)
 # ----------------------------------------------------------------------------------------------------------------------
-
-
-def _edges(result: dict[str, Any], kind: str) -> list[dict[str, Any]]:
-    return [edge["node"] for edge in (result.get(kind) or {}).get("edges", [])]
-
-
-def _value(node: dict[str, Any], attribute: str) -> Any:
-    return (node.get(attribute) or {}).get("value")
 
 
 def parse_state(result: dict[str, Any], subject: Subject) -> State:
@@ -264,23 +284,23 @@ def parse_state(result: dict[str, Any], subject: Subject) -> State:
 
 
 def parse_vrfs(result: dict[str, Any], subject: Subject) -> dict[str, Any]:
-    """``instances``: device -> id of its instance of the circuit's namespace (those that exist); ``others``: name ->
-    id of every other ManagedVRF; ``other_demand``: the end devices that something besides the circuit's own port
-    demands an instance of the namespace for (an address on another interface, an SVI routed in it)."""
-    names = {name: device for device, name in subject.instances.items()}
-    instances: dict[str, str] = {}
-    others: dict[str, str] = {}
+    """``all``: instance name -> {id, devices (frozenset of member names)} for every ManagedVRF; ``memberships``: end
+    device -> the name of the instance of the circuit's namespace it is a member of (those that are);
+    ``other_demand``: the end devices that something besides the circuit's own port demands the namespace for (an
+    address on another interface, an SVI routed in it)."""
+    instances: dict[str, dict[str, Any]] = {}
+    memberships: dict[str, str] = {}
     for node in _edges(result, "vrfs"):
-        name = _value(node, "name")
-        if name in names:
-            instances[names[name]] = node["id"]
-        else:
-            others[name] = node["id"]
+        name = str(_value(node, "name"))
+        members = frozenset(str(_value(edge["node"], "name")) for edge in (node.get("devices") or {}).get("edges", []))
+        instances[name] = {"id": node["id"], "devices": members}
+        if subject.namespace and _namespace_name(node, "namespace") == subject.namespace:
+            memberships.update({device: name for device in members if device in subject.end_devices})
     other_demand: set[str] = set()
     for kind in ("addressed_physical", "addressed_virtual"):
         for node in _edges(result, kind):
             device = (((node.get("device") or {}).get("node") or {}).get("name") or {}).get("value")
-            if device not in subject.instances or (str(device), str(_value(node, "name"))) in subject.ports:
+            if device not in subject.end_devices or (str(device), str(_value(node, "name"))) in subject.ports:
                 continue
             address_ns = (((node.get("ip_address") or {}).get("node") or {}).get("ip_namespace") or {}).get(
                 "node"
@@ -288,7 +308,7 @@ def parse_vrfs(result: dict[str, Any], subject: Subject) -> dict[str, Any]:
             vrf_ns = ((((node.get("vrf") or {}).get("node") or {}).get("namespace") or {}).get("node")) or {}
             if subject.namespace in (_value(address_ns, "name"), _value(vrf_ns, "name")):
                 other_demand.add(str(device))
-    return {"instances": instances, "others": others, "other_demand": sorted(other_demand)}
+    return {"all": instances, "memberships": memberships, "other_demand": sorted(other_demand)}
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -380,33 +400,45 @@ def bystander_errors(before: State, after: State) -> list[str]:
 
 
 def vrf_down_errors(before: State, down: State) -> list[str]:
-    """The VRF instances once the session is gone: an end device's instance is deleted when nothing else demands the
-    namespace there, and kept with the same id when something does; every other device's instance is untouched."""
+    """The VRF instances once the session is gone. An end device leaves its instance of the circuit's namespace unless
+    something else demands it there; the instance keeps its id while other members remain and is deleted with its
+    last member; every other instance (and every bystander's membership) is as it was."""
+    leaving = {device for device in before["vrfs"]["memberships"] if device not in before["vrfs"]["other_demand"]}
     errors: list[str] = []
-    for device, instance_id in sorted(before["vrfs"]["instances"].items()):
-        kept = down["vrfs"]["instances"].get(device)
-        if device in down["vrfs"]["other_demand"]:
-            if kept != instance_id:
-                errors.append(f"{device}: other demand remains but its VRF instance went ({instance_id} -> {kept})")
-        elif kept is not None:
-            errors.append(f"{device}: no demand left but its VRF instance {kept} still exists")
-    if down["vrfs"]["others"] != before["vrfs"]["others"]:
-        errors.append("the VRF instances of other devices changed")
+    for name, instance in sorted(before["vrfs"]["all"].items()):
+        expected = instance["devices"] - leaving
+        now = down["vrfs"]["all"].get(name)
+        if instance["devices"] and not expected:
+            if now is not None:
+                errors.append(f"{name}: its last member left but the instance {now['id']} still exists")
+        elif now is None:
+            reason = f"members remain ({sorted(expected)})" if expected else "it had no members"
+            errors.append(f"{name}: {reason} but the instance went")
+        elif now["id"] != instance["id"]:
+            errors.append(f"{name}: re-created ({instance['id']} -> {now['id']})")
+        elif now["devices"] != expected:
+            errors.append(f"{name}: members {sorted(now['devices'])}, expected {sorted(expected)}")
+    errors += [
+        f"unexpected VRF instance {name}" for name in sorted(set(down["vrfs"]["all"]) - set(before["vrfs"]["all"]))
+    ]
     return errors
 
 
-def vrf_up_errors(before: State, after: State) -> list[str]:
-    """The VRF instances once the session is rebuilt: each end device that had an instance has one again (the same id
-    where it was never deleted), and every other device's instances are as they were."""
+def vrf_up_errors(before: State, down: State, after: State) -> list[str]:
+    """The VRF instances once the session is rebuilt: every instance and membership of ``before`` is back, an instance
+    that survived the decommission with the same id (``down`` shows which did)."""
     errors: list[str] = []
-    for device, instance_id in sorted(before["vrfs"]["instances"].items()):
-        back = after["vrfs"]["instances"].get(device)
+    for name, instance in sorted(before["vrfs"]["all"].items()):
+        back = after["vrfs"]["all"].get(name)
         if back is None:
-            errors.append(f"{device}: its VRF instance did not come back")
-        elif device in before["vrfs"]["other_demand"] and back != instance_id:
-            errors.append(f"{device}: its VRF instance was re-created ({instance_id} -> {back})")
-    if after["vrfs"]["others"] != before["vrfs"]["others"]:
-        errors.append("the VRF instances of other devices changed")
+            errors.append(f"{name}: the instance did not come back")
+        elif back["devices"] != instance["devices"]:
+            errors.append(f"{name}: members {sorted(back['devices'])}, expected {sorted(instance['devices'])}")
+        elif name in down["vrfs"]["all"] and back["id"] != instance["id"]:
+            errors.append(f"{name}: re-created ({instance['id']} -> {back['id']}) though it never went")
+    errors += [
+        f"unexpected VRF instance {name}" for name in sorted(set(after["vrfs"]["all"]) - set(before["vrfs"]["all"]))
+    ]
     return errors
 
 
@@ -491,10 +523,11 @@ async def decommission_and_restore(
     session; set the status back (in a `finally`, so a failure leaves the branch as it was) and assert it is rebuilt
     on the same key, with no other circuit's session touched and no failed task.
 
-    The VRF instances follow (vrf_down_errors / vrf_up_errors): an end device's instance of the circuit's namespace is
-    deleted with the session when nothing else demands it, kept (same id) when something does, and every other
-    device's instance is untouched. ``sole_demand`` names an end device the circuit is the only demand for: the test
-    asserts that precondition on the state read first, so the "deleted" branch is really exercised."""
+    The VRF memberships follow (vrf_down_errors / vrf_up_errors): an end device leaves its topology's instance of the
+    circuit's namespace with the session when nothing else demands it there and stays a member when something does;
+    the instance survives (same id) while other members remain, and every other instance is untouched.
+    ``sole_demand`` names an end device the circuit is the only demand for: the test asserts that precondition on the
+    state read first, so the "leaves" branch is really exercised."""
     await wait_for_tasks_completion(client, branch)
     before = await fetch_state(client, branch, subject)
     errors = rebuilt_errors(before, subject)
@@ -503,11 +536,15 @@ async def decommission_and_restore(
     )
     assert before["bystanders"], "no other circuit has a session: nothing proves they are left alone"
     if sole_demand:
-        assert sole_demand in before["vrfs"]["instances"], (
-            f"{sole_demand} has no VRF instance of {subject.namespace} before the decommission"
+        assert sole_demand in before["vrfs"]["memberships"], (
+            f"{sole_demand} is a member of no {subject.namespace} VRF instance before the decommission"
+        )
+        instance_errors = sole_demand_instance_errors(before["vrfs"], sole_demand, SOLE_DEMAND_PEER)
+        assert not instance_errors, "the premise of the sole-demand handoff does not hold:\n  - " + "\n  - ".join(
+            instance_errors
         )
         assert sole_demand not in before["vrfs"]["other_demand"], (
-            f"{sole_demand} has other demand for {subject.namespace}: the instance would stay"
+            f"{sole_demand} has other demand for {subject.namespace}: it would stay a member"
         )
     processes = sorted({pid for peering in before["peerings"].values() for pid in peering["process_ids"]})
     assert processes, f"{subject.circuit}'s session runs on no BGP process"
@@ -546,7 +583,7 @@ async def decommission_and_restore(
         *rebuilt_errors(after, subject),
         *key_errors(before["key"], after["key"], subject.key),
         *bystander_errors(before, after),
-        *vrf_up_errors(before, after),
+        *vrf_up_errors(before, down, after),
     ]
     assert not errors, "reactivated, but:\n  - " + "\n  - ".join(errors)
     await verify_no_failed_tasks(client=client, branch=branch)
@@ -560,62 +597,15 @@ async def decommission_and_restore(
 # access-leaf pairs (06_customer_boarding/c006/dc/dc11/02_instances.yml). Taking the second VM off both components
 # leaves the segment no port on the second host's leaves: their rows, SVIs and MANAGEMENT instance must go while the
 # first host's leaves keep theirs. The switches are read from the cabling, not named here.
-SEGMENT_NAME = "infra-core-dns-ntp-p"
-SEGMENT_NAMESPACE = "MANAGEMENT"
 SEGMENT_COMPONENT_FQDNS = (
     "dns.core-services.infra.demo.local",
     "ntp.core-services.infra.demo.local",
 )
-KEPT_INSTANCE = "infra-core-dc11-1"
 KEPT_HOST = "dc11-pod1-server-1"
 REMOVED_INSTANCE = "infra-core-dc11-2"
 REMOVED_HOST = "dc11-pod1-server-2"
 COMPONENT_SEGMENT_GENERATOR = "add_app_component_segment"
 SEGMENT_GENERATOR = "add_vxlan_segment"
-SVI_ROLE = "svi"
-
-_HOST_CABLES_QUERY = """
-query ($hosts: [String]) {
-  DcimPhysicalInterface(device__name__values: $hosts) {
-    edges {
-      node {
-        device { node { name { value } } }
-        cable {
-          node {
-            endpoints {
-              edges { node { ... on DcimPhysicalInterface { device { node { name { value } } } } } }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-"""
-
-_SWITCH_VRF_QUERY = """
-query ($devices: [String], $vrfs: [String]) {
-  ManagedVRF(name__values: $vrfs) { edges { node { id name { value } } } }
-  DcimVirtualInterface(device__name__values: $devices) {
-    edges {
-      node {
-        id
-        name { value }
-        role { value }
-        device { node { name { value } } }
-        ip_address { node { ip_namespace { node { name { value } } } } }
-        vrf { node { id namespace { node { name { value } } } } }
-        vlan_domain_segment {
-          node { segment_deployment { node { segment { node { ... on ManagedVxlanSegment { name { value } } } } } } }
-        }
-      }
-    }
-  }
-  DcimPhysicalInterface(device__name__values: $devices) {
-    edges { node { name { value } device { node { name { value } } } ip_address { node { ip_namespace { node { name { value } } } } } } }
-  }
-}
-"""
 
 COMPONENT_QUERY = (
     "query ($fqdns: [String]) { AppComponent(fqdn__values: $fqdns) { edges { node { id fqdn { value } } } } }"
@@ -623,98 +613,14 @@ COMPONENT_QUERY = (
 SEGMENT_QUERY = "query ($name: String) { ManagedVxlanSegment(name__value: $name) { edges { node { id } } } }"
 
 
-def _device_name(node: dict[str, Any]) -> str:
-    return str((((node.get("device") or {}).get("node") or {}).get("name") or {}).get("value"))
-
-
-def _namespace_name(holder: dict[str, Any] | None, key: str) -> str | None:
-    namespace = (((holder or {}).get(key) or {}).get("node") or {}).get("name") or {}
-    return namespace.get("value")
-
-
-def switches_of_host(result: dict[str, Any], host: str) -> set[str]:
-    """The switches at the far end of the cables of ``host``'s ports (a ``_HOST_CABLES_QUERY`` result)."""
-    switches: set[str] = set()
-    for port in _edges(result, "DcimPhysicalInterface"):
-        if _device_name(port) != host:
-            continue
-        endpoints = (((port.get("cable") or {}).get("node") or {}).get("endpoints") or {}).get("edges", [])
-        switches |= {_device_name(edge["node"]) for edge in endpoints if edge["node"]} - {host, "None"}
-    return switches
-
-
-def vrf_name(device: str) -> str:
-    """The name of ``device``'s ManagedVRF of the segment's namespace."""
-    return f"{device}-vrf-{SEGMENT_NAMESPACE.lower()}"
-
-
-def parse_switch_vrf_state(result: dict[str, Any], devices: list[str]) -> dict[str, dict[str, Any]]:
-    """device -> {vrf: id of its instance or None, svis: {name: {id, vrf}} of the segment's SVIs, foreign: what else on
-    the device demands the namespace (an SVI of another segment, an address on another interface)}."""
-    state: dict[str, dict[str, Any]] = {device: {"vrf": None, "svis": {}, "foreign": []} for device in devices}
-    for node in _edges(result, "ManagedVRF"):
-        for device in devices:
-            if _value(node, "name") == vrf_name(device):
-                state[device]["vrf"] = node["id"]
-    for node in _edges(result, "DcimVirtualInterface"):
-        device, name = _device_name(node), str(_value(node, "name"))
-        vrf = (node.get("vrf") or {}).get("node") or {}
-        if _value(node, "role") == SVI_ROLE:
-            row = (node.get("vlan_domain_segment") or {}).get("node") or {}
-            deployment = (row.get("segment_deployment") or {}).get("node") or {}
-            segment = ((deployment.get("segment") or {}).get("node") or {}).get("name") or {}
-            if segment.get("value") == SEGMENT_NAME:
-                state[device]["svis"][name] = {"id": node["id"], "vrf": vrf.get("id")}
-                continue
-        if SEGMENT_NAMESPACE in (_namespace_name(node, "ip_address"), _namespace_name(vrf, "namespace")):
-            state[device]["foreign"].append(f"{name} (virtual)")
-    for node in _edges(result, "DcimPhysicalInterface"):
-        if _namespace_name(node, "ip_address") == SEGMENT_NAMESPACE:
-            state[_device_name(node)]["foreign"].append(f"{_value(node, 'name')} (physical)")
-    return state
-
-
 async def fetch_switch_vrf_state(client: InfrahubClient, branch: str, devices: list[str]) -> dict[str, dict[str, Any]]:
     """Read the instance and the segment's SVIs of each of ``devices`` on the branch."""
     result = await client.execute_graphql(
         query=_SWITCH_VRF_QUERY,
-        variables={"devices": devices, "vrfs": [vrf_name(device) for device in devices]},
+        variables={"devices": devices},
         branch_name=branch,
     )
     return parse_switch_vrf_state(result, devices)
-
-
-def precondition_errors(state: dict[str, dict[str, Any]]) -> list[str]:
-    """Why the segment is not the only demand of the namespace on these switches (it must have SVIs and an instance
-    there, and nothing else may route in the namespace)."""
-    errors: list[str] = []
-    for device, facts in sorted(state.items()):
-        if facts["vrf"] is None:
-            errors.append(f"{device} has no {vrf_name(device)} instance")
-        if not facts["svis"]:
-            errors.append(f"{device} has no SVI of {SEGMENT_NAME}")
-        elif any(svi["vrf"] != facts["vrf"] for svi in facts["svis"].values()):
-            errors.append(f"{device}: an SVI of {SEGMENT_NAME} is not in {vrf_name(device)}")
-        if facts["foreign"]:
-            errors.append(f"{device} has other {SEGMENT_NAMESPACE} demand: {', '.join(facts['foreign'])}")
-    return errors
-
-
-def svis_gone_errors(state: dict[str, dict[str, Any]]) -> list[str]:
-    """Why a switch still has SVIs of the segment."""
-    return [f"{device} still has SVI(s) {sorted(f['svis'])}" for device, f in sorted(state.items()) if f["svis"]]
-
-
-def vrf_gone_errors(state: dict[str, dict[str, Any]]) -> list[str]:
-    """Why a switch still has the instance (or SVIs: the instance goes after them)."""
-    return svis_gone_errors(state) + [
-        f"{device} still has {vrf_name(device)} ({f['vrf']})" for device, f in sorted(state.items()) if f["vrf"]
-    ]
-
-
-def back_errors(state: dict[str, dict[str, Any]]) -> list[str]:
-    """Why the switches do not have the segment's SVIs and instance again, the SVIs in that instance."""
-    return precondition_errors(state)
 
 
 async def poll_switches(
@@ -840,9 +746,9 @@ class TestAllDemoCircuitLifecycle(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """The handoff is the only thing eg-am-ne02 routes in PROD: decommissioning it deletes the device's PROD VRF
-        instance (add_virtual_circuit reconciles after its cleanup), the rebuild creates it again, and every other
-        device's instance keeps its id."""
+        """The handoff is the only thing eg-am-ne02 routes in PROD: decommissioning it removes the device from the AM
+        metro's PROD instance (add_virtual_circuit reconciles after its cleanup), which stays for eg-am-ne01; the
+        rebuild adds the device back, and every other instance keeps its id and members."""
         logging.info("=== %s - Step 3: Handoff VRF instance ===", SCENARIO_NAME)
 
         await decommission_and_restore(
@@ -853,7 +759,7 @@ class TestAllDemoCircuitLifecycle(TestInfrahubDockerWithClient):
             sole_demand=SOLE_DEMAND_DEVICE,
             name__value=SOLE_DEMAND_HANDOFF,
         )
-        logging.info("%s: instance removed with its only demand, back with the rebuild", SOLE_DEMAND_DEVICE)
+        logging.info("%s: membership removed with its only demand, back with the rebuild", SOLE_DEMAND_DEVICE)
 
     @pytest.mark.order(423)
     @pytest.mark.dependency(
@@ -868,9 +774,10 @@ class TestAllDemoCircuitLifecycle(TestInfrahubDockerWithClient):
         scenario_branch: str,
     ) -> None:
         """The DNS/NTP segment is the only MANAGEMENT demand on the leaves of the host of its second VM: taking that VM
-        off the components removes the segment's SVIs there, then the switches' MANAGEMENT instance (the reconcile
-        deletes the instance after the last SVI); the host that stays keeps both. Giving the VM back restores them, the
-        SVIs in the instance."""
+        off the components removes the segment's SVIs there, then the switches' membership of the DC's MANAGEMENT
+        instance (the reconcile removes the member after the last SVI); the instance itself survives through the
+        switches of the host that stays, which keep their membership and SVIs. Giving the VM back restores the
+        memberships of the same instance, the SVIs in it."""
         client, branch = async_client_main, scenario_branch
         logging.info("=== %s - Step 4: Segment VRF instance ===", SCENARIO_NAME)
 
@@ -925,7 +832,7 @@ class TestAllDemoCircuitLifecycle(TestInfrahubDockerWithClient):
             client, branch, [*lost, *kept], back_errors, f"{lost} get the SVIs and the instance of {SEGMENT_NAME} back"
         )
         assert not back_errors(after)
-        for device in kept:
-            assert after[device]["vrf"] == before[device]["vrf"], f"{device}: its instance was re-created"
+        for device in [*lost, *kept]:
+            assert after[device]["vrf"] == before[device]["vrf"], f"{device}: the instance was re-created"
         await verify_no_failed_tasks(client=client, branch=branch)
         logging.info("=== %s - COMPLETED ===", SCENARIO_NAME)

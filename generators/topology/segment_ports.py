@@ -7,11 +7,11 @@ them, so the same reconcile runs from both directions that change the answer:
 
   - add_app_component_segment, when a component's instances or segment change;
   - add_vxlan_segment, when the segment itself is written — creation, its
-    footprints, and an edit of its ``capabilities`` (a port assigned to the
+    footprints, and an edit of its ``switched_interfaces`` (a port assigned to the
     segment by hand is removed by this reconcile, unless the segment has no
     component at all: then there is nothing to compare with and the ports stay).
 
-Writes RelationshipAdd/RelationshipRemove on the segment's ``capabilities``
+Writes RelationshipAdd/RelationshipRemove on the segment's ``switched_interfaces``
 only, untracked: a tagged port belongs to the device's generator, not to a run.
 
 The rows decide which switches route the segment, so the same reconcile ends with the VRF instances and SVIs of every
@@ -108,7 +108,7 @@ class SegmentPortTagMixin(VrfMixin, VlanDomainMixin):
         that moved, or a component that left). ``current_ids`` are the
         physical/port-channel interfaces tagged today. Written with
         RelationshipAdd/RelationshipRemove on the segment's
-        capabilities — touches only this segment's edge on each
+        switched_interfaces — touches only this segment's edge on each
         port and never enters this run's tracking group.
 
         The segment node is fetched only when there is a tag to add or remove.
@@ -137,9 +137,11 @@ class SegmentPortTagMixin(VrfMixin, VlanDomainMixin):
         if to_add or to_remove:
             segment_obj = await self.client.get(kind=ManagedVxlanSegment, id=segment_id)
             if to_add:
-                await segment_obj.add_relationships(relation_to_update="capabilities", related_nodes=to_add)
+                await segment_obj.add_relationships(relation_to_update="switched_interfaces", related_nodes=to_add)
             if to_remove:
-                await segment_obj.remove_relationships(relation_to_update="capabilities", related_nodes=to_remove)
+                await segment_obj.remove_relationships(
+                    relation_to_update="switched_interfaces", related_nodes=to_remove
+                )
         self.logger.info(
             f"Segment {segment_name}: {len(desired_ids)} customer-facing port(s) from {len(components)} "
             f"component(s) — tagged {len(to_add)}, untagged {len(to_remove)}"

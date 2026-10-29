@@ -201,15 +201,18 @@ generics:
         kind: Attribute
         order_weight: 1250
 
-  # Interfaces that can carry sub-interfaces: a physical port, a LAG and a virtual interface (the NIC of a virtual
-  # machine is the parent of its own sub-interfaces). It holds only the inverse of DcimVirtualInterface.parent_interface
-  # (same identifier, opposite direction): with a cardinality-one parent_interface on the kind, the server would cap
-  # a NIC at one sub-interface. Nothing reads it; the generators filter on parent_interface__ids. A generic cannot
-  # inherit a generic, so this one carries no name or device and parent_interface keeps DcimInterface as its peer.
+  # Interfaces that can be the parent of virtual interfaces: a physical port, a LAG and a virtual interface. It holds
+  # only the inverse of DcimVirtualInterface.parent_interface (same identifier, opposite direction): with a
+  # cardinality-one parent_interface on the kind, the server would cap a parent at one child (a NIC has several
+  # sub-interfaces, a host port several VM NICs). checks/interface_layers.py reads it as an L3 signal (a port with
+  # sub-interfaces is routed); the generators filter on parent_interface__ids.
+  # No common_parent: a VM NIC's parent is a port of its hosting device, so the "same device" rule of a
+  # sub-interface is a check (checks/interface_parents.py). A generic cannot inherit a generic, so this one carries
+  # no name or device and parent_interface keeps DcimInterface as its peer.
   - name: HasSubInterface
     namespace: Dcim
     label: Has Sub-Interface
-    description: "Interface that can be the parent of sub-interfaces"
+    description: "Interface that can be the parent of sub-interfaces or virtual machine NICs"
     include_in_menu: false
     relationships:
       - name: sub_interfaces
@@ -219,9 +222,35 @@ generics:
         kind: Generic
         identifier: "sub__interface"
         direction: inbound
-        common_parent: device
-        description: "Sub-interfaces riding on this one, always on the same device"
+        description: "Virtual interfaces riding on this one: sub-interfaces of its device, or the NICs of its VMs"
         order_weight: 1475
+
+  # Interfaces that can hold an address: a physical port, a LAG and a virtual interface (not a console port). One
+  # declaration so all three share one lifecycle: an Attribute with no cascade (a multisite VIP is one address on two
+  # loopbacks); generator addresses go with their run's tracking and with decommission, not with the port.
+  - name: HasIPAddress
+    namespace: Dcim
+    label: Has IP Address
+    description: "Interface that can hold an IP address"
+    include_in_menu: false
+    relationships:
+      - name: ip_address
+        peer: IpamIPAddress
+        optional: true
+        cardinality: one
+        kind: Attribute
+        on_delete: no-action
+        order_weight: 1900
+
+  # Ports that can be switchport members of VXLAN segments: a physical port and a LAG. Its one relationship,
+  # `segments` (the typed L2 membership, reverse `switched_interfaces` on ManagedVxlanSegment), is declared in
+  # schemas/extensions/service/segment.yml next to the segment. The inline L3 termination of a segment on a virtual
+  # sub-interface stays on the `capabilities` edge.
+  - name: SwitchedInterface
+    namespace: Dcim
+    label: Switched Interface
+    description: "Port that can be a switchport member of VXLAN segments"
+    include_in_menu: false
 
   - name: Endpoint
     namespace: Dcim
@@ -611,6 +640,8 @@ nodes:
       - DcimInterface
       - DcimEndpoint
       - DcimHasSubInterface
+      - DcimHasIPAddress
+      - DcimSwitchedInterface
     include_in_menu: false
     attributes:
       - name: interface_type
@@ -680,13 +711,6 @@ nodes:
         default_value: "other"
         order_weight: 1400
     relationships:
-      - name: ip_address
-        peer: IpamIPAddress
-        optional: true
-        cardinality: one
-        kind: Component
-        on_delete: cascade
-        order_weight: 1900
       - name: lag
         peer: DcimLAGInterface
         label: "LAG"
@@ -705,8 +729,12 @@ nodes:
     inherit_from:
       - DcimInterface
       - DcimHasSubInterface
+      - DcimHasIPAddress
     include_in_menu: false
     relationships:
+      # One link for both meanings, no common_parent: a sub-interface's parent is a port, LAG or NIC of its own device,
+      # a VM NIC's is the port of its hosting device it is pinned to (generators/virtual_nics.py). The cross-device
+      # rule is checks/interface_parents.py.
       - name: parent_interface
         peer: DcimInterface
         optional: true
@@ -714,25 +742,8 @@ nodes:
         kind: Attribute
         identifier: "sub__interface"
         direction: outbound
-        common_parent: device
-        description: "Port, LAG or NIC this sub-interface rides on, always on the same device"
+        description: "Interface this one rides on: the host port for a VM NIC, else a port/LAG/NIC of the same device (checks/interface_parents.py)"  # yamllint disable-line rule:line-length
         order_weight: 1400
-      # A virtual machine NIC is not a sub-interface of its host's port: it sits on another device, so it cannot share
-      # parent_interface (common_parent: device refuses a parent on another device).
-      - name: host_interface
-        peer: DcimPhysicalInterface
-        optional: true
-        cardinality: one
-        kind: Attribute
-        identifier: "nic__host_port"
-        description: "Port of the hosting device a virtual machine NIC is pinned to (generators/virtual_nics.py)"
-        order_weight: 1425
-      - name: ip_address
-        peer: IpamIPAddress
-        optional: true
-        cardinality: one
-        kind: Attribute
-        order_weight: 1900
 
   - name: LAGInterface
     namespace: Dcim
@@ -741,6 +752,8 @@ nodes:
     inherit_from:
       - DcimInterface
       - DcimHasSubInterface
+      - DcimHasIPAddress
+      - DcimSwitchedInterface
     include_in_menu: false
     attributes:
       - name: lag_id
@@ -786,13 +799,6 @@ nodes:
         identifier: "lag__members"
         common_parent: device
         order_weight: 1700
-      - name: ip_address
-        peer: IpamIPAddress
-        optional: true
-        cardinality: one
-        kind: Component
-        on_delete: cascade
-        order_weight: 1900
 
   # --------------------  Cables  --------------------
   - name: Cable

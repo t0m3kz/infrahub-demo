@@ -23,7 +23,7 @@ from transforms.helpers.mlag import get_mlag, get_sonic_mlag_config
 from transforms.helpers.origination import get_origination
 from transforms.helpers.ospf import get_ospf, refuse_unrenderable_ospf_auth
 from transforms.helpers.overlay import OVERLAY_CONFIG_KEYS, OVERLAY_RENDERERS
-from transforms.helpers.segments import get_vlans, routed_activations, segment_hosting_candidates
+from transforms.helpers.segments import get_vlans, interface_segments, routed_activations
 from transforms.helpers.templates import load_template
 from transforms.helpers.vrf import VrfRealizationError, l3_vrf_names, svi_vrfs, unrealized_vrfs
 from transforms.helpers.vxlan import get_interfaces, get_vxlan_config
@@ -32,6 +32,7 @@ from utils.data_cleaning import clean_data
 from utils.exchange_transit import service_context_caps
 from utils.fabric_roles import BORDER_ROLES, OFFICE_LISP_ROLES
 from utils.limits import UNDERLAY_MTU
+from utils.segment_addressing import segment_hosting_candidates
 from utils.vlan_domain import vlan_domain_id
 from utils.vrf_demand import SVI_ROLE
 
@@ -609,7 +610,7 @@ class BaseDeviceTransform(InfrahubTransform):
         device_id: str | None = None,
         device_capabilities: list[dict] | None = None,
     ) -> list[dict]:
-        """Collect unique segment activations from capabilities.
+        """Collect unique segment activations from the interfaces' segments (interface_segments).
 
         VxlanSegment.segment_deployments
         is cardinality:many (multi-site stretch — clean_data unwraps it to a
@@ -628,7 +629,7 @@ class BaseDeviceTransform(InfrahubTransform):
         seen: set[str] = set()
         activations: list[dict] = []
         for iface in interfaces:
-            for cap in iface.get("capabilities") or []:
+            for cap in interface_segments(iface):
                 seg_id = cap.get("id") or cap.get("name")
                 if not seg_id or seg_id in seen:
                     continue

@@ -66,7 +66,10 @@ class TestRowIsAChildOfTheSegmentDeployment:
     def test_the_segment_lists_its_rows_through_its_deployments_only(self, segment_schema: dict[str, Any]) -> None:
         extension = next(n for n in segment_schema["extensions"]["nodes"] if n["kind"] == "ManagedVxlanSegment")
 
-        assert {r["name"] for r in extension["relationships"]} == {"segment_deployments"}
+        assert {r["name"] for r in extension["relationships"]} == {"segment_deployments", "switched_interfaces"}
+        assert next(r for r in extension["relationships"] if r["name"] == "switched_interfaces")["peer"] == (
+            "DcimSwitchedInterface"
+        )
 
     def test_the_label_names_the_vlan_the_domain_and_the_vni(self, segment_schema: dict[str, Any]) -> None:
         """A relationship path in a label is one hop: the deployment's VNI, not the segment two hops away."""

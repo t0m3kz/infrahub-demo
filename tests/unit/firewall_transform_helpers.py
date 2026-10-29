@@ -38,7 +38,7 @@ def _make_smoke_data(platform: str) -> dict[str, Any]:
     """
     # Segment node embedded in capabilities (security_zone + policies on segment)
     seg_node: dict[str, Any] = {
-        "__typename": {"value": "ManagedVxlanSegment"},
+        "__typename": "ManagedVxlanSegment",
         "id": "seg-smoke",
         "name": {"value": "seg-smoke"},
         "status": {"value": "active"},

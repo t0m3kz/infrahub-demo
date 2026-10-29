@@ -3,17 +3,23 @@
 # (utils/vrf_demand.py device_vrf_facts):
 #   - checks/vrf_instances.py (registered, no variables: every device);
 #   - generators/helpers/vrf.py (executed by path with $device_ids: the devices a run touched).
-# Self-contained: its two fragments are defined in this file (no repository fragment), because the generator
+# Self-contained: its fragments are defined in this file (no repository fragment), because the generator
 # executes the file text as is.
 #   - IpamNamespace: the four environment namespaces, by name (an instance is created by namespace id).
+#   - ManagedVRF: every instance with its topology and members (an instance with no member is check rule f). Only
+#     the check needs it: the generator passes $with_instances false (it reads the device's own `vrfs`).
+#   - status: a decommissioned device carries nothing (utils/vrf_demand.py carries_vrfs).
 #   - member_of_groups / deployment: a provider stub or a device of a cloud region or an external provider is a
-#     party device and never carries an instance (utils/vrf_demand.py carries_vrfs).
+#     party device and never carries an instance (utils/vrf_demand.py carries_vrfs); the deployment, or its parent
+#     for a pod, zone or virtual colocation, is the hosting deployment its instances live in
+#     (utils/segment_addressing.py hosting_deployment).
+#   - vrfs: the instances the device is a member of.
 #   - vlan_domain_segments: the rows of the device's VLAN domain, its own or its MLAG's (utils/vlan_domain.py), with
 #     the segment's gateway namespace: a routed row needs the namespace and an SVI.
 #   - interfaces: the addresses of the device's own interfaces (their namespaces are demand; a BGP session's local
 #     address is one of them), its SVIs (role svi) with their VRF and row, and the firewall / load-balancer contexts
 #     tagged on its service ports with their legs.
-query vrf_instances($device_ids: [ID]) {
+query vrf_instances($device_ids: [ID], $with_instances: Boolean = true) {
   IpamNamespace {
     edges {
       node {
@@ -24,6 +30,17 @@ query vrf_instances($device_ids: [ID]) {
       }
     }
   }
+  ManagedVRF @include(if: $with_instances) {
+    edges {
+      node {
+        id
+        name { value }
+        deployment { node { id } }
+        namespace { node { name { value } l3_vni { value } namespace_type { value } } }
+        devices { edges { node { id } } }
+      }
+    }
+  }
   DcimDevice(ids: $device_ids) {
     edges {
       node {
@@ -31,10 +48,15 @@ query vrf_instances($device_ids: [ID]) {
         id
         name { value }
         role { value }
+        status { value }
         member_of_groups { edges { node { name { value } } } }
+        vrfs { edges { node { ...VrfDemandInstanceFields } } }
         ... on DcimPhysicalDevice {
-          deployment { node { __typename id } }
+          deployment { node { ...VrfDemandHostingFields } }
           vlan_domain_segments { edges { node { ...VrfDemandRowFields } } }
+        }
+        ... on CloudNetworkAppliance {
+          deployment { node { ...VrfDemandHostingFields } }
         }
         ... on DcimCapabilities {
           capabilities {
@@ -42,10 +64,6 @@ query vrf_instances($device_ids: [ID]) {
               node {
                 __typename
                 id
-                ... on ManagedVRF {
-                  name { value }
-                  namespace { node { name { value } l3_vni { value } namespace_type { value } } }
-                }
                 ... on ManagedMLAG {
                   vlan_domain_segments { edges { node { ...VrfDemandRowFields } } }
                 }
@@ -68,7 +86,7 @@ query vrf_instances($device_ids: [ID]) {
               }
               ... on DcimVirtualInterface {
                 ip_address { node { address { value } ip_namespace { node { name { value } } } } }
-                vrf { node { id namespace { node { name { value } } } } }
+                vrf { node { id deployment { node { id } } namespace { node { name { value } } } } }
                 vlan_domain_segment { node { id } }
               }
               capabilities {
@@ -93,6 +111,24 @@ query vrf_instances($device_ids: [ID]) {
       }
     }
   }
+}
+
+# One instance the device is a member of: its topology and namespace.
+fragment VrfDemandInstanceFields on ManagedVRF {
+  id
+  name { value }
+  deployment { node { id } }
+  namespace { node { name { value } l3_vni { value } namespace_type { value } } }
+}
+
+# The device's deployment and, for a pod, a colocation zone or a virtual colocation, its parent (the DC or metro).
+fragment VrfDemandHostingFields on TopologyDeployment {
+  __typename
+  id
+  name { value }
+  ... on TopologyPod { parent { node { __typename id name { value } } } }
+  ... on TopologyColocationZone { parent { node { __typename id name { value } } } }
+  ... on TopologyVirtualColocation { parent { node { __typename id name { value } } } }
 }
 
 # A row of the device's VLAN domain with its segment's gateway namespace (a routed row needs it and an SVI).

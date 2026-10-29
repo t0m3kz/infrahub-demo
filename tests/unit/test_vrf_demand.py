@@ -98,9 +98,40 @@ def test_mlag_domain_rows_are_used_for_a_paired_device() -> None:
 def test_own_rows_are_used_for_a_standalone_device() -> None:
     """A device with no MLAG is its own domain."""
     vrf = raw_instance("v1", "leaf-1", "PROD")
-    facts = facts_of(raw_device("d1", "leaf-1", rows=[raw_row("r-own", 100, "PROD")], capabilities=[vrf]))
+    facts = facts_of(raw_device("d1", "leaf-1", rows=[raw_row("r-own", 100, "PROD")], vrfs=[vrf]))
     assert facts.domain_row_ids == frozenset({"r-own"})
     assert [instance.namespace for instance in facts.instances] == ["PROD"]
+
+
+def test_memberships_carry_the_instances_deployment() -> None:
+    """``device.vrfs`` gives the instances with their topology; the facts name the hosting deployment."""
+    vrf = raw_instance("v1", "leaf-1", "PROD", deployment_id="dc-2")
+    facts = facts_of(raw_device("d1", "leaf-1", vrfs=[vrf]))
+    assert [(i.id, i.deployment_id, i.name) for i in facts.instances] == [("v1", "dc-2", "dc1-vrf-prod")]
+
+
+def test_hosting_is_the_deployment_or_its_parent() -> None:
+    """A pod's hosting deployment is its DC; a DC (a border leaf's deployment) hosts itself; a cloud region has none."""
+    pod = facts_of(raw_device("d1", "leaf-1"))
+    assert (pod.hosting_id, pod.hosting_name) == ("dc-1", "DC1")
+    border = facts_of(raw_device("d2", "bl-1", role="border-leaf", deployment_kind="TopologyDataCenter"))
+    assert border.hosting_id == "dc-1"
+    zone = facts_of(raw_device("d3", "sw-1", deployment_kind="TopologyColocationZone"))
+    assert zone.hosting_id == "dc-1"
+    assert facts_of(raw_device("d4", "rtr", deployment_kind="TopologyCloudRegion")).hosting_id is None
+    assert facts_of(raw_device("d5", "orphan", hosting_id=None)).hosting_id is None
+
+
+def test_all_instances_reads_the_root_with_its_members() -> None:
+    """``ManagedVRF`` root: topology, namespace and the member device ids."""
+    from tests.unit.vrf_instances_helpers import raw_response
+    from utils.data_cleaning import clean_data
+    from utils.vrf_demand import all_instances
+
+    devices = [raw_device(f"d{i}", f"leaf-{i}", vrfs=[raw_instance("v1", "x", "PROD")]) for i in (1, 2)]
+    (instance,) = all_instances(clean_data(raw_response(*devices)))
+    assert (instance.id, instance.deployment_id, instance.namespace) == ("v1", "dc-1", "PROD")
+    assert instance.member_ids == frozenset({"d1", "d2"})
 
 
 def test_party_and_excluded_devices_get_no_demand() -> None:
@@ -141,5 +172,5 @@ def test_vrf_demand_pure_function_unions_sources_and_drops_default() -> None:
 
 def test_instance_and_svi_names() -> None:
     """The derived names."""
-    assert instance_name("leaf-1", "NON-PROD") == "leaf-1-vrf-non-prod"
+    assert instance_name("DC10", "NON-PROD") == "dc10-vrf-non-prod"
     assert svi_name(321) == "Vlan321"

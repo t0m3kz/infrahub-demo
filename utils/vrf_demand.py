@@ -1,7 +1,8 @@
 """The one derivation of the VRF instances (ManagedVRF) a device needs, and of the segment SVIs it carries.
 
-A device has an instance exactly for the non-``default`` namespaces it routes in (demand-driven, never
-pre-provisioned):
+An instance is one namespace realized in one topology: the device's hosting deployment (a DC, a colocation metro or
+an office, utils/segment_addressing.py ``hosting_deployment``). A device is a member of its topology's instance of
+exactly the non-``default`` namespaces it routes in (demand-driven, never pre-provisioned):
 
 - the gateway namespace of each ROUTED segment row on its VLAN domain (a gateway, not ``terminate_inline``: an
   inline-terminated or gateway-less segment is pure L2 on the fabric), border gateways' stretched rows included;
@@ -11,7 +12,7 @@ pre-provisioned):
 - the leg namespaces of the firewall and load-balancer contexts tagged on its border service ports (the border leaf
   or edge holds no address of its own on a leg: utils/exchange_transit.py transit_leg_namespace).
 
-Only our routing devices carry instances (``carries_vrfs``): never a spine, an L2 leaf, a firewall or a load balancer
+Only our routing devices are members (``carries_vrfs``): never a spine, an L2 leaf, a firewall or a load balancer
 (their VRF is the context), a controller, or a party device (a provider router, an ISP PE, a provider stub).
 
 Readers: the generators (generators/helpers/vrf.py converges the instances and SVIs of the devices a run touched),
@@ -24,11 +25,12 @@ from __future__ import annotations
 
 from collections.abc import Collection, Iterable, Mapping
 from dataclasses import dataclass, field
+from functools import cached_property
 from typing import Any
 
 from utils.exchange_transit import INTERNET_TYPE, service_context_caps, transit_leg_namespace
 from utils.limits import DEFAULT_NAMESPACE, GROUP_PROVIDER_STUBS
-from utils.segment_addressing import routed_segment_namespace
+from utils.segment_addressing import hosting_deployment, routed_segment_namespace
 from utils.vlan_domain import vlan_domain_id
 
 VRF_KIND = "ManagedVRF"
@@ -52,21 +54,35 @@ PARTY_GROUPS = frozenset({GROUP_PROVIDER_STUBS})
 """A provider stub modelled inside our colocation zone (an Equinix Fabric port, a Megaport MCR) is the party's too."""
 
 
+DECOMMISSIONED_STATUS = "decommissioned"
+"""DcimDevice status of a device taken out of service (generators/decommission/pod.py): it carries nothing."""
+
+
 def carries_vrfs(
-    kind: str | None, role: str | None, groups: frozenset[str] = frozenset(), deployment_kind: str | None = None
+    kind: str | None,
+    role: str | None,
+    groups: frozenset[str] = frozenset(),
+    deployment_kind: str | None = None,
+    status: str | None = None,
 ) -> bool:
-    """Whether a device can carry VRF instances: one of our routing devices, not a party's."""
+    """Whether a device can carry VRF instances: one of our routing devices in service, not a party's.
+
+    A decommissioned device is no carrier: it leaves its instances, its SVIs go, and nothing is recreated for it even
+    though its VLAN-domain rows still exist (the config queries do not select ``status``: a rendered device is live).
+    """
     return (
-        kind in VRF_DEVICE_KINDS
+        status != DECOMMISSIONED_STATUS
+        and kind in VRF_DEVICE_KINDS
         and role in VRF_ROLES
         and groups.isdisjoint(PARTY_GROUPS)
         and deployment_kind not in PARTY_DEPLOYMENT_KINDS
     )
 
 
-def instance_name(device_name: str, namespace_name: str) -> str:
-    """The name (and HFID) of a device's instance of a namespace: ``{device}-vrf-{namespace lower}``."""
-    return f"{device_name}-vrf-{namespace_name.lower()}"
+def instance_name(hosting_name: str, namespace_name: str) -> str:
+    """The name of a topology's instance of a namespace: ``{hosting deployment lower}-vrf-{namespace lower}``
+    (dc10-vrf-prod). Its HFID is [deployment name, namespace name]."""
+    return f"{hosting_name.lower()}-vrf-{namespace_name.lower()}"
 
 
 def svi_name(vlan_id: int) -> str:
@@ -131,6 +147,7 @@ class VrfDemandInputs:
     role: str | None
     groups: frozenset[str] = frozenset()
     deployment_kind: str | None = None
+    status: str | None = None
     row_namespaces: frozenset[str] = frozenset()
     svi_namespaces: frozenset[str] = frozenset()
     address_namespaces: frozenset[str] = frozenset()
@@ -139,7 +156,7 @@ class VrfDemandInputs:
 
 def vrf_demand(inputs: VrfDemandInputs) -> frozenset[str]:
     """The namespace names the device needs an instance of; empty for a device that never carries one."""
-    if not carries_vrfs(inputs.kind, inputs.role, inputs.groups, inputs.deployment_kind):
+    if not carries_vrfs(inputs.kind, inputs.role, inputs.groups, inputs.deployment_kind, inputs.status):
         return frozenset()
     used = inputs.row_namespaces | inputs.svi_namespaces | inputs.address_namespaces | inputs.leg_namespaces
     return frozenset(name for name in used if name and name != DEFAULT_NAMESPACE)
@@ -163,6 +180,7 @@ class SviFacts:
     name: str
     vrf_id: str | None
     vrf_namespace: str | None
+    vrf_deployment_id: str | None
     row_id: str | None
     has_address: bool
     has_capabilities: bool
@@ -170,13 +188,15 @@ class SviFacts:
 
 @dataclass(frozen=True)
 class InstanceFacts:
-    """One ManagedVRF of the device."""
+    """One ManagedVRF instance: a namespace realized in one topology (``deployment_id``)."""
 
     id: str
     name: str | None
     namespace: str | None
     l3_vni: int | None
     namespace_type: str | None
+    deployment_id: str | None = None
+    member_ids: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -190,26 +210,25 @@ class DeviceVrfFacts:
     routed_rows: tuple[RoutedRow, ...]
     unrouted_row_ids: frozenset[str]
     svis: tuple[SviFacts, ...]
+    # The instances the device is a member of (``device.vrfs``), of its own topology or, after a move, another one.
     instances: tuple[InstanceFacts, ...] = field(default=())
+    # The device's hosting deployment (utils/segment_addressing.py hosting_deployment): where its instances live.
+    hosting_id: str | None = None
+    hosting_name: str | None = None
     # Interface name -> role of every interface that is not a segment SVI: an SVI name must not collide with one
     # (the MLAG control SVI Vlan4094, a hand-made VlanN).
     other_interfaces: Mapping[str, str | None] = field(default_factory=dict)
 
-    @property
+    @cached_property
     def demand(self) -> frozenset[str]:
-        """The namespace names the device needs an instance of."""
+        """The namespace names the device needs an instance of (computed once)."""
         return vrf_demand(self.inputs)
 
     @property
-    def routed_namespaces(self) -> frozenset[str]:
-        """The namespaces the device has an anycast SVI in: its routed rows and its transit legs."""
-        return self.inputs.row_namespaces | self.inputs.leg_namespaces
-
-    @property
     def carries_vrfs(self) -> bool:
-        """Whether the device can carry instances and SVIs at all."""
+        """Whether the device can carry instances and SVIs at all (in service, one of our routing devices)."""
         inputs = self.inputs
-        return carries_vrfs(inputs.kind, inputs.role, inputs.groups, inputs.deployment_kind)
+        return carries_vrfs(inputs.kind, inputs.role, inputs.groups, inputs.deployment_kind, inputs.status)
 
     def desired_svis(self) -> dict[str, RoutedRow]:
         """``Vlan<id>`` -> the routed row it realizes; empty for a device that carries no VRF."""
@@ -244,20 +263,24 @@ def _svi(iface: dict[str, Any]) -> SviFacts:
         name=iface.get("name") or "",
         vrf_id=vrf.get("id"),
         vrf_namespace=(vrf.get("namespace") or {}).get("name"),
+        vrf_deployment_id=(vrf.get("deployment") or {}).get("id"),
         row_id=(iface.get("vlan_domain_segment") or {}).get("id"),
         has_address=bool((iface.get("ip_address") or {}).get("address")),
         has_capabilities=bool(iface.get("capabilities")),
     )
 
 
-def _instance(cap: dict[str, Any]) -> InstanceFacts:
-    namespace = cap.get("namespace") or {}
+def instance_facts(vrf: dict[str, Any]) -> InstanceFacts:
+    """One cleaned ManagedVRF node (the ``vrfs`` of a device, or the ``ManagedVRF`` root of vrf_instances.gql)."""
+    namespace = vrf.get("namespace") or {}
     return InstanceFacts(
-        id=cap.get("id") or "",
-        name=cap.get("name"),
+        id=vrf.get("id") or "",
+        name=vrf.get("name"),
         namespace=namespace.get("name"),
         l3_vni=namespace.get("l3_vni"),
         namespace_type=namespace.get("namespace_type"),
+        deployment_id=(vrf.get("deployment") or {}).get("id"),
+        member_ids=frozenset(device["id"] for device in vrf.get("devices") or [] if device.get("id")),
     )
 
 
@@ -265,13 +288,16 @@ def device_vrf_facts(device: dict[str, Any]) -> DeviceVrfFacts:
     """The facts of one cleaned ``DcimDevice`` node of queries/validation/vrf_instances.gql."""
     interfaces = device.get("interfaces") or []
     rows = _domain_rows(device)
-    routed = [routed_row for row in rows if (routed_row := _routed_row(row))]
+    row_facts = [(row, _routed_row(row)) for row in rows]
+    routed = [routed_row for _, routed_row in row_facts if routed_row]
     svis = tuple(_svi(iface) for iface in interfaces if iface.get("role") == SVI_ROLE)
+    hosting = hosting_deployment(device.get("deployment")) or {}
     inputs = VrfDemandInputs(
         kind=device.get("typename"),
         role=device.get("role"),
         groups=frozenset(group["name"] for group in device.get("member_of_groups") or [] if group.get("name")),
         deployment_kind=(device.get("deployment") or {}).get("typename"),
+        status=device.get("status"),
         row_namespaces=frozenset(row.namespace for row in routed),
         svi_namespaces=frozenset(svi.vrf_namespace for svi in svis if svi.vrf_namespace),
         address_namespaces=address_namespaces(interfaces),
@@ -283,15 +309,22 @@ def device_vrf_facts(device: dict[str, Any]) -> DeviceVrfFacts:
         inputs=inputs,
         domain_row_ids=frozenset(row["id"] for row in rows if row.get("id")),
         routed_rows=tuple(routed),
-        unrouted_row_ids=frozenset(row["id"] for row in rows if row.get("id") and _routed_row(row) is None),
+        unrouted_row_ids=frozenset(row["id"] for row, routed_row in row_facts if row.get("id") and routed_row is None),
         svis=svis,
         other_interfaces={
             iface["name"]: iface.get("role")
             for iface in interfaces
             if iface.get("name") and iface.get("role") != SVI_ROLE
         },
-        instances=tuple(_instance(cap) for cap in device.get("capabilities") or [] if cap.get("typename") == VRF_KIND),
+        instances=tuple(instance_facts(vrf) for vrf in device.get("vrfs") or []),
+        hosting_id=hosting.get("id"),
+        hosting_name=hosting.get("name"),
     )
+
+
+def all_instances(cleaned: dict[str, Any]) -> tuple[InstanceFacts, ...]:
+    """The ``ManagedVRF`` root of the query: every instance, with its topology and members."""
+    return tuple(instance_facts(vrf) for vrf in cleaned.get(VRF_KIND) or [])
 
 
 def namespaces_by_name(cleaned: dict[str, Any]) -> dict[str, dict[str, Any]]:

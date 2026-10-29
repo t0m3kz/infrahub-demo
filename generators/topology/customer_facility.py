@@ -20,10 +20,13 @@ from utils.data_cleaning import clean_data
 from ..firewall_context import FirewallContextMixin
 from ..helpers.vrf import VrfMixin
 from ..protocols import DcimInterface
-from ..vlan_domain import TAGGABLE_INTERFACE_KINDS
 
 if TYPE_CHECKING:
     from ..devices import DeviceMixin
+
+# The two kinds that inherit DcimSwitchedInterface. A filter on the marker generic cannot carry the context's
+# `capabilities` edge (it belongs to DcimInterface), so the ports of a context are read on DcimInterface and cut here.
+_SWITCHED_PORT_KINDS = frozenset({"DcimPhysicalInterface", "DcimLAGInterface"})
 
 
 class CustomerFacilityMixin(FirewallContextMixin, VrfMixin):
@@ -59,9 +62,9 @@ class CustomerFacilityMixin(FirewallContextMixin, VrfMixin):
         VRF lock is never taken under it; so the instance follows the leg, it does not precede it.
         """
         # One read on the generic: a service port is a physical port or a LAG; the context may also be tagged on the
-        # hosted firewall's sub-interfaces, whose devices carry no instance (TAGGABLE_INTERFACE_KINDS leaves them out).
+        # hosted firewall's sub-interfaces, whose devices carry no instance (_SWITCHED_PORT_KINDS leaves them out).
         ports = await self.client.filters(kind=DcimInterface, capabilities__ids=[context_id], include=["device"])
-        await self.reconcile_vrfs({port.device.id for port in ports if port.get_kind() in TAGGABLE_INTERFACE_KINDS})
+        await self.reconcile_vrfs({port.device.id for port in ports if port.get_kind() in _SWITCHED_PORT_KINDS})
 
     async def generate(self, data: dict[str, Any]) -> None:
         kind = self._customer_kind

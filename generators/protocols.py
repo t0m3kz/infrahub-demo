@@ -93,6 +93,7 @@ class DcimDevice(CoreNode):
     platform: RelationshipAttribute[DcimPlatform]
     primary_address: RelationshipAttribute[IpamIPAddress]
     tags: RelationshipManager[BuiltinTag]
+    vrfs: RelationshipManager[ManagedVRF]
 
 
 class TopologyDeviceHosting(CoreNode):
@@ -188,6 +189,14 @@ class DcimHasSubInterface(CoreNode):
     sub_interfaces: RelationshipManager[DcimVirtualInterface]
 
 
+class DcimHasIPAddress(CoreNode):
+    ip_address: RelationshipAttribute[IpamIPAddress]
+
+
+class DcimSwitchedInterface(CoreNode):
+    segments: RelationshipManager[ManagedVxlanSegment]
+
+
 class DcimInterface(CoreNode):
     description: StringOptional
     index: StringOptional
@@ -260,6 +269,7 @@ class ManagedTenantScoped(CoreNode):
 class TopologySegmentHosting(CoreNode):
     name: String
     vni_pool: RelationshipAttribute[CoreNumberPool]
+    vrfs: RelationshipManager[ManagedVRF]
 
 
 class CloudAccount(CloudResource, CoreArtifactTarget):
@@ -620,11 +630,10 @@ class CloudInstance(CloudResource, DcimCapabilities, AppInstance):
     deployment: RelationshipAttribute[TopologyCloudHosting]
 
 
-class DcimLAGInterface(DcimInterface, DcimHasSubInterface):
+class DcimLAGInterface(DcimInterface, DcimHasSubInterface, DcimHasIPAddress, DcimSwitchedInterface):
     lacp_mode: Dropdown
     lag_id: Integer
     minimum_links: Integer
-    ip_address: RelationshipAttribute[IpamIPAddress]
     member_interfaces: RelationshipManager[DcimPhysicalInterface]
 
 
@@ -656,7 +665,10 @@ class ManagedMLAG(ManagedGeneric, ManagedGenericDevice, ManagedGenericVlanDomain
     virtual_peer_link: Boolean
 
 
-class ManagedVRF(ManagedGeneric, ManagedGenericDevice):
+class ManagedVRF(ManagedGeneric):
+    l3_vni: StringOptional
+    deployment: RelationshipAttribute[TopologySegmentHosting]
+    devices: RelationshipManager[DcimDevice]
     namespace: RelationshipAttribute[IpamNamespace]
 
 
@@ -743,9 +755,8 @@ class DcimPhysicalDevice(CoreArtifactTarget, DcimDevice, DcimCapabilities, AppIn
     serial: StringOptional
 
 
-class DcimPhysicalInterface(DcimInterface, DcimEndpoint, DcimHasSubInterface):
+class DcimPhysicalInterface(DcimInterface, DcimEndpoint, DcimHasSubInterface, DcimHasIPAddress, DcimSwitchedInterface):
     interface_type: Dropdown
-    ip_address: RelationshipAttribute[IpamIPAddress]
     lag: RelationshipAttribute[DcimLAGInterface]
 
 
@@ -1031,9 +1042,7 @@ class DcimVirtualDevice(CoreArtifactTarget, DcimDevice, DcimCapabilities, AppIns
     hosting_device: RelationshipAttribute[DcimPhysicalDevice]
 
 
-class DcimVirtualInterface(DcimInterface, DcimHasSubInterface):
-    host_interface: RelationshipAttribute[DcimPhysicalInterface]
-    ip_address: RelationshipAttribute[IpamIPAddress]
+class DcimVirtualInterface(DcimInterface, DcimHasSubInterface, DcimHasIPAddress):
     parent_interface: RelationshipAttribute[DcimInterface]
     vlan_domain_segment: RelationshipAttribute[ManagedVlanDomainSegment]
     vrf: RelationshipAttribute[ManagedVRF]
@@ -1063,6 +1072,7 @@ class ManagedVxlanSegment(ManagedGeneric, ManagedNetworkSegment, ManagedGenericI
     terminate_inline: Boolean
     customer_deployments: RelationshipManager[TopologyDeployment]
     inline_service: RelationshipAttribute[ManagedGeneric]
+    switched_interfaces: RelationshipManager[DcimSwitchedInterface]
 
 
 class SecurityZone(CoreNode):

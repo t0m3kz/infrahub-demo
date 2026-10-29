@@ -194,6 +194,9 @@
                       }
                     }
                   },
+                  "segments": {
+                    "edges": []
+                  },
                   "capabilities": {
                     "edges": [
                       {
@@ -357,6 +360,9 @@
                       }
                     }
                   },
+                  "segments": {
+                    "edges": []
+                  },
                   "capabilities": {
                     "edges": [
                       {
@@ -458,6 +464,9 @@
                   },
                   "cable": {
                     "node": null
+                  },
+                  "segments": {
+                    "edges": []
                   },
                   "capabilities": {
                     "edges": []

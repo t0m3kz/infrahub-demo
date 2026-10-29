@@ -40,7 +40,7 @@ NON_CARRYING_KINDS = sorted(set(_device_kinds()) - VRF_DEVICE_KINDS)
 
 def _with_instance(**kwargs: Any) -> dict[str, Any]:
     """A device carrying one PROD instance."""
-    return raw_device("d1", "dev-1", capabilities=[raw_instance("v1", "dev-1", "PROD")], **kwargs)
+    return raw_device("d1", "dev-1", vrfs=[raw_instance("v1", "dev-1", "PROD")], **kwargs)
 
 
 def test_the_schema_scan_finds_the_roles_and_kinds() -> None:
@@ -104,14 +104,15 @@ def test_s3_a_default_gateway_row_whose_svi_has_no_vrf_passes() -> None:
 
 
 def test_s5_rows_shared_through_an_mlag_domain_pass_with_an_svi_on_each_member() -> None:
-    """S5: both members of a pair see the domain's rows, and each holds its own SVI and instance."""
+    """S5: both members of a pair see the domain's rows; each holds its own SVI and is a member of the one instance."""
     row = raw_row("r1", 100, "PROD", segment="web")
     members = [
         raw_device(
             f"d{i}",
             f"leaf-{i}",
-            capabilities=[raw_mlag("mlag-1", row), raw_instance(f"v{i}", f"leaf-{i}", "PROD")],
-            interfaces=[raw_svi(f"s{i}", 100, "r1", f"v{i}", "PROD")],
+            capabilities=[raw_mlag("mlag-1", row)],
+            vrfs=[raw_instance("v1", f"leaf-{i}", "PROD")],
+            interfaces=[raw_svi(f"s{i}", 100, "r1", "v1", "PROD")],
         )
         for i in (1, 2)
     ]

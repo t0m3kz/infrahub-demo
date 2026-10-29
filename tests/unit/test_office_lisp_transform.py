@@ -80,7 +80,7 @@ def _seg200_namespaces(data: dict[str, Any]) -> list[dict[str, Any]]:
     """The ip_namespace nodes of seg-200 everywhere it appears in the input (host port and activations)."""
     segments: list[dict[str, Any]] = []
     for iface in _node(data)["interfaces"]["edges"]:
-        segments += [edge["node"] for edge in iface["node"]["capabilities"]["edges"] if "gateway" in edge["node"]]
+        segments += [edge["node"] for edge in iface["node"].get("segments", {"edges": []})["edges"]]
     segments += [act["node"]["segment"]["node"] for act in _deployment(data)["segment_deployments"]["edges"]]
     return [
         seg["gateway"]["node"]["ip_prefix"]["node"]["ip_namespace"]["node"]
@@ -136,7 +136,7 @@ def _device() -> dict[str, Any]:
     return {
         "name": "as-c005-office01",
         "interfaces": [{"name": "Loopback0", "role": "loopback", "ip_address": {"address": "10.0.0.1/32"}}],
-        "capabilities": [{"typename": "ManagedVRF", "name": "as-c005-office01-vrf-vrf_a", "namespace": _VRF_A}],
+        "vrfs": [{"namespace": _VRF_A}],
     }
 
 

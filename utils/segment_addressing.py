@@ -4,6 +4,32 @@ from __future__ import annotations
 
 from typing import Any
 
+HOSTING_KINDS = frozenset({"TopologyDataCenter", "TopologyColocationMetro", "TopologyCustomerOffice"})
+"""The kinds that inherit TopologySegmentHosting: a segment's realization and a VRF instance sit on one of them."""
+
+
+def segment_hosting_candidates(deployment: Any) -> list[dict]:
+    """The device's deployment and its parent, nearest first.
+
+    Only TopologyDataCenter, TopologyColocationMetro and TopologyCustomerOffice
+    inherit TopologySegmentHosting: a border-leaf's deployment IS the DC, but a
+    leaf's deployment is the pod and a colocation edge's is its zone or virtual
+    colocation, one hop below the DC or metro. The device-scoped fragments
+    (evpn_fabric.gql, firewall_contexts.gql) nest one `parent` hop for that case.
+    """
+    parent = deployment.get("parent") if isinstance(deployment, dict) else None
+    return [c for c in (deployment, parent) if isinstance(c, dict)]
+
+
+def hosting_deployment(deployment: Any) -> dict[str, Any] | None:
+    """The device's hosting deployment (a DC, a colocation metro or an office): the first of its deployment and that
+    deployment's parent whose kind is a hosting kind, None when neither is.
+
+    The one rule for where a device's VRF instances live (utils/vrf_demand.py). ``deployment`` is cleaned query data
+    with ``typename`` (and ``parent`` with ``typename`` for a pod, a colocation zone or a virtual colocation).
+    """
+    return next((c for c in segment_hosting_candidates(deployment) if c.get("typename") in HOSTING_KINDS), None)
+
 
 def _in_family(prefix: str, family: str) -> bool:
     """Whether `prefix` belongs to the address family ("ipv4" or "ipv6")."""

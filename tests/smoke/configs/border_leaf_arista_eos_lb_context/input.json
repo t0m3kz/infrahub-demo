@@ -725,56 +725,6 @@
                     ]
                   }
                 }
-              },
-              {
-                "node": {
-                  "__typename": "ManagedVRF",
-                  "id": "vrf-dc1-border-leaf-01-NON-PROD",
-                  "name": {
-                    "value": "dc1-border-leaf-01-vrf-non-prod"
-                  },
-                  "status": {
-                    "value": "active"
-                  },
-                  "namespace": {
-                    "node": {
-                      "name": {
-                        "value": "NON-PROD"
-                      },
-                      "l3_vni": {
-                        "value": 60001
-                      },
-                      "namespace_type": {
-                        "value": "non_prod"
-                      }
-                    }
-                  }
-                }
-              },
-              {
-                "node": {
-                  "__typename": "ManagedVRF",
-                  "id": "vrf-dc1-border-leaf-01-PROD",
-                  "name": {
-                    "value": "dc1-border-leaf-01-vrf-prod"
-                  },
-                  "status": {
-                    "value": "active"
-                  },
-                  "namespace": {
-                    "node": {
-                      "name": {
-                        "value": "PROD"
-                      },
-                      "l3_vni": {
-                        "value": 60000
-                      },
-                      "namespace_type": {
-                        "value": "prod"
-                      }
-                    }
-                  }
-                }
               }
             ]
           },
@@ -902,6 +852,9 @@
                       }
                     }
                   },
+                  "segments": {
+                    "edges": []
+                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -995,6 +948,9 @@
                       }
                     }
                   },
+                  "segments": {
+                    "edges": []
+                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -1026,6 +982,9 @@
                   },
                   "cable": {
                     "node": null
+                  },
+                  "segments": {
+                    "edges": []
                   },
                   "capabilities": {
                     "edges": []
@@ -1312,6 +1271,44 @@
                 "edges": []
               }
             }
+          },
+          "vrfs": {
+            "edges": [
+              {
+                "node": {
+                  "namespace": {
+                    "node": {
+                      "name": {
+                        "value": "NON-PROD"
+                      },
+                      "l3_vni": {
+                        "value": 60001
+                      },
+                      "namespace_type": {
+                        "value": "non_prod"
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "namespace": {
+                    "node": {
+                      "name": {
+                        "value": "PROD"
+                      },
+                      "l3_vni": {
+                        "value": 60000
+                      },
+                      "namespace_type": {
+                        "value": "prod"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
           }
         }
       }

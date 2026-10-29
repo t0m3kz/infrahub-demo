@@ -1,6 +1,6 @@
-"""The VRF instances and SVI objects a fixture device's config demands, appended to its raw input.
+"""The VRF memberships and SVI objects a fixture device's config demands, appended to its raw input.
 
-A transform refuses a device whose config uses a VRF it has no ManagedVRF instance of, or a routed segment with no
+A transform refuses a device whose config uses a VRF it is no member of a ManagedVRF instance of, or a routed segment with no
 role-``svi`` interface (transforms/helpers/vrf.py). The fixture writers (``common._write_data_fixture``) and the unit
 tests that build their own device data therefore go through ``with_vrf_objects``: it asks the transform's own
 ``vrf_requirements`` what the device demands, so there is no second derivation, and appends the missing
@@ -14,7 +14,7 @@ from typing import Any
 
 from transforms.common import BaseDeviceTransform
 from transforms.helpers.vrf import VrfRequirements, vrf_requirements
-from utils.vrf_demand import SVI_ROLE, VRF_KIND, instance_name, svi_name
+from utils.vrf_demand import SVI_ROLE, svi_name
 
 # A fixture namespace dict does not always carry its namespace_type (the segment gateway's does not): the type of the
 # four environment namespaces by name, the tenant default for any other name (a fixture's own VRF_A, ...).
@@ -48,13 +48,9 @@ def _namespace_dicts(data: Any) -> dict[str, dict[str, Any]]:
     return found
 
 
-def _vrf_node(device_name: str, namespace: dict[str, Any]) -> dict[str, Any]:
+def _vrf_node(namespace: dict[str, Any]) -> dict[str, Any]:
     name = namespace["name"]
     return {
-        "__typename": VRF_KIND,
-        "id": f"vrf-{device_name}-{name}",
-        "name": _value(instance_name(device_name, name)),
-        "status": _value("active"),
         "namespace": {
             "node": {
                 "name": _value(name),
@@ -84,30 +80,30 @@ def _append(container: dict[str, Any], key: str, nodes: list[dict[str, Any]]) ->
     container.setdefault(key, {"edges": []}).setdefault("edges", []).extend({"node": node} for node in nodes)
 
 
-def _raw_names(container: dict[str, Any], key: str, only: str | None = None) -> set[str]:
+def _raw_names(container: dict[str, Any], key: str) -> set[str]:
     return {
         edge["node"]["name"]["value"]
         for edge in (container.get(key) or {}).get("edges") or []
-        if edge["node"].get("name") and (only is None or edge["node"].get("__typename") == only)
+        if edge["node"].get("name")
     }
 
 
 def add_requirements(
-    device: dict[str, Any], device_name: str, requirements: VrfRequirements, namespaces: dict[str, dict[str, Any]]
+    device: dict[str, Any], requirements: VrfRequirements, namespaces: dict[str, dict[str, Any]]
 ) -> None:
-    """Append to the raw ``device`` node the instances and SVIs of ``requirements`` it does not have yet.
+    """Append to the raw ``device`` node the memberships (``vrfs``) and SVIs of ``requirements`` it does not have yet.
 
     ``namespaces`` holds the l3_vni / namespace_type of each namespace the fixture names (``_namespace_dicts``).
     """
-    have = _raw_names(device, "capabilities", only=VRF_KIND)
+    have = {
+        edge["node"]["namespace"]["node"]["name"]["value"]
+        for edge in (device.get("vrfs") or {}).get("edges") or []
+        if (edge["node"].get("namespace") or {}).get("node")
+    }
     _append(
         device,
-        "capabilities",
-        [
-            _vrf_node(device_name, namespaces.get(name) or {"name": name})
-            for name in sorted(requirements.namespaces)
-            if instance_name(device_name, name) not in have
-        ],
+        "vrfs",
+        [_vrf_node(namespaces.get(name) or {"name": name}) for name in sorted(requirements.namespaces - have)],
     )
     present = _raw_names(device, "interfaces")
     _append(
@@ -122,7 +118,7 @@ def add_requirements(
 
 
 def with_vrf_objects(transform: BaseDeviceTransform, data: dict[str, Any]) -> dict[str, Any]:
-    """A copy of the raw device query response ``data`` with the VRF instances and SVIs its config demands added."""
+    """A copy of the raw device query response ``data`` with the VRF memberships and SVIs its config demands added."""
     result = copy.deepcopy(data)
     device_data, _, platform_name = transform.prepared_device(result)
     if not platform_name:
@@ -131,5 +127,5 @@ def with_vrf_objects(transform: BaseDeviceTransform, data: dict[str, Any]) -> di
     if requirements.namespaces or requirements.svis:
         first = next(iter(result.values()))
         node = first["edges"][0]["node"] if isinstance(first, dict) and "edges" in first else first
-        add_requirements(node, device_data.get("name") or "", requirements, _namespace_dicts(device_data))
+        add_requirements(node, requirements, _namespace_dicts(device_data))
     return result

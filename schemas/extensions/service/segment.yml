@@ -258,6 +258,31 @@ extensions:
           identifier: "segmentdeployment__segment"
           order_weight: 9000
           description: "Per-deployment VNI allocations for this segment"
+        # The typed L2 membership: the switch ports (physical or LAG) the segment is a VLAN on, written by the
+        # segment reconcile (generators/topology/segment_ports.py) and by its inline termination's border service ports
+        # (generators/topology/segment.py). A change of it re-runs add_vxlan_segment (data/events/99_actions.yml).
+        # The inline L3 termination on an HA member's sub-interface stays on `capabilities`.
+        - name: switched_interfaces
+          label: Switched Interfaces
+          peer: DcimSwitchedInterface
+          kind: Generic
+          cardinality: many
+          optional: true
+          identifier: "segment__switched_interfaces"
+          order_weight: 9100
+          description: "Switch ports (physical or LAG) carrying this segment as a VLAN"
+
+    - kind: DcimSwitchedInterface
+      relationships:
+        - name: segments
+          label: Segments
+          peer: ManagedVxlanSegment
+          kind: Generic
+          cardinality: many
+          optional: true
+          identifier: "segment__switched_interfaces"
+          order_weight: 1850
+          description: "VXLAN segments this port carries as VLANs (its switchport membership)"
 
     - kind: TopologySegmentHosting
       relationships:

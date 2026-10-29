@@ -12,7 +12,6 @@ from generators.protocols import (
     DcimCable,
     DcimPhysicalDevice,
     DcimPhysicalInterface,
-    DcimVirtualInterface,
 )
 from tests.unit.segment_generators_helpers import _make_gen
 
@@ -73,14 +72,9 @@ class TestInlineLegs:
     """Where an inline segment terminates: each HA member port cabled to a border-leaf service port."""
 
     @staticmethod
-    def _filters(routed_parent: str | None = None) -> dict[Any, Any]:
+    def _filters() -> dict[Any, Any]:
         bl_device = MagicMock(id="bl-1")
         bl_device.name.value = "bl-01"
-        routed = []
-        if routed_parent:
-            sub = MagicMock()
-            sub.parent_interface.id = routed_parent
-            routed = [sub]
         return {
             DcimPhysicalInterface: lambda **kwargs: (
                 [
@@ -95,7 +89,6 @@ class TestInlineLegs:
                 ]
             ),
             DcimCable: [_cable("c1", "fw1-up", "bl-fw"), _cable("c2", "fw1-dn", "lb-up")],
-            DcimVirtualInterface: routed,
             DcimPhysicalDevice: [bl_device],
         }
 
@@ -121,13 +114,6 @@ class TestInlineLegs:
         assert cable_call.kwargs["ids"] == ["c1", "c2"]
         gen.client.get.assert_not_called()
 
-    def test_routed_border_port_is_an_error(self) -> None:
-        """A pbr-mode border port parenting routed sub-interfaces cannot also be the segment's trunk."""
-        gen = _inline_gen(self._filters(routed_parent="bl-fw"))
-
-        assert asyncio.run(gen._inline_legs(_INLINE_SEGMENT)) == []
-        assert "routed parent" in gen.logger.error.call_args[0][0]
-
     def test_no_inline_service_has_no_legs(self) -> None:
         """terminate_inline without an inline_service terminates nowhere."""
         gen = _inline_gen({})
@@ -143,7 +129,9 @@ class TestReconcileInlineServicePorts:
     def _gen(tagged: list[dict[str, Any]]) -> Any:
         gen = _inline_gen({})
         gen._inline_legs = AsyncMock(return_value=[{"border_port_id": "bl-fw-new"}])
-        gen._fetch_segment_vlan_state = AsyncMock(return_value={"segment": {"capabilities": tagged}, "activations": {}})
+        gen._fetch_segment_vlan_state = AsyncMock(
+            return_value={"segment": {"switched_interfaces": tagged}, "activations": {}}
+        )
         gen.segment_obj = MagicMock()
         gen.segment_obj.add_relationships = AsyncMock()
         gen.segment_obj.remove_relationships = AsyncMock()
@@ -163,10 +151,10 @@ class TestReconcileInlineServicePorts:
 
         assert legs == [{"border_port_id": "bl-fw-new"}]
         gen.segment_obj.add_relationships.assert_awaited_once_with(
-            relation_to_update="capabilities", related_nodes=["bl-fw-new"]
+            relation_to_update="switched_interfaces", related_nodes=["bl-fw-new"]
         )
         gen.segment_obj.remove_relationships.assert_awaited_once_with(
-            relation_to_update="capabilities", related_nodes=["bl-fw-old"]
+            relation_to_update="switched_interfaces", related_nodes=["bl-fw-old"]
         )
 
     def test_terminate_inline_off_untags_every_service_port(self) -> None:
@@ -179,7 +167,7 @@ class TestReconcileInlineServicePorts:
         gen._inline_legs.assert_not_awaited()
         gen.segment_obj.add_relationships.assert_not_awaited()
         gen.segment_obj.remove_relationships.assert_awaited_once_with(
-            relation_to_update="capabilities", related_nodes=["bl-fw-old"]
+            relation_to_update="switched_interfaces", related_nodes=["bl-fw-old"]
         )
 
 

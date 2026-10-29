@@ -3,7 +3,20 @@
 from collections.abc import Mapping
 from typing import Any
 
+from utils.limits import DEFAULT_NAMESPACE
 from utils.segment_addressing import is_inline_terminated, routed_segment_namespace
+
+
+def interface_segments(iface: dict[str, Any]) -> list[dict[str, Any]]:
+    """The VXLAN segments an interface carries.
+
+    A switch port or LAG carries them on ``segments`` (DcimSwitchedInterface); the inline L3 termination of a segment
+    on a DcimVirtualInterface sub-interface stays on its ``capabilities`` edge.
+    """
+    return [
+        *(iface.get("segments") or []),
+        *(cap for cap in iface.get("capabilities") or [] if cap.get("typename") == "ManagedVxlanSegment"),
+    ]
 
 
 def routed_activations(activations: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
@@ -41,22 +54,9 @@ def _get_segment_gateways(seg: dict) -> tuple[str | None, str | None, str | None
 
     ns = routed_segment_namespace(seg)
     ns_name = ns.get("name")
-    vrf = ns_name if ns_name and ns_name != "default" else None
+    vrf = ns_name if ns_name and ns_name != DEFAULT_NAMESPACE else None
     l3_vni = ns.get("l3_vni")
     return gateway_ip, gateway_ipv6, vrf, l3_vni
-
-
-def segment_hosting_candidates(deployment: Any) -> list[dict]:
-    """The device's deployment and its parent, nearest first.
-
-    Only TopologyDataCenter, TopologyColocationMetro and TopologyCustomerOffice
-    inherit TopologySegmentHosting: a border-leaf's deployment IS the DC, but a
-    leaf's deployment is the pod and a colocation edge's is its zone or virtual
-    colocation, one hop below the DC or metro. The device-scoped fragments
-    (evpn_fabric.gql, firewall_contexts.gql) nest one `parent` hop for that case.
-    """
-    parent = deployment.get("parent") if isinstance(deployment, dict) else None
-    return [c for c in (deployment, parent) if isinstance(c, dict)]
 
 
 def segment_vlan_ids(activations: list[dict[str, Any]] | None) -> dict[str, int]:

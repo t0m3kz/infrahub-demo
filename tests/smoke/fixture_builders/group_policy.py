@@ -141,8 +141,8 @@ def _gp_nic(
         "name": _v(port),
         "role": _v(far_role or ("lag" if lag else "server")),
         "device": _node({"name": _v(switch)}),
-        "capabilities": _edges([] if lag else tagged),
-        "lag": _node({"name": _v(lag), "capabilities": _edges(tagged)} if lag else None),
+        "segments": _edges([] if lag else tagged),
+        "lag": _node({"name": _v(lag), "segments": _edges(tagged)} if lag else None),
     }
     return {"id": near["id"], "name": _v(nic), "cable": _node({"endpoints": _edges([near, far])})}
 

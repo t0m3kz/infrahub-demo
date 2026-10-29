@@ -7,7 +7,7 @@ from typing import Any
 
 from netutils.interface import sort_interface_list
 
-from transforms.helpers.addressing import host_ip
+from transforms.helpers.addressing import host_ip, sub_interface_parent
 
 # The neutral overlay model owns these (transforms/helpers/overlay.py); they stay importable from here.
 from transforms.helpers.overlay import (
@@ -21,11 +21,11 @@ from transforms.helpers.overlay import (
 )
 from transforms.helpers.overlay import _select_vtep_interface as _select_vtep_interface
 from transforms.helpers.overlay import build_overlay_node, l2_instance, vni_activations
-from transforms.helpers.segments import segment_vlan_ids
+from transforms.helpers.segments import interface_segments, segment_vlan_ids
 from transforms.helpers.vrf import device_vrfs
 from utils.exchange_transit import FIREWALL_CONTEXT_KIND, SERVICE_CONTEXT_ROLES
 from utils.fabric_roles import BORDER_ROLES
-from utils.limits import MAX_ENCODABLE_VNI
+from utils.limits import DEFAULT_NAMESPACE, MAX_ENCODABLE_VNI
 from utils.segment_addressing import routed_segment_namespace
 from utils.vrf_demand import internet_exits
 
@@ -80,7 +80,7 @@ def _multisite_vrf_site_asns(activations: list[dict[str, Any]]) -> dict[str, set
         if not _is_multisite_segment(seg):
             continue
         vrf = routed_segment_namespace(seg).get("name")
-        if not vrf or vrf == "default":
+        if not vrf or vrf == DEFAULT_NAMESPACE:
             continue
         by_vrf.setdefault(vrf, set()).update(_segment_site_asns(seg))
     return by_vrf
@@ -181,11 +181,7 @@ def get_interfaces(
         for cap in capabilities:
             by_type.setdefault(cap.get("typename"), []).append(cap)
 
-        vlans = [
-            segment_vlan[s["name"]]
-            for s in capabilities
-            if s.get("typename") == "ManagedVxlanSegment" and s.get("name") in segment_vlan
-        ]
+        vlans = [segment_vlan[s["name"]] for s in interface_segments(iface) if s.get("name") in segment_vlan]
 
         # FirewallContext sub-interface (role="service", created by
         # generators/topology/customer_dc.py's _create_context_subinterface)
@@ -276,7 +272,7 @@ def get_interfaces(
             "mtu": iface.get("mtu"),
             "ip_addresses": ip_addresses,
             "dot1q_vlan": context_vlan_id,
-            "parent_interface": iface.get("parent_interface"),
+            "parent_interface": sub_interface_parent(iface),
         }
 
         if native_vlan is not None:

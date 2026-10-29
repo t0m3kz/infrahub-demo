@@ -184,7 +184,8 @@ def build_exchange_transit_bl_data(
     )
     if with_customer_port:
         customer_port = next(e["node"] for e in interfaces if e["node"]["name"]["value"] == "Ethernet10")
-        customer_port["capabilities"] = _edges([shared])
+        customer_port["capabilities"] = _edges([])
+        customer_port["segments"] = _edges([shared])
     device_node["deployment"]["node"]["segment_deployments"] = _edges(
         [_deployment_record(shared, 10100), _deployment_record(acme, 10110)]
     )

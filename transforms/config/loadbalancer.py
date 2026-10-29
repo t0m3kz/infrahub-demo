@@ -1,7 +1,7 @@
 from typing import Any
 
 from transforms.common import BaseDeviceTransform
-from transforms.helpers.addressing import management_ip
+from transforms.helpers.addressing import management_ip, sub_interface_parent
 from transforms.helpers.ha import get_ha, inline_addresses
 from transforms.helpers.loadbalancer import get_loadbalancer_contexts
 
@@ -21,7 +21,7 @@ def _build_lb_interfaces(interfaces: list[dict[str, Any]], ha: dict[str, Any] | 
                 "status": iface.get("status"),
                 "role": iface.get("role"),
                 "ip_address": ip_obj,
-                "parent_interface": iface.get("parent_interface"),
+                "parent_interface": sub_interface_parent(iface),
                 **inline_addresses(iface.get("capabilities"), ha),
             }
         )

@@ -88,12 +88,6 @@ fragment DeviceCapabilitiesFields on DcimCapabilities {
           router_id { node { address { value } } }
         }
 
-        # The device's VRF instances (utils/vrf_demand.py): the VRFs it has, the L3 instances it may realize.
-        ... on ManagedVRF {
-          id
-          namespace { node { name { value } l3_vni { value } namespace_type { value } } }
-        }
-
         ... on ManagedMLAG {
           id
           domain_id { value }
@@ -128,6 +122,9 @@ fragment DeviceCapabilitiesFields on DcimCapabilities {
 }
 
 fragment DeviceCapabilitiesOnDeviceFields on DcimDevice {
+  # The device's VRF memberships (utils/vrf_demand.py): the topology instances it is a member of, i.e. the L3
+  # instances it may realize. A device's `deployment` selection never selects `vrfs`.
+  vrfs { edges { node { namespace { node { name { value } l3_vni { value } namespace_type { value } } } } } }
   ... on DcimCapabilities {
     ...DeviceCapabilitiesFields
   }

@@ -403,10 +403,14 @@ check_definitions:
   - name: validate_virtual_device_placement
     class_name: CheckVirtualDevicePlacement
     file_path: checks/virtual_device_placement.py
-  # Targetless: the rule is per NIC of every hosted virtual device.
-  - name: validate_virtual_nic_pinning
-    class_name: CheckVirtualNicPinning
-    file_path: checks/virtual_nic_pinning.py
+  # Targetless: the rule is per virtual interface (a NIC on its host, a sub-interface on its own device).
+  - name: validate_interface_parents
+    class_name: CheckInterfaceParents
+    file_path: checks/interface_parents.py
+  # Targetless: a port is a switchport or a routed port (the layer is its content), per interface of every device.
+  - name: validate_interface_layers
+    class_name: CheckInterfaceLayers
+    file_path: checks/interface_layers.py
   # Targetless: a rule's source segment spans footprints, and the hardware that
   # enforces it (firewall pair, legs, exchange, ports, SNAT) belongs to the
   # contexts serving them.
@@ -781,8 +785,10 @@ queries:
     file_path: queries/validation/hypervisor_environment.gql
   - name: virtual_device_placement
     file_path: queries/validation/virtual_device_placement.gql
-  - name: virtual_nic_pinning
-    file_path: queries/validation/virtual_nic_pinning.gql
+  - name: interface_parents
+    file_path: queries/validation/interface_parents.gql
+  - name: interface_layers
+    file_path: queries/validation/interface_layers.gql
   - name: pool_utilization
     file_path: queries/validation/pool_utilization.gql
   - name: loadbalancer_validation

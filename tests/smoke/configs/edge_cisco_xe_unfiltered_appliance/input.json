@@ -1168,31 +1168,6 @@
                     ]
                   }
                 }
-              },
-              {
-                "node": {
-                  "__typename": "ManagedVRF",
-                  "id": "vrf-eg-am-ne02-PROD",
-                  "name": {
-                    "value": "eg-am-ne02-vrf-prod"
-                  },
-                  "status": {
-                    "value": "active"
-                  },
-                  "namespace": {
-                    "node": {
-                      "name": {
-                        "value": "PROD"
-                      },
-                      "l3_vni": {
-                        "value": 60000
-                      },
-                      "namespace_type": {
-                        "value": "prod"
-                      }
-                    }
-                  }
-                }
               }
             ]
           },
@@ -1320,6 +1295,9 @@
                       }
                     }
                   },
+                  "segments": {
+                    "edges": []
+                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -1412,6 +1390,9 @@
                         ]
                       }
                     }
+                  },
+                  "segments": {
+                    "edges": []
                   },
                   "capabilities": {
                     "edges": []
@@ -1517,6 +1498,27 @@
                 "edges": []
               }
             }
+          },
+          "vrfs": {
+            "edges": [
+              {
+                "node": {
+                  "namespace": {
+                    "node": {
+                      "name": {
+                        "value": "PROD"
+                      },
+                      "l3_vni": {
+                        "value": 60000
+                      },
+                      "namespace_type": {
+                        "value": "prod"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
           }
         }
       }

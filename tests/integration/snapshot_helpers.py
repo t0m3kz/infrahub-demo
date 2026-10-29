@@ -76,9 +76,12 @@ TOPOLOGY_SNAPSHOT_KINDS = {
     "ManagedHA": "group_id { value }",
     "ManagedSegmentDeployment": "vni { value }",
     "ManagedVlanDomainSegment": "vlan_id { value } svis { edges { node { id } } }",
-    # The VRF instances and the segment SVIs are untracked and converged by generators/helpers/vrf.py: a rerun that
-    # rebuilt an instance (new id), moved it to another namespace or device, or re-pointed an SVI is a diff.
-    "ManagedVRF": "name { value } namespace { node { id } } capabilities { edges { node { id } } }",
+    # The VRF instances (one per hosting deployment and namespace) and the segment SVIs are untracked and converged by
+    # generators/helpers/vrf.py: a rerun that rebuilt an instance (new id), moved it to another topology or namespace,
+    # changed its members, or re-pointed an SVI is a diff.
+    "ManagedVRF": (
+        "name { value } deployment { node { id } } namespace { node { id } } devices { edges { node { id } } }"
+    ),
     "LocationRack": "name { value }",
     "TopologyPod": "name { value }",
     "TopologyDataCenter": "name { value }",
