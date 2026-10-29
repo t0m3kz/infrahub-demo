@@ -52,10 +52,18 @@ def test_a_routed_row_creates_the_instance_and_its_svi() -> None:
 
     _reconcile(host, ["d1"])
 
+    # The first member is part of the create: a RelationshipAdd on the node just created can hit the other replica
+    # first and fail with an unretried NODE_NOT_FOUND.
     assert host.written("ManagedVRF") == [
-        {"name": "dc1-vrf-prod", "deployment": {"id": "dc-1"}, "namespace": {"id": "ns-PROD"}, "status": "active"}
+        {
+            "name": "dc1-vrf-prod",
+            "deployment": {"id": "dc-1"},
+            "namespace": {"id": "ns-PROD"},
+            "devices": [{"id": "d1"}],
+            "status": "active",
+        }
     ]
-    assert host.edge_ops == [("add", "new-1", "devices", ["d1"])]
+    assert host.edge_ops == []
     assert host.lock_keys == ["vrf-device-d1", "vrf-dc-1-PROD"]
     assert host.written("DcimVirtualInterface") == [
         {
@@ -152,7 +160,8 @@ def test_ensure_never_deletes_and_creates_what_the_caller_is_about_to_need() -> 
     _ensure(host, {"d1": {"PROD", "default"}})
 
     assert [data["name"] for data in host.written("ManagedVRF")] == ["dc1-vrf-prod"]
-    assert host.edge_ops == [("add", "new-1", "devices", ["d1"])]
+    assert [data["devices"] for data in host.written("ManagedVRF")] == [[{"id": "d1"}]]
+    assert host.edge_ops == []
     assert host.deleted == []
     assert host.store.vrfs["vrf-2"].members == {"d1"}
 
@@ -316,8 +325,8 @@ def test_the_membership_is_an_edge_add_never_a_save_of_the_list() -> None:
 
     _reconcile(host, ["d1"])
 
-    assert all("devices" not in data for data in host.written("ManagedVRF"))
-    assert host.edge_ops == [("add", "new-1", "devices", ["d1"])]
+    assert [data["devices"] for data in host.written("ManagedVRF")] == [[{"id": "d1"}]]
+    assert host.edge_ops == []
 
 
 def test_a_second_member_joins_the_existing_instance_without_a_create() -> None:
@@ -387,7 +396,8 @@ def test_a_moved_device_leaves_the_old_topology_and_joins_the_new_one() -> None:
     _reconcile(host, ["d1"])
 
     assert [data["deployment"] for data in host.written("ManagedVRF")] == [{"id": "dc-2"}]
-    assert host.edge_ops == [("add", "new-1", "devices", ["d1"]), ("remove", "vrf-old", "devices", ["d1"])]
+    assert [data["devices"] for data in host.written("ManagedVRF")] == [[{"id": "d1"}]]
+    assert host.edge_ops == [("remove", "vrf-old", "devices", ["d1"])]
     assert host.written("DcimVirtualInterface")[0]["id"] == "svi-1"
     assert host.written("DcimVirtualInterface")[0]["vrf"] == {"id": "new-1"}
     assert host.deleted == [("ManagedVRF", "vrf-old")]

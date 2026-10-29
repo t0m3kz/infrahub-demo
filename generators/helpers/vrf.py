@@ -197,28 +197,31 @@ class VrfMixin(SviMixin):
         self, facts: DeviceVrfFacts, deployment_id: str, deployment_name: str, namespace: Mapping[str, Any]
     ) -> str:
         """Find or create the topology's instance of the namespace and add the device to it; the caller holds the
-        instance lock. Returns the instance id."""
+        instance lock. Returns the instance id.
+
+        A new instance is created WITH its first member in one write: a RelationshipAdd on a node created a moment
+        before, in another request, can reach the other replica first and fail with an unretried NODE_NOT_FOUND."""
         found = await self.client.filters(
             kind=ManagedVRF, deployment__ids=[deployment_id], namespace__ids=[namespace["id"]], include=["devices"]
         )
         if found:
             instance = found[0]
-        else:
-            instance = await self.client.create(
-                kind=ManagedVRF,
-                data={
-                    "name": instance_name(deployment_name, namespace["name"]),
-                    "deployment": {"id": deployment_id},
-                    "namespace": {"id": namespace["id"]},
-                    "status": "active",
-                },
-            )
-            await instance.save(allow_upsert=True, update_group_context=False)
-            self.logger.info(
-                f"  {facts.name}: created VRF instance {instance_name(deployment_name, namespace['name'])}"
-            )
-        if not any(peer.id == facts.id for peer in instance.devices.peers):
-            await instance.add_relationships("devices", [facts.id])
+            if not any(peer.id == facts.id for peer in instance.devices.peers):
+                await instance.add_relationships("devices", [facts.id])
+            return instance.id
+        name = instance_name(deployment_name, namespace["name"])
+        instance = await self.client.create(
+            kind=ManagedVRF,
+            data={
+                "name": name,
+                "deployment": {"id": deployment_id},
+                "namespace": {"id": namespace["id"]},
+                "devices": [{"id": facts.id}],
+                "status": "active",
+            },
+        )
+        await instance.save(allow_upsert=True, update_group_context=False)
+        self.logger.info(f"  {facts.name}: created VRF instance {name}")
         return instance.id
 
     async def _delete_if_unused(

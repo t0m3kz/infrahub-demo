@@ -167,7 +167,10 @@ class VrfHost(VrfMixin):
         if kind.__name__ != "ManagedVRF":
             return SimpleNamespace(id=node_id, save=_save)
         # The created instance is the same object a later read returns, with the SDK's empty member list.
-        vrf = FakeVrf(node_id, data["name"], data["deployment"]["id"], data["namespace"]["id"].removeprefix("ns-"))
+        members = {member["id"] for member in data.get("devices") or []}
+        vrf = FakeVrf(
+            node_id, data["name"], data["deployment"]["id"], data["namespace"]["id"].removeprefix("ns-"), members
+        )
         vrf.store = self.store
         vrf.save = _save
         return vrf
