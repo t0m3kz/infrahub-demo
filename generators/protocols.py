@@ -93,7 +93,6 @@ class DcimDevice(CoreNode):
     platform: RelationshipAttribute[DcimPlatform]
     primary_address: RelationshipAttribute[IpamIPAddress]
     tags: RelationshipManager[BuiltinTag]
-    vrfs: RelationshipManager[ManagedVRF]
 
 
 class TopologyDeviceHosting(CoreNode):
@@ -160,6 +159,10 @@ class ManagedGeneric(CoreNode):
 
 class ManagedGenericDevice(CoreNode):
     capabilities: RelationshipManager[DcimCapabilities]
+
+
+class ManagedGenericSharedDevice(CoreNode):
+    shared_devices: RelationshipManager[DcimCapabilities]
 
 
 class ManagedGenericInterfaces(CoreNode):
@@ -665,10 +668,9 @@ class ManagedMLAG(ManagedGeneric, ManagedGenericDevice, ManagedGenericVlanDomain
     virtual_peer_link: Boolean
 
 
-class ManagedVRF(ManagedGeneric):
+class ManagedVRF(ManagedGeneric, ManagedGenericSharedDevice):
     l3_vni: StringOptional
     deployment: RelationshipAttribute[TopologySegmentHosting]
-    devices: RelationshipManager[DcimDevice]
     namespace: RelationshipAttribute[IpamNamespace]
 
 

@@ -61,7 +61,7 @@ def raw_instance(
     deployment_id: str | None = HOSTING_ID,
     hosting_name: str = HOSTING_NAME,
 ) -> dict[str, Any]:
-    """A ManagedVRF as the device's ``vrfs`` membership (VrfDemandInstanceFields); ``device`` is unused and kept for
+    """A ManagedVRF as the device's ``shared_capabilities`` membership (VrfDemandInstanceFields); ``device`` is unused and kept for
     the callers that pass the member's name. ``deployment_id`` None means an instance with no deployment node."""
     ns: dict[str, Any] = {"name": {"value": namespace}}
     ns["l3_vni"] = {"value": l3_vni}
@@ -76,9 +76,9 @@ def raw_instance(
 
 
 def raw_root_instance(instance: dict[str, Any], *member_ids: str) -> dict[str, Any]:
-    """A node of the ``ManagedVRF`` root: the membership shape plus its ``devices``."""
+    """A node of the ``ManagedVRF`` root: the membership shape plus its ``shared_devices``."""
     root = {key: value for key, value in instance.items() if key != "__typename"}
-    root["devices"] = edges(*({"id": member} for member in member_ids))
+    root["shared_devices"] = edges(*({"id": member} for member in member_ids))
     return root
 
 
@@ -176,9 +176,11 @@ def raw_device(
     vrfs: list[dict[str, Any]] | None = None,
     hosting_id: str | None = HOSTING_ID,
     status: str | None = None,
+    shared_others: list[str] | None = None,
 ) -> dict[str, Any]:
-    """One DcimDevice node of the query. ``vrfs`` are its memberships (``raw_instance``); a ManagedVRF passed in
-    ``capabilities`` is taken as a membership too (the pre-r3 spelling). The device sits in a pod of the DC
+    """One DcimDevice node of the query. ``vrfs`` are its memberships (``raw_instance``), emitted as
+    ``shared_capabilities``; a ManagedVRF passed in ``capabilities`` is taken as a membership too (the pre-r3
+    spelling); ``shared_others`` are foreign shared kinds (a ``__typename`` only). The device sits in a pod of the DC
     ``hosting_id`` (None: a deployment with no hosting parent)."""
     caps = capabilities or []
     members = [*(vrfs or []), *(cap for cap in caps if cap.get("__typename") == VRF_KIND)]
@@ -188,7 +190,7 @@ def raw_device(
         "name": {"value": name},
         "role": {"value": role},
         "member_of_groups": edges(*({"name": {"value": group}} for group in groups)),
-        "vrfs": edges(*({k: v for k, v in vrf.items() if k != "__typename"} for vrf in members)),
+        "shared_capabilities": edges(*members, *({"__typename": kind} for kind in shared_others or [])),
         "deployment": raw_deployment(deployment_kind, hosting_id),
         "vlan_domain_segments": edges(*(rows or [])),
         "capabilities": edges(*(cap for cap in caps if cap.get("__typename") != VRF_KIND)),
@@ -205,7 +207,9 @@ def raw_response(*devices: dict[str, Any], instances: tuple[dict[str, Any], ...]
     members: dict[str, list[str]] = {}
     shapes: dict[str, dict[str, Any]] = {}
     for device in devices:
-        for edge in device["vrfs"]["edges"]:
+        for edge in device["shared_capabilities"]["edges"]:
+            if edge["node"]["__typename"] != VRF_KIND:
+                continue
             members.setdefault(edge["node"]["id"], []).append(device["id"])
             shapes[edge["node"]["id"]] = edge["node"]
     roots = [raw_root_instance(shapes[vrf_id], *ids) for vrf_id, ids in members.items()]

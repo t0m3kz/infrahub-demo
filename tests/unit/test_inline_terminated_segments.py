@@ -148,7 +148,9 @@ def _device_data(deployment: dict | None = None) -> dict:
         "name": "dev-01",
         "role": "leaf",
         "interfaces": [{"name": "Vlan100", "role": "svi", "vrf": {"namespace": {"name": "VRF_A"}}}],
-        "vrfs": [{"namespace": {"name": "VRF_A", "l3_vni": 50001, "namespace_type": "prod"}}],
+        "shared_capabilities": [
+            {"typename": "ManagedVRF", "namespace": {"name": "VRF_A", "l3_vni": 50001, "namespace_type": "prod"}}
+        ],
         "segment_deployments": _activations(),
         "deployment": deployment,
     }

@@ -43,6 +43,7 @@ def _everything() -> dict[str, Any]:
         rows=[row],
         capabilities=[raw_mlag("m1", row)],
         vrfs=[raw_instance("v1", "leaf-1", "PROD")],
+        shared_others=["ManagedSNMP"],
         interfaces=interfaces,
         groups=("provider_stubs",),
     )
@@ -64,12 +65,14 @@ def test_the_query_tree_resolves_the_in_file_fragments() -> None:
 
 
 def test_the_query_selects_memberships_hosting_and_the_vrf_root() -> None:
-    """Round 3: the device ``vrfs``, the deployment with its parent, the ``ManagedVRF`` root and the SVI's VRF topology."""
+    """The device's ``shared_capabilities``, the deployment with its parent, the ``ManagedVRF`` root and the SVI's VRF."""
     tree = _query_tree()
     device = tree["DcimDevice"]["edges"]["node"]
-    assert {"namespace", "deployment"} <= set(device["vrfs"]["edges"]["node"])
+    assert "vrfs" not in device
+    assert {"namespace", "deployment"} <= set(device["shared_capabilities"]["edges"]["node"])
     assert "parent" in device["deployment"]["node"]
-    assert {"deployment", "namespace", "devices"} <= set(tree["ManagedVRF"]["edges"]["node"])
+    assert {"deployment", "namespace", "shared_devices"} <= set(tree["ManagedVRF"]["edges"]["node"])
+    assert "devices" not in tree["ManagedVRF"]["edges"]["node"]
     assert "deployment" in device["interfaces"]["edges"]["node"]["vrf"]["node"]
 
 

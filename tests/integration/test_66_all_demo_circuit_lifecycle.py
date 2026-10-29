@@ -116,7 +116,7 @@ query ($peerings: [String], $keys: [String], $descriptions: [String], $devices: 
         id
         name { value }
         namespace { node { name { value } } }
-        devices { edges { node { name { value } } } }
+        shared_devices { edges { node { name { value } } } }
       }
     }
   }
@@ -292,7 +292,9 @@ def parse_vrfs(result: dict[str, Any], subject: Subject) -> dict[str, Any]:
     memberships: dict[str, str] = {}
     for node in _edges(result, "vrfs"):
         name = str(_value(node, "name"))
-        members = frozenset(str(_value(edge["node"], "name")) for edge in (node.get("devices") or {}).get("edges", []))
+        members = frozenset(
+            str(_value(edge["node"], "name")) for edge in (node.get("shared_devices") or {}).get("edges", [])
+        )
         instances[name] = {"id": node["id"], "devices": members}
         if subject.namespace and _namespace_name(node, "namespace") == subject.namespace:
             memberships.update({device: name for device in members if device in subject.end_devices})

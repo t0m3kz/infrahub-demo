@@ -42,9 +42,9 @@ def _segment(name: str, scope: str | None, ns_type: str | None) -> dict[str, Any
 
 
 def _vrf(namespace: str, l3_vni: int | None = 5000, ns_type: str | None = "prod") -> dict[str, Any]:
-    """A raw ManagedVRF membership (``device.vrfs``)."""
+    """A raw ManagedVRF membership (``device.shared_capabilities``)."""
     ns = {"name": {"value": namespace}, "l3_vni": {"value": l3_vni}, "namespace_type": {"value": ns_type}}
-    return {"namespace": {"node": ns}}
+    return {"__typename": "ManagedVRF", "namespace": {"node": ns}}
 
 
 def _overlay(router_id: str | None) -> dict[str, Any]:
@@ -107,7 +107,7 @@ def _device(
             "name": {"value": name},
             "role": {"value": role},
             "deployment": {"node": {"evpn_rt_as": _rt_as(site_asn)}},
-            "vrfs": edges(*vrfs),
+            "shared_capabilities": edges(*vrfs),
             "capabilities": edges(*capabilities),
             "interfaces": edges(*interfaces),
         }
@@ -205,7 +205,7 @@ def test_site_rt_as_is_read_from_the_parent_of_a_pod() -> None:
         "name": {"value": "edge-1"},
         "role": {"value": "edge"},
         "deployment": {"node": {"evpn_rt_as": None, "parent": {"node": {"evpn_rt_as": _rt_as(65001)}}}},
-        "vrfs": edges(internet),
+        "shared_capabilities": edges(internet),
         "capabilities": edges(_overlay(None)),
         "interfaces": edges(_iface("multisite-vip")),
     }
@@ -237,7 +237,7 @@ def test_check_class_reports_the_new_rules() -> None:
         "name": {"value": "leaf-1"},
         "role": {"value": "leaf"},
         "deployment": {"node": {"evpn_rt_as": None}},
-        "vrfs": edges(_vrf("PROD")),
+        "shared_capabilities": edges(_vrf("PROD")),
         "capabilities": edges(_overlay(None)),
         "interfaces": edges(_iface("svi", "PROD")),
     }

@@ -176,7 +176,9 @@ class TestMultisiteVrfImports:
         device = {
             "name": "eg-fr201",
             "interfaces": [{"name": "loopback1", "role": "loopback-vtep", "ip_address": {"address": "fd00::1/128"}}],
-            "vrfs": [{"namespace": {"name": "PROD", "l3_vni": 60000, "namespace_type": "prod"}}],
+            "shared_capabilities": [
+                {"typename": "ManagedVRF", "namespace": {"name": "PROD", "l3_vni": 60000, "namespace_type": "prod"}}
+            ],
         }
         acts = [{"vlan_id": 100, "vni": 10100, "segment": _stretched_segment()}]
         config = get_vxlan_config(device, "cisco_nxos", device_role="edge", activations=acts, fabric_rt_asn=65100)

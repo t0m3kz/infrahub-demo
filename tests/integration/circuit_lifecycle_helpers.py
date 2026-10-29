@@ -40,7 +40,7 @@ query ($devices: [String]) {
         id
         name { value }
         namespace { node { name { value } } }
-        devices { edges { node { name { value } } } }
+        shared_devices { edges { node { name { value } } } }
       }
     }
   }
@@ -108,7 +108,7 @@ def parse_switch_vrf_state(result: dict[str, Any], devices: list[str]) -> dict[s
     for node in _edges(result, "ManagedVRF"):
         if _namespace_name(node, "namespace") != SEGMENT_NAMESPACE:
             continue
-        for edge in (node.get("devices") or {}).get("edges", []):
+        for edge in (node.get("shared_devices") or {}).get("edges", []):
             device = str(_value(edge["node"], "name"))
             if device in state:
                 state[device]["vrf"] = node["id"]

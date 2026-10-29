@@ -7,13 +7,15 @@
 # executes the file text as is.
 #   - IpamNamespace: the four environment namespaces, by name (an instance is created by namespace id).
 #   - ManagedVRF: every instance with its topology and members (an instance with no member is check rule f). Only
-#     the check needs it: the generator passes $with_instances false (it reads the device's own `vrfs`).
+#     the check needs it: the generator passes $with_instances false (it reads the device's own `shared_capabilities`).
 #   - status: a decommissioned device carries nothing (utils/vrf_demand.py carries_vrfs).
 #   - member_of_groups / deployment: a provider stub or a device of a cloud region or an external provider is a
 #     party device and never carries an instance (utils/vrf_demand.py carries_vrfs); the deployment, or its parent
 #     for a pod, zone or virtual colocation, is the hosting deployment its instances live in
 #     (utils/segment_addressing.py hosting_deployment).
-#   - vrfs: the instances the device is a member of.
+#   - shared_capabilities: the shared objects the device is a member of (the shared device edge); the ManagedVRF
+#     ones are its instances (utils/vrf_demand.py device_memberships). Declared on DcimCapabilities, so it sits
+#     inside `... on DcimCapabilities`.
 #   - vlan_domain_segments: the rows of the device's VLAN domain, its own or its MLAG's (utils/vlan_domain.py), with
 #     the segment's gateway namespace: a routed row needs the namespace and an SVI.
 #   - interfaces: the addresses of the device's own interfaces (their namespaces are demand; a BGP session's local
@@ -37,7 +39,7 @@ query vrf_instances($device_ids: [ID], $with_instances: Boolean = true) {
         name { value }
         deployment { node { id } }
         namespace { node { name { value } l3_vni { value } namespace_type { value } } }
-        devices { edges { node { id } } }
+        shared_devices { edges { node { id } } }
       }
     }
   }
@@ -50,7 +52,6 @@ query vrf_instances($device_ids: [ID], $with_instances: Boolean = true) {
         role { value }
         status { value }
         member_of_groups { edges { node { name { value } } } }
-        vrfs { edges { node { ...VrfDemandInstanceFields } } }
         ... on DcimPhysicalDevice {
           deployment { node { ...VrfDemandHostingFields } }
           vlan_domain_segments { edges { node { ...VrfDemandRowFields } } }
@@ -59,6 +60,7 @@ query vrf_instances($device_ids: [ID], $with_instances: Boolean = true) {
           deployment { node { ...VrfDemandHostingFields } }
         }
         ... on DcimCapabilities {
+          shared_capabilities { edges { node { __typename ...VrfDemandInstanceFields } } }
           capabilities {
             edges {
               node {

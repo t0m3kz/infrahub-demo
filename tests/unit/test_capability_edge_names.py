@@ -7,6 +7,11 @@ name ``interface_capabilities`` (an identifier is a pairing key, not a field nam
 * no node can inherit both ends of the device edge and the interface edge (both are called ``capabilities``,
   so the node would get two relationships with the same name);
 * the old name appears nowhere in the tracked files except on its ``identifier:`` lines.
+
+The device edge has two branches: the individual one (``ManagedGenericDevice``, ``DcimCapabilities.capabilities``,
+cascades with the device) and the shared one (``ManagedGenericSharedDevice``, ``DcimCapabilities.shared_capabilities``,
+never cascades; members are ``shared_devices``). A kind inherits exactly one of them, only the individual edge
+cascades, and ``ManagedVRF`` is a shared kind (no ``devices`` of its own, no ``DcimDevice.vrfs``).
 """
 
 from __future__ import annotations
@@ -25,6 +30,9 @@ OLD_NAME = "interface_" + "capabilities"
 NEW_NAME = "capabilities"
 INTERFACE_EDGE_GENERIC = "ManagedGenericInterfaces"
 DEVICE_EDGE_GENERIC = "ManagedGenericDevice"
+SHARED_EDGE_GENERIC = "ManagedGenericSharedDevice"
+SHARED_IDENTIFIER = "shared_capabilities"
+INDIVIDUAL_IDENTIFIER = "capabilities"
 INTERFACE_EDGE_PEERS = {INTERFACE_EDGE_GENERIC, "DcimInterface"}
 IDENTIFIER_LINE = re.compile(r"identifier:\s*[\"']?" + OLD_NAME + r"[\"']?\s*$")
 
@@ -97,6 +105,59 @@ def test_no_kind_inherits_both_the_device_edge_and_the_interface_edge(schema: Sc
         if {DEVICE_EDGE_GENERIC, INTERFACE_EDGE_GENERIC} <= schema.ancestors(kind) | {kind}
     )
     assert not clashing, f"{clashing} inherit both {DEVICE_EDGE_GENERIC} and {INTERFACE_EDGE_GENERIC}"
+
+
+def test_no_kind_inherits_both_device_edges(schema: SchemaModel) -> None:
+    """A device-edge generic per kind: a node is individual (cascades with its device) or shared, never both.
+
+    The shared + interface combination is name-safe (``shared_devices`` against ``capabilities``), so it is allowed.
+    """
+    clashing = sorted(
+        kind for kind in schema.parents if {DEVICE_EDGE_GENERIC, SHARED_EDGE_GENERIC} <= schema.ancestors(kind) | {kind}
+    )
+    assert not clashing, f"{clashing} inherit both {DEVICE_EDGE_GENERIC} and {SHARED_EDGE_GENERIC}"
+
+
+def test_both_ends_of_the_shared_edge_pair_under_one_identifier(schema: SchemaModel) -> None:
+    """DcimCapabilities.shared_capabilities -> the shared generic, and its shared_devices -> DcimCapabilities."""
+    ends = {
+        (kind, rel["name"]): rel["peer"]
+        for kind, rel in schema.all_relationships()
+        if rel.get("identifier") == SHARED_IDENTIFIER
+    }
+    assert ends == {
+        ("DcimCapabilities", "shared_capabilities"): SHARED_EDGE_GENERIC,
+        (SHARED_EDGE_GENERIC, "shared_devices"): "DcimCapabilities",
+    }, ends
+
+
+def test_only_the_individual_edge_cascades(schema: SchemaModel) -> None:
+    """Deleting a device deletes its individual capabilities, never the shared objects it is a member of."""
+    by_identifier = {
+        rel["identifier"]: rel.get("on_delete")
+        for kind, rel in schema.all_relationships()
+        if kind == "DcimCapabilities" and rel.get("identifier") in {INDIVIDUAL_IDENTIFIER, SHARED_IDENTIFIER}
+    }
+    assert by_identifier == {INDIVIDUAL_IDENTIFIER: "cascade", SHARED_IDENTIFIER: "no-action"}, by_identifier
+    shared_kinds = [kind for kind in schema.parents if SHARED_EDGE_GENERIC in schema.ancestors(kind)]
+    assert shared_kinds, "no kind is a shared capability"
+    cascading = [
+        (kind, rel["name"])
+        for kind in [SHARED_EDGE_GENERIC, *shared_kinds]
+        for rel in schema.relationships.get(kind, [])
+        if rel.get("on_delete") == "cascade" and rel.get("peer") in {"DcimCapabilities", "DcimDevice"}
+    ]
+    assert not cascading, f"a shared kind must never cascade to a device: {cascading}"
+
+
+def test_managed_vrf_is_a_shared_kind(schema: SchemaModel) -> None:
+    """ManagedVRF rides the shared edge: no edge of its own to devices, nothing VRF-specific on DcimDevice."""
+    ancestors = schema.ancestors("ManagedVRF")
+    assert SHARED_EDGE_GENERIC in ancestors and DEVICE_EDGE_GENERIC not in ancestors, ancestors
+    names = {rel["name"]: rel.get("identifier") for rel in schema.relationships.get("ManagedVRF", [])}
+    assert "devices" not in names and "vrf__devices" not in names.values(), names
+    assert not [rel for rel in schema.relationships.get("DcimDevice", []) if rel["name"] == "vrfs"]
+    assert not [rel for _, rel in schema.all_relationships() if rel.get("identifier") == "vrf__devices"]
 
 
 def test_no_kind_ends_up_with_one_relationship_name_pointing_at_two_peers(schema: SchemaModel) -> None:

@@ -1,6 +1,6 @@
 """The VRF memberships and SVI objects a fixture device's config demands, appended to its raw input.
 
-A transform refuses a device whose config uses a VRF it is no member of a ManagedVRF instance of, or a routed segment with no
+A transform refuses a device whose config uses a VRF it is no member of, or a routed segment with no
 role-``svi`` interface (transforms/helpers/vrf.py). The fixture writers (``common._write_data_fixture``) and the unit
 tests that build their own device data therefore go through ``with_vrf_objects``: it asks the transform's own
 ``vrf_requirements`` what the device demands, so there is no second derivation, and appends the missing
@@ -14,7 +14,7 @@ from typing import Any
 
 from transforms.common import BaseDeviceTransform
 from transforms.helpers.vrf import VrfRequirements, vrf_requirements
-from utils.vrf_demand import SVI_ROLE, svi_name
+from utils.vrf_demand import SVI_ROLE, VRF_KIND, svi_name
 
 # A fixture namespace dict does not always carry its namespace_type (the segment gateway's does not): the type of the
 # four environment namespaces by name, the tenant default for any other name (a fixture's own VRF_A, ...).
@@ -51,6 +51,7 @@ def _namespace_dicts(data: Any) -> dict[str, dict[str, Any]]:
 def _vrf_node(namespace: dict[str, Any]) -> dict[str, Any]:
     name = namespace["name"]
     return {
+        "__typename": VRF_KIND,
         "namespace": {
             "node": {
                 "name": _value(name),
@@ -91,18 +92,18 @@ def _raw_names(container: dict[str, Any], key: str) -> set[str]:
 def add_requirements(
     device: dict[str, Any], requirements: VrfRequirements, namespaces: dict[str, dict[str, Any]]
 ) -> None:
-    """Append to the raw ``device`` node the memberships (``vrfs``) and SVIs of ``requirements`` it does not have yet.
+    """Append to the raw ``device`` node the memberships (``shared_capabilities``) and SVIs it does not have yet.
 
     ``namespaces`` holds the l3_vni / namespace_type of each namespace the fixture names (``_namespace_dicts``).
     """
     have = {
         edge["node"]["namespace"]["node"]["name"]["value"]
-        for edge in (device.get("vrfs") or {}).get("edges") or []
-        if (edge["node"].get("namespace") or {}).get("node")
+        for edge in (device.get("shared_capabilities") or {}).get("edges") or []
+        if edge["node"].get("__typename") == VRF_KIND and (edge["node"].get("namespace") or {}).get("node")
     }
     _append(
         device,
-        "vrfs",
+        "shared_capabilities",
         [_vrf_node(namespaces.get(name) or {"name": name}) for name in sorted(requirements.namespaces - have)],
     )
     present = _raw_names(device, "interfaces")

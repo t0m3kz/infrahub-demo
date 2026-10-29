@@ -61,8 +61,8 @@ def _edge(*, bgw: bool = True, namespace: dict[str, Any] | None = _INTERNET_NS) 
     if namespace:
         capabilities.append({"typename": "ManagedBGP", "peerings": [_transit_peering(namespace)]})
         # the VRF generator's membership of the session's namespace: the device's only VRF set
-        vrfs.append({"namespace": namespace})
-    return {"name": "eg-fr201", "interfaces": interfaces, "capabilities": capabilities, "vrfs": vrfs}
+        vrfs.append({"typename": "ManagedVRF", "namespace": namespace})
+    return {"name": "eg-fr201", "interfaces": interfaces, "capabilities": capabilities, "shared_capabilities": vrfs}
 
 
 class TestTransitFlag:
@@ -133,9 +133,9 @@ class TestInternetVniMapping:
         device = {
             "name": "dc1-border-01",
             "interfaces": [{"name": "Loopback0", "role": "loopback", "ip_address": {"address": "10.0.0.1/32"}}],
-            "vrfs": [
-                {"namespace": {"name": "PROD", "l3_vni": 50001, "namespace_type": "prod"}},
-                {"namespace": _INTERNET_NS},
+            "shared_capabilities": [
+                {"typename": "ManagedVRF", "namespace": {"name": "PROD", "l3_vni": 50001, "namespace_type": "prod"}},
+                {"typename": "ManagedVRF", "namespace": _INTERNET_NS},
             ],
         }
         config = get_vxlan_config(

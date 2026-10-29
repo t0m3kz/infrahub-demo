@@ -65,7 +65,7 @@ def _render(transform_cls: type, data: dict[str, Any]) -> str:
 
 
 def _without_instance(data: dict[str, Any], namespace: str) -> dict[str, Any]:
-    edges = _node(data)["vrfs"]["edges"]
+    edges = _node(data)["shared_capabilities"]["edges"]
     edges[:] = [edge for edge in edges if edge["node"]["namespace"]["node"]["name"]["value"] != namespace]
     return data
 
@@ -77,7 +77,7 @@ def _without_svi(data: dict[str, Any], name: str) -> dict[str, Any]:
 
 
 def _instances(data: dict[str, Any]) -> list[str]:
-    return [edge["node"]["namespace"]["node"]["name"]["value"] for edge in _node(data)["vrfs"]["edges"]]
+    return [edge["node"]["namespace"]["node"]["name"]["value"] for edge in _node(data)["shared_capabilities"]["edges"]]
 
 
 def _svis(data: dict[str, Any]) -> dict[str, str | None]:
@@ -310,6 +310,7 @@ class TestMembershipOfAnotherDeployment:
         data = _raw(_EDGE_PEERS)
         stray = {
             "node": {
+                "__typename": "ManagedVRF",
                 "namespace": {
                     "node": {
                         "name": {"value": "OTHER-DC"},
@@ -320,7 +321,7 @@ class TestMembershipOfAnotherDeployment:
                 "deployment": {"node": {"name": {"value": "some-other-dc"}}},
             }
         }
-        _node(data)["vrfs"]["edges"].append(stray)
+        _node(data)["shared_capabilities"]["edges"].append(stray)
 
         assert "OTHER-DC" not in _render(Edge, _raw(_EDGE_PEERS))
         assert "vrf context OTHER-DC" in _render(Edge, data)

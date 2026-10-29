@@ -39,7 +39,10 @@ def test_device_vrfs_are_the_membership_namespaces() -> None:
     """The namespace dicts come from ``vrfs``; a ManagedVRF-looking capability is ignored."""
     prod = {"name": "PROD", "l3_vni": 50000, "namespace_type": "prod"}
     device: dict[str, Any] = {
-        "vrfs": [{"namespace": prod}, {"namespace": None}],
+        "shared_capabilities": [
+            {"typename": "ManagedVRF", "namespace": prod},
+            {"typename": "ManagedVRF", "namespace": None},
+        ],
         "capabilities": [{"typename": "ManagedVRF", "namespace": {"name": "OTHER"}}],
     }
 
@@ -83,9 +86,9 @@ def test_device_vrfs_renders_a_membership_of_another_deployment_as_given() -> No
     here = {"name": "PROD", "l3_vni": 50000}
     elsewhere = {"name": "OTHER-DC", "l3_vni": 50009}
     device: dict[str, Any] = {
-        "vrfs": [
-            {"namespace": here, "deployment": {"name": "dc1"}},
-            {"namespace": elsewhere, "deployment": {"name": "dc9"}},
+        "shared_capabilities": [
+            {"typename": "ManagedVRF", "namespace": here, "deployment": {"name": "dc1"}},
+            {"typename": "ManagedVRF", "namespace": elsewhere, "deployment": {"name": "dc9"}},
         ],
     }
 

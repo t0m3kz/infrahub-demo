@@ -61,7 +61,7 @@ def _vrf(vrf_id: str, namespace: str, members: list[str], name: str = "vrf") -> 
         "id": vrf_id,
         "name": _name(name),
         "namespace": {"node": {"name": _name(namespace)}},
-        "devices": {"edges": [{"node": {"name": _name(member)}} for member in members]},
+        "shared_devices": {"edges": [{"node": {"name": _name(member)}} for member in members]},
     }
 
 
@@ -219,7 +219,7 @@ def test_precondition_passes_for_the_healthy_pair() -> None:
 def test_precondition_fails_for_a_switch_outside_the_instance() -> None:
     """One leaf in no instance: reported, and the two leaves are not members of one instance."""
     result = _healthy()
-    result["ManagedVRF"]["edges"][0]["node"]["devices"]["edges"].pop()
+    result["ManagedVRF"]["edges"][0]["node"]["shared_devices"]["edges"].pop()
     errors = precondition_errors(_state(result))
     assert f"leaf-b is a member of no {SEGMENT_NAMESPACE} instance" in errors
     assert any("not members of one" in e for e in errors)

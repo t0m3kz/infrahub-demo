@@ -59,7 +59,7 @@ def test_a_routed_row_creates_the_instance_and_its_svi() -> None:
             "name": "dc1-vrf-prod",
             "deployment": {"id": "dc-1"},
             "namespace": {"id": "ns-PROD"},
-            "devices": [{"id": "d1"}],
+            "shared_devices": [{"id": "d1"}],
             "status": "active",
         }
     ]
@@ -128,7 +128,7 @@ def test_removing_the_last_demand_deletes_the_svi_before_the_instance() -> None:
     _reconcile(host, ["d1"])
 
     assert host.deleted == [("DcimVirtualInterface", "svi-1"), ("ManagedVRF", "vrf-1")]
-    assert host.edge_ops == [("remove", "vrf-1", "devices", ["d1"])]
+    assert host.edge_ops == [("remove", "vrf-1", "shared_devices", ["d1"])]
     assert host.created == []
 
 
@@ -160,7 +160,7 @@ def test_ensure_never_deletes_and_creates_what_the_caller_is_about_to_need() -> 
     _ensure(host, {"d1": {"PROD", "default"}})
 
     assert [data["name"] for data in host.written("ManagedVRF")] == ["dc1-vrf-prod"]
-    assert [data["devices"] for data in host.written("ManagedVRF")] == [[{"id": "d1"}]]
+    assert [data["shared_devices"] for data in host.written("ManagedVRF")] == [[{"id": "d1"}]]
     assert host.edge_ops == []
     assert host.deleted == []
     assert host.store.vrfs["vrf-2"].members == {"d1"}
@@ -320,12 +320,12 @@ def test_an_svi_whose_row_cascaded_away_is_deleted_by_the_next_pass_with_its_ins
 
 
 def test_the_membership_is_an_edge_add_never_a_save_of_the_list() -> None:
-    """The instance is created without ``devices``; the device joins through the one-edge mutation."""
+    """The instance is created without ``shared_devices``; the device joins through the one-edge mutation."""
     host = VrfHost(response(_leaf(rows=[raw_row("r1", 100, "PROD")])))
 
     _reconcile(host, ["d1"])
 
-    assert [data["devices"] for data in host.written("ManagedVRF")] == [[{"id": "d1"}]]
+    assert [data["shared_devices"] for data in host.written("ManagedVRF")] == [[{"id": "d1"}]]
     assert host.edge_ops == []
 
 
@@ -337,7 +337,7 @@ def test_a_second_member_joins_the_existing_instance_without_a_create() -> None:
     _reconcile(host, ["d1"])
 
     assert host.written("ManagedVRF") == []
-    assert host.edge_ops == [("add", "vrf-1", "devices", ["d1"])]
+    assert host.edge_ops == [("add", "vrf-1", "shared_devices", ["d1"])]
     assert host.store.vrfs["vrf-1"].members == {"d1", "d2"}
     assert host.written("DcimVirtualInterface")[0]["vrf"] == {"id": "vrf-1"}
     assert host.lock_keys == ["vrf-device-d1", "vrf-dc-1-PROD"]
@@ -352,7 +352,7 @@ def test_the_instance_is_looked_up_by_deployment_and_namespace_with_its_members(
     first = host.client.filters.await_args_list[0]
     assert first.kwargs["deployment__ids"] == ["dc-1"]
     assert first.kwargs["namespace__ids"] == ["ns-PROD"]
-    assert first.kwargs["include"] == ["devices"]
+    assert first.kwargs["include"] == ["shared_devices"]
 
 
 def test_a_member_without_demand_leaves_and_the_instance_stays_for_the_others() -> None:
@@ -362,7 +362,7 @@ def test_a_member_without_demand_leaves_and_the_instance_stays_for_the_others() 
 
     _reconcile(host, ["d1"])
 
-    assert host.edge_ops == [("remove", "vrf-1", "devices", ["d1"])]
+    assert host.edge_ops == [("remove", "vrf-1", "shared_devices", ["d1"])]
     assert host.deleted == []
     assert host.store.vrfs["vrf-1"].members == {"d2"}
     assert host.lock_keys == ["vrf-device-d1", "vrf-dc-1-PROD"]
@@ -396,8 +396,8 @@ def test_a_moved_device_leaves_the_old_topology_and_joins_the_new_one() -> None:
     _reconcile(host, ["d1"])
 
     assert [data["deployment"] for data in host.written("ManagedVRF")] == [{"id": "dc-2"}]
-    assert [data["devices"] for data in host.written("ManagedVRF")] == [[{"id": "d1"}]]
-    assert host.edge_ops == [("remove", "vrf-old", "devices", ["d1"])]
+    assert [data["shared_devices"] for data in host.written("ManagedVRF")] == [[{"id": "d1"}]]
+    assert host.edge_ops == [("remove", "vrf-old", "shared_devices", ["d1"])]
     assert host.written("DcimVirtualInterface")[0]["id"] == "svi-1"
     assert host.written("DcimVirtualInterface")[0]["vrf"] == {"id": "new-1"}
     assert host.deleted == [("ManagedVRF", "vrf-old")]
@@ -476,7 +476,7 @@ def test_a_decommissioned_device_loses_its_svi_and_membership_and_the_empty_inst
     _reconcile(host, ["d1"])
 
     assert host.created == []
-    assert host.edge_ops == [("remove", "vrf-1", "devices", ["d1"])]
+    assert host.edge_ops == [("remove", "vrf-1", "shared_devices", ["d1"])]
     assert host.deleted == [("DcimVirtualInterface", "svi-1"), ("ManagedVRF", "vrf-1")]
 
 
@@ -513,3 +513,52 @@ def test_an_instance_kept_alive_by_a_non_svi_interface_is_never_deleted() -> Non
 
     assert host.deleted == []
     assert "vrf-1" in host.store.vrfs
+
+
+def test_a_membership_add_is_a_relationship_add_on_shared_devices_and_never_a_save() -> None:
+    """The member joins a found instance through ``add_relationships("shared_devices", ...)``: the instance is not
+    saved (a save would rewrite the whole list and race the other members) and no ``devices`` edge is touched."""
+    other = raw_root_instance(raw_instance("vrf-1", "x", "PROD"), "d2")
+    host = VrfHost(response(_leaf(rows=[raw_row("r1", 100, "PROD")]), instances=(other,)))
+
+    _reconcile(host, ["d1"])
+
+    assert [(op, relation) for op, _, relation, _ in host.edge_ops] == [("add", "shared_devices")]
+    assert not [saved for saved in host.saves if "shared_devices" in saved]
+    assert host.written("ManagedVRF") == []
+
+
+def test_the_create_carries_shared_devices_and_no_separate_add_follows() -> None:
+    """A new instance is created with its first member in ``shared_devices``; no RelationshipAdd is issued after."""
+    host = VrfHost(response(_leaf(rows=[raw_row("r1", 100, "PROD")])))
+
+    _reconcile(host, ["d1"])
+
+    (created,) = host.written("ManagedVRF")
+    assert created["shared_devices"] == [{"id": "d1"}]
+    assert "devices" not in created
+    assert host.edge_ops == []
+
+
+def test_removing_one_of_several_members_keeps_the_instance() -> None:
+    """The leaving member's edge is removed on ``shared_devices``; the instance and its other member stay."""
+    shared = raw_instance("vrf-1", "x", "PROD")
+    host = VrfHost(response(_leaf(vrfs=[shared]), instances=(raw_root_instance(shared, "d1", "d2"),)))
+
+    _reconcile(host, ["d1"])
+
+    assert host.edge_ops == [("remove", "vrf-1", "shared_devices", ["d1"])]
+    assert host.deleted == []
+    assert host.store.vrfs["vrf-1"].members == {"d2"}
+
+
+def test_the_last_member_without_an_svi_deletes_the_instance() -> None:
+    """The only member leaves and no SVI points at the instance: its edge goes, then the instance is deleted."""
+    shared = raw_instance("vrf-1", "x", "PROD")
+    host = VrfHost(response(_leaf(vrfs=[shared]), instances=(raw_root_instance(shared, "d1"),)))
+
+    _reconcile(host, ["d1"])
+
+    assert host.edge_ops == [("remove", "vrf-1", "shared_devices", ["d1"])]
+    assert host.deleted == [("ManagedVRF", "vrf-1")]
+    assert "vrf-1" not in host.store.vrfs

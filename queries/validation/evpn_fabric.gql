@@ -77,7 +77,7 @@ query evpn_fabric {
   # VTEPs with an instance realized as an L3 VNI (utils/vrf_demand.py realized_l3): the RD is <router_id>:<l3_vni>, so
   # an overlay router_id must exist and be unique among them. The overlay process is picked by the transform's own
   # selector (_select_evpn_bgp_process); a device with no such process renders no RD: an access-leaf is skipped, any other VTEP role is an error. Realization
-  # needs what the overlay transform reads: the namespaces of the device's instances (`vrfs`, its memberships),
+  # needs what the overlay transform reads: the namespaces of the device's instances (`shared_capabilities`, its memberships),
   # the anycast SVIs (SVI vrf namespace, transit legs of the contexts on the service ports) and whether the device is
   # a Multi-Site border gateway (multisite-vip interface, site evpn_rt_as through the deployment).
   DcimDevice {
@@ -86,11 +86,18 @@ query evpn_fabric {
         id
         name { value }
         role { value }
-        vrfs { edges { node { namespace { node { name { value } l3_vni { value } namespace_type { value } } } } } }
         ... on DcimPhysicalDevice {
           deployment { node { ...EvpnRtAsOnDeploymentFields } }
         }
         ... on DcimCapabilities {
+          shared_capabilities {
+            edges {
+              node {
+                __typename
+                ... on ManagedVRF { namespace { node { name { value } l3_vni { value } namespace_type { value } } } }
+              }
+            }
+          }
           capabilities {
             edges {
               node {

@@ -88,8 +88,8 @@ _PROD = {"name": "PROD", "l3_vni": 60000, "namespace_type": "prod"}
 
 
 def _vrf(namespace: dict[str, Any]) -> dict[str, Any]:
-    """A ManagedVRF membership of the device (``device.vrfs``), as the cleaned config query returns it."""
-    return {"namespace": namespace}
+    """A ManagedVRF membership of the device (``device.shared_capabilities``), as the cleaned config query returns it."""
+    return {"typename": "ManagedVRF", "namespace": namespace}
 
 
 def _device(*, loopback: str | None = "10.250.5.1/32", vrfs: tuple[dict[str, Any], ...] = (_VRF_A,)) -> dict[str, Any]:
@@ -97,13 +97,13 @@ def _device(*, loopback: str | None = "10.250.5.1/32", vrfs: tuple[dict[str, Any
     return {
         "name": "ds-c005-office01",
         "interfaces": [{"name": "Loopback0", "role": "loopback", **address}],
-        "vrfs": [_vrf(vrf) for vrf in vrfs],
+        "shared_capabilities": [_vrf(vrf) for vrf in vrfs],
     }
 
 
 def _no_l3_vni(data: dict[str, Any], vrf: str) -> None:
     """Strip the L3 VNI from the device's instance of namespace ``vrf`` (raw query shape)."""
-    for edge in data["DcimDevice"]["edges"][0]["node"]["vrfs"]["edges"]:
+    for edge in data["DcimDevice"]["edges"][0]["node"]["shared_capabilities"]["edges"]:
         namespace = (edge["node"].get("namespace") or {}).get("node")
         if namespace and namespace["name"]["value"] == vrf:
             namespace["l3_vni"]["value"] = None

@@ -154,7 +154,7 @@ def _l3_instances(
 ) -> tuple[L3Instance, ...]:
     """The device's VRF instances that the overlay carries as L3 instances, sorted by VRF name.
 
-    The realization rule: an instance (``vrfs``, the device's ManagedVRF namespaces) is an L3 instance when its
+    The realization rule: an instance (``vrfs``: the namespaces of the device's ManagedVRF memberships) is an L3 instance when its
     namespace is not ``default``, has an ``l3_vni``, and the device either routes a segment or a transit leg in it
     (an activation: it has the anycast SVI) or the caller names it an ``exits`` VRF (carried with no SVI of its own).
     Every other instance is VRF-lite: the templates render it as a plain VRF with no overlay identity.

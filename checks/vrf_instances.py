@@ -7,7 +7,7 @@ function over ``DeviceVrfFacts``; the check class only logs.
 
 An instance is one namespace in one topology (its ``deployment``: the DC, colocation metro or office that hosts the
 device, ``hosting_deployment``); every device of that topology that routes in the namespace is a member
-(``device.vrfs``). Instances:
+(``device.shared_capabilities`` of kind ManagedVRF). Instances:
 
 - (a) ERROR: a namespace the device needs has no instance of its hosting deployment it is a member of;
 - (b) WARNING: a membership in an instance of a namespace the device does not need (the next reconcile drops it);

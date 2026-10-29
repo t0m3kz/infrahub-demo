@@ -21,10 +21,12 @@ nodes:
     label: VRF Instance
     icon: "mdi:routes"
     include_in_menu: false
-    # No ManagedGenericDevice: its device edge (DcimCapabilities.capabilities) cascades, and deleting one member would
-    # delete the topology's VRF. Membership is `devices`, with no cascade.
+    # The shared device edge, not ManagedGenericDevice: that one (DcimCapabilities.capabilities) cascades, and deleting
+    # one member would delete the topology's VRF. Membership is `shared_devices` (reverse
+    # `DcimCapabilities.shared_capabilities`), with no cascade.
     inherit_from:
       - ManagedGeneric
+      - ManagedGenericSharedDevice
     human_friendly_id:
       - "deployment__name__value"
       - "namespace__name__value"
@@ -66,16 +68,6 @@ nodes:
         on_delete: no-action
         identifier: vrf__namespace
         order_weight: 1050
-      - name: devices
-        peer: DcimDevice
-        label: Members
-        description: "The devices of this topology that route in the namespace (utils/vrf_demand.py); written edge by edge"  # yamllint disable-line rule:line-length
-        cardinality: many
-        optional: true
-        kind: Generic
-        on_delete: no-action
-        identifier: vrf__devices
-        order_weight: 1200
 
 extensions:
   nodes:
@@ -92,19 +84,6 @@ extensions:
           identifier: vrf__deployment
           order_weight: 7900
           description: "The environment namespaces realized in this topology"
-    # The transforms' read of a device's VRF set (transforms/helpers/vrf.py device_vrfs).
-    - kind: DcimDevice
-      relationships:
-        - name: vrfs
-          label: VRF Instances
-          peer: ManagedVRF
-          cardinality: many
-          optional: true
-          kind: Generic
-          on_delete: no-action
-          identifier: vrf__devices
-          order_weight: 1950
-          description: "The VRF instances of its topology this device is a member of"
     # So the namespace page lists its instances; written from the VRF side (ManagedVRF.namespace).
     - kind: IpamNamespace
       relationships:

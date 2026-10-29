@@ -80,7 +80,7 @@ TOPOLOGY_SNAPSHOT_KINDS = {
     # generators/helpers/vrf.py: a rerun that rebuilt an instance (new id), moved it to another topology or namespace,
     # changed its members, or re-pointed an SVI is a diff.
     "ManagedVRF": (
-        "name { value } deployment { node { id } } namespace { node { id } } devices { edges { node { id } } }"
+        "name { value } deployment { node { id } } namespace { node { id } } shared_devices { edges { node { id } } }"
     ),
     "LocationRack": "name { value }",
     "TopologyPod": "name { value }",

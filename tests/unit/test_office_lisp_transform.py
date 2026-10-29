@@ -136,7 +136,7 @@ def _device() -> dict[str, Any]:
     return {
         "name": "as-c005-office01",
         "interfaces": [{"name": "Loopback0", "role": "loopback", "ip_address": {"address": "10.0.0.1/32"}}],
-        "vrfs": [{"namespace": _VRF_A}],
+        "shared_capabilities": [{"typename": "ManagedVRF", "namespace": _VRF_A}],
     }
 
 

@@ -8,7 +8,7 @@ from transforms.helpers.vrf import plain_vrf_names
 
 
 def _device(*names: str) -> dict[str, Any]:
-    return {"vrfs": [{"namespace": {"name": name}} for name in names]}
+    return {"shared_capabilities": [{"typename": "ManagedVRF", "namespace": {"name": name}} for name in names]}
 
 
 def _bgp(*vrfs: str) -> list[dict[str, Any]]:

@@ -210,7 +210,7 @@ class DeviceVrfFacts:
     routed_rows: tuple[RoutedRow, ...]
     unrouted_row_ids: frozenset[str]
     svis: tuple[SviFacts, ...]
-    # The instances the device is a member of (``device.vrfs``), of its own topology or, after a move, another one.
+    # The instances the device is a member of (``device.shared_capabilities``, the shared device edge), of its own topology or, after a move, another one.
     instances: tuple[InstanceFacts, ...] = field(default=())
     # The device's hosting deployment (utils/segment_addressing.py hosting_deployment): where its instances live.
     hosting_id: str | None = None
@@ -270,8 +270,17 @@ def _svi(iface: dict[str, Any]) -> SviFacts:
     )
 
 
+def device_memberships(node: dict[str, Any]) -> list[dict[str, Any]]:
+    """The ManagedVRF nodes of a cleaned device: its ``shared_capabilities`` (the shared device edge) of kind ManagedVRF.
+
+    The one filter on the typename, for the transforms' ``device_vrfs`` and the generators' and checks' facts: another
+    shared kind on the same edge (an SNMP profile, later) is never a VRF.
+    """
+    return [cap for cap in node.get("shared_capabilities") or [] if cap.get("typename") == VRF_KIND]
+
+
 def instance_facts(vrf: dict[str, Any]) -> InstanceFacts:
-    """One cleaned ManagedVRF node (the ``vrfs`` of a device, or the ``ManagedVRF`` root of vrf_instances.gql)."""
+    """One cleaned ManagedVRF node (a ``shared_capabilities`` entry of a device, or the ``ManagedVRF`` root of vrf_instances.gql)."""
     namespace = vrf.get("namespace") or {}
     return InstanceFacts(
         id=vrf.get("id") or "",
@@ -280,7 +289,7 @@ def instance_facts(vrf: dict[str, Any]) -> InstanceFacts:
         l3_vni=namespace.get("l3_vni"),
         namespace_type=namespace.get("namespace_type"),
         deployment_id=(vrf.get("deployment") or {}).get("id"),
-        member_ids=frozenset(device["id"] for device in vrf.get("devices") or [] if device.get("id")),
+        member_ids=frozenset(device["id"] for device in vrf.get("shared_devices") or [] if device.get("id")),
     )
 
 
@@ -316,7 +325,7 @@ def device_vrf_facts(device: dict[str, Any]) -> DeviceVrfFacts:
             for iface in interfaces
             if iface.get("name") and iface.get("role") != SVI_ROLE
         },
-        instances=tuple(instance_facts(vrf) for vrf in device.get("vrfs") or []),
+        instances=tuple(instance_facts(vrf) for vrf in device_memberships(device)),
         hosting_id=hosting.get("id"),
         hosting_name=hosting.get("name"),
     )

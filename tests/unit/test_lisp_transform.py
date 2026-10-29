@@ -70,8 +70,8 @@ _PROD = {"name": "PROD", "l3_vni": 50001, "namespace_type": "prod"}
 
 
 def _vrf(namespace: dict[str, Any]) -> dict[str, Any]:
-    """A ManagedVRF membership of the device (``device.vrfs``), as the cleaned config query returns it."""
-    return {"namespace": namespace}
+    """A ManagedVRF membership of the device (``device.shared_capabilities``), as the cleaned config query returns it."""
+    return {"typename": "ManagedVRF", "namespace": namespace}
 
 
 def _activation(
@@ -96,7 +96,7 @@ def _device() -> dict[str, Any]:
             {"name": "Loopback0", "role": "loopback", "ip_address": {"address": "10.0.0.1/32"}},
             {"name": "Ethernet1", "role": "uplink"},
         ],
-        "vrfs": [_vrf(_PROD)],
+        "shared_capabilities": [_vrf(_PROD)],
     }
 
 
@@ -120,7 +120,7 @@ def _office_data(role: str, platform: str = "cisco_xe") -> dict[str, Any]:
         "role": role,
         "platform": {"name": platform},
         "interfaces": [],
-        "vrfs": [_vrf(_PROD)],
+        "shared_capabilities": [_vrf(_PROD)],
         "deployment": deployment,
     }
 
@@ -269,7 +269,7 @@ class TestLispContext:
         ]
 
         device = _device()
-        device["vrfs"].append(_vrf(other))
+        device["shared_capabilities"].append(_vrf(other))
         config = get_lisp_config(device, "access-switch", activations, _inputs())
 
         assert config is not None

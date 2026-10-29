@@ -36,7 +36,7 @@ def response(*devices: dict[str, Any], instances: tuple[dict[str, Any], ...] = (
 
 class FakeVrf:
     """One stored instance, shaped like the SDK node (``name.value``, ``deployment.id``, ``namespace.peer``,
-    ``devices.peers``) so the generator reads it as it reads a ``filters`` result."""
+    ``shared_devices.peers``) so the generator reads it as it reads a ``filters`` result."""
 
     def __init__(
         self, vrf_id: str, name: str, deployment_id: str, namespace: str, members: set[str] | None = None
@@ -50,7 +50,7 @@ class FakeVrf:
         self.save: Any = None
 
     @property
-    def devices(self) -> Any:
+    def shared_devices(self) -> Any:
         """The members as the relationship manager shows them, read when asked."""
         return SimpleNamespace(peers=[SimpleNamespace(id=member) for member in sorted(self.members)])
 
@@ -88,7 +88,7 @@ class VrfStore:
                     node["name"]["value"],
                     ((node.get("deployment") or {}).get("node") or {}).get("id") or "",
                     node["namespace"]["node"]["name"]["value"],
-                    {member["node"]["id"] for member in node["devices"]["edges"]},
+                    {member["node"]["id"] for member in node["shared_devices"]["edges"]},
                 )
             )
         for dev_edge in (data.get("DcimDevice") or {}).get("edges", []):
@@ -167,7 +167,7 @@ class VrfHost(VrfMixin):
         if kind.__name__ != "ManagedVRF":
             return SimpleNamespace(id=node_id, save=_save)
         # The created instance is the same object a later read returns, with the SDK's empty member list.
-        members = {member["id"] for member in data.get("devices") or []}
+        members = {member["id"] for member in data.get("shared_devices") or []}
         vrf = FakeVrf(
             node_id, data["name"], data["deployment"]["id"], data["namespace"]["id"].removeprefix("ns-"), members
         )

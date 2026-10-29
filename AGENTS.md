@@ -239,7 +239,7 @@ class MyCheck(InfrahubCheck):
 
 | Namespace | Holds |
 | --------- | ----- |
-| Managed | On-prem services and the shared generics `ManagedGeneric` (name, description, status), `ManagedGenericDevice` (the device `capabilities` edge), `ManagedGenericInterfaces` (the interface-side `capabilities` edge; its identifier stays `interface_capabilities`), `ManagedNetworkSegment` and `ManagedLoadBalancer`, and `ManagedVRF` (a namespace realized in one topology) |
+| Managed | On-prem services and the shared generics `ManagedGeneric` (name, description, status), `ManagedGenericDevice` (the individual device edge, `capabilities`, cascades), `ManagedGenericSharedDevice` (the shared device edge, `shared_capabilities`, never cascades), `ManagedGenericInterfaces` (the interface-side `capabilities` edge; its identifier stays `interface_capabilities`), `ManagedNetworkSegment` and `ManagedLoadBalancer`, and `ManagedVRF` (a namespace realized in one topology, a shared kind) |
 | Cloud | Provider-hosted resources (public cloud and provider-hosted network services); every resource inherits `CloudResource`, except `CloudNetworkAppliance`, a provider-hosted network function (Equinix Network Edge) that inherits the device generics (`DcimDevice`, `DcimCapabilities`) so its interfaces, BGP and HA stay device-shaped |
 | Topology | Deployments (`TopologyDataCenter`, `TopologyPod`, `TopologyColocationMetro`, ...), design elements, circuits (`TopologyPhysicalCircuit` and the virtual-circuit kinds `TopologyTunnelCircuit`, `TopologyInterconnectCircuit`, `TopologyHandoffCircuit`) and the tenant footprints `TopologyCustomer*` |
 | Dcim, Ipam, Location, Organization | Devices/interfaces/cables, prefixes/addresses/namespaces, geography, providers/customers |
@@ -437,8 +437,9 @@ class MyCheck(InfrahubCheck):
   by its DC or metro, `utils/segment_addressing.py` `hosting_deployment`), deleted with it (`vrfs`, `on_delete:
   cascade`); unique on [deployment, namespace], HFID [deployment name, namespace name], named
   `{deployment lower}-vrf-{namespace lower}` (`dc10-vrf-prod`), the scope of its route-target. Its members are the
-  devices of that topology that route in the namespace: `devices` (reverse `vrfs` on `DcimDevice`, no cascade), written
-  edge by edge with RelationshipAdd/RelationshipRemove, never as a list; the namespace lists its instances through
+  devices of that topology that route in the namespace: `shared_devices` (the shared device edge, reverse
+  `DcimCapabilities.shared_capabilities`, no cascade), written edge by edge with RelationshipAdd/RelationshipRemove,
+  never as a list (a new instance is created with its first member in the create data); the namespace lists its instances through
   `IpamNamespace.vrfs`. `l3_vni` stays on the namespace (one value: a stretched VRF and the global INTERNET RT need it)
   and the instance only shows it (a read-only computed attribute nothing reads); RD, RT, SVI VLAN and EVPN vs VRF-lite
   are derived. Membership is demand-driven, never pre-provisioned: a device is a member for exactly the non-`default`
@@ -456,7 +457,8 @@ class MyCheck(InfrahubCheck):
   dependent write and leaves when no demand remains (after the SVIs); an instance is deleted when its last member and
   its last SVI are gone (every pruning pass sweeps its topologies, and the pod decommission sweeps the DC), because on
   NX-OS `no vrf context` moves the member addresses to the default table. A device's VRF set in the transforms is its
-  memberships (`device.vrfs`); one is realized as an L3 VNI (LISP instance-id) when it has an SVI on the device or is its default exit (a
+  memberships (`shared_capabilities` of kind `ManagedVRF`, `utils/vrf_demand.py` `device_memberships`, read by the
+  renderers through `device_vrfs`); one is realized as an L3 VNI (LISP instance-id) when it has an SVI on the device or is its default exit (a
   border gateway's INTERNET, an office border's WAN exit), else VRF-lite. A routed segment, SVI, address, session or leg
   in a namespace the device has no instance of raises `VrfRealizationError` (a hosted `CloudNetworkAppliance` on
   cisco_ios/cisco_xe renders a `VRF-UNREALIZED` banner and logs a WARNING instead). A caller writes the dependent
@@ -511,11 +513,23 @@ class MyCheck(InfrahubCheck):
   segment: a rule to it has `destination_zone: INTERNET-ZONE` and nothing else (the firewall renders `to INTERNET-ZONE`,
   destination any; the leaf ACL denies `NON_INTERNET_PREFIXES` before the permit to any). Only that zone is accepted,
   and `checks/segment_security.py` refuses a zone next to any other destination.
-- **Capability edges**: a capability reaches devices via `ManagedGenericDevice` and interfaces via
-  `ManagedGenericInterfaces`. Inherit the second only when something reads the interface edge. The device edge
-  (`DcimCapabilities.capabilities`) cascades with the device, so a shared object is never on it: `ManagedVRF` is not a
-  capability, its devices are members (`devices`) and its SVIs reach it through `DcimVirtualInterface.vrf`. A switch
-  port's segment membership is not a capability either (`segments`, see **Interface addresses and layers**).
+- **Capability edges**: a capability reaches devices through ONE of two device-edge generics (a kind inherits exactly
+  one, `tests/unit/test_capability_edge_names.py`) and interfaces via `ManagedGenericInterfaces` (inherit it only when
+  something reads the interface edge). Both device edges sit on `DcimCapabilities`:
+  - **Individual**, `ManagedGenericDevice`: `DcimCapabilities.capabilities` (identifier `capabilities`) cascades with the
+    device. Anything that must die with its device stays here: a BGP or OSPF process, an MLAG domain, a firewall HA pair.
+  - **Shared**, `ManagedGenericSharedDevice`: `DcimCapabilities.shared_capabilities` (identifier `shared_capabilities`,
+    `on_delete: no-action`, explicit) never cascades; the object's members are its `shared_devices`. Deleting a member
+    never deletes the object and deleting the object leaves its devices. `ManagedVRF` is the first shared kind (an SNMP
+    profile, NTP or AAA would be the next). A new shared kind is only a node with
+    `inherit_from: [ManagedGeneric, ManagedGenericSharedDevice]`; it declares no device relationship of its own.
+  - Rules of a shared kind: members are written from the shared side, edge by edge (RelationshipAdd/RelationshipRemove),
+    never as a saved list, because several generators attach devices to one object; it has a lifecycle owner (a
+    `Parent`, like `ManagedVRF.deployment`, or a data file); the transforms and checks read
+    `shared_capabilities { __typename ... on <Kind> {...} }` once, inside `... on DcimCapabilities` (the field is not on
+    `DcimDevice`), in `DeviceCapabilitiesOnDeviceFields`, and filter on the typename (`device_memberships`).
+  - `ManagedVRF`'s SVIs reach it through `DcimVirtualInterface.vrf`. A switch port's segment membership is not a
+    capability either (`segments`, see **Interface addresses and layers**).
 
 #### Schema Best Practices
 

@@ -572,7 +572,7 @@ def _vrf_result(
                         "id": vrf_id,
                         "name": {"value": name},
                         "namespace": {"node": {"name": {"value": namespace}}},
-                        "devices": {"edges": [{"node": {"name": {"value": member}}} for member in members]},
+                        "shared_devices": {"edges": [{"node": {"name": {"value": member}}} for member in members]},
                     }
                 }
                 for name, (vrf_id, members) in instances.items()

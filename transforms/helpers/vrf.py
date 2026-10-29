@@ -3,7 +3,8 @@
 A device's VRF SET is its ManagedVRF instances and nothing else (utils/vrf_demand.py). This module is the transform
 side of that model:
 
-- ``device_vrfs``: the namespace of each instance, read from the cleaned ``vrfs`` (the device's memberships; the one read; the overlay,
+- ``device_vrfs``: the namespace of each instance, read from the cleaned ``shared_capabilities`` of kind ManagedVRF (the device's memberships;
+  the one read, ``utils.vrf_demand.device_memberships``; the overlay,
   VXLAN and LISP renderers and the cisco_xe refusals all start from it).
 - ``l3_vrf_names``: the VRFs the rendered overlay carries as L3 instances (LISP instances, else the VXLAN L3 VNIs).
 - ``plain_vrf_names``: the instances without an L3 VNI, rendered as a plain ``vrf context``.
@@ -25,6 +26,7 @@ from utils.vrf_demand import (
     VrfDemandInputs,
     address_namespaces,
     carries_vrfs,
+    device_memberships,
     leg_namespaces,
     svi_name,
     svi_vlan_id,
@@ -49,7 +51,7 @@ class VrfRequirements:
 
 def device_vrfs(data: dict[str, Any]) -> list[dict[str, Any]]:
     """The namespace dicts (name, l3_vni, namespace_type) of the ManagedVRF instances the device is a member of."""
-    return [vrf["namespace"] for vrf in data.get("vrfs") or [] if vrf.get("namespace")]
+    return [vrf["namespace"] for vrf in device_memberships(data) if vrf.get("namespace")]
 
 
 def l3_vrf_names(lisp: dict[str, Any] | None, vxlan: dict[str, Any] | None) -> list[str]:

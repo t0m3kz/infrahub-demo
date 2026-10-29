@@ -1727,10 +1727,11 @@
               }
             }
           },
-          "vrfs": {
+          "shared_capabilities": {
             "edges": [
               {
                 "node": {
+                  "__typename": "ManagedVRF",
                   "namespace": {
                     "node": {
                       "name": {

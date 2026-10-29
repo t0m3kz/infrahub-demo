@@ -92,8 +92,8 @@ def _bgp_cap(asn: int = 4245880501, router_id: str = "10.0.0.7/32", role: str = 
 
 
 def _vrf(namespace: dict[str, Any]) -> dict[str, Any]:
-    """A ManagedVRF membership of the device (``device.vrfs``), as the cleaned config query returns it."""
-    return {"namespace": namespace}
+    """A ManagedVRF membership of the device (``device.shared_capabilities``), as the cleaned config query returns it."""
+    return {"typename": "ManagedVRF", "namespace": namespace}
 
 
 def _leaf(capabilities: list[dict[str, Any]] | None = None) -> dict[str, Any]:
@@ -104,7 +104,7 @@ def _leaf(capabilities: list[dict[str, Any]] | None = None) -> dict[str, Any]:
             {"name": "Ethernet1", "role": "uplink"},
         ],
         "capabilities": [_bgp_cap()] if capabilities is None else capabilities,
-        "vrfs": [_vrf(_PROD_NS)] if capabilities is None else [],
+        "shared_capabilities": [_vrf(_PROD_NS)] if capabilities is None else [],
     }
 
 
@@ -155,7 +155,7 @@ def _bgw_edge() -> dict[str, Any]:
         "capabilities": [
             {"typename": "ManagedBGP", "name": "bgp", "peerings": [_transit_peering()]},
         ],
-        "vrfs": [_vrf(_INTERNET_NS), _vrf(_PROD_NS)],
+        "shared_capabilities": [_vrf(_INTERNET_NS), _vrf(_PROD_NS)],
     }
 
 

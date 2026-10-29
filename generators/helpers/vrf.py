@@ -5,7 +5,7 @@ mixin runs the query ``queries/validation/vrf_instances.gql`` for the devices it
 It is the ONLY writer of an instance, of its membership and of an SVI.
 
 An instance is a namespace realized in one topology: the device's hosting deployment (a DC, a colocation metro or an
-office). A device is a MEMBER of it (``devices``), written edge by edge (``add_relationships`` /
+office). A device is a MEMBER of it (``shared_devices``, the shared device edge: it never cascades), written edge by edge (``add_relationships`` /
 ``remove_relationships``, never a save of the list: two writers would lose each other's members).
 
 Locks, in this order, never the reverse (they are not re-entrant): the caller's segment lock, then the device locks
@@ -119,9 +119,9 @@ class VrfMixin(SviMixin):
         ids = sorted(set(deployment_ids))
         if not ids:
             return
-        nodes = await self.client.filters(kind=ManagedVRF, deployment__ids=ids, include=["devices", "namespace"])
+        nodes = await self.client.filters(kind=ManagedVRF, deployment__ids=ids, include=["shared_devices", "namespace"])
         for node in nodes:
-            if node.devices.peers:
+            if node.shared_devices.peers:
                 continue
             await self._delete_if_unused(node.deployment.id, node.namespace.peer.name.value, node.id)
 
@@ -202,12 +202,15 @@ class VrfMixin(SviMixin):
         A new instance is created WITH its first member in one write: a RelationshipAdd on a node created a moment
         before, in another request, can reach the other replica first and fail with an unretried NODE_NOT_FOUND."""
         found = await self.client.filters(
-            kind=ManagedVRF, deployment__ids=[deployment_id], namespace__ids=[namespace["id"]], include=["devices"]
+            kind=ManagedVRF,
+            deployment__ids=[deployment_id],
+            namespace__ids=[namespace["id"]],
+            include=["shared_devices"],
         )
         if found:
             instance = found[0]
-            if not any(peer.id == facts.id for peer in instance.devices.peers):
-                await instance.add_relationships("devices", [facts.id])
+            if not any(peer.id == facts.id for peer in instance.shared_devices.peers):
+                await instance.add_relationships("shared_devices", [facts.id])
             return instance.id
         name = instance_name(deployment_name, namespace["name"])
         instance = await self.client.create(
@@ -216,7 +219,7 @@ class VrfMixin(SviMixin):
                 "name": name,
                 "deployment": {"id": deployment_id},
                 "namespace": {"id": namespace["id"]},
-                "devices": [{"id": facts.id}],
+                "shared_devices": [{"id": facts.id}],
                 "status": "active",
             },
         )
@@ -230,13 +233,13 @@ class VrfMixin(SviMixin):
         """Under the instance lock: remove ``leaving`` from the instance, then delete it when it has no member and no
         SVI. The members are read under the lock (every add holds it), so one read answers both questions."""
         async with self.resource_lock(vrf_instance_lock_key(deployment_id, namespace)):
-            found = await self.client.filters(kind=ManagedVRF, ids=[instance_id], include=["devices"])
+            found = await self.client.filters(kind=ManagedVRF, ids=[instance_id], include=["shared_devices"])
             if not found:
                 return
             instance = found[0]
-            members = {peer.id for peer in instance.devices.peers}
+            members = {peer.id for peer in instance.shared_devices.peers}
             if leaving and leaving.id in members:
-                await instance.remove_relationships("devices", [leaving.id])
+                await instance.remove_relationships("shared_devices", [leaving.id])
                 members.discard(leaving.id)
                 self.logger.info(f"  {leaving.name}: left VRF instance {instance.name.value}")
             if members or await self.client.filters(kind=DcimVirtualInterface, vrf__ids=[instance_id]):
