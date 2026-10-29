@@ -341,6 +341,22 @@ class DcimCable(CoreNode):
     endpoints: RelationshipManager[DcimEndpoint]
 
 
+class DcimPatchPanel(CoreNode):
+    description: StringOptional
+    name: String
+    ports: RelationshipManager[DcimPatchPanelPort]
+    rack: RelationshipAttribute[LocationRack]
+
+
+class DcimPatchPanelPort(DcimEndpoint):
+    connector: Dropdown
+    description: StringOptional
+    face: Dropdown
+    label: StringOptional
+    name: String
+    panel: RelationshipAttribute[DcimPatchPanel]
+
+
 class TopologyCloud(TopologyDeployment):
     pass
 
@@ -899,6 +915,7 @@ class LocationRack(LocationGeneric, CoreArtifactTarget):
     fabric_templates: RelationshipManager[TopologyElement]
     owner: RelationshipAttribute[OrganizationGeneric]
     deployment: RelationshipAttribute[TopologyRackHosting]
+    patch_panels: RelationshipManager[DcimPatchPanel]
 
 
 class LocationRegion(LocationGeneric):

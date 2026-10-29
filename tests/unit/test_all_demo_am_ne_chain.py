@@ -25,6 +25,7 @@ _AWS_HOP = "HANDOFF-AMNE-AWS-EUC1-PROD"
 _VIF = "vif-transit-am-euc1"
 _DIRECT_CONNECT = "dx-eqx-am-euc1"
 _FABRIC_PORT_STUB = "EXT-EQX-FABRIC-FR2"
+_FABRIC_CABLE = "CBL-FR2-EQX-FABRIC-FR201"  # the cage router to the Fabric port; the patch panel demo cables are others
 _TEMPLATE = "C8000V_EDGE"
 # The NE sub-interface of each hop: (router, parent port, VLAN).
 _NE_ENDS = {_FABRIC_HOP: ("eg-am-ne01", "Ethernet1/1", 1200), _AWS_HOP: ("eg-am-ne02", "Ethernet1/1", 1100)}
@@ -112,7 +113,7 @@ def test_the_fabric_hop_is_an_unowned_prod_handoff_between_the_cage_and_am_ne() 
 def test_the_cage_end_is_carried_by_a_cable_to_the_fabric_port_stub_and_the_ne_end_needs_none() -> None:
     """The parent eg-fr201 Ethernet1/1 is cabled to the Equinix Fabric port (a device of the same cage), a cable not a
     circuit: no physical circuit has either port, and the NE router's parent port has no carrier at all."""
-    (cable,) = [c for c in declared("DcimCable", _ALL) if _FABRIC_PORT_STUB in str(c.item["endpoints"])]
+    (cable,) = [c for c in declared("DcimCable", _ALL) if name(c) == _FABRIC_CABLE]
     ends = {(e["data"]["device"], e["data"]["name"]) for e in cable.item["endpoints"]}
     assert ends == {("eg-fr201", "Ethernet1/1"), (_FABRIC_PORT_STUB, "et-0/0/0")}
     assert cable.item["deployment"] == "FR2"
@@ -129,7 +130,7 @@ def test_the_cage_end_is_carried_by_a_cable_to_the_fabric_port_stub_and_the_ne_e
 def test_the_cage_port_is_not_one_the_zone_generator_cables() -> None:
     """eg-fr201 Ethernet1/[15-16] face the firewall pair (add_colocation_zone cables them), Ethernet1/12 is the gateway
     and 1/13-1/14 the cloud and ISP uplinks: the Fabric patch sits on a `customer` port (Ethernet1/[1-7])."""
-    (cable,) = [c for c in declared("DcimCable", _ALL) if _FABRIC_PORT_STUB in str(c.item["endpoints"])]
+    (cable,) = [c for c in declared("DcimCable", _ALL) if name(c) == _FABRIC_CABLE]
     (port,) = [e["data"]["name"] for e in cable.item["endpoints"] if e["data"]["device"] == "eg-fr201"]
     edge = object_templates()["N9K-C9316D-GX_EDGE"]["interfaces"]["data"]
     customer = next(row for row in edge if row["role"] == "customer")

@@ -454,6 +454,14 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
+    resource_name: patch_panel
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/patch_panel.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
     resource_name: interface_layers
     tests:
       - name: syntax_check

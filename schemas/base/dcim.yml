@@ -128,10 +128,6 @@ generics:
             label: Proxy
             description: "Forward, transparent, or reverse proxy appliance."
             color: "#5ba85b"
-          - name: patch-panel
-            label: Patch Panel
-            description: "Passive patch panel used as cable interconnect."
-            color: "#d4b8a0"
           - name: access-switch
             label: Access Switch
             description: "Campus wiring-closet switch — SD-Access edge node."

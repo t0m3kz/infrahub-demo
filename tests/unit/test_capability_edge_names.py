@@ -70,6 +70,10 @@ class SchemaModel:
                 pending.extend(self.parents.get(parent, []))
         return found
 
+    def resolved_relationship_names(self, kind: str) -> set[str]:
+        """Names of the relationships ``kind`` has: its own, those of every ancestor and every extension on either."""
+        return {rel["name"] for owner in {kind, *self.ancestors(kind)} for rel in self.relationships.get(owner, [])}
+
     def all_relationships(self) -> list[tuple[str, dict[str, Any]]]:
         """Every (declaring kind, relationship) pair."""
         return [(kind, rel) for kind, rels in self.relationships.items() for rel in rels]
@@ -240,3 +244,40 @@ def test_inline_segment_is_a_one_sided_relationship_on_the_sub_interface(schema:
     assert isinstance(rel.get("order_weight"), int)
     assert not [r for r in schema.relationships["ManagedVxlanSegment"] if r.get("identifier") == rel["identifier"]]
     assert "DcimSwitchedInterface" not in schema.ancestors(sub) | {sub}
+
+
+PANEL_KINDS = ("DcimPatchPanel", "DcimPatchPanelPort")
+DEVICE_ONLY_GENERICS = {
+    "DcimDevice",
+    "DcimPhysicalDevice",
+    "DcimCapabilities",
+    DEVICE_EDGE_GENERIC,
+    SHARED_EDGE_GENERIC,
+    INTERFACE_EDGE_GENERIC,
+    "CoreArtifactTarget",
+    "AppInstance",
+}
+
+
+@pytest.mark.parametrize("kind", PANEL_KINDS)
+def test_a_patch_panel_kind_has_no_capability_edge(schema: SchemaModel, kind: str) -> None:
+    """A passive panel and its ports carry neither ``capabilities`` nor ``shared_capabilities``, by construction.
+
+    Both edges reach a kind only through DcimCapabilities (device edges) or DcimInterface (interface edge); the
+    panel kinds inherit neither, so no extension on either can reach them. The generated templates
+    (TemplateDcimPatchPanel, TemplateDcimPatchPanelPort) are built from the node's own relationships, so the same holds.
+    """
+    assert schema.is_generic.get(kind) is False
+    assert schema.ancestors(kind).isdisjoint(DEVICE_ONLY_GENERICS | {"DcimInterface"}), kind
+    assert schema.resolved_relationship_names(kind).isdisjoint({NEW_NAME, "shared_capabilities", "shared_devices"})
+
+
+def test_no_kind_inherits_a_panel_kind_and_the_capabilities_generic(schema: SchemaModel) -> None:
+    """Nothing inherits from a panel kind, and no panel kind sits under DcimCapabilities."""
+    offenders = sorted(
+        kind
+        for kind in schema.parents
+        if set(PANEL_KINDS) & (schema.ancestors(kind) | {kind}) and "DcimCapabilities" in schema.ancestors(kind)
+    )
+    assert not offenders, offenders
+    assert not [kind for kind in schema.parents if set(PANEL_KINDS) & set(schema.parents[kind])]

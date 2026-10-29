@@ -284,7 +284,8 @@ class MyCheck(InfrahubCheck):
     form one contiguous path between the two locations and a single carrier is pure fibre (its two ends are the
     circuit's two ports); each end device has exactly one `overlay` `ManagedBGP`.
   - **Handoff**: one or two locations (both ends may sit in one cage); at least one end on a physical device is
-    carried (a live physical circuit or a `DcimCable` on the port or its `parent_interface`); both ports are
+    carried (a live physical circuit or a `DcimCable` on the port or its `parent_interface`, a cable to a patch panel port
+    counts: the cross-connect through a panel is cables, see **Patch panels**); both ports are
     sub-interfaces `<port>.<vlan>` with the same VLAN (the cloud endpoint's `vlan_id` too).
   - **Session circuits (Interconnect, Handoff)**: a port is an end of at most one of them. **Environment class**:
     circuits meeting at a device share a class (prod vs non-prod; a handoff takes its `ip_namespace`'s
@@ -369,6 +370,22 @@ class MyCheck(InfrahubCheck):
   endpoint labels), `color` (the TIA-598 jacket colour of its `type`) and `length_cm`, derived from the suite layout
   (`rack_pitch_cm`, `row_pitch_cm`; `generators/helpers/cable_attributes.py`). The length is unset when an end is not
   in a rack or the ends are in different suites. Cables declared in data are not generated and stay unset.
+- **Patch panels**: a `DcimPatchPanel` is a passive panel and NOT a device: it inherits nothing (no role, platform,
+  artifact, `capabilities` or `shared_capabilities`, no VRF demand, no VLAN row), so no artifact group, transform or
+  `DcimDevice` query ever sees it (`schemas/extensions/dcim/patch_panel.yml`). Its ports are the child nodes
+  `DcimPatchPanelPort` (Parent = the panel, cascade; `name`, `face` front or rear, `connector`), which inherit only
+  `DcimEndpoint`. A cable ends on a physical interface or on a `DcimPatchPanelPort` (both are `DcimEndpoint`), with no
+  change to `DcimCable`. A jack is two ports, and the only pairing rule is: the front port and the rear port of the SAME
+  `name` in one panel are a pair, so a cross-connect is port - cable - front N, rear N - cable - port
+  (`utils/cable_path.py` `trace_through_panels`, read by `checks/patch_panel.py` rules P1, P2 and P4). A panel always sits
+  between two devices: a circuit end stays an interface (the `capabilities` peers are untouched) and the panel's
+  location is its optional `rack` (`LocationRack.deployment` gives the facility); a panel has no
+  `deployment`, no device type and no `position` (the rack-unit position returns together with a rack drawing that
+  draws panels). Panels come from the
+  `TemplateDcimPatchPanel` templates (`PP-24-LC`, `PP-24-RJ45`); the `patch-panel` device role is gone. A generated cable
+  never ends on a panel port (a panel cable is data). A reader of a cable end meets a panel port as an empty node `{}`
+  where it spreads `... on DcimPhysicalInterface` (`queries/topology/cabling.gql`), and must skip it; `far_end_interfaces`
+  logs a warning and drops a non-interface far end (following a cable through a panel is not built).
 - **Routing identity**: `OrganizationCustomer.routing_tag` and `ManagedNetworkSegment.routing_tag` (Number 1..65534,
   optional) are the numbers behind the standard communities `64496:<customer tag>` and `64497:<segment tag>`
   (`utils/routing_identity.py` derives the strings, no community is stored, and no template re-derives them). They are

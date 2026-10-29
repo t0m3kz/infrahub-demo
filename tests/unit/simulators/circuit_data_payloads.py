@@ -81,7 +81,8 @@ class _Model:
         if not without_cables:
             for cable in _all("DcimCable"):
                 for end in cable.item["endpoints"]:
-                    self.cabled.add((str(end["data"]["device"]), str(end["data"]["name"])))
+                    if end["kind"] == "DcimPhysicalInterface":  # a DcimPatchPanelPort end has a panel, not a device
+                        self.cabled.add((str(end["data"]["device"]), str(end["data"]["name"])))
         self.physical = self._physical_circuits()
 
     # -- places and devices --------------------------------------------------------------------------------------

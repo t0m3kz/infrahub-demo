@@ -148,6 +148,13 @@ spec:
                   kind: DcimCable
                   description: "Cabling between devices"
 
+                - name: PatchPanel
+                  namespace: Dcim
+                  label: Patch Panels
+                  icon: "mdi:ethernet"
+                  kind: DcimPatchPanel
+                  description: "Passive patch panels and their front and rear ports"
+
                 - name: Mlag
                   namespace: Managed
                   label: MLAG

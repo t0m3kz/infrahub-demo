@@ -407,6 +407,10 @@ check_definitions:
   - name: validate_interface_parents
     class_name: CheckInterfaceParents
     file_path: checks/interface_parents.py
+  # Targetless: a cross-connect runs through the pairs of several panels, so one query reads every panel.
+  - name: validate_patch_panel
+    class_name: CheckPatchPanel
+    file_path: checks/patch_panel.py
   # Targetless: a port is a switchport or a routed port (the layer is its content), per interface of every device.
   - name: validate_interface_layers
     class_name: CheckInterfaceLayers
@@ -787,6 +791,8 @@ queries:
     file_path: queries/validation/virtual_device_placement.gql
   - name: interface_parents
     file_path: queries/validation/interface_parents.gql
+  - name: patch_panel
+    file_path: queries/validation/patch_panel.gql
   - name: interface_layers
     file_path: queries/validation/interface_layers.gql
   - name: pool_utilization

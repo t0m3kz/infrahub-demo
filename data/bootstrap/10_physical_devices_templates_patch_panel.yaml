@@ -1,20 +1,40 @@
 ---
+# Passive patch panel templates. A panel is DcimPatchPanel, not a device (schemas/extensions/dcim/patch_panel.yml): a
+# jack is two ports of one name, a `front` and a `rear` one, and the pair is how a cross-connect continues through the
+# panel. Instantiated with `object_template:` like a device template; the panel gets its name and rack in data.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: TemplateDcimPhysicalDevice
+  kind: TemplateDcimPatchPanel
   data:
-    - template_name: PATCH-PANEL-24_PATCH
-      owner: "P027"
-      device_type: PATCH-PANEL-24
-      role: patch-panel
-      status: provisioning
-      interfaces:
-        kind: TemplateDcimPhysicalInterface
+    - template_name: PP-24-LC
+      description: "24-jack fibre patch panel, LC/UPC"
+      ports:
+        kind: TemplateDcimPatchPanelPort
         parameters:
           expand_range: true
         data:
-          - template_name: PATCH-PANEL-24_PATCH_Port[1-24]
-            name: Port[1-24]
-            role: uplink
-            interface_type: 100gbase-x-qsfp28
+          - template_name: PP-24-LC_front_[1-24]
+            name: "[1-24]"
+            face: front
+            connector: lc-upc
+          - template_name: PP-24-LC_rear_[1-24]
+            name: "[1-24]"
+            face: rear
+            connector: lc-upc
+
+    - template_name: PP-24-RJ45
+      description: "24-jack copper patch panel, RJ45"
+      ports:
+        kind: TemplateDcimPatchPanelPort
+        parameters:
+          expand_range: true
+        data:
+          - template_name: PP-24-RJ45_front_[1-24]
+            name: "[1-24]"
+            face: front
+            connector: rj45
+          - template_name: PP-24-RJ45_rear_[1-24]
+            name: "[1-24]"
+            face: rear
+            connector: rj45
