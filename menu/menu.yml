@@ -255,6 +255,13 @@ spec:
             kind: ManagedPeering
             icon: "mdi:transit-connection-horizontal"
 
+          # ── VRF instances (one per topology and namespace, with their member devices) ──
+          - namespace: Managed
+            name: VrfItem
+            label: VRF Instances
+            kind: ManagedVRF
+            icon: "mdi:routes"
+
           # ── BGP ────────────────────────────────────────────────────────────
           - namespace: Managed
             name: BgpMenu
