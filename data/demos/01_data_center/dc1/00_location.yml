@@ -15,19 +15,19 @@ spec:
             children:
               kind: LocationSuite
               data:
-                - suite_name: "Suite-1"
+                - name: MUC-1-Suite-1
                   index: 1
                   shortname: "muc-1-s-1"
                   parent: muc-1
                   rows: 2
                   racks_per_row: 9
-                - suite_name: "Suite-2"
+                - name: MUC-1-Suite-2
                   index: 2
                   shortname: "muc-1-s-2"
                   parent: muc-1
                   rows: 2
                   racks_per_row: 9
-                - suite_name: "Suite-3"
+                - name: MUC-1-Suite-3
                   index: 3
                   shortname: "muc-1-s-3"
                   parent: muc-1

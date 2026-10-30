@@ -983,7 +983,6 @@ class LocationSuite(LocationGeneric):
     racks_per_row: Integer
     row_pitch_cm: IntegerOptional
     rows: Integer
-    suite_name: String
     owner: RelationshipAttribute[OrganizationGeneric]
 
 

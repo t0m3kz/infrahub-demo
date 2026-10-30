@@ -8,7 +8,8 @@ kind: Object
 spec:
   kind: LocationRack
   data:
-    - index: 1
+    - name: KTW-1-SUITE-1-R1-1
+      index: 1
       row_index: 1
       shortname: ktw-1-s-1-r-1-1
       rack_type: compute
@@ -16,7 +17,8 @@ spec:
       parent: ktw-1-s-1
       member_of_groups: [topologies_rack]
 
-    - index: 1
+    - name: KTW-1-SUITE-1-R2-1
+      index: 1
       row_index: 2
       shortname: ktw-1-s-1-r-2-1
       rack_type: compute

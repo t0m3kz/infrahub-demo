@@ -15,7 +15,7 @@ spec:
       children:
         kind: LocationSuite
         data:
-          - suite_name: FR2
+          - name: FR2-FR2
             index: 2
             shortname: fr2-s1
             rows: 1
@@ -23,12 +23,14 @@ spec:
             children:
               kind: LocationRack
               data:
-                - shortname: fr2-s1-r-1
+                - name: FR2-FR2-R1-1
+                  shortname: fr2-s1-r-1
                   index: 1
                   row_index: 1
                   deployment: FR2
                   member_of_groups: [topologies_rack]
-                - shortname: fr2-s1-r-2
+                - name: FR2-FR2-R1-2
+                  shortname: fr2-s1-r-2
                   index: 2
                   row_index: 1
                   deployment: FR2
@@ -39,7 +41,7 @@ spec:
       children:
         kind: LocationSuite
         data:
-          - suite_name: FR6
+          - name: FR6-FR6
             index: 6
             shortname: fr6-s1
             rows: 1
@@ -47,12 +49,14 @@ spec:
             children:
               kind: LocationRack
               data:
-                - shortname: fr6-s1-r-1
+                - name: FR6-FR6-R1-1
+                  shortname: fr6-s1-r-1
                   index: 1
                   row_index: 1
                   deployment: FR6
                   member_of_groups: [topologies_rack]
-                - shortname: fr6-s1-r-2
+                - name: FR6-FR6-R1-2
+                  shortname: fr6-s1-r-2
                   index: 2
                   row_index: 1
                   deployment: FR6

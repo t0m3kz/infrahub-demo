@@ -11,7 +11,7 @@ spec:
       children:
         kind: LocationSuite
         data:
-          - suite_name: MCR-PAR1
+          - name: MCR-PAR1-MCR-PAR1
             index: 1
             shortname: mcr-par1-s1
             rows: 1
@@ -19,7 +19,8 @@ spec:
             children:
               kind: LocationRack
               data:
-                - shortname: mcr-par1-s1-r-1
+                - name: MCR-PAR1-MCR-PAR1-R1-1
+                  shortname: mcr-par1-s1-r-1
                   index: 1
                   row_index: 1
                   deployment: MCR-PAR1
