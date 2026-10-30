@@ -84,22 +84,6 @@ generics:
         order_weight: 1000
         description: "Service provider for this connectivity"
 
-      # The two ends, shared by every circuit. ManagedGenericInterfaces carries the interface-side edge
-      # (a circuit in a port's `capabilities`); this re-declares the circuit side with a count, so the nodes
-      # inherit TopologyCircuit FIRST and its declaration wins. The cap holds when the circuit side is written;
-      # checks/carrier_circuit_ports.py and checks/circuit_placement.py hold the rest.
-      - name: capabilities
-        peer: DcimInterface
-        label: "Ends"
-        kind: Generic
-        cardinality: many
-        optional: false
-        min_count: 2
-        max_count: 2
-        identifier: interface_capabilities
-        order_weight: 1100
-        description: "The two ports this circuit terminates on, one at each end"
-
       # Data authors only the end that cannot be derived (the colocation cage); add_circuit adds each
       # endpoint device's deployment that is a facility (DC, ISP, cloud region). So one location is valid
       # on load: no min_count (it is enforced on update only; the checks hold the count).
@@ -228,6 +212,24 @@ nodes:
   #            remote ASN lives in the party device's ManagedBGP.local_as; the VLAN in the sub-interface name.
   #   tunnel   Office edge <-> SD-WAN gateway (eth1), and the partner tunnel. No session is generated (the
   #            VeloCloud orchestrator owns the overlay routing). Owner = the office's owner.
+    relationships:
+      # The two ends. ManagedGenericInterfaces carries the interface-side edge (a circuit in a port's `capabilities`);
+      # this re-declares the circuit side with a count. It cannot be hoisted onto TopologyCircuit: a node that
+      # inherits two generics declaring `capabilities` with a different min_count is refused (measured on 1.11.9).
+      # The cap holds when the circuit side is written; checks/carrier_circuit_ports.py and
+      # checks/circuit_placement.py hold the rest.
+      - name: capabilities
+        peer: DcimInterface
+        label: "Ends"
+        kind: Generic
+        cardinality: many
+        optional: false
+        min_count: 2
+        max_count: 2
+        identifier: interface_capabilities
+        order_weight: 1100
+        description: "The two ports this circuit terminates on, one at each end"
+
   - name: SessionCircuit
     namespace: Topology
     description: "Circuit that rides carriers: a DCI or a handoff with generated routing, or a tunnel kept as inventory"
@@ -275,6 +277,24 @@ nodes:
         description: "Accepted-prefix limit of the session (handoff only)"
 
     relationships:
+      # The two ends. ManagedGenericInterfaces carries the interface-side edge (a circuit in a port's `capabilities`);
+      # this re-declares the circuit side with a count. It cannot be hoisted onto TopologyCircuit: a node that
+      # inherits two generics declaring `capabilities` with a different min_count is refused (measured on 1.11.9).
+      # The cap holds when the circuit side is written; checks/carrier_circuit_ports.py and
+      # checks/circuit_placement.py hold the rest.
+      - name: capabilities
+        peer: DcimInterface
+        label: "Ends"
+        kind: Generic
+        cardinality: many
+        optional: false
+        min_count: 2
+        max_count: 2
+        identifier: interface_capabilities
+        order_weight: 1100
+        description: "The two ports this circuit terminates on, one at each end"
+
+
       # The same concept as TopologyCustomerOffice.lan_prefixes (a PROD prefix a customer registers behind the
       # SD-WAN gateway, so the gateway's border session accepts it), for space the tunnel reaches that no office
       # of ours hosts: a B2B partner's extranet range.

@@ -265,11 +265,12 @@ class MyCheck(InfrahubCheck):
 - **Office**: `TopologyCustomerOffice` is not a `TopologyCustomer`. The owner sits directly on it, its name is
   `{OWNER}-OFFICE` (for example `C005-OFFICE`), it is always PROD (no `environment`) and its parent is the
   "Campus and Office" `TopologyLabel`.
-- **Circuit placement**: two circuit kinds, both inheriting `[TopologyCircuit, ManagedGeneric, ManagedGenericInterfaces]`
-  (`TopologyCircuit` FIRST, so its declarations win): `TopologyCarrierCircuit` and `TopologySessionCircuit`. The
-  two ends (`capabilities`, peer `DcimInterface`, identifier `interface_capabilities`, min and max 2) and `locations`
-  (peer `TopologyFacility`, max 2, no `min_count`: it is enforced on update only) are declared ONCE, on the
-  `TopologyCircuit` generic. A carrier circuit is a pure carrier (fibre, cross-connect, internet access, or a
+- **Circuit placement**: two circuit kinds, both inheriting `[TopologyCircuit, ManagedGeneric, ManagedGenericInterfaces]`:
+  `TopologyCarrierCircuit` and `TopologySessionCircuit`. `locations` (peer `TopologyFacility`, max 2, no `min_count`:
+  it is enforced on update only) is declared ONCE, on the `TopologyCircuit` generic. The two ends (`capabilities`, peer
+  `DcimInterface`, identifier `interface_capabilities`, min and max 2) are re-declared on each node: a node that inherits
+  two generics declaring `capabilities` with a different `min_count` is refused (measured on 1.11.9), so they cannot be
+  hoisted onto the generic. A carrier circuit is a pure carrier (fibre, cross-connect, internet access, or a
   provider-delivered `virtual_connection` or `metro_ethernet` service) with no role and no session; its `locations` peer
   `TopologyFacility`: the DC (never a pod, rack or footprint), the colocation
   cage `TopologyColocationZone` or the provider-hosted `TopologyVirtualColocation` (never the metro), the

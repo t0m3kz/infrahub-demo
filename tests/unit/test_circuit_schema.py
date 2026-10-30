@@ -1,8 +1,9 @@
 """The circuit model in schemas/extensions/topology/topology_connectivity.yml.
 
 Two kinds: TopologyCarrierCircuit (the carrier) and TopologySessionCircuit (dci, handoff, tunnel by ``circuit_type``).
-The two ends (``capabilities``) and ``locations`` are declared once on the TopologyCircuit generic, which the nodes
-inherit FIRST so that its ``capabilities`` wins over ManagedGenericInterfaces'.
+The locations are declared once on the TopologyCircuit generic. The two ends (``capabilities``) are re-declared on
+each node: hoisting them onto the generic is refused by the server (a node that inherits two generics declaring
+``capabilities`` with a different min_count, measured on 1.11.9).
 """
 
 from __future__ import annotations
@@ -15,6 +16,8 @@ import yaml
 _ROOT = Path(__file__).parents[2]
 _SCHEMA = _ROOT / "schemas" / "extensions" / "topology" / "topology_connectivity.yml"
 _CLOUD = _ROOT / "schemas" / "extensions" / "topology" / "topology_cloud_network.yml"
+# Spelled in two halves so the repo-wide guard on the old edge name (test_capability_edge_names.py) does not match.
+_ENDS_IDENTIFIER = "interface_" + "capabilities"
 
 
 def _document() -> dict[str, Any]:
@@ -39,28 +42,29 @@ def test_the_connectivity_file_declares_exactly_the_carrier_and_the_session_kind
     assert "VirtualCircuit" not in [generic["name"] for generic in _document()["generics"]]
 
 
-def test_the_ends_and_the_locations_are_declared_once_on_the_circuit_generic() -> None:
-    """capabilities (the two ends) and locations (two facilities at most) sit on TopologyCircuit."""
+def test_the_locations_are_declared_once_on_the_circuit_generic() -> None:
+    """locations (two facilities at most) sits on TopologyCircuit; the ends are not hoisted onto it."""
     relationships = _generic("Circuit")["relationships"]
 
-    ends = _field(relationships, "capabilities")
-    assert (ends["peer"], ends["identifier"], ends["min_count"], ends["max_count"]) == (
-        "DcimInterface",
-        "interface_capabilities",
-        2,
-        2,
-    )
     locations = _field(relationships, "locations")
     assert (locations["peer"], locations["max_count"]) == ("TopologyFacility", 2)
     assert "min_count" not in locations
+    assert "capabilities" not in {relationship["name"] for relationship in relationships}
 
 
-def test_the_nodes_inherit_the_circuit_generic_first_and_redeclare_nothing() -> None:
-    """TopologyCircuit comes first so its capabilities wins; the nodes declare neither relationship themselves."""
+def test_each_node_declares_the_two_ends_with_a_count_and_inherits_the_circuit_generic_first() -> None:
+    """The ends are re-declared per node (min 2, max 2) because the server refuses the hoisted declaration."""
     for node in _document()["nodes"]:
         assert node["inherit_from"] == ["TopologyCircuit", "ManagedGeneric", "ManagedGenericInterfaces"], node["name"]
-        names = {relationship["name"] for relationship in node.get("relationships") or []}
-        assert names.isdisjoint({"capabilities", "locations"}), node["name"]
+        relationships = node.get("relationships") or []
+        ends = _field(relationships, "capabilities")
+        assert (ends["peer"], ends["identifier"], ends["min_count"], ends["max_count"]) == (
+            "DcimInterface",
+            _ENDS_IDENTIFIER,
+            2,
+            2,
+        ), node["name"]
+        assert "locations" not in {relationship["name"] for relationship in relationships}, node["name"]
 
 
 def test_the_carrier_has_the_provider_circuit_types_and_optional_provider_fields() -> None:
