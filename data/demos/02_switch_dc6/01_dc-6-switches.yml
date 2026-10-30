@@ -5,7 +5,8 @@ spec:
   kind: LocationRack
   data:
     # Pod 1 - Arista Spines with Dell Leafs/ToRs (mixed vendors)
-    - index: 5
+    - name: KTW-1-SUITE-1-R2-5
+      index: 5
       row_index: 2
       shortname: ktw-1-s-1-r-2-5
       rack_type: network

@@ -11,7 +11,8 @@ spec:
   kind: LocationRack
   data:
     # Network rack in POD-4 Row 1
-    - index: 1
+    - name: KTW-1-SUITE-4-R1-1
+      index: 1
       row_index: 1
       shortname: ktw-1-s-4-r-1-1
       rack_type: network
@@ -23,7 +24,8 @@ spec:
         - ["2", "access-leaf", "N9K-C93180YC-EX_ACCESS"]
 
     # Network rack in POD-4 Row 2
-    - index: 1
+    - name: KTW-1-SUITE-4-R2-1
+      index: 1
       row_index: 2
       shortname: ktw-1-s-4-r-2-1
       rack_type: network
