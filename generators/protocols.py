@@ -106,6 +106,10 @@ class TopologyProviderHosting(CoreNode):
     appliances: RelationshipManager[CloudNetworkAppliance]
 
 
+class TopologyProviderAccount(CoreNode):
+    account: RelationshipAttribute[CloudAccount]
+
+
 class TopologyCloudHosting(CoreNode):
     name: String
     instances: RelationshipManager[CloudInstance]
@@ -411,11 +415,12 @@ class TopologyColocationZone(
 class TopologyVirtualColocation(
     TopologyDeployment,
     TopologyProviderHosting,
+    TopologyProviderAccount,
     TopologyColocationFabric,
     TopologyConnectableLocation,
     TopologyFacility,
 ):
-    account: RelationshipAttribute[CloudAccount]
+    pass
 
 
 class AppComponent(AppGeneric):
@@ -929,7 +934,13 @@ class TopologySaas(TopologyDeployment, CoreArtifactTarget):
     status: Dropdown
 
 
-class TopologySaasRegion(TopologyDeployment, TopologyConnectableLocation, TopologyFacility):
+class TopologySaasRegion(
+    TopologyDeployment,
+    TopologyProviderHosting,
+    TopologyProviderAccount,
+    TopologyConnectableLocation,
+    TopologyFacility,
+):
     name: String
     region_name: String
     status: Dropdown

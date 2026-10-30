@@ -96,6 +96,26 @@ generics:
         order_weight: 1200
         on_delete: cascade
 
+  # The provider account a provider-hosted presence's appliances are ordered under: its account_id is the billing
+  # account number, its provider the operator, and its owner's notification_emails receive the provider's order
+  # notices. One declaration for every provider-hosted presence (a virtual colocation, a SaaS region). Not on
+  # ProviderHosting: a customer cloud is hosted too, but its accounts are the CloudAccounts it is built from.
+  # Optional because only a presence routed to terraform needs it (checks/colocation_placement.py).
+  - name: ProviderAccount
+    namespace: Topology
+    description: "Deployment whose provider-hosted appliances are ordered under one provider account"
+    include_in_menu: false
+    relationships:
+      - name: account
+        peer: CloudAccount
+        label: "Provider Account"
+        description: "The account of the provider the presence's appliances are ordered under"
+        cardinality: one
+        kind: Attribute
+        optional: true
+        order_weight: 1050
+        identifier: "topology__provider_account"
+
   # Where a customer's cloud compute runs: the cloud footprint (TopologyCustomerCloud). The instances (EC2, GCE, ...)
   # belong to a CloudAccount and a zone; this is the footprint they serve, so a deployment reads its instances
   # directly. Not DeviceHosting: a cloud instance is a CloudResource, not a DcimDevice.
