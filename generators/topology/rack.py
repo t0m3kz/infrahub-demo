@@ -80,7 +80,6 @@ class TopologyRackParentSuiteData(TypedDict, total=False):
     index: int
     name: str | None
     shortname: str | None
-    suite_name: str | None
 
 
 class TopologyRackData(TypedDict, total=False):

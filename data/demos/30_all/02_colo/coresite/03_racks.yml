@@ -28,7 +28,7 @@ spec:
       children:
         kind: LocationSuite
         data:
-          - suite_name: NY1
+          - name: NY1-NY1
             index: 1
             shortname: ny1-s1
             rows: 1
@@ -36,7 +36,8 @@ spec:
             children:
               kind: LocationRack
               data:
-                - shortname: ny1-s1-r-1
+                - name: NY1-NY1-R1-1
+                  shortname: ny1-s1-r-1
                   index: 1
                   row_index: 1
                   deployment: NY1
@@ -48,7 +49,7 @@ spec:
       children:
         kind: LocationSuite
         data:
-          - suite_name: VA1
+          - name: VA1-VA1
             index: 1
             shortname: va1-s1
             rows: 1
@@ -56,7 +57,8 @@ spec:
             children:
               kind: LocationRack
               data:
-                - shortname: va1-s1-r-1
+                - name: VA1-VA1-R1-1
+                  shortname: va1-s1-r-1
                   index: 1
                   row_index: 1
                   deployment: VA1

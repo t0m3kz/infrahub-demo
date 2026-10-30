@@ -4,7 +4,8 @@ kind: Object
 spec:
   kind: LocationRack
   data:
-    - index: 5
+    - name: KTW-1-SUITE-1-R4-5
+      index: 5
       row_index: 4
       shortname: ktw-1-s-1-r-4-5
       rack_type: network

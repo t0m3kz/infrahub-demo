@@ -11,7 +11,7 @@ spec:
       children:
         kind: LocationSuite
         data:
-          - suite_name: MCR-AMS1
+          - name: MCR-AMS1-MCR-AMS1
             index: 1
             shortname: mcr-ams1-s1
             rows: 1
@@ -19,7 +19,8 @@ spec:
             children:
               kind: LocationRack
               data:
-                - shortname: mcr-ams1-s1-r-1
+                - name: MCR-AMS1-MCR-AMS1-R1-1
+                  shortname: mcr-ams1-s1-r-1
                   index: 1
                   row_index: 1
                   deployment: MCR-AMS1

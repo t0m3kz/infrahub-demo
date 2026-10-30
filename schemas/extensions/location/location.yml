@@ -73,15 +73,8 @@ nodes:
     attributes:
       - name: name
         kind: Text
-        computed_attribute:
-          kind: Jinja2
-          jinja2_template: "{{parent__name__value}}-{{suite_name__value}}"
-        read_only: true
         optional: false
         order_weight: 100
-      - name: suite_name
-        kind: Text
-        optional: false
       - name: index
         kind: Number
         optional: false
@@ -143,10 +136,6 @@ nodes:
     attributes:
       - name: name
         kind: Text
-        computed_attribute:
-          kind: Jinja2
-          jinja2_template: "{{parent__name__value|upper}}-R{{row_index__value}}-{{index__value}}"  # yamllint disable-line rule:line-length
-        read_only: true
         optional: false
         order_weight: 100
       - name: index

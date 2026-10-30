@@ -387,6 +387,9 @@ class MyCheck(InfrahubCheck):
   (`TopologyTemplatePod`: S_MIDDLE, S_TOR, ...) are required and hold only the envelope (`max_*`); the rows live in
   `data/bootstrap/14b_fabric_templates.yml`. Every fabric pool size is derived from them by
   `generators/fabric_sizing.py`, and a pod's design must be one of its DC design's `pod_templates`.
+- **Suite and rack names are data**: `LocationSuite.name` and `LocationRack.name` are plain, required attributes the
+  data spells out (`tests/unit/test_location_names.py`); nothing computes them, so a rename of a suite, a row or a slot
+  never renames an object behind the data's back. `suite_name` is gone.
 - **Suite capacity**: a `LocationSuite` is the physical capacity: `rows` and `racks_per_row` (both required) are its
   grid. `checks/suite_capacity.py` enforces that every rack sits inside it (`row_index <= rows`,
   `index <= racks_per_row`, where `index` is the slot in the row) and that each hosting suite fits the pod's design
