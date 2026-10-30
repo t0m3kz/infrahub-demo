@@ -14,7 +14,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 from generators.logger import GeneratorError
-from generators.topology.circuit import PhysicalCircuitGenerator
+from generators.topology.circuit import CarrierCircuitGenerator
 from generators.topology.virtual_circuit import VirtualCircuitSessionGenerator
 
 CIRCUIT_ID = "circ-df10"
@@ -78,18 +78,18 @@ def cage_edge(**kwargs: Any) -> dict[str, Any]:
     return interface("if-eg", "Ethernet1/10", "eg-fr201", **kwargs)
 
 
-def physical_payload(
+def carrier_payload(
     *,
     ends: list[dict[str, Any]] | None = None,
     circuit_id: str = "DF-DC10-EQXFR2",
     locations: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """A physical circuit payload: its ends are one capabilities list (default: DC border leaf, cage edge),
+    """A carrier circuit payload: its ends are one capabilities list (default: DC border leaf, cage edge),
     its locations already complete by default (the authored cage and the DC derived on an earlier run)."""
     ends = [dc_border_leaf(), cage_edge()] if ends is None else ends
     locations = [CAGE, dc_place()] if locations is None else locations
     return {
-        "TopologyPhysicalCircuit": {
+        "TopologyCarrierCircuit": {
             "edges": [
                 {
                     "node": {
@@ -157,9 +157,9 @@ def deployment(kind: str, name: str, *, underlay: str = "ipv6") -> dict[str, Any
 
 
 def underlay_circuit(circuit_id: str = "DF-DC10-EQXFR2", status: str = "active") -> dict[str, Any]:
-    """A physical circuit as virtual_circuit.gql selects it under a port's (or its parent's) capabilities."""
+    """A carrier circuit as virtual_circuit.gql selects it under a port's (or its parent's) capabilities."""
     return {
-        "__typename": "TopologyPhysicalCircuit",
+        "__typename": "TopologyCarrierCircuit",
         "id": f"pc-{circuit_id}",
         "name": {"value": circuit_id},
         "circuit_id": {"value": circuit_id},
@@ -261,7 +261,7 @@ def handoff_party_port(**kwargs: Any) -> dict[str, Any]:
 
 
 def session_payload(
-    kind: str,
+    circuit_type: str,
     ends: list[dict[str, Any]],
     *,
     name: str | None = None,
@@ -271,40 +271,40 @@ def session_payload(
     password: str | None = None,
     circuit_id: str = VC_ID,
 ) -> dict[str, Any]:
-    """A virtual circuit payload of ``kind``; a handoff also carries its namespace, maximum_routes and password.
+    """A TopologySessionCircuit payload of ``circuit_type`` (dci, handoff, tunnel); a handoff also carries its
+    namespace, maximum_routes and password.
 
     ``circuit_id`` is for a second circuit on the same client (see ``FakeClient.circuit_ids``)."""
     node: dict[str, Any] = {
         "id": circuit_id,
-        "__typename": kind,
-        "name": {
-            "value": name or ("VC-DCI-DC10-FR2" if kind == "TopologyInterconnectCircuit" else "VC-C001-EQXFR-AWS")
-        },
+        "__typename": "TopologySessionCircuit",
+        "name": {"value": name or ("VC-DCI-DC10-FR2" if circuit_type == "dci" else "VC-C001-EQXFR-AWS")},
         "status": {"value": status},
+        "circuit_type": {"value": circuit_type},
     }
-    if kind == "TopologyHandoffCircuit":
+    if circuit_type == "handoff":
         node["ip_namespace"] = {"node": {"name": {"value": namespace}} if namespace else None}
         node["maximum_routes"] = {"value": maximum_routes}
         node["password"] = {"node": {"id": password} if password else None}
     node["capabilities"] = {"edges": [{"node": port} for port in ends]}
-    return {"TopologyVirtualCircuit": {"edges": [{"node": node}]}}
+    return {"TopologySessionCircuit": {"edges": [{"node": node}]}}
 
 
 def interconnect_payload(**kwargs: Any) -> dict[str, Any]:
     """A DCI between the DC border leaf and the colocation edge (override with ``ends=``)."""
     ends = kwargs.pop("ends", None) or [dc_border_port(), colo_edge_port()]
-    return session_payload("TopologyInterconnectCircuit", ends, **kwargs)
+    return session_payload("dci", ends, **kwargs)
 
 
 def handoff_payload(**kwargs: Any) -> dict[str, Any]:
     """A handoff between the cage edge sub-interface and the provider router's (override with ``ends=``)."""
     ends = kwargs.pop("ends", None) or [handoff_edge_port(), handoff_party_port()]
-    return session_payload("TopologyHandoffCircuit", ends, **kwargs)
+    return session_payload("handoff", ends, **kwargs)
 
 
 def tunnel_payload() -> dict[str, Any]:
     """A tunnel circuit: the generator reads nothing but its typename and name."""
-    return session_payload("TopologyTunnelCircuit", [], name="C001-SDWAN-FR2")
+    return session_payload("tunnel", [], name="C001-SDWAN-FR2")
 
 
 # ---------------------------------------------------------------------------
@@ -387,6 +387,7 @@ class FakeClient:
         self.allocations: list[dict[str, Any]] = []
         # Session circuits ending on a port: kind name -> [(id, name) or (id, name, status)], returned by
         # filters(capabilities__ids=...); the status defaults to active.
+        # circuit_type (dci, handoff, tunnel) -> (id, name[, status]) of the session circuits of that type
         self.session_circuits: dict[str, list[tuple[str, ...]]] = {}
         # DcimVirtualInterface ids whose parent is a port, returned by filters(parent_interface__ids=...).
         self.sub_interfaces: list[str] = []
@@ -418,7 +419,7 @@ class FakeClient:
         return node
 
     def circuit_node(self, circuit_id: str) -> MagicMock:
-        """A fetched physical circuit whose add_relationships() is logged as a ("relate", id, kwargs) write."""
+        """A fetched carrier circuit whose add_relationships() is logged as a ("relate", id, kwargs) write."""
         node = self._node(circuit_id)
 
         async def _relate(**kwargs: Any) -> None:
@@ -434,7 +435,7 @@ class FakeClient:
     async def get(self, kind: Any, raise_when_missing: bool = True, **kwargs: Any) -> Any:
         name = kind_name(kind)
         self.get_calls.append((name, kwargs))
-        if name == "TopologyPhysicalCircuit":
+        if name == "TopologyCarrierCircuit":
             return self.circuit_node(kwargs["id"])
         if name == "RoutingPassword":
             return self.keys.get(kwargs["name__value"])
@@ -458,13 +459,17 @@ class FakeClient:
             return [self.interface_node(iface_id) for iface_id in kwargs["ids"]]
         if name == "IpamIPAddress":  # CablingMixin._find_addresses: one read for the addresses of a prefix
             return [self.addresses[address] for address in kwargs["address__values"] if address in self.addresses]
-        if name in ("TopologyInterconnectCircuit", "TopologyHandoffCircuit"):
+        if name == "TopologySessionCircuit":
+            wanted = kwargs.get("circuit_type__values")
             matches = []
-            for circuit_id, circuit_name, *rest in self.session_circuits.get(name, []):
-                other = MagicMock(id=circuit_id)
-                other.name = MagicMock(value=circuit_name)
-                other.status = MagicMock(value=rest[0] if rest else "active")
-                matches.append(other)
+            for circuit_type, rows in self.session_circuits.items():
+                if wanted is not None and circuit_type not in wanted:
+                    continue
+                for circuit_id, circuit_name, *rest in rows:
+                    other = MagicMock(id=circuit_id)
+                    other.name = MagicMock(value=circuit_name)
+                    other.status = MagicMock(value=rest[0] if rest else "active")
+                    matches.append(other)
             return matches
         raise AssertionError(f"unexpected filters({name}, {kwargs})")
 
@@ -568,12 +573,23 @@ def make_generator(cls: Any, client: FakeClient) -> Any:
     gen.resource_lock = _lock
     gen.run_generator = AsyncMock()
     gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
+    # The VRF pass (generators/helpers/vrf.py) is tested on its own: here it only records its calls.
+    gen.reconcile_vrfs = AsyncMock()
+    gen._vrf_device_ids = set()  # __init__ is bypassed
+    gen.vrfs_held_calls = []
+
+    @asynccontextmanager
+    async def _held(needs: dict[str, set[str]]):  # noqa: ANN202
+        gen.vrfs_held_calls.append(needs)
+        yield
+
+    gen.vrfs_held = _held
     return gen
 
 
 def physical_generator(client: FakeClient) -> Any:
     """add_circuit over the fake client (typed Any so tests can reach the mocked attributes)."""
-    return make_generator(PhysicalCircuitGenerator, client)
+    return make_generator(CarrierCircuitGenerator, client)
 
 
 def session_generator(client: FakeClient) -> Any:

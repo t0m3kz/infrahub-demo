@@ -232,6 +232,11 @@ def declared(kind: str, *paths: Path) -> list[Declared]:
     return [obj for obj in declared_in(*paths) if obj.kind == kind]
 
 
+def declared_session(circuit_type: str, *paths: Path) -> list[Declared]:
+    """The TopologySessionCircuit declarations of one ``circuit_type`` (dci, handoff, tunnel) under ``paths``."""
+    return [obj for obj in declared("TopologySessionCircuit", *paths) if obj.value("circuit_type") == circuit_type]
+
+
 # ---------------------------------------------------------------------------
 # Identity
 # ---------------------------------------------------------------------------

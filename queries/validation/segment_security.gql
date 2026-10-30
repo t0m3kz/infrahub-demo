@@ -120,7 +120,7 @@ query segment_security {
     }
   }
 
-  TopologyTunnelCircuit {
+  TopologySessionCircuit(circuit_type__value: "tunnel") {
     edges {
       node {
         owner { node { __typename org_id { value } display_label } }

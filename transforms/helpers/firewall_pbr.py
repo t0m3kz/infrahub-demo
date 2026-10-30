@@ -8,9 +8,8 @@ from typing import Any
 
 from transforms.helpers.firewall import _context_leg_ip
 from transforms.helpers.policy import rule_selector, segment_flows
-from transforms.helpers.segments import _get_segment_namespace
 from utils.exchange_transit import MANAGEMENT_TYPE, exchange_peer_zones
-from utils.segment_addressing import segment_prefix
+from utils.segment_addressing import routed_segment_namespace, segment_prefix
 
 
 def _segment_deployment_ids(segment: dict[str, Any]) -> list[str]:
@@ -184,12 +183,12 @@ def get_customer_pbr_rules(
 
         # A segment living in the MANAGEMENT VRF is a service network: tenants reach
         # it through their context, it is never itself redirected to one.
-        if _get_segment_namespace(seg).get("namespace_type") == MANAGEMENT_TYPE:
+        if routed_segment_namespace(seg).get("namespace_type") == MANAGEMENT_TYPE:
             continue
 
         deployment_ids = _segment_deployment_ids(seg)
 
-        context_nexthop_by_deployment, shared_nexthop, serving = _nexthops(_get_segment_namespace(seg).get("name"))
+        context_nexthop_by_deployment, shared_nexthop, serving = _nexthops(routed_segment_namespace(seg).get("name"))
         fw_nexthop = _redirect_nexthop(deployment_ids, context_nexthop_by_deployment, shared_nexthop)
         if fw_nexthop is None:
             continue
@@ -202,7 +201,7 @@ def get_customer_pbr_rules(
         bypass: set[str] = set()
         via_firewall: set[str] = set()
 
-        own_namespace = _get_segment_namespace(seg).get("name")
+        own_namespace = routed_segment_namespace(seg).get("name")
 
         def _classify(rule: dict[str, Any], side: str) -> None:
             peer = rule.get(f"{side}_segment")

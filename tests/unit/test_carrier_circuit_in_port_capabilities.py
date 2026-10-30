@@ -1,8 +1,8 @@
-"""A TopologyPhysicalCircuit in a port's capabilities must not change a rendered config.
+"""A TopologyCarrierCircuit in a port's capabilities must not change a rendered config.
 
-TopologyPhysicalCircuit is a ManagedGenericInterfaces since step 5 of the caps series, so every circuit end
+TopologyCarrierCircuit is a ManagedGenericInterfaces since step 5 of the caps series, so every circuit end
 port lists its circuit next to the OSPF/segment/firewall capabilities. The shared fragments select only
-``__typename`` (and ``id``) for kinds without their own fragment, exactly as a TopologyVirtualCircuit already
+``__typename`` (and ``id``) for kinds without their own fragment, exactly as a TopologySessionCircuit already
 appears today. Each smoke fixture below is rendered with such a circuit added to every device interface and
 must match its golden output byte for byte.
 """
@@ -21,7 +21,7 @@ from tests.smoke.test_configs_smoke import CONFIGS_DIR
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.edge import Edge
 
-_CIRCUIT = {"node": {"__typename": "TopologyPhysicalCircuit", "id": "pc-1"}}
+_CIRCUIT = {"node": {"__typename": "TopologyCarrierCircuit", "id": "pc-1"}}
 
 
 def _with_circuit_on_every_port(data: dict[str, Any]) -> tuple[dict[str, Any], int]:
@@ -42,8 +42,8 @@ def _with_circuit_on_every_port(data: dict[str, Any]) -> tuple[dict[str, Any], i
         pytest.param(BorderLeaf, "border_leaf_cisco_nxos_bgw_stretched", id="border-leaf"),
     ],
 )
-def test_a_physical_circuit_on_every_port_leaves_the_config_unchanged(transform_cls: type, fixture: str) -> None:
-    """The typename filters of the transforms skip a physical circuit, so the render equals the golden output."""
+def test_a_carrier_circuit_on_every_port_leaves_the_config_unchanged(transform_cls: type, fixture: str) -> None:
+    """The typename filters of the transforms skip a carrier circuit, so the render equals the golden output."""
     directory: Path = CONFIGS_DIR / fixture
     data, injected = _with_circuit_on_every_port(json.loads((directory / "input.json").read_text()))
 

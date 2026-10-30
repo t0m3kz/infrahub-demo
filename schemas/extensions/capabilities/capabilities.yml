@@ -61,6 +61,27 @@ generics:
         identifier: capabilities
         order_weight: 9500
 
+  # The shared branch of the device edge: objects several devices are members of (a VRF of a topology; later an SNMP
+  # profile, NTP, syslog, AAA). Its edge never cascades: deleting a member never deletes the object and deleting the
+  # object leaves its devices. Anything that must die with its device stays on GenericDevice. A kind inherits exactly
+  # one of the two device-edge generics (tests/unit/test_capability_edge_names.py). Members are written from this side,
+  # edge by edge (RelationshipAdd / RelationshipRemove), never as a saved list; the object's lifecycle owner is a
+  # Parent (ManagedVRF.deployment) or a data file.
+  - name: GenericSharedDevice
+    namespace: Managed
+    description: "Objects shared by several devices: devices are members, deleting a device never deletes the object"
+    label: "Shared Resource"
+    include_in_menu: false
+    relationships:
+      - name: shared_devices
+        peer: DcimCapabilities
+        label: Members
+        cardinality: many
+        kind: Generic
+        optional: true
+        identifier: shared_capabilities
+        order_weight: 9500
+
   # Capabilities attached to device interfaces (segments, circuits, peerings, firewall-context legs, VIPs)
   - name: GenericInterfaces
     namespace: Managed
@@ -90,6 +111,16 @@ extensions:
           kind: Generic
           on_delete: cascade
           identifier: capabilities
+        # The shared edge: never cascades (explicit), see GenericSharedDevice.
+        - name: shared_capabilities
+          peer: ManagedGenericSharedDevice
+          label: Shared capabilities
+          optional: true
+          cardinality: many
+          kind: Generic
+          on_delete: no-action
+          identifier: shared_capabilities
+          order_weight: 1950
     - kind: DcimInterface
       relationships:
         - name: capabilities

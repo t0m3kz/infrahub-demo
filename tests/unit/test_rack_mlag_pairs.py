@@ -105,6 +105,7 @@ class TestEnsureMlagPairs:
         gen.client.create.assert_awaited_once()
         create_kwargs = gen.client.create.call_args.kwargs
         assert create_kwargs["data"]["virtual_peer_link"] is False
+        assert create_kwargs["data"]["peer_devices"] == "l2-01,l2-02"
 
     @pytest.mark.asyncio
     async def test_virtual_fallback_still_requires_mlag_peer_interface(self) -> None:
@@ -166,6 +167,7 @@ class TestEnsureMlagPairs:
         assert "id" not in create_kwargs["data"]
         assert create_kwargs["data"]["name"] == "tor-01-tor-02-mlag"
         assert create_kwargs["data"]["virtual_peer_link"] is False
+        assert create_kwargs["data"]["peer_devices"] == "tor-01,tor-02"
         assert create_kwargs["data"]["capabilities"] == [{"id": "id-tor-01"}, {"id": "id-tor-02"}]
         mlag_obj.save.assert_awaited_once_with(allow_upsert=True)
         gen.ensure_mlag_wiring.assert_awaited_once_with(

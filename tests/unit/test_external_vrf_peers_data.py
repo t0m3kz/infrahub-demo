@@ -14,13 +14,13 @@ from transforms.helpers.bgp_external import get_external_peer_prefixes
 _INTERCONNECTS = _ROOT / "data" / "demos" / "30_all" / "08_interconnects"
 
 
-def _objects(directory: Path, kind: str) -> list[dict[str, Any]]:
-    """Every data entry of ``kind`` in the YAML files under ``directory``."""
+def _objects(directory: Path, kind: str, circuit_type: str | None = None) -> list[dict[str, Any]]:
+    """Every data entry of ``kind`` (of ``circuit_type``, for a session circuit) in the YAML files under ``directory``."""
     entries: list[dict[str, Any]] = []
     for path in sorted(directory.rglob("*.yml")):
         for doc in yaml.safe_load_all(path.read_text()):
             if doc and doc["spec"]["kind"] == kind:
-                entries.extend(doc["spec"]["data"])
+                entries.extend(e for e in doc["spec"]["data"] if circuit_type in (None, e.get("circuit_type")))
     return entries
 
 
@@ -37,7 +37,7 @@ def _external_handoffs() -> list[dict[str, Any]]:
     """
     return [
         {**circuit, "namespaces": [circuit["ip_namespace"]] * len(circuit["capabilities"])}
-        for circuit in _objects(_INTERCONNECTS, "TopologyHandoffCircuit")
+        for circuit in _objects(_INTERCONNECTS, "TopologySessionCircuit", "handoff")
         if circuit["ip_namespace"] in ("PROD", "NON-PROD")
     ]
 
@@ -79,7 +79,7 @@ class TestAllDemoData:
         assert peering["namespaces"] == ["PROD", "PROD"]
         # the dedicated port of the FR2 cage is the cross-connect's own; the hosted connection of the NE router is not
         crossconnects = [
-            c for c in _objects(_INTERCONNECTS, "TopologyPhysicalCircuit") if c["name"] == "XC-EQXFR2-AWS-EUC1"
+            c for c in _objects(_INTERCONNECTS, "TopologyCarrierCircuit") if c["name"] == "XC-EQXFR2-AWS-EUC1"
         ]
         assert ([device, port] in crossconnects[0]["capabilities"]) == (dx["connection_type"] == "dedicated")
 

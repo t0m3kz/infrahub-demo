@@ -41,7 +41,8 @@ async def render_device_config(
 # changed value or a deleted-and-added id. The kinds after the generator
 # outputs are mostly data-loaded or owned by another generator: an id lost
 # there is a foreign deletion, i.e. a generator cleaned up a node it does not
-# own. capabilities carries the segment tags on switch ports.
+# own. A switch port's segment tags are its typed `segments` (the tag reconcile's output); capabilities carries the
+# circuits, contexts and sessions on it, and a sub-interface's inline termination is `inline_segment`.
 TOPOLOGY_SNAPSHOT_KINDS = {
     "DcimDevice": "name { value }",
     # ip_address is declared on each concrete interface kind, not on the generic: a rerun that re-pointed a port
@@ -49,9 +50,10 @@ TOPOLOGY_SNAPSHOT_KINDS = {
     # addresses add_virtual_circuit puts on the DCI ports and the handoff sub-interfaces.
     "DcimInterface": (
         "name { value } capabilities { edges { node { id } } } "
-        "... on DcimPhysicalInterface { ip_address { node { id address { value } } } } "
-        "... on DcimVirtualInterface { ip_address { node { id address { value } } } } "
-        "... on DcimLAGInterface { ip_address { node { id address { value } } } }"
+        "... on DcimPhysicalInterface { ip_address { node { id address { value } } } segments { edges { node { id } } } } "
+        "... on DcimVirtualInterface { ip_address { node { id address { value } } } "
+        "role { value } vrf { node { id } } vlan_domain_segment { node { id } } inline_segment { node { id } } } "
+        "... on DcimLAGInterface { ip_address { node { id address { value } } } segments { edges { node { id } } } }"
     ),
     # cable_id, color and length_cm are derived by the cabling, HA and MLAG sites from the endpoints, the type and
     # the suite layout: a rerun that rewrote one is a diff.
@@ -74,29 +76,32 @@ TOPOLOGY_SNAPSHOT_KINDS = {
     ),
     "ManagedHA": "group_id { value }",
     "ManagedSegmentDeployment": "vni { value }",
-    "ManagedVlanDomainSegment": "vlan_id { value }",
+    "ManagedVlanDomainSegment": "vlan_id { value } device { node { id } } svi { node { id } }",
+    # The VRF instances (one per hosting deployment and namespace) and the segment SVIs are untracked and converged by
+    # generators/helpers/vrf.py: a rerun that rebuilt an instance (new id), moved it to another topology or namespace,
+    # changed its members, or re-pointed an SVI is a diff.
+    "ManagedVRF": (
+        "name { value } deployment { node { id } } namespace { node { id } } shared_devices { edges { node { id } } }"
+    ),
     "LocationRack": "name { value }",
     "TopologyPod": "name { value }",
     "TopologyDataCenter": "name { value }",
-    # add_circuit/add_sdwan_edge output (the physical circuit and the tunnel); an Interconnect and a Handoff are
-    # data-loaded and only gain sessions, so their own selection must not move either. `locations` is declared on
-    # each virtual kind, not on the generic.
-    "TopologyPhysicalCircuit": (
+    # add_circuit/add_sdwan_edge output (the carrier circuit and the tunnel); an Interconnect and a Handoff are
+    # data-loaded and only gain sessions, so their own selection must not move either.
+    "TopologyCarrierCircuit": (
         "name { value } locations { edges { node { id } } } capabilities { edges { node { id } } }"
     ),
-    "TopologyVirtualCircuit": (
-        "name { value } "
-        "... on ManagedGenericInterfaces { capabilities { edges { node { id capabilities { edges { node { id } } } } } } } "
-        "... on TopologyTunnelCircuit { locations { edges { node { id } } } } "
-        "... on TopologyInterconnectCircuit { locations { edges { node { id } } } } "
-        "... on TopologyHandoffCircuit { locations { edges { node { id } } } ip_namespace { node { id } } "
-        "password { node { id } } maximum_routes { value } cloud_endpoint { node { id } } }"
+    "TopologySessionCircuit": (
+        "name { value } circuit_type { value } locations { edges { node { id } } } "
+        "capabilities { edges { node { id capabilities { edges { node { id } } } } } } "
+        "ip_namespace { node { id } } password { node { id } } maximum_routes { value } cloud_endpoint { node { id } } "
+        "registered_prefixes { edges { node { id } } }"
     ),
     "ManagedController": "name { value } managed_devices { edges { node { id } } }",
     "ManagedFirewallHA": "name { value }",
     "ManagedFirewallContext": "name { value }",
     "ManagedLoadbalancerContext": "name { value }",
-    "ManagedMLAG": "name { value }",
+    "ManagedMLAG": "name { value } peer_devices { value }",
     "RoutingOSPFArea": "name { value } area { value }",
     # The office fabric's OSPF underlay (add_office_fabric): the only OSPF in 30_all.
     "ManagedOSPF": "name { value }",

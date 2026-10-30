@@ -141,8 +141,8 @@ def _gp_nic(
         "name": _v(port),
         "role": _v(far_role or ("lag" if lag else "server")),
         "device": _node({"name": _v(switch)}),
-        "capabilities": _edges([] if lag else tagged),
-        "lag": _node({"name": _v(lag), "capabilities": _edges(tagged)} if lag else None),
+        "segments": _edges([] if lag else tagged),
+        "lag": _node({"name": _v(lag), "segments": _edges(tagged)} if lag else None),
     }
     return {"id": near["id"], "name": _v(nic), "cable": _node({"endpoints": _edges([near, far])})}
 
@@ -402,7 +402,7 @@ def _gpo_segment_nodes(device_name: str, segments: tuple[str, ...]) -> list[dict
             gateway_ip=gateway,
             ns_name=vrf,
             l3_vni=l3_vni,
-            vlan_domain_id=f"dev-{device_name}",
+            row_device_id=f"dev-{device_name}",
         )
         for name, vlan, vni, gateway, vrf, _ns_type, l3_vni in _GPO_SEGMENTS
         if name in segments

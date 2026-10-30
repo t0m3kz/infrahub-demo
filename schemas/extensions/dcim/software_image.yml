@@ -41,6 +41,13 @@ nodes:
         order_weight: 200
         description: "Release version string (e.g. 4.28.3M, 22.04.3, R81.20)"
 
+      - name: package
+        kind: Text
+        label: "Package"
+        optional: true
+        description: "The provider's licence package of this image (Equinix Network Edge package_code, e.g. network-essentials, VM100, CloudEOS)"  # yamllint disable-line rule:line-length
+        order_weight: 230
+
       - name: containerlab_image
         kind: Text
         label: "Containerlab Image"

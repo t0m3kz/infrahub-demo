@@ -7,11 +7,12 @@ PBR rules that resolve their nexthop through a context live in ``transforms.help
 from ipaddress import ip_interface
 from typing import Any
 
-from transforms.helpers.firewall import FIREWALL_CONTEXT_KIND, _snat_host
+from transforms.helpers.addressing import sub_interface_parent
+from transforms.helpers.firewall import _snat_host
 from transforms.helpers.ha import inline_addresses
 from transforms.helpers.policy import segment_rule_policies
-from transforms.helpers.segments import segment_hosting_candidates
-from utils.exchange_transit import TRANSIT_SLOT, ZONE_BY_NS_TYPE, transit_addresses, transit_vlan
+from utils.exchange_transit import FIREWALL_CONTEXT_KIND, TRANSIT_SLOT, ZONE_BY_NS_TYPE, transit_addresses, transit_vlan
+from utils.segment_addressing import segment_hosting_candidates
 
 
 def _new_context(cap: dict[str, Any], legs: list[dict[str, Any]]) -> dict[str, Any]:
@@ -64,7 +65,7 @@ def get_firewall_contexts(
     legs_by_context: dict[str, list[dict[str, Any]]] = {}
     for iface in interfaces or []:
         ip_obj = iface.get("ip_address") or {}
-        parent_iface = iface.get("parent_interface") or {}
+        parent_iface = sub_interface_parent(iface) or {}
         for cap in iface.get("capabilities") or []:
             if cap.get("typename") != FIREWALL_CONTEXT_KIND:
                 continue

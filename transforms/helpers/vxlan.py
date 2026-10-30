@@ -7,8 +7,8 @@ from typing import Any
 
 from netutils.interface import sort_interface_list
 
-from transforms.helpers.addressing import host_ip
-from transforms.helpers.firewall import FIREWALL_CONTEXT_KIND, SERVICE_CONTEXT_ROLES
+from transforms.helpers.addressing import host_ip, sub_interface_parent
+from transforms.helpers.mlag import CHANNEL_GROUP_MODE
 
 # The neutral overlay model owns these (transforms/helpers/overlay.py); they stay importable from here.
 from transforms.helpers.overlay import (
@@ -17,15 +17,18 @@ from transforms.helpers.overlay import (
     L2Instance,
     L3Instance,
     OverlayNode,
+    _interface_address,
+    _is_multisite_segment,
 )
-from transforms.helpers.overlay import _collect_l3_vni_from_namespaces as _collect_l3_vni_from_namespaces
-from transforms.helpers.overlay import _interface_address, _is_multisite_segment
-from transforms.helpers.overlay import _l3_from_activations as _l3_from_activations
 from transforms.helpers.overlay import _select_vtep_interface as _select_vtep_interface
 from transforms.helpers.overlay import build_overlay_node, l2_instance, vni_activations
-from transforms.helpers.segments import _get_segment_namespace, segment_vlan_ids
+from transforms.helpers.segments import interface_segments, segment_vlan_ids
+from transforms.helpers.vrf import device_vrfs
+from utils.exchange_transit import FIREWALL_CONTEXT_KIND, SERVICE_CONTEXT_ROLES
 from utils.fabric_roles import BORDER_ROLES
-from utils.limits import MAX_ENCODABLE_VNI
+from utils.limits import DEFAULT_NAMESPACE, MAX_ENCODABLE_VNI
+from utils.segment_addressing import routed_segment_namespace
+from utils.vrf_demand import internet_exits
 
 _log = logging.getLogger(__name__)
 
@@ -77,8 +80,8 @@ def _multisite_vrf_site_asns(activations: list[dict[str, Any]]) -> dict[str, set
         seg = act.get("segment") or {}
         if not _is_multisite_segment(seg):
             continue
-        vrf = _get_segment_namespace(seg).get("name")
-        if not vrf or vrf == "default":
+        vrf = routed_segment_namespace(seg).get("name")
+        if not vrf or vrf == DEFAULT_NAMESPACE:
             continue
         by_vrf.setdefault(vrf, set()).update(_segment_site_asns(seg))
     return by_vrf
@@ -121,28 +124,6 @@ def _is_bgw(data: dict[str, Any], fabric_rt_asn: int | None) -> bool:
     return bool(fabric_rt_asn) and any(iface.get("role") == "multisite-vip" for iface in data.get("interfaces") or [])
 
 
-def _internet_session_namespaces(data: dict[str, Any]) -> list[dict[str, Any]]:
-    """Internet-type namespaces of this device's own BGP sessions.
-
-    A BGP peering whose local address sits in a namespace_type internet
-    namespace is the upstream transit handoff (bgp.py flags it ``transit``);
-    the VRF needs an L3 VNI on a BGW to export what it learns as EVPN type-5.
-    """
-    device_name = data.get("name")
-    found: dict[str, dict[str, Any]] = {}
-    for cap in data.get("capabilities") or []:
-        if cap.get("typename") != "ManagedBGP":
-            continue
-        for peering in cap.get("peerings") or []:
-            for iface in peering.get("capabilities") or []:
-                if (iface.get("device") or {}).get("name") != device_name:
-                    continue
-                ns = (iface.get("ip_address") or {}).get("ip_namespace") or {}
-                if ns.get("namespace_type") == _INTERNET_NAMESPACE_TYPE and ns.get("name"):
-                    found.setdefault(ns["name"], ns)
-    return list(found.values())
-
-
 def _l3_route_target(mapping: dict[str, Any], rt_asn: int | None) -> str | None:
     """The route-target a VRF exports and imports; the one place that decides it.
 
@@ -155,6 +136,20 @@ def _l3_route_target(mapping: dict[str, Any], rt_asn: int | None) -> str | None:
     if mapping.get("namespace_type") == _INTERNET_NAMESPACE_TYPE:
         return f"{vni}:{vni}"
     return f"{rt_asn}:{vni}" if rt_asn else None
+
+
+def _bind_lag_members(name_to_interface: dict[str, dict[str, Any]]) -> None:
+    """Give each member port of a LAG the `channel_group` (the LAG's lag_id) and `channel_group_mode` the
+    switch templates render as `channel-group <id> mode <mode>`. A LAG without members binds nothing."""
+    for lag in list(name_to_interface.values()):
+        if lag.get("lag_id") is None:
+            continue
+        mode = CHANNEL_GROUP_MODE.get(lag.get("lacp_mode") or "active", "active")
+        lag["channel_group_mode"] = mode
+        for member_name in lag.get("member_interfaces") or []:
+            if member := name_to_interface.get(member_name):
+                member["channel_group"] = lag["lag_id"]
+                member["channel_group_mode"] = mode
 
 
 def get_interfaces(
@@ -201,11 +196,7 @@ def get_interfaces(
         for cap in capabilities:
             by_type.setdefault(cap.get("typename"), []).append(cap)
 
-        vlans = [
-            segment_vlan[s["name"]]
-            for s in capabilities
-            if s.get("typename") == "ManagedVxlanSegment" and s.get("name") in segment_vlan
-        ]
+        vlans = [segment_vlan[s["name"]] for s in interface_segments(iface) if s.get("name") in segment_vlan]
 
         # FirewallContext sub-interface (role="service", created by
         # generators/topology/customer_dc.py's _create_context_subinterface)
@@ -296,7 +287,7 @@ def get_interfaces(
             "mtu": iface.get("mtu"),
             "ip_addresses": ip_addresses,
             "dot1q_vlan": context_vlan_id,
-            "parent_interface": iface.get("parent_interface"),
+            "parent_interface": sub_interface_parent(iface),
         }
 
         if native_vlan is not None:
@@ -306,6 +297,11 @@ def get_interfaces(
             iface_dict["lag_id"] = iface.get("lag_id")
             iface_dict["lacp_mode"] = iface.get("lacp_mode")
             iface_dict["minimum_links"] = iface.get("minimum_links")
+            # The multi-chassis id of a host-facing port-channel: both peers of one bond carry the same lag_id
+            # (generators/topology/endpoint_lag.py) and checks/mlag_domains.py M5 pairs them, so the lag_id is
+            # the `mlag <id>` / `vpc <id>`. The peer-link is bound by the domain block, never by an id.
+            if (iface.get("mlag_domain") or {}).get("id") and iface.get("role") != "mlag-peer":
+                iface_dict["mlag_id"] = iface.get("lag_id")
             member_interfaces = iface.get("member_interfaces") or []
             iface_dict["member_interfaces"] = [m.get("name") for m in member_interfaces if m.get("name")]
 
@@ -323,6 +319,7 @@ def get_interfaces(
 
         name_to_interface[name] = iface_dict
 
+    _bind_lag_members(name_to_interface)
     return [name_to_interface[name] for name in sorted_names if name in name_to_interface]
 
 
@@ -697,14 +694,16 @@ def get_vxlan_config(
     Returns:
         VXLAN configuration dict or None if VXLAN not needed
     """
-    # A BGW with an upstream transit session also needs the INTERNET L3 VNI, with
-    # or without stretched segments (an edge usually has none).
-    default_exit_namespaces = _internet_session_namespaces(data) if _is_bgw(data, fabric_rt_asn) else []
+    # A BGW carries its INTERNET instance as an L3 VNI (the upstream transit it exports as EVPN type-5),
+    # with or without stretched segments (an edge usually has none).
+    vrfs = device_vrfs(data)
+    exits = internet_exits(vrfs, border_gateway=_is_bgw(data, fabric_rt_asn))
     node = build_overlay_node(
         data.get("interfaces", []),
         device_role,
         activations or [],
-        default_exit_namespaces,
+        vrfs,
+        exits,
         fabric_anycast_mac or _DEFAULT_ANYCAST_GATEWAY_MAC,
     )
     if node is None:

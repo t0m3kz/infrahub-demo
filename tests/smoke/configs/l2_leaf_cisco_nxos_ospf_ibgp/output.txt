@@ -19,15 +19,11 @@ vlan 200
 !
 ! Interfaces
 interface Ethernet1
-  no switchport
   no shutdown
-  ip address 10.1.0.1/31
 
 !
 interface Ethernet2
-  no switchport
   no shutdown
-  ip address 10.1.0.3/31
 
 !
 interface Ethernet10

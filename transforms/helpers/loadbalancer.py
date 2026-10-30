@@ -30,7 +30,7 @@ import math
 from collections.abc import Callable, Mapping
 from typing import Any
 
-from transforms.helpers.addressing import host_ip
+from transforms.helpers.addressing import host_ip, sub_interface_parent
 from transforms.helpers.firewall import transit_legs
 from utils.exchange_transit import TENANT_NAMESPACE_TYPES, TRANSIT_SLOT
 
@@ -285,7 +285,7 @@ def _leg(context: dict[str, Any], device_name: str, ha: dict[str, Any] | None) -
             )
         return {
             "name": iface.get("name"),
-            "parent_interface": (iface.get("parent_interface") or {}).get("name"),
+            "parent_interface": (sub_interface_parent(iface) or {}).get("name"),
             "vlan": leg["vlan"],
             "vni": leg["vni"],
             "prefixlen": leg["prefixlen"],

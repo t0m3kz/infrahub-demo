@@ -8,13 +8,16 @@ from transforms.helpers.acl import _PROTO_MAP, _port_match
 from transforms.helpers.policy import active_rules, enabled_policies, rule_endpoint, rule_zone
 from utils.exchange_transit import (
     EXCHANGE_PEERS,
+    FIREWALL_CONTEXT_KIND,
     INTERNET_TYPE,
-    TRANSIT_SLOT,
+    LOADBALANCER_CONTEXT_KIND,
+    service_context_caps,
     transit_addresses,
+    transit_leg_namespace,
     transit_vlan,
     transit_vni,
 )
-from utils.limits import ACL_CLOSING_SEQ, VLAN_NAME_MAX
+from utils.limits import ACL_CLOSING_SEQ, DEFAULT_NAMESPACE, VLAN_NAME_MAX
 from utils.segment_addressing import segment_prefix
 
 
@@ -133,14 +136,6 @@ def get_firewall_static_routes(
     return sorted(routes, key=lambda r: (r["vrf"], r["destination"]))
 
 
-FIREWALL_CONTEXT_KIND = "ManagedFirewallContext"
-LOADBALANCER_CONTEXT_KIND = "ManagedLoadbalancerContext"
-
-SERVICE_CONTEXT_ROLES: dict[str, str] = {FIREWALL_CONTEXT_KIND: "firewall", LOADBALANCER_CONTEXT_KIND: "load-balancer"}
-"""Context kind -> the role of the border service port it is tagged on, which is also the role of the HA
-members holding its legs (generators/connections.py BORDER_ROLE_FOR_SERVICES)."""
-
-
 def _transit_names(ctx: dict[str, Any], namespace: str) -> tuple[str, str]:
     """(full name, VLAN name) of a context leg's pseudo segment.
 
@@ -161,25 +156,6 @@ def _transit_names(ctx: dict[str, Any], namespace: str) -> tuple[str, str]:
     return name, f"{name[: VLAN_NAME_MAX - len(digest) - 1]}-{digest}"
 
 
-def _service_context_caps(interfaces: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
-    """The service-context capabilities on this device's service ports (SERVICE_CONTEXT_ROLES).
-
-    On a border leaf these are the ports facing the HA members: a firewall-role
-    port is tagged with the firewall contexts, a load-balancer-role port with the
-    load-balancer contexts whose legs the leaf has to carry. De-duplicated by id.
-    """
-    found: dict[str, dict[str, Any]] = {}
-    for iface in interfaces or []:
-        for cap in iface.get("capabilities") or []:
-            role = SERVICE_CONTEXT_ROLES.get(cap.get("typename") or "")
-            if role is None or role != iface.get("role"):
-                continue
-            key = cap.get("id") or cap.get("name")
-            if key:
-                found.setdefault(key, cap)
-    return list(found.values())
-
-
 def transit_legs(ctx: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """The context's legs in a non-default VRF namespace, keyed by namespace name.
 
@@ -189,18 +165,16 @@ def transit_legs(ctx: dict[str, Any]) -> dict[str, dict[str, Any]]:
     firewall or a load balancer); the border ports tagged with the context and
     legs in the default namespace are skipped.
     """
-    member_roles = SERVICE_CONTEXT_ROLES.values()
     legs: dict[str, dict[str, Any]] = {}
     context_vlan = ctx.get("vlan_id")
     for leg in ctx.get("capabilities") or []:
-        if (leg.get("device") or {}).get("role") not in member_roles:
+        namespace = transit_leg_namespace(context_vlan, leg)
+        if (
+            namespace is None or context_vlan is None
+        ):  # a transit leg has a context VLAN: the narrowing for the type checker
             continue
-        address = (leg.get("ip_address") or {}).get("address")
-        namespace = (leg.get("ip_address") or {}).get("ip_namespace") or {}
-        ns_name, ns_type = namespace.get("name"), namespace.get("namespace_type")
-        if not address or not context_vlan or not ns_name or ns_name == "default" or ns_type not in TRANSIT_SLOT:
-            continue
-        network = ip_interface(address).network
+        ns_name, ns_type = namespace["name"], namespace["namespace_type"]
+        network = ip_interface(leg["ip_address"]["address"]).network
         addresses = transit_addresses(str(network))
         legs.setdefault(
             ns_name,
@@ -239,7 +213,7 @@ def _context_leg_ip(ctx: dict[str, Any], namespace: str | None = None) -> str | 
         except ValueError:
             continue
         ns_name = (ip_obj.get("ip_namespace") or {}).get("name")
-        if namespace and ns_name == namespace and ns_name != "default":
+        if namespace and ns_name == namespace and ns_name != DEFAULT_NAMESPACE:
             return transit_addresses(str(interface.network))["vip"]
     return None
 
@@ -388,7 +362,7 @@ def get_exchange_routes(
             **({"local_only": True} if local_only else {}),
         }
 
-    for ctx in _service_context_caps(interfaces):
+    for ctx in service_context_caps(interfaces):
         legs = transit_legs(ctx)
         if ctx.get("typename") == LOADBALANCER_CONTEXT_KIND:
             vip_prefix = (ctx.get("vip_prefix") or {}).get("prefix")

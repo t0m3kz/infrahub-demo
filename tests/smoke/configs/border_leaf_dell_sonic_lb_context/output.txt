@@ -26,7 +26,8 @@
     },
     "NON-PROD|l2vpn_evpn": {
       "admin_status": "true",
-      "advertise-ipv4-unicast": "true"
+      "advertise-ipv4-unicast": "true",
+      "route-distinguisher": "10.0.0.1:60001"
     },
     "PROD|ipv4_unicast": {
       "admin_status": "true",
@@ -36,7 +37,8 @@
     },
     "PROD|l2vpn_evpn": {
       "admin_status": "true",
-      "advertise-ipv4-unicast": "true"
+      "advertise-ipv4-unicast": "true",
+      "route-distinguisher": "10.0.0.1:60000"
     },
     "default|ipv4_unicast": {
       "admin_status": "true",
@@ -53,7 +55,14 @@
       "admin_status": "true"
     }
   },
-  "BGP_GLOBALS_EVPN_RT": {},
+  "BGP_GLOBALS_EVPN_RT": {
+    "NON-PROD|l2vpn_evpn|65000:60001": {
+      "route-target-type": "both"
+    },
+    "PROD|l2vpn_evpn|65000:60000": {
+      "route-target-type": "both"
+    }
+  },
   "BGP_NEIGHBOR": {
     "10.0.0.100": {
       "admin_status": "true",
@@ -216,10 +225,10 @@
     },
     "Vlan3301|100.66.80.1/29": {},
     "Vlan3900": {
-      "vrf_name": "NON-PROD"
+      "vrf_name": "PROD"
     },
     "Vlan3901": {
-      "vrf_name": "PROD"
+      "vrf_name": "NON-PROD"
     }
   },
   "VLAN_MEMBER": {
@@ -244,12 +253,12 @@
     }
   },
   "VXLAN_TUNNEL_MAP": {
-    "vtep|map_60000_Vlan3901": {
-      "vlan": "Vlan3901",
+    "vtep|map_60000_Vlan3900": {
+      "vlan": "Vlan3900",
       "vni": "60000"
     },
-    "vtep|map_60001_Vlan3900": {
-      "vlan": "Vlan3900",
+    "vtep|map_60001_Vlan3901": {
+      "vlan": "Vlan3901",
       "vni": "60001"
     },
     "vtep|map_64100_Vlan3100": {

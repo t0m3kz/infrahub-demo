@@ -44,8 +44,8 @@ consequently do NOT appear:
   instances is a connection inside the provider's platform rather than fibre;
 * anything leaving the zone, including the link to another zone of the same
   metro, the on-ramp's links to the DCs and cloud fabrics it fronts. Those are
-  the colocation operator's cross-connects, modelled as TopologyPhysicalCircuits
-  (pure carriers) with the TopologyInterconnectCircuit or TopologyHandoffCircuit
+  the colocation operator's cross-connects, modelled as TopologyCarrierCircuits
+  (pure carriers) with the dci or handoff TopologySessionCircuit
   that rides them (see data/demos/30_all/08_interconnects/), and they need both
   endpoints, which a colocation-side generator cannot see; their sessions belong
   to the virtual circuit generator (add_virtual_circuit).
@@ -569,7 +569,7 @@ class ColocationFabricGenerator(
         platform, not a cable. It is a real link and it is not modelled here:
         there is no virtual-link node kind in the schema, and the thing that
         does express a link we do not own — a virtual circuit (Interconnect or
-        Handoff kind) riding a TopologyPhysicalCircuit — needs both endpoints
+        Handoff kind) riding a TopologyCarrierCircuit — needs both endpoints
         and a provider, which is the virtual circuit generator's input, not
         this one's.
 
@@ -615,8 +615,8 @@ class ColocationFabricGenerator(
         2. Both ends are in one facility: the edge pair and the appliances are
            all deployed to this one zone. A link that leaves the zone is the
            colocation operator's cross-connect, modelled as a
-           TopologyPhysicalCircuit carrying a TopologyInterconnectCircuit or
-           TopologyHandoffCircuit (data/demos/30_all/08_interconnects/), never as a cable. That
+           TopologyCarrierCircuit carrying a dci or
+           handoff TopologySessionCircuit (data/demos/30_all/08_interconnects/), never as a cable. That
            is why the on-ramp's links to the DCs, the cloud fabrics it fronts and
            the other zones are absent here and not merely deferred.
 

@@ -18,7 +18,7 @@ from tests.unit.test_routing_invariants_check import _vif
 PLACEMENT = _QUERIES / "validation" / "circuit_placement.gql"
 INVARIANTS = _QUERIES / "validation" / "routing_invariants.gql"
 
-# checks/circuit_placement.py: what it reads from a physical circuit.
+# checks/circuit_placement.py: what it reads from a carrier circuit.
 _PHYSICAL_READS = [
     "id",
     "name",
@@ -74,41 +74,30 @@ _PORT_READS = [
     ),
 ]
 
-_VIRTUAL_READS = {
-    "TopologyTunnelCircuit": [
-        "id",
-        "name",
-        "owner.id",
-        "owner.org_id",
-        "locations.id",
-        "locations.__typename",
-        "locations.name",
-        "locations.owner.id",
-        "locations.owner.org_id",
-    ],
-    "TopologyInterconnectCircuit": [
-        "id",
-        "name",
-        "status",
-        "owner.id",
-        "owner.org_id",
-        "locations.id",
-        "locations.__typename",
-        "locations.name",
-    ],
-    "TopologyHandoffCircuit": [
-        "id",
-        "name",
-        "status",
-        "locations.id",
-        "locations.__typename",
-        "locations.name",
-        "ip_namespace.name",
-        "ip_namespace.namespace_type",
-        "cloud_endpoint.name",
-        "cloud_endpoint.vlan_id",
-    ],
-}
+# What it reads from a session circuit, for every circuit_type: a tunnel's owner and office locations, a dci's and
+# a handoff's status, a handoff's namespace and cloud endpoint, and the fields it refuses on the other types.
+_SESSION_READS = [
+    "id",
+    "name",
+    "status",
+    "circuit_type",
+    "owner.id",
+    "owner.org_id",
+    "locations.id",
+    "locations.__typename",
+    "locations.name",
+    "locations.owner.id",
+    "locations.owner.org_id",
+    "ip_namespace.name",
+    "ip_namespace.namespace_type",
+    "password.id",
+    "maximum_routes",
+    "registered_prefixes.id",
+    "cloud_endpoint.id",
+    "cloud_endpoint.name",
+    "cloud_endpoint.vlan_id",
+]
+_ROOTS = ["TopologyCarrierCircuit", "TopologySessionCircuit"]
 
 # checks/routing_invariants.py: what it reads from a cloud virtual interface and its handoff circuit.
 _VIF_READS = [
@@ -124,15 +113,14 @@ _VIF_READS = [
 @pytest.fixture(scope="module")
 def placement_paths() -> dict[str, set[str]]:
     """Selected paths per root of circuit_placement.gql."""
-    roots = ["TopologyPhysicalCircuit", *_VIRTUAL_READS]
-    return {root: _selected_paths(PLACEMENT, root) for root in roots}
+    return {root: _selected_paths(PLACEMENT, root) for root in _ROOTS}
 
 
 def _reads(root: str) -> list[str]:
-    return _PHYSICAL_READS if root == "TopologyPhysicalCircuit" else [*_VIRTUAL_READS[root], *_PORT_READS]
+    return _PHYSICAL_READS if root == "TopologyCarrierCircuit" else [*_SESSION_READS, *_PORT_READS]
 
 
-@pytest.mark.parametrize("root", ["TopologyPhysicalCircuit", *_VIRTUAL_READS])
+@pytest.mark.parametrize("root", _ROOTS)
 def test_the_placement_query_selects_what_the_check_reads(root: str, placement_paths: dict[str, set[str]]) -> None:
     """Every path the check reads from a circuit of this kind is selected by circuit_placement.gql."""
     missing = [path for path in _reads(root) if path not in placement_paths[root]]
@@ -141,7 +129,7 @@ def test_the_placement_query_selects_what_the_check_reads(root: str, placement_p
 
 def test_the_placement_query_selects_nothing_the_check_never_reads(placement_paths: dict[str, set[str]]) -> None:
     """A selected leaf that no kind's rules read is dead weight on every run (the shared port fragment is read by
-    the union of the kinds: a Tunnel never reads the BGP processes, the Interconnect does)."""
+    the union of the kinds: a tunnel never reads the BGP processes, a dci does)."""
     read = {path for root in placement_paths for path in _reads(root)}
     prefixes = {".".join(path.split(".")[:i]) for path in read for i in range(1, len(path.split(".")))}
     unread = {path for paths in placement_paths.values() for path in paths} - read - prefixes
@@ -151,11 +139,11 @@ def test_the_placement_query_selects_nothing_the_check_never_reads(placement_pat
 @pytest.mark.parametrize(
     ("root", "fixture"),
     [
-        ("TopologyPhysicalCircuit", DF10),
-        ("TopologyPhysicalCircuit", INET_OFFICE),
-        ("TopologyTunnelCircuit", TUNNEL),
-        ("TopologyInterconnectCircuit", DCI),
-        ("TopologyHandoffCircuit", HANDOFF),
+        ("TopologyCarrierCircuit", DF10),
+        ("TopologyCarrierCircuit", INET_OFFICE),
+        ("TopologySessionCircuit", TUNNEL),
+        ("TopologySessionCircuit", DCI),
+        ("TopologySessionCircuit", HANDOFF),
     ],
 )
 def test_the_check_fixtures_carry_only_selected_fields(

@@ -12,7 +12,7 @@ from typing import Any
 
 from infrahub_sdk.checks import InfrahubCheck
 
-from generators.vlan_domain import SERVICE_PORT_ROLES, TAGGABLE_INTERFACE_KINDS
+from generators.vlan_domain import SERVICE_PORT_ROLES
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import is_exchange_zone
 from utils.interface_speed import InterfaceSpeedMatcher
@@ -29,7 +29,7 @@ class CheckCustomerQuota(InfrahubCheck):
 
     - segments: the ManagedVxlanSegments (customer_deployments) that name the footprint, against ``max_segments``. A segment stretched over two DCs counts for each
       footprint it names.
-    - host-facing ports: the switch ports tagged with those segments (their `capabilities`: add_app_component_segment
+    - host-facing ports: the switch ports tagged with those segments (their `switched_interfaces`: add_app_component_segment
       tags the far end of the uplink NICs of every AppComponent instance's physical host, a role=lag NIC's far end
       through its port-channel), grouped by speed, against ``ports_<speed>g``. A port counts once per footprint
       however many of its segments tag it, and once for each footprint that has a segment on it (a host serving
@@ -69,7 +69,9 @@ class CheckCustomerQuota(InfrahubCheck):
         """Add the segment and its host-facing ports to every metered footprint it names."""
         if is_exchange_zone((segment.get("security_zone") or {}).get("name")):
             return
-        host_ports = [port for interface in segment.get("capabilities") or [] for port in _host_facing_ports(interface)]
+        host_ports = [
+            port for interface in segment.get("switched_interfaces") or [] for port in _host_facing_ports(interface)
+        ]
         for deployment in segment.get("customer_deployments") or []:
             footprint = footprints.get(deployment.get("id", ""))
             if footprint is None:
@@ -112,12 +114,12 @@ class CheckCustomerQuota(InfrahubCheck):
 
 
 def _host_facing_ports(interface: dict[str, Any]) -> list[tuple[str, int, set[str]]]:
-    """(port id, speed in Gbps, ids of the port's device deployment and its parent) of one tagged interface.
+    """(port id, speed in Gbps, ids of the port's device deployment and its parent) of one switched interface.
 
     A physical port is itself; a port-channel is its member ports. Anything that is not a host-facing port,
     or whose speed its interface_type does not state or is below 1G (no ``ports_<speed>g`` meters it), yields nothing.
     """
-    if interface.get("typename") not in TAGGABLE_INTERFACE_KINDS or interface.get("role") in SERVICE_PORT_ROLES:
+    if interface.get("role") in SERVICE_PORT_ROLES:
         return []
     scope = deployment_scope_ids((interface.get("device") or {}).get("deployment"))
     physical = [interface] if interface["typename"] == "DcimPhysicalInterface" else interface.get("member_interfaces")

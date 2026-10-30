@@ -23,7 +23,7 @@ async def fetch_interconnect_inventory(client: InfrahubClient, branch: str) -> d
                        "owner", "owner_id", "locations": [str],
                        "location_nodes": [location], "end_devices": [device],
                        "end_ids": [str], "ends": [(device, interface)]}],
-         "virtual": [{"id", "name", "kind", "owner", "owner_id", "locations": [str],
+         "virtual": [{"id", "name", "circuit_type", "owner", "owner_id", "locations": [str],
                       "location_nodes": [location], "end_devices": [device],
                       "ends": [(device, interface)], "end_nodes": [end],
                       "carrier": [str], "carriers": [carrier],
@@ -38,13 +38,12 @@ async def fetch_interconnect_inventory(client: InfrahubClient, branch: str) -> d
         "deployment_name", "deployment_parent_id"}, one per circuit end, in end order; the parent is the metro
         of a zone or virtual colocation deployment, None otherwise.
 
-        A virtual circuit's "kind" is its concrete kind (TopologyTunnelCircuit, TopologyInterconnectCircuit or
-        TopologyHandoffCircuit), "ends" its sorted (device, interface) pairs and "end_nodes" the same ends in query
+        A session circuit's "circuit_type" is its role (tunnel, dci or handoff), "ends" its sorted (device, interface) pairs and "end_nodes" the same ends in query
         order, each {"id", "device", "device_id", "interface", "kind", "address", "parent_id", "parent_name",
         "carriers", "cabled"}: the address ("10.255.128.0/31", None when unaddressed), the parent interface of a
         sub-interface, the carriers found on the port or on its parent (utils.circuit_underlay.port_underlay) and
         whether a cable terminates there (port_cabled). The "carrier" of the circuit is derived, never declared:
-        the circuit_ids of the physical circuits on its ends (derived_underlay), deduped and sorted, "carriers" the
+        the circuit_ids of the carrier circuits on its ends (derived_underlay), deduped and sorted, "carriers" the
         same circuits as {"id", "circuit_id", "status"}. A Handoff also carries "ip_namespace", "maximum_routes",
         "password" (its key's name), "cloud_endpoint" (the VIF's name) and the "cloud_endpoint_vlan" the VIF states;
         the other kinds have None for those.
@@ -73,11 +72,11 @@ async def fetch_interconnect_inventory(client: InfrahubClient, branch: str) -> d
                 for end in circuit.get("capabilities", []) or []
             ),
         }
-        for circuit in result.get("TopologyPhysicalCircuit", []) or []
+        for circuit in result.get("TopologyCarrierCircuit", []) or []
     ]
 
     virtual: list[dict[str, Any]] = [
-        _virtual_circuit(circuit) for circuit in result.get("TopologyVirtualCircuit", []) or []
+        _virtual_circuit(circuit) for circuit in result.get("TopologySessionCircuit", []) or []
     ]
 
     logger.info(
@@ -99,7 +98,7 @@ async def fetch_interconnect_inventory(client: InfrahubClient, branch: str) -> d
         logger.info(
             "  VC  %s [%s] owner=%s locations=%s ends=%s carrier=%s ns=%s cloud=%s",
             circuit["name"],
-            str(circuit["kind"]).removeprefix("Topology").removesuffix("Circuit"),
+            circuit["circuit_type"],
             circuit["owner"],
             circuit["locations"],
             circuit["ends"],
@@ -126,7 +125,7 @@ def _virtual_circuit(circuit: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": str(circuit.get("id") or ""),
         "name": str(circuit.get("name") or ""),
-        "kind": str(circuit.get("typename") or ""),
+        "circuit_type": str(circuit.get("circuit_type") or ""),
         "owner": (circuit.get("owner") or {}).get("name"),
         "owner_id": (circuit.get("owner") or {}).get("id"),
         "locations": sorted(str(loc.get("name") or "") for loc in circuit.get("locations", []) or []),

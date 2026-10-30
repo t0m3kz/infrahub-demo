@@ -2,10 +2,10 @@
 
 A virtual circuit's underlay is derived, never declared. A port is carried by
 
-- a TopologyPhysicalCircuit found in the ``capabilities`` of the port, or of its parent interface when the port is a
+- a TopologyCarrierCircuit found in the ``capabilities`` of the port, or of its parent interface when the port is a
   sub-interface (``parent_interface``: a handoff VLAN on a cage edge port rides the circuit that terminates on the
   parent): :func:`port_underlay`, :func:`derived_underlay` over every end, or
-- a DcimCable on the port or its parent: :func:`port_cabled`. A physical circuit needs two distinct facilities, so a
+- a DcimCable on the port or its parent: :func:`port_cabled`. A carrier circuit needs two distinct facilities, so a
   hop inside one facility (the gateway and the cage edge in one cage) is a cable, the project's rule for fibre
   pulled between two chassis in one facility. A cable has no status: a cabled port is always carried.
 
@@ -14,25 +14,26 @@ A virtual circuit's underlay is derived, never declared. A port is carried by
 ``cable`` (the cable's id, or None) when the query selects it on a DcimPhysicalInterface, and a sub-interface's
 ``parent_interface`` has its own ``cable``.
 
-The virtual circuit kind names live here once (strings, no protocols import): the generators, the check and the
-planner mapping all read :data:`SESSION_CIRCUIT_KINDS`. The two rules of a session end that the generator and the check
+The session circuit kind and its ``circuit_type`` values live here once (strings, no protocols import): the
+generators, the check and the planner mapping all read :data:`SESSION_CIRCUIT_TYPES`. The two rules of a session end that the generator and the check
 must agree on are here too: the overlay BGP processes of a device (:func:`overlay_processes`) and the VLAN of a
 ``<port>.<vlan>`` sub-interface (:func:`subinterface_vlan`).
 """
 
 from __future__ import annotations
 
-import asyncio
 import re
 from typing import Any
 
 DECOMMISSIONED = "decommissioned"
-PHYSICAL_CIRCUIT = "TopologyPhysicalCircuit"
-TUNNEL_CIRCUIT = "TopologyTunnelCircuit"
-INTERCONNECT_CIRCUIT = "TopologyInterconnectCircuit"
-HANDOFF_CIRCUIT = "TopologyHandoffCircuit"
-# The virtual circuit kinds that have a session generated (the tunnel circuit has none): a port is an end of at most one.
-SESSION_CIRCUIT_KINDS = (INTERCONNECT_CIRCUIT, HANDOFF_CIRCUIT)
+CARRIER_CIRCUIT = "TopologyCarrierCircuit"
+# One kind for every circuit that rides a carrier; its role is its ``circuit_type``.
+SESSION_CIRCUIT = "TopologySessionCircuit"
+DCI_TYPE = "dci"
+HANDOFF_TYPE = "handoff"
+TUNNEL_TYPE = "tunnel"
+# The circuit types that have a session generated (a tunnel has none): a port is an end of at most one.
+SESSION_CIRCUIT_TYPES = (DCI_TYPE, HANDOFF_TYPE)
 
 BGP_PROCESS = "ManagedBGP"
 OVERLAY_ROLE = "overlay"
@@ -66,16 +67,16 @@ def _port_and_parent(port: dict[str, Any]) -> tuple[dict[str, Any], dict[str, An
 
 
 def port_underlay(port: dict[str, Any]) -> list[dict[str, Any]]:
-    """The physical circuits terminating on one port, or on its parent interface when it is a sub-interface.
+    """The carrier circuits terminating on one port, or on its parent interface when it is a sub-interface.
 
     Each port's own ``capabilities`` list the entries that terminate on it (segments, peerings, other circuits
     too); a sub-interface has no carrier of its own, so its ``parent_interface`` is read as well, one level. The
-    TopologyPhysicalCircuit entries, deduplicated by id in first-seen order, whatever their status.
+    TopologyCarrierCircuit entries, deduplicated by id in first-seen order, whatever their status.
     """
     circuits: dict[str, dict[str, Any]] = {}
     for interface in _port_and_parent(port):
         for cap in interface.get("capabilities") or []:
-            if isinstance(cap, dict) and cap.get("typename") == PHYSICAL_CIRCUIT and cap.get("id"):
+            if isinstance(cap, dict) and cap.get("typename") == CARRIER_CIRCUIT and cap.get("id"):
                 circuits.setdefault(cap["id"], cap)
     return list(circuits.values())
 
@@ -86,7 +87,7 @@ def port_cabled(port: dict[str, Any]) -> bool:
 
 
 def has_carrier(port: dict[str, Any]) -> bool:
-    """The port is carried: a physical circuit (whatever its status) or a cable at the port or its parent."""
+    """The port is carried: a carrier circuit (whatever its status) or a cable at the port or its parent."""
     return bool(port_underlay(port)) or port_cabled(port)
 
 
@@ -95,7 +96,7 @@ def derived_underlay(circuit: dict[str, Any]) -> list[dict[str, Any]]:
 
     Only circuits: a cable is no entry here (nothing to wait for, nothing to chain). Limitations, all silent: a LAG
     or other logical port that is not a ``parent_interface`` of the port derives nothing; a middle hop of a chain that
-    touches none of the circuit's ports is not found; and a port removed from a physical circuit, or cabled after the
+    touches none of the circuit's ports is not found; and a port removed from a carrier circuit, or cabled after the
     virtual circuit exists, reruns nothing, so the virtual circuits that sat on it keep (or lack) their session until
     their next run.
 
@@ -112,13 +113,11 @@ def derived_underlay(circuit: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 async def session_circuits_on(client: Any, port_ids: list[str]) -> list[Any]:
-    """Every session circuit (interconnect or handoff) with one of ``port_ids`` among its ends.
+    """Every session circuit (dci or handoff) with one of ``port_ids`` among its ends.
 
-    One ``capabilities__ids`` query per kind, not one on the TopologyVirtualCircuit generic: that generic is a marker
-    (it has only ``name``, neither ``capabilities`` to filter on nor ``status`` to read), and a tunnel circuit shares
-    its ports by design so it must stay out. The kinds are read together. Nodes of both kinds, interconnects first.
+    A tunnel shares its ports by design (one gateway port serves many tunnels), so it stays out: the filter is on
+    ``circuit_type``, not on the kind.
     """
-    found = await asyncio.gather(
-        *(client.filters(kind=kind, capabilities__ids=port_ids) for kind in SESSION_CIRCUIT_KINDS)
+    return await client.filters(
+        kind=SESSION_CIRCUIT, capabilities__ids=port_ids, circuit_type__values=list(SESSION_CIRCUIT_TYPES)
     )
-    return [circuit for circuits in found for circuit in circuits]

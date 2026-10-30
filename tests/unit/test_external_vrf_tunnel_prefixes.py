@@ -34,8 +34,8 @@ def _raw_prefix(prefix: str, namespace: str = "PROD") -> dict[str, Any]:
 
 
 def _tunnels(*raw: dict[str, Any]) -> list[dict[str, Any]]:
-    """The cleaned TopologyTunnelCircuit root of raw edge-query nodes."""
-    return clean_data({"TopologyTunnelCircuit": {"edges": [{"node": n} for n in raw]}})["TopologyTunnelCircuit"]
+    """The cleaned TopologySessionCircuit root of raw edge-query nodes."""
+    return clean_data({"TopologySessionCircuit": {"edges": [{"node": n} for n in raw]}})["TopologySessionCircuit"]
 
 
 def _tunnel(
@@ -174,7 +174,7 @@ class TestEdgeQueryAndData:
 
     def test_the_edge_query_selects_the_tunnel_fields(self) -> None:
         """Owner, registered prefixes with their namespace and the device of each end port."""
-        selected = _selected_paths(_QUERIES / "config" / "edge.gql", "TopologyTunnelCircuit")
+        selected = _selected_paths(_QUERIES / "config" / "edge.gql", "TopologySessionCircuit")
         reads = [
             "owner.org_id",
             "owner.display_label",
@@ -183,7 +183,7 @@ class TestEdgeQueryAndData:
             "capabilities.device.name",
         ]
         assert not [item for item in reads if item not in selected]
-        assert {"owner", "registered_prefixes", "capabilities"} <= relationship_names("TopologyTunnelCircuit")
+        assert {"owner", "registered_prefixes", "capabilities"} <= relationship_names("TopologySessionCircuit")
 
     def test_a_cleaned_response_has_the_shape_the_helper_reads(self) -> None:
         """clean_data: owner dict with typename, registered_prefixes a list of dicts, capabilities device names."""
@@ -200,6 +200,6 @@ class TestEdgeQueryAndData:
         assert {"prefix": _ACME, "ip_namespace": "PROD"} == {
             key: by_kind["IpamPrefix"][0][key] for key in ("prefix", "ip_namespace")
         }
-        (tunnel,) = by_kind["TopologyTunnelCircuit"]
+        (tunnel,) = by_kind["TopologySessionCircuit"]
         assert tunnel["owner"] == "C001"
         assert tunnel["registered_prefixes"] == [[_ACME, "PROD"]]

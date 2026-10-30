@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from .firewall_context_spec import ContextSpec
     from .common import CommonGenerator
 
-from utils.limits import RESOURCE_LOCK, WAIT_FOR_PEER_GENERATOR
+from utils.limits import DEFAULT_NAMESPACE, RESOURCE_LOCK, WAIT_FOR_PEER_GENERATOR
 
 from .helpers.routing import underlay_pool_is_ipv6
 from .logger import GeneratorError
@@ -350,7 +350,7 @@ class PoolMixin:
         prefix_length: int,
         role: str,
         kind: Literal["address", "prefix"],
-        namespace: str = "default",
+        namespace: str = DEFAULT_NAMESPACE,
     ) -> Any:
         """Slice one prefix out of a bootstrap parent pool and upsert a pool around it.
 
@@ -477,7 +477,7 @@ class PoolMixin:
                 prefix_length=pool_size,
                 role=pool_name if pool_name in ["management", "technical", "loopback"] else pool_name.split("-")[-1],
                 kind="prefix" if is_prefix_pool else "address",
-                namespace="MANAGEMENT" if pool_name == "management" else "default",
+                namespace="MANAGEMENT" if pool_name == "management" else DEFAULT_NAMESPACE,
             )
             created_pools[pool_name] = new_pool
 

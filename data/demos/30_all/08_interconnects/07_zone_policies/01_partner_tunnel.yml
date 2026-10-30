@@ -1,9 +1,9 @@
 ---
 # Partner-acme B2B extranet: C001's IPsec tunnel between the shared SD-WAN gateway and the partner
-# Acme Logistics, as a TopologyTunnelCircuit (an inventory record: no address, no session; the
+# Acme Logistics, as a tunnel TopologySessionCircuit (an inventory record: no address, no session; the
 # partner's IPsec endpoint is configured by the partner and the gateway's by its orchestrator).
 # Most B2B partner integrations really are IPsec over the internet, not a private cross-connect, so
-# nothing here is a new dedicated physical circuit to the partner.
+# nothing here is a new dedicated carrier circuit to the partner.
 #
 # The partner is modelled the way the other parties are, as a stub the demo does not configure:
 #
@@ -60,10 +60,10 @@ spec:
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: TopologyPhysicalCircuit
+  kind: TopologyCarrierCircuit
   data:
     - circuit_id: "INET-ACME-COGENT"
-      member_of_groups: [physical_circuits]
+      member_of_groups: [carrier_circuits]
       name: "INET-ACME-COGENT"
       circuit_type: internet
       status: active
@@ -93,9 +93,11 @@ spec:
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: TopologyTunnelCircuit
+  kind: TopologySessionCircuit
   data:
     - name: "C001-PARTNER-ACME-FR2"
+      circuit_type: tunnel
+      member_of_groups: [virtual_circuits]
       status: active
       provider: "P035"
       owner: "C001"

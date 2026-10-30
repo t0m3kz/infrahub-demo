@@ -97,10 +97,13 @@ class TestGenerate:
     def _ready(*, added: int = 0, removed: int = 0) -> Any:
         gen = _gen_with_lock()
         gen._fetch_segment_vlan_state = AsyncMock(
-            return_value={"segment": {"id": "seg-1", "capabilities": []}, "activations": {}}
+            return_value={"segment": {"id": "seg-1", "switched_interfaces": []}, "activations": {}}
         )
         gen._reconcile_segment_interface_tags = AsyncMock(return_value=(added, removed))
-        gen._reconcile_segment_vlan_domains_locked = AsyncMock()
+        gen._reconcile_segment_vlan_domains_locked = AsyncMock(return_value=False)
+        # The VRF pass over the domains' devices has its own tests (test_vrf_callers.py).
+        gen.reconcile_vrfs = AsyncMock()
+        gen._domain_member_device_ids = AsyncMock(return_value=[])
         return gen
 
     def test_no_component_data_logs_error_and_returns(self) -> None:
@@ -299,7 +302,7 @@ class TestReconcileSegmentInterfaceTags:
         # One resolution for every host of the segment (a VM resolves to its host, deduped).
         gen._customer_facing_target_ids.assert_awaited_once_with(["dev-1", "dev-2"])
         segment_obj.add_relationships.assert_awaited_once_with(
-            relation_to_update="capabilities", related_nodes=["if-a", "po-b"]
+            relation_to_update="switched_interfaces", related_nodes=["if-a", "po-b"]
         )
         segment_obj.remove_relationships.assert_not_awaited()
         segment_obj.save.assert_not_called()
@@ -315,10 +318,10 @@ class TestReconcileSegmentInterfaceTags:
 
         assert result == (1, 1)
         segment_obj.add_relationships.assert_awaited_once_with(
-            relation_to_update="capabilities", related_nodes=["if-new"]
+            relation_to_update="switched_interfaces", related_nodes=["if-new"]
         )
         segment_obj.remove_relationships.assert_awaited_once_with(
-            relation_to_update="capabilities", related_nodes=["if-old"]
+            relation_to_update="switched_interfaces", related_nodes=["if-old"]
         )
 
     def test_port_still_used_by_another_component_is_kept(self) -> None:
@@ -345,10 +348,10 @@ class TestReconcileSegmentInterfaceTags:
 
         gen.client.get.assert_awaited_once_with(kind=ManagedVxlanSegment, id="seg-1")
         segment_obj.add_relationships.assert_awaited_once_with(
-            relation_to_update="capabilities", related_nodes=["if-new"]
+            relation_to_update="switched_interfaces", related_nodes=["if-new"]
         )
         segment_obj.remove_relationships.assert_awaited_once_with(
-            relation_to_update="capabilities", related_nodes=["if-old"]
+            relation_to_update="switched_interfaces", related_nodes=["if-old"]
         )
 
     def test_unchanged_tags_read_no_segment_node(self) -> None:

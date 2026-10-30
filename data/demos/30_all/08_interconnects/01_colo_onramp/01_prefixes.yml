@@ -9,7 +9,7 @@
 # The dark fibre point-to-points are not here: add_virtual_circuit allocates them
 # from the DCI-Technical-IPv6 pool (data/bootstrap/20_dci_pools.yml) for every
 # Interconnect circuit (../03_virtual_circuits/01_dci_interconnects.yml), one per fibre
-# of 03_physical_circuits.yml.
+# of 03_carrier_circuits.yml.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

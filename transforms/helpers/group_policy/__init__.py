@@ -87,7 +87,7 @@ own data center, cut to the VRFs the device carries (a VTEP with none of them st
 enables GPO, with no groups or contracts). Every VTEP of the data
 center renders the same class-maps, policy-maps and contracts for a VRF; only the
 selectors differ, since they name things of one device: ``match vlan`` for a segment
-group (a VLAN ID is per VLAN domain) and ``match vlan <vlan> interface <port>`` for a
+group (a VLAN ID is per device) and ``match vlan <vlan> interface <port>`` for a
 component group, rendered on the VTEP that owns the host-facing port only.
 It renders nothing (None) unless the data center is a reference fabric of a
 kind with a renderer, and refuses a row it cannot number, a tag shared by two

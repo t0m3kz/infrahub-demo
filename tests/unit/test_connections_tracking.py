@@ -348,6 +348,56 @@ class TestEnsureVlanSubinterfaceExtraCapabilities:
         assert [c.args[0] for c in node.stored.capabilities.add.call_args_list] == [{"id": "cap-1"}]
 
     @pytest.mark.asyncio
+    async def test_inline_segment_is_written_in_the_upsert_and_not_as_a_capability(self) -> None:
+        """The inline segment rides in the sub-interface data; no capability is read or linked for it."""
+        gen = _make_gen()
+        node = _sub_iface(existing_peer_ids=[], gen=gen)
+
+        await gen.ensure_vlan_subinterface(
+            device_id="d", device_name="D", trunk_iface=_trunk(), vlan_id_value=210, inline_segment_id="seg-1"
+        )
+
+        data = gen.client.create.await_args.kwargs["data"]
+        assert data["inline_segment"] == {"id": "seg-1"}
+        node.save.assert_awaited_once_with(**_TRACKED)
+        gen.client.get.assert_not_awaited()
+        node.stored.capabilities.add.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_inline_segment_rerun_is_idempotent_and_contexts_stay_capabilities(self) -> None:
+        """Two runs send the same payload (the upsert by name replaces the value); contexts still go to capabilities."""
+        gen = _make_gen()
+        node = _sub_iface(existing_peer_ids=["ctx-1"], gen=gen)
+        kwargs: dict[str, Any] = {
+            "device_id": "d",
+            "device_name": "D",
+            "trunk_iface": _trunk(),
+            "vlan_id_value": 210,
+            "inline_segment_id": "seg-2",
+            "capability_ids": ["ctx-1"],
+        }
+
+        await gen.ensure_vlan_subinterface(**kwargs)
+        await gen.ensure_vlan_subinterface(**kwargs)
+
+        payloads = [c.kwargs["data"] for c in gen.client.create.await_args_list]
+        assert payloads[0] == payloads[1]
+        assert payloads[0]["inline_segment"] == {"id": "seg-2"}
+        assert "capabilities" not in payloads[0]
+        node.stored.capabilities.add.assert_not_called()
+        node.stored.save.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_no_inline_segment_leaves_the_field_out_of_the_payload(self) -> None:
+        """A context leg sends no inline_segment, so an existing value is never cleared by it."""
+        gen = _make_gen()
+        _sub_iface(existing_peer_ids=[], gen=gen)
+
+        await self._run(gen, [])
+
+        assert "inline_segment" not in gen.client.create.await_args.kwargs["data"]
+
+    @pytest.mark.asyncio
     async def test_a_failed_capability_read_is_logged_and_returns_none(self) -> None:
         """The helper's error policy is unchanged: a failure is logged as an error and the result is None."""
         gen = _make_gen()

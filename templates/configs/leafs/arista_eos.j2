@@ -55,19 +55,13 @@ interface Port-Channel{{ interface.lag_id }}
 {%- if interface.minimum_links and interface.minimum_links > 1 %}
    port-channel min-links {{ interface.minimum_links }}
 {%- endif %}
+{%- include 'common/arista_eos_mlag_id.j2' %}
 {%- set eos_ifname = 'Port-Channel' ~ interface.lag_id %}
 {%- include 'common/arista_eos_interface_ip.j2' %}
    no shutdown
 {% endfor %}
 
-{#- Physical member interfaces — bind to their LAG -#}
-{%- for lag in interfaces if lag.lag_id is defined and lag.member_interfaces is defined and lag.role != 'mlag-peer' %}
-{%- for member_name in lag.member_interfaces %}
-interface {{ member_name }}
-   channel-group {{ lag.lag_id }} mode {{ lag.lacp_mode | default('active') }}
-   no shutdown
-{% endfor %}
-{%- endfor %}
+{%- include 'common/arista_eos_lag_members.j2' %}
 
 {#- All Interfaces (Loopback, Physical, Virtual) -#}
 {%- for interface in interfaces if interface.role != 'mlag-peer' %}

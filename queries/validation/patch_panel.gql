@@ -1,0 +1,30 @@
+# validate_patch_panel: every passive patch panel with its ports and, per port, the cable and both of its ends.
+# An end is a physical interface or another panel port (both DcimEndpoint), so only its id is read. Small on purpose: it
+# covers every panel, and the trace through the pairs (utils/cable_path.py) needs the ports of all of them.
+query patch_panel {
+  DcimPatchPanel {
+    edges {
+      node {
+        id
+        __typename
+        name { value }
+        rack { node { id } }
+        ports {
+          edges {
+            node {
+              id
+              name { value }
+              face { value }
+              cable {
+                node {
+                  id
+                  endpoints { edges { node { id } } }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

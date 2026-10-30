@@ -15,10 +15,10 @@
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: TopologyPhysicalCircuit
+  kind: TopologyCarrierCircuit
   data:
     - circuit_id: "INET-LUMEN-EQXFR2-GW"
-      member_of_groups: [physical_circuits]
+      member_of_groups: [carrier_circuits]
       name: "INET-LUMEN-EQXFR2-GW"
       circuit_type: internet
       status: active

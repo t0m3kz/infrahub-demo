@@ -117,7 +117,7 @@ def _segment(
         "id": seg_id,
         "name": _v(seg_id),
         "security_zone": {"node": {"name": _v(zone)}} if zone else {"node": None},
-        "capabilities": {"edges": list(ports)},
+        "switched_interfaces": {"edges": list(ports)},
     }
     return {"node": {**node, "_footprints": footprints}}
 
@@ -422,7 +422,7 @@ def test_all_demo_footprints_are_metered() -> None:
     payload = _all_demo_payload()
     assert len(payload["TopologyCustomerDC"]["edges"]) == 10
     assert len(payload["ManagedVxlanSegment"]["edges"]) >= 10
-    ports = [p for s in payload["ManagedVxlanSegment"]["edges"] for p in s["node"]["capabilities"]["edges"]]
+    ports = [p for s in payload["ManagedVxlanSegment"]["edges"] for p in s["node"]["switched_interfaces"]["edges"]]
     assert ports and all(p["node"]["interface_type"]["value"].startswith("25gbase") for p in ports)
 
 

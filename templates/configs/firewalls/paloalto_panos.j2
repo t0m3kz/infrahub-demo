@@ -85,6 +85,12 @@ set address-group ag-{{ zone.name }} static [ any ]
 {%- endfor %}
 #
 {%- endif %}
+{%- if default_vr_interfaces %}
+# --- Virtual router interfaces ---
+{%- for iface_name in default_vr_interfaces %}
+set network virtual-router default interface {{ iface_name }}
+{%- endfor %}
+{%- endif %}
 {%- if static_routes %}
 #
 # --- Static Routes (return path to leaf per zone) ---

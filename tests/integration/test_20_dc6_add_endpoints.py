@@ -363,7 +363,7 @@ class TestDC6AddEndpoints(TestInfrahubDockerWithClient):
             f"switches {SCENARIO_ENDPOINT_SERVER} is cabled to: {sorted(cabled_switches)} (tagged: {sorted(tagged)})"
         )
         logging.info(
-            "Segment %s: %d VLAN domain record(s), tagged %s",
+            "Segment %s: %d row(s), tagged %s",
             SCENARIO_ENDPOINT_SEGMENT,
             len(records),
             sorted(tagged),

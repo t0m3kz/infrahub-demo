@@ -17,7 +17,7 @@ from typing import Any
 import pytest
 
 from tasks import ALL_DEMO_DATA
-from tests.integration.demo_data import BOOTSTRAP, ROOT, Declared, declared, distinct, name
+from tests.integration.demo_data import BOOTSTRAP, ROOT, Declared, declared, declared_session, distinct, name
 from utils.exchange_transit import INTERNET_ZONE
 
 _ALL = ROOT / ALL_DEMO_DATA
@@ -74,7 +74,7 @@ def _tunnel_registered_prefixes(owner: str) -> set[tuple[str, str]]:
     """(prefix, namespace) of the ``registered_prefixes`` of every tunnel circuit owned by ``owner``."""
     return {
         (prefix[0], prefix[1])
-        for tunnel in _by_name("TopologyTunnelCircuit").values()
+        for tunnel in distinct(declared_session("tunnel", _ALL))
         if tunnel.item.get("owner") == owner
         for prefix in tunnel.item.get("registered_prefixes") or []
     }

@@ -116,9 +116,10 @@ spec:
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: TopologyHandoffCircuit
+  kind: TopologySessionCircuit
   data:
     - name: "HANDOFF-FR2-SDWAN-GW1-PROD"
+      circuit_type: handoff
       member_of_groups: [virtual_circuits]
       status: active
       provider: "P035"

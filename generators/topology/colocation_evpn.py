@@ -116,7 +116,7 @@ class ColocationEvpnMixin:
           gets). Whichever zone or virtual colocation runs first draws it; the
           others find it by its description;
         * an overlay ManagedBGP per edge in that ASN, so the DCI peerings
-          (add_virtual_circuit, for a TopologyInterconnectCircuit) have a
+          (add_virtual_circuit, for a TopologySessionCircuit of type dci) have a
           process to attach to;
         * an IPv6 VTEP loopback per edge (LOOPBACK_IPV6_SLOT).
 

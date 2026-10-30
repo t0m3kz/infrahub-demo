@@ -13,7 +13,7 @@
 # routers that peer with us).
 #
 # Created before ../05_cloud_endpoints/00_vif_handoff.yml, whose sub-interface references the AWS router
-# by device name, and before 03_physical_circuits.yml and 05_cage_cabling.yml (this directory), whose
+# by device name, and before 03_carrier_circuits.yml and 05_cage_cabling.yml (this directory), whose
 # cross-connects and cable end on these routers' et-0/0/0. `deployment` is the router's facility:
 # add_circuit derives each cross-connect's far end from it (the circuit data lists only the cage):
 #

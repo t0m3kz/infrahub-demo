@@ -8,6 +8,17 @@ from generators.helpers.naming import sdwan_edge_name
 from .all_demo_constants import ALL_DEMO_DC_NAMES, _all_demo
 from .demo_data import Declared, name, parent_name, render, schema
 
+#: The `circuit_type` values of a TopologySessionCircuit (its role); the constants are used by every consumer.
+TUNNEL_TYPE = "tunnel"
+INTERCONNECT_TYPE = "dci"
+HANDOFF_TYPE = "handoff"
+
+
+def _session_circuits(circuit_type: str) -> list[Declared]:
+    """The declared TopologySessionCircuit objects of one `circuit_type`."""
+    return [c for c in _all_demo("TopologySessionCircuit") if c.value("circuit_type") == circuit_type]
+
+
 # ---------------------------------------------------------------------------
 # 30_all — interconnect and tenant-service expectations (test_62)
 # ---------------------------------------------------------------------------
@@ -21,17 +32,17 @@ _SDWAN_OFFICES: list[Declared] = [
 ]
 
 
-# Physical circuits are pure carriers, all declared in the data except the office underlays: the dark fibres and
+# Carrier circuits are pure carriers, all declared in the data except the office underlays: the dark fibres and
 # cross-connects of 08_interconnects/01_colo_onramp (each DC has one fibre to each of its metro's two border gateways:
 # DC10/DC11 -> EQX FR2 (eg-fr201 and eg-fr202), DC12 -> EQX PA4 (eg-pa401 and eg-pa402); cross-connects: AWS
 # eu-central-1, Azure westeurope, Megaport MCR), the shared transit circuits of 06_internet, the shared gateway's own
 # access (08_gateway_access) and the partner's access (07_zone_policies), plus one generated underlay per SD-WAN office.
 _DECLARED_CIRCUIT_TYPE_COUNTS: dict[str, int] = {
-    circuit_type: len([c for c in _all_demo("TopologyPhysicalCircuit") if c.value("circuit_type") == circuit_type])
+    circuit_type: len([c for c in _all_demo("TopologyCarrierCircuit") if c.value("circuit_type") == circuit_type])
     for circuit_type in ("dark_fiber", "cross_connect", "internet")
 }
 
-ALL_DEMO_PHYSICAL_CIRCUIT_TYPES: dict[str, int] = {
+ALL_DEMO_CARRIER_CIRCUIT_TYPES: dict[str, int] = {
     **_DECLARED_CIRCUIT_TYPE_COUNTS,
     "internet": _DECLARED_CIRCUIT_TYPE_COUNTS["internet"] + len(_SDWAN_OFFICES),
 }
@@ -49,7 +60,7 @@ ALL_DEMO_DCI_CIRCUITS: dict[str, tuple[str, tuple[tuple[str, str], tuple[str, st
             (str(circuit.item["capabilities"][1][0]), str(circuit.item["capabilities"][1][1])),
         ),
     )
-    for circuit in _all_demo("TopologyInterconnectCircuit")
+    for circuit in _session_circuits(INTERCONNECT_TYPE)
 }
 
 
@@ -223,10 +234,10 @@ INTERNET_ROUTE_TARGET = "60002:60002"
 
 
 class VirtualCircuitExpectation(TypedDict):
-    """What one virtual circuit (a Tunnel, Interconnect or Handoff kind) in 30_all must look like."""
+    """What one session circuit (a tunnel, dci or handoff `circuit_type`) in 30_all must look like."""
 
-    #: TopologyTunnelCircuit, TopologyInterconnectCircuit or TopologyHandoffCircuit: the role IS the kind.
-    kind: str
+    #: The `circuit_type` of the TopologySessionCircuit: tunnel, dci or handoff.
+    circuit_type: str
     #: The owning customer's name; None for the shared on-ramp circuits that belong to no single customer.
     owner: str | None
     #: The circuit's locations, sorted. Authored for a declared circuit, `(office, the gateway's zone)` for the tunnel
@@ -235,7 +246,7 @@ class VirtualCircuitExpectation(TypedDict):
     #: The (device, interface) ends in `capabilities`, sorted. A Handoff end is the `<port>.<vlan>` sub-interface, a
     #: Tunnel's the gateway's public port and the other device's uplink.
     ends: tuple[tuple[str, str], ...]
-    #: circuit_ids of the physical circuits derived from the ends (on the end port, or on its parent interface when it
+    #: circuit_ids of the carrier circuits derived from the ends (on the end port, or on its parent interface when it
     #: is a sub-interface), in end order, each once; never declared. Empty when the carrier is a cable or there is none.
     #: The derived list is compared sorted in test_02 (declared ones only: the generated INET-<office> is in no row).
     carrier: tuple[str, ...]
@@ -261,17 +272,11 @@ ALL_DEMO_SDWAN_GATEWAY_PUBLIC_PORT = "eth1"
 #: The circuit that carries the gateway's public port.
 ALL_DEMO_SDWAN_GATEWAY_ACCESS = "INET-LUMEN-EQXFR2-GW"
 
-TUNNEL_KIND = "TopologyTunnelCircuit"
-
-INTERCONNECT_KIND = "TopologyInterconnectCircuit"
-
-HANDOFF_KIND = "TopologyHandoffCircuit"
-
 
 def _sdwan_tunnel(office: Declared) -> tuple[str, VirtualCircuitExpectation]:
     """The tunnel add_sdwan_edge builds for one opted-in office, named as the generator names it.
 
-    `<office>-SDWAN-<the gateway's zone>`, a TopologyTunnelCircuit owned by the office's customer, located at the
+    `<office>-SDWAN-<the gateway's zone>`, a tunnel TopologySessionCircuit owned by the office's customer, located at the
     office and the gateway's zone, ending on the gateway's public port and the edge uplink. Each end rides its own
     internet access: the edge uplink `INET-<office>`, the gateway's port the shared `INET-LUMEN-EQXFR2-GW`.
     """
@@ -279,7 +284,7 @@ def _sdwan_tunnel(office: Declared) -> tuple[str, VirtualCircuitExpectation]:
     gateway = str(office.item["sdwan_gateway"])
     zone = _DEVICE_DEPLOYMENTS[gateway]
     return f"{office_name}-SDWAN-{zone}", {
-        "kind": TUNNEL_KIND,
+        "circuit_type": TUNNEL_TYPE,
         "owner": _CUSTOMER_NAMES[render(office, "{{ owner__org_id__value }}")],
         "locations": tuple(sorted((office_name, zone))),
         "ends": tuple(
@@ -298,7 +303,7 @@ def _sdwan_tunnel(office: Declared) -> tuple[str, VirtualCircuitExpectation]:
 
 # The full virtual-circuit fabric: the generated tunnels (one per SD-WAN office), the partner tunnel, the six DCI
 # Interconnects (one per dark fibre, unowned, carrier = the fibre) and the five Handoffs (unowned shared on-ramps, all
-# PROD). `carrier` is the expected derived underlay: the physical circuits on the circuit's own ports, or on the parent
+# PROD). `carrier` is the expected derived underlay: the carrier circuits on the circuit's own ports, or on the parent
 # of a sub-interface; the data declares none.
 ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
     # One generated tunnel per SD-WAN office (_sdwan_tunnel).
@@ -306,7 +311,7 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
     # C001's partner extranet (08_interconnects/07_zone_policies/01_partner_tunnel.yml): the gateway's public port to
     # the partner stub router, each end on its own internet access; located at C001's office and the gateway's zone.
     "C001-PARTNER-ACME-FR2": {
-        "kind": TUNNEL_KIND,
+        "circuit_type": TUNNEL_TYPE,
         "owner": "Nordix Ltd.",
         "locations": ("C001-OFFICE", "FR2"),
         "ends": (("EQX-FR2-SDWAN-GW1", "eth1"), ("EXT-ACME-EDGE1", "et-0/0/0")),
@@ -317,7 +322,7 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
     # The DCI: ends = the fibre's two ports, locations = the fibre's two facilities.
     **{
         circuit_name: {
-            "kind": INTERCONNECT_KIND,
+            "circuit_type": INTERCONNECT_TYPE,
             "owner": None,
             "locations": tuple(sorted(locations)),
             "ends": ends,
@@ -367,7 +372,7 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
     # The AWS transit VIF of the FR2 cage (05_cloud_endpoints/00_vif_handoff.yml): the party sub-interface rides the
     # parent et-0/0/0 of the cross-connect.
     "HANDOFF-FR2-AWS-EUC1-PROD": {
-        "kind": HANDOFF_KIND,
+        "circuit_type": HANDOFF_TYPE,
         "owner": None,
         "locations": ("FR2", "eu-central-1"),
         "ends": (("EXT-AWS-DX-FR2", "et-0/0/0.1000"), ("eg-fr201", "Ethernet1/13.1000")),
@@ -377,7 +382,7 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
     },
     # The SD-WAN gateway's LAN handoff (04_sdwan/06_vrf_handoff.yml): both ends in one cage, carried by a cable.
     "HANDOFF-FR2-SDWAN-GW1-PROD": {
-        "kind": HANDOFF_KIND,
+        "circuit_type": HANDOFF_TYPE,
         "owner": None,
         "locations": ("FR2",),
         "ends": (("EQX-FR2-SDWAN-GW1", "eth0.1900"), ("eg-fr201", "Ethernet1/12.1900")),
@@ -389,7 +394,7 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
     # Equinix Fabric hop cage -> NE (carried by the cable to the Fabric port, the NE end needs none) and the NE ->
     # AWS hop whose party end rides the same cross-connect as the FR2 VIF.
     "HANDOFF-FR2-AMNE-PROD": {
-        "kind": HANDOFF_KIND,
+        "circuit_type": HANDOFF_TYPE,
         "owner": None,
         "locations": ("AM-NE", "FR2"),
         "ends": (("eg-am-ne01", "Ethernet1/1.1200"), ("eg-fr201", "Ethernet1/1.1200")),
@@ -398,7 +403,7 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
         "cloud_endpoint": None,
     },
     "HANDOFF-AMNE-AWS-EUC1-PROD": {
-        "kind": HANDOFF_KIND,
+        "circuit_type": HANDOFF_TYPE,
         "owner": None,
         "locations": ("AM-NE", "eu-central-1"),
         "ends": (("EXT-AWS-DX-FR2", "et-0/0/0.1100"), ("eg-am-ne02", "Ethernet1/1.1100")),
@@ -409,7 +414,7 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
     # The Megaport Cloud Router (05_cloud_endpoints/03_megaport_handoff.yml): the cloud-neutral example, carried by the
     # cross-connect to the MCR; no cloud endpoint. The Azure cross-connect has no handoff (idle carrier).
     "HANDOFF-PA4-MEGAPORT-PROD": {
-        "kind": HANDOFF_KIND,
+        "circuit_type": HANDOFF_TYPE,
         "owner": None,
         "locations": ("MCR-PAR1", "PA4"),
         "ends": (("EXT-MEGAPORT-MCR1", "et-0/0/0.1300"), ("eg-pa401", "Ethernet1/1.1300")),
@@ -420,26 +425,27 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
 }
 
 
-# Circuit placement (test_62 test_01/test_02). A physical circuit terminates on two facilities: the kinds that inherit
+# Circuit placement (test_62 test_01/test_02). A carrier circuit terminates on two facilities: the kinds that inherit
 # TopologyFacility (read from schemas/); a virtual circuit's locations are facilities too.
 ALL_DEMO_FACILITY_KINDS: frozenset[str] = frozenset(
     kind for kind, definition in schema().items() if "TopologyFacility" in definition.inherit_from
 )
 
 
-_DECLARED_PHYSICAL_CIRCUITS = {str(c.value("circuit_id")): c for c in _all_demo("TopologyPhysicalCircuit")}
+_DECLARED_CARRIER_CIRCUITS = {str(c.value("circuit_id")): c for c in _all_demo("TopologyCarrierCircuit")}
 
 _DECLARED_VIRTUAL_CIRCUITS = {
-    name(c): c for kind in (TUNNEL_KIND, INTERCONNECT_KIND, HANDOFF_KIND) for c in _all_demo(kind)
+    name(c): c
+    for circuit_type in (TUNNEL_TYPE, INTERCONNECT_TYPE, HANDOFF_TYPE)
+    for c in _session_circuits(circuit_type)
 }
 
 
-# circuit_id / name -> the locations the 30_all data authors. A physical circuit's other end is derived by add_circuit
+# circuit_id / name -> the locations the 30_all data authors. A carrier circuit's other end is derived by add_circuit
 # from its end devices' deployments, so the data lists only one place: the cage for the on-ramp circuits (add_circuit also
 # derives the zone from the edge's deployment, so an authored cage must be that zone), the ISP for the partner's access.
 ALL_DEMO_DECLARED_PHYSICAL_LOCATIONS: dict[str, tuple[str, ...]] = {
-    circuit_id: tuple(circuit.item.get("locations") or ())
-    for circuit_id, circuit in _DECLARED_PHYSICAL_CIRCUITS.items()
+    circuit_id: tuple(circuit.item.get("locations") or ()) for circuit_id, circuit in _DECLARED_CARRIER_CIRCUITS.items()
 }
 
 ALL_DEMO_DECLARED_VIRTUAL_LOCATIONS: dict[str, tuple[str, ...]] = {
@@ -449,10 +455,10 @@ ALL_DEMO_DECLARED_VIRTUAL_LOCATIONS: dict[str, tuple[str, ...]] = {
 
 
 # circuit_id / name -> the (device, interface) ports the data declares in `capabilities`. A virtual circuit's underlay is
-# derived from them: the physical circuits that terminate on its own ports.
+# derived from them: the carrier circuits that terminate on its own ports.
 ALL_DEMO_DECLARED_PHYSICAL_PORTS: dict[str, frozenset[tuple[str, str]]] = {
     circuit_id: frozenset((str(device), str(port)) for device, port in circuit.item.get("capabilities") or ())
-    for circuit_id, circuit in _DECLARED_PHYSICAL_CIRCUITS.items()
+    for circuit_id, circuit in _DECLARED_CARRIER_CIRCUITS.items()
 }
 
 ALL_DEMO_DECLARED_VIRTUAL_PORTS: dict[str, frozenset[tuple[str, str]]] = {
@@ -478,7 +484,7 @@ ALL_DEMO_HANDOFF_PARTY_ASNS: dict[str, tuple[str, int]] = {
             name(circuit),
             [str(device) for device, _ in circuit.item["capabilities"] if str(device) in _DECLARED_PROCESS_ASNS],
         )
-        for circuit in _all_demo(HANDOFF_KIND)
+        for circuit in _session_circuits(HANDOFF_TYPE)
     )
     if len(party) == 1
 }

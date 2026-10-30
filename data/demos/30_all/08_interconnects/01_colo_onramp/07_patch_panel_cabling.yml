@@ -1,0 +1,45 @@
+---
+# An isolated cross-connect through the patch panel: the second edge of the FR2 cage, eg-fr202, to a second Equinix
+# Fabric port (EXT-EQX-FABRIC-FR2 et-0/0/1) over jack 1 of PP-EQX-FR2-01:
+#
+#   eg-fr202 Ethernet1/2 --- front 1 | rear 1 --- EXT-EQX-FABRIC-FR2 et-0/0/1
+#
+# Both ports are free (`customer` role of Ethernet1/[1-7] and et-0/0/[0-3]); no circuit, session or segment rides them,
+# and the first Fabric cable (05_cage_cabling.yml, eg-fr201 Ethernet1/1) is untouched. Cables in data are never
+# generated. checks/patch_panel.py follows the path through the panel: front 1 and rear 1 are one jack.
+# An end given as a nested object is an upsert and the loader validates the mandatory fields of its kind, so each panel
+# port repeats the `connector` of the PP-24-LC template (lc-upc) that created it.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+    - name: "CBL-FR2-EG-FR202-PP01-F1"
+      type: smf
+      deployment: "FR2"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "eg-fr202"
+            name: "Ethernet1/2"
+        - kind: DcimPatchPanelPort
+          data:
+            panel: "PP-EQX-FR2-01"
+            face: "front"
+            name: "1"
+            connector: "lc-upc"
+
+    - name: "CBL-FR2-PP01-R1-EQX-FABRIC"
+      type: smf
+      deployment: "FR2"
+      endpoints:
+        - kind: DcimPatchPanelPort
+          data:
+            panel: "PP-EQX-FR2-01"
+            face: "rear"
+            name: "1"
+            connector: "lc-upc"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "EXT-EQX-FABRIC-FR2"
+            name: "et-0/0/1"

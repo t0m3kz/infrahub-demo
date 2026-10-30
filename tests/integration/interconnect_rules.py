@@ -11,9 +11,9 @@ from .all_demo_circuit_constants import (
     ALL_DEMO_FACILITY_KINDS,
     ALL_DEMO_SDWAN_GATEWAY_PUBLIC_PORT,
     ALL_DEMO_VIRTUAL_CIRCUITS,
-    HANDOFF_KIND,
-    INTERCONNECT_KIND,
-    TUNNEL_KIND,
+    HANDOFF_TYPE,
+    INTERCONNECT_TYPE,
+    TUNNEL_TYPE,
 )
 from .all_demo_firewall_constants import ALL_DEMO_TRANSIT_RESOURCES, transit_namespace_type
 
@@ -199,7 +199,7 @@ def _contiguous(hops: list[list[str]], start: str, finish: str) -> bool:
 
 def _tunnel_errors(circuit: dict[str, Any], physical_by_id: dict[str, dict[str, Any]]) -> list[str]:
     """A Tunnel: owned by its office's owner, one end on the gateway's public port in the gateway's zone, and every
-    end on a live internet physical circuit of its own (one with an end on an ISP): no shared path to be contiguous."""
+    end on a live internet carrier circuit of its own (one with an end on an ISP): no shared path to be contiguous."""
     name = circuit["name"]
     errors: list[str] = []
     locations = circuit["location_nodes"]
@@ -232,14 +232,14 @@ def _tunnel_errors(circuit: dict[str, Any], physical_by_id: dict[str, dict[str, 
         )
         if not internet:
             errors.append(
-                f"{name}: end {end['device']}:{end['interface']} rides no live internet physical circuit "
+                f"{name}: end {end['device']}:{end['interface']} rides no live internet carrier circuit "
                 f"(carriers {[carrier['circuit_id'] for carrier in end['carriers']]}): every end of a tunnel has its own"
             )
     return errors
 
 
 def _interconnect_errors(circuit: dict[str, Any], physical_by_id: dict[str, dict[str, Any]]) -> list[str]:
-    """An Interconnect (a DCI): unowned, two facilities, every end on a live physical circuit, and those circuits one
+    """An Interconnect (a DCI): unowned, two facilities, every end on a live carrier circuit, and those circuits one
     contiguous path between the two facilities. When one circuit carries it, it is pure fibre: its two ends are
     exactly the DCI's two ports."""
     name = circuit["name"]
@@ -252,7 +252,7 @@ def _interconnect_errors(circuit: dict[str, Any], physical_by_id: dict[str, dict
         errors.append(f"{name}: a DCI ends on facilities, but {strays} is not one")
     uncarried = [f"{end['device']}:{end['interface']}" for end in circuit["end_nodes"] if not _live(end["carriers"])]
     if uncarried:
-        errors.append(f"{name}: end(s) {uncarried} are on no live physical circuit")
+        errors.append(f"{name}: end(s) {uncarried} are on no live carrier circuit")
         return errors
     carriers: dict[str, dict[str, Any]] = {}
     for end in circuit["end_nodes"]:
@@ -285,7 +285,7 @@ def _interconnect_errors(circuit: dict[str, Any], physical_by_id: dict[str, dict
 def _handoff_errors(circuit: dict[str, Any]) -> list[str]:
     """A Handoff: unowned, one or two facilities that are where its two ends are deployed, both ends VLAN
     sub-interfaces on one VLAN (the VIF's, when it has a cloud endpoint), at least one end carried by a live
-    physical circuit or a cable at the port or its parent, and its namespace stated."""
+    carrier circuit or a cable at the port or its parent, and its namespace stated."""
     name = circuit["name"]
     errors: list[str] = []
     locations = circuit["location_nodes"]
@@ -303,7 +303,7 @@ def _handoff_errors(circuit: dict[str, Any]) -> list[str]:
     if not circuit["ip_namespace"]:
         errors.append(f"{name}: no ip_namespace")
     if not any(_live(end["carriers"]) or end["cabled"] for end in circuit["end_nodes"]):
-        errors.append(f"{name}: no end is on a live physical circuit or a cable (at the port or its parent)")
+        errors.append(f"{name}: no end is on a live carrier circuit or a cable (at the port or its parent)")
     vlans = {_vlan(end["interface"]) for end in circuit["end_nodes"]}
     for end in circuit["end_nodes"]:
         if end["kind"] != "DcimVirtualInterface" or _vlan(end["interface"]) is None:
@@ -328,7 +328,7 @@ def _session_port_errors(virtual: list[dict[str, Any]]) -> list[str]:
     gateway port serves many tunnels)."""
     circuits_of_port: dict[str, list[str]] = {}
     for circuit in virtual:
-        if circuit["kind"] in (INTERCONNECT_KIND, HANDOFF_KIND):
+        if circuit["circuit_type"] in (INTERCONNECT_TYPE, HANDOFF_TYPE):
             for end in circuit["end_nodes"]:
                 circuits_of_port.setdefault(end["id"], []).append(circuit["name"])
     return [
@@ -345,9 +345,9 @@ def _environment_errors(virtual: list[dict[str, Any]]) -> list[str]:
     by_device: dict[str, tuple[str, list[tuple[str, str]]]] = {}
     for circuit in virtual:
         env_class: str | None = None
-        if circuit["kind"] == TUNNEL_KIND:
+        if circuit["circuit_type"] == TUNNEL_TYPE:
             env_class = PROD_TYPE
-        elif circuit["kind"] == HANDOFF_KIND and circuit["ip_namespace"]:
+        elif circuit["circuit_type"] == HANDOFF_TYPE and circuit["ip_namespace"]:
             namespace_type = transit_namespace_type(circuit["ip_namespace"])
             env_class = namespace_type if namespace_type in TENANT_NAMESPACE_TYPES else None
         if env_class is None:
@@ -377,8 +377,8 @@ def _expectation_errors(virtual: list[dict[str, Any]]) -> list[str]:
         circuit = by_name.get(name)
         if circuit is None:
             continue
-        if circuit["kind"] != expected["kind"]:
-            errors.append(f"{name}: kind '{circuit['kind']}', expected '{expected['kind']}'")
+        if circuit["circuit_type"] != expected["circuit_type"]:
+            errors.append(f"{name}: circuit_type '{circuit['circuit_type']}', expected '{expected['circuit_type']}'")
         if circuit["owner"] != expected["owner"]:
             errors.append(f"{name}: owner '{circuit['owner']}', expected '{expected['owner']}'")
         if circuit["locations"] != sorted(expected["locations"]):
@@ -391,7 +391,7 @@ def _expectation_errors(virtual: list[dict[str, Any]]) -> list[str]:
         if circuit["carrier"] != sorted(expected["carrier"]):
             errors.append(
                 f"{name}: carrier {circuit['carrier']}, expected {sorted(expected['carrier'])} — "
-                "the carrier is derived: the physical circuits on the circuit's own ports (or their parents)"
+                "the carrier is derived: the carrier circuits on the circuit's own ports (or their parents)"
             )
         if circuit["ip_namespace"] != expected["ip_namespace"]:
             errors.append(f"{name}: ip_namespace '{circuit['ip_namespace']}', expected '{expected['ip_namespace']}'")

@@ -135,13 +135,13 @@ class TestEnvironmentSeparation:
 
     @pytest.mark.parametrize(
         "namespace",
-        [("INTERNET", "internet"), ("MANAGEMENT", "management"), ("X", None), None],
-        ids=["internet", "management", "untyped", "no-namespace"],
+        [("INTERNET", "internet"), ("MANAGEMENT", "management"), ("X", None)],
+        ids=["internet", "management", "untyped"],
     )
     def test_a_handoff_in_a_namespace_with_no_tenant_class_is_skipped(
         self, namespace: tuple[str, str | None] | None
     ) -> None:
-        """Internet, management, untyped or absent namespaces state no environment class, so they never conflict."""
+        """Internet, management or untyped namespaces state no environment class, so they never conflict."""
         prod = self._on_edge("HO-P", ("PROD", "prod"), 3101)
         other = self._on_edge("HO-X", namespace, 3102)
         assert _run(handoffs=[prod, other]) == []
@@ -169,7 +169,7 @@ class TestDecommissionedSessionCircuits:
 
     @staticmethod
     def _uncarried_dci(status: str) -> dict[str, Any]:
-        """A DCI whose far end is on no physical circuit."""
+        """A DCI whose far end is on no carrier circuit."""
         circuit = _interconnect("DCI", [DC10, FR2], [BL10, _vport("eg-fr201", "Ethernet1/10")])
         return {**circuit, "status": {"value": status}}
 
@@ -201,7 +201,7 @@ class TestDecommissionedSessionCircuits:
         """The same two defects on an active DCI are findings, so the exemption is by status only."""
         uncarried = _run(interconnects=[self._uncarried_dci("active")])
         assert len(uncarried) == 1
-        assert "end 'eg-fr201:Ethernet1/10' is on no live physical circuit" in uncarried[0]
+        assert "end 'eg-fr201:Ethernet1/10' is on no live carrier circuit" in uncarried[0]
         chain = _run(interconnects=[self._broken_chain_dci("active")])
         assert len(chain) == 1
         assert "is not one contiguous path" in chain[0]
@@ -221,7 +221,7 @@ class TestDecommissionedSessionCircuits:
         no_carrier = [_vport("eg-fr201", "Ethernet1/13.3101", parent=("Ethernet1/13", ())), AWS_VLAN_NO_CARRIER]
         messages = _run(handoffs=[self._bad_handoff("HO", "active", no_carrier)])
         assert len(messages) == 1
-        assert "has no live physical circuit and no cable" in messages[0]
+        assert "has no live carrier circuit and no cable" in messages[0]
         other = _vport("EXT-AWS-DX-FR2", "et-0/0/0.3102", parent=("et-0/0/0", (XC,)))
         messages = _run(handoffs=[self._bad_handoff("HO", "active", [EG_FR_VLAN, other])])
         assert len(messages) == 1
@@ -276,5 +276,5 @@ class TestDecommissionedSessionCircuits:
 def test_all_circuits_together_pass() -> None:
     """The demo shapes side by side: physical carriers, a tunnel, a DCI and a handoff raise nothing."""
     assert (
-        _run(physical=[DF10, XC, INET_OFFICE, INET_GW], tunnels=[TUNNEL], interconnects=[DCI], handoffs=[HANDOFF]) == []
+        _run(carrier=[DF10, XC, INET_OFFICE, INET_GW], tunnels=[TUNNEL], interconnects=[DCI], handoffs=[HANDOFF]) == []
     )

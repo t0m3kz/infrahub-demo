@@ -1,4 +1,4 @@
-"""Unit tests for CheckEdge: a transit session needs a BGW edge with an INTERNET L3 VNI."""
+"""Unit tests for CheckEdge: an upstream transit VRF (the edge's internet instance) needs a BGW edge with an INTERNET L3 VNI."""
 
 from __future__ import annotations
 
@@ -14,37 +14,19 @@ _INTERNET_NS = {"name": "INTERNET", "l3_vni": 60002, "namespace_type": "internet
 def _edge(
     *, bgw: bool = True, rt_as: int | None = 65000, namespace: dict[str, Any] | None = _INTERNET_NS
 ) -> dict[str, Any]:
-    """Cleaned edge data with one VRF peering whose local address is in ``namespace``."""
+    """Cleaned edge data with one VRF instance of ``namespace``."""
     interfaces: list[dict[str, Any]] = [
         {"name": "Loopback0", "role": "loopback", "ip_address": {"address": "10.0.0.1/32"}}
     ]
     if bgw:
         interfaces.append({"name": "Loopback1", "role": "multisite-vip", "ip_address": {"address": "10.0.0.50/32"}})
-    capabilities = []
-    if namespace:
-        capabilities.append(
-            {
-                "typename": "ManagedBGP",
-                "peerings": [
-                    {
-                        "name": "TRANSIT-LUMEN-FRA1",
-                        "password": "x",
-                        "capabilities": [
-                            {
-                                "name": "Ethernet1/14",
-                                "device": {"name": "eg-fr201"},
-                                "ip_address": {"address": "203.0.113.0/31", "ip_namespace": namespace},
-                            },
-                            {"name": "eth1", "device": {"name": "EXT-LUMEN-FRA1"}},
-                        ],
-                    }
-                ],
-            }
-        )
+    # the edge's VRF memberships (device.shared_capabilities): the upstream transit is its instance of an internet namespace
+    vrfs = [{"typename": "ManagedVRF", "namespace": namespace}] if namespace else []
     return {
         "name": "eg-fr201",
         "interfaces": interfaces,
-        "capabilities": capabilities,
+        "capabilities": [],
+        "shared_capabilities": vrfs,
         "deployment": {"evpn_rt_as": {"asn": rt_as}} if rt_as else {},
     }
 
@@ -71,10 +53,10 @@ def test_transit_namespace_without_l3_vni_warns() -> None:
 
 
 @pytest.mark.parametrize(
-    "namespace", [None, {"name": "PROD", "l3_vni": 60001, "namespace_type": "prod"}], ids=["no-session", "tenant-vrf"]
+    "namespace", [None, {"name": "PROD", "l3_vni": 60001, "namespace_type": "prod"}], ids=["no-vrf", "tenant-vrf"]
 )
 def test_edge_without_transit_session_is_not_checked(namespace: dict[str, Any] | None) -> None:
-    """An edge without an internet VRF session is not a transit edge, BGW or not."""
+    """An edge without an internet VRF instance is not a transit edge, BGW or not."""
     assert warn_transit_without_internet_bgw(_edge(bgw=False, rt_as=None, namespace=namespace)) == []
 
 

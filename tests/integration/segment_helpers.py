@@ -140,8 +140,8 @@ async def fetch_vlan_domain_segments(
     max_attempts: int = 12,
     poll_interval: int = 5,
 ) -> dict[str, Any]:
-    """Poll for ManagedVlanDomainSegment records — per-(segment deployment, VLAN
-    domain) local VLAN ID realizations, read as the children of the segment's
+    """Poll for ManagedVlanDomainSegment records — per-(segment deployment, device)
+    local VLAN ID realizations, read as the children of the segment's
     ManagedSegmentDeployment records (the VNI of the deployment is returned with
     each) — see schemas/extensions/service/segment.yml.
 
@@ -188,7 +188,7 @@ async def fetch_vlan_domain_segments(
                             node {{
                                 id
                                 vlan_id {{ value }}
-                                vlan_domain {{
+                                device {{
                                     node {{
                                         id
                                         display_label
@@ -233,8 +233,8 @@ async def fetch_vlan_domain_segments(
             "vlan_id": row["vlan_id"]["value"],
             "vni": (row.get("vni") or {}).get("value"),
             "segment_name": ((row.get("segment") or {}).get("node") or {}).get("name", {}).get("value"),
-            "vlan_domain_id": (row.get("vlan_domain") or {}).get("node", {}).get("id"),
-            "vlan_domain_label": (row.get("vlan_domain") or {}).get("node", {}).get("display_label"),
+            "device_id": (row.get("device") or {}).get("node", {}).get("id"),
+            "device_label": (row.get("device") or {}).get("node", {}).get("display_label"),
         }
         for row in rows
     ]
@@ -247,10 +247,10 @@ async def fetch_vlan_domain_segments(
     )
     for r in records:
         logger.info(
-            "  - segment=%s, vlan_id=%s, vlan_domain=%s",
+            "  - segment=%s, vlan_id=%s, device=%s",
             r["segment_name"],
             r["vlan_id"],
-            r["vlan_domain_label"],
+            r["device_label"],
         )
 
     return {"record_count": record_count, "records": records}

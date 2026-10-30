@@ -1,7 +1,7 @@
 """The raw response of ``tests/integration/queries/get_interconnect_inventory.gql`` over the 30_all data.
 
 Built on the simulator of the placement check (``circuit_data_payloads``, shaped like ``circuit_placement.gql``) and
-completed with what the inventory query selects on top: the physical circuits' ``circuit_id`` and status, owner names,
+completed with what the inventory query selects on top: the carrier circuits' ``circuit_id`` and status, owner names,
 each end device's deployment, the interface kind, the parent of a sub-interface, a handoff's key and route limit. No
 address is set (nothing generated it offline): ``addresses`` puts them on named ports.
 """
@@ -13,12 +13,14 @@ from typing import Any
 from tests.integration.demo_data import declared, distinct, name
 from tests.unit.simulators.circuit_data_payloads import (
     ALL_DEMO,
+    CARRIER,
     HANDOFF,
     INTERCONNECT,
-    PHYSICAL,
+    SESSION,
     TUNNEL,
     _Model,
     build_payloads,
+    session_circuits,
 )
 
 
@@ -27,9 +29,9 @@ def _edges(nodes: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _with_circuit_id(carriers: list[dict[str, Any]]) -> None:
-    """The inventory query selects a physical circuit's `circuit_id`, the check query its `name`."""
+    """The inventory query selects a carrier circuit's `circuit_id`, the check query its `name`."""
     for carrier in carriers:
-        if carrier.get("__typename") == PHYSICAL:
+        if carrier.get("__typename") == CARRIER:
             carrier["circuit_id"] = carrier["name"]
 
 
@@ -44,7 +46,7 @@ def inventory_payload(
     organisations = {
         str(org.value("org_id")): str(org.value("name")) for org in distinct(declared("OrganizationCustomer", ALL_DEMO))
     }
-    status = {row["name"]: row["status"] for row in model.physical}
+    status = {row["name"]: row["status"] for row in model.carriers}
 
     def named_owner(circuit: dict[str, Any]) -> None:
         owner = circuit["owner"]["node"]
@@ -52,7 +54,7 @@ def inventory_payload(
             owner["name"] = {"value": organisations[owner["org_id"]["value"]]}
 
     physical = []
-    for edge in payloads[PHYSICAL]["edges"]:
+    for edge in payloads[CARRIER]["edges"]:
         circuit = edge["node"]
         circuit["circuit_id"] = circuit["name"]
         circuit["circuit_type"] = {"value": "dark_fiber"}
@@ -61,16 +63,18 @@ def inventory_payload(
         named_owner(circuit)
         physical.append(circuit)
 
-    maximum_routes = {name(h): h.item["maximum_routes"] for h in distinct(declared(HANDOFF, ALL_DEMO))}
-    passwords = {name(h): h.item["password"] for h in distinct(declared(HANDOFF, ALL_DEMO))}
+    maximum_routes = {name(h): h.item["maximum_routes"] for h in session_circuits(HANDOFF)}
+    passwords = {name(h): h.item["password"] for h in session_circuits(HANDOFF)}
     virtual = []
-    for kind in (TUNNEL, INTERCONNECT, HANDOFF):
-        for edge in payloads[kind]["edges"]:
+    for circuit_type in (TUNNEL, INTERCONNECT, HANDOFF):
+        for edge in payloads[SESSION]["edges"]:
             circuit = edge["node"]
-            circuit["__typename"] = kind
+            if circuit["circuit_type"]["value"] != circuit_type:
+                continue
+            circuit["__typename"] = SESSION
             if "owner" in circuit:
                 named_owner(circuit)
-            if kind == HANDOFF:
+            if circuit_type == HANDOFF:
                 circuit["maximum_routes"] = {"value": maximum_routes[circuit["name"]["value"]]}
                 circuit["password"] = {"node": {"name": {"value": passwords[circuit["name"]["value"]]}}}
             for port_edge in circuit["capabilities"]["edges"]:
@@ -89,4 +93,4 @@ def inventory_payload(
                     _with_circuit_id([e["node"] for e in parent["node"]["capabilities"]["edges"]])
             virtual.append(circuit)
 
-    return {"TopologyPhysicalCircuit": _edges(physical), "TopologyVirtualCircuit": _edges(virtual)}
+    return {"TopologyCarrierCircuit": _edges(physical), "TopologySessionCircuit": _edges(virtual)}

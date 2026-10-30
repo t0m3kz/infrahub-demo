@@ -1,12 +1,14 @@
-# The rows of checks/physical_circuit_ports.py: every physical circuit with the ports it terminates on (the one
+# The rows of checks/carrier_circuit_ports.py: every carrier circuit with the ports it terminates on (the one
 # capabilities edge, exactly two by schema) and, per end, its kind, name and device so a finding names the
-# port. Virtual circuits are not selected: a tunnel port carries several.
-query physical_circuit_ports {
-  TopologyPhysicalCircuit {
+# port, and its type (a virtual_connection may end on a NIC and shares its ports). Session circuits are not
+# selected: a tunnel port carries several.
+query carrier_circuit_ports {
+  TopologyCarrierCircuit {
     edges {
       node {
         id
         circuit_id { value }
+        circuit_type { value }
         capabilities {
           edges {
             node {

@@ -229,7 +229,8 @@ def _regular_handoff(
 def build_edge_unfiltered_appliance_data(*, device_name: str) -> dict:
     """A provider-hosted Network Edge router (CloudNetworkAppliance, cisco_xe, role edge) with two PROD handoffs.
 
-    The platform has no external-policy renderer, and a hosted appliance must still get its artifact, so the
+    Its base ports are DcimVirtualInterface NICs (the appliance has no hardware and no cable). The platform has
+    no external-policy renderer, and a hosted appliance must still get its artifact, so the
     external session renders with an UNFILTERED banner comment:
       - Ethernet1/1.1100 PROD: EXT-AWS-DX-FR2 (DcimPhysicalDevice, process_role unset): external, banner.
       - Ethernet1/2.1200 PROD: eg-fr201 (DcimPhysicalDevice) whose BGP process in the peering has
@@ -240,6 +241,14 @@ def build_edge_unfiltered_appliance_data(*, device_name: str) -> dict:
     )
     device_node = data["DcimDevice"]["edges"][0]["node"]
     device_node["__typename"] = "CloudNetworkAppliance"
+    # A hosted appliance has no hardware: its base ports are virtual NICs (no cable, no interface type, no MTU).
+    for edge in device_node["interfaces"]["edges"]:
+        port = edge["node"]
+        if port["__typename"] == "DcimPhysicalInterface":
+            port["__typename"] = "DcimVirtualInterface"
+            for physical_only in ("cable", "interface_type", "mtu", "segments"):
+                port.pop(physical_only, None)
+            port["inline_segment"] = _node(None)
     prod = _node({"name": _v("PROD"), "l3_vni": _v(60000), "namespace_type": _v("prod")})
     peerings = []
     for iface, local_ip, remote_ip, remote, remote_iface, remote_asn, name, far_role in (
@@ -543,7 +552,7 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
     # The tunnels registering space behind a gateway: C001's partner range behind GW1 (accepted from GW1's
     # session, announced to C001's other sessions), a provider-owned one (never accepted), a NON-PROD one
     # (not the PROD session's) and the office's own inventory tunnel, which registers nothing.
-    data["TopologyTunnelCircuit"] = _edges(
+    data["TopologySessionCircuit"] = _edges(
         [
             tunnel(_customer("C001"), (("198.18.0.0/24", "PROD"),), gw1, "EXT-ACME-EDGE1"),
             tunnel(_PROVIDER, (("198.19.0.0/24", "PROD"),), gw1, "EXT-PARTNER-EDGE1"),
@@ -598,7 +607,7 @@ def build_edge_bgw_pair_data(*, device_name: str, platform: str) -> dict:
     )
     # One segment on a firewall-role port gives the BGW its VXLAN block (an edge
     # without a stretched segment or an INTERNET session renders none).
-    seg = _make_inline_segment_node(vlan_domain_id=device_node["id"])
+    seg = _make_inline_segment_node(row_device_id=device_node["id"])
     interfaces.append(
         {
             "node": _make_interface(

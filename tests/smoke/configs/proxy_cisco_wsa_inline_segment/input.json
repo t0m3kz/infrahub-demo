@@ -168,75 +168,74 @@
                       }
                     }
                   },
-                  "capabilities": {
-                    "edges": [
-                      {
+                  "inline_segment": {
+                    "node": {
+                      "__typename": "ManagedVxlanSegment",
+                      "id": "seg-inline",
+                      "name": {
+                        "value": "c001-web-p"
+                      },
+                      "terminate_inline": {
+                        "value": true
+                      },
+                      "inline_service": {
                         "node": {
-                          "__typename": "ManagedVxlanSegment",
-                          "id": "seg-inline",
                           "name": {
-                            "value": "c001-web-p"
-                          },
-                          "terminate_inline": {
-                            "value": true
-                          },
-                          "inline_service": {
+                            "value": "DC3-PRX-01-HA"
+                          }
+                        }
+                      },
+                      "gateway": {
+                        "node": {
+                          "address": {
+                            "value": "10.2.0.1/24"
+                          }
+                        }
+                      },
+                      "capabilities": {
+                        "edges": [
+                          {
                             "node": {
-                              "name": {
-                                "value": "DC3-PRX-01-HA"
-                              }
-                            }
-                          },
-                          "gateway": {
-                            "node": {
-                              "address": {
-                                "value": "10.2.0.1/24"
-                              }
-                            }
-                          },
-                          "capabilities": {
-                            "edges": [
-                              {
+                              "device": {
                                 "node": {
-                                  "device": {
-                                    "node": {
-                                      "name": {
-                                        "value": "DC3-PRX-01"
-                                      }
-                                    }
-                                  },
-                                  "ip_address": {
-                                    "node": {
-                                      "address": {
-                                        "value": "10.2.0.2/24"
-                                      }
-                                    }
+                                  "name": {
+                                    "value": "DC3-PRX-01"
                                   }
                                 }
                               },
-                              {
+                              "ip_address": {
                                 "node": {
-                                  "device": {
-                                    "node": {
-                                      "name": {
-                                        "value": "DC3-PRX-02"
-                                      }
-                                    }
-                                  },
-                                  "ip_address": {
-                                    "node": {
-                                      "address": {
-                                        "value": "10.2.0.3/24"
-                                      }
-                                    }
+                                  "address": {
+                                    "value": "10.2.0.2/24"
                                   }
                                 }
                               }
-                            ]
+                            }
+                          },
+                          {
+                            "node": {
+                              "device": {
+                                "node": {
+                                  "name": {
+                                    "value": "DC3-PRX-02"
+                                  }
+                                }
+                              },
+                              "ip_address": {
+                                "node": {
+                                  "address": {
+                                    "value": "10.2.0.3/24"
+                                  }
+                                }
+                              }
+                            }
                           }
-                        }
+                        ]
                       }
-                    ]
+                    }
+                  },
+                  "capabilities": {
+                    "edges": []
                   }
                 }
               }

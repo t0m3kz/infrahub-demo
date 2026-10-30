@@ -8,6 +8,7 @@ from typing import Any
 from transforms.helpers.bgp_external import registered_by_attachment
 from transforms.helpers.group_policy import get_vrf_contracts, rule_groups, segment_groups
 from transforms.helpers.policy import rule_enabled, segment_flows
+from utils.circuit_underlay import SESSION_CIRCUIT
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import (
     EXCHANGE_PEERS,
@@ -210,7 +211,7 @@ class CheckSegmentSecurity(WarningCheck):
         space = _reachable_space(
             segments,
             cleaned.get("TopologyCustomerOffice"),
-            cleaned.get("TopologyTunnelCircuit"),
+            cleaned.get(SESSION_CIRCUIT),
             cleaned.get("CloudVirtualInterface"),
         )
         environments = {segment["id"]: segment.get("environment") for segment in segments if segment.get("id")}

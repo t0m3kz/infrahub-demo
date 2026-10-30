@@ -31,7 +31,7 @@ rendered config; each is a property of data that spans topologies.
    held to the same overlap rule as a VPC block: inside one namespace it
    overlaps no VPC block, no other office's LAN and no on-prem prefix. These
    are the routes an office may announce into its VRF over SD-WAN. The same
-   holds for a tunnel's `TopologyTunnelCircuit.registered_prefixes` (a B2B
+   holds for a tunnel's `TopologySessionCircuit.registered_prefixes` (a B2B
    partner's range reached through the SD-WAN gateway): PROD, no overlap.
 7. Registered-prefix owners. The colocation edge announces to and accepts from
    an external BGP peer only prefixes whose owner is an OrganizationCustomer,
@@ -84,6 +84,7 @@ from transforms.helpers.bgp_external import (
     registered_by_attachment,
     registered_by_namespace,
 )
+from utils.circuit_underlay import SESSION_CIRCUIT
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import INTERNET_TYPE, PROD_TYPE, namespace_type_for_environment
 from utils.ownership import customer_owner, ownership_conflicts
@@ -131,7 +132,7 @@ class CheckRoutingInvariants(WarningCheck):
         self._validate_tgw_route_tables(cleaned.get("CloudTransitGatewayAttachment") or [], vif_types)
         networks = cleaned.get("CloudVirtualNetwork") or []
         offices = cleaned.get("TopologyCustomerOffice") or []
-        tunnels = cleaned.get("TopologyTunnelCircuit") or []
+        tunnels = cleaned.get(SESSION_CIRCUIT) or []
         aggregates = _vpc_aggregates(networks) + _office_aggregates(offices) + _tunnel_aggregates(tunnels)
         self._validate_aggregate_namespaces(aggregates)
         self._validate_subnets_in_vpc(networks, cleaned.get("CloudNetworkSegment") or [])

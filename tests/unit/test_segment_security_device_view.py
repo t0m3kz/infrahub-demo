@@ -37,6 +37,7 @@ from tests.smoke.fixture_builders.group_policy import (
     gpo_segment,
     gpo_view,
 )
+from tests.smoke.fixture_builders.vrf import with_vrf_objects
 from transforms.common import BaseDeviceTransform
 from transforms.config.access_leaf import AccessLeaf
 from transforms.config.border_leaf import BorderLeaf
@@ -292,7 +293,7 @@ class TestDispatcher:
     def _context(raw: dict, root_dir: Path) -> dict[str, Any]:
         transform = Leaf.__new__(Leaf)
         transform.root_directory = str(root_dir)
-        device, roots, platform = transform._device_and_platform(copy.deepcopy(raw))
+        device, roots, platform = transform._device_and_platform(with_vrf_objects(transform, raw))
         device["segment_deployments"] = transform._device_activations(device)
         return transform._template_context(device, platform or "", roots)
 

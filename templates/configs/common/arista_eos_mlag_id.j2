@@ -1,0 +1,10 @@
+{#- Expects `interface` in scope. `interface.mlag_id` is the lag_id of a host-facing port-channel of an MLAG pair
+    (transforms/helpers/vxlan.py), the same on both peers; it is never set on the peer-link.
+    D: Arista EOS User Manual, Multi-chassis Link Aggregation (arista.com/en/um-eos/eos-multi-chassis-link-aggregation),
+    "MLAG Interface Configuration Commands": `mlag <id>` under `interface Port-Channel <n>` (the manual's example is
+    `mlag 12` under `interface port-channel 20`). "Configuring MLAG Services": "Port channels configured as an MLAG
+    must have identical port channel numbers", and the best practice is to set the MLAG ID to the port channel
+    number, which is what lag_id is on both peers. The peer-link is bound by `peer-link` (arista_eos_mlag.j2). -#}
+{%- if interface.mlag_id is defined %}
+   mlag {{ interface.mlag_id }}
+{%- endif -%}

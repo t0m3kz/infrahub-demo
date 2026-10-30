@@ -192,7 +192,12 @@ class TestLeafPbrRules:
     @pytest.mark.parametrize("role", sorted(BORDER_ROLES))
     def test_border_gateway_activations_render_without_tenant_policy(self, platform: str, role: str) -> None:
         """A BGW's hostless stitched segments keep their VLAN, VNI and SVI but are no ACL/PBR input."""
-        data = _device_data()
+        data = _device_data(
+            interfaces=[{"name": "Vlan100", "role": "svi", "vrf": {"namespace": {"name": "PROD"}}}],
+        )
+        data["shared_capabilities"] = [
+            {"typename": "ManagedVRF", "namespace": {"name": "PROD", "l3_vni": 50000, "namespace_type": "prod"}}
+        ]
         data["segment_deployments"] = [self._gateway_activation(100, border_gateway=True)]
         pbr, acl = self._policy_for_every_activation()
 
@@ -255,14 +260,12 @@ class TestLeafPbrRules:
             "segment_deployments": [
                 {
                     "vni": 10100,
-                    "vlan_domain_segments": [{"vlan_id": 100, "vlan_domain": {"id": "dev-1"}}],
+                    "vlan_domain_segments": [{"vlan_id": 100, "device": {"id": "dev-1"}}],
                     "segment": {"id": "seg-100", "stretch_scope": "dc_pair"},
                 }
             ]
         }
-        found = transform._collect_border_gateway_activations(
-            deployment, device_id="dev-1", device_capabilities=[], seen=set()
-        )
+        found = transform._collect_border_gateway_activations(deployment, device_id="dev-1", seen=set())
 
         assert [(a["vlan_id"], a["border_gateway"]) for a in found] == [(100, True)]
 

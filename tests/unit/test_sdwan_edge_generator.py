@@ -147,7 +147,7 @@ def _port(port_id: str, name: str, *, held_by: str | None = None) -> Any:
 
 
 def _existing_circuit(*port_ids: str) -> Any:
-    """A TopologyPhysicalCircuit as the by-name lookup returns it, ending on ``port_ids``."""
+    """A TopologyCarrierCircuit as the by-name lookup returns it, ending on ``port_ids``."""
     circuit = MagicMock(id="inet-1")
     circuit.capabilities = MagicMock(peers=[MagicMock(id=port_id) for port_id in port_ids])
     return circuit
@@ -282,21 +282,22 @@ class TestGenerateHappyPath:
         create_kinds = [call.kwargs["kind"] for call in gen.client.create.call_args_list]
         assert [k.__name__ for k in create_kinds] == [
             "DcimPhysicalDevice",
-            "TopologyPhysicalCircuit",
-            "TopologyTunnelCircuit",
+            "TopologyCarrierCircuit",
+            "TopologySessionCircuit",
         ]
         gen.client.get.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_only_the_underlay_circuit_joins_a_generator_target_group(self) -> None:
-        """INET-<office> joins physical_circuits so add_circuit runs for it; the tunnel is in no group (inventory only)."""
+    async def test_each_circuit_joins_the_target_group_of_its_generator(self) -> None:
+        """INET-<office> joins carrier_circuits so add_circuit runs for it; the tunnel joins virtual_circuits, whose
+        created-trigger raises for a non-member (add_virtual_circuit builds no session for a tunnel)."""
         gen = self._wire_full_success()
 
         await gen.generate(_office_payload())
 
         internet_data, tunnel_data = (call.kwargs["data"] for call in gen.client.create.call_args_list[1:3])
-        assert internet_data["member_of_groups"] == [{"hfid": ["physical_circuits"], "kind": "CoreStandardGroup"}]
-        assert "member_of_groups" not in tunnel_data
+        assert internet_data["member_of_groups"] == [{"hfid": ["carrier_circuits"], "kind": "CoreStandardGroup"}]
+        assert tunnel_data["member_of_groups"] == [{"hfid": ["virtual_circuits"], "kind": "CoreStandardGroup"}]
 
     @pytest.mark.asyncio
     async def test_new_edge_sends_object_template(self) -> None:
@@ -396,22 +397,24 @@ class TestGenerateHappyPath:
 
     @pytest.mark.asyncio
     async def test_tunnel_is_an_inventory_record_of_the_office(self) -> None:
-        """A TopologyTunnelCircuit owned by the office's owner, active, from the SD-WAN operator, in no generator
-        group, with no tunnel id, link type, encryption or session attribute."""
+        """A TopologySessionCircuit of type tunnel owned by the office's owner, active, from the SD-WAN operator, in the
+        virtual_circuits group, with no tunnel id, link type, encryption, handoff or session attribute."""
         gen = self._wire_full_success()
 
         await gen.generate(_office_payload())
 
         tunnel_call = gen.client.create.call_args_list[2]
-        assert tunnel_call.kwargs["kind"].__name__ == "TopologyTunnelCircuit"
+        assert tunnel_call.kwargs["kind"].__name__ == "TopologySessionCircuit"
         assert tunnel_call.kwargs["data"] == {
             "name": "C002-OFFICE-SDWAN-FR2",
+            "circuit_type": "tunnel",
             "status": "active",
             "provider": {"id": "provider-overlay"},
             "owner": {"id": "org-c002"},
             "description": "C002-OFFICE SD-WAN tunnel to FR2 gateway",
             "locations": [{"id": "office-1"}, {"id": "zone-1"}],
             "capabilities": [{"id": "public-1"}, {"id": "edge-uplink-1"}],
+            "member_of_groups": [{"hfid": ["virtual_circuits"], "kind": "CoreStandardGroup"}],
         }
         self._tunnel_circuit.save.assert_awaited_once_with(allow_upsert=True)
 
@@ -498,7 +501,7 @@ class TestIspAccessPort:
 
     @pytest.mark.asyncio
     async def test_circuit_is_created_with_both_ends_and_office_and_isp_locations(self) -> None:
-        """A physical circuit needs both ends at creation: edge uplink + ISP port, in the office and the ISP."""
+        """A carrier circuit needs both ends at creation: edge uplink + ISP port, in the office and the ISP."""
         gen = TestGenerateHappyPath()._wire_full_success(ports=[_port("port-1", "xe-0/1/0")])
 
         await gen.generate(_office_payload())
@@ -535,9 +538,9 @@ class TestIspAccessPort:
         assert data["capabilities"][1] == {"id": "port-2"}
 
     @pytest.mark.asyncio
-    async def test_a_port_held_by_another_physical_circuit_is_skipped(self) -> None:
-        """A port already ending another physical circuit is not free, whatever its name sorts like."""
-        ports = [_port("port-0", "xe-0/1/0", held_by="TopologyPhysicalCircuit"), _port("port-1", "xe-0/1/1")]
+    async def test_a_port_held_by_another_carrier_circuit_is_skipped(self) -> None:
+        """A port already ending another carrier circuit is not free, whatever its name sorts like."""
+        ports = [_port("port-0", "xe-0/1/0", held_by="TopologyCarrierCircuit"), _port("port-1", "xe-0/1/1")]
         gen = TestGenerateHappyPath()._wire_full_success(ports=ports)
 
         await gen.generate(_office_payload())
@@ -547,8 +550,8 @@ class TestIspAccessPort:
 
     @pytest.mark.asyncio
     async def test_a_port_with_only_a_virtual_circuit_is_still_free(self) -> None:
-        """A tunnel's port may be shared; only a physical circuit end makes a port busy."""
-        ports = [_port("port-0", "xe-0/1/0", held_by="TopologyVirtualCircuit")]
+        """A tunnel's port may be shared; only a carrier circuit end makes a port busy."""
+        ports = [_port("port-0", "xe-0/1/0", held_by="TopologySessionCircuit")]
         gen = TestGenerateHappyPath()._wire_full_success(ports=ports)
 
         await gen.generate(_office_payload())
@@ -561,7 +564,7 @@ class TestIspAccessPort:
         """The circuit's own port wins over an earlier free one, so a rerun neither moves nor re-allocates."""
         ports = [
             _port("port-0", "xe-0/1/0"),
-            _port("port-5", "xe-0/1/5", held_by="TopologyPhysicalCircuit"),
+            _port("port-5", "xe-0/1/5", held_by="TopologyCarrierCircuit"),
         ]
         gen = TestGenerateHappyPath()._wire_full_success(
             ports=ports, circuits=[_existing_circuit("edge-uplink-1", "port-5")]
@@ -577,7 +580,7 @@ class TestIspAccessPort:
         """An exhausted access PE fails the run with only the edge created, never a half circuit."""
         gen = _make_gen()
         gen.client.create = AsyncMock(return_value=_node("edge-1"))
-        busy = [_port("port-0", "xe-0/1/0", held_by="TopologyPhysicalCircuit")]
+        busy = [_port("port-0", "xe-0/1/0", held_by="TopologyCarrierCircuit")]
         edge_uplink = MagicMock(id="edge-uplink-1")
         edge_uplink.name.value = "GE1"
         gen.client.filters = AsyncMock(
@@ -645,9 +648,9 @@ class TestIspAccessPort:
         assert getattr(gen, "locked_keys") == [f"isp-access-port-{_ISP_DEVICE_ID}"]
         inside = events[events.index("lock") + 1 : events.index("unlock")]
         assert inside == [
-            "filters:TopologyPhysicalCircuit",
+            "filters:TopologyCarrierCircuit",
             "filters:DcimPhysicalInterface",
-            "create:TopologyPhysicalCircuit",
+            "create:TopologyCarrierCircuit",
         ]
         assert events.index("filters:TopologyExternalProviders") < events.index("lock")
 

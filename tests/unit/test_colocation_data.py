@@ -356,27 +356,46 @@ class TestVirtualColocationTerraform:
         assert "terraform" in used
         assert used <= choices
 
-    def test_the_template_it_uses_carries_the_provider_order_fields(self, demo: str) -> None:
-        """The Terraform artifact reads type code, package, version, term and cores off the appliance (from its template)."""
+    def test_the_template_it_uses_names_the_offer_through_its_device_type_and_software_image(self, demo: str) -> None:
+        """The Terraform artifact reads type_code off the device type name, package and version off the software
+        image, and the term off the appliance; the three catalogue attributes are gone."""
         am_ne = next(obj for obj in _objects(demo, _VIRTUAL) if name(obj) == "AM-NE")
         template_names = {row[2] for row in am_ne.item["fabric_templates"]}
         assert template_names == {"C8000V_EDGE"}
+        images = {
+            image["name"]: image
+            for document in yaml.safe_load_all((_BOOTSTRAP / "05b_software_images.yml").read_text())
+            for image in document["spec"]["data"]
+        }
 
         for template_name in template_names:
             template = object_templates()[template_name]
-            for field in ("service_code", "package_code", "software_version", "term_length"):
-                assert template.get(field) not in (None, ""), f"{template_name}: {field} is not set"
+            assert template["device_type"] == "C8000V"
+            image = images[template["software_image"]]
+            assert (image["version"], image["package"], image["platform"]) == (
+                "17.12.01a",
+                "network-essentials",
+                template["platform"],
+            )
+            assert {"service_code", "package_code", "software_version"}.isdisjoint(template)
             assert isinstance(template["term_length"], int)
             assert template["term_length"] in (1, 12, 24, 36)
+
+    def test_the_template_ports_are_virtual_nics(self, demo: str) -> None:
+        """A hosted appliance has no hardware: the template declares DcimVirtualInterface ports, never physical ones."""
+        interfaces = object_templates()["C8000V_EDGE"]["interfaces"]
+
+        assert interfaces["kind"] == "TemplateDcimVirtualInterface"
+        assert {row["role"] for row in interfaces["data"]} == {"customer", "management"}
 
     def test_the_provider_fields_are_declared_on_the_appliance_schema_and_gone_from_the_virtual_device(
         self, demo: str
     ) -> None:
-        """Template values only load if CloudNetworkAppliance (and so its templates) has the attributes; DcimVirtualDevice
-        no longer carries any provider ordering field."""
-        assert {"service_code", "package_code", "software_version", "term_length", "cloud_id"} <= (
-            attribute_names("CloudNetworkAppliance")
-        )
+        """Template values only load if CloudNetworkAppliance (and so its templates) has the attributes; the offer's
+        catalogue codes are structured data now; DcimVirtualDevice carries no provider ordering field."""
+        assert {"term_length", "cloud_id"} <= attribute_names("CloudNetworkAppliance")
+        assert {"service_code", "package_code", "software_version"}.isdisjoint(attribute_names("CloudNetworkAppliance"))
+        assert "package" in attribute_names("DcimSoftwareImage")
         # The order's core count is the device type's cpu_count, not a field of the appliance.
         assert "cpu_count" not in attribute_names("CloudNetworkAppliance")
         assert not [name_ for name_ in attribute_names("DcimVirtualDevice") if name_.startswith("provider_")]

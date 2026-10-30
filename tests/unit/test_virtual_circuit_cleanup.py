@@ -150,7 +150,7 @@ class TestEarlyReturnsCleanTheOldSession:
 
 
 class TestTransientNoCarrierKeepsTheSession:
-    """Not enough carried ends (the physical circuit or its ports are not linked, or not visible yet) is no reason
+    """Not enough carried ends (the carrier circuit or its ports are not linked, or not visible yet) is no reason
     to delete a good session: the run tracks nothing, so the SDK cleans nothing."""
 
     @pytest.mark.parametrize(

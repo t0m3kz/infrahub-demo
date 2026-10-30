@@ -461,43 +461,42 @@ class TestGetVxlanConfigMultisite:
 # ---------------------------------------------------------------------------
 
 
-def _deployment_entry(seg_id: str, *, scope: str = "metro", vni: int | None = 10100, domain: str = "dev-1") -> dict:
+def _deployment_entry(seg_id: str, *, scope: str = "metro", vni: int | None = 10100, device: str = "dev-1") -> dict:
     return {
         "vni": vni,
         "vlan_domain_segments": [
-            {"vlan_id": 200, "vlan_domain": {"id": "other"}},
-            {"vlan_id": 100, "vlan_domain": {"id": domain}},
+            {"vlan_id": 200, "device": {"id": "other"}},
+            {"vlan_id": 100, "device": {"id": device}},
         ],
         "segment": {"id": seg_id, "stretch_scope": scope},
     }
 
 
 class TestCollectBorderGatewayActivations:
-    def _collect(self, entries: list[dict], seen: set[str | None] | None = None, caps: list | None = None) -> list:
+    def _collect(self, entries: list[dict], seen: set[str | None] | None = None) -> list:
         transform = BaseDeviceTransform.__new__(BaseDeviceTransform)
         return transform._collect_border_gateway_activations(
             {"segment_deployments": entries},
             device_id="dev-1",
-            device_capabilities=caps or [],
             seen=set() if seen is None else seen,
         )
 
-    def test_stretched_segment_uses_own_vlan_domain(self) -> None:
+    def test_stretched_segment_uses_own_row(self) -> None:
         (act,) = self._collect([_deployment_entry("s1")])
         assert act["vlan_id"] == 100
         assert act["vni"] == 10100
         assert act["segment"]["id"] == "s1"
 
-    def test_mlag_domain_id_is_own_domain(self) -> None:
-        caps = [{"typename": "ManagedMLAG", "id": "mlag-1"}]
-        (act,) = self._collect([_deployment_entry("s1", domain="mlag-1")], caps=caps)
-        assert act["vlan_id"] == 100
+    def test_a_peer_row_is_ignored(self) -> None:
+        """A paired device renders its own row; the peer's row (another device id) is never used."""
+        entry = _deployment_entry("s1", device="peer-1")
+        assert self._collect([entry]) == []
 
     def test_skips_local_unconverged_vniless_and_seen(self) -> None:
         entries = [
             _deployment_entry("local", scope="local"),
             _deployment_entry("no-vni", vni=None),
-            _deployment_entry("no-domain", domain="someone-else"),
+            _deployment_entry("no-row", device="someone-else"),
             _deployment_entry("seen"),
             _deployment_entry("dup"),
             _deployment_entry("dup"),
@@ -507,9 +506,7 @@ class TestCollectBorderGatewayActivations:
 
     def test_no_deployment_returns_empty(self) -> None:
         transform = BaseDeviceTransform.__new__(BaseDeviceTransform)
-        assert (
-            transform._collect_border_gateway_activations(None, device_id="d", device_capabilities=[], seen=set()) == []
-        )
+        assert transform._collect_border_gateway_activations(None, device_id="d", seen=set()) == []
 
 
 class TestDeviceActivationsBySite:

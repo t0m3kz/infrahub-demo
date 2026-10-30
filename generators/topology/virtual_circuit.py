@@ -1,20 +1,21 @@
-"""add_virtual_circuit: the BGP sessions of an InterconnectCircuit (DCI) and a HandoffCircuit.
+"""add_virtual_circuit: the BGP sessions of a TopologySessionCircuit of type ``dci`` or ``handoff``.
 
-One generator, one flow, two kinds. A TopologyTunnelCircuit has no session (the SD-WAN orchestrator owns its overlay
-routing) and is not in the generator's target group; a run that reaches one logs and stops.
+One generator, one flow, two circuit types. A ``tunnel`` session circuit has no session (the SD-WAN orchestrator owns
+its overlay routing); it is a member of the generator's target group like the others (the created-trigger needs the
+group), and a run that reaches one logs and stops.
 
-The flow, shared by both kinds (what differs is a planner per kind: pool, family, peerings):
+The flow, shared by both types (what differs is a planner per ``circuit_type``: pool, family, peerings):
 
 1. A decommissioned circuit, or one with fewer than two ends, builds nothing and CLEANS UP: the run's tracked cleanup
    removes what an earlier run built (see "Ownership"). Two ends on one device, or more than two ends, is an error.
-2. It waits (concurrently: the carriers are independent) for add_circuit on every physical circuit it rides
+2. It waits (concurrently: the carriers are independent) for add_circuit on every carrier circuit it rides
    (``derived_underlay``: the carrier terminating on each end port, or on a sub-interface's parent). add_circuit never
    waits for this generator, so there is no cycle. Then it decides whether the ends are carried
-   (``utils.circuit_underlay.has_carrier``: a physical circuit of any status, or a DcimCable, at the port or its
+   (``utils.circuit_underlay.has_carrier``: a carrier circuit of any status, or a DcimCable, at the port or its
    parent; a hop inside one facility is a cable, not a circuit):
 
-   - InterconnectCircuit: BOTH ends need a carrier (a DCI between two border gateways, each on its own fibre);
-   - HandoffCircuit: AT LEAST ONE end needs one (the party end may be a stub, or a provider-hosted appliance, with
+   - dci: BOTH ends need a carrier (a DCI between two border gateways, each on its own fibre);
+   - handoff: AT LEAST ONE end needs one (the party end may be a stub, or a provider-hosted appliance, with
      none).
 
    Not enough carried ends (no carrier found, or one end only of an interconnect) builds nothing, is not an error and
@@ -26,7 +27,7 @@ The flow, shared by both kinds (what differs is a planner per kind: pool, family
    no status, so a cabled end is always live.
 3. A port that is also an end of another session circuit is an error: one port, one session.
 4. Under a lock per port (sorted, so two runs never wait on each other in a cycle) around the check of step 3 and
-   the writes, and under a lock per circuit around the writes, it allocates a /31 (/127) from the pool the kind names
+   the writes, and under a lock per circuit around the writes, it allocates a /31 (/127) from the pool the circuit type names
    (identifier ``vc-p2p__<id>``, so a re-run gets the same prefix), addresses the two ends, and
 5. upserts the peering(s), named ``<vc>-bgp`` (handoff) or ``<vc>-underlay`` and ``<vc>-evpn`` (interconnect).
    Peerings share the ManagedGeneric name space with circuits, hence the suffix.
@@ -34,13 +35,13 @@ The flow, shared by both kinds (what differs is a planner per kind: pool, family
 Every precondition fails before the first write, so a refused run never returns after a partial save, which its
 tracked cleanup would turn into deletions.
 
-HandoffCircuit: the two ends are the sub-interfaces (``<parent>.<vlan>``) of our edge and of the party-owned device,
+Handoff: the two ends are the sub-interfaces (``<parent>.<vlan>``) of our edge and of the party-owned device,
 inside the circuit's ``ip_namespace``. The /31 comes from the pool named after that namespace (``Handoff-<NAMESPACE>-
 IPv4``, data/bootstrap/26_handoff_pools.yml): addresses on both sides come from OUR pool only. One eBGP session
 (peering_role ``regular``) between the devices' BGP processes; the party's ASN is its process's ``local_as``. The
 session sends no communities (standard or extended): there is nothing to strip yet, communities come in a later change.
 
-InterconnectCircuit: DCI between two EVPN Multi-Site border gateways, both ends physical ports on a device with exactly
+DCI: between two EVPN Multi-Site border gateways, both ends physical ports on a device with exactly
 one overlay ManagedBGP process. The /31 (/127) comes from the DCI pools (data/bootstrap/20_dci_pools.yml) by the DC
 end's ``underlay_protocol``; dual-stack is refused, and so is IPv4 towards a colocation edge, whose VTEP loopback is
 IPv6 only. Two sessions on the overlay processes, keyed with one generated per-circuit RoutingPassword
@@ -86,9 +87,10 @@ from infrahub_sdk.protocols import CoreIPPrefixPool
 
 from utils.circuit_underlay import (
     BGP_PROCESS,
+    DCI_TYPE,
     DECOMMISSIONED,
-    HANDOFF_CIRCUIT,
-    INTERCONNECT_CIRCUIT,
+    HANDOFF_TYPE,
+    SESSION_CIRCUIT,
     derived_underlay,
     has_carrier,
     overlay_processes,
@@ -101,10 +103,11 @@ from utils.limits import DCI_TECHNICAL_IPV4_POOL, DCI_TECHNICAL_IPV6_POOL, HANDO
 
 from ..common import CommonGenerator
 from ..connections import CablingMixin
+from ..helpers.vrf import VrfMixin
 from ..pools import PoolMixin
 from ..protocols import DcimPhysicalInterface, DcimVirtualInterface
 from ..routing import EVPN_AF, IPV4_UNICAST_AF, IPV6_UNICAST_AF, RoutingMixin, _dci_key_name
-from .circuit import PHYSICAL_CIRCUIT_GENERATOR
+from .circuit import CARRIER_CIRCUIT_GENERATOR
 
 # DCI P2P pools (data/bootstrap/20_dci_pools.yml) by address family, with the prefix length allocated from them.
 _DCI_POOLS: dict[int, tuple[str, int]] = {4: (DCI_TECHNICAL_IPV4_POOL, 31), 6: (DCI_TECHNICAL_IPV6_POOL, 127)}
@@ -259,37 +262,69 @@ class SessionPlan:
     prefix_length: int
     process_ids: tuple[str, str]
     peerings: tuple[PeeringPlan, ...]
+    # The environment namespace the /31 lives in when it is not ``default`` (a handoff's): both ends need an instance
+    # of it before the addresses are written.
+    namespace: str | None = None
     # Interconnect: the per-circuit key to ensure. Handoff: the circuit's own optional key, by id.
     key_name: str | None = None
     password_id: str | None = None
     mtu: int | None = None
 
 
-class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, CommonGenerator):
+class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfMixin, CommonGenerator):
     """add_virtual_circuit: the BGP session(s) of an interconnect or handoff circuit."""
 
     client: Any
 
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        # Devices on the ends of a handoff circuit, now or before: their VRF instances are converged once the run's
+        # tracked cleanup has removed what the circuit no longer holds (see run()). One instance is one run.
+        self._vrf_device_ids: set[str] = set()
+
+    async def run(self, identifier: str, data: dict[str, Any] | None = None) -> None:
+        """Run the generator, then converge the VRF instances of the handoff's end devices.
+
+        The /31 a decommissioned or shrunk circuit held is deleted by the run's cleanup, after ``generate()``; only
+        then does the device no longer demand its namespace, so the pass that prunes the instance runs here. It also
+        follows a circuit whose namespace changed. An interconnect is in ``default``: no demand, no pass. Accepted
+        gap: a port taken off the circuit is no longer listed, so its device is reconciled by its next pass
+        (a segment run, or a handoff) and the check reports the leftover instance until then.
+        """
+        await super().run(identifier, data)
+        await self.reconcile_vrfs(self._vrf_device_ids)
+
+    def _note_end_devices(self, circuit: dict[str, Any]) -> None:
+        """Remember the devices on the circuit's listed ports (a handoff only)."""
+        if circuit.get("circuit_type") != HANDOFF_TYPE:
+            return
+        self._vrf_device_ids.update(
+            device_id
+            for port in circuit.get("capabilities") or []
+            if isinstance(port, dict) and (device_id := (port.get("device") or {}).get("id"))
+        )
+
     async def generate(self, data: dict[str, Any]) -> None:
-        circuits = clean_data(data).get("TopologyVirtualCircuit") or []
+        circuits = clean_data(data).get(SESSION_CIRCUIT) or []
         if not circuits:
-            self.logger.error("No TopologyVirtualCircuit data in GraphQL response")
+            self.logger.error(f"No {SESSION_CIRCUIT} data in GraphQL response")
             return
         circuit = circuits[0]
         name: str = circuit.get("name") or ""
         if not name:
-            self.logger.error("TopologyVirtualCircuit missing name")
+            self.logger.error(f"{SESSION_CIRCUIT} missing name")
             return
-        kind = circuit.get("typename") or ""
-        planner = self._PLANNERS.get(kind)
+        circuit_type = circuit.get("circuit_type") or ""
+        planner = self._PLANNERS.get(circuit_type)
         if planner is None:
-            self.logger.info(f"Virtual circuit {name} ({kind}): no session is generated for this kind")
+            self.logger.info(f"Virtual circuit {name} ({circuit_type}): no session is generated for this circuit type")
             return
         self.logger.info(
-            f"Processing virtual circuit {name} ({kind}, status={circuit.get('status') or '?'}); "
+            f"Processing virtual circuit {name} ({circuit_type}, status={circuit.get('status') or '?'}); "
             f"carrier: {self._carrier_label(circuit)}"
         )
 
+        self._note_end_devices(circuit)
         ends = self._ends_or_none(circuit, name)
         if ends is None:
             self._track_circuit(circuit["id"])
@@ -298,24 +333,25 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, Comm
         # carrier order (every refetch re-collects the whole query, so the last one is the freshest).
         refetched = await asyncio.gather(
             *(
-                self.wait_for_parent_generator_and_refetch(PHYSICAL_CIRCUIT_GENERATOR, carrier["id"])
+                self.wait_for_parent_generator_and_refetch(CARRIER_CIRCUIT_GENERATOR, carrier["id"])
                 for carrier in derived_underlay(circuit)
             )
         )
         refreshed = next((result for result in reversed(refetched) if result), None)
         if refreshed is not None:
-            circuits = clean_data(refreshed).get("TopologyVirtualCircuit") or []
+            circuits = clean_data(refreshed).get(SESSION_CIRCUIT) or []
             if not circuits:
                 self.logger.error(f"{name}: not found when refetched after its carrier's generator ran")
                 return
             circuit = circuits[0]
+            self._note_end_devices(circuit)
             ends = self._ends_or_none(circuit, name)
             if ends is None:
                 self._track_circuit(circuit["id"])
                 return
         ports = [port for port in circuit.get("capabilities") or [] if isinstance(port, dict) and port.get("id")]
         carried = [has_carrier(port) for port in ports]
-        if not (all(carried) if kind == INTERCONNECT_CIRCUIT else any(carried)):
+        if not (all(carried) if circuit_type == DCI_TYPE else any(carried)):
             # Not tracked, on purpose: see "Ownership". The run tracks nothing, so the SDK cleans nothing.
             self.logger.info(
                 f"  {name}: ports not linked to a physical carrier yet - nothing built, any session an earlier run "
@@ -367,7 +403,7 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, Comm
 
     @staticmethod
     def _carrier_label(circuit: dict[str, Any]) -> str:
-        """The physical circuits and the cabled ports (``device:port``) under the circuit's ends, for the log."""
+        """The carrier circuits and the cabled ports (``device:port``) under the circuit's ends, for the log."""
         circuits = [c.get("circuit_id") or c.get("name") or c["id"] for c in derived_underlay(circuit)]
         cables = [
             f"cable {(port.get('device') or {}).get('name') or '?'}:{port.get('name') or '?'}"
@@ -454,6 +490,7 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, Comm
             pool_name=handoff_pool_name(namespace["name"]),
             prefix_length=31,
             process_ids=self._process_ids(name, first, second),
+            namespace=namespace["name"],
             peerings=(
                 PeeringPlan(
                     suffix="bgp",
@@ -534,10 +571,10 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, Comm
             mtu=UNDERLAY_MTU,
         )
 
-    # Circuit kind -> its planner. Keys are exactly SESSION_CIRCUIT_KINDS (a test pins it).
+    # circuit_type -> its planner. Keys are exactly SESSION_CIRCUIT_TYPES (a test pins it).
     _PLANNERS: ClassVar[dict[str, Callable[..., SessionPlan]]] = {
-        INTERCONNECT_CIRCUIT: _plan_interconnect,
-        HANDOFF_CIRCUIT: _plan_handoff,
+        DCI_TYPE: _plan_interconnect,
+        HANDOFF_TYPE: _plan_handoff,
     }
 
     def _dci_family(self, name: str, ends: list[SessionEnd]) -> int:
@@ -573,35 +610,39 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, Comm
             if missing:
                 self.fail(f"{name}: interface(s) {', '.join(missing)} not found")
 
-            # Every precondition holds - the writes start here.
-            prefix = await self.client.allocate_next_ip_prefix(
-                resource_pool=pool,
-                identifier=f"vc-p2p__{circuit['id']}",
-                prefix_length=plan.prefix_length,
-                member_type="address",
-                data={"role": "technical", "is_pool": True, "description": f"{plan.label} {name}"},
-            )
-            if prefix is None:
-                self.fail(f"{name}: pool '{plan.pool_name}' returned no prefix - exhausted?")
-            # Owned by this circuit. allocate_next_ip_prefix() is a pool mutation, not a save(), so the prefix joins
-            # the run's tracking group only here.
-            self.client.group_context.related_node_ids.append(prefix.id)
-            self.logger.info(f"  {plan.label} prefix {prefix.prefix.value} for {name}")
-
-            addresses = await self.upsert_p2p_addresses(prefix, description=f"{plan.label} {name}")
-            interface_status = _INTERFACE_STATUS_FOR_CIRCUIT.get(status, "provisioning")
-            for end, peer, address in (
-                (plan.first, plan.second, addresses[0]),
-                (plan.second, plan.first, addresses[1]),
-            ):
-                await self._update_interface(
-                    nodes[end.port_id],
-                    address_id=address.id,
-                    description=f"{plan.label} {name} to {peer.device_name} {peer.port_name}",
-                    status=interface_status,
-                    mtu=plan.mtu,
+            # Every precondition holds - the writes start here. The instance comes first and its device locks are held
+            # until the addresses are saved: the transforms refuse a session in a VRF its device lacks, and a pruning
+            # pass must not see the instance without its demand.
+            needs = {end.device_id: {plan.namespace} for end in (plan.first, plan.second)} if plan.namespace else {}
+            async with self.vrfs_held(needs):
+                prefix = await self.client.allocate_next_ip_prefix(
+                    resource_pool=pool,
+                    identifier=f"vc-p2p__{circuit['id']}",
+                    prefix_length=plan.prefix_length,
+                    member_type="address",
+                    data={"role": "technical", "is_pool": True, "description": f"{plan.label} {name}"},
                 )
-                self.logger.info(f"  {end.label} = {address.address.value}")
+                if prefix is None:
+                    self.fail(f"{name}: pool '{plan.pool_name}' returned no prefix - exhausted?")
+                # Owned by this circuit. allocate_next_ip_prefix() is a pool mutation, not a save(), so the prefix joins
+                # the run's tracking group only here.
+                self.client.group_context.related_node_ids.append(prefix.id)
+                self.logger.info(f"  {plan.label} prefix {prefix.prefix.value} for {name}")
+
+                addresses = await self.upsert_p2p_addresses(prefix, description=f"{plan.label} {name}")
+                interface_status = _INTERFACE_STATUS_FOR_CIRCUIT.get(status, "provisioning")
+                for end, peer, address in (
+                    (plan.first, plan.second, addresses[0]),
+                    (plan.second, plan.first, addresses[1]),
+                ):
+                    await self._update_interface(
+                        nodes[end.port_id],
+                        address_id=address.id,
+                        description=f"{plan.label} {name} to {peer.device_name} {peer.port_name}",
+                        status=interface_status,
+                        mtu=plan.mtu,
+                    )
+                    self.logger.info(f"  {end.label} = {address.address.value}")
 
             password_id = plan.password_id
             if plan.key_name:

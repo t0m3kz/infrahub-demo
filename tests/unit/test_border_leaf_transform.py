@@ -9,7 +9,6 @@ Covers:
 from __future__ import annotations
 
 import asyncio
-import copy
 import json
 from pathlib import Path
 from typing import Any
@@ -17,6 +16,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from tests.smoke.fixture_builders.vrf import with_vrf_objects
 from transforms.config.border_leaf import BorderLeaf
 
 _ROOT = Path(__file__).parent.parent.parent
@@ -110,7 +110,7 @@ def _render(platform: str, data: dict) -> str:
     client.clone.return_value = client
     client.schema.get = AsyncMock(return_value=MagicMock())
     instance = BorderLeaf(client=client, infrahub_node=MagicMock(), root_directory=str(_ROOT))
-    return asyncio.run(instance.transform(copy.deepcopy(data)))
+    return asyncio.run(instance.transform(with_vrf_objects(instance, data)))
 
 
 class TestExchangeTransitRendering:

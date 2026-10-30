@@ -394,11 +394,20 @@ class TestCloudNetworkAppliance:
         assert "AppInstance" not in inherited
         assert _kind(self._KIND)["generate_template"] is True
 
-    def test_it_declares_cloud_id_itself_and_the_provider_offer(self) -> None:
-        assert {"cloud_id", "service_code", "package_code", "software_version", "term_length"} <= (
-            _attribute_names(self._KIND)
-        )
+    def test_it_declares_cloud_id_and_term_length_and_no_catalogue_codes(self) -> None:
+        """The offer is structured data (Device Type name, Software Image package and version), not attributes."""
+        assert {"cloud_id", "term_length"} <= _attribute_names(self._KIND)
+        assert {"service_code", "package_code", "software_version"}.isdisjoint(_attribute_names(self._KIND))
         assert "cpu_count" not in _attribute_names(self._KIND)  # the vCPU count is DcimDeviceType.cpu_count
+
+    def test_the_software_image_carries_the_licence_package_outside_its_uniqueness(self) -> None:
+        """DcimSoftwareImage.package is the order's package_code: optional text, not part of the image identity."""
+        image = _kind("DcimSoftwareImage")
+        package = next(a for a in image["attributes"] if a["name"] == "package")
+
+        assert package["kind"] == "Text"
+        assert package["optional"] is True
+        assert not any("package" in str(constraint) for constraint in image.get("uniqueness_constraints") or [])
 
     def test_it_has_no_hypervisor_and_no_redundancy_fields_of_its_own(self) -> None:
         """No hosting_device (nothing of ours runs it); redundancy is an HA domain, not a field or a self-relationship."""
@@ -455,13 +464,36 @@ class TestCloudNetworkAppliance:
             for node in _document(path).get("nodes") or []
             if "TopologyProviderHosting" in (node.get("inherit_from") or [])
         ]
-        assert sorted(inheritors) == ["CustomerCloud", "VirtualColocation"]
+        assert sorted(inheritors) == ["CustomerCloud", "SaasRegion", "VirtualColocation"]
         appliances = next(r for r in generic["relationships"] if r["name"] == "appliances")
         assert (appliances["peer"], appliances["cardinality"], appliances["identifier"]) == (
             "CloudNetworkAppliance",
             "many",
             "topology__appliances",
         )
+
+    def test_the_provider_account_is_declared_once_for_the_presences_a_provider_hosts(self) -> None:
+        """A virtual colocation and a SaaS region order their appliances under one account; neither declares it itself."""
+        generic = next(g for g in _document(_TOPOLOGY / "topology.yml")["generics"] if g["name"] == "ProviderAccount")
+        account = next(r for r in generic["relationships"] if r["name"] == "account")
+        assert (account["peer"], account["cardinality"], account["optional"], account["identifier"]) == (
+            "CloudAccount",
+            "one",
+            True,
+            "topology__provider_account",
+        )
+        nodes = {
+            node["name"]: node
+            for path in sorted(_TOPOLOGY.glob("*.yml"))
+            for node in _document(path).get("nodes") or []
+        }
+        inheritors = sorted(
+            n for n, node in nodes.items() if "TopologyProviderAccount" in (node.get("inherit_from") or [])
+        )
+        assert inheritors == ["SaasRegion", "VirtualColocation"]
+        for name in inheritors:
+            assert all(r["name"] != "account" for r in nodes[name].get("relationships") or []), name
+        assert "TopologyProviderAccount" not in nodes["CustomerCloud"]["inherit_from"]
 
     def test_the_cloud_hosting_generic_links_a_customer_cloud_to_its_instances(self) -> None:
         """A cloud instance is a CloudResource, not a device: the footprint reads it through a generic of its own."""
@@ -510,9 +542,8 @@ class TestCloudNetworkAppliance:
 
     def test_the_virtual_colocation_orders_under_an_account_and_has_no_order_fields_of_its_own(self) -> None:
         kind = "TopologyVirtualColocation"
-        account = next(r for r in _kind(kind)["relationships"] if r["name"] == "account")
 
-        assert (account["peer"], account["cardinality"], account["optional"]) == ("CloudAccount", "one", True)
+        assert "TopologyProviderAccount" in _kind(kind)["inherit_from"]
         assert {"provider_account_number"}.isdisjoint(_attribute_names(kind))
         assert "owner" not in _relationship_names(kind)
 

@@ -14,7 +14,7 @@
 # human_friendly_id.
 #
 # Carrier: the party sub-interface et-0/0/0.1100 rides its PARENT et-0/0/0, the port of the
-# cross-connect XC-EQXFR2-AWS-EUC1 (../01_colo_onramp/03_physical_circuits.yml). That is the circuit's
+# cross-connect XC-EQXFR2-AWS-EUC1 (../01_colo_onramp/03_carrier_circuits.yml). That is the circuit's
 # derived underlay, and the one carried end the rule needs. The NE end is a provider-hosted appliance
 # with no port of ours and needs none. The Fabric virtual connection between the NE router and the AWS
 # router is not carried over our fibre: Equinix runs it inside its own platform.
@@ -65,9 +65,10 @@ spec:
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: TopologyHandoffCircuit
+  kind: TopologySessionCircuit
   data:
     - name: "HANDOFF-AMNE-AWS-EUC1-PROD"
+      circuit_type: handoff
       member_of_groups: [virtual_circuits]
       status: active
       provider: "P016"

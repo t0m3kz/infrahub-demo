@@ -85,7 +85,7 @@ def get_ha(
 
 
 def inline_addresses(
-    capabilities: list[dict[str, Any]] | None,
+    segments: list[dict[str, Any]] | None,
     ha: dict[str, Any] | None,
     leg_address: str | None = None,
 ) -> dict[str, str | None]:
@@ -93,7 +93,7 @@ def inline_addresses(
 
     Two sources, one result shape:
 
-    - an interface carrying a segment the pair terminates inline
+    - an interface carrying (``segments``) a segment the pair terminates inline
       (terminate_inline, inline_service == this pair): virtual_ip is the
       segment gateway — the address hosts use, owned by the active member
       (floating IP / VIP / VRRP address, per vendor).
@@ -112,10 +112,10 @@ def inline_addresses(
         if network.version != 4:
             return none
         return {"virtual_ip": f"{network[OFFSET_VIP]}/{network.prefixlen}"}
-    for cap in capabilities or []:
-        if not cap.get("terminate_inline") or (cap.get("inline_service") or {}).get("name") != ha.get("name"):
+    for seg in segments or []:
+        if not seg.get("terminate_inline") or (seg.get("inline_service") or {}).get("name") != ha.get("name"):
             continue
-        virtual_ip = (cap.get("gateway") or {}).get("address")
+        virtual_ip = (seg.get("gateway") or {}).get("address")
         if not virtual_ip:
             continue
         return {"virtual_ip": virtual_ip}

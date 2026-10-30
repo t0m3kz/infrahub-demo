@@ -147,7 +147,7 @@ def registered_by_gateway(
     ``registered_prefixes`` (owned by the tunnel's owner) behind the gateway at one of its ends, the way an office
     LAN is: the space its far end reaches that no office of ours hosts (a B2B partner's range). Its other end (an
     office edge, a partner router) is no gateway and gets nothing.
-    ``offices`` is the cleaned TopologyCustomerOffice query root, ``tunnels`` the TopologyTunnelCircuit one.
+    ``offices`` is the cleaned TopologyCustomerOffice query root, ``tunnels`` the tunnel TopologySessionCircuit one.
     A gateway with offices but no registered prefix is present with an empty list; a gateway no office names
     is absent, so a tunnel registers behind a gateway only where an office sits behind it too.
     """

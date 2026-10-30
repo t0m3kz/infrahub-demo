@@ -3,7 +3,7 @@
 - Megaport (05_cloud_endpoints/03_megaport_handoff.yml): ``HANDOFF-PA4-MEGAPORT-PROD`` from eg-pa401 `Ethernet1/1.1300` to
   the stub Cloud Router EXT-MEGAPORT-MCR1, carried by the cross-connect ``XC-EQXPA4-MEGAPORT``; the Azure cross-connect has
   no handoff and stays an idle carrier.
-- Partner tunnel (07_zone_policies/01_partner_tunnel.yml): ``C001-PARTNER-ACME-FR2``, a TopologyTunnelCircuit from the
+- Partner tunnel (07_zone_policies/01_partner_tunnel.yml): ``C001-PARTNER-ACME-FR2``, a tunnel TopologySessionCircuit from the
   gateway's eth1 to a partner stub, each end on its own internet access.
 - Gateway handoff (04_sdwan/06_vrf_handoff.yml): ``HANDOFF-FR2-SDWAN-GW1-PROD`` on eth0 <-> eg-fr201 `Ethernet1/12`,
   carried by a cable.
@@ -23,7 +23,7 @@ from tests.integration.all_demo_circuit_constants import (
     ALL_DEMO_PARTNER_ACCESS_LOCATIONS,
     ALL_DEMO_VIRTUAL_CIRCUITS,
 )
-from tests.integration.demo_data import ROOT, Declared, declared, distinct, name, object_templates
+from tests.integration.demo_data import ROOT, Declared, declared, declared_session, distinct, name, object_templates
 
 _ALL = ROOT / ALL_DEMO_DATA
 _MEGAPORT = "HANDOFF-PA4-MEGAPORT-PROD"
@@ -42,8 +42,14 @@ def _one(kind: str, object_name: str) -> Declared:
     return obj
 
 
+def _one_session(circuit_type: str, object_name: str) -> Declared:
+    """The one declaration of the session circuit `object_name` of `circuit_type` (a re-declaration counts once)."""
+    (obj,) = [o for o in distinct(declared_session(circuit_type, _ALL)) if name(o) == object_name]
+    return obj
+
+
 def _circuit_row(circuit_id: str) -> Declared:
-    (circuit,) = [c for c in declared("TopologyPhysicalCircuit", _ALL) if c.item["circuit_id"] == circuit_id]
+    (circuit,) = [c for c in declared("TopologyCarrierCircuit", _ALL) if c.item["circuit_id"] == circuit_id]
     return circuit
 
 
@@ -59,7 +65,7 @@ def _sub_interface(device: str, port: str) -> Declared:
 
 def test_the_megaport_handoff_is_an_unowned_prod_handoff_provided_by_megaport() -> None:
     """P033 (Megaport sells the MCR service; Equinix only the cross-connect), PROD, VLAN 1300, no cloud endpoint."""
-    circuit = _one("TopologyHandoffCircuit", _MEGAPORT).item
+    circuit = _one_session("handoff", _MEGAPORT).item
 
     assert "owner" not in circuit and "cloud_endpoint" not in circuit
     assert circuit["provider"] == "P033"
@@ -85,21 +91,21 @@ def test_the_megaport_stub_is_a_provider_owned_router_in_the_megaport_zone() -> 
 
 
 def test_the_megaport_cross_connect_is_an_unowned_shared_carrier_listing_only_the_cage() -> None:
-    """XC-EQXPA4-MEGAPORT: cross_connect, active, Equinix, physical_circuits, only the PA4 cage; the MCR end is derived."""
+    """XC-EQXPA4-MEGAPORT: cross_connect, active, Equinix, carrier_circuits, only the PA4 cage; the MCR end is derived."""
     circuit = _circuit_row(_XC).item
 
     assert circuit["circuit_type"] == "cross_connect"
     assert circuit["status"] == "active"
     assert circuit["provider"] == "P016"
     assert "owner" not in circuit
-    assert circuit["member_of_groups"] == ["physical_circuits"]
+    assert circuit["member_of_groups"] == ["carrier_circuits"]
     assert ALL_DEMO_DECLARED_PHYSICAL_LOCATIONS[_XC] == ("PA4",)
     assert circuit["capabilities"] == [["eg-pa401", "Ethernet1/1"], [_MCR, "et-0/0/0"]]
 
 
 def test_the_megaport_handoff_rides_the_cross_connect_on_the_parent_ports() -> None:
     """Each sub-interface's parent is one end of the cross-connect: that is the carrier derived from the ports."""
-    circuit = _one("TopologyHandoffCircuit", _MEGAPORT).item
+    circuit = _one_session("handoff", _MEGAPORT).item
     parents = {tuple(_sub_interface(*end).item["parent_interface"]) for end in circuit["capabilities"]}
     assert parents == set(ALL_DEMO_DECLARED_PHYSICAL_PORTS[_XC]) == {("eg-pa401", "Ethernet1/1"), (_MCR, "et-0/0/0")}
     assert ALL_DEMO_VIRTUAL_CIRCUITS[_MEGAPORT]["carrier"] == (_XC,)
@@ -130,7 +136,7 @@ def test_the_azure_cross_connect_is_an_idle_carrier_with_no_handoff() -> None:
 
 
 def test_the_cage_edge_port_of_the_megaport_handoff_is_free() -> None:
-    """eg-pa401 Ethernet1/1 is a `customer` port, and the only physical circuit on it is the Megaport cross-connect."""
+    """eg-pa401 Ethernet1/1 is a `customer` port, and the only carrier circuit on it is the Megaport cross-connect."""
     edge = object_templates()["N9K-C9316D-GX_EDGE"]["interfaces"]["data"]
     assert next(row for row in edge if row["name"] == "Ethernet1/[1-7]")["role"] == "customer"
     on_port = [cid for cid, ports in ALL_DEMO_DECLARED_PHYSICAL_PORTS.items() if ("eg-pa401", "Ethernet1/1") in ports]
@@ -142,14 +148,15 @@ def test_the_cage_edge_port_of_the_megaport_handoff_is_free() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_the_partner_tunnel_is_an_ungrouped_tunnel_owned_by_c001_from_the_gateway_to_the_partner_stub() -> None:
-    """A TopologyTunnelCircuit (no session, not in `virtual_circuits`), owner C001, provider the overlay operator."""
-    tunnel = _one("TopologyTunnelCircuit", _PARTNER_TUNNEL)
+def test_the_partner_tunnel_is_a_tunnel_owned_by_c001_from_the_gateway_to_the_partner_stub() -> None:
+    """A tunnel session circuit (no session, but in `virtual_circuits`), owner C001, provider the overlay operator."""
+    tunnel = _one_session("tunnel", _PARTNER_TUNNEL)
 
     assert tunnel.item["owner"] == "C001"
     assert tunnel.item["provider"] == "P035"
     assert tunnel.item["status"] == "active"
-    assert not tunnel.groups()
+    assert tunnel.groups() == ["virtual_circuits"]
+    assert tunnel.item["circuit_type"] == "tunnel"
     assert tunnel.item["locations"] == ["C001-OFFICE", "FR2"]
     assert tunnel.item["capabilities"] == [[_GATEWAY, "eth1"], [_PARTNER_STUB, "et-0/0/0"]]
     assert not {"bandwidth", "link_type", "transport_mode", "tunnel_id", "peering_role"} & set(tunnel.item)
@@ -157,7 +164,7 @@ def test_the_partner_tunnel_is_an_ungrouped_tunnel_owned_by_c001_from_the_gatewa
 
 def test_the_tunnels_office_is_owned_by_the_tunnels_owner_and_its_other_place_is_the_gateways_zone() -> None:
     """The check wants one TopologyCustomerOffice location of the owner; the other is where the gateway is deployed."""
-    tunnel = _one("TopologyTunnelCircuit", _PARTNER_TUNNEL)
+    tunnel = _one_session("tunnel", _PARTNER_TUNNEL)
     (office,) = [o for o in declared("TopologyCustomerOffice", _ALL) if name(o) == "C001-OFFICE"]
     assert office.item["owner"] == tunnel.item["owner"]
     assert _one("DcimPhysicalDevice", _GATEWAY).item["deployment"] == "FR2"
@@ -177,13 +184,13 @@ def test_the_partner_stub_is_owned_by_the_partner_organization_and_deployed_to_t
 
 
 def test_the_partner_end_rides_a_shared_internet_access_to_a_free_port_of_the_cogent_edge() -> None:
-    """INET-ACME-COGENT: internet, unowned, in physical_circuits, only ISP-COGENT listed; the tunnel's partner port."""
+    """INET-ACME-COGENT: internet, unowned, in carrier_circuits, only ISP-COGENT listed; the tunnel's partner port."""
     circuit = _circuit_row(_PARTNER_ACCESS).item
 
     assert circuit["circuit_type"] == "internet"
     assert circuit["provider"] == "P023"
     assert "owner" not in circuit
-    assert circuit["member_of_groups"] == ["physical_circuits"]
+    assert circuit["member_of_groups"] == ["carrier_circuits"]
     assert ALL_DEMO_DECLARED_PHYSICAL_LOCATIONS[_PARTNER_ACCESS] == ("ISP-COGENT",)
     assert ALL_DEMO_PARTNER_ACCESS_LOCATIONS == ("ISP-COGENT", "PARTNER-ACME")
     assert circuit["capabilities"] == [[_PARTNER_STUB, "et-0/0/0"], ["EXT-COGENT-FRA1", "et-0/0/1"]]
@@ -220,7 +227,7 @@ def test_the_partner_tunnel_leaves_no_gateway_sub_interface_and_the_security_pol
 
 def test_the_gateway_handoff_is_a_prod_handoff_in_one_cage_carried_by_a_cable() -> None:
     """GW1 eth0.1900 <-> eg-fr201 Ethernet1/12.1900, locations the cage only, VeloCloud as provider, no cloud end."""
-    circuit = _one("TopologyHandoffCircuit", _GATEWAY_HANDOFF).item
+    circuit = _one_session("handoff", _GATEWAY_HANDOFF).item
 
     assert "owner" not in circuit and "cloud_endpoint" not in circuit
     assert circuit["provider"] == "P035"
@@ -249,7 +256,7 @@ def test_the_gateway_has_an_asn_a_loopback_router_id_and_one_bgp_process() -> No
 @pytest.mark.parametrize("circuit_name", [_MEGAPORT, _GATEWAY_HANDOFF])
 def test_the_handoff_sub_interfaces_have_the_vlan_in_their_name_and_no_address(circuit_name: str) -> None:
     """`<parent>.<vlan>` on both ends, the same VLAN, nothing authored on them (the /31 is generated)."""
-    ends: list[Any] = _one("TopologyHandoffCircuit", circuit_name).item["capabilities"]
+    ends: list[Any] = _one_session("handoff", circuit_name).item["capabilities"]
     vlans = {port.rpartition(".")[2] for _, port in ends}
     assert len(vlans) == 1 and vlans.pop().isdigit()
     for end in ends:

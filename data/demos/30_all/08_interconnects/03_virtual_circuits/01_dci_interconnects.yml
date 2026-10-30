@@ -1,6 +1,6 @@
 ---
 # The DCI of the colo on-ramp: one Interconnect circuit per dark fibre of
-# ../01_colo_onramp/03_physical_circuits.yml (six: each DC lands one fibre on each of
+# ../01_colo_onramp/03_carrier_circuits.yml (six: each DC lands one fibre on each of
 # its metro's two border gateways).
 #
 # The fibre is a pure carrier; this circuit is the DCI that rides it, unowned like the
@@ -27,9 +27,10 @@
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: TopologyInterconnectCircuit
+  kind: TopologySessionCircuit
   data:
     - name: "ICX-DC10-EQXFR2"
+      circuit_type: dci
       member_of_groups: [virtual_circuits]
       status: active
       provider: "P016"
@@ -42,6 +43,7 @@ spec:
         - ["eg-fr201", "Ethernet1/10"]
 
     - name: "ICX-DC11-EQXFR2"
+      circuit_type: dci
       member_of_groups: [virtual_circuits]
       status: active
       provider: "P016"
@@ -54,6 +56,7 @@ spec:
         - ["eg-fr201", "Ethernet1/11"]
 
     - name: "ICX-DC12-EQXPA4"
+      circuit_type: dci
       member_of_groups: [virtual_circuits]
       status: active
       provider: "P016"
@@ -66,6 +69,7 @@ spec:
         - ["eg-pa401", "Ethernet1/10"]
 
     - name: "ICX-DC10-EQXFR2-B"
+      circuit_type: dci
       member_of_groups: [virtual_circuits]
       status: active
       provider: "P016"
@@ -78,6 +82,7 @@ spec:
         - ["eg-fr202", "Ethernet1/10"]
 
     - name: "ICX-DC11-EQXFR2-B"
+      circuit_type: dci
       member_of_groups: [virtual_circuits]
       status: active
       provider: "P016"
@@ -90,6 +95,7 @@ spec:
         - ["eg-fr202", "Ethernet1/11"]
 
     - name: "ICX-DC12-EQXPA4-B"
+      circuit_type: dci
       member_of_groups: [virtual_circuits]
       status: active
       provider: "P016"

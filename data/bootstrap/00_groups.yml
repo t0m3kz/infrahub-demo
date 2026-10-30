@@ -117,7 +117,7 @@ spec:
       description: "TopologyColocationZone cages, the kit owners — generator target for ColocationZoneGenerator (add_colocation_zone), which builds the zone's pools, edge pair and firewalls from its fabric_templates. Every zone joins, even one without fabric_templates, because the created-trigger fires per kind and would raise on a non-member"  # yamllint disable-line rule:line-length
     - name: virtual_colocations
       description: "TopologyVirtualColocation provider-hosted presences (Equinix Network Edge, Megaport MCR) — generator target for VirtualColocationGenerator (add_virtual_colocation), which builds the presence's pools and virtual edge devices from its fabric_templates. Every one joins, even one without fabric_templates, because the created-trigger fires per kind and would raise on a non-member"  # yamllint disable-line rule:line-length
-    - name: physical_circuits
-      description: "TopologyPhysicalCircuit, a pure carrier — generator target for PhysicalCircuitGenerator (add_circuit), which derives its facility locations and builds no session"  # yamllint disable-line rule:line-length
+    - name: carrier_circuits
+      description: "TopologyCarrierCircuit, a pure carrier — generator target for CarrierCircuitGenerator (add_circuit), which derives its facility locations and builds no session"  # yamllint disable-line rule:line-length
     - name: virtual_circuits
-      description: "TopologyInterconnectCircuit and TopologyHandoffCircuit — target of the virtual-circuit session generator, which builds their BGP sessions. TopologyTunnelCircuit is not a member: the SD-WAN orchestrator owns its overlay routing"  # yamllint disable-line rule:line-length
+      description: "TopologySessionCircuit of every circuit_type (dci, handoff, tunnel) — target of the virtual-circuit session generator, which builds the BGP sessions of a dci and a handoff and none for a tunnel (the SD-WAN orchestrator owns its overlay routing). Every session circuit joins because the created-trigger fires per kind and would raise on a non-member"  # yamllint disable-line rule:line-length

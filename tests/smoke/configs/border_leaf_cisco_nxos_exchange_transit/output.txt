@@ -284,33 +284,33 @@ vlan 3601
 !
 ! L3 VNI Transit SVIs (symmetric IRB — no host addressing, forwarding only)
 !
-vlan 3900
+vlan 3902
   name L3VNI_INTERNET
   vn-segment 50003
 !
-interface Vlan3900
+interface Vlan3902
   description L3VNI transit SVI for VRF INTERNET
   vrf member INTERNET
   ip forward
   mtu 9214
   no shutdown
 !
-vlan 3901
+vlan 3903
   name L3VNI_MANAGEMENT
   vn-segment 50004
 !
-interface Vlan3901
+interface Vlan3903
   description L3VNI transit SVI for VRF MANAGEMENT
   vrf member MANAGEMENT
   ip forward
   mtu 9214
   no shutdown
 !
-vlan 3902
+vlan 3900
   name L3VNI_PROD
   vn-segment 50001
 !
-interface Vlan3902
+interface Vlan3900
   description L3VNI transit SVI for VRF PROD
   vrf member PROD
   ip forward

@@ -8,11 +8,13 @@
 #     sits in, so a device is mapped to a deployment through its own
 #     `deployment` (the hosting parent or one of its children, see
 #     _device_deployment_ids).
-#   - capabilities: the switch ports carrying the segment; their
-#     devices' VLAN domains need it (DcimPhysicalInterface/DcimLAGInterface
-#     only — an inline DcimVirtualInterface sub-interface on a firewall/LB
-#     HA pair takes the facing border leaf's VLAN, it has no domain). role
-#     tells the customer-facing ports from the border-leaf service ports.
+#   - switched_interfaces: the switch ports carrying the segment; their
+#     devices need a row. The edge's peer is DcimSwitchedInterface
+#     (a physical port or a LAG), so an inline DcimVirtualInterface
+#     sub-interface on a firewall/LB HA pair (it takes the facing border
+#     leaf's VLAN, it has no row) is never in it. role tells the
+#     customer-facing ports from the border-leaf service ports.
+#   - each row's device (the devices whose VRF instances and SVIs follow the rows).
 #   - stretch_scope + customer_deployments' hosting parents: a stretched
 #     segment's border gateways need it too (same shape as vxlan_segment.gql)
 query segment_vlan_domains($segment_id: ID!) {
@@ -61,13 +63,14 @@ query segment_vlan_domains($segment_id: ID!) {
             }
           }
         }
-        capabilities {
+        switched_interfaces {
           edges {
             node {
               id
-              __typename
-              role { value }
-              device { node { id } }
+              ... on DcimInterface {
+                role { value }
+                device { node { id } }
+              }
             }
           }
         }
@@ -84,7 +87,7 @@ query segment_vlan_domains($segment_id: ID!) {
             node {
               id
               vlan_id { value }
-              vlan_domain { node { id } }
+              device { node { id } }
             }
           }
         }

@@ -1202,6 +1202,9 @@
                       }
                     }
                   },
+                  "inline_segment": {
+                    "node": null
+                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -1209,7 +1212,7 @@
               },
               {
                 "node": {
-                  "__typename": "DcimPhysicalInterface",
+                  "__typename": "DcimVirtualInterface",
                   "name": {
                     "value": "Ethernet1"
                   },
@@ -1221,12 +1224,6 @@
                   },
                   "role": {
                     "value": "spine"
-                  },
-                  "interface_type": {
-                    "value": "10gbase-x-sfpp"
-                  },
-                  "mtu": {
-                    "value": 9000
                   },
                   "ip_address": {
                     "node": {
@@ -1242,67 +1239,17 @@
                       }
                     }
                   },
-                  "cable": {
-                    "node": {
-                      "id": "cable-Ethernet1",
-                      "endpoints": {
-                        "edges": [
-                          {
-                            "node": {
-                              "__typename": "DcimPhysicalInterface",
-                              "name": {
-                                "value": "Ethernet1"
-                              },
-                              "ip_address": {
-                                "node": {
-                                  "address": {
-                                    "value": "10.1.0.1/31"
-                                  }
-                                }
-                              },
-                              "device": {
-                                "node": {
-                                  "name": {
-                                    "value": "eg-am-ne02"
-                                  }
-                                }
-                              }
-                            }
-                          },
-                          {
-                            "node": {
-                              "__typename": "DcimPhysicalInterface",
-                              "name": {
-                                "value": "Ethernet1/1"
-                              },
-                              "ip_address": {
-                                "node": {
-                                  "address": {
-                                    "value": "10.1.0.0/31"
-                                  }
-                                }
-                              },
-                              "device": {
-                                "node": {
-                                  "name": {
-                                    "value": "spine-01"
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        ]
-                      }
-                    }
-                  },
                   "capabilities": {
                     "edges": []
+                  },
+                  "inline_segment": {
+                    "node": null
                   }
                 }
               },
               {
                 "node": {
-                  "__typename": "DcimPhysicalInterface",
+                  "__typename": "DcimVirtualInterface",
                   "name": {
                     "value": "Ethernet2"
                   },
@@ -1314,12 +1261,6 @@
                   },
                   "role": {
                     "value": "spine"
-                  },
-                  "interface_type": {
-                    "value": "10gbase-x-sfpp"
-                  },
-                  "mtu": {
-                    "value": 9000
                   },
                   "ip_address": {
                     "node": {
@@ -1335,61 +1276,11 @@
                       }
                     }
                   },
-                  "cable": {
-                    "node": {
-                      "id": "cable-Ethernet2",
-                      "endpoints": {
-                        "edges": [
-                          {
-                            "node": {
-                              "__typename": "DcimPhysicalInterface",
-                              "name": {
-                                "value": "Ethernet2"
-                              },
-                              "ip_address": {
-                                "node": {
-                                  "address": {
-                                    "value": "10.1.0.3/31"
-                                  }
-                                }
-                              },
-                              "device": {
-                                "node": {
-                                  "name": {
-                                    "value": "eg-am-ne02"
-                                  }
-                                }
-                              }
-                            }
-                          },
-                          {
-                            "node": {
-                              "__typename": "DcimPhysicalInterface",
-                              "name": {
-                                "value": "Ethernet1/2"
-                              },
-                              "ip_address": {
-                                "node": {
-                                  "address": {
-                                    "value": "10.1.0.2/31"
-                                  }
-                                }
-                              },
-                              "device": {
-                                "node": {
-                                  "name": {
-                                    "value": "spine-02"
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        ]
-                      }
-                    }
-                  },
                   "capabilities": {
                     "edges": []
+                  },
+                  "inline_segment": {
+                    "node": null
                   }
                 }
               },
@@ -1427,6 +1318,9 @@
                         }
                       }
                     }
+                  },
+                  "inline_segment": {
+                    "node": null
                   },
                   "capabilities": {
                     "edges": []
@@ -1468,6 +1362,9 @@
                       }
                     }
                   },
+                  "inline_segment": {
+                    "node": null
+                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -1492,6 +1389,28 @@
                 "edges": []
               }
             }
+          },
+          "shared_capabilities": {
+            "edges": [
+              {
+                "node": {
+                  "__typename": "ManagedVRF",
+                  "namespace": {
+                    "node": {
+                      "name": {
+                        "value": "PROD"
+                      },
+                      "l3_vni": {
+                        "value": 60000
+                      },
+                      "namespace_type": {
+                        "value": "prod"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
           }
         }
       }

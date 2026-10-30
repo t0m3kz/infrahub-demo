@@ -6,7 +6,7 @@
 # Interface naming:
 #   GE1-GE4  — WAN/LAN copper GigabitEthernet ports on VCE-610
 #   eth0     — VCG-VA gateway uplink (role uplink): cabled to the cage router, carrying the PROD
-#              handoff sub-interface (a HandoffCircuit, eth0.<vlan>).
+#              handoff sub-interface (a handoff session circuit, eth0.<vlan>).
 #   eth1     — VCG-VA gateway internet access (role customer, not uplink): the gateway's own
 #              physical connection to its ISP, the end of its INET-*-GW circuit and the public
 #              port every tunnel of the gateway ends on (add_sdwan_edge takes the one customer

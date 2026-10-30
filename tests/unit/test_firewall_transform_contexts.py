@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 
 from tests.unit.firewall_transform_helpers import _make_context_smoke_data, _make_fw, _render_template
+from transforms.config.firewall import _build_fw_interfaces
 
 
 class TestAddressFamilyAwareRendering:
@@ -167,3 +168,30 @@ class TestFirewallTransformContextPlacement:
         out = await _make_fw().transform(_make_context_smoke_data("paloalto_panos", serves_segment=False))
         assert "set rulebase security rules smoke-permit-rule" in out
         assert "set vsys c005-dedicated rulebase" not in out
+
+
+class TestParentInterfaceOnlyForSubInterfaces:
+    """``parent_interface`` is also a VM NIC's host port: only a ``<parent>.<vlan>`` name is a sub-interface."""
+
+    @staticmethod
+    def _interfaces(name: str, parent: str) -> list[dict[str, Any]]:
+        return [
+            {
+                "name": name,
+                "ip_address": {"address": "10.0.0.2/30"},
+                "parent_interface": {"name": parent},
+                "capabilities": [],
+            }
+        ]
+
+    def test_a_nic_with_an_address_and_a_host_port_parent_has_no_parent(self) -> None:
+        """A NIC named eth0 riding on the host port Ethernet5 keeps parent_interface None."""
+        (nic,) = _build_fw_interfaces(self._interfaces("eth0", "Ethernet5"), [], None)
+
+        assert nic["parent_interface"] is None
+
+    def test_a_vlan_sub_interface_keeps_its_parent(self) -> None:
+        """ethernet1/1.210 on ethernet1/1 is the sub-interface the templates tag with its VLAN."""
+        (sub,) = _build_fw_interfaces(self._interfaces("ethernet1/1.210", "ethernet1/1"), [], None)
+
+        assert sub["parent_interface"] == {"name": "ethernet1/1"}

@@ -95,10 +95,8 @@ ALL_DEMO_EXPECTED_OBJECTS: dict[str, int] = {
         "AppDependency",
         "SecurityAccessProfile",
         "DcimVirtualDevice",
-        "TopologyPhysicalCircuit",
-        "TopologyTunnelCircuit",
-        "TopologyInterconnectCircuit",
-        "TopologyHandoffCircuit",
+        "TopologyCarrierCircuit",
+        "TopologySessionCircuit",
         "CloudInstance",
         "ManagedCloudProxy",
     )

@@ -7,7 +7,7 @@ Network Edge chain, Megaport and the SD-WAN gateway), the SD-WAN branches'
 tunnels and internet underlay, and the cloud-side terminations that close the
 on-prem-to-cloud path.
 
-A physical circuit is a pure carrier. The role of a virtual circuit is its KIND:
+A carrier circuit is a pure carrier. The role of a virtual circuit is its KIND:
 a Tunnel (inventory only, no session), an Interconnect (a DCI: an underlay and
 an EVPN session) or a Handoff (one eBGP session in one environment namespace).
 Their carrier is never declared: it is derived from the circuit's own ports.
@@ -23,7 +23,7 @@ into islands:
     CloudVirtualInterface, not a device port. Without it the traversal walks
     from a border leaf out to the cage and then stops at an island boundary.
 
-Circuit placement is checked from both sides: a physical circuit ends on two
+Circuit placement is checked from both sides: a carrier circuit ends on two
 facilities where its end devices sit (the end the data leaves out is the one
 add_circuit derived), a tunnel on its owner's office, and every location's
 reverse ``circuits`` lists exactly the circuits naming it. The per-kind rules
@@ -54,6 +54,7 @@ from utils.data_cleaning import clean_data
 from utils.limits import CIRCUIT_ENDS
 
 from .all_demo_circuit_constants import (
+    ALL_DEMO_CARRIER_CIRCUIT_TYPES,
     ALL_DEMO_DECLARED_PHYSICAL_LOCATIONS,
     ALL_DEMO_DECLARED_VIRTUAL_LOCATIONS,
     ALL_DEMO_FACILITY_KINDS,
@@ -62,13 +63,12 @@ from .all_demo_circuit_constants import (
     ALL_DEMO_ISP_ACCESS_DEVICE,
     ALL_DEMO_ISP_ACCESS_LOCATION,
     ALL_DEMO_ISP_ACCESS_PORTS,
-    ALL_DEMO_PHYSICAL_CIRCUIT_TYPES,
     ALL_DEMO_SDWAN_EDGE_UPLINK,
     ALL_DEMO_SDWAN_UNDERLAY_CIRCUITS,
     ALL_DEMO_SHARED_INTERNET_CIRCUITS,
-    HANDOFF_KIND,
-    INTERCONNECT_KIND,
-    TUNNEL_KIND,
+    HANDOFF_TYPE,
+    INTERCONNECT_TYPE,
+    TUNNEL_TYPE,
 )
 from .circuit_helpers import fetch_interconnect_inventory
 from .conftest import TestInfrahubDockerWithClient
@@ -101,9 +101,9 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
     # ------------------------------------------------------------------
 
     @pytest.mark.order(394)
-    @pytest.mark.dependency(scope="session", name="all_demo_physical_circuits", depends=["all_demo_inventory"])
+    @pytest.mark.dependency(scope="session", name="all_demo_carrier_circuits", depends=["all_demo_inventory"])
     @pytest.mark.asyncio
-    async def test_01_verify_physical_circuits(
+    async def test_01_verify_carrier_circuits(
         self,
         async_client_main: InfrahubClient,
         scenario_branch: str,
@@ -118,7 +118,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         is where one end's device is deployed (_placement_errors); the ends the
         data leaves out are the ones add_circuit derived (_derived_location_errors).
         """
-        logging.info("=== %s - Step 1: Physical Circuits ===", SCENARIO_NAME)
+        logging.info("=== %s - Step 1: Carrier Circuits ===", SCENARIO_NAME)
 
         inventory = await fetch_interconnect_inventory(client=async_client_main, branch=scenario_branch)
         physical = inventory["physical"]
@@ -129,11 +129,11 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         for circuit in physical:
             by_type[circuit["circuit_type"]] = by_type.get(circuit["circuit_type"], 0) + 1
 
-        for circuit_type, expected in sorted(ALL_DEMO_PHYSICAL_CIRCUIT_TYPES.items()):
+        for circuit_type, expected in sorted(ALL_DEMO_CARRIER_CIRCUIT_TYPES.items()):
             actual = by_type.get(circuit_type, 0)
             if actual != expected:
                 errors.append(f"circuit_type '{circuit_type}': {actual} circuit(s), expected {expected}")
-        unexpected = sorted(set(by_type) - set(ALL_DEMO_PHYSICAL_CIRCUIT_TYPES))
+        unexpected = sorted(set(by_type) - set(ALL_DEMO_CARRIER_CIRCUIT_TYPES))
         if unexpected:
             errors.append(f"unexpected circuit type(s): {unexpected}")
 
@@ -158,11 +158,11 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         errors.extend(self._sdwan_underlay_errors(physical))
         errors.extend(self._gateway_access_errors(physical))
 
-        assert not errors, f"30_all physical circuits are wrong on branch '{scenario_branch}':\n" + "\n".join(
+        assert not errors, f"30_all carrier circuits are wrong on branch '{scenario_branch}':\n" + "\n".join(
             f"  - {e}" for e in errors
         )
 
-        logging.info("Physical circuits verified: %d (%s)", len(physical), dict(sorted(by_type.items())))
+        logging.info("Carrier circuits verified: %d (%s)", len(physical), dict(sorted(by_type.items())))
 
     @staticmethod
     def _port_errors(physical: list[dict]) -> list[str]:
@@ -212,7 +212,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                 errors.append(f"{circuit_id}: end devices {_deployments(circuit)}, expected 2, each with a deployment")
                 continue
             (first, second), (left, right) = locations, devices
-            # Exact, like checks/circuit_placement.py's _end_at: a physical circuit's location IS the end device's
+            # Exact, like checks/circuit_placement.py's _end_at: a carrier circuit's location IS the end device's
             # deployment (an on-ramp edge's zone), never a sibling cage of the same metro.
             if not (
                 (first["id"] == left["deployment_id"] and second["id"] == right["deployment_id"])
@@ -328,7 +328,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
     # ------------------------------------------------------------------
 
     @pytest.mark.order(395)
-    @pytest.mark.dependency(scope="session", name="all_demo_virtual_circuits", depends=["all_demo_physical_circuits"])
+    @pytest.mark.dependency(scope="session", name="all_demo_virtual_circuits", depends=["all_demo_carrier_circuits"])
     @pytest.mark.asyncio
     async def test_02_verify_virtual_circuits(
         self,
@@ -338,7 +338,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         """Verify each virtual circuit's kind, owner, locations, ends, derived carrier and placement.
 
         The role of a virtual circuit is its kind (Tunnel, Interconnect, Handoff). The carrier is derived, never
-        declared: the physical circuits on the circuit's own ports (or on the parent of a sub-interface), compared
+        declared: the carrier circuits on the circuit's own ports (or on the parent of a sub-interface), compared
         with ALL_DEMO_VIRTUAL_CIRCUITS. The per-kind rules (_virtual_placement_errors) hold on the live data.
         """
         logging.info("=== %s - Step 2: Virtual Circuits ===", SCENARIO_NAME)
@@ -354,7 +354,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
 
         kinds: dict[str, int] = {}
         for circuit in inventory["virtual"]:
-            kinds[circuit["kind"]] = kinds.get(circuit["kind"], 0) + 1
+            kinds[circuit["circuit_type"]] = kinds.get(circuit["circuit_type"], 0) + 1
         logging.info("Virtual circuits verified: %d %s", len(inventory["virtual"]), dict(sorted(kinds.items())))
 
     @staticmethod
@@ -379,7 +379,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                     f"{sorted(ALL_DEMO_DECLARED_VIRTUAL_LOCATIONS[name])} (a virtual circuit derives none)"
                 )
             locations = {location["id"] for location in circuit["location_nodes"]}
-            allowed = (1, CIRCUIT_ENDS) if circuit["kind"] == HANDOFF_KIND else (CIRCUIT_ENDS,)
+            allowed = (1, CIRCUIT_ENDS) if circuit["circuit_type"] == HANDOFF_TYPE else (CIRCUIT_ENDS,)
             if len(locations) not in allowed:
                 errors.append(
                     f"{name}: terminates at {circuit['locations']}, expected {' or '.join(map(str, allowed))} distinct location(s)"
@@ -388,11 +388,11 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             if len({end["id"] for end in circuit["end_nodes"]}) != CIRCUIT_ENDS:
                 errors.append(f"{name}: ends {circuit['ends']}, expected exactly {CIRCUIT_ENDS} distinct ports")
                 continue
-            if circuit["kind"] == TUNNEL_KIND:
+            if circuit["circuit_type"] == TUNNEL_TYPE:
                 errors.extend(_tunnel_errors(circuit, physical_by_id))
-            elif circuit["kind"] == INTERCONNECT_KIND:
+            elif circuit["circuit_type"] == INTERCONNECT_TYPE:
                 errors.extend(_interconnect_errors(circuit, physical_by_id))
-            elif circuit["kind"] == HANDOFF_KIND:
+            elif circuit["circuit_type"] == HANDOFF_TYPE:
                 errors.extend(_handoff_errors(circuit))
             else:
                 errors.append(f"{name}: kind '{circuit['kind']}' is none of the three virtual circuit kinds")
@@ -408,8 +408,9 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify `virtual_circuits`, add_virtual_circuit's target group, is exactly the Interconnect and Handoff
-        circuits: a Tunnel has no session (the SD-WAN orchestrator owns its overlay routing), so it is not a member."""
+        """Verify `virtual_circuits`, add_virtual_circuit's target group, is exactly the session circuits: the DCI and
+        handoff circuits it builds sessions for, and the tunnels (a member because the created-trigger raises for a
+        non-member; the generator logs and stops, the SD-WAN orchestrator owns the overlay routing)."""
         logging.info("=== %s - Step 2a: virtual_circuits group ===", SCENARIO_NAME)
 
         inventory = await fetch_interconnect_inventory(client=async_client_main, branch=scenario_branch)
@@ -422,20 +423,16 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         assert groups, "group 'virtual_circuits' not found"
         members = {str(member["id"]): str(member["typename"]) for member in groups[0]["members"] or []}
 
-        session_kinds = {INTERCONNECT_KIND, HANDOFF_KIND}
-        expected = {c["id"] for c in inventory["virtual"] if c["kind"] in session_kinds}
-        tunnels = {c["id"] for c in inventory["virtual"] if c["kind"] == TUNNEL_KIND}
+        expected = {c["id"] for c in inventory["virtual"]}
         errors = []
         if expected - set(members):
             errors.append(
                 f"not in the group: {sorted(c['name'] for c in inventory['virtual'] if c['id'] in expected - set(members))}"
             )
         if set(members) - expected:
-            errors.append(f"members that are no interconnect or handoff circuit: {sorted(set(members) - expected)}")
-        if tunnels & set(members):
-            errors.append("a tunnel circuit is in the group, it has no session to generate")
+            errors.append(f"members that are no session circuit: {sorted(set(members) - expected)}")
         if not expected:
-            errors.append("no interconnect or handoff circuit on the branch")
+            errors.append("no session circuit on the branch")
 
         assert not errors, f"virtual_circuits group is wrong on branch '{scenario_branch}':\n" + "\n".join(
             f"  - {e}" for e in errors

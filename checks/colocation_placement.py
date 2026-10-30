@@ -39,6 +39,10 @@ envelope):
    in at most one domain; a domain has exactly two members, both appliances of the presence that list it, and the
    mode is active-passive (the artifact renders no other). A pair-level problem is reported once, on the first member
    by name.
+8. Terraform appliance model. The artifact orders the appliance's device type name (type_code), its software image's
+   ``package`` (package_code) and ``version``, and its ``term_length``; an appliance has no hardware, so every
+   interface is a ``DcimVirtualInterface``. Each appliance of a terraform presence reports a missing device type,
+   software image, image package or term_length, and any interface of another kind.
 """
 
 from __future__ import annotations
@@ -59,6 +63,9 @@ TERRAFORM = "terraform"
 
 APPLIANCE = "CloudNetworkAppliance"
 """The kind of a device hosted by the provider on a virtual colocation."""
+
+VIRTUAL_INTERFACE = "DcimVirtualInterface"
+"""The only interface kind of a hosted appliance: it has no hardware, so no physical port and no cable."""
 
 HOSTED_TEMPLATE_KIND = {
     ZONE: "TemplateDcimPhysicalDevice",
@@ -403,6 +410,54 @@ def terraform_order_data_findings(cleaned: dict[str, Any]) -> list[Finding]:
     return findings
 
 
+def _appliance_model_problems(appliance: dict[str, Any]) -> list[str]:
+    """What one appliance lacks of the structured model the order is read from, and its non-virtual interfaces."""
+    label = f"appliance '{_name(appliance)}'"
+    problems = []
+    image = appliance.get("software_image")
+    if not appliance.get("device_type"):
+        problems.append(f"{label} has no device type (its name is the order's type_code)")
+    if not isinstance(image, dict) or not image:
+        problems.append(f"{label} has no software image (its version and package are the order's)")
+    elif not image.get("package"):
+        problems.append(f"{label} has a software image without a package (the order's package_code)")
+    if not appliance.get("term_length"):
+        problems.append(f"{label} has no term_length")
+    physical = sorted(
+        {
+            str(interface.get("typename"))
+            for interface in appliance.get("interfaces") or []
+            if isinstance(interface, dict) and interface.get("typename") != VIRTUAL_INTERFACE
+        }
+    )
+    if physical:
+        problems.append(
+            f"{label} has interfaces of kind {', '.join(physical)} but a hosted appliance has only {VIRTUAL_INTERFACE}"
+        )
+    return problems
+
+
+def terraform_appliance_findings(cleaned: dict[str, Any]) -> list[Finding]:
+    """Rule 8: each appliance of a terraform presence has device type, software image with package, term and only virtual NICs."""
+    findings = []
+    for node in cleaned.get(VIRTUAL_COLOCATION) or []:
+        if node.get("infrastructure_orchestrator") != TERRAFORM:
+            continue
+        for appliance in node.get("appliances") or []:
+            if not isinstance(appliance, dict) or appliance.get("typename") != APPLIANCE:
+                continue
+            findings.extend(
+                Finding(
+                    f"{VIRTUAL_COLOCATION} '{_name(node)}' is routed to terraform but its appliance model is wrong: "
+                    f"{problem}.",
+                    node.get("id"),
+                    VIRTUAL_COLOCATION,
+                )
+                for problem in _appliance_model_problems(appliance)
+            )
+    return findings
+
+
 RULES: tuple[Callable[[dict[str, Any]], list[Finding]], ...] = (
     template_kind_findings,
     unique_name_findings,
@@ -411,6 +466,7 @@ RULES: tuple[Callable[[dict[str, Any]], list[Finding]], ...] = (
     zone_design_in_metro_findings,
     metro_zone_count_findings,
     terraform_order_data_findings,
+    terraform_appliance_findings,
 )
 """Every rule, run in order over the cleaned query result."""
 

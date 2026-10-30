@@ -375,22 +375,22 @@ vlan 220
 !
 ! L3 VNI Transit SVIs (symmetric IRB — no host addressing, forwarding only)
 !
-vlan 3900
+vlan 3901
   name L3VNI_NONPROD
   vn-segment 50011
 !
-interface Vlan3900
+interface Vlan3901
   description L3VNI transit SVI for VRF NONPROD
   vrf member NONPROD
   ip forward
   mtu 9214
   no shutdown
 !
-vlan 3901
+vlan 3900
   name L3VNI_PROD
   vn-segment 50012
 !
-interface Vlan3901
+interface Vlan3900
   description L3VNI transit SVI for VRF PROD
   vrf member PROD
   ip forward

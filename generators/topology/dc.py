@@ -215,11 +215,10 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
             if asn_pool_obj:
                 fabric_asn_pool_id = asn_pool_obj.id
 
-        # A segment's LOCAL VLAN ID is chosen per VLAN domain (MLAG pair
-        # or a device without MLAG), not per-DC — see generators/devices.py's
-        # _ensure_mlag_pairs and
-        # generators/vlan_domain.py's per-domain ManagedVlanDomainSegment
-        # allocation (no pool: the lowest id free on every domain the segment
+        # A segment's LOCAL VLAN ID is chosen per device (an MLAG pair shares
+        # one), not per-DC — see generators/vlan_domain.py's per-device
+        # ManagedVlanDomainSegment
+        # allocation (no pool: the lowest id free on every device the segment
         # lands on, so one segment keeps one id across the fabric).
 
         # L2 VNI pool for the VXLAN overlay (VRF-lite: no VRF stretches over

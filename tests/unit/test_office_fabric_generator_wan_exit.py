@@ -185,6 +185,25 @@ class TestWanExit:
         assert all("capability_obj" not in c for c in calls)
 
     @pytest.mark.asyncio
+    async def test_every_end_gets_the_prod_instance_once_and_keeps_the_lock_over_the_addresses(self) -> None:
+        """One held block for all the exit's devices; the sub-interfaces (and so the addresses) land inside it."""
+        exit_ = _WanExit()
+        original = exit_.gen.ensure_vlan_subinterface
+
+        async def _sub(**kwargs: Any) -> Any:
+            exit_.gen.vrfs_events.append("sub")
+            return await original(**kwargs)
+
+        exit_.gen.ensure_vlan_subinterface = _sub
+
+        await exit_.run()
+
+        assert exit_.gen.vrfs_held_calls == [{"ds-id-1": {"PROD"}, "ds-id-2": {"PROD"}, "edge-id": {"PROD"}}]
+        events = exit_.gen.vrfs_events
+        assert events[0] == "held" and events[-1] == "released"
+        assert set(events[1:-1]) == {"sub"}
+
+    @pytest.mark.asyncio
     async def test_an_office_always_exits_in_the_prod_vrf_with_the_prod_tag(self) -> None:
         """An office has no environment: its exit is the PROD namespace's, never a NON-PROD one."""
         exit_ = _WanExit()

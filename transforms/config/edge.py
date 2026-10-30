@@ -7,6 +7,8 @@ from transforms.helpers.bgp_external import (
     get_internet_prefixes,
     get_onprem_prefixes,
 )
+from transforms.helpers.vrf import plain_vrf_names
+from utils.circuit_underlay import SESSION_CIRCUIT
 from utils.routing_identity import customer_tags, identity_in_use, routing_community_regexes
 
 
@@ -42,7 +44,7 @@ class Edge(BaseDeviceTransform):
                 data.get("name") or "",
                 device_capabilities=data.get("capabilities"),
                 offices=roots.get("TopologyCustomerOffice"),
-                tunnels=roots.get("TopologyTunnelCircuit"),
+                tunnels=roots.get(SESSION_CIRCUIT),
             ),
             get_onprem_prefixes(roots.get("ManagedNetworkSegment")),
             device_name=data.get("name") or "",
@@ -53,4 +55,10 @@ class Edge(BaseDeviceTransform):
         )
         # The expressions of the community-list that selects our communities (edges/cisco_nxos.j2).
         config["routing_community_regexes"] = routing_community_regexes()
+        return config
+
+    def _template_context(self, device_data: dict, platform_name: str, extra_roots: dict) -> dict:
+        config = super()._template_context(device_data, platform_name, extra_roots)
+        # The VRF instances with no L3 VNI: a plain `vrf context` (edges/cisco_nxos.j2).
+        config["plain_vrfs"] = plain_vrf_names(device_data, config.get("bgp"), config.get("vxlan"))
         return config

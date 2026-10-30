@@ -343,6 +343,15 @@ check_definitions:
   - name: validate_routing_tags
     class_name: CheckRoutingTags
     file_path: checks/routing_tags.py
+  # Targetless: a device is in one domain across the whole instance.
+  - name: validate_mlag_domains
+    class_name: CheckMlagDomains
+    file_path: checks/mlag_domains.py
+  # Targetless: a device's VRF instances and SVIs are derived from its VLAN domain,
+  # interfaces and service contexts; the check reads every device with no variables.
+  - name: validate_vrf_instances
+    class_name: CheckVrfInstances
+    file_path: checks/vrf_instances.py
   # Targetless: the invariants span topologies (namespaces, the INTERNET VRF,
   # cloud Transit Gateways and virtual interfaces), not one device.
   - name: validate_routing_invariants
@@ -360,13 +369,13 @@ check_definitions:
     class_name: CheckLispFabric
     file_path: checks/lisp_fabric.py
   # Targetless: a port is shared between circuits, so the rule spans every
-  # physical circuit, not one device or one circuit.
-  - name: validate_physical_circuit_ports
-    class_name: CheckPhysicalCircuitPorts
-    file_path: checks/physical_circuit_ports.py
-  # Targetless: the rules span the carriers found on a virtual circuit's
-  # ports, so one query reads every physical circuit and every Tunnel,
-  # Interconnect and Handoff circuit.
+  # carrier circuit, not one device or one circuit.
+  - name: validate_carrier_circuit_ports
+    class_name: CheckCarrierCircuitPorts
+    file_path: checks/carrier_circuit_ports.py
+  # Targetless: the rules span the carriers found on a session circuit's
+  # ports, so one query reads every carrier circuit and every session circuit
+  # (dci, handoff and tunnel).
   - name: validate_circuit_placement
     class_name: CheckCircuitPlacement
     file_path: checks/circuit_placement.py
@@ -394,10 +403,18 @@ check_definitions:
   - name: validate_virtual_device_placement
     class_name: CheckVirtualDevicePlacement
     file_path: checks/virtual_device_placement.py
-  # Targetless: the rule is per NIC of every hosted virtual device.
-  - name: validate_virtual_nic_pinning
-    class_name: CheckVirtualNicPinning
-    file_path: checks/virtual_nic_pinning.py
+  # Targetless: the rule is per virtual interface (a NIC on its host, a sub-interface on its own device).
+  - name: validate_interface_parents
+    class_name: CheckInterfaceParents
+    file_path: checks/interface_parents.py
+  # Targetless: a cross-connect runs through the pairs of several panels, so one query reads every panel.
+  - name: validate_patch_panel
+    class_name: CheckPatchPanel
+    file_path: checks/patch_panel.py
+  # Targetless: a port is a switchport or a routed port (the layer is its content), per interface of every device.
+  - name: validate_interface_layers
+    class_name: CheckInterfaceLayers
+    file_path: checks/interface_layers.py
   # Targetless: a rule's source segment spans footprints, and the hardware that
   # enforces it (firewall pair, legs, exchange, ports, SNAT) belongs to the
   # contexts serving them.
@@ -720,8 +737,6 @@ queries:
     file_path: queries/topology/add/segment_vlan_domains.gql
   - name: vxlan_segment_data
     file_path: queries/topology/add/vxlan_segment.gql
-  - name: vrf_namespace_data
-    file_path: queries/topology/add/vrf_namespace.gql
   - name: colocation_metro_data
     file_path: queries/topology/add/colocation_metro.gql
   - name: colocation_zone_data
@@ -748,14 +763,18 @@ queries:
     file_path: queries/validation/reference_fabric.gql
   - name: routing_tags
     file_path: queries/validation/routing_tags.gql
+  - name: mlag_domains
+    file_path: queries/validation/mlag_domains.gql
+  - name: vrf_instances
+    file_path: queries/validation/vrf_instances.gql
   - name: routing_invariants
     file_path: queries/validation/routing_invariants.gql
   - name: evpn_fabric
     file_path: queries/validation/evpn_fabric.gql
   - name: lisp_fabric
     file_path: queries/validation/lisp_fabric.gql
-  - name: physical_circuit_ports
-    file_path: queries/validation/physical_circuit_ports.gql
+  - name: carrier_circuit_ports
+    file_path: queries/validation/carrier_circuit_ports.gql
   - name: circuit_placement
     file_path: queries/validation/circuit_placement.gql
   - name: suite_capacity
@@ -770,8 +789,12 @@ queries:
     file_path: queries/validation/hypervisor_environment.gql
   - name: virtual_device_placement
     file_path: queries/validation/virtual_device_placement.gql
-  - name: virtual_nic_pinning
-    file_path: queries/validation/virtual_nic_pinning.gql
+  - name: interface_parents
+    file_path: queries/validation/interface_parents.gql
+  - name: patch_panel
+    file_path: queries/validation/patch_panel.gql
+  - name: interface_layers
+    file_path: queries/validation/interface_layers.gql
   - name: pool_utilization
     file_path: queries/validation/pool_utilization.gql
   - name: loadbalancer_validation
@@ -926,9 +949,9 @@ generator_definitions:
         - utils/
   - name: add_circuit
     file_path: generators/topology/circuit.py
-    targets: physical_circuits
+    targets: carrier_circuits
     query: circuit_data
-    class_name: PhysicalCircuitGenerator
+    class_name: CarrierCircuitGenerator
     execute_in_proposed_change: false
     execute_after_merge: false
     parameters:

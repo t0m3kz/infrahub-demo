@@ -19,20 +19,16 @@ from transforms.colocation.virtual_colocation import VirtualColocationTerraform,
 from transforms.colocation.virtual_terraform import render_equinix_network_devices
 
 _C8000V = {
-    "service_code": "C8000V",
-    "package_code": "network-essentials",
-    "software_version": "17.12.01a",
-    "device_type": {"cpu_count": 2},
+    "device_type": {"name": "C8000V", "cpu_count": 2},
+    "software_image": {"version": "17.12.01a", "package": "network-essentials"},
     "term_length": 12,
 }
 _PA_VM = {
-    "service_code": "PA-VM",
-    "package_code": "VM100",
-    "software_version": "11.1.3",
-    "device_type": {"cpu_count": 2},
+    "device_type": {"name": "PA-VM", "cpu_count": 2},
+    "software_image": {"version": "11.1.3", "package": "VM100"},
     "term_length": 12,
 }
-_FG_VM = {**_PA_VM, "service_code": "FG-VM"}
+_FG_VM = {**_PA_VM, "device_type": {"name": "FG-VM", "cpu_count": 2}}
 
 
 _BGP = {"id": "bgp-1", "typename": "ManagedBGP", "name": "AM-NE-overlay"}
@@ -171,8 +167,15 @@ def _raw(cleaned: dict[str, Any]) -> dict[str, Any]:
             "role": value(item["role"]),
         }
         if item["typename"] == "CloudNetworkAppliance":
-            raw.update({key: value(item.get(key)) for key in _C8000V if key != "device_type"})
-            raw["device_type"] = node({"cpu_count": value((item.get("device_type") or {}).get("cpu_count"))})
+            raw["term_length"] = value(item.get("term_length"))
+            device_type = item.get("device_type") or {}
+            raw["device_type"] = node(
+                {"name": value(device_type.get("name")), "cpu_count": value(device_type.get("cpu_count"))}
+            )
+            image = item.get("software_image") or {}
+            raw["software_image"] = node(
+                {"version": value(image.get("version")), "package": value(image.get("package"))}
+            )
             raw["capabilities"] = {"edges": [node(capability(entry)) for entry in item["capabilities"]]}
         return raw
 
@@ -351,7 +354,7 @@ def test_account_and_notifications_come_from_the_model() -> None:
 
 def test_missing_ordering_parameter_is_reported_by_the_renderer_per_device() -> None:
     """An appliance without a package code leaves it empty; the renderer names the device and the field."""
-    ordering = {key: item for key, item in _C8000V.items() if key != "package_code"}
+    ordering = {**_C8000V, "software_image": {"version": "17.12.01a", "package": None}}
     cleaned = _vc([_entry("edge", 1)], [_appliance("eg-am-ne01", "edge", ordering)])
 
     with pytest.raises(ValueError, match="eg-am-ne01.*package_code"):

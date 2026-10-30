@@ -39,7 +39,7 @@ def _peerings() -> dict[str, dict[str, Any]]:
 
 
 def _circuits() -> dict[str, dict[str, Any]]:
-    return {c["circuit_id"]: c for c in _objects("TopologyPhysicalCircuit")}
+    return {c["circuit_id"]: c for c in _objects("TopologyCarrierCircuit")}
 
 
 def test_every_circuit_has_a_peering_and_vice_versa() -> None:
@@ -51,7 +51,7 @@ def test_every_circuit_has_a_peering_and_vice_versa() -> None:
 def test_peering_names_do_not_collide_with_circuits() -> None:
     """Peerings and circuits share the ManagedGeneric name HFID, so their names must differ."""
     names = {p["name"] for p in _objects("ManagedBGPPeering")}
-    assert not names & {c["name"] for c in _objects("TopologyPhysicalCircuit")}
+    assert not names & {c["name"] for c in _objects("TopologyCarrierCircuit")}
     assert len(_circuits()) == 4
 
 

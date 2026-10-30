@@ -1,0 +1,9 @@
+{#- Expects `interface` in scope. `interface.channel_group` / `channel_group_mode` are set on a member port of a LAG
+    (transforms/helpers/vxlan.py): the LAG's lag_id and its lacp_mode (active, passive, static -> on). The peer-link
+    members are bound by cisco_nxos_vpc.j2.
+    D: Cisco Nexus 9000 Series NX-OS Layer 2 Switching Configuration Guide, "Configuring Port Channels":
+    `channel-group <number> mode {active | passive | on}` on the member interface adds it to the port-channel.
+    documented-not-lab-verified: the section was not opened. -#}
+{%- if interface.channel_group is defined %}
+  channel-group {{ interface.channel_group }} mode {{ interface.channel_group_mode }}
+{%- endif -%}

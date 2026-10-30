@@ -3,11 +3,13 @@
 #   - TopologyCustomerDC: the design's quota (max_segments, ports_<speed>g) and
 #     the DC the footprint hangs off (a port counts for a footprint only in its DC).
 #   - ManagedVxlanSegment: the footprints each names and the
-#     switch ports tagged with it (its `capabilities`). A port's speed is its
+#     switch ports tagged with it (its `switched_interfaces`: physical ports and port-channels). A port's speed is its
 #     interface_type; a port-channel carries its member ports' speeds. role tells
 #     the host-facing ports from the border-leaf firewall/load-balancer ports;
 #     the device's deployment (a pod, a colocation zone) is how the port is placed
-#     in a DC. security_zone: an exchange-zone segment is a shared service.
+#     in a DC. security_zone: an exchange-zone segment is a shared service. QuotaPortFields is spread once at node
+#     level: a named fragment spread directly inside an inline fragment resolves to nulls on a live Infrahub
+#     (queries/fragments/group_policy.gql).
 query customer_quota {
   TopologyCustomerDC {
     edges {
@@ -35,31 +37,33 @@ query customer_quota {
         name { value }
         security_zone { node { name { value } } }
         customer_deployments { edges { node { id name { value } } } }
-        capabilities {
+        switched_interfaces {
           edges {
             node {
               id
               __typename
-              role { value }
-              device {
-                node {
-                  ... on DcimPhysicalDevice {
-                    deployment {
-                      node {
-                        id
-                        __typename
-                        ... on TopologyPod { parent { node { id name { value } } } }
-                        ... on TopologyColocationZone { parent { node { id name { value } } } }
-                      }
-                    }
-                  }
-                }
-              }
+              ...QuotaPortFields
               ... on DcimPhysicalInterface { interface_type { value } }
-              ... on DcimLAGInterface {
-                member_interfaces { edges { node { id interface_type { value } } } }
-              }
+              ... on DcimLAGInterface { member_interfaces { edges { node { id interface_type { value } } } } }
             }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment QuotaPortFields on DcimInterface {
+  role { value }
+  device {
+    node {
+      ... on DcimPhysicalDevice {
+        deployment {
+          node {
+            id
+            __typename
+            ... on TopologyPod { parent { node { id name { value } } } }
+            ... on TopologyColocationZone { parent { node { id name { value } } } }
           }
         }
       }

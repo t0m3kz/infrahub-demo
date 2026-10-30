@@ -21,16 +21,12 @@ vlan 200
    name Customer-A
 
 interface Ethernet1
-   description to spine-01
-   no switchport
-   ip address 10.1.0.1/31
+   description to leaf-01
 
    no shutdown
 
 interface Ethernet2
-   description to spine-02
-   no switchport
-   ip address 10.1.0.3/31
+   description to leaf-02
 
    no shutdown
 

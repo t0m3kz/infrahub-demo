@@ -25,9 +25,12 @@ from typing import Any
 from infrahub_sdk.batch import InfrahubBatch
 
 from utils.data_cleaning import clean_data
+from utils.vrf_demand import SVI_ROLE
 
 from ..common import CommonGenerator
+from ..helpers.vrf import VrfMixin
 from ..pod_config import pod_spine_slot_device_names, spine_slot_role
+from ..pools import PoolMixin
 from ..protocols import (
     CoreIPAddressPool,
     CoreIPPrefixPool,
@@ -50,7 +53,7 @@ _FAR_END_FABRIC_ROLES = frozenset({"super-spine", "spine", "border-spine", "bord
 _POD_POOLS = (("loopback_pool", CoreIPAddressPool), ("prefix_pool", CoreIPPrefixPool))
 
 
-class PodDecommissionGenerator(CommonGenerator):
+class PodDecommissionGenerator(PoolMixin, VrfMixin, CommonGenerator):
     async def _filter_by_ids(self, kind: Any, ids: list[str], **kwargs: Any) -> list[Any]:
         """client.filters(ids=...), or [] for no ids: the SDK forwards an
         empty id list, which does not narrow the query at all."""
@@ -140,7 +143,10 @@ class PodDecommissionGenerator(CommonGenerator):
             interface.get("id")
             for device in self.data.get("devices", []) or []
             for interface in device.get("interfaces", []) or []
-            if interface.get("status") == "active" and interface.get("typename") == "DcimVirtualInterface"
+            if interface.get("status") == "active"
+            and interface.get("typename") == "DcimVirtualInterface"
+            # An SVI goes through the VRF reconcile below, which deletes it under the device locks.
+            and interface.get("role") != SVI_ROLE
         ]
 
         p2p_addresses: list[str] = [
@@ -255,4 +261,13 @@ class PodDecommissionGenerator(CommonGenerator):
             await prefix_obj.delete()
             self.logger.info(f"deleted prefix {prefix_obj.prefix.value}")
 
+        # The devices are decommissioned, so they carry no VRF: the reconcile (device locks held) deletes their SVIs,
+        # drops their memberships and the instances that leave empty. It runs for every pod device, also on a re-run
+        # that finds them already decommissioned.
+        await self.reconcile_vrfs([device["id"] for device in pod_devices if device.get("id")])
+
         await self._release_pod_pools()
+
+        # Last: sweep what is left empty in the DC (an instance no pod device of this run belonged to).
+        if dc_id := (self.data.get("parent") or {}).get("id"):
+            await self.prune_empty_vrfs([dc_id])

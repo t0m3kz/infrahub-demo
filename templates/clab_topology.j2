@@ -31,10 +31,10 @@ topology:
 {% if interface.cable and interface.cable.node.endpoints.edges | length == 2 %}
 {% for endpoint_edge in interface.cable.node.endpoints.edges %}
 {% set endpoint = endpoint_edge.node %}
-{% if endpoint.device.node.name.value == device.name.value and endpoint.name.value == interface.name.value %}
+{% if endpoint.device and endpoint.device.node.name.value == device.name.value and endpoint.name.value == interface.name.value %}
 {% for peer_edge in interface.cable.node.endpoints.edges %}
 {% set peer = peer_edge.node %}
-{% if peer.device.node.name.value != device.name.value %}
+{% if peer.device and peer.device.node.name.value != device.name.value %}
 {% set local_key = endpoint.device.node.name.value ~ ":" ~ endpoint.name.value %}
 {% set peer_key = peer.device.node.name.value ~ ":" ~ peer.name.value %}
 {% if local_key < peer_key %}

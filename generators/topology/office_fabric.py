@@ -75,6 +75,7 @@ from ..devices import DeviceMixin
 from ..helpers.naming import sdwan_edge_name
 from ..helpers.routing import loopback_prefix_length, p2p_prefix_length
 from ..helpers.template_interfaces import template_interface_names_by_role
+from ..helpers.vrf import VrfMixin
 from ..pools import PoolMixin
 from ..protocols import (
     DcimPhysicalDevice,
@@ -145,7 +146,7 @@ class _ExitLink:
     edge_address: Any
 
 
-class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, CommonGenerator):
+class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, VrfMixin, CommonGenerator):
     """add_office_fabric — an office's pools, switches, cabling, OSPF underlay and LISP site key."""
 
     data: TopologyCustomerOfficeData
@@ -493,6 +494,7 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
                 distribution_names=distribution_names,
                 switch_ports=switch_ports,
                 transit_pool=transit_pools[0],
+                namespace=namespaces[0].name.value,
                 vlan=wan_exit_vlan(PROD_TYPE),
             )
 
@@ -505,6 +507,7 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
         distribution_names: list[str],
         switch_ports: list[str],
         transit_pool: Any,
+        namespace: str,
         vlan: int,
     ) -> None:
         """Cable, address and peer every link of the exit; every precondition has held by now."""
@@ -520,30 +523,37 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
         if not pairs:
             return
 
+        # Both ends of every link get an instance of the namespace first (generators/helpers/vrf.py), and keep their
+        # device locks until the addresses are saved: a pruning pass must not see an instance without its demand.
+        needs = {port.device.id: {namespace} for pair in pairs for port in pair}
         links: list[_ExitLink] = []
-        for edge_port, switch_port in sorted(pairs, key=lambda pair: pair[1].device.display_label):
-            link = await self._address_exit_link(
-                edge_port=edge_port,
-                edge_name=edge_name,
-                switch_port=switch_port,
-                transit_pool=transit_pool,
-                vlan=vlan,
-            )
-            if link is not None:
-                links.append(link)
+        async with self.vrfs_held(needs):
+            for edge_port, switch_port in sorted(pairs, key=lambda pair: pair[1].device.display_label):
+                link = await self._address_exit_link(
+                    edge_port=edge_port,
+                    edge_name=edge_name,
+                    switch_port=switch_port,
+                    transit_pool=transit_pool,
+                    namespace=namespace,
+                    vlan=vlan,
+                )
+                if link is not None:
+                    links.append(link)
         if not links:
             return
 
         await self._peer_exit_links(links=links, edge=edge, edge_name=edge_name)
 
     async def _address_exit_link(
-        self, *, edge_port: Any, edge_name: str, switch_port: Any, transit_pool: Any, vlan: int
+        self, *, edge_port: Any, edge_name: str, switch_port: Any, transit_pool: Any, namespace: str, vlan: int
     ) -> _ExitLink | None:
         """Address one cabled link in the tenant VRF: a /31 from its transit pool, a dot1q sub-interface per end.
 
         The /31 is keyed by the link (its two interface ids), so a re-run gets the same one. Both
         sub-interfaces are ``<port>.<vlan>`` with the port's own role, the convention of a handoff circuit's
         ends (``eth0.1900``, add_virtual_circuit); the switch takes the lower address.
+
+        The caller holds both devices' VRF locks and has ensured their instances of ``namespace``.
         """
         switch_name = switch_port.device.display_label
         prefix = await self.client.allocate_next_ip_prefix(

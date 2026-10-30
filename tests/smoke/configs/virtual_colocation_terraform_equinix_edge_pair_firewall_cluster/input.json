@@ -91,15 +91,6 @@
                   "role": {
                     "value": "edge"
                   },
-                  "service_code": {
-                    "value": "C8000V"
-                  },
-                  "package_code": {
-                    "value": "network-essentials"
-                  },
-                  "software_version": {
-                    "value": "17.12.01a"
-                  },
                   "term_length": {
                     "value": 12
                   },
@@ -118,8 +109,21 @@
                   },
                   "device_type": {
                     "node": {
+                      "name": {
+                        "value": "C8000V"
+                      },
                       "cpu_count": {
                         "value": 2
+                      }
+                    }
+                  },
+                  "software_image": {
+                    "node": {
+                      "version": {
+                        "value": "17.12.01a"
+                      },
+                      "package": {
+                        "value": "network-essentials"
                       }
                     }
                   }
@@ -135,15 +139,6 @@
                   "role": {
                     "value": "edge"
                   },
-                  "service_code": {
-                    "value": "C8000V"
-                  },
-                  "package_code": {
-                    "value": "network-essentials"
-                  },
-                  "software_version": {
-                    "value": "17.12.01a"
-                  },
                   "term_length": {
                     "value": 12
                   },
@@ -162,8 +157,21 @@
                   },
                   "device_type": {
                     "node": {
+                      "name": {
+                        "value": "C8000V"
+                      },
                       "cpu_count": {
                         "value": 2
+                      }
+                    }
+                  },
+                  "software_image": {
+                    "node": {
+                      "version": {
+                        "value": "17.12.01a"
+                      },
+                      "package": {
+                        "value": "network-essentials"
                       }
                     }
                   }
@@ -179,15 +187,6 @@
                   "role": {
                     "value": "firewall"
                   },
-                  "service_code": {
-                    "value": "PA-VM"
-                  },
-                  "package_code": {
-                    "value": "VM100"
-                  },
-                  "software_version": {
-                    "value": "11.1.3"
-                  },
                   "term_length": {
                     "value": 12
                   },
@@ -238,8 +237,21 @@
                   },
                   "device_type": {
                     "node": {
+                      "name": {
+                        "value": "PA-VM"
+                      },
                       "cpu_count": {
                         "value": 2
+                      }
+                    }
+                  },
+                  "software_image": {
+                    "node": {
+                      "version": {
+                        "value": "11.1.3"
+                      },
+                      "package": {
+                        "value": "VM100"
                       }
                     }
                   }
@@ -255,15 +267,6 @@
                   "role": {
                     "value": "firewall"
                   },
-                  "service_code": {
-                    "value": "PA-VM"
-                  },
-                  "package_code": {
-                    "value": "VM100"
-                  },
-                  "software_version": {
-                    "value": "11.1.3"
-                  },
                   "term_length": {
                     "value": 12
                   },
@@ -314,8 +317,21 @@
                   },
                   "device_type": {
                     "node": {
+                      "name": {
+                        "value": "PA-VM"
+                      },
                       "cpu_count": {
                         "value": 2
+                      }
+                    }
+                  },
+                  "software_image": {
+                    "node": {
+                      "version": {
+                        "value": "11.1.3"
+                      },
+                      "package": {
+                        "value": "VM100"
                       }
                     }
                   }

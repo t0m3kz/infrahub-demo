@@ -2,6 +2,9 @@
 !
 ! {{ name }} Configuration
 !
+{%- for line in vrf_banner | default([]) %}
+! {{ line }}
+{%- endfor %}
 hostname {{ name }}
 !
 {%- if edge_feature_lines | default(true) %}

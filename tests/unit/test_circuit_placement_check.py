@@ -6,7 +6,7 @@ border leaves, the Equinix FR cage FR2 (the edges eg-fr201/eg-fr202 are deployed
 the Equinix AM virtual colocation AM-NE, AWS eu-central-1, the ISPs Orange and Lumen, C001's office (owner of its
 access circuit INET-C001-OFFICE).
 
-A virtual circuit's carrier is derived, never listed: the physical circuits found in the ``capabilities`` of its own
+A virtual circuit's carrier is derived, never listed: the carrier circuits found in the ``capabilities`` of its own
 ports, or of the parent interface of a sub-interface. ``_vport`` puts them there, nested under the port as the
 query selects them. The ports mirror the demo data: DF-DC10-EQXFR2 ends on bl-dc101101 Ethernet1/35 and eg-fr201
 Ethernet1/10, the cross-connect XC-EQXFR2-AWS-EUC1 on eg-fr201 Ethernet1/13 and the stub's et-0/0/0.
@@ -55,19 +55,20 @@ from tests.unit.circuit_placement_check_helpers import (
     TUNNEL,
     XC,
     XC_AM_NE,
+    _carrier_circuit,
     _decommissioned,
+    _edges,
     _end,
     _handoff,
     _interconnect,
     _owner,
-    _physical,
     _run,
     _tunnel,
     _vport,
 )
 
 
-class TestPhysicalCircuitPlacement:
+class TestCarrierCircuitPlacement:
     @pytest.mark.parametrize(
         "circuit",
         [
@@ -76,8 +77,8 @@ class TestPhysicalCircuitPlacement:
             INET_OFFICE,
             INET_GW,
             # A device racked in the cage itself places the cage end too.
-            _physical("XC-GW-AWS", [FR2, EUC1], [GW_ETH0_END, AWS_END]),
-            # A virtual colocation is a circuit end like a zone. Synthetic: no demo physical circuit ends on
+            _carrier_circuit("XC-GW-AWS", [FR2, EUC1], [GW_ETH0_END, AWS_END]),
+            # A virtual colocation is a circuit end like a zone. Synthetic: no demo carrier circuit ends on
             # AM-NE (eg-am-ne01 is a virtual edge); XC_AM_NE is the fixture, a cross-connect from AM-NE to AWS.
             XC_AM_NE,
         ],
@@ -92,103 +93,105 @@ class TestPhysicalCircuitPlacement:
     )
     def test_placed_circuit_passes(self, circuit: dict[str, Any]) -> None:
         """Each location is the deployment of one end's device: no finding."""
-        assert _run(physical=[circuit]) == []
+        assert _run(carrier=[circuit]) == []
 
     @pytest.mark.parametrize("locations", [[FR2], []], ids=["only-the-authored-cage", "none"])
     def test_not_two_locations_fails(self, locations: list[dict[str, Any]]) -> None:
-        """A physical circuit with fewer than two distinct locations (a derived end missing) is an error."""
-        messages = _run(physical=[_physical("DF-DC10-EQXFR2", locations, [BL10_END, EG_FR_END])])
+        """A carrier circuit with fewer than two distinct locations (a derived end missing) is an error."""
+        messages = _run(carrier=[_carrier_circuit("DF-DC10-EQXFR2", locations, [BL10_END, EG_FR_END])])
         assert len(messages) == 1
-        assert "Physical circuit 'DF-DC10-EQXFR2' terminates on" in messages[0]
+        assert "Carrier circuit 'DF-DC10-EQXFR2' terminates on" in messages[0]
         assert "exactly 2 distinct locations" in messages[0]
 
     def test_end_device_without_deployment_fails(self) -> None:
         """An end on a device with no deployment cannot place its end: error naming the port."""
         undeployed = _end("EXT-AWS-DX-FR2", "et-0/0/0", None)
-        messages = _run(physical=[_physical("XC-EQXFR2-AWS-EUC1", [FR2, EUC1], [EG_FR_END, undeployed])])
+        messages = _run(carrier=[_carrier_circuit("XC-EQXFR2-AWS-EUC1", [FR2, EUC1], [EG_FR_END, undeployed])])
         assert len(messages) == 1
         assert "end 'EXT-AWS-DX-FR2:et-0/0/0' is on a device with no deployment" in messages[0]
 
     def test_dc_end_other_than_the_device_deployment_fails(self) -> None:
         """Authored DC10 while the border leaf sits in DC11: the DC end is the device's deployment."""
-        messages = _run(physical=[_physical("DF-DC10-EQXFR2", [DC10, FR2], [BL11_END, EG_FR_END])])
+        messages = _run(carrier=[_carrier_circuit("DF-DC10-EQXFR2", [DC10, FR2], [BL11_END, EG_FR_END])])
         assert len(messages) == 1
-        assert "Physical circuit 'DF-DC10-EQXFR2' terminates on" in messages[0]
+        assert "Carrier circuit 'DF-DC10-EQXFR2' terminates on" in messages[0]
         assert "bl-dc1111101:Ethernet1/35 in TopologyDataCenter 'DC11'" in messages[0]
 
     def test_cage_of_another_metro_fails(self) -> None:
         """A colocation end must be the edge's zone itself: PA4 with an edge in FR2 fails."""
-        messages = _run(physical=[_physical("DF-DC10-EQXPA4", [DC10, PA4], [BL10_END, EG_FR_END])])
+        messages = _run(carrier=[_carrier_circuit("DF-DC10-EQXPA4", [DC10, PA4], [BL10_END, EG_FR_END])])
         assert len(messages) == 1
         assert "not a sibling zone of its metro" in messages[0]
 
     def test_virtual_colocation_of_another_metro_fails(self) -> None:
         """AM-NE is not where an edge in zone FR2 is deployed."""
-        messages = _run(physical=[_physical("DF-DC10-EQXAMNE", [DC10, AM_NE], [BL10_END, EG_FR_END])])
+        messages = _run(carrier=[_carrier_circuit("DF-DC10-EQXAMNE", [DC10, AM_NE], [BL10_END, EG_FR_END])])
         assert len(messages) == 1
-        assert "Physical circuit 'DF-DC10-EQXAMNE' terminates on" in messages[0]
+        assert "Carrier circuit 'DF-DC10-EQXAMNE' terminates on" in messages[0]
 
     def test_sibling_cage_of_the_same_metro_fails(self) -> None:
         """Authored FR6 while the edge sits in FR2: add_circuit (plan_locations) refuses it as contradicting the
         endpoint devices' deployment, so the check does too."""
-        messages = _run(physical=[_physical("DF-DC10-EQXFR6", [DC10, FR6], [BL10_END, EG_FR_END])])
+        messages = _run(carrier=[_carrier_circuit("DF-DC10-EQXFR6", [DC10, FR6], [BL10_END, EG_FR_END])])
         assert len(messages) == 1
         assert "eg-fr201:Ethernet1/13 in TopologyColocationZone 'FR2'" in messages[0]
         assert "TopologyColocationZone 'FR6'" in messages[0]
 
     def test_device_deployed_to_the_metro_fails(self) -> None:
         """No device is deployed to a metro any more: a legacy metro deployment places no zone of it."""
-        messages = _run(physical=[_physical("DF-DC10-EQXFR2-METRO", [DC10, FR2], [BL10_END, EG_FR_METRO_END])])
+        messages = _run(carrier=[_carrier_circuit("DF-DC10-EQXFR2-METRO", [DC10, FR2], [BL10_END, EG_FR_METRO_END])])
         assert len(messages) == 1
         assert "eg-fr01:Ethernet1/13 in TopologyColocationMetro 'FR'" in messages[0]
 
     def test_two_zones_of_different_metros_with_edges_in_one_fail(self) -> None:
         """FR2 and PA4 with both edges in FR2: one location has no end."""
-        messages = _run(physical=[_physical("XC-FR2-PA4", [FR2, PA4], [EG_FR_END, _end("eg-fr202", "e1", FR2)])])
+        messages = _run(carrier=[_carrier_circuit("XC-FR2-PA4", [FR2, PA4], [EG_FR_END, _end("eg-fr202", "e1", FR2)])])
         assert len(messages) == 1
 
     def test_ends_must_match_locations_one_to_one(self) -> None:
         """Both ends in DC10 leave the FR2 location without an end."""
         messages = _run(
-            physical=[_physical("DF-DC10-EQXFR2", [DC10, FR2], [BL10_END, _end("bl-dc101102", "e1", DC10)])]
+            carrier=[_carrier_circuit("DF-DC10-EQXFR2", [DC10, FR2], [BL10_END, _end("bl-dc101102", "e1", DC10)])]
         )
         assert len(messages) == 1
 
-    def test_end_count_is_left_to_physical_circuit_ports(self) -> None:
-        """A circuit with one end gets no placement finding: checks/physical_circuit_ports.py reports it."""
-        assert _run(physical=[_physical("DF-DC10-EQXFR2", [DC10, FR2], [BL10_END])]) == []
+    def test_end_count_is_left_to_carrier_circuit_ports(self) -> None:
+        """A circuit with one end gets no placement finding: checks/carrier_circuit_ports.py reports it."""
+        assert _run(carrier=[_carrier_circuit("DF-DC10-EQXFR2", [DC10, FR2], [BL10_END])]) == []
 
 
-class TestPhysicalCircuitOwnership:
+class TestCarrierCircuitOwnership:
     """Owned exactly when it is an office's access circuit (add_sdwan_edge's INET-<office>), then by the office's
     owner; the rest is shared underlay."""
 
     def test_office_access_circuit_owned_by_the_office_owner_passes(self) -> None:
         """INET-C001-OFFICE ends on C001's office and is owned by C001: no finding."""
-        assert _run(physical=[INET_OFFICE]) == []
+        assert _run(carrier=[INET_OFFICE]) == []
 
     @pytest.mark.parametrize(
         ("owner", "ownership"), [(None, "unowned"), ("C005", "owned by 'C005'")], ids=["unowned", "other-customer"]
     )
     def test_office_access_circuit_not_owned_by_the_office_owner_fails(self, owner: str | None, ownership: str) -> None:
         """An office's access circuit that is unowned or owned by another customer is reported with its ownership."""
-        circuit = _physical("INET-C001-OFFICE", [C001_OFFICE, ORANGE], [OFFICE_EDGE_END, ORANGE_PE_END], owner=owner)
-        messages = _run(physical=[circuit])
+        circuit = _carrier_circuit(
+            "INET-C001-OFFICE", [C001_OFFICE, ORANGE], [OFFICE_EDGE_END, ORANGE_PE_END], owner=owner
+        )
+        messages = _run(carrier=[circuit])
         assert messages == [
-            f"Physical circuit 'INET-C001-OFFICE' ends on TopologyCustomerOffice 'C001-OFFICE' of 'C001' but is "
+            f"Carrier circuit 'INET-C001-OFFICE' ends on TopologyCustomerOffice 'C001-OFFICE' of 'C001' but is "
             f"{ownership}: an office's access circuit is owned by the office's owner."
         ]
 
     def test_owned_shared_underlay_fails(self) -> None:
         """A dark fibre carries every tenant: owned, it would pin the shared underlay on one customer."""
-        messages = _run(physical=[_physical("DF-DC10-EQXFR2", [DC10, FR2], [BL10_END, EG_FR_END], owner="C005")])
+        messages = _run(carrier=[_carrier_circuit("DF-DC10-EQXFR2", [DC10, FR2], [BL10_END, EG_FR_END], owner="C005")])
         assert len(messages) == 1
-        assert "Physical circuit 'DF-DC10-EQXFR2' is owned by 'C005' but ends on no office" in messages[0]
+        assert "Carrier circuit 'DF-DC10-EQXFR2' is owned by 'C005' but ends on no office" in messages[0]
 
     def test_ownership_is_checked_with_a_location_missing(self) -> None:
         """The owner rule does not wait for the derived end: one location is enough to see the office."""
-        circuit = _physical("INET-C001-OFFICE", [C001_OFFICE], [OFFICE_EDGE_END, ORANGE_PE_END])
-        messages = _run(physical=[circuit])
+        circuit = _carrier_circuit("INET-C001-OFFICE", [C001_OFFICE], [OFFICE_EDGE_END, ORANGE_PE_END])
+        messages = _run(carrier=[circuit])
         assert len(messages) == 2
         assert "an office's access circuit is owned by the office's owner" in messages[0]
         assert "terminates on 1 location(s)" in messages[1]
@@ -208,7 +211,9 @@ class TestTunnelCircuit:
 
     def test_tunnels_sharing_a_gateway_port_pass(self) -> None:
         """One gateway port serves many tunnels: a tunnel is exempt from the one-session-per-port rule."""
-        other_edge = _vport("C002-OFFICE-EDGE1", "GE1", (_physical("INET-C002-OFFICE", [C002_OFFICE, ORANGE], []),))
+        other_edge = _vport(
+            "C002-OFFICE-EDGE1", "GE1", (_carrier_circuit("INET-C002-OFFICE", [C002_OFFICE, ORANGE], []),)
+        )
         other = _tunnel("C002-OFFICE-SDWAN-FR2", [C002_OFFICE, FR2], [other_edge, GW_PUBLIC], owner="C002")
         assert _run(tunnels=[TUNNEL, other]) == []
 
@@ -236,11 +241,11 @@ class TestTunnelCircuit:
         assert "Tunnel circuit 'T' is " in messages[0]
         assert "a tunnel is owned by its office's owner" in messages[0]
 
-    def test_end_on_no_physical_circuit_fails(self) -> None:
-        """A tunnel end whose port rides no physical circuit is reported as riding no live internet circuit."""
+    def test_end_on_no_carrier_circuit_fails(self) -> None:
+        """A tunnel end whose port rides no carrier circuit is reported as riding no live internet circuit."""
         messages = _run(tunnels=[_tunnel("T", [C001_OFFICE, FR2], [OFFICE_EDGE, _vport("EQX-FR2-SDWAN-GW1", "eth1")])])
         assert len(messages) == 1
-        assert "end 'EQX-FR2-SDWAN-GW1:eth1' rides no live internet physical circuit" in messages[0]
+        assert "end 'EQX-FR2-SDWAN-GW1:eth1' rides no live internet carrier circuit" in messages[0]
         assert "it is on no live one" in messages[0]
 
     def test_end_on_a_circuit_that_is_not_internet_fails(self) -> None:
@@ -249,14 +254,14 @@ class TestTunnelCircuit:
             tunnels=[_tunnel("T", [C001_OFFICE, FR2], [OFFICE_EDGE, _vport("EQX-FR2-SDWAN-GW1", "eth1", (DF10,))])]
         )
         assert len(messages) == 1
-        assert "its live physical circuits are DF-DC10-EQXFR2 (DC10 - FR2)" in messages[0]
+        assert "its live carrier circuits are DF-DC10-EQXFR2 (DC10 - FR2)" in messages[0]
 
     def test_end_on_a_decommissioned_internet_circuit_fails(self) -> None:
         """A decommissioned internet circuit is not a carrier, and is left out of the message."""
         port = _vport("C001-OFFICE-EDGE1", "GE1", (_decommissioned(INET_OFFICE),))
         messages = _run(tunnels=[_tunnel("T", [C001_OFFICE, FR2], [port, GW_PUBLIC])])
         assert len(messages) == 1
-        assert "end 'C001-OFFICE-EDGE1:GE1' rides no live internet physical circuit" in messages[0]
+        assert "end 'C001-OFFICE-EDGE1:GE1' rides no live internet carrier circuit" in messages[0]
         assert "INET-C001-OFFICE" not in messages[0]
 
     def test_each_end_needs_its_own_internet_circuit(self) -> None:
@@ -308,13 +313,13 @@ class TestInterconnectCircuit:
         messages = _run(interconnects=[_interconnect("DCI", [DC10, FR2], [BL10])])
         assert any("has 1 end port(s)" in message for message in messages)
 
-    def test_end_on_no_live_physical_circuit_fails(self) -> None:
-        """A DCI end whose port is on no physical circuit is reported with the fix to apply."""
+    def test_end_on_no_live_carrier_circuit_fails(self) -> None:
+        """A DCI end whose port is on no carrier circuit is reported with the fix to apply."""
         circuit = _interconnect("DCI", [DC10, FR2], [BL10, _vport("eg-fr201", "Ethernet1/10")])
         messages = _run(interconnects=[circuit])
         assert messages == [
-            "Interconnect circuit 'DCI' end 'eg-fr201:Ethernet1/10' is on no live physical circuit: terminate it on "
-            "a port cabled through a physical circuit."
+            "Interconnect circuit 'DCI' end 'eg-fr201:Ethernet1/10' is on no live carrier circuit: terminate it on "
+            "a port cabled through a carrier circuit."
         ]
 
     def test_chain_not_reaching_the_far_location_fails(self) -> None:
@@ -363,7 +368,7 @@ class TestInterconnectCircuit:
         )
         messages = _run(interconnects=[circuit])
         assert len(messages) == 2
-        assert all("is on no live physical circuit" in message for message in messages)
+        assert all("is on no live carrier circuit" in message for message in messages)
 
     def test_a_carrier_on_other_ports_than_the_circuit_names_fails(self) -> None:
         """The circuit names eg-fr201 Ethernet1/12 but DF-DC10-EQXFR2 terminates on Ethernet1/10: drift."""
@@ -472,11 +477,27 @@ class TestHandoffCircuit:
         messages = _run(handoffs=[_handoff("HO", None, [EG_FR_VLAN])])
         assert messages == ["Handoff circuit 'HO' has 1 end port(s): it terminates on exactly 2 ports, one per end."]
 
-    def test_unowned_and_owned_both_pass(self) -> None:
-        """The owner is optional: nothing is checked on it."""
+    def test_an_owned_handoff_fails(self) -> None:
+        """A handoff is shared platform: only a tunnel has an owner (the owner of a prefix registers it)."""
         owned = {**HANDOFF, "owner": _owner("C005")}
         assert _run(handoffs=[HANDOFF]) == []
-        assert _run(handoffs=[owned]) == []
+        messages = _run(handoffs=[owned])
+        assert len(messages) == 1 and "owned by 'C005'" in messages[0] and "unowned" in messages[0]
+
+    def test_a_handoff_without_a_namespace_fails(self) -> None:
+        """The schema leaves ip_namespace optional (a dci and a tunnel have none); a handoff needs it."""
+        messages = _run(handoffs=[_handoff("HO", None, [EG_FR_VLAN, AWS_VLAN], namespace=None)])
+        assert messages == [
+            "Handoff circuit 'HO' has no ip_namespace: its /31 is allocated and its session runs in an environment "
+            "namespace."
+        ]
+
+    @pytest.mark.parametrize("field", ["registered_prefixes"])
+    def test_a_handoff_with_a_tunnel_only_field_fails(self, field: str) -> None:
+        """Only a tunnel has registered_prefixes."""
+        circuit = {**HANDOFF, field: _edges([{"id": "pfx-1"}])}
+        messages = _run(handoffs=[circuit])
+        assert len(messages) == 1 and field in messages[0]
 
     def test_carrier_on_the_port_itself_passes(self) -> None:
         """A handoff on an unchannelled port: the port's own circuit is the carrier."""
@@ -488,7 +509,7 @@ class TestHandoffCircuit:
         assert _run(handoffs=[_handoff("HO", None, [EG_FR_VLAN, AWS_VLAN_NO_CARRIER])]) == []
 
     def test_a_cable_on_the_parent_port_is_a_carrier(self) -> None:
-        """Both ends in one cage: a hop inside one facility is a DcimCable, not a physical circuit."""
+        """Both ends in one cage: a hop inside one facility is a DcimCable, not a carrier circuit."""
         ends = [
             _vport("eg-fr201", "Ethernet1/13.3101", parent=("Ethernet1/13", ()), parent_cabled=True),
             _vport("EQX-FR2-SDWAN-GW1", "eth0.3101", parent=("eth0", ())),
@@ -513,10 +534,10 @@ class TestHandoffCircuit:
         ]
         messages = _run(handoffs=[_handoff("HO", None, ends)])
         assert len(messages) == 1
-        assert "no live physical circuit and no cable" in messages[0]
+        assert "no live carrier circuit and no cable" in messages[0]
 
     def test_no_physical_end_needs_no_carrier(self) -> None:
-        """Both ends on Network Edge appliances or virtual devices: there is no physical circuit to require."""
+        """Both ends on Network Edge appliances or virtual devices: there is no carrier circuit to require."""
         ends = [
             _vport("eg-am-ne01", "Ethernet1/13.3101", parent=("Ethernet1/13", ()), device_kind="CloudNetworkAppliance"),
             _vport("EXT-AWS-DX-AM", "et-0/0/0.3101", parent=("et-0/0/0", ()), device_kind="DcimVirtualDevice"),
@@ -531,7 +552,7 @@ class TestHandoffCircuit:
         ]
         messages = _run(handoffs=[_handoff("HO", None, ends)])
         assert len(messages) == 1
-        assert "has no live physical circuit and no cable at EXT-AWS-DX-FR2:et-0/0/0.3101" in messages[0]
+        assert "has no live carrier circuit and no cable at EXT-AWS-DX-FR2:et-0/0/0.3101" in messages[0]
 
     def test_no_carrier_on_physical_ends_fails(self) -> None:
         """Physical ends with no circuit and no cable are reported, naming the first such port."""
@@ -539,8 +560,7 @@ class TestHandoffCircuit:
         messages = _run(handoffs=[_handoff("HO", None, ends)])
         assert len(messages) == 1
         assert (
-            "Handoff circuit 'HO' has no live physical circuit and no cable at eg-fr201:Ethernet1/13.3101"
-            in messages[0]
+            "Handoff circuit 'HO' has no live carrier circuit and no cable at eg-fr201:Ethernet1/13.3101" in messages[0]
         )
 
     def test_decommissioned_carriers_do_not_count(self) -> None:
@@ -551,7 +571,7 @@ class TestHandoffCircuit:
         ]
         messages = _run(handoffs=[_handoff("HO", None, ends)])
         assert len(messages) == 1
-        assert "has no live physical circuit and no cable" in messages[0]
+        assert "has no live carrier circuit and no cable" in messages[0]
 
     def test_end_that_is_not_a_vlan_sub_interface_fails(self) -> None:
         """A handoff end must be named <port>.<vlan>; a bare physical port is reported."""

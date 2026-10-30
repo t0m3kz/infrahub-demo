@@ -17,7 +17,12 @@ from graphql import parse
 
 from tasks import ALL_DEMO_BRANCH
 from tests.integration import test_66_all_demo_circuit_lifecycle as lifecycle
-from tests.integration.all_demo_circuit_constants import ALL_DEMO_VIRTUAL_CIRCUITS, HANDOFF_KIND, INTERCONNECT_KIND
+from tests.integration.all_demo_circuit_constants import (
+    ALL_DEMO_VIRTUAL_CIRCUITS,
+    HANDOFF_TYPE,
+    INTERCONNECT_TYPE,
+    TUNNEL_TYPE,
+)
 from tests.integration.test_66_all_demo_circuit_lifecycle import (
     HANDOFF_CIRCUIT,
     HANDOFF_KEY,
@@ -119,7 +124,7 @@ def _torn_down(subject: Subject = DCI, **kwargs: Any) -> State:
 
 def test_the_interconnect_subject_is_the_dci_and_its_ports() -> None:
     """Names, description and ports are derived from ALL_DEMO_VIRTUAL_CIRCUITS and the generator's naming."""
-    assert DCI.kind == INTERCONNECT_KIND
+    assert DCI.kind == INTERCONNECT_TYPE
     assert DCI.peerings == ("ICX-DC12-EQXPA4-B-underlay", "ICX-DC12-EQXPA4-B-evpn")
     assert DCI.key == "ICX-DC12-EQXPA4-B-dci-key"
     assert DCI.description == "DCI ICX-DC12-EQXPA4-B"
@@ -130,7 +135,7 @@ def test_the_interconnect_subject_is_the_dci_and_its_ports() -> None:
 
 def test_the_handoff_subject_is_the_aws_vif_and_its_subinterfaces() -> None:
     """A handoff has one session, a prefix described 'Handoff <name>' and VLAN sub-interface ends."""
-    assert HANDOFF.kind == HANDOFF_KIND
+    assert HANDOFF.kind == HANDOFF_TYPE
     assert HANDOFF.peerings == ("HANDOFF-FR2-AWS-EUC1-PROD-bgp",)
     assert HANDOFF.description == "Handoff HANDOFF-FR2-AWS-EUC1-PROD"
     assert set(HANDOFF.ports) == {("eg-fr201", "Ethernet1/13.1000"), ("EXT-AWS-DX-FR2", "et-0/0/0.1000")}
@@ -148,7 +153,7 @@ def test_the_bystanders_are_every_other_session_of_the_branch() -> None:
 def test_a_tunnel_has_no_subject() -> None:
     """A tunnel has no session: asking for its subject is a mistake of the test, not data."""
     tunnel = next(
-        name for name, expected in ALL_DEMO_VIRTUAL_CIRCUITS.items() if expected["kind"].endswith("TunnelCircuit")
+        name for name, expected in ALL_DEMO_VIRTUAL_CIRCUITS.items() if expected["circuit_type"] == TUNNEL_TYPE
     )
     with pytest.raises(AssertionError, match="no session"):
         subject_for(tunnel)
@@ -215,6 +220,7 @@ def test_parse_state_of_an_empty_result_has_nothing() -> None:
     """No peering, key, prefix, address or port: every reader falls back to empty rather than raising."""
     state = lifecycle.parse_state({}, DCI)
     assert state == {
+        "vrfs": {"all": {}, "memberships": {}, "other_demand": []},
         "peerings": {},
         "bystanders": {},
         "key": None,
@@ -419,12 +425,12 @@ async def test_set_status_changes_saves_and_returns_the_previous_status() -> Non
     client = MagicMock()
     client.get = AsyncMock(return_value=node)
     previous = await lifecycle.set_status(
-        client, ALL_DEMO_BRANCH, "TopologyPhysicalCircuit", "decommissioned", circuit_id__value="DF"
+        client, ALL_DEMO_BRANCH, "TopologyCarrierCircuit", "decommissioned", circuit_id__value="DF"
     )
     assert previous == "active"
     assert node.status.value == "decommissioned"
     node.save.assert_awaited_once()
-    client.get.assert_awaited_once_with(kind="TopologyPhysicalCircuit", branch=ALL_DEMO_BRANCH, circuit_id__value="DF")
+    client.get.assert_awaited_once_with(kind="TopologyCarrierCircuit", branch=ALL_DEMO_BRANCH, circuit_id__value="DF")
 
 
 async def test_set_status_to_the_current_status_saves_nothing() -> None:
@@ -433,7 +439,7 @@ async def test_set_status_to_the_current_status_saves_nothing() -> None:
     client = MagicMock()
     client.get = AsyncMock(return_value=node)
     assert (
-        await lifecycle.set_status(client, ALL_DEMO_BRANCH, "TopologyHandoffCircuit", "active", name__value="H")
+        await lifecycle.set_status(client, ALL_DEMO_BRANCH, "TopologySessionCircuit", "active", name__value="H")
         == "active"
     )
     node.save.assert_not_awaited()
@@ -494,7 +500,7 @@ async def test_the_lifecycle_decommissions_waits_restores_and_waits_for_the_rebu
     """Happy path: the status is set, the session goes, the status is set back, the session returns."""
     stack = _FakeStack(monkeypatch, reacts=True)
     await lifecycle.decommission_and_restore(
-        stack.client, ALL_DEMO_BRANCH, DCI, "TopologyPhysicalCircuit", circuit_id__value="DF"
+        stack.client, ALL_DEMO_BRANCH, DCI, "TopologyCarrierCircuit", circuit_id__value="DF"
     )
     assert stack.node.status.value == "active"
     assert stack.node.save.await_count == 2
@@ -509,7 +515,7 @@ async def test_a_generator_that_ignores_the_status_fails_the_lifecycle_and_the_s
     stack = _FakeStack(monkeypatch, reacts=False)
     with pytest.raises(AssertionError, match="ICX-DC12-EQXPA4-B-underlay still exists"):
         await lifecycle.decommission_and_restore(
-            stack.client, ALL_DEMO_BRANCH, DCI, "TopologyPhysicalCircuit", circuit_id__value="DF"
+            stack.client, ALL_DEMO_BRANCH, DCI, "TopologyCarrierCircuit", circuit_id__value="DF"
         )
     assert stack.node.status.value == "active"
     assert stack.node.save.await_count == 2
@@ -523,7 +529,7 @@ async def test_a_lifecycle_that_starts_without_a_session_refuses_to_run(monkeypa
     monkeypatch.setattr(lifecycle, "fetch_state", AsyncMock(return_value=_torn_down(DCI)))
     with pytest.raises(AssertionError, match="has no complete session"):
         await lifecycle.decommission_and_restore(
-            stack.client, ALL_DEMO_BRANCH, DCI, "TopologyPhysicalCircuit", circuit_id__value="DF"
+            stack.client, ALL_DEMO_BRANCH, DCI, "TopologyCarrierCircuit", circuit_id__value="DF"
         )
     stack.node.save.assert_not_awaited()
 
@@ -542,3 +548,152 @@ def test_the_module_follows_test_65_and_runs_in_the_30_all_task() -> None:
     assert 'name="all_demo_idempotent_topology_reruns"' in idempotency
     tasks = (root / "tasks.py").read_text()
     assert tasks.index("test_65_all_demo_idempotency.py") < tasks.index("test_66_all_demo_circuit_lifecycle.py")
+
+
+# ---------------------------------------------------------------------------
+# The VRF memberships of the end devices
+# ---------------------------------------------------------------------------
+
+AMNE = lifecycle.subject_for(lifecycle.SOLE_DEMAND_HANDOFF, key=lifecycle.SOLE_DEMAND_KEY)
+AM_PROD = "am-vrf-prod"
+OTHER_PROD = "dc10-vrf-prod"
+
+
+def _vrf_result(
+    subject: Subject,
+    *,
+    instances: dict[str, tuple[str, list[str]]],
+    namespace: str = "PROD",
+    demand: tuple[str, ...] | list[str] = (),
+) -> dict[str, Any]:
+    """A ``state_query`` result reduced to the VRF part: ``instances`` is {name: (id, member device names)}, all in
+    ``namespace``; ``demand`` lists the devices with an address in the circuit's namespace on an interface that is not
+    the circuit's own port."""
+    return {
+        "vrfs": {
+            "edges": [
+                {
+                    "node": {
+                        "id": vrf_id,
+                        "name": {"value": name},
+                        "namespace": {"node": {"name": {"value": namespace}}},
+                        "shared_devices": {"edges": [{"node": {"name": {"value": member}}} for member in members]},
+                    }
+                }
+                for name, (vrf_id, members) in instances.items()
+            ]
+        },
+        "addressed_physical": {
+            "edges": [
+                {
+                    "node": {
+                        "name": {"value": "Ethernet1/9"},
+                        "device": {"node": {"name": {"value": device}}},
+                        "ip_address": {"node": {"ip_namespace": {"node": {"name": {"value": subject.namespace}}}}},
+                    }
+                }
+                for device in demand
+            ]
+        },
+        "addressed_virtual": {
+            "edges": [
+                # The circuit's own sub-interface never counts as other demand.
+                {
+                    "node": {
+                        "name": {"value": port},
+                        "role": {"value": "customer"},
+                        "device": {"node": {"name": {"value": device}}},
+                        "ip_address": {"node": {"ip_namespace": {"node": {"name": {"value": subject.namespace}}}}},
+                    }
+                }
+                for device, port in subject.ports
+            ]
+        },
+    }
+
+
+def _vrf_state(**kwargs: Any) -> State:
+    return {"vrfs": lifecycle.parse_vrfs(_vrf_result(AMNE, **kwargs), AMNE)}
+
+
+def test_parse_vrfs_finds_every_instance_the_end_memberships_and_the_other_demand() -> None:
+    """The circuit's own port is not demand; an address on another interface of an end device is."""
+    result = _vrf_result(
+        AMNE,
+        instances={AM_PROD: ("v1", ["eg-am-ne01", "eg-am-ne02"]), OTHER_PROD: ("v2", ["leaf-1"])},
+        demand=["eg-am-ne02"],
+    )
+
+    assert lifecycle.parse_vrfs(result, AMNE) == {
+        "all": {
+            AM_PROD: {"id": "v1", "devices": frozenset({"eg-am-ne01", "eg-am-ne02"})},
+            OTHER_PROD: {"id": "v2", "devices": frozenset({"leaf-1"})},
+        },
+        "memberships": {"eg-am-ne02": AM_PROD},
+        "other_demand": ["eg-am-ne02"],
+    }
+    quiet = _vrf_result(AMNE, instances={AM_PROD: ("v1", ["eg-am-ne02"])})
+    assert lifecycle.parse_vrfs(quiet, AMNE)["other_demand"] == []
+
+
+def test_an_interconnect_has_instances_but_no_membership_to_judge() -> None:
+    """The default namespace has no instance of its own: nothing of the circuit's ends is a member."""
+    state = lifecycle.parse_vrfs(_vrf_result(DCI, instances={OTHER_PROD: ("v2", ["leaf-1"])}), DCI)
+
+    assert state["memberships"] == {}
+    assert set(state["all"]) == {OTHER_PROD}
+
+
+def test_a_member_with_no_other_demand_leaves_and_the_instance_stays_for_the_others() -> None:
+    """Sole demand, other members: the device is gone from the instance, which keeps its id."""
+    before = _vrf_state(instances={AM_PROD: ("v1", ["eg-am-ne01", "eg-am-ne02"])})
+    left = _vrf_state(instances={AM_PROD: ("v1", ["eg-am-ne01"])})
+
+    assert lifecycle.vrf_down_errors(before, left) == []
+    assert "members" in lifecycle.vrf_down_errors(before, before)[0]
+
+
+def test_the_instance_goes_with_its_last_member() -> None:
+    """The last member leaves: the instance is deleted, and still existing is an error."""
+    before = _vrf_state(instances={AM_PROD: ("v1", ["eg-am-ne02"])})
+
+    assert lifecycle.vrf_down_errors(before, _vrf_state(instances={})) == []
+    assert "still exists" in lifecycle.vrf_down_errors(before, before)[0]
+
+
+def test_a_member_with_other_demand_stays_a_member_of_the_same_instance() -> None:
+    """Other demand: leaving, or the instance deleted or re-created, is an error."""
+    before = _vrf_state(instances={AM_PROD: ("v1", ["eg-am-ne02"])}, demand=["eg-am-ne02"])
+
+    assert lifecycle.vrf_down_errors(before, before) == []
+    assert "went" in lifecycle.vrf_down_errors(before, _vrf_state(instances={}, demand=["eg-am-ne02"]))[0]
+    recreated = _vrf_state(instances={AM_PROD: ("v9", ["eg-am-ne02"])}, demand=["eg-am-ne02"])
+    assert "re-created" in lifecycle.vrf_down_errors(before, recreated)[0]
+
+
+def test_another_instances_change_is_reported_both_ways() -> None:
+    """A bystander instance whose members changed or that went during the teardown or the rebuild."""
+    before = _vrf_state(instances={AM_PROD: ("v1", ["eg-am-ne02"]), OTHER_PROD: ("v2", ["leaf-1", "leaf-2"])})
+    changed = _vrf_state(instances={OTHER_PROD: ("v2", ["leaf-1"])})
+
+    assert any(OTHER_PROD in error for error in lifecycle.vrf_down_errors(before, changed))
+    assert any(OTHER_PROD in error for error in lifecycle.vrf_up_errors(before, changed, changed))
+
+
+def test_the_rebuild_restores_the_deleted_instance_under_a_new_id_and_keeps_a_survivor() -> None:
+    """Back (any id) when it was deleted; the same id when it survived the decommission."""
+    before = _vrf_state(instances={AM_PROD: ("v1", ["eg-am-ne02"])})
+    gone = _vrf_state(instances={})
+    survived = _vrf_state(instances={AM_PROD: ("v1", ["eg-am-ne01"])})
+    rebuilt = _vrf_state(instances={AM_PROD: ("v2", ["eg-am-ne02"])})
+
+    assert lifecycle.vrf_up_errors(before, gone, rebuilt) == []
+    assert "did not come back" in lifecycle.vrf_up_errors(before, gone, gone)[0]
+    assert "re-created" in lifecycle.vrf_up_errors(before, survived, rebuilt)[0]
+    assert "members" in lifecycle.vrf_up_errors(before, survived, survived)[0]
+
+
+def test_the_end_devices_of_a_circuit_are_its_ports_devices() -> None:
+    """A party's device is an end too; it is simply never a member."""
+    assert DCI.end_devices == tuple(sorted({device for device, _ in DCI.ports}))
+    assert AMNE.end_devices == ("EXT-AWS-DX-FR2", "eg-am-ne02")

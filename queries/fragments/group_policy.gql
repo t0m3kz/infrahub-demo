@@ -71,11 +71,11 @@ fragment HostNicFields on DcimInterface {
                 name { value }
                 role { value }
                 device { node { name { value } } }
-                capabilities { edges { node { id } } }
+                segments { edges { node { id } } }
                 lag {
                   node {
                     name { value }
-                    capabilities { edges { node { id } } }
+                    segments { edges { node { id } } }
                   }
                 }
               }

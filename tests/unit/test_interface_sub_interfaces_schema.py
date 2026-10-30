@@ -3,9 +3,10 @@
 DcimVirtualInterface.parent_interface (outbound, one) is the child side of a sub-interface; DcimHasSubInterface.
 sub_interfaces (inbound, many) is the other end, declared once on a marker generic that every kind able to carry
 sub-interfaces inherits (a NIC is the parent of several sub-interfaces, which the server accepts only with the many
-side declared: ``has 2 peers for sub__interface, maximum of 1 allowed`` otherwise). Both, and the LAG pair, carry
-``common_parent: device``: a sub-interface and its port, a port and its LAG, are on one device. The NIC of a virtual
-machine is pinned to a port of ANOTHER device (its host), so that link is a relationship of its own, host_interface.
+side declared: ``has 2 peers for sub__interface, maximum of 1 allowed`` otherwise). Only the LAG pair carries
+``common_parent: device`` (a port and its LAG are on one device). The NIC of a virtual machine rides a port of ANOTHER
+device (its host) through the same parent_interface, so the sub-interface pair has no common_parent and
+checks/interface_parents.py holds the cross-device rule. ``ip_address`` is declared once on DcimHasIPAddress.
 """
 
 from __future__ import annotations
@@ -53,24 +54,38 @@ def test_the_marker_declares_the_relationship_only_once() -> None:
         assert "sub_interfaces" not in [rel["name"] for rel in node.get("relationships") or []], node["name"]
 
 
-def test_a_sub_interface_and_its_port_share_a_device() -> None:
-    """common_parent: device on both ends of the pair and on the LAG membership: the server refuses a cross-device link."""
+def test_common_parent_stays_only_on_the_lag_pair() -> None:
+    """Only a port and its LAG are tied to one device by the server; sub-interface links are held by a check."""
     schema = _schema()
     child = _item(_item(schema["nodes"], "VirtualInterface")["relationships"], "parent_interface")
     parent = _item(_item(schema["generics"], "HasSubInterface")["relationships"], "sub_interfaces")
     lag = _item(_item(schema["nodes"], "PhysicalInterface")["relationships"], "lag")
     members = _item(_item(schema["nodes"], "LAGInterface")["relationships"], "member_interfaces")
 
-    assert [rel.get("common_parent") for rel in (child, parent, lag, members)] == ["device"] * 4
+    assert [rel.get("common_parent") for rel in (lag, members)] == ["device"] * 2
+    assert "common_parent" not in child
+    assert "common_parent" not in parent
 
 
-def test_the_nic_of_a_virtual_machine_is_pinned_by_a_relationship_of_its_own() -> None:
-    """host_interface crosses devices (VM -> host), so it is not parent_interface and carries no common_parent."""
+def test_host_interface_is_gone_the_nic_rides_its_host_port_through_parent_interface() -> None:
+    """A VM NIC's parent_interface is its host port (another device); there is no relationship of its own."""
+    nodes = _schema()["nodes"]
+    names = [rel["name"] for rel in _item(nodes, "VirtualInterface").get("relationships") or []]
+
+    assert "host_interface" not in names
+    assert "parent_interface" in names
+
+
+def test_ip_address_is_declared_once_on_the_marker_generic() -> None:
+    """One Attribute declaration without cascade (a multisite VIP is one address on two loopbacks), inherited by the
+    three address-holding kinds and not by the console interface."""
     schema = _schema()
-    nic = _item(_item(schema["nodes"], "VirtualInterface")["relationships"], "host_interface")
-    child = _item(_item(schema["nodes"], "VirtualInterface")["relationships"], "parent_interface")
+    ip_address = _item(_item(schema["generics"], "HasIPAddress")["relationships"], "ip_address")
+    nodes = {(node["namespace"] + node["name"]): node for node in schema["nodes"]}
+    inheritors = {kind for kind, node in nodes.items() if "DcimHasIPAddress" in (node.get("inherit_from") or [])}
 
-    assert nic["peer"] == "DcimPhysicalInterface"
-    assert nic["cardinality"] == "one"
-    assert "common_parent" not in nic
-    assert nic["identifier"] != child["identifier"]
+    assert (ip_address["peer"], ip_address["cardinality"], ip_address["kind"]) == ("IpamIPAddress", "one", "Attribute")
+    assert ip_address["on_delete"] == "no-action"
+    assert inheritors == {"DcimPhysicalInterface", "DcimLAGInterface", "DcimVirtualInterface"}
+    for node in schema["nodes"]:
+        assert "ip_address" not in [rel["name"] for rel in node.get("relationships") or []], node["name"]

@@ -3,12 +3,13 @@
 
 ManagedVlanDomainSegment rows are reached by add_vxlan_segment and by
 every add_app_component_segment run of a component on the segment, so no run
-owns them: they are reconciled per SEGMENT from desired state (VLAN domains
-of every switch with a port tagged with the segment, plus border gateways of
+owns them: they are reconciled per SEGMENT from desired state (every
+switch with a port tagged with the segment, plus border gateways of
 a stretched segment), each under the segment deployment its switch sits in,
 written untracked, and stale ones are deleted explicitly. Covers state
 parsing, the desired device set, create/keep/delete/move, the lock, and that a
 device with no deployment of the segment is reported and leaves the rows alone.
+MLAG pairs: tests/unit/test_vlan_domain_pairs.py.
 """
 
 from __future__ import annotations
@@ -51,13 +52,13 @@ def _customer_dc(parent_id: str, pod_ids: list[str]) -> dict[str, Any]:
 
 class TestFetchSegmentVlanState:
     def test_parses_segment_and_the_rows_per_deployment(self) -> None:
-        """Each segment deployment carries its hosting deployment and its rows keyed by VLAN domain id."""
+        """Each segment deployment carries its hosting deployment and its rows keyed by device id."""
         gen = make_gen()
         gen.client.execute_graphql = AsyncMock(
             return_value=raw_state(
                 interfaces=[("if-1", "DcimPhysicalInterface", "sw-1")],
                 deployments=[("sd-a", "dc-1"), ("sd-b", "dc-2")],
-                rows=[("row-1", "mlag-1", 120, "sd-a")],
+                rows=[("row-1", "sw-1", 120, "sd-a")],
             )
         )
 
@@ -65,7 +66,7 @@ class TestFetchSegmentVlanState:
 
         assert state is not None
         assert state["deployments"] == [
-            {"id": "sd-a", "deployment_id": "dc-1", "rows": {"mlag-1": {"id": "row-1", "vlan_id": 120}}},
+            {"id": "sd-a", "deployment_id": "dc-1", "rows": {"sw-1": {"id": "row-1", "vlan_id": 120}}},
             {"id": "sd-b", "deployment_id": "dc-2", "rows": {}},
         ]
         assert state["segment"]["id"] == "seg-1"
@@ -80,44 +81,42 @@ class TestFetchSegmentVlanState:
 
         assert asyncio.run(gen._fetch_segment_vlan_state("vlan-seg-1")) is None
 
-    def test_vlan_by_domain_reads_every_deployment(self) -> None:
-        """The inline termination takes the VLAN of a domain whichever deployment holds the row."""
+    def test_vlan_by_device_reads_every_deployment(self) -> None:
+        """The inline termination takes the VLAN of a device whichever deployment holds the row."""
         gen = make_gen()
         gen.client.execute_graphql = AsyncMock(
             return_value=raw_state(
                 deployments=[("sd-a", "dc-1"), ("sd-b", "dc-2")],
-                rows=[("row-1", "mlag-1", 120, "sd-a"), ("row-2", "sw-2", 130, "sd-b")],
+                rows=[("row-1", "sw-1", 120, "sd-a"), ("row-2", "sw-2", 130, "sd-b")],
             )
         )
 
-        assert asyncio.run(gen.segment_vlan_by_domain("seg-1")) == {"mlag-1": 120, "sw-2": 130}
+        assert asyncio.run(gen.segment_vlan_by_device("seg-1")) == {"sw-1": 120, "sw-2": 130}
 
     def test_query_reads_pod_children_interface_devices_and_the_deployments_rows(self, root_dir: Path) -> None:
         """The query carries the hosting parents' pods, the tagged ports' devices and the rows under each deployment."""
         query = (root_dir / "queries" / "topology" / "add" / "segment_vlan_domains.gql").read_text()
         compact = " ".join(query.split())
         assert "... on TopologyDataCenter { children { edges { node { ... on TopologyPod { id } } } } }" in compact
-        assert "capabilities { edges { node { id __typename role { value } device { node { id } } } } }" in compact
+        assert (
+            "switched_interfaces { edges { node { id ... on DcimInterface { role { value } device { node { id } } } } } }"
+            in compact
+        )
         assert "ManagedSegmentDeployment(segment__ids: [$segment_id])" in compact
-        assert "vlan_domain_segments { edges { node { id vlan_id { value } vlan_domain { node { id } } } } }" in compact
+        assert "vlan_domain_segments { edges { node { id vlan_id { value } device { node { id } } } } }" in compact
+        assert "ManagedMLAG" not in compact
 
 
 class TestTaggedInterfaceIds:
-    def test_only_physical_and_port_channel_ports_count(self) -> None:
-        """An inline DcimVirtualInterface sub-interface is not a switch port carrying the segment."""
-        segment = {
-            "capabilities": [
-                {"id": "if-1", "typename": "DcimPhysicalInterface"},
-                {"id": "po-1", "typename": "DcimLAGInterface"},
-                {"id": "sub-1", "typename": "DcimVirtualInterface"},
-            ]
-        }
+    def test_physical_and_port_channel_ports_count(self) -> None:
+        """Every peer of the typed edge is a switch port carrying the segment."""
+        segment = {"switched_interfaces": [{"id": "if-1"}, {"id": "po-1"}]}
         assert VlanDomainMixin.tagged_interface_ids(segment) == {"if-1", "po-1"}
 
     def test_service_ports_are_kept_apart_from_customer_ports(self) -> None:
         """Border-leaf firewall/load-balancer ports belong to inline termination, not to AppComponents."""
         segment = {
-            "capabilities": [
+            "switched_interfaces": [
                 {"id": "if-1", "typename": "DcimPhysicalInterface", "role": "customer"},
                 {"id": "fw-1", "typename": "DcimPhysicalInterface", "role": "firewall"},
                 {"id": "lb-1", "typename": "DcimPhysicalInterface", "role": "load-balancer"},
@@ -141,11 +140,10 @@ class TestSegmentVlanDevices:
         segment = {
             "stretch_scope": "local",
             "customer_deployments": [{"id": "cust-1", "parent": {"id": "dc-1"}}],
-            "capabilities": [
+            "switched_interfaces": [
                 {"id": "if-1", "typename": "DcimPhysicalInterface", "device": {"id": "sw-2"}},
                 {"id": "po-1", "typename": "DcimLAGInterface", "device": {"id": "sw-1"}},
                 {"id": "if-2", "typename": "DcimPhysicalInterface", "device": {"id": "sw-1"}},
-                {"id": "sub-1", "typename": "DcimVirtualInterface", "device": {"id": "fw-1"}},
             ],
         }
 
@@ -167,7 +165,7 @@ class TestSegmentVlanDevices:
                 {"id": "cust-1", "parent": {"id": "dc-1", "children": [{"id": "pod-1"}, {}]}},
                 {"id": "cust-2", "parent": {"id": "metro-1"}},
             ],
-            "capabilities": [],
+            "switched_interfaces": [],
         }
 
         devices = asyncio.run(gen._segment_vlan_devices(segment))
@@ -185,7 +183,7 @@ class TestSegmentVlanDevices:
         segment = {
             "stretch_scope": "global",
             "customer_deployments": [{"id": "cust-1", "parent": {"id": "metro-1"}}],
-            "capabilities": [{"id": "if-1", "typename": "DcimPhysicalInterface", "device": {"id": "edge-1"}}],
+            "switched_interfaces": [{"id": "if-1", "typename": "DcimPhysicalInterface", "device": {"id": "edge-1"}}],
         }
 
         assert asyncio.run(gen._segment_vlan_devices(segment)) == [edge]
@@ -201,7 +199,7 @@ class TestSegmentVlanDevices:
         segment = {
             "stretch_scope": "global",
             "customer_deployments": [{"id": "cust-1", "parent": {"id": "metro-1", "children": [{"id": "zone-1"}]}}],
-            "capabilities": [],
+            "switched_interfaces": [],
         }
 
         assert asyncio.run(gen._segment_vlan_devices(segment)) == [onramp]
@@ -219,7 +217,7 @@ class TestSegmentVlanDevices:
         segment = {
             "stretch_scope": "global",
             "customer_deployments": [{"id": "cust-1", "parent": {"id": "metro-1", "children": [{"id": "zone-1"}]}}],
-            "capabilities": [],
+            "switched_interfaces": [],
         }
 
         assert asyncio.run(gen._segment_vlan_devices(segment)) == [onramp]
@@ -233,7 +231,7 @@ class TestSegmentVlanDevices:
         segment = {
             "stretch_scope": "global",
             "customer_deployments": [{"id": "cust-1", "parent": {"id": "metro-1", "children": [{"id": "zone-1"}]}}],
-            "capabilities": [],
+            "switched_interfaces": [],
         }
 
         assert asyncio.run(gen._segment_vlan_devices(segment)) == [stray]
@@ -259,32 +257,30 @@ class TestReconcileSegmentVlanDomains:
 
         asyncio.run(reconcile(gen, "seg-1", "c001-web-p"))
 
-        assert gen.locked_keys == [segment_lock_key("seg-1"), "vlan-domain-ids-sw-1"]
+        assert gen.locked_keys == [segment_lock_key("seg-1"), "vlan-device-ids-sw-1"]
         assert gen.locked_keys[0] == "segment-vlan-domains-seg-1"
-        assert world.created == [
-            {"segment_deployment": {"id": "sd-seg-1"}, "vlan_domain": {"id": "sw-1"}, "vlan_id": 100}
-        ]
+        assert world.created == [{"segment_deployment": {"id": "sd-seg-1"}, "device": {"id": "sw-1"}, "vlan_id": 100}]
         assert world.rows[0].save_kwargs == {"allow_upsert": True, "update_group_context": False}
         gen.client.delete.assert_not_awaited()
 
     def test_existing_row_keeps_its_vlan_id(self) -> None:
         """A row that is still needed is neither re-created (no re-allocation) nor deleted."""
         world = VlanWorld()
-        world.add("seg-1", "mlag-1", 321)
-        gen = world.gen([make_device("leaf-1", mlag_id="mlag-1")], interfaces=[("po-1", "DcimLAGInterface", "leaf-1")])
+        world.add("seg-1", "leaf-1", 321)
+        gen = world.gen([make_device("leaf-1")], interfaces=[("po-1", "DcimLAGInterface", "leaf-1")])
 
         asyncio.run(reconcile(gen, "seg-1", "c001-web-p"))
 
         assert world.created == []
         assert world.deleted == []
-        assert world.vlan_ids("seg-1") == {"mlag-1": 321}
+        assert world.vlan_ids("seg-1") == {"leaf-1": 321}
 
-    def test_row_no_domain_needs_any_more_is_deleted(self) -> None:
-        """A domain whose switch lost its last tagged port loses the row."""
+    def test_row_no_device_needs_any_more_is_deleted(self) -> None:
+        """A device that lost its last tagged port (and has no MLAG peer needing it) loses the row."""
         world = VlanWorld()
-        world.add("seg-1", "mlag-1", 100)
-        stale = world.add("seg-1", "mlag-old", 100)
-        gen = world.gen([make_device("leaf-1", mlag_id="mlag-1")], interfaces=[("po-1", "DcimLAGInterface", "leaf-1")])
+        world.add("seg-1", "leaf-1", 100)
+        stale = world.add("seg-1", "leaf-old", 100)
+        gen = world.gen([make_device("leaf-1")], interfaces=[("po-1", "DcimLAGInterface", "leaf-1")])
 
         asyncio.run(reconcile(gen, "seg-1", "c001-web-p"))
 
@@ -294,7 +290,7 @@ class TestReconcileSegmentVlanDomains:
     def test_untagged_local_segment_drops_every_row(self) -> None:
         """No port carries it and it is not stretched: nothing needs it."""
         world = VlanWorld()
-        first = world.add("seg-1", "mlag-1", 100)
+        first = world.add("seg-1", "sw-2", 100)
         second = world.add("seg-1", "sw-1", 100)
         gen = world.gen([], interfaces=[])
 
@@ -306,7 +302,8 @@ class TestReconcileSegmentVlanDomains:
     def test_stretched_segment_keeps_border_gateway_row_without_tags(self) -> None:
         """A border gateway needs a stretched segment even with no customer port."""
         world = VlanWorld()
-        world.add("seg-1", "mlag-bl", 100)
+        world.add("seg-1", "bl-1", 100)
+        world.add("seg-1", "bl-2", 100)
         gen = world.gen(
             [make_device("bl-1", mlag_id="mlag-bl"), make_device("bl-2", mlag_id="mlag-bl")],
             interfaces=[],
@@ -318,7 +315,8 @@ class TestReconcileSegmentVlanDomains:
 
         gen.client.delete.assert_not_awaited()
         assert world.created == []
-        assert gen.client.filters.call_args.kwargs["deployment__ids"] == ["dc-1", "pod-1"]
+        border_read = next(c for c in gen.client.filters.await_args_list if "deployment__ids" in c.kwargs)
+        assert border_read.kwargs["deployment__ids"] == ["dc-1", "pod-1"]
 
     def test_switch_in_a_pod_is_mapped_to_the_deployment_of_its_dc(self) -> None:
         """A leaf is deployed into the pod, the segment's realization is on the DC: the DC's pods map to it."""
@@ -329,9 +327,7 @@ class TestReconcileSegmentVlanDomains:
 
         asyncio.run(reconcile(gen, "seg-1", "seg"))
 
-        assert world.created == [
-            {"segment_deployment": {"id": "sd-seg-1"}, "vlan_domain": {"id": "sw-1"}, "vlan_id": 100}
-        ]
+        assert world.created == [{"segment_deployment": {"id": "sd-seg-1"}, "device": {"id": "sw-1"}, "vlan_id": 100}]
 
     def test_each_switch_gets_its_row_under_the_deployment_of_its_own_dc(self) -> None:
         """A segment in two DCs: a switch of each DC, and the segment keeps one VLAN id across both."""
@@ -344,9 +340,7 @@ class TestReconcileSegmentVlanDomains:
 
         asyncio.run(reconcile(gen, "seg-1", "seg"))
 
-        created = {
-            data["vlan_domain"]["id"]: (data["segment_deployment"]["id"], data["vlan_id"]) for data in world.created
-        }
+        created = {data["device"]["id"]: (data["segment_deployment"]["id"], data["vlan_id"]) for data in world.created}
         assert created == {"sw-1": ("sd-a", 100), "sw-2": ("sd-b", 100)}
 
     def test_new_domain_reuses_the_vlan_id_the_segment_has_under_another_deployment(self) -> None:
@@ -405,10 +399,10 @@ class TestReconcileSegmentVlanDomains:
         assert world.created == []
         gen.logger.warning.assert_called_once()
 
-    def test_domain_with_devices_in_two_deployments_is_left_as_it_is(self) -> None:
+    def test_pair_with_members_in_two_deployments_is_left_as_it_is(self) -> None:
         """An MLAG pair sits in one pod: members in two deployments are reported, nothing written or deleted."""
         world = VlanWorld()
-        row = world.add("seg-1", "mlag-1", 150, sd="sd-a")
+        row = world.add("seg-1", "l1", 150, sd="sd-a")
         gen = world.gen(
             [
                 make_device("l1", mlag_id="mlag-1", deployment_id="dc-1"),
@@ -424,7 +418,7 @@ class TestReconcileSegmentVlanDomains:
         assert world.deleted == []
         assert [r.id for r in world.rows] == [row]
         gen.logger.warning.assert_called_once()
-        assert "mlag-1" in gen.logger.warning.call_args.args[0]
+        assert "l1" in gen.logger.warning.call_args.args[0] and "l2" in gen.logger.warning.call_args.args[0]
 
     def test_non_vxlan_segment_does_nothing(self) -> None:
         """An id that matches no ManagedVxlanSegment has no rows to reconcile."""

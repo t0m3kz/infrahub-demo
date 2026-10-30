@@ -1,31 +1,32 @@
-# The rows of checks/circuit_placement.py, one root per circuit kind (the role of a virtual circuit IS its kind):
+# The rows of checks/circuit_placement.py, one root per circuit kind (the role of a session circuit is its
+# `circuit_type`: dci, handoff or tunnel):
 #
-# - TopologyPhysicalCircuit: the places it terminates on (locations), the owner (with an office location's owner:
+# - TopologyCarrierCircuit: the places it terminates on (locations), the owner (with an office location's owner:
 #   an office's access circuit is owned by it) and the device each end port sits on with where that device is
 #   deployed.
-# - TopologyTunnelCircuit: owner and locations (an office location carries its owner), and its end ports.
-# - TopologyInterconnectCircuit: status (a decommissioned session circuit is exempt: nothing is built for it),
-#   locations and end ports; each port's device carries its BGP processes (the Interconnect needs exactly one
-#   overlay process on it).
-# - TopologyHandoffCircuit: status (as above), locations and end ports; the environment namespace; the cloud-side
-#   endpoint (a VIF states its VLAN, which mirrors the sub-interface name). Its locations are exactly where its two
-#   end devices are deployed, so every end port's device carries its deployment.
+# - TopologySessionCircuit: circuit_type, status (a decommissioned dci or handoff is exempt: nothing is built for it),
+#   owner and locations (an office location carries its owner), end ports; each port's device carries its BGP
+#   processes (a dci needs exactly one overlay process on it). What only one type may carry is selected for all:
+#   ip_namespace (with its namespace_type) and the cloud-side endpoint (a VIF states its VLAN, which mirrors the
+#   sub-interface name) for a handoff, password, maximum_routes and registered_prefixes (their ids only).
+#   A handoff's locations are exactly where its two end devices are deployed, so every end port's device carries
+#   its deployment.
 #
-# A virtual circuit's end port (VirtualPort) carries the physical circuits terminating on it (its own
-# `capabilities`, which also hold segments and peerings: only TopologyPhysicalCircuit is selected) and, for a
+# A session circuit's end port (VirtualPort) carries the carrier circuits terminating on it (its own
+# `capabilities`, which also hold peerings and contexts: only TopologyCarrierCircuit is selected) and, for a
 # sub-interface, the same on its parent interface: a handoff VLAN rides the circuit that terminates on the parent.
 # A hop inside one facility is a DcimCable, not a circuit, so the port (a physical interface has the relationship)
-# and its parent carry their `cable` too: a Handoff is carried by a cable (the Interconnect and Tunnel rules read
+# and its parent carry their `cable` too: a handoff is carried by a cable (the dci and tunnel rules read
 # circuits only). The check derives the carrier per port from utils/circuit_underlay.py (a decommissioned circuit is
 # no carrier; a cable has no status).
-# Every virtual kind shares the one port fragment, so a kind that does not read a path of it (a Tunnel and the
+# Every circuit_type shares the one port fragment, so a type that does not read a path of it (a tunnel and the
 # BGP processes) still selects it. One global query.
 #
 # Concrete inline fragments only for the deployment of a physical end, so the query is valid whether the deployment
-# peer is a generic or a concrete kind. The physical `locations` peer TopologyFacility; a tunnel's peers
-# TopologyConnectableLocation (an office is one), which is why only the office carries an owner here.
+# peer is a generic or a concrete kind. Both kinds' `locations` peer TopologyFacility (an office is one, which is
+# why only the office carries an owner here).
 query circuit_placement {
-  TopologyPhysicalCircuit {
+  TopologyCarrierCircuit {
     edges {
       node {
         id
@@ -68,11 +69,13 @@ query circuit_placement {
     }
   }
 
-  TopologyTunnelCircuit {
+  TopologySessionCircuit {
     edges {
       node {
         id
         name { value }
+        status { value }
+        circuit_type { value }
         owner { node { id org_id { value } } }
         locations {
           edges {
@@ -84,34 +87,13 @@ query circuit_placement {
             }
           }
         }
-        capabilities { edges { node { ...VirtualPort } } }
-      }
-    }
-  }
-
-  TopologyInterconnectCircuit {
-    edges {
-      node {
-        id
-        name { value }
-        status { value }
-        owner { node { id org_id { value } } }
-        locations { edges { node { id __typename name { value } } } }
-        capabilities { edges { node { ...VirtualPort } } }
-      }
-    }
-  }
-
-  TopologyHandoffCircuit {
-    edges {
-      node {
-        id
-        name { value }
-        status { value }
-        locations { edges { node { id __typename name { value } } } }
         ip_namespace { node { name { value } namespace_type { value } } }
+        password { node { id } }
+        maximum_routes { value }
+        registered_prefixes { edges { node { id } } }
         cloud_endpoint {
           node {
+            id
             ... on CloudVirtualInterface {
               name { value }
               vlan_id { value }
@@ -131,7 +113,7 @@ fragment VirtualPort on DcimInterface {
     edges {
       node {
         __typename
-        ... on TopologyPhysicalCircuit { ...Carrier }
+        ... on TopologyCarrierCircuit { ...Carrier }
       }
     }
   }
@@ -148,7 +130,7 @@ fragment VirtualPort on DcimInterface {
           edges {
             node {
               __typename
-              ... on TopologyPhysicalCircuit { ...Carrier }
+              ... on TopologyCarrierCircuit { ...Carrier }
             }
           }
         }
@@ -183,9 +165,9 @@ fragment VirtualPort on DcimInterface {
   }
 }
 
-# A physical circuit found on a port: its status (a decommissioned one is no carrier), where it terminates and
+# A carrier circuit found on a port: its status (a decommissioned one is no carrier), where it terminates and
 # the ports it terminates on (a carrier of exactly the circuit's two ports is pure fibre).
-fragment Carrier on TopologyPhysicalCircuit {
+fragment Carrier on TopologyCarrierCircuit {
   id
   name { value }
   status { value }

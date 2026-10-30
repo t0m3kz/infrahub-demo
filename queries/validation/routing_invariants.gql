@@ -123,7 +123,7 @@ query routing_invariants {
     }
   }
 
-  TopologyTunnelCircuit {
+  TopologySessionCircuit(circuit_type__value: "tunnel") {
     edges {
       node {
         id

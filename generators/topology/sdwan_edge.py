@@ -10,9 +10,9 @@ No-ops unless office.sdwan_gateway is set — that relationship is the opt-in
 signal (see schemas/extensions/topology/topology_customer.yml), same shape
 as design.dedicated_firewall gating dedicated provisioning elsewhere. When
 set, this generator provisions the per-office slice of SD-WAN: an Edge
-device, the internet-underlay TopologyPhysicalCircuit INET-<office> (the
+device, the internet-underlay TopologyCarrierCircuit INET-<office> (the
 Edge's uplink to a free ``customer`` port of the ISP's access PE) and the
-SD-WAN TopologyTunnelCircuit <office>-SDWAN-<gateway zone> (owned by the
+SD-WAN tunnel (a TopologySessionCircuit of type tunnel) <office>-SDWAN-<gateway zone> (owned by the
 office's owner, ending on the Gateway's public port and the Edge's uplink) —
 then attaches the new Edge to the Gateway's own Orchestrator (VCO) via
 managed_devices. It is the only path: no office's Edge, tunnel or underlay is
@@ -27,9 +27,9 @@ the trunk (role uplink) is not used here.
 The underlay's far end is not authored per office. The ISP is the one
 TopologyExternalProviders of the internet provider (data/demos/30_all/
 04_internet), its one device the access PE; the circuit takes that PE's first
-free ``customer`` port (a port that is an end of no physical circuit), and
+free ``customer`` port (a port that is an end of no carrier circuit), and
 reuses its own port on a rerun. The pick and the circuit's single save (a
-physical circuit needs both ends at creation) run under one resource_lock,
+carrier circuit needs both ends at creation) run under one resource_lock,
 because the offices board in one load and run concurrently. The circuit's
 locations are the office and the ISP; the tunnel's are the office and the
 Gateway's zone.
@@ -68,7 +68,7 @@ from infrahub_sdk.protocols import CoreIPPrefixPool
 from netutils.interface import sort_interface_list
 
 from utils.data_cleaning import clean_data
-from utils.limits import GROUP_PHYSICAL_CIRCUITS
+from utils.limits import GROUP_CARRIER_CIRCUITS, GROUP_VIRTUAL_CIRCUITS
 
 from ..common import CommonGenerator
 from ..helpers.naming import sdwan_edge_name
@@ -78,10 +78,10 @@ from ..protocols import (
     DcimPhysicalInterface,
     IpamPrefix,
     ManagedController,
+    TopologyCarrierCircuit,
     TopologyCustomerOffice,
     TopologyExternalProviders,
-    TopologyPhysicalCircuit,
-    TopologyTunnelCircuit,
+    TopologySessionCircuit,
 )
 from .segment import tenant_pool_name
 
@@ -269,7 +269,7 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
     ) -> None:
         """Create/upsert INET-<office> from the Edge uplink to the ISP access PE's port, in one save.
 
-        A physical circuit needs both ends when it is written, so the port is
+        A carrier circuit needs both ends when it is written, so the port is
         picked and the circuit saved inside one lock: two offices running at
         once would otherwise both see the same port free.
         """
@@ -277,7 +277,7 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
         async with self.resource_lock(f"isp-access-port-{isp_device_id}"):
             isp_port_id = await self._pick_isp_port(office_name, circuit_name, isp_device_id)
             circuit = await self.client.create(
-                kind=TopologyPhysicalCircuit,
+                kind=TopologyCarrierCircuit,
                 data={
                     "circuit_id": circuit_name,
                     "name": circuit_name,
@@ -290,7 +290,7 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
                     # (not the edge device) and the ISP the far end sits in are facilities.
                     "locations": [{"id": office_id}, {"id": isp_location_id}],
                     "capabilities": [{"id": edge_uplink_id}, {"id": isp_port_id}],
-                    "member_of_groups": [_target_group(GROUP_PHYSICAL_CIRCUITS)],
+                    "member_of_groups": [_target_group(GROUP_CARRIER_CIRCUITS)],
                 },
             )
             await circuit.save(allow_upsert=True)
@@ -299,13 +299,13 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
     async def _pick_isp_port(self, office_name: str, circuit_name: str, isp_device_id: str) -> str:
         """The access PE port for this circuit: the one it already ends on, else the first free ``customer`` port.
 
-        Free = no physical circuit among the port's capabilities
+        Free = no carrier circuit among the port's capabilities
         (a virtual circuit's tunnel port may be shared, a physical end may
         not). Fails, before anything is written, when none is left. Call
         inside the isp-access-port lock.
         """
         circuits = await self.client.filters(
-            kind=TopologyPhysicalCircuit, name__value=circuit_name, include=["capabilities"]
+            kind=TopologyCarrierCircuit, name__value=circuit_name, include=["capabilities"]
         )
         own_ends = {peer.id for circuit in circuits for peer in getattr(circuit, "capabilities").peers}
         ports = await self.client.filters(
@@ -320,9 +320,7 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
         free = {
             port.name.value: port.id
             for port in ports
-            if not any(
-                peer.typename == TopologyPhysicalCircuit.__name__ for peer in getattr(port, "capabilities").peers
-            )
+            if not any(peer.typename == TopologyCarrierCircuit.__name__ for peer in getattr(port, "capabilities").peers)
         }
         if not free:
             self.fail(f"{office_name}: the ISP access device has no free customer port for {circuit_name}")
@@ -339,24 +337,26 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
         gateway_zone_name: str,
         end_ids: list[str],
     ) -> None:
-        """Create/upsert the office's TopologyTunnelCircuit, both ends in one save.
+        """Create/upsert the office's tunnel (a TopologySessionCircuit of type ``tunnel``), both ends in one save.
 
         Ends: the gateway's public port and the edge uplink. An upsert replaces the
         cardinality-many ``capabilities``, so a rerun over unchanged data resends the
-        same two ends. Not in the ``virtual_circuits`` group: the orchestrator owns
-        the overlay routing and no session is generated for a tunnel.
+        same two ends. A member of the ``virtual_circuits`` group like every session circuit (its created-trigger
+        needs it); the orchestrator owns the overlay routing, so add_virtual_circuit builds no session for it.
         """
         tunnel_name = f"{office_name}-SDWAN-{gateway_zone_name}"
         tunnel = await self.client.create(
-            kind=TopologyTunnelCircuit,
+            kind=TopologySessionCircuit,
             data={
                 "name": tunnel_name,
+                "circuit_type": "tunnel",
                 "status": "active",
                 "provider": {"id": provider_id},
                 "owner": {"id": owner_id},
                 "description": f"{office_name} SD-WAN tunnel to {gateway_zone_name} gateway",
                 "locations": [{"id": office_id}, {"id": gateway_zone_id}],
                 "capabilities": [{"id": end_id} for end_id in end_ids],
+                "member_of_groups": [_target_group(GROUP_VIRTUAL_CIRCUITS)],
             },
         )
         await tunnel.save(allow_upsert=True)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -71,14 +72,21 @@ async def test_cable_without_another_endpoint_is_absent() -> None:
 
 
 @pytest.mark.asyncio
-async def test_far_end_that_is_not_a_physical_interface_is_absent() -> None:
-    """The other endpoint is not found as a DcimPhysicalInterface: no far end for that interface only."""
+async def test_far_end_that_is_not_a_physical_interface_is_absent(caplog: pytest.LogCaptureFixture) -> None:
+    """The other endpoint is a patch panel port (not a DcimPhysicalInterface): no far end for that interface only.
+
+    Skipped with a WARNING naming the port, never an error: the generators fail on an error log.
+    """
     port_b = SimpleNamespace(id="port-b")
     client = _client([_cable("c-1", "up-1", "front-port"), _cable("c-2", "up-2", "port-b")], [port_b])
 
-    result = await far_end_interfaces(client, [_iface("up-1", "c-1"), _iface("up-2", "c-2")], include=[])
+    with caplog.at_level(logging.DEBUG, logger="generators.far_end"):
+        result = await far_end_interfaces(client, [_iface("up-1", "c-1"), _iface("up-2", "c-2")], include=[])
 
     assert result == {"up-2": port_b}
+    assert [(record.levelno, "front-port" in record.getMessage()) for record in caplog.records] == [
+        (logging.WARNING, True)
+    ]
 
 
 @pytest.mark.asyncio

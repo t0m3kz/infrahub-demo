@@ -1,6 +1,6 @@
 ---
 # IP transit, cage -> ISP. Unowned like the rest of the on-ramp underlay
-# (../01_colo_onramp/03_physical_circuits.yml): every tenant's internet traffic
+# (../01_colo_onramp/03_carrier_circuits.yml): every tenant's internet traffic
 # leaves over these. The cage end is the zone the dark fibre also lands in, the
 # far end the ISP's endpoint in the INTERNET topology (../../04_internet/01_topology.yml).
 # Only the cage is listed: add_circuit derives the ISP end from the provider
@@ -8,10 +8,10 @@
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: TopologyPhysicalCircuit
+  kind: TopologyCarrierCircuit
   data:
     - circuit_id: "INET-LUMEN-EQXFR2"
-      member_of_groups: [physical_circuits]
+      member_of_groups: [carrier_circuits]
       name: "INET-LUMEN-EQXFR2"
       circuit_type: internet
       status: active
@@ -25,7 +25,7 @@ spec:
         - ["EXT-LUMEN-FRA1", "et-0/0/0"]
 
     - circuit_id: "INET-COGENT-EQXFR2"
-      member_of_groups: [physical_circuits]
+      member_of_groups: [carrier_circuits]
       name: "INET-COGENT-EQXFR2"
       circuit_type: internet
       status: active
@@ -39,7 +39,7 @@ spec:
         - ["EXT-COGENT-FRA1", "et-0/0/0"]
 
     - circuit_id: "INET-LUMEN-EQXPA4"
-      member_of_groups: [physical_circuits]
+      member_of_groups: [carrier_circuits]
       name: "INET-LUMEN-EQXPA4"
       circuit_type: internet
       status: active
@@ -53,7 +53,7 @@ spec:
         - ["EXT-LUMEN-PAR1", "et-0/0/0"]
 
     - circuit_id: "INET-COGENT-EQXPA4"
-      member_of_groups: [physical_circuits]
+      member_of_groups: [carrier_circuits]
       name: "INET-COGENT-EQXPA4"
       circuit_type: internet
       status: active
