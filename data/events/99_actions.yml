@@ -699,9 +699,9 @@ spec:
             modification_type: updated
 
     # ── Circuits ──────────────────────────────────────────────────────────────
-    # add_circuit targets physical_circuits, so every physical circuit — loaded or
+    # add_circuit targets carrier_circuits, so every carrier circuit — loaded or
     # generator-created (add_sdwan_edge creates INET-<office>) — must be a member, or
-    # its created-trigger raises (see the endpoint note above). A physical circuit
+    # its created-trigger raises (see the endpoint note above). A carrier circuit
     # is a pure carrier; add_circuit reads its ends and fans out to the session
     # circuits riding it, so the `updated` rules watch `capabilities` (the ends) and
     # `status` (a carrier set to decommissioned, or back to active, reaches the
@@ -718,13 +718,13 @@ spec:
     # edit (generators/topology/circuit.py).
     - name: trigger-circuit-on-created
       branch_scope: "other_branches"
-      node_kind: TopologyPhysicalCircuit
+      node_kind: TopologyCarrierCircuit
       mutation_action: "created"
       action: run-circuit-generator
 
     - name: trigger-circuit-on-interface-capabilities-updated
       branch_scope: "other_branches"
-      node_kind: TopologyPhysicalCircuit
+      node_kind: TopologyCarrierCircuit
       mutation_action: "updated"
       action: run-circuit-generator
       matches:
@@ -735,7 +735,7 @@ spec:
 
     - name: trigger-circuit-on-status-updated
       branch_scope: "other_branches"
-      node_kind: TopologyPhysicalCircuit
+      node_kind: TopologyCarrierCircuit
       mutation_action: "updated"
       action: run-circuit-generator
       matches:
@@ -745,26 +745,27 @@ spec:
             value_match: any
 
     # ── Virtual circuits ──────────────────────────────────────────────────────
-    # add_virtual_circuit targets virtual_circuits and builds the BGP session(s) of an interconnect or a
-    # handoff circuit, so every such circuit — loaded or generator-created — must be a member, or its
-    # created-trigger raises (see the endpoint note above). A TopologyTunnelCircuit has no rule and is not a
-    # member: the SD-WAN orchestrator owns its overlay routing.
-    # One set of rules per kind, none on the TopologyVirtualCircuit generic: a rule on a generic node_kind is
-    # unprobed here, a per-kind rule is the shape every rule in this file uses.
+    # add_virtual_circuit targets virtual_circuits and builds the BGP session(s) of a dci or a handoff
+    # session circuit, so every TopologySessionCircuit — loaded or generator-created, a tunnel too — must be a
+    # member, or its created-trigger raises (see the endpoint note above). A tunnel is a member but the generator
+    # builds no session for it: the SD-WAN orchestrator owns its overlay routing.
+    # One set of rules for the one kind, none on a generic: a rule on a generic node_kind is unprobed here, a
+    # per-kind rule is the shape every rule in this file uses.
     # Each `updated` rule watches what the generator reads and nothing it writes: `capabilities` (the ends, hence
-    # the carrier), `status`, and for a handoff its `ip_namespace` (the pool), `password` and `maximum_routes`.
+    # the carrier), `status`, and for a handoff its `ip_namespace` (the pool), `password` and `maximum_routes`
+    # (those three fire for a dci or a tunnel too, which never sets them: harmless).
     # `cloud_endpoint` is deliberately absent: the generator does not read it. A carrier's change reaches the
     # circuits through add_circuit, which fans out here (generators/topology/circuit.py).
 
-    - name: trigger-interconnect-circuit-on-created
+    - name: trigger-session-circuit-on-created
       branch_scope: "other_branches"
-      node_kind: TopologyInterconnectCircuit
+      node_kind: TopologySessionCircuit
       mutation_action: "created"
       action: run-virtual-circuit-generator
 
-    - name: trigger-interconnect-circuit-on-capabilities-updated
+    - name: trigger-session-circuit-on-capabilities-updated
       branch_scope: "other_branches"
-      node_kind: TopologyInterconnectCircuit
+      node_kind: TopologySessionCircuit
       mutation_action: "updated"
       action: run-virtual-circuit-generator
       matches:
@@ -773,9 +774,9 @@ spec:
           - relationship_name: capabilities
             modification_type: updated
 
-    - name: trigger-interconnect-circuit-on-status-updated
+    - name: trigger-session-circuit-on-status-updated
       branch_scope: "other_branches"
-      node_kind: TopologyInterconnectCircuit
+      node_kind: TopologySessionCircuit
       mutation_action: "updated"
       action: run-virtual-circuit-generator
       matches:
@@ -784,37 +785,9 @@ spec:
           - attribute_name: status
             value_match: any
 
-    - name: trigger-handoff-circuit-on-created
+    - name: trigger-session-circuit-on-namespace-updated
       branch_scope: "other_branches"
-      node_kind: TopologyHandoffCircuit
-      mutation_action: "created"
-      action: run-virtual-circuit-generator
-
-    - name: trigger-handoff-circuit-on-capabilities-updated
-      branch_scope: "other_branches"
-      node_kind: TopologyHandoffCircuit
-      mutation_action: "updated"
-      action: run-virtual-circuit-generator
-      matches:
-        kind: CoreNodeTriggerRelationshipMatch
-        data:
-          - relationship_name: capabilities
-            modification_type: updated
-
-    - name: trigger-handoff-circuit-on-status-updated
-      branch_scope: "other_branches"
-      node_kind: TopologyHandoffCircuit
-      mutation_action: "updated"
-      action: run-virtual-circuit-generator
-      matches:
-        kind: CoreNodeTriggerAttributeMatch
-        data:
-          - attribute_name: status
-            value_match: any
-
-    - name: trigger-handoff-circuit-on-namespace-updated
-      branch_scope: "other_branches"
-      node_kind: TopologyHandoffCircuit
+      node_kind: TopologySessionCircuit
       mutation_action: "updated"
       action: run-virtual-circuit-generator
       matches:
@@ -823,9 +796,9 @@ spec:
           - relationship_name: ip_namespace
             modification_type: updated
 
-    - name: trigger-handoff-circuit-on-password-updated
+    - name: trigger-session-circuit-on-password-updated
       branch_scope: "other_branches"
-      node_kind: TopologyHandoffCircuit
+      node_kind: TopologySessionCircuit
       mutation_action: "updated"
       action: run-virtual-circuit-generator
       matches:
@@ -834,9 +807,9 @@ spec:
           - relationship_name: password
             modification_type: updated
 
-    - name: trigger-handoff-circuit-on-maximum-routes-updated
+    - name: trigger-session-circuit-on-maximum-routes-updated
       branch_scope: "other_branches"
-      node_kind: TopologyHandoffCircuit
+      node_kind: TopologySessionCircuit
       mutation_action: "updated"
       action: run-virtual-circuit-generator
       matches:

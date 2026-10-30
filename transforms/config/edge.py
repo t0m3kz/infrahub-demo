@@ -8,6 +8,7 @@ from transforms.helpers.bgp_external import (
     get_onprem_prefixes,
 )
 from transforms.helpers.vrf import plain_vrf_names
+from utils.circuit_underlay import SESSION_CIRCUIT
 from utils.routing_identity import customer_tags, identity_in_use, routing_community_regexes
 
 
@@ -43,7 +44,7 @@ class Edge(BaseDeviceTransform):
                 data.get("name") or "",
                 device_capabilities=data.get("capabilities"),
                 offices=roots.get("TopologyCustomerOffice"),
-                tunnels=roots.get("TopologyTunnelCircuit"),
+                tunnels=roots.get(SESSION_CIRCUIT),
             ),
             get_onprem_prefixes(roots.get("ManagedNetworkSegment")),
             device_name=data.get("name") or "",

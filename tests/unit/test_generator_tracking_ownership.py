@@ -721,7 +721,7 @@ class TestCircuitOwnership:
         client = circuit_fakes.FakeClient()
 
         await circuit_fakes.physical_generator(client).generate(
-            circuit_fakes.physical_payload(locations=[circuit_fakes.CAGE])
+            circuit_fakes.carrier_payload(locations=[circuit_fakes.CAGE])
         )
 
         assert [action for action, _, _ in client.writes] == ["relate"]

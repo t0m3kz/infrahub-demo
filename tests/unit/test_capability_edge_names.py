@@ -96,7 +96,7 @@ def test_both_ends_of_the_interface_edge_are_named_capabilities(schema: SchemaMo
     ends = [(kind, rel) for kind, rel in schema.all_relationships() if rel.get("identifier") == OLD_NAME]
     assert {rel["name"] for _, rel in ends} == {NEW_NAME}, [(kind, rel["name"]) for kind, rel in ends]
     assert {rel["peer"] for _, rel in ends} == INTERFACE_EDGE_PEERS, [(kind, rel["peer"]) for kind, rel in ends]
-    # The two base relationships exist; a node may re-declare its own copy to set counts (physical circuits).
+    # The two base relationships exist; a node may re-declare its own copy to set counts (carrier circuits).
     declared_on = {kind for kind, _ in ends}
     assert {INTERFACE_EDGE_GENERIC, "DcimInterface"} <= declared_on, declared_on
 

@@ -10,8 +10,8 @@
 # XC-EQXPA4-AZURE-WEU and the stub EXT-AZURE-ER-PA4 (../01_colo_onramp/) stay as an idle carrier.
 #
 # The carrier is the cross-connect XC-EQXPA4-MEGAPORT on the sub-interfaces' parent ports
-# (../01_colo_onramp/03_physical_circuits.yml): eg-pa401 Ethernet1/1 and the stub's et-0/0/0. The
-# circuit lists no physical circuit of its own, it is derived from its ports. The stub is deployed to
+# (../01_colo_onramp/03_carrier_circuits.yml): eg-pa401 Ethernet1/1 and the stub's et-0/0/0. The
+# circuit lists no carrier circuit of its own, it is derived from its ports. The stub is deployed to
 # the Megaport zone MCR-PAR1 (../01_colo_onramp/02_cloud_provider_edges.yml explains why).
 #
 # Nothing of the session is authored: the addresses come from Handoff-PROD-IPv4
@@ -93,9 +93,10 @@ spec:
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: TopologyHandoffCircuit
+  kind: TopologySessionCircuit
   data:
     - name: "HANDOFF-PA4-MEGAPORT-PROD"
+      circuit_type: handoff
       member_of_groups: [virtual_circuits]
       status: active
       provider: "P033"

@@ -19,7 +19,7 @@ ALLOWED: dict[tuple[str, str], str] = {
         "which the integration runs resolve with real values; the VRF branch does not touch the spread"
     ),
     ("validation/circuit_placement.gql", "Carrier"): (
-        "pre-existing and not in the VRF branch's diff (`... on TopologyPhysicalCircuit { ...Carrier }`, twice); "
+        "pre-existing and not in the VRF branch's diff (`... on TopologyCarrierCircuit { ...Carrier }`, twice); "
         "reported to the owner of the circuit checks, to be moved to node level in its own change"
     ),
 }

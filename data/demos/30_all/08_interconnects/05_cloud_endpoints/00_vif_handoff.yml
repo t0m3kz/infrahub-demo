@@ -29,7 +29,7 @@
 # addressed from OUR pool too. The sub-interfaces below therefore carry no address.
 #
 # The carrier is the cross-connect XC-EQXFR2-AWS-EUC1 on the sub-interfaces' parent
-# ports (../01_colo_onramp/03_physical_circuits.yml): the circuit lists no physical
+# ports (../01_colo_onramp/03_carrier_circuits.yml): the circuit lists no physical
 # circuit of its own, it is derived from its ports.
 apiVersion: infrahub.app/v1
 kind: Object
@@ -103,7 +103,7 @@ spec:
 # The handoff. Unowned shared on-ramp, like the cross-connect it rides. Provider AWS
 # (P004), not Equinix (P016): the party device is AWS's own Direct Connect router, the
 # service handed off to us is AWS's Direct Connect, and Equinix only sells the
-# cross-connect (the physical circuit). An Equinix Fabric service would make it Equinix.
+# cross-connect (the carrier circuit). An Equinix Fabric service would make it Equinix.
 #
 # Locations: the cage, where our end sits, and the region the AWS side serves from (the
 # stub EXT-AWS-DX-FR2 is deployed to eu-central-1). maximum_routes 100: the hub carries a
@@ -120,9 +120,10 @@ spec:
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: TopologyHandoffCircuit
+  kind: TopologySessionCircuit
   data:
     - name: "HANDOFF-FR2-AWS-EUC1-PROD"
+      circuit_type: handoff
       member_of_groups: [virtual_circuits]
       status: active
       provider: "P004"

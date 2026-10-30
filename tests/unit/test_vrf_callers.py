@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from infrahub_sdk.generator import InfrahubGenerator
 
-from generators.topology.circuit import PhysicalCircuitGenerator
+from generators.topology.circuit import CarrierCircuitGenerator
 from generators.topology.customer_dc import CustomerDeploymentDCExchangeGenerator
 from generators.topology.segment import VxlanSegmentGenerator
 from generators.topology.segment_ports import SegmentPortTagMixin
@@ -310,10 +310,10 @@ class TestHandoffCircuit:
         assert client.writes[-1][:2] == ("vrf", "dev-EXT-AWS-DX-FR2,dev-eg-fr201")
 
 
-# --- physical circuits --------------------------------------------------------------------------------------------
+# --- carrier circuits --------------------------------------------------------------------------------------------
 
 
-class TestPhysicalCircuit:
+class TestCarrierCircuit:
     @pytest.mark.asyncio
     async def test_the_end_devices_are_reconciled(self) -> None:
         """The authored INTERNET addresses of the cage edges demand an instance; add_circuit is the run that sees them."""
@@ -335,7 +335,7 @@ class TestPhysicalCircuit:
         }
         gen._add_locations = AsyncMock()
 
-        await gen.generate({"TopologyPhysicalCircuit": {"edges": [{"node": circuit}]}})
+        await gen.generate({"TopologyCarrierCircuit": {"edges": [{"node": circuit}]}})
 
         gen.reconcile_vrfs.assert_awaited_once_with({"dev-1", "dev-2"})
 
@@ -362,7 +362,7 @@ def test_every_host_composes_the_mixin_without_shadowing_it() -> None:
     from generators.topology.office_fabric import OfficeFabricGenerator
 
     for host in (
-        PhysicalCircuitGenerator,
+        CarrierCircuitGenerator,
         VirtualCircuitSessionGenerator,
         VxlanSegmentGenerator,
         CustomerDeploymentDCExchangeGenerator,

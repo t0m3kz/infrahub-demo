@@ -44,6 +44,7 @@ class TopologyCircuit(CoreNode):
     description: StringOptional
     name: String
     status: Dropdown
+    locations: RelationshipManager[TopologyFacility]
     owner: RelationshipAttribute[OrganizationCustomer]
     provider: RelationshipAttribute[OrganizationProvider]
 
@@ -258,7 +259,7 @@ class CloudResource(CoreNode):
 
 
 class CloudHybridAttachment(CoreNode):
-    virtual_circuit: RelationshipAttribute[TopologyHandoffCircuit]
+    virtual_circuit: RelationshipAttribute[TopologySessionCircuit]
 
 
 class ManagedTenantScoped(CoreNode):
@@ -326,10 +327,6 @@ class ManagedBGPPeering(ManagedGeneric, ManagedPeering, ManagedGenericInterfaces
     ttl: Integer
     bgp_processes: RelationshipManager[ManagedBGP]
     password: RelationshipAttribute[RoutingPassword]
-
-
-class TopologyVirtualCircuit(TopologyCircuit, ManagedGeneric, ManagedGenericInterfaces):
-    pass
 
 
 class DcimCable(CoreNode):
@@ -753,11 +750,13 @@ class RoutingPassword(CoreNode):
     password: String
 
 
-class TopologyPhysicalCircuit(TopologyCircuit, ManagedGeneric, ManagedGenericInterfaces):
+class TopologyCarrierCircuit(TopologyCircuit, ManagedGeneric, ManagedGenericInterfaces):
     bandwidth: IntegerOptional
     circuit_id: String
     circuit_type: Dropdown
-    locations: RelationshipManager[TopologyFacility]
+    commit_rate: IntegerOptional
+    redundancy_group: StringOptional
+    term_length: IntegerOptional
 
 
 class DcimPhysicalDevice(CoreArtifactTarget, DcimDevice, DcimCapabilities, AppInstance):
@@ -1032,20 +1031,12 @@ class LoadbalancerVIP(CoreNode):
     vip_ip: RelationshipAttribute[IpamIPAddress]
 
 
-class TopologyHandoffCircuit(TopologyVirtualCircuit):
+class TopologySessionCircuit(TopologyCircuit, ManagedGeneric, ManagedGenericInterfaces):
+    circuit_type: Dropdown
     maximum_routes: IntegerOptional
     cloud_endpoint: RelationshipAttribute[CloudHybridAttachment]
     ip_namespace: RelationshipAttribute[IpamNamespace]
-    locations: RelationshipManager[TopologyFacility]
     password: RelationshipAttribute[RoutingPassword]
-
-
-class TopologyInterconnectCircuit(TopologyVirtualCircuit):
-    locations: RelationshipManager[TopologyFacility]
-
-
-class TopologyTunnelCircuit(TopologyVirtualCircuit):
-    locations: RelationshipManager[TopologyConnectableLocation]
     registered_prefixes: RelationshipManager[IpamPrefix]
 
 

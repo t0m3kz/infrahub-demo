@@ -10,7 +10,7 @@ from typing import Any, cast
 
 from checks.circuit_placement import CheckCircuitPlacement
 
-KINDS = {"TopologyPhysicalCircuit", "TopologyTunnelCircuit", "TopologyInterconnectCircuit", "TopologyHandoffCircuit"}
+KINDS = {"TopologyCarrierCircuit", "TopologySessionCircuit"}
 
 
 def _place(name: str, kind: str, owner: str | None = None) -> dict[str, Any]:
@@ -48,7 +48,7 @@ def _owner(owner: str | None) -> dict[str, Any]:
 
 
 def _end(device: str, name: str, deployment: dict[str, Any] | None) -> dict[str, Any]:
-    """An end port of a physical circuit, with the device's deployment (id, kind and name only)."""
+    """An end port of a carrier circuit, with the device's deployment (id, kind and name only)."""
     deployment = {key: deployment[key] for key in ("id", "__typename", "name")} if deployment else None
     return {
         "id": f"id-{device}:{name}",
@@ -72,13 +72,13 @@ ORANGE_PE_END = _end("EXT-ORANGE-1", "ge-0/0/1", ORANGE)
 LUMEN_PE_END = _end("EXT-LUMEN-1", "ge-0/0/1", LUMEN)
 
 
-def _physical(
+def _carrier_circuit(
     name: str,
     locations: list[dict[str, Any]],
     ends: list[dict[str, Any]],
     owner: str | None = None,
 ) -> dict[str, Any]:
-    """A physical circuit as the query selects it: its locations and the end ports it terminates on."""
+    """A carrier circuit as the query selects it: its locations and the end ports it terminates on."""
     return {
         "id": f"id-{name}",
         "name": {"value": name},
@@ -88,12 +88,14 @@ def _physical(
     }
 
 
-DF10 = _physical("DF-DC10-EQXFR2", [DC10, FR2], [BL10_END, EG_FR_DF10_END])
-DF11 = _physical("DF-DC11-EQXFR2", [DC11, FR2], [BL11_END, EG_FR_DF11_END])
-XC = _physical("XC-EQXFR2-AWS-EUC1", [FR2, EUC1], [EG_FR_END, AWS_END])
-XC_AM_NE = _physical("XC-EQXAMNE-AWS-EUC1", [AM_NE, EUC1], [EG_AM_NE_END, AWS_END])
-INET_OFFICE = _physical("INET-C001-OFFICE", [C001_OFFICE, ORANGE], [OFFICE_EDGE_END, ORANGE_PE_END], owner="C001")
-INET_GW = _physical("INET-LUMEN-EQXFR2-GW", [FR2, LUMEN], [GW_END, LUMEN_PE_END])
+DF10 = _carrier_circuit("DF-DC10-EQXFR2", [DC10, FR2], [BL10_END, EG_FR_DF10_END])
+DF11 = _carrier_circuit("DF-DC11-EQXFR2", [DC11, FR2], [BL11_END, EG_FR_DF11_END])
+XC = _carrier_circuit("XC-EQXFR2-AWS-EUC1", [FR2, EUC1], [EG_FR_END, AWS_END])
+XC_AM_NE = _carrier_circuit("XC-EQXAMNE-AWS-EUC1", [AM_NE, EUC1], [EG_AM_NE_END, AWS_END])
+INET_OFFICE = _carrier_circuit(
+    "INET-C001-OFFICE", [C001_OFFICE, ORANGE], [OFFICE_EDGE_END, ORANGE_PE_END], owner="C001"
+)
+INET_GW = _carrier_circuit("INET-LUMEN-EQXFR2-GW", [FR2, LUMEN], [GW_END, LUMEN_PE_END])
 
 
 def _decommissioned(circuit: dict[str, Any]) -> dict[str, Any]:
@@ -102,10 +104,10 @@ def _decommissioned(circuit: dict[str, Any]) -> dict[str, Any]:
 
 
 def _carrier(circuit: dict[str, Any]) -> dict[str, Any]:
-    """A physical circuit as the query selects it under a port: status, locations and its end ports."""
+    """A carrier circuit as the query selects it under a port: status, locations and its end ports."""
     ends = [edge["node"] for edge in circuit["capabilities"]["edges"]]
     return {
-        "__typename": "TopologyPhysicalCircuit",
+        "__typename": "TopologyCarrierCircuit",
         "id": circuit["id"],
         "name": circuit["name"],
         "status": circuit.get("status", {"value": "active"}),
@@ -147,7 +149,7 @@ def _vport(
     cabled: bool = False,
     parent_cabled: bool = False,
 ) -> dict[str, Any]:
-    """A virtual circuit's end port: the physical circuits on it, the parent interface (name, circuits on it) of a
+    """A virtual circuit's end port: the carrier circuits on it, the parent interface (name, circuits on it) of a
     sub-interface, and its device with its deployment and its BGP processes (one per role in ``bgp``).
 
     ``cabled`` puts a DcimCable on a physical port, ``parent_cabled`` on the parent of a sub-interface (a
@@ -196,11 +198,14 @@ AWS_VLAN = _vport("EXT-AWS-DX-FR2", "et-0/0/0.3101", parent=("et-0/0/0", (XC,)))
 AWS_VLAN_NO_CARRIER = _vport("EXT-AWS-DX-FR2", "et-0/0/0.3101", parent=("et-0/0/0", ()))
 
 
-def _virtual(name: str, locations: list[dict[str, Any]], ends: list[dict[str, Any]]) -> dict[str, Any]:
-    """The fields every virtual kind selects."""
+def _virtual(
+    name: str, circuit_type: str, locations: list[dict[str, Any]], ends: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """The fields every session circuit selects."""
     return {
         "id": f"id-{name}",
         "name": {"value": name},
+        "circuit_type": {"value": circuit_type},
         "locations": _edges(locations),
         "capabilities": _edges(ends),
     }
@@ -210,14 +215,14 @@ def _tunnel(
     name: str, locations: list[dict[str, Any]], ends: list[dict[str, Any]], owner: str | None = "C001"
 ) -> dict[str, Any]:
     """A tunnel circuit, owned by C001 (the owner of the C001 office) unless told otherwise."""
-    return {**_virtual(name, locations, ends), "owner": _owner(owner)}
+    return {**_virtual(name, "tunnel", locations, ends), "owner": _owner(owner)}
 
 
 def _interconnect(
     name: str, locations: list[dict[str, Any]], ends: list[dict[str, Any]], owner: str | None = None
 ) -> dict[str, Any]:
     """An interconnect (DCI) circuit; unowned unless told otherwise, since a DCI is shared platform."""
-    return {**_virtual(name, locations, ends), "owner": _owner(owner)}
+    return {**_virtual(name, "dci", locations, ends), "owner": _owner(owner)}
 
 
 def _handoff(
@@ -234,7 +239,7 @@ def _handoff(
     if locations is None:
         deployments = [end["device"]["node"]["deployment"]["node"] for end in ends]
         locations = list({deployment["id"]: deployment for deployment in deployments if deployment}.values())
-    node = _virtual(name, locations, ends)
+    node = _virtual(name, "handoff", locations, ends)
     node["ip_namespace"] = {
         "node": {"name": {"value": namespace[0]}, "namespace_type": {"value": namespace[1]}} if namespace else None
     }
@@ -248,7 +253,7 @@ def _handoff(
 
 
 def _run(
-    physical: list[dict[str, Any]] | None = None,
+    carrier: list[dict[str, Any]] | None = None,
     tunnels: list[dict[str, Any]] | None = None,
     interconnects: list[dict[str, Any]] | None = None,
     handoffs: list[dict[str, Any]] | None = None,
@@ -259,10 +264,8 @@ def _run(
     check.log_error = lambda **kwargs: findings.append(kwargs)
     check.validate(
         {
-            "TopologyPhysicalCircuit": _edges(physical or []),
-            "TopologyTunnelCircuit": _edges(tunnels or []),
-            "TopologyInterconnectCircuit": _edges(interconnects or []),
-            "TopologyHandoffCircuit": _edges(handoffs or []),
+            "TopologyCarrierCircuit": _edges(carrier or []),
+            "TopologySessionCircuit": _edges([*(tunnels or []), *(interconnects or []), *(handoffs or [])]),
         }
     )
     for finding in findings:

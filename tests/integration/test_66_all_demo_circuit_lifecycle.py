@@ -44,8 +44,9 @@ from infrahub_sdk import InfrahubClient
 
 from tasks import ALL_DEMO_BRANCH
 from transforms.config.access_leaf import AccessLeaf
+from utils.circuit_underlay import SESSION_CIRCUIT
 
-from .all_demo_circuit_constants import ALL_DEMO_VIRTUAL_CIRCUITS, HANDOFF_KIND, INTERCONNECT_KIND
+from .all_demo_circuit_constants import ALL_DEMO_VIRTUAL_CIRCUITS, HANDOFF_TYPE, INTERCONNECT_TYPE
 from .circuit_lifecycle_helpers import (
     _HOST_CABLES_QUERY,
     _SWITCH_VRF_QUERY,
@@ -89,7 +90,7 @@ POLL_INTERVAL = 10
 
 DECOMMISSIONED = "decommissioned"
 ACTIVE = "active"
-PHYSICAL_CIRCUIT_KIND = "TopologyPhysicalCircuit"
+CARRIER_CIRCUIT_KIND = "TopologyCarrierCircuit"
 
 # The DCI under test: the *-B fibre of DC12 to PA4. Its sibling ICX-DC12-EQXPA4 shares both devices and must not move.
 INTERCONNECT_CIRCUIT = "ICX-DC12-EQXPA4-B"
@@ -108,9 +109,9 @@ SOLE_DEMAND_DEVICE = "eg-am-ne02"
 SOLE_DEMAND_PEER = "eg-am-ne01"
 SOLE_DEMAND_KEY = "eqx-am-ne-aws-vif-key"
 
-_PORT_KINDS = {INTERCONNECT_KIND: "DcimPhysicalInterface", HANDOFF_KIND: "DcimVirtualInterface"}
-_PEERING_SUFFIXES = {INTERCONNECT_KIND: ("underlay", "evpn"), HANDOFF_KIND: ("bgp",)}
-_PREFIX_LABELS = {INTERCONNECT_KIND: "DCI", HANDOFF_KIND: "Handoff"}
+_PORT_KINDS = {INTERCONNECT_TYPE: "DcimPhysicalInterface", HANDOFF_TYPE: "DcimVirtualInterface"}
+_PEERING_SUFFIXES = {INTERCONNECT_TYPE: ("underlay", "evpn"), HANDOFF_TYPE: ("bgp",)}
+_PREFIX_LABELS = {INTERCONNECT_TYPE: "DCI", HANDOFF_TYPE: "Handoff"}
 _ENDS = 2
 
 State = dict[str, Any]
@@ -232,15 +233,15 @@ class Subject:
         return tuple(
             f"{name}-{suffix}"
             for name, expected in sorted(ALL_DEMO_VIRTUAL_CIRCUITS.items())
-            if name != self.circuit and expected["kind"] in _PEERING_SUFFIXES
-            for suffix in _PEERING_SUFFIXES[expected["kind"]]
+            if name != self.circuit and expected["circuit_type"] in _PEERING_SUFFIXES
+            for suffix in _PEERING_SUFFIXES[expected["circuit_type"]]
         )
 
 
 def subject_for(circuit: str, key: str | None = None) -> Subject:
     """The subject for a 30_all Interconnect (its generated ``<name>-dci-key``) or Handoff (``key`` is the data's)."""
     expected = ALL_DEMO_VIRTUAL_CIRCUITS[circuit]
-    kind = expected["kind"]
+    kind = expected["circuit_type"]
     assert kind in _PEERING_SUFFIXES, f"{circuit} is a {kind}: it has no session"
     ends = tuple((str(device), str(port)) for device, port in expected["ends"])
     return Subject(circuit=circuit, kind=kind, key=key or f"{circuit}-dci-key", ports=ends)
@@ -722,7 +723,7 @@ class TestAllDemoCircuitLifecycle(TestInfrahubDockerWithClient):
             async_client_main,
             scenario_branch,
             subject_for(INTERCONNECT_CIRCUIT),
-            PHYSICAL_CIRCUIT_KIND,
+            CARRIER_CIRCUIT_KIND,
             circuit_id__value=carrier,
         )
         logging.info("%s: sessions removed with its carrier, rebuilt on the same key", INTERCONNECT_CIRCUIT)
@@ -747,7 +748,7 @@ class TestAllDemoCircuitLifecycle(TestInfrahubDockerWithClient):
             async_client_main,
             scenario_branch,
             subject_for(HANDOFF_CIRCUIT, key=HANDOFF_KEY),
-            HANDOFF_KIND,
+            SESSION_CIRCUIT,
             name__value=HANDOFF_CIRCUIT,
         )
         logging.info("%s: session removed with its status, rebuilt on the same key", HANDOFF_CIRCUIT)
@@ -773,7 +774,7 @@ class TestAllDemoCircuitLifecycle(TestInfrahubDockerWithClient):
             async_client_main,
             scenario_branch,
             subject_for(SOLE_DEMAND_HANDOFF, key=SOLE_DEMAND_KEY),
-            HANDOFF_KIND,
+            SESSION_CIRCUIT,
             sole_demand=SOLE_DEMAND_DEVICE,
             name__value=SOLE_DEMAND_HANDOFF,
         )

@@ -17,7 +17,7 @@ import pytest
 
 from tasks import ALL_DEMO_DATA
 from tests.integration.all_demo_circuit_constants import ALL_DEMO_DECLARED_PHYSICAL_PORTS, ALL_DEMO_VIRTUAL_CIRCUITS
-from tests.integration.demo_data import ROOT, Declared, declared, name, object_templates
+from tests.integration.demo_data import ROOT, Declared, declared, declared_session, name, object_templates
 
 _ALL = ROOT / ALL_DEMO_DATA
 _FABRIC_HOP = "HANDOFF-FR2-AMNE-PROD"
@@ -33,7 +33,7 @@ _NE_ENDS = {_FABRIC_HOP: ("eg-am-ne01", "Ethernet1/1", 1200), _AWS_HOP: ("eg-am-
 
 def _handoff(circuit_name: str) -> Declared:
     """The one declaration of a handoff circuit."""
-    (circuit,) = [c for c in declared("TopologyHandoffCircuit", _ALL) if name(c) == circuit_name]
+    (circuit,) = [c for c in declared_session("handoff", _ALL) if name(c) == circuit_name]
     return circuit
 
 
@@ -112,7 +112,7 @@ def test_the_fabric_hop_is_an_unowned_prod_handoff_between_the_cage_and_am_ne() 
 
 def test_the_cage_end_is_carried_by_a_cable_to_the_fabric_port_stub_and_the_ne_end_needs_none() -> None:
     """The parent eg-fr201 Ethernet1/1 is cabled to the Equinix Fabric port (a device of the same cage), a cable not a
-    circuit: no physical circuit has either port, and the NE router's parent port has no carrier at all."""
+    circuit: no carrier circuit has either port, and the NE router's parent port has no carrier at all."""
     (cable,) = [c for c in declared("DcimCable", _ALL) if name(c) == _FABRIC_CABLE]
     ends = {(e["data"]["device"], e["data"]["name"]) for e in cable.item["endpoints"]}
     assert ends == {("eg-fr201", "Ethernet1/1"), (_FABRIC_PORT_STUB, "et-0/0/0")}
@@ -189,14 +189,14 @@ def test_a_vif_vlan_is_unique_per_direct_connect_and_only_the_aws_hops_have_a_vi
 
 def test_every_circuit_a_vif_names_is_declared() -> None:
     """A VIF naming a circuit that no file declares would be a dangling HFID at load time."""
-    circuits = {name(c) for c in declared("TopologyHandoffCircuit", _ALL)}
+    circuits = {name(c) for c in declared_session("handoff", _ALL)}
     assert {v.item["virtual_circuit"] for v in declared("CloudVirtualInterface", _ALL)} <= circuits
 
 
 @pytest.mark.parametrize("circuit_name", [_FABRIC_HOP, _AWS_HOP])
-def test_no_declared_handoff_carries_a_physical_circuits_or_addresses(circuit_name: str) -> None:
+def test_no_declared_handoff_carries_a_carrier_circuits_or_addresses(circuit_name: str) -> None:
     """The carrier is derived from the ports and the addresses generated: neither is a key of the data."""
     circuit = _handoff(circuit_name).item
-    assert "physical_circuits" not in circuit
+    assert "carrier_circuits" not in circuit
     for device, port in circuit["capabilities"]:
         assert "ip_address" not in _sub_interface(device, port).item

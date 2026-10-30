@@ -552,7 +552,7 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
     # The tunnels registering space behind a gateway: C001's partner range behind GW1 (accepted from GW1's
     # session, announced to C001's other sessions), a provider-owned one (never accepted), a NON-PROD one
     # (not the PROD session's) and the office's own inventory tunnel, which registers nothing.
-    data["TopologyTunnelCircuit"] = _edges(
+    data["TopologySessionCircuit"] = _edges(
         [
             tunnel(_customer("C001"), (("198.18.0.0/24", "PROD"),), gw1, "EXT-ACME-EDGE1"),
             tunnel(_PROVIDER, (("198.19.0.0/24", "PROD"),), gw1, "EXT-PARTNER-EDGE1"),

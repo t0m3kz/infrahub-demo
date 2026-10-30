@@ -103,8 +103,8 @@ A `DcimCable` means fibre someone pulled between two chassis, so the generator l
 
 **Links that leave the zone.** The on-ramp's links to the DC border-leafs (the edge's `dci` ports) and to the cloud
 fabrics (its `uplink` ports) are the colocation operator's cross-connect, not fibre we pull, so the model is a
-`TopologyPhysicalCircuit` with the virtual circuits that ride it (`TopologyInterconnectCircuit` for a DCI,
-`TopologyHandoffCircuit` for a cloud or provider handoff) — see `data/demos/30_all/08_interconnects/`. They also need
+`TopologyCarrierCircuit` with the session circuits that ride it (a `dci` `TopologySessionCircuit` for a DCI,
+a `handoff` one for a cloud or provider handoff) — see `data/demos/30_all/08_interconnects/`. They also need
 both endpoints, and a colocation-side generator can only see one. In this demo, which loads no data centers and no
 clouds, those ports stay `free` by design. The same applies between two zones of one metro: FR6 reaches the on-ramp in FR2 over a cross-connect (a circuit between zones), never
 over a cable. The reverse also holds: a hop inside one cage, such as the patch from an edge to the colocation operator's

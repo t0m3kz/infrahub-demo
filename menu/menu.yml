@@ -218,17 +218,17 @@ spec:
             children:
               data:
                 - namespace: Topology
-                  name: PhysicalCircuitItem
-                  label: Physical Circuits
-                  kind: TopologyPhysicalCircuit
+                  name: CarrierCircuitItem
+                  label: Carrier Circuits
+                  kind: TopologyCarrierCircuit
                   icon: "mdi:cable-data"
 
                 - namespace: Topology
-                  name: VirtualCircuitItem
-                  label: Virtual Circuits
-                  kind: TopologyVirtualCircuit
+                  name: SessionCircuitItem
+                  label: Session Circuits
+                  kind: TopologySessionCircuit
                   icon: "mdi:cloud-sync"
-                  description: "Tunnel, Interconnect and Handoff circuits: the connections routing is generated on"
+                  description: "DCI, handoff and tunnel circuits: the connections routing is generated on"
 
           # --------- Cloud Inventory ---------
           - namespace: Cloud

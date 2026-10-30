@@ -1,4 +1,4 @@
-"""Unit tests for utils/circuit_underlay.py: what carries a port (a physical circuit or a cable)."""
+"""Unit tests for utils/circuit_underlay.py: what carries a port (a carrier circuit or a cable)."""
 
 from __future__ import annotations
 
@@ -8,10 +8,11 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from utils.circuit_underlay import (
-    HANDOFF_CIRCUIT,
-    INTERCONNECT_CIRCUIT,
-    SESSION_CIRCUIT_KINDS,
-    TUNNEL_CIRCUIT,
+    DCI_TYPE,
+    HANDOFF_TYPE,
+    SESSION_CIRCUIT,
+    SESSION_CIRCUIT_TYPES,
+    TUNNEL_TYPE,
     has_carrier,
     overlay_processes,
     port_cabled,
@@ -19,7 +20,7 @@ from utils.circuit_underlay import (
     subinterface_vlan,
 )
 
-CIRCUIT = {"typename": "TopologyPhysicalCircuit", "id": "pc-1", "status": "decommissioned"}
+CIRCUIT = {"typename": "TopologyCarrierCircuit", "id": "pc-1", "status": "decommissioned"}
 OTHER = {"typename": "ManagedVxlanSegment"}
 
 
@@ -51,7 +52,7 @@ def test_port_cabled_reads_the_port_and_its_parent(port: dict[str, Any], cabled:
     ],
 )
 def test_has_carrier_is_a_circuit_or_a_cable(port: dict[str, Any], carried: bool) -> None:
-    """A port is carried by a physical circuit (whatever its status) or a cable, at itself or its parent."""
+    """A port is carried by a carrier circuit (whatever its status) or a cable, at itself or its parent."""
     assert has_carrier(port) is carried
 
 
@@ -97,39 +98,33 @@ def test_subinterface_vlan_parses_port_dot_vlan(name: str, vlan: int | None) -> 
     assert subinterface_vlan(name) == vlan
 
 
-def test_the_session_kinds_are_the_interconnect_and_the_handoff_never_the_tunnel() -> None:
-    """One source of truth for the kind names: a tunnel circuit has no session."""
-    assert SESSION_CIRCUIT_KINDS == (INTERCONNECT_CIRCUIT, HANDOFF_CIRCUIT)
-    assert TUNNEL_CIRCUIT not in SESSION_CIRCUIT_KINDS
-    assert (INTERCONNECT_CIRCUIT, HANDOFF_CIRCUIT, TUNNEL_CIRCUIT) == (
-        "TopologyInterconnectCircuit",
-        "TopologyHandoffCircuit",
-        "TopologyTunnelCircuit",
-    )
+def test_the_session_types_are_the_dci_and_the_handoff_never_the_tunnel() -> None:
+    """One source of truth for the circuit_type names: a tunnel has no session."""
+    assert SESSION_CIRCUIT_TYPES == (DCI_TYPE, HANDOFF_TYPE)
+    assert TUNNEL_TYPE not in SESSION_CIRCUIT_TYPES
+    assert (DCI_TYPE, HANDOFF_TYPE, TUNNEL_TYPE) == ("dci", "handoff", "tunnel")
 
 
-def test_the_kind_names_are_those_of_the_protocol_classes() -> None:
-    """The strings are the schema kinds the protocol classes name, so a rename fails here."""
-    from generators.protocols import TopologyHandoffCircuit, TopologyInterconnectCircuit, TopologyTunnelCircuit
+def test_the_kind_and_the_types_are_those_of_the_schema() -> None:
+    """The kind is the protocol class; the types are the choices tests/unit/test_circuit_schema.py pins."""
+    from generators.protocols import TopologySessionCircuit
 
-    assert HANDOFF_CIRCUIT == TopologyHandoffCircuit.__name__
-    assert INTERCONNECT_CIRCUIT == TopologyInterconnectCircuit.__name__
-    assert TUNNEL_CIRCUIT == TopologyTunnelCircuit.__name__
+    assert SESSION_CIRCUIT == TopologySessionCircuit.__name__
 
 
 @pytest.mark.asyncio
-async def test_session_circuits_on_reads_both_session_kinds_and_never_the_tunnel() -> None:
-    """One capabilities__ids query per session kind, merged, interconnects first; no tunnel circuit."""
+async def test_session_circuits_on_is_one_query_on_the_session_types_and_never_the_tunnel() -> None:
+    """One capabilities__ids query on the session kind, filtered on circuit_type to dci and handoff."""
     interconnect, handoff = MagicMock(id="vc-icx"), MagicMock(id="vc-hnd")
-    by_kind = {INTERCONNECT_CIRCUIT: [interconnect], HANDOFF_CIRCUIT: [handoff]}
     client = MagicMock()
-    client.filters = AsyncMock(side_effect=lambda *, kind, **_: by_kind[kind])
+    client.filters = AsyncMock(return_value=[interconnect, handoff])
 
     found = await session_circuits_on(client, ["port-1", "port-2"])
 
     assert found == [interconnect, handoff]
-    assert sorted(call.kwargs["kind"] for call in client.filters.await_args_list) == sorted(SESSION_CIRCUIT_KINDS)
-    assert all(call.kwargs["capabilities__ids"] == ["port-1", "port-2"] for call in client.filters.await_args_list)
+    client.filters.assert_awaited_once_with(
+        kind=SESSION_CIRCUIT, capabilities__ids=["port-1", "port-2"], circuit_type__values=["dci", "handoff"]
+    )
 
 
 @pytest.mark.asyncio

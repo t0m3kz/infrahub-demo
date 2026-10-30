@@ -27,9 +27,9 @@ from tests.integration import test_62_all_demo_interconnects as interconnects
 from tests.integration.all_demo_circuit_constants import (
     ALL_DEMO_HANDOFF_PARTY_ASNS,
     ALL_DEMO_VIRTUAL_CIRCUITS,
-    HANDOFF_KIND,
-    INTERCONNECT_KIND,
-    TUNNEL_KIND,
+    HANDOFF_TYPE,
+    INTERCONNECT_TYPE,
+    TUNNEL_TYPE,
 )
 from tests.integration.circuit_helpers import fetch_interconnect_inventory
 from tests.integration.snapshot_helpers import TOPOLOGY_SNAPSHOT_KINDS, snapshot_query
@@ -76,8 +76,8 @@ async def test_the_shipped_data_passes_every_per_kind_placement_rule(monkeypatch
 async def test_every_kind_is_in_the_inventory_with_its_own_fields(monkeypatch: pytest.MonkeyPatch) -> None:
     """The parser keeps what only one kind has: a handoff's namespace, key, limit and VIF VLAN."""
     data = await inventory(monkeypatch)
-    kinds = {c["kind"] for c in data["virtual"]}
-    assert kinds == {TUNNEL_KIND, INTERCONNECT_KIND, HANDOFF_KIND}
+    kinds = {c["circuit_type"] for c in data["virtual"]}
+    assert kinds == {TUNNEL_TYPE, INTERCONNECT_TYPE, HANDOFF_TYPE}
     aws = _circuit(data, "HANDOFF-FR2-AWS-EUC1-PROD")
     assert (aws["ip_namespace"], aws["cloud_endpoint"], aws["cloud_endpoint_vlan"]) == (
         "PROD",
@@ -91,7 +91,7 @@ async def test_every_kind_is_in_the_inventory_with_its_own_fields(monkeypatch: p
     assert [c["circuit_id"] for end in aws["end_nodes"] for c in end["carriers"]] == ["XC-EQXFR2-AWS-EUC1"] * 2
     sdwan = _circuit(data, "HANDOFF-FR2-SDWAN-GW1-PROD")
     assert sdwan["carrier"] == [] and all(end["cabled"] for end in sdwan["end_nodes"])
-    for tunnel in (c for c in data["virtual"] if c["kind"] == TUNNEL_KIND):
+    for tunnel in (c for c in data["virtual"] if c["circuit_type"] == TUNNEL_TYPE):
         assert tunnel["ip_namespace"] is None and tunnel["cloud_endpoint"] is None and tunnel["password"] is None
 
 
@@ -104,22 +104,20 @@ async def test_without_the_internet_underlay_a_tunnel_rides_no_internet_circuit(
     """Dropping INET-C001-OFFICE leaves the C001 tunnel's edge uplink on no circuit: the carrier differs and the
     tunnel rule reports it."""
     data = await inventory(monkeypatch, without_circuits=("INET-C001-OFFICE",))
-    assert any(
-        "C001-OFFICE-SDWAN-FR2" in e and "rides no live internet physical circuit" in e for e in _placement(data)
-    )
+    assert any("C001-OFFICE-SDWAN-FR2" in e and "rides no live internet carrier circuit" in e for e in _placement(data))
     assert any("C001-OFFICE-SDWAN-FR2: carrier" in e for e in interconnect_rules._expectation_errors(data["virtual"]))
 
 
-async def test_without_the_fibre_a_dci_is_on_no_physical_circuit(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_without_the_fibre_a_dci_is_on_no_carrier_circuit(monkeypatch: pytest.MonkeyPatch) -> None:
     """Dropping a dark fibre leaves one DCI end carried by nothing."""
     data = await inventory(monkeypatch, without_circuits=("DF-DC10-EQXFR2",))
-    assert any("ICX-DC10-EQXFR2" in e and "are on no live physical circuit" in e for e in _placement(data))
+    assert any("ICX-DC10-EQXFR2" in e and "are on no live carrier circuit" in e for e in _placement(data))
 
 
 async def test_without_the_cables_the_cable_carried_handoffs_have_no_carrier(monkeypatch: pytest.MonkeyPatch) -> None:
     """The SD-WAN gateway handoff and the Fabric hop sit in one cage: carried by a cable, not a circuit."""
     errors = _placement(await inventory(monkeypatch, without_cables=True))
-    carrierless = {e.split(":")[0] for e in errors if "no end is on a live physical circuit or a cable" in e}
+    carrierless = {e.split(":")[0] for e in errors if "no end is on a live carrier circuit or a cable" in e}
     assert carrierless == {"HANDOFF-FR2-SDWAN-GW1-PROD", "HANDOFF-FR2-AMNE-PROD"}
 
 
@@ -307,7 +305,7 @@ def test_p2p_errors_hold_a_pair_of_addresses_to_its_pool_and_its_one_prefix() ->
 
 def test_every_handoff_party_asn_is_a_declared_process() -> None:
     """The party of a handoff is the one end that has a declared process; the Network Edge pair has none."""
-    handoffs = {n for n, e in ALL_DEMO_VIRTUAL_CIRCUITS.items() if e["kind"] == HANDOFF_KIND}
+    handoffs = {n for n, e in ALL_DEMO_VIRTUAL_CIRCUITS.items() if e["circuit_type"] == HANDOFF_TYPE}
     assert set(ALL_DEMO_HANDOFF_PARTY_ASNS) == handoffs - {"HANDOFF-FR2-AMNE-PROD"}
     assert {party for party, _ in ALL_DEMO_HANDOFF_PARTY_ASNS.values()} == {
         "EXT-AWS-DX-FR2",
@@ -345,9 +343,10 @@ def test_the_snapshot_covers_the_addresses_sessions_and_keys_the_generator_write
     cable = TOPOLOGY_SNAPSHOT_KINDS["DcimCable"]
     for field in ("endpoints", "cable_id { value }", "color { value }", "length_cm { value }"):
         assert field in cable
-    circuits = TOPOLOGY_SNAPSHOT_KINDS["TopologyVirtualCircuit"]
-    assert "tunnel_id" not in circuits and "physical_circuits" not in circuits
-    assert all(f"... on {kind} {{ locations" in circuits for kind in (TUNNEL_KIND, INTERCONNECT_KIND, HANDOFF_KIND))
+    circuits = TOPOLOGY_SNAPSHOT_KINDS["TopologySessionCircuit"]
+    assert "tunnel_id" not in circuits and "carrier_circuits" not in circuits
+    for field in ("circuit_type { value }", "locations {", "ip_namespace", "registered_prefixes"):
+        assert field in circuits
 
 
 def test_the_payload_builder_does_not_share_state_between_calls() -> None:

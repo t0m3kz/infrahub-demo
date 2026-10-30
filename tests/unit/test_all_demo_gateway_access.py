@@ -13,9 +13,9 @@ from pathlib import Path
 from typing import Any
 
 from tests.integration.all_demo_circuit_constants import (
+    ALL_DEMO_CARRIER_CIRCUIT_TYPES,
     ALL_DEMO_GATEWAY_ACCESS_CIRCUITS,
     ALL_DEMO_INTERNET_TRANSIT_CIRCUITS,
-    ALL_DEMO_PHYSICAL_CIRCUIT_TYPES,
     ALL_DEMO_SDWAN_UNDERLAY_CIRCUITS,
 )
 from tests.integration.demo_data import ROOT, declared, name, object_documents, object_templates
@@ -35,7 +35,7 @@ def _entries(kind: str, *paths: Path) -> list[dict[str, Any]]:
 
 def _circuit() -> dict[str, Any]:
     """The gateway access circuit as the data declares it."""
-    (circuit,) = _entries("TopologyPhysicalCircuit", _GATEWAY_DIR)
+    (circuit,) = _entries("TopologyCarrierCircuit", _GATEWAY_DIR)
     return circuit
 
 
@@ -75,7 +75,7 @@ def test_gateway_template_has_exactly_one_uplink_and_the_new_eth1() -> None:
 
 
 def test_gateway_access_circuit_is_an_unowned_internet_circuit_in_the_generator_group() -> None:
-    """Shared underlay: internet, active, Lumen, no owner, in physical_circuits (add_circuit's target group)."""
+    """Shared underlay: internet, active, Lumen, no owner, in carrier_circuits (add_circuit's target group)."""
     circuit = _circuit()
 
     assert circuit["circuit_id"] == circuit["name"] == _CIRCUIT
@@ -83,7 +83,7 @@ def test_gateway_access_circuit_is_an_unowned_internet_circuit_in_the_generator_
     assert circuit["status"] == "active"
     assert circuit["provider"] == "P014"
     assert "owner" not in circuit
-    assert circuit["member_of_groups"] == ["physical_circuits"]
+    assert circuit["member_of_groups"] == ["carrier_circuits"]
 
 
 def test_gateway_access_circuit_lists_only_the_cage() -> None:
@@ -114,7 +114,14 @@ def test_gateway_access_ports_are_used_by_no_other_circuit_peering_or_address() 
     A tunnel circuit is no other user: the gateway's public port eth1 is the end every tunnel shares.
     """
     ends = [tuple(end) for end in _circuit()["capabilities"]]
-    docs = [doc for _, doc in object_documents(_ALL) if doc["spec"]["kind"] != "TopologyTunnelCircuit"]
+    docs = [
+        doc
+        for _, doc in object_documents(_ALL)
+        if not (
+            doc["spec"]["kind"] == "TopologySessionCircuit"
+            and any(entry.get("circuit_type") == "tunnel" for entry in doc["spec"]["data"])
+        )
+    ]
 
     for device, port in ends:
         assert sum(_uses(doc, device, port) for doc in docs) == 1, f"{device} {port} is used more than once"
@@ -133,15 +140,15 @@ def test_gateway_access_is_not_in_the_transit_folder_nor_counted_as_transit() ->
     """06_internet pairs every circuit with a transit peering (and tests it); the gateway access is separate."""
     assert _CIRCUIT not in ALL_DEMO_INTERNET_TRANSIT_CIRCUITS
     assert not (_INTERNET_DIR / "01_circuit.yml").exists()
-    assert not [c for c in _entries("TopologyPhysicalCircuit", _INTERNET_DIR) if c["circuit_id"] == _CIRCUIT]
+    assert not [c for c in _entries("TopologyCarrierCircuit", _INTERNET_DIR) if c["circuit_id"] == _CIRCUIT]
 
 
 def test_internet_circuit_count_is_transit_plus_two_accesses_plus_one_per_office() -> None:
     """The expected internet count follows the data: the 06_internet transit, the gateway's and the partner's access,
     an INET-<office> each."""
-    transit = {c["circuit_id"] for c in _entries("TopologyPhysicalCircuit", _INTERNET_DIR)}
+    transit = {c["circuit_id"] for c in _entries("TopologyCarrierCircuit", _INTERNET_DIR)}
     offices = {name(o) for o in declared("TopologyCustomerOffice", _ALL) if o.item.get("sdwan_gateway")}
     assert transit == ALL_DEMO_INTERNET_TRANSIT_CIRCUITS
     assert set(ALL_DEMO_SDWAN_UNDERLAY_CIRCUITS) == {f"INET-{office}" for office in offices}
     assert offices
-    assert ALL_DEMO_PHYSICAL_CIRCUIT_TYPES["internet"] == len(transit) + 1 + 1 + len(offices)
+    assert ALL_DEMO_CARRIER_CIRCUIT_TYPES["internet"] == len(transit) + 1 + 1 + len(offices)

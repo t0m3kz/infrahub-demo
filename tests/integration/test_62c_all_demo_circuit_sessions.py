@@ -32,8 +32,8 @@ from .all_demo_circuit_constants import (
     ALL_DEMO_SDWAN_GATEWAY_PUBLIC_PORT,
     ALL_DEMO_VIRTUAL_CIRCUITS,
     ALL_DEMO_ZONE_SITE_VIPS,
-    HANDOFF_KIND,
-    TUNNEL_KIND,
+    HANDOFF_TYPE,
+    TUNNEL_TYPE,
 )
 from .all_demo_firewall_constants import (
     ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS,
@@ -367,8 +367,8 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         client = async_client_main
         errors: list[str] = []
         inventory = await fetch_interconnect_inventory(client=client, branch=scenario_branch)
-        handoffs = {c["name"]: c for c in inventory["virtual"] if c["kind"] == HANDOFF_KIND}
-        expected = sorted(n for n, e in ALL_DEMO_VIRTUAL_CIRCUITS.items() if e["kind"] == HANDOFF_KIND)
+        handoffs = {c["name"]: c for c in inventory["virtual"] if c["circuit_type"] == HANDOFF_TYPE}
+        expected = sorted(n for n, e in ALL_DEMO_VIRTUAL_CIRCUITS.items() if e["circuit_type"] == HANDOFF_TYPE)
         if sorted(handoffs) != expected:
             errors.append(f"handoff circuits {sorted(handoffs)}, expected {expected}")
 
@@ -512,7 +512,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
 
         client = async_client_main
         inventory = await fetch_interconnect_inventory(client=client, branch=scenario_branch)
-        tunnels = [c for c in inventory["virtual"] if c["kind"] == TUNNEL_KIND]
+        tunnels = [c for c in inventory["virtual"] if c["circuit_type"] == TUNNEL_TYPE]
         errors: list[str] = []
         if not tunnels:
             errors.append("no tunnel circuit on the branch")
@@ -523,7 +523,9 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         if found:
             errors.append(f"tunnel session(s) {sorted(found)} exist: a tunnel has none")
 
-        session_ports = {end["id"] for c in inventory["virtual"] if c["kind"] != TUNNEL_KIND for end in c["end_nodes"]}
+        session_ports = {
+            end["id"] for c in inventory["virtual"] if c["circuit_type"] != TUNNEL_TYPE for end in c["end_nodes"]
+        }
         for tunnel in tunnels:
             gateway = [end for end in tunnel["end_nodes"] if end["interface"] == ALL_DEMO_SDWAN_GATEWAY_PUBLIC_PORT]
             if len(gateway) != 1 or len(tunnel["end_nodes"]) != CIRCUIT_ENDS:
@@ -544,7 +546,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         logging.info("=== %s - COMPLETED ===", SCENARIO_NAME)
 
     @pytest.mark.order(410)
-    @pytest.mark.dependency(scope="session", depends=["all_demo_physical_circuits"])
+    @pytest.mark.dependency(scope="session", depends=["all_demo_carrier_circuits"])
     @pytest.mark.asyncio
     async def test_07_verify_internet_upstream(
         self,
@@ -627,7 +629,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         logging.info("=== %s - COMPLETED ===", SCENARIO_NAME)
 
     @pytest.mark.order(411)
-    @pytest.mark.dependency(scope="session", depends=["all_demo_physical_circuits"])
+    @pytest.mark.dependency(scope="session", depends=["all_demo_carrier_circuits"])
     @pytest.mark.asyncio
     async def test_08_verify_zone_edge_pair(
         self,
@@ -776,7 +778,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         logging.info("=== %s - COMPLETED ===", SCENARIO_NAME)
 
     @pytest.mark.order(411)
-    @pytest.mark.dependency(scope="session", depends=["all_demo_physical_circuits"])
+    @pytest.mark.dependency(scope="session", depends=["all_demo_carrier_circuits"])
     @pytest.mark.asyncio
     async def test_09_verify_office_wan_exit(
         self,

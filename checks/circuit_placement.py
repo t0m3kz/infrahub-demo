@@ -1,10 +1,11 @@
 """Validate where a circuit terminates and what carries it: locations, owner, carrier and environment.
 
-The schema holds the kinds (a physical circuit's ``locations`` peers TopologyFacility); what it cannot hold is
-held here. A physical circuit is a pure carrier (fibre, cross-connect, internet); the role of a virtual circuit is
-its KIND, so each kind has its own rules.
+The schema holds the kinds (``locations`` peers TopologyFacility on both); what it cannot hold is held here. A
+carrier circuit is a pure carrier (fibre, cross-connect, internet, a provider virtual connection). A session circuit
+is one kind whose role is its ``circuit_type`` (dci, handoff, tunnel), so each type has its own rules, including the
+fields only it may carry (the schema leaves them all optional).
 
-Physical circuits
+Carrier circuits
     1. exactly two distinct locations (the authored cage plus the ends add_circuit derives),
     2. each location is the ``deployment`` of one end's device, one end per location: a DC, ISP or cloud region,
        or for colocation kit the zone (or virtual colocation) the device is deployed to. A sibling zone of the
@@ -13,16 +14,21 @@ Physical circuits
     3. owned exactly when it is an office's access circuit: one ending on a TopologyCustomerOffice is owned by
        that office's owner (add_sdwan_edge's INET-<office>); every other one is shared underlay, unowned.
 
-Tunnel circuit (office edge to SD-WAN gateway; inventory only, the orchestrator owns the overlay routing)
+Tunnel circuit (``circuit_type`` tunnel: office edge to SD-WAN gateway; inventory only, the orchestrator owns the
+overlay routing)
     1. exactly two distinct locations and two end ports,
-    2. owned by the office's owner: one location is a TopologyCustomerOffice of that owner,
-    3. every end port rides a live internet physical circuit of its own (one with an end on a
+    2. owned by the office's owner: one location is a TopologyCustomerOffice of that owner; the only type with an
+       owner and with ``registered_prefixes`` (the others are unowned and have none),
+    3. none of the handoff-only fields (``ip_namespace``, ``password``, ``maximum_routes``, ``cloud_endpoint``),
+    4. every end port rides a live internet carrier circuit of its own (one with an end on a
        TopologyExternalProviders): the office edge uplink its INET-<office>, the gateway's public port its own
        internet access. The ends share no path, so there is no contiguity rule.
 
-Interconnect circuit (DCI between two EVPN Multi-Site border gateways; an underlay and an EVPN session are built)
+Interconnect circuit (``circuit_type`` dci: between two EVPN Multi-Site border gateways; an underlay and an EVPN
+session are built)
+    0. none of the handoff-only fields (see the tunnel) and no ``registered_prefixes``,
     1. unowned, exactly two distinct locations and two end ports,
-    2. every end port is on a live physical circuit,
+    2. every end port is on a live carrier circuit,
     3. contiguity over the port-derived carrier: the carriers found at the two ports (each once) form one path
        between the two locations, in some order each shares a facility with the next (relationship peers carry no
        order, so every order is tried),
@@ -31,18 +37,21 @@ Interconnect circuit (DCI between two EVPN Multi-Site border gateways; an underl
     5. each end device carries exactly one ManagedBGP process of role ``overlay`` (keeps a Network Edge router out
        of a DCI: the EVPN session runs between those processes).
 
-Handoff circuit (our edge sub-interface to a party device sub-interface, in one environment namespace)
+Handoff circuit (``circuit_type`` handoff: our edge sub-interface to a party device sub-interface, in one
+environment namespace)
+    0. unowned, with an ``ip_namespace`` (the schema leaves it optional) and no ``registered_prefixes``; the
+       ``cloud_endpoint`` is held by this type only (the schema peer is the session kind),
     1. one or two distinct locations (both ends may sit in one cage) and two end ports; the locations are exactly the
        facilities the two end devices are deployed in (nothing derives them, so a location no end device is deployed
        in, or an end device deployed elsewhere, is drift),
-    2. at least one end on a physical device is carried at its port or its parent interface: by a live physical
+    2. at least one end on a physical device is carried at its port or its parent interface: by a live carrier
        circuit, or by a DcimCable (a hop inside one facility, such as the gateway and the cage edge in one cage, is a
        cable, not a circuit; a cable has no status). An end on a Network Edge appliance or other virtual device has
        none and is not required to,
     3. both end ports are sub-interfaces named ``<port>.<vlan>`` with the same VLAN, and when the circuit has a
        cloud endpoint (a VIF) its ``vlan_id`` is that VLAN.
 
-All session circuits (Interconnect and Handoff)
+All session circuits (dci and handoff)
     A port is an end of at most one of them, so two circuits never share the same pair of ports: one session per
     address. A Tunnel is exempt: one gateway port serves many tunnels.
 
@@ -61,20 +70,20 @@ Environment class
 The Interconnect and Tunnel rules read circuits only: a DCI is a pure-fibre circuit by construction, and a tunnel
 rides an internet access circuit.
 
-Contiguity is over the port-derived carrier: the physical circuits found in the ``capabilities`` of each end port,
+Contiguity is over the port-derived carrier: the carrier circuits found in the ``capabilities`` of each end port,
 or of its parent interface when the port is a sub-interface (``utils.circuit_underlay``); a decommissioned one is
 ignored (it neither satisfies "rides a circuit" nor counts in a path). A virtual circuit's underlay is derived,
 never listed.
 
 Known limitations (the check sees the final state of the data, nothing more):
 
-- a port removed from a physical circuit reruns nothing: the virtual circuits that sat on it keep their session
+- a port removed from a carrier circuit reruns nothing: the virtual circuits that sat on it keep their session
   until their next run,
 - a logical port further than one ``parent_interface`` level (a LAG, a sub-interface of a sub-interface) derives
   nothing,
-- a virtual circuit created before its ports are linked to a physical circuit (add_sdwan_edge) is reported if the
+- a virtual circuit created before its ports are linked to a carrier circuit (add_sdwan_edge) is reported if the
   check runs in between,
-- a physical circuit's end count and port kind are checks/physical_circuit_ports.py's.
+- a carrier circuit's end count and port kind are checks/carrier_circuit_ports.py's.
 """
 
 from __future__ import annotations
@@ -87,12 +96,13 @@ from infrahub_sdk.checks import InfrahubCheck
 
 from utils.circuit_underlay import (
     BGP_PROCESS,
+    DCI_TYPE,
     DECOMMISSIONED,
-    HANDOFF_CIRCUIT,
-    INTERCONNECT_CIRCUIT,
+    HANDOFF_TYPE,
     OVERLAY_ROLE,
-    SESSION_CIRCUIT_KINDS,
-    TUNNEL_CIRCUIT,
+    SESSION_CIRCUIT,
+    SESSION_CIRCUIT_TYPES,
+    TUNNEL_TYPE,
     derived_underlay,
     overlay_processes,
     port_cabled,
@@ -103,12 +113,15 @@ from utils.data_cleaning import clean_data
 from utils.exchange_transit import PROD_TYPE, TENANT_NAMESPACE_TYPES
 from utils.limits import CIRCUIT_ENDS
 
-PHYSICAL = "TopologyPhysicalCircuit"
-TUNNEL = TUNNEL_CIRCUIT
-INTERCONNECT = INTERCONNECT_CIRCUIT
-HANDOFF = HANDOFF_CIRCUIT
-VIRTUAL_KINDS = (TUNNEL, INTERCONNECT, HANDOFF)
+CARRIER = "TopologyCarrierCircuit"
+# The session circuit types, keyed by their ``circuit_type`` value.
+TUNNEL = TUNNEL_TYPE
+INTERCONNECT = DCI_TYPE
+HANDOFF = HANDOFF_TYPE
+CIRCUIT_TYPES = (TUNNEL, INTERCONNECT, HANDOFF)
 NOUNS = {TUNNEL: "Tunnel", INTERCONNECT: "Interconnect", HANDOFF: "Handoff"}
+# The fields of a handoff alone; the schema leaves them optional on the one session kind.
+HANDOFF_ONLY_FIELDS = ("ip_namespace", "password", "maximum_routes", "cloud_endpoint")
 
 INTERNET = "TopologyExternalProviders"
 OFFICE = "TopologyCustomerOffice"
@@ -161,7 +174,7 @@ def _port_label(port: dict[str, Any]) -> str:
 
 
 def _ends(circuit: dict[str, Any]) -> list[tuple[str, dict[str, Any] | None]]:
-    """(``device:port``, the device's deployment) per end port of a physical circuit."""
+    """(``device:port``, the device's deployment) per end port of a carrier circuit."""
     ends = []
     for port in _ports(circuit):
         deployment = (port.get("device") or {}).get("deployment")
@@ -174,7 +187,7 @@ def _ends_label(ends: list[tuple[str, dict[str, Any] | None]]) -> str:
 
 
 def _live_carriers(port: dict[str, Any]) -> list[dict[str, Any]]:
-    """The physical circuits at one port (or its parent interface), a decommissioned one ignored."""
+    """The carrier circuits at one port (or its parent interface), a decommissioned one ignored."""
     return [carrier for carrier in port_underlay(port) if carrier.get("status") != DECOMMISSIONED]
 
 
@@ -224,15 +237,15 @@ def _chain_reaches(
     return walk(None, hops)
 
 
-def _environment_class(kind: str, circuit: dict[str, Any]) -> tuple[str, str] | None:
+def _environment_class(circuit_type: str, circuit: dict[str, Any]) -> tuple[str, str] | None:
     """(class, where it comes from) of a circuit, None when it states none.
 
     A handoff takes the ``namespace_type`` of its ``ip_namespace`` when that is a tenant VRF (PROD, NON-PROD); a
     tunnel is PROD because its office is always production."""
-    if kind == TUNNEL:
+    if circuit_type == TUNNEL:
         office = next((location for location in _locations(circuit) if location.get("typename") == OFFICE), None)
         return (PROD_TYPE, f"office '{office.get('name')}'") if office else None
-    if kind == HANDOFF:
+    if circuit_type == HANDOFF:
         namespace = circuit.get("ip_namespace") or {}
         if namespace.get("namespace_type") in TENANT_NAMESPACE_TYPES:
             return namespace["namespace_type"], f"namespace '{namespace.get('name')}'"
@@ -240,23 +253,34 @@ def _environment_class(kind: str, circuit: dict[str, Any]) -> tuple[str, str] | 
 
 
 class CheckCircuitPlacement(InfrahubCheck):
-    """Physical and virtual circuits terminate on the right places, owned by the right customer, on the right
-    carrier; virtual circuits meeting at a device share an environment class (prod never meets non-prod)."""
+    """Carrier and session circuits terminate on the right places, owned by the right customer, on the right
+    carrier; session circuits meeting at a device share an environment class (prod never meets non-prod)."""
 
     query = "circuit_placement"
 
     def validate(self, data: Any) -> None:
         cleaned = clean_data(data)
-        for circuit in cleaned.get(PHYSICAL) or []:
-            self._validate_physical(circuit)
-        virtual = {kind: cleaned.get(kind) or [] for kind in VIRTUAL_KINDS}
-        # add_virtual_circuit builds nothing for a decommissioned session circuit: it is not validated, holds no port
+        for circuit in cleaned.get(CARRIER) or []:
+            self._validate_carrier(circuit)
+        by_type: dict[str, list[dict[str, Any]]] = {circuit_type: [] for circuit_type in CIRCUIT_TYPES}
+        for circuit in cleaned.get(SESSION_CIRCUIT) or []:
+            circuit_type = circuit.get("circuit_type")
+            if circuit_type in by_type:
+                by_type[circuit_type].append(circuit)
+            else:
+                self._error(
+                    circuit,
+                    SESSION_CIRCUIT,
+                    f"Session circuit '{_name(circuit)}' has circuit_type '{circuit_type}': it is one of "
+                    f"{', '.join(CIRCUIT_TYPES)}.",
+                )
+        # add_virtual_circuit builds nothing for a decommissioned dci or handoff: it is not validated, holds no port
         # and meets no device. A tunnel is not generated on either, so it is always validated.
         live = {
-            kind: [c for c in circuits if c.get("status") != DECOMMISSIONED]
-            if kind in SESSION_CIRCUIT_KINDS
+            circuit_type: [c for c in circuits if c.get("status") != DECOMMISSIONED]
+            if circuit_type in SESSION_CIRCUIT_TYPES
             else circuits
-            for kind, circuits in virtual.items()
+            for circuit_type, circuits in by_type.items()
         }
         for circuit in live[TUNNEL]:
             self._validate_tunnel(circuit)
@@ -264,35 +288,39 @@ class CheckCircuitPlacement(InfrahubCheck):
             self._validate_interconnect(circuit)
         for circuit in live[HANDOFF]:
             self._validate_handoff(circuit)
-        self._validate_session_ports([(kind, circuit) for kind in SESSION_CIRCUIT_KINDS for circuit in live[kind]])
-        self._validate_environments([(kind, circuit) for kind in VIRTUAL_KINDS for circuit in live[kind]])
+        self._validate_session_ports(
+            [(circuit_type, circuit) for circuit_type in SESSION_CIRCUIT_TYPES for circuit in live[circuit_type]]
+        )
+        self._validate_environments(
+            [(circuit_type, circuit) for circuit_type in CIRCUIT_TYPES for circuit in live[circuit_type]]
+        )
 
     # ------------------------------------------------------------------
-    # Physical circuits
+    # Carrier circuits
     # ------------------------------------------------------------------
 
-    def _validate_physical(self, circuit: dict[str, Any]) -> None:
+    def _validate_carrier(self, circuit: dict[str, Any]) -> None:
         name = _name(circuit)
         locations = _locations(circuit)
-        self._validate_physical_owner(circuit, name, locations)
+        self._validate_carrier_owner(circuit, name, locations)
         if len(locations) != CIRCUIT_ENDS:
             self._error(
                 circuit,
-                PHYSICAL,
-                f"Physical circuit '{name}' terminates on {len(locations)} location(s) ({_labels(locations)}): a "
-                f"physical circuit has exactly {CIRCUIT_ENDS} distinct locations, one facility per end.",
+                CARRIER,
+                f"Carrier circuit '{name}' terminates on {len(locations)} location(s) ({_labels(locations)}): a "
+                f"carrier circuit has exactly {CIRCUIT_ENDS} distinct locations, one facility per end.",
             )
             return
 
         ends = _ends(circuit)
         if len(ends) != CIRCUIT_ENDS:
-            return  # checks/physical_circuit_ports.py reports the end count
+            return  # checks/carrier_circuit_ports.py reports the end count
         undeployed = [port for port, deployment in ends if deployment is None]
         for port in undeployed:
             self._error(
                 circuit,
-                PHYSICAL,
-                f"Physical circuit '{name}' end '{port}' is on a device with no deployment: set the device's "
+                CARRIER,
+                f"Carrier circuit '{name}' end '{port}' is on a device with no deployment: set the device's "
                 "deployment to the facility it sits in (an on-ramp edge: its colocation zone).",
             )
         if undeployed:
@@ -305,14 +333,14 @@ class CheckCircuitPlacement(InfrahubCheck):
             return
         self._error(
             circuit,
-            PHYSICAL,
-            f"Physical circuit '{name}' terminates on {_labels(locations)} but its ends are {_ends_label(ends)}: "
+            CARRIER,
+            f"Carrier circuit '{name}' terminates on {_labels(locations)} but its ends are {_ends_label(ends)}: "
             "each location is the deployment of one end's device (a DC, ISP, cloud region, or for colocation kit the "
             "zone or virtual colocation the device is deployed to; not a sibling zone of its metro).",
         )
 
-    def _validate_physical_owner(self, circuit: dict[str, Any], name: str, locations: list[dict[str, Any]]) -> None:
-        """An office's access circuit is owned by the office's owner; any other physical circuit is unowned."""
+    def _validate_carrier_owner(self, circuit: dict[str, Any], name: str, locations: list[dict[str, Any]]) -> None:
+        """An office's access circuit is owned by the office's owner; any other carrier circuit is unowned."""
         owner = circuit.get("owner") if isinstance(circuit.get("owner"), dict) else None
         owner_id = (owner or {}).get("id")
         org = _owner_org(owner)
@@ -323,16 +351,16 @@ class CheckCircuitPlacement(InfrahubCheck):
             if office_owner.get("id") != owner_id:
                 self._error(
                     circuit,
-                    PHYSICAL,
-                    f"Physical circuit '{name}' ends on {_label(office)} of '{_owner_org(office_owner)}' but is "
+                    CARRIER,
+                    f"Carrier circuit '{name}' ends on {_label(office)} of '{_owner_org(office_owner)}' but is "
                     f"{ownership}: an office's access circuit is owned by the office's owner.",
                 )
         if owner_id and not offices:
             self._error(
                 circuit,
-                PHYSICAL,
-                f"Physical circuit '{name}' is owned by '{org}' but ends on no office ({_labels(locations)}): a "
-                "physical circuit is shared underlay, unowned, unless it is an office's access circuit.",
+                CARRIER,
+                f"Carrier circuit '{name}' is owned by '{org}' but ends on no office ({_labels(locations)}): a "
+                "carrier circuit is shared underlay, unowned, unless it is an office's access circuit.",
             )
 
     # ------------------------------------------------------------------
@@ -344,6 +372,7 @@ class CheckCircuitPlacement(InfrahubCheck):
         locations = _locations(circuit)
         ports = _ports(circuit)
         self._validate_shape(circuit, TUNNEL, locations, ports, CIRCUIT_ENDS)
+        self._validate_fields(circuit, TUNNEL, HANDOFF_ONLY_FIELDS)
 
         owner = circuit.get("owner") if isinstance(circuit.get("owner"), dict) else None
         offices = [location for location in locations if location.get("typename") == OFFICE]
@@ -365,11 +394,11 @@ class CheckCircuitPlacement(InfrahubCheck):
             live = _live_carriers(port)
             if any(location.get("typename") == INTERNET for carrier in live for location in _locations(carrier)):
                 continue
-            found = f"its live physical circuits are {_carriers_label(live)}" if live else "it is on no live one"
+            found = f"its live carrier circuits are {_carriers_label(live)}" if live else "it is on no live one"
             self._error(
                 circuit,
                 TUNNEL,
-                f"Tunnel circuit '{name}' end '{_port_label(port)}' rides no live internet physical circuit (one "
+                f"Tunnel circuit '{name}' end '{_port_label(port)}' rides no live internet carrier circuit (one "
                 f"with an end on a {INTERNET}): {found}. Every end of a tunnel has its own internet access.",
             )
 
@@ -388,6 +417,7 @@ class CheckCircuitPlacement(InfrahubCheck):
                 f"Interconnect circuit '{name}' is owned by '{_owner_org(circuit['owner'])}': a DCI between two "
                 "border gateways is shared platform, unowned.",
             )
+        self._validate_fields(circuit, INTERCONNECT, (*HANDOFF_ONLY_FIELDS, "registered_prefixes"))
         self._validate_shape(circuit, INTERCONNECT, locations, ports, CIRCUIT_ENDS)
         self._validate_overlay_processes(circuit, name, ports)
 
@@ -396,8 +426,8 @@ class CheckCircuitPlacement(InfrahubCheck):
             self._error(
                 circuit,
                 INTERCONNECT,
-                f"Interconnect circuit '{name}' end '{_port_label(port)}' is on no live physical circuit: terminate "
-                "it on a port cabled through a physical circuit.",
+                f"Interconnect circuit '{name}' end '{_port_label(port)}' is on no live carrier circuit: terminate "
+                "it on a port cabled through a carrier circuit.",
             )
         if uncarried or len(locations) != CIRCUIT_ENDS:
             return
@@ -405,7 +435,7 @@ class CheckCircuitPlacement(InfrahubCheck):
         carriers = _live_underlay(circuit)
         hops = [_locations(carrier) for carrier in carriers]
         if any(len(hop) != CIRCUIT_ENDS for hop in hops):
-            return  # that physical circuit's own location count is reported against it
+            return  # that carrier circuit's own location count is reported against it
 
         if len(carriers) == 1:
             carrier_ports = {str(end.get("id")) for end in carriers[0].get("capabilities") or []}
@@ -419,7 +449,7 @@ class CheckCircuitPlacement(InfrahubCheck):
                     INTERCONNECT,
                     f"Interconnect circuit '{name}' ports {', '.join(_port_label(port) for port in ports)} are not "
                     f"the ends of its carrier {_name(carriers[0])} ({ends or 'no ends'}): a DCI is pure fibre, the "
-                    "physical circuit's two ends are the circuit's two ports.",
+                    "carrier circuit's two ends are the circuit's two ports.",
                 )
 
         first, second = locations
@@ -432,7 +462,7 @@ class CheckCircuitPlacement(InfrahubCheck):
             circuit,
             INTERCONNECT,
             f"Interconnect circuit '{name}' carrier {_carriers_label(carriers)} is not one contiguous path from "
-            f"{_label(first)} to {_label(second)}: in some order, each physical circuit shares a facility with the "
+            f"{_label(first)} to {_label(second)}: in some order, each carrier circuit shares a facility with the "
             "next, the first starts and the last finishes at the path's ends.",
         )
 
@@ -458,6 +488,21 @@ class CheckCircuitPlacement(InfrahubCheck):
         ports = _ports(circuit)
         locations = _locations(circuit)
         self._validate_shape(circuit, HANDOFF, locations, ports, 1)
+        self._validate_fields(circuit, HANDOFF, ("registered_prefixes",))
+        if isinstance(circuit.get("owner"), dict):
+            self._error(
+                circuit,
+                HANDOFF,
+                f"Handoff circuit '{name}' is owned by '{_owner_org(circuit['owner'])}': a handoff is shared "
+                "platform, unowned (the owner of a prefix is the object that registers it).",
+            )
+        if not (circuit.get("ip_namespace") or {}).get("name"):
+            self._error(
+                circuit,
+                HANDOFF,
+                f"Handoff circuit '{name}' has no ip_namespace: its /31 is allocated and its session runs in an "
+                "environment namespace.",
+            )
         self._validate_handoff_placement(circuit, name, locations)
 
         physical = [port for port in ports if (port.get("device") or {}).get("typename") == PHYSICAL_DEVICE]
@@ -465,7 +510,7 @@ class CheckCircuitPlacement(InfrahubCheck):
             self._error(
                 circuit,
                 HANDOFF,
-                f"Handoff circuit '{name}' has no live physical circuit and no cable at "
+                f"Handoff circuit '{name}' has no live carrier circuit and no cable at "
                 f"{', '.join(_port_label(port) for port in physical)} or their parent interfaces: a handoff on a "
                 "physical device rides a cross-connect or fibre that terminates on the parent port (a cable when "
                 "both ends are in one facility).",
@@ -504,7 +549,7 @@ class CheckCircuitPlacement(InfrahubCheck):
     def _validate_handoff_placement(self, circuit: dict[str, Any], name: str, locations: list[dict[str, Any]]) -> None:
         """The handoff's locations are exactly the facilities its two end devices are deployed in.
 
-        Skipped when the shape is already reported (not 1 or 2 locations, not 2 ports). Unlike a physical circuit
+        Skipped when the shape is already reported (not 1 or 2 locations, not 2 ports). Unlike a carrier circuit
         nothing derives a handoff's locations, so they are authored and must agree with the devices; both ends may be
         deployed in one cage, which is one location.
         """
@@ -524,6 +569,18 @@ class CheckCircuitPlacement(InfrahubCheck):
     # ------------------------------------------------------------------
     # Rules across circuits
     # ------------------------------------------------------------------
+
+    def _validate_fields(self, circuit: dict[str, Any], circuit_type: str, forbidden: tuple[str, ...]) -> None:
+        """None of the ``forbidden`` fields is set: the schema leaves every field of the one session kind
+        optional, so what only another ``circuit_type`` may carry is refused here."""
+        present = [field for field in forbidden if circuit.get(field) not in (None, [], {})]
+        if present:
+            self._error(
+                circuit,
+                circuit_type,
+                f"{NOUNS[circuit_type]} circuit '{_name(circuit)}' sets {', '.join(present)}: not a field of a "
+                f"{circuit_type} circuit.",
+            )
 
     def _validate_shape(
         self,
@@ -604,5 +661,6 @@ class CheckCircuitPlacement(InfrahubCheck):
             )
 
     def _error(self, circuit: dict[str, Any], kind: str, message: str) -> None:
-        """Log one finding against the circuit."""
-        self.log_error(message=message, object_id=circuit.get("id"), object_type=kind)
+        """Log one finding against the circuit; ``kind`` is CARRIER or a session circuit_type."""
+        object_type = CARRIER if kind == CARRIER else SESSION_CIRCUIT
+        self.log_error(message=message, object_id=circuit.get("id"), object_type=object_type)

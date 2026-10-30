@@ -1,6 +1,6 @@
-"""Unit tests for the physical circuit generator (generators/topology/circuit.py).
+"""Unit tests for the carrier circuit generator (generators/topology/circuit.py).
 
-PhysicalCircuitGenerator derives a circuit's facility locations from its end devices' deployments and adds the
+CarrierCircuitGenerator derives a circuit's facility locations from its end devices' deployments and adds the
 missing ones; a placement problem must fail the run before any write. It builds no session, but re-runs
 add_virtual_circuit for every interconnect and handoff circuit on its ports. Fakes:
 tests/unit/simulators/circuit_fakes.py.
@@ -30,22 +30,22 @@ from tests.unit.simulators.circuit_fakes import (
     VIRTUAL_COLOCATION,
     FakeClient,
     cage_edge,
+    carrier_payload,
     dc_border_leaf,
     dc_place,
     interface,
     physical_generator,
-    physical_payload,
     place,
 )
-from utils.circuit_underlay import SESSION_CIRCUIT_KINDS
+from utils.circuit_underlay import SESSION_CIRCUIT, SESSION_CIRCUIT_TYPES
 from utils.data_cleaning import clean_data
 
 
 class TestEndpoints:
     def test_both_ends_come_from_capabilities_deduplicated(self) -> None:
         """The circuit's ends are its capabilities, one list; a port listed twice counts once."""
-        circuit = clean_data(physical_payload(ends=[dc_border_leaf(), cage_edge(), cage_edge()]))
-        endpoints = circuit_endpoints(circuit["TopologyPhysicalCircuit"][0])
+        circuit = clean_data(carrier_payload(ends=[dc_border_leaf(), cage_edge(), cage_edge()]))
+        endpoints = circuit_endpoints(circuit["TopologyCarrierCircuit"][0])
 
         assert [e.label for e in endpoints] == ["bl-dc101101/Ethernet1/35", "eg-fr201/Ethernet1/10"]
 
@@ -59,16 +59,16 @@ class TestEndpoints:
         assert bare.deployment is None
 
 
-class TestPhysicalCircuitInput:
+class TestCarrierCircuitInput:
     @pytest.mark.asyncio
     async def test_empty_response_fails(self) -> None:
-        with pytest.raises(GeneratorError, match="No TopologyPhysicalCircuit data"):
-            await physical_generator(FakeClient()).generate({"TopologyPhysicalCircuit": {"edges": []}})
+        with pytest.raises(GeneratorError, match="No TopologyCarrierCircuit data"):
+            await physical_generator(FakeClient()).generate({"TopologyCarrierCircuit": {"edges": []}})
 
     @pytest.mark.asyncio
     async def test_a_circuit_without_a_name_fails(self) -> None:
-        payload = physical_payload()
-        node = payload["TopologyPhysicalCircuit"]["edges"][0]["node"]
+        payload = carrier_payload()
+        node = payload["TopologyCarrierCircuit"]["edges"][0]["node"]
         node["name"], node["circuit_id"] = {"value": None}, {"value": None}
 
         with pytest.raises(GeneratorError, match="missing circuit_id/name"):
@@ -94,7 +94,7 @@ def _added_locations(client: FakeClient) -> list[tuple[str, dict[str, Any]]]:
     return client.related()
 
 
-class TestPhysicalCircuitPlacement:
+class TestCarrierCircuitPlacement:
     """Each end deployed in a DC, ISP or cloud region places itself; the rest is authored."""
 
     @pytest.mark.parametrize(
@@ -118,7 +118,7 @@ class TestPhysicalCircuitPlacement:
         """Only the derived locations the circuit lacks are sent; the authored ones are never re-sent."""
         client = FakeClient()
 
-        await physical_generator(client).generate(physical_payload(ends=ends, locations=authored))
+        await physical_generator(client).generate(carrier_payload(ends=ends, locations=authored))
 
         assert _added_locations(client) == [(CIRCUIT_ID, {"relation_to_update": "locations", "related_nodes": derived})]
 
@@ -127,18 +127,18 @@ class TestPhysicalCircuitPlacement:
         """The circuit is the run's target: no save, nothing joins the tracking group."""
         client = FakeClient()
 
-        await physical_generator(client).generate(physical_payload(locations=[CAGE]))
+        await physical_generator(client).generate(carrier_payload(locations=[CAGE]))
 
         assert [action for action, _, _ in client.writes] == ["relate"]
         assert client.created == []
 
     @pytest.mark.asyncio
     async def test_the_only_write_is_the_locations_relationship_so_the_status_trigger_cannot_loop(self) -> None:
-        """data/events/99_actions.yml fires add_circuit on a physical circuit's status and capabilities; the run
+        """data/events/99_actions.yml fires add_circuit on a carrier circuit's status and capabilities; the run
         writes neither (only a RelationshipAdd on `locations`), so it cannot re-trigger itself."""
         client = FakeClient()
 
-        await physical_generator(client).generate(physical_payload(locations=[CAGE]))
+        await physical_generator(client).generate(carrier_payload(locations=[CAGE]))
 
         assert {kwargs["relation_to_update"] for _, kwargs in client.related()} == {"locations"}
         assert [action for action, _, _ in client.writes if action == "save"] == []
@@ -148,10 +148,10 @@ class TestPhysicalCircuitPlacement:
         """Authored cage plus the DC an earlier run derived: the circuit is not even fetched."""
         client = FakeClient()
 
-        await physical_generator(client).generate(physical_payload(locations=[CAGE, dc_place()]))
+        await physical_generator(client).generate(carrier_payload(locations=[CAGE, dc_place()]))
 
         assert _added_locations(client) == []
-        assert not any(name == "TopologyPhysicalCircuit" for name, _ in client.get_calls)
+        assert not any(name == "TopologyCarrierCircuit" for name, _ in client.get_calls)
 
     @pytest.mark.asyncio
     async def test_a_device_without_deployment_derives_nothing(self) -> None:
@@ -159,12 +159,12 @@ class TestPhysicalCircuitPlacement:
         client = FakeClient()
         ends = [cage_edge(), interface("if-x", "eth1", "dev-x", no_deployment=True)]
 
-        await physical_generator(client).generate(physical_payload(ends=ends, locations=[CAGE, ISP]))
+        await physical_generator(client).generate(carrier_payload(ends=ends, locations=[CAGE, ISP]))
 
         assert client.writes == []
 
 
-class TestPhysicalCircuitPlacementRefusals:
+class TestCarrierCircuitPlacementRefusals:
     """A placement problem fails the run before any write."""
 
     @pytest.mark.parametrize(
@@ -224,7 +224,7 @@ class TestPhysicalCircuitPlacementRefusals:
         gen = physical_generator(client)
 
         with pytest.raises(GeneratorError, match=message):
-            await gen.generate(physical_payload(ends=ends, locations=authored))
+            await gen.generate(carrier_payload(ends=ends, locations=authored))
 
         assert client.writes == []
         assert client.get_calls == []
@@ -233,7 +233,7 @@ class TestPhysicalCircuitPlacementRefusals:
     async def test_error_names_the_circuit_and_its_endpoints(self) -> None:
         with pytest.raises(GeneratorError) as excinfo:
             await physical_generator(FakeClient()).generate(
-                physical_payload(
+                carrier_payload(
                     ends=[dc_border_leaf(), cage_edge(no_deployment=True)],
                     locations=[],
                 )
@@ -250,36 +250,39 @@ class TestFanOutToSessionCircuits:
     @pytest.mark.asyncio
     async def test_session_circuits_on_the_ports_are_rerun_without_waiting(self) -> None:
         client = FakeClient()
-        client.session_circuits["TopologyInterconnectCircuit"] = [("vc-b", "VC-B")]
-        client.session_circuits["TopologyHandoffCircuit"] = [("vc-a", "VC-A")]
+        client.session_circuits["dci"] = [("vc-b", "VC-B")]
+        client.session_circuits["handoff"] = [("vc-a", "VC-A")]
         gen = physical_generator(client)
 
-        await gen.generate(physical_payload())
+        await gen.generate(carrier_payload())
 
         gen.run_generator.assert_awaited_once_with(VIRTUAL_CIRCUIT_GENERATOR, ["vc-a", "vc-b"], wait=False)
         assert VIRTUAL_CIRCUIT_GENERATOR == "add_virtual_circuit"
 
     @pytest.mark.asyncio
-    async def test_a_circuit_found_by_both_kinds_is_rerun_once(self) -> None:
+    async def test_a_circuit_listed_twice_is_rerun_once(self) -> None:
         client = FakeClient()
-        client.session_circuits["TopologyInterconnectCircuit"] = [("vc-a", "VC-A")]
-        client.session_circuits["TopologyHandoffCircuit"] = [("vc-a", "VC-A")]
+        client.session_circuits["dci"] = [("vc-a", "VC-A")]
+        client.session_circuits["handoff"] = [("vc-a", "VC-A")]
         gen = physical_generator(client)
 
-        await gen.generate(physical_payload())
+        await gen.generate(carrier_payload())
 
         gen.run_generator.assert_awaited_once_with(VIRTUAL_CIRCUIT_GENERATOR, ["vc-a"], wait=False)
 
     @pytest.mark.asyncio
-    async def test_only_the_two_session_kinds_are_queried_never_the_tunnel_circuit(self) -> None:
-        """The tunnel circuit is not in the generator's target group: running it there would raise."""
+    async def test_only_the_dci_and_handoff_types_are_queried_never_the_tunnel(self) -> None:
+        """A tunnel builds no session and shares its ports: the one query filters on circuit_type."""
         client = FakeClient()
+        client.session_circuits["tunnel"] = [("vc-t", "TUN-1")]
+        gen = physical_generator(client)
 
-        await physical_generator(client).generate(physical_payload())
+        await gen.generate(carrier_payload())
 
-        asked = [kind for kind, kwargs in client.filter_calls if "capabilities__ids" in kwargs]
-        assert asked == list(SESSION_CIRCUIT_KINDS)
-        assert {"TopologyTunnelCircuit", "TopologyVirtualCircuit"}.isdisjoint(kind for kind, _ in client.filter_calls)
+        asked = [(kind, kwargs) for kind, kwargs in client.filter_calls if "capabilities__ids" in kwargs]
+        assert [kind for kind, _ in asked] == [SESSION_CIRCUIT]
+        assert asked[0][1]["circuit_type__values"] == list(SESSION_CIRCUIT_TYPES)
+        gen.run_generator.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_sub_interfaces_of_the_ports_count_as_ends(self) -> None:
@@ -287,17 +290,22 @@ class TestFanOutToSessionCircuits:
         client = FakeClient()
         client.sub_interfaces = ["sub-1900", "sub-1901"]
 
-        await physical_generator(client).generate(physical_payload())
+        await physical_generator(client).generate(carrier_payload())
 
         assert ("DcimVirtualInterface", {"parent_interface__ids": ["if-bl", "if-eg"]}) in client.filter_calls
         session_queries = [kwargs for _, kwargs in client.filter_calls if "capabilities__ids" in kwargs]
-        assert session_queries == [{"capabilities__ids": ["if-bl", "if-eg", "sub-1900", "sub-1901"]}] * 2
+        assert session_queries == [
+            {
+                "capabilities__ids": ["if-bl", "if-eg", "sub-1900", "sub-1901"],
+                "circuit_type__values": list(SESSION_CIRCUIT_TYPES),
+            }
+        ]
 
     @pytest.mark.asyncio
     async def test_no_session_circuit_means_no_rerun(self) -> None:
         gen = physical_generator(FakeClient())
 
-        await gen.generate(physical_payload())
+        await gen.generate(carrier_payload())
 
         gen.run_generator.assert_not_awaited()
 
@@ -307,7 +315,7 @@ class TestFanOutToSessionCircuits:
         client = FakeClient()
         gen = physical_generator(client)
 
-        await gen.generate(physical_payload(ends=[], locations=[CAGE, ISP]))
+        await gen.generate(carrier_payload(ends=[], locations=[CAGE, ISP]))
 
         assert client.filter_calls == []
         gen.run_generator.assert_not_awaited()
@@ -318,7 +326,7 @@ class TestFanOutToSessionCircuits:
         gen = physical_generator(client)
 
         with pytest.raises(GeneratorError):
-            await gen.generate(physical_payload(locations=[CAGE, ISP]))
+            await gen.generate(carrier_payload(locations=[CAGE, ISP]))
 
         assert client.filter_calls == []
         gen.run_generator.assert_not_awaited()
@@ -327,10 +335,10 @@ class TestFanOutToSessionCircuits:
     async def test_the_fan_out_follows_the_location_write(self) -> None:
         """The session run waits for this one, so it sees the derived locations: written first, fired last."""
         client = FakeClient()
-        client.session_circuits["TopologyHandoffCircuit"] = [("vc-a", "VC-A")]
+        client.session_circuits["handoff"] = [("vc-a", "VC-A")]
         gen = physical_generator(client)
 
-        await gen.generate(physical_payload(locations=[CAGE]))
+        await gen.generate(carrier_payload(locations=[CAGE]))
 
         assert [action for action, _, _ in client.writes] == ["relate"]
         gen.run_generator.assert_awaited_once()

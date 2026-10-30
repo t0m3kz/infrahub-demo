@@ -1,6 +1,6 @@
-"""add_circuit: the derived facility locations of a TopologyPhysicalCircuit.
+"""add_circuit: the derived facility locations of a TopologyCarrierCircuit.
 
-A physical circuit is a pure carrier (fibre, cross-connect, internet access): it has no role and no session. This
+A carrier circuit is a pure carrier (fibre, cross-connect, internet access): it has no role and no session. This
 generator's one job is its placement. An endpoint device whose ``deployment`` is itself a facility
 (TopologyDataCenter, TopologyExternalProviders, TopologyCloudRegion, TopologyColocationZone,
 TopologyVirtualColocation) places that end, so the circuit's locations are the authored ones plus these derived
@@ -23,15 +23,15 @@ The derived locations are written untracked: the circuit is the run's target, no
 could delete it). Nothing else is written.
 
 BGP sessions over a connection between topologies come from the virtual circuits, not from here: the
-InterconnectCircuit and HandoffCircuit session generator (generators/topology/virtual_circuit.py) waits for this
-generator (``PHYSICAL_CIRCUIT_GENERATOR``) on the physical circuits it rides and reads their ends. This generator
+dci and handoff session circuit generator (generators/topology/virtual_circuit.py) waits for this
+generator (``CARRIER_CIRCUIT_GENERATOR``) on the carrier circuits it rides and reads their ends. This generator
 never waits for it (no cycle): it only fires it, without waiting, for every session circuit on the circuit's ports
 (or on a sub-interface whose parent is one of them).
 
 What reaches a session: it reruns on its own created / capabilities / status (a handoff also ip_namespace, password
-and maximum_routes), and, through this fan-out, when a physical circuit on its ports (or on a port's parent) is
+and maximum_routes), and, through this fan-out, when a carrier circuit on its ports (or on a port's parent) is
 created, has its ends changed (capabilities) or its status changed (data/events/99_actions.yml: created, capabilities
-and status rules on TopologyPhysicalCircuit). It does NOT rerun when a cable is added later, when a port is removed
+and status rules on TopologyCarrierCircuit). It does NOT rerun when a cable is added later, when a port is removed
 from a circuit (the circuit no longer lists the port, so the fan-out does not find the session), or when a circuit's
 type changes (no rule).
 
@@ -50,12 +50,12 @@ from utils.data_cleaning import clean_data
 from ..common import CommonGenerator
 from ..helpers.vrf import VrfMixin
 from ..pools import PoolMixin
-from ..protocols import DcimVirtualInterface, TopologyPhysicalCircuit
+from ..protocols import DcimVirtualInterface, TopologyCarrierCircuit
 
-PHYSICAL_CIRCUIT_GENERATOR = "add_circuit"
+CARRIER_CIRCUIT_GENERATOR = "add_circuit"
 VIRTUAL_CIRCUIT_GENERATOR = "add_virtual_circuit"
 
-# Device deployments that are themselves the facility a physical circuit end
+# Device deployments that are themselves the facility a carrier circuit end
 # terminates on, so that end's location is derived from its device. A colocation
 # zone or virtual colocation is one: the on-ramp edge deploys to it, not to the
 # metro. Not an office (generators/topology/sdwan_edge.py authors its circuit's
@@ -173,25 +173,25 @@ def plan_locations(
     return missing, None
 
 
-class PhysicalCircuitGenerator(PoolMixin, VrfMixin, CommonGenerator):
-    """add_circuit — a TopologyPhysicalCircuit's derived facility locations."""
+class CarrierCircuitGenerator(PoolMixin, VrfMixin, CommonGenerator):
+    """add_circuit — a TopologyCarrierCircuit's derived facility locations."""
 
     client: Any
 
     async def generate(self, data: dict[str, Any]) -> None:
-        circuits = clean_data(data).get("TopologyPhysicalCircuit") or []
+        circuits = clean_data(data).get("TopologyCarrierCircuit") or []
         if not circuits:
-            self.logger.error("No TopologyPhysicalCircuit data in GraphQL response")
+            self.logger.error("No TopologyCarrierCircuit data in GraphQL response")
             return
         circuit = circuits[0]
         circuit_name: str = circuit.get("circuit_id") or circuit.get("name") or ""
         if not circuit_name:
-            self.logger.error("TopologyPhysicalCircuit missing circuit_id/name")
+            self.logger.error("TopologyCarrierCircuit missing circuit_id/name")
             return
 
         endpoints = circuit_endpoints(circuit)
         summary = " | ".join(e.label for e in endpoints) or "no endpoints"
-        self.logger.info(f"Processing physical circuit {circuit_name}: {summary}")
+        self.logger.info(f"Processing carrier circuit {circuit_name}: {summary}")
         missing_locations, problem = plan_locations(circuit_locations(circuit), endpoints)
         if problem:
             self.logger.error(f"{circuit_name} ({summary}): {problem}")
@@ -202,7 +202,7 @@ class PhysicalCircuitGenerator(PoolMixin, VrfMixin, CommonGenerator):
         # is the one that sees them, so it converges the end devices' VRF instances (nothing else writes them).
         await self.reconcile_vrfs({endpoint.device_id for endpoint in endpoints if endpoint.device_id})
         await self._fan_out_sessions(endpoints, circuit_name)
-        self.logger.info(f"Physical circuit {circuit_name} — completed")
+        self.logger.info(f"Carrier circuit {circuit_name} — completed")
 
     async def _add_locations(self, circuit_id: str, circuit_name: str, locations: list[CircuitLocation]) -> None:
         """Add the derived locations the circuit lacks: one RelationshipAdd, untracked.
@@ -211,7 +211,7 @@ class PhysicalCircuitGenerator(PoolMixin, VrfMixin, CommonGenerator):
         """
         if not locations:
             return
-        node = await self.client.get(kind=TopologyPhysicalCircuit, id=circuit_id)
+        node = await self.client.get(kind=TopologyCarrierCircuit, id=circuit_id)
         await node.add_relationships(relation_to_update="locations", related_nodes=[loc.id for loc in locations])
         self.logger.info(f"  {circuit_name}: derived location(s) {', '.join(loc.label for loc in locations)}")
 

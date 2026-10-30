@@ -4,7 +4,7 @@ version: "1.0"
 generics:
   - name: ConnectableLocation
     namespace: Topology
-    description: "Topology location that can participate in circuit connectivity (physical or virtual)"
+    description: "Topology location that can participate in circuit connectivity (carrier or session)"
     label: "Connectable Location"
     include_in_menu: false
     human_friendly_id:
@@ -22,15 +22,15 @@ generics:
         optional: true
         identifier: "circuit__location"
         order_weight: 3000
-        description: "Physical and virtual circuits terminating here"
+        description: "Carrier and session circuits terminating here"
 
-  # A place a PHYSICAL circuit can terminate on: the facility itself, never a
+  # A place a CARRIER circuit can terminate on: the facility itself, never a
   # pod, rack, metro, cloud zone or tenant footprint. Inherited alongside
   # TopologyConnectableLocation by DataCenter, ColocationZone, CloudRegion,
   # ExternalProviders, SaasRegion and CustomerOffice.
   - name: Facility
     namespace: Topology
-    description: "A facility a physical circuit can terminate on"
+    description: "A facility a carrier circuit can terminate on"
     label: "Facility"
     include_in_menu: false
     human_friendly_id:
@@ -84,9 +84,35 @@ generics:
         order_weight: 1000
         description: "Service provider for this connectivity"
 
-      # `locations` is declared on each node, not here: an inherited
-      # relationship's peer cannot be narrowed, and a physical circuit ends
-      # on a TopologyFacility while a virtual one may end on a footprint.
+      # The two ends, shared by every circuit. ManagedGenericInterfaces carries the interface-side edge
+      # (a circuit in a port's `capabilities`); this re-declares the circuit side with a count, so the nodes
+      # inherit TopologyCircuit FIRST and its declaration wins. The cap holds when the circuit side is written;
+      # checks/carrier_circuit_ports.py and checks/circuit_placement.py hold the rest.
+      - name: capabilities
+        peer: DcimInterface
+        label: "Ends"
+        kind: Generic
+        cardinality: many
+        optional: false
+        min_count: 2
+        max_count: 2
+        identifier: interface_capabilities
+        order_weight: 1100
+        description: "The two ports this circuit terminates on, one at each end"
+
+      # Data authors only the end that cannot be derived (the colocation cage); add_circuit adds each
+      # endpoint device's deployment that is a facility (DC, ISP, cloud region). So one location is valid
+      # on load: no min_count (it is enforced on update only; the checks hold the count).
+      - name: locations
+        label: "Endpoint Locations"
+        peer: TopologyFacility
+        cardinality: many
+        max_count: 2
+        optional: false
+        identifier: "circuit__location"
+        order_weight: 3000
+        description: "Facilities where this circuit terminates (both ends may sit in one facility, e.g. the cage)"
+
       - name: owner
         label: "Customer"
         peer: OrganizationCustomer
@@ -97,39 +123,13 @@ generics:
         order_weight: 3100
         description: "Customer this circuit belongs to; unset for shared/backbone circuits"
 
-  # The connection between topologies on which ROUTING is generated or recorded. A physical circuit is
-  # only the carrier (fibre, cross-connect, internet); the role of a virtual circuit is its KIND:
-  #   TunnelCircuit       office edge <-> SD-WAN gateway; inventory record, the orchestrator owns the routing
-  #   InterconnectCircuit DCI between two EVPN Multi-Site border gateways; an eBGP underlay + EVPN session
-  #   HandoffCircuit      our edge <-> a party-owned device inside one environment namespace; an eBGP session
-  # The session generator reads Interconnect and Handoff circuits; it builds the ManagedBGPPeerings.
-  # Carries nothing of its own: name, description, status, provider and the optional owner come from the
-  # generics below. `locations` is declared on each node (an inherited peer cannot be narrowed).
-  #
-  # ManagedGenericInterfaces puts a circuit into a terminating interface's `capabilities` list, alongside
-  # RoutingOSPFInterface, ManagedVxlanSegment and TopologyExchangeGateway: the one uniform way in this
-  # schema to ask "what is this port doing", and the edge a walk outward from a changed interface follows.
-  # The physical circuit uses the same edge with exactly two ends; a virtual circuit leaves it uncapped
-  # because a tunnel port carries several circuits. The underlay is the physical circuits on these ports
-  # (each port's own `capabilities`); there is no separate overlay-to-underlay mapping to keep in step.
-  - name: VirtualCircuit
-    namespace: Topology
-    description: "Connection between topologies on which routing is generated (SD-WAN, cloud services, DCI)"
-    label: "Virtual Circuit"
-    include_in_menu: false
-    human_friendly_id:
-      - name__value
-    display_label: "{{ name__value }}"
-    attributes:
-      - name: name
-        kind: Text
-        order_weight: 100
-
 nodes:
-  - name: PhysicalCircuit
+  # The carrier: fibre, cross-connect, internet access, or a provider-delivered virtual connection. It
+  # is the underlay a session circuit rides on, never a routing role. Carries no session and no routing.
+  - name: CarrierCircuit
     namespace: Topology
-    description: "Physical connectivity circuit (dark fiber, cross connect, metro ethernet, etc.)"
-    label: "Physical Circuit"
+    description: "Carrier circuit (dark fiber, cross connect, internet access, virtual connection, metro ethernet)"
+    label: "Carrier Circuit"
     icon: "mdi:transit-connection-variant"
     include_in_menu: false
     inherit_from:
@@ -145,15 +145,10 @@ nodes:
       - name: circuit_id
         kind: Text
         label: "Circuit ID"
-        description: "Provider circuit identifier"
+        description: >-
+          Provider circuit ID; for a virtual_connection the Fabric connection uuid or the Megaport VXC
+          product_uid
         order_weight: 110
-
-      - name: bandwidth
-        kind: Number
-        label: "Bandwidth (Mbps)"
-        optional: true
-        order_weight: 400
-        description: "Link bandwidth in megabits per second"
 
       - name: circuit_type
         kind: Dropdown
@@ -172,79 +167,114 @@ nodes:
             label: "Cross Connect"
             description: "Physical cross-connect within facility"
             color: "#3498db"
+          - name: virtual_connection
+            label: "Virtual Connection"
+            description: >-
+              Provider-delivered layer 2 service riding provider ports (mirrors an Equinix Fabric connection or a
+              Megaport VXC); a provider port hosts one per VLAN tag, which lives per end, not on the circuit
+            color: "#9b59b6"
+          - name: metro_ethernet
+            label: "Metro Ethernet"
+            description: "Carrier E-Line service (mirrors an MEF EPL or EVPL)"
+            color: "#16a085"
 
-    relationships:
-      # Data authors only the end that cannot be derived (the colocation cage);
-      # add_circuit adds each endpoint device's deployment that is a facility
-      # (DC, ISP, cloud region). So one location is valid on load: no min_count.
-      - name: locations
-        label: "Endpoint Locations"
-        peer: TopologyFacility
-        cardinality: many
-        max_count: 2
-        optional: false
-        identifier: "circuit__location"
-        order_weight: 3000
-        description: "Facilities where this circuit terminates"
+      - name: bandwidth
+        kind: Number
+        label: "Bandwidth (Mbps)"
+        optional: true
+        order_weight: 400
+        description: >-
+          Link or connection bandwidth in megabits per second (mirrors the Fabric bandwidth and the Megaport
+          rate_limit)
 
-      # Re-declares ManagedGenericInterfaces.capabilities with a count. The cap holds when the
-      # circuit side is written; checks/physical_circuit_ports.py holds it for interface-side writes.
-      - name: capabilities
-        peer: DcimInterface
-        label: "Ends"
-        kind: Generic
-        cardinality: many
-        optional: false
-        min_count: 2
-        max_count: 2
-        identifier: interface_capabilities
-        order_weight: 1100
-        description: "The two ports this circuit terminates on, one at each end"
+      - name: term_length
+        kind: Number
+        label: "Term Length (months)"
+        optional: true
+        order_weight: 450
+        description: >-
+          Term in months, as CloudNetworkAppliance.term_length (mirrors Megaport contract_term_months, an ISP
+          term)
 
-  # Ends on the gateway's public port (eth1) and the edge uplink. No session is generated: the VeloCloud
-  # orchestrator owns the overlay routing, so this is an inventory record. Owner = the office's owner.
-  - name: TunnelCircuit
+      - name: commit_rate
+        kind: Number
+        label: "Committed Rate (Mbps)"
+        optional: true
+        order_weight: 500
+        description: >-
+          Committed information rate in megabits per second (an ISP or MEF CIR; Equinix Fabric and Megaport
+          have none)
+
+      - name: redundancy_group
+        kind: Text
+        label: "Redundancy Group"
+        optional: true
+        order_weight: 550
+        description: >-
+          Connections sharing a value are a primary/secondary pair (mirrors Fabric redundancy.group); the name
+          tells which
+
+  # One kind for every circuit that rides a carrier, told apart by `circuit_type` (the role is an attribute,
+  # not a kind). The session generator builds the ManagedBGPPeerings of dci and handoff; a tunnel is an
+  # inventory record. What each type may carry is held by checks/circuit_placement.py, not by the schema:
+  #   dci      DCI between two EVPN Multi-Site border gateways (DC border leafs and colocation edges); the
+  #            generator builds an underlay eBGP session on a /31 or /127 (peering_role dci-underlay) and a
+  #            loopback-to-loopback EVPN session (peering_role dci) over it. Unowned.
+  #   handoff  Our edge sub-interface <-> a party-owned device sub-interface (cloud on-ramp, SD-WAN gateway
+  #            LAN handoff, Equinix or Megaport provider) inside ONE environment namespace; an eBGP session is
+  #            generated. Unowned. An Equinix Fabric or Megaport service is a handoff whose provider is Equinix
+  #            or Megaport. Cloud and provider side addresses come from OUR per-environment /31 pool only; for
+  #            AWS Direct Connect the customer specifies the peer IPs and the provider assigns none. The
+  #            remote ASN lives in the party device's ManagedBGP.local_as; the VLAN in the sub-interface name.
+  #   tunnel   Office edge <-> SD-WAN gateway (eth1), and the partner tunnel. No session is generated (the
+  #            VeloCloud orchestrator owns the overlay routing). Owner = the office's owner.
+  - name: SessionCircuit
     namespace: Topology
-    description: "Office edge to SD-WAN gateway tunnel, owned by the office; inventory only, no session generated"
-    label: "Tunnel Circuit"
-    icon: "mdi:shield-link-variant"
+    description: "Circuit that rides carriers: a DCI or a handoff with generated routing, or a tunnel kept as inventory"
+    label: "Session Circuit"
+    icon: "mdi:swap-horizontal-bold"
     include_in_menu: false
     inherit_from:
       - TopologyCircuit
       - ManagedGeneric
-      - TopologyVirtualCircuit
       - ManagedGenericInterfaces
     human_friendly_id:
       - name__value
     uniqueness_constraints:
       - [name__value]
+    attributes:
+      - name: circuit_type
+        kind: Dropdown
+        label: "Circuit Type"
+        order_weight: 300
+        description: "The role of the circuit: dci, handoff or tunnel"
+        choices:
+          - name: dci
+            label: "DCI"
+            description: >-
+              Interconnect between two EVPN Multi-Site border gateways, unowned; underlay and EVPN sessions
+              generated
+            color: "#2980b9"
+          - name: handoff
+            label: "Handoff"
+            description: >-
+              Edge to party-owned handoff in one namespace, unowned; peer IPs from our /31 pool only; routing
+              generated
+            color: "#27ae60"
+          - name: tunnel
+            label: "Tunnel"
+            description: >-
+              Office edge to SD-WAN gateway tunnel, owned by the office; inventory only, no session generated
+            color: "#8e44ad"
+
+      - name: maximum_routes
+        kind: Number
+        label: "Maximum Routes"
+        optional: true
+        order_weight: 600
+        description: "Accepted-prefix limit of the session (handoff only)"
+
     relationships:
-      # Re-declares ManagedGenericInterfaces.capabilities with a count, as PhysicalCircuit does: the two ports this
-      # circuit terminates on. The cap holds when the circuit side is written; checks/physical_circuit_ports.py
-      # and checks/circuit_placement.py hold the rest.
-      - name: capabilities
-        peer: DcimInterface
-        label: "Ends"
-        kind: Generic
-        cardinality: many
-        optional: false
-        min_count: 2
-        max_count: 2
-        identifier: interface_capabilities
-        order_weight: 1100
-        description: "The two ports this circuit terminates on, one at each end"
-
-      - name: locations
-        label: "Endpoint Locations"
-        peer: TopologyConnectableLocation
-        cardinality: many
-        max_count: 2
-        optional: false
-        identifier: "circuit__location"
-        order_weight: 3000
-        description: "Footprints where this tunnel terminates (the office and the gateway's facility)"
-        min_count: 2
-
       # The same concept as TopologyCustomerOffice.lan_prefixes (a PROD prefix a customer registers behind the
       # SD-WAN gateway, so the gateway's border session accepts it), for space the tunnel reaches that no office
       # of ours hosts: a B2B partner's extranet range.
@@ -256,118 +286,17 @@ nodes:
         optional: true
         identifier: "tunnel_circuit__registered_prefixes"
         order_weight: 1150
-        description: "PROD prefixes reachable behind the tunnel's far end, owned by the tunnel's owner"
-
-  # DCI between two EVPN Multi-Site border gateways (DC border leafs and colocation edges). The session
-  # generator builds an underlay eBGP session on a /31 (peering_role dci-underlay) and a loopback-to-loopback
-  # EVPN session (peering_role dci) over it.
-  - name: InterconnectCircuit
-    namespace: Topology
-    description: "DCI between two EVPN Multi-Site border gateways, unowned; underlay and EVPN sessions generated"
-    label: "Interconnect Circuit"
-    icon: "mdi:swap-horizontal-bold"
-    include_in_menu: false
-    inherit_from:
-      - TopologyCircuit
-      - ManagedGeneric
-      - TopologyVirtualCircuit
-      - ManagedGenericInterfaces
-    human_friendly_id:
-      - name__value
-    uniqueness_constraints:
-      - [name__value]
-    relationships:
-      # Re-declares ManagedGenericInterfaces.capabilities with a count, as PhysicalCircuit does: the two ports this
-      # circuit terminates on. The cap holds when the circuit side is written; checks/physical_circuit_ports.py
-      # and checks/circuit_placement.py hold the rest.
-      - name: capabilities
-        peer: DcimInterface
-        label: "Ends"
-        kind: Generic
-        cardinality: many
-        optional: false
-        min_count: 2
-        max_count: 2
-        identifier: interface_capabilities
-        order_weight: 1100
-        description: "The two ports this circuit terminates on, one at each end"
-
-      - name: locations
-        label: "Endpoint Locations"
-        peer: TopologyFacility
-        cardinality: many
-        max_count: 2
-        optional: false
-        identifier: "circuit__location"
-        order_weight: 3000
-        description: "Facilities where this interconnect terminates"
-        min_count: 2
-
-  # Our edge sub-interface <-> a party-owned device sub-interface (cloud on-ramp, SD-WAN gateway LAN handoff,
-  # Equinix or Megaport provider) inside ONE environment namespace; an eBGP session is generated. An Equinix
-  # Fabric or Megaport service is just a handoff whose provider is Equinix or Megaport, not a separate kind.
-  #
-  # Addressing: cloud and provider side addresses come from OUR per-environment /31 pool only. For AWS Direct
-  # Connect the customer specifies the peer IPs and the provider assigns none; there is no provider-assigned
-  # (169.254) mode and no authored-address mode.
-  # The remote ASN lives in the party device's ManagedBGP.local_as; the VLAN lives in the sub-interface name.
-  - name: HandoffCircuit
-    namespace: Topology
-    description: "Edge to party-owned handoff in one namespace; peer IPs from our /31 pool only; routing generated"
-    label: "Handoff Circuit"
-    icon: "mdi:cloud-sync"
-    include_in_menu: false
-    inherit_from:
-      - TopologyCircuit
-      - ManagedGeneric
-      - TopologyVirtualCircuit
-      - ManagedGenericInterfaces
-    human_friendly_id:
-      - name__value
-    uniqueness_constraints:
-      - [name__value]
-    attributes:
-      - name: maximum_routes
-        kind: Number
-        label: "Maximum Routes"
-        optional: true
-        order_weight: 600
-        description: "Accepted-prefix limit of the session"
-    relationships:
-      # Re-declares ManagedGenericInterfaces.capabilities with a count, as PhysicalCircuit does: the two ports this
-      # circuit terminates on. The cap holds when the circuit side is written; checks/physical_circuit_ports.py
-      # and checks/circuit_placement.py hold the rest.
-      - name: capabilities
-        peer: DcimInterface
-        label: "Ends"
-        kind: Generic
-        cardinality: many
-        optional: false
-        min_count: 2
-        max_count: 2
-        identifier: interface_capabilities
-        order_weight: 1100
-        description: "The two ports this circuit terminates on, one at each end"
-
-      - name: locations
-        label: "Endpoint Locations"
-        peer: TopologyFacility
-        cardinality: many
-        max_count: 2
-        optional: false
-        identifier: "circuit__location"
-        order_weight: 3000
-        description: "Facilities where this handoff terminates (both ends may sit in one facility, e.g. the cage)"
+        description: "PROD prefixes reachable behind the tunnel's far end, owned by the tunnel's owner (tunnel only)"
 
       - name: ip_namespace
         label: "IP Namespace"
         peer: IpamNamespace
         cardinality: one
         kind: Attribute
-        optional: false
+        optional: true
         identifier: "handoff_circuit__ip_namespace"
         order_weight: 1200
-        description: "Environment namespace in which the /31 is allocated and the session runs"
+        description: "Environment namespace in which the /31 is allocated and the session runs (required for a handoff)"
 
       - name: password
         label: "Password"
@@ -377,7 +306,7 @@ nodes:
         optional: true
         identifier: "handoff_circuit__password"
         order_weight: 1300
-        description: "Shared authentication key of the session (optional)"
+        description: "Shared authentication key of the session (handoff only, optional)"
 
       # The reverse side, CloudHybridAttachment.virtual_circuit, is declared in topology_cloud_network.yml.
       - name: cloud_endpoint
@@ -388,4 +317,4 @@ nodes:
         optional: true
         identifier: "handoff_circuit__cloud_endpoint"
         order_weight: 1400
-        description: "Cloud-side termination of this handoff (a VIF); one endpoint has one handoff"
+        description: "Cloud-side termination of this handoff (a VIF); one endpoint has one handoff (handoff only)"

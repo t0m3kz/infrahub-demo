@@ -243,18 +243,18 @@ def test_colocation_generators_are_registered_in_infrahub_yml() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Circuits: a physical circuit is a pure carrier, the session kinds of a virtual circuit run add_virtual_circuit
+# Circuits: a carrier circuit is a pure carrier, the session kinds of a virtual circuit run add_virtual_circuit
 # ---------------------------------------------------------------------------
 
 
-def test_physical_circuit_rules_watch_creation_ends_and_status() -> None:
+def test_carrier_circuit_rules_watch_creation_ends_and_status() -> None:
     """add_circuit runs on creation, when `capabilities` change and when `status` changes, nothing else.
 
     The status rule is what lets a carrier set to decommissioned (or back to active) reach, through add_circuit's
     fan-out, the sessions riding it. `locations` (written by add_circuit itself, so a rule would loop) and
     `circuit_type` (read by nothing) have no rule.
     """
-    rules = _rules_for("TopologyPhysicalCircuit")
+    rules = _rules_for("TopologyCarrierCircuit")
     assert sorted(rules) == [
         "trigger-circuit-on-created",
         "trigger-circuit-on-interface-capabilities-updated",
@@ -271,10 +271,10 @@ def test_physical_circuit_rules_watch_creation_ends_and_status() -> None:
     assert not rules["trigger-circuit-on-created"].get("matches")
 
 
-def test_the_circuit_action_runs_add_circuit_on_the_physical_circuits_group() -> None:
-    """The physical-circuit rules reach add_circuit, whose target group is physical_circuits."""
+def test_the_circuit_action_runs_add_circuit_on_the_carrier_circuits_group() -> None:
+    """The carrier-circuit rules reach add_circuit, whose target group is carrier_circuits."""
     assert action_generators()["run-circuit-generator"] == "add_circuit"
-    assert definition_targets()["add_circuit"] == "physical_circuits"
+    assert definition_targets()["add_circuit"] == "carrier_circuits"
 
 
 _SESSION_COMMON_RULES = {
@@ -282,7 +282,7 @@ _SESSION_COMMON_RULES = {
     "capabilities-updated": ("CoreNodeTriggerRelationshipMatch", "capabilities"),
     "status-updated": ("CoreNodeTriggerAttributeMatch", "status"),
 }
-# What only a handoff circuit reads, beyond its ends and status.
+# What only a handoff reads, beyond its ends and status (they fire for every type of the one kind, harmlessly).
 _HANDOFF_ONLY_RULES = {
     "namespace-updated": ("CoreNodeTriggerRelationshipMatch", "ip_namespace"),
     "password-updated": ("CoreNodeTriggerRelationshipMatch", "password"),
@@ -291,26 +291,20 @@ _HANDOFF_ONLY_RULES = {
 
 
 def test_the_virtual_circuit_action_runs_the_session_generator_on_the_virtual_circuits_group() -> None:
-    """One action, one definition, one group for both session kinds."""
+    """One action, one definition, one group for the one session kind."""
     assert action_generators()["run-virtual-circuit-generator"] == "add_virtual_circuit"
     assert definition_targets()["add_virtual_circuit"] == "virtual_circuits"
 
 
-@pytest.mark.parametrize(
-    ("node_kind", "slug", "extra"),
-    [
-        ("TopologyInterconnectCircuit", "interconnect-circuit", {}),
-        ("TopologyHandoffCircuit", "handoff-circuit", _HANDOFF_ONLY_RULES),
-    ],
-)
-def test_every_session_kind_has_its_own_rules(node_kind: str, slug: str, extra: dict[str, tuple[str, str]]) -> None:
-    """Per-kind rules (a rule on the TopologyVirtualCircuit generic is unprobed): created, the ends, the status,
-    and for a handoff what its generator also reads. `cloud_endpoint` is not read, so it has no rule."""
-    rules = _rules_for(node_kind)
-    expected = {**_SESSION_COMMON_RULES, **extra}
-    assert sorted(rules) == sorted(f"trigger-{slug}-on-{suffix}" for suffix in expected)
+def test_the_session_kind_has_its_own_six_rules() -> None:
+    """One set of rules on the one kind (a rule on a generic is unprobed): created, the ends, the status, and what a
+    handoff reads. `cloud_endpoint` is not read, so it has no rule."""
+    rules = _rules_for("TopologySessionCircuit")
+    expected = {**_SESSION_COMMON_RULES, **_HANDOFF_ONLY_RULES}
+    assert len(rules) == 6
+    assert sorted(rules) == sorted(f"trigger-session-circuit-on-{suffix}" for suffix in expected)
     for suffix, match in expected.items():
-        rule = rules[f"trigger-{slug}-on-{suffix}"]
+        rule = rules[f"trigger-session-circuit-on-{suffix}"]
         assert rule["action"] == "run-virtual-circuit-generator"
         if match is None:
             assert rule["mutation_action"] == "created" and not rule.get("matches")
@@ -319,16 +313,22 @@ def test_every_session_kind_has_its_own_rules(node_kind: str, slug: str, extra: 
             assert _match_fields(rule) == [match]
 
 
-def test_a_tunnel_circuit_and_the_generic_have_no_rule() -> None:
-    """The SD-WAN orchestrator owns a tunnel's routing, and it is not in the generator's group: a rule would raise."""
-    assert _rules_for("TopologyTunnelCircuit") == {}
-    assert _rules_for("TopologyVirtualCircuit") == {}
+def test_the_removed_kinds_and_the_generics_have_no_rule() -> None:
+    """The five old circuit kinds are gone, and no rule sits on a generic (it is unprobed here)."""
+    for kind in (
+        "TopologyTunnelCircuit",
+        "TopologyInterconnectCircuit",
+        "TopologyHandoffCircuit",
+        "TopologyVirtualCircuit",
+        "TopologyCircuit",
+    ):
+        assert _rules_for(kind) == {}, kind
 
 
-def test_every_rule_of_the_session_action_is_on_a_session_kind() -> None:
-    """Only interconnect and handoff circuits trigger add_virtual_circuit; a tunnel or the generic would raise."""
+def test_every_rule_of_the_session_action_is_on_the_session_kind() -> None:
+    """Only the session circuit kind triggers add_virtual_circuit."""
     kinds = {rule["node_kind"] for rule in trigger_rules() if rule["action"] == "run-virtual-circuit-generator"}
-    assert kinds == {"TopologyInterconnectCircuit", "TopologyHandoffCircuit"}
+    assert kinds == {"TopologySessionCircuit"}
 
 
 def test_the_session_generator_is_registered_in_infrahub_yml() -> None:

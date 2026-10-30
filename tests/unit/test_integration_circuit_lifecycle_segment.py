@@ -324,7 +324,7 @@ async def test_the_lifecycle_refuses_a_sole_demand_instance_without_the_peer(mon
     monkeypatch.setattr(lifecycle, "wait_for_tasks_completion", AsyncMock())
     with pytest.raises(AssertionError, match="premise of the sole-demand handoff"):
         await lifecycle.decommission_and_restore(
-            client, "b", AMNE, "TopologyHandoffCircuit", sole_demand="eg-am-ne02", name__value="H"
+            client, "b", AMNE, "TopologySessionCircuit", sole_demand="eg-am-ne02", name__value="H"
         )
     node.save.assert_not_awaited()
 

@@ -518,11 +518,11 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
-    resource_name: physical_circuit_ports
+    resource_name: carrier_circuit_ports
     tests:
       - name: syntax_check
         spec:
-          path: queries/validation/physical_circuit_ports.gql
+          path: queries/validation/carrier_circuit_ports.gql
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery

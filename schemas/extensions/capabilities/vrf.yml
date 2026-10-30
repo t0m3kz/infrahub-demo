@@ -57,7 +57,7 @@ nodes:
         identifier: vrf__deployment
         order_weight: 1000
       # Not `ip_namespace`: that field name already peers two different kinds (BuiltinIPNamespace on the IPAM nodes,
-      # IpamNamespace on TopologyHandoffCircuit), and a third would risk a GraphQL "Fields ... conflict".
+      # IpamNamespace on TopologySessionCircuit), and a third would risk a GraphQL "Fields ... conflict".
       - name: namespace
         peer: IpamNamespace
         label: Namespace

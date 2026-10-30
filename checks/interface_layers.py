@@ -5,7 +5,7 @@ There is no ``l2_mode`` attribute: the layer of a port is its content.
 * An L2 tag on a switch port (physical or LAG) is its ``segments`` (switchport membership, ManagedVxlanSegment
   ``switched_interfaces``) or a firewall / load-balancer context in its ``capabilities``.
 * An L3 signal is an ``ip_address``, any ``sub_interfaces``, or a routing capability (a BGP or OSPF session, an OSPF
-  interface, a routed exchange, an interconnect, tunnel or handoff circuit). A physical circuit is L1 and never a signal.
+  interface, a routed exchange, an interconnect, tunnel or handoff circuit). A carrier circuit is L1 and never a signal.
 
 Rules:
 
@@ -33,9 +33,7 @@ L3_SIGNAL_KINDS = frozenset(
         "RoutingOSPFInterface",
         "ManagedOSPFPeering",
         "TopologyRoutedExchange",
-        "TopologyInterconnectCircuit",
-        "TopologyTunnelCircuit",
-        "TopologyHandoffCircuit",
+        "TopologySessionCircuit",
     }
 )
 """Capabilities that make a port a routed port besides an address and sub-interfaces."""

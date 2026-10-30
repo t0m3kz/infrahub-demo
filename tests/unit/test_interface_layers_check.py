@@ -58,7 +58,7 @@ def test_pure_switchports_and_routed_ports_pass() -> None:
         _port("E3", caps=("ManagedLoadbalancerContext",)),
         _port("E4", ip=True, caps=("ManagedBGPPeering",)),
         _port("E5", subs=2),
-        _port("E6", ip=True, caps=("TopologyPhysicalCircuit",)),
+        _port("E6", ip=True, caps=("TopologyCarrierCircuit",)),
         _port("E7"),
     ]
     assert _run(ports) == []
@@ -82,17 +82,15 @@ def test_r1_segment_and_bgp_peering_fail() -> None:
 
 
 def test_r1_every_l3_capability_is_a_signal() -> None:
-    """R1: the OSPF, exchange and circuit kinds all count; a physical circuit never does."""
+    """R1: the OSPF, exchange and circuit kinds all count; a carrier circuit never does."""
     for kind in (
         "RoutingOSPFInterface",
         "ManagedOSPFPeering",
         "TopologyRoutedExchange",
-        "TopologyInterconnectCircuit",
-        "TopologyTunnelCircuit",
-        "TopologyHandoffCircuit",
+        "TopologySessionCircuit",
     ):
         assert len(_run([_port(segments=1, caps=(kind,))])) == 1, kind
-    assert _run([_port(segments=1, caps=("TopologyPhysicalCircuit",))]) == []
+    assert _run([_port(segments=1, caps=("TopologyCarrierCircuit",))]) == []
 
 
 def test_r1_applies_to_a_lag() -> None:
@@ -105,7 +103,7 @@ def test_r2_lag_member_with_a_segment_or_a_signal_fails() -> None:
     assert len(_run([_port(lag=True, segments=1)])) == 1
     assert len(_run([_port(lag=True, ip=True)])) == 1
     assert len(_run([_port(lag=True, segments=1, ip=True)])) == 1
-    assert _run([_port(lag=True, caps=("TopologyPhysicalCircuit",))]) == []
+    assert _run([_port(lag=True, caps=("TopologyCarrierCircuit",))]) == []
     assert _run([_port(lag=True)]) == []
 
 

@@ -79,7 +79,7 @@ async def test_fetch_interconnect_inventory_parses_location_and_end_placement() 
 
     def carrier(circuit_id: str) -> dict:
         return {
-            "__typename": "TopologyPhysicalCircuit",
+            "__typename": "TopologyCarrierCircuit",
             "id": f"pc-{circuit_id}",
             "circuit_id": value(circuit_id),
             "status": value("active"),
@@ -88,7 +88,8 @@ async def test_fetch_interconnect_inventory_parses_location_and_end_placement() 
     # A handoff: our edge's sub-interface rides its PARENT's cross-connect, the DC-side end is cabled, not carried.
     virtual = {
         "id": "vc1",
-        "__typename": "TopologyHandoffCircuit",
+        "__typename": "TopologySessionCircuit",
+        "circuit_type": value("handoff"),
         "name": value("HANDOFF-C005-DC10-AWS-EUC1"),
         "owner": owner,
         "ip_namespace": {"node": {"id": "ns-prod", "name": value("PROD")}},
@@ -158,8 +159,8 @@ async def test_fetch_interconnect_inventory_parses_location_and_end_placement() 
     client = MagicMock()
     client.execute_graphql = AsyncMock(
         return_value={
-            "TopologyPhysicalCircuit": {"edges": [{"node": physical}]},
-            "TopologyVirtualCircuit": {"edges": [{"node": virtual}]},
+            "TopologyCarrierCircuit": {"edges": [{"node": physical}]},
+            "TopologySessionCircuit": {"edges": [{"node": virtual}]},
         }
     )
 
@@ -206,9 +207,9 @@ async def test_fetch_interconnect_inventory_parses_location_and_end_placement() 
         },
     ]
     (handoff,) = inventory["virtual"]
-    assert (handoff["id"], handoff["kind"], handoff["owner"], handoff["owner_id"]) == (
+    assert (handoff["id"], handoff["circuit_type"], handoff["owner"], handoff["owner_id"]) == (
         "vc1",
-        "TopologyHandoffCircuit",
+        "handoff",
         "Drentec BV",
         "org-C005",
     )
@@ -249,7 +250,8 @@ async def test_fetch_interconnect_inventory_leaves_the_handoff_fields_empty_on_t
     """A tunnel or an interconnect has no namespace, limit, key or cloud endpoint."""
     tunnel = {
         "id": "vc2",
-        "__typename": "TopologyTunnelCircuit",
+        "__typename": "TopologySessionCircuit",
+        "circuit_type": {"value": "tunnel"},
         "name": {"value": "C001-OFFICE-SDWAN-FR2"},
         "owner": {"node": None},
         "locations": {"edges": []},
@@ -257,13 +259,13 @@ async def test_fetch_interconnect_inventory_leaves_the_handoff_fields_empty_on_t
     }
     client = MagicMock()
     client.execute_graphql = AsyncMock(
-        return_value={"TopologyPhysicalCircuit": {"edges": []}, "TopologyVirtualCircuit": {"edges": [{"node": tunnel}]}}
+        return_value={"TopologyCarrierCircuit": {"edges": []}, "TopologySessionCircuit": {"edges": [{"node": tunnel}]}}
     )
 
     inventory = await fetch_interconnect_inventory(client=client, branch="main")
 
     (circuit,) = inventory["virtual"]
-    assert circuit["kind"] == "TopologyTunnelCircuit"
+    assert circuit["circuit_type"] == "tunnel"
     assert (circuit["owner"], circuit["ends"], circuit["carrier"], circuit["end_nodes"]) == (None, [], [], [])
     assert (circuit["ip_namespace"], circuit["maximum_routes"], circuit["password"]) == (None, None, None)
     assert (circuit["cloud_endpoint"], circuit["cloud_endpoint_vlan"]) == (None, None)

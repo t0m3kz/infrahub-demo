@@ -241,7 +241,7 @@ class MyCheck(InfrahubCheck):
 | --------- | ----- |
 | Managed | On-prem services and the shared generics `ManagedGeneric` (name, description, status), `ManagedGenericDevice` (the individual device edge, `capabilities`, cascades), `ManagedGenericSharedDevice` (the shared device edge, `shared_capabilities`, never cascades), `ManagedGenericInterfaces` (the interface-side `capabilities` edge; its identifier stays `interface_capabilities`), `ManagedNetworkSegment` and `ManagedLoadBalancer`, and `ManagedVRF` (a namespace realized in one topology, a shared kind) |
 | Cloud | Provider-hosted resources (public cloud and provider-hosted network services); every resource inherits `CloudResource`, except `CloudNetworkAppliance`, a provider-hosted network function (Equinix Network Edge) that inherits the device generics (`DcimDevice`, `DcimCapabilities`) so its interfaces (virtual NICs: no hardware), BGP and HA stay device-shaped; the provider's order is structured data (Device Type name = `type_code`, `DcimSoftwareImage.package` and `version`), not attributes of the appliance |
-| Topology | Deployments (`TopologyDataCenter`, `TopologyPod`, `TopologyColocationMetro`, ...), design elements, circuits (`TopologyPhysicalCircuit` and the virtual-circuit kinds `TopologyTunnelCircuit`, `TopologyInterconnectCircuit`, `TopologyHandoffCircuit`) and the tenant footprints `TopologyCustomer*` |
+| Topology | Deployments (`TopologyDataCenter`, `TopologyPod`, `TopologyColocationMetro`, ...), design elements, circuits (`TopologyCarrierCircuit` and `TopologySessionCircuit`, whose role is its `circuit_type`: `dci`, `handoff`, `tunnel`) and the tenant footprints `TopologyCustomer*` |
 | Dcim, Ipam, Location, Organization | Devices/interfaces/cables, prefixes/addresses/namespaces, geography, providers/customers |
 | Routing | Shared routing objects (`RoutingAutonomousSystem`, `RoutingOSPFArea`, `RoutingPassword`) |
 | Security, Loadbalancer, Proxy, App, Virt | Functional domains |
@@ -265,51 +265,75 @@ class MyCheck(InfrahubCheck):
 - **Office**: `TopologyCustomerOffice` is not a `TopologyCustomer`. The owner sits directly on it, its name is
   `{OWNER}-OFFICE` (for example `C005-OFFICE`), it is always PROD (no `environment`) and its parent is the
   "Campus and Office" `TopologyLabel`.
-- **Circuit placement**: a physical circuit is a pure carrier (fibre, cross-connect, internet access) with no role
-  and no session; its `locations` peer `TopologyFacility`: the DC (never a pod, rack or footprint), the colocation
+- **Circuit placement**: two circuit kinds, both inheriting `[TopologyCircuit, ManagedGeneric, ManagedGenericInterfaces]`
+  (`TopologyCircuit` FIRST, so its declarations win): `TopologyCarrierCircuit` and `TopologySessionCircuit`. The
+  two ends (`capabilities`, peer `DcimInterface`, identifier `interface_capabilities`, min and max 2) and `locations`
+  (peer `TopologyFacility`, max 2, no `min_count`: it is enforced on update only) are declared ONCE, on the
+  `TopologyCircuit` generic. A carrier circuit is a pure carrier (fibre, cross-connect, internet access, or a
+  provider-delivered `virtual_connection` or `metro_ethernet` service) with no role and no session; its `locations` peer
+  `TopologyFacility`: the DC (never a pod, rack or footprint), the colocation
   cage `TopologyColocationZone` or the provider-hosted `TopologyVirtualColocation` (never the metro), the
   `TopologyCloudRegion` (never a zone or `TopologyCloud`), the ISP `TopologyExternalProviders`, the
   `TopologySaasRegion` or the `TopologyCustomerOffice`. Data lists only the cage; `add_circuit` adds every end
   whose endpoint device's `deployment` is a facility (border leaf -> DC, provider router -> region, ISP PE -> ISP),
   when the circuit is created or its ends change: nothing re-runs it on a later `deployment` edit (the check reports
-  it). A physical circuit is shared underlay, unowned, except an office's access circuit (`add_sdwan_edge`'s
-  `INET-<office>`), owned by the office's owner. `locations` is declared on each circuit node, not on
-  `TopologyCircuit`: an inherited peer cannot be narrowed. `checks/circuit_placement.py` guards what the schema
-  cannot, per kind:
-  - **Physical**: exactly two distinct locations, one per end device's `deployment`; owned exactly when it ends on a
-    `TopologyCustomerOffice`.
-  - **Tunnel**: two locations and two ports, owned by the office's owner, every end port rides a live internet
-    physical circuit of its own (no contiguity rule).
-  - **Interconnect**: unowned, two locations and two ports, both ports carried, the carriers found at the two ports
+  it). A carrier circuit is shared underlay, unowned, except an office's access circuit (`add_sdwan_edge`'s
+  `INET-<office>`), owned by the office's owner. `checks/circuit_placement.py` guards what the schema
+  cannot, per circuit (a session circuit's rules are selected by `circuit_type`, the schema leaves its type-specific
+  fields optional):
+  - **Carrier**: exactly two distinct locations, one per end device's `deployment`; owned exactly when it ends on a
+    `TopologyCustomerOffice`. `checks/carrier_circuit_ports.py`: a port is an end of at most one carrier and both ends
+    are physical ports, EXCEPT a `virtual_connection` (a provider port hosts one connection per S-tag, and an end may be
+    the `DcimVirtualInterface` NIC of a provider-hosted appliance); the other types on the same port still hold both.
+  - **Carrier provider data** (optional, inventory only, nothing reads it): `circuit_id` also holds the Equinix Fabric
+    connection `uuid` or the Megaport VXC `product_uid`; `bandwidth` mirrors the Fabric `bandwidth` and the Megaport
+    `rate_limit`; `term_length` (months) has the name and meaning of `CloudNetworkAppliance.term_length` and mirrors the
+    Megaport `contract_term_months` or an ISP term (a Fabric connection has none); `commit_rate` (Mbps) is an ISP or MEF
+    CIR (Fabric and Megaport have none); `redundancy_group` mirrors the Fabric `redundancy.group` (its
+    `redundancy.priority` stays out: the name or description says which is primary). Per-end VLAN tags are not carrier
+    attributes (Fabric `vlan_s_tag`/`vlan_c_tag` and Megaport `ordered_vlan` live per end).
+  - **Tunnel** (`circuit_type: tunnel`): two locations and two ports, owned by the office's owner (the only type with an
+    owner and with `registered_prefixes`), no handoff-only field, every end port rides a live internet
+    carrier circuit of its own (no contiguity rule).
+  - **Interconnect** (`dci`): unowned, no handoff-only field, two locations and two ports, both ports carried, the
+    carriers found at the two ports
     form one contiguous path between the two locations and a single carrier is pure fibre (its two ends are the
     circuit's two ports); each end device has exactly one `overlay` `ManagedBGP`.
-  - **Handoff**: one or two locations (both ends may sit in one cage); at least one end on a physical device is
-    carried (a live physical circuit or a `DcimCable` on the port or its `parent_interface`, a cable to a patch panel port
+  - **Handoff** (`handoff`): unowned, with an `ip_namespace` (required here, optional in the schema); `password`,
+    `maximum_routes` and `cloud_endpoint` belong to this type only (`CloudHybridAttachment.virtual_circuit` peers the
+    session kind, so the check refuses `cloud_endpoint` on a `dci` or a `tunnel`); one or two locations (both ends may
+    sit in one cage); at least one end on a physical device is
+    carried (a live carrier circuit or a `DcimCable` on the port or its `parent_interface`, a cable to a patch panel port
     counts: the cross-connect through a panel is cables, see **Patch panels**); both ports are
     sub-interfaces `<port>.<vlan>` with the same VLAN (the cloud endpoint's `vlan_id` too).
-  - **Session circuits (Interconnect, Handoff)**: a port is an end of at most one of them. **Environment class**:
+  - **Session circuits (`dci`, `handoff`)**: a port is an end of at most one of them. **Environment class**:
     circuits meeting at a device share a class (prod vs non-prod; a handoff takes its `ip_namespace`'s
     `namespace_type`, a tunnel is PROD, an interconnect has none).
-- **Virtual circuits**: `TopologyVirtualCircuit` (generic) is the connection between topologies on which routing is
-  generated or recorded; its role is its KIND, never an attribute. `TopologyTunnelCircuit` (SD-WAN office edge <->
-  gateway `eth1`, and the partner tunnel; inventory only, no session, owner = the office),
-  `TopologyInterconnectCircuit` (DCI, unowned: a `/31` or `/127` eBGP underlay plus a loopback-to-loopback EVPN
-  multihop session keyed per circuit, MTU 9214) and `TopologyHandoffCircuit` (our edge sub-interface <-> a party
+- **Session circuits** (virtual circuits): `TopologySessionCircuit` is the connection between topologies on which routing
+  is generated or recorded; its role is its `circuit_type` (`dci`, `handoff`, `tunnel`), required, never a kind. The
+  carrier kind keeps its own `circuit_type` (the carrier's nature) beside it. `tunnel` (SD-WAN office edge <->
+  gateway `eth1`, and the partner tunnel; inventory only, no session, owner = the office; a member of `virtual_circuits`
+  because the group's created-trigger raises for a non-member, the generator logs and stops), `dci` (unowned: a `/31` or
+  `/127` eBGP underlay plus a loopback-to-loopback EVPN
+  multihop session keyed per circuit, MTU 9214) and `handoff` (our edge sub-interface <-> a party
   device sub-interface in one environment namespace: cloud on-ramps, Equinix/Megaport, the SD-WAN gateway LAN; a `/31`
   from `Handoff-<namespace>-IPv4` and one eBGP session; the cloud or provider side address comes from OUR pool only,
   and for AWS Direct Connect the customer specifies the peer IPs). One generator, `add_virtual_circuit`
-  (`VirtualCircuitSessionGenerator`), builds the sessions of Interconnect and Handoff circuits; `add_circuit` only
-  derives physical locations and fans out to it. The carrier of a virtual circuit is derived, never listed: the
-  physical circuits (or a `DcimCable` inside one facility) on its port or its `parent_interface`
+  (`VirtualCircuitSessionGenerator`, planners keyed by `circuit_type`), builds the sessions of `dci` and `handoff`
+  circuits; `add_circuit` only derives carrier locations and fans out to it (one `filters` on `circuit_type__values`). The
+  carrier of a session circuit is derived, never listed: the
+  carrier circuits (or a `DcimCable` inside one facility) on its port or its `parent_interface`
   (`utils/circuit_underlay.py`). The only role that is an output is `ManagedBGPPeering.peering_role` (`regular`,
   `dci`, `dci-underlay`, `fabric`, `overlay`, `underlay`). The tenant impact of a fibre is a graph traversal (circuit ->
-  ports -> segments (`segments`), peerings, circuits (`capabilities`, filtered by kind)), not a per-tenant circuit.
+  ports -> segments (`segments`), peerings, circuits (`capabilities`, filtered by kind)), not a per-tenant circuit. The
+  tunnel readers (`edge.gql`, `routing_invariants.gql`, `segment_security.gql`) root at
+  `TopologySessionCircuit(circuit_type__value: "tunnel")`.
 - **Border policy**: a `regular` session in a PROD or NON-PROD VRF is external unless its far end is ours: the far
   end's BGP process in that peering has `process_role: overlay` (not when the far end device is a
   `CloudNetworkAppliance`, a provider-hosted Network Edge: that hop is external), or the far end is the office's own
   SD-WAN edge (`deployment.lisp_wan_edges`). The device owner is never the signal. A handoff circuit is unowned; the owner of a
   prefix is the object that registers it (`CloudVirtualNetwork.account.owner` for a VPC block, the office's owner for
-  `lan_prefixes`, the tunnel's owner for a `TopologyTunnelCircuit.registered_prefixes` range such as a B2B partner's,
+  `lan_prefixes`, the tunnel's owner for a tunnel `TopologySessionCircuit.registered_prefixes` range such as a B2B partner's,
   `segment.owner` for a segment), and only an `OrganizationCustomer` counts. An external session
   accepts its owners' registered prefixes (`RM-<session>-IN`) and is announced (`RM-<session>-OUT`) what those same
   owners have on-prem or registered behind another external session of the namespace (an office LAN reaches the
@@ -564,6 +588,9 @@ class MyCheck(InfrahubCheck):
   - `ManagedVRF`'s SVIs reach it through `DcimVirtualInterface.vrf`. A segment is not on the interface edge: a switch
     port's membership is `segments` and an inline termination is `inline_segment` (see **Interface addresses and
     layers**); the kinds left on `ManagedGenericInterfaces` are circuits, contexts, the routed exchange, peerings and OSPF.
+    A circuit re-declares the circuit side of that edge once, on the `TopologyCircuit` generic (`capabilities`, same
+    `interface_capabilities` identifier, min and max 2), and the circuit nodes inherit `TopologyCircuit` before
+    `ManagedGenericInterfaces` so the counted declaration wins (a generic cannot inherit a generic).
 
 #### Schema Best Practices
 
@@ -934,7 +961,7 @@ async def main():
     c = InfrahubClient(address='http://localhost:8000')
     c.default_branch = 'flow'
 
-    kinds = ['DcimPhysicalDevice', 'DcimCable', 'TopologyPhysicalCircuit', 'TopologyVirtualCircuit']
+    kinds = ['DcimPhysicalDevice', 'DcimCable', 'TopologyCarrierCircuit', 'TopologySessionCircuit']
 
     print()
     print('='*60)
@@ -1010,7 +1037,7 @@ async def main():
 
     result = await client.execute_graphql(query="""
         query {
-            TopologyPhysicalCircuit {
+            TopologyCarrierCircuit {
                 edges {
                     node {
                         display_label
@@ -1033,7 +1060,7 @@ async def main():
         }
     """)
 
-    circuits = result["TopologyPhysicalCircuit"]["edges"]
+    circuits = result["TopologyCarrierCircuit"]["edges"]
     missing_provider = []
     missing_location = []
 
@@ -1112,7 +1139,7 @@ async def main():
     # Circuit Layer
     circuits_result = await client.execute_graphql(query="""
         query {
-            TopologyPhysicalCircuit {
+            TopologyCarrierCircuit {
                 edges {
                     node {
                         circuit_type { value }
@@ -1125,7 +1152,7 @@ async def main():
     # Virtual Layer
     virtual_circuits_result = await client.execute_graphql(query="""
         query {
-            TopologyVirtualCircuit {
+            TopologySessionCircuit {
                 edges {
                     node {
                         __typename
@@ -1161,7 +1188,7 @@ async def main():
             print(f"   🔌 {dev1}:{int1} ═══[{cable_type}]═══ {dev2}:{int2}")
 
     # Circuit Layer
-    circuits = circuits_result["TopologyPhysicalCircuit"]["edges"]
+    circuits = circuits_result["TopologyCarrierCircuit"]["edges"]
     circuit_types = {}
     for edge in circuits:
         circuit = edge["node"]
@@ -1173,7 +1200,7 @@ async def main():
         print(f"   📡 {ctype}: {count}")
 
     # Virtual Layer
-    virtual_circuits = virtual_circuits_result["TopologyVirtualCircuit"]["edges"]
+    virtual_circuits = virtual_circuits_result["TopologySessionCircuit"]["edges"]
     providers = {}
     for edge in virtual_circuits:
         provider_node = edge["node"]["provider"]["node"]
@@ -1246,7 +1273,7 @@ endpoints {
 **Filters**:
 
 ```graphql
-TopologyPhysicalCircuit(circuit_type__value: "dark_fiber") {
+TopologyCarrierCircuit(circuit_type__value: "dark_fiber") {
     edges {
         node {
             display_label

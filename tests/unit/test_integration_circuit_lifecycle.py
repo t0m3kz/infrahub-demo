@@ -17,7 +17,12 @@ from graphql import parse
 
 from tasks import ALL_DEMO_BRANCH
 from tests.integration import test_66_all_demo_circuit_lifecycle as lifecycle
-from tests.integration.all_demo_circuit_constants import ALL_DEMO_VIRTUAL_CIRCUITS, HANDOFF_KIND, INTERCONNECT_KIND
+from tests.integration.all_demo_circuit_constants import (
+    ALL_DEMO_VIRTUAL_CIRCUITS,
+    HANDOFF_TYPE,
+    INTERCONNECT_TYPE,
+    TUNNEL_TYPE,
+)
 from tests.integration.test_66_all_demo_circuit_lifecycle import (
     HANDOFF_CIRCUIT,
     HANDOFF_KEY,
@@ -119,7 +124,7 @@ def _torn_down(subject: Subject = DCI, **kwargs: Any) -> State:
 
 def test_the_interconnect_subject_is_the_dci_and_its_ports() -> None:
     """Names, description and ports are derived from ALL_DEMO_VIRTUAL_CIRCUITS and the generator's naming."""
-    assert DCI.kind == INTERCONNECT_KIND
+    assert DCI.kind == INTERCONNECT_TYPE
     assert DCI.peerings == ("ICX-DC12-EQXPA4-B-underlay", "ICX-DC12-EQXPA4-B-evpn")
     assert DCI.key == "ICX-DC12-EQXPA4-B-dci-key"
     assert DCI.description == "DCI ICX-DC12-EQXPA4-B"
@@ -130,7 +135,7 @@ def test_the_interconnect_subject_is_the_dci_and_its_ports() -> None:
 
 def test_the_handoff_subject_is_the_aws_vif_and_its_subinterfaces() -> None:
     """A handoff has one session, a prefix described 'Handoff <name>' and VLAN sub-interface ends."""
-    assert HANDOFF.kind == HANDOFF_KIND
+    assert HANDOFF.kind == HANDOFF_TYPE
     assert HANDOFF.peerings == ("HANDOFF-FR2-AWS-EUC1-PROD-bgp",)
     assert HANDOFF.description == "Handoff HANDOFF-FR2-AWS-EUC1-PROD"
     assert set(HANDOFF.ports) == {("eg-fr201", "Ethernet1/13.1000"), ("EXT-AWS-DX-FR2", "et-0/0/0.1000")}
@@ -148,7 +153,7 @@ def test_the_bystanders_are_every_other_session_of_the_branch() -> None:
 def test_a_tunnel_has_no_subject() -> None:
     """A tunnel has no session: asking for its subject is a mistake of the test, not data."""
     tunnel = next(
-        name for name, expected in ALL_DEMO_VIRTUAL_CIRCUITS.items() if expected["kind"].endswith("TunnelCircuit")
+        name for name, expected in ALL_DEMO_VIRTUAL_CIRCUITS.items() if expected["circuit_type"] == TUNNEL_TYPE
     )
     with pytest.raises(AssertionError, match="no session"):
         subject_for(tunnel)
@@ -420,12 +425,12 @@ async def test_set_status_changes_saves_and_returns_the_previous_status() -> Non
     client = MagicMock()
     client.get = AsyncMock(return_value=node)
     previous = await lifecycle.set_status(
-        client, ALL_DEMO_BRANCH, "TopologyPhysicalCircuit", "decommissioned", circuit_id__value="DF"
+        client, ALL_DEMO_BRANCH, "TopologyCarrierCircuit", "decommissioned", circuit_id__value="DF"
     )
     assert previous == "active"
     assert node.status.value == "decommissioned"
     node.save.assert_awaited_once()
-    client.get.assert_awaited_once_with(kind="TopologyPhysicalCircuit", branch=ALL_DEMO_BRANCH, circuit_id__value="DF")
+    client.get.assert_awaited_once_with(kind="TopologyCarrierCircuit", branch=ALL_DEMO_BRANCH, circuit_id__value="DF")
 
 
 async def test_set_status_to_the_current_status_saves_nothing() -> None:
@@ -434,7 +439,7 @@ async def test_set_status_to_the_current_status_saves_nothing() -> None:
     client = MagicMock()
     client.get = AsyncMock(return_value=node)
     assert (
-        await lifecycle.set_status(client, ALL_DEMO_BRANCH, "TopologyHandoffCircuit", "active", name__value="H")
+        await lifecycle.set_status(client, ALL_DEMO_BRANCH, "TopologySessionCircuit", "active", name__value="H")
         == "active"
     )
     node.save.assert_not_awaited()
@@ -495,7 +500,7 @@ async def test_the_lifecycle_decommissions_waits_restores_and_waits_for_the_rebu
     """Happy path: the status is set, the session goes, the status is set back, the session returns."""
     stack = _FakeStack(monkeypatch, reacts=True)
     await lifecycle.decommission_and_restore(
-        stack.client, ALL_DEMO_BRANCH, DCI, "TopologyPhysicalCircuit", circuit_id__value="DF"
+        stack.client, ALL_DEMO_BRANCH, DCI, "TopologyCarrierCircuit", circuit_id__value="DF"
     )
     assert stack.node.status.value == "active"
     assert stack.node.save.await_count == 2
@@ -510,7 +515,7 @@ async def test_a_generator_that_ignores_the_status_fails_the_lifecycle_and_the_s
     stack = _FakeStack(monkeypatch, reacts=False)
     with pytest.raises(AssertionError, match="ICX-DC12-EQXPA4-B-underlay still exists"):
         await lifecycle.decommission_and_restore(
-            stack.client, ALL_DEMO_BRANCH, DCI, "TopologyPhysicalCircuit", circuit_id__value="DF"
+            stack.client, ALL_DEMO_BRANCH, DCI, "TopologyCarrierCircuit", circuit_id__value="DF"
         )
     assert stack.node.status.value == "active"
     assert stack.node.save.await_count == 2
@@ -524,7 +529,7 @@ async def test_a_lifecycle_that_starts_without_a_session_refuses_to_run(monkeypa
     monkeypatch.setattr(lifecycle, "fetch_state", AsyncMock(return_value=_torn_down(DCI)))
     with pytest.raises(AssertionError, match="has no complete session"):
         await lifecycle.decommission_and_restore(
-            stack.client, ALL_DEMO_BRANCH, DCI, "TopologyPhysicalCircuit", circuit_id__value="DF"
+            stack.client, ALL_DEMO_BRANCH, DCI, "TopologyCarrierCircuit", circuit_id__value="DF"
         )
     stack.node.save.assert_not_awaited()
 

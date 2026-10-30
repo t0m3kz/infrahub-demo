@@ -62,7 +62,7 @@ spec:
       description: Sync a virtual colocation into the routing group of its infrastructure_orchestrator
       generator: add_virtual_colocation_orchestrator_routing
     - name: run-circuit-generator
-      description: Derive a physical circuit's facility locations
+      description: Derive a carrier circuit's facility locations
       generator: add_circuit
     - name: run-virtual-circuit-generator
       description: Build the BGP session(s) of an interconnect or handoff circuit

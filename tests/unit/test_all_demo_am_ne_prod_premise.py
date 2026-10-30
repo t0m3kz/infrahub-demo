@@ -9,7 +9,7 @@ with its last member.
 from __future__ import annotations
 
 from tasks import ALL_DEMO_DATA
-from tests.integration.demo_data import ROOT, Declared, declared, name
+from tests.integration.demo_data import ROOT, Declared, declared_session, name
 from tests.integration.test_66_all_demo_circuit_lifecycle import (
     SOLE_DEMAND_DEVICE,
     SOLE_DEMAND_HANDOFF,
@@ -24,7 +24,7 @@ def _prod_handoffs_of(device: str) -> list[Declared]:
     """The declared handoff circuits of the PROD namespace one of whose ends is a port of ``device``."""
     return [
         circuit
-        for circuit in declared("TopologyHandoffCircuit", _ALL)
+        for circuit in declared_session("handoff", _ALL)
         if circuit.item["ip_namespace"] == _NAMESPACE and device in {end[0] for end in circuit.item["capabilities"]}
     ]
 

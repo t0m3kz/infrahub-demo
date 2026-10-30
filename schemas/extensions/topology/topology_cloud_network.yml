@@ -419,10 +419,11 @@ extensions:
         # The edge that closes the handoff leg. A handoff circuit's customer end is a DcimInterface, but its
         # cloud end is a CloudVirtualInterface, not a device port. Without this the traversal
         # walks from a DC border leaf out to the colo cage and then stops at an island boundary. 1:1: one VIF
-        # has one handoff circuit; the other side is TopologyHandoffCircuit.cloud_endpoint.
+        # has one handoff circuit; the other side is TopologySessionCircuit.cloud_endpoint. The peer is the session
+        # kind, so only a handoff may hold it: checks/circuit_placement.py refuses cloud_endpoint on a dci or a tunnel.
         - name: virtual_circuit
           label: "Handoff Circuit"
-          peer: TopologyHandoffCircuit
+          peer: TopologySessionCircuit
           cardinality: one
           kind: Attribute
           optional: true

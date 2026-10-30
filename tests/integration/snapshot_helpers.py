@@ -86,19 +86,16 @@ TOPOLOGY_SNAPSHOT_KINDS = {
     "LocationRack": "name { value }",
     "TopologyPod": "name { value }",
     "TopologyDataCenter": "name { value }",
-    # add_circuit/add_sdwan_edge output (the physical circuit and the tunnel); an Interconnect and a Handoff are
-    # data-loaded and only gain sessions, so their own selection must not move either. `locations` is declared on
-    # each virtual kind, not on the generic.
-    "TopologyPhysicalCircuit": (
+    # add_circuit/add_sdwan_edge output (the carrier circuit and the tunnel); an Interconnect and a Handoff are
+    # data-loaded and only gain sessions, so their own selection must not move either.
+    "TopologyCarrierCircuit": (
         "name { value } locations { edges { node { id } } } capabilities { edges { node { id } } }"
     ),
-    "TopologyVirtualCircuit": (
-        "name { value } "
-        "... on ManagedGenericInterfaces { capabilities { edges { node { id capabilities { edges { node { id } } } } } } } "
-        "... on TopologyTunnelCircuit { locations { edges { node { id } } } } "
-        "... on TopologyInterconnectCircuit { locations { edges { node { id } } } } "
-        "... on TopologyHandoffCircuit { locations { edges { node { id } } } ip_namespace { node { id } } "
-        "password { node { id } } maximum_routes { value } cloud_endpoint { node { id } } }"
+    "TopologySessionCircuit": (
+        "name { value } circuit_type { value } locations { edges { node { id } } } "
+        "capabilities { edges { node { id capabilities { edges { node { id } } } } } } "
+        "ip_namespace { node { id } } password { node { id } } maximum_routes { value } cloud_endpoint { node { id } } "
+        "registered_prefixes { edges { node { id } } }"
     ),
     "ManagedController": "name { value } managed_devices { edges { node { id } } }",
     "ManagedFirewallHA": "name { value }",

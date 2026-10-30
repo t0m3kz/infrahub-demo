@@ -1,4 +1,4 @@
-"""The virtual-circuit session query selects every field the generator reads.
+"""The session circuit query selects every field the generator reads.
 
 Unit tests feed canned payloads, so a field the code reads but the query does not select passes there and fails only
 on a real stack. These tests parse ``queries/topology/add/virtual_circuit.gql`` with graphql-core, flatten it to the
@@ -96,7 +96,7 @@ def _payload_paths(value: Any, prefix: tuple[str, ...] = ()) -> set[str]:
 @pytest.fixture(scope="module")
 def generator_paths() -> set[str]:
     """Paths selected by queries/topology/add/virtual_circuit.gql."""
-    return _selected_paths(_QUERIES / "topology" / "add" / "virtual_circuit.gql", "TopologyVirtualCircuit")
+    return _selected_paths(_QUERIES / "topology" / "add" / "virtual_circuit.gql", "TopologySessionCircuit")
 
 
 # What generators/topology/virtual_circuit.py reads from the cleaned virtual circuit, for every kind
@@ -106,6 +106,7 @@ _GENERATOR_READS = [
     "__typename",
     "name",
     "status",
+    "circuit_type",
     "capabilities.id",
     "capabilities.name",
     "capabilities.__typename",
@@ -124,7 +125,7 @@ _GENERATOR_READS = [
     "capabilities.device.interfaces.name",
     "capabilities.device.interfaces.role",
     "capabilities.device.interfaces.ip_address.address",
-    # the derived underlay: the physical circuits on each port ...
+    # the derived underlay: the carrier circuits on each port ...
     "capabilities.capabilities.__typename",
     "capabilities.capabilities.id",
     "capabilities.capabilities.name",
@@ -139,7 +140,7 @@ _GENERATOR_READS = [
     # a hop inside one facility is a cable, not a circuit: on a physical port, or on a sub-interface's parent
     "capabilities.cable.id",
     "capabilities.parent_interface.cable.id",
-    # TopologyHandoffCircuit
+    # a handoff
     "ip_namespace.name",
     "maximum_routes",
     "password.id",
@@ -192,7 +193,7 @@ def test_every_selected_field_is_read(generator_paths: set[str]) -> None:
 
 def _fake_paths(payload: dict[str, Any]) -> set[str]:
     """Paths of one fake circuit payload (raw GraphQL), in the query's spelling."""
-    return _payload_paths(payload["TopologyVirtualCircuit"]["edges"][0]["node"])
+    return _payload_paths(payload["TopologySessionCircuit"]["edges"][0]["node"])
 
 
 @pytest.mark.parametrize(

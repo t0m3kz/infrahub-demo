@@ -96,7 +96,7 @@ ACL_INTERNET_BAND_SEQ_START = 6000
 ACL_CLOSING_SEQ = 9990
 
 # A circuit has two ends (two ports, at most two facilities): checks/circuit_placement.py and
-# checks/physical_circuit_ports.py.
+# checks/carrier_circuit_ports.py.
 CIRCUIT_ENDS = 2
 
 # --- 2. Vendor and platform limits -----------------------------------------------------------------------------
@@ -158,7 +158,9 @@ SEGMENT_ROUTING_TAG_POOL = "Segment-Routing-Tag"
 GROUP_HA_DOMAINS = "ha_domains"
 GROUP_MLAG_DOMAINS = "mlag_domains"
 GROUP_APP_COMPONENTS = "app_components"
-GROUP_PHYSICAL_CIRCUITS = "physical_circuits"
+GROUP_CARRIER_CIRCUITS = "carrier_circuits"
+# Every session circuit (dci, handoff and tunnel): the target group of add_virtual_circuit, whose created-trigger needs it.
+GROUP_VIRTUAL_CIRCUITS = "virtual_circuits"
 GROUP_CLOUD_LOADBALANCERS = "cloud_loadbalancers"
 # Devices that are never a border gateway of a VLAN domain: the SD-WAN hubs and the provider stub routers.
 GROUP_SDWAN_GATEWAYS = "sdwan_gateways"

@@ -4,7 +4,10 @@
     documented-not-lab-verified: Cisco Nexus 9000 Series NX-OS Layer 2 Switching Configuration Guide, "Configuring
     vPCs": `vpc <number>` under `interface port-channel <n>`, the same number on both vPC peers, on a Layer 2
     (switchport) port-channel. The section text was NOT opened (the Cisco page returned 404 when this was written);
-    only the Arista side is quoted from its manual (arista_eos_mlag_id.j2). Confirm against the Cisco guide.
+    only the Arista side is quoted from its manual (arista_eos_mlag_id.j2). Indirect support: the cisco.nxos Ansible
+    collection (plugins/modules/nxos_vpc_interface.py) configures `vpc <n>` on an interface that is a switchport
+    (its examples show `switchport` with `vpc: 100`) and makes `vpc` and `peer_link` exclusive on one interface.
+    Confirm against the Cisco guide.
     A virtual peer-link renders no vPC domain (cisco_nxos_vpc.j2), and `vpc <id>` needs the domain. -#}
 {%- if interface.mlag_id is defined and interface.vlans and not (mlag and mlag.virtual_peer_link) %}
   vpc {{ interface.mlag_id }}

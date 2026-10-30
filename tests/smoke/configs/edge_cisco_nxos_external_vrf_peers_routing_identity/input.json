@@ -3503,7 +3503,7 @@
       }
     ]
   },
-  "TopologyTunnelCircuit": {
+  "TopologySessionCircuit": {
     "edges": [
       {
         "node": {
