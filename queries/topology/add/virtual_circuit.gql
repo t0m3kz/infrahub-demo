@@ -1,21 +1,21 @@
 # add_virtual_circuit (generators/topology/virtual_circuit.py, VirtualCircuitSessionGenerator). One query for the
-# three TopologyVirtualCircuit kinds, dispatched on the root node's `typename`:
-#   TopologyInterconnectCircuit  DCI: underlay eBGP on a /31 plus a loopback-to-loopback EVPN session
-#   TopologyHandoffCircuit       edge <-> party device in one namespace: an eBGP session over the sub-interfaces
-#   TopologyTunnelCircuit        inventory only, no session; the generator reads its typename and stops
+# TopologySessionCircuit kind, dispatched on the root node's `circuit_type`:
+#   dci      DCI: underlay eBGP on a /31 plus a loopback-to-loopback EVPN session
+#   handoff  edge <-> party device in one namespace: an eBGP session over the sub-interfaces
+#   tunnel   inventory only, no session; the generator reads its circuit_type and stops
 # The ends are `capabilities` (the circuit's interfaces, a DcimInterface generic). The underlay is never declared:
-# it is the TopologyPhysicalCircuit entries in each end's own `capabilities` (the carrier terminating on the
+# it is the TopologyCarrierCircuit entries in each end's own `capabilities` (the carrier terminating on the
 # port) or, for a sub-interface, in its `parent_interface`'s (utils/circuit_underlay.py derived_underlay); or a
 # DcimCable on the port or its parent (a hop inside one facility is a cable, not a circuit: port_cabled). `cable` is
 # a DcimEndpoint relationship: a physical interface has it, a sub-interface does not (its parent does).
 #
 # The generator reads the cleaned payload (utils/data_cleaning.clean_data: edges/node/value flattened, `__typename`
 # becomes `typename`, a node selecting only `id` becomes `{"id": ...}`). Paths of the cleaned circuit:
-#   id, typename, name, status
+#   id, typename, name, status, circuit_type
 #   capabilities[].id, .name, .typename
 #   capabilities[].parent_interface.capabilities[]                  (sub-interfaces only: the carrier on the parent)
 #   capabilities[].cable, capabilities[].parent_interface.cable     (a cable's id, else null; physical port / parent)
-#   capabilities[].capabilities[].typename, and for a TopologyPhysicalCircuit .id, .name, .circuit_id, .status
+#   capabilities[].capabilities[].typename, and for a TopologyCarrierCircuit .id, .name, .circuit_id, .status
 #   capabilities[].device.id, .name
 #   capabilities[].device.deployment.typename                      (a TopologyDataCenter also .name, .underlay_protocol:
 #                                                                   the address family of a DCI)
@@ -24,93 +24,88 @@
 #                                                                  (loopback and loopback-vtep only: the DCI EVPN
 #                                                                   session sources its loopbacks from them; the
 #                                                                   address only on a DcimVirtualInterface)
-# TopologyHandoffCircuit adds ip_namespace.name; maximum_routes; password.id (null when unkeyed).
+# A handoff adds ip_namespace.name; maximum_routes; password.id (null when unkeyed).
 # The ends' own addresses are not selected: the generator allocates them and reads the interface nodes it writes.
 query virtual_circuit_data($name: String!) {
-  TopologyVirtualCircuit(name__value: $name) {
+  TopologySessionCircuit(name__value: $name) {
     edges {
       node {
         id
         __typename
         name { value }
-        ... on TopologyCircuit {
-          status { value }
-        }
-        ... on TopologyHandoffCircuit {
-          ip_namespace { node { name { value } } }
-          maximum_routes { value }
-          password { node { id } }
-        }
-        ... on ManagedGenericInterfaces {
-          capabilities {
-            edges {
-              node {
-                id
-                __typename
-                name { value }
-                ... on DcimPhysicalInterface {
-                  cable { node { id } }
-                }
-                ... on DcimVirtualInterface {
-                  parent_interface {
-                    node {
-                      ... on DcimPhysicalInterface {
-                        cable { node { id } }
-                      }
-                      capabilities {
-                        edges {
-                          node {
-                            ...VirtualCircuitCarrier
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-                capabilities {
-                  edges {
-                    node {
-                      ...VirtualCircuitCarrier
-                    }
-                  }
-                }
-                device {
+        status { value }
+        circuit_type { value }
+        ip_namespace { node { name { value } } }
+        maximum_routes { value }
+        password { node { id } }
+        capabilities {
+          edges {
+            node {
+              id
+              __typename
+              name { value }
+              ... on DcimPhysicalInterface {
+                cable { node { id } }
+              }
+              ... on DcimVirtualInterface {
+                parent_interface {
                   node {
-                    id
-                    name { value }
-                    ... on DcimPhysicalDevice {
-                      deployment { node { ...VirtualCircuitDeployment } }
+                    ... on DcimPhysicalInterface {
+                      cable { node { id } }
                     }
-                    ... on DcimVirtualDevice {
-                      deployment { node { ...VirtualCircuitDeployment } }
-                    }
-                    ... on CloudNetworkAppliance {
-                      deployment { node { ...VirtualCircuitDeployment } }
-                    }
-                    ... on DcimCapabilities {
-                      capabilities {
-                        edges {
-                          node {
-                            id
-                            __typename
-                            ... on ManagedBGP {
-                              name { value }
-                              process_role { value }
-                            }
-                          }
+                    capabilities {
+                      edges {
+                        node {
+                          ...VirtualCircuitCarrier
                         }
                       }
                     }
-                    interfaces(role__values: ["loopback", "loopback-vtep"]) {
+                  }
+                }
+              }
+              capabilities {
+                edges {
+                  node {
+                    ...VirtualCircuitCarrier
+                  }
+                }
+              }
+              device {
+                node {
+                  id
+                  name { value }
+                  ... on DcimPhysicalDevice {
+                    deployment { node { ...VirtualCircuitDeployment } }
+                  }
+                  ... on DcimVirtualDevice {
+                    deployment { node { ...VirtualCircuitDeployment } }
+                  }
+                  ... on CloudNetworkAppliance {
+                    deployment { node { ...VirtualCircuitDeployment } }
+                  }
+                  ... on DcimCapabilities {
+                    capabilities {
                       edges {
                         node {
                           id
                           __typename
-                          name { value }
-                          role { value }
-                          ... on DcimVirtualInterface {
-                            ip_address { node { address { value } } }
+                          ... on ManagedBGP {
+                            name { value }
+                            process_role { value }
                           }
+                        }
+                      }
+                    }
+                  }
+                  interfaces(role__values: ["loopback", "loopback-vtep"]) {
+                    edges {
+                      node {
+                        id
+                        __typename
+                        name { value }
+                        role { value }
+                        ... on DcimVirtualInterface {
+                          ip_address { node { address { value } } }
                         }
                       }
                     }
@@ -125,10 +120,10 @@ query virtual_circuit_data($name: String!) {
   }
 }
 
-# What terminates on a port: segments, peerings and other circuits too, so only a physical circuit is expanded.
+# What terminates on a port: segments, peerings and other circuits too, so only a carrier circuit is expanded.
 fragment VirtualCircuitCarrier on ManagedGenericInterfaces {
   __typename
-  ... on TopologyPhysicalCircuit {
+  ... on TopologyCarrierCircuit {
     id
     name { value }
     circuit_id { value }

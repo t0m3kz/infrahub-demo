@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 
 from generators.logger import GeneratorError
-from generators.topology.circuit import PHYSICAL_CIRCUIT_GENERATOR
+from generators.topology.circuit import CARRIER_CIRCUIT_GENERATOR
 from generators.topology.virtual_circuit import SessionEnd, VirtualCircuitSessionGenerator
 from tests.unit.simulators.circuit_fakes import (
     VC_ID,
@@ -32,7 +32,7 @@ from tests.unit.simulators.circuit_fakes import (
     underlay_circuit,
 )
 from tests.unit.virtual_circuit_session_helpers import DCI, HANDOFF, _assert_refused, _peering, _run
-from utils.circuit_underlay import SESSION_CIRCUIT_KINDS
+from utils.circuit_underlay import SESSION_CIRCUIT, SESSION_CIRCUIT_TYPES
 from utils.data_cleaning import clean_data
 
 
@@ -68,7 +68,7 @@ class TestNothingToBuild:
         """A session needs two ends: with none or one the run only logs it, as a port may be linked later."""
         client = FakeClient()
 
-        gen = await _run(client, session_payload("TopologyHandoffCircuit", ends))
+        gen = await _run(client, session_payload("handoff", ends))
 
         assert client.writes == [] and client.filter_calls == []
         gen.wait_for_parent_generator_and_refetch.assert_not_awaited()
@@ -146,7 +146,7 @@ class TestNothingToBuild:
 
     @pytest.mark.asyncio
     async def test_an_interconnect_without_a_carrier_builds_nothing(self) -> None:
-        """A DCI whose two ends ride no physical circuit and no cable has nothing to run over, so nothing is built."""
+        """A DCI whose two ends ride no carrier circuit and no cable has nothing to run over, so nothing is built."""
         client = FakeClient()
         ends = [dc_border_port(circuits=[]), colo_edge_port(circuits=[])]
 
@@ -202,8 +202,8 @@ class TestNothingToBuild:
     @pytest.mark.asyncio
     async def test_empty_response_is_an_error(self) -> None:
         """A query response with no circuit at all is an error, not a silent no-op."""
-        with pytest.raises(GeneratorError, match="No TopologyVirtualCircuit data"):
-            await _run(FakeClient(), {"TopologyVirtualCircuit": {"edges": []}})
+        with pytest.raises(GeneratorError, match="No TopologySessionCircuit data"):
+            await _run(FakeClient(), {"TopologySessionCircuit": {"edges": []}})
 
 
 class TestCableCarrier:
@@ -211,7 +211,7 @@ class TestCableCarrier:
 
     @pytest.mark.asyncio
     async def test_a_cable_only_handoff_builds_without_waiting(self) -> None:
-        """A cable on the parent of the sub-interface, no physical circuit anywhere: nothing to wait for, built.
+        """A cable on the parent of the sub-interface, no carrier circuit anywhere: nothing to wait for, built.
 
         (A handoff end is always a sub-interface, so the cable is on its parent.)
         """
@@ -256,14 +256,14 @@ class TestCableCarrier:
         gen = await _run(client, handoff_payload(ends=ends))
 
         assert [call.args for call in gen.wait_for_parent_generator_and_refetch.await_args_list] == [
-            (PHYSICAL_CIRCUIT_GENERATOR, "pc-XC-B")
+            (CARRIER_CIRCUIT_GENERATOR, "pc-XC-B")
         ]
 
 
 class TestWaitForTheCarrier:
     @pytest.mark.asyncio
     async def test_waits_for_add_circuit_on_every_carrier(self) -> None:
-        """One wait per physical circuit the ports ride, whichever port (or parent) it terminates on."""
+        """One wait per carrier circuit the ports ride, whichever port (or parent) it terminates on."""
         client = FakeClient()
         other = underlay_circuit("XC-FR2-AWS-B")
         ends = [handoff_edge_port(), handoff_party_port(parent_circuits=[other])]
@@ -272,8 +272,8 @@ class TestWaitForTheCarrier:
 
         waited = [call.args for call in gen.wait_for_parent_generator_and_refetch.await_args_list]
         assert waited == [
-            (PHYSICAL_CIRCUIT_GENERATOR, "pc-XC-FR2-AWS"),
-            (PHYSICAL_CIRCUIT_GENERATOR, "pc-XC-FR2-AWS-B"),
+            (CARRIER_CIRCUIT_GENERATOR, "pc-XC-FR2-AWS"),
+            (CARRIER_CIRCUIT_GENERATOR, "pc-XC-FR2-AWS-B"),
         ]
 
     @pytest.mark.asyncio
@@ -294,7 +294,7 @@ class TestWaitsForTheCarriersAtOnce:
 
     @staticmethod
     def _three_carriers() -> dict[str, Any]:
-        """A handoff on three physical circuits: two under the edge's parent port, one under the party's."""
+        """A handoff on three carrier circuits: two under the edge's parent port, one under the party's."""
         ends = [
             handoff_edge_port(parent_circuits=[underlay_circuit("XC-A"), underlay_circuit("XC-B")]),
             handoff_party_port(parent_circuits=[underlay_circuit("XC-C")]),
@@ -312,7 +312,7 @@ class TestWaitsForTheCarriersAtOnce:
         all_started = asyncio.Event()
 
         async def wait(generator: str, parent_id: str) -> dict[str, Any] | None:
-            assert generator == PHYSICAL_CIRCUIT_GENERATOR
+            assert generator == CARRIER_CIRCUIT_GENERATOR
             started.append(parent_id)
             if len(started) == len(refetched):
                 all_started.set()
@@ -388,7 +388,7 @@ class TestConcurrentRunsOnOnePort:
         """Both circuits are known to the client (registered by kind), neither is visible before it is built."""
         client = _LaggingClient()
         client.circuit_ids.add("vc-2")
-        client.session_circuits["TopologyHandoffCircuit"] = [(VC_ID, "VC-A"), ("vc-2", "VC-B")]
+        client.session_circuits["handoff"] = [(VC_ID, "VC-A"), ("vc-2", "VC-B")]
         return client
 
     @pytest.mark.parametrize("reverse_ends", [False, True], ids=["same-order", "opposite-order"])
@@ -432,7 +432,7 @@ class TestConcurrentRunsOnOnePort:
     async def test_a_refused_run_releases_its_port_locks(self) -> None:
         """A run refused for a shared port leaves no port locked for the next one."""
         client = FakeClient()
-        client.session_circuits["TopologyHandoffCircuit"] = [("vc-other", "VC-OTHER")]
+        client.session_circuits["handoff"] = [("vc-other", "VC-OTHER")]
 
         with pytest.raises(GeneratorError, match="a port carries one"):
             await _run(client, handoff_payload())
@@ -442,18 +442,18 @@ class TestConcurrentRunsOnOnePort:
 
 class TestOnePortOneSession:
     @pytest.mark.parametrize(
-        ("payload_for", "other_kind"),
+        ("payload_for", "other_type"),
         [
-            (handoff_payload, "TopologyHandoffCircuit"),
-            (handoff_payload, "TopologyInterconnectCircuit"),
-            (interconnect_payload, "TopologyInterconnectCircuit"),
+            (handoff_payload, "handoff"),
+            (handoff_payload, "dci"),
+            (interconnect_payload, "dci"),
         ],
     )
     @pytest.mark.asyncio
-    async def test_a_port_that_ends_another_session_circuit_is_refused(self, payload_for: Any, other_kind: str) -> None:
+    async def test_a_port_that_ends_another_session_circuit_is_refused(self, payload_for: Any, other_type: str) -> None:
         """Any other handoff or interconnect circuit on one of the two ports refuses the run before it writes."""
         client = FakeClient()
-        client.session_circuits[other_kind] = [("vc-2", "VC-OTHER")]
+        client.session_circuits[other_type] = [("vc-2", "VC-OTHER")]
 
         await _assert_refused(
             payload_for(), r"are also ends of VC-OTHER; a port carries one interconnect or handoff session", client
@@ -465,17 +465,17 @@ class TestOnePortOneSession:
     async def test_a_live_holder_of_the_port_blocks_before_any_write(self, payload_for: Any, status: str) -> None:
         """Any status but decommissioned keeps its ports: the new circuit is refused with nothing written."""
         client = FakeClient()
-        client.session_circuits["TopologyHandoffCircuit"] = [("vc-2", "VC-LIVE", status)]
+        client.session_circuits["handoff"] = [("vc-2", "VC-LIVE", status)]
 
         await _assert_refused(payload_for(), r"are also ends of VC-LIVE; a port carries one", client)
 
     @pytest.mark.parametrize("payload_for", [handoff_payload, interconnect_payload])
-    @pytest.mark.parametrize("other_kind", ["TopologyHandoffCircuit", "TopologyInterconnectCircuit"])
+    @pytest.mark.parametrize("other_type", ["handoff", "dci"])
     @pytest.mark.asyncio
-    async def test_a_decommissioned_holder_of_the_port_does_not_block(self, payload_for: Any, other_kind: str) -> None:
+    async def test_a_decommissioned_holder_of_the_port_does_not_block(self, payload_for: Any, other_type: str) -> None:
         """A retired circuit that kept its ports must not block a live one; only the live holder is named."""
         client = FakeClient()
-        client.session_circuits[other_kind] = [("vc-old", "VC-RETIRED", "decommissioned")]
+        client.session_circuits[other_type] = [("vc-old", "VC-RETIRED", "decommissioned")]
 
         await _run(client, payload_for())
 
@@ -485,7 +485,7 @@ class TestOnePortOneSession:
     async def test_a_decommissioned_holder_is_not_named_beside_a_live_one(self) -> None:
         """Only the live holder is named in the refusal; the retired circuit that kept its ports is left out."""
         client = FakeClient()
-        client.session_circuits["TopologyHandoffCircuit"] = [
+        client.session_circuits["handoff"] = [
             ("vc-old", "VC-RETIRED", "decommissioned"),
             ("vc-2", "VC-LIVE", "active"),
         ]
@@ -499,41 +499,44 @@ class TestOnePortOneSession:
     @pytest.mark.parametrize("payload_for", [handoff_payload, interconnect_payload])
     @pytest.mark.asyncio
     async def test_a_tunnel_circuit_on_the_same_port_does_not_block(self, payload_for: Any) -> None:
-        """A tunnel port is shared by design: the tunnel kind is never queried, whatever its status."""
+        """A tunnel port is shared by design: the tunnel type is never asked for, whatever its status."""
         client = FakeClient()
-        client.session_circuits["TopologyTunnelCircuit"] = [("vc-t", "TUN-1", "active")]
+        client.session_circuits["tunnel"] = [("vc-t", "TUN-1", "active")]
 
         await _run(client, payload_for())
 
-        assert "TopologyTunnelCircuit" not in {kind for kind, _ in client.filter_calls}
+        asked = [kwargs["circuit_type__values"] for kind, kwargs in client.filter_calls if kind == SESSION_CIRCUIT]
+        assert asked == [list(SESSION_CIRCUIT_TYPES)]
         assert len(client.created_of("ManagedBGPPeering")) >= 1
 
     @pytest.mark.asyncio
     async def test_the_circuit_itself_does_not_count(self) -> None:
         """The circuit being run is also found on its own ports and must not block itself."""
         client = FakeClient()
-        client.session_circuits["TopologyHandoffCircuit"] = [(VC_ID, HANDOFF)]
+        client.session_circuits["handoff"] = [(VC_ID, HANDOFF)]
 
         await _run(client, handoff_payload())
 
         assert _peering(client, "bgp")["name"] == f"{HANDOFF}-bgp"
 
     @pytest.mark.asyncio
-    async def test_both_session_kinds_are_asked_for_the_two_ports_only(self) -> None:
-        """The tunnel circuit (not a session kind, and it shares ports) is never part of the query."""
+    async def test_both_session_types_are_asked_for_the_two_ports_in_one_query(self) -> None:
+        """The tunnel (no session, and it shares ports) is never part of the query: one filter on circuit_type."""
         client = FakeClient()
 
         await _run(client, handoff_payload())
 
         asked = [(kind, kwargs) for kind, kwargs in client.filter_calls if "capabilities__ids" in kwargs]
         assert asked == [
-            ("TopologyInterconnectCircuit", {"capabilities__ids": ["if-hs", "if-aws"]}),
-            ("TopologyHandoffCircuit", {"capabilities__ids": ["if-hs", "if-aws"]}),
+            (
+                SESSION_CIRCUIT,
+                {"capabilities__ids": ["if-hs", "if-aws"], "circuit_type__values": ["dci", "handoff"]},
+            )
         ]
 
-    def test_the_planners_cover_exactly_the_session_kinds(self) -> None:
-        """circuit.py's fan-out and the port check use SESSION_CIRCUIT_KINDS; the generator plans these kinds."""
-        assert set(VirtualCircuitSessionGenerator._PLANNERS) == set(SESSION_CIRCUIT_KINDS)
+    def test_the_planners_cover_exactly_the_session_types(self) -> None:
+        """circuit.py's fan-out and the port check use SESSION_CIRCUIT_TYPES; the generator plans these types."""
+        assert set(VirtualCircuitSessionGenerator._PLANNERS) == set(SESSION_CIRCUIT_TYPES)
 
 
 class TestSessionEnd:

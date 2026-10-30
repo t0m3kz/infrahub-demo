@@ -33,10 +33,10 @@ from transforms.helpers.group_policy.model import (
     _entry_set,
     segment_vrf,
 )
-from transforms.helpers.segments import is_inline_terminated
 from utils.app_instances import HOSTED_INSTANCE_TYPENAMES, physical_host
 from utils.exchange_transit import is_routed_tenant_segment
 from utils.group_policy import reserved_groups
+from utils.segment_addressing import is_inline_terminated
 
 
 def vxlan_gpo_view(
@@ -226,9 +226,9 @@ class ComponentCoverage:
     blockers: dict[str, list[str]]
 
 
-def _capability_ids(interface: dict[str, Any]) -> set[str]:
-    """The ids of what an interface is tagged with (segments, among others)."""
-    return {str(item["id"]) for item in interface.get("capabilities") or [] if item.get("id")}
+def _segment_ids(interface: dict[str, Any]) -> set[str]:
+    """The ids of the segments a switch port or LAG carries (``segments``; a sub-interface is never a host port)."""
+    return {str(item["id"]) for item in interface.get("segments") or [] if item.get("id")}
 
 
 def _place_instance(
@@ -281,9 +281,9 @@ def _place_instance(
                         f"{nic_label} reaches {switch} {far_end['name']}, a LAG member with no port-channel"
                     )
                     continue
-                port, carried = str(port_channel["name"]), _capability_ids(port_channel)
+                port, carried = str(port_channel["name"]), _segment_ids(port_channel)
             else:
-                port, carried = str(far_end["name"]), _capability_ids(far_end)
+                port, carried = str(far_end["name"]), _segment_ids(far_end)
             if segment_id in carried:
                 ports.add((str(switch), port))
             else:
@@ -404,7 +404,7 @@ def _selectors(
         if claim.vtep != device_name:
             continue
         interface, vlan = own.get(claim.port), vlan_of_segment.get(claim.segment_id)
-        if interface is None or claim.segment_id not in _capability_ids(interface):
+        if interface is None or claim.segment_id not in _segment_ids(interface):
             problems[claim.group].append(
                 f"port {claim.port} is not an interface of {device_name} tagged with the segment"
             )
@@ -522,7 +522,7 @@ def _vxlan_gpo_build(scope: _DeviceScope) -> dict[str, Any]:
 
     The scope's ``contracts`` are the cleaned fleet roots' contracts of the device's data center,
     ``activations`` the device's segment activations (``vlan_id`` and ``segment.id``: the VLAN
-    ID of a group's segment here, which is per VLAN domain), ``vrfs`` the
+    ID of a group's segment here, which is per device), ``vrfs`` the
     VRFs it carries (``vxlan.l3_vni_mappings``): a segment's VRF is its
     gateway namespace, the ``vrf_name`` of its L3 VNI mapping, and ``interfaces``
     its own cleaned interfaces (the host ports a component selector names must be

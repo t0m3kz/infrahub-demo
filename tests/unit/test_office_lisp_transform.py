@@ -80,13 +80,19 @@ def _seg200_namespaces(data: dict[str, Any]) -> list[dict[str, Any]]:
     """The ip_namespace nodes of seg-200 everywhere it appears in the input (host port and activations)."""
     segments: list[dict[str, Any]] = []
     for iface in _node(data)["interfaces"]["edges"]:
-        segments += [edge["node"] for edge in iface["node"]["capabilities"]["edges"] if "gateway" in edge["node"]]
+        segments += [edge["node"] for edge in iface["node"].get("segments", {"edges": []})["edges"]]
     segments += [act["node"]["segment"]["node"] for act in _deployment(data)["segment_deployments"]["edges"]]
     return [
         seg["gateway"]["node"]["ip_prefix"]["node"]["ip_namespace"]["node"]
         for seg in segments
         if seg["name"]["value"] == "seg-200"
     ]
+
+
+def _drop_svi(data: dict[str, Any], name: str) -> None:
+    """Remove the segment SVI object ``name`` from the input (the fixture hook adds the one the edit calls for)."""
+    interfaces = _node(data)["interfaces"]["edges"]
+    interfaces[:] = [edge for edge in interfaces if edge["node"]["name"]["value"] != name]
 
 
 def _lisp_lines(text: str) -> list[str]:
@@ -123,10 +129,14 @@ def _activation(
     return {"vlan_id": vlan_id, "vni": vni, "status": "active", "segment": segment}
 
 
+_VRF_A = {"name": "VRF_A", "l3_vni": 50001, "namespace_type": "prod"}
+
+
 def _device() -> dict[str, Any]:
     return {
         "name": "as-c005-office01",
         "interfaces": [{"name": "Loopback0", "role": "loopback", "ip_address": {"address": "10.0.0.1/32"}}],
+        "shared_capabilities": [{"typename": "ManagedVRF", "namespace": _VRF_A}],
     }
 
 
@@ -176,14 +186,21 @@ class TestRoleSets:
 
     @pytest.mark.parametrize("role", sorted(OFFICE_LISP_ROLES))
     def test_the_overlay_model_terminates_an_overlay_on_the_office_roles(self, role: str) -> None:
-        node = build_overlay_node(_device()["interfaces"], role, [_activation()], [], "00:1c:73:00:dc:01")
+        node = build_overlay_node(
+            _device()["interfaces"], role, [_activation()], [_VRF_A], frozenset(), "00:1c:73:00:dc:01"
+        )
 
         assert node is not None
         assert [l2.instance_id for l2 in node.l2] == [10100]
 
     @pytest.mark.parametrize("role", ["spine", "l2-leaf", "firewall"])
     def test_the_overlay_model_still_terminates_nothing_on_other_roles(self, role: str) -> None:
-        assert build_overlay_node(_device()["interfaces"], role, [_activation()], [], "00:1c:73:00:dc:01") is None
+        assert (
+            build_overlay_node(
+                _device()["interfaces"], role, [_activation()], [_VRF_A], frozenset(), "00:1c:73:00:dc:01"
+            )
+            is None
+        )
 
     @pytest.mark.parametrize("role", sorted(OFFICE_LISP_ROLES))
     def test_the_office_roles_get_the_cisco_xe_context(self, role: str) -> None:
@@ -416,6 +433,7 @@ class TestSegmentsOutsideAVrf:
         for namespace in _seg200_namespaces(data):
             namespace["name"]["value"] = "default"
             namespace["l3_vni"]["value"] = None
+        _drop_svi(data, "Vlan200")  # its VRF followed the old namespace; the default one has none
 
         with pytest.raises(ValueError, match=r"the gateway of VLAN 200 is in no VRF with an L3 instance-id"):
             run_transform(AccessSwitch, data)

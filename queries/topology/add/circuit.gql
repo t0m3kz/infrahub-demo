@@ -1,13 +1,13 @@
 # add_circuit (generators/topology/circuit.py). Filters on name, the
 # generator's registered parameter (.infrahub.yml `name: name__value`).
 #
-# A physical circuit's endpoints are one list, capabilities: exactly two
+# A carrier circuit's endpoints are one list, capabilities: exactly two
 # interfaces by schema (min_count = max_count = 2), one per end. Each endpoint
 # carries its device's deployment: the deployment's kind places that end (a DC,
 # ISP, cloud region, colocation zone or virtual colocation deployment is the
 # circuit's location there), checked against the circuit's current locations.
 query circuit_data($name: String!) {
-  TopologyPhysicalCircuit(name__value: $name) {
+  TopologyCarrierCircuit(name__value: $name) {
     edges {
       node {
         id
@@ -39,6 +39,7 @@ fragment CircuitEndpoint on DcimInterface {
   name { value }
   device {
     node {
+      id
       name { value }
       ... on DcimPhysicalDevice {
         deployment { node { ...CircuitDeployment } }

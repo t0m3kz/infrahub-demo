@@ -9,7 +9,6 @@ component sits on the leaf's trunk port Ethernet10, the db component, a VM, on i
 from __future__ import annotations
 
 import asyncio
-import copy
 import hashlib
 import json
 from pathlib import Path
@@ -26,6 +25,7 @@ from tests.smoke.fixture_builders.group_policy import (
     build_gpo_device_data,
     gpo_segment,
 )
+from tests.smoke.fixture_builders.vrf import with_vrf_objects
 from tests.unit.gpo_device_view_helpers import LEAF_ACTIVATIONS, VRFS, _raw, _roots, _view
 from transforms.common import BaseDeviceTransform
 from transforms.config.access_leaf import AccessLeaf
@@ -219,7 +219,7 @@ class TestScope:
             segments=("web-np", "app-np", "db-np", "pay-p", "portal-p"),
         )
         transform = BorderLeaf.__new__(BorderLeaf)
-        device, roots, platform = transform._device_and_platform(raw)
+        device, roots, platform = transform._device_and_platform(with_vrf_objects(transform, raw))
         activations = transform._device_activations(device)
         vxlan = get_vxlan_config(device, platform or "", device_role="border-leaf", activations=activations)
         assert vxlan is not None
@@ -664,7 +664,7 @@ class TestExtraConfig:
     def _config(transform_cls: type[BaseDeviceTransform], raw: dict, root_dir: Path) -> dict[str, Any]:
         transform = transform_cls.__new__(transform_cls)
         transform.root_directory = str(root_dir)
-        device, roots, platform = transform._device_and_platform(copy.deepcopy(raw))
+        device, roots, platform = transform._device_and_platform(with_vrf_objects(transform, raw))
         activations = transform._device_activations(device)
         if activations:
             device["segment_deployments"] = activations
@@ -742,7 +742,7 @@ class TestExtraConfig:
         raw = self._raw_with_vtep("dc1-leaf-01", "leaf")
         transform = Leaf.__new__(Leaf)
         transform.root_directory = str(root_dir)
-        rendered = asyncio.run(transform.transform(raw))
+        rendered = asyncio.run(transform.transform(with_vrf_objects(transform, raw)))
         lines = rendered.splitlines()
         assert lines.count("feature security-group") == 1
         assert lines.count("system routing template-security-groups") == 1

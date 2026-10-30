@@ -248,6 +248,7 @@ nodes:
       - CoreArtifactTarget
       - TopologyDeployment
       - TopologyProviderHosting
+      - TopologyProviderAccount
       - TopologyOrchestratorScoped
       - TopologyColocationFabric
       - TopologyConnectableLocation
@@ -262,19 +263,6 @@ nodes:
     uniqueness_constraints:
       - [name__value, parent]
     include_in_menu: false
-    relationships:
-      # The provider account the presence's appliances are ordered under: its account_id is the billing account
-      # number, its provider the operator, and its owner's notification_emails receive the provider's order notices.
-      # Optional because only a presence routed to terraform needs it (checks/colocation_placement.py).
-      - name: account
-        peer: CloudAccount
-        label: "Provider Account"
-        description: "The account of the colocation operator the presence's appliances are ordered under"
-        cardinality: one
-        kind: Attribute
-        optional: true
-        order_weight: 1050
-        identifier: "virtual_colocation__account"
 
   # The envelope of a metro and of a zone or virtual colocation, the colocation
   # counterparts of TopologyTemplateDC / TopologyTemplatePod (topology_dc.yml).

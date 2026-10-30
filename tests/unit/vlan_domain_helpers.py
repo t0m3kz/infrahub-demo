@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from generators.protocols import DcimPhysicalDevice, ManagedVlanDomainSegment
+from generators.protocols import DcimPhysicalDevice, ManagedMLAG, ManagedVlanDomainSegment
 from generators.topology.segment import VxlanSegmentGenerator
 from generators.vlan_domain import segment_lock_key
 
@@ -60,7 +60,7 @@ def raw_state(
     customer_deployments: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """A raw segment_vlan_domains.gql response: interfaces are (id, typename, device id); deployments are
-    (segment deployment id, hosting deployment id), by default one in ``dc-1``; rows are (row id, domain id,
+    (segment deployment id, hosting deployment id), by default one in ``dc-1``; rows are (row id, device id,
     vlan id, segment deployment id)."""
     return {
         "ManagedVxlanSegment": {
@@ -70,7 +70,7 @@ def raw_state(
                         "id": segment_id,
                         "stretch_scope": {"value": stretch_scope},
                         "customer_deployments": {"edges": customer_deployments or []},
-                        "capabilities": {
+                        "switched_interfaces": {
                             "edges": [
                                 {"node": {"id": i, "__typename": t, "device": {"node": {"id": d}}}}
                                 for i, t, d in interfaces
@@ -92,10 +92,10 @@ def raw_state(
                                     "node": {
                                         "id": row_id,
                                         "vlan_id": {"value": vlan},
-                                        "vlan_domain": {"node": {"id": domain_id}},
+                                        "device": {"node": {"id": device_id}},
                                     }
                                 }
-                                for row_id, domain_id, vlan, row_sd in rows
+                                for row_id, device_id, vlan, row_sd in rows
                                 if row_sd == sd_id
                             ]
                         },
@@ -110,10 +110,10 @@ def raw_state(
 class _Row:
     """A ManagedVlanDomainSegment as the SDK returns it, and the node a create() builds (written on save)."""
 
-    def __init__(self, world: VlanWorld, row_id: str, sd: str, domain: str, vlan: int) -> None:
+    def __init__(self, world: VlanWorld, row_id: str, sd: str, device: str, vlan: int) -> None:
         self.id = row_id
         self.segment_deployment = MagicMock(id=sd)
-        self.vlan_domain = MagicMock(id=domain)
+        self.device = MagicMock(id=device)
         self.vlan_id = MagicMock(value=vlan)
         self._world = world
         self.save_kwargs: dict[str, Any] = {}
@@ -135,21 +135,21 @@ class VlanWorld:
         self.filter_kwargs: list[dict[str, Any]] = []
         self.created: list[dict[str, Any]] = []
         self.deleted: list[str] = []
-        # "lock:<key>", "unlock:<key>", "read:<kind>", "create:<domain>", "delete:<id>" in the order they happen.
+        # "lock:<key>", "unlock:<key>", "read:<kind>", "create:<device>", "delete:<id>" in the order they happen.
         self.events: list[str] = []
         self._counter = 0
 
-    def add(self, segment: str, domain: str, vlan: int, *, sd: str | None = None) -> str:
+    def add(self, segment: str, device: str, vlan: int, *, sd: str | None = None) -> str:
         """Store an existing row (under the segment's realization unless ``sd`` is given) and return its id."""
         self._counter += 1
-        row = _Row(self, f"row-{self._counter}", sd or segment_deployment_id(segment), domain, vlan)
+        row = _Row(self, f"row-{self._counter}", sd or segment_deployment_id(segment), device, vlan)
         self.rows.append(row)
         return row.id
 
     def vlan_ids(self, segment: str) -> dict[str, int]:
-        """{domain id: vlan id} of the rows under a segment's default realization."""
+        """{device id: vlan id} of the rows under a segment's default realization."""
         sd = segment_deployment_id(segment)
-        return {r.vlan_domain.id: r.vlan_id.value for r in self.rows if r.segment_deployment.id == sd}
+        return {r.device.id: r.vlan_id.value for r in self.rows if r.segment_deployment.id == sd}
 
     def reads(self, kind: Any) -> list[dict[str, Any]]:
         """The kwargs of every filters() call made for ``kind``."""
@@ -160,17 +160,17 @@ class VlanWorld:
         self.filter_kwargs.append(kwargs)
         self.events.append(f"read:{kind.__name__}")
         if kind is ManagedVlanDomainSegment:
-            domain_ids = set(kwargs["vlan_domain__ids"])
-            return [r for r in self.rows if r.vlan_domain.id in domain_ids]
+            device_ids = set(kwargs["device__ids"])
+            return [r for r in self.rows if r.device.id in device_ids]
         raise AssertionError(f"unexpected filters kind {kind}")
 
     async def _create(self, kind: Any, data: dict[str, Any]) -> _Row:
         assert kind is ManagedVlanDomainSegment
         self.created.append(data)
-        self.events.append(f"create:{data['vlan_domain']['id']}")
+        self.events.append(f"create:{data['device']['id']}")
         self._counter += 1
         return _Row(
-            self, f"row-{self._counter}", data["segment_deployment"]["id"], data["vlan_domain"]["id"], data["vlan_id"]
+            self, f"row-{self._counter}", data["segment_deployment"]["id"], data["device"]["id"], data["vlan_id"]
         )
 
     async def _delete(self, kind: Any, id: str) -> None:  # noqa: A002 - the SDK's own keyword
@@ -206,7 +206,7 @@ class VlanWorld:
         async def _execute_graphql(**_: Any) -> dict[str, Any]:
             sd_ids = {sd_id for sd_id, _ in realizations}
             stored = [
-                (r.id, r.vlan_domain.id, r.vlan_id.value, r.segment_deployment.id)
+                (r.id, r.device.id, r.vlan_id.value, r.segment_deployment.id)
                 for r in self.rows
                 if r.segment_deployment.id in sd_ids
             ]
@@ -216,7 +216,17 @@ class VlanWorld:
 
         async def _filters(kind: Any, **kwargs: Any) -> list[Any]:
             if kind is DcimPhysicalDevice:
-                return devices
+                return [d for d in devices if d.id in kwargs["ids"]] if "ids" in kwargs else devices
+            if kind is ManagedMLAG:
+                members: dict[str, list[Any]] = {}
+                for device in devices:
+                    for peer in device.capabilities.peers:
+                        members.setdefault(peer.id, []).append(MagicMock(id=device.id))
+                return [
+                    MagicMock(id=mlag, capabilities=MagicMock(peers=members[mlag]))
+                    for mlag in kwargs["ids"]
+                    if mlag in members
+                ]
             return await self._filters(kind, **kwargs)
 
         gen.client.execute_graphql = AsyncMock(side_effect=_execute_graphql)

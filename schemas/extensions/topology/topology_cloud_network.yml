@@ -335,7 +335,11 @@ nodes:
   # --------------------  Network Appliance  --------------------
   # A network function a provider hosts for us (Equinix Network Edge, Megaport MVE;
   # later a cloud marketplace NVA): an instance with interfaces, BGP and a config,
-  # but no rack, no chassis and no hypervisor of ours. Every provider models it the
+  # but no rack, no chassis and no hypervisor of ours. Its ports are virtual NICs
+  # (DcimVirtualInterface, no cable, no host): the template declares no physical
+  # interface. What the provider's catalogue calls the offer is structured data,
+  # not attributes here: type_code is the Device Type name, package_code and
+  # version are the Software Image's `package` and `version`. Every provider models it the
   # same way: an instance whose routing is a resource of the provider's service.
   # The function stays a device (DcimDevice: interfaces, capabilities such as
   # ManagedBGP, owner, platform), only its consumption is cloud-like, so it
@@ -365,26 +369,6 @@ nodes:
         optional: true
         description: "The provider's identifier of the instance"
         order_weight: 2300
-      # How the provider's catalogue names the offer; set on the template.
-      # Accounts, notification lists and licence tokens are never stored here.
-      - name: service_code
-        label: Service Code
-        kind: Text
-        optional: true
-        description: "The provider's code of the function (Equinix Network Edge type_code, e.g. C8000V, PA-VM)"
-        order_weight: 2310
-      - name: package_code
-        label: Package Code
-        kind: Text
-        optional: true
-        description: "The provider's software package (Equinix Network Edge package_code, e.g. network-essentials)"
-        order_weight: 2320
-      - name: software_version
-        label: Software Version
-        kind: Text
-        optional: true
-        description: "Software version as the provider names it (Equinix Network Edge version, e.g. 17.12.01a)"
-        order_weight: 2330
       - name: term_length
         label: Term (months)
         kind: Number
@@ -435,10 +419,11 @@ extensions:
         # The edge that closes the handoff leg. A handoff circuit's customer end is a DcimInterface, but its
         # cloud end is a CloudVirtualInterface, not a device port. Without this the traversal
         # walks from a DC border leaf out to the colo cage and then stops at an island boundary. 1:1: one VIF
-        # has one handoff circuit; the other side is TopologyHandoffCircuit.cloud_endpoint.
+        # has one handoff circuit; the other side is TopologySessionCircuit.cloud_endpoint. The peer is the session
+        # kind, so only a handoff may hold it: checks/circuit_placement.py refuses cloud_endpoint on a dci or a tunnel.
         - name: virtual_circuit
           label: "Handoff Circuit"
-          peer: TopologyHandoffCircuit
+          peer: TopologySessionCircuit
           cardinality: one
           kind: Attribute
           optional: true

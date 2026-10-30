@@ -44,9 +44,9 @@ def _dev_name(device: Any) -> str:
     return device["name"] if isinstance(device, dict) else device.name.value
 
 
-def _host_interface_id(interface: Any) -> str | None:
-    """id of the host port a virtual NIC is pinned to, None for a physical port or an unpinned NIC."""
-    return getattr(getattr(interface, "host_interface", None), "id", None)
+def _parent_interface_id(interface: Any) -> str | None:
+    """id of the interface a virtual NIC rides on (its host port when pinned), None for an unpinned NIC."""
+    return getattr(getattr(interface, "parent_interface", None), "id", None)
 
 
 def _host_port(uplink: Any, host_ports: dict[str, Any]) -> Any | None:
@@ -54,7 +54,7 @@ def _host_port(uplink: Any, host_ports: dict[str, Any]) -> Any | None:
     that uplink is pinned to (None when it is not pinned to a physical port of its host)."""
     if getattr(uplink, "typename", None) != DcimVirtualInterface.__name__:
         return uplink
-    return host_ports.get(_host_interface_id(uplink) or "")
+    return host_ports.get(_parent_interface_id(uplink) or "")
 
 
 def _cable_id(interface: Any) -> str | None:
@@ -149,7 +149,7 @@ class TransitLegsMixin:
             if uplink is None:
                 self.logger.error(
                     f"{device_name}: uplink {trunk.name.value} is not pinned to a physical port of its hosting device "
-                    f"(host_interface) — cannot find its border service port"
+                    f"(parent_interface) — cannot find its border service port"
                 )
                 continue
             bl_port = self._border_service_port(
@@ -358,11 +358,18 @@ class TransitLegsMixin:
         return by_device
 
     async def _pinned_host_ports(self, uplinks: Any) -> dict[str, Any] | None:
-        """port id -> the host port each virtual uplink is pinned to (host_interface), one query.
+        """port id -> the host port each virtual uplink is pinned to (parent_interface), one query.
 
         Empty when no uplink is pinned (physical members). None when the lookup fails.
         """
-        port_ids = sorted({port_id for uplink in uplinks if (port_id := _host_interface_id(uplink))})
+        port_ids = sorted(
+            {
+                port_id
+                for uplink in uplinks
+                if getattr(uplink, "typename", None) == DcimVirtualInterface.__name__
+                and (port_id := _parent_interface_id(uplink))
+            }
+        )
         if not port_ids:
             return {}
         try:

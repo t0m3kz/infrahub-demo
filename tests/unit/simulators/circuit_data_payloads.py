@@ -1,14 +1,14 @@
 """Check payloads for the 30_all circuits, built from the object files instead of typed by hand.
 
 ``build_payloads`` reads the YAML the demo loads (``data/demos/30_all``, ``data/bootstrap`` namespaces) and shapes it
-like the raw GraphQL response of ``queries/validation/circuit_placement.gql``: one root per circuit kind, every end
-port with the physical circuits found on it (or on its parent interface), the cable on the port, the device with its
+like the raw GraphQL response of ``queries/validation/circuit_placement.gql``: one root per circuit kind (the session circuits in one, told apart by circuit_type), every end
+port with the carrier circuits found on it (or on its parent interface), the cable on the port, the device with its
 BGP processes and deployment. What the generators add at load time is rebuilt here by the same rules, so the real
 ``CheckCircuitPlacement`` can run over the shipped data without an Infrahub:
 
 - the colocation edges (``eg-<zone><NN>``: a ``CloudNetworkAppliance`` in a virtual colocation, else a physical
   device), the DC border leaves (``bl-<dc>...``) and the SD-WAN offices' edges, each with its one ``overlay`` process,
-- the facility locations of each physical circuit, derived by the real ``plan_locations`` of ``add_circuit``,
+- the facility locations of each carrier circuit, derived by the real ``plan_locations`` of ``add_circuit``,
 - per SD-WAN office the ``INET-<office>`` underlay and the ``<office>-SDWAN-<zone>`` tunnel ``add_sdwan_edge`` builds.
 
 Anything the data names that this module cannot resolve (a device, a place, a namespace) raises ``KeyError``: a payload
@@ -27,10 +27,12 @@ from tests.integration.demo_data import ROOT, Declared, declared, distinct, name
 ALL_DEMO = ROOT / "data" / "demos" / "30_all"
 BOOTSTRAP = ROOT / "data" / "bootstrap"
 
-PHYSICAL = "TopologyPhysicalCircuit"
-TUNNEL = "TopologyTunnelCircuit"
-INTERCONNECT = "TopologyInterconnectCircuit"
-HANDOFF = "TopologyHandoffCircuit"
+CARRIER = "TopologyCarrierCircuit"
+SESSION = "TopologySessionCircuit"
+# The circuit_type of a session circuit.
+TUNNEL = "tunnel"
+INTERCONNECT = "dci"
+HANDOFF = "handoff"
 
 PHYSICAL_DEVICE = "DcimPhysicalDevice"
 APPLIANCE = "CloudNetworkAppliance"
@@ -59,8 +61,13 @@ def _all(kind: str) -> list[Declared]:
     return distinct(declared(kind, ALL_DEMO))
 
 
+def session_circuits(circuit_type: str) -> list[Declared]:
+    """The declared TopologySessionCircuit objects of one circuit_type."""
+    return [circuit for circuit in _all(SESSION) if circuit.value("circuit_type") == circuit_type]
+
+
 class _Model:
-    """The devices, places, ports, cables and physical circuits of the data, before they are shaped as a payload."""
+    """The devices, places, ports, cables and carrier circuits of the data, before they are shaped as a payload."""
 
     def __init__(self, without_cables: bool, without_circuits: frozenset[str]) -> None:
         self.without_circuits = without_circuits
@@ -81,8 +88,9 @@ class _Model:
         if not without_cables:
             for cable in _all("DcimCable"):
                 for end in cable.item["endpoints"]:
-                    self.cabled.add((str(end["data"]["device"]), str(end["data"]["name"])))
-        self.physical = self._physical_circuits()
+                    if end["kind"] == "DcimPhysicalInterface":  # a DcimPatchPanelPort end has a panel, not a device
+                        self.cabled.add((str(end["data"]["device"]), str(end["data"]["name"])))
+        self.carriers = self._carrier_circuits()
 
     # -- places and devices --------------------------------------------------------------------------------------
 
@@ -122,7 +130,7 @@ class _Model:
                     "bgp": ["overlay"],
                 }
         dcs = {name(dc) for dc in _all("TopologyDataCenter")}
-        for circuit in _all(INTERCONNECT):
+        for circuit in session_circuits(INTERCONNECT):
             for device, _ in circuit.item["capabilities"]:
                 if device.startswith("bl-"):
                     (dc,) = [d for d in dcs if device.startswith(f"bl-{d.lower()}")]
@@ -139,10 +147,10 @@ class _Model:
             raise KeyError(f"device {device} is neither declared nor generated")
         return f"{device}:{port}"
 
-    # -- physical circuits ---------------------------------------------------------------------------------------
+    # -- carrier circuits ---------------------------------------------------------------------------------------
 
-    def _physical_circuits(self) -> list[dict[str, Any]]:
-        """Declared physical circuits plus each office's INET-<office>, locations completed as add_circuit does."""
+    def _carrier_circuits(self) -> list[dict[str, Any]]:
+        """Declared carrier circuits plus each office's INET-<office>, locations completed as add_circuit does."""
         rows: list[dict[str, Any]] = []
         for index, office in enumerate(self.sdwan_offices):
             rows.append(
@@ -157,7 +165,7 @@ class _Model:
                     ],
                 }
             )
-        for circuit in _all(PHYSICAL):
+        for circuit in _all(CARRIER):
             rows.append(
                 {
                     "name": str(circuit.value("circuit_id")),
@@ -203,9 +211,9 @@ class _Model:
         return {"node": {key: self.places[place][key] for key in ("id", "__typename", "name")}}
 
     def carrier(self, row: dict[str, Any]) -> dict[str, Any]:
-        """A physical circuit as the query selects it under a port."""
+        """A carrier circuit as the query selects it under a port."""
         return {
-            "__typename": PHYSICAL,
+            "__typename": CARRIER,
             "id": f"id-{row['name']}",
             "name": {"value": row["name"]},
             "status": {"value": row["status"]},
@@ -223,8 +231,8 @@ class _Model:
         }
 
     def carriers_on(self, device: str, port: str) -> list[dict[str, Any]]:
-        """The physical circuits (not decommissioned or otherwise) that end on exactly this port."""
-        return [self.carrier(row) for row in self.physical if (device, port) in row["ends"]]
+        """The carrier circuits (not decommissioned or otherwise) that end on exactly this port."""
+        return [self.carrier(row) for row in self.carriers if (device, port) in row["ends"]]
 
     def virtual_port(self, device: str, port: str) -> dict[str, Any]:
         """A virtual circuit's end port: carriers on it, parent interface of a sub-interface, device and processes."""
@@ -257,7 +265,7 @@ class _Model:
             }
         return node
 
-    def physical_payload(self, row: dict[str, Any]) -> dict[str, Any]:
+    def carrier_payload(self, row: dict[str, Any]) -> dict[str, Any]:
         owner = row.get("owner")
         return {
             "id": f"id-{row['name']}",
@@ -305,7 +313,7 @@ class _Model:
 def build_payloads(without_cables: bool = False, without_circuits: Iterable[str] = ()) -> dict[str, Any]:
     """The raw GraphQL response of ``circuit_placement.gql`` over the 30_all data.
 
-    ``without_cables`` drops every declared DcimCable and ``without_circuits`` the named physical circuits, to show the
+    ``without_cables`` drops every declared DcimCable and ``without_circuits`` the named carrier circuits, to show the
     check reports what they carried (a payload that cannot fail proves nothing).
     """
     model = _Model(without_cables, frozenset(without_circuits))
@@ -326,7 +334,7 @@ def build_payloads(without_cables: bool = False, without_circuits: Iterable[str]
             [(str(d), str(p)) for d, p in circuit.item["capabilities"]],
             owner=str(circuit.item["owner"]) if circuit.item.get("owner") else None,
         )
-        for circuit in _all(TUNNEL)
+        for circuit in session_circuits(TUNNEL)
     ]
     interconnects = [
         model.virtual_payload(
@@ -336,7 +344,7 @@ def build_payloads(without_cables: bool = False, without_circuits: Iterable[str]
             owner=str(circuit.item["owner"]) if circuit.item.get("owner") else None,
             facility_only=True,
         )
-        for circuit in _all(INTERCONNECT)
+        for circuit in session_circuits(INTERCONNECT)
     ]
     endpoints = {
         str(vif.item["virtual_circuit"]): {"name": {"value": name(vif)}, "vlan_id": {"value": vif.item["vlan_id"]}}
@@ -344,7 +352,7 @@ def build_payloads(without_cables: bool = False, without_circuits: Iterable[str]
         if vif.item.get("virtual_circuit")
     }
     handoffs = []
-    for circuit in _all(HANDOFF):
+    for circuit in session_circuits(HANDOFF):
         payload = model.virtual_payload(
             name(circuit),
             [str(p) for p in circuit.item["locations"]],
@@ -359,9 +367,9 @@ def build_payloads(without_cables: bool = False, without_circuits: Iterable[str]
         payload["cloud_endpoint"] = {"node": endpoints.get(name(circuit))}
         handoffs.append(payload)
 
-    return {
-        PHYSICAL: _edges(model.physical_payload(row) for row in model.physical),
-        TUNNEL: _edges(tunnels),
-        INTERCONNECT: _edges(interconnects),
-        HANDOFF: _edges(handoffs),
-    }
+    sessions = [
+        {**circuit, "circuit_type": {"value": circuit_type}}
+        for circuit_type, circuits in ((TUNNEL, tunnels), (INTERCONNECT, interconnects), (HANDOFF, handoffs))
+        for circuit in circuits
+    ]
+    return {CARRIER: _edges(model.carrier_payload(row) for row in model.carriers), SESSION: _edges(sessions)}

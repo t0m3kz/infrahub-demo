@@ -60,7 +60,7 @@ def _gw(prefix: dict[str, Any]) -> dict[str, Any]:
 def _tunnel(
     owner: str | None, *prefixes: dict[str, Any], ends: tuple[str, ...] = (_GW1, "EXT-ACME-EDGE1")
 ) -> dict[str, Any]:
-    """A TopologyTunnelCircuit as segment_security.gql selects it."""
+    """A TopologySessionCircuit as segment_security.gql selects it."""
     return {
         "owner": _owner(owner),
         "registered_prefixes": _edges(*prefixes),
@@ -206,13 +206,13 @@ class TestRegisteredDestinations:
         check = _run(
             [_dest_rule("nordix-prod-to-partner-acme", _ACME)],
             TopologyCustomerOffice=[_office(_GW1, "C001")],
-            TopologyTunnelCircuit=[_tunnel("C001", _prefix(_ACME))],
+            TopologySessionCircuit=[_tunnel("C001", _prefix(_ACME))],
         )
         assert _unreachable(check) == []
 
     def test_a_tunnel_range_at_a_gateway_without_an_office_is_unreachable(self) -> None:
         """No office behind the gateway: no session faces it, the range is accepted nowhere."""
-        check = _run([_dest_rule("r", _ACME)], TopologyTunnelCircuit=[_tunnel("C001", _prefix(_ACME))])
+        check = _run([_dest_rule("r", _ACME)], TopologySessionCircuit=[_tunnel("C001", _prefix(_ACME))])
         assert len(_unreachable(check)) == 1
 
     def test_a_tunnel_range_of_a_provider_owned_tunnel_is_unreachable(self) -> None:
@@ -220,7 +220,7 @@ class TestRegisteredDestinations:
         check = _run(
             [_dest_rule("r", _ACME)],
             TopologyCustomerOffice=[_office(_GW1, "C001")],
-            TopologyTunnelCircuit=[_tunnel(None, _prefix(_ACME))],
+            TopologySessionCircuit=[_tunnel(None, _prefix(_ACME))],
         )
         assert len(_unreachable(check)) == 1
 
@@ -229,7 +229,7 @@ class TestRegisteredDestinations:
         check = _run(
             [_dest_rule("r", _ACME)],
             TopologyCustomerOffice=[_office(_GW1, "C001")],
-            TopologyTunnelCircuit=[_tunnel("C001", _prefix(_ACME))],
+            TopologySessionCircuit=[_tunnel("C001", _prefix(_ACME))],
         )
         assert _unreachable(check) == []
 
@@ -242,7 +242,7 @@ class TestEnvironmentOfTheSource:
         check = _run(
             [_dest_rule("r", _ACME)],
             TopologyCustomerOffice=[_office(_GW1, "C001")],
-            TopologyTunnelCircuit=[_tunnel("C001", _prefix(_ACME, "non_prod"))],
+            TopologySessionCircuit=[_tunnel("C001", _prefix(_ACME, "non_prod"))],
         )
         assert len(_unreachable(check)) == 1
 
@@ -253,7 +253,7 @@ class TestEnvironmentOfTheSource:
             [_dest_rule("r", _ACME, src="dev")],
             [dev],
             TopologyCustomerOffice=[_office(_GW1, "C001")],
-            TopologyTunnelCircuit=[_tunnel("C001", _prefix(_ACME))],
+            TopologySessionCircuit=[_tunnel("C001", _prefix(_ACME))],
         )
         assert len(_unreachable(check)) == 1
 
@@ -262,7 +262,7 @@ class TestEnvironmentOfTheSource:
         check = _run(
             [_dest_rule("r", _ACME, src=None)],
             TopologyCustomerOffice=[_office(_GW1, "C001")],
-            TopologyTunnelCircuit=[_tunnel("C001", _prefix(_ACME, "non_prod"))],
+            TopologySessionCircuit=[_tunnel("C001", _prefix(_ACME, "non_prod"))],
         )
         assert _unreachable(check) == []
 
@@ -281,7 +281,7 @@ def test_the_query_selects_what_the_destination_rule_reads() -> None:
             "segment_deployments.segment.gateway.ip_prefix.prefix",
             "segment_deployments.segment.gateway.ip_prefix.ip_namespace.namespace_type",
         ],
-        "TopologyTunnelCircuit": [
+        "TopologySessionCircuit": [
             "owner.org_id",
             "registered_prefixes.prefix",
             "registered_prefixes.ip_namespace.namespace_type",
@@ -303,4 +303,4 @@ def test_the_query_selects_what_the_destination_rule_reads() -> None:
         selected = _selected_paths(path, root)
         assert not [item for item in paths if item not in selected], root
     assert {"sdwan_gateway", "lan_prefixes", "segment_deployments"} <= relationship_names("TopologyCustomerOffice")
-    assert {"registered_prefixes", "capabilities"} <= relationship_names("TopologyTunnelCircuit")
+    assert {"registered_prefixes", "capabilities"} <= relationship_names("TopologySessionCircuit")

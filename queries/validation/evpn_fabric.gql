@@ -39,6 +39,8 @@ query evpn_fabric {
       node {
         id
         name { value }
+        stretch_scope { value }
+        gateway { node { ip_prefix { node { ip_namespace { node { name { value } namespace_type { value } } } } } } }
         segment_deployments {
           edges {
             node {
@@ -70,5 +72,82 @@ query evpn_fabric {
         l3_vni { value }
       }
     }
+  }
+
+  # VTEPs with an instance realized as an L3 VNI (utils/vrf_demand.py realized_l3): the RD is <router_id>:<l3_vni>, so
+  # an overlay router_id must exist and be unique among them. The overlay process is picked by the transform's own
+  # selector (_select_evpn_bgp_process); a device with no such process renders no RD: an access-leaf is skipped, any other VTEP role is an error. Realization
+  # needs what the overlay transform reads: the namespaces of the device's instances (`shared_capabilities`, its memberships),
+  # the anycast SVIs (SVI vrf namespace, transit legs of the contexts on the service ports) and whether the device is
+  # a Multi-Site border gateway (multisite-vip interface, site evpn_rt_as through the deployment).
+  DcimDevice {
+    edges {
+      node {
+        id
+        name { value }
+        role { value }
+        ... on DcimPhysicalDevice {
+          deployment { node { ...EvpnRtAsOnDeploymentFields } }
+        }
+        ... on DcimCapabilities {
+          shared_capabilities {
+            edges {
+              node {
+                __typename
+                ... on ManagedVRF { namespace { node { name { value } l3_vni { value } namespace_type { value } } } }
+              }
+            }
+          }
+          capabilities {
+            edges {
+              node {
+                __typename
+                ... on ManagedBGP {
+                  name { value }
+                  process_role { value }
+                  router_id { node { address { value } } }
+                }
+              }
+            }
+          }
+        }
+        interfaces {
+          edges {
+            node {
+              __typename
+              id
+              role { value }
+              ... on DcimVirtualInterface {
+                vrf { node { namespace { node { name { value } } } } }
+              }
+              capabilities {
+                edges {
+                  node {
+                    __typename
+                    id
+                    ... on ManagedFirewallContext {
+                      vlan_id { value }
+                      capabilities { edges { node { ...EvpnFabricLegFields } } }
+                    }
+                    ... on ManagedLoadbalancerContext {
+                      vlan_id { value }
+                      capabilities { edges { node { ...EvpnFabricLegFields } } }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+# A leg of a firewall or load-balancer context: a member's sub-interface and its address namespace.
+fragment EvpnFabricLegFields on DcimInterface {
+  device { node { role { value } } }
+  ... on DcimVirtualInterface {
+    ip_address { node { address { value } ip_namespace { node { name { value } namespace_type { value } } } } }
   }
 }

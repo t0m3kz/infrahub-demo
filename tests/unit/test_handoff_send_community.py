@@ -14,9 +14,9 @@ from utils.data_cleaning import clean_data
 def _plan(payload: dict[str, Any]) -> SessionPlan:
     """The plan the kind's planner builds for a payload (pure: no client call)."""
     gen: Any = session_generator(FakeClient())
-    (circuit,) = clean_data(payload)["TopologyVirtualCircuit"]
+    (circuit,) = clean_data(payload)["TopologySessionCircuit"]
     ends = [end for port in circuit["capabilities"] if (end := SessionEnd.parse(port)) is not None]
-    planner = gen._PLANNERS[circuit["typename"]]
+    planner = gen._PLANNERS[circuit["circuit_type"]]
     return planner(gen, circuit, circuit["name"], ends)
 
 

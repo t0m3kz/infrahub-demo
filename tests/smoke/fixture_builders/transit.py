@@ -87,7 +87,7 @@ def _xchg_segment(*, seg_name: str, vlan: int, vni: int, gateway_ip: str, deploy
         gateway_ip=gateway_ip,
         ns_name="PROD",
         l3_vni=_XCHG_NAMESPACES["prod"][1],
-        vlan_domain_id=domain,
+        row_device_id=domain,
     )
     ns = seg["gateway"]["node"]["ip_prefix"]["node"]["ip_namespace"]["node"]
     ns["namespace_type"] = _v("prod")
@@ -184,7 +184,8 @@ def build_exchange_transit_bl_data(
     )
     if with_customer_port:
         customer_port = next(e["node"] for e in interfaces if e["node"]["name"]["value"] == "Ethernet10")
-        customer_port["capabilities"] = _edges([shared])
+        customer_port["capabilities"] = _edges([])
+        customer_port["segments"] = _edges([shared])
     device_node["deployment"]["node"]["segment_deployments"] = _edges(
         [_deployment_record(shared, 10100), _deployment_record(acme, 10110)]
     )

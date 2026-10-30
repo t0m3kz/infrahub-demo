@@ -1677,6 +1677,9 @@
                       }
                     }
                   },
+                  "inline_segment": {
+                    "node": null
+                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -1769,6 +1772,9 @@
                         ]
                       }
                     }
+                  },
+                  "segments": {
+                    "edges": []
                   },
                   "capabilities": {
                     "edges": []
@@ -1863,6 +1869,9 @@
                       }
                     }
                   },
+                  "segments": {
+                    "edges": []
+                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -1896,6 +1905,9 @@
                         }
                       }
                     }
+                  },
+                  "inline_segment": {
+                    "node": null
                   },
                   "capabilities": {
                     "edges": []
@@ -1931,6 +1943,9 @@
                       }
                     }
                   },
+                  "inline_segment": {
+                    "node": null
+                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -1963,7 +1978,7 @@
                   "cable": {
                     "node": null
                   },
-                  "capabilities": {
+                  "segments": {
                     "edges": [
                       {
                         "node": {
@@ -2027,7 +2042,7 @@
                                           "vlan_id": {
                                             "value": 150
                                           },
-                                          "vlan_domain": {
+                                          "device": {
                                             "node": {
                                               "id": "dev-dc1-edge-01"
                                             }
@@ -2055,6 +2070,9 @@
                         }
                       }
                     ]
+                  },
+                  "capabilities": {
+                    "edges": []
                   }
                 }
               },
@@ -2145,6 +2163,9 @@
                         ]
                       }
                     }
+                  },
+                  "segments": {
+                    "edges": []
                   },
                   "capabilities": {
                     "edges": []
@@ -2239,6 +2260,9 @@
                       }
                     }
                   },
+                  "segments": {
+                    "edges": []
+                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -2332,6 +2356,9 @@
                       }
                     }
                   },
+                  "segments": {
+                    "edges": []
+                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -2369,7 +2396,7 @@
                               "vlan_id": {
                                 "value": 150
                               },
-                              "vlan_domain": {
+                              "device": {
                                 "node": {
                                   "id": "dev-dc1-edge-01"
                                 }
@@ -2440,7 +2467,7 @@
                                           "vlan_id": {
                                             "value": 150
                                           },
-                                          "vlan_domain": {
+                                          "device": {
                                             "node": {
                                               "id": "dev-dc1-edge-01"
                                             }

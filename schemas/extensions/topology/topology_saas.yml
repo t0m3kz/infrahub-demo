@@ -84,6 +84,8 @@ nodes:
     namespace: Topology
     inherit_from:
       - TopologyDeployment
+      - TopologyProviderHosting
+      - TopologyProviderAccount
       - TopologyConnectableLocation
       - TopologyFacility
     parent: TopologySaas

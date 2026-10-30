@@ -759,6 +759,9 @@
                       }
                     }
                   },
+                  "inline_segment": {
+                    "node": null
+                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -852,6 +855,9 @@
                       }
                     }
                   },
+                  "segments": {
+                    "edges": []
+                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -944,6 +950,9 @@
                         ]
                       }
                     }
+                  },
+                  "segments": {
+                    "edges": []
                   },
                   "capabilities": {
                     "edges": []

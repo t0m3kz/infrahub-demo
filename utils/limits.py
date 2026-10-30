@@ -28,7 +28,8 @@ from dataclasses import dataclass
 #   3100-3199   LoadbalancerContext VLANs; the other half of the context band, so the two kinds' legs never share a tag
 #   3000-3799   the per-VRF transit VLANs: a context VLAN + TRANSIT_VLAN_BAND per namespace slot
 #   3800-3803   the WAN exit tags of an office (utils/exchange_transit.py WAN_EXIT_VLAN_BASE)
-#   3900-3967   the local VLAN of the per-VRF L3 VNI SVI NX-OS needs for symmetric IRB (transforms/helpers/overlay.py);
+#   3900-3967   the local VLAN of the per-VRF L3 VNI SVI NX-OS needs for symmetric IRB: L3VNI_SVI_VLAN_BASE + the
+#               namespace type's slot, 3900-3903 (utils/exchange_transit.py l3vni_svi_vlan, transforms/helpers/overlay.py);
 #               above all of the above and below NX-OS's reserved 3968-4094
 CUSTOMER_VLAN_ID_MIN = 100
 CUSTOMER_VLAN_ID_MAX = 2999
@@ -95,7 +96,7 @@ ACL_INTERNET_BAND_SEQ_START = 6000
 ACL_CLOSING_SEQ = 9990
 
 # A circuit has two ends (two ports, at most two facilities): checks/circuit_placement.py and
-# checks/physical_circuit_ports.py.
+# checks/carrier_circuit_ports.py.
 CIRCUIT_ENDS = 2
 
 # --- 2. Vendor and platform limits -----------------------------------------------------------------------------
@@ -118,6 +119,10 @@ EOS_MSSG_MAX_SEGMENTS = 60
 # namespace name: PROD, NON-PROD, INTERNET, MANAGEMENT); the builders (``utils/exchange_transit.py``
 # ``transit_pool_name``/``lb_leg_pool_name``/``lb_vip_pool_name``, ``generators/topology/segment.py``
 # ``tenant_pool_name``, ``generators/topology/virtual_circuit.py`` ``handoff_pool_name``) fill it in.
+
+# The underlay namespace (Infrahub's built-in IP namespace): the global routing table, never a VRF instance
+# (utils/vrf_demand.py), never a transit leg, never an L3 instance.
+DEFAULT_NAMESPACE = "default"
 
 # Prefix pools (17_ip_prefix_pools.yml): the supernets every DC, colocation and office slices its own pools from.
 TECHNICAL_IPV4_POOL = "Technical-IPv4"
@@ -153,7 +158,9 @@ SEGMENT_ROUTING_TAG_POOL = "Segment-Routing-Tag"
 GROUP_HA_DOMAINS = "ha_domains"
 GROUP_MLAG_DOMAINS = "mlag_domains"
 GROUP_APP_COMPONENTS = "app_components"
-GROUP_PHYSICAL_CIRCUITS = "physical_circuits"
+GROUP_CARRIER_CIRCUITS = "carrier_circuits"
+# Every session circuit (dci, handoff and tunnel): the target group of add_virtual_circuit, whose created-trigger needs it.
+GROUP_VIRTUAL_CIRCUITS = "virtual_circuits"
 GROUP_CLOUD_LOADBALANCERS = "cloud_loadbalancers"
 # Devices that are never a border gateway of a VLAN domain: the SD-WAN hubs and the provider stub routers.
 GROUP_SDWAN_GATEWAYS = "sdwan_gateways"

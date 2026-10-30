@@ -5,6 +5,7 @@ from __future__ import annotations
 from tests.smoke.fixture_builders.common import (
     _edges,
     _make_interface,
+    _make_segment_node,
     _node,
     _v,
     _write_data_fixture,
@@ -159,22 +160,32 @@ def build_mlag_device_data(
                 typename="DcimVirtualInterface",
             )
         )
+    # The host-facing dual-homed port-channel of a bond, in the shape generators/topology/endpoint_lag.py creates
+    # (role lag, one lag_id on both peers, the domain's mlag_domain, one member port). SONiC names it by its
+    # lag_id (get_lag_name); the others get a segment so it is a switchport.
+    host_member = member1.replace("33", "10")
     if platform in {"sonic", "dell_sonic"}:
-        device_interfaces.extend(
-            [
-                {
-                    **lag_iface,
-                    "name": _v("PortChannel101"),
-                    "role": _v("lag"),
-                    "lag_id": _v(101),
-                    "mlag_domain": _node({"id": "mlag-dom-1", "name": _v(domain_name)}),
-                    "member_interfaces": _edges([{"name": _v("Ethernet10")}]),
-                },
-                _make_interface(
-                    name="Ethernet10", device_name=device_name, description="MLAG host member", role="customer"
-                ),
-            ]
-        )
+        host_lag_name, host_lag_id, host_segments = "PortChannel101", 101, []
+    else:
+        host_lag_id = 10
+        host_lag_name = f"port-channel{host_lag_id}" if platform == "cisco_nxos" else f"Port-Channel{host_lag_id}"
+        host_segments = [
+            _make_segment_node(vlan_id=100, vni=10100, seg_name="seg-100", row_device_id=f"dev-{device_name}")
+        ]
+    device_interfaces.extend(
+        [
+            {
+                **lag_iface,
+                "name": _v(host_lag_name),
+                "description": _v("host-01:bond0"),
+                "role": _v("lag"),
+                "lag_id": _v(host_lag_id),
+                "member_interfaces": _edges([{"name": _v(host_member)}]),
+                "segments": _edges(host_segments),
+            },
+            _make_interface(name=host_member, device_name=device_name, description="MLAG host member", role="customer"),
+        ]
+    )
 
     device_node: dict = {
         "__typename": "DcimPhysicalDevice",

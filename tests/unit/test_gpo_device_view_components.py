@@ -22,6 +22,7 @@ from tests.smoke.fixture_builders.group_policy import (
     build_gpo_device_data,
     gpo_segment,
 )
+from tests.smoke.fixture_builders.vrf import with_vrf_objects
 from tests.unit.gpo_device_view_helpers import (
     LEAF_ACTIVATIONS,
     LEAF_SEGMENTS,
@@ -129,8 +130,8 @@ class TestComponentCoverage:
         """A LAG member: the port-channel is what must carry the segment, whatever the member port is tagged with."""
         member = _nic("srv-web", "eno1", "dc1-leaf-01", "Ethernet20", lag="port-channel20")
         far = member["cable"]["node"]["endpoints"]["edges"][1]["node"]
-        far["capabilities"] = _edges([{"id": "seg-pay-p"}])  # the member port is tagged, not the channel
-        far["lag"]["node"]["capabilities"] = _edges([{"id": "seg-web-np"}])
+        far["segments"] = _edges([{"id": "seg-pay-p"}])  # the member port is tagged, not the channel
+        far["lag"]["node"]["segments"] = _edges([{"id": "seg-web-np"}])
         roots = _placed_roots(web=[_server("srv-web", member)])
         coverage = _coverage(roots)
         assert not [claim for claim in coverage.claims if claim.group == WEB]
@@ -378,7 +379,7 @@ class TestComponentSelectors:
     def _with_port_channel() -> list[dict[str, Any]]:
         return [
             *_leaf_interfaces(),
-            {"name": "port-channel30", "typename": "DcimLAGInterface", "capabilities": [{"id": "seg-pay-p"}]},
+            {"name": "port-channel30", "typename": "DcimLAGInterface", "segments": [{"id": "seg-pay-p"}]},
         ]
 
     def test_ports_are_sorted_naturally(self) -> None:
@@ -391,7 +392,7 @@ class TestComponentSelectors:
                 _nic("srv-web", "eno3", "dc1-leaf-01", "Ethernet10"),
             )
         ]
-        interfaces = [*_leaf_interfaces(), {"name": "Ethernet2", "capabilities": [{"id": "seg-pay-p"}]}]
+        interfaces = [*_leaf_interfaces(), {"name": "Ethernet2", "segments": [{"id": "seg-pay-p"}]}]
         view = _view(_placed_roots(web=web, db=[]), interfaces=interfaces)
         assert [port["name"] for port in self._groups(view)["web_pay_demo_local"]["interfaces"]] == [
             "Ethernet2",
@@ -469,9 +470,7 @@ class TestComponentGate:
         )
 
     def test_a_claimed_port_not_tagged_with_the_segment_unenforces_it(self) -> None:
-        interfaces = [
-            {**item, "capabilities": []} if item["name"] == "Ethernet11" else item for item in _leaf_interfaces()
-        ]
+        interfaces = [{**item, "segments": []} if item["name"] == "Ethernet11" else item for item in _leaf_interfaces()]
         assert "port Ethernet11 is not an interface of dc1-leaf-01 tagged with the segment" in (
             _prod_reason(_view(_roots(), interfaces=interfaces)) or ""
         )
@@ -678,7 +677,7 @@ class TestHostTrunks:
         get_interfaces spy of that one call."""
         transform = Leaf.__new__(Leaf)
         transform.root_directory = str(root_dir)
-        device, roots, platform = transform._device_and_platform(copy.deepcopy(raw))
+        device, roots, platform = transform._device_and_platform(with_vrf_objects(transform, raw))
         device["segment_deployments"] = transform._device_activations(device)
         with patch("transforms.common.get_interfaces", wraps=get_interfaces) as spy:
             return transform._template_context(device, platform or "", roots), spy

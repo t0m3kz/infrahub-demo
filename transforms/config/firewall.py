@@ -1,14 +1,29 @@
 from typing import Any
 
 from transforms.common import BaseDeviceTransform
+from transforms.helpers.addressing import sub_interface_parent
 from transforms.helpers.firewall import get_firewall_static_routes, get_firewall_zones, get_zone_policies
 from transforms.helpers.firewall_contexts import get_firewall_contexts, place_policies_in_contexts
 from transforms.helpers.ha import get_ha, inline_addresses
-from transforms.helpers.segments import segment_vlan_ids
+from transforms.helpers.segments import interface_segments, segment_vlan_ids
 from utils.exchange_transit import EXCHANGE_PEERS, INTERNET_TYPE, MANAGEMENT_TYPE, ZONE_BY_NS_TYPE
 from utils.segment_addressing import segment_prefix
 
 DEFAULT_ROUTE = "0.0.0.0/0"
+
+
+def _default_vr_interfaces(fw_interfaces: list[dict[str, Any]]) -> list[str]:
+    """Names of the L3 interfaces (those with a namespace) that belong to the single ``default`` virtual router.
+
+    Includes the inline-terminated ones that have no static route (``get_firewall_static_routes`` skips them).
+    """
+    return sorted(
+        {
+            i["name"]
+            for i in fw_interfaces
+            if i.get("name") and ((i.get("ip_address") or {}).get("ip_namespace") or {}).get("name")
+        }
+    )
 
 
 def _build_fw_interfaces(
@@ -42,12 +57,12 @@ def _build_fw_interfaces(
 
         zone: dict | None = None
         vlan_id: int | None = None
-        capabilities = iface.get("capabilities") or []
-        for cap in capabilities:
-            if cap.get("id") in seg_zone and zone is None:
-                zone = seg_zone[cap["id"]]
-            if cap.get("name") in seg_vlan and vlan_id is None:
-                vlan_id = seg_vlan[cap["name"]]
+        segments = interface_segments(iface)
+        for seg in segments:
+            if seg.get("id") in seg_zone and zone is None:
+                zone = seg_zone[seg["id"]]
+            if seg.get("name") in seg_vlan and vlan_id is None:
+                vlan_id = seg_vlan[seg["name"]]
 
         fw_ifaces.append(
             {
@@ -55,10 +70,10 @@ def _build_fw_interfaces(
                 "description": iface.get("description"),
                 "status": iface.get("status"),
                 "vlan_id": vlan_id,
-                "parent_interface": iface.get("parent_interface"),
+                "parent_interface": sub_interface_parent(iface),
                 "ip_address": ip_obj,
                 "security_zone": zone,
-                **inline_addresses(capabilities, ha),
+                **inline_addresses(segments, ha),
             }
         )
     return fw_ifaces
@@ -199,7 +214,7 @@ def _nat_entries(
 class Firewall(BaseDeviceTransform):
     query = "firewall_config"
     template_subdir = "firewalls"
-    resolve_vlan_domain = False
+    resolve_vlan_row = False
 
     def collect_policies(
         self, device: dict[str, Any]
@@ -247,6 +262,7 @@ class Firewall(BaseDeviceTransform):
                 "zones": zones,
                 "zone_policies": get_zone_policies(root_policies_data),
                 "static_routes": get_firewall_static_routes(fw_interfaces, zones),
+                "default_vr_interfaces": [] if contexts else _default_vr_interfaces(fw_interfaces),
                 "ha": ha,
                 "contexts": contexts,
             }

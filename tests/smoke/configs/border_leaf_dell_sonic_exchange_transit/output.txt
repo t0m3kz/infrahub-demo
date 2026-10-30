@@ -30,7 +30,8 @@
     },
     "INTERNET|l2vpn_evpn": {
       "admin_status": "true",
-      "advertise-ipv4-unicast": "true"
+      "advertise-ipv4-unicast": "true",
+      "route-distinguisher": "10.0.0.1:50003"
     },
     "MANAGEMENT|ipv4_unicast": {
       "admin_status": "true",
@@ -38,7 +39,8 @@
     },
     "MANAGEMENT|l2vpn_evpn": {
       "admin_status": "true",
-      "advertise-ipv4-unicast": "true"
+      "advertise-ipv4-unicast": "true",
+      "route-distinguisher": "10.0.0.1:50004"
     },
     "PROD|ipv4_unicast": {
       "admin_status": "true",
@@ -48,7 +50,8 @@
     },
     "PROD|l2vpn_evpn": {
       "admin_status": "true",
-      "advertise-ipv4-unicast": "true"
+      "advertise-ipv4-unicast": "true",
+      "route-distinguisher": "10.0.0.1:50001"
     },
     "default|ipv4_unicast": {
       "admin_status": "true",
@@ -65,7 +68,17 @@
       "admin_status": "true"
     }
   },
-  "BGP_GLOBALS_EVPN_RT": {},
+  "BGP_GLOBALS_EVPN_RT": {
+    "INTERNET|l2vpn_evpn|50003:50003": {
+      "route-target-type": "both"
+    },
+    "MANAGEMENT|l2vpn_evpn|65000:50004": {
+      "route-target-type": "both"
+    },
+    "PROD|l2vpn_evpn|65000:50001": {
+      "route-target-type": "both"
+    }
+  },
   "BGP_NEIGHBOR": {
     "10.0.0.100": {
       "admin_status": "true",
@@ -233,11 +246,11 @@
     "Vlan3900": {
       "vlanid": "3900"
     },
-    "Vlan3901": {
-      "vlanid": "3901"
-    },
     "Vlan3902": {
       "vlanid": "3902"
+    },
+    "Vlan3903": {
+      "vlanid": "3903"
     }
   },
   "VLAN_INTERFACE": {
@@ -277,13 +290,13 @@
     },
     "Vlan3601|100.66.48.9/29": {},
     "Vlan3900": {
-      "vrf_name": "INTERNET"
-    },
-    "Vlan3901": {
-      "vrf_name": "MANAGEMENT"
+      "vrf_name": "PROD"
     },
     "Vlan3902": {
-      "vrf_name": "PROD"
+      "vrf_name": "INTERNET"
+    },
+    "Vlan3903": {
+      "vrf_name": "MANAGEMENT"
     }
   },
   "VLAN_MEMBER": {
@@ -330,16 +343,16 @@
       "vlan": "Vlan100",
       "vni": "10100"
     },
-    "vtep|map_50001_Vlan3902": {
-      "vlan": "Vlan3902",
+    "vtep|map_50001_Vlan3900": {
+      "vlan": "Vlan3900",
       "vni": "50001"
     },
-    "vtep|map_50003_Vlan3900": {
-      "vlan": "Vlan3900",
+    "vtep|map_50003_Vlan3902": {
+      "vlan": "Vlan3902",
       "vni": "50003"
     },
-    "vtep|map_50004_Vlan3901": {
-      "vlan": "Vlan3901",
+    "vtep|map_50004_Vlan3903": {
+      "vlan": "Vlan3903",
       "vni": "50004"
     },
     "vtep|map_64000_Vlan3000": {

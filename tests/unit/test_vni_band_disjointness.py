@@ -174,7 +174,7 @@ class TestPoolBandsAreDisjoint:
     def test_every_vni_pool_stays_encodable(self, l2_vni_pools: list[dict[str, Any]]) -> None:
         """Every VNI pool is EVPN-carried and so RD/RT-encoded.
 
-        This previously exempted TopologyVirtualCircuit pools as WAN-scoped and
+        This previously exempted virtual-circuit pools as WAN-scoped and
         never route-targeted; GLOBAL-INTERCONNECT-VNI was the only such pool and
         it is gone. Re-add the exemption deliberately if a WAN VNI pool returns,
         rather than widening a band to make this pass.

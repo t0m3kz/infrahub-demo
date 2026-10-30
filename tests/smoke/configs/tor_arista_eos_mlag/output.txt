@@ -49,6 +49,20 @@ mlag configuration
    reload-delay mlag 300
    reload-delay non-mlag 330
 
+vlan 100
+   name Customer-A
+
+interface Port-Channel10
+   description host-01:bond0
+   mtu 9000
+   mlag 10
+
+   no shutdown
+
+interface Ethernet10
+   channel-group 10 mode active
+   no shutdown
+
 interface Ethernet1
    description to spine-01
    no switchport
@@ -63,16 +77,37 @@ interface Ethernet2
 
    no shutdown
 
+interface Ethernet10
+   description MLAG host member
+
+   no shutdown
+
 interface Loopback0
    description Router ID
    ip address 10.0.2.1/32
 
    no shutdown
 
+interface Port-Channel10
+   description host-01:bond0
+
+   switchport access vlan 100
+   no shutdown
+
 
 ! Configure route-maps
 route-map RM-CONN-2-BGP permit 10
    match interface Loopback0
+!
+! VXLAN Configuration with Microsegmentation (VRF-aware VNIs)
+!
+!
+interface Vxlan1
+   vxlan source-interface Loopback0
+   !
+   ! L2 VNI Mappings (VLAN segments)
+   vxlan vlan 100 vni 10100
+!
 
 
 ! End of configuration

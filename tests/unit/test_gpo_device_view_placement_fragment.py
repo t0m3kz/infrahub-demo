@@ -140,7 +140,7 @@ class TestPlacementFragment:
 
         reads = self._recorded_reads(kind)
         host = ("components", "instances") + (("hosting_device",) if "Virtual" in kind else ())
-        assert (*host, "interfaces", "cable", "endpoints", "lag", "capabilities", "id") in reads, (
+        assert (*host, "interfaces", "cable", "endpoints", "lag", "segments", "id") in reads, (
             "the data must exercise the whole walk down to the port-channel's tags"
         )
         missing = {

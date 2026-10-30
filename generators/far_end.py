@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from .protocols import DcimCable, DcimPhysicalInterface
+
+logger = logging.getLogger(__name__)
 
 
 async def far_end_interfaces(client: Any, interfaces: list[Any], include: list[str]) -> dict[str, Any]:
@@ -12,8 +15,9 @@ async def far_end_interfaces(client: Any, interfaces: list[Any], include: list[s
 
     Resolves several cabled interfaces in two queries, whatever
     their number: their cables, then the far ends. An interface whose cable
-    has no other endpoint, or whose far end is not a physical interface, is
-    absent from the result. No query at all for no interfaces.
+    has no other endpoint, or whose far end is not a physical interface (a patch panel port: the far end
+    through a panel is not followed), is absent from the result; the latter is logged at warning level, never as
+    an error. No query at all for no interfaces.
     """
     if not interfaces:
         return {}
@@ -37,4 +41,9 @@ async def far_end_interfaces(client: Any, interfaces: list[Any], include: list[s
             kind=DcimPhysicalInterface, ids=sorted(set(far_end_ids.values())), include=include
         )
     }
+    for iface_id, peer_id in far_end_ids.items():
+        if peer_id not in far_ends:
+            logger.warning(
+                f"Far end {peer_id} of the cable on interface {iface_id} is not a physical interface: skipped"
+            )
     return {iface_id: far_ends[peer_id] for iface_id, peer_id in far_end_ids.items() if peer_id in far_ends}

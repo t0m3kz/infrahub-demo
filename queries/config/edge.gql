@@ -248,7 +248,7 @@ query edge_config($device: String!) {
   # session facing that gateway like an office's lan_prefixes (registered_by_gateway in
   # transforms/helpers/bgp_external.py). owner: who owns them (only an OrganizationCustomer counts).
   # capabilities: the tunnel's end ports; the device name of each is matched to a gateway.
-  TopologyTunnelCircuit {
+  TopologySessionCircuit(circuit_type__value: "tunnel") {
     edges {
       node {
         owner { node { __typename org_id { value } display_label } }

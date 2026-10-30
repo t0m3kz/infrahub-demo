@@ -9,9 +9,9 @@ generators/topology/office_fabric.py; the VCO describes the edge's side from the
 
 Covers:
   - the signal         — only an office role with an SD-WAN edge on its deployment has a WAN exit
-  - the lisp context   — the border's exit VRFs come from the site's EID records, the edge's PETRs are the map-servers
+  - the lisp context   — the border's exit VRFs are the instances it has, the edge's PETRs are the map-servers
   - the rendered CLI   — golden fixtures plus the lines that must (and must not) be there
-  - refusals           — a session in a VRF no hosted segment defines; a border with no locator address
+  - refusals           — a session in a VRF the LISP site does not carry; a border with no locator address
   - the data center    — untouched whatever its deployment lists
 """
 
@@ -24,7 +24,7 @@ from typing import Any
 
 import pytest
 
-from tests.smoke.fixture_builders.common import run_transform
+from tests.smoke.fixture_builders.common import make_transform, run_transform
 from tests.smoke.fixture_builders.office import (
     OFFICE_EDGE_NAME,
     OFFICE_EXIT_EDGE_ASN,
@@ -36,6 +36,7 @@ from tests.smoke.fixture_builders.office import (
     OFFICE_EXIT_VRF,
     build_office_wan_exit_data,
 )
+from tests.smoke.fixture_builders.vrf import with_vrf_objects
 from transforms.config.access_switch import AccessSwitch
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.distribution_switch import DistributionSwitch
@@ -82,9 +83,30 @@ def _inputs(**overrides: Any) -> LispInputs:
     return LispInputs(**values)
 
 
-def _device(*, loopback: str | None = "10.250.5.1/32") -> dict[str, Any]:
+_VRF_A = {"name": "VRF_A", "l3_vni": 50001, "namespace_type": "prod"}
+_PROD = {"name": "PROD", "l3_vni": 60000, "namespace_type": "prod"}
+
+
+def _vrf(namespace: dict[str, Any]) -> dict[str, Any]:
+    """A ManagedVRF membership of the device (``device.shared_capabilities``), as the cleaned config query returns it."""
+    return {"typename": "ManagedVRF", "namespace": namespace}
+
+
+def _device(*, loopback: str | None = "10.250.5.1/32", vrfs: tuple[dict[str, Any], ...] = (_VRF_A,)) -> dict[str, Any]:
     address = {"ip_address": {"address": loopback}} if loopback else {}
-    return {"name": "ds-c005-office01", "interfaces": [{"name": "Loopback0", "role": "loopback", **address}]}
+    return {
+        "name": "ds-c005-office01",
+        "interfaces": [{"name": "Loopback0", "role": "loopback", **address}],
+        "shared_capabilities": [_vrf(vrf) for vrf in vrfs],
+    }
+
+
+def _no_l3_vni(data: dict[str, Any], vrf: str) -> None:
+    """Strip the L3 VNI from the device's instance of namespace ``vrf`` (raw query shape)."""
+    for edge in data["DcimDevice"]["edges"][0]["node"]["shared_capabilities"]["edges"]:
+        namespace = (edge["node"].get("namespace") or {}).get("node")
+        if namespace and namespace["name"]["value"] == vrf:
+            namespace["l3_vni"]["value"] = None
 
 
 def _block(text: str, header: str) -> list[str]:
@@ -127,8 +149,8 @@ class TestTheSignal:
 
 
 class TestLispContext:
-    def test_the_border_is_the_exit_of_every_vrf_the_site_registers(self) -> None:
-        """A distribution-switch hosts no segment port, yet it exits from the site's VRFs."""
+    def test_the_border_is_the_exit_of_every_vrf_it_has(self) -> None:
+        """A distribution-switch hosts no segment port, yet it exits from each VRF instance it has."""
         config = get_lisp_config(_device(), "distribution-switch", [], _inputs())
 
         assert config["wan_exit"] is True
@@ -136,13 +158,9 @@ class TestLispContext:
         assert config["l3_instances"] == [{"instance_id": 50001, "vrf": "VRF_A", "prefixes": []}]
 
     def test_the_exit_vrfs_are_sorted_by_instance_id_and_not_repeated(self) -> None:
-        records = (
-            EidRecord(60000, "PROD", "10.1.0.0/24"),
-            EidRecord(50001, "VRF_A", "10.100.0.0/24"),
-            EidRecord(60000, "PROD", "10.2.0.0/24"),
-        )
+        device = _device(vrfs=(_PROD, _VRF_A, _PROD))
 
-        config = get_lisp_config(_device(), "distribution-switch", [], _inputs(l3_records=records))
+        config = get_lisp_config(device, "distribution-switch", [], _inputs())
 
         assert [(i["instance_id"], i["vrf"]) for i in config["l3_instances"]] == [(50001, "VRF_A"), (60000, "PROD")]
 
@@ -172,6 +190,7 @@ class TestLispContext:
         assert config["l3_instances"] == []
 
     def test_an_edge_gets_the_flag_and_no_extra_instance(self) -> None:
+        """Only a border is the exit: an edge's instances stay VRF-lite until it hosts a segment in them."""
         config = get_lisp_config(_device(), "access-switch", [], _inputs())
 
         assert config["wan_exit"] is True
@@ -293,7 +312,7 @@ class TestRenderedDistributionSwitch:
         ):
             data = build_office_wan_exit_data(device_name=name, role=role)
 
-            assert data == _raw(directory)
+            assert with_vrf_objects(make_transform(cls), data) == _raw(directory)
             assert run_transform(cls, data).rstrip("\n") + "\n" == _golden(directory)[1]
 
     @pytest.mark.parametrize(
@@ -327,19 +346,19 @@ class TestRenderedDistributionSwitch:
 
 
 class TestRefusals:
-    def test_a_session_in_a_vrf_no_hosted_segment_defines_is_refused(self) -> None:
+    def test_a_session_in_a_vrf_the_site_does_not_carry_is_refused(self) -> None:
         """The LISP template defines the VRFs of its L3 instances; a BGP session elsewhere would render under none."""
         data = _raw(DISTRIBUTION_EXIT)
-        _deployment(data)["segment_deployments"] = {"edges": []}
+        _no_l3_vni(data, OFFICE_EXIT_VRF)
 
         with pytest.raises(
-            ValueError, match=rf"a BGP session in VRF {OFFICE_EXIT_VRF}, which no hosted segment defines"
+            ValueError, match=rf"a BGP session in VRF {OFFICE_EXIT_VRF}, which is no L3 instance of the LISP site"
         ):
             run_transform(DistributionSwitch, data)
 
     def test_the_refusal_names_the_role_and_asks_for_no_partial_config(self) -> None:
         data = _raw(DISTRIBUTION_EXIT)
-        _deployment(data)["segment_deployments"] = {"edges": []}
+        _no_l3_vni(data, OFFICE_EXIT_VRF)
 
         with pytest.raises(
             ValueError, match=r"^cisco_xe distribution-switch cannot render: .*refusing incomplete config$"

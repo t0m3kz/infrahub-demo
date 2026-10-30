@@ -46,7 +46,7 @@ def _neighbor_block(output: str, neighbor: str) -> str:
 
 def _set_far_end_kind(data: dict[str, Any], peering_name: str, kind: str) -> dict[str, Any]:
     """Set the device ``__typename`` of the far end (second end) of the edge's peering ``peering_name``."""
-    bgp = data["DcimDevice"]["edges"][0]["node"]["capabilities"]["edges"][-1]["node"]
+    bgp = _bgp_node(data)
     (peering,) = [e["node"] for e in bgp["peerings"]["edges"] if e["node"]["name"]["value"] == peering_name]
     peering["capabilities"]["edges"][1]["node"]["device"]["node"]["__typename"] = kind
     return data
@@ -202,7 +202,7 @@ class TestEdgeRender:
     def test_a_far_end_without_a_selected_typename_is_not_an_appliance(self) -> None:
         """The older query shape (no __typename on the far end's device): the overlay process still makes it ours."""
         data = _fixture()
-        bgp = data["DcimDevice"]["edges"][0]["node"]["capabilities"]["edges"][-1]["node"]
+        bgp = _bgp_node(data)
         for edge in bgp["peerings"]["edges"]:
             for end in edge["node"]["capabilities"]["edges"]:
                 end["node"]["device"]["node"].pop("__typename", None)
@@ -306,7 +306,7 @@ class TestEdgeRender:
     def test_other_vrf_sessions_render_unfiltered_as_before(self) -> None:
         """A non-regular VRF session keeps the old stanza: no route-maps, no filter definitions."""
         data = _fixture()
-        bgp = data["DcimDevice"]["edges"][0]["node"]["capabilities"]["edges"][-1]["node"]
+        bgp = _bgp_node(data)
         for edge in bgp["peerings"]["edges"]:
             edge["node"]["peering_role"] = {"value": None}
         output = _run_edge(data)
@@ -374,7 +374,7 @@ class TestRefusalWithoutOwnerFilters:
         template is looked up, whatever the sessions).
         """
         data = _on_platform(_fixture(), "cisco_xe")
-        bgp = data["DcimDevice"]["edges"][0]["node"]["capabilities"]["edges"][-1]["node"]
+        bgp = _bgp_node(data)
         bgp["peerings"]["edges"] = [
             edge for edge in bgp["peerings"]["edges"] if edge["node"]["name"]["value"] == _NE_HOP
         ]
@@ -383,8 +383,9 @@ class TestRefusalWithoutOwnerFilters:
 
 
 def _bgp_node(data: dict[str, Any]) -> dict[str, Any]:
-    """The edge's last ManagedBGP capability node of a fixture."""
-    return data["DcimDevice"]["edges"][0]["node"]["capabilities"]["edges"][-1]["node"]
+    """The edge's last ManagedBGP capability node of a fixture (which also carries its VRF instances)."""
+    capabilities = data["DcimDevice"]["edges"][0]["node"]["capabilities"]["edges"]
+    return [edge["node"] for edge in capabilities if edge["node"]["__typename"] == "ManagedBGP"][-1]
 
 
 def _wan_edges(data: dict[str, Any], *names: str) -> dict[str, Any]:
@@ -522,7 +523,7 @@ class TestHostedApplianceRender:
         """Two external sessions: two banners, each above its own neighbor."""
         data = _appliance_fixture()
         _set_far_end_kind(data, "HANDOFF-FR2-AMNE-PROD", "DcimPhysicalDevice")
-        bgp = data["DcimDevice"]["edges"][0]["node"]["capabilities"]["edges"][-1]["node"]
+        bgp = _bgp_node(data)
         for edge in bgp["peerings"]["edges"]:
             for end in edge["node"]["capabilities"]["edges"]:
                 end["node"]["device"]["node"]["__typename"] = "DcimPhysicalDevice"
@@ -560,7 +561,7 @@ class TestHostedApplianceRender:
     ) -> None:
         """No external session: nothing to warn about."""
         data = _appliance_fixture()
-        bgp = data["DcimDevice"]["edges"][0]["node"]["capabilities"]["edges"][-1]["node"]
+        bgp = _bgp_node(data)
         bgp["peerings"]["edges"] = [e for e in bgp["peerings"]["edges"] if e["node"]["name"]["value"] == _NE_HOP]
         with caplog.at_level(logging.DEBUG):
             output = _run_transform(Edge, data)

@@ -77,7 +77,13 @@ def _carried(seg_id: str, policy: dict[str, Any] | None, inbound: list[dict[str,
 
 def _payload(*capabilities: dict[str, Any]) -> dict[str, Any]:
     interfaces = [
-        {"name": _v(f"eth0.{i}"), "capabilities": _edges([capability])} for i, capability in enumerate(capabilities)
+        {
+            "name": _v(f"eth0.{i}"),
+            # A carried segment is the sub-interface's inline_segment; a context stays on its capabilities.
+            "inline_segment": _node(None if capability["__typename"] == "ManagedFirewallContext" else capability),
+            "capabilities": _edges([capability] if capability["__typename"] == "ManagedFirewallContext" else []),
+        }
+        for i, capability in enumerate(capabilities)
     ]
     return {"DcimDevice": _edges([{"name": _v("fw-1"), "interfaces": _edges(interfaces)}])}
 

@@ -1,0 +1,13 @@
+{#- Physical member interfaces — bind to their LAG. `lag.member_interfaces` are the member port names; the
+    peer-link is bound by arista_eos_mlag.j2.
+    D: Arista EOS User Manual, "Port Channel and LACP Configuration Commands" (arista.com/en/um-eos/eos-port-channels-and-lacp):
+    `channel-group <number> mode <group_mode>` on the member Ethernet interface, group_mode `on` | `active` | `passive`
+    (`on` is the static channel group; `static` is NOT a keyword), e.g. `channel-group 10 mode active`.
+    `lag.channel_group_mode` is the LAG's lacp_mode mapped to that keyword (transforms/helpers/mlag.py). -#}
+{%- for lag in interfaces if lag.lag_id is defined and lag.member_interfaces is defined and lag.role != 'mlag-peer' %}
+{%- for member_name in lag.member_interfaces %}
+interface {{ member_name }}
+   channel-group {{ lag.lag_id }} mode {{ lag.channel_group_mode | default('active') }}
+   no shutdown
+{% endfor %}
+{%- endfor -%}

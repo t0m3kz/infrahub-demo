@@ -759,6 +759,9 @@
                       }
                     }
                   },
+                  "inline_segment": {
+                    "node": null
+                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -852,6 +855,9 @@
                       }
                     }
                   },
+                  "segments": {
+                    "edges": []
+                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -944,6 +950,9 @@
                         ]
                       }
                     }
+                  },
+                  "segments": {
+                    "edges": []
                   },
                   "capabilities": {
                     "edges": []
@@ -1800,6 +1809,9 @@
                       }
                     }
                   },
+                  "inline_segment": {
+                    "node": null
+                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -1833,6 +1845,9 @@
                         }
                       }
                     }
+                  },
+                  "inline_segment": {
+                    "node": null
                   },
                   "capabilities": {
                     "edges": []
@@ -1871,7 +1886,7 @@
                               "vlan_id": {
                                 "value": 100
                               },
-                              "vlan_domain": {
+                              "device": {
                                 "node": {
                                   "id": "dev-dc1-edge-01"
                                 }
@@ -1940,7 +1955,7 @@
                                           "vlan_id": {
                                             "value": 100
                                           },
-                                          "vlan_domain": {
+                                          "device": {
                                             "node": {
                                               "id": "dev-dc1-edge-01"
                                             }
@@ -1990,7 +2005,7 @@
                               "vlan_id": {
                                 "value": 110
                               },
-                              "vlan_domain": {
+                              "device": {
                                 "node": {
                                   "id": "dev-dc1-edge-01"
                                 }
@@ -2059,7 +2074,7 @@
                                           "vlan_id": {
                                             "value": 110
                                           },
-                                          "vlan_domain": {
+                                          "device": {
                                             "node": {
                                               "id": "dev-dc1-edge-01"
                                             }
@@ -2097,6 +2112,64 @@
                 ]
               }
             }
+          },
+          "shared_capabilities": {
+            "edges": [
+              {
+                "node": {
+                  "__typename": "ManagedVRF",
+                  "namespace": {
+                    "node": {
+                      "name": {
+                        "value": "INTERNET"
+                      },
+                      "l3_vni": {
+                        "value": 50003
+                      },
+                      "namespace_type": {
+                        "value": "internet"
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "ManagedVRF",
+                  "namespace": {
+                    "node": {
+                      "name": {
+                        "value": "MANAGEMENT"
+                      },
+                      "l3_vni": {
+                        "value": 50004
+                      },
+                      "namespace_type": {
+                        "value": "management"
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "ManagedVRF",
+                  "namespace": {
+                    "node": {
+                      "name": {
+                        "value": "PROD"
+                      },
+                      "l3_vni": {
+                        "value": 50001
+                      },
+                      "namespace_type": {
+                        "value": "prod"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
           }
         }
       }

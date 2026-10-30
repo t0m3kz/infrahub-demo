@@ -88,18 +88,22 @@ query virtual_colocation_config($instance: String!) {
                 value
               }
               ... on CloudNetworkAppliance {
-                service_code {
-                  value
-                }
-                package_code {
-                  value
-                }
-                software_version {
-                  value
-                }
                 device_type {
                   node {
+                    name {
+                      value
+                    }
                     cpu_count {
+                      value
+                    }
+                  }
+                }
+                software_image {
+                  node {
+                    version {
+                      value
+                    }
+                    package {
                       value
                     }
                   }

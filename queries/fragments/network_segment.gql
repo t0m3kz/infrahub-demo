@@ -56,11 +56,10 @@ fragment NetworkSegmentFields on ManagedNetworkSegment {
     # deployment.evpn_rt_as: a stretched segment's route-target must be the
     # same at every site it spans, so its admin field is anchored on the
     # lowest evpn_rt_as across all of them (transforms/helpers/vxlan.py).
-    # LOCAL VLAN ID is per VLAN domain (MLAG pair or device without MLAG), not
-    # DC-wide, and is a child of the deployment it sits in, so the VNI and the
-    # VLAN of a row come from one record — the rendering transform resolves the
-    # row whose vlan_domain matches THIS device's own domain (its MLAG if
-    # paired, else itself). See transforms/common.py's _own_vlan_domain_segment.
+    # LOCAL VLAN ID is per device, not DC-wide, and is a child of the deployment
+    # it sits in, so the VNI and the VLAN of a row come from one record — the
+    # rendering transform resolves the row whose device is THIS device (a paired
+    # device uses its own row). See transforms/common.py's _own_vlan_row.
     segment_deployments {
       edges {
         node {
@@ -70,7 +69,7 @@ fragment NetworkSegmentFields on ManagedNetworkSegment {
             edges {
               node {
                 vlan_id { value }
-                vlan_domain { node { id } }
+                device { node { id } }
               }
             }
           }
@@ -109,7 +108,7 @@ fragment NetworkSegmentFields on ManagedNetworkSegment {
 # the way a leaf does: reached via TopologySegmentHosting.segment_deployments
 # (see schemas/extensions/service/segment.yml — TopologyDataCenter inherits
 # TopologySegmentHosting directly). vni is the dedup/naming key here (NOT
-# vlan_id — local VLAN ID is per VLAN domain, not DC-wide, so the same
+# vlan_id — local VLAN ID is per device, not DC-wide, so the same
 # segment can have a different vlan_id on every leaf; VNI is the only value
 # that's genuinely DC-wide/fabric-wide unique). gateway.ip_prefix.prefix is
 # what a segment is matched on here. The segment's group tag is not read here:
@@ -121,12 +120,12 @@ fragment SegmentDeploymentsOnDeploymentFields on TopologySegmentHosting {
     edges {
       node {
         vni { value }
-        # The rows of this deployment: a border gateway's own domain is one of them.
+        # The rows of this deployment: a border gateway's own row is one of them.
         vlan_domain_segments {
           edges {
             node {
               vlan_id { value }
-              vlan_domain { node { id } }
+              device { node { id } }
             }
           }
         }

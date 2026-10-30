@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from .pools import PoolMixin
 
 from utils.limits import GROUP_HA_DOMAINS, GROUP_MLAG_DOMAINS
+from utils.vlan_domain import mlag_peer_devices
 
 from .helpers.cable_attributes import cable_attributes, endpoint_label
 from .helpers.pairing import pair_device_names
@@ -367,6 +368,7 @@ class DomainPairingMixin(MLAGWiringMixin):
                     data={
                         **({"id": existing_mlag.id} if existing_mlag else {}),
                         "name": mlag_name,
+                        "peer_devices": mlag_peer_devices([first, second]),
                         "domain_id": pair_index,
                         "virtual_peer_link": mlag_create == "virtual",
                         "status": "active",

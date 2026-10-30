@@ -2,7 +2,7 @@
 # The shared underlay of the colo on-ramp.
 #
 # Every circuit here is deliberately *unowned*: no `owner`, because these are
-# shared facilities carrying every tenant. A physical circuit is a pure carrier:
+# shared facilities carrying every tenant. A carrier circuit is a pure carrier:
 # it has no role and builds no session. What rides it is a virtual circuit of a
 # kind, listed in ../03_virtual_circuits/ (the DCI sessions of the dark fibres,
 # one Interconnect circuit per fibre) or in ../05_cloud_endpoints/ (the handoff
@@ -29,7 +29,7 @@
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: TopologyPhysicalCircuit
+  kind: TopologyCarrierCircuit
   data:
     # --- DC <-> cage dark fibre ---------------------------------------------
     # The fibre is a carrier only. Its DCI session (an underlay /31 plus the loopback-to-loopback
@@ -41,7 +41,7 @@ spec:
     # DC lands one fibre on the "01" edge (Ethernet1/35) and one on the "02" edge (Ethernet1/36)
     # of the metro it fronts.
     - circuit_id: "DF-DC10-EQXFR2"
-      member_of_groups: [physical_circuits]
+      member_of_groups: [carrier_circuits]
       name: "DF-DC10-EQXFR2"
       circuit_type: dark_fiber
       status: active
@@ -55,7 +55,7 @@ spec:
         - ["eg-fr201", "Ethernet1/10"]
 
     - circuit_id: "DF-DC11-EQXFR2"
-      member_of_groups: [physical_circuits]
+      member_of_groups: [carrier_circuits]
       name: "DF-DC11-EQXFR2"
       circuit_type: dark_fiber
       status: active
@@ -69,7 +69,7 @@ spec:
         - ["eg-fr201", "Ethernet1/11"]
 
     - circuit_id: "DF-DC12-EQXPA4"
-      member_of_groups: [physical_circuits]
+      member_of_groups: [carrier_circuits]
       name: "DF-DC12-EQXPA4"
       circuit_type: dark_fiber
       status: active
@@ -83,7 +83,7 @@ spec:
         - ["eg-pa401", "Ethernet1/10"]
 
     - circuit_id: "DF-DC10-EQXFR2-B"
-      member_of_groups: [physical_circuits]
+      member_of_groups: [carrier_circuits]
       name: "DF-DC10-EQXFR2-B"
       circuit_type: dark_fiber
       status: active
@@ -97,7 +97,7 @@ spec:
         - ["eg-fr202", "Ethernet1/10"]
 
     - circuit_id: "DF-DC11-EQXFR2-B"
-      member_of_groups: [physical_circuits]
+      member_of_groups: [carrier_circuits]
       name: "DF-DC11-EQXFR2-B"
       circuit_type: dark_fiber
       status: active
@@ -111,7 +111,7 @@ spec:
         - ["eg-fr202", "Ethernet1/11"]
 
     - circuit_id: "DF-DC12-EQXPA4-B"
-      member_of_groups: [physical_circuits]
+      member_of_groups: [carrier_circuits]
       name: "DF-DC12-EQXPA4-B"
       circuit_type: dark_fiber
       status: active
@@ -128,7 +128,7 @@ spec:
     # The cloud end is the region, not a zone: an AZ is finer than any provider
     # commits to for a Direct Connect or ExpressRoute hand-off.
     - circuit_id: "XC-EQXFR2-AWS-EUC1"
-      member_of_groups: [physical_circuits]
+      member_of_groups: [carrier_circuits]
       name: "XC-EQXFR2-AWS-EUC1"
       circuit_type: cross_connect
       status: active
@@ -144,7 +144,7 @@ spec:
     # No handoff rides this one: no Azure attachment or VIF is modelled for westeurope, so the carrier
     # (and the stub EXT-AZURE-ER-PA4 it ends on) stays idle, kept as the shape of an unused on-ramp.
     - circuit_id: "XC-EQXPA4-AZURE-WEU"
-      member_of_groups: [physical_circuits]
+      member_of_groups: [carrier_circuits]
       name: "XC-EQXPA4-AZURE-WEU"
       circuit_type: cross_connect
       status: active
@@ -162,7 +162,7 @@ spec:
     # which add_circuit derives as the far end. The handoff HANDOFF-PA4-MEGAPORT-PROD rides this port
     # (../05_cloud_endpoints/03_megaport_handoff.yml). Equinix sells the cross-connect, Megaport the service.
     - circuit_id: "XC-EQXPA4-MEGAPORT"
-      member_of_groups: [physical_circuits]
+      member_of_groups: [carrier_circuits]
       name: "XC-EQXPA4-MEGAPORT"
       circuit_type: cross_connect
       status: active

@@ -37,8 +37,8 @@ from .all_demo_circuit_constants import (
     ALL_DEMO_FABRIC_PEERINGS,
     ALL_DEMO_VIRTUAL_CIRCUITS,
     ALL_DEMO_ZONE_SITE_VIPS,
-    HANDOFF_KIND,
-    INTERCONNECT_KIND,
+    HANDOFF_TYPE,
+    INTERCONNECT_TYPE,
 )
 from .conftest import TestInfrahubDockerWithClient
 from .snapshot_helpers import diff_snapshots, snapshot_topology
@@ -203,7 +203,7 @@ TOPOLOGY_RERUN_GENERATORS = {
     "add_colocation_metro": "colocation_metros",
     "add_colocation_zone": "colocation_zones",
     "add_virtual_colocation": "virtual_colocations",
-    "add_circuit": "physical_circuits",
+    "add_circuit": "carrier_circuits",
     # virtual_circuits holds the Interconnect and Handoff circuits (no Tunnel: it has no session). The rerun must
     # keep each one's /31 (/127), the addresses on its ports, its <name>-bgp or <name>-underlay/<name>-evpn
     # peerings and a DCI's per-circuit key exactly as they were: same ids, same values (snapshot_topology).
@@ -479,10 +479,10 @@ class TestAllDemoIdempotency(TestInfrahubDockerWithClient):
         # (new id) or a re-created per-circuit key would go unnoticed: an Interconnect holds <name>-underlay,
         # <name>-evpn and <name>-dci-key, a Handoff <name>-bgp and no key of its own (its key is data-loaded).
         for circuit, expected in ALL_DEMO_VIRTUAL_CIRCUITS.items():
-            if expected["kind"] == INTERCONNECT_KIND:
+            if expected["circuit_type"] == INTERCONNECT_TYPE:
                 peerings = [f"{circuit}-underlay", f"{circuit}-evpn"]
                 keys = [f"{circuit}-dci-key"]
-            elif expected["kind"] == HANDOFF_KIND:
+            elif expected["circuit_type"] == HANDOFF_TYPE:
                 peerings, keys = [f"{circuit}-bgp"], []
             else:
                 peerings, keys = [], []

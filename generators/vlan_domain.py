@@ -1,38 +1,43 @@
-"""Mixin realizing a segment's LOCAL VLAN ID per VLAN domain (an MLAG pair, or
-a device without MLAG, which is its own domain).
+"""Mixin realizing a segment's LOCAL VLAN ID per device (a ManagedVlanDomainSegment row is on ONE device).
 
 Shared by VxlanSegmentGenerator (generators/topology/segment.py, border
 gateway realization for a stretched segment) and AppInstanceSegmentGenerator
 (generators/topology/app_instance_segment.py, customer-port realization
-driven by an AppComponent's instances) — both need the same (segment, VLAN
-domain) -> local VLAN ID allocation, just reached from different device sets.
+driven by an AppComponent's instances) — both need the same (segment, device)
+-> local VLAN ID allocation, just reached from different device sets.
 
-Ownership: a (segment deployment, VLAN domain) row is reached by BOTH
+Ownership: a (segment deployment, device) row is reached by BOTH
 generators and by every AppComponent on the segment, so it belongs to no single
 run. Rows are therefore shared desired state, written untracked
 (update_group_context=False) and reconciled explicitly per SEGMENT from what
 the segment needs right now — see reconcile_vxlan_segment (generators/topology/segment_ports.py). A row is a
 child of the segment's realization (ManagedSegmentDeployment, the VNI) in the
 DC or metro its switch sits in: a switch maps to that deployment through its own
-`deployment` (the hosting parent or one of its children). The VLAN domains
-themselves (a device, or a ManagedMLAG) belong to the generator that creates
-the device and are only read here, never saved. A domain has ONE deployment
-(an MLAG pair sits in one pod): a domain whose devices map to two, or a device
-with no deployment of the segment, is reported (WARNING) and left as it is.
+`deployment` (the hosting parent or one of its children). The devices
+belong to the generator that creates them and are only read here, never saved.
+A device with no deployment the segment is activated in is reported (WARNING)
+and left as it is.
+
+MLAG pairs: the two peers of a pair must carry the SAME VLAN ID for a segment (a dual-homed port-channel is one L2
+broadcast domain), so every MLAG peer of a device that needs the segment gets a row too, even with no port of the
+segment, and a pair shares one id. If the two members of a pair map to different segment deployments (or one to none)
+the pair is reported and left as it is.
 
 Local significance and consistency: an IEEE 802.1Q VLAN ID only has to be
-unique within one VLAN domain (the real DC-wide segment identity is the VNI,
-allocated in segment.py), so a domain never gives one id to two segments
-(ManagedVlanDomainSegment is unique on [vlan_domain, vlan_id]). But a
-virtualisation cluster spans racks served by different domains and wants ONE
-VLAN id per port group, so the id is chosen, not drawn from a per-domain pool:
-a segment keeps the id it already has on its other domains; a segment with
-none gets the lowest id free on every domain it lands on. Only when a domain
-already uses the preferred id for another segment does that domain fall back
-to its own lowest free id (with a WARNING); a domain with no free id fails.
-The domains' used ids are read, chosen and written under a lock per domain
+unique within one device (the real DC-wide segment identity is the VNI,
+allocated in segment.py), so a device never gives one id to two segments
+(ManagedVlanDomainSegment is unique on [device, vlan_id]). But a
+virtualisation cluster spans racks served by different switches and wants ONE
+VLAN id per port group, so the id is chosen, not drawn from a per-device pool:
+a segment keeps the id it already has elsewhere (a pair follows its existing member); a segment with
+none gets the lowest id free on every device it lands on. Only when a device
+already uses the preferred id for another segment does that group fall back
+to the lowest id free on its members (with a WARNING); a device with no free id fails.
+A row's id is never re-chosen: a pair whose existing rows differ (a late pairing) is reported (WARNING) and left
+alone; checks/mlag_domains.py reports it too.
+The devices' used ids are read, chosen and written under a lock per device
 (taken in sorted order, inside the segment lock), so two segments landing on
-one domain never pick the same id.
+one device never pick the same id.
 """
 
 from __future__ import annotations
@@ -44,10 +49,10 @@ from typing import TYPE_CHECKING, Any
 
 from utils.data_cleaning import clean_data
 from utils.limits import CUSTOMER_VLAN_ID_MAX, CUSTOMER_VLAN_ID_MIN, GROUP_PROVIDER_STUBS, GROUP_SDWAN_GATEWAYS
-from utils.vlan_domain import vlan_domain_id
+from utils.vlan_domain import mlag_id
 
 from .connections import BORDER_ROLE_FOR_SERVICES
-from .protocols import DcimPhysicalDevice, ManagedVlanDomainSegment
+from .protocols import DcimPhysicalDevice, ManagedMLAG, ManagedVlanDomainSegment
 
 if TYPE_CHECKING:
     from .common import CommonGenerator
@@ -64,10 +69,6 @@ BORDER_GATEWAY_ROLES = frozenset({"border-leaf", "edge"})
 # router, so the zone lookup finds it. Neither terminates VXLAN segments and no generator gives it a VLAN domain,
 # so it is never a border gateway. (The missing-domain error for a real border gateway stays.)
 NON_BORDER_GATEWAY_GROUPS = frozenset({GROUP_SDWAN_GATEWAYS, GROUP_PROVIDER_STUBS})
-# Interface kinds whose segment tag puts the device's VLAN domain in scope. A
-# DcimVirtualInterface carrying the segment is an inline sub-interface on a
-# firewall/LB HA pair, which takes the facing border leaf's VLAN instead.
-TAGGABLE_INTERFACE_KINDS = frozenset({"DcimPhysicalInterface", "DcimLAGInterface"})
 # Border-leaf ports facing a firewall/load-balancer: tagged with a segment
 # only by its inline termination (segment.py), never by its AppComponents.
 SERVICE_PORT_ROLES = frozenset(BORDER_ROLE_FOR_SERVICES.values())
@@ -75,15 +76,15 @@ SERVICE_PORT_ROLES = frozenset(BORDER_ROLE_FOR_SERVICES.values())
 _SEGMENT_VLAN_DOMAINS_QUERY_PATH = Path(__file__).resolve().parents[1] / "queries/topology/add/segment_vlan_domains.gql"
 
 
-def vlan_domain_lock_key(domain_id: str) -> str:
-    """The resource_lock key serializing the choice of VLAN IDs on one VLAN
-    domain (taken inside the segment lock, domains in sorted order)."""
-    return f"vlan-domain-ids-{domain_id}"
+def vlan_device_lock_key(device_id: str) -> str:
+    """The resource_lock key serializing the choice of VLAN IDs on one device
+    (taken inside the segment lock, devices in sorted order)."""
+    return f"vlan-device-ids-{device_id}"
 
 
 def segment_lock_key(segment_id: str) -> str:
     """The resource_lock key serializing every per-segment reconciliation
-    (VLAN domain activations and, in AppInstanceSegmentGenerator, interface
+    (VLAN row activations and, in AppInstanceSegmentGenerator, interface
     tags) across both generators and all of the segment's components."""
     return f"segment-vlan-domains-{segment_id}"
 
@@ -103,63 +104,64 @@ class VlanDomainMixin:
         fail = CommonGenerator.fail
         resource_lock = PoolMixin.resource_lock
 
-    @staticmethod
-    def _resolve_vlan_domains(devices: list[Any]) -> dict[str, str]:
-        """{device id: VLAN domain id} for every device, capabilities included.
-
-        The rule is utils/vlan_domain.vlan_domain_id (the MLAG first, else the
-        device). Never saves a domain: a ManagedMLAG is created and owned by the generator
-        that creates the device (rack/pod/dc/colocation), and a save here would
-        claim it for this segment's run, whose cleanup would then delete it for
-        every other segment on the device.
-        """
-        domain_by_device: dict[str, str] = {}
-        for device in devices:
-            capabilities = getattr(device, "capabilities", None)
-            peers = capabilities.peers if capabilities else []
-            domain_by_device[device.id] = (
-                vlan_domain_id(device.id, ((peer.typename, peer.id) for peer in peers)) or device.id
-            )
-        return domain_by_device
-
     def _choose_vlan_ids(
-        self, segment_name: str, new_domains: list[str], taken: dict[str, set[int]], preferred: int | None
+        self,
+        segment_name: str,
+        groups: list[tuple[str, ...]],
+        new: set[str],
+        taken: dict[str, set[int]],
+        held: dict[str, int],
+        preferred: int | None,
     ) -> dict[str, int]:
-        """The vlan_id for each domain that needs a new activation of the segment.
+        """The vlan_id for each device in ``new`` (a device that needs a new row of the segment).
 
-        ``taken`` is the ids other segments use on each new domain; ``preferred``
-        is the id the segment already has on its other domains (None when it has
-        none). One id is used everywhere when it is free on every domain: the
-        preferred one, else the lowest free on all of them. A domain where it is
-        taken (or when no id is free on all) gets its own lowest free id, with a
-        WARNING; a domain with no free id in the customer band fails the run.
+        ``groups`` are the devices that share one id (an MLAG pair, or a single device), every member included even
+        when it already has its row; ``taken`` is the ids other segments use on each member; ``held`` is the id the
+        segment already has on a member's row; ``preferred`` is the id the segment has on its other devices (None
+        when it has none). A group uses ``held`` of an existing member, else ``preferred``, else the lowest id free
+        on every device of every group: when that is free on all its members. Otherwise the group takes the lowest
+        id free on its members, with a WARNING; a member left with no common free id takes its own lowest free id
+        (WARNING; the pair's rows then differ and the check reports it); a device with no free id fails the run.
         """
         band = range(CUSTOMER_VLAN_ID_MIN, CUSTOMER_VLAN_ID_MAX + 1)
-        wanted = preferred
-        if wanted is None:
-            busy = set().union(*(taken[domain_id] for domain_id in new_domains))
-            wanted = next((vlan_id for vlan_id in band if vlan_id not in busy), None)
+        default = preferred
+        if default is None:
+            busy = set().union(*(taken[device_id] for group in groups for device_id in group))
+            default = next((vlan_id for vlan_id in band if vlan_id not in busy), None)
         chosen: dict[str, int] = {}
-        for domain_id in new_domains:
-            if wanted is not None and wanted not in taken[domain_id]:
-                chosen[domain_id] = wanted
-                continue
-            own = next((vlan_id for vlan_id in band if vlan_id not in taken[domain_id]), None)
-            if own is None:
-                self.fail(
-                    f"VLAN domain {domain_id} has no free VLAN ID in {CUSTOMER_VLAN_ID_MIN}-{CUSTOMER_VLAN_ID_MAX} "
-                    f"for segment {segment_name}"
+        for group in groups:
+            wanted = next((held[device_id] for device_id in group if device_id in held), default)
+            busy = set().union(*(taken[device_id] for device_id in group))
+            if wanted is not None and wanted not in busy:
+                common: int | None = wanted
+            else:
+                common = next((vlan_id for vlan_id in band if vlan_id not in busy), None)
+                reason = (
+                    f"VLAN ID {wanted} is already used by another segment on {', '.join(group)}"
+                    if wanted is not None
+                    else f"no VLAN ID is free on every device of the segment ({', '.join(group)} included)"
                 )
-            reason = (
-                f"VLAN ID {wanted} is already used by another segment on VLAN domain {domain_id}"
-                if wanted is not None
-                else f"no VLAN ID is free on every VLAN domain of the segment (VLAN domain {domain_id} included)"
-            )
-            self.logger.warning(
-                f"Segment {segment_name}: {reason} — using {own} there, so the segment has different VLAN IDs "
-                "across domains"
-            )
-            chosen[domain_id] = own
+                self.logger.warning(
+                    f"Segment {segment_name}: {reason} — using {common if common is not None else 'its own lowest'} "
+                    "there, so the segment has different VLAN IDs across devices"
+                )
+            for device_id in group:
+                if device_id not in new:
+                    continue
+                if common is not None:
+                    chosen[device_id] = common
+                    continue
+                own = next((vlan_id for vlan_id in band if vlan_id not in taken[device_id]), None)
+                if own is None:
+                    self.fail(
+                        f"Device {device_id} has no free VLAN ID in {CUSTOMER_VLAN_ID_MIN}-{CUSTOMER_VLAN_ID_MAX} "
+                        f"for segment {segment_name}"
+                    )
+                self.logger.warning(
+                    f"Segment {segment_name}: no VLAN ID is free on both members of {', '.join(group)} — "
+                    f"using {own} on {device_id}, so the pair's VLAN IDs differ"
+                )
+                chosen[device_id] = own
         return chosen
 
     async def _create_vlan_domain_segments(
@@ -167,16 +169,18 @@ class VlanDomainMixin:
         segment_name: str,
         segment_deployment_ids: list[str],
         new: dict[str, str],
-        kept_domains: list[str],
+        groups: list[tuple[str, ...]],
+        kept_devices: list[str],
     ) -> None:
         """Create the missing rows of the segment, choosing each vlan_id.
 
-        ``new`` is {VLAN domain id: id of the segment deployment its row goes
+        ``new`` is {device id: id of the segment deployment its row goes
         under}; only rows that do not exist yet, so an existing row's vlan_id
-        is never re-chosen. The new domains are locked in sorted order (inside
-        the caller's segment lock, so two runs never hold one domain each while
+        is never re-chosen. ``groups`` are the devices sharing one id (an MLAG pair or a single
+        device) for every group with a new row, the peers included. The members are locked in sorted order (inside
+        the caller's segment lock, so two runs never hold one device each while
         waiting for the other's), then ONE read returns the ids in use on them
-        and the segment's own ids on its ``kept_domains`` (a row of the segment
+        and the segment's own ids on its ``kept_devices`` (a row of the segment
         is one under any of ``segment_deployment_ids``) — and the rows are
         written before the locks are released, so the next segment sees them.
 
@@ -184,35 +188,38 @@ class VlanDomainMixin:
         state of the segment, cleaned up explicitly by
         the segment reconcile, never by a run's group.
         """
-        new_domains = sorted(new)
+        members = sorted({device_id for group in groups for device_id in group})
         async with AsyncExitStack() as stack:
-            for domain_id in new_domains:
-                await stack.enter_async_context(self.resource_lock(vlan_domain_lock_key(domain_id)))
+            for device_id in members:
+                await stack.enter_async_context(self.resource_lock(vlan_device_lock_key(device_id)))
             rows = await self.client.filters(
                 kind=ManagedVlanDomainSegment,
-                vlan_domain__ids=sorted({*new_domains, *kept_domains}),
-                include=["segment_deployment", "vlan_domain"],
+                device__ids=sorted({*members, *kept_devices}),
+                include=["segment_deployment", "device"],
             )
-            taken: dict[str, set[int]] = {domain_id: set() for domain_id in new_domains}
+            taken: dict[str, set[int]] = {device_id: set() for device_id in members}
+            held: dict[str, int] = {}
             own_ids: list[int] = []
             for row in rows:
-                domain_id = row.vlan_domain.id
+                device_id = row.device.id
                 if row.segment_deployment.id in segment_deployment_ids:
                     own_ids.append(row.vlan_id.value)
-                elif domain_id in taken:
-                    taken[domain_id].add(row.vlan_id.value)
-            chosen = self._choose_vlan_ids(segment_name, new_domains, taken, min(own_ids, default=None))
-            for domain_id, vlan_id in chosen.items():
+                    held[device_id] = row.vlan_id.value
+                elif device_id in taken:
+                    taken[device_id].add(row.vlan_id.value)
+            chosen = self._choose_vlan_ids(segment_name, groups, set(new), taken, held, min(own_ids, default=None))
+            for device_id in sorted(chosen):
+                vlan_id = chosen[device_id]
                 row = await self.client.create(
                     kind=ManagedVlanDomainSegment,
                     data={
-                        "segment_deployment": {"id": new[domain_id]},
-                        "vlan_domain": {"id": domain_id},
+                        "segment_deployment": {"id": new[device_id]},
+                        "device": {"id": device_id},
                         "vlan_id": vlan_id,
                     },
                 )
                 await row.save(allow_upsert=True, update_group_context=False)
-                self.logger.info(f"  Allocated VLAN ID {vlan_id} on VLAN domain {domain_id} for segment {segment_name}")
+                self.logger.info(f"  Allocated VLAN ID {vlan_id} on device {device_id} for segment {segment_name}")
 
     @staticmethod
     def _device_deployment_ids(hosting_parent: dict[str, Any]) -> list[str]:
@@ -229,8 +236,7 @@ class VlanDomainMixin:
     async def _fetch_segment_vlan_state(self, segment_id: str) -> dict[str, Any] | None:
         """The segment's reconciliation inputs (segment_vlan_domains.gql), as
         {"segment": cleaned segment, "deployments": [{"id", "deployment_id",
-        "rows": {domain id: {"id", "vlan_id"}}}]}, one entry per
-        ManagedSegmentDeployment; None when ``segment_id`` is not a
+        "rows": {device id: {"id", "vlan_id"}}}]}, one entry per ManagedSegmentDeployment; None when ``segment_id`` is not a
         ManagedVxlanSegment."""
         result = await self.client.execute_graphql(
             query=_SEGMENT_VLAN_DOMAINS_QUERY_PATH.read_text(), variables={"segment_id": segment_id}
@@ -242,9 +248,9 @@ class VlanDomainMixin:
         deployments: list[dict[str, Any]] = []
         for segment_deployment in cleaned.get("ManagedSegmentDeployment") or []:
             rows = {
-                domain_id: {"id": row["id"], "vlan_id": row.get("vlan_id")}
+                device_id: {"id": row["id"], "vlan_id": row.get("vlan_id")}
                 for row in segment_deployment.get("vlan_domain_segments") or []
-                if (domain_id := (row.get("vlan_domain") or {}).get("id"))
+                if (device_id := (row.get("device") or {}).get("id"))
             }
             deployments.append(
                 {
@@ -255,13 +261,13 @@ class VlanDomainMixin:
             )
         return {"segment": segments[0], "deployments": deployments}
 
-    async def segment_vlan_by_domain(self, segment_id: str) -> dict[str, int]:
-        """{VLAN domain id: vlan_id} of the segment's rows, whatever deployment they sit under."""
+    async def segment_vlan_by_device(self, segment_id: str) -> dict[str, int]:
+        """{device id: vlan_id} of the segment's rows, whatever deployment they sit under."""
         state = await self._fetch_segment_vlan_state(segment_id)
         return {
-            domain_id: row["vlan_id"]
+            device_id: row["vlan_id"]
             for segment_deployment in (state or {}).get("deployments", [])
-            for domain_id, row in segment_deployment["rows"].items()
+            for device_id, row in segment_deployment["rows"].items()
         }
 
     @classmethod
@@ -287,22 +293,20 @@ class VlanDomainMixin:
         border-leaf ports facing its inline-terminating HA pair."""
         return {
             iface["id"]
-            for iface in segment.get("capabilities") or []
-            if iface.get("typename") in TAGGABLE_INTERFACE_KINDS
-            and iface.get("id")
-            and (iface.get("role") in SERVICE_PORT_ROLES) == service_ports
+            for iface in segment.get("switched_interfaces") or []
+            if iface.get("id") and (iface.get("role") in SERVICE_PORT_ROLES) == service_ports
         }
 
     async def _segment_vlan_devices(self, segment: dict[str, Any]) -> list[Any]:
-        """Every device whose VLAN domain needs the segment, capabilities
+        """Every device that needs a row of the segment, capabilities and deployment
         included: the devices of the switch ports tagged with it, plus — for
-        a stretched segment — every border gateway of each hosting parent."""
+        a stretched segment — every border gateway of each hosting parent, plus the MLAG peer of each of them
+        (a peer with no port of the segment still carries its VLAN: a dual-homed port-channel is on both)."""
         tagged_device_ids = sorted(
             {
                 device_id
-                for iface in segment.get("capabilities") or []
-                if iface.get("typename") in TAGGABLE_INTERFACE_KINDS
-                and (device_id := (iface.get("device") or {}).get("id"))
+                for iface in segment.get("switched_interfaces") or []
+                if (device_id := (iface.get("device") or {}).get("id"))
             }
         )
         devices: dict[str, Any] = {}
@@ -328,7 +332,25 @@ class VlanDomainMixin:
                     if not NON_BORDER_GATEWAY_GROUPS.isdisjoint(self._group_names(device)):
                         continue
                     devices[device.id] = device
+
+        mlag_ids = sorted({mlag for device in devices.values() if (mlag := self._mlag_of(device))})
+        if mlag_ids:
+            mlags = await self.client.filters(kind=ManagedMLAG, ids=mlag_ids, include=["capabilities"])
+            peer_ids = sorted(
+                {peer.id for mlag in mlags for peer in mlag.capabilities.peers if peer.id and peer.id not in devices}
+            )
+            if peer_ids:
+                for device in await self.client.filters(
+                    kind=DcimPhysicalDevice, ids=peer_ids, include=["capabilities", "deployment"]
+                ):
+                    devices[device.id] = device
         return list(devices.values())
+
+    @staticmethod
+    def _mlag_of(device: Any) -> str | None:
+        """The id of the MLAG the device (fetched with its capabilities) is a member of."""
+        capabilities = getattr(device, "capabilities", None)
+        return mlag_id((peer.typename, peer.id) for peer in capabilities.peers) if capabilities else None
 
     @staticmethod
     def _group_names(device: Any) -> set[str]:
@@ -337,79 +359,106 @@ class VlanDomainMixin:
 
     async def _reconcile_segment_vlan_domains_locked(
         self, segment_id: str, segment_name: str, state: dict[str, Any] | None = None
-    ) -> None:
-        """Desired rows = the VLAN domain of every switch with a port carrying
-        the segment, plus every border gateway's domain when the segment is
-        stretched, each under the segment's deployment its switch sits in.
-        Rows on domains that no longer need the segment (or that moved to
+    ) -> bool:
+        """Desired rows = every switch with a port carrying the segment, plus every border gateway when the
+        segment is stretched, plus the MLAG peer of each (a pair shares one VLAN id), each under the segment's
+        deployment its switch sits in. Rows on devices that no longer need the segment (or that moved to
         another deployment) are deleted (freeing their ids); missing ones are
         created (untracked, vlan_id chosen — see _create_vlan_domain_segments);
         existing ones keep their vlan_id, so a re-run writes nothing.
 
         A device the segment has no deployment for (a port in a DC the segment
-        is not activated in, or the deployment not created yet), and a domain
-        whose devices sit in two deployments, are reported and skipped, and
-        the rows of their domains are left as they are: add_vxlan_segment
-        reconciles again once the deployment exists.
+        is not activated in, or the deployment not created yet), and a pair
+        whose members map to two deployments or to none, are reported and skipped, and
+        the rows of their devices are left as they are: add_vxlan_segment
+        reconciles again once the deployment exists. A pair whose existing rows
+        carry different ids (a late pairing) is reported and not renumbered.
 
         The caller must hold the segment lock (segment_lock_key). ``state``
         is a fresh _fetch_segment_vlan_state result, or None to read it here.
+
+        Returns whether it created or deleted a row.
         """
         if state is None:
             state = await self._fetch_segment_vlan_state(segment_id)
         if state is None:
-            self.logger.info(f"Segment {segment_name}: not a VXLAN segment — no VLAN domain rows")
-            return
+            self.logger.info(f"Segment {segment_name}: not a VXLAN segment — no VLAN rows")
+            return False
 
         devices = await self._segment_vlan_devices(state["segment"])
-        domain_by_device = self._resolve_vlan_domains(devices)
         deployment_by_device_deployment = self._deployment_by_device_deployment(state)
+
+        by_group: dict[str, list[Any]] = {}
+        for device in devices:
+            by_group.setdefault(self._mlag_of(device) or device.id, []).append(device)
 
         desired: dict[str, str] = {}
         undecided: set[str] = set()
-        for device in devices:
-            domain_id = domain_by_device[device.id]
-            deployment_id = getattr(getattr(device, "deployment", None), "id", None)
-            segment_deployment_id = deployment_by_device_deployment.get(deployment_id)
-            if segment_deployment_id is None:
-                undecided.add(domain_id)
-                self.logger.warning(
-                    f"Segment {segment_name}: device {device.name.value} sits in no deployment the segment is "
-                    "activated in — no VLAN ID for it"
-                )
-            elif desired.setdefault(domain_id, segment_deployment_id) != segment_deployment_id:
-                undecided.add(domain_id)
-                self.logger.warning(
-                    f"Segment {segment_name}: VLAN domain {domain_id} has devices in two deployments — left as it is"
-                )
-        desired = {domain_id: dep_id for domain_id, dep_id in desired.items() if domain_id not in undecided}
+        groups: list[tuple[str, ...]] = []
+        for members in by_group.values():
+            segment_deployments = {
+                device.id: deployment_by_device_deployment.get(getattr(getattr(device, "deployment", None), "id", None))
+                for device in members
+            }
+            for device in members:
+                if segment_deployments[device.id] is None:
+                    self.logger.warning(
+                        f"Segment {segment_name}: device {device.name.value} sits in no deployment the segment is "
+                        "activated in — no VLAN ID for it"
+                    )
+            if len(set(segment_deployments.values())) > 1:
+                undecided.update(segment_deployments)
+                if None not in segment_deployments.values():
+                    self.logger.warning(
+                        f"Segment {segment_name}: the MLAG pair {', '.join(sorted(segment_deployments))} sits in two "
+                        "deployments — left as it is"
+                    )
+            elif None in segment_deployments.values():
+                undecided.update(segment_deployments)
+            else:
+                desired.update(segment_deployments)
+                groups.append(tuple(sorted(segment_deployments)))
 
-        existing: dict[str, tuple[str, str]] = {
-            domain_id: (row["id"], item["id"])
+        existing: dict[str, tuple[str, str, int]] = {
+            device_id: (row["id"], item["id"], row["vlan_id"])
             for item in state["deployments"]
-            for domain_id, row in item["rows"].items()
+            for device_id, row in item["rows"].items()
         }
+        for group in groups:
+            ids = {existing[device_id][2] for device_id in group if device_id in existing}
+            if len(group) > 1 and len(ids) > 1:
+                self.logger.warning(
+                    f"Segment {segment_name}: the MLAG pair {' and '.join(group)} has different VLAN IDs "
+                    f"({', '.join(f'{device_id}: {existing[device_id][2]}' for device_id in group if device_id in existing)}) "
+                    "— not renumbered, fix one row by hand"
+                )
+
         stale = sorted(
             row_id
-            for domain_id, (row_id, deployment_id) in existing.items()
-            if domain_id not in undecided and desired.get(domain_id) != deployment_id
+            for device_id, (row_id, deployment_id, _) in existing.items()
+            if device_id not in undecided and desired.get(device_id) != deployment_id
         )
         for row_id in stale:
             await self.client.delete(kind=ManagedVlanDomainSegment, id=row_id)
 
         # After the deletes: the ids they held are free for the new rows below.
         new = {
-            domain_id: deployment_id
-            for domain_id, deployment_id in desired.items()
-            if existing.get(domain_id, (None, None))[1] != deployment_id
+            device_id: deployment_id
+            for device_id, deployment_id in desired.items()
+            if existing.get(device_id, (None, None, None))[1] != deployment_id
         }
         if new:
-            kept_domains = sorted(set(desired) & existing.keys() - new.keys())
+            kept_devices = sorted(set(desired) & existing.keys() - new.keys())
             await self._create_vlan_domain_segments(
-                segment_name, [item["id"] for item in state["deployments"]], new, kept_domains
+                segment_name,
+                [item["id"] for item in state["deployments"]],
+                new,
+                [group for group in groups if not new.keys().isdisjoint(group)],
+                kept_devices,
             )
 
         self.logger.info(
-            f"Segment {segment_name}: {len(desired)} VLAN domain(s) need it across {len(devices)} device(s) — "
+            f"Segment {segment_name}: {len(desired)} device(s) need it (peers included) — "
             f"created {len(new)}, removed {len(stale)} row(s)"
         )
+        return bool(new or stale)

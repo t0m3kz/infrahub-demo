@@ -8,6 +8,7 @@ from transforms.helpers.addressing import host_ip
 from utils.circuit_underlay import NETWORK_APPLIANCE_KIND, OVERLAY_ROLE
 from utils.exchange_transit import EXCHANGE_PEERS, INTERNET_TYPE
 from utils.fabric_roles import RR_ROLES
+from utils.limits import DEFAULT_NAMESPACE
 
 _log = logging.getLogger(__name__)
 
@@ -191,7 +192,7 @@ def _build_session_from_peering(
     local_ns = local_ip_obj.get("ip_namespace") or {}
     vrf = local_ns.get("name")
 
-    if vrf and vrf != "default":
+    if vrf and vrf != DEFAULT_NAMESPACE:
         session["vrf"] = vrf
         # Upstream transit (namespace_type internet): the session gets the
         # default-only inbound / deny-all outbound route-maps (edges template).

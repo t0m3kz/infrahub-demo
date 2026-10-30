@@ -73,7 +73,8 @@
     },
     "VRF_A|l2vpn_evpn": {
       "admin_status": "true",
-      "advertise-ipv4-unicast": "true"
+      "advertise-ipv4-unicast": "true",
+      "route-distinguisher": "10.0.0.1:50001"
     },
     "default|ipv4_unicast": {
       "admin_status": "true",
@@ -90,7 +91,11 @@
       "admin_status": "true"
     }
   },
-  "BGP_GLOBALS_EVPN_RT": {},
+  "BGP_GLOBALS_EVPN_RT": {
+    "VRF_A|l2vpn_evpn|65000:50001": {
+      "route-target-type": "both"
+    }
+  },
   "BGP_NEIGHBOR": {
     "10.0.0.100": {
       "admin_status": "true",

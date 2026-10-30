@@ -342,6 +342,9 @@
                       }
                     }
                   },
+                  "inline_segment": {
+                    "node": null
+                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -434,6 +437,9 @@
                         ]
                       }
                     }
+                  },
+                  "segments": {
+                    "edges": []
                   },
                   "capabilities": {
                     "edges": [
@@ -598,6 +604,9 @@
                       }
                     }
                   },
+                  "segments": {
+                    "edges": []
+                  },
                   "capabilities": {
                     "edges": [
                       {
@@ -700,6 +709,9 @@
                   "cable": {
                     "node": null
                   },
+                  "segments": {
+                    "edges": []
+                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -739,6 +751,9 @@
                         }
                       }
                     }
+                  },
+                  "inline_segment": {
+                    "node": null
                   },
                   "capabilities": {
                     "edges": []
@@ -780,7 +795,7 @@
                               "vlan_id": {
                                 "value": 100
                               },
-                              "vlan_domain": {
+                              "device": {
                                 "node": {
                                   "id": "dev-ds-c005-office01"
                                 }
@@ -846,7 +861,7 @@
                                           "vlan_id": {
                                             "value": 100
                                           },
-                                          "vlan_domain": {
+                                          "device": {
                                             "node": {
                                               "id": "dev-ds-c005-office01"
                                             }
@@ -890,7 +905,7 @@
                               "vlan_id": {
                                 "value": 200
                               },
-                              "vlan_domain": {
+                              "device": {
                                 "node": {
                                   "id": "dev-ds-c005-office01"
                                 }
@@ -956,7 +971,7 @@
                                           "vlan_id": {
                                             "value": 200
                                           },
-                                          "vlan_domain": {
+                                          "device": {
                                             "node": {
                                               "id": "dev-ds-c005-office01"
                                             }
@@ -1051,6 +1066,28 @@
                 ]
               }
             }
+          },
+          "shared_capabilities": {
+            "edges": [
+              {
+                "node": {
+                  "__typename": "ManagedVRF",
+                  "namespace": {
+                    "node": {
+                      "name": {
+                        "value": "VRF_A"
+                      },
+                      "l3_vni": {
+                        "value": 50001
+                      },
+                      "namespace_type": {
+                        "value": "prod"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
           }
         }
       }

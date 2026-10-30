@@ -46,6 +46,7 @@ fragment DecommissionDeviceFields on DcimDevice {
           }
         }
         ... on DcimVirtualInterface {
+          role { value }
           ip_address {
             node {
               id
@@ -83,6 +84,7 @@ query pod_decommission($name: String!) {
         parent {
           node {
             ... on TopologyDataCenter {
+              id
               name { value }
               index { value }
               naming_convention { value }

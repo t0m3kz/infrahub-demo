@@ -1,0 +1,34 @@
+# validate_interface_parents: every virtual interface with the interface it rides on (parent_interface) and the device of both.
+# A VM NIC's parent is a port of its hosting device (with the cable of that port); a sub-interface's parent is a NIC, a port or a
+# LAG of its own device; its inline_segment (R4: a segment is terminated inline on
+# `<parent>.<vlan>`). An unset parent_interface arrives as a null node. Small on purpose: it covers every virtual interface.
+query interface_parents {
+  DcimVirtualInterface {
+    edges {
+      node {
+        id
+        __typename
+        name { value }
+        role { value }
+        inline_segment { node { id } }
+        device {
+          node {
+            id
+            __typename
+            name { value }
+            ... on DcimVirtualDevice { hosting_device { node { id name { value } } } }
+          }
+        }
+        parent_interface {
+          node {
+            id
+            __typename
+            name { value }
+            device { node { id name { value } } }
+            ... on DcimPhysicalInterface { cable { node { id } } }
+          }
+        }
+      }
+    }
+  }
+}

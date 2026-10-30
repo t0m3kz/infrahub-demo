@@ -13,6 +13,15 @@ skips the whole tracked cleanup when a run tracked nothing, so the sessions of a
   * test_02 does the same for a Handoff through the circuit's OWN status (its rule runs add_virtual_circuit
     directly): the sub-interfaces, the circuit, both BGP processes and the data-loaded key stay.
 
+  * test_03 (and the sole-demand handoff it uses) proves the VRF membership of a handoff follows its only demand: the
+    device leaves the topology's instance (one per hosting deployment and namespace), which survives while other
+    members remain and goes with its last one.
+  * test_04 does the same for a segment: the SVIs a segment's rows demand on a switch go, and so does the switch's
+    membership of the DC's instance, when the segment no longer lands there (see the module-level constants of that
+    test); the instance survives through the other switches, and the switches rejoin it with the segment.
+  * test_05 deletes the ManagedMLAG of an access-leaf pair and builds it again (add_rack): a VLAN row hangs off its
+    DEVICE, so no row, VLAN id, SVI or VLAN/SVI line of the rendered config may change either way.
+
 A Tunnel is not covered: it has no trigger rule and is not in the generator's group, so setting its status starts
 nothing (tests/unit/test_event_rules.py pins both), and "no peering appeared" is true of every tunnel anyway.
 
@@ -34,11 +43,40 @@ import pytest
 from infrahub_sdk import InfrahubClient
 
 from tasks import ALL_DEMO_BRANCH
+from transforms.config.access_leaf import AccessLeaf
+from utils.circuit_underlay import SESSION_CIRCUIT
 
-from .all_demo_circuit_constants import ALL_DEMO_VIRTUAL_CIRCUITS, HANDOFF_KIND, INTERCONNECT_KIND
+from .all_demo_circuit_constants import ALL_DEMO_VIRTUAL_CIRCUITS, HANDOFF_TYPE, INTERCONNECT_TYPE
+from .circuit_lifecycle_helpers import (
+    _HOST_CABLES_QUERY,
+    _SWITCH_VRF_QUERY,
+    SEGMENT_NAME,
+    SEGMENT_NAMESPACE,
+    _edges,
+    _namespace_name,
+    _value,
+    back_errors,
+    parse_switch_vrf_state,
+    precondition_errors,
+    sole_demand_instance_errors,
+    svis_gone_errors,
+    switches_of_host,
+    vrf_gone_errors,
+)
 from .conftest import TestInfrahubDockerWithClient
+from .mlag_lifecycle_helpers import (
+    artifact_errors,
+    fetch_candidates,
+    fetch_mlag_findings,
+    fetch_rows,
+    new_findings,
+    pick_candidate,
+    snapshot_errors,
+    vlan_lines,
+)
+from .snapshot_helpers import render_device_config
 from .wait_helpers import wait_for_condition
-from .workflow_helpers import verify_no_failed_tasks, wait_for_tasks_completion
+from .workflow_helpers import run_generator, verify_no_failed_tasks, wait_for_tasks_completion
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -52,7 +90,7 @@ POLL_INTERVAL = 10
 
 DECOMMISSIONED = "decommissioned"
 ACTIVE = "active"
-PHYSICAL_CIRCUIT_KIND = "TopologyPhysicalCircuit"
+CARRIER_CIRCUIT_KIND = "TopologyCarrierCircuit"
 
 # The DCI under test: the *-B fibre of DC12 to PA4. Its sibling ICX-DC12-EQXPA4 shares both devices and must not move.
 INTERCONNECT_CIRCUIT = "ICX-DC12-EQXPA4-B"
@@ -60,10 +98,20 @@ INTERCONNECT_CIRCUIT = "ICX-DC12-EQXPA4-B"
 # 00_vif_handoff.yml), not generated: it must be there before and after.
 HANDOFF_CIRCUIT = "HANDOFF-FR2-AWS-EUC1-PROD"
 HANDOFF_KEY = "eqx-fr2-aws-vif-key"
+# The second AWS VIF, held by the Network Edge router eg-am-ne02. That router is on no other circuit of 30_all (data:
+# 05_cloud_endpoints/00_vif_handoff_am_ne.yml; no segment, no other handoff, no transit), so the /31 of this handoff is
+# the only thing that demands its PROD VRF membership: decommissioning the circuit must remove the device from the AM
+# metro's PROD instance (which stays: eg-am-ne01 is still a member), and the rebuild must add it back. (eg-fr201, the
+# end of HANDOFF_CIRCUIT, has other PROD handoffs and segments: there it must stay a member.)
+SOLE_DEMAND_HANDOFF = "HANDOFF-AMNE-AWS-EUC1-PROD"
+SOLE_DEMAND_DEVICE = "eg-am-ne02"
+# The other router of the AM metro's PROD instance: it keeps the instance alive when SOLE_DEMAND_DEVICE leaves.
+SOLE_DEMAND_PEER = "eg-am-ne01"
+SOLE_DEMAND_KEY = "eqx-am-ne-aws-vif-key"
 
-_PORT_KINDS = {INTERCONNECT_KIND: "DcimPhysicalInterface", HANDOFF_KIND: "DcimVirtualInterface"}
-_PEERING_SUFFIXES = {INTERCONNECT_KIND: ("underlay", "evpn"), HANDOFF_KIND: ("bgp",)}
-_PREFIX_LABELS = {INTERCONNECT_KIND: "DCI", HANDOFF_KIND: "Handoff"}
+_PORT_KINDS = {INTERCONNECT_TYPE: "DcimPhysicalInterface", HANDOFF_TYPE: "DcimVirtualInterface"}
+_PEERING_SUFFIXES = {INTERCONNECT_TYPE: ("underlay", "evpn"), HANDOFF_TYPE: ("bgp",)}
+_PREFIX_LABELS = {INTERCONNECT_TYPE: "DCI", HANDOFF_TYPE: "Handoff"}
 _ENDS = 2
 
 State = dict[str, Any]
@@ -71,8 +119,42 @@ State = dict[str, Any]
 # Everything the generator owns or must leave alone, in one round trip: the sessions (and the other circuits', to prove
 # they are untouched), the keys, the circuit's prefix and addresses (found by the description the generator writes, "DCI
 # <name>" / "Handoff <name>"), and the two ports with the address they carry.
+#
+# Also the VRF instances (ManagedVRF, every one, with its topology and members: the ones of other devices are the
+# bystanders) and what else on the circuit's devices demands the circuit's namespace: an address on another interface,
+# an SVI.
 _STATE_QUERY = """
 query ($peerings: [String], $keys: [String], $descriptions: [String], $devices: [String], $ports: [String]) {
+  vrfs: ManagedVRF {
+    edges {
+      node {
+        id
+        name { value }
+        namespace { node { name { value } } }
+        shared_devices { edges { node { name { value } } } }
+      }
+    }
+  }
+  addressed_physical: DcimPhysicalInterface(device__name__values: $devices) {
+    edges {
+      node {
+        name { value }
+        device { node { name { value } } }
+        ip_address { node { ip_namespace { node { name { value } } } } }
+      }
+    }
+  }
+  addressed_virtual: DcimVirtualInterface(device__name__values: $devices) {
+    edges {
+      node {
+        name { value }
+        role { value }
+        device { node { name { value } } }
+        ip_address { node { ip_namespace { node { name { value } } } } }
+        vrf { node { namespace { node { name { value } } } } }
+      }
+    }
+  }
   ManagedBGPPeering(name__values: $peerings) {
     edges {
       node {
@@ -136,20 +218,30 @@ class Subject:
         return _PORT_KINDS[self.kind]
 
     @property
+    def namespace(self) -> str | None:
+        """The IPAM namespace the circuit's /31 lives in (None for an Interconnect: ``default``, no instance)."""
+        return ALL_DEMO_VIRTUAL_CIRCUITS[self.circuit]["ip_namespace"]
+
+    @property
+    def end_devices(self) -> tuple[str, ...]:
+        """The devices at the circuit's two ends (a party's device is never a member of an instance)."""
+        return tuple(sorted({device for device, _ in self.ports}))
+
+    @property
     def bystanders(self) -> tuple[str, ...]:
         """The sessions of every OTHER interconnect and handoff circuit of 30_all."""
         return tuple(
             f"{name}-{suffix}"
             for name, expected in sorted(ALL_DEMO_VIRTUAL_CIRCUITS.items())
-            if name != self.circuit and expected["kind"] in _PEERING_SUFFIXES
-            for suffix in _PEERING_SUFFIXES[expected["kind"]]
+            if name != self.circuit and expected["circuit_type"] in _PEERING_SUFFIXES
+            for suffix in _PEERING_SUFFIXES[expected["circuit_type"]]
         )
 
 
 def subject_for(circuit: str, key: str | None = None) -> Subject:
     """The subject for a 30_all Interconnect (its generated ``<name>-dci-key``) or Handoff (``key`` is the data's)."""
     expected = ALL_DEMO_VIRTUAL_CIRCUITS[circuit]
-    kind = expected["kind"]
+    kind = expected["circuit_type"]
     assert kind in _PEERING_SUFFIXES, f"{circuit} is a {kind}: it has no session"
     ends = tuple((str(device), str(port)) for device, port in expected["ends"])
     return Subject(circuit=circuit, kind=kind, key=key or f"{circuit}-dci-key", ports=ends)
@@ -158,14 +250,6 @@ def subject_for(circuit: str, key: str | None = None) -> Subject:
 # ----------------------------------------------------------------------------------------------------------------------
 # Reading the state (pure: GraphQL result -> comparable dict)
 # ----------------------------------------------------------------------------------------------------------------------
-
-
-def _edges(result: dict[str, Any], kind: str) -> list[dict[str, Any]]:
-    return [edge["node"] for edge in (result.get(kind) or {}).get("edges", [])]
-
-
-def _value(node: dict[str, Any], attribute: str) -> Any:
-    return (node.get(attribute) or {}).get("value")
 
 
 def parse_state(result: dict[str, Any], subject: Subject) -> State:
@@ -200,6 +284,7 @@ def parse_state(result: dict[str, Any], subject: Subject) -> State:
             address = (node.get("ip_address") or {}).get("node") or {}
             ports[end] = {"id": node["id"], "address": (address.get("address") or {}).get("value")}
     return {
+        "vrfs": parse_vrfs(result, subject),
         "peerings": peerings,
         "bystanders": bystanders,
         "key": {"id": keys[0]["id"], "password": _value(keys[0], "password")} if keys else None,
@@ -211,6 +296,36 @@ def parse_state(result: dict[str, Any], subject: Subject) -> State:
         "address_count": (result.get("IpamIPAddress") or {}).get("count", 0),
         "ports": ports,
     }
+
+
+def parse_vrfs(result: dict[str, Any], subject: Subject) -> dict[str, Any]:
+    """``all``: instance name -> {id, devices (frozenset of member names)} for every ManagedVRF; ``memberships``: end
+    device -> the name of the instance of the circuit's namespace it is a member of (those that are);
+    ``other_demand``: the end devices that something besides the circuit's own port demands the namespace for (an
+    address on another interface, an SVI routed in it)."""
+    instances: dict[str, dict[str, Any]] = {}
+    memberships: dict[str, str] = {}
+    for node in _edges(result, "vrfs"):
+        name = str(_value(node, "name"))
+        members = frozenset(
+            str(_value(edge["node"], "name")) for edge in (node.get("shared_devices") or {}).get("edges", [])
+        )
+        instances[name] = {"id": node["id"], "devices": members}
+        if subject.namespace and _namespace_name(node, "namespace") == subject.namespace:
+            memberships.update({device: name for device in members if device in subject.end_devices})
+    other_demand: set[str] = set()
+    for kind in ("addressed_physical", "addressed_virtual"):
+        for node in _edges(result, kind):
+            device = (((node.get("device") or {}).get("node") or {}).get("name") or {}).get("value")
+            if device not in subject.end_devices or (str(device), str(_value(node, "name"))) in subject.ports:
+                continue
+            address_ns = (((node.get("ip_address") or {}).get("node") or {}).get("ip_namespace") or {}).get(
+                "node"
+            ) or {}
+            vrf_ns = ((((node.get("vrf") or {}).get("node") or {}).get("namespace") or {}).get("node")) or {}
+            if subject.namespace in (_value(address_ns, "name"), _value(vrf_ns, "name")):
+                other_demand.add(str(device))
+    return {"all": instances, "memberships": memberships, "other_demand": sorted(other_demand)}
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -301,6 +416,49 @@ def bystander_errors(before: State, after: State) -> list[str]:
     return errors
 
 
+def vrf_down_errors(before: State, down: State) -> list[str]:
+    """The VRF instances once the session is gone. An end device leaves its instance of the circuit's namespace unless
+    something else demands it there; the instance keeps its id while other members remain and is deleted with its
+    last member; every other instance (and every bystander's membership) is as it was."""
+    leaving = {device for device in before["vrfs"]["memberships"] if device not in before["vrfs"]["other_demand"]}
+    errors: list[str] = []
+    for name, instance in sorted(before["vrfs"]["all"].items()):
+        expected = instance["devices"] - leaving
+        now = down["vrfs"]["all"].get(name)
+        if instance["devices"] and not expected:
+            if now is not None:
+                errors.append(f"{name}: its last member left but the instance {now['id']} still exists")
+        elif now is None:
+            reason = f"members remain ({sorted(expected)})" if expected else "it had no members"
+            errors.append(f"{name}: {reason} but the instance went")
+        elif now["id"] != instance["id"]:
+            errors.append(f"{name}: re-created ({instance['id']} -> {now['id']})")
+        elif now["devices"] != expected:
+            errors.append(f"{name}: members {sorted(now['devices'])}, expected {sorted(expected)}")
+    errors += [
+        f"unexpected VRF instance {name}" for name in sorted(set(down["vrfs"]["all"]) - set(before["vrfs"]["all"]))
+    ]
+    return errors
+
+
+def vrf_up_errors(before: State, down: State, after: State) -> list[str]:
+    """The VRF instances once the session is rebuilt: every instance and membership of ``before`` is back, an instance
+    that survived the decommission with the same id (``down`` shows which did)."""
+    errors: list[str] = []
+    for name, instance in sorted(before["vrfs"]["all"].items()):
+        back = after["vrfs"]["all"].get(name)
+        if back is None:
+            errors.append(f"{name}: the instance did not come back")
+        elif back["devices"] != instance["devices"]:
+            errors.append(f"{name}: members {sorted(back['devices'])}, expected {sorted(instance['devices'])}")
+        elif name in down["vrfs"]["all"] and back["id"] != instance["id"]:
+            errors.append(f"{name}: re-created ({instance['id']} -> {back['id']}) though it never went")
+    errors += [
+        f"unexpected VRF instance {name}" for name in sorted(set(after["vrfs"]["all"]) - set(before["vrfs"]["all"]))
+    ]
+    return errors
+
+
 def process_errors(expected: int, result: dict[str, Any]) -> list[str]:
     """Why fewer BGP processes than the sessions ran on are left (``PROCESSES_QUERY`` result)."""
     alive = (result.get("ManagedBGP") or {}).get("count", 0)
@@ -369,12 +527,24 @@ async def wait_for_state(
 
 
 async def decommission_and_restore(
-    client: InfrahubClient, branch: str, subject: Subject, toggled_kind: str, **toggled: Any
+    client: InfrahubClient,
+    branch: str,
+    subject: Subject,
+    toggled_kind: str,
+    *,
+    sole_demand: str | None = None,
+    **toggled: Any,
 ) -> None:
     """The lifecycle of one circuit's session, driven through the status of the node ``toggled_kind`` / ``toggled``
     (the carrier of an Interconnect, the Handoff itself): decommission it and assert the session is gone and only the
     session; set the status back (in a `finally`, so a failure leaves the branch as it was) and assert it is rebuilt
-    on the same key, with no other circuit's session touched and no failed task."""
+    on the same key, with no other circuit's session touched and no failed task.
+
+    The VRF memberships follow (vrf_down_errors / vrf_up_errors): an end device leaves its topology's instance of the
+    circuit's namespace with the session when nothing else demands it there and stays a member when something does;
+    the instance survives (same id) while other members remain, and every other instance is untouched.
+    ``sole_demand`` names an end device the circuit is the only demand for: the test asserts that precondition on the
+    state read first, so the "leaves" branch is really exercised."""
     await wait_for_tasks_completion(client, branch)
     before = await fetch_state(client, branch, subject)
     errors = rebuilt_errors(before, subject)
@@ -382,6 +552,17 @@ async def decommission_and_restore(
         f"{subject.circuit} has no complete session on '{branch}' to decommission:\n  - " + "\n  - ".join(errors)
     )
     assert before["bystanders"], "no other circuit has a session: nothing proves they are left alone"
+    if sole_demand:
+        assert sole_demand in before["vrfs"]["memberships"], (
+            f"{sole_demand} is a member of no {subject.namespace} VRF instance before the decommission"
+        )
+        instance_errors = sole_demand_instance_errors(before["vrfs"], sole_demand, SOLE_DEMAND_PEER)
+        assert not instance_errors, "the premise of the sole-demand handoff does not hold:\n  - " + "\n  - ".join(
+            instance_errors
+        )
+        assert sole_demand not in before["vrfs"]["other_demand"], (
+            f"{sole_demand} has other demand for {subject.namespace}: it would stay a member"
+        )
     processes = sorted({pid for peering in before["peerings"].values() for pid in peering["process_ids"]})
     assert processes, f"{subject.circuit}'s session runs on no BGP process"
     toggled_id = (await client.get(kind=toggled_kind, branch=branch, **toggled)).id
@@ -400,6 +581,7 @@ async def decommission_and_restore(
             *torn_down_errors(down, subject),
             *survivor_errors(before, down, subject),
             *bystander_errors(before, down),
+            *vrf_down_errors(before, down),
             *process_errors(len(processes), left),
         ]
         assert (await client.get(kind=toggled_kind, branch=branch, **toggled)).id == toggled_id, (
@@ -418,9 +600,99 @@ async def decommission_and_restore(
         *rebuilt_errors(after, subject),
         *key_errors(before["key"], after["key"], subject.key),
         *bystander_errors(before, after),
+        *vrf_up_errors(before, down, after),
     ]
     assert not errors, "reactivated, but:\n  - " + "\n  - ".join(errors)
     await verify_no_failed_tasks(client=client, branch=branch)
+
+
+# The segment under test: the MANAGEMENT-gateway segment of the Infrastructure Services pseudo-customer
+# (data/demos/30_all/07_applications/infra/00_segment.yml). Nothing else of 30_all routes in the MANAGEMENT namespace on
+# an access leaf (the tenant segments are PROD / NON-PROD, and the firewall MANAGEMENT legs sit on border leaves), so on
+# the leaves of one host it is the ONLY demand of the MANAGEMENT instance. Its two components (dns, ntp) have the same
+# two VMs (07_applications/infra/01_application.yml) on two hosts racked in different rows, hence on different
+# access-leaf pairs (06_customer_boarding/c006/dc/dc11/02_instances.yml). Taking the second VM off both components
+# leaves the segment no port on the second host's leaves: their rows, SVIs and MANAGEMENT instance must go while the
+# first host's leaves keep theirs. The switches are read from the cabling, not named here.
+SEGMENT_COMPONENT_FQDNS = (
+    "dns.core-services.infra.demo.local",
+    "ntp.core-services.infra.demo.local",
+)
+KEPT_HOST = "dc11-pod1-server-1"
+REMOVED_INSTANCE = "infra-core-dc11-2"
+REMOVED_HOST = "dc11-pod1-server-2"
+# DeviceMixin._ensure_mlag_pairs, called by rack.py for the access-leaf pairs of a rack
+MLAG_REBUILD_GENERATOR = "add_rack"
+COMPONENT_SEGMENT_GENERATOR = "add_app_component_segment"
+SEGMENT_GENERATOR = "add_vxlan_segment"
+
+COMPONENT_QUERY = (
+    "query ($fqdns: [String]) { AppComponent(fqdn__values: $fqdns) { edges { node { id fqdn { value } } } } }"
+)
+SEGMENT_QUERY = "query ($name: String) { ManagedVxlanSegment(name__value: $name) { edges { node { id } } } }"
+
+
+async def fetch_switch_vrf_state(client: InfrahubClient, branch: str, devices: list[str]) -> dict[str, dict[str, Any]]:
+    """Read the instance and the segment's SVIs of each of ``devices`` on the branch."""
+    result = await client.execute_graphql(
+        query=_SWITCH_VRF_QUERY,
+        variables={"devices": devices},
+        branch_name=branch,
+    )
+    return parse_switch_vrf_state(result, devices)
+
+
+async def poll_switches(
+    client: InfrahubClient,
+    branch: str,
+    devices: list[str],
+    judge: Callable[[dict[str, dict[str, Any]]], list[str]],
+    description: str,
+) -> dict[str, dict[str, Any]]:
+    """Poll until ``judge`` finds nothing wrong with the switches' state; a timeout fails with what is still wrong."""
+    last: list[dict[str, dict[str, Any]]] = []
+
+    async def _check() -> tuple[bool, dict[str, dict[str, Any]]]:
+        state = await fetch_switch_vrf_state(client, branch, devices)
+        last[:] = [state]
+        errors = judge(state)
+        if errors:
+            logging.info("%s: not yet: %s", description, "; ".join(errors))
+        return not errors, state
+
+    try:
+        return await wait_for_condition(
+            _check, max_attempts=MAX_ATTEMPTS, poll_interval=POLL_INTERVAL, description=description
+        )
+    except TimeoutError as exc:
+        raise AssertionError(f"{exc}\n  - " + "\n  - ".join(judge(last[0]))) from exc
+
+
+async def nudge_segment(client: InfrahubClient, branch: str, component_ids: list[str], segment_id: str) -> None:
+    """Run the segment reconcile from both of its entry points and let the queue drain: the first run must have finished
+    before the second starts (run_generator waits for the branch to settle), and the cleanup of a run that deletes a
+    deployment runs after its generate(), so the next run is what removes what that cleanup freed."""
+    for generator, ids in ((COMPONENT_SEGMENT_GENERATOR, component_ids), (SEGMENT_GENERATOR, [segment_id])):
+        outcome = await run_generator(client=client, generator_name=generator, node_ids=ids, branch=branch)
+        assert outcome["success"], f"{generator} failed: {outcome}"
+        await wait_for_tasks_completion(client, branch)
+
+
+async def set_component_instances(
+    client: InfrahubClient, branch: str, fqdn: str, instance_id: str, *, present: bool
+) -> None:
+    """Make the AppComponent ``fqdn`` list (``present``) or not list the instance ``instance_id``; a no-op when it
+    already is so, so restoring an untouched component writes nothing."""
+    component = await client.get(kind="AppComponent", branch=branch, fqdn__value=fqdn, include=["instances"])
+    relationship = getattr(component, "instances")  # noqa: B009 - SDK relationships are dynamic
+    listed = instance_id in {peer.id for peer in relationship.peers}
+    if present and not listed:
+        relationship.add(instance_id)
+    elif not present and listed:
+        relationship.remove(instance_id)
+    else:
+        return
+    await component.save()
 
 
 class TestAllDemoCircuitLifecycle(TestInfrahubDockerWithClient):
@@ -451,7 +723,7 @@ class TestAllDemoCircuitLifecycle(TestInfrahubDockerWithClient):
             async_client_main,
             scenario_branch,
             subject_for(INTERCONNECT_CIRCUIT),
-            PHYSICAL_CIRCUIT_KIND,
+            CARRIER_CIRCUIT_KIND,
             circuit_id__value=carrier,
         )
         logging.info("%s: sessions removed with its carrier, rebuilt on the same key", INTERCONNECT_CIRCUIT)
@@ -476,8 +748,192 @@ class TestAllDemoCircuitLifecycle(TestInfrahubDockerWithClient):
             async_client_main,
             scenario_branch,
             subject_for(HANDOFF_CIRCUIT, key=HANDOFF_KEY),
-            HANDOFF_KIND,
+            SESSION_CIRCUIT,
             name__value=HANDOFF_CIRCUIT,
         )
         logging.info("%s: session removed with its status, rebuilt on the same key", HANDOFF_CIRCUIT)
+
+    @pytest.mark.order(422)
+    @pytest.mark.dependency(
+        scope="session",
+        name="all_demo_handoff_vrf_lifecycle",
+        depends=["all_demo_handoff_lifecycle"],
+    )
+    @pytest.mark.asyncio
+    async def test_03_handoff_vrf_instance_follows_its_only_demand(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """The handoff is the only thing eg-am-ne02 routes in PROD: decommissioning it removes the device from the AM
+        metro's PROD instance (add_virtual_circuit reconciles after its cleanup), which stays for eg-am-ne01; the
+        rebuild adds the device back, and every other instance keeps its id and members."""
+        logging.info("=== %s - Step 3: Handoff VRF instance ===", SCENARIO_NAME)
+
+        await decommission_and_restore(
+            async_client_main,
+            scenario_branch,
+            subject_for(SOLE_DEMAND_HANDOFF, key=SOLE_DEMAND_KEY),
+            SESSION_CIRCUIT,
+            sole_demand=SOLE_DEMAND_DEVICE,
+            name__value=SOLE_DEMAND_HANDOFF,
+        )
+        logging.info("%s: membership removed with its only demand, back with the rebuild", SOLE_DEMAND_DEVICE)
+
+    @pytest.mark.order(423)
+    @pytest.mark.dependency(
+        scope="session",
+        name="all_demo_segment_vrf_lifecycle",
+        depends=["all_demo_handoff_vrf_lifecycle"],
+    )
+    @pytest.mark.asyncio
+    async def test_04_segment_vrf_instance_follows_its_rows(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """The DNS/NTP segment is the only MANAGEMENT demand on the leaves of the host of its second VM: taking that VM
+        off the components removes the segment's SVIs there, then the switches' membership of the DC's MANAGEMENT
+        instance (the reconcile removes the member after the last SVI); the instance itself survives through the
+        switches of the host that stays, which keep their membership and SVIs. Giving the VM back restores the
+        memberships of the same instance, the SVIs in it."""
+        client, branch = async_client_main, scenario_branch
+        logging.info("=== %s - Step 4: Segment VRF instance ===", SCENARIO_NAME)
+
+        await wait_for_tasks_completion(client, branch)
+        cables = await client.execute_graphql(
+            query=_HOST_CABLES_QUERY, variables={"hosts": [KEPT_HOST, REMOVED_HOST]}, branch_name=branch
+        )
+        kept_switches = switches_of_host(cables, KEPT_HOST)
+        lost = sorted(switches_of_host(cables, REMOVED_HOST) - kept_switches)
+        assert lost, f"{REMOVED_HOST} is cabled to no switch {KEPT_HOST} is not: pick another segment or host"
+        kept = sorted(kept_switches)
+        assert kept, f"{KEPT_HOST} is cabled to no switch"
+
+        before = await fetch_switch_vrf_state(client, branch, [*lost, *kept])
+        errors = precondition_errors(before)
+        assert not errors, (
+            f"{SEGMENT_NAME} is not the only {SEGMENT_NAMESPACE} demand of {lost} (and present on {kept}); pick another "
+            "segment:\n  - " + "\n  - ".join(errors)
+        )
+
+        component_ids = [
+            (await client.get(kind="AppComponent", branch=branch, fqdn__value=fqdn)).id
+            for fqdn in SEGMENT_COMPONENT_FQDNS
+        ]
+        segment_id = (await client.get(kind="ManagedVxlanSegment", branch=branch, name__value=SEGMENT_NAME)).id
+        removed_id = (await client.get(kind="DcimVirtualDevice", branch=branch, name__value=REMOVED_INSTANCE)).id
+
+        try:
+            for fqdn in SEGMENT_COMPONENT_FQDNS:
+                await set_component_instances(client, branch, fqdn, removed_id, present=False)
+            logging.info("%s taken off %s", REMOVED_INSTANCE, SEGMENT_COMPONENT_FQDNS)
+            await wait_for_tasks_completion(client, branch)
+            await nudge_segment(client, branch, component_ids, segment_id)
+
+            await poll_switches(
+                client, branch, lost, lambda st: svis_gone_errors(st), f"{lost} lose the SVIs of {SEGMENT_NAME}"
+            )
+            down = await poll_switches(
+                client, branch, lost, lambda st: vrf_gone_errors(st), f"{lost} lose their {SEGMENT_NAMESPACE} instance"
+            )
+            assert not vrf_gone_errors(down)
+            still = await fetch_switch_vrf_state(client, branch, kept)
+            assert still == {d: before[d] for d in kept}, f"the switches of {KEPT_HOST} changed: {still}"
+        finally:
+            for fqdn in SEGMENT_COMPONENT_FQDNS:
+                await set_component_instances(client, branch, fqdn, removed_id, present=True)
+            await wait_for_tasks_completion(client, branch)
+            await nudge_segment(client, branch, component_ids, segment_id)
+            logging.info("%s given back to %s", REMOVED_INSTANCE, SEGMENT_COMPONENT_FQDNS)
+
+        after = await poll_switches(
+            client, branch, [*lost, *kept], back_errors, f"{lost} get the SVIs and the instance of {SEGMENT_NAME} back"
+        )
+        assert not back_errors(after)
+        for device in [*lost, *kept]:
+            assert after[device]["vrf"] == before[device]["vrf"], f"{device}: the instance was re-created"
+        await verify_no_failed_tasks(client=client, branch=branch)
         logging.info("=== %s - COMPLETED ===", SCENARIO_NAME)
+
+    @pytest.mark.order(424)
+    @pytest.mark.dependency(
+        scope="session",
+        name="all_demo_mlag_remove_readd",
+        depends=["all_demo_segment_vrf_lifecycle"],
+    )
+    @pytest.mark.asyncio
+    async def test_05_rows_survive_removing_and_readding_an_mlag(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """Deleting the ManagedMLAG of an access-leaf pair changes no row, VLAN id or SVI of its members, nor the VLAN
+        and SVI lines of their rendered config; add_rack builds the MLAG again and the rows are still the same, none
+        created or deleted, and validate_mlag_domains (M4 / M5) has no new finding.
+
+        The full render DOES differ while the MLAG is gone: the mlag / vPC domain block and the peer-link are the MLAG's
+        own config. Only the lines of the segments' VLANs and SVIs (``vlan_lines``) are compared, plus the rows.
+        """
+        client, branch = async_client_main, scenario_branch
+        logging.info("=== %s - Step 5: remove and re-add an MLAG ===", SCENARIO_NAME)
+
+        await wait_for_tasks_completion(client, branch)
+        candidates = await fetch_candidates(client, branch)
+        every_device = [member["id"] for candidate in candidates for member in candidate["members"]]
+        all_rows, _ = await fetch_rows(client, branch, every_device)
+        mlag, reasons = pick_candidate(candidates, all_rows)
+        assert mlag is not None, "no access-leaf MLAG can show the property:\n  - " + "\n  - ".join(reasons)
+        mlag_name = mlag["name"]
+        names = {member["id"]: member["name"] for member in mlag["members"]}
+        racks = sorted({member["rack_id"] for member in mlag["members"]})
+        logging.info("MLAG %s (%s), racks %s", mlag["name"], sorted(names.values()), racks)
+
+        async def snapshot() -> tuple[Any, dict[str, list[str]]]:
+            state = await fetch_rows(client, branch, list(names))
+            vlan_ids = {row["vlan_id"] for rows in state[0].values() for row in rows.values()}
+            lines = {
+                name: vlan_lines(
+                    await render_device_config(client, branch, name, query="leaf_config", transform_cls=AccessLeaf),
+                    vlan_ids,
+                )
+                for name in names.values()
+            }
+            return state, lines
+
+        async def exists() -> bool:
+            return any(c["name"] == mlag_name for c in await fetch_candidates(client, branch))
+
+        before_state, before_lines = await snapshot()
+        findings_before = await fetch_mlag_findings(client, branch)
+        assert all(before_lines.values()), f"a member renders no VLAN line, nothing to compare: {before_lines}"
+
+        await (await client.get(kind="ManagedMLAG", branch=branch, id=mlag["id"])).delete()
+        outcome: dict[str, Any] = {"success": False, "task_state": "not run: the MLAG was not deleted"}
+        try:
+            await wait_for_tasks_completion(client, branch)
+            assert not await exists(), f"{mlag['name']} still exists after its delete"
+            gone_state, gone_lines = await snapshot()
+            errors = snapshot_errors(before_state, gone_state, names) + artifact_errors(before_lines, gone_lines)
+            assert not errors, "MLAG deleted, but rows / SVIs / VLAN lines changed:\n  - " + "\n  - ".join(errors)
+        finally:
+            if not await exists():
+                outcome = await run_generator(
+                    client=client, generator_name=MLAG_REBUILD_GENERATOR, node_ids=racks, branch=branch
+                )
+            await wait_for_tasks_completion(client, branch)
+            logging.info("%s rebuilt by %s: %s", mlag["name"], MLAG_REBUILD_GENERATOR, outcome)
+
+        assert outcome["success"], f"{MLAG_REBUILD_GENERATOR} failed: {outcome}"
+        rebuilt = [c for c in await fetch_candidates(client, branch) if c["name"] == mlag_name]
+        assert rebuilt, f"{MLAG_REBUILD_GENERATOR} did not build {mlag['name']} again"
+        assert {m["id"] for m in rebuilt[0]["members"]} == set(names), f"{mlag['name']} has other members: {rebuilt}"
+        after_state, after_lines = await snapshot()
+        errors = snapshot_errors(before_state, after_state, names) + artifact_errors(before_lines, after_lines)
+        assert not errors, "MLAG re-added, but rows / SVIs / VLAN lines changed:\n  - " + "\n  - ".join(errors)
+        findings = new_findings(findings_before, await fetch_mlag_findings(client, branch))
+        assert not findings, "validate_mlag_domains has new finding(s) after the re-add:\n  - " + "\n  - ".join(
+            findings
+        )
+        await verify_no_failed_tasks(client=client, branch=branch)
+        logging.info("=== %s - MLAG step COMPLETED ===", SCENARIO_NAME)

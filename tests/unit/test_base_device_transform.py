@@ -143,13 +143,13 @@ class TestTransformDataRouting:
         assert "No configuration generated" in result
 
     @pytest.mark.asyncio
-    async def test_activation_from_capabilities(self) -> None:
-        """Activations on segment.segment_deployments within capabilities are collected."""
+    async def test_activation_from_segments(self) -> None:
+        """Activations on segment.segment_deployments on the interface segments are collected."""
         t = _make_transform(device_role="leaf")
         interfaces = [
             {
                 "name": "Ethernet10",
-                "capabilities": [
+                "segments": [
                     {
                         "id": "seg-1",
                         "typename": "ManagedVxlanSegment",
@@ -247,14 +247,14 @@ class TestTransformDataRouting:
 # ---------------------------------------------------------------------------
 
 
-class TestCollectActivationsVlanDomainMatching:
-    """A VXLAN segment's local vlan_id comes from the row (under a segment deployment) matching THIS
-    device's own domain, and its VNI from that same deployment."""
+class TestCollectActivationsOwnRow:
+    """A VXLAN segment's local vlan_id comes from the row (under a segment deployment) of THIS device
+    (``row.device.id``), and its VNI from that same deployment."""
 
     @staticmethod
-    def _vxlan_iface(vlan_domain_id: str, vlan_id: int = 100) -> dict:
+    def _vxlan_iface(row_device_id: str, vlan_id: int = 100) -> dict:
         return {
-            "capabilities": [
+            "segments": [
                 {
                     "typename": "ManagedVxlanSegment",
                     "id": "seg-1",
@@ -262,62 +262,74 @@ class TestCollectActivationsVlanDomainMatching:
                     "segment_deployments": [
                         {
                             "vni": 10100,
-                            "vlan_domain_segments": [{"vlan_domain": {"id": vlan_domain_id}, "vlan_id": vlan_id}],
+                            "vlan_domain_segments": [{"device": {"id": row_device_id}, "vlan_id": vlan_id}],
                         }
                     ],
                 }
             ]
         }
 
-    def test_mlag_pair_reads_the_domain_entry_not_a_device_entry(self) -> None:
+    def test_device_reads_its_own_row(self) -> None:
         t = _make_transform("leaf")
         activations = t._collect_activations_from_interfaces(
-            [self._vxlan_iface("mlag-domain-1", vlan_id=250)],
-            device_id="dev-leaf-01",
-            device_capabilities=[{"typename": "ManagedMLAG", "id": "mlag-domain-1"}],
-        )
-        assert [a["vlan_id"] for a in activations] == [250]
-
-    def test_standalone_device_reads_its_own_entry(self) -> None:
-        t = _make_transform("leaf")
-        activations = t._collect_activations_from_interfaces(
-            [self._vxlan_iface("dev-leaf-01", vlan_id=110)],
-            device_id="dev-leaf-01",
-            device_capabilities=[],
+            [self._vxlan_iface("dev-leaf-01", vlan_id=110)], device_id="dev-leaf-01"
         )
         assert [a["vlan_id"] for a in activations] == [110]
 
-    def test_vni_is_the_one_of_the_deployment_holding_the_row(self) -> None:
-        """A segment in two deployments: the row of this device's domain sits under one of them,
-        and the VNI is that deployment's, never the first one's."""
+    def test_paired_device_reads_its_own_row_not_its_peers(self) -> None:
+        """Both MLAG peers carry a row of the segment; each renders its own (ids may differ)."""
         t = _make_transform("leaf")
         iface = {
-            "capabilities": [
+            "segments": [
                 {
                     "typename": "ManagedVxlanSegment",
                     "id": "seg-1",
                     "name": "tenant-a-web",
                     "segment_deployments": [
-                        {"vni": 10100, "vlan_domain_segments": [{"vlan_domain": {"id": "other"}, "vlan_id": 100}]},
+                        {
+                            "vni": 10100,
+                            "vlan_domain_segments": [
+                                {"device": {"id": "dev-leaf-02"}, "vlan_id": 250},
+                                {"device": {"id": "dev-leaf-01"}, "vlan_id": 150},
+                            ],
+                        }
+                    ],
+                }
+            ]
+        }
+        for device_id, expected in (("dev-leaf-01", 150), ("dev-leaf-02", 250)):
+            activations = t._collect_activations_from_interfaces([iface], device_id=device_id)
+            assert [a["vlan_id"] for a in activations] == [expected]
+
+    def test_vni_is_the_one_of_the_deployment_holding_the_row(self) -> None:
+        """A segment in two deployments: the row of this device sits under one of them,
+        and the VNI is that deployment's, never the first one's."""
+        t = _make_transform("leaf")
+        iface = {
+            "segments": [
+                {
+                    "typename": "ManagedVxlanSegment",
+                    "id": "seg-1",
+                    "name": "tenant-a-web",
+                    "segment_deployments": [
+                        {"vni": 10100, "vlan_domain_segments": [{"device": {"id": "other"}, "vlan_id": 100}]},
                         {
                             "vni": 20200,
-                            "vlan_domain_segments": [{"vlan_domain": {"id": "dev-leaf-01"}, "vlan_id": 120}],
+                            "vlan_domain_segments": [{"device": {"id": "dev-leaf-01"}, "vlan_id": 120}],
                         },
                     ],
                 }
             ]
         }
-        activations = t._collect_activations_from_interfaces([iface], device_id="dev-leaf-01", device_capabilities=[])
+        activations = t._collect_activations_from_interfaces([iface], device_id="dev-leaf-01")
         assert [(a["vlan_id"], a["vni"]) for a in activations] == [(120, 20200)]
 
-    def test_segment_with_no_entry_for_this_domain_is_skipped(self) -> None:
-        """Allocation has not converged for this domain yet. Skipping beats
+    def test_segment_with_no_row_for_this_device_is_skipped(self) -> None:
+        """Allocation has not converged for this device yet. Skipping beats
         rendering an SVI on a VLAN this device never allocated."""
         t = _make_transform("leaf")
         activations = t._collect_activations_from_interfaces(
-            [self._vxlan_iface("some-other-domain")],
-            device_id="dev-leaf-01",
-            device_capabilities=[],
+            [self._vxlan_iface("some-other-device")], device_id="dev-leaf-01"
         )
         assert activations == []
 

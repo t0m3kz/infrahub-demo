@@ -1,5 +1,5 @@
 ---
-# The hops that stay inside one cage. A physical circuit needs two distinct facilities
+# The hops that stay inside one cage. A carrier circuit needs two distinct facilities
 # (checks/circuit_placement.py, utils/circuit_underlay.py port_cabled), so a hop between two chassis
 # of one cage, or between our edge and the colocation operator's own port in the same IBX, is a cable,
 # the project's rule for fibre pulled inside one facility. A cable has no status: a cabled port is

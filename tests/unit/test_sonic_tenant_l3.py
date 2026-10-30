@@ -124,6 +124,22 @@ class TestVrfBgp:
                 "advertise-ipv4-unicast": "true",
             }
 
+    def test_the_vrf_gets_an_explicit_evpn_route_distinguisher_and_route_target(self) -> None:
+        """frrcfgd: BGP_GLOBALS_AF `<vrf>|l2vpn_evpn` field route-distinguisher, BGP_GLOBALS_EVPN_RT
+        `<vrf>|l2vpn_evpn|<rt>` with route-target-type (sonic-buildimage 77eafbef, documented in sonic_vxlan.j2)."""
+        vxlan = _vxlan(("PROD", 50001, 3900))
+        vxlan["evpn"] = {"enabled": True, "rd_format": "10.0.0.7:{vni}"}
+        vxlan["l3_vni_mappings"][0]["route_target"] = "65100:50001"
+        vxlan["l3_vni_mappings"][0]["import_route_targets"] = []
+        config = _render(vxlan=vxlan)
+        assert config["BGP_GLOBALS_AF"]["PROD|l2vpn_evpn"]["route-distinguisher"] == "10.0.0.7:50001"
+        assert config["BGP_GLOBALS_EVPN_RT"] == {"PROD|l2vpn_evpn|65100:50001": {"route-target-type": "both"}}
+        assert "PROD" in config["BGP_GLOBALS"], "the handlers run `router bgp <local_asn> vrf <vrf>`"
+
+    def test_no_route_distinguisher_without_a_router_id(self) -> None:
+        config = _render(vxlan=_vxlan(("PROD", 50001, 3900)))
+        assert "route-distinguisher" not in config["BGP_GLOBALS_AF"]["PROD|l2vpn_evpn"]
+
     def test_vrf_instance_merges_into_a_vrf_handoff_session_entry(self) -> None:
         """sonic_common.j2 already creates BGP_GLOBALS[vrf] for a VRF-scoped session; it is kept."""
         session = {"neighbor": "100.64.0.1", "remote_as": {"asn": 65100}, "vrf": "PROD"}

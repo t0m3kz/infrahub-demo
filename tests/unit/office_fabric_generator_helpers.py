@@ -63,6 +63,18 @@ def _make_generator(*, wan_exit: bool = False) -> Any:
     gen.ensure_ospf_area = AsyncMock(return_value="area-id")
     gen.create_routing = AsyncMock()
     gen.ensure_lisp_site_key = AsyncMock(return_value="site-key-id")
+    # The VRF instances of the exit's two ends have their own tests (test_vrf_callers.py).
+    gen.vrfs_held_calls = []
+
+    @asynccontextmanager
+    async def _held(needs: dict[str, set[str]]):  # noqa: ANN202
+        gen.vrfs_held_calls.append(needs)
+        gen.vrfs_events.append("held")
+        yield
+        gen.vrfs_events.append("released")
+
+    gen.vrfs_events = []
+    gen.vrfs_held = _held
     if not wan_exit:
         gen._ensure_wan_exit = AsyncMock()
     return gen

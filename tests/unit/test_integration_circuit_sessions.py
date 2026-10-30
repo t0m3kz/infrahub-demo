@@ -36,11 +36,8 @@ from tests.integration import circuit_helpers, interconnect_queries, query_files
 from tests.integration import test_62_all_demo_interconnects as interconnects
 from tests.integration import test_62c_all_demo_circuit_sessions as session_steps
 from tests.integration.all_demo_circuit_constants import (
-    ALL_DEMO_DCI_CIRCUITS,
     ALL_DEMO_HANDOFF_PARTY_ASNS,
     ALL_DEMO_VIRTUAL_CIRCUITS,
-    HANDOFF_KIND,
-    TUNNEL_KIND,
 )
 from tests.integration.demo_data import BOOTSTRAP, attribute, declared, name
 from tests.unit.simulators.circuit_fakes import FakeClient, session_generator
@@ -242,7 +239,7 @@ class _Devices:
         """The virtual_circuit.gql response for one circuit of the inventory; a tunnel is only named, like the query."""
         selected: dict[str, Any] = {
             key: circuit[key]
-            for key in ("id", "__typename", "name", "ip_namespace", "maximum_routes")
+            for key in ("id", "__typename", "name", "circuit_type", "ip_namespace", "maximum_routes")
             if key in circuit
         }
         selected["status"] = _value("active")
@@ -256,7 +253,7 @@ class _Devices:
                 for edge in circuit["capabilities"]["edges"]
             ]
         }
-        return {"TopologyVirtualCircuit": {"edges": [{"node": selected}]}}
+        return {"TopologySessionCircuit": {"edges": [{"node": selected}]}}
 
 
 def _underlay_protocol() -> str:
@@ -340,16 +337,15 @@ class FakeStack:
         stack = cls()
         client = _ServerClient()
         devices = _Devices()
-        circuits = [e["node"] for e in inventory_payload()["TopologyVirtualCircuit"]["edges"]]
+        circuits = [e["node"] for e in inventory_payload()["TopologySessionCircuit"]["edges"]]
         for circuit in circuits:
             await session_generator(client).generate(devices.circuit(circuit))
         stack._read_back(client, devices)
         stack.pool_resources = {pool: [resource] for pool, (resource, _) in client.resources.items()}
-        # The group of add_virtual_circuit holds the kinds it plans for, which the generator itself names.
+        # The group of add_virtual_circuit holds every session circuit (a tunnel too: the created-trigger needs it).
         stack.group_members = [
             {"id": node["id"], "__typename": node["__typename"], "display_label": node["name"]["value"]}
-            for node in (e["node"] for e in stack.inventory["TopologyVirtualCircuit"]["edges"])
-            if node["__typename"] in VirtualCircuitSessionGenerator._PLANNERS
+            for node in (e["node"] for e in stack.inventory["TopologySessionCircuit"]["edges"])
         ]
         return stack
 
@@ -578,7 +574,7 @@ async def test_a_handoff_whose_lower_address_is_on_the_party_end_fails(stack: Fa
     addresses = [p["ip_address"]["node"]["address"] for p in ports]
     addresses[0]["value"], addresses[1]["value"] = addresses[1]["value"], addresses[0]["value"]
     # the inventory (circuit side) carries the same swap, so only the lower-end rule is left to fail
-    nodes = {e["node"]["name"]["value"]: e["node"] for e in stack.inventory["TopologyVirtualCircuit"]["edges"]}
+    nodes = {e["node"]["name"]["value"]: e["node"] for e in stack.inventory["TopologySessionCircuit"]["edges"]}
     circuit_ports = [e["node"] for e in nodes["HANDOFF-FR2-SDWAN-GW1-PROD"]["capabilities"]["edges"]]
     swapped = {p["name"]["value"]: p["ip_address"]["node"]["address"] for p in circuit_ports}
     names = list(swapped)
@@ -605,22 +601,16 @@ async def test_a_tunnel_with_a_session_of_any_name_fails(stack: FakeStack, suffi
         await _tests().test_06c_verify_tunnels_have_no_session(_client(stack), "main")
 
 
-async def test_the_group_holds_exactly_the_interconnects_and_handoffs(stack: FakeStack) -> None:
-    """The virtual-circuits group has the DCIs and handoffs, the circuits add_virtual_circuit runs on, and no tunnel."""
+async def test_the_group_holds_exactly_the_session_circuits(stack: FakeStack) -> None:
+    """The virtual-circuits group has every session circuit: the DCIs, the handoffs and the tunnels (a non-member
+    would raise in the created-trigger)."""
     await interconnects.TestAllDemoInterconnects().test_02a_verify_virtual_circuits_group(_client(stack), "main")
-    assert len(stack.group_members) == len(ALL_DEMO_DCI_CIRCUITS) + sum(
-        1 for e in ALL_DEMO_VIRTUAL_CIRCUITS.values() if e["kind"] == HANDOFF_KIND
-    )
+    assert len(stack.group_members) == len(ALL_DEMO_VIRTUAL_CIRCUITS)
 
 
-async def test_a_tunnel_in_the_group_or_a_circuit_missing_from_it_fails(stack: FakeStack) -> None:
-    """A tunnel in the group would raise inside the generator, and a session circuit left out would never run."""
-    nodes = [e["node"] for e in stack.inventory["TopologyVirtualCircuit"]["edges"]]
-    tunnel = next(n for n in nodes if n["__typename"] == TUNNEL_KIND)
-    stack.group_members.append({"id": tunnel["id"], "__typename": TUNNEL_KIND, "display_label": "tunnel"})
-    with pytest.raises(AssertionError, match="a tunnel circuit is in the group"):
-        await interconnects.TestAllDemoInterconnects().test_02a_verify_virtual_circuits_group(_client(stack), "main")
-    stack.group_members = stack.group_members[1:-1]
+async def test_a_circuit_missing_from_the_group_or_a_stray_member_fails(stack: FakeStack) -> None:
+    """A session circuit left out would never run, and a member that is no session circuit is drift."""
+    stack.group_members = stack.group_members[1:]
     with pytest.raises(AssertionError, match="not in the group"):
         await interconnects.TestAllDemoInterconnects().test_02a_verify_virtual_circuits_group(_client(stack), "main")
 
@@ -676,31 +666,31 @@ def _drift_plan(kind: str, rewrite: Callable[[SessionPlan], SessionPlan]) -> Cal
             id="dci-mtu",
         ),
         pytest.param(
-            _drift_plan(virtual_circuit.INTERCONNECT_CIRCUIT, _peerings_with(ttl=64)),
+            _drift_plan(virtual_circuit.DCI_TYPE, _peerings_with(ttl=64)),
             "test_06_verify_dci_sessions",
             "ttl 64",
             id="dci-ttl",
         ),
         pytest.param(
-            _drift_plan(virtual_circuit.INTERCONNECT_CIRCUIT, _ends_swapped),
+            _drift_plan(virtual_circuit.DCI_TYPE, _ends_swapped),
             "test_06_verify_dci_sessions",
             "the facility end takes the lower address",
             id="dci-lower-address",
         ),
         pytest.param(
-            _drift_plan(virtual_circuit.HANDOFF_CIRCUIT, _peerings_with(ttl=255)),
+            _drift_plan(virtual_circuit.HANDOFF_TYPE, _peerings_with(ttl=255)),
             "test_06b_verify_handoff_sessions",
             "ttl 255",
             id="handoff-ttl",
         ),
         pytest.param(
-            _drift_plan(virtual_circuit.HANDOFF_CIRCUIT, _peerings_with(maximum_routes=7)),
+            _drift_plan(virtual_circuit.HANDOFF_TYPE, _peerings_with(maximum_routes=7)),
             "test_06b_verify_handoff_sessions",
             "maximum_routes 7",
             id="handoff-maximum-routes",
         ),
         pytest.param(
-            _drift_plan(virtual_circuit.HANDOFF_CIRCUIT, _ends_swapped),
+            _drift_plan(virtual_circuit.HANDOFF_TYPE, _ends_swapped),
             "test_06b_verify_handoff_sessions",
             "not the lower address of the /31",
             id="handoff-lower-address",

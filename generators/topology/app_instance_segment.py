@@ -29,7 +29,7 @@ A segment with no AppComponent at all referencing it gets no customer-port
 assignment — there is intentionally no DC-wide fallback (see
 generators/topology/segment.py's module docstring).
 
-A ManagedVxlanSegment has its ports tagged, then its VLAN domain rows
+A ManagedVxlanSegment has its ports tagged, then its VLAN rows
 reconciled (its local VLAN is per switch). Any other segment (a cloud segment)
 has no on-prem port to tag.
 
@@ -37,9 +37,9 @@ Reconciled per SEGMENT, not per component: the triggering component only
 names the segment. The desired tags are the union over every AppComponent
 on it (queries/topology/add/segment_components.gql); a port no instance
 lands on any more (an instance moved, a component left, a port assigned to the
-segment by hand) is untagged, and the segment's VLAN domain rows follow
+segment by hand) is untagged, and the segment's VLAN rows follow
 (SegmentPortTagMixin, shared with add_vxlan_segment, which a change of the
-segment's ``capabilities`` triggers, data/events/99_actions.yml). A component
+segment's ``switched_interfaces`` triggers, data/events/99_actions.yml). A component
 that moves to ANOTHER segment leaves the old segment's tags until that
 segment is reconciled again (the next run of either generator on it).
 
@@ -65,8 +65,8 @@ from .segment_ports import SegmentPortTagMixin
 class AppInstanceSegmentGenerator(PoolMixin, SegmentPortTagMixin, CommonGenerator):
     """Reconciles a segment's customer-facing switch-port tags from the
     instances of every AppComponent on it, then, for a VXLAN segment, the
-    segment's LOCAL VLAN ID rows on the VLAN domains (MLAG pair or device
-    without MLAG) of the switches those ports belong to.
+    segment's LOCAL VLAN ID rows on the switches those ports belong to
+    (and their MLAG peers).
 
     Ownership: a tagged switch port belongs to the device's generator and a
     row is shared by every component on the segment and by add_vxlan_segment,

@@ -1,5 +1,5 @@
 ---
-# /31 pools for HandoffCircuit sessions (generators/topology/virtual_circuit.py), one per environment namespace
+# /31 pools for handoff session circuits (generators/topology/virtual_circuit.py), one per environment namespace
 # and named after it (`Handoff-<NAMESPACE>-IPv4`, virtual_circuit.handoff_pool_name): the generator picks the pool
 # from the circuit's `ip_namespace`. Each pool allocates inside its namespace, so the resource prefix itself lives
 # in that namespace; this file sorts after 22_namespaces.yml on purpose (the loader processes files in name order

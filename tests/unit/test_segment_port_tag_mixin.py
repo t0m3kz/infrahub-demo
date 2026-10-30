@@ -62,7 +62,7 @@ class TestEveryHostRunsTheSameReconcile:
 
 
 class TestHandAssignedPorts:
-    """A port put on the segment by hand (its `capabilities`) is checked against the components' instances."""
+    """A port put on the segment by hand (its `switched_interfaces`) is checked against the components' instances."""
 
     @staticmethod
     def _reconcile(gen: Any, current: set[str], segment_obj: MagicMock) -> tuple[int, int]:
@@ -82,9 +82,24 @@ class TestHandAssignedPorts:
 
         assert result == (0, 1)
         segment_obj.remove_relationships.assert_awaited_once_with(
-            relation_to_update="capabilities", related_nodes=["if-x"]
+            relation_to_update="switched_interfaces", related_nodes=["if-x"]
         )
         segment_obj.add_relationships.assert_not_awaited()
+
+    def test_a_desired_untagged_port_is_tagged_through_an_edge_add(self) -> None:
+        """The instance lands on if-a, which the segment is not tagged on yet: one add_relationships, no remove."""
+        gen = _gen()
+        gen._segment_components = AsyncMock(return_value=_components("dev-1"))
+        gen._customer_facing_target_ids = AsyncMock(return_value={"if-a"})
+        segment_obj = _segment_obj()
+
+        result = self._reconcile(gen, set(), segment_obj)
+
+        assert result == (1, 0)
+        segment_obj.add_relationships.assert_awaited_once_with(
+            relation_to_update="switched_interfaces", related_nodes=["if-a"]
+        )
+        segment_obj.remove_relationships.assert_not_awaited()
 
     def test_a_segment_with_no_component_keeps_its_ports(self) -> None:
         """Nothing names where the segment is wanted: an authored port is not a stray one."""
@@ -127,13 +142,17 @@ class TestReconcileVxlanSegment:
         gen = _gen()
         gen._fetch_segment_vlan_state = AsyncMock(
             return_value={
-                "segment": {"id": "seg-1", "capabilities": [{"id": "if-a", "typename": "DcimPhysicalInterface"}]}
+                "segment": {"id": "seg-1", "switched_interfaces": [{"id": "if-a", "typename": "DcimPhysicalInterface"}]}
             }
         )
         gen._reconcile_segment_interface_tags = AsyncMock(
             side_effect=lambda **_: gen.events.append("tags") or ((1, 0) if changed else (0, 0))
         )
-        gen._reconcile_segment_vlan_domains_locked = AsyncMock(side_effect=lambda *_a, **_k: gen.events.append("rows"))
+        gen._reconcile_segment_vlan_domains_locked = AsyncMock(
+            side_effect=lambda *_a, **_k: gen.events.append("rows") or False
+        )
+        # The VRF pass over the domains' devices has its own tests (test_vrf_callers.py).
+        gen.reconcile_vrfs = AsyncMock()
         return gen
 
     def test_tags_then_rows_under_one_segment_lock(self) -> None:

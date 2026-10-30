@@ -123,6 +123,18 @@ fragment DeviceCapabilitiesFields on DcimCapabilities {
 
 fragment DeviceCapabilitiesOnDeviceFields on DcimDevice {
   ... on DcimCapabilities {
+    # The device's memberships of shared objects (the shared device edge, ManagedGenericSharedDevice): today the
+    # VRF instances of its topology, i.e. the L3 instances it may realize (utils/vrf_demand.py device_memberships).
+    # A new shared kind adds one typed `... on` block here. Declared on DcimCapabilities, not on DcimDevice: it must
+    # stay inside this inline fragment.
+    shared_capabilities {
+      edges {
+        node {
+          __typename
+          ... on ManagedVRF { namespace { node { name { value } l3_vni { value } namespace_type { value } } } }
+        }
+      }
+    }
     ...DeviceCapabilitiesFields
   }
 }

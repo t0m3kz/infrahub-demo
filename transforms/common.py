@@ -11,7 +11,6 @@ from transforms.helpers.acl import get_acls
 from transforms.helpers.bgp import get_bgp_profile
 from transforms.helpers.cisco_xe import get_cisco_xe_acls, get_cisco_xe_vrf_routes, refuse_unfiltered_ipv6
 from transforms.helpers.firewall import (
-    _service_context_caps,
     get_exchange_routes,
     get_exchange_transits,
     get_leaf_firewall_transits,
@@ -24,20 +23,28 @@ from transforms.helpers.mlag import get_mlag, get_sonic_mlag_config
 from transforms.helpers.origination import get_origination
 from transforms.helpers.ospf import get_ospf, refuse_unrenderable_ospf_auth
 from transforms.helpers.overlay import OVERLAY_CONFIG_KEYS, OVERLAY_RENDERERS
-from transforms.helpers.segments import get_vlans, routed_activations, segment_hosting_candidates
+from transforms.helpers.segments import get_vlans, interface_segments, routed_activations
 from transforms.helpers.templates import load_template
+from transforms.helpers.vrf import VrfRealizationError, l3_vrf_names, svi_vrfs, unrealized_vrfs
 from transforms.helpers.vxlan import get_interfaces, get_vxlan_config
 from utils.circuit_underlay import NETWORK_APPLIANCE_KIND
 from utils.data_cleaning import clean_data
+from utils.exchange_transit import service_context_caps
 from utils.fabric_roles import BORDER_ROLES, OFFICE_LISP_ROLES
 from utils.limits import UNDERLAY_MTU
-from utils.vlan_domain import vlan_domain_id
+from utils.segment_addressing import segment_hosting_candidates
+from utils.vrf_demand import SVI_ROLE
 
 _log = logging.getLogger(__name__)
 
 # The platforms whose BGP template (common/cisco_ios_bgp.j2) renders the session["unfiltered_banner"] comment above
 # a VRF neighbour. A hosted appliance on any other platform is refused: its template would render no banner.
 UNFILTERED_BANNER_PLATFORMS = frozenset({"cisco_ios", "cisco_xe"})
+
+# Interface roles the generic interface loop does not render: the MLAG control SVI is rendered by the platform's MLAG
+# include (it needs the peer-link VLAN/trunk group around it), a segment SVI (role svi, an object since the VRF
+# instances) by the VLAN loop from its segment (get_vlans), and neither is a port.
+_NON_TEMPLATE_INTERFACE_ROLES = frozenset({"mlag-control", SVI_ROLE})
 
 
 def _fabric_rt_asn(deployment: Any) -> int | None:
@@ -152,8 +159,8 @@ class BaseDeviceTransform(InfrahubTransform):
     export_tenant_default_to_evpn: bool = True
     # Comment character of the "no platform" stub config.
     comment_char: str = "!"
-    # Resolve a VxlanSegment's local VLAN through this device's own VLAN domain.
-    resolve_vlan_domain: bool = True
+    # Resolve a VxlanSegment's local VLAN from this device's own row of the segment deployment.
+    resolve_vlan_row: bool = True
     # The platforms whose template defines the RM-<session>-IN/-OUT maps of an external BGP session
     # (transforms/helpers/bgp.py). Any other platform would render that session with no policy.
     external_policy_platforms: ClassVar[frozenset[str]] = frozenset()
@@ -162,10 +169,7 @@ class BaseDeviceTransform(InfrahubTransform):
         """Segment activations of one device: from its interface capabilities, plus the
         stretched segments its multi-site border gateway carries."""
         interfaces = device.get("interfaces") or []
-        capabilities = device.get("capabilities") or []
-        activations = self._collect_activations_from_interfaces(
-            interfaces, device_id=device.get("id"), device_capabilities=capabilities
-        )
+        activations = self._collect_activations_from_interfaces(interfaces, device_id=device.get("id"))
         if any(iface.get("role") == "multisite-vip" for iface in interfaces):
             # The site hosting the segments: the DC for a border-leaf, the metro (one `parent` hop
             # above the zone the edge is deployed to) for a colocation edge.
@@ -184,28 +188,67 @@ class BaseDeviceTransform(InfrahubTransform):
                 self._collect_border_gateway_activations(
                     site,
                     device_id=device.get("id"),
-                    device_capabilities=capabilities,
                     seen={(act.get("segment") or {}).get("id") for act in activations},
                 )
             )
         return activations
 
-    async def transform(self, data: Any) -> Any:
+    def prepared_device(self, data: Any) -> tuple[dict, dict, str | None]:
+        """Clean `data` and return (device, the other query roots, platform name), the device ready to render.
+
+        The device carries its segment activations (``segment_deployments``) and the transit legs of the contexts
+        tagged on its service ports (``exchange_transits``: VLAN/VNI/VRF/anycast only, never segment policy input).
+        """
         device_data, extra_roots, platform_name = self._device_and_platform(data)
+        if platform_name:
+            activations = self._device_activations(device_data)
+            if activations:
+                device_data["segment_deployments"] = activations
+            device_data["exchange_transits"] = get_exchange_transits(
+                service_context_caps(device_data.get("interfaces"))
+            )
+        return device_data, extra_roots, platform_name
+
+    async def transform(self, data: Any) -> Any:
+        device_data, extra_roots, platform_name = self.prepared_device(data)
         if not platform_name:
             return self._no_platform_config(device_data)
 
-        activations = self._device_activations(device_data)
-        if activations:
-            device_data["segment_deployments"] = activations
-        # Transit legs of the firewall and load-balancer contexts tagged on this
-        # device's service ports: VLAN/VNI/VRF/anycast only, never segment policy input.
-        device_data["exchange_transits"] = get_exchange_transits(_service_context_caps(device_data.get("interfaces")))
-
+        vrf_banner = self._refuse_unrealized_vrfs(platform_name, device_data)
         config = self._template_context(device_data, platform_name, extra_roots)
+        if vrf_banner:
+            config["vrf_banner"] = vrf_banner
         self._refuse_cisco_xe_unrendered(platform_name, config)
         config.update(self._cisco_xe_context(platform_name, config))
         return self._render(platform_name, config)
+
+    @staticmethod
+    def _refuse_unrealized_vrfs(platform_name: str, device_data: dict) -> list[str]:
+        """Raise ``VrfRealizationError`` when the device's config uses a VRF or SVI it has no instance of.
+
+        A VRF instance (ManagedVRF) is the device's only VRF set (transforms/helpers/vrf.py): a routed segment,
+        an SVI, a session or address, or a transit leg in a namespace with no instance, and a routed segment with no
+        SVI object (or one in another VRF), would render a config that routes in a table the device does not have.
+        One raise lists everything missing.
+
+        A provider-hosted ``CloudNetworkAppliance`` on a ``UNFILTERED_BANNER_PLATFORMS`` platform must still get its
+        artifact: the problems are logged as a WARNING and returned as the ``vrf_banner`` comment lines instead.
+        """
+        problems = unrealized_vrfs(device_data)
+        if not problems:
+            return []
+        name = device_data.get("name") or "device"
+        if device_data.get("typename") == NETWORK_APPLIANCE_KIND and platform_name in UNFILTERED_BANNER_PLATFORMS:
+            _log.warning(
+                "%s: renders with VRFs it has no instance of (%s); the VRF generator has not converged",
+                name,
+                "; ".join(problems),
+            )
+            return [f"VRF-UNREALIZED: {problem}" for problem in problems]
+        raise VrfRealizationError(
+            f"{name}: {platform_name} config uses VRFs the device has no instance of ({'; '.join(problems)}); "
+            "refusing a config that routes in a table the device does not have"
+        )
 
     def _refuse_unfiltered_external_sessions(self, platform_name: str, config: dict, device_kind: str | None) -> None:
         """Raise when an external BGP session would render with no owner prefix filter.
@@ -281,11 +324,14 @@ class BaseDeviceTransform(InfrahubTransform):
         lisp = config.get(OVERLAY_CONFIG_KEYS["lisp"])
         if lisp:
             # The LISP template defines the VRFs of its L3 instances; a BGP session (an office's WAN exit) in any
-            # other VRF would render under a VRF the device does not have.
+            # other VRF (an instance that is VRF-lite, or has no L3 instance-id) would render under a VRF the
+            # template does not define.
             session_vrfs = {vrf for bgp in config.get("bgp") or [] for vrf in bgp.get("vrf_sessions") or {}}
-            undefined = sorted(session_vrfs - {l3["vrf"] for l3 in lisp.get("l3_instances") or []})
+            undefined = sorted(session_vrfs - set(l3_vrf_names(lisp, None)))
             if undefined:
-                unsupported.append(f"a BGP session in VRF {', '.join(undefined)}, which no hosted segment defines")
+                unsupported.append(
+                    f"a BGP session in VRF {', '.join(undefined)}, which is no L3 instance of the LISP site"
+                )
         if unsupported:
             raise ValueError(
                 f"cisco_xe {self.device_role} cannot render: {', '.join(unsupported)}; refusing incomplete config"
@@ -301,11 +347,7 @@ class BaseDeviceTransform(InfrahubTransform):
             return {}
         refuse_unfiltered_ipv6(config.get("vlans") or [], self.device_role)
         lisp = config.get(OVERLAY_CONFIG_KEYS["lisp"])
-        defined_vrfs = (
-            [l3["vrf"] for l3 in lisp["l3_instances"]]
-            if lisp
-            else [mapping["vrf_name"] for mapping in (config.get("vxlan") or {}).get("l3_vni_mappings", [])]
-        )
+        defined_vrfs = l3_vrf_names(lisp, config.get("vxlan"))
         return {
             "xe_acls": get_cisco_xe_acls(config.get("acls"), self.device_role),
             "xe_vrf_routes": get_cisco_xe_vrf_routes(
@@ -388,12 +430,11 @@ class BaseDeviceTransform(InfrahubTransform):
     def _template_interfaces(data: dict, *, host_vlans: dict[str, int] | None = None) -> list[dict[str, Any]]:
         """The interfaces the templates render (get_interfaces), ``host_vlans`` being the NX-OS GPO host ports.
 
-        The MLAG control SVI is rendered by the platform's MLAG include (it needs the peer-link
-        VLAN/trunk group around it), not as a generic interface.
+        Not the roles of ``_NON_TEMPLATE_INTERFACE_ROLES`` (the MLAG control SVI, the segment SVIs).
         """
         activations = (data.get("segment_deployments") or []) + (data.get("exchange_transits") or []) or None
         return get_interfaces(
-            [iface for iface in data.get("interfaces") or [] if iface.get("role") != "mlag-control"],
+            [iface for iface in data.get("interfaces") or [] if iface.get("role") not in _NON_TEMPLATE_INTERFACE_ROLES],
             activations=activations,
             device_name=data.get("name", ""),
             native_vlans=host_vlans,
@@ -434,7 +475,7 @@ class BaseDeviceTransform(InfrahubTransform):
         # on real segments. They are not bound to any host port (get_interfaces only
         # binds a transit VLAN to a port carrying the context).
         transits = (data.get("exchange_transits") or []) + leaf_transits
-        vlans = get_vlans(activations=(activations or []) + transits)
+        vlans = get_vlans(activations=(activations or []) + transits, svi_vrfs=svi_vrfs(data.get("interfaces")))
 
         # Inter-VRF exchange routes through the firewall context(s) tagged on
         # this device's service ports (statics in the VRF, redistributed to EVPN).
@@ -485,9 +526,7 @@ class BaseDeviceTransform(InfrahubTransform):
             "leaf_transit_prefixes": sorted({t["segment"]["gateway"]["ip_prefix"]["prefix"] for t in leaf_transits}),
             # The tagged segments' SVI prefixes with the routing-identity communities their EVPN export adds
             # (transforms/helpers/origination.py); empty, so every template renders as before, without tags.
-            "origination": get_origination(
-                activations, [mapping["vrf_name"] for mapping in (vxlan or {}).get("l3_vni_mappings", [])]
-            ),
+            "origination": get_origination(activations, l3_vrf_names(None, vxlan)),
         }
         if lisp is not None:
             config[OVERLAY_CONFIG_KEYS["lisp"]] = lisp
@@ -500,11 +539,7 @@ class BaseDeviceTransform(InfrahubTransform):
             role=self.device_role,
             platform=platform_name,
             activations=activations or [],
-            vrfs=(
-                [l3["vrf"] for l3 in lisp["l3_instances"]]
-                if lisp
-                else [mapping["vrf_name"] for mapping in (vxlan or {}).get("l3_vni_mappings", [])]
-            ),
+            vrfs=l3_vrf_names(lisp, vxlan),
             interfaces=data.get("interfaces") or [],
         )
         if found is not None:
@@ -552,14 +587,15 @@ class BaseDeviceTransform(InfrahubTransform):
             )
 
     @staticmethod
-    def _own_vlan_domain_row(deployments: list[dict], own_domain_id: str | None) -> tuple[dict, dict] | None:
-        """(row, segment deployment) of the segment's row for this device's own VLAN domain.
+    def _own_vlan_row(deployments: list[dict], device_id: str | None) -> tuple[dict, dict] | None:
+        """(row, segment deployment) of the segment's row of this device.
 
-        The row is a child of the deployment it sits in, so its VLAN ID and the
+        A row points straight at its device (a paired device has its own row, a peer's row is
+        ignored). The row is a child of the deployment it sits in, so its VLAN ID and the
         deployment's VNI come from one record."""
         for deployment in deployments:
             for row in deployment.get("vlan_domain_segments") or []:
-                if (row.get("vlan_domain") or {}).get("id") == own_domain_id:
+                if device_id and (row.get("device") or {}).get("id") == device_id:
                     return row, deployment
         return None
 
@@ -568,36 +604,34 @@ class BaseDeviceTransform(InfrahubTransform):
         interfaces: list[dict],
         *,
         device_id: str | None = None,
-        device_capabilities: list[dict] | None = None,
     ) -> list[dict]:
-        """Collect unique segment activations from capabilities.
+        """Collect unique segment activations from the interfaces' segments (interface_segments).
 
         VxlanSegment.segment_deployments
         is cardinality:many (multi-site stretch — clean_data unwraps it to a
         list, already filtered to active/provisioning by the query) and
         carries the vni and, under it, the vlan_domain_segments rows — the LOCAL
-        vlan_id for a VxlanSegment is the row of THIS device's own VLAN domain
-        (its ManagedMLAG if paired, else itself, utils/vlan_domain.vlan_domain_id)
+        vlan_id for a VxlanSegment is the row of THIS device (``row.device.id``;
+        a paired device uses its own row, never its peer's)
         and the vni is its deployment's, one record for both. A VxlanSegment
-        with no row for this device's own domain yet (allocation not
+        with no row for this device yet (allocation not
         converged) is skipped.
-        Without ``resolve_vlan_domain`` (a firewall is never part of a VLAN
-        domain) a VxlanSegment takes the first segment_deployments entry as is.
+        Without ``resolve_vlan_row`` (a firewall has no VLAN rows)
+        a VxlanSegment takes the first segment_deployments entry as is.
         We deduplicate by segment id so each segment appears once.
         """
-        own_domain_id = vlan_domain_id(device_id, ((c.get("typename"), c.get("id")) for c in device_capabilities or []))
         seen: set[str] = set()
         activations: list[dict] = []
         for iface in interfaces:
-            for cap in iface.get("capabilities") or []:
+            for cap in interface_segments(iface):
                 seg_id = cap.get("id") or cap.get("name")
                 if not seg_id or seg_id in seen:
                     continue
                 seg_deps = cap.get("segment_deployments")
                 if not seg_deps:
                     continue
-                if self.resolve_vlan_domain:
-                    own_row = self._own_vlan_domain_row(seg_deps, own_domain_id)
+                if self.resolve_vlan_row:
+                    own_row = self._own_vlan_row(seg_deps, device_id)
                     if own_row is None:
                         continue
                     vlan_id, vni = own_row[0].get("vlan_id"), own_row[1].get("vni")
@@ -618,7 +652,6 @@ class BaseDeviceTransform(InfrahubTransform):
         deployment: dict[str, Any] | None,
         *,
         device_id: str | None,
-        device_capabilities: list[dict[str, Any]],
         seen: set[str | None],
     ) -> list[dict[str, Any]]:
         """Activations for every stretched VXLAN segment of an EVPN Multi-Site BGW's site.
@@ -629,18 +662,17 @@ class BaseDeviceTransform(InfrahubTransform):
         site's own TopologySegmentHosting.segment_deployments instead (queries/
         fragments/network_segment.gql SegmentDeploymentsOnDeploymentFields),
         keeping only stretch_scope != local. The local VLAN still has to be the
-        BGW's own vlan_domain entry (generators/topology/segment.py assigns one
+        BGW's own row (generators/topology/segment.py assigns one
         to border-leaf/edge devices for stretched segments); a segment without
         one has not converged yet and is skipped, same as on a leaf.
         """
-        own_domain_id = vlan_domain_id(device_id, ((c.get("typename"), c.get("id")) for c in device_capabilities))
         activations: list[dict[str, Any]] = []
         for dep in (deployment or {}).get("segment_deployments") or []:
             seg = dep.get("segment") or {}
             seg_id = seg.get("id")
             if not seg_id or seg_id in seen or (seg.get("stretch_scope") or "local") == "local" or not dep.get("vni"):
                 continue
-            own_row = self._own_vlan_domain_row([dep], own_domain_id)
+            own_row = self._own_vlan_row([dep], device_id)
             if own_row is None or not own_row[0].get("vlan_id"):
                 continue
             seen.add(seg_id)

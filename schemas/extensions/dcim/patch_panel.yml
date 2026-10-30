@@ -1,0 +1,145 @@
+---
+version: "1.0"
+
+# ============================================================================
+# A passive patch panel: ports and nothing else.
+#
+# DcimPatchPanel is NOT a DcimDevice. It inherits no generic at all, so it has no role, platform, address, interface
+# list, artifact (CoreArtifactTarget) and none of the capability edges (DcimCapabilities: `capabilities` and
+# `shared_capabilities`), no VRF demand and no VLAN row. DcimPatchPanelPort inherits DcimEndpoint only: the `cable`
+# edge is all it takes for a DcimCable to join a panel port to an interface (DcimCable.endpoints peers DcimEndpoint).
+# tests/unit/test_patch_panel_schema.py guards both.
+#
+# A jack has two faces and a DcimEndpoint carries one cable, so a jack is two port nodes: a `front` and a `rear` one.
+# The pairing rule of v1 is the only one: the front port and the rear port of the SAME `name` in one panel are a pair
+# (a cable on one continues through the pair to the cable on the other; utils/cable_path.py). There are no rear-port
+# positions, no mapping tables and no trunk templates.
+#
+# A panel always sits between two devices: a circuit end stays an interface (the `capabilities` peers are untouched).
+# The rack-unit `position` returns together with a rack drawing that draws panels.
+# Its location is its `rack` (LocationRack.deployment gives the facility); it has no `deployment` and no device type.
+# ============================================================================
+
+nodes:
+  - name: PatchPanel
+    namespace: Dcim
+    description: "Passive patch panel: ports and nothing else (no config, no artifact, no capabilities)."
+    label: Patch Panel
+    icon: mdi:ethernet
+    include_in_menu: false
+    generate_template: true
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value }}"
+    order_by:
+      - name__value
+    uniqueness_constraints:
+      - ["name__value"]
+    attributes:
+      - name: name
+        kind: Text
+        unique: true
+        optional: false
+        order_weight: 900
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 950
+    relationships:
+      - name: rack
+        peer: LocationRack
+        optional: true
+        cardinality: one
+        kind: Attribute
+        identifier: "rack__patch_panels"
+        order_weight: 1700
+      - name: ports
+        peer: DcimPatchPanelPort
+        optional: true
+        cardinality: many
+        kind: Component
+        identifier: "panel__ports"
+        order_weight: 2500
+
+  - name: PatchPanelPort
+    namespace: Dcim
+    description: "One face of a jack: front N pairs with rear N of the same panel."
+    label: Patch Panel Port
+    icon: mdi:ethernet
+    include_in_menu: false
+    inherit_from:
+      - DcimEndpoint
+    human_friendly_id:
+      - panel__name__value
+      - face__value
+      - name__value
+    display_label: "{{ panel__name__value }}-{{ face__value }}-{{ name__value }}"
+    order_by:
+      - panel__name__value
+      - face__value
+      - name__value
+    uniqueness_constraints:
+      - ["panel", "face__value", "name__value"]
+    attributes:
+      - name: name
+        kind: Text
+        optional: false
+        description: "The jack number; the front and the rear port of one name are a pair"
+        order_weight: 900
+      - name: face
+        kind: Dropdown
+        optional: false
+        order_weight: 950
+        choices:
+          - name: front
+            label: Front
+            color: "#A9CCE3"
+          - name: rear
+            label: Rear
+            color: "#A9DFBF"
+      - name: connector
+        kind: Dropdown
+        optional: false
+        order_weight: 1000
+        choices:
+          - name: lc-upc
+            label: LC/UPC
+          - name: lc-apc
+            label: LC/APC
+          - name: sc-upc
+            label: SC/UPC
+          - name: sc-apc
+            label: SC/APC
+          - name: mpo-12
+            label: MPO-12
+          - name: rj45
+            label: RJ45
+      - name: label
+        kind: Text
+        optional: true
+        order_weight: 1100
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 1150
+    relationships:
+      - name: panel
+        peer: DcimPatchPanel
+        optional: false
+        cardinality: one
+        kind: Parent
+        identifier: "panel__ports"
+        order_weight: 1200
+
+extensions:
+  nodes:
+    - kind: LocationRack
+      relationships:
+        - name: patch_panels
+          peer: DcimPatchPanel
+          label: Patch Panels in Rack
+          optional: true
+          cardinality: many
+          kind: Generic
+          identifier: "rack__patch_panels"
+          order_weight: 2100

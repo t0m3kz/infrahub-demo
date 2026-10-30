@@ -4,6 +4,7 @@ from typing import Any
 
 from transforms.common import BaseDeviceTransform
 from transforms.helpers.segments import get_vlans
+from transforms.helpers.vrf import svi_vrfs
 
 
 class L2Leaf(BaseDeviceTransform):
@@ -20,5 +21,5 @@ class L2Leaf(BaseDeviceTransform):
 
     def _extra_config(self, data: dict, platform_name: str, extra_roots: dict | None = None) -> dict[str, Any]:
         return {
-            "vlans": get_vlans(activations=data.get("segment_deployments")),
+            "vlans": get_vlans(activations=data.get("segment_deployments"), svi_vrfs=svi_vrfs(data.get("interfaces"))),
         }

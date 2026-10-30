@@ -1,10 +1,10 @@
 """Consistency of the circuit data the circuit generators run on.
 
-add_circuit (physical circuits) and add_virtual_circuit (Interconnect and Handoff circuits) only run for members of
+add_circuit (carrier circuits) and add_virtual_circuit (session circuits of type dci and handoff) only run for members of
 their target groups. The loader accepts a circuit outside its group, or a handoff the generator would refuse, so both
 only surface as a missing session or a failed task after the 30_all load - and a hand-written peering left next to a
-generated one is a duplicate session to the same neighbour. A TopologyTunnelCircuit builds nothing and stays out of
-the group.
+generated one is a duplicate session to the same neighbour. A tunnel (a TopologySessionCircuit of type tunnel) builds nothing but is a member
+too: the created-trigger raises for a non-member.
 """
 
 from __future__ import annotations
@@ -15,14 +15,21 @@ from typing import Any
 
 import pytest
 
-from tests.integration.demo_data import BOOTSTRAP, ROOT, declared, name, object_documents, object_templates
+from tests.integration.demo_data import (
+    BOOTSTRAP,
+    ROOT,
+    declared,
+    declared_session,
+    name,
+    object_documents,
+    object_templates,
+)
 
 _DEMOS = ROOT / "data" / "demos"
 _BOOTSTRAP_GROUPS = BOOTSTRAP / "00_groups.yml"
 _TARGET_GROUPS = {
-    "TopologyPhysicalCircuit": "physical_circuits",
-    "TopologyInterconnectCircuit": "virtual_circuits",
-    "TopologyHandoffCircuit": "virtual_circuits",
+    "TopologyCarrierCircuit": "carrier_circuits",
+    "TopologySessionCircuit": "virtual_circuits",
 }
 _ALL = _DEMOS / "30_all"
 _ONRAMP = _ALL / "08_interconnects" / "01_colo_onramp"
@@ -43,6 +50,11 @@ _DCI_CIRCUITS = set(_DCI_FIBRES)
 def _rows(kind: str, root: Path) -> list[dict[str, Any]]:
     """The entries of `kind` the object files under root (a directory or one file) declare, nested ones included."""
     return [obj.item for obj in declared(kind, root)]
+
+
+def _session_rows(circuit_type: str, root: Path) -> list[dict[str, Any]]:
+    """The session circuits of one circuit_type (dci, handoff, tunnel) the object files under root declare."""
+    return [obj.item for obj in declared_session(circuit_type, root)]
 
 
 def _nested(node: Any, key: str) -> list[dict[str, Any]]:
@@ -72,16 +84,31 @@ def test_every_circuit_is_in_its_generator_target_group(kind: str) -> None:
     assert not outside, f"{kind} outside {_TARGET_GROUPS[kind]}: {outside}"
 
 
-def test_a_tunnel_circuit_is_in_no_generator_group() -> None:
-    """The SD-WAN orchestrator owns a tunnel's routing: no session is generated, so it is not a group member."""
-    rows = _rows("TopologyTunnelCircuit", _DEMOS)
+def test_a_tunnel_circuit_is_in_the_virtual_circuits_group_and_has_no_session_field() -> None:
+    """The SD-WAN orchestrator owns a tunnel's routing, so no session is generated, but the created-trigger of the
+    group's generator raises for a non-member: the tunnel joins virtual_circuits and carries no handoff field."""
+    rows = _session_rows("tunnel", _DEMOS)
     assert [_circuit_name(entry) for entry in rows] == ["C001-PARTNER-ACME-FR2"]
-    assert not [_circuit_name(entry) for entry in rows if entry.get("member_of_groups")]
+    assert all("virtual_circuits" in entry["member_of_groups"] for entry in rows)
+    assert not [e["name"] for e in rows if {"ip_namespace", "password", "maximum_routes", "cloud_endpoint"} & set(e)]
 
 
-def test_no_virtual_circuit_is_declared_as_the_generic() -> None:
-    """The generic TopologyVirtualCircuit has no data row: the role of a virtual circuit is its kind."""
-    assert not _rows("TopologyVirtualCircuit", _DEMOS)
+def test_no_circuit_is_declared_as_a_removed_kind() -> None:
+    """The physical, virtual, interconnect, handoff and tunnel kinds are gone: the role is circuit_type."""
+    removed = (
+        "TopologyPhysicalCircuit",
+        "TopologyVirtualCircuit",
+        "TopologyTunnelCircuit",
+        "TopologyInterconnectCircuit",
+        "TopologyHandoffCircuit",
+    )
+    assert not [kind for kind in removed if _rows(kind, _DEMOS)]
+
+
+def test_every_session_circuit_declares_a_circuit_type_of_the_schema() -> None:
+    """circuit_type is required and one of dci, handoff, tunnel."""
+    rows = _rows("TopologySessionCircuit", _DEMOS)
+    assert rows and {entry["circuit_type"] for entry in rows} == {"dci", "handoff", "tunnel"}
 
 
 def test_circuit_target_groups_are_generator_groups() -> None:
@@ -93,28 +120,28 @@ def test_circuit_target_groups_are_generator_groups() -> None:
 _REMOVED_CIRCUIT_KEYS = ("peering_role", "link_type", "transport_mode", "tunnel_id", "bandwidth", "encryption", "vni")
 
 
-@pytest.mark.parametrize("kind", ["TopologyTunnelCircuit", "TopologyInterconnectCircuit", "TopologyHandoffCircuit"])
-def test_a_virtual_circuit_row_uses_no_removed_attribute(kind: str) -> None:
-    """The role is the kind: no `peering_role`, `link_type`, `transport_mode`, `tunnel_id`, and no carrier key."""
-    for entry in _rows(kind, _DEMOS):
-        assert not [key for key in (*_REMOVED_CIRCUIT_KEYS, "physical_circuits") if key in entry], _circuit_name(entry)
+@pytest.mark.parametrize("circuit_type", ["tunnel", "dci", "handoff"])
+def test_a_session_circuit_row_uses_no_removed_attribute(circuit_type: str) -> None:
+    """The role is circuit_type: no `peering_role`, `link_type`, `transport_mode`, `tunnel_id`, and no carrier key."""
+    for entry in _session_rows(circuit_type, _DEMOS):
+        assert not [key for key in (*_REMOVED_CIRCUIT_KEYS, "carrier_circuits") if key in entry], _circuit_name(entry)
 
 
-def test_no_physical_circuit_names_a_peering_role() -> None:
-    """A physical circuit is a pure carrier: the DCI session belongs to the Interconnect that rides it."""
-    assert _rows("TopologyPhysicalCircuit", _DEMOS / "30_all")
-    assert not [_circuit_name(e) for e in _rows("TopologyPhysicalCircuit", _DEMOS / "30_all") if "peering_role" in e]
+def test_no_carrier_circuit_names_a_peering_role() -> None:
+    """A carrier circuit is a pure carrier: the DCI session belongs to the Interconnect that rides it."""
+    assert _rows("TopologyCarrierCircuit", _DEMOS / "30_all")
+    assert not [_circuit_name(e) for e in _rows("TopologyCarrierCircuit", _DEMOS / "30_all") if "peering_role" in e]
 
 
 def test_the_dark_fibres_are_the_six_dci_carriers() -> None:
     """Exactly the six DC <-> cage fibres are dark fibre, and each has one Interconnect with the same two ports."""
     fibres = {
         _circuit_name(e): e
-        for e in _rows("TopologyPhysicalCircuit", _DEMOS / "30_all")
+        for e in _rows("TopologyCarrierCircuit", _DEMOS / "30_all")
         if e["circuit_type"] == "dark_fiber"
     }
     assert set(fibres) == _DCI_CIRCUITS
-    interconnects = {e["name"]: e for e in _rows("TopologyInterconnectCircuit", _DEMOS / "30_all")}
+    interconnects = {e["name"]: e for e in _session_rows("dci", _DEMOS / "30_all")}
     assert set(interconnects) == set(_DCI_FIBRES.values())
     for fibre_id, interconnect in _DCI_FIBRES.items():
         assert interconnects[interconnect]["capabilities"] == fibres[fibre_id]["capabilities"]
@@ -128,7 +155,7 @@ def test_the_dark_fibres_are_the_six_dci_carriers() -> None:
 @pytest.mark.parametrize("circuit_id", sorted(_DCI_CIRCUITS))
 def test_dci_circuit_has_a_border_leaf_and_a_cage_edge_end(circuit_id: str) -> None:
     """add_circuit refuses anything but two endpoints on two devices, one of them a DC device."""
-    circuit = next(e for e in _rows("TopologyPhysicalCircuit", _ONRAMP) if e["circuit_id"] == circuit_id)
+    circuit = next(e for e in _rows("TopologyCarrierCircuit", _ONRAMP) if e["circuit_id"] == circuit_id)
     ends = [tuple(i) for i in circuit["capabilities"]]
     devices = sorted(device for device, _ in ends)
 
@@ -149,12 +176,11 @@ def test_generated_peering_and_key_names_do_not_collide_with_data() -> None:
     `<name>-bgp` (Handoff), `<name>-dci-key`. They share the peering/circuit name space, so no row may reuse them."""
     names = {e["name"] for e in _rows("ManagedBGPPeering", _DEMOS)}
     names |= {_circuit_name(e) for kind in _TARGET_GROUPS for e in _rows(kind, _DEMOS)}
-    names |= {e["name"] for e in _rows("TopologyTunnelCircuit", _DEMOS)}
     names |= {e["name"] for e in _rows("RoutingPassword", _DEMOS)}
     generated: set[str] = set()
-    for e in _rows("TopologyInterconnectCircuit", _DEMOS):
+    for e in _session_rows("dci", _DEMOS):
         generated |= {f"{e['name']}-underlay", f"{e['name']}-evpn", f"{e['name']}-dci-key"}
-    generated |= {f"{e['name']}-bgp" for e in _rows("TopologyHandoffCircuit", _DEMOS)}
+    generated |= {f"{e['name']}-bgp" for e in _session_rows("handoff", _DEMOS)}
 
     assert generated
     assert not generated & names
@@ -162,7 +188,7 @@ def test_generated_peering_and_key_names_do_not_collide_with_data() -> None:
 
 def test_every_dci_fibre_lands_on_its_own_free_port() -> None:
     """No two fibres share a port: each DC border leaf uses Ethernet1/35 and 1/36, each cage edge its dci ports."""
-    ends = [tuple(i) for e in _rows("TopologyPhysicalCircuit", _ONRAMP) for i in e["capabilities"]]
+    ends = [tuple(i) for e in _rows("TopologyCarrierCircuit", _ONRAMP) for i in e["capabilities"]]
     assert len(ends) == len(set(ends))
     border_leaf_ports = {port for device, port in ends if device.startswith("bl-dc")}
     assert border_leaf_ports == {"Ethernet1/35", "Ethernet1/36"}
@@ -186,12 +212,12 @@ def test_generated_fabric_peering_names_do_not_collide_with_data() -> None:
     assert not {"FABRIC-eg-fr201-eg-fr202", "FABRIC-eg-pa401-eg-pa402"} & names
 
 
-def test_every_physical_circuit_row_has_two_distinct_ends_and_no_port_is_in_two_rows() -> None:
-    """A physical circuit terminates on exactly two ports (the schema's min/max count), each port on one circuit.
+def test_every_carrier_circuit_row_has_two_distinct_ends_and_no_port_is_in_two_rows() -> None:
+    """A carrier circuit terminates on exactly two ports (the schema's min/max count), each port on one circuit.
 
     The INET-<office> circuits are not data rows: add_sdwan_edge creates them with both ends in one write.
     """
-    rows = _rows("TopologyPhysicalCircuit", _ALL)
+    rows = _rows("TopologyCarrierCircuit", _ALL)
     assert rows
     seen: dict[tuple[str, str], str] = {}
     for row in rows:
@@ -205,7 +231,7 @@ def test_every_physical_circuit_row_has_two_distinct_ends_and_no_port_is_in_two_
 def test_every_cross_connect_far_end_is_a_declared_cloud_provider_edge() -> None:
     """A cross-connect's second port sits on a stub device the 01_colo_onramp provider edges declare."""
     stubs = {e["name"] for e in _rows("DcimPhysicalDevice", _ONRAMP / "02_cloud_provider_edges.yml")}
-    cross_connects = [e for e in _rows("TopologyPhysicalCircuit", _ONRAMP) if e["circuit_type"] == "cross_connect"]
+    cross_connects = [e for e in _rows("TopologyCarrierCircuit", _ONRAMP) if e["circuit_type"] == "cross_connect"]
     assert sorted(_circuit_name(e) for e in cross_connects) == [
         "XC-EQXFR2-AWS-EUC1",
         "XC-EQXPA4-AZURE-WEU",
@@ -271,7 +297,7 @@ _STUB_LOOPBACKS = "10.255.64."
 
 
 def _handoffs() -> list[dict[str, Any]]:
-    return _rows("TopologyHandoffCircuit", _ALL)
+    return _session_rows("handoff", _ALL)
 
 
 def _sub_interfaces() -> dict[tuple[str, str], dict[str, Any]]:

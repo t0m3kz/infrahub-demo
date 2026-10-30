@@ -82,7 +82,8 @@ def _make_firewall_interface(
             }
         ),
         "ha_domain": _node(None),
-        "capabilities": _edges([seg_node]),
+        "inline_segment": _node(seg_node),
+        "capabilities": _edges([]),
     }
 
 
@@ -487,7 +488,7 @@ def build_leaf_lb_client_data(*, device_name: str, platform: str) -> dict:
             gateway_ip=gateway,
             ns_name="VRF_A",
             l3_vni=50001,
-            vlan_domain_id=domain,
+            row_device_id=domain,
         )
         for name, vlan, gateway in (("seg-web", 110, "10.110.0.1/24"), ("seg-app", 120, "10.120.0.1/24"))
     }
@@ -669,7 +670,7 @@ def build_firewall_inline_data(*, device_name: str, platform: str) -> dict:
         namespace_name="PROD",
     )
     inline_iface["ip_address"] = _node({"address": _v("10.1.0.2/24"), "ip_namespace": _node({"name": _v("PROD")})})
-    segment = inline_iface["capabilities"]["edges"][0]["node"]
+    segment = inline_iface["inline_segment"]["node"]
     segment["terminate_inline"] = _v(True)
     segment["inline_service"] = _node({"id": "ha-1", "name": _v("dc1-fw-ha")})
     segment["capabilities"] = _edges(

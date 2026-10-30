@@ -88,6 +88,10 @@ query colocation_placement {
               name { value }
               ... on CloudNetworkAppliance {
                 account { node { id } }
+                term_length { value }
+                device_type { node { id name { value } } }
+                software_image { node { id package { value } } }
+                interfaces { edges { node { __typename } } }
                 capabilities {
                   edges {
                     node {

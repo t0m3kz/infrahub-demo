@@ -28,6 +28,8 @@ vlan {{ vlan.vlan_id }}
    name {{ vlan.name or 'VLAN_' + vlan.vlan_id|string }}
 {% endfor %}
 
+{%- include 'common/arista_eos_lag_members.j2' %}
+
 {#- All Physical Interfaces (sorted) -#}
 {%- for interface in interfaces if interface.role != 'mlag-peer' %}
 interface {{ interface.name }}
@@ -39,6 +41,7 @@ interface {{ interface.name }}
 {%- if interface.dot1q_vlan %}
    encapsulation dot1q vlan {{ interface.dot1q_vlan }}
 {%- endif %}
+{%- include 'common/arista_eos_mlag_id.j2' %}
 {%- include 'common/arista_eos_interface_ip.j2' %}
 {%- include 'common/arista_eos_switchport.j2' %}
 {%- if interface.get('ospf') %}

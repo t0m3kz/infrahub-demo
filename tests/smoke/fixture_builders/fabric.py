@@ -390,11 +390,9 @@ def build_device_data(
                 ],
             )
 
-        # This device's own VLAN domain. build_device_data never builds a
-        # ManagedMLAG capability, so utils/vlan_domain.vlan_domain_id falls through to
-        # the device id — the vlan_domain_segments row must use the same value
-        # or the transform skips the VxlanSegment.
-        vlan_domain_id = f"dev-{device_name}"
+        # The vlan_domain_segments row points at this device (its id) or the
+        # transform skips the VxlanSegment.
+        row_device_id = f"dev-{device_name}"
 
         # microsegmented: assign firewall but still render leaf ACL
         microseg = isolation_mode == "microsegmented"
@@ -414,7 +412,7 @@ def build_device_data(
                 "num_deployments": 1,
                 "isolation_mode": isolation_mode,
                 "has_firewall": microseg,
-                "vlan_domain_id": vlan_domain_id,
+                "row_device_id": row_device_id,
                 **({"routing_identity": (12, 5)} if routing_identity else {}),
             }
         )
@@ -428,10 +426,25 @@ def build_device_data(
                 "security_policy": policy_vlan,
                 "isolation_mode": isolation_mode,
                 "num_deployments": 1,
-                "vlan_domain_id": vlan_domain_id,
+                "row_device_id": row_device_id,
                 **({"routing_identity": (13, None)} if routing_identity and vlan_segment_vrf else {}),
             }
         )
+
+    # An l2-leaf is pure L2 (generators/topology/rack.py _generate_l2_leafs): its uplinks are 802.1Q trunks to the
+    # leaf pair, cabled with no pool, so they hold no address, no routing and no segments
+    # (SegmentPortTagMixin tags only customer-facing host ports, never leaf-to-leaf trunks).
+    if role == "l2-leaf":
+        interfaces[1:3] = [
+            _make_interface(
+                name=f"Ethernet{port}",
+                device_name=device_name,
+                description=f"to leaf-0{port}",
+                role="uplink",
+                ip_address=None,
+            )
+            for port in (1, 2)
+        ]
 
     # VXLAN/EVPN is rendered ONLY from capabilities, so the
     # customer-facing port must carry the segments. Attaching them solely to
@@ -506,9 +519,9 @@ _INLINE_SEGMENT_KWARGS: dict[str, Any] = {
 }
 
 
-def _make_inline_segment_node(vlan_domain_id: str) -> dict:
-    """The terminate_inline VXLAN segment, with this device's vlan_domain_segments row under its deployment."""
-    seg = _make_segment_node(**_INLINE_SEGMENT_KWARGS, vlan_domain_id=vlan_domain_id)
+def _make_inline_segment_node(row_device_id: str) -> dict:
+    """The terminate_inline VXLAN segment, with this device's row under its deployment."""
+    seg = _make_segment_node(**_INLINE_SEGMENT_KWARGS, row_device_id=row_device_id)
     seg["terminate_inline"] = _v(True)
     seg["inline_service"] = _node({"id": "fw-ha-dc1", "name": _v("dc1-fw-ha")})
     return seg
@@ -521,13 +534,13 @@ def build_inline_segment_data(*, device_name: str, role: str, platform: str) -> 
     L2 VNI, no SVI. border-leaf: the segment is on a firewall-role service
     port (Ethernet20) facing an HA member, which the generator tags with it —
     rendered as a tagged trunk. Either way the segment is in the device's own
-    VLAN domain (its device id: build_device_data builds no ManagedMLAG).
+    row (its device id).
     """
     data = build_device_data(
         device_name=device_name, role=role, platform=platform, scenario="ebgp_ibgp", include_segments=False
     )
     device_node = data["DcimDevice"]["edges"][0]["node"]
-    seg = _make_inline_segment_node(vlan_domain_id=device_node["id"])
+    seg = _make_inline_segment_node(row_device_id=device_node["id"])
     interfaces = device_node["interfaces"]["edges"]
     if role == "border-leaf":
         interfaces.append(
@@ -543,7 +556,8 @@ def build_inline_segment_data(*, device_name: str, role: str, platform: str) -> 
         )
     else:
         customer_port = next(e["node"] for e in interfaces if e["node"]["name"]["value"] == "Ethernet10")
-        customer_port["capabilities"] = _edges([seg])
+        customer_port["capabilities"] = _edges([])
+        customer_port["segments"] = _edges([seg])
     # DC-wide view (border-leaf PBR / BGW): the same segment, still no PBR.
     device_node["deployment"]["node"]["segment_deployments"] = _edges(
         [_deployment_record(seg, _INLINE_SEGMENT_KWARGS["vni"])]

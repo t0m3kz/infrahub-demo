@@ -26,6 +26,7 @@ from checks.colocation_placement import (
     kit_without_design_findings,
     metro_zone_count_findings,
     template_kind_findings,
+    terraform_appliance_findings,
     terraform_order_data_findings,
     unique_name_findings,
     zone_design_in_metro_findings,
@@ -539,12 +540,19 @@ def _appliance(
     *,
     account: str | None = "acct-1",
     domains: list[dict[str, Any]] | None = None,
+    **model: Any,
 ) -> dict[str, Any]:
     """A raw device of a virtual colocation, shaped like the ``... on CloudNetworkAppliance`` selection.
 
-    ``capabilities`` holds the BGP overlay process and the HA domains the appliance is a member of.
+    ``capabilities`` holds the BGP overlay process and the HA domains the appliance is a member of; ``model``
+    overrides a field of the order's model (device_type, software_image, term_length, interfaces), complete by default.
     """
     return {
+        "device_type": {"node": {"id": "dt-1", "name": {"value": "C8000V"}}},
+        "software_image": {"node": {"id": "img-1", "package": {"value": "network-essentials"}}},
+        "term_length": {"value": 12},
+        "interfaces": _edges([{"__typename": "DcimVirtualInterface"}, {"__typename": "DcimVirtualInterface"}]),
+        **model,
         "id": node_id,
         "__typename": "CloudNetworkAppliance",
         "name": {"value": name},
@@ -816,6 +824,82 @@ class TestTerraformOrderData:
         assert [type(f) for f in findings] == [Finding]
 
 
+class TestTerraformApplianceModel:
+    """Rule 8: each appliance of a terraform presence has its device type, software image with package, term and virtual NICs."""
+
+    def _messages(self, **model: Any) -> list[str]:
+        vc = {
+            **AM_NE,
+            "infrastructure_orchestrator": {"value": "terraform"},
+            "appliances": _edges([_appliance(*NE01, **model)]),
+        }
+        return [f.message for f in terraform_appliance_findings(clean_data(_payload(virtual=[vc])))]
+
+    def test_a_complete_appliance_passes(self) -> None:
+        assert self._messages() == []
+
+    def test_a_presence_not_routed_to_terraform_is_not_judged(self) -> None:
+        vc = {
+            **AM_NE,
+            "infrastructure_orchestrator": {"value": "manual"},
+            "appliances": _edges([_appliance(*NE01, device_type={"node": None}, software_image={"node": None})]),
+        }
+
+        assert terraform_appliance_findings(clean_data(_payload(virtual=[vc]))) == []
+
+    def test_no_device_type_fails(self) -> None:
+        messages = self._messages(device_type={"node": None})
+
+        assert len(messages) == 1
+        assert "appliance 'fw-am-ne01' has no device type" in messages[0]
+
+    def test_no_software_image_fails(self) -> None:
+        messages = self._messages(software_image={"node": None})
+
+        assert len(messages) == 1
+        assert "has no software image" in messages[0]
+
+    def test_an_image_without_a_package_fails(self) -> None:
+        messages = self._messages(software_image={"node": {"id": "img-1", "package": {"value": None}}})
+
+        assert len(messages) == 1
+        assert "software image without a package" in messages[0]
+
+    def test_no_term_length_fails(self) -> None:
+        messages = self._messages(term_length={"value": None})
+
+        assert len(messages) == 1
+        assert "has no term_length" in messages[0]
+
+    def test_a_physical_interface_fails_once_per_kind(self) -> None:
+        interfaces = _edges([{"__typename": "DcimPhysicalInterface"}] * 2 + [{"__typename": "DcimVirtualInterface"}])
+        messages = self._messages(interfaces=interfaces)
+
+        assert len(messages) == 1
+        assert (
+            "interfaces of kind DcimPhysicalInterface but a hosted appliance has only DcimVirtualInterface"
+            in messages[0]
+        )
+
+    def test_an_appliance_with_no_interface_passes(self) -> None:
+        assert self._messages(interfaces=_edges([])) == []
+
+    def test_findings_are_attached_to_the_presence(self) -> None:
+        findings = _run(
+            _payload(
+                virtual=[
+                    {
+                        **AM_NE,
+                        "infrastructure_orchestrator": {"value": "terraform"},
+                        "appliances": _edges([_appliance(*NE01, term_length={"value": None})]),
+                    }
+                ]
+            )
+        )
+
+        assert any("appliance model is wrong" in f["message"] and f["object_id"] == "vc-am-ne" for f in findings)
+
+
 class TestRegistry:
     def test_every_rule_is_registered_once(self) -> None:
         assert RULES == (
@@ -826,6 +910,7 @@ class TestRegistry:
             zone_design_in_metro_findings,
             metro_zone_count_findings,
             terraform_order_data_findings,
+            terraform_appliance_findings,
         )
 
     def test_empty_response_has_no_findings(self) -> None:

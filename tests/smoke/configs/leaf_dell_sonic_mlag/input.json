@@ -171,6 +171,9 @@
                       }
                     }
                   },
+                  "inline_segment": {
+                    "node": null
+                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -214,6 +217,9 @@
                   "cable": {
                     "node": null
                   },
+                  "segments": {
+                    "edges": []
+                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -256,6 +262,9 @@
                   },
                   "cable": {
                     "node": null
+                  },
+                  "segments": {
+                    "edges": []
                   },
                   "capabilities": {
                     "edges": []
@@ -350,6 +359,9 @@
                   "cable": {
                     "node": null
                   },
+                  "segments": {
+                    "edges": []
+                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -381,6 +393,9 @@
                   },
                   "cable": {
                     "node": null
+                  },
+                  "segments": {
+                    "edges": []
                   },
                   "capabilities": {
                     "edges": []
@@ -416,6 +431,9 @@
                       }
                     }
                   },
+                  "inline_segment": {
+                    "node": null
+                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -428,7 +446,7 @@
                     "value": "PortChannel101"
                   },
                   "description": {
-                    "value": "MLAG Peer-Link"
+                    "value": "host-01:bond0"
                   },
                   "status": {
                     "value": "active"
@@ -472,6 +490,9 @@
                   },
                   "capabilities": {
                     "edges": []
+                  },
+                  "segments": {
+                    "edges": []
                   }
                 }
               },
@@ -501,6 +522,9 @@
                   },
                   "cable": {
                     "node": null
+                  },
+                  "segments": {
+                    "edges": []
                   },
                   "capabilities": {
                     "edges": []

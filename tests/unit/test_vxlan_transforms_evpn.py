@@ -6,9 +6,9 @@ import pytest
 
 from tests.unit.vxlan_transforms_helpers import _make_activation
 from transforms.common import _fabric_anycast_mac, _fabric_rt_asn
+from transforms.helpers.overlay import _l3_instances
 from transforms.helpers.vxlan import (
     _DEFAULT_ANYCAST_GATEWAY_MAC,
-    _collect_l3_vni_from_namespaces,
     _overlay_is_ebgp,
     _select_evpn_bgp_process,
     _warn_unencodable_vnis,
@@ -561,38 +561,38 @@ class TestRtFallbackUnderEbgpOverlayIsLoudlyWrong:
 class TestL3VniSviVlanAssignment:
     """NX-OS cannot bind a VRF to an L3 VNI without an `ip forward` SVI, and
     that SVI needs a local VLAN. The number has local significance only — no two
-    devices need to agree on it — so it is assigned by position rather than
-    modelled or drawn from a pool.
+    devices need to agree on it — and is the fixed slot of the VRF's namespace type
+    (L3VNI_SVI_VLAN_BASE + TRANSIT_SLOT), so it never depends on the other VRFs of the device.
     """
 
     @staticmethod
-    def _ns(name: str, l3_vni: int) -> dict:
-        return {"name": name, "l3_vni": l3_vni}
+    def _ns(name: str, l3_vni: int, namespace_type: str = "prod") -> dict:
+        return {"name": name, "l3_vni": l3_vni, "namespace_type": namespace_type}
 
-    def test_single_vrf_gets_the_base_vlan(self) -> None:
-        mappings = _collect_l3_vni_from_namespaces([self._ns("production", 50001)])
-        assert [m["svi_vlan_id"] for m in mappings] == [L3VNI_SVI_VLAN_BASE]
+    @staticmethod
+    def _slots(namespaces: list[dict]) -> dict[str, int | None]:
+        instances = _l3_instances(namespaces, [], frozenset(ns["name"] for ns in namespaces))
+        return {i.vrf: i.svi_vlan_id for i in instances}
 
-    def test_vlans_are_assigned_by_sorted_vrf_name(self) -> None:
-        """Assignment must be stable for a given set of VRFs regardless of the
-        order GraphQL returned the namespaces in, or a re-render churns the
-        config with no data change."""
-        forward = _collect_l3_vni_from_namespaces(
-            [self._ns("production", 50001), self._ns("development", 50002), self._ns("staging", 50003)]
-        )
-        reversed_order = _collect_l3_vni_from_namespaces(
-            [self._ns("staging", 50003), self._ns("production", 50001), self._ns("development", 50002)]
-        )
-        assert [(m["vrf_name"], m["svi_vlan_id"]) for m in forward] == [
-            ("development", L3VNI_SVI_VLAN_BASE),
-            ("production", L3VNI_SVI_VLAN_BASE + 1),
-            ("staging", L3VNI_SVI_VLAN_BASE + 2),
+    def test_single_vrf_gets_the_slot_of_its_type(self) -> None:
+        assert self._slots([self._ns("production", 50001)]) == {"production": L3VNI_SVI_VLAN_BASE}
+
+    def test_vlans_are_the_namespace_types_slot_whatever_else_the_device_carries(self) -> None:
+        """A VRF keeps its VLAN when another VRF comes or goes, or the order GraphQL returned them in changes."""
+        every = [
+            self._ns("MANAGEMENT", 60003, "management"),
+            self._ns("INTERNET", 60002, "internet"),
+            self._ns("NON-PROD", 60001, "non_prod"),
+            self._ns("PROD", 60000, "prod"),
         ]
-        assert forward == reversed_order
+        expected = {"PROD": 3900, "NON-PROD": 3901, "INTERNET": 3902, "MANAGEMENT": 3903}
+        assert self._slots(every) == expected
+        assert self._slots(list(reversed(every))) == expected
+        assert self._slots([self._ns("INTERNET", 60002, "internet")]) == {"INTERNET": 3902}
 
     def test_band_is_above_the_customer_vlan_ceiling(self) -> None:
-        """The customer ceiling sits below the firewall-context and transit
-        bands, which sit below this band, so none can collide."""
+        """The customer ceiling sits below the firewall-context and transit bands, which sit below this band,
+        so none can collide."""
         from utils.limits import CUSTOMER_VLAN_ID_MAX, FW_CONTEXT_VLAN_END
 
         assert CUSTOMER_VLAN_ID_MAX < FW_CONTEXT_VLAN_END + 600 < L3VNI_SVI_VLAN_BASE
@@ -601,26 +601,20 @@ class TestL3VniSviVlanAssignment:
         """NX-OS reserves 3968-4094 for its own internal use."""
         assert L3VNI_SVI_VLAN_MAX < 3968
 
-    def test_exhausted_band_yields_none_and_warns(self, caplog: pytest.LogCaptureFixture) -> None:
-        """None, not an out-of-range VLAN: the template filters these out rather
-        than emitting `interface VlanNone`, so the VRF simply gets no symmetric
-        IRB on NX-OS instead of a config the device rejects.
+    def test_a_type_without_a_slot_yields_none_and_warns(self, caplog: pytest.LogCaptureFixture) -> None:
+        """None, not an out-of-range VLAN: the template filters these out rather than emitting
+        `interface VlanNone`, so the VRF simply gets no symmetric IRB on NX-OS instead of a config the
+        device rejects.
         """
-        count = L3VNI_SVI_VLAN_MAX - L3VNI_SVI_VLAN_BASE + 2
-        namespaces = [self._ns(f"vrf-{index:04d}", 50001 + index) for index in range(count)]
         with caplog.at_level(logging.WARNING):
-            mappings = _collect_l3_vni_from_namespaces(namespaces)
+            slots = self._slots([self._ns("odd", 50001, "lab")])
 
-        assert len(mappings) == count
-        assert mappings[-2]["svi_vlan_id"] == L3VNI_SVI_VLAN_MAX
-        assert mappings[-1]["svi_vlan_id"] is None
-        assert mappings[-1]["vrf_name"] in caplog.text
+        assert slots == {"odd": None}
+        assert "odd" in caplog.text
 
     def test_default_namespace_is_excluded(self) -> None:
         """The default namespace is the underlay — it has no tenant L3 VNI."""
-        mappings = _collect_l3_vni_from_namespaces([{"name": "default", "l3_vni": 50001}])
-        assert mappings == []
+        assert self._slots([self._ns("default", 50001)]) == {}
 
     def test_namespace_without_an_l3_vni_is_excluded(self) -> None:
-        mappings = _collect_l3_vni_from_namespaces([{"name": "production", "l3_vni": None}])
-        assert mappings == []
+        assert self._slots([{"name": "production", "l3_vni": None, "namespace_type": "prod"}]) == {}
