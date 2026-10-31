@@ -6,14 +6,21 @@ version: "1.0"
 #
 # DcimPatchPanel is NOT a DcimDevice. It inherits no generic at all, so it has no role, platform, address, interface
 # list, artifact (CoreArtifactTarget) and none of the capability edges (DcimCapabilities: `capabilities` and
-# `shared_capabilities`), no VRF demand and no VLAN row. DcimPatchPanelPort inherits DcimEndpoint only: the `cable`
-# edge is all it takes for a DcimCable to join a panel port to an interface (DcimCable.endpoints peers DcimEndpoint).
+# `shared_capabilities`), no VRF demand and no VLAN row. Its two port kinds inherit DcimEndpoint only: the `cable` edge
+# is all it takes for a DcimCable to join a panel port to an interface (DcimCable.endpoints peers DcimEndpoint).
 # tests/unit/test_patch_panel_schema.py guards both.
 #
-# A jack has two faces and a DcimEndpoint carries one cable, so a jack is two port nodes: a `front` and a `rear` one.
-# The pairing rule of v1 is the only one: the front port and the rear port of the SAME `name` in one panel are a pair
-# (a cable on one continues through the pair to the cable on the other; utils/cable_path.py). There are no rear-port
-# positions, no mapping tables and no trunk templates.
+# A jack has two faces and a DcimEndpoint carries one cable, so a jack is two port nodes, and the pairing is STRUCTURE:
+# the panel's components are its REAR ports (DcimRearPatchPanelPort) and the components of a rear port are its FRONT
+# ports (DcimFrontPatchPanelPort). A jack is a rear port with one front port; a cassette is a rear port (MPO) with
+# several. An object template materializes component children level by level and cannot point one child at a sibling
+# (an attribute relationship is copied as it is), so the template carries the mapping itself: the panel templates
+# (data/bootstrap/10_physical_devices_templates_patch_panel.yaml) write every jack out, a ranged nested list multiplies.
+# A cable that lands on one port continues through its jack to the cable on the other: one `front_ports` edge crosses
+# it.
+#
+# The HFID cannot go through two relationships (the server: "panel is not a valid attribute of DcimRearPatchPanelPort"),
+# so each kind carries a computed `port_id` that is its HFID: `<panel>:<rear>` and `<panel>:<rear>:<front>`.
 #
 # A panel always sits between two devices: a circuit end stays an interface (the `capabilities` peers are untouched).
 # The rack-unit `position` returns together with a rack drawing that draws panels.
@@ -53,50 +60,45 @@ nodes:
         kind: Attribute
         identifier: "rack__patch_panels"
         order_weight: 1700
-      - name: ports
-        peer: DcimPatchPanelPort
+      - name: rear_ports
+        peer: DcimRearPatchPanelPort
         optional: true
         cardinality: many
         kind: Component
-        identifier: "panel__ports"
+        identifier: "panel__rear_ports"
         order_weight: 2500
 
-  - name: PatchPanelPort
+  - name: RearPatchPanelPort
     namespace: Dcim
-    description: "One face of a jack: front N pairs with rear N of the same panel."
-    label: Patch Panel Port
+    description: "Rear port of a panel; its front ports are its components (one for a jack, several for a cassette)."
+    label: Patch Panel Rear Port
     icon: mdi:ethernet
     include_in_menu: false
     inherit_from:
       - DcimEndpoint
     human_friendly_id:
-      - panel__name__value
-      - face__value
-      - name__value
-    display_label: "{{ panel__name__value }}-{{ face__value }}-{{ name__value }}"
+      - port_id__value
+    display_label: "{{ port_id__value }}"
     order_by:
-      - panel__name__value
-      - face__value
-      - name__value
+      - port_id__value
     uniqueness_constraints:
-      - ["panel", "face__value", "name__value"]
+      - ["panel", "name__value"]
     attributes:
       - name: name
         kind: Text
         optional: false
-        description: "The jack number; the front and the rear port of one name are a pair"
+        description: "The rear port number within the panel"
         order_weight: 900
-      - name: face
-        kind: Dropdown
+      - name: port_id
+        kind: Text
+        read_only: true
         optional: false
+        unique: true
+        description: "<panel>:<rear>: the human friendly id (it cannot go through the panel relationship twice)"
+        computed_attribute:
+          kind: Jinja2
+          jinja2_template: "{{ panel__name__value }}:{{ name__value }}"
         order_weight: 950
-        choices:
-          - name: front
-            label: Front
-            color: "#A9CCE3"
-          - name: rear
-            label: Rear
-            color: "#A9DFBF"
       - name: connector
         kind: Dropdown
         optional: false
@@ -128,8 +130,80 @@ nodes:
         optional: false
         cardinality: one
         kind: Parent
-        identifier: "panel__ports"
-        order_weight: 1200
+        identifier: "panel__rear_ports"
+        order_weight: 800
+      - name: front_ports
+        peer: DcimFrontPatchPanelPort
+        optional: true
+        cardinality: many
+        kind: Component
+        identifier: "rear__front_ports"
+        order_weight: 2500
+
+  - name: FrontPatchPanelPort
+    namespace: Dcim
+    description: "Front port of a panel; a component of exactly one rear port, which is its other face."
+    label: Patch Panel Front Port
+    icon: mdi:ethernet
+    include_in_menu: false
+    inherit_from:
+      - DcimEndpoint
+    human_friendly_id:
+      - port_id__value
+    display_label: "{{ port_id__value }}"
+    order_by:
+      - port_id__value
+    uniqueness_constraints:
+      - ["rear_port", "name__value"]
+    attributes:
+      - name: name
+        kind: Text
+        optional: false
+        description: "The front port number under its rear port"
+        order_weight: 900
+      - name: port_id
+        kind: Text
+        read_only: true
+        optional: false
+        unique: true
+        description: "<panel>:<rear>:<front>: the human friendly id"
+        computed_attribute:
+          kind: Jinja2
+          jinja2_template: "{{ rear_port__port_id__value }}:{{ name__value }}"
+        order_weight: 950
+      - name: connector
+        kind: Dropdown
+        optional: false
+        order_weight: 1000
+        choices:
+          - name: lc-upc
+            label: LC/UPC
+          - name: lc-apc
+            label: LC/APC
+          - name: sc-upc
+            label: SC/UPC
+          - name: sc-apc
+            label: SC/APC
+          - name: mpo-12
+            label: MPO-12
+          - name: rj45
+            label: RJ45
+      - name: label
+        kind: Text
+        optional: true
+        order_weight: 1100
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 1150
+    relationships:
+      - name: rear_port
+        peer: DcimRearPatchPanelPort
+        optional: false
+        cardinality: one
+        kind: Parent
+        identifier: "rear__front_ports"
+        order_weight: 800
 
 extensions:
   nodes:

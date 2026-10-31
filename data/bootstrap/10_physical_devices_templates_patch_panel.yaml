@@ -1,7 +1,16 @@
 ---
-# Passive patch panel templates. A panel is DcimPatchPanel, not a device (schemas/extensions/dcim/patch_panel.yml): a
-# jack is two ports of one name, a `front` and a `rear` one, and the pair is how a cross-connect continues through the
-# panel. Instantiated with `object_template:` like a device template; the panel gets its name and rack in data.
+# Passive patch panel templates. A panel is DcimPatchPanel, not a device (schemas/extensions/dcim/patch_panel.yml): its
+# rear ports are its components and each rear port's front ports are ITS components, so the pairing of a jack is the
+# structure the template creates (an object template copies an attribute relationship as it is and cannot point a
+# front port at a sibling, but it materializes component children level by level). A ranged nested list multiplies
+# (rear [1-24] x front [1-24] = 576 fronts), so every jack is written out in full (rear port N with its front port N):
+# edit a template by hand or by script; tests/unit/test_patch_panel_schema.py pins the shape. Instantiated with
+# `object_template:` like a device template; the panel gets its name and rack in data.
+#
+#   PP-24-LC, PP-48-LC   N jacks, LC/UPC, one front port per rear port
+#   PP-12-SC             12 jacks, SC/UPC
+#   PP-24-RJ45           24 jacks, RJ45
+#   PP-CASSETTE-MPO12    4 cassettes: a rear MPO-12 port each carrying 12 LC/UPC front ports (48 LC in 1U)
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -9,32 +18,1170 @@ spec:
   data:
     - template_name: PP-24-LC
       description: "24-jack fibre patch panel, LC/UPC"
-      ports:
-        kind: TemplateDcimPatchPanelPort
-        parameters:
-          expand_range: true
+      rear_ports:
+        kind: TemplateDcimRearPatchPanelPort
         data:
-          - template_name: PP-24-LC_front_[1-24]
-            name: "[1-24]"
-            face: front
+          - template_name: PP-24-LC_rear_1
+            name: "1"
             connector: lc-upc
-          - template_name: PP-24-LC_rear_[1-24]
-            name: "[1-24]"
-            face: rear
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-LC_front_1_1
+                  name: "1"
+                  connector: lc-upc
+          - template_name: PP-24-LC_rear_2
+            name: "2"
             connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-LC_front_2_2
+                  name: "2"
+                  connector: lc-upc
+          - template_name: PP-24-LC_rear_3
+            name: "3"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-LC_front_3_3
+                  name: "3"
+                  connector: lc-upc
+          - template_name: PP-24-LC_rear_4
+            name: "4"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-LC_front_4_4
+                  name: "4"
+                  connector: lc-upc
+          - template_name: PP-24-LC_rear_5
+            name: "5"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-LC_front_5_5
+                  name: "5"
+                  connector: lc-upc
+          - template_name: PP-24-LC_rear_6
+            name: "6"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-LC_front_6_6
+                  name: "6"
+                  connector: lc-upc
+          - template_name: PP-24-LC_rear_7
+            name: "7"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-LC_front_7_7
+                  name: "7"
+                  connector: lc-upc
+          - template_name: PP-24-LC_rear_8
+            name: "8"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-LC_front_8_8
+                  name: "8"
+                  connector: lc-upc
+          - template_name: PP-24-LC_rear_9
+            name: "9"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-LC_front_9_9
+                  name: "9"
+                  connector: lc-upc
+          - template_name: PP-24-LC_rear_10
+            name: "10"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-LC_front_10_10
+                  name: "10"
+                  connector: lc-upc
+          - template_name: PP-24-LC_rear_11
+            name: "11"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-LC_front_11_11
+                  name: "11"
+                  connector: lc-upc
+          - template_name: PP-24-LC_rear_12
+            name: "12"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-LC_front_12_12
+                  name: "12"
+                  connector: lc-upc
+          - template_name: PP-24-LC_rear_13
+            name: "13"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-LC_front_13_13
+                  name: "13"
+                  connector: lc-upc
+          - template_name: PP-24-LC_rear_14
+            name: "14"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-LC_front_14_14
+                  name: "14"
+                  connector: lc-upc
+          - template_name: PP-24-LC_rear_15
+            name: "15"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-LC_front_15_15
+                  name: "15"
+                  connector: lc-upc
+          - template_name: PP-24-LC_rear_16
+            name: "16"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-LC_front_16_16
+                  name: "16"
+                  connector: lc-upc
+          - template_name: PP-24-LC_rear_17
+            name: "17"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-LC_front_17_17
+                  name: "17"
+                  connector: lc-upc
+          - template_name: PP-24-LC_rear_18
+            name: "18"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-LC_front_18_18
+                  name: "18"
+                  connector: lc-upc
+          - template_name: PP-24-LC_rear_19
+            name: "19"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-LC_front_19_19
+                  name: "19"
+                  connector: lc-upc
+          - template_name: PP-24-LC_rear_20
+            name: "20"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-LC_front_20_20
+                  name: "20"
+                  connector: lc-upc
+          - template_name: PP-24-LC_rear_21
+            name: "21"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-LC_front_21_21
+                  name: "21"
+                  connector: lc-upc
+          - template_name: PP-24-LC_rear_22
+            name: "22"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-LC_front_22_22
+                  name: "22"
+                  connector: lc-upc
+          - template_name: PP-24-LC_rear_23
+            name: "23"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-LC_front_23_23
+                  name: "23"
+                  connector: lc-upc
+          - template_name: PP-24-LC_rear_24
+            name: "24"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-LC_front_24_24
+                  name: "24"
+                  connector: lc-upc
+
+    - template_name: PP-48-LC
+      description: "48-jack fibre patch panel, LC/UPC"
+      rear_ports:
+        kind: TemplateDcimRearPatchPanelPort
+        data:
+          - template_name: PP-48-LC_rear_1
+            name: "1"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_1_1
+                  name: "1"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_2
+            name: "2"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_2_2
+                  name: "2"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_3
+            name: "3"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_3_3
+                  name: "3"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_4
+            name: "4"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_4_4
+                  name: "4"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_5
+            name: "5"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_5_5
+                  name: "5"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_6
+            name: "6"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_6_6
+                  name: "6"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_7
+            name: "7"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_7_7
+                  name: "7"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_8
+            name: "8"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_8_8
+                  name: "8"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_9
+            name: "9"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_9_9
+                  name: "9"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_10
+            name: "10"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_10_10
+                  name: "10"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_11
+            name: "11"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_11_11
+                  name: "11"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_12
+            name: "12"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_12_12
+                  name: "12"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_13
+            name: "13"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_13_13
+                  name: "13"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_14
+            name: "14"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_14_14
+                  name: "14"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_15
+            name: "15"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_15_15
+                  name: "15"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_16
+            name: "16"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_16_16
+                  name: "16"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_17
+            name: "17"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_17_17
+                  name: "17"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_18
+            name: "18"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_18_18
+                  name: "18"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_19
+            name: "19"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_19_19
+                  name: "19"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_20
+            name: "20"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_20_20
+                  name: "20"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_21
+            name: "21"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_21_21
+                  name: "21"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_22
+            name: "22"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_22_22
+                  name: "22"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_23
+            name: "23"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_23_23
+                  name: "23"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_24
+            name: "24"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_24_24
+                  name: "24"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_25
+            name: "25"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_25_25
+                  name: "25"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_26
+            name: "26"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_26_26
+                  name: "26"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_27
+            name: "27"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_27_27
+                  name: "27"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_28
+            name: "28"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_28_28
+                  name: "28"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_29
+            name: "29"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_29_29
+                  name: "29"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_30
+            name: "30"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_30_30
+                  name: "30"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_31
+            name: "31"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_31_31
+                  name: "31"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_32
+            name: "32"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_32_32
+                  name: "32"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_33
+            name: "33"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_33_33
+                  name: "33"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_34
+            name: "34"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_34_34
+                  name: "34"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_35
+            name: "35"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_35_35
+                  name: "35"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_36
+            name: "36"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_36_36
+                  name: "36"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_37
+            name: "37"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_37_37
+                  name: "37"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_38
+            name: "38"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_38_38
+                  name: "38"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_39
+            name: "39"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_39_39
+                  name: "39"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_40
+            name: "40"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_40_40
+                  name: "40"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_41
+            name: "41"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_41_41
+                  name: "41"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_42
+            name: "42"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_42_42
+                  name: "42"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_43
+            name: "43"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_43_43
+                  name: "43"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_44
+            name: "44"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_44_44
+                  name: "44"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_45
+            name: "45"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_45_45
+                  name: "45"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_46
+            name: "46"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_46_46
+                  name: "46"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_47
+            name: "47"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_47_47
+                  name: "47"
+                  connector: lc-upc
+          - template_name: PP-48-LC_rear_48
+            name: "48"
+            connector: lc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-48-LC_front_48_48
+                  name: "48"
+                  connector: lc-upc
+
+    - template_name: PP-12-SC
+      description: "12-jack fibre patch panel, SC/UPC"
+      rear_ports:
+        kind: TemplateDcimRearPatchPanelPort
+        data:
+          - template_name: PP-12-SC_rear_1
+            name: "1"
+            connector: sc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-12-SC_front_1_1
+                  name: "1"
+                  connector: sc-upc
+          - template_name: PP-12-SC_rear_2
+            name: "2"
+            connector: sc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-12-SC_front_2_2
+                  name: "2"
+                  connector: sc-upc
+          - template_name: PP-12-SC_rear_3
+            name: "3"
+            connector: sc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-12-SC_front_3_3
+                  name: "3"
+                  connector: sc-upc
+          - template_name: PP-12-SC_rear_4
+            name: "4"
+            connector: sc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-12-SC_front_4_4
+                  name: "4"
+                  connector: sc-upc
+          - template_name: PP-12-SC_rear_5
+            name: "5"
+            connector: sc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-12-SC_front_5_5
+                  name: "5"
+                  connector: sc-upc
+          - template_name: PP-12-SC_rear_6
+            name: "6"
+            connector: sc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-12-SC_front_6_6
+                  name: "6"
+                  connector: sc-upc
+          - template_name: PP-12-SC_rear_7
+            name: "7"
+            connector: sc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-12-SC_front_7_7
+                  name: "7"
+                  connector: sc-upc
+          - template_name: PP-12-SC_rear_8
+            name: "8"
+            connector: sc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-12-SC_front_8_8
+                  name: "8"
+                  connector: sc-upc
+          - template_name: PP-12-SC_rear_9
+            name: "9"
+            connector: sc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-12-SC_front_9_9
+                  name: "9"
+                  connector: sc-upc
+          - template_name: PP-12-SC_rear_10
+            name: "10"
+            connector: sc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-12-SC_front_10_10
+                  name: "10"
+                  connector: sc-upc
+          - template_name: PP-12-SC_rear_11
+            name: "11"
+            connector: sc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-12-SC_front_11_11
+                  name: "11"
+                  connector: sc-upc
+          - template_name: PP-12-SC_rear_12
+            name: "12"
+            connector: sc-upc
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-12-SC_front_12_12
+                  name: "12"
+                  connector: sc-upc
 
     - template_name: PP-24-RJ45
       description: "24-jack copper patch panel, RJ45"
-      ports:
-        kind: TemplateDcimPatchPanelPort
-        parameters:
-          expand_range: true
+      rear_ports:
+        kind: TemplateDcimRearPatchPanelPort
         data:
-          - template_name: PP-24-RJ45_front_[1-24]
-            name: "[1-24]"
-            face: front
+          - template_name: PP-24-RJ45_rear_1
+            name: "1"
             connector: rj45
-          - template_name: PP-24-RJ45_rear_[1-24]
-            name: "[1-24]"
-            face: rear
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-RJ45_front_1_1
+                  name: "1"
+                  connector: rj45
+          - template_name: PP-24-RJ45_rear_2
+            name: "2"
             connector: rj45
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-RJ45_front_2_2
+                  name: "2"
+                  connector: rj45
+          - template_name: PP-24-RJ45_rear_3
+            name: "3"
+            connector: rj45
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-RJ45_front_3_3
+                  name: "3"
+                  connector: rj45
+          - template_name: PP-24-RJ45_rear_4
+            name: "4"
+            connector: rj45
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-RJ45_front_4_4
+                  name: "4"
+                  connector: rj45
+          - template_name: PP-24-RJ45_rear_5
+            name: "5"
+            connector: rj45
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-RJ45_front_5_5
+                  name: "5"
+                  connector: rj45
+          - template_name: PP-24-RJ45_rear_6
+            name: "6"
+            connector: rj45
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-RJ45_front_6_6
+                  name: "6"
+                  connector: rj45
+          - template_name: PP-24-RJ45_rear_7
+            name: "7"
+            connector: rj45
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-RJ45_front_7_7
+                  name: "7"
+                  connector: rj45
+          - template_name: PP-24-RJ45_rear_8
+            name: "8"
+            connector: rj45
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-RJ45_front_8_8
+                  name: "8"
+                  connector: rj45
+          - template_name: PP-24-RJ45_rear_9
+            name: "9"
+            connector: rj45
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-RJ45_front_9_9
+                  name: "9"
+                  connector: rj45
+          - template_name: PP-24-RJ45_rear_10
+            name: "10"
+            connector: rj45
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-RJ45_front_10_10
+                  name: "10"
+                  connector: rj45
+          - template_name: PP-24-RJ45_rear_11
+            name: "11"
+            connector: rj45
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-RJ45_front_11_11
+                  name: "11"
+                  connector: rj45
+          - template_name: PP-24-RJ45_rear_12
+            name: "12"
+            connector: rj45
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-RJ45_front_12_12
+                  name: "12"
+                  connector: rj45
+          - template_name: PP-24-RJ45_rear_13
+            name: "13"
+            connector: rj45
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-RJ45_front_13_13
+                  name: "13"
+                  connector: rj45
+          - template_name: PP-24-RJ45_rear_14
+            name: "14"
+            connector: rj45
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-RJ45_front_14_14
+                  name: "14"
+                  connector: rj45
+          - template_name: PP-24-RJ45_rear_15
+            name: "15"
+            connector: rj45
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-RJ45_front_15_15
+                  name: "15"
+                  connector: rj45
+          - template_name: PP-24-RJ45_rear_16
+            name: "16"
+            connector: rj45
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-RJ45_front_16_16
+                  name: "16"
+                  connector: rj45
+          - template_name: PP-24-RJ45_rear_17
+            name: "17"
+            connector: rj45
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-RJ45_front_17_17
+                  name: "17"
+                  connector: rj45
+          - template_name: PP-24-RJ45_rear_18
+            name: "18"
+            connector: rj45
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-RJ45_front_18_18
+                  name: "18"
+                  connector: rj45
+          - template_name: PP-24-RJ45_rear_19
+            name: "19"
+            connector: rj45
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-RJ45_front_19_19
+                  name: "19"
+                  connector: rj45
+          - template_name: PP-24-RJ45_rear_20
+            name: "20"
+            connector: rj45
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-RJ45_front_20_20
+                  name: "20"
+                  connector: rj45
+          - template_name: PP-24-RJ45_rear_21
+            name: "21"
+            connector: rj45
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-RJ45_front_21_21
+                  name: "21"
+                  connector: rj45
+          - template_name: PP-24-RJ45_rear_22
+            name: "22"
+            connector: rj45
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-RJ45_front_22_22
+                  name: "22"
+                  connector: rj45
+          - template_name: PP-24-RJ45_rear_23
+            name: "23"
+            connector: rj45
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-RJ45_front_23_23
+                  name: "23"
+                  connector: rj45
+          - template_name: PP-24-RJ45_rear_24
+            name: "24"
+            connector: rj45
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-24-RJ45_front_24_24
+                  name: "24"
+                  connector: rj45
+
+    - template_name: PP-CASSETTE-MPO12
+      description: "4-cassette fibre enclosure: a rear MPO-12 per cassette, 12 LC/UPC front ports each"
+      rear_ports:
+        kind: TemplateDcimRearPatchPanelPort
+        data:
+          - template_name: PP-CASSETTE-MPO12_rear_1
+            name: "1"
+            connector: mpo-12
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-CASSETTE-MPO12_front_1_1
+                  name: "1"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_1_2
+                  name: "2"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_1_3
+                  name: "3"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_1_4
+                  name: "4"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_1_5
+                  name: "5"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_1_6
+                  name: "6"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_1_7
+                  name: "7"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_1_8
+                  name: "8"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_1_9
+                  name: "9"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_1_10
+                  name: "10"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_1_11
+                  name: "11"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_1_12
+                  name: "12"
+                  connector: lc-upc
+          - template_name: PP-CASSETTE-MPO12_rear_2
+            name: "2"
+            connector: mpo-12
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-CASSETTE-MPO12_front_2_1
+                  name: "1"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_2_2
+                  name: "2"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_2_3
+                  name: "3"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_2_4
+                  name: "4"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_2_5
+                  name: "5"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_2_6
+                  name: "6"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_2_7
+                  name: "7"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_2_8
+                  name: "8"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_2_9
+                  name: "9"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_2_10
+                  name: "10"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_2_11
+                  name: "11"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_2_12
+                  name: "12"
+                  connector: lc-upc
+          - template_name: PP-CASSETTE-MPO12_rear_3
+            name: "3"
+            connector: mpo-12
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-CASSETTE-MPO12_front_3_1
+                  name: "1"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_3_2
+                  name: "2"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_3_3
+                  name: "3"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_3_4
+                  name: "4"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_3_5
+                  name: "5"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_3_6
+                  name: "6"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_3_7
+                  name: "7"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_3_8
+                  name: "8"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_3_9
+                  name: "9"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_3_10
+                  name: "10"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_3_11
+                  name: "11"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_3_12
+                  name: "12"
+                  connector: lc-upc
+          - template_name: PP-CASSETTE-MPO12_rear_4
+            name: "4"
+            connector: mpo-12
+            front_ports:
+              kind: TemplateDcimFrontPatchPanelPort
+              data:
+                - template_name: PP-CASSETTE-MPO12_front_4_1
+                  name: "1"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_4_2
+                  name: "2"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_4_3
+                  name: "3"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_4_4
+                  name: "4"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_4_5
+                  name: "5"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_4_6
+                  name: "6"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_4_7
+                  name: "7"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_4_8
+                  name: "8"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_4_9
+                  name: "9"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_4_10
+                  name: "10"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_4_11
+                  name: "11"
+                  connector: lc-upc
+                - template_name: PP-CASSETTE-MPO12_front_4_12
+                  name: "12"
+                  connector: lc-upc

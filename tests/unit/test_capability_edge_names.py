@@ -246,7 +246,7 @@ def test_inline_segment_is_a_one_sided_relationship_on_the_sub_interface(schema:
     assert "DcimSwitchedInterface" not in schema.ancestors(sub) | {sub}
 
 
-PANEL_KINDS = ("DcimPatchPanel", "DcimPatchPanelPort")
+PANEL_KINDS = ("DcimPatchPanel", "DcimRearPatchPanelPort", "DcimFrontPatchPanelPort")
 DEVICE_ONLY_GENERICS = {
     "DcimDevice",
     "DcimPhysicalDevice",
@@ -265,7 +265,7 @@ def test_a_patch_panel_kind_has_no_capability_edge(schema: SchemaModel, kind: st
 
     Both edges reach a kind only through DcimCapabilities (device edges) or DcimInterface (interface edge); the
     panel kinds inherit neither, so no extension on either can reach them. The generated templates
-    (TemplateDcimPatchPanel, TemplateDcimPatchPanelPort) are built from the node's own relationships, so the same holds.
+    (TemplateDcimPatchPanel and the two port templates) are built from the node's own relationships, so the same holds.
     """
     assert schema.is_generic.get(kind) is False
     assert schema.ancestors(kind).isdisjoint(DEVICE_ONLY_GENERICS | {"DcimInterface"}), kind

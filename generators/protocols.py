@@ -345,17 +345,27 @@ class DcimCable(CoreNode):
 class DcimPatchPanel(CoreNode):
     description: StringOptional
     name: String
-    ports: RelationshipManager[DcimPatchPanelPort]
     rack: RelationshipAttribute[LocationRack]
+    rear_ports: RelationshipManager[DcimRearPatchPanelPort]
 
 
-class DcimPatchPanelPort(DcimEndpoint):
+class DcimRearPatchPanelPort(DcimEndpoint):
     connector: Dropdown
     description: StringOptional
-    face: Dropdown
     label: StringOptional
     name: String
+    port_id: String
+    front_ports: RelationshipManager[DcimFrontPatchPanelPort]
     panel: RelationshipAttribute[DcimPatchPanel]
+
+
+class DcimFrontPatchPanelPort(DcimEndpoint):
+    connector: Dropdown
+    description: StringOptional
+    label: StringOptional
+    name: String
+    port_id: String
+    rear_port: RelationshipAttribute[DcimRearPatchPanelPort]
 
 
 class TopologyCloud(TopologyDeployment):

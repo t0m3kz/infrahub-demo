@@ -1,6 +1,6 @@
-"""Readers of a cable end tolerate a DcimPatchPanelPort end.
+"""Readers of a cable end tolerate a patch panel port end (DcimFrontPatchPanelPort or DcimRearPatchPanelPort).
 
-A cable ends on a physical interface or on a DcimPatchPanelPort (both are DcimEndpoint). A query that reads an end
+A cable ends on a physical interface or on a patch panel port (all are DcimEndpoint). A query that reads an end
 through ``... on DcimPhysicalInterface`` gets an EMPTY node ``{}`` for a panel port (queries/topology/cabling.gql,
 clab.gql), one that selects ``id`` gets ``{"id": ...}`` only. The payloads here are raw GraphQL shapes run through
 clean_data where the reader does.
