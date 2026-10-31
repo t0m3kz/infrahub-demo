@@ -155,20 +155,6 @@ spec:
                   kind: DcimPatchPanel
                   description: "Passive patch panels and their front and rear ports"
 
-                - name: Mlag
-                  namespace: Managed
-                  label: MLAG
-                  icon: "mdi:link-variant"
-                  kind: ManagedMLAG
-                  description: "Multi-chassis link aggregation groups"
-
-                - name: HA
-                  namespace: Managed
-                  label: HA Domains
-                  icon: "mdi:heart-pulse"
-                  kind: ManagedHA
-                  description: "High availability domains (firewall, proxy, load balancer, cloud)"
-
                 - name: Controller
                   namespace: Managed
                   label: Controllers
@@ -255,6 +241,13 @@ spec:
             kind: ManagedPeering
             icon: "mdi:transit-connection-horizontal"
 
+          # ── VRF instances (one per topology and namespace, with their member devices) ──
+          - namespace: Managed
+            name: VrfItem
+            label: VRF Instances
+            kind: ManagedVRF
+            icon: "mdi:routes"
+
           # ── BGP ────────────────────────────────────────────────────────────
           - namespace: Managed
             name: BgpMenu
@@ -298,30 +291,70 @@ spec:
     # SERVICES — network services organised by function
     # ──────────────────────────────────────────────────────────────────────────
     - namespace: Managed
-      name: ServicesMenu
-      label: Services
+      name: NetworkServicesMenu
+      label: Network Services
       icon: "mdi:cog-transfer"
       children:
         data:
-          # ── Network Segments ───────────────────────────────────────────────
-          - namespace: Platform
+          # ── Overlay: the tenant segments ────────────────────────────────────
+          - namespace: Managed
             name: SegmentsItem
             label: Network Segments
             kind: ManagedNetworkSegment
             icon: "mdi:layers-triple"
 
-          # ── Traffic Management ─────────────────────────────────────────────
+          # ── Firewalls: a context per tenant namespace on a firewall pair ───
           - namespace: Managed
-            name: TrafficManagementMenu
-            label: Traffic Management
-            icon: "mdi:transit-connection-variant"
+            name: FirewallContextItem
+            label: Firewall Contexts
+            kind: ManagedFirewallContext
+            icon: "mdi:wall-fire"
+
+          # ── Load balancing ─────────────────────────────────────────────────
+          - namespace: Managed
+            name: LoadBalancingMenu
+            label: Load Balancing
+            icon: "mdi:scale-balance"
             children:
               data:
-                - namespace: Platform
+                - namespace: Managed
                   name: LoadBalancerItem
                   label: Load Balancers
                   kind: ManagedLoadBalancer
                   icon: "mdi:scale-balance"
+
+                - namespace: Loadbalancer
+                  name: VipItem
+                  label: Virtual IPs
+                  kind: LoadbalancerVIP
+                  icon: "mdi:ip-network"
+
+                - namespace: Loadbalancer
+                  name: HealthCheckItem
+                  label: Health Checks
+                  kind: LoadbalancerHealthCheck
+                  icon: "mdi:stethoscope"
+
+          # ── High availability: pairs and multi-chassis bonds ───────────────
+          - namespace: Managed
+            name: HighAvailabilityMenu
+            label: High Availability
+            icon: "mdi:heart-pulse"
+            children:
+              data:
+                - namespace: Managed
+                  name: HA
+                  label: HA Domains
+                  icon: "mdi:heart-pulse"
+                  kind: ManagedHA
+                  description: "High availability domains (firewall, proxy, load balancer, cloud)"
+
+                - namespace: Managed
+                  name: Mlag
+                  label: MLAG Domains
+                  icon: "mdi:link-variant"
+                  kind: ManagedMLAG
+                  description: "Multi-chassis link aggregation groups"
 
     # ──────────────────────────────────────────────────────────────────────────
     # SECURITY — zones, profiles, policies
