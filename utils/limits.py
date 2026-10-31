@@ -112,6 +112,14 @@ XE_REMARK_MAX = 100
 # transforms/helpers/group_policy/eos.py).
 EOS_MSSG_MAX_SEGMENTS = 60
 
+# BGP maximum-prefix (utils/bgp_expectation.py). Every limit is derived from the model (a pool's capacity, the size of
+# an allowed set); the slack is the spares added to a SET-sized limit (a partner, a transit, a border-gateway pair) so a
+# prefix added to the model before the next generator run does not drop the session. A pool-sized limit already has
+# the headroom generators/fabric_sizing.py gave the pool. The ceiling is the 32-bit counter a limit has to fit (U: no
+# vendor guide was read for a smaller cap); a derived limit above it is not rendered.
+BGP_PREFIX_SLACK = 2
+BGP_MAX_PREFIX_CEILING = 2**32 - 1
+
 # --- 3. Setup data: pool and group names -----------------------------------------------------------------------
 
 # The pools and groups below are loaded by data/bootstrap and found by name; ``tests/unit/test_limits_consistency.py``
