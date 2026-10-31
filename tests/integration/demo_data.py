@@ -118,11 +118,20 @@ def relationship_names(kind: str) -> set[str]:
 
 
 def human_friendly_id(kind: str) -> tuple[str, ...]:
-    """The nearest human_friendly_id of ``kind`` or its generics, else the kind's first
-    uniqueness constraint (a rack is unique on its computed name); empty when neither exists."""
-    for k in _lineage(kind):
+    """The nearest human_friendly_id of ``kind`` or its generics.
+
+    Without one, the server derives it from a unique attribute, so the fallback is the nearest uniqueness constraint
+    made of attribute values only (a rack is identified by its ``shortname``, the generic's constraint, not by its
+    ``(parent, name)`` pair: the parent is not a value of the object); else the kind's first constraint; empty when
+    there is none."""
+    lineage = _lineage(kind)
+    for k in lineage:
         if schema()[k].human_friendly_id:
             return schema()[k].human_friendly_id
+    for k in lineage:
+        for constraint in schema()[k].uniqueness_constraints or ():
+            if all(field.endswith("__value") for field in constraint):
+                return constraint
     constraints = schema()[kind].uniqueness_constraints if kind in schema() else ()
     return constraints[0] if constraints else ()
 

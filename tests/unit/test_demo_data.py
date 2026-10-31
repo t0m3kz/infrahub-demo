@@ -208,9 +208,11 @@ class TestDistinct:
         assert identity(objects[0]) != identity(objects[1])
         assert len(distinct(objects)) == 2
 
-    def test_rack_identity_falls_back_to_its_uniqueness_constraint(self) -> None:
-        """LocationRack declares no human_friendly_id; its constraint is the computed name."""
-        assert human_friendly_id("LocationRack") == ("name__value",)
+    def test_rack_identity_falls_back_to_the_unique_attribute_not_the_parent_pair(self) -> None:
+        """LocationRack declares no human_friendly_id and is unique on (parent, name) and on shortname (the generic's):
+        the identity is the shortname, because the parent is not a value of the object."""
+        assert human_friendly_id("LocationRack") == ("shortname__value",)
+        assert human_friendly_id("LocationSuite") == ("shortname__value",)
 
 
 class TestDefaults:

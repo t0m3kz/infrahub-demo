@@ -69,6 +69,9 @@ nodes:
     label: Suite
     parent: LocationFacility
     children: "LocationRack"
+    # Unique within its facility; `shortname` (LocationGeneric) is the global identifier.
+    uniqueness_constraints:
+      - ["parent", "name__value"]
     icon: "game-icons:cage"
     attributes:
       - name: name
@@ -128,8 +131,10 @@ nodes:
     menu_placement: "LocationGeneric"
     parent: "LocationSuite"
     children: ""
+    # A rack name is unique within its suite, not across the estate (R1-1 exists in every suite); the globally
+    # unique identifier is `shortname` (LocationGeneric), which is also the human friendly id.
     uniqueness_constraints:
-      - ["name__value"]
+      - ["parent", "name__value"]
     label: Rack
     icon: "clarity:rack-server-line"
     display_label: "{{ name__value }}"
@@ -196,3 +201,27 @@ extensions:
           kind: Attribute
           optional: true
           identifier: "device_rack"
+
+    # The hierarchical `parent` is inherited from LocationGeneric as an optional relationship, and a uniqueness
+    # constraint refuses an optional relationship. A suite and a rack always sit under a parent, so the override
+    # makes it mandatory (measured on 1.11.9): kind Hierarchy (not Parent: that one breaks the template reverse
+    # relationships of an unrelated node), the generic's peer (the server narrows it to the node's `parent:` kind) and
+    # the generic's identifier and direction. Region, Country, Metro and Facility keep it optional.
+    - kind: LocationSuite
+      relationships:
+        - name: parent
+          peer: LocationGeneric
+          cardinality: one
+          kind: Hierarchy
+          optional: false
+          identifier: parent__child
+          direction: outbound
+    - kind: LocationRack
+      relationships:
+        - name: parent
+          peer: LocationGeneric
+          cardinality: one
+          kind: Hierarchy
+          optional: false
+          identifier: parent__child
+          direction: outbound
