@@ -343,6 +343,11 @@ check_definitions:
   - name: validate_routing_tags
     class_name: CheckRoutingTags
     file_path: checks/routing_tags.py
+  # Targetless: a session has two devices and the filters derive from fleet-wide facts (loopback pools, VRF instances,
+  # environment prefixes). Turn routing_filter_enforce on only where it reports no error.
+  - name: validate_bgp_expectations
+    class_name: CheckBgpExpectations
+    file_path: checks/bgp_expectations.py
   # Targetless: a device is in one domain across the whole instance.
   - name: validate_mlag_domains
     class_name: CheckMlagDomains
@@ -763,6 +768,8 @@ queries:
     file_path: queries/validation/reference_fabric.gql
   - name: routing_tags
     file_path: queries/validation/routing_tags.gql
+  - name: bgp_expectations
+    file_path: queries/validation/bgp_expectations.gql
   - name: mlag_domains
     file_path: queries/validation/mlag_domains.gql
   - name: vrf_instances

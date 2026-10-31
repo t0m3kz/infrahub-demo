@@ -425,6 +425,33 @@ class MyCheck(InfrahubCheck):
   gate and nothing filters on a community. A customer or segment without a tag renders no community.
   `checks/routing_tags.py` requires a tag on each routed tenant segment and its owner, in range and unique. Not
   `unique: true` in the schema: an optional attribute collides on the second unset value.
+- **Route protection**: every BGP session is protected against a neighbour announcing what it must not, internal
+  sessions included (external and transit keep `utils/ownership.py exchange_policies`). ONE derivation,
+  `utils/bgp_expectation.py` (pure; the transform renders it and `checks/bgp_expectations.py` compares it): a session
+  class (underlay, fabric, DCI underlay, overlay EVPN, DCI EVPN, internal VRF, external, transit; an SD-WAN/LISP far
+  end is left out) gives, per address family, the prefixes allowed in and out, whether a default route is allowed, and a
+  maximum-prefix. Internal classes use RANGES where the space is a pool (underlay: the DC or metro `loopback_pool` with
+  `le 32`/`le 128` plus the multisite VIPs in; the own loopback and VIP out, a spine relays the whole pool), the far
+  border gateway's own addresses for a fabric or DCI underlay pair, and for EVPN the exact prefixes of the
+  environment namespaces the device is a member of (a spine: all of them; the internet namespace as ranges), a default
+  route only from a default exit (a border gateway in the internet VRF instance). A family the query data cannot derive
+  is "not derivable" and renders UNPROTECTED (reported by the check), never as a deny-all list.
+  **maximum_routes is gone**: the limit is derived, never typed: the pool's capacity (already sized with headroom by
+  `generators/fabric_sizing.py`) plus the VIPs, the far end's addresses or the allowed set plus
+  `BGP_PREFIX_SLACK` (`utils/limits.py`); a loose bound for EVPN (type 3 VTEPs x L2 VNIs, type 5, type 2 as twice the
+  IPv4 hosts). `transforms/helpers/bgp_policy.py` composes `session.policy` (one route-map per direction: an attached
+  filter carries the local-preference, MED and no-export sets of the maps it replaces) and
+  `transforms/helpers/bgp_facts.py` reads the facts off the device query (hosting `loopback_pool`, the
+  `multisite-vip` root, `environment_prefixes_*`, `ManagedVRF`, `ManagedVxlanSegment`). **Staged rollout**:
+  `TopologySegmentHosting.routing_filter_enforce` (default false, true on every DC and metro of `data/demos/30_all`;
+  the precedent is `group_policy_enforce`) renders the prefix-lists and route-maps UNATTACHED with a comment and every
+  limit as warning-only; true attaches them. Platforms: EOS, NX-OS and IOS XE render the unicast filters (evidence I);
+  only NX-OS renders the EVPN one (U); SONiC and Dell SONiC render everything (U) and only when enforcing; EOS and IOS XE
+  render no EVPN filter and EOS no EVPN limit (the check reports them as unprotected, E5). Every template line carries
+  its evidence label. `checks/bgp_expectations.py` (targetless) reports E1 an end announcing what the other would
+  filter, E2 a loopback or VIP outside the pool, E3 a connected VRF prefix that is no prefix of its namespace, E4 a
+  transit session on a device that is no default exit, E5 a session left unprotected; an ERROR where the hosting
+  deployment enforces, a WARNING where it stages: turn the switch on only where it reports no error.
 - **Virtual NICs**: the base NICs of a hosted virtual device (a dedicated firewall or load balancer, built from a
   `*_CUSTOMER_*` template) are `DcimVirtualInterface`, never `DcimPhysicalInterface`. Only the physical host is cabled:
   `generators/virtual_nics.py` pins each NIC through its `parent_interface` to the host port of its role (`management`,

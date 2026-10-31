@@ -51,6 +51,12 @@ from utils.bgp_expectation import (
     Expectation,
 )
 
+# The platforms whose templates render a prefix filter for a unicast session (common/bgp_filter_objects.j2 on the CLI
+# platforms, common/sonic_bgp_policy.j2 on SONiC) and for an EVPN one (NX-OS only: no keyword is known elsewhere, U).
+# checks/bgp_closure.py reports a session on any other platform as unprotected.
+UNICAST_FILTER_PLATFORMS = frozenset({"cisco_nxos", "arista_eos", "cisco_xe", "cisco_ios", "sonic", "dell_sonic"})
+EVPN_FILTER_PLATFORMS = frozenset({"cisco_nxos"})
+
 FABRIC_OUT_MAP = "RM-FABRIC-OUT"
 DCI_IN_MAP = "RM-DCI-IN"
 

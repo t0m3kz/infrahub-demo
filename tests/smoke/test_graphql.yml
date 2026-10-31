@@ -636,3 +636,11 @@ infrahub_tests:
         spec:
           path: queries/validation/tenant_svi_protection.gql
           kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: bgp_expectations
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/bgp_expectations.gql
+          kind: graphql-query-smoke

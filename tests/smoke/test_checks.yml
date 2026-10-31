@@ -120,3 +120,10 @@ infrahub_tests:
       - name: syntax_check
         spec:
           kind: check-smoke
+
+  - resource: Check
+    resource_name: validate_bgp_expectations
+    tests:
+      - name: syntax_check
+        spec:
+          kind: check-smoke

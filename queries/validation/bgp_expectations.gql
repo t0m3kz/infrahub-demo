@@ -1,0 +1,138 @@
+# validate_bgp_expectations (checks/bgp_expectations.py): the closure check of the BGP route protection. It derives,
+# from the model, what every end of every BGP session may send and accept (utils/bgp_expectation.py, the same
+# derivation the device transforms render) and compares the two ends, so a filter that would take a working fabric
+# down is reported before routing_filter_enforce is turned on.
+#
+# What the derivation reads is what queries/config/*.gql give a device transform: the peering with its two ends and
+# processes, each device's loopbacks, VIPs, VRF memberships, platform and hosting deployment (loopback pool, the
+# staging switch), and the shared roots (environment prefixes, VRF instances, multisite VIPs, L2 VNIs).
+query bgp_expectations {
+  ManagedBGPPeering {
+    edges {
+      node {
+        id
+        name { value }
+        peering_role { value }
+        session_type { value }
+        ttl { value }
+        route_reflector_client { value }
+        address_families {
+          edges { node { afi { value } safi { value } } }
+        }
+        capabilities {
+          edges {
+            node {
+              name { value }
+              ... on DcimPhysicalInterface {
+                ip_address { node { address { value } ip_namespace { node { name { value } namespace_type { value } } } } }
+              }
+              ... on DcimVirtualInterface {
+                ip_address { node { address { value } ip_namespace { node { name { value } namespace_type { value } } } } }
+              }
+              device { node { __typename name { value } } }
+            }
+          }
+        }
+        bgp_processes {
+          edges {
+            node {
+              process_role { value }
+              local_as { node { asn { value } } }
+              capabilities { edges { node { name { value } } } }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  DcimDevice {
+    edges {
+      node {
+        __typename
+        id
+        name { value }
+        role { value }
+        platform { node { name { value } } }
+        ... on DcimPhysicalDevice {
+          deployment {
+            node {
+              ...EvpnRtAsOnDeploymentFields
+            }
+          }
+        }
+        ... on DcimCapabilities {
+          shared_capabilities {
+            edges {
+              node {
+                __typename
+                ... on ManagedVRF { namespace { node { name { value } l3_vni { value } namespace_type { value } } } }
+              }
+            }
+          }
+        }
+        interfaces {
+          edges {
+            node {
+              name { value }
+              role { value }
+              ... on DcimPhysicalInterface {
+                ip_address { node { address { value } ip_namespace { node { name { value } } } } }
+              }
+              ... on DcimVirtualInterface {
+                ip_address { node { address { value } ip_namespace { node { name { value } } } } }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  DcimVirtualInterface(role__value: "multisite-vip") {
+    edges {
+      node {
+        ip_address { node { address { value } } }
+        device {
+          node {
+            name { value }
+            role { value }
+            interfaces(role__values: ["loopback", "loopback-vtep"]) {
+              edges {
+                node {
+                  role { value }
+                  ... on DcimVirtualInterface { ip_address { node { address { value } } } }
+                  ... on DcimPhysicalInterface { ip_address { node { address { value } } } }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  environment_prefixes_prod: IpamPrefix(ip_namespace__namespace_type__value: "prod") {
+    edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } }
+  }
+  environment_prefixes_non_prod: IpamPrefix(ip_namespace__namespace_type__value: "non_prod") {
+    edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } }
+  }
+  environment_prefixes_internet: IpamPrefix(ip_namespace__namespace_type__value: "internet") {
+    edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } }
+  }
+  environment_prefixes_management: IpamPrefix(ip_namespace__namespace_type__value: "management") {
+    edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } }
+  }
+  ManagedVRF {
+    edges {
+      node {
+        namespace { node { name { value } namespace_type { value } } }
+        shared_devices { edges { node { name { value } } } }
+      }
+    }
+  }
+  ManagedVxlanSegment {
+    edges { node { id } }
+  }
+}
