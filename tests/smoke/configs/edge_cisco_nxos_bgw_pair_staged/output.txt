@@ -207,7 +207,6 @@ router bgp 65001
     !
     address-family l2vpn evpn
       inherit peer-policy FABRIC-PEERS-POLICY 1
-      maximum-prefix 2039 warning-only
       ! staged or unsupported: the derived EVPN filter RM-peer-dc1-edge-01-dc1-edge-02-ibgp-EVPN-IN (in) is not rendered (U)
       ! staged or unsupported: the derived EVPN filter RM-peer-dc1-edge-01-dc1-edge-02-ibgp-EVPN-OUT (out) is not rendered (U)
     !
@@ -243,7 +242,6 @@ router bgp 65001
     inherit peer-session EVPN-OVERLAY-SESSION
     address-family l2vpn evpn
       inherit peer-policy EVPN-OVERLAY-POLICY 1
-      maximum-prefix 2039 warning-only
       ! staged or unsupported: the derived EVPN filter RM-OVERLAY-EVPN-IN (in) is not rendered (U)
       ! staged or unsupported: the derived EVPN filter RM-OVERLAY-EVPN-OUT (out) is not rendered (U)
     !
@@ -253,7 +251,6 @@ router bgp 65001
     inherit peer-session EVPN-OVERLAY-SESSION
     address-family l2vpn evpn
       inherit peer-policy EVPN-OVERLAY-POLICY 1
-      maximum-prefix 2039 warning-only
       ! staged or unsupported: the derived EVPN filter RM-OVERLAY-EVPN-IN (in) is not rendered (U)
       ! staged or unsupported: the derived EVPN filter RM-OVERLAY-EVPN-OUT (out) is not rendered (U)
     !
@@ -266,7 +263,6 @@ router bgp 65001
     inherit peer-session DCI-PEERS-SESSION
     address-family l2vpn evpn
       inherit peer-policy DCI-PEERS-POLICY 1
-      maximum-prefix 2039 warning-only
       ! staged or unsupported: the derived EVPN filter RM-DCI-EVPN-IN (in) is not rendered (U)
       ! staged or unsupported: the derived EVPN filter RM-DCI-EVPN-OUT (out) is not rendered (U)
     !
@@ -279,7 +275,6 @@ router bgp 65001
     inherit peer-session DCI-PEERS-SESSION
     address-family l2vpn evpn
       inherit peer-policy DCI-PEERS-POLICY 1
-      maximum-prefix 2039 warning-only
       ! staged or unsupported: the derived EVPN filter RM-DCI-EVPN-IN (in) is not rendered (U)
       ! staged or unsupported: the derived EVPN filter RM-DCI-EVPN-OUT (out) is not rendered (U)
     !

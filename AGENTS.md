@@ -448,7 +448,8 @@ class MyCheck(InfrahubCheck):
   the precedent is `group_policy_enforce`) renders the prefix-lists and route-maps UNATTACHED with a comment and every
   limit as warning-only; true attaches them. Platforms: EOS, NX-OS and IOS XE render the unicast filters (evidence I);
   only NX-OS renders the EVPN one (U); SONiC and Dell SONiC render everything (U) and only when enforcing; EOS and IOS XE
-  render no EVPN filter and EOS no EVPN limit (the check reports them as unprotected, E5). Every template line carries
+  render no EVPN filter and EOS no EVPN limit (the check reports them as unprotected, E5); the NX-OS EVPN filter and limit (U)
+  are rendered only when enforcing. Every template line carries
   its evidence label. `checks/bgp_expectations.py` (targetless) reports E1 an end announcing what the other would
   filter, E2 a loopback or VIP outside the pool, E3 a connected VRF prefix that is no prefix of its namespace, E4 a
   transit session on a device that is no default exit, E5 a session left unprotected; an ERROR where the hosting

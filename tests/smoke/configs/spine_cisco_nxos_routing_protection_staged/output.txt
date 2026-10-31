@@ -106,7 +106,6 @@ router bgp 65001
     inherit peer-session EVPN-OVERLAY-SESSION
     address-family l2vpn evpn
       inherit peer-policy EVPN-OVERLAY-POLICY 1
-      maximum-prefix 2039 warning-only
       ! staged or unsupported: the derived EVPN filter RM-OVERLAY-EVPN-IN (in) is not rendered (U)
       ! staged or unsupported: the derived EVPN filter RM-OVERLAY-EVPN-OUT (out) is not rendered (U)
     !
@@ -116,7 +115,6 @@ router bgp 65001
     inherit peer-session EVPN-OVERLAY-SESSION
     address-family l2vpn evpn
       inherit peer-policy EVPN-OVERLAY-POLICY 1
-      maximum-prefix 2039 warning-only
       ! staged or unsupported: the derived EVPN filter RM-OVERLAY-EVPN-IN (in) is not rendered (U)
       ! staged or unsupported: the derived EVPN filter RM-OVERLAY-EVPN-OUT (out) is not rendered (U)
     !
