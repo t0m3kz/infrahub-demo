@@ -125,18 +125,9 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- if session.get('maximum_routes') %}
       maximum-prefix {{ session.maximum_routes }}
 {%- endif %}
-{%- if session.get('local_pref') %}
-      route-map {{ session.name }}-LOCAL-PREF-IN in
-{%- endif %}
-{%- if session.get('med') %}
-      route-map {{ session.name }}-MED-OUT out
-{%- endif %}
-{%- if session.get('export_local_only') %}
-      route-map RM-FABRIC-OUT out
-{%- endif %}
-{%- if session.get('dci_inbound') %}
-      route-map RM-DCI-IN in
-{%- endif %}
+{%- for attached in session.policy.attach %}
+      route-map {{ attached.map }} {{ attached.direction }}
+{%- endfor %}
 {%- endif %}
     !
 {%- endfor %}

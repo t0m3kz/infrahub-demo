@@ -3,14 +3,14 @@
 {#- D: a route-map is global configuration on EOS, so the per-neighbour maps sit at column 0 before `router bgp`, not
     inside it (VRF neighbours below reference the same maps). -#}
 {%- for session in bgp_config.sessions %}
-{%- if session.get('local_pref') %}
-route-map {{ session.name }}-LOCAL-PREF-IN permit 10
-   set local-preference {{ session.local_pref }}
+{%- if session.policy.inbound.own %}
+route-map {{ session.policy.inbound.own.name }} permit 10
+   set local-preference {{ session.policy.inbound.own.local_pref }}
 !
 {%- endif %}
-{%- if session.get('med') %}
-route-map {{ session.name }}-MED-OUT permit 10
-   set metric {{ session.med }}
+{%- if session.policy.outbound.own %}
+route-map {{ session.policy.outbound.own.name }} permit 10
+   set metric {{ session.policy.outbound.own.med }}
 !
 {%- endif %}
 {%- endfor %}
@@ -90,12 +90,9 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- if session.get('password') %}
    neighbor {{ session.neighbor }} password {{ session.password }}
 {%- endif %}
-{%- if session.get('local_pref') %}
-   neighbor {{ session.neighbor }} route-map {{ session.name }}-LOCAL-PREF-IN in
-{%- endif %}
-{%- if session.get('med') %}
-   neighbor {{ session.neighbor }} route-map {{ session.name }}-MED-OUT out
-{%- endif %}
+{%- for attached in session.policy.attach if attached.own %}
+   neighbor {{ session.neighbor }} route-map {{ attached.map }} {{ attached.direction }}
+{%- endfor %}
 {%- endfor %}
    !
    address-family ipv4
@@ -177,12 +174,9 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- if session.get('password') %}
       neighbor {{ session.neighbor }} password {{ session.password }}
 {%- endif %}
-{%- if session.get('local_pref') %}
-      neighbor {{ session.neighbor }} route-map {{ session.name }}-LOCAL-PREF-IN in
-{%- endif %}
-{%- if session.get('med') %}
-      neighbor {{ session.neighbor }} route-map {{ session.name }}-MED-OUT out
-{%- endif %}
+{%- for attached in session.policy.attach if attached.own %}
+      neighbor {{ session.neighbor }} route-map {{ attached.map }} {{ attached.direction }}
+{%- endfor %}
 {%- endfor %}
 {%- for _af, _af_sessions in bgp_config.vrf_af_sessions[vrf_name].items() %}
       address-family {{ _af }}
