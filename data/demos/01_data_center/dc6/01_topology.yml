@@ -32,7 +32,8 @@ spec:
             racks:
               kind: LocationRack
               data:
-                - index: 5
+                - name: KTW-1-SUITE-1-R1-5
+                  index: 5
                   row_index: 1
                   shortname: ktw-1-s-1-r-1-5
                   rack_type: network
@@ -41,7 +42,8 @@ spec:
                   fabric_templates:
                     - ["2", "leaf", "PowerSwitch-S5232F-ON_LEAF_MR"]
                     - ["2", "l2-leaf", "PowerSwitch-S5224F-ON_TOR"]
-                - index: 5
+                - name: KTW-1-SUITE-1-R2-5
+                  index: 5
                   row_index: 2
                   shortname: ktw-1-s-1-r-2-5
                   rack_type: network
@@ -67,7 +69,8 @@ spec:
             racks:
               kind: LocationRack
               data:
-                - index: 1
+                - name: KTW-1-SUITE-2-R1-1
+                  index: 1
                   row_index: 1
                   shortname: ktw-1-s-2-r-1-1
                   rack_type: tor
@@ -75,7 +78,8 @@ spec:
                   member_of_groups: [topologies_rack]
                   fabric_templates:
                     - ["2", "tor", "N9K-C9336C-FX2_TOR"]
-                - index: 5
+                - name: KTW-1-SUITE-2-R1-5
+                  index: 5
                   row_index: 1
                   shortname: ktw-1-s-2-r-1-5
                   rack_type: tor
@@ -83,7 +87,8 @@ spec:
                   member_of_groups: [topologies_rack]
                   fabric_templates:
                     - ["2", "tor", "N9K-C9336C-FX2_TOR"]
-                - index: 1
+                - name: KTW-1-SUITE-2-R2-1
+                  index: 1
                   row_index: 2
                   shortname: ktw-1-s-2-r-2-1
                   rack_type: tor
@@ -91,7 +96,8 @@ spec:
                   member_of_groups: [topologies_rack]
                   fabric_templates:
                     - ["2", "tor", "PowerSwitch-S5224F-ON_TOR"]
-                - index: 5
+                - name: KTW-1-SUITE-2-R2-5
+                  index: 5
                   row_index: 2
                   shortname: ktw-1-s-2-r-2-5
                   rack_type: tor
@@ -109,7 +115,8 @@ spec:
             racks:
               kind: LocationRack
               data:
-                - index: 1
+                - name: KTW-1-SUITE-3-R1-1
+                  index: 1
                   row_index: 1
                   shortname: ktw-1-s-3-r-1-1
                   rack_type: compute
@@ -117,7 +124,8 @@ spec:
                   member_of_groups: [topologies_rack]
                   fabric_templates:
                     - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
-                - index: 4
+                - name: KTW-1-SUITE-3-R1-4
+                  index: 4
                   row_index: 1
                   shortname: ktw-1-s-3-r-1-4
                   rack_type: network
@@ -125,7 +133,8 @@ spec:
                   member_of_groups: [topologies_rack]
                   fabric_templates:
                     - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MIXED"]
-                - index: 7
+                - name: KTW-1-SUITE-3-R1-7
+                  index: 7
                   row_index: 1
                   shortname: ktw-1-s-3-r-1-7
                   rack_type: compute
@@ -133,7 +142,8 @@ spec:
                   member_of_groups: [topologies_rack]
                   fabric_templates:
                     - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
-                - index: 1
+                - name: KTW-1-SUITE-3-R2-1
+                  index: 1
                   row_index: 2
                   shortname: ktw-1-s-3-r-2-1
                   rack_type: compute
@@ -141,7 +151,8 @@ spec:
                   member_of_groups: [topologies_rack]
                   fabric_templates:
                     - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
-                - index: 4
+                - name: KTW-1-SUITE-3-R2-4
+                  index: 4
                   row_index: 2
                   shortname: ktw-1-s-3-r-2-4
                   rack_type: network
@@ -149,7 +160,8 @@ spec:
                   member_of_groups: [topologies_rack]
                   fabric_templates:
                     - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MIXED"]
-                - index: 7
+                - name: KTW-1-SUITE-3-R2-7
+                  index: 7
                   row_index: 2
                   shortname: ktw-1-s-3-r-2-7
                   rack_type: compute
