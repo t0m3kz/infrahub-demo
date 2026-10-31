@@ -37,7 +37,8 @@ spec:
             racks:
               kind: LocationRack
               data:
-                - index: 1
+                - name: BER-1-SUITE-1-R1-1
+                  index: 1
                   row_index: 1
                   shortname: ber-1-s-1-r-1-1
                   rack_type: network
@@ -55,7 +56,8 @@ spec:
             racks:
               kind: LocationRack
               data:
-                - index: 1
+                - name: BER-1-SUITE-2-R1-1
+                  index: 1
                   row_index: 1
                   shortname: ber-1-s-2-r-1-1
                   rack_type: network
@@ -63,7 +65,8 @@ spec:
                   member_of_groups: [topologies_rack]
                   fabric_templates:
                     - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MIXED"]
-                - index: 2
+                - name: BER-1-SUITE-2-R1-2
+                  index: 2
                   row_index: 1
                   shortname: ber-1-s-2-r-1-2
                   rack_type: compute
@@ -80,7 +83,8 @@ spec:
             racks:
               kind: LocationRack
               data:
-                - index: 1
+                - name: BER-1-SUITE-3-R1-1
+                  index: 1
                   row_index: 1
                   shortname: ber-1-s-3-r-1-1
                   rack_type: tor

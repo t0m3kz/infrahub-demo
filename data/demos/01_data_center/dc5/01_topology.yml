@@ -31,7 +31,8 @@ spec:
             racks:
               kind: LocationRack
               data:
-                - index: 1
+                - name: NY-1-SUITE-1-R1-1
+                  index: 1
                   row_index: 1
                   shortname: ny-1-s-1-r-1-1
                   rack_type: network
@@ -40,7 +41,8 @@ spec:
                   fabric_templates:
                     - ["2", "leaf", "N9K-C9336C-FX2_LEAF_MR"]
                     - ["2", "l2-leaf", "N9K-C9336C-FX2_TOR"]
-                - index: 1
+                - name: NY-1-SUITE-1-R2-1
+                  index: 1
                   row_index: 2
                   shortname: ny-1-s-1-r-2-1
                   rack_type: network
@@ -49,7 +51,8 @@ spec:
                   fabric_templates:
                     - ["2", "leaf", "N9K-C9336C-FX2_LEAF_MR"]
                     - ["2", "l2-leaf", "N9K-C9336C-FX2_TOR"]
-                - index: 1
+                - name: NY-1-SUITE-1-R3-1
+                  index: 1
                   row_index: 3
                   rack_type: network
                   shortname: ny-1-s-1-r-3-1
@@ -64,7 +67,8 @@ spec:
             racks:
               kind: LocationRack
               data:
-                - index: 1
+                - name: NY-1-SUITE-2-R1-1
+                  index: 1
                   row_index: 1
                   shortname: ny-1-s-2-r-1-1
                   rack_type: network
@@ -73,7 +77,8 @@ spec:
                   fabric_templates:
                     - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MR"]
                     - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
-                - index: 1
+                - name: NY-1-SUITE-2-R2-1
+                  index: 1
                   row_index: 2
                   shortname: ny-1-s-2-r-2-1
                   rack_type: network
@@ -82,7 +87,8 @@ spec:
                   fabric_templates:
                     - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MR"]
                     - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
-                - index: 1
+                - name: NY-1-SUITE-2-R3-1
+                  index: 1
                   row_index: 3
                   rack_type: network
                   shortname: ny-1-s-2-r-3-1
@@ -97,7 +103,8 @@ spec:
             racks:
               kind: LocationRack
               data:
-                - index: 1
+                - name: NY-1-SUITE-3-R1-1
+                  index: 1
                   row_index: 1
                   shortname: ny-1-s-3-r-1-1
                   rack_type: network
@@ -106,7 +113,8 @@ spec:
                   fabric_templates:
                     - ["2", "leaf", "PowerSwitch-S5232F-ON_LEAF_MR"]
                     - ["2", "l2-leaf", "PowerSwitch-S5224F-ON_TOR"]
-                - index: 1
+                - name: NY-1-SUITE-3-R2-1
+                  index: 1
                   row_index: 2
                   shortname: ny-1-s-3-r-2-1
                   rack_type: network
@@ -124,7 +132,8 @@ spec:
             racks:
               kind: LocationRack
               data:
-                - index: 1
+                - name: NY-1-SUITE-4-R1-1
+                  index: 1
                   row_index: 1
                   shortname: ny-1-s-4-r-1-1
                   rack_type: network
@@ -133,7 +142,8 @@ spec:
                   fabric_templates:
                     - ["2", "leaf", "Edgecore-7726-32X-O_LEAF_MR"]
                     - ["2", "l2-leaf", "Edgecore-7AS7326-56X-O-48V-F_TOR"]
-                - index: 1
+                - name: NY-1-SUITE-4-R2-1
+                  index: 1
                   row_index: 2
                   shortname: ny-1-s-4-r-2-1
                   rack_type: network

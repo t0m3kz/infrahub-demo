@@ -50,7 +50,8 @@ spec:
               kind: LocationRack
               data:
                 # Network racks: row 1 = leaf pair + access-leaf pair, row 2 = leaf pair.
-                - index: 5
+                - name: ROM-1-SUITE-1-R1-5
+                  index: 5
                   row_index: 1
                   shortname: rom-1-s-1-r-1-5
                   rack_type: network
@@ -59,7 +60,8 @@ spec:
                   fabric_templates:
                     - ["2", "leaf", "DCS-7280SR3-48YC8_LEAF"]
                     - ["2", "access-leaf", "DCS-7280SR3-48YC8_ACCESS"]
-                - index: 5
+                - name: ROM-1-SUITE-1-R2-5
+                  index: 5
                   row_index: 2
                   shortname: rom-1-s-1-r-2-5
                   rack_type: network
@@ -69,12 +71,14 @@ spec:
                     - ["2", "leaf", "DCS-7280SR3-48YC8_LEAF"]
                 # Compute racks: no fabric templates of their own; the endpoint generator cables
                 # their servers to the network rack that shares their row.
-                - index: 1
+                - name: ROM-1-SUITE-1-R1-1
+                  index: 1
                   row_index: 1
                   shortname: rom-1-s-1-r-1-1
                   parent: rom-1-s-1
                   member_of_groups: [topologies_rack]
-                - index: 1
+                - name: ROM-1-SUITE-1-R2-1
+                  index: 1
                   row_index: 2
                   shortname: rom-1-s-1-r-2-1
                   parent: rom-1-s-1

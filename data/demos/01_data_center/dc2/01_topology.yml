@@ -31,7 +31,8 @@ spec:
             racks:
               kind: LocationRack
               data:
-                - index: 1
+                - name: PAR-1-SUITE-1-R1-1
+                  index: 1
                   row_index: 1
                   shortname: par-1-s-1-r-1-1
                   rack_type: network
@@ -49,7 +50,8 @@ spec:
             racks:
               kind: LocationRack
               data:
-                - index: 1
+                - name: PAR-1-SUITE-2-R1-1
+                  index: 1
                   row_index: 1
                   shortname: par-1-s-2-r-1-1
                   rack_type: network
@@ -67,7 +69,8 @@ spec:
             racks:
               kind: LocationRack
               data:
-                - index: 1
+                - name: PAR-1-SUITE-3-R1-1
+                  index: 1
                   row_index: 1
                   shortname: par-1-s-3-r-1-1
                   rack_type: network
@@ -85,7 +88,8 @@ spec:
             racks:
               kind: LocationRack
               data:
-                - index: 1
+                - name: PAR-1-SUITE-4-R1-1
+                  index: 1
                   row_index: 1
                   shortname: par-1-s-4-r-1-1
                   rack_type: network
