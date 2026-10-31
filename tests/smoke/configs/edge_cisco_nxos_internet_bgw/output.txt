@@ -129,7 +129,7 @@ router bgp 65001
       bfd
       address-family ipv4 unicast
         send-community
-        maximum-prefix 100
+        maximum-prefix 3 warning-only
         route-map RM-TRANSIT-IN in
         route-map RM-TRANSIT-OUT out
   !

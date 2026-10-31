@@ -267,12 +267,11 @@ def session_payload(
     name: str | None = None,
     status: str = "active",
     namespace: str | None = "PROD",
-    maximum_routes: int | None = 100,
     password: str | None = None,
     circuit_id: str = VC_ID,
 ) -> dict[str, Any]:
     """A TopologySessionCircuit payload of ``circuit_type`` (dci, handoff, tunnel); a handoff also carries its
-    namespace, maximum_routes and password.
+    namespace and password.
 
     ``circuit_id`` is for a second circuit on the same client (see ``FakeClient.circuit_ids``)."""
     node: dict[str, Any] = {
@@ -284,7 +283,6 @@ def session_payload(
     }
     if circuit_type == "handoff":
         node["ip_namespace"] = {"node": {"name": {"value": namespace}} if namespace else None}
-        node["maximum_routes"] = {"value": maximum_routes}
         node["password"] = {"node": {"id": password} if password else None}
     node["capabilities"] = {"edges": [{"node": port} for port in ends]}
     return {"TopologySessionCircuit": {"edges": [{"node": node}]}}

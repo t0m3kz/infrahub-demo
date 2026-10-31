@@ -18,6 +18,7 @@ import pytest
 
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.leaf import Leaf
+from transforms.helpers.bgp_policy import compose_policy
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _MAC = "00:1c:73:00:dc:01"
@@ -143,6 +144,7 @@ class TestVrfBgp:
     def test_vrf_instance_merges_into_a_vrf_handoff_session_entry(self) -> None:
         """sonic_common.j2 already creates BGP_GLOBALS[vrf] for a VRF-scoped session; it is kept."""
         session = {"neighbor": "100.64.0.1", "remote_as": {"asn": 65100}, "vrf": "PROD"}
+        session["policy"] = compose_policy(session)
         bgp = [{"local_as": {"asn": 65000}, "router_ip": "10.0.0.1", "sessions": [session]}]
         config = _render(bgp=bgp)
         assert config["BGP_GLOBALS"]["PROD"]["local_asn"] == 65000

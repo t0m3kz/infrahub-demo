@@ -84,8 +84,11 @@ router bgp {{ bgp_config.local_as.asn }}
    neighbor {{ session.neighbor }} bfd
 {%- endif %}
 {%- endif %}
-{%- if session.get('maximum_routes') %}
-   neighbor {{ session.neighbor }} maximum-routes {{ session.maximum_routes }}
+{%- if session.policy.max_total %}
+{#- I: `neighbor <peer> maximum-routes <n> [warning-only]` (Arista EOS BGP command reference); one limit per
+    neighbour, so the sum of its unicast families. U for an IPv6 neighbour: whether the command is per family
+    there was not checked. `warning-only` while routing_filter_enforce is false. #}
+   neighbor {{ session.neighbor }} maximum-routes {{ session.policy.max_total.limit }}{{ ' warning-only' if session.policy.max_total.warning_only }}
 {%- endif %}
 {%- if session.get('password') %}
    neighbor {{ session.neighbor }} password {{ session.password }}
@@ -168,8 +171,8 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- if session.get('bfd_enabled') %}
       neighbor {{ session.neighbor }} bfd
 {%- endif %}
-{%- if session.get('maximum_routes') %}
-      neighbor {{ session.neighbor }} maximum-routes {{ session.maximum_routes }}
+{%- if session.policy.max_total %}
+      neighbor {{ session.neighbor }} maximum-routes {{ session.policy.max_total.limit }}{{ ' warning-only' if session.policy.max_total.warning_only }}
 {%- endif %}
 {%- if session.get('password') %}
       neighbor {{ session.neighbor }} password {{ session.password }}

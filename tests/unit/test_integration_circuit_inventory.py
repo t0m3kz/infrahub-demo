@@ -84,7 +84,6 @@ async def test_every_kind_is_in_the_inventory_with_its_own_fields(monkeypatch: p
         "vif-transit-hub-euc1",
         1000,
     )
-    assert aws["maximum_routes"] == 100
     assert aws["password"] == "eqx-fr2-aws-vif-key"
     assert [end["parent_name"] for end in aws["end_nodes"]] == ["Ethernet1/13", "et-0/0/0"]
     # a sub-interface rides its parent's carrier, a cable-carried handoff has no circuit but a cable
@@ -227,7 +226,6 @@ def _session(**changes: Any) -> dict[str, Any]:
         "ttl": {"value": 1},
         "bfd_enabled": {"value": True},
         "send_extended_community": {"value": False},
-        "maximum_routes": {"value": 100},
         "password": {"node": {"name": {"value": "key"}}},
         "address_families": {"edges": [{"node": {"afi": {"value": "ipv4"}, "safi": {"value": "unicast"}}}]},
     }
@@ -241,26 +239,24 @@ _EXPECTED_SESSION: dict[str, Any] = {
     "ttl": 1,
     "bfd_enabled": True,
     "send_extended_community": False,
-    "maximum_routes": 100,
     "key": "key",
     "families": [("ipv4", "unicast")],
 }
 
 
 def test_session_errors_name_every_knob_that_differs() -> None:
-    """Each differing knob (ttl, BFD, route limit, key, families) is named once, in a fixed order."""
+    """Each differing knob (ttl, BFD, key, families) is named once, in a fixed order."""
     assert interconnect_rules._session_errors(_session(), _EXPECTED_SESSION) == []
     errors = interconnect_rules._session_errors(
         _session(
             ttl={"value": 2},
             bfd_enabled={"value": False},
             password={"node": None},
-            maximum_routes={"value": None},
             address_families={"edges": []},
         ),
         _EXPECTED_SESSION,
     )
-    assert [e.split(" ")[1] for e in errors] == ["ttl", "bfd_enabled", "maximum_routes", "key", "families"]
+    assert [e.split(" ")[1] for e in errors] == ["ttl", "bfd_enabled", "key", "families"]
 
 
 def _prefix(prefix: str, role: str = "technical") -> dict[str, Any]:
@@ -337,7 +333,7 @@ def test_the_snapshot_covers_the_addresses_sessions_and_keys_the_generator_write
     interface = TOPOLOGY_SNAPSHOT_KINDS["DcimInterface"]
     assert interface.count("ip_address { node { id address { value } } }") == 3
     peering = TOPOLOGY_SNAPSHOT_KINDS["ManagedBGPPeering"]
-    for field in ("peering_role", "ttl", "bfd_enabled", "send_extended_community", "maximum_routes", "password"):
+    for field in ("peering_role", "ttl", "bfd_enabled", "send_extended_community", "password"):
         assert field in peering
     assert "password { value }" in TOPOLOGY_SNAPSHOT_KINDS["RoutingPassword"]
     cable = TOPOLOGY_SNAPSHOT_KINDS["DcimCable"]

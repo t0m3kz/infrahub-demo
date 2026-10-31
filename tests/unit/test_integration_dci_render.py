@@ -41,14 +41,14 @@ def test_a_circuit_the_render_does_not_hold_is_reported_on_both_session_kinds(re
     ("line", "error"),
     [
         ("      route-map RM-DCI-IN in\n", "a DCI underlay neighbour has no 'route-map RM-DCI-IN in'"),
-        ("      maximum-prefix 16\n", "a DCI underlay neighbour has no 'maximum-prefix 16'"),
+        ("      maximum-prefix 4\n", "a DCI underlay neighbour has no 'maximum-prefix <n>'"),
         ("    update-source Loopback1\n", "a DCI EVPN neighbour has no 'update-source'"),
         ("    ebgp-multihop 2\n", "DCI-PEERS-SESSION does not give 'ebgp-multihop 2'"),
         ("route-map RM-DCI-IN permit 10\n", "RM-DCI-IN is referenced but not defined"),
     ],
 )
 def test_a_missing_line_of_the_dci_render_is_named(rendered: str, line: str, error: str) -> None:
-    """Dropping one DCI line names it (16 = DCI underlay route cap, multihop 2 = loopback to loopback)."""
+    """Dropping one DCI line names it (the limit is derived from the far gateway; multihop 2 is loopback to loopback)."""
     assert line in rendered
     errors = firewall_config._dci_session_errors("dc1-edge-01", rendered.replace(line, ""), 2)
     assert any(error in e for e in errors)

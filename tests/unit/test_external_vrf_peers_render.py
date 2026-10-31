@@ -74,7 +74,8 @@ class TestEdgeRender:
         assert "    neighbor 10.255.5.6\n" in prod
         assert "      remote-as 64512\n" in block
         assert "      bfd\n" in block
-        assert "        maximum-prefix 100\n" in block
+        # Derived from the allowed set (two registered VPC blocks plus the slack), warning-only while staged.
+        assert "        maximum-prefix 4 warning-only\n" in block
         assert "        route-map RM-VRF-PROD-EQXFR2-AWS-EUC1-IN in\n" in block
         assert "        route-map RM-VRF-PROD-EQXFR2-AWS-EUC1-OUT out\n" in block
         assert "EXTERNAL-OUT" not in output
@@ -121,7 +122,7 @@ class TestEdgeRender:
             assert excluded not in output
         block = _neighbor_block(output, "10.255.5.1")
         assert "        route-map RM-VRF-PROD-EQXFR2-SDWAN-IN in\n" in block
-        assert "        maximum-prefix 100\n" in block
+        assert re.search(r"^ {8}maximum-prefix \d+ warning-only$", block, re.M)
         assert "send-community" not in block
 
     def test_the_policy_names_its_owners(self) -> None:
@@ -177,7 +178,7 @@ class TestEdgeRender:
         output = _run_edge(_fixture())
         block = _neighbor_block(output, "10.255.8.1")
         assert "remote-as 4200000200" in block
-        assert "        maximum-prefix 100\n" in block
+        assert re.search(r"^ {8}maximum-prefix \d+ warning-only$", block, re.M)
         assert f"        route-map RM-{_NE_HOP}-IN in\n" in block
         assert f"        route-map RM-{_NE_HOP}-OUT out\n" in block
         assert (
@@ -192,7 +193,7 @@ class TestEdgeRender:
         output = _run_edge(_set_far_end_kind(_fixture(), _NE_HOP, "DcimPhysicalDevice"))
         block = _neighbor_block(output, "10.255.8.1")
         assert "remote-as 4200000200" in block
-        assert "        maximum-prefix 100\n" in block
+        assert re.search(r"^ {8}maximum-prefix \d+ warning-only$", block, re.M)
         assert "route-map" not in block
         assert _NE_HOP not in output.split("! Route-maps", 1)[1]
         assert f"RM-{_NE_HOP}" not in output
@@ -313,7 +314,7 @@ class TestEdgeRender:
         assert "-OUT" not in output
         assert "-IN in" not in output
         assert "ip prefix-list" not in output
-        assert "        maximum-prefix 100\n" in _neighbor_block(output, "10.255.5.6")
+        assert re.search(r"^ {8}maximum-prefix \d+ warning-only$", _neighbor_block(output, "10.255.5.6"), re.M)
 
 
 # ---------------------------------------------------------------------------

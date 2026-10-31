@@ -74,7 +74,6 @@ spec:
       provider: "P016"
       description: "PROD transit VIF eg-am-ne02 <-> EXT-AWS-DX-FR2 (vif-transit-am-euc1, AS64512)"
       ip_namespace: "PROD"
-      maximum_routes: 100
       password: "eqx-am-ne-aws-vif-key"
       locations:
         - "AM-NE"

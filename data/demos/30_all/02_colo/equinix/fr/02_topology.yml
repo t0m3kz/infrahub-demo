@@ -40,6 +40,7 @@ spec:
           - name: FR
             design: "S"
             location: ["fra"]
+            routing_filter_enforce: true
             member_of_groups:
               - colocation_metros
             children:

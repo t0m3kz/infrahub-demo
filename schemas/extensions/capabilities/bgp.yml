@@ -255,12 +255,6 @@ nodes:
             color: "#A29BFE"
         default_value: "EBGP"
         order_weight: 1400
-      - name: maximum_routes
-        kind: Number
-        description: "Maximum routes to accept from peer"
-        optional: true
-        order_weight: 1500
-        regex: "^[0-9]+$"
       - name: local_pref
         kind: Number
         description: "Local preference for routes from this peer"

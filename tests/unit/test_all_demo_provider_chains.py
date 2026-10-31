@@ -71,7 +71,6 @@ def test_the_megaport_handoff_is_an_unowned_prod_handoff_provided_by_megaport() 
     assert circuit["provider"] == "P033"
     assert circuit["ip_namespace"] == "PROD"
     assert circuit["status"] == "active"
-    assert circuit["maximum_routes"] == 100
     assert circuit["member_of_groups"] == ["virtual_circuits"]
     assert circuit["locations"] == ["PA4", "MCR-PAR1"]
     assert circuit["capabilities"] == [["eg-pa401", "Ethernet1/1.1300"], [_MCR, "et-0/0/0.1300"]]

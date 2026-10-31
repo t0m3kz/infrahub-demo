@@ -102,7 +102,6 @@ spec:
       provider: "P033"
       description: "PROD handoff eg-pa401 <-> Megaport Cloud Router EXT-MEGAPORT-MCR1 (AS133937)"
       ip_namespace: "PROD"
-      maximum_routes: 100
       password: "eqx-pa4-megaport-key"
       locations:
         - "PA4"

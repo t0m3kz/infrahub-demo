@@ -116,7 +116,6 @@ def build_device_data(
             ttl=1,
             local_iface_name="Ethernet1",
             remote_iface_name="Ethernet1/1",
-            maximum_routes=1000 if security_fields else None,
             local_pref=200 if security_fields else None,
             med=50 if security_fields else None,
             send_extended_community=security_fields,
@@ -207,7 +206,6 @@ def build_device_data(
             ttl=1,
             local_iface_name="Ethernet1",
             remote_iface_name="Ethernet1/1",
-            maximum_routes=1000 if security_fields else None,
             local_pref=200 if security_fields else None,
             med=50 if security_fields else None,
             send_extended_community=security_fields,
@@ -663,7 +661,7 @@ def write_fixtures() -> tuple[int, int]:
         generated += g
         errors += e
 
-    # BGP security/hardening fields: maximum_routes, local_pref, med,
+    # BGP security/hardening fields: local_pref, med,
     # send_extended_community, remove_private_as, password on the underlay peering
     print("\nGenerating BGP security-fields fixtures (leaf):")
     for platform in FABRIC_PLATFORMS:

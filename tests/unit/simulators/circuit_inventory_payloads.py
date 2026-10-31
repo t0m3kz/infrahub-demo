@@ -63,7 +63,6 @@ def inventory_payload(
         named_owner(circuit)
         physical.append(circuit)
 
-    maximum_routes = {name(h): h.item["maximum_routes"] for h in session_circuits(HANDOFF)}
     passwords = {name(h): h.item["password"] for h in session_circuits(HANDOFF)}
     virtual = []
     for circuit_type in (TUNNEL, INTERCONNECT, HANDOFF):
@@ -75,7 +74,6 @@ def inventory_payload(
             if "owner" in circuit:
                 named_owner(circuit)
             if circuit_type == HANDOFF:
-                circuit["maximum_routes"] = {"value": maximum_routes[circuit["name"]["value"]]}
                 circuit["password"] = {"node": {"name": {"value": passwords[circuit["name"]["value"]]}}}
             for port_edge in circuit["capabilities"]["edges"]:
                 port = port_edge["node"]

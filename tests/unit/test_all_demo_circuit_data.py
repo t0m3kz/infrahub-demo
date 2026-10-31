@@ -90,7 +90,7 @@ def test_a_tunnel_circuit_is_in_the_virtual_circuits_group_and_has_no_session_fi
     rows = _session_rows("tunnel", _DEMOS)
     assert [_circuit_name(entry) for entry in rows] == ["C001-PARTNER-ACME-FR2"]
     assert all("virtual_circuits" in entry["member_of_groups"] for entry in rows)
-    assert not [e["name"] for e in rows if {"ip_namespace", "password", "maximum_routes", "cloud_endpoint"} & set(e)]
+    assert not [e["name"] for e in rows if {"ip_namespace", "password", "cloud_endpoint"} & set(e)]
 
 
 def test_no_circuit_is_declared_as_a_removed_kind() -> None:

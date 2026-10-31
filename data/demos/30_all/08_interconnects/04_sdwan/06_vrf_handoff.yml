@@ -125,7 +125,6 @@ spec:
       provider: "P035"
       description: "PROD handoff eg-fr201 <-> EQX-FR2-SDWAN-GW1 (office routes into the stretched segments)"
       ip_namespace: "PROD"
-      maximum_routes: 100
       password: "eqx-fr2-sdwan-handoff-key"
       locations:
         - "FR2"

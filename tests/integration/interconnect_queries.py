@@ -59,7 +59,6 @@ query ($names: [String]) {
         ttl { value }
         bfd_enabled { value }
         send_extended_community { value }
-        maximum_routes { value }
         password { node { name { value } } }
         address_families { edges { node { afi { value } safi { value } } } }
         bgp_processes {

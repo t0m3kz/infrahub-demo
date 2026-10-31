@@ -728,7 +728,6 @@ def _dci_bgp(*, with_underlay: bool = True, with_evpn: bool = True) -> list[dict
                 "remote_as": {"asn": 65010},
                 "remote_device": "dc10-bl01",
                 "password": "key-1",
-                "maximum_routes": 16,
             }
         )
     if with_evpn:
@@ -763,7 +762,8 @@ class TestNxosDciRendering:
         assert "update-source" not in underlay
         assert "address-family ipv6 unicast" in underlay
         assert "l2vpn evpn" not in underlay
-        assert "maximum-prefix 16" in underlay
+        # No pool and no far-end facts in this hand-built context: no limit is derived, none is invented.
+        assert "maximum-prefix" not in underlay
         assert "route-map RM-FABRIC-OUT out\n      route-map RM-DCI-IN in" in underlay
 
     def test_dci_evpn_neighbour_is_multihop_from_its_loopback(self, nxos_env: jinja2.Environment) -> None:

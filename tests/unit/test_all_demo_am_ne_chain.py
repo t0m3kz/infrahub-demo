@@ -102,7 +102,6 @@ def test_the_fabric_hop_is_an_unowned_prod_handoff_between_the_cage_and_am_ne() 
     assert circuit["provider"] == "P016"
     assert circuit["ip_namespace"] == "PROD"
     assert circuit["status"] == "active"
-    assert circuit["maximum_routes"] == 100
     assert circuit["member_of_groups"] == ["virtual_circuits"]
     assert circuit["locations"] == ["FR2", "AM-NE"]
     assert circuit["capabilities"] == [["eg-fr201", "Ethernet1/1.1200"], ["eg-am-ne01", "Ethernet1/1.1200"]]

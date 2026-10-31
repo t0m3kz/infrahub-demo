@@ -8,7 +8,7 @@
 #   owner and locations (an office location carries its owner), end ports; each port's device carries its BGP
 #   processes (a dci needs exactly one overlay process on it). What only one type may carry is selected for all:
 #   ip_namespace (with its namespace_type) and the cloud-side endpoint (a VIF states its VLAN, which mirrors the
-#   sub-interface name) for a handoff, password, maximum_routes and registered_prefixes (their ids only).
+#   sub-interface name) for a handoff, password and registered_prefixes (their ids only).
 #   A handoff's locations are exactly where its two end devices are deployed, so every end port's device carries
 #   its deployment.
 #
@@ -89,7 +89,6 @@ query circuit_placement {
         }
         ip_namespace { node { name { value } namespace_type { value } } }
         password { node { id } }
-        maximum_routes { value }
         registered_prefixes { edges { node { id } } }
         cloud_endpoint {
           node {

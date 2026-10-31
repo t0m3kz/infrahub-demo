@@ -170,7 +170,6 @@ def _build_session_from_peering(
         "bfd_enabled": peering_node.get("bfd_enabled"),
         "send_community": peering_node.get("send_community"),
         "send_extended_community": peering_node.get("send_extended_community"),
-        "maximum_routes": peering_node.get("maximum_routes"),
         "local_pref": peering_node.get("local_pref"),
         "med": peering_node.get("med"),
         "remove_private_as": peering_node.get("remove_private_as"),

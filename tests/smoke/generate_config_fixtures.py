@@ -30,6 +30,7 @@ from tests.smoke.fixture_builders import (
     office,
     proxy_lb,
     routing_identity,
+    routing_protection,
     transit,
 )
 from tests.smoke.fixture_builders.common import SMOKE_DIR
@@ -48,6 +49,7 @@ WRITERS: list[tuple[str | None, Callable[[], tuple[int, int]]]] = [
     (None, proxy_lb.write_fixtures),
     (None, group_policy.write_fixtures),
     (None, routing_identity.write_fixtures),
+    (None, routing_protection.write_fixtures),
     ("Cloud VPC Terraform fixtures", cloud.write_fixtures),
 ]
 

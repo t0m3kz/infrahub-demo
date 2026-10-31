@@ -101,7 +101,6 @@ class TestInterconnectSession:
             "bfd_enabled": True,
             "send_community": True,
             "send_extended_community": False,
-            "maximum_routes": 16,
             "address_families": [{"id": "af-ipv6-unicast"}],
             "bgp_processes": [{"id": "eg-fr201-bgp-overlay"}, {"id": "bl-dc101101-bgp-overlay"}],
             "password": {"id": DCI_KEY},
@@ -130,7 +129,6 @@ class TestInterconnectSession:
             "password": {"id": DCI_KEY},
             "capabilities": [{"id": "lo-eg-fr201-loopback1"}, {"id": "lo-bl-dc101101-loopback2"}],
         }
-        assert "maximum_routes" not in _peering(client, "evpn")
 
     @pytest.mark.parametrize(
         ("loopbacks", "expected"),

@@ -103,7 +103,6 @@ def test_the_session_fields_of_one_type_are_optional_in_the_schema() -> None:
     session = _node("SessionCircuit")
     for name in ("ip_namespace", "password", "cloud_endpoint", "registered_prefixes"):
         assert _field(session["relationships"], name)["optional"] is True, name
-    assert _field(session["attributes"], "maximum_routes")["optional"] is True
 
 
 def test_the_cloud_attachment_peers_the_session_kind() -> None:

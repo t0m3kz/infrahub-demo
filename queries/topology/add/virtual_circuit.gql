@@ -24,7 +24,7 @@
 #                                                                  (loopback and loopback-vtep only: the DCI EVPN
 #                                                                   session sources its loopbacks from them; the
 #                                                                   address only on a DcimVirtualInterface)
-# A handoff adds ip_namespace.name; maximum_routes; password.id (null when unkeyed).
+# A handoff adds ip_namespace.name; password.id (null when unkeyed).
 # The ends' own addresses are not selected: the generator allocates them and reads the interface nodes it writes.
 query virtual_circuit_data($name: String!) {
   TopologySessionCircuit(name__value: $name) {
@@ -36,7 +36,6 @@ query virtual_circuit_data($name: String!) {
         status { value }
         circuit_type { value }
         ip_namespace { node { name { value } } }
-        maximum_routes { value }
         password { node { id } }
         capabilities {
           edges {

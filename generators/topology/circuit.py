@@ -28,10 +28,10 @@ generator (``CARRIER_CIRCUIT_GENERATOR``) on the carrier circuits it rides and r
 never waits for it (no cycle): it only fires it, without waiting, for every session circuit on the circuit's ports
 (or on a sub-interface whose parent is one of them).
 
-What reaches a session: it reruns on its own created / capabilities / status (a handoff also ip_namespace, password
-and maximum_routes), and, through this fan-out, when a carrier circuit on its ports (or on a port's parent) is
-created, has its ends changed (capabilities) or its status changed (data/events/99_actions.yml: created, capabilities
-and status rules on TopologyCarrierCircuit). It does NOT rerun when a cable is added later, when a port is removed
+What reaches a session: it reruns on its own created / capabilities / status (a handoff also ip_namespace and password),
+and, through this fan-out, when a carrier circuit on its ports (or on a port's parent) is created, has its ends
+changed (capabilities) or its status changed (data/events/99_actions.yml: created, capabilities and status rules on
+TopologyCarrierCircuit). It does NOT rerun when a cable is added later, when a port is removed
 from a circuit (the circuit no longer lists the port, so the fan-out does not find the session), or when a circuit's
 type changes (no rule).
 

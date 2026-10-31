@@ -27,6 +27,7 @@ spec:
           - name: AM
             design: "S"
             location: ["ams"]
+            routing_filter_enforce: true
             member_of_groups:
               - colocation_metros
             children:

@@ -494,7 +494,7 @@ async def _vip_contexts(client: InfrahubClient, branch: str) -> dict[Loadbalance
 def _dci_session_errors(device: str, rendered: str, expected: int) -> list[str]:
     """What an edge renders for the DCI sessions of its ``expected`` dark fibres (add_virtual_circuit builds two each).
 
-    The underlay neighbours inherit DCI-UNDERLAY-PEERS-SESSION: one per fibre, with `maximum-prefix 16`, announcing
+    The underlay neighbours inherit DCI-UNDERLAY-PEERS-SESSION: one per fibre, with the `maximum-prefix` derived from the far border gateway (utils/bgp_expectation.py), announcing
     only the box's own loopbacks (`RM-FABRIC-OUT out`) and tagging what the other site sends no-export
     (`RM-DCI-IN in`, defined). The EVPN neighbours inherit DCI-PEERS-SESSION: one per fibre, keyed, sourced from the
     loopback their peering names (`update-source`), the template giving `ebgp-multihop 2`.
@@ -507,9 +507,12 @@ def _dci_session_errors(device: str, rendered: str, expected: int) -> list[str]:
         errors.append(f"{device}: {len(underlay)} DCI-UNDERLAY-PEERS neighbour(s), expected {expected}")
     if len(evpn) != expected:
         errors.append(f"{device}: {len(evpn)} DCI-PEERS neighbour(s), expected {expected}")
-    for needle in ("maximum-prefix 16", "route-map RM-FABRIC-OUT out", "route-map RM-DCI-IN in"):
+    for needle in ("route-map RM-FABRIC-OUT out", "route-map RM-DCI-IN in"):
         if any(needle not in body for body in underlay):
             errors.append(f"{device}: a DCI underlay neighbour has no '{needle}'")
+    # The limit is a number derived from the model, not a constant: any value is right, none is wrong.
+    if any(not re.search(r"^ +maximum-prefix \d+$", body, re.MULTILINE) for body in underlay):
+        errors.append(f"{device}: a DCI underlay neighbour has no 'maximum-prefix <n>'")
     for needle in ("update-source ", "password "):
         if any(needle not in body for body in evpn):
             errors.append(f"{device}: a DCI EVPN neighbour has no '{needle.strip()}'")

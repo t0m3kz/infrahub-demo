@@ -15,7 +15,6 @@ fragment ManagedBGPServiceFields on ManagedBGP {
         bfd_enabled { value }
         send_community { value }
         send_extended_community { value }
-        maximum_routes { value }
         local_pref { value }
         med { value }
         remove_private_as { value }

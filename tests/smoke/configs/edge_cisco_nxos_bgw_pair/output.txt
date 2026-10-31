@@ -161,6 +161,7 @@ router bgp 65001
     inherit peer-session FABRIC-PEERS-SESSION
     address-family ipv6 unicast
       inherit peer-policy FABRIC-PEERS-POLICY 1
+      maximum-prefix 4
       route-map RM-FABRIC-OUT out
     !
     address-family l2vpn evpn
@@ -173,7 +174,7 @@ router bgp 65001
     inherit peer-session DCI-UNDERLAY-PEERS-SESSION
     address-family ipv6 unicast
       inherit peer-policy DCI-UNDERLAY-PEERS-POLICY 1
-      maximum-prefix 16
+      maximum-prefix 4
       route-map RM-FABRIC-OUT out
       route-map RM-DCI-IN in
     !
@@ -184,7 +185,7 @@ router bgp 65001
     inherit peer-session DCI-UNDERLAY-PEERS-SESSION
     address-family ipv6 unicast
       inherit peer-policy DCI-UNDERLAY-PEERS-POLICY 1
-      maximum-prefix 16
+      maximum-prefix 4
       route-map RM-FABRIC-OUT out
       route-map RM-DCI-IN in
     !

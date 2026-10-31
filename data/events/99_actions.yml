@@ -752,8 +752,8 @@ spec:
     # One set of rules for the one kind, none on a generic: a rule on a generic node_kind is unprobed here, a
     # per-kind rule is the shape every rule in this file uses.
     # Each `updated` rule watches what the generator reads and nothing it writes: `capabilities` (the ends, hence
-    # the carrier), `status`, and for a handoff its `ip_namespace` (the pool), `password` and `maximum_routes`
-    # (those three fire for a dci or a tunnel too, which never sets them: harmless).
+    # the carrier), `status`, and for a handoff its `ip_namespace` (the pool) and `password`
+    # (those two fire for a dci or a tunnel too, which never sets them: harmless).
     # `cloud_endpoint` is deliberately absent: the generator does not read it. A carrier's change reaches the
     # circuits through add_circuit, which fans out here (generators/topology/circuit.py).
 
@@ -806,14 +806,3 @@ spec:
         data:
           - relationship_name: password
             modification_type: updated
-
-    - name: trigger-session-circuit-on-maximum-routes-updated
-      branch_scope: "other_branches"
-      node_kind: TopologySessionCircuit
-      mutation_action: "updated"
-      action: run-virtual-circuit-generator
-      matches:
-        kind: CoreNodeTriggerAttributeMatch
-        data:
-          - attribute_name: maximum_routes
-            value_match: any

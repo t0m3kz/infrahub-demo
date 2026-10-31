@@ -5,6 +5,16 @@ fragment EvpnRtAsOnSegmentHostingFields on TopologySegmentHosting {
     }
   }
   evpn_anycast_gateway_mac { value }
+  # The BGP route protection (utils/bgp_expectation.py, transforms/helpers/bgp_facts.py): the staging switch and the
+  # supernet the fabric's loopbacks are sliced from. The DC and the metro name their pool on different relationships
+  # (identifiers dc__loopback_pool / colocation_metro__loopback_pool), so one inline fragment each.
+  routing_filter_enforce { value }
+  ... on TopologyDataCenter {
+    loopback_pool { node { resources { edges { node { prefix { value } } } } } }
+  }
+  ... on TopologyColocationMetro {
+    loopback_pool { node { resources { edges { node { prefix { value } } } } } }
+  }
 }
 
 # ORDER MATTERS: spread EvpnRtAsOnDeploymentFields FIRST in the device's deployment selection. On the

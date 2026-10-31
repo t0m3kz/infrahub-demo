@@ -116,10 +116,6 @@
 {#- NOTE: 'remove_private_as' key unverified against real SONiC BGP_PEER_GROUP config-DB schema -#}
 {%- set _ = pg_entry.update({'remove_private_as': 'true'}) -%}
 {%- endif -%}
-{%- if pg.get('maximum_routes') -%}
-{#- NOTE: 'max_prefix_limit' key unverified against real SONiC BGP_PEER_GROUP_AF config-DB schema -#}
-{%- set _ = pg_entry.update({'max_prefix_limit': pg.maximum_routes|string}) -%}
-{%- endif -%}
 {%- set _ = bgp_peer_groups.update({pg.name: pg_entry}) -%}
 {#- Per-group address family activation -#}
 {%- if 'ipv4' in (pg.address_families | default([])) -%}
@@ -181,10 +177,12 @@
 {#- NOTE: 'remove_private_as' key unverified against real SONiC BGP_NEIGHBOR config-DB schema -#}
 {%- set _ = neighbor_entry.update({'remove_private_as': 'true'}) -%}
 {%- endif -%}
-{%- if session.get('maximum_routes') -%}
-{#- NOTE: 'max_prefix_limit' key unverified against real SONiC BGP_NEIGHBOR_AF config-DB schema -#}
-{%- set _ = neighbor_entry.update({'max_prefix_limit': session.maximum_routes|string}) -%}
 {%- endif -%}
+{#- U: 'max_prefix_limit' key unverified against the real SONiC BGP_NEIGHBOR(_AF) config-DB schema, and no
+    warning-only form is known, so the limit is rendered only when the hosting deployment enforces
+    (routing_filter_enforce). Staged: not rendered. -#}
+{%- if session.policy.max_total and session.policy.enforced -%}
+{%- set _ = neighbor_entry.update({'max_prefix_limit': session.policy.max_total.limit|string}) -%}
 {%- endif -%}
 {#- 'password'/'local_pref'/'med' intentionally not rendered here: BGP auth and route-map/policy
     based attributes don't have a clean config-DB JSON representation in this file's model -#}

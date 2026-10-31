@@ -66,7 +66,6 @@ spec:
       provider: "P016"
       description: "PROD Equinix Fabric handoff eg-fr201 <-> Network Edge router eg-am-ne01"
       ip_namespace: "PROD"
-      maximum_routes: 100
       password: "eqx-fr2-am-ne-handoff-key"
       locations:
         - "FR2"

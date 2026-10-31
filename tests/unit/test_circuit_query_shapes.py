@@ -142,7 +142,6 @@ _GENERATOR_READS = [
     "capabilities.parent_interface.cable.id",
     # a handoff
     "ip_namespace.name",
-    "maximum_routes",
     "password.id",
 ]
 

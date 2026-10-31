@@ -93,9 +93,6 @@ query GetInterconnectInventory {
             }
           }
         }
-        maximum_routes {
-          value
-        }
         password {
           node {
             name {

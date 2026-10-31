@@ -97,7 +97,6 @@ def _session(
     ttl: int,
     bfd: bool,
     extended: bool,
-    maximum_routes: int | None,
     key: str | None,
     families: list[tuple[str, str]],
     processes: list[tuple[str, str, str, int]],
@@ -112,7 +111,6 @@ def _session(
         "ttl": _value(ttl),
         "bfd_enabled": _value(bfd),
         "send_extended_community": _value(extended),
-        "maximum_routes": _value(maximum_routes),
         "password": {"node": {"name": _value(key)}},
         "address_families": {"edges": [{"node": {"afi": _value(afi), "safi": _value(safi)}} for afi, safi in families]},
         "bgp_processes": {
@@ -238,9 +236,7 @@ class _Devices:
     def circuit(self, circuit: dict[str, Any]) -> dict[str, Any]:
         """The virtual_circuit.gql response for one circuit of the inventory; a tunnel is only named, like the query."""
         selected: dict[str, Any] = {
-            key: circuit[key]
-            for key in ("id", "__typename", "name", "circuit_type", "ip_namespace", "maximum_routes")
-            if key in circuit
+            key: circuit[key] for key in ("id", "__typename", "name", "circuit_type", "ip_namespace") if key in circuit
         }
         selected["status"] = _value("active")
         if "password" in circuit:
@@ -393,7 +389,6 @@ class FakeStack:
                 ttl=data["ttl"],
                 bfd=data["bfd_enabled"],
                 extended=data["send_extended_community"],
-                maximum_routes=data.get("maximum_routes"),
                 key=keys[data["password"]["id"]] if "password" in data else None,
                 families=[client.families[family["id"]] for family in data["address_families"]],
                 processes=[devices.processes[process["id"]] for process in data["bgp_processes"]],
@@ -535,10 +530,6 @@ async def test_the_handoff_sessions_the_generator_plans_pass(stack: FakeStack) -
     ("mutate", "message"),
     [
         (lambda s: s.sessions["HANDOFF-FR2-AWS-EUC1-PROD-bgp"].update(ttl=_value(255)), "ttl 255"),
-        (
-            lambda s: s.sessions["HANDOFF-FR2-AWS-EUC1-PROD-bgp"].update(maximum_routes=_value(None)),
-            "maximum_routes None, expected 100",
-        ),
         (lambda s: s.sessions.pop("HANDOFF-PA4-MEGAPORT-PROD-bgp"), "no HANDOFF-PA4-MEGAPORT-PROD-bgp session"),
         (lambda s: s.prefixes.pop("Handoff HANDOFF-FR2-SDWAN-GW1-PROD"), "0 prefix object(s)"),
         (lambda s: s.pool_resources.update({"Handoff-PROD-IPv4": ["10.0.0.0/20"]}), "is not a /31 from"),
@@ -654,12 +645,6 @@ def _drift_plan(kind: str, rewrite: Callable[[SessionPlan], SessionPlan]) -> Cal
     ("drift", "method", "message"),
     [
         pytest.param(
-            _drift_constant("_DCI_UNDERLAY_MAXIMUM_ROUTES", 32),
-            "test_06_verify_dci_sessions",
-            "maximum_routes 32, expected 16",
-            id="dci-maximum-routes",
-        ),
-        pytest.param(
             _drift_constant("UNDERLAY_MTU", 1500),
             "test_06_verify_dci_sessions",
             "MTU 1500, expected 9214",
@@ -682,12 +667,6 @@ def _drift_plan(kind: str, rewrite: Callable[[SessionPlan], SessionPlan]) -> Cal
             "test_06b_verify_handoff_sessions",
             "ttl 255",
             id="handoff-ttl",
-        ),
-        pytest.param(
-            _drift_plan(virtual_circuit.HANDOFF_TYPE, _peerings_with(maximum_routes=7)),
-            "test_06b_verify_handoff_sessions",
-            "maximum_routes 7",
-            id="handoff-maximum-routes",
         ),
         pytest.param(
             _drift_plan(virtual_circuit.HANDOFF_TYPE, _ends_swapped),

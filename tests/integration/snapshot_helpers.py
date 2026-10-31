@@ -70,7 +70,7 @@ TOPOLOGY_SNAPSHOT_KINDS = {
     # knobs is a diff here.
     "ManagedBGPPeering": (
         "name { value } peering_role { value } session_type { value } ttl { value } bfd_enabled { value } "
-        "send_extended_community { value } maximum_routes { value } password { node { id } } "
+        "send_extended_community { value } password { node { id } } "
         "bgp_processes { edges { node { id } } } address_families { edges { node { id } } } "
         "capabilities { edges { node { id } } }"
     ),
@@ -94,7 +94,7 @@ TOPOLOGY_SNAPSHOT_KINDS = {
     "TopologySessionCircuit": (
         "name { value } circuit_type { value } locations { edges { node { id } } } "
         "capabilities { edges { node { id capabilities { edges { node { id } } } } } } "
-        "ip_namespace { node { id } } password { node { id } } maximum_routes { value } cloud_endpoint { node { id } } "
+        "ip_namespace { node { id } } password { node { id } } cloud_endpoint { node { id } } "
         "registered_prefixes { edges { node { id } } }"
     ),
     "ManagedController": "name { value } managed_devices { edges { node { id } } }",

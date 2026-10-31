@@ -117,7 +117,6 @@ def build_edge_internet_bgw_data(*, device_name: str, platform: str) -> dict:
         ttl=1,
         local_iface_name="Ethernet1/14",
         remote_iface_name="Ethernet1/1",
-        maximum_routes=100,
         password="isp-s3cr3t",
     )
     for iface_edge in peering["capabilities"]["edges"]:
@@ -211,7 +210,6 @@ def _regular_handoff(
         remote_iface_name=remote_iface,
         send_community=False,
         send_extended_community=False,
-        maximum_routes=100,
         password=f"{name.lower()}-key",
     )
     peering["name"] = _v(name)
@@ -672,7 +670,6 @@ def build_edge_bgw_pair_data(*, device_name: str, platform: str) -> dict:
             ttl=1,
             local_iface_name=port,
             remote_iface_name="Ethernet1/35",
-            maximum_routes=16,
             password=key,
         )
         underlay["peering_role"] = _v("dci-underlay")
@@ -726,7 +723,41 @@ def build_edge_bgw_pair_data(*, device_name: str, platform: str) -> dict:
             }
         }
     )
+    _enforce_route_protection(data, device_name=device_name, sibling=sibling)
     return data
+
+
+def _vip_interface(device: str, role: str, vip: str, loopback: str) -> dict:
+    """One ``DcimVirtualInterface(role: multisite-vip)`` root node with its device's loopback (bgp_facts reads it)."""
+    return {
+        "ip_address": _node({"address": _v(vip)}),
+        "device": _node(
+            {
+                "name": _v(device),
+                "role": _v(role),
+                "interfaces": _edges([{"role": _v("loopback-vtep"), "ip_address": _node({"address": _v(loopback)})}]),
+            }
+        ),
+    }
+
+
+def _enforce_route_protection(data: dict, *, device_name: str, sibling: str) -> None:
+    """Turn the route protection on for the BGW pair fixture: the metro enforces and names its loopback supernet.
+
+    The remote border gateways (one per DC) and the sibling edge carry their VIPs on the ``DcimVirtualInterface``
+    root, which is what a DCI or fabric session derives its far-end addresses from (transforms/helpers/bgp_facts.py).
+    """
+    deployment = data["DcimDevice"]["edges"][0]["node"]["deployment"]["node"]
+    deployment["routing_filter_enforce"] = _v(True)
+    deployment["loopback_pool"] = _node({"resources": _edges([{"prefix": _v("2001:db8:100::/120")}])})
+    data["DcimVirtualInterface"] = _edges(
+        [
+            _vip_interface(device_name, "edge", "2001:db8:100::f1/128", "2001:db8:100::1/128"),
+            _vip_interface(sibling, "edge", "2001:db8:100::f1/128", "2001:db8:100::2/128"),
+            _vip_interface("dc10-border-leaf-01", "border-leaf", "2001:db8:dc10::f10/128", "2001:db8:dc10::1/128"),
+            _vip_interface("dc11-border-leaf-01", "border-leaf", "2001:db8:dc11::f11/128", "2001:db8:dc11::1/128"),
+        ]
+    )
 
 
 def write_fixtures() -> tuple[int, int]:

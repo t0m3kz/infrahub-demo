@@ -112,7 +112,6 @@ from .circuit import CARRIER_CIRCUIT_GENERATOR
 # DCI P2P pools (data/bootstrap/20_dci_pools.yml) by address family, with the prefix length allocated from them.
 _DCI_POOLS: dict[int, tuple[str, int]] = {4: (DCI_TECHNICAL_IPV4_POOL, 31), 6: (DCI_TECHNICAL_IPV6_POOL, 127)}
 _UNICAST_AF: dict[int, tuple[str, str]] = {4: IPV4_UNICAST_AF, 6: IPV6_UNICAST_AF}
-_DCI_UNDERLAY_MAXIMUM_ROUTES = 16
 # Loopback roles an EVPN session may source from, in order of preference. Never the multisite-vip, shared by every
 # border gateway of a site (the query does not select it either).
 _SESSION_LOOPBACK_ROLES = ("loopback-vtep", "loopback")
@@ -245,7 +244,6 @@ class PeeringPlan:
     bfd_enabled: bool = True
     send_community: bool = True
     send_extended_community: bool = False
-    maximum_routes: int | None = None
 
 
 @dataclass(frozen=True)
@@ -499,7 +497,6 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
                     session_type="EBGP",
                     address_family=IPV4_UNICAST_AF,
                     send_community=False,
-                    maximum_routes=circuit.get("maximum_routes"),
                     interface_ids=(first.port_id, second.port_id),
                 ),
             ),
@@ -552,7 +549,6 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
                     peering_role="dci-underlay",
                     session_type="EBGP",
                     address_family=_UNICAST_AF[family],
-                    maximum_routes=_DCI_UNDERLAY_MAXIMUM_ROUTES,
                     interface_ids=(first.port_id, second.port_id),
                 ),
                 PeeringPlan(
@@ -664,7 +660,6 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
                     bfd_enabled=peering.bfd_enabled,
                     send_community=peering.send_community,
                     send_extended_community=peering.send_extended_community,
-                    maximum_routes=peering.maximum_routes,
                 )
 
     async def _update_interface(

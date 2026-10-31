@@ -9,6 +9,7 @@ from netutils.utils import jinja2_convenience_function
 
 from transforms.helpers.acl import get_acls
 from transforms.helpers.bgp import get_bgp_profile
+from transforms.helpers.bgp_facts import annotate_bgp_policy
 from transforms.helpers.cisco_xe import get_cisco_xe_acls, get_cisco_xe_vrf_routes, refuse_unfiltered_ipv6
 from transforms.helpers.firewall import (
     get_exchange_routes,
@@ -366,6 +367,7 @@ class BaseDeviceTransform(InfrahubTransform):
         extra = self._extra_config(device_data, platform_name, extra_roots=extra_roots)
         config = self._build_config(device_data, platform_name, host_vlans=_gpo_host_vlans(extra.get("group_policy")))
         config.update(extra)
+        annotate_bgp_policy(config, device_data, extra_roots, unmanaged=_own_devices(device_data.get("deployment")))
         return config
 
     @staticmethod

@@ -29,7 +29,6 @@ def _transit_peering(namespace: dict[str, Any]) -> dict[str, Any]:
         "session_type": "EBGP",
         "peering_role": "regular",
         "ttl": 1,
-        "maximum_routes": 100,
         "capabilities": [
             {
                 "name": "Ethernet1/14",

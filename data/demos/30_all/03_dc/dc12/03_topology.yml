@@ -27,6 +27,7 @@ spec:
         - "DC12-DCNM1"
         - "DC12-CPSMS1"
         - "DC12-BIGIQ1"
+      routing_filter_enforce: true
       member_of_groups:
         - topologies_dc
       children:

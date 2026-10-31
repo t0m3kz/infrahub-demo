@@ -263,7 +263,6 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                         "ttl": 1,
                         "bfd_enabled": True,
                         "send_extended_community": False,
-                        "maximum_routes": 16,
                         "key": key,
                         "families": [("ipv6", "unicast")],
                     },
@@ -279,7 +278,6 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                         "ttl": 2,
                         "bfd_enabled": False,
                         "send_extended_community": True,
-                        "maximum_routes": None,
                         "key": key,
                         "families": [("l2vpn", "evpn")],
                     },
@@ -356,7 +354,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         """Verify add_virtual_circuit built exactly one eBGP session on each Handoff circuit.
 
         Per circuit `<name>`: one `<name>-bgp` (peering_role regular, EBGP, ttl 1, bfd, no extended communities, the
-        circuit's maximum_routes, IPv4 unicast, the circuit's key) between the two devices' BGP processes, on the two
+        IPv4 unicast, the circuit's key) between the two devices' BGP processes, on the two
         `<port>.<vlan>` sub-interfaces. Both are addressed in the circuit's namespace from one /31 of the pool
         `Handoff-<namespace>-IPv4` (the overlay-process end the lower address, else the first device by name); the
         prefix is the one `Handoff <name>`. The party process's `local_as` is the data's ASN, ours differs, and the
@@ -415,16 +413,13 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                         "ttl": 1,
                         "bfd_enabled": True,
                         "send_extended_community": False,
-                        "maximum_routes": circuit["maximum_routes"],
                         "key": circuit["password"],
                         "families": [("ipv4", "unicast")],
                     },
                 )
             )
-            if circuit["maximum_routes"] is None or circuit["password"] is None:
-                errors.append(
-                    f"{name}: maximum_routes {circuit['maximum_routes']} / key {circuit['password']}, both are authored"
-                )
+            if circuit["password"] is None:
+                errors.append(f"{name}: key {circuit['password']}, it is authored")
 
             # the two sub-interfaces: the circuit's ends, one namespace, one /31 of its pool
             ports = _interfaces(session)

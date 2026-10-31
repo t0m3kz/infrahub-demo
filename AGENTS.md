@@ -300,8 +300,8 @@ class MyCheck(InfrahubCheck):
     carriers found at the two ports
     form one contiguous path between the two locations and a single carrier is pure fibre (its two ends are the
     circuit's two ports); each end device has exactly one `overlay` `ManagedBGP`.
-  - **Handoff** (`handoff`): unowned, with an `ip_namespace` (required here, optional in the schema); `password`,
-    `maximum_routes` and `cloud_endpoint` belong to this type only (`CloudHybridAttachment.virtual_circuit` peers the
+  - **Handoff** (`handoff`): unowned, with an `ip_namespace` (required here, optional in the schema); `password`
+    and `cloud_endpoint` belong to this type only (`CloudHybridAttachment.virtual_circuit` peers the
     session kind, so the check refuses `cloud_endpoint` on a `dci` or a `tunnel`); one or two locations (both ends may
     sit in one cage); at least one end on a physical device is
     carried (a live carrier circuit or a `DcimCable` on the port or its `parent_interface`, a cable to a patch panel port

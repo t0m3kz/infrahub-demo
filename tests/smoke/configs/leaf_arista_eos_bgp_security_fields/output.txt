@@ -70,7 +70,6 @@ router bgp 65000
    neighbor 10.1.0.0 local-as 65001 no-prepend replace-as
 
    neighbor 10.1.0.0 description spine-01
-   neighbor 10.1.0.0 maximum-routes 1000
    neighbor 10.1.0.0 password underlay-s3cr3t
    neighbor 10.1.0.0 route-map peer-dc1-leaf-01-spine-01-ebgp-LOCAL-PREF-IN in
    neighbor 10.1.0.0 route-map peer-dc1-leaf-01-spine-01-ebgp-MED-OUT out

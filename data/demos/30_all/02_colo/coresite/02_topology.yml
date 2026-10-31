@@ -19,6 +19,7 @@ spec:
         data:
           - name: NY
             location: ["nyc"]
+            routing_filter_enforce: true
             member_of_groups:
               - colocation_metros
             children:
@@ -33,6 +34,7 @@ spec:
 
           - name: VA
             location: ["iad"]
+            routing_filter_enforce: true
             member_of_groups:
               - colocation_metros
             children:
@@ -47,6 +49,7 @@ spec:
 
           - name: SV
             location: ["sjc"]
+            routing_filter_enforce: true
             member_of_groups:
               - colocation_metros
             children:

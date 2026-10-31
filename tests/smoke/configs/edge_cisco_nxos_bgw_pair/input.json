@@ -90,9 +90,6 @@
                           "send_extended_community": {
                             "value": false
                           },
-                          "maximum_routes": {
-                            "value": null
-                          },
                           "local_pref": {
                             "value": null
                           },
@@ -242,9 +239,6 @@
                           },
                           "send_extended_community": {
                             "value": false
-                          },
-                          "maximum_routes": {
-                            "value": null
                           },
                           "local_pref": {
                             "value": null
@@ -434,9 +428,6 @@
                           "send_extended_community": {
                             "value": true
                           },
-                          "maximum_routes": {
-                            "value": null
-                          },
                           "local_pref": {
                             "value": null
                           },
@@ -586,9 +577,6 @@
                           },
                           "send_extended_community": {
                             "value": true
-                          },
-                          "maximum_routes": {
-                            "value": null
                           },
                           "local_pref": {
                             "value": null
@@ -778,9 +766,6 @@
                           "send_extended_community": {
                             "value": false
                           },
-                          "maximum_routes": {
-                            "value": 16
-                          },
                           "local_pref": {
                             "value": null
                           },
@@ -951,9 +936,6 @@
                           },
                           "send_extended_community": {
                             "value": true
-                          },
-                          "maximum_routes": {
-                            "value": null
                           },
                           "local_pref": {
                             "value": null
@@ -1126,9 +1108,6 @@
                           "send_extended_community": {
                             "value": false
                           },
-                          "maximum_routes": {
-                            "value": 16
-                          },
                           "local_pref": {
                             "value": null
                           },
@@ -1300,9 +1279,6 @@
                           "send_extended_community": {
                             "value": true
                           },
-                          "maximum_routes": {
-                            "value": null
-                          },
                           "local_pref": {
                             "value": null
                           },
@@ -1473,9 +1449,6 @@
                           },
                           "send_extended_community": {
                             "value": false
-                          },
-                          "maximum_routes": {
-                            "value": null
                           },
                           "local_pref": {
                             "value": null
@@ -2491,6 +2464,184 @@
                           },
                           "terminate_inline": {
                             "value": true
+                          }
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              "routing_filter_enforce": {
+                "value": true
+              },
+              "loopback_pool": {
+                "node": {
+                  "resources": {
+                    "edges": [
+                      {
+                        "node": {
+                          "prefix": {
+                            "value": "2001:db8:100::/120"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    ]
+  },
+  "DcimVirtualInterface": {
+    "edges": [
+      {
+        "node": {
+          "ip_address": {
+            "node": {
+              "address": {
+                "value": "2001:db8:100::f1/128"
+              }
+            }
+          },
+          "device": {
+            "node": {
+              "name": {
+                "value": "dc1-edge-01"
+              },
+              "role": {
+                "value": "edge"
+              },
+              "interfaces": {
+                "edges": [
+                  {
+                    "node": {
+                      "role": {
+                        "value": "loopback-vtep"
+                      },
+                      "ip_address": {
+                        "node": {
+                          "address": {
+                            "value": "2001:db8:100::1/128"
+                          }
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "node": {
+          "ip_address": {
+            "node": {
+              "address": {
+                "value": "2001:db8:100::f1/128"
+              }
+            }
+          },
+          "device": {
+            "node": {
+              "name": {
+                "value": "dc1-edge-02"
+              },
+              "role": {
+                "value": "edge"
+              },
+              "interfaces": {
+                "edges": [
+                  {
+                    "node": {
+                      "role": {
+                        "value": "loopback-vtep"
+                      },
+                      "ip_address": {
+                        "node": {
+                          "address": {
+                            "value": "2001:db8:100::2/128"
+                          }
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "node": {
+          "ip_address": {
+            "node": {
+              "address": {
+                "value": "2001:db8:dc10::f10/128"
+              }
+            }
+          },
+          "device": {
+            "node": {
+              "name": {
+                "value": "dc10-border-leaf-01"
+              },
+              "role": {
+                "value": "border-leaf"
+              },
+              "interfaces": {
+                "edges": [
+                  {
+                    "node": {
+                      "role": {
+                        "value": "loopback-vtep"
+                      },
+                      "ip_address": {
+                        "node": {
+                          "address": {
+                            "value": "2001:db8:dc10::1/128"
+                          }
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "node": {
+          "ip_address": {
+            "node": {
+              "address": {
+                "value": "2001:db8:dc11::f11/128"
+              }
+            }
+          },
+          "device": {
+            "node": {
+              "name": {
+                "value": "dc11-border-leaf-01"
+              },
+              "role": {
+                "value": "border-leaf"
+              },
+              "interfaces": {
+                "edges": [
+                  {
+                    "node": {
+                      "role": {
+                        "value": "loopback-vtep"
+                      },
+                      "ip_address": {
+                        "node": {
+                          "address": {
+                            "value": "2001:db8:dc11::1/128"
                           }
                         }
                       }

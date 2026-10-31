@@ -194,7 +194,7 @@ router bgp 65001
       description EQX-FR2-SDWAN-GW1
       password vrf-prod-eqxfr2-sdwan-key
       address-family ipv4 unicast
-        maximum-prefix 100
+        maximum-prefix 6 warning-only
         route-map RM-VRF-PROD-EQXFR2-SDWAN-IN in
         route-map RM-VRF-PROD-EQXFR2-SDWAN-OUT out
     neighbor 10.255.5.6
@@ -203,7 +203,7 @@ router bgp 65001
       password vrf-prod-eqxfr2-aws-euc1-key
       bfd
       address-family ipv4 unicast
-        maximum-prefix 100
+        maximum-prefix 4 warning-only
         route-map RM-VRF-PROD-EQXFR2-AWS-EUC1-IN in
         route-map RM-VRF-PROD-EQXFR2-AWS-EUC1-OUT out
     neighbor 10.255.7.1
@@ -211,7 +211,7 @@ router bgp 65001
       description EXT-MEGAPORT-MCR1
       password vrf-prod-eqxfr2-megaport-key
       address-family ipv4 unicast
-        maximum-prefix 100
+        maximum-prefix 2 warning-only
         route-map RM-VRF-PROD-EQXFR2-MEGAPORT-IN in
         route-map RM-VRF-PROD-EQXFR2-MEGAPORT-OUT out
     neighbor 10.255.8.1
@@ -219,7 +219,7 @@ router bgp 65001
       description eg-am-ne01
       password handoff-fr2-amne-prod-key
       address-family ipv4 unicast
-        maximum-prefix 100
+        maximum-prefix 2 warning-only
         route-map RM-HANDOFF-FR2-AMNE-PROD-IN in
         route-map RM-HANDOFF-FR2-AMNE-PROD-OUT out
   !
@@ -231,7 +231,7 @@ router bgp 65001
       password vrf-nonprod-eqxfr2-aws-euc1-key
       bfd
       address-family ipv4 unicast
-        maximum-prefix 100
+        maximum-prefix 3 warning-only
         route-map RM-VRF-NONPROD-EQXFR2-AWS-EUC1-IN in
         route-map RM-VRF-NONPROD-EQXFR2-AWS-EUC1-OUT out
   !

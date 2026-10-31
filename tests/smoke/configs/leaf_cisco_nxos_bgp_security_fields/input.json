@@ -90,9 +90,6 @@
                           "send_extended_community": {
                             "value": true
                           },
-                          "maximum_routes": {
-                            "value": 1000
-                          },
                           "local_pref": {
                             "value": 200
                           },
@@ -246,9 +243,6 @@
                           },
                           "send_extended_community": {
                             "value": false
-                          },
-                          "maximum_routes": {
-                            "value": null
                           },
                           "local_pref": {
                             "value": null
@@ -438,9 +432,6 @@
                           "send_extended_community": {
                             "value": false
                           },
-                          "maximum_routes": {
-                            "value": null
-                          },
                           "local_pref": {
                             "value": null
                           },
@@ -590,9 +581,6 @@
                           },
                           "send_extended_community": {
                             "value": false
-                          },
-                          "maximum_routes": {
-                            "value": null
                           },
                           "local_pref": {
                             "value": null

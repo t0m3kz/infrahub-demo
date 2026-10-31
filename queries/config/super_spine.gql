@@ -27,6 +27,15 @@ query super_spine_config(
         # Device Services (BGP, OSPF) with nested peerings
         ...DeviceCapabilitiesOnDeviceFields
 
+        # The hosting deployment: the loopback supernet and the staging switch of the BGP route protection.
+        ... on DcimPhysicalDevice {
+          deployment {
+            node {
+              ...EvpnRtAsOnDeploymentFields
+            }
+          }
+        }
+
         # Interface Information
         interfaces {
           edges {
@@ -101,6 +110,32 @@ query super_spine_config(
                 }
               }
               ...InterfaceCapabilitiesOnInterfaceFields
+            }
+          }
+        }
+      }
+    }
+  }
+
+  # The EVPN Multi-Site VIPs of the model and the loopbacks of the border gateways that carry them: the far end
+  # of a fabric or DCI session and the VIPs every underlay session may carry
+  # (transforms/helpers/bgp_facts.py). A handful of interfaces, however large the fleet.
+  DcimVirtualInterface(role__value: "multisite-vip") {
+    edges {
+      node {
+        ip_address { node { address { value } } }
+        device {
+          node {
+            name { value }
+            role { value }
+            interfaces(role__values: ["loopback", "loopback-vtep"]) {
+              edges {
+                node {
+                  role { value }
+                  ... on DcimVirtualInterface { ip_address { node { address { value } } } }
+                  ... on DcimPhysicalInterface { ip_address { node { address { value } } } }
+                }
+              }
             }
           }
         }

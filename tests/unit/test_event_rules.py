@@ -286,7 +286,6 @@ _SESSION_COMMON_RULES = {
 _HANDOFF_ONLY_RULES = {
     "namespace-updated": ("CoreNodeTriggerRelationshipMatch", "ip_namespace"),
     "password-updated": ("CoreNodeTriggerRelationshipMatch", "password"),
-    "maximum-routes-updated": ("CoreNodeTriggerAttributeMatch", "maximum_routes"),
 }
 
 
@@ -296,12 +295,12 @@ def test_the_virtual_circuit_action_runs_the_session_generator_on_the_virtual_ci
     assert definition_targets()["add_virtual_circuit"] == "virtual_circuits"
 
 
-def test_the_session_kind_has_its_own_six_rules() -> None:
+def test_the_session_kind_has_its_own_five_rules() -> None:
     """One set of rules on the one kind (a rule on a generic is unprobed): created, the ends, the status, and what a
     handoff reads. `cloud_endpoint` is not read, so it has no rule."""
     rules = _rules_for("TopologySessionCircuit")
     expected = {**_SESSION_COMMON_RULES, **_HANDOFF_ONLY_RULES}
-    assert len(rules) == 6
+    assert len(rules) == 5
     assert sorted(rules) == sorted(f"trigger-session-circuit-on-{suffix}" for suffix in expected)
     for suffix, match in expected.items():
         rule = rules[f"trigger-session-circuit-on-{suffix}"]

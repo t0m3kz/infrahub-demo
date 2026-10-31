@@ -27,7 +27,7 @@ async def fetch_interconnect_inventory(client: InfrahubClient, branch: str) -> d
                       "location_nodes": [location], "end_devices": [device],
                       "ends": [(device, interface)], "end_nodes": [end],
                       "carrier": [str], "carriers": [carrier],
-                      "ip_namespace", "maximum_routes", "password",
+                      "ip_namespace", "password",
                       "cloud_endpoint", "cloud_endpoint_vlan"}]}
 
         A location is {"id", "kind", "name", "parent_id", "parent_kind",
@@ -44,7 +44,7 @@ async def fetch_interconnect_inventory(client: InfrahubClient, branch: str) -> d
         sub-interface, the carriers found on the port or on its parent (utils.circuit_underlay.port_underlay) and
         whether a cable terminates there (port_cabled). The "carrier" of the circuit is derived, never declared:
         the circuit_ids of the carrier circuits on its ends (derived_underlay), deduped and sorted, "carriers" the
-        same circuits as {"id", "circuit_id", "status"}. A Handoff also carries "ip_namespace", "maximum_routes",
+        same circuits as {"id", "circuit_id", "status"}. A Handoff also carries "ip_namespace",
         "password" (its key's name), "cloud_endpoint" (the VIF's name) and the "cloud_endpoint_vlan" the VIF states;
         the other kinds have None for those.
     """
@@ -136,7 +136,6 @@ def _virtual_circuit(circuit: dict[str, Any]) -> dict[str, Any]:
         "carrier": sorted({carrier["circuit_id"] for carrier in carriers}),
         "carriers": carriers,
         "ip_namespace": (circuit.get("ip_namespace") or {}).get("name"),
-        "maximum_routes": circuit.get("maximum_routes"),
         "password": (circuit.get("password") or {}).get("name"),
         "cloud_endpoint": endpoint.get("name") if endpoint else None,
         "cloud_endpoint_vlan": endpoint.get("vlan_id") if endpoint else None,

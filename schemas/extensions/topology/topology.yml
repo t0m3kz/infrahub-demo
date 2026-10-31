@@ -191,6 +191,20 @@ generics:
         order_weight: 7650
         regex: "^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$"
         description: "Shared anycast-gateway MAC for every VTEP in this fabric (colon-separated). Must be identical fabric-wide."  # yamllint disable-line rule:line-length
+
+      # Staged rollout of the BGP route protection (utils/bgp_expectation.py). A wrong filter takes a working fabric
+      # down, so what is not lab-verified is rendered only when this is true; false renders the policy objects and
+      # leaves the neighbours unattached, with the maximum-prefix as warning-only. The precedent is
+      # TopologyDataCenter.group_policy_enforce. Read by the device transforms (transforms/helpers/bgp_facts.py)
+      # from the device's own hosting deployment.
+      - name: routing_filter_enforce
+        label: "Enforce Routing Filters"
+        kind: Boolean
+        optional: true
+        default_value: false
+        order_weight: 7660
+        description: >-
+          True attaches the derived BGP filters and enforces the maximum-prefix; false renders them unattached.
     relationships:
       - name: vni_pool
         peer: CoreNumberPool

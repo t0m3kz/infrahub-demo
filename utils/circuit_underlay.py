@@ -100,8 +100,8 @@ def derived_underlay(circuit: dict[str, Any]) -> list[dict[str, Any]]:
     virtual circuit exists, reruns nothing, so the virtual circuits that sat on it keep (or lack) their session until
     their next run.
 
-    What reaches a session: it reruns on its own created / capabilities / status (a handoff also ip_namespace,
-    password and maximum_routes) and, through add_circuit's fan-out (generators/topology/circuit.py), when a physical
+    What reaches a session: it reruns on its own created / capabilities / status (a handoff also ip_namespace and
+    password) and, through add_circuit's fan-out (generators/topology/circuit.py), when a physical
     circuit on its ports (or on a port's parent) is created, has its ends changed or its status changed. It does NOT
     rerun when a cable is added later, when a port is removed from a circuit, or when a circuit's type changes.
     """

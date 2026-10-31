@@ -25,7 +25,6 @@ def _session(
     send_community=True,
     send_extended_community=False,
     remove_private_as=False,
-    maximum_routes=None,
     local_pref=None,
     med=None,
     password=None,
@@ -39,7 +38,6 @@ def _session(
         "send_community": send_community,
         "send_extended_community": send_extended_community,
         "remove_private_as": remove_private_as,
-        "maximum_routes": maximum_routes,
         "local_pref": local_pref,
         "med": med,
         "password": password,
@@ -271,12 +269,11 @@ class TestBuildPeerGroups:
         assert pgs[0]["remove_private_as"] is False
 
     def test_per_neighbor_fields_not_present_on_peer_group_dict(self):
-        """maximum_routes/local_pref/med/password are per-neighbor only, never aggregated onto the group."""
+        """local_pref/med/password are per-neighbor only, never aggregated onto the group."""
         sessions = [
-            _session(session_type="EBGP", ttl=1, name="u1", maximum_routes=100, local_pref=200, med=50, password="x"),
+            _session(session_type="EBGP", ttl=1, name="u1", local_pref=200, med=50, password="x"),
         ]
         pgs = _build_peer_groups(sessions)
-        assert "maximum_routes" not in pgs[0]
         assert "local_pref" not in pgs[0]
         assert "med" not in pgs[0]
         assert "password" not in pgs[0]

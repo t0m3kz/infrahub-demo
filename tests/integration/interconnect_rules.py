@@ -108,7 +108,7 @@ def _process_roles(session: dict[str, Any]) -> dict[str, str]:
 
 def _session_errors(session: dict[str, Any], expected: dict[str, Any]) -> list[str]:
     """Why a session is not what ``expected`` says: status, peering_role, session_type, ttl, bfd_enabled,
-    send_extended_community, maximum_routes (None: unset), key (the password's name) and address families."""
+    send_extended_community, key (the password's name) and address families."""
     name = session["name"]["value"]
     password = (session.get("password") or {}).get("node") or {}
     actual = {
@@ -118,7 +118,6 @@ def _session_errors(session: dict[str, Any], expected: dict[str, Any]) -> list[s
         "ttl": session["ttl"]["value"],
         "bfd_enabled": session["bfd_enabled"]["value"],
         "send_extended_community": session["send_extended_community"]["value"],
-        "maximum_routes": session["maximum_routes"]["value"],
         "key": password.get("name", {}).get("value"),
         "families": sorted(
             (edge["node"]["afi"]["value"], edge["node"]["safi"]["value"])

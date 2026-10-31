@@ -272,6 +272,7 @@ class ManagedTenantScoped(CoreNode):
 
 class TopologySegmentHosting(CoreNode):
     name: String
+    routing_filter_enforce: BooleanOptional
     vni_pool: RelationshipAttribute[CoreNumberPool]
     vrfs: RelationshipManager[ManagedVRF]
 
@@ -320,7 +321,6 @@ class RoutingBGPAddressFamily(CoreNode):
 class ManagedBGPPeering(ManagedGeneric, ManagedPeering, ManagedGenericInterfaces):
     bfd_enabled: Boolean
     local_pref: IntegerOptional
-    maximum_routes: IntegerOptional
     med: IntegerOptional
     peering_role: DropdownOptional
     remove_private_as: Boolean
@@ -1043,7 +1043,6 @@ class LoadbalancerVIP(CoreNode):
 
 class TopologySessionCircuit(TopologyCircuit, ManagedGeneric, ManagedGenericInterfaces):
     circuit_type: Dropdown
-    maximum_routes: IntegerOptional
     cloud_endpoint: RelationshipAttribute[CloudHybridAttachment]
     ip_namespace: RelationshipAttribute[IpamNamespace]
     password: RelationshipAttribute[RoutingPassword]

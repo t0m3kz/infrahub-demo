@@ -123,9 +123,6 @@
                           "send_extended_community": {
                             "value": true
                           },
-                          "maximum_routes": {
-                            "value": null
-                          },
                           "local_pref": {
                             "value": null
                           },

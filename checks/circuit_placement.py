@@ -19,7 +19,7 @@ overlay routing)
     1. exactly two distinct locations and two end ports,
     2. owned by the office's owner: one location is a TopologyCustomerOffice of that owner; the only type with an
        owner and with ``registered_prefixes`` (the others are unowned and have none),
-    3. none of the handoff-only fields (``ip_namespace``, ``password``, ``maximum_routes``, ``cloud_endpoint``),
+    3. none of the handoff-only fields (``ip_namespace``, ``password``, ``cloud_endpoint``),
     4. every end port rides a live internet carrier circuit of its own (one with an end on a
        TopologyExternalProviders): the office edge uplink its INET-<office>, the gateway's public port its own
        internet access. The ends share no path, so there is no contiguity rule.
@@ -121,7 +121,7 @@ HANDOFF = HANDOFF_TYPE
 CIRCUIT_TYPES = (TUNNEL, INTERCONNECT, HANDOFF)
 NOUNS = {TUNNEL: "Tunnel", INTERCONNECT: "Interconnect", HANDOFF: "Handoff"}
 # The fields of a handoff alone; the schema leaves them optional on the one session kind.
-HANDOFF_ONLY_FIELDS = ("ip_namespace", "password", "maximum_routes", "cloud_endpoint")
+HANDOFF_ONLY_FIELDS = ("ip_namespace", "password", "cloud_endpoint")
 
 INTERNET = "TopologyExternalProviders"
 OFFICE = "TopologyCustomerOffice"

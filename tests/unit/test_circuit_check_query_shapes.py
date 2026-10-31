@@ -91,7 +91,6 @@ _SESSION_READS = [
     "ip_namespace.name",
     "ip_namespace.namespace_type",
     "password.id",
-    "maximum_routes",
     "registered_prefixes.id",
     "cloud_endpoint.id",
     "cloud_endpoint.name",

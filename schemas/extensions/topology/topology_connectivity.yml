@@ -269,13 +269,6 @@ nodes:
               Office edge to SD-WAN gateway tunnel, owned by the office; inventory only, no session generated
             color: "#8e44ad"
 
-      - name: maximum_routes
-        kind: Number
-        label: "Maximum Routes"
-        optional: true
-        order_weight: 600
-        description: "Accepted-prefix limit of the session (handoff only)"
-
     relationships:
       # The two ends. ManagedGenericInterfaces carries the interface-side edge (a circuit in a port's `capabilities`);
       # this re-declares the circuit side with a count. It cannot be hoisted onto TopologyCircuit: a node that

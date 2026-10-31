@@ -106,8 +106,8 @@ spec:
 # cross-connect (the carrier circuit). An Equinix Fabric service would make it Equinix.
 #
 # Locations: the cage, where our end sits, and the region the AWS side serves from (the
-# stub EXT-AWS-DX-FR2 is deployed to eu-central-1). maximum_routes 100: the hub carries a
-# handful of VPC aggregates. The session is peering_role regular in a PROD address: an
+# stub EXT-AWS-DX-FR2 is deployed to eu-central-1). The hub carries a handful of VPC
+# aggregates, which sizes the derived maximum-prefix. The session is peering_role regular in a PROD address: an
 # external tenant-VRF peer. On eg-fr201 it renders under `vrf PROD` with RM-<session>-IN
 # (only the reachable PROD VPC blocks, never a default) and RM-<session>-OUT (only the PROD
 # on-prem segment prefixes of the blocks' owners: each block is owned by its VPC's
@@ -129,7 +129,6 @@ spec:
       provider: "P004"
       description: "PROD transit VIF eg-fr201 <-> EXT-AWS-DX-FR2 (vif-transit-hub-euc1, AS64512)"
       ip_namespace: "PROD"
-      maximum_routes: 100
       password: "eqx-fr2-aws-vif-key"
       locations:
         - "FR2"

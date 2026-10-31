@@ -234,7 +234,7 @@ class TestBuildSessionFromPeering:
         assert session["address_families"] == ["ipv4", "evpn"]
 
     def test_security_fields_pass_through(self):
-        """maximum_routes/local_pref/med/send_extended_community/remove_private_as/password
+        """local_pref/med/send_extended_community/remove_private_as/password
         are threaded from the peering node into the session dict verbatim."""
         peering = _make_peering(
             session_type="EBGP",
@@ -243,7 +243,6 @@ class TestBuildSessionFromPeering:
             remote_device="spine-01",
             local_asn=65001,
             remote_asn=65000,
-            maximum_routes=100,
             local_pref=200,
             med=50,
             send_extended_community=True,
@@ -257,7 +256,6 @@ class TestBuildSessionFromPeering:
             interfaces=None,
         )
         assert session is not None
-        assert session["maximum_routes"] == 100
         assert session["local_pref"] == 200
         assert session["med"] == 50
         assert session["send_extended_community"] is True
@@ -280,7 +278,6 @@ class TestBuildSessionFromPeering:
             interfaces=None,
         )
         assert session is not None
-        assert session["maximum_routes"] is None
         assert session["local_pref"] is None
         assert session["med"] is None
         assert session["send_extended_community"] is False

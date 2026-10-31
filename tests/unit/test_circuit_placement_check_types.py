@@ -1,6 +1,6 @@
 """CheckCircuitPlacement: what the one session kind may carry per ``circuit_type``.
 
-The schema leaves ip_namespace, password, maximum_routes, cloud_endpoint and registered_prefixes optional on
+The schema leaves ip_namespace, password, cloud_endpoint and registered_prefixes optional on
 TopologySessionCircuit, so the check holds them per circuit_type (handoff requires ip_namespace and refuses an owner;
 dci and tunnel refuse the handoff-only fields; only a tunnel has an owner and registered_prefixes). Payload builders:
 tests/unit/circuit_placement_check_helpers.py.
@@ -18,7 +18,6 @@ from tests.unit.circuit_placement_check_helpers import DCI, HANDOFF, TUNNEL, _ed
 HANDOFF_ONLY: dict[str, Any] = {
     "ip_namespace": {"node": {"name": {"value": "PROD"}, "namespace_type": {"value": "prod"}}},
     "password": {"node": {"id": "key-1"}},
-    "maximum_routes": {"value": 100},
     "cloud_endpoint": {"node": {"id": "vif-1", "name": {"value": "VIF-1"}}},
 }
 

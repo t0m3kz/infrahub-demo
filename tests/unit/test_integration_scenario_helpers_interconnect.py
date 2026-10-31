@@ -93,7 +93,6 @@ async def test_fetch_interconnect_inventory_parses_location_and_end_placement() 
         "name": value("HANDOFF-C005-DC10-AWS-EUC1"),
         "owner": owner,
         "ip_namespace": {"node": {"id": "ns-prod", "name": value("PROD")}},
-        "maximum_routes": value(100),
         "password": {"node": {"name": value("eqx-fr2-aws-vif-key")}},
         "cloud_endpoint": {
             "node": {
@@ -238,9 +237,8 @@ async def test_fetch_interconnect_inventory_parses_location_and_end_placement() 
     assert (virtual_end["kind"], virtual_end["address"], virtual_end["cabled"]) == ("DcimVirtualInterface", None, False)
     assert (virtual_end["parent_id"], virtual_end["parent_name"]) == ("if-parent", "Ethernet1/13")
     assert [c["circuit_id"] for c in virtual_end["carriers"]] == ["XC-EQXFR2-AWS-EUC1"]
-    assert (handoff["ip_namespace"], handoff["maximum_routes"], handoff["password"]) == (
+    assert (handoff["ip_namespace"], handoff["password"]) == (
         "PROD",
-        100,
         "eqx-fr2-aws-vif-key",
     )
     assert (handoff["cloud_endpoint"], handoff["cloud_endpoint_vlan"]) == ("vif-1", 1000)
@@ -267,5 +265,5 @@ async def test_fetch_interconnect_inventory_leaves_the_handoff_fields_empty_on_t
     (circuit,) = inventory["virtual"]
     assert circuit["circuit_type"] == "tunnel"
     assert (circuit["owner"], circuit["ends"], circuit["carrier"], circuit["end_nodes"]) == (None, [], [], [])
-    assert (circuit["ip_namespace"], circuit["maximum_routes"], circuit["password"]) == (None, None, None)
+    assert (circuit["ip_namespace"], circuit["password"]) == (None, None)
     assert (circuit["cloud_endpoint"], circuit["cloud_endpoint_vlan"]) == (None, None)

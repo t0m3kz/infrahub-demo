@@ -55,9 +55,8 @@ class TestAllDemoData:
         assert {p["ip_namespace"] for p in _external_handoffs()} == {"PROD"}
 
     @pytest.mark.parametrize("peering", _external_handoffs(), ids=lambda p: p["name"])
-    def test_handoff_has_max_prefix_and_one_namespace(self, peering: dict[str, Any]) -> None:
-        """max-prefix is set, and both ends sit in one namespace: a handoff never mixes environments."""
-        assert isinstance(peering.get("maximum_routes"), int) and peering["maximum_routes"] > 0
+    def test_handoff_has_one_namespace(self, peering: dict[str, Any]) -> None:
+        """Both ends sit in one namespace: a handoff never mixes environments."""
         assert len(set(peering["namespaces"])) == 1, peering["namespaces"]
 
     @pytest.mark.parametrize(

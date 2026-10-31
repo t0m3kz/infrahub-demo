@@ -73,7 +73,7 @@ class TestHandoffSession:
 
     @pytest.mark.asyncio
     async def test_one_peering_with_these_exact_attributes(self) -> None:
-        """Handoff eBGP: ttl 1 (directly connected /31), BFD on, no communities sent, maximum_routes 100 from the circuit."""
+        """Handoff eBGP: ttl 1 (directly connected /31), BFD on, no communities sent."""
         client = FakeClient()
 
         await _run(client, handoff_payload(password="pw-1"))
@@ -91,7 +91,6 @@ class TestHandoffSession:
             "bfd_enabled": True,
             "send_community": False,
             "send_extended_community": False,
-            "maximum_routes": 100,
             "address_families": [{"id": "af-ipv4-unicast"}],
             "bgp_processes": [{"id": "eg-fr201-bgp-overlay"}, {"id": "EXT-AWS-DX-FR2-bgp-regular"}],
             "password": {"id": "pw-1"},
@@ -99,14 +98,14 @@ class TestHandoffSession:
         }
 
     @pytest.mark.asyncio
-    async def test_no_password_and_no_maximum_routes_are_not_written(self) -> None:
-        """A handoff that states neither a key nor a route limit gets a session without those two fields."""
+    async def test_no_password_is_not_written(self) -> None:
+        """A handoff that states no key gets a session without a password."""
         client = FakeClient()
 
-        await _run(client, handoff_payload(maximum_routes=None))
+        await _run(client, handoff_payload())
 
         peering = _peering(client, "bgp")
-        assert "password" not in peering and "maximum_routes" not in peering
+        assert "password" not in peering
         assert client.created_of("RoutingPassword") == []
 
     @pytest.mark.asyncio
