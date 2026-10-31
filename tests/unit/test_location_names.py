@@ -22,13 +22,22 @@ def _location_schema() -> dict[str, dict[str, Any]]:
     return {node["name"]: node for node in document["nodes"]}
 
 
-def _objects(item: dict[str, Any], kind: str) -> Iterator[tuple[str, dict[str, Any]]]:
-    """``item`` of ``kind`` and every object nested under its ``children``."""
-    yield kind, item
-    children = item.get("children")
-    if isinstance(children, dict):
-        for child in children.get("data") or []:
-            yield from _objects(child, children["kind"])
+def _objects(node: Any) -> Iterator[tuple[str, dict[str, Any]]]:
+    """(kind, object) for every suite and rack object under ``node``, wherever it is nested.
+
+    An object file nests objects as ``{kind, data: [...]}`` under ``children`` (a suite's racks), under a relationship
+    such as ``racks`` (a pod's racks), or as the document's own ``spec``; walking every mapping finds all three."""
+    if isinstance(node, dict):
+        data = node.get("data")
+        if node.get("kind") in _LOCATION_KINDS and isinstance(data, list):
+            for obj in data:
+                if isinstance(obj, dict):
+                    yield node["kind"], obj
+        for value in node.values():
+            yield from _objects(value)
+    elif isinstance(node, list):
+        for value in node:
+            yield from _objects(value)
 
 
 def _location_objects() -> list[tuple[str, str, dict[str, Any]]]:
@@ -36,13 +45,8 @@ def _location_objects() -> list[tuple[str, str, dict[str, Any]]]:
     found: list[tuple[str, str, dict[str, Any]]] = []
     for path in sorted((_ROOT / "data").rglob("*.y*ml")):
         for document in yaml.safe_load_all(path.read_text()):
-            if not isinstance(document, dict) or document.get("kind") != "Object":
-                continue
-            spec = document["spec"]
-            for item in spec.get("data") or []:
-                for kind, obj in _objects(item, spec["kind"]):
-                    if kind in _LOCATION_KINDS:
-                        found.append((str(path.relative_to(_ROOT)), kind, obj))
+            if isinstance(document, dict) and document.get("kind") == "Object":
+                found.extend((str(path.relative_to(_ROOT)), kind, obj) for kind, obj in _objects(document["spec"]))
     return found
 
 

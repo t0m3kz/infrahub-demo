@@ -42,7 +42,8 @@ spec:
             racks:
               kind: LocationRack
               data:
-                - index: 5
+                - name: LYO-1-SUITE-1-R1-5
+                  index: 5
                   row_index: 1
                   shortname: lyo-1-s-1-r-1-5
                   rack_type: network
@@ -51,7 +52,8 @@ spec:
                   fabric_templates:
                     - ["2", "leaf", "N9K-C9336C-FX2_LEAF_MR"]
                     - ["2", "access-leaf", "N9K-C93180YC-EX_ACCESS"]
-                - index: 5
+                - name: LYO-1-SUITE-1-R2-5
+                  index: 5
                   row_index: 2
                   shortname: lyo-1-s-1-r-2-5
                   rack_type: network
@@ -63,12 +65,14 @@ spec:
                 # Compute racks: no fabric templates of their own. The endpoint
                 # generator cables their servers to the access-leaf pair in the
                 # network rack that shares their row.
-                - index: 1
+                - name: LYO-1-SUITE-1-R1-1
+                  index: 1
                   row_index: 1
                   shortname: lyo-1-s-1-r-1-1
                   parent: lyo-1-s-1
                   member_of_groups: [topologies_rack]
-                - index: 1
+                - name: LYO-1-SUITE-1-R2-1
+                  index: 1
                   row_index: 2
                   shortname: lyo-1-s-1-r-2-1
                   parent: lyo-1-s-1
