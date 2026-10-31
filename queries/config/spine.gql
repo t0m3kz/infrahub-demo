@@ -159,12 +159,13 @@ query spine_config($device: String!) {
   environment_prefixes_management: IpamPrefix(ip_namespace__namespace_type__value: "management") {
     edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } }
   }
-  # The devices in each namespace's VRF instance: a border gateway in an internet one is the default exit.
+  # The devices in each namespace's VRF instance: a border gateway in an internet one is the default exit, and a border
+  # in a tenant one originates the shared firewall context's default route (get_exchange_routes).
   ManagedVRF {
     edges {
       node {
         namespace { node { name { value } namespace_type { value } } }
-        shared_devices { edges { node { name { value } } } }
+        shared_devices { edges { node { name { value } ... on DcimDevice { role { value } } } } }
       }
     }
   }

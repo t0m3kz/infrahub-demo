@@ -176,6 +176,8 @@ def _build_session_from_peering(
         "password": password_rel.get("password"),
         "ttl": peering_node.get("ttl"),
         "peering_role": peering_node.get("peering_role"),
+        # The far end's role: a relaying far end (a spine) passes on routes (utils/bgp_expectation.py).
+        "remote_role": (remote_iface.get("device") or {}).get("role"),
         "route_reflector_client": peering_node.get("route_reflector_client", False),
         "enabled": True,
     }

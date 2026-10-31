@@ -2620,6 +2620,9 @@
                 "node": {
                   "name": {
                     "value": "dc1-edge-01"
+                  },
+                  "role": {
+                    "value": "leaf"
                   }
                 }
               }
@@ -2645,6 +2648,9 @@
                 "node": {
                   "name": {
                     "value": "dc1-edge-01"
+                  },
+                  "role": {
+                    "value": "leaf"
                   }
                 }
               }

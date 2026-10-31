@@ -196,8 +196,8 @@ class TestEnvironmentFacts:
         assert fabric.range_namespaces == {"INTERNET"}
         assert fabric.l2vni_count == 3
 
-    def test_only_a_border_gateway_in_an_internet_instance_is_a_default_exit(self) -> None:
-        """A member of the INTERNET instance that carries no multisite VIP is not an exit; a PROD member never is."""
+    def test_the_default_comes_from_internet_border_gateways_and_tenant_borders(self) -> None:
+        """INTERNET: a member that carries a multisite VIP. A tenant VRF: its borders (the shared context's 0/0 static)."""
         roots = {
             "DcimVirtualInterface": [
                 {"ip_address": {"address": VIP}, "device": {"name": "bl1", "role": "border-leaf", "interfaces": []}}
@@ -205,12 +205,23 @@ class TestEnvironmentFacts:
             "ManagedVRF": [
                 {
                     "namespace": {"name": "INTERNET", "namespace_type": "internet"},
-                    "shared_devices": [{"name": "bl1"}, {"name": "leaf9"}],
+                    "shared_devices": [{"name": "bl1", "role": "border-leaf"}, {"name": "leaf9", "role": "leaf"}],
                 },
-                {"namespace": {"name": "PROD", "namespace_type": "prod"}, "shared_devices": [{"name": "bl1"}]},
+                {
+                    "namespace": {"name": "PROD", "namespace_type": "prod"},
+                    "shared_devices": [
+                        {"name": "bl1", "role": "border-leaf"},
+                        {"name": "bs1", "role": "border-spine"},
+                        {"name": "leaf9", "role": "leaf"},
+                    ],
+                },
+                {
+                    "namespace": {"name": "MANAGEMENT", "namespace_type": "management"},
+                    "shared_devices": [{"name": "bl1", "role": "border-leaf"}],
+                },
             ],
         }
-        assert build_fabric(_leaf(None), roots).default_exits == {"INTERNET": {"bl1"}}
+        assert build_fabric(_leaf(None), roots).default_exits == {"INTERNET": {"bl1"}, "PROD": {"bl1", "bs1"}}
 
     def test_a_device_is_a_member_of_the_namespaces_of_its_vrf_instances(self) -> None:
         """Memberships come from the device's shared_capabilities (utils/vrf_demand.py), never the default namespace."""

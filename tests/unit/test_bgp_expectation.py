@@ -404,3 +404,33 @@ class TestVrfAndExternal:
         policy = expect_session(session, fabric.devices["bl-dc101101"], fabric).families[IPV4]
         assert policy.inbound == frozenset()
         assert policy.max_prefix == BGP_PREFIX_SLACK
+
+
+class TestFarEndRole:
+    """The far end's role comes from the peering when the facts do not hold the device (a spine is no border gateway)."""
+
+    def test_a_spine_named_by_the_peering_relays_the_tenant_default_to_a_leaf(self) -> None:
+        """No Device for spine-9 in the facts, but the session says its role: the leaf accepts the default it relays."""
+        fabric = _fabric(default_exits={"PROD": frozenset({"bl-dc101101"})})
+        session = {
+            "name": "o",
+            "ttl": 255,
+            "peering_role": "overlay",
+            "remote_device": "spine-9",
+            "remote_role": "spine",
+            "address_families": [EVPN],
+        }
+        assert expect_session(session, fabric.devices["leaf1"], fabric).families[EVPN].default_in
+
+    def test_a_leaf_far_end_does_not_relay_a_default(self) -> None:
+        """The same session towards a leaf: only an exit or a relay may send a default."""
+        fabric = _fabric(default_exits={"PROD": frozenset({"bl-dc101101"})})
+        session = {
+            "name": "o",
+            "ttl": 255,
+            "peering_role": "overlay",
+            "remote_device": "leaf-9",
+            "remote_role": "leaf",
+            "address_families": [EVPN],
+        }
+        assert not expect_session(session, fabric.devices["leaf1"], fabric).families[EVPN].default_in

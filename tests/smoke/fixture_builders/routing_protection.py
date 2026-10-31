@@ -31,7 +31,13 @@ def add_route_protection_facts(data: dict, *, device_name: str, enforce: bool) -
     deployment = data["DcimDevice"]["edges"][0]["node"]["deployment"]["node"]
     deployment["routing_filter_enforce"] = _v(enforce)
     deployment["loopback_pool"] = _node({"resources": _edges([{"prefix": _v(LOOPBACK_POOL)}])})
-    add_environment_roots(data, tenant_members=[device_name, BORDER_GATEWAY], internet_members=[BORDER_GATEWAY])
+    add_environment_roots(
+        data,
+        tenant_members=[device_name, BORDER_GATEWAY],
+        internet_members=[BORDER_GATEWAY],
+        roles={BORDER_GATEWAY: "border-leaf"},
+    )
+    _name_far_end_roles(data)
     data["DcimVirtualInterface"] = _edges(
         [
             {
@@ -48,6 +54,17 @@ def add_route_protection_facts(data: dict, *, device_name: str, enforce: bool) -
             }
         ]
     )
+
+
+def _name_far_end_roles(data: dict) -> None:
+    """Give the far end of every peering its role, as the peering selection returns it (spines are named spine-NN)."""
+    node = data["DcimDevice"]["edges"][0]["node"]
+    for edge in node["capabilities"]["edges"]:
+        for peering in ((edge["node"].get("peerings") or {}).get("edges")) or []:
+            for end in peering["node"]["capabilities"]["edges"]:
+                device = end["node"]["device"]["node"]
+                if device["name"]["value"].startswith("spine"):
+                    device["role"] = _v("spine")
 
 
 def build_protected_device_data(*, device_name: str, role: str, platform: str, enforce: bool) -> dict:

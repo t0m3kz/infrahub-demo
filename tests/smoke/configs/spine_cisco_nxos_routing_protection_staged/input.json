@@ -149,6 +149,9 @@
                                     "node": {
                                       "name": {
                                         "value": "spine-01"
+                                      },
+                                      "role": {
+                                        "value": "spine"
                                       }
                                     }
                                   }
@@ -299,6 +302,9 @@
                                     "node": {
                                       "name": {
                                         "value": "spine-02"
+                                      },
+                                      "role": {
+                                        "value": "spine"
                                       }
                                     }
                                   }
@@ -487,6 +493,9 @@
                                     "node": {
                                       "name": {
                                         "value": "spine-01"
+                                      },
+                                      "role": {
+                                        "value": "spine"
                                       }
                                     }
                                   }
@@ -637,6 +646,9 @@
                                     "node": {
                                       "name": {
                                         "value": "spine-02"
+                                      },
+                                      "role": {
+                                        "value": "spine"
                                       }
                                     }
                                   }
@@ -1074,6 +1086,9 @@
                 "node": {
                   "name": {
                     "value": "dc1-spine-01"
+                  },
+                  "role": {
+                    "value": "leaf"
                   }
                 }
               },
@@ -1081,6 +1096,9 @@
                 "node": {
                   "name": {
                     "value": "dc1-border-01"
+                  },
+                  "role": {
+                    "value": "border-leaf"
                   }
                 }
               }
@@ -1106,6 +1124,9 @@
                 "node": {
                   "name": {
                     "value": "dc1-border-01"
+                  },
+                  "role": {
+                    "value": "border-leaf"
                   }
                 }
               }

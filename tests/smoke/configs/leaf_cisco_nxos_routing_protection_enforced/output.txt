@@ -62,11 +62,16 @@ ip prefix-list PL-UNDERLAY-IPV4-OUT seq 10 permit 10.0.0.1/32
 route-map RM-UNDERLAY-IPV4-OUT permit 10
   match ip address prefix-list PL-UNDERLAY-IPV4-OUT
 !
-ip prefix-list PL-OVERLAY-EVPN-IN seq 10 permit 10.100.0.0/24
-ip prefix-list PL-OVERLAY-EVPN-IN seq 20 permit 10.100.8.0/24
+ip prefix-list PL-OVERLAY-EVPN-IN seq 10 permit 0.0.0.0/0
+ip prefix-list PL-OVERLAY-EVPN-IN seq 20 permit 10.100.0.0/24
+ip prefix-list PL-OVERLAY-EVPN-IN seq 30 permit 10.100.8.0/24
+ipv6 prefix-list PL6-OVERLAY-EVPN-IN seq 10 permit ::/0
 route-map RM-OVERLAY-EVPN-IN permit 10
   match evpn route-type 5
   match ip address prefix-list PL-OVERLAY-EVPN-IN
+route-map RM-OVERLAY-EVPN-IN permit 11
+  match evpn route-type 5
+  match ipv6 address prefix-list PL6-OVERLAY-EVPN-IN
 route-map RM-OVERLAY-EVPN-IN deny 30
   match evpn route-type 5
 route-map RM-OVERLAY-EVPN-IN permit 40

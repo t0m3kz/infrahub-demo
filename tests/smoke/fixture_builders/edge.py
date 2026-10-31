@@ -563,7 +563,7 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
     return data
 
 
-def build_edge_bgw_pair_data(*, device_name: str, platform: str) -> dict:
+def build_edge_bgw_pair_data(*, device_name: str, platform: str, enforce: bool = True) -> dict:
     """A colocation metro edge that is one of two BGWs sharing a site VIP.
 
     BGW edge (Loopback1 IPv6 VTEP, Loopback100 multisite-vip) with two DCI dark
@@ -725,7 +725,7 @@ def build_edge_bgw_pair_data(*, device_name: str, platform: str) -> dict:
             }
         }
     )
-    _enforce_route_protection(data, device_name=device_name, sibling=sibling)
+    _add_route_protection(data, device_name=device_name, sibling=sibling, enforce=enforce)
     return data
 
 
@@ -743,14 +743,14 @@ def _vip_interface(device: str, role: str, vip: str, loopback: str) -> dict:
     }
 
 
-def _enforce_route_protection(data: dict, *, device_name: str, sibling: str) -> None:
-    """Turn the route protection on for the BGW pair fixture: the metro enforces and names its loopback supernet.
+def _add_route_protection(data: dict, *, device_name: str, sibling: str, enforce: bool) -> None:
+    """Give the BGW pair fixture the route protection facts: the metro stages or enforces and names its loopback supernet.
 
     The remote border gateways (one per DC) and the sibling edge carry their VIPs on the ``DcimVirtualInterface``
     root, which is what a DCI or fabric session derives its far-end addresses from (transforms/helpers/bgp_facts.py).
     """
     deployment = data["DcimDevice"]["edges"][0]["node"]["deployment"]["node"]
-    deployment["routing_filter_enforce"] = _v(True)
+    deployment["routing_filter_enforce"] = _v(enforce)
     deployment["loopback_pool"] = _node({"resources": _edges([{"prefix": _v("2001:db8:100::/120")}])})
     # The edge is a border gateway in the INTERNET instance (its default exit) and a member of the tenant one.
     add_environment_roots(data, tenant_members=[device_name], internet_members=[device_name])
@@ -814,6 +814,13 @@ def write_fixtures() -> tuple[int, int]:
             "edge_cisco_nxos_bgw_pair",
             # Metro edge pair: fabric-tracking on the interlink, FABRIC-PEERS iBGP session.
             build_edge_bgw_pair_data(device_name="dc1-edge-01", platform="cisco_nxos"),
+        ),
+        (
+            "metro edge pair BGW, route protection staged",
+            Edge,
+            "edge_cisco_nxos_bgw_pair_staged",
+            # The same pair with routing_filter_enforce false: the objects exist, RM-FABRIC-OUT and RM-DCI-IN stay attached.
+            build_edge_bgw_pair_data(device_name="dc1-edge-01", platform="cisco_nxos", enforce=False),
         ),
     )
     generated = errors = 0

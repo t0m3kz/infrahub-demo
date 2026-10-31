@@ -43,8 +43,9 @@ fragment ManagedBGPServiceFields on ManagedBGP {
                 ip_address { node { address { value } ip_namespace { node { name { value } l3_vni { value } namespace_type { value } } } } }
               }
               # __typename: a far end that is a CloudNetworkAppliance (provider-hosted) is never ours
-              # (transforms/helpers/bgp.py _far_end_is_ours).
-              device { node { __typename name { value } } }
+              # (transforms/helpers/bgp.py _far_end_is_ours). role: a relaying far end (a spine) may pass on a
+              # default route its client could not (utils/bgp_expectation.py).
+              device { node { __typename name { value } role { value } } }
             }
           }
         }

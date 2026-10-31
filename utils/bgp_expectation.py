@@ -314,9 +314,9 @@ def _evpn_family(session: Mapping[str, Any], device: Device, fabric: Fabric) -> 
 
 
 def _far_end(session: Mapping[str, Any], fabric: Fabric) -> Device:
-    """The far end of a session; one the facts do not know is a client with no role (never a relay, never an exit)."""
+    """The far end of a session: the facts' device, else its role as the peering names it (a relay is a spine)."""
     name = str(session.get("remote_device"))
-    return fabric.devices.get(name) or Device(name, "")
+    return fabric.devices.get(name) or Device(name, str(session.get("remote_role") or ""))
 
 
 def _vrf_family(family: str, session: Mapping[str, Any], device: Device, fabric: Fabric) -> FamilyPolicy:

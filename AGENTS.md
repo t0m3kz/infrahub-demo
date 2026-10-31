@@ -434,7 +434,8 @@ class MyCheck(InfrahubCheck):
   `le 32`/`le 128` plus the multisite VIPs in; the own loopback and VIP out, a spine relays the whole pool), the far
   border gateway's own addresses for a fabric or DCI underlay pair, and for EVPN the exact prefixes of the
   environment namespaces the device is a member of (a spine: all of them; the internet namespace as ranges), a default
-  route only from a default exit (a border gateway in the internet VRF instance). A family the query data cannot derive
+  route only from a default exit (a border gateway in the internet VRF instance, a border leaf or spine in a tenant one:
+  the shared firewall context's `0.0.0.0/0` static; a spine relays it). A family the query data cannot derive
   is "not derivable" and renders UNPROTECTED (reported by the check), never as a deny-all list.
   **maximum_routes is gone**: the limit is derived, never typed: the pool's capacity (already sized with headroom by
   `generators/fabric_sizing.py`) plus the VIPs, the far end's addresses or the allowed set plus

@@ -29,7 +29,7 @@ query bgp_expectations {
               ... on DcimVirtualInterface {
                 ip_address { node { address { value } ip_namespace { node { name { value } namespace_type { value } } } } }
               }
-              device { node { __typename name { value } } }
+              device { node { __typename name { value } role { value } } }
             }
           }
         }
@@ -128,7 +128,7 @@ query bgp_expectations {
     edges {
       node {
         namespace { node { name { value } namespace_type { value } } }
-        shared_devices { edges { node { name { value } } } }
+        shared_devices { edges { node { name { value } ... on DcimDevice { role { value } } } } }
       }
     }
   }

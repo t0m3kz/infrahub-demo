@@ -24,11 +24,20 @@ def prefix_node(prefix: str, namespace: str, namespace_type: str) -> dict:
     }
 
 
-def add_environment_roots(data: dict, *, tenant_members: list[str], internet_members: list[str]) -> None:
+def _members(names: list[str], roles: dict[str, str]) -> dict:
+    """The ``shared_devices`` edges of a VRF instance: each member with its role (a border originates the tenant default)."""
+    return _edges([{"name": _v(name), "role": _v(roles.get(name, "leaf"))} for name in names])
+
+
+def add_environment_roots(
+    data: dict, *, tenant_members: list[str], internet_members: list[str], roles: dict[str, str] | None = None
+) -> None:
     """Add the environment prefixes, the VRF instances and the segments to a device query response.
 
-    ``tenant_members`` / ``internet_members`` are the devices in the tenant and in the INTERNET VRF instance.
+    ``tenant_members`` / ``internet_members`` are the devices in the tenant and in the INTERNET VRF instance, ``roles``
+    their roles by name (a device not named is a leaf).
     """
+    roles = roles or {}
     data["environment_prefixes_prod"] = _edges([prefix_node(p, TENANT_NAMESPACE, "prod") for p in TENANT_PREFIXES])
     data["environment_prefixes_non_prod"] = _edges([])
     data["environment_prefixes_internet"] = _edges([prefix_node(p, "INTERNET", "internet") for p in INTERNET_PREFIXES])
@@ -37,11 +46,11 @@ def add_environment_roots(data: dict, *, tenant_members: list[str], internet_mem
         [
             {
                 "namespace": _node({"name": _v(TENANT_NAMESPACE), "namespace_type": _v("prod")}),
-                "shared_devices": _edges([{"name": _v(name)} for name in tenant_members]),
+                "shared_devices": _members(tenant_members, roles),
             },
             {
                 "namespace": _node({"name": _v("INTERNET"), "namespace_type": _v("internet")}),
-                "shared_devices": _edges([{"name": _v(name)} for name in internet_members]),
+                "shared_devices": _members(internet_members, roles),
             },
         ]
     )

@@ -20,7 +20,8 @@ from typing import Any
 
 from transforms.helpers.bgp_policy import compose_policy, name_filters
 from utils.bgp_expectation import Device, DeviceAddrs, ExternalPolicy, Fabric, expect_session
-from utils.exchange_transit import INTERNET_TYPE
+from utils.exchange_transit import EXCHANGE_PEERS, INTERNET_TYPE
+from utils.fabric_roles import BORDER_ROLES
 from utils.limits import DEFAULT_NAMESPACE
 from utils.segment_addressing import segment_hosting_candidates
 from utils.vrf_demand import VRF_KIND, device_memberships
@@ -128,19 +129,32 @@ def environment_prefixes(extra_roots: Mapping[str, Any]) -> tuple[dict[str, froz
 
 
 def default_exits(extra_roots: Mapping[str, Any], gateways: Iterable[str]) -> dict[str, frozenset[str]]:
-    """Namespace -> the devices that originate its default route: border gateways in an internet VRF instance.
+    """Namespace -> the devices that originate a default route in it.
 
-    ``gateways`` are the devices that carry a multisite VIP (utils/vrf_demand.py ``internet_exits``: only a border
-    gateway exits to the internet). The instances are the ``ManagedVRF`` root.
+    - An internet VRF instance: its border gateways (``gateways`` carry a multisite VIP; utils/vrf_demand.py
+      ``internet_exits``): the edge's upstream default enters EVPN there.
+    - A tenant (prod, non-prod) instance: its border leafs and border spines. The shared firewall context's
+      ``0.0.0.0/0`` static to its VIP is redistributed into EVPN by the border that holds it
+      (transforms/helpers/firewall.py ``get_exchange_routes``), so every VTEP of the VRF takes its default from there.
+      Every border of the VRF counts: the query does not say which one holds a shared context.
+
+    The instances are the ``ManagedVRF`` root.
     """
     border_gateways = set(gateways)
     exits: dict[str, set[str]] = {}
     for instance in extra_roots.get(VRF_KIND) or []:
         namespace = instance.get("namespace") or {}
-        if namespace.get("namespace_type") != INTERNET_TYPE or not namespace.get("name"):
+        name = namespace.get("name")
+        if not name or name == DEFAULT_NAMESPACE:
             continue
-        members = {device.get("name") for device in instance.get("shared_devices") or []}
-        exits.setdefault(namespace["name"], set()).update(members & border_gateways)
+        members = {device.get("name"): device.get("role") for device in instance.get("shared_devices") or []}
+        if namespace.get("namespace_type") == INTERNET_TYPE:
+            found = set(members) & border_gateways
+        elif namespace.get("namespace_type") in EXCHANGE_PEERS:
+            found = {device for device, role in members.items() if role in BORDER_ROLES}
+        else:
+            continue
+        exits.setdefault(name, set()).update(found)
     return {name: frozenset(devices) for name, devices in exits.items()}
 
 

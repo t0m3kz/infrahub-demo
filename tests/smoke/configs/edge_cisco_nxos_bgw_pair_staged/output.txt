@@ -1,0 +1,362 @@
+!
+! dc1-edge-01 Configuration
+!
+hostname dc1-edge-01
+!
+feature ospf
+feature bgp
+feature bfd
+feature interface-vlan
+feature lacp
+feature vpc
+feature lldp
+feature nv overlay
+feature vn-segment-vlan-based
+feature nve
+nv overlay evpn
+!
+! VLANs
+vlan 150
+  name Customer-A
+!
+!
+! VRF Contexts (BGP handoffs without an L3 VNI)
+vrf context VRF_A
+  address-family ipv4 unicast
+!
+!
+! Interfaces
+interface Ethernet1
+  no switchport
+  no shutdown
+  ip address 10.1.0.1/31
+
+!
+interface Ethernet1/8
+  no switchport
+  no shutdown
+  ipv6 address 2001:db8:100:ff::/127
+
+!
+interface Ethernet1/10
+  no switchport
+  no shutdown
+  ipv6 address 2001:db8:dc10::/127
+  mtu 9214
+
+!
+interface Ethernet1/11
+  no switchport
+  no shutdown
+  ipv6 address 2001:db8:dc11::/127
+  mtu 9214
+
+!
+interface Ethernet1/15
+  no shutdown
+
+  switchport
+  switchport mode trunk
+  switchport trunk allowed vlan 150
+!
+interface Ethernet2
+  no switchport
+  no shutdown
+  ip address 10.1.0.3/31
+
+!
+interface Loopback0
+  no shutdown
+  ip address 10.0.0.1/32
+
+!
+interface Loopback1
+  no shutdown
+  ipv6 address 2001:db8:100::1/128
+
+!
+interface Loopback100
+  no shutdown
+  ipv6 address 2001:db8:100::f1/128
+
+!
+!
+! Route-maps
+ipv6 prefix-list PL6-peer-dc1-edge-01-dc1-edge-02-ibgp-IPV6-IN seq 10 permit 2001:db8:100::2/128
+ipv6 prefix-list PL6-peer-dc1-edge-01-dc1-edge-02-ibgp-IPV6-IN seq 20 permit 2001:db8:100::f1/128
+route-map RM-peer-dc1-edge-01-dc1-edge-02-ibgp-IPV6-IN permit 10
+  match ipv6 address prefix-list PL6-peer-dc1-edge-01-dc1-edge-02-ibgp-IPV6-IN
+!
+ipv6 prefix-list PL6-peer-dc1-edge-01-dc1-edge-02-ibgp-IPV6-OUT seq 10 permit 2001:db8:100::1/128
+ipv6 prefix-list PL6-peer-dc1-edge-01-dc1-edge-02-ibgp-IPV6-OUT seq 20 permit 2001:db8:100::f1/128
+route-map RM-peer-dc1-edge-01-dc1-edge-02-ibgp-IPV6-OUT permit 10
+  match ipv6 address prefix-list PL6-peer-dc1-edge-01-dc1-edge-02-ibgp-IPV6-OUT
+!
+ipv6 prefix-list PL6-peer-dc1-edge-01-dc10-border-leaf-01-ebgp-IPV6-IN seq 10 permit 2001:db8:dc10::1/128
+ipv6 prefix-list PL6-peer-dc1-edge-01-dc10-border-leaf-01-ebgp-IPV6-IN seq 20 permit 2001:db8:dc10::f10/128
+route-map RM-peer-dc1-edge-01-dc10-border-leaf-01-ebgp-IPV6-IN permit 10
+  match ipv6 address prefix-list PL6-peer-dc1-edge-01-dc10-border-leaf-01-ebgp-IPV6-IN
+  set community no-export additive
+!
+ipv6 prefix-list PL6-peer-dc1-edge-01-dc10-border-leaf-01-ebgp-IPV6-OUT seq 10 permit 2001:db8:100::1/128
+ipv6 prefix-list PL6-peer-dc1-edge-01-dc10-border-leaf-01-ebgp-IPV6-OUT seq 20 permit 2001:db8:100::f1/128
+route-map RM-peer-dc1-edge-01-dc10-border-leaf-01-ebgp-IPV6-OUT permit 10
+  match ipv6 address prefix-list PL6-peer-dc1-edge-01-dc10-border-leaf-01-ebgp-IPV6-OUT
+!
+ipv6 prefix-list PL6-peer-dc1-edge-01-dc11-border-leaf-01-ebgp-IPV6-IN seq 10 permit 2001:db8:dc11::1/128
+ipv6 prefix-list PL6-peer-dc1-edge-01-dc11-border-leaf-01-ebgp-IPV6-IN seq 20 permit 2001:db8:dc11::f11/128
+route-map RM-peer-dc1-edge-01-dc11-border-leaf-01-ebgp-IPV6-IN permit 10
+  match ipv6 address prefix-list PL6-peer-dc1-edge-01-dc11-border-leaf-01-ebgp-IPV6-IN
+  set community no-export additive
+!
+ipv6 prefix-list PL6-peer-dc1-edge-01-dc11-border-leaf-01-ebgp-IPV6-OUT seq 10 permit 2001:db8:100::1/128
+ipv6 prefix-list PL6-peer-dc1-edge-01-dc11-border-leaf-01-ebgp-IPV6-OUT seq 20 permit 2001:db8:100::f1/128
+route-map RM-peer-dc1-edge-01-dc11-border-leaf-01-ebgp-IPV6-OUT permit 10
+  match ipv6 address prefix-list PL6-peer-dc1-edge-01-dc11-border-leaf-01-ebgp-IPV6-OUT
+!
+route-map RM-CONN-2-BGP permit 10
+  match interface loopback0 Loopback1 Loopback100
+!
+route-map RM-FABRIC-OUT permit 10
+  match interface loopback0 Loopback1 Loopback100
+!
+route-map RM-DCI-IN permit 10
+  set community no-export additive
+!
+route-map RM-VRF-DIRECT-2-EVPN permit 10
+!
+!
+! BGP Configuration
+
+router bgp 65001
+  router-id 10.0.0.1
+  graceful-restart
+  !
+  template peer-policy DCI-PEERS-POLICY
+    send-community
+    send-community extended
+  !
+  template peer-session DCI-PEERS-SESSION
+    ebgp-multihop 2
+  !
+  !
+  template peer-policy DCI-UNDERLAY-PEERS-POLICY
+    send-community
+  !
+  template peer-session DCI-UNDERLAY-PEERS-SESSION
+    bfd
+  !
+  !
+  template peer-policy EVPN-OVERLAY-POLICY
+    send-community
+    send-community extended
+  !
+  template peer-session EVPN-OVERLAY-SESSION
+    update-source loopback0
+    ebgp-multihop 255
+  !
+  !
+  template peer-policy FABRIC-PEERS-POLICY
+    send-community
+  !
+  template peer-session FABRIC-PEERS-SESSION
+    bfd
+  !
+  !
+  template peer-policy UNDERLAY-PEERS-POLICY
+    send-community
+  !
+  template peer-session UNDERLAY-PEERS-SESSION
+    bfd
+  !
+  address-family ipv4 unicast
+    redistribute direct route-map RM-CONN-2-BGP
+    maximum-paths 8
+  !
+  address-family ipv6 unicast
+    redistribute direct route-map RM-CONN-2-BGP
+    maximum-paths 8
+  !
+  address-family l2vpn evpn
+  !
+  neighbor 10.1.0.0
+    remote-as 65100
+    description spine-01
+    inherit peer-session UNDERLAY-PEERS-SESSION
+    address-family ipv4 unicast
+      inherit peer-policy UNDERLAY-PEERS-POLICY 1
+    !
+  neighbor 10.1.0.2
+    remote-as 65101
+    description spine-02
+    inherit peer-session UNDERLAY-PEERS-SESSION
+    address-family ipv4 unicast
+      inherit peer-policy UNDERLAY-PEERS-POLICY 1
+    !
+  neighbor 2001:db8:100:ff::1
+    remote-as 65001
+    description dc1-edge-02
+    password fabric-s3cr3t
+    inherit peer-session FABRIC-PEERS-SESSION
+    address-family ipv6 unicast
+      inherit peer-policy FABRIC-PEERS-POLICY 1
+      maximum-prefix 4 warning-only
+      route-map RM-FABRIC-OUT out
+      ! staged (routing_filter_enforce false): route-map RM-peer-dc1-edge-01-dc1-edge-02-ibgp-IPV6-IN in is not attached
+      ! staged (routing_filter_enforce false): route-map RM-peer-dc1-edge-01-dc1-edge-02-ibgp-IPV6-OUT out is not attached
+    !
+    address-family l2vpn evpn
+      inherit peer-policy FABRIC-PEERS-POLICY 1
+      maximum-prefix 2039 warning-only
+      ! staged or unsupported: the derived EVPN filter RM-peer-dc1-edge-01-dc1-edge-02-ibgp-EVPN-IN (in) is not rendered (U)
+      ! staged or unsupported: the derived EVPN filter RM-peer-dc1-edge-01-dc1-edge-02-ibgp-EVPN-OUT (out) is not rendered (U)
+    !
+  neighbor 2001:db8:dc10::1
+    remote-as 65100
+    description dc10-border-leaf-01
+    password dci-s3cr3t-0
+    inherit peer-session DCI-UNDERLAY-PEERS-SESSION
+    address-family ipv6 unicast
+      inherit peer-policy DCI-UNDERLAY-PEERS-POLICY 1
+      maximum-prefix 4 warning-only
+      route-map RM-FABRIC-OUT out
+      route-map RM-DCI-IN in
+      ! staged (routing_filter_enforce false): route-map RM-peer-dc1-edge-01-dc10-border-leaf-01-ebgp-IPV6-IN in is not attached
+      ! staged (routing_filter_enforce false): route-map RM-peer-dc1-edge-01-dc10-border-leaf-01-ebgp-IPV6-OUT out is not attached
+    !
+  neighbor 2001:db8:dc11::1
+    remote-as 65101
+    description dc11-border-leaf-01
+    password dci-s3cr3t-1
+    inherit peer-session DCI-UNDERLAY-PEERS-SESSION
+    address-family ipv6 unicast
+      inherit peer-policy DCI-UNDERLAY-PEERS-POLICY 1
+      maximum-prefix 4 warning-only
+      route-map RM-FABRIC-OUT out
+      route-map RM-DCI-IN in
+      ! staged (routing_filter_enforce false): route-map RM-peer-dc1-edge-01-dc11-border-leaf-01-ebgp-IPV6-IN in is not attached
+      ! staged (routing_filter_enforce false): route-map RM-peer-dc1-edge-01-dc11-border-leaf-01-ebgp-IPV6-OUT out is not attached
+    !
+  neighbor 10.0.0.100
+    remote-as 65100
+    description spine-01
+    inherit peer-session EVPN-OVERLAY-SESSION
+    address-family l2vpn evpn
+      inherit peer-policy EVPN-OVERLAY-POLICY 1
+      maximum-prefix 2039 warning-only
+      ! staged or unsupported: the derived EVPN filter RM-OVERLAY-EVPN-IN (in) is not rendered (U)
+      ! staged or unsupported: the derived EVPN filter RM-OVERLAY-EVPN-OUT (out) is not rendered (U)
+    !
+  neighbor 10.0.0.101
+    remote-as 65101
+    description spine-02
+    inherit peer-session EVPN-OVERLAY-SESSION
+    address-family l2vpn evpn
+      inherit peer-policy EVPN-OVERLAY-POLICY 1
+      maximum-prefix 2039 warning-only
+      ! staged or unsupported: the derived EVPN filter RM-OVERLAY-EVPN-IN (in) is not rendered (U)
+      ! staged or unsupported: the derived EVPN filter RM-OVERLAY-EVPN-OUT (out) is not rendered (U)
+    !
+  neighbor 2001:db8:dc10:ffff::1
+    remote-as 65100
+    description dc10-border-leaf-01
+    peer-type fabric-external
+    password dci-s3cr3t-0
+    update-source Loopback1
+    inherit peer-session DCI-PEERS-SESSION
+    address-family l2vpn evpn
+      inherit peer-policy DCI-PEERS-POLICY 1
+      maximum-prefix 2039 warning-only
+      ! staged or unsupported: the derived EVPN filter RM-DCI-EVPN-IN (in) is not rendered (U)
+      ! staged or unsupported: the derived EVPN filter RM-DCI-EVPN-OUT (out) is not rendered (U)
+    !
+  neighbor 2001:db8:dc11:ffff::1
+    remote-as 65101
+    description dc11-border-leaf-01
+    peer-type fabric-external
+    password dci-s3cr3t-1
+    update-source Loopback1
+    inherit peer-session DCI-PEERS-SESSION
+    address-family l2vpn evpn
+      inherit peer-policy DCI-PEERS-POLICY 1
+      maximum-prefix 2039 warning-only
+      ! staged or unsupported: the derived EVPN filter RM-DCI-EVPN-IN (in) is not rendered (U)
+      ! staged or unsupported: the derived EVPN filter RM-DCI-EVPN-OUT (out) is not rendered (U)
+    !
+  vrf INTERNET
+    address-family ipv4 unicast
+      advertise l2vpn evpn
+      redistribute direct route-map RM-VRF-DIRECT-2-EVPN
+  !
+!
+
+!
+!
+! VXLAN Configuration (netlab-style multivendor)
+!
+evpn multisite border-gateway 65000
+  delay-restore time 300
+!
+!
+! VRF Contexts (symmetric IRB — one L3 VNI per tenant)
+!
+vrf context INTERNET
+  vni 60002
+  rd 10.0.0.1:60002
+  address-family ipv4 unicast
+    route-target both 60002:60002
+    route-target both 60002:60002 evpn
+!
+interface nve1
+  source-interface Loopback1
+  host-reachability protocol bgp
+  multisite border-gateway interface Loopback100
+  member vni 10150
+    suppress-arp
+    ingress-replication protocol bgp
+  member vni 60002 associate-vrf
+  no shutdown
+!
+interface Ethernet1/10
+  evpn multisite dci-tracking
+!
+interface Ethernet1/11
+  evpn multisite dci-tracking
+!
+interface Ethernet1/8
+  evpn multisite fabric-tracking
+!
+!
+! EVPN Configuration
+!
+evpn
+  vni 10150 l2
+    rd 10.0.0.1:10150
+    route-target import 65000:10150
+    route-target export 65000:10150
+!
+!
+! VLAN to VNI mapping
+!
+vlan 150
+  vn-segment 10150
+!
+! L3 VNI Transit SVIs (symmetric IRB — no host addressing, forwarding only)
+!
+vlan 3902
+  name L3VNI_INTERNET
+  vn-segment 60002
+!
+interface Vlan3902
+  description L3VNI transit SVI for VRF INTERNET
+  vrf member INTERNET
+  ip forward
+  mtu 9214
+  no shutdown
+!
+
+!
+! Management
+line console
+line vty
+!
