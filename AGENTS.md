@@ -405,8 +405,9 @@ class MyCheck(InfrahubCheck):
   components of a rear port are its `DcimFrontPatchPanelPort` (Parent = the rear port, mandatory). A jack is a rear port
   with one front port, a cassette a rear port (MPO-12) with several. Both kinds inherit only `DcimEndpoint`, so a cable
   ends on a physical interface or on either port kind with no change to `DcimCable`, and a cross-connect is
-  port - cable - front, rear - cable - port: one `front_ports` edge crosses a jack, no name is compared. The HFID of both
-  is the computed `port_id` (`<panel>:<rear>` and `<panel>:<rear>:<front>`): an HFID cannot go through two
+  port - cable - front, rear - cable - port: one `front_ports` edge crosses a jack, no name is compared. A panel is unique by its
+  mandatory `rack` and its `name` (HFID `[rack shortname, name]`; `PP-01` may exist in every rack). The HFID of both ports
+  is the computed `port_id` (`<rack>:<panel>:<rear>` and `<rack>:<panel>:<rear>:<front>`): an HFID cannot go through two
   relationships. An object template copies an attribute relationship as it is and cannot point a child at a sibling, but
   it materializes component children level by level, so the panel templates
   (`data/bootstrap/10_physical_devices_templates_patch_panel.yaml`: `PP-24-LC`, `PP-48-LC`, `PP-12-SC`, `PP-24-RJ45`,
@@ -414,7 +415,7 @@ class MyCheck(InfrahubCheck):
   fronts). Nothing checks a panel's cross-connects: structure holds the pairing, and a cable that stops at a panel is
   data to read, not a defect to report. A panel always sits
   between two devices: a circuit end stays an interface (the `capabilities` peers are untouched) and the panel's
-  location is its optional `rack` (`LocationRack.deployment` gives the facility); a panel has no
+  location is its mandatory `rack` (`LocationRack.deployment` gives the facility); a panel has no
   `deployment`, no device type and no `position` (the rack-unit position returns together with a rack drawing that
   draws panels). The `patch-panel` device role is gone. A generated cable
   never ends on a panel port (a panel cable is data). A reader of a cable end meets a panel port as an empty node `{}`

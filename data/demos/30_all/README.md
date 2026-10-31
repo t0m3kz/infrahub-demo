@@ -215,7 +215,7 @@ carrier. Nothing of the sessions is authored, no address and no BGP peering: the
 hybrid attachment, which has a single endpoint.
 
 The FR2 cage also shows a patch panel (`01_colo_onramp/06_patch_panel.yml`, `07_patch_panel_cabling.yml`): `eg-fr202`
-`Ethernet1/2` is cabled to front port `PP-EQX-FR2-01:1:1` and rear port `PP-EQX-FR2-01:1` to `EXT-EQX-FABRIC-FR2` `et-0/0/1`, so the
+`Ethernet1/2` is cabled to front port `fr2-s1-r-1:PP-EQX-FR2-01:1:1` and rear port `fr2-s1-r-1:PP-EQX-FR2-01:1` to `EXT-EQX-FABRIC-FR2` `et-0/0/1`, so the
 cross-connect is two cables through one jack (the front port is a component of its rear port). It is isolated: no circuit, session or segment rides these ports, and the panel makes
 no artifact, VRF, VLAN row or capability (it sits in rack `fr2-s1-r-1`).
 

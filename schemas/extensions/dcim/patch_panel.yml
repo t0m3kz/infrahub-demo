@@ -19,12 +19,17 @@ version: "1.0"
 # A cable that lands on one port continues through its jack to the cable on the other: one `front_ports` edge crosses
 # it.
 #
+# A panel is unique by its rack and its name (`PP-01` may exist in every rack), so the rack is mandatory: the server
+# refuses a uniqueness constraint on an optional relationship. The panel's HFID is [rack shortname, name].
+#
 # The HFID cannot go through two relationships (the server: "panel is not a valid attribute of DcimRearPatchPanelPort"),
-# so each kind carries a computed `port_id` that is its HFID: `<panel>:<rear>` and `<panel>:<rear>:<front>`.
+# so each kind carries a computed id that is its HFID: the panel's `panel_id` is `<rack>:<name>`, a rear port's
+# `port_id` is `<panel_id>:<rear>` and a front port's `<panel_id>:<rear>:<front>`.
 #
 # A panel always sits between two devices: a circuit end stays an interface (the `capabilities` peers are untouched).
 # The rack-unit `position` returns together with a rack drawing that draws panels.
-# Its location is its `rack` (LocationRack.deployment gives the facility); it has no `deployment` and no device type.
+# Its location is its mandatory `rack` (LocationRack.deployment gives the facility); it has no `deployment` and no
+# device type.
 # ============================================================================
 
 nodes:
@@ -36,18 +41,30 @@ nodes:
     include_in_menu: false
     generate_template: true
     human_friendly_id:
+      - rack__shortname__value
       - name__value
-    display_label: "{{ name__value }}"
+    display_label: "{{ name__value }} ({{ rack__shortname__value }})"
     order_by:
+      - rack__shortname__value
       - name__value
     uniqueness_constraints:
-      - ["name__value"]
+      - ["rack", "name__value"]
     attributes:
       - name: name
         kind: Text
-        unique: true
         optional: false
+        description: "The panel name, unique within its rack"
         order_weight: 900
+      - name: panel_id
+        kind: Text
+        read_only: true
+        optional: false
+        unique: true
+        description: "<rack>:<name>: the id the port ids are built from (an HFID cannot go through two relationships)"
+        computed_attribute:
+          kind: Jinja2
+          jinja2_template: "{{ rack__shortname__value }}:{{ name__value }}"
+        order_weight: 925
       - name: description
         kind: Text
         optional: true
@@ -55,7 +72,7 @@ nodes:
     relationships:
       - name: rack
         peer: LocationRack
-        optional: true
+        optional: false
         cardinality: one
         kind: Attribute
         identifier: "rack__patch_panels"
@@ -94,10 +111,10 @@ nodes:
         read_only: true
         optional: false
         unique: true
-        description: "<panel>:<rear>: the human friendly id (it cannot go through the panel relationship twice)"
+        description: "<panel_id>:<rear>: the human friendly id (it cannot go through the panel relationship twice)"
         computed_attribute:
           kind: Jinja2
-          jinja2_template: "{{ panel__name__value }}:{{ name__value }}"
+          jinja2_template: "{{ panel__panel_id__value }}:{{ name__value }}"
         order_weight: 950
       - name: connector
         kind: Dropdown
@@ -166,7 +183,7 @@ nodes:
         read_only: true
         optional: false
         unique: true
-        description: "<panel>:<rear>:<front>: the human friendly id"
+        description: "<panel_id>:<rear>:<front>: the human friendly id"
         computed_attribute:
           kind: Jinja2
           jinja2_template: "{{ rear_port__port_id__value }}:{{ name__value }}"

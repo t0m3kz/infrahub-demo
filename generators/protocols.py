@@ -345,6 +345,7 @@ class DcimCable(CoreNode):
 class DcimPatchPanel(CoreNode):
     description: StringOptional
     name: String
+    panel_id: String
     rack: RelationshipAttribute[LocationRack]
     rear_ports: RelationshipManager[DcimRearPatchPanelPort]
 

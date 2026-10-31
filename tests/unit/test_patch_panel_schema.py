@@ -44,8 +44,23 @@ def test_port_hfid_is_the_computed_port_id_because_it_cannot_go_through_two_rela
         assert port_id["read_only"] is True and port_id["unique"] is True, name
     rear = _item(_node("RearPatchPanelPort")["attributes"], "port_id")["computed_attribute"]["jinja2_template"]
     front = _item(_node("FrontPatchPanelPort")["attributes"], "port_id")["computed_attribute"]["jinja2_template"]
-    assert rear == "{{ panel__name__value }}:{{ name__value }}"
+    assert rear == "{{ panel__panel_id__value }}:{{ name__value }}"
     assert front == "{{ rear_port__port_id__value }}:{{ name__value }}"
+
+
+def test_a_panel_is_unique_by_its_mandatory_rack_and_its_name() -> None:
+    """`PP-01` may exist in every rack: the constraint is (rack, name), which needs the rack mandatory (the server
+    refuses a constraint on an optional relationship), and the HFID and the id the ports are built from follow."""
+    panel = _node("PatchPanel")
+    rack = _item(panel["relationships"], "rack")
+    panel_id = _item(panel["attributes"], "panel_id")
+
+    assert panel["uniqueness_constraints"] == [["rack", "name__value"]]
+    assert panel["human_friendly_id"] == ["rack__shortname__value", "name__value"]
+    assert rack["optional"] is False
+    assert not _item(panel["attributes"], "name").get("unique")
+    assert panel_id["read_only"] is True and panel_id["unique"] is True
+    assert panel_id["computed_attribute"]["jinja2_template"] == "{{ rack__shortname__value }}:{{ name__value }}"
 
 
 def test_port_uniqueness_is_per_parent() -> None:
@@ -107,7 +122,8 @@ def test_connectors_and_labels() -> None:
 
 
 def test_panel_has_rack_and_rear_ports_and_no_deployment_or_device_type() -> None:
-    """The panel is located by its rack (LocationRack.deployment gives the facility); no deployment, no device type."""
+    """The panel is located by its mandatory rack (LocationRack.deployment gives the facility); no deployment, no device
+    type."""
     names = {rel["name"] for rel in _node("PatchPanel")["relationships"]}
 
     assert names == {"rack", "rear_ports"}
