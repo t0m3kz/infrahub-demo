@@ -679,7 +679,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         session (default-only in, only the public SNAT block out, aggregated
         with summary-only). Each edge also peers its zone partner over the
         interlink: one `FABRIC-PEERS` neighbour (iBGP, remote-as = the site AS,
-        no peer-type, no update-source, `RM-FABRIC-OUT` out), `evpn multisite
+        no peer-type, no update-source, an `out` route-map), `evpn multisite
         fabric-tracking` on the interlink port only and `dci-tracking` on the
         dark-fibre ports. The two sessions add_virtual_circuit builds per DCI circuit render as one
         DCI-UNDERLAY-PEERS and one DCI-PEERS neighbour each (_dci_session_errors).

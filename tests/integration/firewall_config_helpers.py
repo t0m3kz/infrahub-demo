@@ -431,8 +431,8 @@ def _fabric_pair_errors(device: str, rendered: str) -> list[str]:
     """What an edge of a two-edge zone must render for its FABRIC iBGP session and Multi-Site tracking.
 
     Exactly one neighbour inherits FABRIC-PEERS-SESSION: iBGP (remote-as equal to the
-    process's own AS, the site AS), no peer-type, no update-source, `RM-FABRIC-OUT` out on
-    IPv6 unicast. `fabric-tracking` sits on the interlink port alone; `dci-tracking` on the
+    process's own AS, the site AS), no peer-type, no update-source, an `out` route-map on
+    IPv6 unicast (the derived filter, or `RM-FABRIC-OUT` while the deployment stages). `fabric-tracking` sits on the interlink port alone; `dci-tracking` on the
     ports of this edge's dark fibres (ALL_DEMO_DCI_CIRCUITS) and never on the interlink.
     """
     errors: list[str] = []
@@ -458,8 +458,13 @@ def _fabric_pair_errors(device: str, rendered: str) -> list[str]:
             )
         if re.search(r"update-source|peer-type", body):
             errors.append(f"{device}: FABRIC neighbour {address} sets update-source/peer-type")
-        if "route-map RM-FABRIC-OUT out" not in body:
-            errors.append(f"{device}: FABRIC neighbour {address} has no 'route-map RM-FABRIC-OUT out'")
+        # The announcement filter on IPv6 unicast: the derived per-session map while the deployment enforces
+        # (routing_filter_enforce), RM-FABRIC-OUT while it stages; either way it is defined in the config.
+        out_map = re.search(r"^ +route-map (\S+) out$", body, re.MULTILINE)
+        if out_map is None:
+            errors.append(f"{device}: FABRIC neighbour {address} has no 'route-map <name> out'")
+        elif not re.search(rf"^route-map {re.escape(out_map.group(1))} (permit|deny) \d+$", rendered, re.MULTILINE):
+            errors.append(f"{device}: FABRIC neighbour {address} out route-map {out_map.group(1)} is not defined")
     tracking: dict[str, set[str]] = {"fabric": set(), "dci": set()}
     for interface, kind in re.findall(
         r"^interface (\S+)\n\s+evpn multisite (fabric|dci)-tracking$", rendered, re.MULTILINE
