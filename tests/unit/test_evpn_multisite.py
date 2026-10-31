@@ -25,6 +25,7 @@ import pytest
 
 from transforms.common import BaseDeviceTransform
 from transforms.helpers.bgp import _build_peer_groups, _build_session_from_peering, add_template_fields
+from transforms.helpers.bgp_policy import compose_policy
 from transforms.helpers.vxlan import (
     _get_multisite_config,
     _is_multisite_segment,
@@ -805,6 +806,7 @@ class TestNxosDciRendering:
     def test_fabric_session_alone_defines_only_the_fabric_route_map(self, nxos_env: jinja2.Environment) -> None:
         bgp = _dci_bgp(with_underlay=False, with_evpn=False)
         bgp[0]["sessions"][0]["export_local_only"] = True
+        bgp[0]["sessions"][0]["policy"] = compose_policy(bgp[0]["sessions"][0])
         rendered = nxos_env.get_template("common/cisco_nxos_dci_route_maps.j2").render(
             bgp=bgp, loopback_name="loopback0", vxlan=_vxlan_ctx()
         )

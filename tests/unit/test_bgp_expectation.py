@@ -50,13 +50,13 @@ def _fabric(**overrides: Any) -> Fabric:
         "leaf",
         DeviceAddrs(frozenset({"10.250.0.11/32"})),
         namespaces=frozenset({"PROD"}),
+        local_only=frozenset({"10.99.0.0/29"}),
     )
     bgw = Device(
         "bl-dc101101",
         "border-leaf",
         DeviceAddrs(frozenset({"fd00:2500:1::5/128"}), frozenset({VIP_DC10})),
         namespaces=frozenset({"PROD", "INTERNET"}),
-        default_exit=frozenset({"INTERNET"}),
     )
     far_bgw = Device("eg-fr201", "edge", DeviceAddrs(frozenset({"fd00:2500:2::5/128"}), frozenset({VIP_FR})))
     values: dict[str, Any] = {
@@ -68,7 +68,6 @@ def _fabric(**overrides: Any) -> Fabric:
             "INTERNET": frozenset({"203.0.113.0/24"}),
         },
         "default_exits": {"INTERNET": frozenset({"bl-dc101101"})},
-        "transit_prefixes": frozenset({"10.99.0.0/29"}),
         "l2vni_count": 2,
     }
     values.update(overrides)
@@ -324,11 +323,22 @@ class TestOverlay:
             "address_families": [EVPN],
         }
 
-    def test_a_leaf_accepts_the_prefixes_of_its_namespaces_without_the_transit_29(self) -> None:
-        """The firewall/LB transit /29 is a connected prefix of the border and never a type-5 route."""
+    def test_a_leaf_accepts_the_border_transit_29_but_never_announces_its_own_copy(self) -> None:
+        """The firewall/LB transit /29 is originated by the borders only: a leaf accepts it, its own copy stays local."""
         fabric = _fabric()
         policy = expect_session(self._overlay("spine1"), fabric.devices["leaf1"], fabric).families[EVPN]
-        assert policy.inbound == frozenset({exact_entry("10.20.0.0/24"), exact_entry("10.20.1.0/24")})
+        assert policy.inbound == frozenset(
+            {exact_entry("10.20.0.0/24"), exact_entry("10.20.1.0/24"), exact_entry("10.99.0.0/29")}
+        )
+        assert policy.outbound == frozenset({exact_entry("10.20.0.0/24"), exact_entry("10.20.1.0/24")})
+
+    def test_a_spine_relays_every_namespace(self) -> None:
+        """A spine holds no VRF: its set is the prefixes of all namespaces, the internet range included."""
+        fabric = _fabric(range_namespaces=frozenset({"INTERNET"}))
+        policy = expect_session(self._overlay("leaf1"), fabric.devices["spine1"], fabric).families[EVPN]
+        assert range_entry("203.0.113.0/24") in (policy.inbound or ())
+        assert exact_entry("10.20.0.0/24") in (policy.inbound or ())
+        assert policy.inbound == policy.outbound
 
     def test_the_internet_default_comes_from_a_border_through_a_relay_only(self) -> None:
         """INTERNET 0/0: accepted from the exit and from a spine relaying it, not from a plain leaf."""
@@ -340,6 +350,8 @@ class TestOverlay:
         assert from_spine.families[EVPN].default_in
         assert not from_leaf.families[EVPN].default_in
         assert not expect_session(self._overlay("spine1"), leaf, fabric).families[EVPN].default_in
+        spine = fabric.devices["spine1"]
+        assert expect_session(self._overlay("bl-dc101101"), spine, fabric).families[EVPN].default_in
         out = expect_session(self._overlay("spine1"), fabric.devices["bl-dc101101"], fabric)
         assert out.families[EVPN].default_out
 
@@ -360,8 +372,10 @@ class TestVrfAndExternal:
         fabric = _fabric()
         session = {"name": "v", "vrf": "PROD", "remote_device": "leaf1", "address_families": [IPV4]}
         policy = expect_session(session, fabric.devices["bl-dc101101"], fabric).families[IPV4]
-        assert policy.inbound == frozenset({exact_entry("10.20.0.0/24"), exact_entry("10.20.1.0/24")})
-        assert policy.max_prefix == 2 + BGP_PREFIX_SLACK
+        assert policy.inbound == frozenset(
+            {exact_entry("10.20.0.0/24"), exact_entry("10.20.1.0/24"), exact_entry("10.99.0.0/29")}
+        )
+        assert policy.max_prefix == 3 + BGP_PREFIX_SLACK
 
     def test_an_external_session_keeps_the_exchange_policy_and_gets_a_derived_limit(self) -> None:
         """A hosted CloudNetworkAppliance session is external already: in/out come from the ownership rule."""

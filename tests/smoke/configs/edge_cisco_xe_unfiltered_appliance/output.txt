@@ -79,7 +79,6 @@ router bgp 65001
   address-family ipv4 vrf PROD
     neighbor 10.255.8.0 remote-as 4200000100
     neighbor 10.255.8.0 description eg-fr201
-    neighbor 10.255.8.0 maximum-prefix 2 warning-only
     neighbor 10.255.8.0 password handoff-fr2-amne-prod-key
     neighbor 10.255.8.0 activate
     ! UNFILTERED: no external-policy renderer for cisco_xe; this session announces and accepts everything the peer sends - provider-side filter required

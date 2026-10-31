@@ -51,7 +51,7 @@
       "holdtime": "180",
       "keepalive": "60",
       "local_addr": "10.1.0.1",
-      "max_prefix_limit": "256",
+      "max_prefix_limit": "257",
       "name": "UNDERLAY-PEERS"
     },
     "10.1.0.2": {
@@ -61,8 +61,28 @@
       "holdtime": "180",
       "keepalive": "60",
       "local_addr": "10.1.0.3",
-      "max_prefix_limit": "256",
+      "max_prefix_limit": "257",
       "name": "UNDERLAY-PEERS"
+    }
+  },
+  "BGP_NEIGHBOR_AF": {
+    "default|10.1.0.0|ipv4_unicast": {
+      "admin_status": "true",
+      "route_map_in": [
+        "RM-UNDERLAY-IPV4-IN"
+      ],
+      "route_map_out": [
+        "RM-UNDERLAY-IPV4-OUT"
+      ]
+    },
+    "default|10.1.0.2|ipv4_unicast": {
+      "admin_status": "true",
+      "route_map_in": [
+        "RM-UNDERLAY-IPV4-IN"
+      ],
+      "route_map_out": [
+        "RM-UNDERLAY-IPV4-OUT"
+      ]
     }
   },
   "BGP_PEER_GROUP": {
@@ -104,6 +124,38 @@
   },
   "NTP_SERVER": {},
   "OSPF_ROUTER": {},
+  "PREFIX": {
+    "PL-UNDERLAY-IPV4-IN|10|10.0.0.0/24|24..32": {
+      "action": "permit"
+    },
+    "PL-UNDERLAY-IPV4-IN|20|10.0.0.250/32|exact": {
+      "action": "permit"
+    },
+    "PL-UNDERLAY-IPV4-OUT|10|10.0.0.0/24|24..32": {
+      "action": "permit"
+    },
+    "PL-UNDERLAY-IPV4-OUT|20|10.0.0.250/32|exact": {
+      "action": "permit"
+    }
+  },
+  "PREFIX_SET": {
+    "PL-UNDERLAY-IPV4-IN": {
+      "mode": "IPv4"
+    },
+    "PL-UNDERLAY-IPV4-OUT": {
+      "mode": "IPv4"
+    }
+  },
+  "ROUTE_MAP": {
+    "RM-UNDERLAY-IPV4-IN|10": {
+      "match_prefix_set": "PL-UNDERLAY-IPV4-IN",
+      "route_operation": "permit"
+    },
+    "RM-UNDERLAY-IPV4-OUT|10": {
+      "match_prefix_set": "PL-UNDERLAY-IPV4-OUT",
+      "route_operation": "permit"
+    }
+  },
   "SYSLOG_SERVER": {},
   "VLAN": {},
   "VLAN_INTERFACE": {}

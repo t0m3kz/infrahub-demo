@@ -40,11 +40,21 @@ def test_a_circuit_the_render_does_not_hold_is_reported_on_both_session_kinds(re
 @pytest.mark.parametrize(
     ("line", "error"),
     [
-        ("      route-map RM-DCI-IN in\n", "a DCI underlay neighbour has no 'route-map RM-DCI-IN in'"),
+        (
+            "      route-map RM-peer-dc1-edge-01-dc10-border-leaf-01-ebgp-IPV6-IN in\n",
+            "a DCI underlay neighbour has no 'route-map <name> in'",
+        ),
+        (
+            "      route-map RM-peer-dc1-edge-01-dc10-border-leaf-01-ebgp-IPV6-OUT out\n",
+            "a DCI underlay neighbour has no 'route-map <name> out'",
+        ),
         ("      maximum-prefix 4\n", "a DCI underlay neighbour has no 'maximum-prefix <n>'"),
         ("    update-source Loopback1\n", "a DCI EVPN neighbour has no 'update-source'"),
         ("    ebgp-multihop 2\n", "DCI-PEERS-SESSION does not give 'ebgp-multihop 2'"),
-        ("route-map RM-DCI-IN permit 10\n", "RM-DCI-IN is referenced but not defined"),
+        (
+            "  set community no-export additive\n",
+            "does not tag what the other site sends no-export",
+        ),
     ],
 )
 def test_a_missing_line_of_the_dci_render_is_named(rendered: str, line: str, error: str) -> None:

@@ -174,3 +174,79 @@ def test_entries_of_a_range_and_a_host_stay_distinct() -> None:
     """The pool range and a host route are different prefix-list lines even inside the range."""
     assert range_entry(POOL) != host_entry("10.250.0.11/32")
     assert Entry(POOL, 32).longest == 32
+
+
+def _prefix(prefix: str, namespace: str, kind: str) -> dict[str, Any]:
+    return {"prefix": prefix, "ip_namespace": {"name": namespace, "namespace_type": kind}}
+
+
+class TestEnvironmentFacts:
+    def test_prefixes_are_grouped_by_namespace_and_the_internet_is_matched_as_ranges(self) -> None:
+        """Every IpamPrefix of an environment namespace is a possible type-5 route; the default namespace is none."""
+        roots = {
+            "environment_prefixes_prod": [
+                _prefix("10.20.0.0/24", "PROD", "prod"),
+                _prefix("10.9.0.0/31", "default", "x"),
+            ],
+            "environment_prefixes_internet": [_prefix("203.0.113.0/24", "INTERNET", "internet")],
+            "ManagedVxlanSegment": [{"id": "a"}, {"id": "b"}, {"id": "c"}],
+        }
+        fabric = build_fabric(_leaf(None), roots)
+        assert fabric.namespace_prefixes == {"PROD": {"10.20.0.0/24"}, "INTERNET": {"203.0.113.0/24"}}
+        assert fabric.range_namespaces == {"INTERNET"}
+        assert fabric.l2vni_count == 3
+
+    def test_only_a_border_gateway_in_an_internet_instance_is_a_default_exit(self) -> None:
+        """A member of the INTERNET instance that carries no multisite VIP is not an exit; a PROD member never is."""
+        roots = {
+            "DcimVirtualInterface": [
+                {"ip_address": {"address": VIP}, "device": {"name": "bl1", "role": "border-leaf", "interfaces": []}}
+            ],
+            "ManagedVRF": [
+                {
+                    "namespace": {"name": "INTERNET", "namespace_type": "internet"},
+                    "shared_devices": [{"name": "bl1"}, {"name": "leaf9"}],
+                },
+                {"namespace": {"name": "PROD", "namespace_type": "prod"}, "shared_devices": [{"name": "bl1"}]},
+            ],
+        }
+        assert build_fabric(_leaf(None), roots).default_exits == {"INTERNET": {"bl1"}}
+
+    def test_a_device_is_a_member_of_the_namespaces_of_its_vrf_instances(self) -> None:
+        """Memberships come from the device's shared_capabilities (utils/vrf_demand.py), never the default namespace."""
+        device = {
+            **_leaf(None),
+            "shared_capabilities": [
+                {"typename": "ManagedVRF", "namespace": {"name": "PROD"}},
+                {"typename": "ManagedVRF", "namespace": {"name": "default"}},
+                {"typename": "ManagedSnmp", "namespace": {"name": "OTHER"}},
+            ],
+        }
+        assert build_device(device, local_only=["10.99.0.0/29"]).namespaces == {"PROD"}
+        assert build_device(device, local_only=["10.99.0.0/29"]).local_only == {"10.99.0.0/29"}
+
+    def test_a_leaf_gets_an_overlay_filter_only_when_the_query_carried_the_prefixes(self) -> None:
+        """No environment prefixes: not derivable and no filter, never a deny-all of every type-5 route."""
+        session = {
+            "name": "o",
+            "ttl": 255,
+            "peering_role": "overlay",
+            "remote_device": "spine1",
+            "address_families": ["evpn"],
+        }
+        first: dict[str, Any] = dict(session)
+        config: dict[str, Any] = {"bgp": [{"sessions": [first]}]}
+        annotate_bgp_policy(config, _leaf(_pod(_dc())), {})
+        assert first["policy"]["filters"] == []
+        roots = {"environment_prefixes_prod": [_prefix("10.20.0.0/24", "PROD", "prod")]}
+        device = {
+            **_leaf(_pod(_dc())),
+            "shared_capabilities": [{"typename": "ManagedVRF", "namespace": {"name": "PROD"}}],
+        }
+        second: dict[str, Any] = dict(session)
+        annotate_bgp_policy({"bgp": [{"sessions": [second]}]}, device, roots)
+        filters = second["policy"]["filters"]
+        assert [(f["direction"], f["map"], [e["prefix"] for e in f["entries"]]) for f in filters] == [
+            ("in", "RM-OVERLAY-EVPN-IN", ["10.20.0.0/24"]),
+            ("out", "RM-OVERLAY-EVPN-OUT", ["10.20.0.0/24"]),
+        ]

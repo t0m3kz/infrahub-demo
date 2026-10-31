@@ -193,7 +193,8 @@ class TestEdgeRender:
         output = _run_edge(_set_far_end_kind(_fixture(), _NE_HOP, "DcimPhysicalDevice"))
         block = _neighbor_block(output, "10.255.8.1")
         assert "remote-as 4200000200" in block
-        assert re.search(r"^ {8}maximum-prefix \d+ warning-only$", block, re.M)
+        # An internal VRF session: this fixture carries no environment prefixes, so no limit is derived (not 0, not a guess).
+        assert "maximum-prefix" not in block
         assert "route-map" not in block
         assert _NE_HOP not in output.split("! Route-maps", 1)[1]
         assert f"RM-{_NE_HOP}" not in output
@@ -314,7 +315,7 @@ class TestEdgeRender:
         assert "-OUT" not in output
         assert "-IN in" not in output
         assert "ip prefix-list" not in output
-        assert re.search(r"^ {8}maximum-prefix \d+ warning-only$", _neighbor_block(output, "10.255.5.6"), re.M)
+        assert "maximum-prefix" not in _neighbor_block(output, "10.255.5.6")
 
 
 # ---------------------------------------------------------------------------

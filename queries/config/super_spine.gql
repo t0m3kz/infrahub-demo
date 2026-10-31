@@ -142,4 +142,33 @@ query super_spine_config(
       }
     }
   }
+
+  # Route protection (utils/bgp_expectation.py, transforms/helpers/bgp_facts.py): the EVPN type-5 routes of a VRF are
+  # prefixes of its namespace, so a device's EVPN filter is the prefixes of the namespaces it is a member of (a
+  # spine: all of them), the default route only from a default exit, and the L2 VNIs bound the route count.
+  # One aliased root per environment namespace type (the namespaces are data/bootstrap/22_namespaces.yml).
+  environment_prefixes_prod: IpamPrefix(ip_namespace__namespace_type__value: "prod") {
+    edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } }
+  }
+  environment_prefixes_non_prod: IpamPrefix(ip_namespace__namespace_type__value: "non_prod") {
+    edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } }
+  }
+  environment_prefixes_internet: IpamPrefix(ip_namespace__namespace_type__value: "internet") {
+    edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } }
+  }
+  environment_prefixes_management: IpamPrefix(ip_namespace__namespace_type__value: "management") {
+    edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } }
+  }
+  # The devices in each namespace's VRF instance: a border gateway in an internet one is the default exit.
+  ManagedVRF {
+    edges {
+      node {
+        namespace { node { name { value } namespace_type { value } } }
+        shared_devices { edges { node { name { value } } } }
+      }
+    }
+  }
+  ManagedVxlanSegment {
+    edges { node { id } }
+  }
 }

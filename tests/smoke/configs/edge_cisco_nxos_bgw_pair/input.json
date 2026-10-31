@@ -2490,7 +2490,180 @@
                 }
               }
             }
+          },
+          "shared_capabilities": {
+            "edges": [
+              {
+                "node": {
+                  "__typename": "ManagedVRF",
+                  "namespace": {
+                    "node": {
+                      "name": {
+                        "value": "VRF_A"
+                      },
+                      "l3_vni": {
+                        "value": 50001
+                      },
+                      "namespace_type": {
+                        "value": "prod"
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "ManagedVRF",
+                  "namespace": {
+                    "node": {
+                      "name": {
+                        "value": "INTERNET"
+                      },
+                      "l3_vni": {
+                        "value": 60002
+                      },
+                      "namespace_type": {
+                        "value": "internet"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
           }
+        }
+      }
+    ]
+  },
+  "environment_prefixes_prod": {
+    "edges": [
+      {
+        "node": {
+          "prefix": {
+            "value": "10.100.0.0/24"
+          },
+          "ip_namespace": {
+            "node": {
+              "name": {
+                "value": "VRF_A"
+              },
+              "namespace_type": {
+                "value": "prod"
+              }
+            }
+          }
+        }
+      },
+      {
+        "node": {
+          "prefix": {
+            "value": "10.100.8.0/24"
+          },
+          "ip_namespace": {
+            "node": {
+              "name": {
+                "value": "VRF_A"
+              },
+              "namespace_type": {
+                "value": "prod"
+              }
+            }
+          }
+        }
+      }
+    ]
+  },
+  "environment_prefixes_non_prod": {
+    "edges": []
+  },
+  "environment_prefixes_internet": {
+    "edges": [
+      {
+        "node": {
+          "prefix": {
+            "value": "203.0.113.0/24"
+          },
+          "ip_namespace": {
+            "node": {
+              "name": {
+                "value": "INTERNET"
+              },
+              "namespace_type": {
+                "value": "internet"
+              }
+            }
+          }
+        }
+      }
+    ]
+  },
+  "environment_prefixes_management": {
+    "edges": []
+  },
+  "ManagedVRF": {
+    "edges": [
+      {
+        "node": {
+          "namespace": {
+            "node": {
+              "name": {
+                "value": "VRF_A"
+              },
+              "namespace_type": {
+                "value": "prod"
+              }
+            }
+          },
+          "shared_devices": {
+            "edges": [
+              {
+                "node": {
+                  "name": {
+                    "value": "dc1-edge-01"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "node": {
+          "namespace": {
+            "node": {
+              "name": {
+                "value": "INTERNET"
+              },
+              "namespace_type": {
+                "value": "internet"
+              }
+            }
+          },
+          "shared_devices": {
+            "edges": [
+              {
+                "node": {
+                  "name": {
+                    "value": "dc1-edge-01"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "ManagedVxlanSegment": {
+    "edges": [
+      {
+        "node": {
+          "id": "segment-1"
+        }
+      },
+      {
+        "node": {
+          "id": "segment-2"
         }
       }
     ]

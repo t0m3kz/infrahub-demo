@@ -1,4 +1,5 @@
 {%- if capabilities is not defined or capabilities.bgp_enabled is not defined or capabilities.bgp_enabled %}
+{%- from 'common/bgp_filter_objects.j2' import bgp_filter_attachments %}
 {%- for bgp_config in bgp %}
 router bgp {{ bgp_config.local_as.asn }}
   router-id {{ bgp_config.router_ip }}
@@ -126,7 +127,8 @@ router bgp {{ bgp_config.local_as.asn }}
 {#- I: `maximum-prefix <max> [warning-only]` under the neighbour's address family (Cisco Nexus 9000 Unicast Routing
     guide, BGP neighbour); not checked against the guide in this change. The limit is derived from the model
     (utils/bgp_expectation.py). `warning-only` while routing_filter_enforce is false: it logs and never tears the
-    session down. #}
+    session down. U under `address-family l2vpn evpn`: that the EVPN neighbour takes the command and counts type-5
+    routes the same way was not checked. #}
       maximum-prefix {{ _max.limit }}{{ ' warning-only' if _max.warning_only }}
 {%- endif %}
 {%- if _af != 'evpn' %}
@@ -134,6 +136,7 @@ router bgp {{ bgp_config.local_as.asn }}
       route-map {{ attached.map }} {{ attached.direction }}
 {%- endfor %}
 {%- endif %}
+{{- bgp_filter_attachments(session, _af, '      ', true) }}
     !
 {%- endfor %}
 {%- endfor %}
@@ -219,6 +222,7 @@ router bgp {{ bgp_config.local_as.asn }}
         route-map RM-{{ session.name }}-IN in
         route-map RM-{{ session.name }}-OUT out
 {%- endif %}
+{{- bgp_filter_attachments(session, _af, '        ', true) }}
 {%- endfor %}
   !
 {%- endfor %}

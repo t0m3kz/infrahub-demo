@@ -11,10 +11,20 @@ feature interface-vlan
 feature lacp
 feature vpc
 feature lldp
+feature nv overlay
+feature vn-segment-vlan-based
+feature nve
+feature fabric forwarding
 nv overlay evpn
 !
 
 ! VLANs
+vlan 100
+  name Customer-A
+!
+vlan 200
+  name Customer-A
+!
 !
 !
 ! Interfaces
@@ -33,6 +43,9 @@ interface Ethernet2
 interface Ethernet10
   no shutdown
 
+  switchport
+  switchport mode trunk
+  switchport trunk allowed vlan 100,200
 !
 interface Loopback0
   no shutdown
@@ -40,8 +53,37 @@ interface Loopback0
 
 !
 ! Route-maps
+ip prefix-list PL-UNDERLAY-IPV4-IN seq 10 permit 10.0.0.0/24 le 32
+ip prefix-list PL-UNDERLAY-IPV4-IN seq 20 permit 10.0.0.250/32
+route-map RM-UNDERLAY-IPV4-IN permit 10
+  match ip address prefix-list PL-UNDERLAY-IPV4-IN
+!
+ip prefix-list PL-UNDERLAY-IPV4-OUT seq 10 permit 10.0.0.1/32
+route-map RM-UNDERLAY-IPV4-OUT permit 10
+  match ip address prefix-list PL-UNDERLAY-IPV4-OUT
+!
+ip prefix-list PL-OVERLAY-EVPN-IN seq 10 permit 10.100.0.0/24
+ip prefix-list PL-OVERLAY-EVPN-IN seq 20 permit 10.100.8.0/24
+route-map RM-OVERLAY-EVPN-IN permit 10
+  match evpn route-type 5
+  match ip address prefix-list PL-OVERLAY-EVPN-IN
+route-map RM-OVERLAY-EVPN-IN deny 30
+  match evpn route-type 5
+route-map RM-OVERLAY-EVPN-IN permit 40
+!
+ip prefix-list PL-OVERLAY-EVPN-OUT seq 10 permit 10.100.0.0/24
+ip prefix-list PL-OVERLAY-EVPN-OUT seq 20 permit 10.100.8.0/24
+route-map RM-OVERLAY-EVPN-OUT permit 10
+  match evpn route-type 5
+  match ip address prefix-list PL-OVERLAY-EVPN-OUT
+route-map RM-OVERLAY-EVPN-OUT deny 30
+  match evpn route-type 5
+route-map RM-OVERLAY-EVPN-OUT permit 40
+!
 route-map RM-CONN-2-BGP permit 10
   match interface loopback0
+!
+route-map RM-VRF-DIRECT-2-EVPN permit 10
 !
 !
 ! OSPF Configuration
@@ -81,7 +123,9 @@ router bgp 65001
     inherit peer-session UNDERLAY-PEERS-SESSION
     address-family ipv4 unicast
       inherit peer-policy UNDERLAY-PEERS-POLICY 1
-      maximum-prefix 256
+      maximum-prefix 257
+      route-map RM-UNDERLAY-IPV4-IN in
+      route-map RM-UNDERLAY-IPV4-OUT out
     !
   neighbor 10.1.0.2
     remote-as 65101
@@ -89,7 +133,9 @@ router bgp 65001
     inherit peer-session UNDERLAY-PEERS-SESSION
     address-family ipv4 unicast
       inherit peer-policy UNDERLAY-PEERS-POLICY 1
-      maximum-prefix 256
+      maximum-prefix 257
+      route-map RM-UNDERLAY-IPV4-IN in
+      route-map RM-UNDERLAY-IPV4-OUT out
     !
   neighbor 10.0.0.100
     remote-as 65100
@@ -97,6 +143,9 @@ router bgp 65001
     inherit peer-session EVPN-OVERLAY-SESSION
     address-family l2vpn evpn
       inherit peer-policy EVPN-OVERLAY-POLICY 1
+      maximum-prefix 1530
+      route-map RM-OVERLAY-EVPN-IN in
+      route-map RM-OVERLAY-EVPN-OUT out
     !
   neighbor 10.0.0.101
     remote-as 65101
@@ -104,9 +153,94 @@ router bgp 65001
     inherit peer-session EVPN-OVERLAY-SESSION
     address-family l2vpn evpn
       inherit peer-policy EVPN-OVERLAY-POLICY 1
+      maximum-prefix 1530
+      route-map RM-OVERLAY-EVPN-IN in
+      route-map RM-OVERLAY-EVPN-OUT out
     !
+  vrf VRF_A
+    address-family ipv4 unicast
+      advertise l2vpn evpn
+      redistribute direct route-map RM-VRF-DIRECT-2-EVPN
+  !
 !
 
+!
+!
+! VXLAN Configuration (netlab-style multivendor)
+!
+!
+! VRF Contexts (symmetric IRB — one L3 VNI per tenant)
+!
+vrf context VRF_A
+  vni 50001
+  rd 10.0.0.1:50001
+  address-family ipv4 unicast
+    route-target both 65000:50001
+    route-target both 65000:50001 evpn
+!
+interface nve1
+  source-interface Loopback0
+  host-reachability protocol bgp
+  member vni 10100
+    suppress-arp
+    ingress-replication protocol bgp
+  member vni 10200
+    suppress-arp
+    ingress-replication protocol bgp
+  member vni 50001 associate-vrf
+  no shutdown
+!
+!
+! EVPN Configuration
+!
+evpn
+  vni 10100 l2
+    rd 10.0.0.1:10100
+    route-target import 65000:10100
+    route-target export 65000:10100
+  vni 10200 l2
+    rd 10.0.0.1:10200
+    route-target import 65000:10200
+    route-target export 65000:10200
+!
+!
+! VLAN to VNI mapping
+!
+vlan 100
+  vn-segment 10100
+vlan 200
+  vn-segment 10200
+!
+! L3 VNI Transit SVIs (symmetric IRB — no host addressing, forwarding only)
+!
+vlan 3900
+  name L3VNI_VRF_A
+  vn-segment 50001
+!
+interface Vlan3900
+  description L3VNI transit SVI for VRF VRF_A
+  vrf member VRF_A
+  ip forward
+  mtu 9214
+  no shutdown
+!
+! Anycast Gateway — identical MAC on every leaf/border-leaf in the fabric
+fabric forwarding anycast-gateway-mac 001c7300dc01
+!
+! VLAN SVI Configuration
+!
+interface Vlan100
+  description Customer-A
+  vrf member VRF_A
+  ip address 10.100.0.1/24
+  fabric forwarding mode anycast-gateway
+  no shutdown
+!
+interface Vlan200
+  description Customer-A
+  ip address 10.200.0.1/24
+  fabric forwarding mode anycast-gateway
+  no shutdown
 !
 !
 

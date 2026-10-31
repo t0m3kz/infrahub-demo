@@ -1,0 +1,81 @@
+{#- The prefix-lists and route-maps of the BGP route protection (session.policy.filters, composed by
+    transforms/helpers/bgp_policy.py, derived by utils/bgp_expectation.py), for the three CLI platforms that share this
+    syntax: NX-OS, Arista EOS and IOS XE. Defined at column 0 BEFORE `router bgp`, once per route-map name however many
+    neighbours name it. A neighbour names the map only when the filter is attached (routing_filter_enforce); a staged
+    filter is rendered and unattached.
+
+    Evidence (per line):
+    - I: `ip prefix-list <name> seq <n> permit <prefix> [le <len>]` and `ipv6 prefix-list ...`; `route-map <name> permit|deny
+      <seq>` with `match ip address prefix-list` / `match ipv6 address prefix-list`, `set local-preference`,
+      `set metric` and `set community no-export additive`. Inferred from the same constructs the NX-OS templates already
+      carry as documented (cisco_nxos_route_maps.j2); the EOS and IOS spellings are the same by general knowledge and
+      were not checked against their guides in this change.
+    - U: the EVPN route-map (`evpn` true, NX-OS only). `match evpn route-type 5` is the only keyword used; its spelling
+      and that a route-map on the `l2vpn evpn` neighbour matches type-5 prefixes against `match ip address prefix-list`
+      need a lab. It is rendered only when attached; EOS and IOS XE render no EVPN filter at all (no keyword known).
+    An empty prefix set is a deny-all map; the implicit deny at the end of a route-map does the rest. -#}
+{%- macro bgp_filter_objects(bgp, indent, evpn=false) -%}
+{%- set _seen = namespace(maps=[]) -%}
+{%- for bgp_config in bgp or [] %}
+{%- for session in bgp_config.sessions %}
+{%- for flt in session.policy.filters if flt.map not in _seen.maps and (flt.family != 'evpn' or (evpn and flt.attached)) %}
+{%- set _seen.maps = _seen.maps + [flt.map] %}
+{%- set _v4 = flt.entries | selectattr('family', 'equalto', 'ipv4') | list %}
+{%- set _v6 = flt.entries | selectattr('family', 'equalto', 'ipv6') | list %}
+{%- for e in _v4 %}
+ip prefix-list {{ flt.list }} seq {{ loop.index * 10 }} permit {{ e.prefix }}{{ ' le ' ~ e.le if e.le is not none }}
+{%- endfor %}
+{%- for e in _v6 %}
+ipv6 prefix-list {{ flt.list6 }} seq {{ loop.index * 10 }} permit {{ e.prefix }}{{ ' le ' ~ e.le if e.le is not none }}
+{%- endfor %}
+{%- set _sets %}
+{%- if flt.sets.get('local_pref') %}
+{{ indent }}set local-preference {{ flt.sets.local_pref }}
+{%- endif %}
+{%- if flt.sets.get('med') %}
+{{ indent }}set metric {{ flt.sets.med }}
+{%- endif %}
+{%- if flt.sets.get('no_export') %}
+{{ indent }}set community no-export additive
+{%- endif %}
+{%- endset %}
+{%- if flt.family == 'evpn' %}
+{%- if _v4 %}
+route-map {{ flt.map }} permit 10
+{{ indent }}match evpn route-type 5
+{{ indent }}match ip address prefix-list {{ flt.list }}{{ _sets }}
+{%- endif %}
+{%- if _v6 %}
+route-map {{ flt.map }} permit 11
+{{ indent }}match evpn route-type 5
+{{ indent }}match ipv6 address prefix-list {{ flt.list6 }}{{ _sets }}
+{%- endif %}
+route-map {{ flt.map }} deny 30
+{{ indent }}match evpn route-type 5
+route-map {{ flt.map }} permit 40{{ _sets }}
+{%- elif _v4 or _v6 %}
+route-map {{ flt.map }} permit 10
+{{ indent }}match {{ 'ipv6' if flt.family == 'ipv6' else 'ip' }} address prefix-list {{ flt.list6 if flt.family == 'ipv6' else flt.list }}{{ _sets }}
+{%- else %}
+route-map {{ flt.map }} deny 10
+{%- endif %}
+!
+{%- endfor %}
+{%- endfor %}
+{%- endfor %}
+{%- endmacro %}
+
+{#- The neighbour lines of one address family: the filter map where it is attached, a staged comment where it is not.
+    `prefix` is what precedes `route-map` on the line (`neighbor <peer> ` where the AF block names the neighbour on
+    each line: EOS, IOS). A staged EVPN filter is not even rendered (U), a staged unicast one is. -#}
+{%- macro bgp_filter_attachments(session, family, indent, evpn=false, prefix='') -%}
+{%- for flt in session.policy.filters if flt.family == family %}
+{%- if flt.attached and (flt.family != 'evpn' or evpn) %}
+{{ indent }}{{ prefix }}route-map {{ flt.map }} {{ flt.direction }}
+{%- elif flt.family == 'evpn' %}
+{{ indent }}! staged or unsupported: the derived EVPN filter {{ flt.map }} ({{ flt.direction }}) is not rendered (U)
+{%- else %}
+{{ indent }}! staged (routing_filter_enforce false): route-map {{ flt.map }} {{ flt.direction }} is not attached
+{%- endif %}
+{%- endfor %}
+{%- endmacro %}

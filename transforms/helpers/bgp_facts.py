@@ -18,13 +18,18 @@ from collections.abc import Iterable, Mapping
 from ipaddress import IPv4Network, IPv6Network, collapse_addresses, ip_network
 from typing import Any
 
-from transforms.helpers.bgp_policy import compose_policy
+from transforms.helpers.bgp_policy import compose_policy, name_filters
 from utils.bgp_expectation import Device, DeviceAddrs, ExternalPolicy, Fabric, expect_session
+from utils.exchange_transit import INTERNET_TYPE
+from utils.limits import DEFAULT_NAMESPACE
 from utils.segment_addressing import segment_hosting_candidates
+from utils.vrf_demand import VRF_KIND, device_memberships
 
 LOOPBACK_ROLES = frozenset({"loopback", "loopback-vtep"})
 VIP_ROLE = "multisite-vip"
 VIP_ROOT = "DcimVirtualInterface"
+ENVIRONMENT_PREFIX_ROOT = "environment_prefixes_"
+SEGMENT_ROOT = "ManagedVxlanSegment"
 
 
 def _address(interface: Mapping[str, Any]) -> str | None:
@@ -99,6 +104,46 @@ def _vip_devices(vip_interfaces: Iterable[Mapping[str, Any]] | None) -> tuple[fr
     return frozenset(vips), devices
 
 
+def environment_prefixes(extra_roots: Mapping[str, Any]) -> tuple[dict[str, frozenset[str]], frozenset[str]]:
+    """The routed prefixes per environment namespace and the namespaces matched as ranges.
+
+    Read off the ``environment_prefixes_*`` roots (queries/config/*.gql): every ``IpamPrefix`` of a PROD, NON-PROD,
+    INTERNET or MANAGEMENT namespace is a prefix a VRF of that namespace may carry as an EVPN type-5 route. The
+    internet namespace is matched as ranges: the SNAT /32s ride inside the public aggregate.
+    """
+    found: dict[str, set[str]] = {}
+    ranges: set[str] = set()
+    for key, prefixes in extra_roots.items():
+        if not key.startswith(ENVIRONMENT_PREFIX_ROOT):
+            continue
+        for prefix in prefixes or []:
+            namespace = prefix.get("ip_namespace") or {}
+            name = namespace.get("name")
+            if not name or name == DEFAULT_NAMESPACE or not prefix.get("prefix"):
+                continue
+            found.setdefault(name, set()).add(prefix["prefix"])
+            if namespace.get("namespace_type") == INTERNET_TYPE:
+                ranges.add(name)
+    return {name: frozenset(prefixes) for name, prefixes in found.items()}, frozenset(ranges)
+
+
+def default_exits(extra_roots: Mapping[str, Any], gateways: Iterable[str]) -> dict[str, frozenset[str]]:
+    """Namespace -> the devices that originate its default route: border gateways in an internet VRF instance.
+
+    ``gateways`` are the devices that carry a multisite VIP (utils/vrf_demand.py ``internet_exits``: only a border
+    gateway exits to the internet). The instances are the ``ManagedVRF`` root.
+    """
+    border_gateways = set(gateways)
+    exits: dict[str, set[str]] = {}
+    for instance in extra_roots.get(VRF_KIND) or []:
+        namespace = instance.get("namespace") or {}
+        if namespace.get("namespace_type") != INTERNET_TYPE or not namespace.get("name"):
+            continue
+        members = {device.get("name") for device in instance.get("shared_devices") or []}
+        exits.setdefault(namespace["name"], set()).update(members & border_gateways)
+    return {name: frozenset(devices) for name, devices in exits.items()}
+
+
 def build_fabric(
     device_data: Mapping[str, Any],
     extra_roots: Mapping[str, Any],
@@ -109,10 +154,15 @@ def build_fabric(
 ) -> Fabric:
     """The fabric facts of one device's query data."""
     vips, devices = _vip_devices(extra_roots.get(VIP_ROOT))
+    namespace_prefixes, range_namespaces = environment_prefixes(extra_roots)
     return Fabric(
         loopback_ranges=loopback_ranges(device_data.get("deployment")),
         vips=vips,
         devices=devices,
+        namespace_prefixes=namespace_prefixes,
+        range_namespaces=range_namespaces,
+        default_exits=default_exits(extra_roots, devices),
+        l2vni_count=len(extra_roots.get(SEGMENT_ROOT) or []),
         external={
             name: ExternalPolicy(frozenset(policy.get("in") or []), frozenset(policy.get("out") or []))
             for name, policy in (external_policies or {}).items()
@@ -122,12 +172,20 @@ def build_fabric(
     )
 
 
-def build_device(device_data: Mapping[str, Any]) -> Device:
-    """The device whose sessions are derived: its name, role and own loopbacks and VIPs."""
+def build_device(device_data: Mapping[str, Any], local_only: Iterable[str] = ()) -> Device:
+    """The device whose sessions are derived: name, role, own loopbacks and VIPs, VRF memberships.
+
+    ``local_only``: prefixes it holds for itself and must not originate into EVPN (a leaf's transit /29s).
+    """
+    namespaces = {
+        (membership.get("namespace") or {}).get("name") for membership in device_memberships(dict(device_data))
+    }
     return Device(
         str(device_data.get("name") or ""),
         str(device_data.get("role") or ""),
         device_addrs(device_data.get("interfaces")),
+        namespaces=frozenset(name for name in namespaces if name and name != DEFAULT_NAMESPACE),
+        local_only=frozenset(local_only),
     )
 
 
@@ -149,8 +207,10 @@ def annotate_bgp_policy(
         internet_prefixes=config.get("internet_prefixes"),
         unmanaged=unmanaged,
     )
-    device = build_device(device_data)
+    device = build_device(device_data, local_only=config.get("leaf_transit_prefixes") or [])
     enforce = routing_filter_enforce(device_data.get("deployment"))
     for bgp_config in bgp:
-        for session in bgp_config.get("sessions") or []:
+        sessions = bgp_config.get("sessions") or []
+        for session in sessions:
             session["policy"] = compose_policy(session, expect_session(session, device, fabric), enforce=enforce)
+        name_filters(sessions)

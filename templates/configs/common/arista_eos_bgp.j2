@@ -1,3 +1,4 @@
+{%- from 'common/bgp_filter_objects.j2' import bgp_filter_attachments, bgp_filter_objects %}
 {%- macro render_bgp(bgp, loopback_name) %}
 {%- for bgp_config in bgp %}
 {#- D: a route-map is global configuration on EOS, so the per-neighbour maps sit at column 0 before `router bgp`, not
@@ -14,6 +15,9 @@ route-map {{ session.policy.outbound.own.name }} permit 10
 !
 {%- endif %}
 {%- endfor %}
+{#- The route protection's prefix-lists and route-maps (common/bgp_filter_objects.j2, evidence per line there). EOS
+    renders no EVPN filter: no keyword for the EVPN route type is known (U). -#}
+{{- bgp_filter_objects([bgp_config], '   ', false) }}
 router bgp {{ bgp_config.local_as.asn }}
    router-id {{ bgp_config.router_ip }}
 {%- if bgp_config.get('cluster_id') %}
@@ -110,6 +114,9 @@ router bgp {{ bgp_config.local_as.asn }}
       neighbor {{ session.neighbor }} activate
 {%- endif %}
 {%- endfor %}
+{%- for session in bgp_config.sessions if not session.get('vrf') and 'ipv4' in (session.address_families | default([])) %}
+{{- bgp_filter_attachments(session, 'ipv4', '      ', false, 'neighbor ' ~ session.neighbor ~ ' ') }}
+{%- endfor %}
    !
 {%- if bgp_config.has_ipv6 %}
    address-family ipv6 unicast
@@ -123,6 +130,9 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- if session.peer_group is not defined and 'ipv6' in (session.address_families | default([])) %}
       neighbor {{ session.neighbor }} activate
 {%- endif %}
+{%- endfor %}
+{%- for session in bgp_config.sessions if not session.get('vrf') and 'ipv6' in (session.address_families | default([])) %}
+{{- bgp_filter_attachments(session, 'ipv6', '      ', false, 'neighbor ' ~ session.neighbor ~ ' ') }}
 {%- endfor %}
    !
 {%- endif %}
@@ -148,6 +158,9 @@ router bgp {{ bgp_config.local_as.asn }}
       neighbor {{ session.neighbor }} next-hop-unchanged
 {%- endif %}
 {%- endif %}
+{%- endfor %}
+{%- for session in bgp_config.sessions if not session.get('vrf') and 'evpn' in (session.address_families | default([])) %}
+{{- bgp_filter_attachments(session, 'evpn', '      ', false) }}
 {%- endfor %}
 {#- VRF neighbours: eBGP handoffs whose local address sits in a tenant
     namespace (transforms/helpers/bgp.py sets session.vrf). They stay out of
@@ -185,6 +198,7 @@ router bgp {{ bgp_config.local_as.asn }}
       address-family {{ _af }}
 {%- for session in _af_sessions %}
          neighbor {{ session.neighbor }} activate
+{{- bgp_filter_attachments(session, _af, '         ', false, 'neighbor ' ~ session.neighbor ~ ' ') }}
 {%- endfor %}
 {%- endfor %}
 {%- endfor %}

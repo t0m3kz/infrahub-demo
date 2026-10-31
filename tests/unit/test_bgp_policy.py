@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 from transforms.helpers.bgp import add_template_fields
-from transforms.helpers.bgp_policy import DCI_IN_MAP, FABRIC_OUT_MAP, compose_policy
-from utils.bgp_expectation import DCI_UNDERLAY, UNDERLAY, Expectation, FamilyPolicy
+from transforms.helpers.bgp_policy import DCI_IN_MAP, FABRIC_OUT_MAP, compose_policy, name_filters
+from utils.bgp_expectation import DCI_UNDERLAY, EXTERNAL, FABRIC, OVERLAY, UNDERLAY, Entry, Expectation, FamilyPolicy
 
 
 def test_a_session_without_policy_attributes_attaches_nothing() -> None:
@@ -19,6 +19,7 @@ def test_a_session_without_policy_attributes_attaches_nothing() -> None:
         "max": {},
         "max_total": None,
         "enforced": False,
+        "filters": [],
     }
 
 
@@ -92,3 +93,89 @@ def test_an_expectation_leaves_the_own_maps_and_shared_maps_alone() -> None:
     session = {"name": "d1", "local_pref": 150, "export_local_only": True}
     policy = compose_policy(session, _expectation(DCI_UNDERLAY, ipv6=4), enforce=True)
     assert [a["map"] for a in policy["attach"]] == ["d1-LOCAL-PREF-IN", FABRIC_OUT_MAP]
+
+
+def _underlay_expectation(inbound: frozenset[Entry] | None, outbound: frozenset[Entry] | None) -> Expectation:
+    """An IPv4 underlay expectation with the given sets."""
+    return Expectation(UNDERLAY, {"ipv4": FamilyPolicy(inbound, outbound, max_prefix=256)})
+
+
+POOL_ENTRY = Entry("10.250.0.0/24", 32)
+OWN_ENTRY = Entry("10.250.0.11/32")
+
+
+def test_a_staged_filter_is_composed_but_not_attached_and_the_old_maps_stay() -> None:
+    """Staged: the filter objects exist, the neighbour keeps naming the maps it names today."""
+    session = {"name": "u1", "local_pref": 150}
+    policy = compose_policy(session, _underlay_expectation(frozenset({POOL_ENTRY}), frozenset({OWN_ENTRY})))
+    assert [(f["direction"], f["family"], f["attached"]) for f in policy["filters"]] == [
+        ("in", "ipv4", False),
+        ("out", "ipv4", False),
+    ]
+    assert [a["map"] for a in policy["attach"]] == ["u1-LOCAL-PREF-IN"]
+
+
+def test_an_attached_filter_replaces_the_maps_of_its_direction_and_carries_their_sets() -> None:
+    """Enforced: one map per direction; the local-preference, MED and no-export move into the filter's sets."""
+    session = {"name": "d1", "local_pref": 150, "med": 7, "export_local_only": True, "dci_inbound": True}
+    policy = compose_policy(
+        session,
+        _underlay_expectation(frozenset({POOL_ENTRY}), frozenset({OWN_ENTRY})),
+        enforce=True,
+    )
+    by_direction = {f["direction"]: f for f in policy["filters"]}
+    assert by_direction["in"]["sets"] == {"local_pref": 150, "no_export": True}
+    assert by_direction["out"]["sets"] == {"med": 7}
+    assert policy["attach"] == []
+    assert policy["inbound"]["own"] is None
+    assert policy["outbound"]["own"] is None
+
+
+def test_one_family_not_derivable_leaves_the_whole_direction_unfiltered() -> None:
+    """All families of a direction or none: a fabric session with IPv6 and an underivable EVPN stays unfiltered."""
+    expectation = Expectation(
+        FABRIC,
+        {
+            "ipv6": FamilyPolicy(frozenset({OWN_ENTRY}), frozenset({OWN_ENTRY})),
+            "evpn": FamilyPolicy(None, None),
+        },
+    )
+    assert compose_policy({"name": "f"}, expectation, enforce=True)["filters"] == []
+
+
+def test_a_default_route_is_added_to_the_entries_of_the_family_that_may_carry_it() -> None:
+    """EVPN: both defaults, sorted after nothing else is lost; a unicast family: its own default."""
+    allowed = FamilyPolicy(frozenset({Entry("10.100.0.0/24")}), frozenset(), default_in=True)
+    policy = compose_policy({"name": "o"}, Expectation(OVERLAY, {"evpn": allowed}), enforce=True)
+    inbound = next(f for f in policy["filters"] if f["direction"] == "in")
+    assert [e["prefix"] for e in inbound["entries"]] == ["0.0.0.0/0", "10.100.0.0/24", "::/0"]
+    outbound = next(f for f in policy["filters"] if f["direction"] == "out")
+    assert outbound["entries"] == []
+
+
+def test_external_sessions_get_no_derived_filter() -> None:
+    """The exchange_policies maps of an external session are the edge template's: no filter is composed for them."""
+    expectation = Expectation(EXTERNAL, {"ipv4": FamilyPolicy(frozenset({OWN_ENTRY}), frozenset(), max_prefix=3)})
+    policy = compose_policy({"name": "x"}, expectation, enforce=True)
+    assert policy["filters"] == []
+    assert policy["max"] == {"ipv4": {"limit": 3, "warning_only": False}}
+
+
+def test_equal_content_shares_one_name_and_different_content_gets_a_digest() -> None:
+    """Hundred spine neighbours name one route-map; the same base with another set is told apart by a digest."""
+    expectation = _underlay_expectation(frozenset({POOL_ENTRY}), frozenset({OWN_ENTRY}))
+    sessions = [
+        {"policy": compose_policy({"name": "a"}, expectation, enforce=True)},
+        {"policy": compose_policy({"name": "b"}, expectation, enforce=True)},
+    ]
+    name_filters(sessions)
+    assert {f["map"] for s in sessions for f in s["policy"]["filters"]} == {
+        "RM-UNDERLAY-IPV4-IN",
+        "RM-UNDERLAY-IPV4-OUT",
+    }
+    sessions.append({"policy": compose_policy({"name": "c", "local_pref": 90}, expectation, enforce=True)})
+    name_filters(sessions)
+    inbound = {f["map"] for s in sessions for f in s["policy"]["filters"] if f["direction"] == "in"}
+    assert "RM-UNDERLAY-IPV4-IN" not in inbound
+    assert len(inbound) == 2
+    assert all(m.startswith("RM-UNDERLAY-IPV4-IN-") for m in inbound)

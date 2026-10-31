@@ -15,7 +15,9 @@ from tests.smoke.fixture_builders.common import (
     _write_data_fixture,
 )
 from tests.smoke.fixture_builders.fabric import _INLINE_SEGMENT_KWARGS, _make_inline_segment_node, build_device_data
+from tests.smoke.fixture_builders.route_protection_roots import TENANT_NAMESPACE, add_environment_roots
 from tests.smoke.fixture_builders.transit import build_exchange_transit_bl_data
+from tests.smoke.fixture_builders.vrf import _vrf_node
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.edge import Edge
 
@@ -750,6 +752,20 @@ def _enforce_route_protection(data: dict, *, device_name: str, sibling: str) -> 
     deployment = data["DcimDevice"]["edges"][0]["node"]["deployment"]["node"]
     deployment["routing_filter_enforce"] = _v(True)
     deployment["loopback_pool"] = _node({"resources": _edges([{"prefix": _v("2001:db8:100::/120")}])})
+    # The edge is a border gateway in the INTERNET instance (its default exit) and a member of the tenant one.
+    add_environment_roots(data, tenant_members=[device_name], internet_members=[device_name])
+    node = data["DcimDevice"]["edges"][0]["node"]
+    memberships = [
+        {"namespace": {"name": TENANT_NAMESPACE, "l3_vni": 50001, "namespace_type": "prod"}},
+        {"namespace": {"name": "INTERNET", "l3_vni": 60002, "namespace_type": "internet"}},
+    ]
+    existing = {
+        edge["node"]["namespace"]["node"]["name"]["value"]
+        for edge in (node.get("shared_capabilities") or {}).get("edges") or []
+    }
+    node.setdefault("shared_capabilities", {"edges": []})["edges"].extend(
+        {"node": _vrf_node(m["namespace"])} for m in memberships if m["namespace"]["name"] not in existing
+    )
     data["DcimVirtualInterface"] = _edges(
         [
             _vip_interface(device_name, "edge", "2001:db8:100::f1/128", "2001:db8:100::1/128"),

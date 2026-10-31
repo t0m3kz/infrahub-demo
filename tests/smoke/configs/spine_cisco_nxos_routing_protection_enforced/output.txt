@@ -33,6 +33,41 @@ interface Loopback0
 
 !
 ! Route-maps
+ip prefix-list PL-UNDERLAY-IPV4-IN seq 10 permit 10.0.0.0/24 le 32
+ip prefix-list PL-UNDERLAY-IPV4-IN seq 20 permit 10.0.0.250/32
+route-map RM-UNDERLAY-IPV4-IN permit 10
+  match ip address prefix-list PL-UNDERLAY-IPV4-IN
+!
+ip prefix-list PL-UNDERLAY-IPV4-OUT seq 10 permit 10.0.0.0/24 le 32
+ip prefix-list PL-UNDERLAY-IPV4-OUT seq 20 permit 10.0.0.250/32
+route-map RM-UNDERLAY-IPV4-OUT permit 10
+  match ip address prefix-list PL-UNDERLAY-IPV4-OUT
+!
+ip prefix-list PL-OVERLAY-EVPN-IN seq 10 permit 10.100.0.0/24
+ip prefix-list PL-OVERLAY-EVPN-IN seq 20 permit 10.100.8.0/24
+ip prefix-list PL-OVERLAY-EVPN-IN seq 30 permit 203.0.113.0/24 le 32
+route-map RM-OVERLAY-EVPN-IN permit 10
+  match evpn route-type 5
+  match ip address prefix-list PL-OVERLAY-EVPN-IN
+route-map RM-OVERLAY-EVPN-IN deny 30
+  match evpn route-type 5
+route-map RM-OVERLAY-EVPN-IN permit 40
+!
+ip prefix-list PL-OVERLAY-EVPN-OUT seq 10 permit 0.0.0.0/0
+ip prefix-list PL-OVERLAY-EVPN-OUT seq 20 permit 10.100.0.0/24
+ip prefix-list PL-OVERLAY-EVPN-OUT seq 30 permit 10.100.8.0/24
+ip prefix-list PL-OVERLAY-EVPN-OUT seq 40 permit 203.0.113.0/24 le 32
+ipv6 prefix-list PL6-OVERLAY-EVPN-OUT seq 10 permit ::/0
+route-map RM-OVERLAY-EVPN-OUT permit 10
+  match evpn route-type 5
+  match ip address prefix-list PL-OVERLAY-EVPN-OUT
+route-map RM-OVERLAY-EVPN-OUT permit 11
+  match evpn route-type 5
+  match ipv6 address prefix-list PL6-OVERLAY-EVPN-OUT
+route-map RM-OVERLAY-EVPN-OUT deny 30
+  match evpn route-type 5
+route-map RM-OVERLAY-EVPN-OUT permit 40
+!
 route-map RM-CONN-2-BGP permit 10
   match interface loopback0
 !
@@ -76,7 +111,9 @@ router bgp 65001
     inherit peer-session UNDERLAY-PEERS-SESSION
     address-family ipv4 unicast
       inherit peer-policy UNDERLAY-PEERS-POLICY 1
-      maximum-prefix 256
+      maximum-prefix 257
+      route-map RM-UNDERLAY-IPV4-IN in
+      route-map RM-UNDERLAY-IPV4-OUT out
     !
   neighbor 10.1.0.2
     remote-as 65101
@@ -84,7 +121,9 @@ router bgp 65001
     inherit peer-session UNDERLAY-PEERS-SESSION
     address-family ipv4 unicast
       inherit peer-policy UNDERLAY-PEERS-POLICY 1
-      maximum-prefix 256
+      maximum-prefix 257
+      route-map RM-UNDERLAY-IPV4-IN in
+      route-map RM-UNDERLAY-IPV4-OUT out
     !
   neighbor 10.0.0.100
     remote-as 65100
@@ -92,6 +131,9 @@ router bgp 65001
     inherit peer-session EVPN-OVERLAY-SESSION
     address-family l2vpn evpn
       inherit peer-policy EVPN-OVERLAY-POLICY 1
+      maximum-prefix 2039
+      route-map RM-OVERLAY-EVPN-IN in
+      route-map RM-OVERLAY-EVPN-OUT out
     !
   neighbor 10.0.0.101
     remote-as 65101
@@ -99,6 +141,9 @@ router bgp 65001
     inherit peer-session EVPN-OVERLAY-SESSION
     address-family l2vpn evpn
       inherit peer-policy EVPN-OVERLAY-POLICY 1
+      maximum-prefix 2039
+      route-map RM-OVERLAY-EVPN-IN in
+      route-map RM-OVERLAY-EVPN-OUT out
     !
 !
 

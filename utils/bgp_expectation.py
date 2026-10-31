@@ -123,13 +123,17 @@ class DeviceAddrs:
 
 @dataclass(frozen=True)
 class Device:
-    """The device a session sits on: ``namespaces`` are its VRF memberships, ``default_exit`` where it originates 0/0."""
+    """The device a session sits on: ``namespaces`` are its VRF memberships.
+
+    ``local_only`` are routed prefixes the device holds for itself and must not originate into EVPN (a leaf's
+    firewall transit /29s for PBR: only the borders originate them, cisco_nxos_route_maps.j2 ``PL-XCHG-TRANSIT``).
+    """
 
     name: str
     role: str
     addrs: DeviceAddrs = field(default_factory=DeviceAddrs)
     namespaces: frozenset[str] = frozenset()
-    default_exit: frozenset[str] = frozenset()
+    local_only: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -147,9 +151,9 @@ class Fabric:
     ``loopback_ranges``: the CIDRs of the loopback pools (DC and zone) the fabric is sliced from. ``vips``: every
     EVPN Multi-Site VIP of the model. ``devices``: the far ends by device name (role, addresses, memberships). ``namespace_prefixes``:
     routed prefixes per namespace (segment prefixes and what is registered behind an external session).
-    ``default_exits``: the devices that originate the default route per namespace. ``transit_prefixes``: the firewall
-    and load-balancer transit /29s, never announced as type-5. ``l2vni_count``: the stretched and local L2 VNIs.
-    ``external``: ``ExternalPolicy`` by the session's ``local_interface``. ``internet_prefixes``: what the edge
+    ``range_namespaces``: namespaces whose prefixes are matched with ``le`` (the internet: SNAT /32s ride inside the
+    public aggregate). ``default_exits``: the devices that originate the default route per namespace.
+    ``l2vni_count``: the stretched and local L2 VNIs. ``external``: ``ExternalPolicy`` by the session's ``local_interface``. ``internet_prefixes``: what the edge
     announces upstream. ``unmanaged``: far ends the first class set leaves out (an office's SD-WAN edge).
     """
 
@@ -158,7 +162,7 @@ class Fabric:
     devices: Mapping[str, Device] = field(default_factory=dict)
     namespace_prefixes: Mapping[str, frozenset[str]] = field(default_factory=dict)
     default_exits: Mapping[str, frozenset[str]] = field(default_factory=dict)
-    transit_prefixes: frozenset[str] = frozenset()
+    range_namespaces: frozenset[str] = frozenset()
     l2vni_count: int = 0
     external: Mapping[str, ExternalPolicy] = field(default_factory=dict)
     internet_prefixes: frozenset[str] = frozenset()
@@ -262,9 +266,12 @@ def _default_allowed(sender: Device, namespaces: frozenset[str], exits: Mapping[
 
 
 def _type5(namespaces: frozenset[str], fabric: Fabric) -> frozenset[Entry]:
-    """The type-5 prefixes of the namespaces, minus the firewall and load-balancer transit /29s."""
-    prefixes = {p for ns in namespaces for p in fabric.namespace_prefixes.get(ns, frozenset())}
-    return frozenset(exact_entry(p) for p in prefixes - fabric.transit_prefixes)
+    """The type-5 prefixes of the namespaces: exact, but a range in a ``range_namespaces`` one (the internet)."""
+    return frozenset(
+        range_entry(p) if ns in fabric.range_namespaces else exact_entry(p)
+        for ns in namespaces
+        for p in fabric.namespace_prefixes.get(ns, frozenset())
+    )
 
 
 def _host_addresses(prefixes: frozenset[Entry]) -> int:
@@ -282,15 +289,24 @@ def evpn_route_bound(vteps: int, l2vnis: int, type5: frozenset[Entry]) -> int:
 
 
 def _evpn_family(session: Mapping[str, Any], device: Device, fabric: Fabric) -> FamilyPolicy:
-    """The EVPN address family: the type-5 prefixes of the member namespaces; a default only from a default exit."""
-    members = device.namespaces
-    prefixes = _type5(members, fabric)
+    """The EVPN address family: the type-5 prefixes of the namespaces; a default only from a default exit.
+
+    A relaying tier (spine) holds no VRF and passes every namespace's routes on, so its set is all of them; any other
+    device takes the namespaces it is a member of. What it must not originate (``Device.local_only``) is left out of
+    its outbound set only: it still accepts the border's copy of the same prefix. A query that carried no environment
+    prefixes at all gives "not derivable", never an empty set (which would filter every type-5 route out).
+    """
+    if not fabric.namespace_prefixes:
+        return FamilyPolicy(None, None)
     far = _far_end(session, fabric)
+    members = frozenset(fabric.namespace_prefixes) if _is_relay(device) else device.namespaces
+    accepted = _type5(members, fabric)
+    announced = frozenset(e for e in accepted if e.prefix not in device.local_only)
     vteps = _capacity(fabric.loopback_ranges, IPV4) + _capacity(fabric.loopback_ranges, IPV6)
-    bound = evpn_route_bound(min(vteps, BGP_MAX_PREFIX_CEILING), fabric.l2vni_count, prefixes)
+    bound = evpn_route_bound(min(vteps, BGP_MAX_PREFIX_CEILING), fabric.l2vni_count, accepted)
     return FamilyPolicy(
-        prefixes,
-        prefixes,
+        accepted,
+        announced,
         default_in=_default_allowed(far, members, fabric.default_exits),
         default_out=_default_allowed(device, members, fabric.default_exits),
         max_prefix=_bounded(bound),
@@ -306,6 +322,8 @@ def _far_end(session: Mapping[str, Any], fabric: Fabric) -> Device:
 def _vrf_family(family: str, session: Mapping[str, Any], device: Device, fabric: Fabric) -> FamilyPolicy:
     """An internal VRF session: the routed prefixes of its namespace of this family, a default only from an exit."""
     namespace = str(session.get("vrf"))
+    if namespace not in fabric.namespace_prefixes:
+        return FamilyPolicy(None, None)
     prefixes = frozenset(e for e in _type5(frozenset({namespace}), fabric) if e.family == family)
     far = _far_end(session, fabric)
     return FamilyPolicy(

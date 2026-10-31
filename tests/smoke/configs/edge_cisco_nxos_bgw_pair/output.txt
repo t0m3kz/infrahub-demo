@@ -20,6 +20,11 @@ vlan 150
   name Customer-A
 !
 !
+! VRF Contexts (BGP handoffs without an L3 VNI)
+vrf context VRF_A
+  address-family ipv4 unicast
+!
+!
 ! Interfaces
 interface Ethernet1
   no switchport
@@ -77,14 +82,117 @@ interface Loopback100
 !
 !
 ! Route-maps
+ipv6 prefix-list PL6-peer-dc1-edge-01-dc1-edge-02-ibgp-IPV6-IN seq 10 permit 2001:db8:100::2/128
+ipv6 prefix-list PL6-peer-dc1-edge-01-dc1-edge-02-ibgp-IPV6-IN seq 20 permit 2001:db8:100::f1/128
+route-map RM-peer-dc1-edge-01-dc1-edge-02-ibgp-IPV6-IN permit 10
+  match ipv6 address prefix-list PL6-peer-dc1-edge-01-dc1-edge-02-ibgp-IPV6-IN
+!
+ip prefix-list PL-peer-dc1-edge-01-dc1-edge-02-ibgp-EVPN-IN seq 10 permit 10.100.0.0/24
+ip prefix-list PL-peer-dc1-edge-01-dc1-edge-02-ibgp-EVPN-IN seq 20 permit 10.100.8.0/24
+ip prefix-list PL-peer-dc1-edge-01-dc1-edge-02-ibgp-EVPN-IN seq 30 permit 203.0.113.0/24 le 32
+route-map RM-peer-dc1-edge-01-dc1-edge-02-ibgp-EVPN-IN permit 10
+  match evpn route-type 5
+  match ip address prefix-list PL-peer-dc1-edge-01-dc1-edge-02-ibgp-EVPN-IN
+route-map RM-peer-dc1-edge-01-dc1-edge-02-ibgp-EVPN-IN deny 30
+  match evpn route-type 5
+route-map RM-peer-dc1-edge-01-dc1-edge-02-ibgp-EVPN-IN permit 40
+!
+ipv6 prefix-list PL6-peer-dc1-edge-01-dc1-edge-02-ibgp-IPV6-OUT seq 10 permit 2001:db8:100::1/128
+ipv6 prefix-list PL6-peer-dc1-edge-01-dc1-edge-02-ibgp-IPV6-OUT seq 20 permit 2001:db8:100::f1/128
+route-map RM-peer-dc1-edge-01-dc1-edge-02-ibgp-IPV6-OUT permit 10
+  match ipv6 address prefix-list PL6-peer-dc1-edge-01-dc1-edge-02-ibgp-IPV6-OUT
+!
+ip prefix-list PL-peer-dc1-edge-01-dc1-edge-02-ibgp-EVPN-OUT seq 10 permit 0.0.0.0/0
+ip prefix-list PL-peer-dc1-edge-01-dc1-edge-02-ibgp-EVPN-OUT seq 20 permit 10.100.0.0/24
+ip prefix-list PL-peer-dc1-edge-01-dc1-edge-02-ibgp-EVPN-OUT seq 30 permit 10.100.8.0/24
+ip prefix-list PL-peer-dc1-edge-01-dc1-edge-02-ibgp-EVPN-OUT seq 40 permit 203.0.113.0/24 le 32
+ipv6 prefix-list PL6-peer-dc1-edge-01-dc1-edge-02-ibgp-EVPN-OUT seq 10 permit ::/0
+route-map RM-peer-dc1-edge-01-dc1-edge-02-ibgp-EVPN-OUT permit 10
+  match evpn route-type 5
+  match ip address prefix-list PL-peer-dc1-edge-01-dc1-edge-02-ibgp-EVPN-OUT
+route-map RM-peer-dc1-edge-01-dc1-edge-02-ibgp-EVPN-OUT permit 11
+  match evpn route-type 5
+  match ipv6 address prefix-list PL6-peer-dc1-edge-01-dc1-edge-02-ibgp-EVPN-OUT
+route-map RM-peer-dc1-edge-01-dc1-edge-02-ibgp-EVPN-OUT deny 30
+  match evpn route-type 5
+route-map RM-peer-dc1-edge-01-dc1-edge-02-ibgp-EVPN-OUT permit 40
+!
+ipv6 prefix-list PL6-peer-dc1-edge-01-dc10-border-leaf-01-ebgp-IPV6-IN seq 10 permit 2001:db8:dc10::1/128
+ipv6 prefix-list PL6-peer-dc1-edge-01-dc10-border-leaf-01-ebgp-IPV6-IN seq 20 permit 2001:db8:dc10::f10/128
+route-map RM-peer-dc1-edge-01-dc10-border-leaf-01-ebgp-IPV6-IN permit 10
+  match ipv6 address prefix-list PL6-peer-dc1-edge-01-dc10-border-leaf-01-ebgp-IPV6-IN
+  set community no-export additive
+!
+ipv6 prefix-list PL6-peer-dc1-edge-01-dc10-border-leaf-01-ebgp-IPV6-OUT seq 10 permit 2001:db8:100::1/128
+ipv6 prefix-list PL6-peer-dc1-edge-01-dc10-border-leaf-01-ebgp-IPV6-OUT seq 20 permit 2001:db8:100::f1/128
+route-map RM-peer-dc1-edge-01-dc10-border-leaf-01-ebgp-IPV6-OUT permit 10
+  match ipv6 address prefix-list PL6-peer-dc1-edge-01-dc10-border-leaf-01-ebgp-IPV6-OUT
+!
+ipv6 prefix-list PL6-peer-dc1-edge-01-dc11-border-leaf-01-ebgp-IPV6-IN seq 10 permit 2001:db8:dc11::1/128
+ipv6 prefix-list PL6-peer-dc1-edge-01-dc11-border-leaf-01-ebgp-IPV6-IN seq 20 permit 2001:db8:dc11::f11/128
+route-map RM-peer-dc1-edge-01-dc11-border-leaf-01-ebgp-IPV6-IN permit 10
+  match ipv6 address prefix-list PL6-peer-dc1-edge-01-dc11-border-leaf-01-ebgp-IPV6-IN
+  set community no-export additive
+!
+ipv6 prefix-list PL6-peer-dc1-edge-01-dc11-border-leaf-01-ebgp-IPV6-OUT seq 10 permit 2001:db8:100::1/128
+ipv6 prefix-list PL6-peer-dc1-edge-01-dc11-border-leaf-01-ebgp-IPV6-OUT seq 20 permit 2001:db8:100::f1/128
+route-map RM-peer-dc1-edge-01-dc11-border-leaf-01-ebgp-IPV6-OUT permit 10
+  match ipv6 address prefix-list PL6-peer-dc1-edge-01-dc11-border-leaf-01-ebgp-IPV6-OUT
+!
+ip prefix-list PL-OVERLAY-EVPN-IN seq 10 permit 10.100.0.0/24
+ip prefix-list PL-OVERLAY-EVPN-IN seq 20 permit 10.100.8.0/24
+ip prefix-list PL-OVERLAY-EVPN-IN seq 30 permit 203.0.113.0/24 le 32
+route-map RM-OVERLAY-EVPN-IN permit 10
+  match evpn route-type 5
+  match ip address prefix-list PL-OVERLAY-EVPN-IN
+route-map RM-OVERLAY-EVPN-IN deny 30
+  match evpn route-type 5
+route-map RM-OVERLAY-EVPN-IN permit 40
+!
+ip prefix-list PL-OVERLAY-EVPN-OUT seq 10 permit 0.0.0.0/0
+ip prefix-list PL-OVERLAY-EVPN-OUT seq 20 permit 10.100.0.0/24
+ip prefix-list PL-OVERLAY-EVPN-OUT seq 30 permit 10.100.8.0/24
+ip prefix-list PL-OVERLAY-EVPN-OUT seq 40 permit 203.0.113.0/24 le 32
+ipv6 prefix-list PL6-OVERLAY-EVPN-OUT seq 10 permit ::/0
+route-map RM-OVERLAY-EVPN-OUT permit 10
+  match evpn route-type 5
+  match ip address prefix-list PL-OVERLAY-EVPN-OUT
+route-map RM-OVERLAY-EVPN-OUT permit 11
+  match evpn route-type 5
+  match ipv6 address prefix-list PL6-OVERLAY-EVPN-OUT
+route-map RM-OVERLAY-EVPN-OUT deny 30
+  match evpn route-type 5
+route-map RM-OVERLAY-EVPN-OUT permit 40
+!
+ip prefix-list PL-DCI-EVPN-IN seq 10 permit 10.100.0.0/24
+ip prefix-list PL-DCI-EVPN-IN seq 20 permit 10.100.8.0/24
+ip prefix-list PL-DCI-EVPN-IN seq 30 permit 203.0.113.0/24 le 32
+route-map RM-DCI-EVPN-IN permit 10
+  match evpn route-type 5
+  match ip address prefix-list PL-DCI-EVPN-IN
+route-map RM-DCI-EVPN-IN deny 30
+  match evpn route-type 5
+route-map RM-DCI-EVPN-IN permit 40
+!
+ip prefix-list PL-DCI-EVPN-OUT seq 10 permit 0.0.0.0/0
+ip prefix-list PL-DCI-EVPN-OUT seq 20 permit 10.100.0.0/24
+ip prefix-list PL-DCI-EVPN-OUT seq 30 permit 10.100.8.0/24
+ip prefix-list PL-DCI-EVPN-OUT seq 40 permit 203.0.113.0/24 le 32
+ipv6 prefix-list PL6-DCI-EVPN-OUT seq 10 permit ::/0
+route-map RM-DCI-EVPN-OUT permit 10
+  match evpn route-type 5
+  match ip address prefix-list PL-DCI-EVPN-OUT
+route-map RM-DCI-EVPN-OUT permit 11
+  match evpn route-type 5
+  match ipv6 address prefix-list PL6-DCI-EVPN-OUT
+route-map RM-DCI-EVPN-OUT deny 30
+  match evpn route-type 5
+route-map RM-DCI-EVPN-OUT permit 40
+!
 route-map RM-CONN-2-BGP permit 10
   match interface loopback0 Loopback1 Loopback100
 !
-route-map RM-FABRIC-OUT permit 10
-  match interface loopback0 Loopback1 Loopback100
-!
-route-map RM-DCI-IN permit 10
-  set community no-export additive
+route-map RM-VRF-DIRECT-2-EVPN permit 10
 !
 !
 ! BGP Configuration
@@ -162,10 +270,14 @@ router bgp 65001
     address-family ipv6 unicast
       inherit peer-policy FABRIC-PEERS-POLICY 1
       maximum-prefix 4
-      route-map RM-FABRIC-OUT out
+      route-map RM-peer-dc1-edge-01-dc1-edge-02-ibgp-IPV6-IN in
+      route-map RM-peer-dc1-edge-01-dc1-edge-02-ibgp-IPV6-OUT out
     !
     address-family l2vpn evpn
       inherit peer-policy FABRIC-PEERS-POLICY 1
+      maximum-prefix 2039
+      route-map RM-peer-dc1-edge-01-dc1-edge-02-ibgp-EVPN-IN in
+      route-map RM-peer-dc1-edge-01-dc1-edge-02-ibgp-EVPN-OUT out
     !
   neighbor 2001:db8:dc10::1
     remote-as 65100
@@ -175,8 +287,8 @@ router bgp 65001
     address-family ipv6 unicast
       inherit peer-policy DCI-UNDERLAY-PEERS-POLICY 1
       maximum-prefix 4
-      route-map RM-FABRIC-OUT out
-      route-map RM-DCI-IN in
+      route-map RM-peer-dc1-edge-01-dc10-border-leaf-01-ebgp-IPV6-IN in
+      route-map RM-peer-dc1-edge-01-dc10-border-leaf-01-ebgp-IPV6-OUT out
     !
   neighbor 2001:db8:dc11::1
     remote-as 65101
@@ -186,8 +298,8 @@ router bgp 65001
     address-family ipv6 unicast
       inherit peer-policy DCI-UNDERLAY-PEERS-POLICY 1
       maximum-prefix 4
-      route-map RM-FABRIC-OUT out
-      route-map RM-DCI-IN in
+      route-map RM-peer-dc1-edge-01-dc11-border-leaf-01-ebgp-IPV6-IN in
+      route-map RM-peer-dc1-edge-01-dc11-border-leaf-01-ebgp-IPV6-OUT out
     !
   neighbor 10.0.0.100
     remote-as 65100
@@ -195,6 +307,9 @@ router bgp 65001
     inherit peer-session EVPN-OVERLAY-SESSION
     address-family l2vpn evpn
       inherit peer-policy EVPN-OVERLAY-POLICY 1
+      maximum-prefix 2039
+      route-map RM-OVERLAY-EVPN-IN in
+      route-map RM-OVERLAY-EVPN-OUT out
     !
   neighbor 10.0.0.101
     remote-as 65101
@@ -202,6 +317,9 @@ router bgp 65001
     inherit peer-session EVPN-OVERLAY-SESSION
     address-family l2vpn evpn
       inherit peer-policy EVPN-OVERLAY-POLICY 1
+      maximum-prefix 2039
+      route-map RM-OVERLAY-EVPN-IN in
+      route-map RM-OVERLAY-EVPN-OUT out
     !
   neighbor 2001:db8:dc10:ffff::1
     remote-as 65100
@@ -212,6 +330,9 @@ router bgp 65001
     inherit peer-session DCI-PEERS-SESSION
     address-family l2vpn evpn
       inherit peer-policy DCI-PEERS-POLICY 1
+      maximum-prefix 2039
+      route-map RM-DCI-EVPN-IN in
+      route-map RM-DCI-EVPN-OUT out
     !
   neighbor 2001:db8:dc11:ffff::1
     remote-as 65101
@@ -222,7 +343,15 @@ router bgp 65001
     inherit peer-session DCI-PEERS-SESSION
     address-family l2vpn evpn
       inherit peer-policy DCI-PEERS-POLICY 1
+      maximum-prefix 2039
+      route-map RM-DCI-EVPN-IN in
+      route-map RM-DCI-EVPN-OUT out
     !
+  vrf INTERNET
+    address-family ipv4 unicast
+      advertise l2vpn evpn
+      redistribute direct route-map RM-VRF-DIRECT-2-EVPN
+  !
 !
 
 !
@@ -232,6 +361,16 @@ router bgp 65001
 evpn multisite border-gateway 65000
   delay-restore time 300
 !
+!
+! VRF Contexts (symmetric IRB — one L3 VNI per tenant)
+!
+vrf context INTERNET
+  vni 60002
+  rd 10.0.0.1:60002
+  address-family ipv4 unicast
+    route-target both 60002:60002
+    route-target both 60002:60002 evpn
+!
 interface nve1
   source-interface Loopback1
   host-reachability protocol bgp
@@ -239,6 +378,7 @@ interface nve1
   member vni 10150
     suppress-arp
     ingress-replication protocol bgp
+  member vni 60002 associate-vrf
   no shutdown
 !
 interface Ethernet1/10
@@ -264,6 +404,20 @@ evpn
 !
 vlan 150
   vn-segment 10150
+!
+! L3 VNI Transit SVIs (symmetric IRB — no host addressing, forwarding only)
+!
+vlan 3902
+  name L3VNI_INTERNET
+  vn-segment 60002
+!
+interface Vlan3902
+  description L3VNI transit SVI for VRF INTERNET
+  vrf member INTERNET
+  ip forward
+  mtu 9214
+  no shutdown
+!
 
 !
 ! Management
