@@ -400,22 +400,24 @@ class MyCheck(InfrahubCheck):
   in a rack or the ends are in different suites. Cables declared in data are not generated and stay unset.
 - **Patch panels**: a `DcimPatchPanel` is a passive panel and NOT a device: it inherits nothing (no role, platform,
   artifact, `capabilities` or `shared_capabilities`, no VRF demand, no VLAN row), so no artifact group, transform or
-  `DcimDevice` query ever sees it (`schemas/extensions/dcim/patch_panel.yml`). A jack is a rear port and the front
-  port(s) under it, and the pairing is STRUCTURE: the panel's components are its `DcimRearPatchPanelPort` and the
-  components of a rear port are its `DcimFrontPatchPanelPort` (Parent = the rear port, mandatory). A jack is a rear port
-  with one front port, a cassette a rear port (MPO-12) with several. Both kinds inherit only `DcimEndpoint`, so a cable
-  ends on a physical interface or on either port kind with no change to `DcimCable`, and a cross-connect is
-  port - cable - front, rear - cable - port: one `front_ports` edge crosses a jack, no name is compared. A panel is unique by its
-  mandatory `rack` and its `name` (HFID `[rack shortname, name]`; `PP-01` may exist in every rack). The HFID of both ports
-  is the computed `port_id` (`<rack>:<panel>:<rear>` and `<rack>:<panel>:<rear>:<front>`): an HFID cannot go through two
-  relationships. An object template copies an attribute relationship as it is and cannot point a child at a sibling, but
-  it materializes component children level by level, so the panel templates
-  (`data/bootstrap/10_physical_devices_templates_patch_panel.yaml`: `PP-24-LC`, `PP-48-LC`, `PP-12-SC`, `PP-24-RJ45`,
-  `PP-CASSETTE-MPO12`) write every jack out: a ranged nested list multiplies (rear `[1-24]` x front `[1-24]` is 576
-  fronts). Nothing checks a panel's cross-connects: structure holds the pairing, and a cable that stops at a panel is
-  data to read, not a defect to report. A panel always sits
-  between two devices: a circuit end stays an interface (the `capabilities` peers are untouched) and the panel's
-  location is its mandatory `rack` (`LocationRack.deployment` gives the facility); a panel has no
+  `DcimDevice` query ever sees it (`schemas/extensions/dcim/patch_panel.yml`). The model is FLAT: the panel lists its
+  `DcimRearPatchPanelPort` (`rear_ports`) and its `DcimFrontPatchPanelPort` (`front_ports`) as components, and a front
+  port names its rear port (`rear_port`, optional, `common_parent: panel`: the server refuses a rear port of another
+  panel). A jack is one front port on one rear port, a cassette several on one MPO-12 rear port. Both kinds inherit only
+  `DcimEndpoint`, so a cable ends on a physical interface or on either port kind with no change to `DcimCable`; a
+  cross-connect is port - cable - front, rear - cable - port. A panel is unique by its mandatory `rack` and its `name`
+  (HFID `[rack shortname, name]`; `PP-01` may exist in every rack). The HFID of both ports is a computed id, because an
+  HFID cannot go through two relationships: `<rack>:<panel>:<rear>` and `<rack>:<panel>:F<front>`. An object template
+  copies an attribute relationship as it is and the server refuses a template port as its peer (measured on 1.11.9, in
+  one file, in a third file, by id and from the rear side), so a template cannot pair a front port with its rear port.
+  The panel templates (`data/bootstrap/10_physical_devices_templates_patch_panel_rear.yaml` and `_front.yaml`: `PP-24-LC`,
+  `PP-48-LC`, `PP-12-SC`, `PP-24-RJ45`, `PP-CASSETTE-MPO12`) therefore create the ports unpaired, one ranged block per
+  kind (never nested: a nested range multiplies), and the pairing is a data file next to the panel: a ranged front block
+  with a ranged `rear_port` (`data/demos/30_all/08_interconnects/01_colo_onramp/06b_patch_panel_mapping.yml`).
+  `tests/unit/test_patch_panel_data.py` pins that every front port of a demo panel made from a template is paired.
+  Nothing checks a panel's cross-connects: a cable that stops at a panel is data to read, not a defect to report. A panel
+  always sits between two devices: a circuit end stays an interface (the `capabilities` peers are untouched) and the
+  panel's location is its mandatory `rack` (`LocationRack.deployment` gives the facility); a panel has no
   `deployment`, no device type and no `position` (the rack-unit position returns together with a rack drawing that
   draws panels). The `patch-panel` device role is gone. A generated cable
   never ends on a panel port (a panel cable is data). A reader of a cable end meets a panel port as an empty node `{}`

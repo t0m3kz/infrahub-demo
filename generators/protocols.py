@@ -346,6 +346,7 @@ class DcimPatchPanel(CoreNode):
     description: StringOptional
     name: String
     panel_id: String
+    front_ports: RelationshipManager[DcimFrontPatchPanelPort]
     rack: RelationshipAttribute[LocationRack]
     rear_ports: RelationshipManager[DcimRearPatchPanelPort]
 
@@ -366,6 +367,7 @@ class DcimFrontPatchPanelPort(DcimEndpoint):
     label: StringOptional
     name: String
     port_id: String
+    panel: RelationshipAttribute[DcimPatchPanel]
     rear_port: RelationshipAttribute[DcimRearPatchPanelPort]
 
 

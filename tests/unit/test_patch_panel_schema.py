@@ -1,8 +1,9 @@
 """The patch panel model in schemas/extensions/dcim/patch_panel.yml.
 
 DcimPatchPanel is a standalone node (no device, no artifact, no capabilities); its two port kinds inherit DcimEndpoint
-only, so a DcimCable joins them unchanged. A jack is a rear port and the front port(s) under it: the pairing is the
-``front_ports`` Component edge, which an object template materializes (an attribute relationship it could only copy).
+only, so a DcimCable joins them unchanged. The model is flat: the panel lists its rear ports and its front ports, and a
+front port names its rear port (``rear_port``). An object template cannot pair them (the server refuses a template port
+as the peer), so the pairing is data (tests/unit/test_patch_panel_data.py).
 The capability-edge side of this (no ``capabilities`` / ``shared_capabilities`` on any kind or their templates) is
 guarded in tests/unit/test_capability_edge_names.py.
 """
@@ -34,8 +35,8 @@ _PORTS = ("RearPatchPanelPort", "FrontPatchPanelPort")
 
 
 def test_port_hfid_is_the_computed_port_id_because_it_cannot_go_through_two_relationships() -> None:
-    """Both ports are addressed by ``port_id`` (``<panel>:<rear>``, ``<panel>:<rear>:<front>``), a read-only computed
-    attribute: the server refuses an HFID through two relationships ("panel is not a valid attribute of ...")."""
+    """Both ports are addressed by ``port_id`` (``<rack>:<panel>:<rear>``, ``<rack>:<panel>:F<front>``), a read-only
+    computed attribute: the server refuses an HFID through two relationships."""
     for name in _PORTS:
         port = _node(name)
         port_id = _item(port["attributes"], "port_id")
@@ -45,7 +46,7 @@ def test_port_hfid_is_the_computed_port_id_because_it_cannot_go_through_two_rela
     rear = _item(_node("RearPatchPanelPort")["attributes"], "port_id")["computed_attribute"]["jinja2_template"]
     front = _item(_node("FrontPatchPanelPort")["attributes"], "port_id")["computed_attribute"]["jinja2_template"]
     assert rear == "{{ panel__panel_id__value }}:{{ name__value }}"
-    assert front == "{{ rear_port__port_id__value }}:{{ name__value }}"
+    assert front == "{{ panel__panel_id__value }}:F{{ name__value }}"
 
 
 def test_a_panel_is_unique_by_its_mandatory_rack_and_its_name() -> None:
@@ -63,10 +64,10 @@ def test_a_panel_is_unique_by_its_mandatory_rack_and_its_name() -> None:
     assert panel_id["computed_attribute"]["jinja2_template"] == "{{ rack__shortname__value }}:{{ name__value }}"
 
 
-def test_port_uniqueness_is_per_parent() -> None:
-    """A rear port is unique in its panel, a front port under its rear port."""
-    assert _node("RearPatchPanelPort")["uniqueness_constraints"] == [["panel", "name__value"]]
-    assert _node("FrontPatchPanelPort")["uniqueness_constraints"] == [["rear_port", "name__value"]]
+def test_port_uniqueness_is_per_panel() -> None:
+    """A rear port and a front port are each unique by name within their panel."""
+    for name in _PORTS:
+        assert _node(name)["uniqueness_constraints"] == [["panel", "name__value"]], name
 
 
 def test_ports_inherit_only_the_endpoint_generic() -> None:
@@ -87,20 +88,27 @@ def test_panel_declares_no_capability_relationship() -> None:
         assert names.isdisjoint({"capabilities", "shared_capabilities"}), name
 
 
-def test_the_pairing_is_structure_panel_to_rear_to_front() -> None:
-    """Component on the parent, Parent on the child, one identifier each: the front port is a component of its rear
-    port, so a template that creates the rear port creates its front port(s), and the pair needs no name."""
-    chain = (
-        ("PatchPanel", "rear_ports", "RearPatchPanelPort", "panel"),
-        ("RearPatchPanelPort", "front_ports", "FrontPatchPanelPort", "rear_port"),
-    )
-    for parent, down, child, up in chain:
-        parent_side = _item(_node(parent)["relationships"], down)
-        child_side = _item(_node(child)["relationships"], up)
+def test_the_panel_lists_both_port_kinds_as_components() -> None:
+    """Flat: the panel holds its rear and its front ports (Component on the panel, Parent on the port), so both lists
+    show on the panel and a template creates both."""
+    for down, child in (("rear_ports", "RearPatchPanelPort"), ("front_ports", "FrontPatchPanelPort")):
+        parent_side = _item(_node("PatchPanel")["relationships"], down)
+        child_side = _item(_node(child)["relationships"], "panel")
 
-        assert (parent_side["kind"], child_side["kind"]) == ("Component", "Parent"), parent
-        assert parent_side["identifier"] == child_side["identifier"], parent
-        assert parent_side["peer"] == f"Dcim{child}" and child_side["optional"] is False, parent
+        assert (parent_side["kind"], child_side["kind"]) == ("Component", "Parent"), child
+        assert parent_side["identifier"] == child_side["identifier"], child
+        assert parent_side["peer"] == f"Dcim{child}" and child_side["optional"] is False, child
+
+
+def test_a_front_port_names_its_rear_port_inside_its_own_panel() -> None:
+    """``rear_port`` is optional (a template cannot set it) and ``common_parent: panel`` makes the server refuse a rear
+    port of another panel; the rear port lists its front ports on the same identifier."""
+    front = _item(_node("FrontPatchPanelPort")["relationships"], "rear_port")
+    rear = _item(_node("RearPatchPanelPort")["relationships"], "front_ports")
+
+    assert front["kind"] == "Attribute" and front["optional"] is True and front["common_parent"] == "panel"
+    assert front["peer"] == "DcimRearPatchPanelPort" and rear["peer"] == "DcimFrontPatchPanelPort"
+    assert front["identifier"] == rear["identifier"]
 
 
 def test_connectors_and_labels() -> None:
@@ -121,12 +129,12 @@ def test_connectors_and_labels() -> None:
         assert "face" not in {a["name"] for a in attributes}, name
 
 
-def test_panel_has_rack_and_rear_ports_and_no_deployment_or_device_type() -> None:
+def test_panel_has_rack_and_both_port_lists_and_no_deployment_or_device_type() -> None:
     """The panel is located by its mandatory rack (LocationRack.deployment gives the facility); no deployment, no device
     type."""
     names = {rel["name"] for rel in _node("PatchPanel")["relationships"]}
 
-    assert names == {"rack", "rear_ports"}
+    assert names == {"rack", "rear_ports", "front_ports"}
     assert "position" not in {a["name"] for a in _node("PatchPanel")["attributes"]}
     assert _item(_node("PatchPanel")["relationships"], "rack")["peer"] == "LocationRack"
 
@@ -154,55 +162,40 @@ def test_the_panel_role_is_gone_from_the_device_roles() -> None:
     assert "patch-panel" not in roles
 
 
-def _templates() -> dict[str, dict[str, Any]]:
-    path = _ROOT / "data" / "bootstrap" / "10_physical_devices_templates_patch_panel.yaml"
+def _templates(part: str) -> dict[str, dict[str, Any]]:
+    path = _ROOT / "data" / "bootstrap" / f"10_physical_devices_templates_patch_panel_{part}.yaml"
     document = yaml.safe_load(path.read_text())
     assert document["spec"]["kind"] == "TemplateDcimPatchPanel"
     return {template["template_name"]: template for template in document["spec"]["data"]}
 
 
-def test_the_bootstrap_templates_are_panel_templates() -> None:
-    """The five panel types, none of them a device template."""
-    templates = _templates()
+def test_the_bootstrap_templates_are_panel_templates_in_both_files() -> None:
+    """The five panel types, none of them a device template, in the rear file and again in the front file."""
+    rear, front = _templates("rear"), _templates("front")
+    expected = {"PP-24-LC", "PP-48-LC", "PP-12-SC", "PP-24-RJ45", "PP-CASSETTE-MPO12"}
 
-    assert set(templates) == {"PP-24-LC", "PP-48-LC", "PP-12-SC", "PP-24-RJ45", "PP-CASSETTE-MPO12"}
-    assert all("device_type" not in template for template in templates.values())
-
-
-def test_a_jack_template_gives_each_rear_port_exactly_one_front_port_of_the_same_number() -> None:
-    """The mapping lives in the template, written out: a ranged nested list would multiply (24 x 24 = 576)."""
-    expected = {"PP-24-LC": 24, "PP-48-LC": 48, "PP-12-SC": 12, "PP-24-RJ45": 24}
-    templates = _templates()
-
-    for name, jacks in expected.items():
-        rears = templates[name]["rear_ports"]
-        assert rears["kind"] == "TemplateDcimRearPatchPanelPort" and "parameters" not in rears, name
-        assert [r["name"] for r in rears["data"]] == [str(n) for n in range(1, jacks + 1)], name
-        for rear in rears["data"]:
-            fronts = rear["front_ports"]
-            assert fronts["kind"] == "TemplateDcimFrontPatchPanelPort", name
-            assert [f["name"] for f in fronts["data"]] == [rear["name"]], (name, rear["name"])
-            assert fronts["data"][0]["connector"] == rear["connector"], (name, rear["name"])
+    assert set(rear) == expected and set(front) == expected
+    assert all("device_type" not in template for template in (*rear.values(), *front.values()))
 
 
-def test_the_cassette_template_gives_each_mpo_rear_port_twelve_lc_front_ports() -> None:
-    """A cassette is the 1:N case of the same structure."""
-    rears = _templates()["PP-CASSETTE-MPO12"]["rear_ports"]["data"]
+def test_the_templates_give_each_panel_its_rear_and_its_front_ports() -> None:
+    """Ranges, never nested (a nested range multiplies): one ranged block per port kind. A jack panel has as many front
+    as rear ports, a cassette twelve front LC ports per MPO-12 rear port."""
+    expected = {
+        "PP-24-LC": (24, "lc-upc", 24, "lc-upc"),
+        "PP-48-LC": (48, "lc-upc", 48, "lc-upc"),
+        "PP-12-SC": (12, "sc-upc", 12, "sc-upc"),
+        "PP-24-RJ45": (24, "rj45", 24, "rj45"),
+        "PP-CASSETTE-MPO12": (4, "mpo-12", 48, "lc-upc"),
+    }
+    rear, front = _templates("rear"), _templates("front")
 
-    assert [r["name"] for r in rears] == ["1", "2", "3", "4"]
-    for rear in rears:
-        assert rear["connector"] == "mpo-12"
-        assert [f["name"] for f in rear["front_ports"]["data"]] == [str(n) for n in range(1, 13)]
-        assert {f["connector"] for f in rear["front_ports"]["data"]} == {"lc-upc"}
-
-
-def test_template_names_are_unique_within_the_file() -> None:
-    """A template_name is the template object's key: a repeat would be an upsert of another port."""
-    names: list[str] = []
-    for template in _templates().values():
-        names.append(template["template_name"])
-        for rear in template["rear_ports"]["data"]:
-            names.append(rear["template_name"])
-            names.extend(front["template_name"] for front in rear["front_ports"]["data"])
-
-    assert len(names) == len(set(names))
+    for name, (rears, rear_connector, fronts, front_connector) in expected.items():
+        for block, count, connector, kind, key in (
+            (rear[name]["rear_ports"], rears, rear_connector, "TemplateDcimRearPatchPanelPort", "rear"),
+            (front[name]["front_ports"], fronts, front_connector, "TemplateDcimFrontPatchPanelPort", "front"),
+        ):
+            (port,) = block["data"]
+            assert block["kind"] == kind and block["parameters"] == {"expand_range": True}, (name, key)
+            assert port["name"] == f"[1-{count}]" and port["template_name"] == f"{name}_{key}_[1-{count}]", name
+            assert port["connector"] == connector and "front_ports" not in port, name

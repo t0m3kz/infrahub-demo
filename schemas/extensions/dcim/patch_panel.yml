@@ -10,21 +10,23 @@ version: "1.0"
 # is all it takes for a DcimCable to join a panel port to an interface (DcimCable.endpoints peers DcimEndpoint).
 # tests/unit/test_patch_panel_schema.py guards both.
 #
-# A jack has two faces and a DcimEndpoint carries one cable, so a jack is two port nodes, and the pairing is STRUCTURE:
-# the panel's components are its REAR ports (DcimRearPatchPanelPort) and the components of a rear port are its FRONT
-# ports (DcimFrontPatchPanelPort). A jack is a rear port with one front port; a cassette is a rear port (MPO) with
-# several. An object template materializes component children level by level and cannot point one child at a sibling
-# (an attribute relationship is copied as it is), so the template carries the mapping itself: the panel templates
-# (data/bootstrap/10_physical_devices_templates_patch_panel.yaml) write every jack out, a ranged nested list multiplies.
-# A cable that lands on one port continues through its jack to the cable on the other: one `front_ports` edge crosses
-# it.
+# A jack has two faces and a DcimEndpoint carries one cable, so a jack is two port nodes: a rear port
+# (DcimRearPatchPanelPort) and a front port (DcimFrontPatchPanelPort), both components of the panel, so the panel lists
+# both. The front port names its rear port (`rear_port`, an attribute relationship with `common_parent: panel`: the
+# server refuses a rear port of another panel). A jack is one front port on one rear port, a cassette several front
+# ports on one rear port (MPO-12). A cable that lands on one port continues on the cable of the port it is paired with.
+#
+# An object template carries the ports but not the pairing: it copies an attribute relationship as it is and cannot
+# point a front port at its sibling (the server: "Unable to find the node ... / DcimRearPatchPanelPort"). So
+# `rear_port` is optional, the panel is created from its template with unpaired front ports, and the pairing is a
+# short data file next to the panel (a ranged front block with a ranged `rear_port`).
+# tests/unit/test_patch_panel_data.py pins that every front port of the demo data is paired.
 #
 # A panel is unique by its rack and its name (`PP-01` may exist in every rack), so the rack is mandatory: the server
-# refuses a uniqueness constraint on an optional relationship. The panel's HFID is [rack shortname, name].
-#
-# The HFID cannot go through two relationships (the server: "panel is not a valid attribute of DcimRearPatchPanelPort"),
-# so each kind carries a computed id that is its HFID: the panel's `panel_id` is `<rack>:<name>`, a rear port's
-# `port_id` is `<panel_id>:<rear>` and a front port's `<panel_id>:<rear>:<front>`.
+# refuses a uniqueness constraint on an optional relationship. The panel's HFID is [rack shortname, name]. The HFID
+# of a port cannot go through two relationships (the server: "panel is not a valid attribute of ..."), so each kind
+# carries a computed id that is its HFID: the panel's `panel_id` is `<rack>:<name>`, a rear port's `port_id` is
+# `<panel_id>:<rear>` and a front port's `<panel_id>:F<front>`.
 #
 # A panel always sits between two devices: a circuit end stays an interface (the `capabilities` peers are untouched).
 # The rack-unit `position` returns together with a rack drawing that draws panels.
@@ -84,10 +86,17 @@ nodes:
         kind: Component
         identifier: "panel__rear_ports"
         order_weight: 2500
+      - name: front_ports
+        peer: DcimFrontPatchPanelPort
+        optional: true
+        cardinality: many
+        kind: Component
+        identifier: "panel__front_ports"
+        order_weight: 2600
 
   - name: RearPatchPanelPort
     namespace: Dcim
-    description: "Rear port of a panel; its front ports are its components (one for a jack, several for a cassette)."
+    description: "Rear port of a panel: the permanent side of a jack, paired with the front port(s) that name it."
     label: Patch Panel Rear Port
     icon: mdi:ethernet
     include_in_menu: false
@@ -150,16 +159,17 @@ nodes:
         identifier: "panel__rear_ports"
         order_weight: 800
       - name: front_ports
+        label: Front Ports
         peer: DcimFrontPatchPanelPort
         optional: true
         cardinality: many
-        kind: Component
+        kind: Generic
         identifier: "rear__front_ports"
         order_weight: 2500
 
   - name: FrontPatchPanelPort
     namespace: Dcim
-    description: "Front port of a panel; a component of exactly one rear port, which is its other face."
+    description: "Front port of a panel: where equipment is patched in; it names the rear port it is paired with."
     label: Patch Panel Front Port
     icon: mdi:ethernet
     include_in_menu: false
@@ -171,22 +181,22 @@ nodes:
     order_by:
       - port_id__value
     uniqueness_constraints:
-      - ["rear_port", "name__value"]
+      - ["panel", "name__value"]
     attributes:
       - name: name
         kind: Text
         optional: false
-        description: "The front port number under its rear port"
+        description: "The front port number within the panel"
         order_weight: 900
       - name: port_id
         kind: Text
         read_only: true
         optional: false
         unique: true
-        description: "<panel_id>:<rear>:<front>: the human friendly id"
+        description: "<panel_id>:F<front>: the human friendly id"
         computed_attribute:
           kind: Jinja2
-          jinja2_template: "{{ rear_port__port_id__value }}:{{ name__value }}"
+          jinja2_template: "{{ panel__panel_id__value }}:F{{ name__value }}"
         order_weight: 950
       - name: connector
         kind: Dropdown
@@ -214,13 +224,24 @@ nodes:
         optional: true
         order_weight: 1150
     relationships:
-      - name: rear_port
-        peer: DcimRearPatchPanelPort
+      - name: panel
+        peer: DcimPatchPanel
         optional: false
         cardinality: one
         kind: Parent
-        identifier: "rear__front_ports"
+        identifier: "panel__front_ports"
         order_weight: 800
+      # Optional: an object template creates the front ports without it (it cannot point at a sibling); a data file
+      # pairs them. common_parent: the rear port must be a component of the same panel.
+      - name: rear_port
+        label: Rear Port
+        peer: DcimRearPatchPanelPort
+        optional: true
+        cardinality: one
+        kind: Attribute
+        common_parent: panel
+        identifier: "rear__front_ports"
+        order_weight: 810
 
 extensions:
   nodes:
