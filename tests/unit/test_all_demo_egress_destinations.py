@@ -52,15 +52,15 @@ def _hub_registered_blocks(owner: str) -> set[tuple[str, str]]:
     The chain of transforms/helpers/bgp_external.py ``vif_registered_blocks``: every VPC attachment propagating into the
     table the hybrid attachment is associated with, its virtual network's blocks, owned by the account's owner.
     """
-    attachments = list(_by_name("CloudTransitGatewayAttachment").values())
-    (hybrid,) = [a for a in attachments if a.item["attachment_type"] == "hybrid"]
+    attachments = list(_by_name("CloudGatewayAttachment").values())
+    (hybrid,) = [a for a in attachments if "peer_gateway" in a.item]
     accounts = _by_name("CloudAccount")
     networks = _by_name("CloudVirtualNetwork")
     registered: set[tuple[str, str]] = set()
     for attachment in attachments:
         item = attachment.item
         if (
-            item["attachment_type"] != "vpc"
+            "virtual_network" not in item
             or hybrid.item["associated_route_table"] not in item["propagates_to_route_tables"]
         ):
             continue
@@ -107,16 +107,15 @@ def test_nordix_is_boarded_into_aws_like_the_other_hub_tenants() -> None:
 
 def test_the_nordix_vpc_attachment_is_a_cross_account_attachment_onto_the_hub() -> None:
     """The attachment belongs to the tenant's account while the gateway is the hub's, associated like vaultex's."""
-    attachment = _by_name("CloudTransitGatewayAttachment")["tgwa-vpc-nordix"].item
-    vaultex = _by_name("CloudTransitGatewayAttachment")["tgwa-vpc-vaultex"].item
+    attachment = _by_name("CloudGatewayAttachment")["tgwa-vpc-nordix"].item
+    vaultex = _by_name("CloudGatewayAttachment")["tgwa-vpc-vaultex"].item
 
-    assert attachment["attachment_type"] == "vpc"
     assert attachment["owner_account"] == "nordix-aws-prod" and attachment["virtual_network"] == _VPC
-    assert attachment["transit_gateway"] == vaultex["transit_gateway"]
+    assert attachment["gateway"] == vaultex["gateway"]
     assert attachment["associated_route_table"] == vaultex["associated_route_table"]
     assert attachment["propagates_to_route_tables"] == vaultex["propagates_to_route_tables"]
     assert attachment["cloud_id"] not in {
-        a.item["cloud_id"] for n, a in _by_name("CloudTransitGatewayAttachment").items() if n != "tgwa-vpc-nordix"
+        a.item["cloud_id"] for n, a in _by_name("CloudGatewayAttachment").items() if n != "tgwa-vpc-nordix"
     }
 
 

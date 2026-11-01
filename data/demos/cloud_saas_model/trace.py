@@ -8,11 +8,12 @@ Reads the graph in a few bulk GraphQL reads (one per kind), then walks it in mem
 
 L1  segment -> leaf port (segments edge) -> cable -> patch panel (front, paired rear) -> cable -> edge port
     -> [device] -> carrier circuit (physical, its two ends) -> transport (Direct Connect / SaaS peering)
-    -> transport (CloudDirectConnect / VPN connection) -> peering interface -> cloud edge gateway
-    -> transit gateway -> attachment -> virtual network -> cloud segment
+    -> transport (CloudDirectConnect / VPN connection) -> peering interface -> gateway (edge)
+    -> attachment -> gateway (hub) -> attachment -> virtual network [-> peers] -> cloud segment
 L3  segment prefix/SVI/VRF -> BGP processes and peerings (overlay, then the handoff) -> session circuit
-    -> CloudPeeringInterface (VIF / peering / VLAN attachment / VPN tunnel / SaaS) -> cloud edge gateway
-    -> transit gateway -> attachment -> virtual network -> prefix -> cloud segment
+    -> CloudPeeringInterface (VIF / peering / VLAN attachment / VPN tunnel / SaaS) -> gateway (edge)
+    -> attachment (allowed prefixes) -> gateway (hub) -> attachment -> virtual network -> prefix -> cloud segment
+    (-> service endpoint of the segment)
 Then every peering interface and where it lands (all clouds, not only the ones that reach the target).
 """
 
@@ -20,6 +21,7 @@ import argparse
 import asyncio
 import os
 import sys
+from collections.abc import Iterator
 from typing import Any
 
 from infrahub_sdk import Config, InfrahubClient
@@ -79,16 +81,22 @@ QUERIES = {
       crypto_profile { node { name { value } } } tunnel_key { node { name { value } } }
       transport { node { id __typename display_label } } account { node { name { value } } }
       region { node { name { value } } } saas_region { node { display_label } } owner { node { name { value } } }
-      gateway { node { id } } transit_gateway { node { id } } virtual_network { node { id } }
+      gateway { node { id } }
       auth { node { name { value } } } advertised_prefixes { edges { node { prefix { value } } } }
       peer_ip { node { address { value } } } peer_asn { node { asn { value } } } } } }""",
     "vpn": """CloudVPNConnection { edges { node { id name { value } account { node { name { value } } }
-      customer_gateway { node { id } } gateway { node { id } } transit_gateway { node { id } } virtual_network { node { id } } } } }""",
+      customer_gateway { node { id } } gateway { node { id } } } } }""",
     "gw": """CloudGateway { edges { node { id name { value } gateway_type { value } ip_address { value } asn { value }
-      account { node { name { value } } } transit_gateway { node { id } } virtual_network { node { id } } } } }""",
-    "tgw": """CloudTransitGateway { edges { node { id name { value } attached_virtual_networks { edges { node { id name { value } } } }
-      attachments { edges { node { name { value } attachment_type { value } virtual_network { node { id name { value } } } } } } } } }""",
+      account { node { name { value } } } } } }""",
+    "att": """CloudGatewayAttachment { edges { node { id name { value } owner_account { node { name { value } } }
+      gateway { node { id } } peer_gateway { node { id } } virtual_network { node { id } }
+      allowed_prefixes { edges { node { prefix { value } } } }
+      associated_route_table { node { name { value } } } propagates_to_route_tables { edges { node { name { value } } } } } } }""",
+    "sep": """CloudServiceEndpoint { edges { node { id name { value } service_name { value } access { value } status { value }
+      provider { node { org_id { value } } } saas_region { node { display_label } }
+      segments { edges { node { id } } } virtual_network { node { id } } } } }""",
     "vnet": """CloudVirtualNetwork { edges { node { id name { value } account { node { name { value } } }
+      peers { edges { node { id name { value } } } }
       cidr_blocks { edges { node { prefix { value } } } } network_segments { edges { node { id name { value } cidr_block { value } } } } } } }""",
     "csg": """CloudNetworkSegment { edges { node { id name { value } cidr_block { value } virtual_network { node { id name { value } } } } } }""",
     "inst": """CloudInstance { edges { node { id name { value } private_ip { value } network_segment { node { id } } } } }""",
@@ -143,55 +151,67 @@ def main_walk(d: dict[str, list[dict]], dc_seg: str, cloud_seg: str, quiet: bool
         result["missing"].append(f"segment not found: {dc_seg if not seg else cloud_seg}")
         return result
     cloud_vnet = (csg["virtual_network"]["node"] or {})["id"]
-    vnet_by_tgw: dict[str, set[str]] = {
-        t["id"]: {v["id"] for v in rel(t, "attached_virtual_networks")} for t in d["tgw"]
-    }
     peers = {p["id"]: p for p in d["peer"]}
     vpns = {v["id"]: v for v in d["vpn"]}
     dxs = {v["id"]: v for v in d["dx"]}
-    objs = {
-        "gw": {g["id"]: g for g in d["gw"]},
-        "tgw": {t["id"]: t for t in d["tgw"]},
-        "vnet": {v["id"]: v for v in d["vnet"]},
-        "vpn": vpns,
-    }
-    # the edges the cloud side is walked along: kind -> [(field, kind of the peer)]
-    edges_of = {
-        "peer": [("gateway", "gw"), ("transit_gateway", "tgw"), ("virtual_network", "vnet"), ("transport", "vpn")],
-        "vpn": [("gateway", "gw"), ("transit_gateway", "tgw"), ("virtual_network", "vnet")],
-        "gw": [("transit_gateway", "tgw"), ("virtual_network", "vnet")],
-    }
+    objs = {"gw": {g["id"]: g for g in d["gw"]}, "vnet": {v["id"]: v for v in d["vnet"]}}
+    on_gateway: dict[str, list[dict]] = {}
+    on_peer_gateway: dict[str, list[dict]] = {}
+    for att in d["att"]:
+        for field, index in (("gateway", on_gateway), ("peer_gateway", on_peer_gateway)):
+            for ref in rel(att, field):
+                index.setdefault(ref["id"], []).append(att)
+
+    def allowed_of(att: dict) -> list[str]:
+        return [val(x, "prefix") for x in rel(att, "allowed_prefixes")]
+
+    def att_text(att: dict) -> str:
+        allowed = allowed_of(att)
+        return f"--attachment {val(att, 'name')}" + (f" (allowed {','.join(allowed)})" if allowed else "")
+
+    def gateway_paths(gid: str, seen: tuple[str, ...] = ()) -> Iterator[tuple[str, str, list[str]]]:
+        """(text, virtual network id, allowed prefixes) from a gateway: attachments to a network, then to a gateway."""
+        gw = objs["gw"].get(gid)
+        if gw is None or gid in seen:
+            return
+        head = f"cloud gateway {val(gw, 'gateway_type')} {val(gw, 'name')}"
+        for att in on_gateway.get(gid, []):
+            for net in rel(att, "virtual_network"):
+                name = val(objs["vnet"][net["id"]], "name")
+                yield f"{head} {att_text(att)}--> virtual network {name}", net["id"], allowed_of(att)
+        for att in on_peer_gateway.get(gid, []):
+            for host in rel(att, "gateway"):
+                for text, vid, allowed in gateway_paths(host["id"], (*seen, gid)):
+                    yield f"{head} {att_text(att)}--> {text}", vid, [*allowed_of(att), *allowed]
+
+    def landing(peering: dict, target: str | None) -> tuple[str, list[str]] | None:
+        """Where a peering lands: its gateway, else the gateway of its VPN connection, down to a virtual network.
+
+        `target` is the virtual network to reach (or any); a network peered with it (`peers`, one lap) counts.
+        """
+        start, via = None, ""
+        for ref in rel(peering, "gateway"):
+            start = ref["id"]
+        if start is None:
+            for ref in rel(peering, "transport"):
+                vpn = vpns.get(ref["id"])
+                if vpn and rel(vpn, "gateway"):
+                    start, via = rel(vpn, "gateway")[0]["id"], f"transport VPN {val(vpn, 'name')} --> "
+        if start is None:
+            return None
+        for text, vid, allowed in gateway_paths(start):
+            if target in (None, vid):
+                note = ""
+                if target is None and rel(objs["vnet"][vid], "peers"):
+                    note = f" (peered with {', '.join(val(x, 'name') for x in rel(objs['vnet'][vid], 'peers'))})"
+                return f"{via}{text}{note}", allowed
+            if target in [x["id"] for x in rel(objs["vnet"][vid], "peers")]:
+                return f"{via}{text} --peer--> virtual network {val(objs['vnet'][target], 'name')}", allowed
+        return None
 
     def to_vnet(kind: str, n: dict, target: str | None) -> str | None:
-        """The cloud-side chain from a peering / gateway / VPN to a virtual network (`target`, or any), or None."""
-        if kind == "vnet":
-            return f"virtual network {val(n, 'name')}" if target in (None, n["id"]) else None
-        if kind == "tgw":
-            for vid in sorted(vnet_by_tgw.get(n["id"], set())):
-                if target in (None, vid):
-                    att = [
-                        a["name"]["value"]
-                        for a in rel(n, "attachments")
-                        if (a.get("virtual_network") or {}).get("node", {}).get("id") == vid
-                    ]
-                    return (
-                        f"transit gateway {val(n, 'name')} --attachment {','.join(att) or '(attached)'}--> "
-                        f"virtual network {val(objs['vnet'][vid], 'name')}"
-                    )
-            return None
-        for field, k in edges_of.get(kind, []):
-            for ref in rel(n, field):
-                m = objs[k].get(ref["id"])
-                if m is None:
-                    continue
-                r = to_vnet(k, m, target)
-                if r:
-                    if k == "gw":
-                        return f"cloud gateway {val(m, 'gateway_type')} {val(m, 'name')} --> {r}"
-                    if k == "vpn":
-                        return f"transport VPN {val(m, 'name')} --> {r}"
-                    return r
-        return None
+        found = landing(n, target)
+        return found[0] if found else None
 
     def bundle_of(transport_id: str) -> list[str]:
         """The transport and the ones it rides on (member port -> bundle), nearest first; a loop ends the walk."""
@@ -390,9 +410,10 @@ def main_walk(d: dict[str, list[dict]], dc_seg: str, cloud_seg: str, quiet: bool
                     obj = peers.get(cn["id"])
                     if not obj:
                         continue
-                    tail = to_vnet("peer", obj, cloud_vnet)
-                    if not tail:
+                    landed = landing(obj, cloud_vnet)
+                    if not landed:
                         continue
+                    tail, allowed = landed
                     sc = [s for s in circuits if cn["id"] in [e["id"] for e in conn_ends(s)]]
                     peer = ((obj.get("peer_ip") or {}).get("node") or {}).get("address", {}).get("value")
                     pas = ((obj.get("peer_asn") or {}).get("node") or {}).get("asn", {}).get("value")
@@ -422,8 +443,11 @@ def main_walk(d: dict[str, list[dict]], dc_seg: str, cloud_seg: str, quiet: bool
                         )
                     say(f"      --> {peer_text(obj)} (provider {peer} AS{pas}) --> {tail}")
                     vnet = by_id[cloud_vnet]
-                    blocks = [val(b, "prefix") for b in rel(vnet, "cidr_blocks")]
+                    blocks = allowed or [val(b, "prefix") for b in rel(vnet, "cidr_blocks")]
                     say(f"      --> prefix {blocks} --> cloud segment {cloud_seg} {val(csg, 'cidr_block')}")
+                    for ep in [e for e in d["sep"] if csg["id"] in [x["id"] for x in rel(e, "segments")]]:
+                        provider = ((ep.get("provider") or {}).get("node") or {}).get("org_id", {}).get("value")
+                        say(f"      --> service endpoint {val(ep, 'name')} ({val(ep, 'access')}, provider {provider})")
                     for i in [i for i in d["inst"] if (i["network_segment"]["node"] or {}).get("id") == csg["id"]]:
                         say(f"      --> instance {val(i, 'name')} {val(i, 'private_ip')}")
                     say()

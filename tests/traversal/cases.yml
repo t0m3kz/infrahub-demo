@@ -25,4 +25,4 @@ cases:
           vpn: 2
         # the graph kinds (keys of the tracer's `load`) that must not be empty
         non_empty:
-          [seg, iface, front, rear, carrier, session, vif, dx, peer, vpn, gw, tgw, vnet, csg, inst, bgp, peering]
+          [seg, iface, front, rear, carrier, session, vif, dx, peer, vpn, gw, att, sep, vnet, csg, inst, bgp, peering]

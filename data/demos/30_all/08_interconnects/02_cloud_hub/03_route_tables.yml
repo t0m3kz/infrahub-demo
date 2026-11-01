@@ -7,18 +7,18 @@
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: CloudTransitGatewayRouteTable
+  kind: CloudGatewayRouteTable
   data:
     - name: "rt-hub-shared"
       cloud_id: "tgw-rtb-00shared0euc1"
       description: "Shared routing domain: attachments here reach each other through the hub"
       status: active
       is_default: true
-      transit_gateway: "tgw-30all-euc1"
+      gateway: "tgw-30all-euc1"
 
     - name: "rt-hub-isolated"
       cloud_id: "tgw-rtb-00isolated0euc1"
       description: "Isolated routing domain: on-prem reachable, no tenant-to-tenant path"
       status: active
       is_default: false
-      transit_gateway: "tgw-30all-euc1"
+      gateway: "tgw-30all-euc1"

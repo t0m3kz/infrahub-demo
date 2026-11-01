@@ -69,6 +69,21 @@ spec:
             kind: CloudGateway
             icon: "mdi:router-network"
           - namespace: Cloud
+            name: CsGatewayAttachmentItem
+            label: Cloud Gateway Attachments
+            kind: CloudGatewayAttachment
+            icon: "mdi:transit-connection-variant"
+          - namespace: Cloud
+            name: CsGatewayRouteTableItem
+            label: Cloud Gateway Route Tables
+            kind: CloudGatewayRouteTable
+            icon: "mdi:routes"
+          - namespace: Cloud
+            name: CsServiceEndpointItem
+            label: Cloud Service Endpoints
+            kind: CloudServiceEndpoint
+            icon: "mdi:cloud-lock-outline"
+          - namespace: Cloud
             name: CsVPNConnectionItem
             label: Cloud VPN Connections
             kind: CloudVPNConnection

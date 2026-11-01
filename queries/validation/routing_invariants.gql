@@ -154,15 +154,14 @@ query routing_invariants {
     }
   }
 
-  CloudTransitGatewayAttachment {
+  CloudGatewayAttachment {
     edges {
       node {
         id
         name { value }
-        attachment_type { value }
         owner_account { node { id name { value } environment { value } } }
         virtual_network { node { id name { value } account { node { id name { value } environment { value } } } } }
-        hybrid_endpoint { node { id } }
+        peer_gateway { node { id } }
         associated_route_table { node { id name { value } } }
         propagates_to_route_tables { edges { node { id name { value } } } }
       }

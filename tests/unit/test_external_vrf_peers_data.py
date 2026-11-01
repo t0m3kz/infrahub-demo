@@ -87,10 +87,10 @@ class TestAllDemoData:
         """connection_registered reads attached_gateway's attachments and transit_attachment's route table. A
         transit connection with no transit_attachment (a second hop without a hybrid attachment of its own) accepts
         nothing: a deny-all session."""
-        attachments = {a["name"]: a for a in _objects(_INTERCONNECTS / "02_cloud_hub", "CloudTransitGatewayAttachment")}
+        attachments = {a["name"]: a for a in _objects(_INTERCONNECTS / "02_cloud_hub", "CloudGatewayAttachment")}
         assert connection["attached_gateway"]
         attachment = connection.get("transit_attachment")
-        assert attachment is None or attachments[attachment]["attachment_type"] == "hybrid"
+        assert attachment is None or "peer_gateway" in attachments[attachment]
 
     def test_vif_accounts_are_prod_like_the_handoff(self) -> None:
         """Every account behind the PROD VIF is environment p (a non-prod account needs its own VIF)."""
@@ -98,7 +98,7 @@ class TestAllDemoData:
             account["name"]: account["environment"]
             for account in _objects(_ROOT / "data" / "demos" / "30_all", "CloudAccount")
         }
-        attachments = _objects(_INTERCONNECTS / "02_cloud_hub", "CloudTransitGatewayAttachment")
+        attachments = _objects(_INTERCONNECTS / "02_cloud_hub", "CloudGatewayAttachment")
         assert {accounts[a["owner_account"]] for a in attachments} == {"p"}
 
     def test_every_hub_vpc_propagates_into_the_hybrid_attachments_table(self) -> None:
@@ -107,9 +107,9 @@ class TestAllDemoData:
         This is what makes novantis (associated with rt-hub-isolated) reachable from on-prem, and its
         10.150.0.0/16 accepted on the colo edge's transit VIF session.
         """
-        attachments = _objects(_INTERCONNECTS / "02_cloud_hub", "CloudTransitGatewayAttachment")
-        (hybrid,) = [a for a in attachments if a["attachment_type"] == "hybrid"]
-        vpcs = [a for a in attachments if a["attachment_type"] == "vpc"]
+        attachments = _objects(_INTERCONNECTS / "02_cloud_hub", "CloudGatewayAttachment")
+        (hybrid,) = [a for a in attachments if "peer_gateway" in a]
+        vpcs = [a for a in attachments if "virtual_network" in a]
         assert vpcs
         missing = [a["name"] for a in vpcs if hybrid["associated_route_table"] not in a["propagates_to_route_tables"]]
         assert missing == []

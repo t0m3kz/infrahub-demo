@@ -251,7 +251,7 @@ def run(
             "TopologySessionCircuit": edges(sessions or []),
             "TopologyCarrierCircuit": edges(carriers or []),
             "CloudNetworkSegment": edges(segments or []),
-            "CloudTransitGatewayAttachment": edges(attachments or []),
+            "CloudGatewayAttachment": edges(attachments or []),
         }
     )
     for error in errors:

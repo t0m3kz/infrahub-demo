@@ -529,10 +529,17 @@ class TestCloudConsistency:
 
     @staticmethod
     def _attachment(kind: str, owner_account: str, network_account: str) -> dict[str, Any]:
+        """A network attachment (``vpc``) or a gateway-to-gateway one (anything else: no virtual network)."""
+        if kind != "vpc":
+            return {
+                "id": "id-att",
+                "name": {"value": "att-1"},
+                "owner_account": {"node": {"id": f"id-{owner_account}", "name": {"value": owner_account}}},
+                "virtual_network": {"node": None},
+            }
         return {
             "id": "id-att",
             "name": {"value": "att-1"},
-            "attachment_type": {"value": kind},
             "owner_account": {"node": {"id": f"id-{owner_account}", "name": {"value": owner_account}}},
             "virtual_network": {
                 "node": {
@@ -550,8 +557,9 @@ class TestCloudConsistency:
         errors, _ = run(attachments=[self._attachment("vpc", "acct-1", "acct-2")])
         assert (
             len(errors) == 1
-            and "(vpc) lives in account 'acct-1' but its virtual network 'vnet-1' is in account 'acct-2'" in errors[0]
+            and "(network target) lives in account 'acct-1' but its virtual network 'vnet-1' is in account 'acct-2'"
+            in errors[0]
         )
 
-    def test_other_attachment_types_are_not_checked(self) -> None:
+    def test_a_gateway_target_attachment_is_not_checked(self) -> None:
         assert run(attachments=[self._attachment("connect", "acct-1", "acct-2")])[0] == []

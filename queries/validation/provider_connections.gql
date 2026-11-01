@@ -10,7 +10,7 @@
 #   connection, ip_namespace, link_prefix, locations and both end ports. Each port carries the carrier circuits on it
 #   and on its parent interface (the derived underlay) and its device with its deployment and BGP processes.
 # - TopologyCarrierCircuit: locations, the connections it belongs to (PC2), its redundancy_group and end ports (PC13).
-# - CloudNetworkSegment and CloudTransitGatewayAttachment: owner and account consistency.
+# - CloudNetworkSegment and CloudGatewayAttachment: owner and account consistency.
 query provider_connections {
   TopologyProviderConnection {
     edges {
@@ -128,12 +128,11 @@ query provider_connections {
     }
   }
 
-  CloudTransitGatewayAttachment {
+  CloudGatewayAttachment {
     edges {
       node {
         id
         name { value }
-        attachment_type { value }
         owner_account { node { id name { value } } }
         virtual_network { node { id name { value } account { node { id name { value } } } } }
       }

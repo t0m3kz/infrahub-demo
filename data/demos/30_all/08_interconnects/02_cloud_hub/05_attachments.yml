@@ -1,7 +1,7 @@
 ---
 # Cross-account attachments onto the hub.
 #
-# `owner_account` is the tenant's own account while `transit_gateway` belongs to
+# `owner_account` is the tenant's own account while `gateway` belongs to
 # net-hub-aws-prod — that asymmetry *is* the cross-account attachment, and it is
 # the edge that lets the traversal cross an account boundary at all.
 #
@@ -33,18 +33,17 @@
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: CloudTransitGatewayAttachment
+  kind: CloudGatewayAttachment
   data:
     # The on-prem side: the transit connection PC-FR2-AWS-EUC1-PROD, owned by the network account itself.
     - name: "tgwa-hybrid-eqx-fr2"
       cloud_id: "tgw-attach-0hybridfr2"
       description: "Hybrid attachment carrying on-prem DC traffic in over Equinix FR2"
       status: active
-      attachment_type: hybrid
-      transit_gateway: "tgw-30all-euc1"
+      gateway: "tgw-30all-euc1"
       owner_account: "net-hub-aws-prod"
-      # The provider connection that lands here names this attachment as its `transit_attachment`
-      # (../05_provider_connections/01_aws_fr2_euc1.yml); the edge is set from the connection side.
+      # Target: the Direct Connect gateway the on-prem link lands on (an attachment has exactly one target).
+      peer_gateway: "dxgw-30all"
       associated_route_table: "rt-hub-shared"
       propagates_to_route_tables:
         - "rt-hub-shared"
@@ -55,8 +54,7 @@ spec:
       cloud_id: "tgw-attach-0vaultexvpc"
       description: "Vaultex (C003) production VPC onto the shared hub domain"
       status: active
-      attachment_type: vpc
-      transit_gateway: "tgw-30all-euc1"
+      gateway: "tgw-30all-euc1"
       owner_account: "vaultex-aws-prod"
       virtual_network: "vaultex-vpc-prod"
       associated_route_table: "rt-hub-shared"
@@ -67,8 +65,7 @@ spec:
       cloud_id: "tgw-attach-0nordixvpc"
       description: "Nordix (C001) production VPC onto the shared hub domain (target of egress rule 10)"
       status: active
-      attachment_type: vpc
-      transit_gateway: "tgw-30all-euc1"
+      gateway: "tgw-30all-euc1"
       owner_account: "nordix-aws-prod"
       virtual_network: "nordix-vpc-prod"
       associated_route_table: "rt-hub-shared"
@@ -79,8 +76,7 @@ spec:
       cloud_id: "tgw-attach-0novantisvpc"
       description: "Novantis (C015) production VPC; propagates into rt-hub-shared so on-prem can reach it"
       status: active
-      attachment_type: vpc
-      transit_gateway: "tgw-30all-euc1"
+      gateway: "tgw-30all-euc1"
       owner_account: "novantis-aws-prod"
       virtual_network: "novantis-vpc-prod"
       associated_route_table: "rt-hub-isolated"

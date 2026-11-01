@@ -11,6 +11,7 @@ spec:
     - {prefix: "10.200.0.0/16", ip_namespace: "PROD", status: active, description: "AWS VPC block"}
     - {prefix: "10.201.0.0/16", ip_namespace: "PROD", status: active, description: "Azure VNet block"}
     - {prefix: "10.202.0.0/16", ip_namespace: "PROD", status: active, description: "GCP VPC block"}
+    - {prefix: "10.203.0.0/16", ip_namespace: "PROD", status: active, description: "Azure spoke VNet block"}
     - {prefix: "10.90.255.0/24", ip_namespace: "PROD", status: active, description: "DC90 loopbacks"}
     - {prefix: "10.255.128.0/31", ip_namespace: "PROD", status: active, description: "Link: AWS transit VIF"}
     - {prefix: "10.255.128.2/31", ip_namespace: "PROD", status: active, description: "Link: AWS private VIF"}

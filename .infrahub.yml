@@ -352,6 +352,11 @@ check_definitions:
   - name: validate_customer_cloud_account
     class_name: CheckCustomerCloudAccount
     file_path: checks/customer_cloud_account.py
+  # Targetless: the cloud side of a connection (gateway attachments and route tables, transports that ride on one
+  # another, tunnels, service endpoints) is judged as a whole: rules R1 to R6 hold what the schema cannot.
+  - name: validate_cloud_connection
+    class_name: CheckCloudConnection
+    file_path: checks/cloud_connection.py
   # Targetless: the pairing is written by add_patch_panel from the ports, and a person can edit it; the check
   # compares every panel with what the generator would write.
   - name: validate_patch_panel_pairing
@@ -715,6 +720,8 @@ queries:
     file_path: queries/validation/provider_decommission.gql
   - name: customer_cloud_account
     file_path: queries/validation/customer_cloud_account.gql
+  - name: cloud_connection
+    file_path: queries/validation/cloud_connection.gql
   - name: patch_panel_pairing
     file_path: queries/validation/patch_panel_pairing.gql
   - name: suite_capacity

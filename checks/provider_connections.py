@@ -36,7 +36,7 @@ PC13 WARNING: the carriers of one ``redundancy_group`` end, on the near side, on
 from the ports (``utils/circuit_underlay.py``).
 
 Also two consistency rules of the cloud models, no removal behind them: a ``CloudNetworkSegment`` is owned by the owner
-of its customer footprint, and a vpc ``CloudTransitGatewayAttachment`` lives in the account of its virtual network.
+of its customer footprint, and a ``CloudGatewayAttachment`` to a virtual network lives in the account of its virtual network.
 
 A decommissioned connection or session is exempt (nothing is built for it) from the rules above; what it must no longer
 have (PC14) and the debris of deleted connections (PC15) are judged by ``checks/provider_decommission.py``.
@@ -161,7 +161,7 @@ class CheckProviderConnections(WarningCheck):
             self._validate_connection(connection, live_sessions)
         self._validate_redundancy(live_connections, _dicts(cleaned.get(CARRIER)))
         self._validate_cloud_segments(_dicts(cleaned.get("CloudNetworkSegment")))
-        self._validate_attachments(_dicts(cleaned.get("CloudTransitGatewayAttachment")))
+        self._validate_attachments(_dicts(cleaned.get("CloudGatewayAttachment")))
 
     # ------------------------------------------------------------------
     # PC1, PC2 and the session types (PC10): every circuit
@@ -539,18 +539,18 @@ class CheckProviderConnections(WarningCheck):
 
     def _validate_attachments(self, attachments: list[dict[str, Any]]) -> None:
         for attachment in attachments:
-            if attachment.get("attachment_type") != "vpc":
-                continue
             network = attachment.get("virtual_network") or {}
+            if not isinstance(network, dict) or not network:
+                continue
             account = _ref(network.get("account")) if isinstance(network, dict) else None
             owner_account = _ref(attachment.get("owner_account"))
             if account and owner_account and account != owner_account:
                 self._error(
                     attachment,
-                    "CloudTransitGatewayAttachment",
-                    f"Transit gateway attachment '{_name(attachment)}' (vpc) lives in account "
+                    "CloudGatewayAttachment",
+                    f"Gateway attachment '{_name(attachment)}' (network target) lives in account "
                     f"'{_name(attachment['owner_account'])}' but its virtual network '{_name(network)}' is in account "
-                    f"'{_name(network['account'])}': a vpc attachment is in the account of its network.",
+                    f"'{_name(network['account'])}': a network attachment is in the account of its network.",
                 )
 
     def _error(self, node: dict[str, Any], kind: str, message: str) -> None:

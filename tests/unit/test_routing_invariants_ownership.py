@@ -262,6 +262,6 @@ def test_the_query_selects_what_rule_eight_reads() -> None:
         "session_circuits",
         "registered_prefixes",
     } <= relationship_names("TopologyProviderConnection")
-    assert {"transit_gateway", "associated_route_table"} <= relationship_names("CloudTransitGatewayAttachment")
-    assert "attachments" in relationship_names("CloudTransitGateway")
+    assert {"gateway", "associated_route_table"} <= relationship_names("CloudGatewayAttachment")
+    assert "attachments" in relationship_names("CloudGateway")
     assert "segment" in relationship_names("ManagedSegmentDeployment")

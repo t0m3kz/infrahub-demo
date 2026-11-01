@@ -40,18 +40,16 @@ def _attachment(
     env: str | None,
     associated: str,
     propagates: list[str],
-    endpoint_id: str | None = None,
 ) -> dict[str, Any]:
     account = {"node": {"id": f"acc-{name}", "name": _v(f"acc-{name}"), "environment": _v(env)}}
     return {
         "id": f"att-{name}",
         "name": _v(name),
-        "attachment_type": _v(att_type),
         "owner_account": account,
         "virtual_network": {"node": {"id": f"vn-{name}", "name": _v(f"vn-{name}"), "account": account}}
         if att_type == "vpc"
         else {"node": None},
-        "hybrid_endpoint": {"node": {"id": endpoint_id}} if endpoint_id else {"node": None},
+        "peer_gateway": {"node": {"id": f"gw-{name}"}} if att_type != "vpc" else {"node": None},
         "associated_route_table": {"node": {"id": f"rt-{associated}", "name": _v(associated)}},
         "propagates_to_route_tables": {"edges": [{"node": {"id": f"rt-{rt}", "name": _v(rt)}} for rt in propagates]},
     }
@@ -138,8 +136,8 @@ class TestTgwRouteTables:
     def test_pure_table_passes(self) -> None:
         """Prod VPCs and a prod hub attachment sharing tables are accepted."""
         check = _run(
-            CloudTransitGatewayAttachment=[
-                _attachment("hub", "hybrid", "p", "shared", ["shared", "isolated"]),
+            CloudGatewayAttachment=[
+                _attachment("hub", "gateway", "p", "shared", ["shared", "isolated"]),
                 _attachment("a", "vpc", "p", "shared", ["shared"]),
                 _attachment("b", "vpc", "p", "isolated", ["isolated"]),
             ]
@@ -149,7 +147,7 @@ class TestTgwRouteTables:
     def test_mixed_association_fails(self) -> None:
         """A prod and a staging VPC associated with one table is an error."""
         check = _run(
-            CloudTransitGatewayAttachment=[
+            CloudGatewayAttachment=[
                 _attachment("a", "vpc", "p", "shared", []),
                 _attachment("b", "vpc", "s", "shared", []),
             ]
@@ -160,7 +158,7 @@ class TestTgwRouteTables:
     def test_mixed_propagation_fails(self) -> None:
         """Propagating a prod and a non-prod attachment into one table is an error."""
         check = _run(
-            CloudTransitGatewayAttachment=[
+            CloudGatewayAttachment=[
                 _attachment("a", "vpc", "p", "ra", ["shared"]),
                 _attachment("b", "vpc", "d", "rb", ["shared"]),
             ]
@@ -170,27 +168,26 @@ class TestTgwRouteTables:
     def test_non_prod_environments_are_one_type(self) -> None:
         """Staging and development both resolve to non_prod, so they may share a table."""
         check = _run(
-            CloudTransitGatewayAttachment=[
+            CloudGatewayAttachment=[
                 _attachment("a", "vpc", "s", "shared", []),
                 _attachment("b", "vpc", "d", "shared", []),
             ]
         )
         assert check._captured_errors == []
 
-    def test_hybrid_attachment_resolves_via_its_connections_namespace(self) -> None:
-        """A hybrid attachment takes the type of its connection's namespace, not its account's."""
+    def test_gateway_attachment_resolves_via_its_owner_account(self) -> None:
+        """An attachment whose target is a gateway takes the environment of its owner account."""
         check = _run(
-            CloudTransitGatewayAttachment=[
-                _attachment("hub", "hybrid", "p", "shared", [], endpoint_id="conn-1"),
+            CloudGatewayAttachment=[
+                _attachment("hub", "gateway", "d", "shared", []),
                 _attachment("a", "vpc", "p", "shared", []),
-            ],
-            TopologyProviderConnection=[_connection("conn-1", "non_prod", sessions=())],
+            ]
         )
         assert len(check._captured_errors) == 1
 
     def test_unknown_environment_warns(self) -> None:
         """An account without an environment is a warning, not an error."""
-        check = _run(CloudTransitGatewayAttachment=[_attachment("a", "vpc", None, "shared", [])])
+        check = _run(CloudGatewayAttachment=[_attachment("a", "vpc", None, "shared", [])])
         assert check._captured_errors == []
         assert check._captured_infos and check._captured_infos[0].startswith("WARNING")
 

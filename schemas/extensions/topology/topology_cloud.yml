@@ -238,6 +238,16 @@ nodes:
         optional: true
         description: Subnets within this virtual network
         order_weight: 2000
+      # Symmetric: one write is seen from both networks (measured on 1.11.9, one identifier, no direction).
+      - name: peers
+        label: Peers
+        peer: CloudVirtualNetwork
+        cardinality: many
+        kind: Attribute
+        optional: true
+        identifier: "cloud_network_peering"
+        description: "Networks peered directly with this one (VPC peering, VNet peering)"
+        order_weight: 2100
     uniqueness_constraints:
       - [account, name__value]
 

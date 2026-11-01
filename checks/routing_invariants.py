@@ -138,8 +138,8 @@ class CheckRoutingInvariants(WarningCheck):
             interfaces=[iface for key in _INTERNET_INTERFACE_KEYS for iface in cleaned.get(key) or []],
         )
         connections = cleaned.get("TopologyProviderConnection") or []
-        connection_types = self._validate_connection_namespaces(connections)
-        self._validate_tgw_route_tables(cleaned.get("CloudTransitGatewayAttachment") or [], connection_types)
+        self._validate_connection_namespaces(connections)
+        self._validate_hub_route_tables(cleaned.get("CloudGatewayAttachment") or [])
         networks = cleaned.get("CloudVirtualNetwork") or []
         offices = cleaned.get("TopologyCustomerOffice") or []
         tunnels = cleaned.get(SESSION_CIRCUIT) or []
@@ -204,9 +204,8 @@ class CheckRoutingInvariants(WarningCheck):
     # 3. Provider connections
     # ------------------------------------------------------------------
 
-    def _validate_connection_namespaces(self, connections: list[dict[str, Any]]) -> dict[str, str]:
-        """Check each connection's namespace against its network; return connection id -> its namespace type."""
-        resolved: dict[str, str] = {}
+    def _validate_connection_namespaces(self, connections: list[dict[str, Any]]) -> None:
+        """Check each connection's namespace against its network."""
         for connection in connections:
             namespace = connection.get("ip_namespace") or {}
             actual = namespace.get("namespace_type")
@@ -220,19 +219,16 @@ class CheckRoutingInvariants(WarningCheck):
                         f"{expected} virtual network but lies in the {actual} namespace '{namespace.get('name')}'"
                     )
                 )
-            if connection.get("id"):
-                resolved[connection["id"]] = actual
-        return resolved
 
     # ------------------------------------------------------------------
-    # 4. TGW route-table environment purity
+    # 4. Hub route-table environment purity
     # ------------------------------------------------------------------
 
-    def _validate_tgw_route_tables(self, attachments: list[dict[str, Any]], connection_types: dict[str, str]) -> None:
+    def _validate_hub_route_tables(self, attachments: list[dict[str, Any]]) -> None:
         members: dict[str, dict[str, Any]] = {}
         for att in attachments:
             att_name = att.get("name", "<unnamed-attachment>")
-            att_type = self._attachment_type(att, connection_types)
+            att_type = self._attachment_type(att)
             tables = [att.get("associated_route_table"), *(att.get("propagates_to_route_tables") or [])]
             for table in tables:
                 if not isinstance(table, dict) or not table.get("id"):
@@ -251,23 +247,18 @@ class CheckRoutingInvariants(WarningCheck):
             if len(entry["types"]) > 1:
                 self.log_error(
                     message=(
-                        f"TGW route table '{entry['name']}' mixes environments: "
+                        f"Hub route table '{entry['name']}' mixes environments: "
                         f"{ {t: sorted(n) for t, n in sorted(entry['types'].items())} }"
                     )
                 )
 
     @staticmethod
-    def _attachment_type(att: dict[str, Any], connection_types: dict[str, str]) -> str | None:
-        """vpc -> its account's environment; hybrid -> its connection's namespace, else the owner account's."""
-        if att.get("attachment_type") == "vpc":
-            environment = _account_environment(att.get("virtual_network")) or (att.get("owner_account") or {}).get(
-                "environment"
-            )
-            return _type_for_environment(environment)
-        endpoint = att.get("hybrid_endpoint") or {}
-        if endpoint.get("id") in connection_types:
-            return connection_types[endpoint["id"]]
-        return _type_for_environment((att.get("owner_account") or {}).get("environment"))
+    def _attachment_type(att: dict[str, Any]) -> str | None:
+        """A network attachment -> its network's account environment; a gateway one -> the owner account's."""
+        owner_environment = (att.get("owner_account") or {}).get("environment")
+        if att.get("virtual_network"):
+            return _type_for_environment(_account_environment(att.get("virtual_network")) or owner_environment)
+        return _type_for_environment(owner_environment)
 
     # ------------------------------------------------------------------
     # 5-6. VPC and office aggregates

@@ -212,9 +212,8 @@ def test_the_aws_connections_share_one_stub_and_the_hub() -> None:
         assert "owner" not in row
     assert connections["PC-FR2-AWS-EUC1-PROD"]["transit_attachment"] == "tgwa-hybrid-eqx-fr2"
     assert "transit_attachment" not in connections["PC-AMNE-AWS-EUC1-PROD"]
-    attachments = {name(a): a.item for a in declared("CloudTransitGatewayAttachment", _ALL)}
-    assert attachments["tgwa-hybrid-eqx-fr2"]["attachment_type"] == "hybrid"
-    assert "hybrid_endpoint" not in attachments["tgwa-hybrid-eqx-fr2"]
+    attachments = {name(a): a.item for a in declared("CloudGatewayAttachment", _ALL)}
+    assert attachments["tgwa-hybrid-eqx-fr2"]["peer_gateway"] == "dxgw-30all"
 
 
 def test_the_vpn_is_model_only_with_two_provider_assigned_tunnel_ranges() -> None:

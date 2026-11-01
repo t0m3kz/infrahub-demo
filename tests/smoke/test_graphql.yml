@@ -558,6 +558,14 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
+    resource_name: cloud_connection
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/cloud_connection.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
     resource_name: patch_panel_pairing
     tests:
       - name: syntax_check

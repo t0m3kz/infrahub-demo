@@ -978,29 +978,28 @@ class SecurityTag(CoreNode):
     network_segments: RelationshipManager[ManagedNetworkSegment]
 
 
-class CloudTransitGateway(CloudResource):
-    default_route_table: Boolean
-    dns_support: Boolean
-    vpn_ecmp_support: Boolean
+class CloudGateway(CloudResource):
+    asn: IntegerOptional
+    gateway_type: Dropdown
+    ip_address: StringOptional
     account: RelationshipAttribute[CloudAccount]
-    asn: RelationshipAttribute[RoutingAutonomousSystem]
-    attached_virtual_networks: RelationshipManager[CloudVirtualNetwork]
     region: RelationshipAttribute[TopologyCloudRegion]
+    attachments: RelationshipManager[CloudGatewayAttachment]
 
 
-class CloudTransitGatewayAttachment(CloudResource):
-    attachment_type: Dropdown
-    associated_route_table: RelationshipAttribute[CloudTransitGatewayRouteTable]
-    hybrid_endpoint: RelationshipAttribute[TopologyProviderConnection]
+class CloudGatewayAttachment(CloudResource):
+    associated_route_table: RelationshipAttribute[CloudGatewayRouteTable]
+    gateway: RelationshipAttribute[CloudGateway]
     owner_account: RelationshipAttribute[CloudAccount]
-    propagates_to_route_tables: RelationshipManager[CloudTransitGatewayRouteTable]
-    transit_gateway: RelationshipAttribute[CloudTransitGateway]
+    peer_gateway: RelationshipAttribute[CloudGateway]
     virtual_network: RelationshipAttribute[CloudVirtualNetwork]
+    allowed_prefixes: RelationshipManager[IpamPrefix]
+    propagates_to_route_tables: RelationshipManager[CloudGatewayRouteTable]
 
 
-class CloudTransitGatewayRouteTable(CloudResource):
+class CloudGatewayRouteTable(CloudResource):
     is_default: Boolean
-    transit_gateway: RelationshipAttribute[CloudTransitGateway]
+    gateway: RelationshipAttribute[CloudGateway]
 
 
 class LoadbalancerVIP(CoreNode):
@@ -1035,7 +1034,7 @@ class TopologyProviderConnection(CoreNode):
     status: Dropdown
     vlan_id: IntegerOptional
     account: RelationshipAttribute[CloudAccount]
-    attached_gateway: RelationshipAttribute[CloudTransitGateway]
+    attached_gateway: RelationshipAttribute[CloudGateway]
     attached_network: RelationshipAttribute[CloudVirtualNetwork]
     far: RelationshipAttribute[TopologyFacility]
     ip_namespace: RelationshipAttribute[IpamNamespace]
@@ -1044,7 +1043,7 @@ class TopologyProviderConnection(CoreNode):
     owner: RelationshipAttribute[OrganizationCustomer]
     password: RelationshipAttribute[RoutingPassword]
     provider_as: RelationshipAttribute[RoutingAutonomousSystem]
-    transit_attachment: RelationshipAttribute[CloudTransitGatewayAttachment]
+    transit_attachment: RelationshipAttribute[CloudGatewayAttachment]
     carrier_circuits: RelationshipManager[TopologyCarrierCircuit]
     link_prefixes: RelationshipManager[IpamPrefix]
     registered_prefixes: RelationshipManager[IpamPrefix]
@@ -1071,6 +1070,7 @@ class CloudVirtualNetwork(CloudResource):
     account: RelationshipAttribute[CloudAccount]
     cidr_blocks: RelationshipManager[IpamPrefix]
     network_segments: RelationshipManager[CloudNetworkSegment]
+    peers: RelationshipManager[CloudVirtualNetwork]
     region: RelationshipAttribute[TopologyCloudRegion]
 
 
