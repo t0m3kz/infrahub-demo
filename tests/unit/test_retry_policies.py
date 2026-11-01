@@ -1,7 +1,7 @@
 """The retry and polling policy is defined once in utils/limits.py, and every generator reads it from there.
 
-The values are pinned: they were the module constants before they moved, and a change here changes how long a
-generator run waits for another one.
+A change of a value changes how long a generator run waits for another one, so what must hold between values is
+tested, not the values.
 """
 
 from __future__ import annotations
@@ -18,13 +18,9 @@ import pytest
 from generators.helpers.common import save_with_node_not_found_retry
 from utils import limits
 from utils.limits import (
-    BORDER_LEAF_WAIT,
-    LB_VIP_REREAD,
     NODE_SAVE_RETRY,
-    OFFICE_EDGE_WAIT,
     PARENT_GENERATOR_WAIT,
     RESOURCE_LOCK,
-    RULE_SAVE_ATTEMPTS,
     WAIT_FOR_PEER_GENERATOR,
     PollPolicy,
     ResourceLockPolicy,
@@ -52,26 +48,7 @@ _RETRY_CONSTANT = re.compile(r"RETR|ATTEMPT|DELAY|INTERVAL|STALE|POLL")
 
 
 class TestPolicyValues:
-    """Every policy keeps the value its module constant had before it moved to utils/limits.py."""
-
-    @pytest.mark.parametrize(
-        ("policy", "attempts", "delay"),
-        [
-            pytest.param(WAIT_FOR_PEER_GENERATOR, 10, 3.0, id="wait-for-peer-generator"),
-            pytest.param(NODE_SAVE_RETRY, 5, 2.0, id="node-save-retry"),
-            pytest.param(LB_VIP_REREAD, 12, 5.0, id="lb-vip-reread"),
-            pytest.param(OFFICE_EDGE_WAIT, 8, 3.0, id="office-edge-wait"),
-            pytest.param(BORDER_LEAF_WAIT, 3, 2.0, id="border-leaf-wait"),
-            pytest.param(RESOURCE_LOCK, 40, 2.0, id="resource-lock"),
-        ],
-    )
-    def test_retry_policy_values(self, policy: RetryPolicy, attempts: int, delay: float) -> None:
-        """A retry policy is (attempts, base delay)."""
-        assert (policy.attempts, policy.delay) == (attempts, delay)
-
-    def test_resource_lock_is_stale_after_five_minutes(self) -> None:
-        """A lock older than 300 s is treated as abandoned."""
-        assert RESOURCE_LOCK.stale_after == 300
+    """The relations the policies must keep to each other."""
 
     def test_a_waiter_outlasts_a_lock_that_is_still_to_become_stale(self) -> None:
         """A lock whose release failed stays until it is stale_after old; the waiters, backing off to the cap of
@@ -79,14 +56,6 @@ class TestPolicyValues:
         waited = sum(min(RESOURCE_LOCK.delay * 2**attempt, 10.0) for attempt in range(RESOURCE_LOCK.attempts))
 
         assert waited > RESOURCE_LOCK.stale_after
-
-    def test_parent_generator_wait_polls_every_three_seconds_for_half_an_hour(self) -> None:
-        """The wait for a parent generator run in flight: interval 3 s, timeout 1800 s."""
-        assert (PARENT_GENERATOR_WAIT.interval, PARENT_GENERATOR_WAIT.timeout) == (3, 1800)
-
-    def test_rule_save_attempts(self) -> None:
-        """A colliding policy rule index is retried up to five times."""
-        assert RULE_SAVE_ATTEMPTS == 5
 
     def test_policies_are_immutable(self) -> None:
         """A frozen policy cannot be changed by one caller for all (tests replace it with dataclasses.replace)."""

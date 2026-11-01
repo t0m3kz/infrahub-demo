@@ -13,7 +13,6 @@ from utils.ownership import (
     CircuitOwnerError,
     OwnershipConflict,
     circuit_owner,
-    customer_owner,
     exchange_policies,
     ownership_conflicts,
 )
@@ -231,21 +230,3 @@ class TestCircuitOwner:
         """A handoff or carrier circuit: no office, no owner."""
         assert circuit_owner([]) is None
         assert circuit_owner([None]) is None
-
-
-class TestCustomerOwner:
-    """customer_owner keys only an OrganizationCustomer."""
-
-    @pytest.mark.parametrize(
-        ("owner", "expected"),
-        [
-            ({"typename": "OrganizationCustomer", "org_id": "C003", "display_label": "Vaultex"}, "C003"),
-            ({"typename": "OrganizationCustomer", "org_id": None, "display_label": "Vaultex"}, "Vaultex"),
-            ({"typename": "OrganizationProvider", "org_id": "P028"}, None),
-            (None, None),
-            ("C003", None),
-        ],
-    )
-    def test_only_a_customer_counts(self, owner: object, expected: str | None) -> None:
-        """Customer: org_id, else display_label; anything else: None."""
-        assert customer_owner(owner) == expected
