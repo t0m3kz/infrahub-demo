@@ -100,8 +100,11 @@ def inventory_payload(
             for port_edge in circuit["capabilities"]["edges"]:
                 port = port_edge["node"]
                 device = port["device"]["node"]["name"]["value"]
-                port["device"]["node"]["deployment"] = model.deployment(device)
-                port["__typename"] = "DcimVirtualInterface" if "parent_interface" in port else "DcimPhysicalInterface"
+                port["device"]["node"].update(model.placement(device))
+                if port.get("__typename") != "CloudPeeringInterface":
+                    port["__typename"] = (
+                        "DcimVirtualInterface" if "parent_interface" in port else "DcimPhysicalInterface"
+                    )
                 address = (addresses or {}).get((device, port["name"]["value"]))
                 port["ip_address"] = {"node": {"address": {"value": address}} if address else None}
                 _with_circuit_id([e["node"] for e in port["capabilities"]["edges"]])

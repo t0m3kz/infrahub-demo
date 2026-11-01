@@ -40,6 +40,10 @@ BGP_PROCESS = "ManagedBGP"
 OVERLAY_ROLE = "overlay"
 # A provider-hosted network function (Equinix Network Edge): a device kind we do not administer.
 NETWORK_APPLIANCE_KIND = "CloudNetworkAppliance"
+# The cloud side of a circuit: a transport is a device without role or deployment (a port, a LAG, and the
+# CloudPeeringInterface that rides on them); the provider's side is authored, never generated.
+CLOUD_PEERING_KIND = "CloudPeeringInterface"
+CLOUD_TRANSPORT_KINDS = ("CloudDirectConnect", "CloudVPNConnection")
 # A handoff end is a VLAN sub-interface, <parent>.<vlan>: the VLAN lives in the name.
 _VLAN_SUBINTERFACE = re.compile(r".+\.(\d+)")
 
@@ -59,6 +63,13 @@ def subinterface_vlan(name: str) -> int | None:
     """The VLAN of a sub-interface named ``<port>.<vlan>``, None for any other name."""
     match = _VLAN_SUBINTERFACE.fullmatch(name)
     return int(match.group(1)) if match else None
+
+
+def is_cloud_end(port: dict[str, Any]) -> bool:
+    """The cleaned end is a cloud peering interface, or a port of a cloud transport (a device with no deployment)."""
+    return port.get("typename") == CLOUD_PEERING_KIND or (port.get("device") or {}).get("typename") in (
+        CLOUD_TRANSPORT_KINDS
+    )
 
 
 def _port_and_parent(port: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:

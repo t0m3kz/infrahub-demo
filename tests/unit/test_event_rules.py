@@ -227,7 +227,7 @@ def test_colocation_generators_are_registered_in_infrahub_yml() -> None:
 
 
 def test_carrier_circuit_rules_watch_creation_ends_and_status() -> None:
-    """add_circuit runs on creation, when `endpoints` change and when `status` changes, nothing else.
+    """add_circuit runs on creation, when `capabilities` change and when `status` changes, nothing else.
 
     The status rule is what lets a carrier set to decommissioned (or back to active) reach, through add_circuit's
     fan-out, the sessions riding it. `locations` (written by add_circuit itself, so a rule would loop) and
@@ -236,12 +236,12 @@ def test_carrier_circuit_rules_watch_creation_ends_and_status() -> None:
     rules = _rules_for("TopologyCarrierCircuit")
     assert sorted(rules) == [
         "trigger-circuit-on-created",
-        "trigger-circuit-on-endpoints-updated",
+        "trigger-circuit-on-interface-capabilities-updated",
         "trigger-circuit-on-status-updated",
     ]
     assert {rule["action"] for rule in rules.values()} == {"run-circuit-generator"}
-    assert _match_fields(rules["trigger-circuit-on-endpoints-updated"]) == [
-        ("CoreNodeTriggerRelationshipMatch", "endpoints")
+    assert _match_fields(rules["trigger-circuit-on-interface-capabilities-updated"]) == [
+        ("CoreNodeTriggerRelationshipMatch", "capabilities")
     ]
     assert _match_fields(rules["trigger-circuit-on-status-updated"]) == [("CoreNodeTriggerAttributeMatch", "status")]
     status_rule = rules["trigger-circuit-on-status-updated"]
@@ -258,7 +258,7 @@ def test_the_circuit_action_runs_add_circuit_on_the_carrier_circuits_group() -> 
 
 _SESSION_COMMON_RULES = {
     "created": None,
-    "endpoints-updated": ("CoreNodeTriggerRelationshipMatch", "endpoints"),
+    "capabilities-updated": ("CoreNodeTriggerRelationshipMatch", "capabilities"),
     "status-updated": ("CoreNodeTriggerAttributeMatch", "status"),
 }
 # What only a handoff reads, beyond its ends and status (they fire for every type of the one kind, harmlessly).
@@ -276,7 +276,7 @@ def test_the_virtual_circuit_action_runs_the_session_generator_on_the_virtual_ci
 
 def test_the_session_kind_has_its_own_five_rules() -> None:
     """One set of rules on the one kind (a rule on a generic is unprobed): created, the ends, the status, and what a
-    handoff reads. `cloud_endpoint` is not read, so it has no rule."""
+    handoff reads."""
     rules = _rules_for("TopologySessionCircuit")
     expected = {**_SESSION_COMMON_RULES, **_HANDOFF_ONLY_RULES}
     assert len(rules) == 5

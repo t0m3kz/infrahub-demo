@@ -26,6 +26,7 @@ from tests.unit.simulators.circuit_fakes import (
     ISP,
     METRO,
     REGION,
+    SAAS_REGION,
     SIBLING_CAGE,
     VIRTUAL_COLOCATION,
     FakeClient,
@@ -57,6 +58,15 @@ class TestEndpoints:
         assert bl is not None and bare is not None
         assert bl.deployment == CircuitLocation(id="dep-DC10", kind="TopologyDataCenter", label="DC10")
         assert bare.deployment is None
+
+    def test_a_cloud_transport_end_is_placed_by_its_region(self) -> None:
+        """A transport has no deployment: its region (or SaaS region) is where the end sits."""
+        dx = CircuitEndpoint.parse(clean_data(_transport_port()))
+        saas = CircuitEndpoint.parse(clean_data(_saas_transport_port()))
+
+        assert dx is not None and saas is not None
+        assert dx.deployment == CircuitLocation(id="loc-eu-central-1", kind="TopologyCloudRegion", label="eu-central-1")
+        assert saas.deployment == CircuitLocation(id="loc-webex-eu", kind="TopologySaasRegion", label="webex-eu")
 
 
 class TestCarrierCircuitInput:
@@ -90,6 +100,16 @@ def _service_edge_nic(**kwargs: Any) -> dict[str, Any]:
     return interface("if-nic", "vnic-fr2", "AWS-EUC1-SE", deployment=REGION, **kwargs)
 
 
+def _transport_port(**kwargs: Any) -> dict[str, Any]:
+    """A port of a cloud transport (a device with no deployment): its facility is its region."""
+    return interface("if-dx", "Ethernet1", "dx-c900-fra", transport_region=REGION, **kwargs)
+
+
+def _saas_transport_port(**kwargs: Any) -> dict[str, Any]:
+    """A port of a SaaS transport: its facility is its SaaS region."""
+    return interface("if-saas", "Ethernet1", "webex-eu-1", transport_saas_region=SAAS_REGION, **kwargs)
+
+
 def _isp_pe(**kwargs: Any) -> dict[str, Any]:
     """The ISP's access PE, deployed in its TopologyExternalProviders."""
     return interface("if-pe", "xe-0/0/1", "pe-orange-fr", deployment=ISP, **kwargs)
@@ -109,6 +129,10 @@ class TestCarrierCircuitPlacement:
             pytest.param([cage_edge(), _aws_router()], [CAGE], ["loc-eu-central-1"], id="cloud-region-derived"),
             pytest.param(
                 [cage_edge(), _service_edge_nic()], [CAGE], ["loc-eu-central-1"], id="service-edge-nic-region-derived"
+            ),
+            pytest.param([cage_edge(), _transport_port()], [CAGE], ["loc-eu-central-1"], id="transport-region-derived"),
+            pytest.param(
+                [cage_edge(), _saas_transport_port()], [CAGE], ["loc-webex-eu"], id="transport-saas-region-derived"
             ),
             pytest.param([cage_edge(), _isp_pe()], [CAGE], ["loc-ORANGE-FR"], id="isp-derived"),
             pytest.param([dc_border_leaf(), _isp_pe()], [], ["dep-DC10", "loc-ORANGE-FR"], id="both-ends-derived"),

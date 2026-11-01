@@ -2,15 +2,17 @@
 
 A carrier circuit is a cable-like link: two ends, each a physical port, and a port carries at most one of them. A
 ``virtual_connection`` (an Equinix Fabric connection or a Megaport VXC) is the exception to both of those rules.
-The schema caps the ends (``capabilities``: min_count 2, max_count 2) only when the circuit side is
+The schema caps the ends (``capabilities``: min_count 1, max_count 2) only when the circuit side is
 written. A write from the interface side (``DcimInterface.capabilities`` is declared by the generic
 without counts) is never checked against the cap, and deleting a device leaves its circuits with one end, so the
 rules the schema cannot hold are held here, on the circuits as a whole:
 
 1. a port is an end of at most one carrier circuit; a ``virtual_connection`` is exempt (a provider port hosts one
    connection per S-tag), the other types on that same port still hold the rule among themselves,
-2. both ends are a DcimPhysicalInterface (not a virtual interface or another capability); a ``virtual_connection``
-   may also end on a DcimVirtualInterface (the NIC of a provider-hosted appliance, which has no cable),
+2. both ends are a DcimPhysicalInterface (not a virtual interface, a cloud peering interface or another capability);
+   a port of a cloud transport is one (the transport is a device with no role and no deployment, nothing about it is
+   judged here); a ``virtual_connection`` may also end on a DcimVirtualInterface (the NIC of a provider-hosted
+   appliance, which has no cable),
 3. a circuit has exactly two ends.
 
 Session circuits are out of scope (a tunnel port carries several; the one-session-per-port rule of the

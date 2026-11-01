@@ -6,6 +6,8 @@ port with the carrier circuits found on it (or on its parent interface), the cab
 BGP processes and deployment. What the generators add at load time is rebuilt here by the same rules, so the real
 ``CheckCircuitPlacement`` can run over the shipped data without an Infrahub:
 
+- the cloud transports (``CloudDirectConnect``: placed by their ``region``, they have no ``deployment``) and their
+  peering interfaces (the far end of a cloud handoff),
 - the colocation edges (``eg-<zone><NN>``: a ``CloudNetworkAppliance`` in a virtual colocation, else a physical
   device), the DC border leaves (``bl-<dc>...``) and the SD-WAN offices' edges, each with its one ``overlay`` process,
 - the facility locations of each carrier circuit, derived by the real ``plan_locations`` of ``add_circuit``,
@@ -36,6 +38,9 @@ HANDOFF = "handoff"
 
 PHYSICAL_DEVICE = "DcimPhysicalDevice"
 APPLIANCE = "CloudNetworkAppliance"
+# A cloud transport has no deployment: its facility is its region.
+TRANSPORT = "CloudDirectConnect"
+PEERING = "CloudPeeringInterface"
 # Where the place kinds a circuit ends on are declared.
 _PLACE_KINDS = (
     "TopologyDataCenter",
@@ -79,6 +84,7 @@ class _Model:
         self.devices: dict[str, dict[str, Any]] = {}
         self._add_declared_devices()
         self._add_generated_devices()
+        self.peerings = {(str(i.item["device"]), name(i)): i for i in _all(PEERING)}
         self.parents = {
             (str(i.item["device"]), name(i)): str(i.item["parent_interface"][1])
             for i in _all("DcimVirtualInterface")
@@ -111,11 +117,12 @@ class _Model:
         for process in _all("ManagedBGP"):
             for device in process.item.get("capabilities") or []:
                 roles.setdefault(str(device), []).append(str(process.value("process_role")))
-        for kind in (PHYSICAL_DEVICE, APPLIANCE):  # a cloud region's service edge is a declared appliance
+        for kind in (PHYSICAL_DEVICE, APPLIANCE, TRANSPORT):
             for device in _all(kind):
                 self.devices[name(device)] = {
                     "kind": kind,
                     "deployment": device.item.get("deployment"),
+                    "region": device.item.get("region"),
                     "bgp": roles.get(name(device), []),
                 }
 
@@ -142,6 +149,11 @@ class _Model:
                 "deployment": name(office),
                 "bgp": [],
             }
+
+    def facility(self, device: str) -> str | None:
+        """Where a device sits: its ``deployment``, else (a cloud transport) its region."""
+        info = self.devices[device]
+        return info["deployment"] or info.get("region")
 
     def port_id(self, device: str, port: str) -> str:
         if device not in self.devices:
@@ -189,9 +201,7 @@ class _Model:
                 interface_id=self.port_id(device, port),
                 interface_name=port,
                 device_name=device,
-                deployment=self._location(self.devices[device]["deployment"])
-                if self.devices[device]["deployment"]
-                else None,
+                deployment=self._location(facility) if (facility := self.facility(device)) else None,
             )
             for device, port in row["ends"]
         ]
@@ -205,11 +215,17 @@ class _Model:
 
     # -- shaping -------------------------------------------------------------------------------------------------
 
-    def deployment(self, device: str) -> dict[str, Any]:
-        place = self.devices[device]["deployment"]
+    def _place(self, place: str | None) -> dict[str, Any]:
         if place is None:
             return {"node": None}
         return {"node": {key: self.places[place][key] for key in ("id", "__typename", "name")}}
+
+    def placement(self, device: str) -> dict[str, Any]:
+        """The fields that say where a device sits: ``region`` for a cloud transport, else ``deployment``."""
+        info = self.devices[device]
+        if info["kind"] == TRANSPORT:
+            return {"region": self._place(info["region"]), "saas_region": {"node": None}}
+        return {"deployment": self._place(info["deployment"])}
 
     def carrier(self, row: dict[str, Any]) -> dict[str, Any]:
         """A carrier circuit as the query selects it under a port."""
@@ -247,13 +263,17 @@ class _Model:
                     "id": f"id-{device}",
                     "__typename": info["kind"],
                     "name": {"value": device},
-                    "deployment": self.deployment(device),
+                    **self.placement(device),
                     "capabilities": _edges(
                         [{"__typename": "ManagedBGP", "process_role": {"value": role}} for role in info["bgp"]]
                     ),
                 }
             },
         }
+        peering = self.peerings.get((device, port))
+        if peering is not None:
+            node["__typename"] = PEERING
+            node["vlan_id"] = {"value": peering.item.get("vlan_id")}
         parent = self.parents.get((device, port))
         if parent is None:
             node["cable"] = {"node": {"id": f"cable-{device}:{port}"} if (device, port) in self.cabled else None}
@@ -281,7 +301,7 @@ class _Model:
                         "node": {
                             "id": f"id-{device}",
                             "name": {"value": device},
-                            "deployment": self.deployment(device),
+                            **self.placement(device),
                         }
                     },
                 }

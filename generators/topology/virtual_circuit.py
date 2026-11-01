@@ -2,7 +2,8 @@
 
 One generator, one flow, two circuit types. A ``tunnel`` session circuit has no session (the SD-WAN orchestrator owns
 its overlay routing); it is a member of the generator's target group like the others (the created-trigger needs the
-group), and a run that reaches one logs and stops.
+group), and a run that reaches one logs and stops. So does a circuit with a cloud end (a CloudPeeringInterface, or a
+port of a cloud transport): its BGP peering is authored in data, and the run tracks nothing, so nothing is deleted.
 
 The flow, shared by both types (what differs is a planner per ``circuit_type``: pool, family, peerings):
 
@@ -102,6 +103,7 @@ from utils.circuit_underlay import (
     VPN_TYPE,
     derived_underlay,
     has_carrier,
+    is_cloud_end,
     overlay_processes,
     port_cabled,
     session_circuits_on,
@@ -330,6 +332,11 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
         planner = self._PLANNERS.get(circuit_type)
         if planner is None:
             self.logger.info(f"Virtual circuit {name} ({circuit_type}): no session is generated for this circuit type")
+            return
+        if any(is_cloud_end(port) for port in circuit.get("capabilities") or [] if isinstance(port, dict)):
+            # The provider's side has no BGP process of ours: the peering of a cloud leg is written in data. Nothing is
+            # tracked, so the run's cleanup deletes nothing (it would take the authored peering for its own).
+            self.logger.info(f"session of {name} is authored (cloud far end)")
             return
         self.logger.info(
             f"Processing virtual circuit {name} ({circuit_type}, status={circuit.get('status') or '?'}); "

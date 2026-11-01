@@ -25,6 +25,7 @@ from graphql import parse
 from tests.integration import circuit_helpers, interconnect_queries, interconnect_rules
 from tests.integration import test_62_all_demo_interconnects as interconnects
 from tests.integration.all_demo_circuit_constants import (
+    ALL_DEMO_CLOUD_HANDOFF_PEERINGS,
     ALL_DEMO_HANDOFF_PARTY_ASNS,
     ALL_DEMO_VIRTUAL_CIRCUITS,
     HANDOFF_TYPE,
@@ -118,13 +119,27 @@ async def test_without_the_cables_the_cable_carried_handoffs_have_no_carrier(mon
 
 
 async def test_a_handoff_whose_vlans_differ_or_miss_the_vlan_are_reported(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Ends on 1900 and 1901, and a bare port, are each reported."""
+    """Ends on 1900 and 1901, and a bare port with no address, are each reported."""
     data = await inventory(monkeypatch)
     handoff = _circuit(data, SDWAN_HANDOFF)
     handoff["end_nodes"][0]["interface"] = "eth0.1901"
     assert any("different VLANs" in e for e in _placement(data))
     handoff["end_nodes"][0]["interface"] = "eth0"
-    assert any("is not a VLAN sub-interface" in e for e in _placement(data))
+    assert any("is neither a VLAN sub-interface" in e for e in _placement(data))
+
+
+async def test_a_handoff_on_routed_physical_ports_is_accepted_and_a_mixed_one_is_not(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Two physical ports with an address (no VLAN) are a valid handoff; one of them beside a VLAN end is not."""
+    data = await inventory(monkeypatch)
+    handoff = _circuit(data, SDWAN_HANDOFF)
+    first, second = handoff["end_nodes"]
+    for end, address in ((first, "10.0.0.0/31"), (second, "10.0.0.1/31")):
+        end.update(interface="eth9", kind="DcimPhysicalInterface", address=address, parent_id=None, parent_name=None)
+    assert not any("HANDOFF-FR2-SDWAN-GW1-PROD" in e and ("VLAN" in e or "neither" in e) for e in _placement(data))
+    first.update(interface="eth0.1900", kind="DcimVirtualInterface", parent_name="eth0")
+    assert any("mix a sub-interface and a routed port" in e for e in _placement(data))
 
 
 async def test_a_handoff_placed_elsewhere_than_its_ends_is_reported(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -296,7 +311,11 @@ def test_p2p_errors_hold_a_pair_of_addresses_to_its_pool_and_its_one_prefix() ->
 
 def test_every_handoff_party_asn_is_a_declared_process() -> None:
     """The party of a handoff is the one end that has a declared process."""
-    handoffs = {n for n, e in ALL_DEMO_VIRTUAL_CIRCUITS.items() if e["circuit_type"] == HANDOFF_TYPE}
+    handoffs = {
+        n
+        for n, e in ALL_DEMO_VIRTUAL_CIRCUITS.items()
+        if e["circuit_type"] == HANDOFF_TYPE and n not in ALL_DEMO_CLOUD_HANDOFF_PEERINGS
+    }
     assert set(ALL_DEMO_HANDOFF_PARTY_ASNS) == handoffs
     assert {party for party, _ in ALL_DEMO_HANDOFF_PARTY_ASNS.values()} == {"EQX-FR2-SDWAN-GW1"}
 

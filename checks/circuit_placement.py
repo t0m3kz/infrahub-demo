@@ -13,7 +13,9 @@ office with an owner.
 Carrier circuits
     1. exactly two distinct locations (the authored cage plus the ends add_circuit derives),
     2. each location is the ``deployment`` of one end's device, one end per location: a DC, ISP or cloud region,
-       or for colocation kit the zone (or virtual colocation) the device is deployed to. A sibling zone of the
+       or for colocation kit the zone (or virtual colocation) the device is deployed to. A cloud transport (the
+       device of a cloud port, it has no ``deployment``) is placed by its ``region`` (TopologyCloudRegion) or its
+       ``saas_region`` (TopologySaasRegion). A sibling zone of the
        same metro is not the end: add_circuit (``plan_locations``) refuses an authored location that differs from
        the end device's deployment. The metro is no facility and no device is deployed to it,
     3. its offices (an office's access circuit, add_sdwan_edge's INET-<office>) are of one owner.
@@ -41,17 +43,19 @@ session are built)
     5. each end device carries exactly one ManagedBGP process of role ``overlay`` (keeps a Network Edge router out
        of a DCI: the EVPN session runs between those processes).
 
-Handoff circuit (``circuit_type`` handoff: our edge sub-interface to a party device sub-interface, in one
-environment namespace)
+Handoff circuit (``circuit_type`` handoff: our edge port to a party device port, in one environment namespace)
     0. no office owner, with an ``ip_namespace`` (the schema leaves it optional) and no ``registered_prefixes``,
     1. one or two distinct locations (both ends may sit in one cage) and two end ports; the locations are exactly the
        facilities the two end devices are deployed in (nothing derives them, so a location no end device is deployed
        in, or an end device deployed elsewhere, is drift),
     2. at least one end on a physical device is carried at its port or its parent interface: by a live carrier
        circuit, or by a DcimCable (a hop inside one facility, such as the gateway and the cage edge in one cage, is a
-       cable, not a circuit; a cable has no status). An end on a Network Edge appliance or other virtual device has
-       none and is not required to,
-    3. both end ports are sub-interfaces named ``<port>.<vlan>`` with the same VLAN.
+       cable, not a circuit; a cable has no status). A routed physical port is carried at the port itself. An end on a
+       Network Edge appliance, a cloud transport or other virtual device has none and is not required to,
+    3. each end is a sub-interface named ``<port>.<vlan>`` (a VLAN), a routed physical port (a DcimPhysicalInterface
+       with an IP address and no VLAN) or, on the cloud side, a CloudPeeringInterface (its ``vlan_id`` is optional).
+       The two ends are of one shape, a cloud peering interface excepted, and the VLANs that are set are equal. A
+       physical port with no IP address and no VLAN is neither and is refused.
 
 Vpn circuit (``circuit_type`` vpn: an IPsec or GRE tunnel over the internet, one session on the tunnel interface pair;
 model only)
@@ -103,6 +107,7 @@ from infrahub_sdk.checks import InfrahubCheck
 
 from utils.circuit_underlay import (
     BGP_PROCESS,
+    CLOUD_PEERING_KIND,
     DCI_TYPE,
     DECOMMISSIONED,
     HANDOFF_TYPE,
@@ -136,6 +141,11 @@ HANDOFF_ONLY_FIELDS = ("ip_namespace", "password")
 INTERNET = "TopologyExternalProviders"
 OFFICE = "TopologyCustomerOffice"
 PHYSICAL_DEVICE = "DcimPhysicalDevice"
+PHYSICAL_PORT = "DcimPhysicalInterface"
+# The shape of a handoff end: a <port>.<vlan> sub-interface, a routed physical port, a cloud peering interface.
+SUB_INTERFACE = "sub-interface"
+ROUTED_PORT = "routed port"
+CLOUD_PEERING = "cloud peering interface"
 
 
 def _label(place: dict[str, Any] | None) -> str:
@@ -183,6 +193,13 @@ def _locations(circuit: dict[str, Any]) -> list[dict[str, Any]]:
     return list(seen.values())
 
 
+def _facility(device: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Where a device sits: its ``deployment``, else (a cloud transport has none) its region or SaaS region."""
+    device = device or {}
+    place = device.get("deployment") or device.get("region") or device.get("saas_region")
+    return place if isinstance(place, dict) else None
+
+
 def _ports(circuit: dict[str, Any]) -> list[dict[str, Any]]:
     """The circuit's own ports (``capabilities``)."""
     return [port for port in circuit.get("capabilities") or [] if isinstance(port, dict)]
@@ -194,12 +211,8 @@ def _port_label(port: dict[str, Any]) -> str:
 
 
 def _ends(circuit: dict[str, Any]) -> list[tuple[str, dict[str, Any] | None]]:
-    """(``device:port``, the device's deployment) per end port of a carrier circuit."""
-    ends = []
-    for port in _ports(circuit):
-        deployment = (port.get("device") or {}).get("deployment")
-        ends.append((_port_label(port), deployment if isinstance(deployment, dict) else None))
-    return ends
+    """(``device:port``, the device's facility) per end port of a circuit."""
+    return [(_port_label(port), _facility(port.get("device"))) for port in _ports(circuit)]
 
 
 def _ends_label(ends: list[tuple[str, dict[str, Any] | None]]) -> str:
@@ -222,9 +235,20 @@ def _carriers_label(carriers: list[dict[str, Any]]) -> str:
     )
 
 
-def _vlan(port: dict[str, Any]) -> int | None:
-    """The VLAN of an end port named ``<port>.<vlan>``, None for any other name."""
-    return subinterface_vlan(str(port.get("name") or ""))
+def _end_shape(port: dict[str, Any]) -> tuple[str | None, int | None]:
+    """(shape, VLAN) of a handoff end; the shape is None when the end is none of the three.
+
+    A cloud peering interface carries its VLAN as ``vlan_id`` (optional). Any other port named ``<port>.<vlan>`` is a
+    sub-interface; a physical port with an IP address and no VLAN is a routed port.
+    """
+    if port.get("typename") == CLOUD_PEERING_KIND:
+        return CLOUD_PEERING, port.get("vlan_id")
+    vlan = subinterface_vlan(str(port.get("name") or ""))
+    if vlan is not None:
+        return SUB_INTERFACE, vlan
+    if port.get("typename") == PHYSICAL_PORT and port.get("ip_address"):
+        return ROUTED_PORT, None
+    return None, None
 
 
 def _devices(circuit: dict[str, Any]) -> dict[str, str]:
@@ -519,26 +543,44 @@ class CheckCircuitPlacement(InfrahubCheck):
                 "both ends are in one facility).",
             )
 
-        vlans = {_vlan(port) for port in ports}
-        if None in vlans:
-            for port in ports:
-                if _vlan(port) is None:
-                    self._error(
-                        circuit,
-                        HANDOFF,
-                        f"Handoff circuit '{name}' end '{_port_label(port)}' is not a VLAN sub-interface: a handoff "
-                        "end is named <port>.<vlan>.",
-                    )
-            return
-        if len(vlans) > 1:
+        self._validate_handoff_ends(circuit, name, ports)
+
+    def _validate_handoff_ends(self, circuit: dict[str, Any], name: str, ports: list[dict[str, Any]]) -> None:
+        """Each end is a sub-interface, a routed port or a cloud peering interface; the two are of one shape (a cloud
+        peering interface fits any) and the VLANs that are set are equal."""
+        shapes = [(port, *_end_shape(port)) for port in ports]
+        unshaped = [port for port, shape, _ in shapes if shape is None]
+        for port in unshaped:
             self._error(
                 circuit,
                 HANDOFF,
-                f"Handoff circuit '{name}' ends carry different VLANs "
-                f"({', '.join(f'{_port_label(port)} = {_vlan(port)}' for port in ports)}): one VLAN joins the two "
-                "sub-interfaces.",
+                f"Handoff circuit '{name}' end '{_port_label(port)}' is neither a VLAN sub-interface (named "
+                "<port>.<vlan>) nor a routed physical port (an IP address, no VLAN) nor a cloud peering interface: a "
+                "physical port with no IP address and no VLAN cannot carry a handoff.",
+            )
+        if unshaped:
+            return
+        own = {shape for _, shape, _ in shapes if shape != CLOUD_PEERING}
+        if len(own) > 1:
+            self._error(
+                circuit,
+                HANDOFF,
+                f"Handoff circuit '{name}' mixes a {SUB_INTERFACE} and a {ROUTED_PORT} "
+                f"({', '.join(f'{_port_label(port)} is a {shape}' for port, shape, _ in shapes)}): both ends are "
+                "sub-interfaces of one VLAN, or both are routed ports.",
             )
             return
+        vlans = {vlan for _, _, vlan in shapes if vlan is not None}
+        if len(vlans) > 1 or (vlans and ROUTED_PORT in own):
+            listing = ", ".join(
+                f"{_port_label(port)} = {'no VLAN' if vlan is None else vlan}" for port, _, vlan in shapes
+            )
+            self._error(
+                circuit,
+                HANDOFF,
+                f"Handoff circuit '{name}' ends carry different VLANs ({listing}): one VLAN joins the two ends, a "
+                "routed port has none.",
+            )
 
     def _validate_handoff_placement(self, circuit: dict[str, Any], name: str, locations: list[dict[str, Any]]) -> None:
         """The handoff's locations are exactly the facilities its two end devices are deployed in.

@@ -67,6 +67,23 @@ ORANGE_PE_END = _end("EXT-ORANGE-1", "ge-0/0/1", ORANGE)
 LUMEN_PE_END = _end("EXT-LUMEN-1", "ge-0/0/1", LUMEN)
 
 
+def _transport_end(device: str, name: str, region: dict[str, Any], *, saas: bool = False) -> dict[str, Any]:
+    """An end port of a cloud transport: the device has no deployment, its region (or SaaS region) places it."""
+    place = {key: region[key] for key in ("id", "__typename", "name")}
+    return {
+        "id": f"id-{device}:{name}",
+        "name": {"value": name},
+        "device": {
+            "node": {
+                "id": f"id-{device}",
+                "name": {"value": device},
+                "region": {"node": None if saas else place},
+                "saas_region": {"node": place if saas else None},
+            }
+        },
+    }
+
+
 def _carrier_circuit(
     name: str,
     locations: list[dict[str, Any]],
@@ -139,12 +156,20 @@ def _vport(
     bgp: tuple[str, ...] = ("overlay",),
     cabled: bool = False,
     parent_cabled: bool = False,
+    kind: str | None = None,
+    ip_address: bool = False,
+    vlan_id: int | None = None,
+    region: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """A virtual circuit's end port: the carrier circuits on it, the parent interface (name, circuits on it) of a
     sub-interface, and its device with its deployment and its BGP processes (one per role in ``bgp``).
 
     ``cabled`` puts a DcimCable on a physical port, ``parent_cabled`` on the parent of a sub-interface (a
-    sub-interface itself has no ``cable``: the query selects it on the physical interface only)."""
+    sub-interface itself has no ``cable``: the query selects it on the physical interface only).
+
+    ``kind`` is the port's ``__typename``, ``ip_address`` gives a physical port an address (a routed port) and
+    ``vlan_id`` a cloud peering interface its VLAN. ``region`` makes the device a cloud transport (kind
+    ``device_kind``) with no deployment, placed by that region."""
     port: dict[str, Any] = {
         "id": f"id-{device}:{name}",
         "name": {"value": name},
@@ -163,6 +188,18 @@ def _vport(
             }
         },
     }
+    if kind:
+        port["__typename"] = kind
+    if ip_address:
+        port["ip_address"] = {"node": {"id": f"ip-{device}:{name}"}}
+    if kind == "CloudPeeringInterface":
+        port["vlan_id"] = {"value": vlan_id}
+    if region is not None:
+        node = port["device"]["node"]
+        node.pop("deployment")
+        node.pop("capabilities")
+        node["region"] = {"node": {key: region[key] for key in ("id", "__typename", "name")}}
+        node["saas_region"] = {"node": None}
     if parent is None:
         port["cable"] = {"node": {"id": f"cable-{device}:{name}"} if cabled else None}
     else:
@@ -223,7 +260,8 @@ def _handoff(
     ``locations=None`` places the handoff where its ends are deployed (what the check requires); a list states them.
     """
     if locations is None:
-        deployments = [end["device"]["node"]["deployment"]["node"] for end in ends]
+        devices = [end["device"]["node"] for end in ends]
+        deployments = [(device.get("deployment") or device.get("region") or {}).get("node") for device in devices]
         locations = list({deployment["id"]: deployment for deployment in deployments if deployment}.values())
     node = _virtual(name, "handoff", locations, ends)
     node["ip_namespace"] = {

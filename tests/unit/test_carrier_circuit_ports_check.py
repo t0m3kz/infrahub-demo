@@ -69,6 +69,18 @@ class TestCleanInventory:
     def test_a_circuit_with_two_physical_ends_is_silent(self) -> None:
         assert _run(_circuit("DF-DC10-EQXFR2", BL, EG)) == []
 
+    def test_a_cross_connect_to_a_cloud_transport_port_is_silent(self) -> None:
+        """A port of a Direct Connect transport is a DcimPhysicalInterface of a device with no role and no
+        deployment: nothing about the device is judged, only the port kind."""
+        dx = _port("p-dx", "dx-c900-fra", "Ethernet1")
+        assert _run(_circuit("XC-EQXFR2-DX", EG, dx)) == []
+
+    def test_a_cloud_peering_interface_is_no_carrier_end(self) -> None:
+        """A peering interface of a transport is virtual: it ends a session circuit, not a cross-connect."""
+        vif = _port("p-vif", "dx-c900-fra", "vif-3101", typename="CloudPeeringInterface")
+        (finding,) = _run(_circuit("XC-EQXFR2-DX", EG, vif))
+        assert "CloudPeeringInterface" in finding["message"]
+
     def test_two_circuits_on_distinct_ports_are_each_fine(self) -> None:
         assert _run(_circuit("DF-A", BL, EG), _circuit("DF-B", BL2, EG2)) == []
 

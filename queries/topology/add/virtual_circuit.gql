@@ -73,6 +73,7 @@ query virtual_circuit_data($name: String!) {
               device {
                 node {
                   id
+                  __typename
                   name { value }
                   ... on DcimPhysicalDevice {
                     deployment { node { ...VirtualCircuitDeployment } }

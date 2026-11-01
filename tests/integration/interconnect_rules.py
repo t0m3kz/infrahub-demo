@@ -284,7 +284,10 @@ def _interconnect_errors(circuit: dict[str, Any], physical_by_id: dict[str, dict
 
 def _handoff_errors(circuit: dict[str, Any]) -> list[str]:
     """A Handoff: one or two facilities that are where its two ends are deployed, its namespace stated, at least one
-    end carried by a live carrier circuit or a cable, and both ends VLAN sub-interfaces `<port>.<vlan>` on one VLAN."""
+    end carried by a live carrier circuit or a cable, and each end a `<port>.<vlan>` VLAN sub-interface, a routed
+    physical port (an address, no VLAN) or a cloud peering interface (its `vlan_id` is optional); the ends are of one
+    shape (a cloud peering interface fits any) and the VLANs that are set are equal. A cloud transport sits in its
+    region, which stands in the end device's deployment."""
     name = circuit["name"]
     errors: list[str] = []
     locations = circuit["location_nodes"]
@@ -303,17 +306,29 @@ def _handoff_errors(circuit: dict[str, Any]) -> list[str]:
         errors.append(f"{name}: no ip_namespace")
     if not any(_live(end["carriers"]) or end["cabled"] for end in circuit["end_nodes"]):
         errors.append(f"{name}: no end is on a live carrier circuit or a cable (at the port or its parent)")
-    vlans = {_vlan(end["interface"]) for end in circuit["end_nodes"]}
+    shapes = []
     for end in circuit["end_nodes"]:
-        if end["kind"] != "DcimVirtualInterface" or _vlan(end["interface"]) is None:
-            errors.append(f"{name}: end {end['device']}:{end['interface']} is not a VLAN sub-interface <port>.<vlan>")
-        elif end["parent_name"] is None or end["interface"] != f"{end['parent_name']}.{_vlan(end['interface'])}":
+        label = f"end {end['device']}:{end['interface']}"
+        if end["kind"] == "CloudPeeringInterface":
+            shapes.append(("cloud", end.get("vlan_id")))
+        elif _vlan(end["interface"]) is not None:
+            shapes.append(("sub-interface", _vlan(end["interface"])))
+            if end["kind"] != "DcimVirtualInterface":
+                errors.append(f"{name}: {label} is a {end['kind']}, a VLAN end is a DcimVirtualInterface")
+            elif end["parent_name"] is None or end["interface"] != f"{end['parent_name']}.{_vlan(end['interface'])}":
+                errors.append(f"{name}: {label} has parent '{end['parent_name']}', expected <parent>.<vlan>")
+        elif end["kind"] == "DcimPhysicalInterface" and end["address"]:
+            shapes.append(("routed", None))
+        else:
             errors.append(
-                f"{name}: end {end['device']}:{end['interface']} has parent '{end['parent_name']}', "
-                "expected <parent>.<vlan>"
+                f"{name}: {label} is neither a VLAN sub-interface <port>.<vlan>, a routed physical port with an "
+                "address, nor a cloud peering interface"
             )
-    if len(vlans) > 1:
-        errors.append(f"{name}: the ends are on different VLANs {sorted(v for v in vlans if v is not None)}")
+    if len({shape for shape, _ in shapes if shape != "cloud"}) > 1:
+        errors.append(f"{name}: the ends mix a sub-interface and a routed port")
+    vlans = {vlan for _, vlan in shapes if vlan is not None}
+    if len(vlans) > 1 or (vlans and any(shape == "routed" for shape, _ in shapes)):
+        errors.append(f"{name}: the ends are on different VLANs {sorted(vlans)}, a routed port has none")
     return errors
 
 

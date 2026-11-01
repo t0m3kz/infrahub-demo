@@ -1,11 +1,12 @@
 # add_circuit (generators/topology/circuit.py). Filters on name, the
 # generator's registered parameter (.infrahub.yml `name: name__value`).
 #
-# A carrier circuit's endpoints are one list, capabilities: exactly two
-# interfaces by schema (min_count = max_count = 2), one per end. Each endpoint
+# A carrier circuit's ends are one list, capabilities: exactly two
+# interfaces by schema (min_count 1, max_count 2) and by check (two), one per end. Each endpoint
 # carries its device's deployment: the deployment's kind places that end (a DC,
 # ISP, cloud region, colocation zone or virtual colocation deployment is the
-# circuit's location there), checked against the circuit's current locations.
+# circuit's location there), checked against the circuit's current locations. A cloud
+# transport (the device of a cloud port) is placed by its region or SaaS region instead.
 query circuit_data($name: String!) {
   TopologyCarrierCircuit(name__value: $name) {
     edges {
@@ -49,6 +50,11 @@ fragment CircuitEndpoint on DcimInterface {
       }
       ... on CloudNetworkAppliance {
         deployment { node { ...CircuitDeployment } }
+      }
+      # A cloud transport has no deployment: its facility is its region or its SaaS region.
+      ... on CloudTransport {
+        region { node { ...CircuitDeployment } }
+        saas_region { node { ...CircuitDeployment } }
       }
     }
   }

@@ -21,6 +21,10 @@
 # Every circuit_type shares the one port fragment, so a type that does not read a path of it (a tunnel and the
 # BGP processes) still selects it. One global query.
 #
+# A cloud transport (the device of a cloud port or peering interface) has no deployment: its facility is its `region`
+# or `saas_region`. A handoff end is a `<port>.<vlan>` sub-interface, a routed physical port (it has an address) or a
+# cloud peering interface (its `vlan_id` is optional).
+#
 # Concrete inline fragments only for the deployment of a physical end, so the query is valid whether the deployment
 # peer is a generic or a concrete kind. Both kinds' `locations` peer TopologyFacility (an office is one, which is
 # why only the office carries an owner here).
@@ -57,6 +61,10 @@ query circuit_placement {
                   }
                   ... on CloudNetworkAppliance {
                     deployment { node { id __typename name { value } } }
+                  }
+                  ... on CloudTransport {
+                    region { node { id __typename name { value } } }
+                    saas_region { node { id __typename name { value } } }
                   }
                 }
               }
@@ -95,6 +103,7 @@ query circuit_placement {
 
 fragment VirtualPort on DcimInterface {
   id
+  __typename
   name { value }
   capabilities {
     edges {
@@ -106,6 +115,10 @@ fragment VirtualPort on DcimInterface {
   }
   ... on DcimPhysicalInterface {
     cable { node { id } }
+    ip_address { node { id } }
+  }
+  ... on CloudPeeringInterface {
+    vlan_id { value }
   }
   ... on DcimVirtualInterface {
     parent_interface {
@@ -137,6 +150,10 @@ fragment VirtualPort on DcimInterface {
       }
       ... on CloudNetworkAppliance {
         deployment { node { id __typename name { value } } }
+      }
+      ... on CloudTransport {
+        region { node { id __typename name { value } } }
+        saas_region { node { id __typename name { value } } }
       }
       ... on DcimCapabilities {
         capabilities {

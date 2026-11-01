@@ -32,6 +32,13 @@ _PHYSICAL_READS = [
     "capabilities.device.deployment.id",
     "capabilities.device.deployment.__typename",
     "capabilities.device.deployment.name",
+    # a cloud transport has no deployment: its region or SaaS region places it
+    "capabilities.device.region.id",
+    "capabilities.device.region.__typename",
+    "capabilities.device.region.name",
+    "capabilities.device.saas_region.id",
+    "capabilities.device.saas_region.__typename",
+    "capabilities.device.saas_region.name",
 ]
 
 # What it reads from the end ports of a virtual circuit (the shared VirtualPort fragment): the port, the physical
@@ -47,8 +54,19 @@ _PORT_READS = [
     "capabilities.device.deployment.id",
     "capabilities.device.deployment.__typename",
     "capabilities.device.deployment.name",
+    # a cloud transport has no deployment: its region or SaaS region places it
+    "capabilities.device.region.id",
+    "capabilities.device.region.__typename",
+    "capabilities.device.region.name",
+    "capabilities.device.saas_region.id",
+    "capabilities.device.saas_region.__typename",
+    "capabilities.device.saas_region.name",
     "capabilities.device.capabilities.__typename",
     "capabilities.device.capabilities.process_role",
+    # the shape of a handoff end: a cloud peering interface (its vlan_id) or a routed physical port (its address)
+    "capabilities.__typename",
+    "capabilities.vlan_id",
+    "capabilities.ip_address.id",
     # a hop inside one facility is a cable: on the physical port, or on the parent of a sub-interface
     "capabilities.cable.id",
     "capabilities.parent_interface.cable.id",

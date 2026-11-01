@@ -209,7 +209,8 @@ class _Devices:
             device, name, role=_SUBINTERFACE_ROLE if parent else None, parent=parent
         )
         node = port["device"]["node"]
-        deployment = dict(node["deployment"]["node"])
+        # A cloud transport has no deployment (the generator leaves such a circuit authored and reads none).
+        deployment: dict[str, Any] = dict((node.get("deployment") or {}).get("node") or {"__typename": ""})
         if deployment["__typename"] == "TopologyDataCenter":
             deployment["underlay_protocol"] = _value(_underlay_protocol())
         selected: dict[str, Any] = {
@@ -220,6 +221,7 @@ class _Devices:
         selected["device"] = {
             "node": {
                 "id": node["id"],
+                "__typename": node["__typename"],
                 "name": node["name"],
                 "deployment": {"node": deployment},
                 "capabilities": {

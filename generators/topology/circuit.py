@@ -2,7 +2,7 @@
 
 A carrier circuit is a pure carrier (fibre, cross-connect, internet access): it has no role and no session. This
 generator's one job is its placement. An endpoint device whose ``deployment`` is itself a facility
-(TopologyDataCenter, TopologyExternalProviders, TopologyCloudRegion, TopologyColocationZone,
+(TopologyDataCenter, TopologyExternalProviders, TopologyCloudRegion, TopologySaasRegion, TopologyColocationZone,
 TopologyVirtualColocation) places that end, so the circuit's locations are the authored ones plus these derived
 ones, exactly two distinct. An on-ramp edge deploys to its zone or virtual colocation, which is the facility the
 circuit ends on. A derived facility that contradicts an authored one of the same kind, or anything but two
@@ -65,6 +65,7 @@ _DERIVABLE_FACILITY_KINDS = frozenset(
         "TopologyDataCenter",
         "TopologyExternalProviders",
         "TopologyCloudRegion",
+        "TopologySaasRegion",
         "TopologyColocationZone",
         "TopologyVirtualColocation",
     }
@@ -104,7 +105,8 @@ class CircuitEndpoint:
     interface_id: str
     interface_name: str
     device_name: str
-    # The device's deployment, whatever its kind; None when it has none.
+    # The device's deployment, whatever its kind; for a cloud transport (it has none) its region or SaaS region.
+    # None when it has none.
     deployment: CircuitLocation | None
     device_id: str = ""
 
@@ -122,7 +124,9 @@ class CircuitEndpoint:
             interface_id=interface["id"],
             interface_name=interface.get("name") or "?",
             device_name=device.get("name") or "?",
-            deployment=CircuitLocation.parse(device.get("deployment")),
+            deployment=CircuitLocation.parse(
+                device.get("deployment") or device.get("region") or device.get("saas_region")
+            ),
             device_id=device.get("id") or "",
         )
 

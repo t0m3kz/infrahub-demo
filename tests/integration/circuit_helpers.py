@@ -38,10 +38,11 @@ async def fetch_interconnect_inventory(client: InfrahubClient, branch: str) -> d
         owner of a footprint or an office, None where the kind has none. An end
         device is {"device", "device_id", "deployment_id", "deployment_kind",
         "deployment_name", "deployment_parent_id"}, one per circuit end, in end order; the parent is the metro
-        of a zone or virtual colocation deployment, None otherwise.
+        of a zone or virtual colocation deployment, None otherwise. A cloud transport has no deployment: its region (or
+        SaaS region) stands in the "deployment_*" keys.
 
         A session circuit's "circuit_type" is its role (tunnel, dci, handoff or vpn), "ends" its sorted (device, interface) pairs and "end_nodes" the same ends in query
-        order, each {"id", "device", "device_id", "interface", "kind", "address", "parent_id", "parent_name",
+        order, each {"id", "device", "device_id", "interface", "kind", "address", "vlan_id", "parent_id", "parent_name",
         "carriers", "cabled"}: the address ("10.255.128.0/31", None when unaddressed), the parent interface of a
         sub-interface, the carriers found on the port or on its parent (utils.circuit_underlay.port_underlay) and
         whether a cable terminates there (port_cabled). The "carrier" of the circuit is derived, never declared:
@@ -174,6 +175,7 @@ def _circuit_end(port: dict[str, Any]) -> dict[str, Any]:
         "interface": str(port.get("name") or ""),
         "kind": str(port.get("typename") or ""),
         "address": (port.get("ip_address") or {}).get("address"),
+        "vlan_id": port.get("vlan_id"),
         "parent_id": parent.get("id"),
         "parent_name": parent.get("name"),
         "carriers": [
@@ -214,7 +216,8 @@ def _circuit_end_devices(circuit: dict[str, Any]) -> list[dict[str, Any]]:
     devices = []
     for end in circuit.get("capabilities", []) or []:
         device = end.get("device") or {}
-        deployment = device.get("deployment") or {}
+        # A cloud transport has no deployment: its facility is its region (or SaaS region).
+        deployment = device.get("deployment") or device.get("region") or device.get("saas_region") or {}
         devices.append(
             {
                 "device": str(device.get("name") or ""),

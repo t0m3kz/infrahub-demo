@@ -43,6 +43,7 @@ VIRTUAL_COLOCATION = place("TopologyVirtualColocation", "AM-NE")
 METRO = place("TopologyColocationMetro", "FR", "dep-metro")
 ISP = place("TopologyExternalProviders", "ORANGE-FR")
 REGION = place("TopologyCloudRegion", "eu-central-1")
+SAAS_REGION = place("TopologySaasRegion", "webex-eu")
 
 
 def interface(
@@ -53,12 +54,27 @@ def interface(
     dc: str | None = None,
     deployment: dict[str, Any] | None = None,
     no_deployment: bool = False,
+    transport_region: dict[str, Any] | None = None,
+    transport_saas_region: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """One endpoint interface, as the circuit query selects it (raw GraphQL).
 
     The device is deployed in DC ``dc`` when given, else in ``deployment`` (default: the colocation zone FR2,
-    where the on-ramp edges are deployed); ``no_deployment`` leaves it unset.
+    where the on-ramp edges are deployed); ``no_deployment`` leaves it unset. A cloud transport has no deployment:
+    ``transport_region`` / ``transport_saas_region`` make the device one, sitting in that region.
     """
+    if transport_region or transport_saas_region:
+        return {
+            "id": iface_id,
+            "name": {"value": name},
+            "device": {
+                "node": {
+                    "name": {"value": device},
+                    "region": {"node": transport_region},
+                    "saas_region": {"node": transport_saas_region},
+                }
+            },
+        }
     if dc:
         deployment = dc_place(dc)
     elif deployment is None:
@@ -187,8 +203,11 @@ def session_port(
     parent_circuits: list[dict[str, Any]] | None = None,
     cabled: bool = False,
     parent_cabled: bool = False,
+    device_kind: str = "DcimPhysicalDevice",
 ) -> dict[str, Any]:
     """One end of a session circuit, as virtual_circuit.gql selects it (raw GraphQL).
+
+    ``device_kind`` is the device's ``__typename`` (a cloud transport is a CloudDirectConnect).
 
     ``circuits`` terminate on the port itself, ``parent_circuits`` on its parent interface, which a sub-interface
     (``kind="DcimVirtualInterface"``) reads its carrier from. A DcimCable sits on a physical port (``cabled``) or on
@@ -222,6 +241,7 @@ def session_port(
             "interfaces": {"edges": [{"node": lo} for lo in loopbacks or []]},
         }
     }
+    port["device"]["node"]["__typename"] = device_kind
     return port
 
 
@@ -260,6 +280,14 @@ def handoff_party_port(**kwargs: Any) -> dict[str, Any]:
     kwargs.setdefault("where", deployment("TopologyCloudRegion", "eu-central-1"))
     kwargs.setdefault("roles", ("regular",))
     return session_port("if-aws", "Ethernet1.1900", "EXT-AWS-DX-FR2", kind="DcimVirtualInterface", **kwargs)
+
+
+def cloud_peering_port(**kwargs: Any) -> dict[str, Any]:
+    """The cloud end of a handoff: a CloudPeeringInterface of a Direct Connect transport (no deployment, no BGP of ours)."""
+    kwargs.setdefault("roles", ())
+    return session_port(
+        "if-vif", "vif-1900", "dx-c900-fra", kind="CloudPeeringInterface", device_kind="CloudDirectConnect", **kwargs
+    )
 
 
 def session_payload(
