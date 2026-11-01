@@ -4,25 +4,28 @@
 # `provider_stubs`, which keeps them out of the border-gateway lookup of generators/vlan_domain.py: they carry the
 # `edge` role of their template), so no config artifact or device check targets them. They exist, like the ISP provider
 # edges in ../06_internet/02_devices.yml, so a carrier, a cable or a handoff circuit has a second endpoint (and, for the
-# Megaport Cloud Router and the cloud service edges, a remote AS).
+# Megaport Cloud Router, a remote AS).
 #
-# Two kinds, by the physicality of the end (a cable ends on a physical device, a virtual service on a virtual NIC):
+# Two kinds, by what the far end is:
 #
-#   Cloud regions (AWS eu-central-1, Azure westeurope) are provider places with no hardware: the provider side is ONE
-#   CloudNetworkAppliance, a "service edge" of role `provider` (templates AWS_SERVICE_EDGE and AZURE_SERVICE_EDGE,
-#   data/bootstrap/09_network_appliance_templates_cloud_service_edge.yaml), hosted by the region through
-#   `appliances` (TopologyApplianceHosting). It has no port: each connection leg is a DcimVirtualInterface NIC
-#   (`vnic-*`, declared below) that is the far end of a `virtual_connection` carrier, and the handoff sub-interface
-#   `<nic>.<vlan>` rides on it. Nothing is cabled to it.
+#   Cloud regions (AWS eu-central-1, Azure westeurope) host nothing: the provider side of a connection is a cloud
+#   TRANSPORT (CloudDirectConnect), an interface holder in the region (`region`) and in an account of the network team
+#   (01_cloud_accounts.yml). Its ports are DcimPhysicalInterface, the far ends of the `virtual_connection` carriers of
+#   03_carrier_circuits.yml; the virtual interface of a leg is a CloudPeeringInterface of the transport that rides on a
+#   port (the AWS one is authored in ../03_virtual_circuits/02_aws_prod_handoff.yml). Nothing is cabled to a transport.
 #
-#     EXT-AWS-DX-FR2      the Direct Connect service edge of eu-central-1 (AS64512): vnic-fr2 is the leg of the cage
-#                         FR2 (XC-EQXFR2-AWS-EUC1), vnic-amne the leg of the hosted Direct Connect from the Network
-#                         Edge router eg-am-ne02 (FABRIC-AMNE02-AWS-EUC1). The region has a second appliance for the
-#                         Site-to-Site VPN, EXT-AWS-VPN-EUC1: the VPN
-#                         gateway speaks its own Amazon-side AS64513 and a device carries ONE BGP process, so the
-#                         two services of the one provider in the one region are two appliances.
-#     EXT-AZURE-ER-PA4    the ExpressRoute service edge of westeurope (AS12076): vnic-pri and vnic-sec are the
-#                         primary and secondary leg (XC-EQXPA4-AZURE-WEU-PRI and -SEC), the existing carriers
+#     dx-30all-euc1-fr2   AWS Direct Connect of eu-central-1, the leg of the cage FR2 (XC-EQXFR2-AWS-EUC1): a PHYSICAL
+#                         connection, one dedicated 10G port `dxcon-fr2` (not a LAG: a single connection)
+#     dx-30all-euc1-amne  the hosted Direct Connect from the Network Edge router eg-am-ne02 (FABRIC-AMNE02-AWS-EUC1): a
+#                         LOGICAL connection, one 1G port `dxcon-amne`, lives in the Equinix account (`partner_account`)
+#     er-30all-weu        the Azure ExpressRoute circuit of westeurope: ONE logical transport with its two links as
+#                         ports, `msee-pri` and `msee-sec` (the primary and secondary MSEE, XC-EQXPA4-AZURE-WEU-PRI and
+#                         -SEC, the carriers that share a `redundancy_group`)
+#
+#   The two AWS legs are two transports, not one with two ports: they are two Direct Connect connections of different
+#   kinds (dedicated at the cage, hosted through a partner) that share no LAG, and the members of a LAG are the only
+#   case where several connections are the ports of one transport. AWS runs the Site-to-Site VPN of the same region as a
+#   CloudVPNConnection, not modelled here.
 #
 #   Physical provider kit stays a DcimPhysicalDevice (MX204_ISP_PE is the generic provider-edge stand-in template;
 #   only its et-0/0/0 port is used, as the far end of the cross-connect or cable and the parent of the handoff
@@ -36,49 +39,68 @@
 #                       eg-fr201 is a cable (05_cage_cabling.yml), not a circuit
 #
 # Created before 03_carrier_circuits.yml and 05_cage_cabling.yml (this directory), whose carriers and cable end on
-# them. `deployment` is the facility: add_circuit derives each carrier's far end from the end device's deployment
-# (the circuit data lists only the cage).
+# them. A physical stub's `deployment` is the facility: add_circuit derives the far end of a carrier from the end
+# device's deployment (the circuit data lists only the cage); a transport has `region` instead, and the carriers of
+# 03_carrier_circuits.yml list the region next to the cage.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: CloudNetworkAppliance
+  kind: CloudDirectConnect
   data:
-    - name: "EXT-AWS-DX-FR2"
-      object_template: AWS_SERVICE_EDGE
-      description: "AWS Direct Connect service edge of eu-central-1 (far end of the Direct Connect connections)"
-      deployment: "eu-central-1"
-    - name: "EXT-AZURE-ER-PA4"
-      object_template: AZURE_SERVICE_EDGE
-      description: "Azure ExpressRoute service edge of westeurope (far end of the ExpressRoute legs)"
-      deployment: "westeurope"
+    - name: "dx-30all-euc1-fr2"
+      description: "AWS Direct Connect of eu-central-1, dedicated 10G port at the FR2 cage (XC-EQXFR2-AWS-EUC1)"
+      status: active
+      connection_type: physical
+      bandwidth: 10000
+      account: "net-hub-aws-prod"
+      region: "eu-central-1"
+    - name: "dx-30all-euc1-amne"
+      description: "AWS hosted Direct Connect of eu-central-1 through the Network Edge router eg-am-ne02 (FABRIC-AMNE02-AWS-EUC1)"  # yamllint disable-line rule:line-length
+      status: active
+      connection_type: logical
+      bandwidth: 1000
+      account: "net-hub-aws-prod"
+      partner_account: "equinix-network-edge"
+      region: "eu-central-1"
+    - name: "er-30all-weu"
+      description: "Azure ExpressRoute circuit of westeurope: primary and secondary link (XC-EQXPA4-AZURE-WEU-PRI and -SEC)"  # yamllint disable-line rule:line-length
+      status: active
+      connection_type: logical
+      bandwidth: 10000
+      account: "net-hub-azure-prod"
+      region: "westeurope"
 ---
-# One virtual NIC per connection leg: the far end of the leg's virtual_connection carrier and the parent of the handoff
-# sub-interface a handoff adds (`vnic-fr2.1000`). No hardware, so no parent port and no cable.
+# The ports of the transports: the far ends of the virtual_connection carriers (03_carrier_circuits.yml) and the
+# parents of the virtual interfaces. A role of `cloud` says what the port faces.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: DcimVirtualInterface
+  kind: DcimPhysicalInterface
   data:
-    - name: "vnic-fr2"
-      device: "EXT-AWS-DX-FR2"
-      role: uplink
+    - name: "dxcon-fr2"
+      device: "dx-30all-euc1-fr2"
+      interface_type: 10gbase-x-sfpp
+      role: cloud
       status: active
-      description: "Direct Connect leg of the FR2 cage"
-    - name: "vnic-amne"
-      device: "EXT-AWS-DX-FR2"
-      role: uplink
+      description: "Direct Connect dedicated port, leg of the FR2 cage"
+    - name: "dxcon-amne"
+      device: "dx-30all-euc1-amne"
+      interface_type: 1000base-x-sfp
+      role: cloud
       status: active
-      description: "Hosted Direct Connect leg of the Network Edge router eg-am-ne02"
-    - name: "vnic-pri"
-      device: "EXT-AZURE-ER-PA4"
-      role: uplink
+      description: "Hosted Direct Connect port, leg of the Network Edge router eg-am-ne02"
+    - name: "msee-pri"
+      device: "er-30all-weu"
+      interface_type: 10gbase-x-sfpp
+      role: cloud
       status: active
-      description: "ExpressRoute primary leg of the PA4 cage"
-    - name: "vnic-sec"
-      device: "EXT-AZURE-ER-PA4"
-      role: uplink
+      description: "ExpressRoute primary link (primary MSEE)"
+    - name: "msee-sec"
+      device: "er-30all-weu"
+      interface_type: 10gbase-x-sfpp
+      role: cloud
       status: active
-      description: "ExpressRoute secondary leg of the PA4 cage"
+      description: "ExpressRoute secondary link (secondary MSEE)"
 ---
 apiVersion: infrahub.app/v1
 kind: Object

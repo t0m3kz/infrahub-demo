@@ -43,9 +43,12 @@ def _external_handoffs() -> list[dict[str, Any]]:
 
 
 class TestAllDemoData:
-    def test_the_sdwan_handoff_is_the_only_authored_tenant_vrf_handoff(self) -> None:
-        """The only authored tenant-VRF handoff is the SD-WAN gateway's."""
-        assert [p["name"] for p in _external_handoffs()] == ["HANDOFF-FR2-SDWAN-GW1-PROD"]
+    def test_the_authored_tenant_vrf_handoffs_are_the_sdwan_gateways_and_the_aws_one(self) -> None:
+        """The authored tenant-VRF handoffs are the SD-WAN gateway's and C001's AWS Direct Connect one."""
+        assert sorted(p["name"] for p in _external_handoffs()) == [
+            "HANDOFF-FR2-AWS-EUC1-PROD",
+            "HANDOFF-FR2-SDWAN-GW1-PROD",
+        ]
         assert {p["ip_namespace"] for p in _external_handoffs()} == {"PROD"}
 
     @pytest.mark.parametrize("peering", _external_handoffs(), ids=lambda p: p["name"])

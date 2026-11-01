@@ -36,7 +36,7 @@ _SDWAN_OFFICES: list[Declared] = [
 # cross-connects of 08_interconnects/01_colo_onramp (each DC has one fibre to each of its metro's two border gateways:
 # DC10/DC11 -> EQX FR2 (eg-fr201 and eg-fr202), DC12 -> EQX PA4 (eg-pa401 and eg-pa402); one cross-connect: the
 # Megaport MCR; five `virtual_connection`s: the Direct Connect of eu-central-1 and the two Azure westeurope
-# ExpressRoute legs (each ends on a NIC of the region's service edge, a CloudNetworkAppliance) and the two Equinix
+# ExpressRoute legs (each ends on a port of the region's cloud transport, a CloudDirectConnect) and the two Equinix
 # Fabric connections cage -> Network Edge and Network Edge -> AWS), the shared transit circuits of 06_internet, the shared gateway's own
 # access (08_gateway_access) and the partner's access (07_zone_policies), plus one generated underlay per SD-WAN office.
 _DECLARED_CIRCUIT_TYPE_COUNTS: dict[str, int] = {
@@ -293,7 +293,8 @@ def _sdwan_tunnel(office: Declared) -> tuple[str, VirtualCircuitExpectation]:
 
 
 # The virtual-circuit fabric test_62 compares with the inventory: the generated tunnels (one per SD-WAN office), the
-# partner tunnel, the six DCI Interconnects (one per dark fibre, carrier = the fibre) and the gateway Handoff, all PROD.
+# partner tunnel, the six DCI Interconnects (one per dark fibre, carrier = the fibre) and the two Handoffs (the
+# gateway's and C001's AWS one), all PROD.
 # A circuit has no owner of its own: its derived owner is in ALL_DEMO_TUNNEL_OWNERS. `carrier` is the expected derived underlay: the carrier circuits on the circuit's own ports, or on the parent
 # of a sub-interface; the data declares none.
 ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
@@ -364,6 +365,16 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
         "carrier": (),
         "ip_namespace": "PROD",
     },
+    # C001's AWS handoff (08_interconnects/03_virtual_circuits/02_aws_prod_handoff.yml): the cage router's sub-interface
+    # to the private virtual interface of the Direct Connect transport, authored by hand (a cloud end: no generated
+    # session), carried by the virtual connection on the sub-interface's parent port.
+    "HANDOFF-FR2-AWS-EUC1-PROD": {
+        "circuit_type": HANDOFF_TYPE,
+        "locations": ("FR2", "eu-central-1"),
+        "ends": (("dx-30all-euc1-fr2", "dxcon-fr2.1000"), ("eg-fr201", "Ethernet1/13.1000")),
+        "carrier": ("XC-EQXFR2-AWS-EUC1",),
+        "ip_namespace": "PROD",
+    },
 }
 
 
@@ -418,8 +429,9 @@ ALL_DEMO_DECLARED_VIRTUAL_PORTS: dict[str, frozenset[tuple[str, str]]] = {
 
 
 # Handoff circuit -> (the party device, its ASN): the ASN is the `local_as` of the ManagedBGP process the data declares on
-# the party stub (EXT-AWS-DX-FR2 AS64512, EQX-FR2-SDWAN-GW1 AS65028, EXT-MEGAPORT-MCR1 AS133937), which add_virtual_circuit
-# makes the session's remote process. A handoff whose both ends are devices whose processes are generated has no declared party and is absent.
+# the party stub (EQX-FR2-SDWAN-GW1 AS65028, EXT-MEGAPORT-MCR1 AS133937), which add_virtual_circuit
+# makes the session's remote process. A handoff whose both ends are devices whose processes are generated has no declared
+# party and is absent; so is a cloud handoff (its far end is a cloud peering interface: no process, `peer_asn`).
 _DECLARED_PROCESS_ASNS: dict[str, int] = {
     str(device): int(str(process.item["local_as"]).removeprefix("AS"))
     for process in _all_demo("ManagedBGP")
@@ -437,6 +449,22 @@ ALL_DEMO_HANDOFF_PARTY_ASNS: dict[str, tuple[str, int]] = {
         if expected["circuit_type"] == HANDOFF_TYPE
     )
     if len(party) == 1
+}
+
+
+# The handoffs whose far end is a cloud peering interface (a CloudPeeringInterface the data declares): add_virtual_circuit
+# builds no session for them, the data authors the sub-interface address and the ManagedBGPPeering. Circuit name -> the
+# name of its authored peering (the one holding the near sub-interface).
+_CLOUD_PEERING_ENDS: frozenset[tuple[str, str]] = frozenset(
+    (str(peering.item["device"]), name(peering)) for peering in _all_demo("CloudPeeringInterface")
+)
+
+ALL_DEMO_CLOUD_HANDOFF_PEERINGS: dict[str, str] = {
+    circuit_name: str(peering.value("name"))
+    for circuit_name, expected in ALL_DEMO_VIRTUAL_CIRCUITS.items()
+    if expected["circuit_type"] == HANDOFF_TYPE and any(end in _CLOUD_PEERING_ENDS for end in expected["ends"])
+    for peering in _all_demo("ManagedBGPPeering")
+    if [list(end) for end in expected["ends"] if end not in _CLOUD_PEERING_ENDS] == peering.item["capabilities"]
 }
 
 

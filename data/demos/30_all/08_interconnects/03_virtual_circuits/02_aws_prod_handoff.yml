@@ -1,0 +1,141 @@
+---
+# The PROD handoff of C001 (Nordix) to AWS eu-central-1, authored by hand: eg-fr201 Ethernet1/13.1000 <-> the private
+# virtual interface `dxcon-fr2.1000` of the Direct Connect transport dx-30all-euc1-fr2
+# (../01_colo_onramp/02_cloud_provider_edges.yml), carried by the virtual connection XC-EQXFR2-AWS-EUC1 on
+# Ethernet1/13 (../01_colo_onramp/03_carrier_circuits.yml).
+#
+# add_virtual_circuit does NOT build this session: the far end is a cloud peering interface, so there is no party BGP
+# process to peer with and nothing to allocate on the cloud side. Everything is authored: our /31 (10.255.143.254/31,
+# the last link of Handoff-PROD-IPv4, data/bootstrap/26_handoff_pools.yml: the pool hands out the lowest free /31 to
+# the generated handoffs, so the two never meet), the provider side as the virtual interface's `peer_ip` and `peer_asn`
+# (AS64512, the Amazon side of the Direct Connect gateway), the sub-interface with its address and the eBGP peering.
+#
+# The route from the VIF to the Nordix VPC is the cloud model, not a prefix list: the VIF lands on the Direct Connect
+# gateway dxgw-30all (../02_cloud_hub/02_transit_gateway.yml), which the hybrid attachment tgwa-hybrid-eqx-fr2 joins to
+# the hub tgw-30all-euc1, whose attachment tgwa-vpc-nordix reaches the virtual network nordix-vpc-prod (10.10.0.0/16,
+# account nordix-aws-prod, owner C001). That VPC block is what the session accepts for owner C001 (rule 10,
+# nordix-prod-to-aws, ../07_zone_policies/05_security_policy.yml). eg-fr201 already holds the PROD instance through
+# the SD-WAN handoff (../04_sdwan/06_vrf_handoff.yml), whose generator joins the device to the VRF.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamPrefix
+  data:
+    - prefix: "10.255.143.254/31"
+      description: "PROD handoff eg-fr201 <-> AWS Direct Connect VIF dxcon-fr2.1000 (C001)"
+      status: active
+      ip_namespace: "PROD"
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamIPAddress
+  data:
+    - address: "10.255.143.255/31"
+      description: "AWS side of the PROD Direct Connect VIF dxcon-fr2.1000"
+      ip_namespace: "PROD"
+---
+# The Amazon side of the Direct Connect gateway: a 2-byte private ASN, clear of the 4-byte fabric ASNs.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingAutonomousSystem
+  data:
+    - asn: 64512
+      description: "AWS Direct Connect gateway AS (Amazon side)"
+---
+# Demo-only secret, like the key of the SD-WAN handoff: the BGP key of the VIF and of the session.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingPassword
+  data:
+    - name: "eqx-fr2-aws-euc1-key"
+      description: "BGP auth key for the eg-fr201 <-> AWS Direct Connect PROD handoff"
+      password: "demo-eqx-fr2-aws-euc1"
+---
+# Our side: the sub-interface of the cage port that carries the virtual connection, with our end of the /31.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: "Ethernet1/13.1000"
+      device: "eg-fr201"
+      role: cloud
+      status: active
+      description: "PROD handoff to the AWS Direct Connect VIF (C001)"
+      parent_interface: ["eg-fr201", "Ethernet1/13"]
+      ip_address:
+        data:
+          address: "10.255.143.254/31"
+          ip_namespace: "PROD"
+---
+# The provider side: the private virtual interface on the dedicated port, landing on the Direct Connect gateway.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudPeeringInterface
+  data:
+    - name: "dxcon-fr2.1000"
+      device: "dx-30all-euc1-fr2"
+      description: "AWS private virtual interface of the Nordix PROD connection (lands on dxgw-30all)"
+      status: active
+      scope: private
+      routing: bgp
+      vlan_id: 1000
+      bfd: true
+      parent_interface: ["dx-30all-euc1-fr2", "dxcon-fr2"]
+      gateway: "dxgw-30all"
+      auth: "eqx-fr2-aws-euc1-key"
+      peer_ip: ["10.255.143.255/31", "PROD"]
+      peer_asn: "AS64512"
+---
+# The handoff circuit, in PROD. Unowned shared on-ramp (a handoff has no owner): the cage and the region are its
+# locations, the carrier is derived from the virtual connection on Ethernet1/13.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologySessionCircuit
+  data:
+    - name: "HANDOFF-FR2-AWS-EUC1-PROD"
+      circuit_type: handoff
+      member_of_groups: [virtual_circuits]
+      status: active
+      provider: "P004"
+      description: "PROD handoff eg-fr201 <-> AWS Direct Connect private VIF (Nordix VPC behind the hub)"
+      ip_namespace: "PROD"
+      link_prefix: ["10.255.143.254/31", "PROD"]
+      password: "eqx-fr2-aws-euc1-key"
+      locations:
+        - "FR2"
+        - "eu-central-1"
+      capabilities:
+        - ["eg-fr201", "Ethernet1/13.1000"]
+        - ["dx-30all-euc1-fr2", "dxcon-fr2.1000"]
+---
+# The session, authored (named like the hand-written peerings of the cloud model, not `<circuit>-bgp`: that name is
+# the generator's, and add_virtual_circuit builds none for a cloud end): our overlay process of the cage router and our
+# sub-interface. The other end is the
+# connector of the session circuit that has the same sub-interface as an end (the peer address and AS are the VIF's
+# peer_ip and peer_asn), so no provider stub device is needed.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGPPeering
+  data:
+    - name: "BGP-EG-FR201-AWS-DX-PROD"
+      description: "eBGP eg-fr201 <-> AWS Direct Connect private VIF (AS64512), PROD"
+      session_type: EBGP
+      peering_role: regular
+      ttl: 1
+      bfd_enabled: true
+      send_community: true
+      send_extended_community: false
+      address_families:
+        - ["ipv4", "unicast"]
+      bgp_processes:
+        - "eg-fr201-bgp-overlay"
+      password: "eqx-fr2-aws-euc1-key"
+      capabilities:
+        - ["eg-fr201", "Ethernet1/13.1000"]

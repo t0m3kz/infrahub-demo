@@ -43,7 +43,12 @@ from tasks import ALL_DEMO_BRANCH
 from transforms.config.access_leaf import AccessLeaf
 from utils.circuit_underlay import SESSION_CIRCUIT
 
-from .all_demo_circuit_constants import ALL_DEMO_VIRTUAL_CIRCUITS, HANDOFF_TYPE, INTERCONNECT_TYPE
+from .all_demo_circuit_constants import (
+    ALL_DEMO_CLOUD_HANDOFF_PEERINGS,
+    ALL_DEMO_VIRTUAL_CIRCUITS,
+    HANDOFF_TYPE,
+    INTERCONNECT_TYPE,
+)
 from .circuit_lifecycle_helpers import (
     _HOST_CABLES_QUERY,
     _SWITCH_VRF_QUERY,
@@ -218,7 +223,7 @@ class Subject:
     def bystanders(self) -> tuple[str, ...]:
         """The sessions of every OTHER interconnect and handoff circuit of 30_all."""
         return tuple(
-            f"{name}-{suffix}"
+            ALL_DEMO_CLOUD_HANDOFF_PEERINGS.get(name, f"{name}-{suffix}")
             for name, expected in sorted(ALL_DEMO_VIRTUAL_CIRCUITS.items())
             if name != self.circuit and expected["circuit_type"] in _PEERING_SUFFIXES
             for suffix in _PEERING_SUFFIXES[expected["circuit_type"]]

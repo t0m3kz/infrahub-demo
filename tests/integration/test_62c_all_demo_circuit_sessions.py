@@ -17,6 +17,7 @@ from utils.exchange_transit import transit_vlan, wan_exit_vlan
 from utils.limits import CIRCUIT_ENDS, FW_CONTEXT_VLAN_END, FW_CONTEXT_VLAN_START, UNDERLAY_MTU
 
 from .all_demo_circuit_constants import (
+    ALL_DEMO_CLOUD_HANDOFF_PEERINGS,
     ALL_DEMO_COLOCATION_SERVED,
     ALL_DEMO_COLOCATION_SERVING_ZONES,
     ALL_DEMO_DCI_CIRCUITS,
@@ -363,10 +364,12 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         client = async_client_main
         errors: list[str] = []
         inventory = await fetch_interconnect_inventory(client=client, branch=scenario_branch)
-        handoffs = {c["name"]: c for c in inventory["virtual"] if c["circuit_type"] == HANDOFF_TYPE}
+        all_handoffs = {c["name"]: c for c in inventory["virtual"] if c["circuit_type"] == HANDOFF_TYPE}
         expected = {n for n, e in ALL_DEMO_VIRTUAL_CIRCUITS.items() if e["circuit_type"] == HANDOFF_TYPE}
-        if set(handoffs) != expected:
-            errors.append(f"handoff circuits {sorted(handoffs)}, expected {sorted(expected)}")
+        if set(all_handoffs) != expected:
+            errors.append(f"handoff circuits {sorted(all_handoffs)}, expected {sorted(expected)}")
+        # A handoff to a cloud peering interface is authored (sub-interface address and peering): no generated session.
+        handoffs = {n: c for n, c in all_handoffs.items() if n not in ALL_DEMO_CLOUD_HANDOFF_PEERINGS}
 
         sessions = _sessions_by_name(
             await client.execute_graphql(
