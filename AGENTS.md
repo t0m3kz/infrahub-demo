@@ -240,7 +240,7 @@ class MyCheck(InfrahubCheck):
 | Namespace | Holds |
 | --------- | ----- |
 | Managed | On-prem services and the shared generics `ManagedGeneric` (name, description, status), `ManagedGenericDevice` (the individual device edge, `capabilities`, cascades), `ManagedGenericSharedDevice` (the shared device edge, `shared_capabilities`, never cascades), `ManagedGenericInterfaces` (the interface-side `capabilities` edge; its identifier stays `interface_capabilities`), `ManagedNetworkSegment` and `ManagedLoadBalancer`, and `ManagedVRF` (a namespace realized in one topology, a shared kind) |
-| Cloud | Provider-hosted resources (public cloud and provider-hosted network services); every resource inherits `CloudResource`, except `CloudNetworkAppliance`, a provider-hosted network function (Equinix Network Edge) that inherits the device generics (`DcimDevice`, `DcimCapabilities`) so its interfaces (virtual NICs: no hardware), BGP and HA stay device-shaped; a cloud region hosts nothing. The cloud and SaaS side of a connection is one provider-neutral model (see **Cloud and SaaS connections**): transports (`CloudDirectConnect`, `CloudVPNConnection`, marker `CloudTransport`), the peering interface `CloudPeeringInterface`, the gateway `CloudGateway` (`hub`, `edge` or `customer`) with `CloudGatewayAttachment` and `CloudGatewayRouteTable`, `CloudVirtualNetwork` and `CloudServiceEndpoint` |
+| Cloud | Provider-hosted resources (public cloud and provider-hosted network services); every resource inherits `CloudResource`, except `CloudNetworkAppliance`, a provider-hosted network function (Equinix Network Edge) that inherits the device generics (`DcimDevice`, `DcimDeviceManaged`, `DcimCapabilities`) so its interfaces (virtual NICs: no hardware), BGP and HA stay device-shaped, and the two transports `CloudDirectConnect` and `CloudVPNConnection`, which inherit `CloudResource`, `CloudTransport` and only the slim `DcimDevice` (see **Device generics**); a cloud region hosts nothing but its transports' ports. The cloud and SaaS side of a connection is one provider-neutral model (see **Cloud and SaaS connections**): the transport devices (`CloudDirectConnect`, `CloudVPNConnection`, generic `CloudTransport` with `account`, `region` or `saas_region`, `owner`), the peering interface `CloudPeeringInterface` (a `DcimInterface` of its transport), the gateway `CloudGateway` (`hub`, `edge` or `customer`) with `CloudGatewayAttachment` and `CloudGatewayRouteTable`, `CloudVirtualNetwork` and `CloudServiceEndpoint` |
 | Topology | Deployments (`TopologyDataCenter`, `TopologyPod`, `TopologyColocationMetro`, ...), design elements, circuits (`TopologyCarrierCircuit` and `TopologySessionCircuit`, whose role is its `circuit_type`: `dci`, `handoff`, `tunnel`, `vpn`; neither has an `owner`, see **Circuit placement**) and the tenant footprints `TopologyCustomer*` |
 | Dcim, Ipam, Location, Organization | Devices/interfaces/cables, prefixes/addresses/namespaces, geography, providers/customers |
 | Routing | Shared routing objects (`RoutingAutonomousSystem`, `RoutingOSPFArea`, `RoutingPassword`) |
@@ -269,13 +269,25 @@ class MyCheck(InfrahubCheck):
 - **Office**: `TopologyCustomerOffice` is not a `TopologyCustomer`. The owner sits directly on it, its name is
   `{OWNER}-OFFICE` (for example `C005-OFFICE`), it is always PROD (no `environment`) and its parent is the
   "Campus and Office" `TopologyLabel`.
-- **Circuit placement**: two circuit kinds, both inheriting `[TopologyCircuit, ManagedGeneric]`:
+- **Device generics**: `DcimDevice` is slim, `name` (unique across every kind that inherits it, so an interface HFID
+  `[device, interface]` is never ambiguous) and `interfaces`: all an interface needs of its device. `DcimDeviceManaged`
+  holds the rest of a device (`description`, `role`, `status`, `device_type`, `platform`, `primary_address`, `tags`, and
+  the extensions `owner` and `software_image`). `DcimPhysicalDevice`, `DcimVirtualDevice`, `CloudNetworkAppliance` and the
+  controllers inherit BOTH; a holder of interfaces that is not a managed device (a cloud transport) inherits only
+  `DcimDevice`, so it has no role, platform, owner, artifact or capability edge and no query of a managed device sees
+  it. A query that reads a moved field through an interface's `device` (typed `DcimDevice`) spreads
+  `... on DcimDeviceManaged { ... }`; a list of devices that reads them roots at `DcimDeviceManaged`
+  (`DcimDevice: DcimDeviceManaged`, the alias keeps the result key); `TopologyDeviceHosting.devices`, `sdwan_gateway`,
+  `managed_devices`, `DcimPlatform.devices` and `DcimSoftwareImage.devices` peer `DcimDeviceManaged` (read `interfaces`
+  through `... on DcimDevice`).
+- **Circuit placement**: two circuit kinds, both inheriting `[TopologyCircuit, ManagedGeneric, ManagedGenericInterfaces]`:
   `TopologyCarrierCircuit` and `TopologySessionCircuit`. `locations` (peer `TopologyFacility`, max 2, no `min_count`:
-  it is enforced on update only) and the two ends are declared ONCE, on the `TopologyCircuit` generic. The ends are the
-  one field `endpoints` (peer the marker generic `TopologyCircuitEnd`, identifier `circuit_endpoints`, min and max 2): a
-  physical, LAG or virtual interface, or a cloud/SaaS connector (`CloudDirectConnect`, `CloudPeeringInterface`). A
-  circuit does not inherit `ManagedGenericInterfaces`: the shared interface edge (`capabilities`) is untouched and
-  carries no circuit. A carrier circuit is a pure carrier (fibre, cross-connect, internet access, or a
+  it is enforced on update only) is declared ONCE, on the `TopologyCircuit` generic. The ends are the shared interface
+  edge (`capabilities`, peer `DcimInterface`, identifier `interface_capabilities`; an interface has ONLY this edge), re-declared
+  on each circuit node with `min_count` 1 and `max_count` 2 (a node that inherits two generics declaring it with a
+  different count is refused, measured on 1.11.9; the checks hold the count of two). An end is a physical, LAG or
+  virtual interface of ours or of a cloud transport (a transport's port, LAG or `CloudPeeringInterface`), so a circuit
+  is found from our interface through `capabilities`. A carrier circuit is a pure carrier (fibre, cross-connect, internet access, or a
   provider-delivered `virtual_connection` or `metro_ethernet` service) with no role and no session; its `locations` peer
   `TopologyFacility`: the DC (never a pod, rack or footprint), the colocation
   cage `TopologyColocationZone` or the provider-hosted `TopologyVirtualColocation` (never the metro), the
@@ -314,8 +326,10 @@ class MyCheck(InfrahubCheck):
     belongs to the handoff and the `vpn` only; one or two locations (both ends may
     sit in one cage); at least one end on a physical device is
     carried (a live carrier circuit or a `DcimCable` on the port or its `parent_interface`, a cable to a patch panel port
-    counts: the cross-connect through a panel is cables, see **Patch panels**); both ports are
-    sub-interfaces `<port>.<vlan>` with the same VLAN.
+    counts: the cross-connect through a panel is cables, see **Patch panels**); the ends are sub-interfaces
+    `<port>.<vlan>` with the same VLAN, or a routed physical port (an IP and no VLAN); a `CloudPeeringInterface` end
+    (the far end of a cloud leg) fits either shape and needs no carrier of its own, and its `vlan_id` (when set) is the
+    VLAN. The session of a cloud leg is authored, `add_virtual_circuit` builds none.
   - **VPN** (`vpn`): an IPsec or GRE tunnel over the internet, one session on a tunnel interface pair; no office owner, no
     `registered_prefixes`, an `ip_namespace`, one or two locations, two end ports. Model only: no IPsec or tunnel
     template exists.
@@ -323,24 +337,32 @@ class MyCheck(InfrahubCheck):
     circuits meeting at a device share a class (prod vs non-prod; a handoff takes its `ip_namespace`'s
     `namespace_type`, a vpn the same, a tunnel is PROD, an interconnect has none).
 - **Cloud and SaaS connections**: there is no provider-connection object and no generator that builds a connection's
-  circuits: the cloud and SaaS side of a connection is data, described in the words every cloud shares, and a session
-  circuit ends on it. `CloudDirectConnect` is the transport to the cloud edge: `connection_type` `physical` (a port or
-  a bundle) or `logical` (a circuit on a partner's or our own port, `rides_on`, `service_key`, `partner_account`);
-  `CloudVPNConnection` is the encrypted transport that holds the tunnels (both inherit the marker `CloudTransport`).
-  `CloudPeeringInterface` is the L3/BGP termination on the cloud side (an AWS VIF, an ExpressRoute peering, a GCP VLAN
-  attachment, a VPN tunnel, a SaaS peering): `scope` (`private`, `public`, `saas`), `routing`, `vlan_id` or
+  circuits or sessions: the cloud and SaaS side of a connection is data, described in the words every cloud shares, and
+  a session circuit ends on it. A transport is a DEVICE that holds interfaces, the slim `DcimDevice` only (see **Device
+  generics**): `CloudDirectConnect` is the way to the cloud edge, `connection_type` `physical` (its ports are
+  `DcimPhysicalInterface`, its bundle a `DcimLAGInterface` whose members are ports of the SAME transport: the
+  connections of one LAG are ports of one transport) or `logical` (a circuit on a partner's or our own port,
+  `rides_on` the transport that holds the port, `service_key`, `partner_account`); `CloudVPNConnection` is the
+  encrypted transport that holds the tunnels as interfaces. A transport lands in a `region`
+  (`TopologyCloudRegion`) or a `saas_region` (`TopologySaasRegion`), exactly one, never in a `deployment`; with an
+  `account` it has no `owner`, without one (Webex, Zscaler) it has `saas_region` and an `owner` customer.
+  `CloudPeeringInterface` is the L3/BGP termination on the cloud side, a `DcimInterface` of its transport (an AWS VIF, an
+  ExpressRoute peering, a GCP VLAN attachment, a VPN tunnel, a SaaS peering) riding on a port or LAG of it
+  (`parent_interface`, a one-sided edge of its own: the port's `sub_interfaces` does not list it, walk back with
+  `CloudPeeringInterface(parent_interface__ids: ...)`): `scope` (`private`, `public`, `saas`), `routing`, `vlan_id` or
   `tunnel_index`, the provider's `peer_ip` and `peer_asn`, `auth`, and for a tunnel `endpoint_ip`, `tunnel_mode`,
-  `crypto_profile` (`SecurityIPsecProfile`) and `tunnel_key`. It and `CloudDirectConnect` are circuit ends
-  (`TopologyCircuitEnd`); our side is always a sub-interface of one of our devices and our BGP process, never a cloud
-  object. `CloudGateway` is one kind (`gateway_type` `hub`, `edge` or `customer`); a `CloudGatewayAttachment` joins a
+  `crypto_profile` (`SecurityIPsecProfile`) and `tunnel_key`. A circuit ends on a transport port, LAG or peering through
+  `capabilities` like on any interface; our side is always an interface of one of our devices (a sub-interface, or a
+  routed physical port with an IP and no VLAN) and our BGP process, never a cloud object, and the BGP peering of a cloud
+  leg is authored (`add_virtual_circuit` builds nothing for a circuit with a cloud end). `CloudGateway` is one kind (`gateway_type` `hub`, `edge` or `customer`); a `CloudGatewayAttachment` joins a
   gateway to EXACTLY one target, a `virtual_network` or a `peer_gateway` (`checks/cloud_connection.py` R1), carries
   `allowed_prefixes` (cloud to us) and sits in `CloudGatewayRouteTable`s of a hub; the prefixes we announce to the cloud
   are the peering's `advertised_prefixes` (public or static only). A cloud region hosts nothing, a SaaS region or a
   virtual colocation hosts `appliances` (`TopologyApplianceHosting`). A provider's own router that a cable reaches is a
   physical device of its `TopologyExternalProviders`. `OrganizationProvider.connection_profile` names the operator's
   vocabulary and is inventory only. The sample is `data/demos/cloud_saas_model` (its README holds the per-operator
-  table); `checks/cloud_connection.py` (R1 to R6) holds what the schema cannot. The edge does not derive the cloud
-  side's registered prefixes yet (see **Border policy**).
+  table); `checks/cloud_connection.py` (R1 to R9) holds what the schema cannot (the edge derives the cloud side's
+  prefixes, see **Border policy**).
 - **Session circuits** (virtual circuits): `TopologySessionCircuit` is the connection between topologies on which routing
   is generated or recorded; its role is its `circuit_type` (`dci`, `handoff`, `tunnel`, `vpn`), required, never a kind. It has no `owner` field (derived, see **Circuit placement**). The
   carrier kind keeps its own `circuit_type` (the carrier's nature) beside it. `tunnel` (SD-WAN office edge <->
@@ -359,7 +381,7 @@ class MyCheck(InfrahubCheck):
   carrier circuits (or a `DcimCable` inside one facility) on its port or its `parent_interface`
   (`utils/circuit_underlay.py`). The only role that is an output is `ManagedBGPPeering.peering_role` (`regular`,
   `dci`, `dci-underlay`, `fabric`, `overlay`, `underlay`). The tunnel readers (`edge.gql`, `routing_invariants.gql`,
-  `segment_security.gql`) root at `TopologySessionCircuit(circuit_type__value: "tunnel")` and read its `endpoints`.
+  `segment_security.gql`) root at `TopologySessionCircuit(circuit_type__value: "tunnel")` and read its `capabilities`.
 - **Border policy**: a `regular` session in a PROD or NON-PROD VRF is external unless its far end is ours: the far
   end's BGP process in that peering has `process_role: overlay` (not when the far end device is a
   `CloudNetworkAppliance`, a provider-hosted Network Edge: that hop is external), or the far end is the office's own
@@ -374,12 +396,16 @@ class MyCheck(InfrahubCheck):
   office-hosted segment is registered behind its gateway, so it is not local space). Exact match, one helper
   `utils/ownership.py` `exchange_policies`. A prefix of two owners, or an owner's prefix behind
   two attachment points, is a WARNING in the transform and an error of `checks/routing_invariants.py` rule 8
-  (`ownership_conflicts`), one attachment point per SD-WAN gateway (`registered_by_gateway`). With no owner it
-  accepts and announces nothing. The prefixes behind a cloud or SaaS peering (a VPC block through a gateway attachment,
-  `allowed_prefixes`, a peering's `advertised_prefixes`) are NOT registered at the edge yet: a session towards a cloud
-  accepts and announces nothing until a reader derives them from the cloud model. Every destination prefix of an enabled `SecurityPolicyRule` must be on-prem space or
-  registered behind an external session (office LAN or hosted segment, tunnel range), in a namespace of the
-  source segment's environment: otherwise `checks/segment_security.py` reports "not reachable: no session accepts it"
+  (`ownership_conflicts`), one attachment point per SD-WAN gateway and per cloud gateway (`registered_by_attachment`).
+  With no owner it accepts and announces nothing. A cloud far end is external: the far end of a cloud session is the
+  `CloudPeeringInterface` that ends the same session circuit as our interface, never a device with a BGP process.
+  `transforms/helpers/bgp_cloud.py` reads it for the edge and both checks: the neighbor (`peer_ip`, `peer_asn`) and key
+  (`auth`), the owner of the transport (its account's owner, else its own `owner` for a SaaS), the prefixes registered
+  behind it (the `allowed_prefixes`, else the CIDR blocks, of the gateway attachments reached from the peering's gateway
+  through hub hops and route tables) and the peering's `advertised_prefixes` (what we announce to a public or static
+  peering, to that session alone). Every destination prefix of an enabled `SecurityPolicyRule` must be on-prem space or
+  registered behind an external session (office LAN or hosted segment, tunnel range, cloud network block), in a
+  namespace of the source segment's environment: otherwise `checks/segment_security.py` reports "not reachable: no session accepts it"
   (a `destination_segment` or `destination_zone` rule is not checked; the internet is a zone, not a prefix).
   Only the NX-OS edge renders these maps; anywhere else a transform refuses an external session
   (`BaseDeviceTransform.external_policy_platforms`), except a hosted `CloudNetworkAppliance` on cisco_ios/cisco_xe
@@ -484,7 +510,7 @@ class MyCheck(InfrahubCheck):
   differently with a WARNING. `checks/patch_panel_pairing.py` guards the result (a generated, editable pairing is data
   that needs a guard): an underivable layout, an unpaired or mispaired front port. A cable that stops at a panel is data
   to read, not a defect to report. A panel
-  always sits between two devices: a circuit end stays an interface (the circuit `endpoints` are untouched) and the
+  always sits between two devices: a circuit end stays an interface (the circuit `capabilities` are untouched) and the
   panel's location is its mandatory `rack` (`LocationRack.deployment` gives the facility); a panel has no
   `deployment`, no device type and no `position` (the rack-unit position returns together with a rack drawing that
   draws panels). The `patch-panel` device role is gone. A generated cable
@@ -703,7 +729,7 @@ class MyCheck(InfrahubCheck):
   - `ManagedVRF`'s SVIs reach it through `DcimVirtualInterface.vrf`. A segment is not on the interface edge: a switch
     port's membership is `segments` (see **Interface addresses and
     layers**); the kinds left on `ManagedGenericInterfaces` are contexts, the routed exchange, peerings and OSPF.
-    A circuit is not on this edge: its two ends are `endpoints` (see **Circuit placement**).
+    The circuits are on it too: their two ends are their `capabilities` (see **Circuit placement**).
 
 #### Schema Best Practices
 
