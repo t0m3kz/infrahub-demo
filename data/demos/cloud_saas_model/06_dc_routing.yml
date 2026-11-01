@@ -2,7 +2,7 @@
 # L3 of the DC side, authored by hand (no generator): the VRF of the topology (PROD), the leaf SVI in it, the BGP
 # processes of leaf and edge, the overlay peering between them, and the edge sub-interfaces that face the cloud and
 # SaaS legs (our address of each /31 is typed here; a pool would hand it out). The handoff peerings are in 12_*.yml,
-# after the connectors they end on.
+# after the circuits that create the connectors they end on.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

@@ -243,6 +243,18 @@ generics:
     description: "Port that can be a switchport member of VXLAN segments"
     include_in_menu: false
 
+  # A circuit end that is not necessarily an interface of ours: a Direct Connect, a cloud virtual interface, a VPN
+  # connection, a SaaS connection. A thin marker, no attributes: the interface nodes (physical, LAG, virtual) and the
+  # four connector kinds inherit it, so the ONE circuit field `endpoints` holds any of them. Declared in the base set
+  # because the interface nodes below inherit it and a base file cannot reference an extension generic. Every kind
+  # keeps its own name and human friendly id; the shared interface edge (ManagedGenericInterfaces.capabilities) is
+  # not involved.
+  - name: CircuitEnd
+    namespace: Topology
+    description: "Anything a circuit can end on: an interface, a cloud connector or a SaaS connection"
+    label: "Circuit End"
+    include_in_menu: false
+
   - name: Endpoint
     namespace: Dcim
     description: Generic Endpoint to receive a connector.
@@ -624,6 +636,7 @@ nodes:
       - DcimHasSubInterface
       - DcimHasIPAddress
       - DcimSwitchedInterface
+      - TopologyCircuitEnd
     include_in_menu: false
     attributes:
       - name: interface_type
@@ -712,6 +725,7 @@ nodes:
       - DcimInterface
       - DcimHasSubInterface
       - DcimHasIPAddress
+      - TopologyCircuitEnd
     include_in_menu: false
     relationships:
       # One link for both meanings, no common_parent: a sub-interface's parent is a port, LAG or NIC of its own device,
@@ -736,6 +750,7 @@ nodes:
       - DcimHasSubInterface
       - DcimHasIPAddress
       - DcimSwitchedInterface
+      - TopologyCircuitEnd
     include_in_menu: false
     attributes:
       - name: lag_id

@@ -30,7 +30,6 @@ EPC = """__typename id display_label
   ... on DcimRearPatchPanelPort { port_id { value } }"""
 IF_TOP = "__typename id display_label name { value } device { node { name { value } } }"
 PP_TOP = "__typename id display_label port_id { value }"
-END = "__typename id display_label"
 
 
 def emit(text: str = "") -> None:
@@ -42,6 +41,16 @@ def rel(d: dict, k: str) -> list[dict]:
     if "edges" in v:
         return [e["node"] for e in v["edges"]]
     return [v["node"]] if v.get("node") else []
+
+
+def iface_ends(c: dict) -> list[dict]:
+    """The endpoints of a circuit that are interfaces of ours."""
+    return [e for e in rel(c, "endpoints") if e["__typename"].startswith("Dcim")]
+
+
+def conn_ends(c: dict) -> list[dict]:
+    """The endpoints of a circuit that are a cloud or SaaS connector."""
+    return [e for e in rel(c, "endpoints") if not e["__typename"].startswith("Dcim")]
 
 
 def val(d: dict, k: str) -> Any:
@@ -56,8 +65,8 @@ QUERIES = {
     "iface": f"""DcimPhysicalInterface {{ edges {{ node {{ {IF_TOP} segments {{ edges {{ node {{ id }} }} }} cable {{ node {{ name {{ value }} endpoints {{ edges {{ node {{ {EPC} }} }} }} }} }} }} }} }}""",
     "front": f"""DcimFrontPatchPanelPort {{ edges {{ node {{ {PP_TOP} rear_port {{ node {{ port_id {{ value }} }} }} cable {{ node {{ name {{ value }} endpoints {{ edges {{ node {{ {EPC} }} }} }} }} }} }} }} }}""",
     "rear": f"""DcimRearPatchPanelPort {{ edges {{ node {{ {PP_TOP} cable {{ node {{ name {{ value }} endpoints {{ edges {{ node {{ {EPC} }} }} }} }} }} }} }} }}""",
-    "carrier": f"""TopologyCarrierCircuit {{ edges {{ node {{ id name {{ value }} circuit_type {{ value }} capabilities {{ edges {{ node {{ {EP} }} }} }} connector_end {{ node {{ {END} }} }} }} }} }}""",
-    "session": f"""TopologySessionCircuit {{ edges {{ node {{ id name {{ value }} circuit_type {{ value }} capabilities {{ edges {{ node {{ {EP} }} }} }} connector_end {{ node {{ {END} }} }} }} }} }}""",
+    "carrier": f"""TopologyCarrierCircuit {{ edges {{ node {{ id name {{ value }} circuit_type {{ value }} endpoints {{ edges {{ node {{ {EP} }} }} }} }} }} }}""",
+    "session": f"""TopologySessionCircuit {{ edges {{ node {{ id name {{ value }} circuit_type {{ value }} endpoints {{ edges {{ node {{ {EP} }} }} }} }} }} }}""",
     "conn": """TopologyProviderConnection { edges { node { id name { value } connection_type { value } redundancy { value }
       locations { edges { node { name { value } } } }
       carrier_circuits { edges { node { id name { value } } } } session_circuits { edges { node { id name { value } } } }
@@ -217,13 +226,13 @@ def main_walk(d: dict[str, list[dict]], dc_seg: str, cloud_seg: str) -> None:
             continue
         # device hop: every carrier with an end on a port of that device
         for car in d["carrier"]:
-            ends = rel(car, "capabilities") + rel(car, "connector_end")
+            ends = rel(car, "endpoints")
             near = [
                 e
                 for e in ends
                 if e["__typename"] == "DcimPhysicalInterface" and e["device"]["node"]["name"]["value"] == dev
             ]
-            far_c = rel(car, "connector_end")
+            far_c = conn_ends(car)
             if not near:
                 continue
             # a carrier whose far end is a connector (Direct Connect, SaaS), or an internet carrier that a VPN rides
@@ -326,8 +335,8 @@ def main_walk(d: dict[str, list[dict]], dc_seg: str, cloud_seg: str) -> None:
                 # the peering's end is our sub-interface; the far end is the connector of the session circuit on it
                 subs = rel(pe, "capabilities")
                 sub_ids = {e["id"] for e in subs}
-                circuits = [s for s in d["session"] if sub_ids & {e["id"] for e in rel(s, "capabilities")}]
-                conns = [x for s in circuits for x in rel(s, "connector_end")]
+                circuits = [s for s in d["session"] if sub_ids & {e["id"] for e in iface_ends(s)}]
+                conns = [x for s in circuits for x in conn_ends(s)]
                 for cn in conns:
                     obj = vifs.get(cn["id"]) or vpns.get(cn["id"])
                     if not obj:
@@ -335,7 +344,7 @@ def main_walk(d: dict[str, list[dict]], dc_seg: str, cloud_seg: str) -> None:
                     tail = reaches_target(obj)
                     if not tail:
                         continue
-                    sc = [s for s in circuits if cn["id"] in [e["id"] for e in rel(s, "connector_end")]]
+                    sc = [s for s in circuits if cn["id"] in [e["id"] for e in conn_ends(s)]]
                     peer = ((obj.get("peer_ip") or {}).get("node") or {}).get("address", {}).get("value")
                     pas = ((obj.get("peer_asn") or {}).get("node") or {}).get("asn", {}).get("value")
                     legs += 1
@@ -345,7 +354,7 @@ def main_walk(d: dict[str, list[dict]], dc_seg: str, cloud_seg: str) -> None:
                     )
                     for s in sc:
                         emit(
-                            f"      --session circuit {s['name']['value']} ({val(s, 'circuit_type')}): ends {[epname(e) for e in rel(s, 'capabilities') + rel(s, 'connector_end')]}"
+                            f"      --session circuit {s['name']['value']} ({val(s, 'circuit_type')}): ends {[epname(e) for e in rel(s, 'endpoints')]}"
                         )
                     kind = "VIF" if "vif_type" in obj else "VPN"
                     emit(f"      --> {kind} {obj['name']['value']} (provider {peer} AS{pas}) --> {tail}")

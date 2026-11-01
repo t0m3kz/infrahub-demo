@@ -209,7 +209,7 @@ nodes:
     include_in_menu: false
     inherit_from:
       - CloudResource
-      - TopologyCircuitConnector
+      - TopologyCircuitEnd
     human_friendly_id:
       - name__value
     display_label: "{{ name__value }}"
@@ -270,7 +270,7 @@ nodes:
     include_in_menu: false
     inherit_from:
       - CloudResource
-      - TopologyCircuitConnector
+      - TopologyCircuitEnd
       - TopologyConnectorRouting
     human_friendly_id:
       - name__value
@@ -339,7 +339,7 @@ nodes:
     include_in_menu: false
     inherit_from:
       - CloudResource
-      - TopologyCircuitConnector
+      - TopologyCircuitEnd
       - TopologyConnectorRouting
     human_friendly_id:
       - name__value

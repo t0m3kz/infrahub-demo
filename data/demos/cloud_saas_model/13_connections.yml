@@ -3,7 +3,8 @@
 # owner, account, the pools) and, one-sided, what realizes it. ip_pool is the pool our side is addressed from
 # (Handoff-PROD-IPv4: 10.255.128.0/20); asn_pool is the pool of our private AS (PRIVATE-ASN32) where a leg needs one.
 # The object file cannot allocate from a pool, so the addresses and AS numbers of the realized objects are typed in
-# 06_dc_routing.yml and 10_connectors.yml. A connection loads last: everything it points at exists.
+# 06_dc_routing.yml and the connectors created in 11_circuits.yml. A connection loads last: everything it points at
+# exists.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

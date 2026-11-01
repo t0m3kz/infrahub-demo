@@ -20,8 +20,16 @@ Wszystkie krawędzie z połączenia są jednostronne: `locations`, `carrier_circ
 `cloud_direct_connect`, `cloud_virtual_interfaces`, `cloud_vpn_connection`, `saas_connection`, a także `ip_pool`
 (`Handoff-PROD-IPv4`) i `asn_pool` (`PRIVATE-ASN32`). Nic nie wskazuje z powrotem na połączenie.
 
-Koniec obwodu, który jest obiektem, a nie interfejsem, to jednostronna krawędź obwodu `connector_end`
-(`capabilities` obwodu zostają interfejsami, jak w HEAD). Z łącznika nie ma krawędzi powrotnej: idziemy od obwodu.
+Końce obwodu to jedno pole `endpoints` (etykieta "Endpoints", zamiast dawnych "Interface Ends" i "Connector End"):
+dokładnie dwa końce, każdy to interfejs (fizyczny, LAG, wirtualny) albo obiekt, który kończy obwód (Direct Connect,
+VIF, połączenie VPN, połączenie SaaS). Partnerem pola jest cienki generyk `TopologyCircuitEnd` (bez atrybutów), który
+dziedziczą trzy rodzaje interfejsów i cztery rodzaje łączników; pole jest zadeklarowane raz, na generyku
+`TopologyCircuit`, z własnym identyfikatorem `circuit_endpoints`. Wspólna krawędź interfejsów
+(`ManagedGenericInterfaces.capabilities`, której używają peeringi, konteksty, VIP-y, OSPF) nie jest ruszona; obwody jej
+już nie dziedziczą. Z końca nie ma listy powrotnej: idziemy od obwodu, a odwrotnie filtrem
+(`TopologyCarrierCircuit(endpoints__ids: [...])`). Generyk nie ma `human_friendly_id` (rodzaje mają różne, a atrybut
+`name` na generyku psuje nazwę interfejsów z szablonu), więc koniec w pliku obiektów to zagnieżdżony obiekt z `kind`
+i `data`, a łączniki powstają w `11_circuits.yml`, przy obwodzie, który na nich kończy.
 
 Nogi: (a) AWS Direct Connect (dedykowany, VIF transit do TGW), (b) Azure ExpressRoute: dwie nogi, primary i secondary,
 (c) VPN do AWS przez internetowy obwód nośnika, (d) Webex: prywatny peering, (e) Zscaler: tunel przez internet bez BGP.
@@ -32,7 +40,7 @@ Nogi (c) i (e) jadą na tym samym obwodzie internetowym `INET-DC90-ISP-DEMO`.
 Plik obiektów nie umie pobierać z puli. Połączenie wskazuje pule (`ip_pool`, `asn_pool`), a przydzielone wartości
 są wpisane na sztywno w miejscu, gdzie przyszły generator je zapisze: nasz adres to podinterfejs sesji
 (`06_dc_routing.yml`, /31 z `Handoff-PROD-IPv4`), nasz AS to `local_as` procesu BGP, adres i AS dostawcy to
-`peer_ip` i `peer_asn` łącznika (`10_connectors.yml`).
+`peer_ip` i `peer_asn` łącznika (`11_circuits.yml`).
 
 ## Ładowanie od zera
 
@@ -64,7 +72,7 @@ INFRAHUB_ADDRESS=http://localhost:8100 INFRAHUB_API_TOKEN=06438eb2-8019-4776-878
   == jack pairing (front.rear_port) ==> panel dmo-1-s-1-r-1-1:PP-DC90-01:1 (rear)
   --cable CBL-DC90-PP01-R1-EDGE01--> dc90-edge-01:Ethernet1/13
   [device dc90-edge-01: dc90-edge-01:Ethernet1/13 ... dc90-edge-01:Ethernet1/2]  (L2/L3 inside the device, no cable)
-  --carrier INET-DC90-ISP-DEMO (internet): EXT-ISP-DEMO-PE1:et-0/0/0 <-> dc90-edge-01:Ethernet1/2
+  --carrier INET-DC90-ISP-DEMO (internet): dc90-edge-01:Ethernet1/2 <-> EXT-ISP-DEMO-PE1:et-0/0/0
   == provider connection PC-C900-AWS-VPN-PROD (vpn, -) locations ['DC90', 'eu-central-1']
   --> VPN vpn-c900-aws-euc1 --> transit gateway tgw-c900-euc1 --attachment tgwa-c900-vpc--> virtual network vpc-c900-prod
   --> cloud segment c900-demo-subnet-p (10.200.1.0/24)

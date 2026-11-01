@@ -1,7 +1,12 @@
 ---
-# The circuits of the five legs. A circuit's interface ends are `capabilities` (nested objects with their kind, as the
-# generic port has no short reference); the end that is an object (a Direct Connect, a virtual interface, a VPN
-# connection, a SaaS connection) is `connector_end`, one-sided, by the name of the connector.
+# The circuits of the five legs. The two ends of a circuit are ONE field, `endpoints`: an interface of ours or the
+# object that terminates the circuit (a Direct Connect, a virtual interface, a VPN connection, a SaaS connection).
+# The peer is a marker generic without a human friendly id (the kinds have different ones, and a generic `name` would
+# clash with the interfaces'), so every end is a nested object with its kind, and an existing object cannot be named
+# by a string. The connectors are therefore created here, by the circuit end that terminates on them (the
+# peer_ip and peer_asn are the PROVIDER side of the leg; our side is the sub-interface address of
+# 06_dc_routing.yml and the local_as of dc90-edge-01-bgp). The Webex connection ends two circuits (the carrier and
+# the session), so it is spelled out twice with the same values.
 # `locations` are authored here (no generator derives them): our DC and the provider's region.
 #
 # Carrier circuits are the physical wire: they end on our edge port and on the connector that stands for the
@@ -22,12 +27,20 @@ spec:
       locations:
         - DC90
         - eu-central-1
-      capabilities:
+      endpoints:
         - kind: DcimPhysicalInterface
           data:
             device: dc90-edge-01
             name: Ethernet1/3
-      connector_end: dx-c900-fra-1
+        - kind: CloudDirectConnect
+          data:
+            name: dx-c900-fra-1
+            description: Dedicated 10G Direct Connect port
+            status: active
+            connection_type: dedicated
+            bandwidth: 10000
+            account: c900-aws-prod
+            region: eu-central-1
     - name: VC-DC90-AZ-ER-PRI
       circuit_id: VC-DC90-AZ-ER-PRI
       description: Virtual connection to the ExpressRoute circuit, primary
@@ -38,12 +51,20 @@ spec:
       locations:
         - DC90
         - westeurope
-      capabilities:
+      endpoints:
         - kind: DcimPhysicalInterface
           data:
             device: dc90-edge-01
             name: Ethernet1/4
-      connector_end: er-c900-weu-pri
+        - kind: CloudDirectConnect
+          data:
+            name: er-c900-weu-pri
+            description: ExpressRoute circuit, primary
+            status: active
+            connection_type: hosted
+            bandwidth: 1000
+            account: c900-azure-prod
+            region: westeurope
     - name: VC-DC90-AZ-ER-SEC
       circuit_id: VC-DC90-AZ-ER-SEC
       description: Virtual connection to the ExpressRoute circuit, secondary
@@ -54,12 +75,20 @@ spec:
       locations:
         - DC90
         - westeurope
-      capabilities:
+      endpoints:
         - kind: DcimPhysicalInterface
           data:
             device: dc90-edge-01
             name: Ethernet1/5
-      connector_end: er-c900-weu-sec
+        - kind: CloudDirectConnect
+          data:
+            name: er-c900-weu-sec
+            description: ExpressRoute circuit, secondary
+            status: active
+            connection_type: hosted
+            bandwidth: 1000
+            account: c900-azure-prod
+            region: westeurope
     - name: XC-DC90-WEBEX-1
       circuit_id: XC-DC90-WEBEX-1
       description: Cross-connect to the Webex peering point
@@ -70,12 +99,20 @@ spec:
       locations:
         - DC90
         - WEBEX-FRANKFURT
-      capabilities:
+      endpoints:
         - kind: DcimPhysicalInterface
           data:
             device: dc90-edge-01
             name: Ethernet1/6
-      connector_end: saas-c900-webex-fra
+        - kind: TopologySaasConnection
+          data:
+            name: saas-c900-webex-fra
+            description: Webex private peering, tenant of C900
+            status: active
+            service_id: webex-org-c900
+            region: WEBEX-FRANKFURT
+            peer_ip: ["10.255.128.7/31", "PROD"]
+            peer_asn: AS13445
     - name: INET-DC90-ISP-DEMO
       circuit_id: INET-DC90-ISP-DEMO
       description: Internet access of dc90-edge-01 (carries the VPN and the Zscaler tunnel)
@@ -86,7 +123,7 @@ spec:
       locations:
         - DC90
         - ISP-DEMO
-      capabilities:
+      endpoints:
         - kind: DcimPhysicalInterface
           data:
             device: dc90-edge-01
@@ -114,12 +151,21 @@ spec:
       locations:
         - DC90
         - eu-central-1
-      capabilities:
+      endpoints:
         - kind: DcimVirtualInterface
           data:
             device: dc90-edge-01
             name: Ethernet1/3.1000
-      connector_end: vif-c900-aws-transit
+        - kind: CloudVirtualInterface
+          data:
+            name: vif-c900-aws-transit
+            status: active
+            vif_type: transit
+            vlan_id: 1000
+            direct_connect: dx-c900-fra-1
+            transit_gateway: tgw-c900-euc1
+            peer_ip: ["10.255.128.1/31", "PROD"]
+            peer_asn: AS64512
     - name: SC-C900-AZ-ER-PRI
       description: 'Handoff: edge sub-interface to the primary private peering'
       provider: P005
@@ -132,12 +178,21 @@ spec:
       locations:
         - DC90
         - westeurope
-      capabilities:
+      endpoints:
         - kind: DcimVirtualInterface
           data:
             device: dc90-edge-01
             name: Ethernet1/4.200
-      connector_end: vif-c900-azure-pri
+        - kind: CloudVirtualInterface
+          data:
+            name: vif-c900-azure-pri
+            status: active
+            vif_type: private
+            vlan_id: 200
+            direct_connect: er-c900-weu-pri
+            virtual_network: vnet-c900-weu
+            peer_ip: ["10.255.128.3/31", "PROD"]
+            peer_asn: AS12076
     - name: SC-C900-AZ-ER-SEC
       description: 'Handoff: edge sub-interface to the secondary private peering'
       provider: P005
@@ -150,12 +205,21 @@ spec:
       locations:
         - DC90
         - westeurope
-      capabilities:
+      endpoints:
         - kind: DcimVirtualInterface
           data:
             device: dc90-edge-01
             name: Ethernet1/5.200
-      connector_end: vif-c900-azure-sec
+        - kind: CloudVirtualInterface
+          data:
+            name: vif-c900-azure-sec
+            status: active
+            vif_type: private
+            vlan_id: 200
+            direct_connect: er-c900-weu-sec
+            virtual_network: vnet-c900-weu
+            peer_ip: ["10.255.128.5/31", "PROD"]
+            peer_asn: AS12076
     - name: SC-C900-WEBEX-PROD
       description: 'Handoff: edge sub-interface to the Webex connection'
       provider: P901
@@ -168,12 +232,20 @@ spec:
       locations:
         - DC90
         - WEBEX-FRANKFURT
-      capabilities:
+      endpoints:
         - kind: DcimVirtualInterface
           data:
             device: dc90-edge-01
             name: Ethernet1/6.300
-      connector_end: saas-c900-webex-fra
+        - kind: TopologySaasConnection
+          data:
+            name: saas-c900-webex-fra
+            description: Webex private peering, tenant of C900
+            status: active
+            service_id: webex-org-c900
+            region: WEBEX-FRANKFURT
+            peer_ip: ["10.255.128.7/31", "PROD"]
+            peer_asn: AS13445
     - name: SC-C900-AWS-VPN-1
       description: VPN tunnel 1 from the edge to the AWS VPN connection
       provider: P004
@@ -186,12 +258,24 @@ spec:
       locations:
         - DC90
         - eu-central-1
-      capabilities:
+      endpoints:
         - kind: DcimVirtualInterface
           data:
             device: dc90-edge-01
             name: Tunnel1
-      connector_end: vpn-c900-aws-euc1
+        - kind: CloudVPNConnection
+          data:
+            name: vpn-c900-aws-euc1
+            status: active
+            routing: bgp
+            tunnel_count: 2
+            customer_gateway_ip: "198.51.100.10/32"
+            provider_endpoint_ip: "203.0.113.50/32"
+            account: c900-aws-prod
+            region: eu-central-1
+            transit_gateway: tgw-c900-euc1
+            peer_ip: ["169.254.10.1/30", "PROD"]
+            peer_asn: AS64512
     - name: SC-C900-ZSCALER-TUN1
       description: Tunnel to the Zscaler enforcement node, no BGP
       provider: P030
@@ -200,9 +284,15 @@ spec:
       locations:
         - DC90
         - ZSCALER-MUNICH I
-      capabilities:
+      endpoints:
         - kind: DcimVirtualInterface
           data:
             device: dc90-edge-01
             name: Tunnel2
-      connector_end: saas-c900-zscaler-muc
+        - kind: TopologySaasConnection
+          data:
+            name: saas-c900-zscaler-muc
+            description: Zscaler tunnel, tenant of C900 (no BGP)
+            status: active
+            service_id: zscaler-org-c900
+            region: ZSCALER-MUNICH I

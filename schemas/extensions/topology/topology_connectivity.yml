@@ -40,23 +40,6 @@ generics:
         kind: Text
         order_weight: 100
 
-  # A connector is a circuit end that is an object and not an interface: a Direct Connect, a cloud virtual interface, a
-  # VPN connection, a SaaS connection. A circuit's `capabilities` stay the interface ends (peer DcimInterface, paired
-  # with the interface side by the identifier interface_capabilities, which this model does not touch); a circuit whose
-  # far end is a connector lists it in `connector_end`, a one-sided edge. The connector lists nothing back: walk from
-  # the circuit. Names of connectors are unique across the four kinds (the generic's human friendly id).
-  - name: CircuitConnector
-    namespace: Topology
-    description: "Cloud or SaaS object a circuit ends on"
-    label: "Circuit Connector"
-    include_in_menu: false
-    human_friendly_id:
-      - name__value
-    attributes:
-      - name: name
-        kind: Text
-        order_weight: 100
-
   # The provider side of a routed leg, on the connector. OUR side is not here: our address is the sub-interface of the
   # session circuit (allocated from Handoff-<ip_namespace>-IPv4) and our AS is the local_as of our ManagedBGP (a private
   # AS from PRIVATE-ASN32 when the provider needs one).
@@ -142,6 +125,21 @@ generics:
         order_weight: 3000
         description: "Facilities where this circuit terminates (both ends may sit in one facility, e.g. the cage)"
 
+      # The two ends of the circuit in ONE field: an interface, or the object that terminates the circuit (Direct
+      # Connect, cloud virtual interface, VPN connection, SaaS connection). Its own identifier: it does not touch the
+      # interface edge (ManagedGenericInterfaces.capabilities) the peerings, contexts, VIPs and OSPF use.
+      - name: endpoints
+        label: "Endpoints"
+        peer: TopologyCircuitEnd
+        kind: Generic
+        cardinality: many
+        optional: true
+        min_count: 2
+        max_count: 2
+        identifier: circuit_endpoints
+        order_weight: 1100
+        description: "The two ends: an interface, or a cloud/SaaS connector that terminates the circuit"
+
 nodes:
   # The carrier: fibre, cross-connect, internet access, or a provider-delivered virtual connection. It
   # is the underlay a session circuit rides on, never a routing role. Carries no session and no routing.
@@ -154,7 +152,6 @@ nodes:
     inherit_from:
       - TopologyCircuit
       - ManagedGeneric
-      - ManagedGenericInterfaces
     human_friendly_id:
       - circuit_id__value
     display_label: "{{ circuit_id__value }} - {{ provider__name__value }}"
@@ -247,37 +244,6 @@ nodes:
   #            remote ASN lives in the party device's ManagedBGP.local_as; the VLAN in the sub-interface name.
   #   tunnel   Office edge <-> SD-WAN gateway (eth1), and the partner tunnel. No session is generated (the
   #            VeloCloud orchestrator owns the overlay routing). Owner = the office's owner.
-    relationships:
-      # The two ends. ManagedGenericInterfaces carries the interface-side edge (a circuit in a port's `capabilities`);
-      # this re-declares the circuit side with a count. It cannot be hoisted onto TopologyCircuit: a node that
-      # inherits two generics declaring `capabilities` with a different min_count is refused (measured on 1.11.9).
-      # The cap holds when the circuit side is written; checks/carrier_circuit_ports.py and
-      # checks/circuit_placement.py hold the rest.
-      - name: capabilities
-        peer: DcimInterface
-        label: "Interface Ends"
-        kind: Generic
-        cardinality: many
-        optional: false
-        min_count: 1
-        max_count: 2
-        identifier: interface_capabilities
-        order_weight: 1100
-        description: "The interface ends of this circuit: two ports, or one port when the other end is a connector"
-
-      # The end that is an object, not an interface (a Direct Connect, a virtual interface, a VPN connection, a SaaS
-      # connection). One-sided. With `capabilities` a circuit has two ends; the checks hold that count (min_count of
-      # `capabilities` is 1 here, 2 at HEAD: the circuit side only).
-      - name: connector_end
-        label: "Connector End"
-        peer: TopologyCircuitConnector
-        kind: Attribute
-        cardinality: one
-        optional: true
-        identifier: circuit__connector_end
-        order_weight: 1120
-        description: "The cloud or SaaS object this circuit ends on, when one end is not an interface"
-
   - name: SessionCircuit
     namespace: Topology
     description: "Circuit that rides carriers: a DCI, a handoff or a vpn with generated routing, or a tunnel kept as inventory"  # yamllint disable-line rule:line-length
@@ -287,7 +253,6 @@ nodes:
     inherit_from:
       - TopologyCircuit
       - ManagedGeneric
-      - ManagedGenericInterfaces
     human_friendly_id:
       - name__value
     uniqueness_constraints:
@@ -324,36 +289,6 @@ nodes:
             color: "#d35400"
 
     relationships:
-      # The two ends. ManagedGenericInterfaces carries the interface-side edge (a circuit in a port's `capabilities`);
-      # this re-declares the circuit side with a count. It cannot be hoisted onto TopologyCircuit: a node that
-      # inherits two generics declaring `capabilities` with a different min_count is refused (measured on 1.11.9).
-      # The cap holds when the circuit side is written; checks/carrier_circuit_ports.py and
-      # checks/circuit_placement.py hold the rest.
-      - name: capabilities
-        peer: DcimInterface
-        label: "Interface Ends"
-        kind: Generic
-        cardinality: many
-        optional: false
-        min_count: 1
-        max_count: 2
-        identifier: interface_capabilities
-        order_weight: 1100
-        description: "The interface ends of this circuit: two ports, or one port when the other end is a connector"
-
-      # The end that is an object, not an interface (a Direct Connect, a virtual interface, a VPN connection, a SaaS
-      # connection). One-sided. With `capabilities` a circuit has two ends; the checks hold that count (min_count of
-      # `capabilities` is 1 here, 2 at HEAD: the circuit side only).
-      - name: connector_end
-        label: "Connector End"
-        peer: TopologyCircuitConnector
-        kind: Attribute
-        cardinality: one
-        optional: true
-        identifier: circuit__connector_end
-        order_weight: 1120
-        description: "The cloud or SaaS object this circuit ends on, when one end is not an interface"
-
 
       # The same concept as TopologyCustomerOffice.lan_prefixes (a PROD prefix a customer registers behind the
       # SD-WAN gateway, so the gateway's border session accepts it), for space the tunnel reaches that no office
