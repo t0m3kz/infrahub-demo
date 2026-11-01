@@ -566,8 +566,6 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
                 )
             pool_name = None
         ttl = flavour.ttl or 1
-        # BFD stays on for a handoff (today's behaviour, the profile has no way to say "off"); a VPN's flavour decides.
-        bfd = True if label == "Handoff" else flavour.bfd
         return SessionPlan(
             label=label,
             first=first,
@@ -588,7 +586,7 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
                     address_family=IPV4_UNICAST_AF,
                     send_community=False,
                     ttl=ttl,
-                    bfd_enabled=bfd,
+                    bfd_enabled=flavour.bfd,
                     interface_ids=(first.port_id, second.port_id),
                 ),
             ),

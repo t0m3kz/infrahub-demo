@@ -89,12 +89,9 @@ async def test_every_kind_is_in_the_inventory_with_its_own_fields(monkeypatch: p
     )
     assert (aws["owner_org"], aws["link_prefix"]) == (None, None)
     assert aws["password"] == "eqx-fr2-aws-vif-key"
-    assert [end["parent_name"] for end in aws["end_nodes"]] == ["Ethernet1/13", "et-0/0/0"]
+    assert [end["parent_name"] for end in aws["end_nodes"]] == ["Ethernet1/13", "vnic-fr2"]
     # a sub-interface rides its parent's carrier, a cable-carried handoff has no circuit but a cable
-    assert {c["circuit_id"] for end in aws["end_nodes"] for c in end["carriers"]} == {
-        "XC-EQXFR2-AWS-EUC1",
-        "FABRIC-AMNE02-AWS-EUC1",
-    }
+    assert {c["circuit_id"] for end in aws["end_nodes"] for c in end["carriers"]} == {"XC-EQXFR2-AWS-EUC1"}
     sdwan = _circuit(data, "HANDOFF-FR2-SDWAN-GW1-PROD")
     assert sdwan["carrier"] == [] and all(end["cabled"] for end in sdwan["end_nodes"])
     for tunnel in (c for c in data["virtual"] if c["circuit_type"] == TUNNEL_TYPE):

@@ -93,6 +93,7 @@ def test_every_listed_carrier_exists_and_joins_the_near_or_the_far_facility() ->
     """The generator finds the near port on a carrier end deployed at `near` and the far port on one deployed at `far`:
     the carriers listed together must offer both (the first carrier with both is used)."""
     deployments = {name(d): d.item.get("deployment") for d in declared("DcimPhysicalDevice", _ALL)}
+    deployments |= {name(d): d.item.get("deployment") for d in declared("CloudNetworkAppliance", _ALL)}
     deployments |= {
         "eg-fr201": "FR2",
         "eg-pa401": "PA4",
@@ -122,12 +123,12 @@ def test_the_network_edge_hops_ride_fabric_virtual_connections() -> None:
     assert carriers["FABRIC-AMNE02-AWS-EUC1"]["circuit_type"] == "virtual_connection"
     assert carriers["FABRIC-AMNE02-AWS-EUC1"]["capabilities"] == [
         ["eg-am-ne02", "Ethernet1/1"],
-        ["EXT-AWS-DX-FR2", "et-0/0/0"],
+        ["EXT-AWS-DX-FR2", "vnic-amne"],
     ]
     connections = _connections()
     assert connections["PC-FR2-AMNE-PROD"]["carrier_circuits"] == ["FABRIC-FR2-AMNE01"]
-    # the AWS stub port also ends the cross-connect of the first connection, so both carriers are its underlay
-    assert connections["PC-AMNE-AWS-EUC1-PROD"]["carrier_circuits"] == ["FABRIC-AMNE02-AWS-EUC1", "XC-EQXFR2-AWS-EUC1"]
+    # each leg of the AWS service edge is its own NIC (vnic-amne, vnic-fr2) with its own carrier: no carrier is shared
+    assert connections["PC-AMNE-AWS-EUC1-PROD"]["carrier_circuits"] == ["FABRIC-AMNE02-AWS-EUC1"]
     assert connections["PC-FR2-AWS-EUC1-PROD"]["carrier_circuits"] == ["XC-EQXFR2-AWS-EUC1"]
 
 
@@ -200,7 +201,7 @@ def test_the_vpn_is_model_only_with_two_provider_assigned_tunnel_ranges() -> Non
 
 def test_the_azure_legs_are_two_connections_on_two_carriers_of_one_redundancy_group() -> None:
     """azure/dedicated is ONE /30 link per connection: the primary and the secondary leg are two connections, each on
-    its own cross-connect (two cage edges, two ports of the ExpressRoute stub), related by the carriers'
+    its own virtual connection (two cage edges, two NICs of the ExpressRoute service edge), related by the carriers'
     redundancy_group."""
     connections = _connections()
     flavour = flavour_for("azure", "dedicated")
@@ -216,7 +217,7 @@ def test_the_azure_legs_are_two_connections_on_two_carriers_of_one_redundancy_gr
     assert primary["redundancy_group"] == secondary["redundancy_group"]
     assert [d for d, _ in primary["capabilities"]] == ["eg-pa401", "EXT-AZURE-ER-PA4"]
     assert [d for d, _ in secondary["capabilities"]] == ["eg-pa402", "EXT-AZURE-ER-PA4"]
-    assert {p for _, p in (primary["capabilities"][1], secondary["capabilities"][1])} == {"et-0/0/0", "et-0/0/1"}
+    assert {p for _, p in (primary["capabilities"][1], secondary["capabilities"][1])} == {"vnic-pri", "vnic-sec"}
 
 
 def test_every_link_prefix_is_a_declared_prefix_of_the_connections_namespace() -> None:

@@ -44,17 +44,17 @@ class ConnectionFlavour:
     links: int  # sessions (session circuits) one connection carries
     lower_end: str = END_US  # END_US or END_PROVIDER: the end that takes the lower host address
     ttl: int | None = None  # eBGP multihop TTL of the session, None = directly connected
-    bfd: bool = False
+    bfd: bool = False  # BFD on the session (handoff and vpn alike): on for a dedicated path, off over the internet
 
 
-DEFAULT_FLAVOUR = ConnectionFlavour(ADDRESS_SOURCE_OUR_POOL, 31, 1)
+DEFAULT_FLAVOUR = ConnectionFlavour(ADDRESS_SOURCE_OUR_POOL, 31, 1, bfd=True)
 
 # Measured against the vendors' own documentation, not a lab: the rows are the model, not a rendered syntax.
 FLAVOURS: dict[tuple[str, str], ConnectionFlavour] = {
     # Direct Connect: the customer specifies the peer addresses, so they come from OUR pool. Site-to-Site VPN: AWS
     # hands a 169.254/30 per tunnel, two tunnels, the provider end is the lower one (AWS takes .1).
-    ("aws", PATH_DEDICATED): ConnectionFlavour(ADDRESS_SOURCE_OUR_POOL, 31, 1),
-    ("aws", PATH_INTERNET_VPN): ConnectionFlavour(ADDRESS_SOURCE_PROVIDER, 30, 2, END_PROVIDER, bfd=False),
+    ("aws", PATH_DEDICATED): ConnectionFlavour(ADDRESS_SOURCE_OUR_POOL, 31, 1, bfd=True),
+    ("aws", PATH_INTERNET_VPN): ConnectionFlavour(ADDRESS_SOURCE_PROVIDER, 30, 2, END_PROVIDER),
     # ExpressRoute: Microsoft takes a /30 per link, the customer end is the lower address. A connection is ONE leg
     # (one circuit, one /30): the primary and the secondary leg are two connections, related by the carriers'
     # `redundancy_group`.
@@ -63,11 +63,11 @@ FLAVOURS: dict[tuple[str, str], ConnectionFlavour] = {
     # Cloud Interconnect: a link-local /29 per VLAN attachment; Cloud VPN: a /30 per tunnel.
     ("gcp", PATH_DEDICATED): ConnectionFlavour(ADDRESS_SOURCE_PROVIDER, 29, 1, END_PROVIDER, bfd=True),
     ("gcp", PATH_INTERNET_VPN): ConnectionFlavour(ADDRESS_SOURCE_PROVIDER, 30, 2, END_PROVIDER),
-    ("oci", PATH_DEDICATED): ConnectionFlavour(ADDRESS_SOURCE_OUR_POOL, 31, 1),
+    ("oci", PATH_DEDICATED): ConnectionFlavour(ADDRESS_SOURCE_OUR_POOL, 31, 1, bfd=True),
     ("oci", PATH_INTERNET_VPN): ConnectionFlavour(ADDRESS_SOURCE_PROVIDER, 30, 2, END_PROVIDER),
     # A layer 2 service: the session is ours or the far party's, addressed from our pool.
-    ("equinix", PATH_DEDICATED): ConnectionFlavour(ADDRESS_SOURCE_OUR_POOL, 31, 1),
-    ("megaport", PATH_DEDICATED): ConnectionFlavour(ADDRESS_SOURCE_OUR_POOL, 31, 1),
+    ("equinix", PATH_DEDICATED): ConnectionFlavour(ADDRESS_SOURCE_OUR_POOL, 31, 1, bfd=True),
+    ("megaport", PATH_DEDICATED): ConnectionFlavour(ADDRESS_SOURCE_OUR_POOL, 31, 1, bfd=True),
     # Tunnels to the nearest Zscaler node: two tunnels (primary and secondary node), /30 from our pool.
     ("zscaler", PATH_INTERNET_VPN): ConnectionFlavour(ADDRESS_SOURCE_OUR_POOL, 30, 2, ttl=2),
 }

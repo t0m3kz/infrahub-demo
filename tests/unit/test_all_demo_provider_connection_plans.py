@@ -152,12 +152,9 @@ def _payload(row: dict[str, Any]) -> dict[str, Any]:
         for circuit_id, carrier in _carriers().items()
         if carrier["circuit_type"] == "internet" and near in carrier.get("locations", [])
     ]
-    stubs = [
-        _device(device)
-        for device, device_row in _devices().items()
-        if device_row["deployment"] == far and device not in _GENERATED_DEPLOYMENT
-    ]
-    far_node: dict[str, Any] = {"id": far, "typename": "TopologyFacility", "devices": stubs}
+    stubs = [_device(device) for device, device_row in _devices().items() if device_row["deployment"] == far]
+    # The planner reads `appliances` and `devices` alike; a cloud region has no `devices` key at all.
+    far_node: dict[str, Any] = {"id": far, "typename": "TopologyFacility", "appliances": stubs}
     if provider["far_parent"]:
         far_node["parent"] = provider["far_parent"]
     if provider["far_account"]:
@@ -202,17 +199,17 @@ def _ends(link: LinkPlan) -> tuple[str, str]:
 
 #: connection -> the session circuits documented in the data comments: (name, near, far, link prefix or None)
 _EXPECTED: dict[str, list[tuple[str, str, str, str | None]]] = {
-    "PC-FR2-AWS-EUC1-PROD": [("PC-FR2-AWS-EUC1-PROD-L1", "eg-fr201/Ethernet1/13", "EXT-AWS-DX-FR2/et-0/0/0", None)],
+    "PC-FR2-AWS-EUC1-PROD": [("PC-FR2-AWS-EUC1-PROD-L1", "eg-fr201/Ethernet1/13", "EXT-AWS-DX-FR2/vnic-fr2", None)],
     "PC-FR2-AMNE-PROD": [("PC-FR2-AMNE-PROD-L1", "eg-fr201/Ethernet1/1", "eg-am-ne01/Ethernet1/1", None)],
-    "PC-AMNE-AWS-EUC1-PROD": [("PC-AMNE-AWS-EUC1-PROD-L1", "eg-am-ne02/Ethernet1/1", "EXT-AWS-DX-FR2/et-0/0/0", None)],
+    "PC-AMNE-AWS-EUC1-PROD": [("PC-AMNE-AWS-EUC1-PROD-L1", "eg-am-ne02/Ethernet1/1", "EXT-AWS-DX-FR2/vnic-amne", None)],
     "PC-PA4-MEGAPORT-PROD": [("PC-PA4-MEGAPORT-PROD-L1", "eg-pa401/Ethernet1/1", "EXT-MEGAPORT-MCR1/et-0/0/0", None)],
     "PC-PA4-AZURE-WEU-PRI-PROD": [
-        ("PC-PA4-AZURE-WEU-PRI-PROD-L1", "eg-pa401/Ethernet1/13", "EXT-AZURE-ER-PA4/et-0/0/0", "10.255.72.0/30")
+        ("PC-PA4-AZURE-WEU-PRI-PROD-L1", "eg-pa401/Ethernet1/13", "EXT-AZURE-ER-PA4/vnic-pri", "10.255.72.0/30")
     ],
     "PC-PA4-AZURE-WEU-SEC-PROD": [
-        ("PC-PA4-AZURE-WEU-SEC-PROD-L1", "eg-pa402/Ethernet1/13", "EXT-AZURE-ER-PA4/et-0/0/1", "10.255.72.4/30")
+        ("PC-PA4-AZURE-WEU-SEC-PROD-L1", "eg-pa402/Ethernet1/13", "EXT-AZURE-ER-PA4/vnic-sec", "10.255.72.4/30")
     ],
-    # the tunnels leave by eg-fr201's Lumen internet port, and end on the VPN gateway stub / the Zscaler node
+    # the tunnels leave by eg-fr201's Lumen internet port, and end on the VPN gateway appliance / the Zscaler node
     "PC-FR2-AWS-EUC1-VPN-PROD": [
         ("PC-FR2-AWS-EUC1-VPN-PROD-L1", "eg-fr201/Ethernet1/14", "EXT-AWS-VPN-EUC1", "169.254.10.0/30"),
         ("PC-FR2-AWS-EUC1-VPN-PROD-L2", "eg-fr201/Ethernet1/14", "EXT-AWS-VPN-EUC1", "169.254.10.4/30"),
@@ -284,8 +281,14 @@ def test_the_ports_the_planner_picks_on_authored_stubs_exist_on_their_template()
         for link in _plan(connection):
             assert link.far.port is not None
             device = rows.get(link.far.device_name)
-            if device is None:
-                continue  # a generated router
+            if device is None:  # an appliance (a service edge has declared NICs, a Network Edge router is generated)
+                declared_nics = {
+                    str(i.item["name"])
+                    for i in declared("DcimVirtualInterface", _ALL)
+                    if i.item["device"] == link.far.device_name
+                }
+                assert not declared_nics or link.far.port.name in declared_nics, link.far.device_name
+                continue
             template_ports = _template_ports(device["object_template"])
             assert link.far.port.name in template_ports, f"{link.far.device_name}: {link.far.port.name}"
 

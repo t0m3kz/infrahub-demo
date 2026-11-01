@@ -3,8 +3,8 @@
 # DcimPatchPanel, not a device. Part 2 (10_physical_devices_templates_patch_panel_front.yaml) adds the FRONT ports to
 # the same templates, so a panel created with `object_template:` gets both lists on its page. A template carries the
 # ports but not the pairing of a front port with its rear port: an object template copies an attribute relationship as
-# it is and cannot point at a sibling. The pairing is a data file next to the panel (a ranged front block with a ranged
-# `rear_port`), and tests/unit/test_patch_panel_data.py pins that every demo front port is paired.
+# it is and cannot point at a sibling. The generator add_patch_panel pairs them, so each template is a member of the
+# patch_panels group (its target group; the created-trigger raises for a non-member).
 #
 #   PP-24-LC, PP-48-LC   N jacks, LC/UPC
 #   PP-12-SC             12 jacks, SC/UPC
@@ -17,6 +17,8 @@ spec:
   data:
     - template_name: PP-24-LC
       description: "24-jack fibre patch panel, LC/UPC"
+      member_of_groups:
+        - patch_panels
       rear_ports:
         kind: TemplateDcimRearPatchPanelPort
         parameters:
@@ -28,6 +30,8 @@ spec:
 
     - template_name: PP-48-LC
       description: "48-jack fibre patch panel, LC/UPC"
+      member_of_groups:
+        - patch_panels
       rear_ports:
         kind: TemplateDcimRearPatchPanelPort
         parameters:
@@ -39,6 +43,8 @@ spec:
 
     - template_name: PP-12-SC
       description: "12-jack fibre patch panel, SC/UPC"
+      member_of_groups:
+        - patch_panels
       rear_ports:
         kind: TemplateDcimRearPatchPanelPort
         parameters:
@@ -50,6 +56,8 @@ spec:
 
     - template_name: PP-24-RJ45
       description: "24-jack copper patch panel, RJ45"
+      member_of_groups:
+        - patch_panels
       rear_ports:
         kind: TemplateDcimRearPatchPanelPort
         parameters:
@@ -61,6 +69,8 @@ spec:
 
     - template_name: PP-CASSETTE-MPO12
       description: "4-cassette fibre enclosure: a rear MPO-12 per cassette, 12 LC/UPC front ports each"
+      member_of_groups:
+        - patch_panels
       rear_ports:
         kind: TemplateDcimRearPatchPanelPort
         parameters:

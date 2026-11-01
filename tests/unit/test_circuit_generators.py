@@ -85,6 +85,11 @@ def _virtual_edge(**kwargs: Any) -> dict[str, Any]:
     return interface("if-ve", "Gi1", "eg-am-ne01", deployment=VIRTUAL_COLOCATION, **kwargs)
 
 
+def _service_edge_nic(**kwargs: Any) -> dict[str, Any]:
+    """A virtual NIC of the provider's service edge appliance, deployed in its cloud region (no physical port)."""
+    return interface("if-nic", "vnic-fr2", "AWS-EUC1-SE", deployment=REGION, **kwargs)
+
+
 def _isp_pe(**kwargs: Any) -> dict[str, Any]:
     """The ISP's access PE, deployed in its TopologyExternalProviders."""
     return interface("if-pe", "xe-0/0/1", "pe-orange-fr", deployment=ISP, **kwargs)
@@ -102,6 +107,9 @@ class TestCarrierCircuitPlacement:
         [
             pytest.param([dc_border_leaf(), cage_edge()], [CAGE], ["dep-DC10"], id="cage-authored-dc-derived"),
             pytest.param([cage_edge(), _aws_router()], [CAGE], ["loc-eu-central-1"], id="cloud-region-derived"),
+            pytest.param(
+                [cage_edge(), _service_edge_nic()], [CAGE], ["loc-eu-central-1"], id="service-edge-nic-region-derived"
+            ),
             pytest.param([cage_edge(), _isp_pe()], [CAGE], ["loc-ORANGE-FR"], id="isp-derived"),
             pytest.param([dc_border_leaf(), _isp_pe()], [], ["dep-DC10", "loc-ORANGE-FR"], id="both-ends-derived"),
             # The on-ramp edge deploys to its zone: the cage end is derived too, nothing has to be authored.

@@ -1,8 +1,6 @@
 # The rows of checks/colocation_placement.py: every colocation metro, zone (cage) and virtual colocation with its
 # parent, and the kit it declares (fabric_templates, with the kind of each template: the check wants a physical
-# template on a zone and a virtual one on a virtual colocation). A virtual colocation also carries its
-# order data (the account with its provider and owner, the colocation operator above its metro) and its appliances
-# with their HA domain (the `capabilities` entry that has a `mode`, and its members), which rule 9 reads.
+# template on a zone and a virtual one on a virtual colocation).
 #
 # The design rules read the envelope: a zone / virtual colocation carries its `design` (max_edges, max_firewalls,
 # max_load_balancers; the quantities of its fabric_templates are summed per role against them) and a metro its
@@ -70,43 +68,6 @@ query colocation_placement {
       node {
         id
         name { value }
-        infrastructure_orchestrator { value }
-        account {
-          node {
-            id
-            display_label
-            account_id { value }
-            provider { node { id name { value } } }
-            owner { node { id display_label notification_emails { value } } }
-          }
-        }
-        appliances {
-          edges {
-            node {
-              id
-              __typename
-              name { value }
-              ... on CloudNetworkAppliance {
-                account { node { id } }
-                term_length { value }
-                device_type { node { id name { value } } }
-                software_image { node { id package { value } } }
-                interfaces { edges { node { __typename } } }
-                capabilities {
-                  edges {
-                    node {
-                      id
-                      __typename
-                      ... on ManagedGeneric { name { value } }
-                      ... on ManagedHA { mode { value } }
-                      ... on ManagedGenericDevice { capabilities { edges { node { id name { value } } } } }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
         design {
           node {
             id
@@ -120,7 +81,6 @@ query colocation_placement {
           node {
             id
             name { value }
-            ... on TopologyColocationMetro { parent { node { id name { value } } } }
           }
         }
         fabric_templates {

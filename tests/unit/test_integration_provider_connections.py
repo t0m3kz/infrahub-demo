@@ -342,19 +342,20 @@ def test_a_stray_handoff_or_vpn_circuit_is_reported() -> None:
 
 
 def test_a_carrier_must_list_the_connections_that_list_it() -> None:
-    """XC-EQXFR2-AWS-EUC1 is listed by two connections: it must list both back, and nothing else lists any."""
+    """Each carrier lists back the one connection that lists it (the demo shares no carrier), and nothing else lists any."""
     physical = [
-        {"circuit_id": "XC-EQXFR2-AWS-EUC1", "connections": ["PC-FR2-AWS-EUC1-PROD", "PC-AMNE-AWS-EUC1-PROD"]},
+        {"circuit_id": "XC-EQXFR2-AWS-EUC1", "connections": ["PC-FR2-AWS-EUC1-PROD"]},
         {"circuit_id": "FABRIC-AMNE02-AWS-EUC1", "connections": ["PC-AMNE-AWS-EUC1-PROD"]},
         {"circuit_id": "DF-DC10-EQXFR2", "connections": []},
     ]
     only = {k: v for k, v in ALL_DEMO_CONNECTIONS.items() if k in ("PC-FR2-AWS-EUC1-PROD", "PC-AMNE-AWS-EUC1-PROD")}
     assert carrier_membership_errors(physical, only) == []
-    physical[0]["connections"] = ["PC-FR2-AWS-EUC1-PROD"]
+    physical[0]["connections"] = ["PC-FR2-AWS-EUC1-PROD", "PC-AMNE-AWS-EUC1-PROD"]
     physical[1]["connections"] = []
     physical[2]["connections"] = ["PC-STRAY"]
     errors = carrier_membership_errors(physical, only)
     assert any("XC-EQXFR2-AWS-EUC1: provider_connections" in e for e in errors)
+    assert any("FABRIC-AMNE02-AWS-EUC1: provider_connections" in e for e in errors)
     assert any("DF-DC10-EQXFR2: names a connection" in e for e in errors)
 
 

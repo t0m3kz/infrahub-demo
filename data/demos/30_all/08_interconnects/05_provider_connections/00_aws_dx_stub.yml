@@ -1,9 +1,9 @@
 ---
-# The AWS side of the Direct Connect connections, the stub EXT-AWS-DX-FR2
-# (../01_colo_onramp/02_cloud_provider_edges.yml): its router-id, its AS and its BGP process. Authored once and shared
-# by every connection that lands on it
-# (PC-FR2-AWS-EUC1-PROD and PC-AMNE-AWS-EUC1-PROD): the generator of a provider connection creates only what is
-# per connection (the sub-interface of the session on each end, the session circuit), never the stub.
+# The AWS side of the Direct Connect connections, the service edge EXT-AWS-DX-FR2, a CloudNetworkAppliance of the
+# region eu-central-1 (../01_colo_onramp/02_cloud_provider_edges.yml): its router-id, its AS and its BGP process.
+# Authored once and shared by every connection that lands on it (PC-FR2-AWS-EUC1-PROD on its NIC vnic-fr2 and
+# PC-AMNE-AWS-EUC1-PROD on vnic-amne): the generator of a provider connection creates only what is per connection
+# (the sub-interface of the session on each end, the session circuit), never the service edge.
 #
 # The router-id is a loopback, not a link address: the link addresses are generated with the session circuit.
 # 10.255.64.0/24 holds the loopbacks of the party devices we model as stubs, clear of the handoff pools
@@ -17,7 +17,7 @@ spec:
       device: "EXT-AWS-DX-FR2"
       role: loopback
       status: active
-      description: "Router-id of the AWS Direct Connect router"
+      description: "Router-id of the AWS Direct Connect service edge"
       ip_address:
         data:
           address: "10.255.64.1/32"
@@ -35,7 +35,7 @@ spec:
       description: "AWS Amazon-side ASN (tgw-30all-euc1 via the Direct Connect connections)"
 ---
 # The AWS side's BGP process. AWS configures it, not a transform here: it exists so the generated session has a remote
-# AS (the handoff's party ASN is this process's local_as) and a second endpoint. It is the device's only ManagedBGP
+# AS (the handoff's party ASN is this process's local_as) and a second endpoint. It is the appliance's only ManagedBGP
 # process, which is how the generator picks it.
 apiVersion: infrahub.app/v1
 kind: Object

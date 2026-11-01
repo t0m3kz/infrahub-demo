@@ -17,7 +17,7 @@ from tests.smoke.fixture_builders.common import (
 )
 from tests.smoke.fixture_builders.fabric import FIREWALL_PLATFORMS, build_device_data
 from tests.smoke.fixture_builders.firewall import build_firewall_ha_data
-from tests.smoke.fixture_builders.proxy_lb import _LB_CONTEXT_NAMESPACES
+from tests.smoke.fixture_builders.loadbalancer import _LB_CONTEXT_NAMESPACES
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.edge import Edge
 from transforms.config.firewall import Firewall

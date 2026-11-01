@@ -414,60 +414,6 @@ class TestDC1FirewallHAScenario:
         assert result_fw1 == result_fw2
 
 
-# ---------------------------------------------------------------------------
-# get_ha — ManagedProxyHA is matched
-# ---------------------------------------------------------------------------
-
-
-class TestGetHaProxyHA:
-    def test_managed_proxy_ha_typename_is_matched(self) -> None:
-        cap = {
-            "typename": "ManagedProxyHA",
-            "name": "DC3-PRX-HA",
-            "group_id": 3,
-            "mode": "active-passive",
-            "capabilities": [{"name": "dc3-prx-01"}, {"name": "dc3-prx-02"}],
-        }
-        result = get_ha([cap])
-        assert result is not None
-
-    def test_devices_extracted_from_capabilities_key_for_proxy_ha(self) -> None:
-        cap = {
-            "typename": "ManagedProxyHA",
-            "name": "DC3-PRX-HA",
-            "group_id": 3,
-            "capabilities": [{"name": "dc3-prx-01"}, {"name": "dc3-prx-02"}],
-        }
-        result = get_ha([cap])
-        assert result is not None
-        assert result["devices"] == ["dc3-prx-01", "dc3-prx-02"]
-
-    def test_proxy_type_is_not_in_get_ha_return_value(self) -> None:
-        """get_ha() returns only generic HA fields; proxy_type is proxy-specific."""
-        cap = {
-            "typename": "ManagedProxyHA",
-            "name": "DC3-PRX-HA",
-            "group_id": 3,
-            "proxy_type": "explicit",
-            "proxy_vendor": "haproxy",
-            "capabilities": [{"name": "dc3-prx-01"}, {"name": "dc3-prx-02"}],
-        }
-        result = get_ha([cap])
-        assert result is not None
-        assert "proxy_type" not in result
-
-    def test_proxy_ha_name_extracted(self) -> None:
-        cap = {
-            "typename": "ManagedProxyHA",
-            "name": "DC3-PRX-HA",
-            "group_id": 3,
-            "capabilities": [],
-        }
-        result = get_ha([cap])
-        assert result is not None
-        assert result["name"] == "DC3-PRX-HA"
-
-
 def _ha_of(capabilities: list[dict], interfaces: list[dict], device_name: str) -> dict:
     """get_ha() for a device that has an HA domain."""
     ha = get_ha(capabilities, interfaces, device_name=device_name)

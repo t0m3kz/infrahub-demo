@@ -34,9 +34,10 @@ _SDWAN_OFFICES: list[Declared] = [
 
 # Carrier circuits are pure carriers, all declared in the data except the office underlays: the dark fibres and
 # cross-connects of 08_interconnects/01_colo_onramp (each DC has one fibre to each of its metro's two border gateways:
-# DC10/DC11 -> EQX FR2 (eg-fr201 and eg-fr202), DC12 -> EQX PA4 (eg-pa401 and eg-pa402); four cross-connects: AWS
-# eu-central-1, the two Azure westeurope ExpressRoute legs, Megaport MCR; two Equinix Fabric `virtual_connection`s
-# cage -> Network Edge and Network Edge -> AWS), the shared transit circuits of 06_internet, the shared gateway's own
+# DC10/DC11 -> EQX FR2 (eg-fr201 and eg-fr202), DC12 -> EQX PA4 (eg-pa401 and eg-pa402); one cross-connect: the
+# Megaport MCR; five `virtual_connection`s: the Direct Connect of eu-central-1 and the two Azure westeurope
+# ExpressRoute legs (each ends on a NIC of the region's service edge, a CloudNetworkAppliance) and the two Equinix
+# Fabric connections cage -> Network Edge and Network Edge -> AWS), the shared transit circuits of 06_internet, the shared gateway's own
 # access (08_gateway_access) and the partner's access (07_zone_policies), plus one generated underlay per SD-WAN office.
 _DECLARED_CIRCUIT_TYPE_COUNTS: dict[str, int] = {
     circuit_type: len([c for c in _all_demo("TopologyCarrierCircuit") if c.value("circuit_type") == circuit_type])
@@ -368,14 +369,14 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
     },
     # The handoffs add_provider_connection builds, one link on our pool each (`<connection>-L1`; the multi-link and
     # provider-assigned connections are in all_demo_provider_connection_constants and asserted by test_67). The party
-    # end rides the parent port of the carrier: the AWS cross-connect XC-EQXFR2-AWS-EUC1 (and, on the AWS stub's port,
-    # the Fabric virtual connection that lands on the same et-0/0/0), the Fabric connections of the Network Edge
-    # chain, the Megaport cross-connect.
+    # end rides the parent port of the carrier: the AWS Direct Connect virtual connection XC-EQXFR2-AWS-EUC1 on the
+    # service edge's NIC vnic-fr2 and the Fabric virtual connection FABRIC-AMNE02-AWS-EUC1 on its NIC vnic-amne, the
+    # Fabric connections of the Network Edge chain, the Megaport cross-connect.
     "PC-FR2-AWS-EUC1-PROD-L1": {
         "circuit_type": HANDOFF_TYPE,
         "locations": ("FR2", "eu-central-1"),
-        "ends": (("EXT-AWS-DX-FR2", "et-0/0/0.1000"), ("eg-fr201", "Ethernet1/13.1000")),
-        "carrier": ("FABRIC-AMNE02-AWS-EUC1", "XC-EQXFR2-AWS-EUC1"),
+        "ends": (("EXT-AWS-DX-FR2", "vnic-fr2.1000"), ("eg-fr201", "Ethernet1/13.1000")),
+        "carrier": ("XC-EQXFR2-AWS-EUC1",),
         "ip_namespace": "PROD",
     },
     "PC-FR2-AMNE-PROD-L1": {
@@ -388,8 +389,8 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
     "PC-AMNE-AWS-EUC1-PROD-L1": {
         "circuit_type": HANDOFF_TYPE,
         "locations": ("AM-NE", "eu-central-1"),
-        "ends": (("EXT-AWS-DX-FR2", "et-0/0/0.1100"), ("eg-am-ne02", "Ethernet1/1.1100")),
-        "carrier": ("FABRIC-AMNE02-AWS-EUC1", "XC-EQXFR2-AWS-EUC1"),
+        "ends": (("EXT-AWS-DX-FR2", "vnic-amne.1100"), ("eg-am-ne02", "Ethernet1/1.1100")),
+        "carrier": ("FABRIC-AMNE02-AWS-EUC1",),
         "ip_namespace": "PROD",
     },
     "PC-PA4-MEGAPORT-PROD-L1": {

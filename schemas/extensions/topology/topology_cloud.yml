@@ -53,12 +53,17 @@ nodes:
   # cloud-side endpoint of a shared circuit. Not the zone (an AZ is finer than
   # any provider commits to) and not TopologyCloud (which groups the provider's
   # regions and identifies no location at all).
+  #
+  # A region is a provider place with no hardware of ours: it hosts no devices. The provider side of a connection is
+  # the provider's service edge, ONE CloudNetworkAppliance (role `provider`) per provider and region with one virtual
+  # NIC per connection leg, hosted through TopologyApplianceHosting like a SaaS region. A provider's own router that
+  # a cable reaches is a physical device of its TopologyExternalProviders, never of the region.
   - name: CloudRegion
     namespace: Topology
     icon: mdi:earth
     inherit_from:
       - TopologyDeployment
-      - TopologyDeviceHosting
+      - TopologyApplianceHosting
       - TopologyConnectableLocation
       - TopologyFacility
     parent: TopologyCloud

@@ -64,7 +64,7 @@ class CheckLoadBalancer(InfrahubCheck):
         device = devices[0]
         # A dedicated virtual instance has no platform readiness of its own (its uplinks stay planned; the
         # physical host carries the cabling), so only its contexts are validated.
-        errors = validate_appliance(device, ha_kind="ManagedLoadbalancerHA", label="LB") if physical else []
+        errors = validate_appliance(device) if physical else []
         errors.extend(validate_loadbalancer_contexts(device))
         for error in errors:
             self.log_error(message=error)

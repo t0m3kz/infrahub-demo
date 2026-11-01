@@ -16,7 +16,7 @@ from tests.unit.simulators.circuit_fakes import (
     vpn_payload,
 )
 from tests.unit.virtual_circuit_session_helpers import _assert_refused, _peering, _run
-from utils.provider_services import DEFAULT_FLAVOUR, connection_provider
+from utils.provider_services import DEFAULT_FLAVOUR, FLAVOURS, PATH_DEDICATED, connection_provider
 
 VPN = "VC-C001-ZS-VPN"
 BASE = "10.255.128.0"
@@ -95,6 +95,28 @@ class TestDefaultFlavourIsToday:
         assert [w[:2] for w in with_connection.writes] == [w[:2] for w in plain.writes]
 
 
+class TestBfdIsTheFlavours:
+    @pytest.mark.parametrize(("key", "flavour"), list(FLAVOURS.items()))
+    def test_bfd_is_on_exactly_for_a_dedicated_path(self, key: tuple[str, str], flavour: Any) -> None:
+        """One rule: a dedicated path runs BFD, a path over the internet does not; the default is a handoff's."""
+        assert flavour.bfd is (key[1] == PATH_DEDICATED)
+        assert DEFAULT_FLAVOUR.bfd is True
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("profile", [None, "aws", "megaport", "equinix", "azure"])
+    async def test_a_handoff_reads_bfd_from_its_flavour(self, profile: str | None) -> None:
+        """A handoff with no connection or a dedicated one keeps BFD on."""
+        client = FakeClient()
+        payload = handoff_payload(connection=connection_node(profile=profile)) if profile else handoff_payload()
+        if profile == "azure":
+            _assigned(client, f"{ASSIGNED}/30")
+            payload = handoff_payload(connection=connection_node(profile=profile), link_prefix=f"{ASSIGNED}/30")
+
+        await _run(client, payload)
+
+        assert _peering(client, "bgp")["bfd_enabled"] is True
+
+
 class TestOffsets:
     @pytest.mark.asyncio
     async def test_a_slash_31_uses_offsets_0_and_1(self) -> None:
@@ -171,7 +193,7 @@ class TestOffsets:
 class TestVpn:
     @pytest.mark.asyncio
     async def test_a_vpn_needs_no_carrier_and_builds_one_regular_session(self) -> None:
-        """The tunnel interfaces carry no circuit: the session is still built, eBGP, no communities, no BFD."""
+        """The tunnel interfaces carry no circuit: the session is still built, eBGP, no communities, BFD of the default flavour."""
         client = FakeClient()
 
         await _run(client, vpn_payload())
@@ -179,7 +201,7 @@ class TestVpn:
         peering = _peering(client, "bgp")
         assert peering["name"] == f"{VPN}-bgp"
         assert peering["peering_role"] == "regular" and peering["session_type"] == "EBGP"
-        assert peering["ttl"] == 1 and peering["bfd_enabled"] is False
+        assert peering["ttl"] == 1 and peering["bfd_enabled"] is DEFAULT_FLAVOUR.bfd
         assert peering["send_community"] is False
         assert "VPN eBGP" in peering["description"]
         assert client.allocations[0]["data"]["description"] == f"VPN {VPN}"

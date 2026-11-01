@@ -120,12 +120,13 @@ class _Model:
         for process in _all("ManagedBGP"):
             for device in process.item.get("capabilities") or []:
                 roles.setdefault(str(device), []).append(str(process.value("process_role")))
-        for device in _all(PHYSICAL_DEVICE):
-            self.devices[name(device)] = {
-                "kind": PHYSICAL_DEVICE,
-                "deployment": device.item.get("deployment"),
-                "bgp": roles.get(name(device), []),
-            }
+        for kind in (PHYSICAL_DEVICE, APPLIANCE):  # a cloud region's service edge is a declared appliance
+            for device in _all(kind):
+                self.devices[name(device)] = {
+                    "kind": kind,
+                    "deployment": device.item.get("deployment"),
+                    "bgp": roles.get(name(device), []),
+                }
 
     def _add_generated_devices(self) -> None:
         """The edges add_colocation_zone / add_virtual_colocation create, the DC border leaves, the office edges."""

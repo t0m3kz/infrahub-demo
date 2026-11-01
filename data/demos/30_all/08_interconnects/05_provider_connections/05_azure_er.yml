@@ -1,25 +1,27 @@
 ---
 # Azure ExpressRoute, private peering, as TWO provider connections with a PROVIDER-ASSIGNED /30 each: one connection per
 # leg (the primary and the secondary), PA4 cage <-> Azure westeurope. The legs are related by the `redundancy_group` of
-# their carriers, not by a shared connection. It used to be the idle on-ramp of the demo: the stub existed, nothing
+# their carriers, not by a shared connection. It used to be the idle on-ramp of the demo: the appliance existed, nothing
 # rode it.
 #
-#   PC-PA4-AZURE-WEU-PRI-PROD   carrier XC-EQXPA4-AZURE-WEU-PRI: eg-pa401 Ethernet1/13 <-> EXT-AZURE-ER-PA4 et-0/0/0,
+#   PC-PA4-AZURE-WEU-PRI-PROD   carrier XC-EQXPA4-AZURE-WEU-PRI: eg-pa401 Ethernet1/13 <-> EXT-AZURE-ER-PA4 vnic-pri,
 #                               link range 10.255.72.0/30, session circuit PC-PA4-AZURE-WEU-PRI-PROD-L1
-#   PC-PA4-AZURE-WEU-SEC-PROD   carrier XC-EQXPA4-AZURE-WEU-SEC: eg-pa402 Ethernet1/13 <-> EXT-AZURE-ER-PA4 et-0/0/1,
+#   PC-PA4-AZURE-WEU-SEC-PROD   carrier XC-EQXPA4-AZURE-WEU-SEC: eg-pa402 Ethernet1/13 <-> EXT-AZURE-ER-PA4 vnic-sec,
 #                               link range 10.255.72.4/30, session circuit PC-PA4-AZURE-WEU-SEC-PROD-L1
 #                               (../01_colo_onramp/03_carrier_circuits.yml;
-# ../01_colo_onramp/02_cloud_provider_edges.yml)
+#                               ../01_colo_onramp/02_cloud_provider_edges.yml: EXT-AZURE-ER-PA4 is the ExpressRoute
+#                               service edge of westeurope, a CloudNetworkAppliance with one NIC per leg)
 #
 #   flavour azure/dedicated     ONE /30 link per connection, our end the lower address, BFD; the range is the
 #                               connection's `link_prefixes`, never allocated from our pools (Handoff-PROD-IPv4 stays
 #                               untouched).
 #   account / attached          peakora-azure-prod (C004) and its VNet peakora-vnet-prod, 10.40.0.0/16: the block is
 #                               registered by the VNet's account owner behind both sessions
-#   provider_as                 AS12076, Microsoft's ASN, the far process of both sessions (the stub's only BGP process)
-#   vlan_id                     1400, the S-tag of the peering on both ports
+#   provider_as                 AS12076, Microsoft's ASN, the far process of both sessions (the appliance's only BGP
+#                               process)
+#   vlan_id                     1400, the S-tag of the peering on both legs
 #
-# The stub's router-id, AS and BGP process are authored below, like every stub. The key is shared by the two legs.
+# The appliance's router-id, AS and BGP process are authored below, like every stub. The key is shared by the two legs.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -29,7 +31,7 @@ spec:
       device: "EXT-AZURE-ER-PA4"
       role: loopback
       status: active
-      description: "Router-id of the Azure ExpressRoute router"
+      description: "Router-id of the Azure ExpressRoute service edge"
       ip_address:
         data:
           address: "10.255.64.5/32"

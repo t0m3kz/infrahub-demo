@@ -35,6 +35,7 @@ query provider_connections {
             ... on TopologyBilledAccount {
               account { node { provider { node { ...ConnectionProvider } } } }
             }
+            # an external provider or a colocation zone hosts devices; a region hosts appliances only
             ... on TopologyDeviceHosting {
               devices { edges { node { ...ConnectionKitOwner } } }
             }

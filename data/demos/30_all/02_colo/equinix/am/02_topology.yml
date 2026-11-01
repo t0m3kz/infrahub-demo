@@ -34,11 +34,7 @@ spec:
               data:
                 - name: AM-NE
                   design: "EDGE"
-                  # Marked for Terraform: one Equinix Network Edge
-                  # order (no transform renders it today), one equinix_network_device per router (eg-am-ne01, eg-am-
-                  # ne02).
-                  infrastructure_orchestrator: terraform
-                  # The provider order's contract data, printed into that file (02_account.yml).
+                  # The provider order's contract data: the billing account of the Equinix Network Edge routers.
                   account: "equinix-network-edge"
                   member_of_groups:
                     - virtual_colocations

@@ -25,9 +25,9 @@ from tests.smoke.fixture_builders import (
     fabric,
     firewall,
     group_policy,
+    loadbalancer,
     mlag,
     office,
-    proxy_lb,
     routing_identity,
     routing_protection,
     transit,
@@ -45,7 +45,7 @@ WRITERS: list[tuple[str | None, Callable[[], tuple[int, int]]]] = [
     (None, edge.write_fixtures),
     (None, firewall.write_fixtures),
     (None, mlag.write_fixtures),
-    (None, proxy_lb.write_fixtures),
+    (None, loadbalancer.write_fixtures),
     (None, group_policy.write_fixtures),
     (None, routing_identity.write_fixtures),
     (None, routing_protection.write_fixtures),
@@ -67,7 +67,7 @@ def main() -> int:
     print(f"\nDone: {generated} generated, {errors} errors")
     # A fixture that fails to render writes no file, so it leaves no diff for the
     # CI staleness check to catch — the failure has to surface here instead. That
-    # is how a broken `ipaddr` filter in cisco_wsa.j2 went unnoticed.
+    # is how a broken template filter once went unnoticed.
     return 1 if errors else 0
 
 

@@ -26,7 +26,6 @@ from transforms.config.firewall import Firewall
 from transforms.config.l2_leaf import L2Leaf
 from transforms.config.leaf import Leaf
 from transforms.config.loadbalancer import LoadBalancer
-from transforms.config.proxy import Proxy
 from transforms.config.spine import Spine
 from transforms.config.super_spine import SuperSpine
 from transforms.config.tor import ToR
@@ -44,7 +43,6 @@ _PREFIX_TO_CLASS: list[tuple[str, type]] = sorted(
         ("loadbalancer", LoadBalancer),
         ("firewall", Firewall),
         ("spine", Spine),
-        ("proxy", Proxy),
         ("l2_leaf", L2Leaf),
         ("access_leaf", AccessLeaf),
         ("access_switch", AccessSwitch),

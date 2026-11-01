@@ -180,6 +180,19 @@ def connection(
 ) -> dict[str, Any]:
     """The payload of one TopologyProviderConnection (a dedicated AWS connection by default)."""
     dedicated = path_type == "dedicated"
+    carrier_list = (carriers if carriers is not None else [aws_cross_connect()]) if dedicated else carriers or []
+    if stubs is None:
+        # A dedicated link lands on the stub that owns the far carrier port: an appliance of the region.
+        stubs = list(
+            {
+                end["device"]["id"]: stub_device(
+                    end["device"]["id"], end["device"]["name"], end["device"]["capabilities"]
+                )
+                for c in carrier_list
+                for end in c["capabilities"]
+                if end["device"]["deployment"]["id"] == FAR
+            }.values()
+        )
     return {
         "TopologyProviderConnection": [
             {
@@ -195,10 +208,8 @@ def connection(
                 "link_prefixes": link_prefixes or [],
                 "account": {"provider": provider(profile)} if with_provider else None,
                 "near": {"id": NEAR, "circuits": internet or []},
-                "far": {"id": FAR, "typename": "TopologyCloudRegion", "devices": stubs or []},
-                "carrier_circuits": (carriers if carriers is not None else [aws_cross_connect()])
-                if dedicated
-                else carriers or [],
+                "far": {"id": FAR, "typename": "TopologyCloudRegion", "appliances": stubs},
+                "carrier_circuits": carrier_list,
                 "session_circuits": sessions or [],
             }
         ]
@@ -224,6 +235,8 @@ class FakeClient:
         self.subs = subs or []
         self.taken_tunnels = taken_tunnels or {}
         self.foreign: list[SimpleNamespace] = []
+        #: device id -> the names of the virtual interfaces (NICs, loopback) the device already holds.
+        self.nics: dict[str, list[str]] = {}
         #: device id -> the Loopback0 node an earlier run or the data left; device id -> its ManagedBGP nodes.
         self.loopbacks: dict[str, SimpleNamespace] = {}
         self.processes: dict[str, list[SimpleNamespace]] = {}
@@ -252,6 +265,12 @@ class FakeClient:
             return [self.loopbacks[i] for i in kwargs["device__ids"] if i in self.loopbacks]
         if name == "ManagedBGP":
             return [p for i in kwargs["capabilities__ids"] for p in self.processes.get(i, [])]
+        if name == "DcimVirtualInterface" and "name__values" not in kwargs and "device__ids" in kwargs:
+            return [
+                SimpleNamespace(id=f"nic-{n}", name=SimpleNamespace(value=n), device=SimpleNamespace(id=device_id))
+                for device_id in kwargs["device__ids"]
+                for n in self.nics.get(device_id, [])
+            ]
         if name == "DcimVirtualInterface" and "device__ids" in kwargs:
             names = self.taken_tunnels.get(kwargs["device__ids"][0], [])
             return [SimpleNamespace(id=f"t-{n}", name=SimpleNamespace(value=n)) for n in names]

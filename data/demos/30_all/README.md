@@ -89,7 +89,7 @@ Load the stages **in this order**. After each one, wait until no generator task 
 | 1 | foundation | Customers, cloud, colocation (with the shared SD-WAN gateway and orchestrator), the internet's ISPs (`04_internet`), SaaS, offices, and the three DC sites with their fabrics and controllers | `add_colocation_metro` (×9), `add_colocation_zone`, `add_virtual_colocation` (`AM-NE`), `add_dc` → `add_pod` → `add_rack` (longest stage) |
 | 2 | compute_and_customers | Application hosts and the boarding set: DC/colocation/cloud/office footprints (one `01_deployments.yml` per customer for its DC footprints), cage kit, VMs | `add_endpoint`, `add_customer_deployment_*`, `add_sdwan_edge` |
 | 3 | applications | Segments, applications, deployment-request catalogue | `add_vxlan_segment`, `add_app_application` |
-| 4 | interconnects | Colo on-ramp (fibres, cross-connects, cage cabling), cloud hub, the DCI circuits, the SD-WAN VRF handoff, the provider connections (AWS Direct Connect and Site-to-Site VPN, the AM-NE chain, Megaport, Azure ExpressRoute, a Zscaler peering), internet transit, the SD-WAN gateway's own internet access, the partner tunnel | `add_circuit`, `add_provider_connection`, `add_virtual_circuit` |
+| 4 | interconnects | Colo on-ramp (fibres, the Megaport cross-connect, the virtual connections to the cloud service edges, cage cabling), cloud hub, the DCI circuits, the SD-WAN VRF handoff, the provider connections (AWS Direct Connect and Site-to-Site VPN, the AM-NE chain, Megaport, Azure ExpressRoute, a Zscaler peering), internet transit, the SD-WAN gateway's own internet access, the partner tunnel | `add_circuit`, `add_provider_connection`, `add_virtual_circuit` |
 
 ```bash
 D=data/demos/30_all
@@ -161,7 +161,7 @@ Once stage 4 has settled, the branch should contain at least:
 ### Circuits: Carrier and Connection
 
 The interconnect layer separates the carrier from the connection that rides it. A `TopologyCarrierCircuit` is a pure
-carrier (dark fibre, cross-connect, internet access) and has no session; a `DcimCable` is the carrier inside one
+carrier (dark fibre, cross-connect, virtual connection, internet access) and has no session; a `DcimCable` is the carrier inside one
 facility. A session circuit is the connection between topologies on which routing is generated, and its role is its
 `circuit_type` (`dci`, `handoff`, `tunnel` or `vpn`), one kind. A circuit has no `owner`: it is derived (the office among its locations, or the provider connection's owner for a `vpn`). Its carrier is never listed: it is derived from the carrier circuits (or the cable) on its ports, or on the
 parent interface of a sub-interface.
@@ -206,12 +206,12 @@ sides on the loaded branch.
 `AM-NE` hosts two `CloudNetworkAppliance` routers, `eg-am-ne01` and `eg-am-ne02` (template `C8000V_EDGE`, Cisco
 IOS XE): instances we rent from Equinix, not hardware we rack, so there are no cages, cables or edge-pair
 interlink, and their ports are virtual NICs (`DcimVirtualInterface`). The provider order reads the Device Type name
-(`C8000V`) and the Software Image `cisco_xe-17.12.01a` (`version`, `package`). It is marked `infrastructure_orchestrator: terraform` (no Terraform transform exists today) and ordered under the
+(`C8000V`) and the Software Image `cisco_xe-17.12.01a` (`version`, `package`). It is ordered under the
 `CloudAccount` `equinix-network-edge` (`02_colo/equinix/am/02_account.yml`), which sorts before the topology
 file that names it. `AM` is a Multi-Site site like the other metros, so its edges also get a VTEP loopback and an
 overlay `ManagedBGP` process in the metro's site AS (`evpn_rt_as`).
 
-Two PROD provider connections chain the cage into the AWS hub through the two routers (`08_interconnects/05_provider_connections/02_amne_chain.yml`);
+Two PROD provider connections chain the cage into the AWS hub through the two routers (the second ends on the NIC `vnic-amne` of the AWS Direct Connect service edge `EXT-AWS-DX-FR2`) (`08_interconnects/05_provider_connections/02_amne_chain.yml`);
 both are unowned and members of `provider_connections`, and the generator builds a `handoff` session circuit `<connection>-L1`
 for each (a /31 from `Handoff-PROD-IPv4`, an eBGP IPv4 session between the two BGP processes; a C8000V cannot be an EVPN peer,
 so no EVPN):
@@ -219,7 +219,7 @@ so no EVPN):
 | Connection | Session circuit (generated) | Ends | Carrier |
 | --- | --- | --- | --- |
 | `PC-FR2-AMNE-PROD` (VLAN 1200) | `PC-FR2-AMNE-PROD-L1` | `eg-fr201` `Ethernet1/1.1200` to `eg-am-ne01` `Ethernet1/1.1200` | the Fabric virtual connection `FABRIC-FR2-AMNE01` (`01_colo_onramp/03_carrier_circuits.yml`) |
-| `PC-AMNE-AWS-EUC1-PROD` (VLAN 1100) | `PC-AMNE-AWS-EUC1-PROD-L1` | `eg-am-ne02` `Ethernet1/1.1100` to `EXT-AWS-DX-FR2` `et-0/0/0.1100` | `FABRIC-AMNE02-AWS-EUC1` and the cross-connect `XC-EQXFR2-AWS-EUC1` on the AWS router's port |
+| `PC-AMNE-AWS-EUC1-PROD` (VLAN 1100) | `PC-AMNE-AWS-EUC1-PROD-L1` | `eg-am-ne02` `Ethernet1/1.1100` to `EXT-AWS-DX-FR2` `vnic-amne.1100` | `FABRIC-AMNE02-AWS-EUC1`, the virtual connection onto the service edge's own NIC `vnic-amne` |
 
 The cage to NE hop is an Equinix Fabric virtual connection, a carrier of type `virtual_connection`: Equinix runs it inside its
 own platform and the NE end is the virtual NIC of a provider-hosted appliance, so it needs no port of ours. The cable from
@@ -235,18 +235,29 @@ virtual colocation) for an owner: `near`, `far`, the carriers it rides (`carrier
 (one per link of the provider's flavour, `OrganizationProvider.connection_profile` keyed in `utils/provider_services.py`), their
 sub-interfaces and tunnel interfaces; the stubs of the provider side (device, loopback, AS, BGP process) and the BGP keys stay authored.
 
+The provider side of a cloud region is not a router: a cloud region has no hardware, so each provider has a **service edge**, a
+`CloudNetworkAppliance` of role `provider` hosted by the region (`appliances`), built from the templates `AWS_SERVICE_EDGE` and
+`AZURE_SERVICE_EDGE` (`data/bootstrap/09_network_appliance_templates_cloud_service_edge.yaml`) and declared in
+`08_interconnects/01_colo_onramp/02_cloud_provider_edges.yml`. It has no physical port: each connection leg is a
+`DcimVirtualInterface` NIC (`vnic-fr2` and `vnic-amne` on `EXT-AWS-DX-FR2`, `vnic-pri` and `vnic-sec` on `EXT-AZURE-ER-PA4`), the far
+end of a `virtual_connection` carrier, and the handoff sub-interface `<nic>.<vlan>` rides on it. Nothing is cabled to a service edge.
+The AWS Site-to-Site VPN gateway is a second appliance of the same region, `EXT-AWS-VPN-EUC1`, because it speaks its own Amazon-side
+AS (64513) and a device carries one BGP process. Physical provider kit stays a `DcimPhysicalDevice` in its own zone: the Megaport
+Cloud Router `EXT-MEGAPORT-MCR1` and the Equinix Fabric port `EXT-EQX-FABRIC-FR2`. The carrier ids `XC-EQXFR2-AWS-EUC1` and
+`XC-EQXPA4-AZURE-WEU-PRI`/`-SEC` keep the name of the cross-connects they were, but their `circuit_type` is `virtual_connection`.
+
 | Connection | Path / service | Flavour | Owner | Notes |
 | --- | --- | --- | --- | --- |
-| `PC-FR2-AWS-EUC1-PROD` | dedicated / transit, VLAN 1000 | aws: 1 link, /31 from our pool | none (account `net-hub-aws-prod`, Internal) | Direct Connect 10G on `XC-EQXFR2-AWS-EUC1`; `transit_attachment` `tgwa-hybrid-eqx-fr2` decides the VPC blocks the session accepts |
+| `PC-FR2-AWS-EUC1-PROD` | dedicated / transit, VLAN 1000 | aws: 1 link, /31 from our pool | none (account `net-hub-aws-prod`, Internal) | Direct Connect 10G on `XC-EQXFR2-AWS-EUC1` (a virtual connection onto `vnic-fr2`); `transit_attachment` `tgwa-hybrid-eqx-fr2` decides the VPC blocks the session accepts |
 | `PC-FR2-AMNE-PROD`, `PC-AMNE-AWS-EUC1-PROD` | dedicated, VLAN 1200 / 1100 | default / aws | none | The AM-NE chain above |
 | `PC-PA4-MEGAPORT-PROD` | dedicated / private, VLAN 1300 | megaport: 1 link, /31 | none | Cloud-neutral: no account, no attached network |
-| `PC-FR2-AWS-EUC1-VPN-PROD` | internet_vpn / private | aws: 2 tunnels, /30 assigned by AWS (`link_prefixes` `169.254.10.0/30`, `.4/30`) | C001 (account `nordix-aws-prod`) | MODEL ONLY. Attaches `nordix-vpc-vpn` (`10.20.0.0/16`); leaves FR2 by `INET-LUMEN-EQXFR2` (listed in `carrier_circuits`, FR2 has two internet-fed edges), the gateway stub speaks AS64513 |
+| `PC-FR2-AWS-EUC1-VPN-PROD` | internet_vpn / private | aws: 2 tunnels, /30 assigned by AWS (`link_prefixes` `169.254.10.0/30`, `.4/30`) | C001 (account `nordix-aws-prod`) | MODEL ONLY. Attaches `nordix-vpc-vpn` (`10.20.0.0/16`); leaves FR2 by `INET-LUMEN-EQXFR2` (listed in `carrier_circuits`, FR2 has two internet-fed edges), the VPN gateway appliance `EXT-AWS-VPN-EUC1` speaks AS64513 |
 | `PC-PA4-AZURE-WEU-PRI-PROD`, `PC-PA4-AZURE-WEU-SEC-PROD` | dedicated / private, VLAN 1400 | azure: one leg and one /30 per connection, assigned (`link_prefixes` `10.255.72.0/30` and `.4/30`) | C004 (account `peakora-azure-prod`) | One connection per ExpressRoute leg, related by the `redundancy_group` of their carriers `XC-EQXPA4-AZURE-WEU-PRI` (`eg-pa401` to `EXT-AZURE-ER-PA4` `et-0/0/0`) and `-SEC` (`eg-pa402` to `et-0/0/1`); one shared key |
 | `PC-FR2-ZSCALER-MUC-PROD` | internet_vpn / private | zscaler: 2 tunnels, /30 from our pool | C001 (own `owner`: a SaaS has no account) | Leaves by `INET-LUMEN-EQXFR2`. Far end `ZSCALER-MUNICH I`, the hosted node `EXT-ZSCALER-MUC1` (`CloudNetworkAppliance`, device type `ZEN`); registers `198.18.1.0/24` |
 
-The FR2 cage also shows a patch panel (`01_colo_onramp/06_patch_panel.yml`, `06b_patch_panel_mapping.yml`, `07_patch_panel_cabling.yml`): `eg-fr202`
+The FR2 cage also shows a patch panel (`01_colo_onramp/06_patch_panel.yml`, `07_patch_panel_cabling.yml`): `eg-fr202`
 `Ethernet1/2` is cabled to front port `fr2-s1-r-1:PP-EQX-FR2-01:F1` and rear port `fr2-s1-r-1:PP-EQX-FR2-01:1` to `EXT-EQX-FABRIC-FR2` `et-0/0/1`, so the
-cross-connect is two cables through one jack (front port 1 is paired with rear port 1 by the mapping file). It is isolated: no circuit, session or segment rides these ports, and the panel makes
+cross-connect is two cables through one jack (`add_patch_panel` pairs front port 1 with rear port 1). It is isolated: no circuit, session or segment rides these ports, and the panel makes
 no artifact, VRF, VLAN row or capability (it sits in rack `fr2-s1-r-1`).
 
 ### Internet Transit
@@ -275,7 +286,7 @@ C001's partner extranet is a `tunnel` `TopologySessionCircuit`, `C001-PARTNER-AC
 (`07_zone_policies/01_partner_tunnel.yml`): `eth1` of the gateway to the partner's stub router `EXT-ACME-EDGE1`, deployed to the new
 `TopologyExternalProviders` `PARTNER-ACME` and reaching the internet over `INET-ACME-COGENT` (a free `customer` port of
 `EXT-COGENT-FRA1`). A Megaport Cloud Router is the cloud-neutral example: the connection `PC-PA4-MEGAPORT-PROD` (VLAN
-1300, `eg-pa401` to the stub `EXT-MEGAPORT-MCR1`, AS133937) rides the cross-connect `XC-EQXPA4-MEGAPORT`; the two Azure cross-connects carry the ExpressRoute legs `PC-PA4-AZURE-WEU-PRI-PROD` and `PC-PA4-AZURE-WEU-SEC-PROD`.
+1300, `eg-pa401` to the stub `EXT-MEGAPORT-MCR1`, AS133937) rides the cross-connect `XC-EQXPA4-MEGAPORT`; the two Azure virtual connections (onto the NICs `vnic-pri` and `vnic-sec` of the ExpressRoute service edge) carry the ExpressRoute legs `PC-PA4-AZURE-WEU-PRI-PROD` and `PC-PA4-AZURE-WEU-SEC-PROD`.
 
 C001's egress policy (`07_zone_policies/05_security_policy.yml`, segment `c001-nordix-prod-p`) only aims at destinations
 that are reachable. The border filtering accepts and announces only prefixes an owned object registers, so each

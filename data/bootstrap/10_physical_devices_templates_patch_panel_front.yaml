@@ -1,7 +1,7 @@
 ---
 # Passive patch panel templates, part 2 of 2: the FRONT ports. The same templates as part 1
 # (10_physical_devices_templates_patch_panel_rear.yaml), found by `template_name` and given their front ports. The front
-# ports are created unpaired: pairing each with its rear port is data (see part 1).
+# ports are created unpaired: the generator add_patch_panel pairs each with its rear port (see part 1).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

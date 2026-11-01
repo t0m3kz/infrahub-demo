@@ -10,7 +10,10 @@
 #   far.provider / far.parent.provider / far.account.provider    (the provider of a facility that is not a cloud)
 #   device.owner (typename OrganizationProvider, name, connection_profile) of a far stub or carrier end: the provider of
 #   a facility with none of its own (a colocation zone of a cloud-neutral operator)
-#   far.devices[] / far.appliances[]: id, name, capabilities[] (a ManagedBGP also name, local_as)   (the stubs)
+#   far.appliances[] / far.devices[]: id, name, capabilities[] (a ManagedBGP also name, local_as)   (the stubs). A cloud
+#   or SaaS region and a virtual colocation host appliances (their `devices` is not selected: they are no
+#   TopologyDeviceHosting); an external provider or a colocation zone hosts devices. A dedicated carrier's far end may be a
+#   DcimVirtualInterface NIC of the appliance (ConnectionEnd is `on DcimInterface`).
 #   near.id, near.circuits[]: the carrier circuits of the near facility (a VPN leaves by an internet one). The spread
 #   is at node level: inside `... on X { ...F }` a live Infrahub resolves F to nulls (tests/unit/test_query_fragment_spreads.py)
 #   carrier_circuits[] and the near internet carriers: id, name, circuit_type, status, capabilities[] (the ends)

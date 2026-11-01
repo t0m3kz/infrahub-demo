@@ -138,7 +138,7 @@ def test_the_handoff_subject_is_the_aws_connection_link_and_its_subinterfaces() 
     assert HANDOFF.kind == HANDOFF_TYPE
     assert HANDOFF.peerings == ("PC-FR2-AWS-EUC1-PROD-L1-bgp",)
     assert HANDOFF.description == "Handoff PC-FR2-AWS-EUC1-PROD-L1"
-    assert set(HANDOFF.ports) == {("eg-fr201", "Ethernet1/13.1000"), ("EXT-AWS-DX-FR2", "et-0/0/0.1000")}
+    assert set(HANDOFF.ports) == {("eg-fr201", "Ethernet1/13.1000"), ("EXT-AWS-DX-FR2", "vnic-fr2.1000")}
     assert HANDOFF.port_kind == "DcimVirtualInterface"
 
 

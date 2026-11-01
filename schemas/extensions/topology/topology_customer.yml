@@ -49,9 +49,6 @@ generics:
           - name: github_actions
             label: "GitHub Actions"
             color: "#24292F"
-          - name: terraform
-            label: "Terraform / OpenTofu"
-            color: "#7B42BC"
           - name: argocd
             label: "Argo CD"
             color: "#EF7B4D"

@@ -16,7 +16,8 @@ TopologySessionCircuit named ``<connection>-L<n>`` with
 
 What it does not create: the carrier circuits (authored, shared underlay: they are its INPUT, ``carrier_circuits``),
 the provider stub devices (authored, shared per provider and facility; the far port's device of a dedicated link, or
-the one stub of the far facility for a VPN), the autonomous systems, the key
+the one stub of the far facility for a VPN; a cloud or SaaS region hosts a CloudNetworkAppliance, whose far carrier end is
+a virtual NIC and whose far sub-interface rides on it, an external provider or a zone hosts devices), the autonomous systems, the key
 (authored; the connection's ``password`` is put on every session circuit it creates), and the sub-interface
 addresses (add_virtual_circuit).
 
@@ -68,6 +69,7 @@ from ..helpers.provider_connection import (
     ExistingSession,
     LinkPlan,
     choose_tunnel_name,
+    choose_tunnel_parent,
     choose_vlan,
     existing_vlan,
     parse_connection,
@@ -226,6 +228,16 @@ class ProviderConnectionGenerator(ProviderStubMixin, CablingMixin, PoolMixin, Co
                     kind=DcimVirtualInterface, device__ids=[device_id], name__values=tunnel_names()
                 )
                 taken[device_id].update(node.name.value for node in found)
+            # A provider appliance with a NIC hangs its tunnels on it (the first NIC by name), like the near side
+            # rides on the port of its carrier; an appliance without one keeps a free-standing tunnel.
+            far_ids = sorted({link.far.device_id for link in links})
+            nics: dict[str, dict[str, str]] = {device_id: {} for device_id in far_ids}
+            for node in await self.client.filters(kind=DcimVirtualInterface, device__ids=far_ids, include=["device"]):
+                nics[getattr(node, "device").id][node.name.value] = node.id
+            tunnel_parent: dict[str, str | None] = {}
+            for device_id, by_nic_name in nics.items():
+                chosen = choose_tunnel_parent(by_nic_name)
+                tunnel_parent[device_id] = by_nic_name[chosen] if chosen else None
             for link in links:
                 session = by_name.get(link.name)
                 ends = []
@@ -254,8 +266,9 @@ class ProviderConnectionGenerator(ProviderStubMixin, CablingMixin, PoolMixin, Co
                         "role": "service",
                         "description": f"{link.name} tunnel",
                     }
-                    if side.port is not None:
-                        tunnel_data["parent_interface"] = {"id": side.port.id}
+                    parent_id = side.port.id if side.port is not None else tunnel_parent.get(side.device_id)
+                    if parent_id:
+                        tunnel_data["parent_interface"] = {"id": parent_id}
                     node = await self.client.create(kind=DcimVirtualInterface, data=tunnel_data)
                     await node.save(allow_upsert=True)
                     ends.append(node.id)

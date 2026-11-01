@@ -259,9 +259,10 @@ def _session(raw: dict[str, Any]) -> ExistingSession:
 
 
 def _stubs(far: dict[str, Any]) -> tuple[Stub, ...]:
-    """The devices and appliances deployed in the far facility."""
+    """The appliances (a cloud or SaaS region, a virtual colocation) and the devices (an external provider, a
+    colocation zone) deployed in the far facility; a region has no ``devices`` key."""
     stubs: dict[str, Stub] = {}
-    for key in ("devices", "appliances"):
+    for key in ("appliances", "devices"):
         for device in far.get(key) or []:
             if isinstance(device, dict) and device.get("id"):
                 stubs.setdefault(
@@ -441,6 +442,14 @@ def _dedicated_sides(spec: ConnectionSpec, flavour: ConnectionFlavour) -> list[t
             f"the flavour has {flavour.links} link(s): the carriers must end on exactly that many ports in the near "
             f"facility and in the far facility, found {len(near_ports)} near and {len(far_ports)} far"
         )
+    stub_ids = {stub.id for stub in spec.stubs}
+    if not stub_ids:
+        raise ValueError("the far facility holds no provider appliance or device to land the connection on")
+    off_stub = sorted({port.label for port in far_ports if port.device_id not in stub_ids})
+    if off_stub:
+        raise ValueError(
+            f"far carrier end(s) {', '.join(off_stub)} are not on a provider appliance or device of the far facility"
+        )
     sides = []
     for near, far in zip(near_ports, far_ports, strict=True):
         process = _single_process(far.device_name, far.processes, spec.provider_as_id)
@@ -467,6 +476,8 @@ def _vpn_sides(spec: ConnectionSpec, flavour: ConnectionFlavour) -> list[tuple[S
             f"(list the carrier in carrier_circuits when the facility has several), found: {names}"
         )
     near_port = next(iter(devices.values()))
+    if not spec.stubs:
+        raise ValueError("the far facility holds no provider appliance or device to terminate the tunnels on")
     candidates = [stub for stub in spec.stubs if stub.processes]
     if spec.provider_as_id:
         candidates = [stub for stub in candidates if any(p.local_as_id == spec.provider_as_id for p in stub.processes)]
@@ -501,6 +512,13 @@ def choose_vlan(requested: int | None, reuse: int | None, used: Iterable[int]) -
         if vlan not in taken:
             return vlan
     raise ValueError("no free VLAN left on the parent port(s)")
+
+
+def choose_tunnel_parent(nic_names: Iterable[str]) -> str | None:
+    """The NIC a tunnel of a provider appliance rides on: the first by name that is no loopback, tunnel or
+    sub-interface; None when the appliance has no NIC (the tunnel then hangs on nothing)."""
+    nics = sorted(n for n in nic_names if "." not in n and not n.startswith(("Loopback", "Tunnel")))
+    return nics[0] if nics else None
 
 
 def choose_tunnel_name(taken: Iterable[str]) -> str:

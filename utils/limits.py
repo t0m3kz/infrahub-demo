@@ -176,6 +176,8 @@ GROUP_VIRTUAL_CIRCUITS = "virtual_circuits"
 GROUP_SDWAN_GATEWAYS = "sdwan_gateways"
 GROUP_PROVIDER_STUBS = "provider_stubs"
 GROUP_PROVIDER_CONNECTIONS = "provider_connections"
+# Every DcimPatchPanel: the target group of add_patch_panel, whose created-trigger needs it (the panel templates join it).
+GROUP_PATCH_PANELS = "patch_panels"
 
 # device_role -> the group its devices join, for roles whose group does not follow the f"{device_role}s" convention.
 # One map for every create_devices() caller: a group created on a branch because a caller missed it collides with
@@ -191,7 +193,6 @@ ROLE_GROUP_NAMES: dict[str, str] = {
 TOPOLOGY_ORCHESTRATOR_GROUPS: dict[str, str] = {
     "ansible_automation_platform": "topology_ansible",
     "github_actions": "topology_github_actions",
-    "terraform": "topology_terraform",
     "argocd": "topology_argocd",
 }
 APPLICATION_ORCHESTRATOR_GROUPS: dict[str, str] = {

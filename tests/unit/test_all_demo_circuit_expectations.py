@@ -69,8 +69,9 @@ def test_carrier_circuits_declare_only_one_place() -> None:
 
 
 def test_carrier_circuit_type_counts_are_the_shipped_ones() -> None:
-    """Six dark fibres (two per DC), four cross-connects (AWS, the two Azure ExpressRoute legs, Megaport), two Equinix Fabric virtual connections
-    (cage -> Network Edge, Network Edge -> AWS), the declared internet circuits (four transit, the gateway's access, the
+    """Six dark fibres (two per DC), one cross-connect (Megaport), five virtual connections (the AWS Direct Connect
+    and the two Azure ExpressRoute legs on the NICs of the region service edges, the two Equinix Fabric connections
+    cage -> Network Edge and Network Edge -> AWS), the declared internet circuits (four transit, the gateway's access, the
     partner's) plus one generated underlay per SD-WAN office."""
     offices = [
         office
@@ -79,8 +80,8 @@ def test_carrier_circuit_type_counts_are_the_shipped_ones() -> None:
     ]
     assert ALL_DEMO_CARRIER_CIRCUIT_TYPES == {
         "dark_fiber": 6,
-        "cross_connect": 4,
-        "virtual_connection": 2,
+        "cross_connect": 1,
+        "virtual_connection": 5,
         "internet": 4 + 1 + 1 + len(offices),
     }
 

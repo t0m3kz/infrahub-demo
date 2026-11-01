@@ -180,7 +180,7 @@ class TestInternetVpn:
         assert {link.far.device_name for link in links} == {"EXT-STUB"}
 
     def test_no_stub_is_refused(self) -> None:
-        with pytest.raises(ValueError, match="exactly one provider stub"):
+        with pytest.raises(ValueError, match="no provider appliance or device"):
             plan_links(self._vpn(stubs=[]))
 
     def test_a_stub_without_process_is_refused_without_provider_as(self) -> None:

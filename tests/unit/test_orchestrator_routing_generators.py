@@ -89,11 +89,11 @@ class TestApplicationOrchestratorRoutingGenerator:
 
 
 class TestTopologyOrchestratorRoutingGenerator:
-    def test_assigns_terraform_group_for_cloud(self) -> None:
+    def test_assigns_github_actions_group_for_cloud(self) -> None:
         gen = _make_topology_gen()
-        tf_group = MagicMock(id="g-topo-tf")
+        gh_group = MagicMock(id="g-topo-gh")
         updated = _saved_obj()
-        gen.client.get = AsyncMock(return_value=tf_group)
+        gen.client.get = AsyncMock(return_value=gh_group)
         gen.client.create = AsyncMock(return_value=updated)
 
         payload = {
@@ -102,7 +102,7 @@ class TestTopologyOrchestratorRoutingGenerator:
                     "id": "dep-1",
                     "typename": "TopologyCustomerCloud",
                     "name": "C003-VAULTEX-AWS-EU-CENTRAL-1",
-                    "infrastructure_orchestrator": "terraform",
+                    "infrastructure_orchestrator": "github_actions",
                     "member_of_groups": [_group("g-base", "customer_deployments_cloud")],
                 }
             ]
@@ -112,7 +112,7 @@ class TestTopologyOrchestratorRoutingGenerator:
 
         call = gen.client.create.call_args.kwargs
         assert call["kind"] == "TopologyCustomerCloud"
-        assert call["data"]["member_of_groups"] == [{"id": "g-base"}, {"id": "g-topo-tf"}]
+        assert call["data"]["member_of_groups"] == [{"id": "g-base"}, {"id": "g-topo-gh"}]
         updated.save.assert_called_once()
 
     def test_skips_save_when_membership_is_already_correct(self) -> None:
@@ -158,7 +158,7 @@ class TestTopologyOrchestratorRoutingGenerator:
                     "infrastructure_orchestrator": "argocd",
                     "member_of_groups": [
                         _group("g-topo-argo", "topology_argocd"),
-                        _group("g-topo-tf", "topology_terraform"),
+                        _group("g-topo-gh", "topology_github_actions"),
                     ],
                 }
             ]

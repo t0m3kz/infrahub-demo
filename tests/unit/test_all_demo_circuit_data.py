@@ -243,16 +243,13 @@ def test_every_carrier_circuit_row_has_two_distinct_ends_and_no_port_is_in_two_r
             seen[end] = _circuit_name(row)
 
 
-def test_every_cross_connect_far_end_is_a_declared_cloud_provider_edge() -> None:
-    """A cross-connect's second port sits on a stub device the 01_colo_onramp provider edges declare."""
+def test_every_cross_connect_far_end_is_a_declared_physical_provider_edge() -> None:
+    """A cross-connect joins two physical ports: the only one left is the Megaport MCR's, whose second port sits on a
+    stub device the 01_colo_onramp provider edges declare. A cloud region's service edge has no port: its carriers are
+    virtual connections (test_all_demo_cloud_service_edges)."""
     stubs = {e["name"] for e in _rows("DcimPhysicalDevice", _ONRAMP / "02_cloud_provider_edges.yml")}
     cross_connects = [e for e in _rows("TopologyCarrierCircuit", _ONRAMP) if e["circuit_type"] == "cross_connect"]
-    assert sorted(_circuit_name(e) for e in cross_connects) == [
-        "XC-EQXFR2-AWS-EUC1",
-        "XC-EQXPA4-AZURE-WEU-PRI",
-        "XC-EQXPA4-AZURE-WEU-SEC",
-        "XC-EQXPA4-MEGAPORT",
-    ]
+    assert sorted(_circuit_name(e) for e in cross_connects) == ["XC-EQXPA4-MEGAPORT"]
     for circuit in cross_connects:
         cage_end, cloud_end = circuit["capabilities"]
         assert cage_end[0].startswith("eg-")

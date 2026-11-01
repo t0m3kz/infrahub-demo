@@ -47,7 +47,7 @@ VRF_ROLES = frozenset(
 """Device roles that route tenant VRFs. Spines, L2 leaves, firewalls and load balancers never carry one."""
 
 PARTY_DEPLOYMENT_KINDS = frozenset({"TopologyCloudRegion", "TopologyExternalProviders"})
-"""A device deployed into one of these is the party's (a cloud provider router, an ISP PE, a partner edge)."""
+"""A device deployed into one of these is the party's (a cloud provider's service-edge appliance, an ISP PE)."""
 
 PARTY_GROUPS = frozenset({GROUP_PROVIDER_STUBS})
 """A provider stub modelled inside our colocation zone (an Equinix Fabric port, a Megaport MCR) is the party's too."""

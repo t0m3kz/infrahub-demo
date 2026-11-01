@@ -100,13 +100,6 @@ artifact_definitions:
     transformation: loadbalancer
     parameters:
       device: name__value
-  - name: proxy_config
-    artifact_name: proxy
-    content_type: text/plain
-    targets: onprem_proxies
-    transformation: proxy
-    parameters:
-      device: name__value
   - name: proxy_cloud_config
     artifact_name: proxy-cloud-policy
     content_type: application/json
@@ -234,12 +227,6 @@ check_definitions:
     targets: loadbalancers
     parameters:
       device: name__value
-  - name: validate_proxy
-    class_name: CheckProxy
-    file_path: checks/proxy.py
-    targets: onprem_proxies
-    parameters:
-      device: name__value
   - name: validate_tor
     class_name: CheckToR
     file_path: checks/tor.py
@@ -358,6 +345,11 @@ check_definitions:
   - name: validate_provider_connections
     class_name: CheckProviderConnections
     file_path: checks/provider_connections.py
+  # Targetless: the pairing is written by add_patch_panel from the ports, and a person can edit it; the check
+  # compares every panel with what the generator would write.
+  - name: validate_patch_panel_pairing
+    class_name: CheckPatchPanelPairing
+    file_path: checks/patch_panel_pairing.py
   # Targetless: a pod's design is judged against every suite hosting a rack of
   # it, so one query reads every rack with its suite and its pod's design.
   - name: validate_suite_capacity
@@ -494,14 +486,6 @@ python_transforms:
   - name: loadbalancer
     class_name: LoadBalancer
     file_path: transforms/config/loadbalancer.py
-    watch:
-      files:
-        - transforms/
-        - templates/
-        - utils/
-  - name: proxy
-    class_name: Proxy
-    file_path: transforms/config/proxy.py
     watch:
       files:
         - transforms/
@@ -644,8 +628,6 @@ queries:
     file_path: queries/config/edge.gql
   - name: loadbalancer_config
     file_path: queries/config/loadbalancer.gql
-  - name: proxy_config
-    file_path: queries/config/proxy.gql
   - name: proxy_cloud_config
     file_path: queries/config/proxy_cloud.gql
   - name: firewall_config
@@ -690,6 +672,8 @@ queries:
     file_path: queries/topology/add/virtual_circuit.gql
   - name: provider_connection_data
     file_path: queries/topology/add/provider_connection.gql
+  - name: patch_panel_data
+    file_path: queries/topology/add/patch_panel.gql
   - name: segment_placement
     file_path: queries/validation/segment_placement.gql
   - name: segment_security
@@ -722,6 +706,8 @@ queries:
     file_path: queries/validation/circuit_placement.gql
   - name: provider_connections
     file_path: queries/validation/provider_connections.gql
+  - name: patch_panel_pairing
+    file_path: queries/validation/patch_panel_pairing.gql
   - name: suite_capacity
     file_path: queries/validation/suite_capacity.gql
   - name: colocation_placement
@@ -742,8 +728,6 @@ queries:
     file_path: queries/validation/pool_utilization.gql
   - name: loadbalancer_validation
     file_path: queries/validation/lb.gql
-  - name: proxy_validation
-    file_path: queries/validation/proxy.gql
 
   - name: rack_elevation_query
     file_path: queries/topology/rack.gql
@@ -919,6 +903,19 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
+    watch:
+      files:
+        - generators/
+        - utils/
+  - name: add_patch_panel
+    file_path: generators/topology/patch_panel.py
+    targets: patch_panels
+    query: patch_panel_data
+    class_name: PatchPanelGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      panel_id: panel_id__value
     watch:
       files:
         - generators/

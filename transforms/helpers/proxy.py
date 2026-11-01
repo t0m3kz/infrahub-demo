@@ -90,21 +90,15 @@ def flatten_proxy_rules(policies: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 # The access verdict of each ProxyPolicyRule action. `bypass` (allow without TLS inspection) and `inspect`
-# (allow with it) are allows; _refuse_unrenderable decides whether the renderer honours the inspection.
+# (allow with it) are allows; _refuse_unrenderable refuses `inspect`: no cloud payload inspects TLS on request.
 # `redirect` has none: the schema models no redirect target, so no renderer can express it.
 _VERDICTS = {"allow": "allow", "bypass": "allow", "inspect": "allow", "block": "block"}
 
-# Renderers (an on-prem proxy's platform name, a cloud proxy's template name) whose config inspects TLS
-# on every allowed flow, so an `inspect` rule is a plain allow there: squid bumps all (`ssl_bump bump all`).
-_TLS_INSPECTING_RENDERERS = frozenset({"squid_cache"})
-
-# The destination types each renderer matches. Every one matches hostnames (fqdn);
-# squid also has ACL types for an address range (`dst`) and a URL regex (`url_regex`), and the generic
-# and ZIA payloads list their destinations untyped. Anywhere else a CIDR would match as a hostname
-# and a regex as a literal string.
+# The destination types each renderer (a cloud proxy's template name) matches. Every one matches hostnames
+# (fqdn); the generic and ZIA payloads also list address ranges untyped. Anywhere else a CIDR would match as a
+# hostname and a regex as a literal string.
 _HOSTNAME_DESTINATIONS = frozenset({"fqdn"})
 _DESTINATION_TYPES: dict[str, frozenset[str]] = {
-    "squid_cache": _HOSTNAME_DESTINATIONS | {"cidr", "regex"},
     "generic": _HOSTNAME_DESTINATIONS | {"cidr"},
     "zscaler_zia": _HOSTNAME_DESTINATIONS | {"cidr"},
 }
@@ -115,7 +109,7 @@ def proxy_rules(
 ) -> list[dict[str, Any]]:
     """The flat rule list of one proxy: its shared policies plus each customer's own, merged by name.
 
-    Each rule carries its access ``verdict`` (allow/block) for ``renderer`` (see _TLS_INSPECTING_RENDERERS).
+    Each rule carries its access ``verdict`` (allow/block) for ``renderer``.
     Raises ValueError for a rule ``renderer`` cannot express, instead of rendering it as something else.
     """
     customer_policies = [policy for customer in customers or [] for policy in customer.get("proxy_policies") or []]
@@ -131,7 +125,7 @@ def _refuse_unrenderable(rule: dict[str, Any], renderer: str) -> None:
     action, destination_type = rule["action"], rule["destination_type"]
     if action not in _VERDICTS:
         problem = f"action '{action}'" + (" (no redirect target is modelled)" if action == "redirect" else "")
-    elif action == "inspect" and renderer not in _TLS_INSPECTING_RENDERERS:
+    elif action == "inspect":
         problem = "action 'inspect' (its config inspects no TLS)"
     elif destination_type not in _DESTINATION_TYPES.get(renderer, _HOSTNAME_DESTINATIONS):
         problem = f"destination_type '{destination_type}'"

@@ -11,29 +11,30 @@
 #   account               nordix-aws-prod: the connection has no `owner` of its own, it is C001's through the account
 #   attached_network      nordix-vpc-vpn, 10.20.0.0/16 (../../06_customer_boarding/c001/cloud/aws/eu-central-1/)
 #   provider_as           AS64513, the Amazon side of the VPN gateway (its own ASN, so it is told from the Direct
-#                         Connect router EXT-AWS-DX-FR2, AS64512, that shares the region; the stub's own BGP process
-# below)
+#                         Connect service edge EXT-AWS-DX-FR2, AS64512, that shares the region; the appliance's own
+#                         BGP process below)
 #   link_prefixes         the two 169.254.0.0/30 ranges AWS hands out, one per tunnel: provider assigned (flavour
 #                         aws/internet_vpn: /30, two links, the provider end the lower address), never allocated
 #                         from our pools. The generator pairs them onto the two session circuits by prefix order:
 #                         PC-FR2-AWS-EUC1-VPN-PROD-L1 gets 169.254.10.0/30, -L2 gets 169.254.10.4/30.
 #
-# The far end is the VPN gateway's stub, a second provider-edge stub of eu-central-1 (the Direct Connect one,
-# EXT-AWS-DX-FR2, stays the only BGP process of its device). Only the device and its AS are authored: the generator
-# gives the stub its Loopback0 (router-id, from Provider-Stub-Loopback-IPv4) and its BGP process in `provider_as`.
+# The far end is the VPN gateway's service edge, a second CloudNetworkAppliance of the region eu-central-1 (the Direct
+# Connect one, EXT-AWS-DX-FR2, stays the only BGP process of its device): the two services speak different Amazon-side
+# ASes and a device carries ONE BGP process, so one provider and one region have two appliances here. Only the
+# appliance and its AS are authored: the generator gives it its Loopback0 (router-id, from Provider-Stub-Loopback-IPv4),
+# its BGP process in `provider_as` and the Tunnel<n> interfaces.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: DcimPhysicalDevice
+  kind: CloudNetworkAppliance
   data:
     - name: "EXT-AWS-VPN-EUC1"
-      object_template: MX204_ISP_PE
-      owner: "P004"
+      object_template: AWS_SERVICE_EDGE
       description: "AWS Site-to-Site VPN gateway of eu-central-1 (far end of PC-FR2-AWS-EUC1-VPN-PROD)"
       deployment: "eu-central-1"
 ---
 # The VPN gateway speaks its own Amazon-side ASN (a virtual private gateway takes a custom one): the connection's
-# `provider_as` is how the generator tells this stub from the Direct Connect router in the same region.
+# `provider_as` is how the generator tells this appliance from the Direct Connect one in the same region.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

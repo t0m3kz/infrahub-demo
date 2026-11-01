@@ -67,6 +67,9 @@ spec:
     - name: run-provider-connection-generator
       description: Build the session circuits and end interfaces of a provider connection
       generator: add_provider_connection
+    - name: run-patch-panel-generator
+      description: Pair the front ports of a patch panel with its rear ports
+      generator: add_patch_panel
     - name: run-endpoint-generator
       description: Run Endpoint Connectivity Generator
       generator: add_endpoint

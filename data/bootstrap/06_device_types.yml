@@ -413,30 +413,12 @@ spec:
       manufacturer: HAProxy Technologies
       cpu_count: 2
       memory_gb: 2
-    - name: SQUID-PROXY
-      height: 1
-      full_depth: false
-      manufacturer: Squid
-      cpu_count: 4
-      memory_gb: 16
     - name: LINUX-SVC
       height: 1
       full_depth: false
       manufacturer: Generic
       cpu_count: 2
       memory_gb: 4
-    - name: BLUECOAT-SG900
-      height: 2
-      full_depth: true
-      manufacturer: Broadcom
-      cpu_count: 4
-      memory_gb: 32
-    - name: CISCO-WSA-S195
-      height: 1
-      full_depth: true
-      manufacturer: Cisco
-      cpu_count: 2
-      memory_gb: 16
     - name: NetScaler-MPX-26000-100G
       height: 2
       full_depth: true
@@ -578,3 +560,12 @@ spec:
       height: 0
       full_depth: false
       manufacturer: Zscaler
+    # The provider-side service edge of a cloud region (09_network_appliance_templates_cloud_service_edge)
+    - name: AWS-SERVICE-EDGE
+      height: 0
+      full_depth: false
+      manufacturer: "Amazon Web Services"
+    - name: AZURE-SERVICE-EDGE
+      height: 0
+      full_depth: false
+      manufacturer: "Microsoft Azure"

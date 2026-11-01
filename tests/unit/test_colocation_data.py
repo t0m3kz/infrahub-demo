@@ -333,14 +333,14 @@ def test_virtual_colocation_carries_the_edge_pair(demo: str) -> None:
 
 
 @pytest.mark.parametrize("demo", sorted(_DEMO_SETS))
-class TestVirtualColocationTerraform:
-    """AM-NE is the one Terraform-marked presence, in both demos: marked by infrastructure_orchestrator, ordered from its template."""
+class TestVirtualColocationProviderOrder:
+    """AM-NE is the one provider-ordered presence, in both demos: ordered from its template, routed to no orchestrator."""
 
-    def test_am_ne_is_orchestrated_by_terraform(self, demo: str) -> None:
-        """The orchestrator value the provider order (checks/colocation_placement.py rules 7, 8) is judged on."""
+    def test_am_ne_keeps_the_default_orchestrator(self, demo: str) -> None:
+        """No orchestrator is named: the default (manual) applies and no routing group is involved."""
         am_ne = next(obj for obj in _objects(demo, _VIRTUAL) if name(obj) == "AM-NE")
 
-        assert am_ne.item["infrastructure_orchestrator"] == "terraform"
+        assert "infrastructure_orchestrator" not in am_ne.item
         assert am_ne.kind == _VIRTUAL
 
     def test_the_orchestrator_values_are_schema_choices(self, demo: str) -> None:
@@ -353,7 +353,7 @@ class TestVirtualColocationTerraform:
             for obj in _objects(demo, _VIRTUAL, _FOOTPRINT)
             if "infrastructure_orchestrator" in obj.item
         }
-        assert "terraform" in used
+        assert "terraform" not in used
         assert used <= choices
 
     def test_the_template_it_uses_names_the_offer_through_its_device_type_and_software_image(self, demo: str) -> None:

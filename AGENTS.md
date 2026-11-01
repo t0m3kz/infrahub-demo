@@ -244,8 +244,8 @@ class MyCheck(InfrahubCheck):
 | Namespace | Holds |
 | --------- | ----- |
 | Managed | On-prem services and the shared generics `ManagedGeneric` (name, description, status), `ManagedGenericDevice` (the individual device edge, `capabilities`, cascades), `ManagedGenericSharedDevice` (the shared device edge, `shared_capabilities`, never cascades), `ManagedGenericInterfaces` (the interface-side `capabilities` edge; its identifier stays `interface_capabilities`), `ManagedNetworkSegment` and `ManagedLoadBalancer`, and `ManagedVRF` (a namespace realized in one topology, a shared kind) |
-| Cloud | Provider-hosted resources (public cloud and provider-hosted network services); every resource inherits `CloudResource`, except `CloudNetworkAppliance`, a provider-hosted network function (Equinix Network Edge) that inherits the device generics (`DcimDevice`, `DcimCapabilities`) so its interfaces (virtual NICs: no hardware), BGP and HA stay device-shaped; the provider's order is structured data (Device Type name = `type_code`, `DcimSoftwareImage.package` and `version`), not attributes of the appliance; the cloud and SaaS side of a connection is not modelled as Direct Connect, virtual-interface or hybrid-attachment objects (the `TopologyProviderConnection` is that fact), and `CloudTransitGatewayAttachment` keeps its attachment type, owner account, virtual network and route-table fields, with `hybrid_endpoint` an edge to the connection |
-| Topology | Deployments (`TopologyDataCenter`, `TopologyPod`, `TopologyColocationMetro`, ...), design elements, circuits (`TopologyCarrierCircuit` and `TopologySessionCircuit`, whose role is its `circuit_type`: `dci`, `handoff`, `tunnel`, `vpn`; neither has an `owner`, see **Circuit placement**), the provider connection `TopologyProviderConnection` (what connects our facility to a provider facility) and the tenant footprints `TopologyCustomer*` |
+| Cloud | Provider-hosted resources (public cloud and provider-hosted network services); every resource inherits `CloudResource`, except `CloudNetworkAppliance`, a provider-hosted network function (Equinix Network Edge) that inherits the device generics (`DcimDevice`, `DcimCapabilities`) so its interfaces (virtual NICs: no hardware), BGP and HA stay device-shaped; the provider's order is structured data (Device Type name = `type_code`, `DcimSoftwareImage.package` and `version`), not attributes of the appliance; a cloud region hosts no devices: the provider side of a connection is the provider's service edge, one `CloudNetworkAppliance` (role `provider`) per provider and region; the cloud and SaaS side of a connection is not modelled as Direct Connect, virtual-interface or hybrid-attachment objects (the `TopologyProviderConnection` is that fact), and `CloudTransitGatewayAttachment` keeps its attachment type, owner account, virtual network and route-table fields, with `hybrid_endpoint` an edge to the connection |
+| Topology | Deployments (`TopologyDataCenter`, `TopologyPod`, `TopologyColocationMetro`, ...), design elements, circuits (`TopologyCarrierCircuit` and `TopologySessionCircuit`, whose role is its `circuit_type`: `dci`, `handoff`, `tunnel`, `vpn`; neither has an `owner`, see **Circuit placement**), the provider connection `TopologyProviderConnection` (what connects our facility to a provider facility; `TopologyCloudRegion` hosts `appliances`, never `devices`) and the tenant footprints `TopologyCustomer*` |
 | Dcim, Ipam, Location, Organization | Devices/interfaces/cables, prefixes/addresses/namespaces, geography, providers/customers |
 | Routing | Shared routing objects (`RoutingAutonomousSystem`, `RoutingOSPFArea`, `RoutingPassword`) |
 | Security, Loadbalancer, Proxy, App, Virt | Functional domains |
@@ -255,11 +255,12 @@ class MyCheck(InfrahubCheck):
   `ManagedLoadBalancer`.
 - **Segments are VXLAN only**: there is no VLAN segment kind. The VLAN of a port is generated per switch (see
   **VLAN rows**), a segment has no manual `vlan_id` and lists its footprints in `customer_deployments`.
-  An infrastructure VLAN (a transfer or management L2 link) is a segment too: a `ManagedVxlanSegment` with no
-  `gateway`, owned by the `INFRA` pseudo-customer, given to its ports (their `segments` edge) like any segment. The fabric
-  renders it pure L2 (VLAN and L2 VNI, no SVI, VRF or ACL) and its VLAN is chosen per switch like any other; a firewall
-  sub-interface takes the facing leaf's VLAN. A fixed VLAN number is only needed towards an outside party, and that is
-  a handoff circuit's `<port>.<vlan>` sub-interface, not a segment.
+  Every segment has a gateway: an authored one is kept, else `add_vxlan_segment` (`ensure_segment_addressing`) allocates
+  the segment a /24 from its environment's tenant pool and puts the anycast gateway on `.1`; there is no segment without
+  one. The `INFRA` pseudo-customer's segment (`infra-core-dns-ntp-p`, management zone) is such a segment with an authored
+  gateway. A segment is pure L2 on the fabric only when a firewall terminates it (`terminated_on`, see **VLAN rows**).
+  A fixed VLAN number is only needed towards an outside party, and that is a handoff circuit's `<port>.<vlan>`
+  sub-interface, not a segment.
 - **Topology.Customer**: Per-facility tenant footprints (`TopologyCustomerDC`, `TopologyCustomerColocation`,
   `TopologyCustomerCloud`) — not a separate `Customer.*` namespace; these inherit `TopologyConnectableLocation`
   alongside the facility nodes so a circuit endpoint is one shared relationship, not a duplicated model. The
@@ -280,7 +281,7 @@ class MyCheck(InfrahubCheck):
   cage `TopologyColocationZone` or the provider-hosted `TopologyVirtualColocation` (never the metro), the
   `TopologyCloudRegion` (never a zone or `TopologyCloud`), the ISP `TopologyExternalProviders`, the
   `TopologySaasRegion` or the `TopologyCustomerOffice`. Data lists only the cage; `add_circuit` adds every end
-  whose endpoint device's `deployment` is a facility (border leaf -> DC, provider router -> region, ISP PE -> ISP),
+  whose endpoint device's `deployment` is a facility (border leaf -> DC, service-edge appliance -> its region, ISP PE -> ISP),
   when the circuit is created or its ends change: nothing re-runs it on a later `deployment` edit (the check reports
   it). A circuit has no `owner` field: its owner is DERIVED, never stored (`utils/ownership.py` `circuit_owner`): the owner of
   the `TopologyCustomerOffice` among its `locations` (an office's access circuit, `add_sdwan_edge`'s `INET-<office>`, and a
@@ -292,7 +293,10 @@ class MyCheck(InfrahubCheck):
   - **Carrier**: exactly two distinct locations, one per end device's `deployment`; its offices are of one owner.
     `checks/carrier_circuit_ports.py`: a port is an end of at most one carrier and both ends
     are physical ports, EXCEPT a `virtual_connection` (a provider port hosts one connection per S-tag, and an end may be
-    the `DcimVirtualInterface` NIC of a provider-hosted appliance); the other types on the same port still hold both.
+    the `DcimVirtualInterface` NIC of a provider-hosted appliance, such as a region's service edge); the other types on
+    the same port still hold both. A carrier whose far end is a service-edge NIC is a provider-delivered
+    `virtual_connection`; a physical `cross_connect` joins physical ports only (our cage edge and a Fabric port or a
+    provider's own router).
   - **Carrier provider data** (optional, inventory only, nothing reads it): `circuit_id` also holds the Equinix Fabric
     connection `uuid` or the Megaport VXC `product_uid`; `bandwidth` mirrors the Fabric `bandwidth` and the Megaport
     `rate_limit`; `term_length` (months) has the name and meaning of `CloudNetworkAppliance.term_length` and mirrors the
@@ -354,7 +358,9 @@ class MyCheck(InfrahubCheck):
   `Tunnel<n>` interface pair, the near one riding on the port of the internet carrier through `parent_interface` (the
   connection may list that internet carrier to say which of several edges the tunnels leave by), a `vpn` circuit.
   A provider-assigned flavour gets its `link_prefix` paired from `link_prefixes` sorted by address (count mismatch is
-  PC7). The provider-side STUB devices are authored in data, shared per provider and facility: the device and its AS
+  PC7). The provider-side STUB is authored in data, shared per provider and facility: in a cloud region, a SaaS region or
+  a virtual colocation a `CloudNetworkAppliance` listed in `appliances` (the service edge, see **Service edge**), in a
+  `TopologyExternalProviders` or a colocation zone a physical device; its AS
   (and, where wanted, its `Loopback0` and single `ManagedBGP` process, which the run reuses); a stub that has no process
   gets its `Loopback0` (a /32 from `Provider-Stub-Loopback-IPv4`, identifier `stub-lo0__<device id>`, 10.255.65.0/24) and
   its `<stub>-bgp` process in the connection's `provider_as` from the run (`generators/provider_stub.py`, untracked so
@@ -369,6 +375,12 @@ class MyCheck(InfrahubCheck):
   connection, carriers that cover near and far and, for a dedicated one, equal the underlay derived from its
   sessions. It also holds two consistency rules (a `CloudNetworkSegment` has the owner of its footprint; a vpc
   `CloudTransitGatewayAttachment` lives in the account of its virtual network).
+- **Service edge**: a cloud region and a SaaS region are provider places with no hardware of ours, so the provider side
+  of a connection is ONE `CloudNetworkAppliance` with role `provider` per provider and region, hosted through
+  `TopologyApplianceHosting` (`appliances`), never a physical device in `devices`. It has one `DcimVirtualInterface` NIC
+  per connection leg (a carrier end, named `vnic-<tag>`); the `<nic>.<vlan>` sub-interface of a handoff, or the
+  `Tunnel<n>` of a vpn, rides on its NIC through `parent_interface`. A provider's own router that a cable reaches is a
+  physical device of its `TopologyExternalProviders`, not of the region.
 - **Session circuits** (virtual circuits): `TopologySessionCircuit` is the connection between topologies on which routing
   is generated or recorded; its role is its `circuit_type` (`dci`, `handoff`, `tunnel`, `vpn`), required, never a kind. It has no `owner` field (derived, see **Circuit placement**). The
   carrier kind keeps its own `circuit_type` (the carrier's nature) beside it. `tunnel` (SD-WAN office edge <->
@@ -384,8 +396,8 @@ class MyCheck(InfrahubCheck):
   row per (`connection_profile`, `path_type`) with `address_source` (`our_pool` from `Handoff-<namespace>-IPv4`, or
   `provider_assigned`: nothing allocated, the circuit's `link_prefix` is the range, authored as the connection's
   `link_prefixes`), `prefix_length` (/31, /30, /29), `links`, `lower_end` (which end takes the lower host address:
-  offsets (0, 1) for a /31, (1, 2) otherwise), `ttl` and `bfd`; a circuit with no connection is `DEFAULT_FLAVOUR`, a /31
-  from our pool. The server refuses another length for an identifier it already allocated, so a changed flavour is
+  offsets (0, 1) for a /31, (1, 2) otherwise), `ttl` and `bfd` (the session's BFD, read by the handoff and the vpn planner alike: on for a dedicated path, off over the
+  internet); a circuit with no connection is `DEFAULT_FLAVOUR`, a /31 from our pool with BFD. The server refuses another length for an identifier it already allocated, so a changed flavour is
   reported with its remedy, never re-allocated silently. One generator, `add_virtual_circuit`
   (`VirtualCircuitSessionGenerator`, planners keyed by `circuit_type`), builds the sessions of `dci`, `handoff` and
   `vpn` circuits; `add_circuit` only derives carrier locations and fans out to it (one `filters` on `circuit_type__values`). The
@@ -513,10 +525,15 @@ class MyCheck(InfrahubCheck):
   one file, in a third file, by id and from the rear side), so a template cannot pair a front port with its rear port.
   The panel templates (`data/bootstrap/10_physical_devices_templates_patch_panel_rear.yaml` and `_front.yaml`: `PP-24-LC`,
   `PP-48-LC`, `PP-12-SC`, `PP-24-RJ45`, `PP-CASSETTE-MPO12`) therefore create the ports unpaired, one ranged block per
-  kind (never nested: a nested range multiplies), and the pairing is a data file next to the panel: a ranged front block
-  with a ranged `rear_port` (`data/demos/30_all/08_interconnects/01_colo_onramp/06b_patch_panel_mapping.yml`).
-  `tests/unit/test_patch_panel_data.py` pins that every front port of a demo panel made from a template is paired.
-  Nothing checks a panel's cross-connects: a cable that stops at a panel is data to read, not a defect to report. A panel
+  kind (never nested: a nested range multiplies), and carry `member_of_groups: [patch_panels]`. The generator
+  `add_patch_panel` (`generators/topology/patch_panel.py`, created-trigger on the panel plus `updated` triggers on its
+  two port edges, because the template's children may appear after the panel) pairs them: the layout is derived from
+  the ports alone (`generators/helpers/patch_panel.py`): a jack when the numbered counts are equal (front N on rear N), a
+  cassette when every rear port is MPO-12 and the fronts are a multiple F of the rears (rear k takes fronts
+  (k-1)*F+1..k*F), else no pairing and an error. It writes only unpaired front ports (idempotent) and leaves one paired
+  differently with a WARNING. `checks/patch_panel_pairing.py` guards the result (a generated, editable pairing is data
+  that needs a guard): an underivable layout, an unpaired or mispaired front port. A cable that stops at a panel is data
+  to read, not a defect to report. A panel
   always sits between two devices: a circuit end stays an interface (the `capabilities` peers are untouched) and the
   panel's location is its mandatory `rack` (`LocationRack.deployment` gives the facility); a panel has no
   `deployment`, no device type and no `position` (the rack-unit position returns together with a rack drawing that
@@ -650,8 +667,8 @@ class MyCheck(InfrahubCheck):
   exit sub-interfaces, an upstream transit address) and the legs of the contexts tagged on its border service ports.
   Only our routing devices carry one (`carries_vrfs`: leaf, tor, access-leaf, border-leaf, border-spine, edge,
   access-switch, distribution-switch, physical or a `CloudNetworkAppliance`): never a spine, an L2 leaf, a firewall or a
-  load balancer (their VRF is the context), a controller, or a party's device (a provider stub, a device of a cloud
-  region or an external provider). A device with demand but no hosting deployment gets nothing (check rule g, ERROR).
+  load balancer (their VRF is the context), a controller, or a party's device (a provider stub, an appliance of a cloud
+  region, a device of an external provider). A device with demand but no hosting deployment gets nothing (check rule g, ERROR).
   `generators/helpers/vrf.py` is the only writer (untracked; lock order: the segment lock, the device locks
   `vrf-device-<id>`, then the instance locks `vrf-<deployment>-<namespace>`, the latter only to create or delete; never
   under a context lock): the segment reconcile, the context legs (`customer_facility`), `add_virtual_circuit`, the office
@@ -693,8 +710,9 @@ class MyCheck(InfrahubCheck):
   `minimum_links`).
 - **What a deployment hosts is typed by its kind**: a device's `deployment` is its host's, and each kind of host has a generic
   of its own, so the picker and the schema refuse the rest. `TopologyDeviceHosting` (DC, pod, colocation zone, office,
-  external provider, cloud region for the provider routers) lists the physical devices and controllers;
-  `TopologyApplianceHosting` (virtual colocation, SaaS region) lists its `appliances` (`CloudNetworkAppliance`, identifier
+  external provider) lists the physical devices and controllers (a provider's physical router lives in its
+  `TopologyExternalProviders`, never in a region);
+  `TopologyApplianceHosting` (virtual colocation, SaaS region, cloud region) lists its `appliances` (`CloudNetworkAppliance`, identifier
   `topology__appliances`); `TopologyCloudHosting` (customer cloud) lists its `instances` (`CloudInstance`, the EC2 of the
   tenant). A virtual device keeps `deployment` on the `TopologyDeployment` generic: it runs for a customer footprint. The
   colocation metro hosts nothing and cables nothing. `LocationRack.deployment` (peer `TopologyRackHosting`: a pod or a colocation

@@ -73,10 +73,11 @@ generics:
         order_weight: 1200
         on_delete: cascade
 
-  # Where a provider-hosted network function (a CloudNetworkAppliance) can be deployed: the virtual colocation or the
-  # SaaS region it is rented in. A relationship peer, so it carries a name and an hfid as
-  # DeviceHosting does. Not DeviceHosting: a deployment of this kind has no physical or virtual device of ours, only
-  # what the provider hosts for us, so its link is typed to the appliance and not to any DcimDevice.
+  # Where a provider-hosted network function (a CloudNetworkAppliance) can be deployed: the virtual colocation, the
+  # SaaS region or the cloud region it is rented in (in a region it is the provider's service edge). A relationship
+  # peer, so it carries a name and an hfid as DeviceHosting does. Not DeviceHosting: a deployment of this kind has no
+  # physical or virtual device of ours, only what the provider hosts for us, so its link is typed to the appliance and
+  # not to any DcimDevice.
   - name: ApplianceHosting
     namespace: Topology
     description: "Deployment in which a provider-hosted network function is rented"

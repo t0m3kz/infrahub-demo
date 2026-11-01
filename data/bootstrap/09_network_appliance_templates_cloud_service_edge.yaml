@@ -1,0 +1,25 @@
+---
+# The service edge a cloud provider runs in one of its regions (TopologyCloudRegion hosts CloudNetworkAppliance like a
+# SaaS region does): AWS Direct Connect and Site-to-Site VPN, Azure ExpressRoute. A cloud region is a provider place
+# with no hardware, so the provider side of a connection is this appliance and nothing else: it has no physical port,
+# its interfaces are DcimVirtualInterface objects (one NIC per connection leg, `<nic>.<vlan>` sub-interfaces on them,
+# Tunnel<n> for a vpn) that the demo data and the provider-connection generator create. It is the far end of a
+# connection and is never configured here: role `provider` has no config transform, the platforms have no template, and
+# its Loopback0 and BGP process belong to the connection that needs them.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TemplateCloudNetworkAppliance
+  data:
+    - template_name: AWS_SERVICE_EDGE
+      owner: "P004"
+      device_type: AWS-SERVICE-EDGE
+      role: provider
+      platform: aws_service_edge
+      status: active
+    - template_name: AZURE_SERVICE_EDGE
+      owner: "P005"
+      device_type: AZURE-SERVICE-EDGE
+      role: provider
+      platform: azure_service_edge
+      status: active

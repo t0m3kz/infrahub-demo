@@ -1,4 +1,4 @@
-"""Proxy and load-balancer fixtures."""
+"""Load-balancer fixtures."""
 
 from __future__ import annotations
 
@@ -6,91 +6,6 @@ from typing import Any
 
 from tests.smoke.fixture_builders.common import _edges, _node, _v, write_data_fixtures
 from transforms.config.loadbalancer import LoadBalancer
-from transforms.config.proxy import Proxy
-
-_PROXY_PLATFORM_VENDOR: dict[str, str] = {
-    "haproxy_technologies": "haproxy",
-    "squid_cache": "squid",
-    "bluecoat_sgos": "bluecoat",
-    "cisco_wsa": "cisco_wsa",
-}
-
-
-def build_proxy_data(
-    *,
-    device_name: str,
-    platform: str,
-    proxy_type: str = "explicit",
-) -> dict:
-    """Build a raw GQL-shaped dict for a proxy device config query.
-
-    The response mirrors what clean_data() will receive (raw ``{"value": ...}`` wrappers).
-    """
-    vendor = _PROXY_PLATFORM_VENDOR.get(platform, "haproxy")
-
-    proxy_cap = {
-        "__typename": "ManagedProxyHA",
-        "name": _v(f"{device_name}-HA"),
-        "group_id": _v(1),
-        "mode": _v("active-passive"),
-        "priority": _v(100),
-        "preempt": _v(False),
-        "proxy_type": _v(proxy_type),
-        "proxy_vendor": _v(vendor),
-        "capabilities": _edges(
-            [
-                {"name": _v(device_name)},
-                {"name": _v(device_name.replace("01", "02"))},
-            ]
-        ),
-    }
-
-    interfaces = [
-        {
-            "__typename": "DcimPhysicalInterface",
-            "name": _v("mgmt"),
-            "description": _v("OOB management"),
-            "status": _v("active"),
-            "role": _v("management"),
-            "ip_address": _node({"address": _v("192.168.1.1/24")}),
-        },
-        {
-            "__typename": "DcimPhysicalInterface",
-            "name": _v("eth0"),
-            "description": _v("Ingress uplink"),
-            "status": _v("active"),
-            "role": _v("uplink"),
-            "ip_address": _node(None),
-        },
-        {
-            "__typename": "DcimPhysicalInterface",
-            "name": _v("eth1"),
-            "description": _v("Egress uplink"),
-            "status": _v("active"),
-            "role": _v("uplink"),
-            "ip_address": _node(None),
-        },
-    ]
-
-    device_node: dict = {
-        "__typename": "DcimPhysicalDevice",
-        "id": f"dev-{device_name}",
-        "name": _v(device_name),
-        "role": _v("proxy"),
-        "platform": _node(
-            {
-                "id": f"plat-{platform}",
-                "name": _v(platform),
-            }
-        ),
-        "primary_address": _node(None),
-        "tags": _edges([]),
-        "capabilities": _edges([proxy_cap]),
-        "interfaces": _edges(interfaces),
-    }
-
-    return {"DcimPhysicalDevice": _edges([device_node])}
-
 
 LB_PLATFORMS = ["f5_tmos", "haproxy_technologies", "netscaler"]
 
@@ -289,23 +204,8 @@ def build_lb_context_data(*, device_name: str, platform: str) -> dict:
 
 
 def write_fixtures() -> tuple[int, int]:
-    """Write the proxy and load-balancer fixtures."""
+    """Write the load-balancer fixtures."""
     generated = errors = 0
-
-    # Proxy scenarios: platform × proxy_type
-    proxy_platforms = list(_PROXY_PLATFORM_VENDOR)
-    print("\nGenerating proxy fixtures:")
-    g, e = write_data_fixtures(
-        (
-            Proxy,
-            f"proxy_{platform}_{proxy_type}",
-            build_proxy_data(device_name="DC3-PRX-01", platform=platform, proxy_type=proxy_type),
-        )
-        for platform in proxy_platforms
-        for proxy_type in ["explicit", "transparent", "reverse"]
-    )
-    generated += g
-    errors += e
 
     # Load-balancer pair hosting a shared PROD and a shared NON-PROD context (one-arm leg, VIPs)
     print("\nGenerating load-balancer context fixtures:")

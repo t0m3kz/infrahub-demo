@@ -5,11 +5,11 @@
 # to eu-central-1, for the hub account, over this carrier", and add_provider_connection builds the rest.
 #
 #   near / far            the cage FR2 and the region eu-central-1 (a carrier circuit's kind of ends)
-#   carrier_circuits      XC-EQXFR2-AWS-EUC1 (../01_colo_onramp/03_carrier_circuits.yml), the shared cross-connect
-#                         on eg-fr201 Ethernet1/13 and the stub's et-0/0/0. Shared underlay: the connection does not
-#                         own it, a second connection (PC-AMNE-AWS-EUC1-PROD) ends on the same stub port.
+#   carrier_circuits      XC-EQXFR2-AWS-EUC1 (../01_colo_onramp/03_carrier_circuits.yml), the Direct Connect virtual
+#                         connection from eg-fr201 Ethernet1/13 to the NIC vnic-fr2 of the service edge. Shared
+#                         underlay: the connection does not own it.
 #   vlan_id               1000, the VLAN of the transit VIF: the sub-interfaces are eg-fr201 Ethernet1/13.1000 and
-#                         EXT-AWS-DX-FR2 et-0/0/0.1000
+#                         EXT-AWS-DX-FR2 vnic-fr2.1000
 #   service / attached    a transit connection onto the hub tgw-30all-euc1, whose hybrid attachment
 #                         tgwa-hybrid-eqx-fr2 is `transit_attachment` (the route table that decides which VPC blocks
 #                         the session may accept, transforms/helpers/bgp_external.py)

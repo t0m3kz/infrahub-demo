@@ -27,14 +27,6 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
-    resource_name: proxy_config
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/config/proxy.gql
-          kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
     resource_name: proxy_cloud_config
     tests:
       - name: syntax_check
@@ -446,14 +438,6 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
-    resource_name: proxy_validation
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/validation/proxy.gql
-          kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
     resource_name: segment_placement
     tests:
       - name: syntax_check
@@ -547,6 +531,22 @@ infrahub_tests:
       - name: syntax_check
         spec:
           path: queries/validation/vrf_instances.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: patch_panel_data
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/patch_panel.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: patch_panel_pairing
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/patch_panel_pairing.gql
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery

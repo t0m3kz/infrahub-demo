@@ -83,6 +83,7 @@ from .interconnect_rules import (
     _tunnel_errors,
     _vpn_errors,
 )
+from .wait_helpers import wait_for_condition
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -488,3 +489,34 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             f"  - {e}" for e in errors
         )
         logging.info("Location circuits verified: %d location(s) with circuits", len(forward))
+
+    @pytest.mark.order(395)
+    @pytest.mark.dependency(scope="session", depends=["all_demo_inventory"])
+    @pytest.mark.asyncio
+    async def test_02c_verify_patch_panel_pairing(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """PP-EQX-FR2-01 (template PP-24-LC) has all 24 front ports paired, front N on rear N, by add_patch_panel.
+
+        The template creates the ports unpaired and the generator runs on the panel's creation and on its port
+        edges, so the pairing is waited for like the other generator output.
+        """
+        query = """
+        query {
+          DcimPatchPanel(panel_id__value: "fr2-s1-r-1:PP-EQX-FR2-01") {
+            edges { node { front_ports { edges { node { name { value } rear_port { node { name { value } } } } } } } }
+          }
+        }
+        """
+
+        async def paired() -> tuple[bool, dict[str, str | None]]:
+            result = clean_data(await async_client_main.execute_graphql(query=query, branch_name=scenario_branch))
+            panels = result.get("DcimPatchPanel") or []
+            fronts = (panels[0].get("front_ports") or []) if panels else []
+            pairs = {str(front["name"]): (front.get("rear_port") or {}).get("name") for front in fronts}
+            return len(pairs) == 24 and all(pairs.values()), pairs
+
+        pairs = await wait_for_condition(paired, max_attempts=30, poll_interval=10, description="patch panel pairing")
+        assert pairs == {str(n): str(n) for n in range(1, 25)}

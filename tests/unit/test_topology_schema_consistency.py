@@ -161,14 +161,14 @@ class TestInfrastructureOrchestrator:
             if generator.orchestrator_field == _ORCHESTRATOR_ATTRIBUTE
             for root in generator.query_roots
         }
-        # A virtual colocation is read by checks/colocation_placement.py (its provider order), not routed: the
-        # routing generator went with the Terraform transform.
+        # A virtual colocation is provider-hosted and not routed to an orchestrator group.
         assert inheriting - {"TopologyVirtualColocation"} == routed
 
-    def test_the_choices_include_terraform_and_manual(self) -> None:
-        """Terraform marks a provider-ordered virtual colocation; manual is the default, i.e. no routing group."""
+    def test_the_choices_include_manual_and_no_terraform(self) -> None:
+        """Manual is the default, i.e. no routing group; Terraform is not an orchestrator of this repo."""
         attribute = next(a for a in _kind(_ORCHESTRATED)["attributes"] if a["name"] == _ORCHESTRATOR_ATTRIBUTE)
-        assert {choice["name"] for choice in attribute["choices"]} >= {"terraform", "manual"}
+        assert {choice["name"] for choice in attribute["choices"]} >= {"manual"}
+        assert "terraform" not in {choice["name"] for choice in attribute["choices"]}
         assert attribute["default_value"] == "manual"
 
 
@@ -425,8 +425,8 @@ class TestCloudNetworkAppliance:
         self,
     ) -> None:
         """TopologyApplianceHosting.appliances lists the appliances through the identifier of their own. The peer is the
-        generic TopologyApplianceHosting (the virtual colocation or the SaaS region a provider function is rented
-        in), so the schema refuses any other deployment and the picker offers nothing else. A query that selects
+        generic TopologyApplianceHosting (the virtual colocation, the SaaS region or the cloud region a provider
+        function is rented in), so the schema refuses any other deployment and the picker offers nothing else. A query that selects
         `deployment` across the device kinds spreads fragments per kind, and a fragment for a kind that peer cannot
         be (a zone) is a schema error. A physical device (and a physical controller) is deployed to a
         TopologyDeviceHosting; a virtual one runs for a footprint, so its peer stays the TopologyDeployment generic."""
@@ -465,13 +465,34 @@ class TestCloudNetworkAppliance:
             for node in _document(path).get("nodes") or []
             if "TopologyApplianceHosting" in (node.get("inherit_from") or [])
         ]
-        assert sorted(inheritors) == ["SaasRegion", "VirtualColocation"]
+        assert sorted(inheritors) == ["CloudRegion", "SaasRegion", "VirtualColocation"]
         appliances = next(r for r in generic["relationships"] if r["name"] == "appliances")
         assert (appliances["peer"], appliances["cardinality"], appliances["identifier"]) == (
             "CloudNetworkAppliance",
             "many",
             "topology__appliances",
         )
+
+    def test_a_cloud_region_hosts_appliances_and_no_devices(self) -> None:
+        """A region is a provider place with no hardware: the provider's service edge is a CloudNetworkAppliance listed
+        in `appliances`. No kind inherits both hosting generics, so an appliance can never sit on a region through
+        `devices` (the peer of TopologyDeviceHosting.devices is DcimDevice, which a CloudNetworkAppliance is)."""
+        region = _kind("TopologyCloudRegion")
+        assert "TopologyApplianceHosting" in region["inherit_from"]
+        assert "TopologyDeviceHosting" not in region["inherit_from"]
+        assert "devices" not in _relationship_names("TopologyCloudRegion")
+        assert "appliances" not in _relationship_names("TopologyCloudRegion")
+        generics = {g["name"]: g for g in _document(_TOPOLOGY / "topology.yml")["generics"]}
+        appliances = next(r for r in generics["ApplianceHosting"]["relationships"] if r["name"] == "appliances")
+        assert appliances["identifier"] == "topology__appliances"
+        by_hosting: dict[str, set[str]] = {"TopologyDeviceHosting": set(), "TopologyApplianceHosting": set()}
+        for path in sorted(_TOPOLOGY.glob("*.yml")):
+            for node in _document(path).get("nodes") or []:
+                for hosting in by_hosting:
+                    if hosting in (node.get("inherit_from") or []):
+                        by_hosting[hosting].add(node["name"])
+        assert by_hosting["TopologyDeviceHosting"].isdisjoint(by_hosting["TopologyApplianceHosting"])
+        assert "CloudRegion" not in by_hosting["TopologyDeviceHosting"]
 
     def test_the_provider_account_is_declared_once_for_the_presences_a_provider_hosts(self) -> None:
         """A virtual colocation and a SaaS region order their appliances under one account; neither declares it itself."""

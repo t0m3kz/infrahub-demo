@@ -129,7 +129,7 @@ _ZSCALER_ASN = 22616
 
 #: connection name -> its expectation.
 ALL_DEMO_CONNECTIONS: dict[str, ConnectionExpectation] = {
-    # Direct Connect 10G through the cross-connect: the customer specifies the peer addresses, so they come from OUR
+    # Direct Connect 10G through the virtual connection onto the service edge NIC vnic-fr2: the customer specifies the peer addresses, so they come from OUR
     # pool (a /31). The account net-hub-aws-prod belongs to the operator ("Internal"), not to a customer: unowned.
     "PC-FR2-AWS-EUC1-PROD": {
         "path_type": "dedicated",
@@ -150,10 +150,10 @@ ALL_DEMO_CONNECTIONS: dict[str, ConnectionExpectation] = {
                 "PC-FR2-AWS-EUC1-PROD",
                 1,
                 ("eg-fr201", "Ethernet1/13"),
-                ("EXT-AWS-DX-FR2", "et-0/0/0"),
+                ("EXT-AWS-DX-FR2", "vnic-fr2"),
                 1000,
                 _AWS_ASN,
-                ("FABRIC-AMNE02-AWS-EUC1", "XC-EQXFR2-AWS-EUC1"),
+                ("XC-EQXFR2-AWS-EUC1",),
             ),
         ),
     },
@@ -190,7 +190,7 @@ ALL_DEMO_CONNECTIONS: dict[str, ConnectionExpectation] = {
         "vlan_id": 1100,
         "owner": None,
         "locations": ("AM-NE", "eu-central-1"),
-        "carriers": ("FABRIC-AMNE02-AWS-EUC1", "XC-EQXFR2-AWS-EUC1"),
+        "carriers": ("FABRIC-AMNE02-AWS-EUC1",),
         "password": "eqx-am-ne-aws-vif-key",
         "address_source": ADDRESS_OUR_POOL,
         "prefix_length": 31,
@@ -202,10 +202,10 @@ ALL_DEMO_CONNECTIONS: dict[str, ConnectionExpectation] = {
                 "PC-AMNE-AWS-EUC1-PROD",
                 1,
                 ("eg-am-ne02", "Ethernet1/1"),
-                ("EXT-AWS-DX-FR2", "et-0/0/0"),
+                ("EXT-AWS-DX-FR2", "vnic-amne"),
                 1100,
                 _AWS_ASN,
-                ("FABRIC-AMNE02-AWS-EUC1", "XC-EQXFR2-AWS-EUC1"),
+                ("FABRIC-AMNE02-AWS-EUC1",),
             ),
         ),
     },
@@ -274,7 +274,7 @@ ALL_DEMO_CONNECTIONS: dict[str, ConnectionExpectation] = {
         ),
     },
     # ExpressRoute private peering: Microsoft takes a /30 per link and the customer end is the lower address; one
-    # connection per leg, the two legs on two cage edges and two ports of the one router stub. C004's account.
+    # connection per leg, the two legs on two cage edges and two NICs of the one service edge. C004's account.
     "PC-PA4-AZURE-WEU-PRI-PROD": {
         "path_type": "dedicated",
         "service": "private",
@@ -294,7 +294,7 @@ ALL_DEMO_CONNECTIONS: dict[str, ConnectionExpectation] = {
                 "PC-PA4-AZURE-WEU-PRI-PROD",
                 1,
                 ("eg-pa401", "Ethernet1/13"),
-                ("EXT-AZURE-ER-PA4", "et-0/0/0"),
+                ("EXT-AZURE-ER-PA4", "vnic-pri"),
                 1400,
                 _AZURE_ASN,
                 ("XC-EQXPA4-AZURE-WEU-PRI",),
@@ -321,7 +321,7 @@ ALL_DEMO_CONNECTIONS: dict[str, ConnectionExpectation] = {
                 "PC-PA4-AZURE-WEU-SEC-PROD",
                 1,
                 ("eg-pa402", "Ethernet1/13"),
-                ("EXT-AZURE-ER-PA4", "et-0/0/1"),
+                ("EXT-AZURE-ER-PA4", "vnic-sec"),
                 1400,
                 _AZURE_ASN,
                 ("XC-EQXPA4-AZURE-WEU-SEC",),

@@ -218,6 +218,23 @@ class TestPc6Stubs:
     def test_provider_as_matching_passes(self) -> None:
         assert [e for e in run([connection(provider_as=64512)], [SESSION])[0] if e.startswith("PC6")] == []
 
+    def test_two_nics_of_one_service_edge_appliance_are_one_stub_with_one_process(self) -> None:
+        """A region's service edge appliance serves several legs on distinct NICs: still ONE provider-side device."""
+        conn = connection(profile="dual", link_prefixes=[prefix("10.1.0.0/30"), prefix("10.1.0.4/30")])
+        sessions = [
+            session(
+                f"S{n}",
+                ends=[
+                    port("eg-fr201", f"Ethernet1/1{n}.3101", FR2, (XC,)),
+                    port("AWS-EUC1-SE", f"vnic-{n}.3101", EUC1, asns=(64512,)),
+                ],
+                link_prefix=f"10.1.0.{4 * (n - 1)}/30",
+            )
+            for n in (1, 2)
+        ]
+        errors, _ = run([conn], sessions)
+        assert [e for e in errors if e.startswith("PC6")] == []
+
     def test_stubs_in_different_ases_fail(self) -> None:
         conn = connection(profile="dual", link_prefixes=[prefix("10.1.0.0/30"), prefix("10.1.0.4/30")])
         s1 = session("S1", link_prefix="10.1.0.0/30")

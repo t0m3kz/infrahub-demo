@@ -7,6 +7,5 @@ spec:
   data:
     - owner: "C003"
       customer_name: "vaultex-aws"
-      infrastructure_orchestrator: terraform
       parent: "eu-central-1"
       member_of_groups: [customer_deployments_cloud]

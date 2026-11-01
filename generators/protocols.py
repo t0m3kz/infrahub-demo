@@ -180,10 +180,6 @@ class ManagedHA(CoreNode):
     priority: Integer
 
 
-class ManagedInlineService(CoreNode):
-    pass
-
-
 class AppInstance(CoreNode):
     name: String
 
@@ -370,13 +366,13 @@ class TopologyCloud(TopologyDeployment):
     pass
 
 
-class ManagedCloudProxy(ManagedGeneric, ManagedInlineService, ManagedProxyService):
+class ManagedCloudProxy(ManagedGeneric, ManagedProxyService):
     deployment_model: Dropdown
     provider: Dropdown
     region: StringOptional
 
 
-class TopologyCloudRegion(TopologyDeployment, TopologyDeviceHosting, TopologyConnectableLocation, TopologyFacility):
+class TopologyCloudRegion(TopologyDeployment, TopologyApplianceHosting, TopologyConnectableLocation, TopologyFacility):
     status: Dropdown
     location: RelationshipAttribute[LocationMetro]
 
@@ -599,7 +595,7 @@ class LocationFacility(LocationGeneric):
     pass
 
 
-class ManagedFirewallContext(ManagedGeneric, ManagedGenericInterfaces, ManagedInlineService):
+class ManagedFirewallContext(ManagedGeneric, ManagedGenericInterfaces):
     context_id: StringOptional
     vlan_id: IntegerOptional
     cluster: RelationshipAttribute[ManagedFirewallHA]
@@ -609,7 +605,7 @@ class ManagedFirewallContext(ManagedGeneric, ManagedGenericInterfaces, ManagedIn
     snat_address: RelationshipAttribute[IpamIPAddress]
 
 
-class ManagedFirewallHA(ManagedHA, ManagedGeneric, ManagedGenericDevice, ManagedInlineService):
+class ManagedFirewallHA(ManagedHA, ManagedGeneric, ManagedGenericDevice):
     ha_protocol: Dropdown
     ha_timer: Dropdown
     capabilities: RelationshipManager[DcimCapabilities]
@@ -654,7 +650,7 @@ class CloudLoadBalancer(ManagedLoadBalancer, CloudResource, CoreArtifactTarget):
     virtual_network: RelationshipAttribute[CloudVirtualNetwork]
 
 
-class ManagedLoadbalancerHA(ManagedHA, ManagedGeneric, ManagedGenericDevice, ManagedInlineService, ManagedLoadBalancer):
+class ManagedLoadbalancerHA(ManagedHA, ManagedGeneric, ManagedGenericDevice, ManagedLoadBalancer):
     capabilities: RelationshipManager[DcimCapabilities]
     contexts: RelationshipManager[ManagedLoadbalancerContext]
 
@@ -892,12 +888,6 @@ class IpamPrefix(BuiltinIPPrefix):
 
 class OrganizationProvider(OrganizationGeneric, OrganizationEntity):
     connection_profile: DropdownOptional
-
-
-class ManagedProxyHA(ManagedHA, ManagedGeneric, ManagedGenericDevice, ManagedInlineService, ManagedProxyService):
-    proxy_type: DropdownOptional
-    proxy_vendor: DropdownOptional
-    capabilities: RelationshipManager[DcimCapabilities]
 
 
 class LocationRack(LocationGeneric, CoreArtifactTarget):

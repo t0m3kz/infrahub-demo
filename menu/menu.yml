@@ -354,7 +354,7 @@ spec:
                   label: HA Domains
                   icon: "mdi:heart-pulse"
                   kind: ManagedHA
-                  description: "High availability domains (firewall, proxy, load balancer, cloud)"
+                  description: "High availability domains (firewall, load balancer, cloud)"
 
                 - namespace: Managed
                   name: Mlag
