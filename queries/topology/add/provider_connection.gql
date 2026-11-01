@@ -55,8 +55,8 @@ query provider_connection_data($name: String!) {
               edges {
                 node {
                   id
-                  carrier_circuits { edges { node { ...ConnectionEndDevices } } }
-                  session_circuits { edges { node { ...ConnectionEndDevices } } }
+                  carrier_circuits { edges { node { ...ConnectionCarrierEndDevices } } }
+                  session_circuits { edges { node { ...ConnectionSessionEndDevices } } }
                 }
               }
             }
@@ -185,7 +185,20 @@ fragment ConnectionCarrier on TopologyCarrierCircuit {
   }
 }
 
-fragment ConnectionEndDevices on TopologyCircuit {
+# The two circuit kinds, not the TopologyCircuit generic: `capabilities` is declared on each node, so the generic has no such field.
+fragment ConnectionCarrierEndDevices on TopologyCarrierCircuit {
+  capabilities {
+    edges {
+      node {
+        ... on DcimInterface {
+          device { node { id } }
+        }
+      }
+    }
+  }
+}
+
+fragment ConnectionSessionEndDevices on TopologySessionCircuit {
   capabilities {
     edges {
       node {
