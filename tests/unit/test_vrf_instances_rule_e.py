@@ -16,20 +16,20 @@ SCHEMAS = Path(__file__).resolve().parents[2] / "schemas"
 
 
 def _device_roles() -> list[str]:
-    """The choices of the DcimDevice ``role`` dropdown (schemas/base/dcim.yml)."""
+    """The choices of the DcimDeviceManaged ``role`` dropdown (schemas/base/dcim.yml)."""
     document = yaml.safe_load((SCHEMAS / "base" / "dcim.yml").read_text())
-    device = next(generic for generic in document["generics"] if generic["name"] == "Device")
+    device = next(generic for generic in document["generics"] if generic["name"] == "DeviceManaged")
     role = next(attribute for attribute in device["attributes"] if attribute["name"] == "role")
     return [choice["name"] for choice in role["choices"]]
 
 
 def _device_kinds() -> list[str]:
-    """Every concrete node kind that inherits ``DcimDevice``, from the schema files."""
+    """Every concrete node kind that inherits ``DcimDeviceManaged`` (a cloud transport is a slim DcimDevice, no managed device), from the schema files."""
     kinds = []
     for path in SCHEMAS.rglob("*.yml"):
         document = yaml.safe_load(path.read_text()) or {}
         for node in document.get("nodes") or []:
-            if "DcimDevice" in (node.get("inherit_from") or []):
+            if "DcimDeviceManaged" in (node.get("inherit_from") or []):
                 kinds.append(f"{node['namespace']}{node['name']}")
     return sorted(kinds)
 

@@ -1,0 +1,122 @@
+"""The device generics: a slim DcimDevice (name, interfaces) and DcimDeviceManaged (everything else of a device)."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+_SCHEMAS = Path(__file__).resolve().parents[2] / "schemas"
+_MOVED_ATTRIBUTES = {"description", "role", "status"}
+_MOVED_RELATIONSHIPS = {"device_type", "platform", "primary_address", "tags"}
+_MANAGED_KINDS = {
+    "DcimPhysicalDevice",
+    "DcimVirtualDevice",
+    "CloudNetworkAppliance",
+    "ManagedControllerPhysical",
+    "ManagedControllerVirtual",
+}
+_TRANSPORTS = {"CloudDirectConnect", "CloudVPNConnection"}
+
+
+def _documents() -> list[dict[str, Any]]:
+    return [yaml.safe_load(path.read_text()) or {} for path in sorted(_SCHEMAS.rglob("*.yml"))]
+
+
+def _kinds(section: str) -> dict[str, dict[str, Any]]:
+    """Every node (or generic) by kind name, over all schema files."""
+    return {
+        f"{item['namespace']}{item['name']}": item for document in _documents() for item in document.get(section) or []
+    }
+
+
+def _names(item: dict[str, Any], section: str) -> set[str]:
+    return {field["name"] for field in item.get(section) or []}
+
+
+def _extension_names(kind: str) -> set[str]:
+    return {
+        relationship["name"]
+        for document in _documents()
+        for extension in (document.get("extensions") or {}).get("nodes") or []
+        if extension["kind"] == kind
+        for relationship in extension.get("relationships") or []
+    }
+
+
+def test_the_slim_device_holds_only_a_name_and_its_interfaces() -> None:
+    """All an interface needs of its device: the unique name and the component edge."""
+    device = _kinds("generics")["DcimDevice"]
+
+    assert _names(device, "attributes") == {"name"}
+    assert _names(device, "relationships") == {"interfaces"}
+    assert next(a for a in device["attributes"] if a["name"] == "name")["unique"] is True
+
+
+def test_the_managed_device_holds_the_rest_of_the_device() -> None:
+    """Role, status, type, platform, address, tags, and the owner / software image extensions."""
+    managed = _kinds("generics")["DcimDeviceManaged"]
+
+    assert _MOVED_ATTRIBUTES <= _names(managed, "attributes")
+    assert _MOVED_RELATIONSHIPS <= _names(managed, "relationships")
+    assert {"owner", "software_image"} <= _extension_names("DcimDeviceManaged")
+    assert not _extension_names("DcimDevice")
+
+
+def test_every_managed_device_kind_inherits_both_generics() -> None:
+    """Physical, virtual, appliance and controllers are devices of both generics."""
+    nodes = _kinds("nodes")
+
+    for kind in sorted(_MANAGED_KINDS):
+        inherited = nodes[kind]["inherit_from"]
+        assert "DcimDevice" in inherited and "DcimDeviceManaged" in inherited, kind
+
+
+def test_a_cloud_transport_inherits_only_the_slim_device() -> None:
+    """A transport is an interface holder: no role, platform, owner, artifact or capability edge."""
+    nodes = _kinds("nodes")
+
+    for kind in sorted(_TRANSPORTS):
+        inherited = set(nodes[kind]["inherit_from"])
+        assert "DcimDevice" in inherited, kind
+        assert not inherited & {"DcimDeviceManaged", "DcimCapabilities", "CoreArtifactTarget", "AppInstance"}, kind
+
+
+def test_only_the_known_kinds_inherit_the_slim_device() -> None:
+    """A new holder of interfaces is a decision: managed kinds take both generics, transports only the slim one."""
+    inheritors = {kind for kind, node in _kinds("nodes").items() if "DcimDevice" in (node.get("inherit_from") or [])}
+
+    assert inheritors == _MANAGED_KINDS | _TRANSPORTS
+
+
+def test_the_peers_that_need_a_managed_device_are_retyped() -> None:
+    """A transport cannot be put into a data center, a platform, an image, a controller or an SD-WAN gateway."""
+    nodes, generics = _kinds("nodes"), _kinds("generics")
+    peers = {
+        "DcimPlatform": generics["DcimPlatform"] if "DcimPlatform" in generics else nodes["DcimPlatform"],
+        "DcimSoftwareImage": nodes["DcimSoftwareImage"],
+        "ManagedController": generics["ManagedController"],
+        "TopologyDeviceHosting": generics["TopologyDeviceHosting"],
+        "TopologyCustomerOffice": nodes["TopologyCustomerOffice"],
+    }
+    relationship_of = {
+        "DcimPlatform": "devices",
+        "DcimSoftwareImage": "devices",
+        "ManagedController": "managed_devices",
+        "TopologyDeviceHosting": "devices",
+        "TopologyCustomerOffice": "sdwan_gateway",
+    }
+
+    for kind, item in peers.items():
+        relationship = next(r for r in item["relationships"] if r["name"] == relationship_of[kind])
+        assert relationship["peer"] == "DcimDeviceManaged", kind
+
+
+def test_an_interface_has_only_the_shared_capabilities_edge_for_circuits() -> None:
+    """The interface kinds inherit no circuit marker: a circuit reaches them through ManagedGenericInterfaces."""
+    nodes = _kinds("nodes")
+
+    for kind in ("DcimPhysicalInterface", "DcimVirtualInterface", "DcimLAGInterface"):
+        assert not [i for i in nodes[kind]["inherit_from"] if "Circuit" in i], kind
+    assert "TopologyCircuitEnd" not in _kinds("generics")

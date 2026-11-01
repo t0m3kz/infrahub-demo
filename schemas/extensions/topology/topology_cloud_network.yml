@@ -4,34 +4,66 @@ version: "1.0"
 # Transports, peerings, gateways with their attachments and route tables, appliances.
 # The generics and the account/network/compute core: topology_cloud.yml.
 generics:
-  # Marker for the transport a cloud peering rides on: a Direct Connect / circuit / Interconnect or a VPN connection.
-  # Both inherit CloudResource too; the name is declared here so a peering can name its transport by HFID.
+  # What a cloud transport is: the provider's way to its edge (a Direct Connect, an ExpressRoute circuit, an
+  # Interconnect, a SaaS cross-connect, a VPN connection), told in the words every cloud shares. A transport is an
+  # interface holder, a DcimDevice (the slim one: name and interfaces, nothing of DcimDeviceManaged): its ports are
+  # DcimPhysicalInterface, its bundles DcimLAGInterface, its virtual interfaces, VLAN attachments and tunnels
+  # CloudPeeringInterface. It sits in a cloud region (account) or a SaaS region, never in a `deployment`.
   - name: Transport
     namespace: Cloud
     label: Cloud Transport
-    description: "The physical or virtual way to the cloud edge that peerings ride on"
+    description: "The physical or virtual way to the cloud edge: an interface holder in a region"
     include_in_menu: false
-    human_friendly_id:
-      - name__value
-    attributes:
-      - name: name
-        kind: Text
-        order_weight: 100
+    relationships:
+      - name: account
+        peer: CloudAccount
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "cloud_transport__account"
+        order_weight: 600
+        description: "The account the transport and its peerings belong to; empty for a SaaS (see owner)"
+      - name: region
+        peer: TopologyCloudRegion
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "cloud_transport__region"
+        order_weight: 650
+        description: "The cloud region it lands in; exactly one of region and saas_region (checks/cloud_connection.py)"
+      - name: saas_region
+        label: SaaS Region
+        peer: TopologySaasRegion
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "cloud_transport__saas_region"
+        order_weight: 700
+        description: "The SaaS region it lands in (Webex, Zscaler); exactly one of region and saas_region"
+      - name: owner
+        peer: OrganizationCustomer
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "cloud_transport__owner"
+        order_weight: 800
+        description: "The customer, only for a SaaS where there is no account"
 
 nodes:
   # ── Hybrid connectivity: the cloud side of a circuit, in the words every cloud shares ──────────
   # The operators differ in vocabulary, not in structure. Five common elements describe AWS, Azure, GCP, a VPN and a
   # SaaS; the operator's own word is in the names, the descriptions and the blueprint of the sample README, and the
   # flavour per operator is OrganizationProvider.connection_profile (aws, azure, gcp, oci, equinix, megaport, ...).
-  #   transport           the physical or virtual way to the cloud edge: CloudDirectConnect (a port or hosted
-  #                       connection, with a service key where the operator has one) or CloudVPNConnection (the
-  #                       encrypted way, which holds the tunnels)
+  #   transport           the physical or virtual way to the cloud edge, a device that holds interfaces:
+  #                       CloudDirectConnect (ports, a LAG, hosted connections, with a service key where the operator
+  #                       has one) or CloudVPNConnection (the encrypted way, which holds the tunnels)
   #   peering             CloudPeeringInterface: the L3/BGP termination on the cloud side, the "interface of the
-  #                       cloud". A circuit's session ends on it (circuit `endpoints`), our side is a sub-interface
+  #                       cloud", an interface of the transport that rides on its port or LAG. A circuit's session
+  #                       ends on it (circuit `capabilities`, the shared interface edge), our side is a sub-interface
   #   gateway             CloudGateway (hub | edge | customer): what a peering or a VPN lands on inside the provider;
   #                       CloudGatewayAttachment links it to a virtual network or to another gateway
   #   virtual network     CloudVirtualNetwork
-  # Names are global (dx-c900-fra-1). The circuits point at them (`endpoints`); nothing points back.
+  # Names are global (dx-c900-fra-lag). A circuit ends on an interface of the transport through `capabilities`.
   # Addressing is a convention, not a field: our link /31 (a /30 tunnel pair) comes from the pool
   # Handoff-<namespace>-IPv4, our private AS from PRIVATE-ASN32; the provider's address and AS are the peering's peer_ip
   # and peer_asn. The operator flavour is OrganizationProvider.connection_profile.
@@ -39,19 +71,17 @@ nodes:
     namespace: Cloud
     label: Cloud Transport (port or circuit)
     icon: mdi:lan-connect
-    description: "Transport: a physical port or bundle, or a logical connection (Direct Connect, ExpressRoute, Interconnect); peerings ride on it"  # yamllint disable-line rule:line-length
+    description: "Transport device: ports and LAG of a Direct Connect, or a logical connection; peerings ride on them"
     include_in_menu: false
     inherit_from:
       - CloudResource
       - CloudTransport
-      - TopologyCircuitEnd
+      - DcimDevice
     human_friendly_id:
       - name__value
     display_label: "{{ name__value }}"
     order_by:
       - name__value
-    uniqueness_constraints:
-      - [account, name__value]
     attributes:
       - name: connection_type
         kind: Dropdown
@@ -89,19 +119,6 @@ nodes:
         order_weight: 360
         description: "The operator's key or identifier of the connection (service key, pairing key, connection id)"
     relationships:
-      - name: account
-        peer: CloudAccount
-        cardinality: one
-        kind: Attribute
-        optional: false
-        order_weight: 600
-      - name: region
-        peer: TopologyCloudRegion
-        cardinality: one
-        kind: Attribute
-        optional: false
-        identifier: "cloud_direct_connect__region"
-        order_weight: 650
       - name: partner_account
         label: Partner Account
         peer: CloudAccount
@@ -111,7 +128,8 @@ nodes:
         identifier: "cloud_direct_connect__partner_account"
         order_weight: 700
         description: "A logical connection lives in the partner's account while its peerings are in `account`"
-      # A member port rides on its bundle; a logical circuit on its own port or bundle. Same identifier on both sides.
+      # A logical circuit (ExpressRoute, hosted connection) rides on the transport that holds its port. The members of a
+      # LAG are ports of ONE transport (a LAG member on another device is refused), not transports of their own.
       - name: rides_on
         label: Rides On
         peer: CloudDirectConnect
@@ -121,7 +139,7 @@ nodes:
         identifier: "cloud_direct_connect__rides_on"
         direction: outbound
         order_weight: 750
-        description: "The bundle a member port belongs to, or the port or bundle a logical circuit rides on"
+        description: "The transport whose port or LAG a logical circuit rides on (the partner's, or our own)"
       - name: riders
         label: Riders
         peer: CloudDirectConnect
@@ -131,11 +149,13 @@ nodes:
         identifier: "cloud_direct_connect__rides_on"
         direction: inbound
         order_weight: 760
-        description: "The member ports and logical circuits that ride on this one"
+        description: "The logical circuits that ride on this transport"
 
-  # The interface of the cloud: the L3 termination of one session, the same for every operator. The provider side
-  # address and AS are the TopologyConnectorRouting edges (peer_ip, peer_asn); OUR side is a sub-interface of ours
-  # and our BGP process. What it rides on is the transport; where it lands is the gateway.
+  # The interface of the cloud: the L3 termination of one session, the same for every operator. A DcimInterface of
+  # its transport (`device`), riding on a port or LAG of it (`parent_interface`), so a session circuit ends on it
+  # through the shared interface edge like on any port. The provider side address and AS are the
+  # TopologyConnectorRouting edges (peer_ip, peer_asn); OUR side is a sub-interface of ours and our BGP process. Where
+  # it lands is the gateway. Account, region and owner are the transport's.
   - name: PeeringInterface
     namespace: Cloud
     label: Cloud Peering Interface
@@ -143,22 +163,20 @@ nodes:
     description: "The interface of the cloud: where a session ends (virtual interface, peering, VLAN attachment, VPN tunnel, SaaS peering)"  # yamllint disable-line rule:line-length
     include_in_menu: false
     inherit_from:
-      - CloudResource
-      - TopologyCircuitEnd
+      - DcimInterface
       - TopologyConnectorRouting
-    human_friendly_id:
-      - name__value
-    display_label: "{{ name__value }} {{ scope__value }}"
-    order_by:
-      - name__value
-    uniqueness_constraints:
-      - [name__value]
     attributes:
+      - name: cloud_id
+        kind: Text
+        label: "Cloud ID"
+        optional: true
+        order_weight: 2000
+        description: "The provider's identifier of the interface (virtual interface id, peering id, attachment name)"
       - name: scope
         kind: Dropdown
         label: "Scope"
         optional: false
-        order_weight: 250
+        order_weight: 2010
         description: "What it reaches (private, public, saas); the operator word is in the name and the blueprint"  # yamllint disable-line rule:line-length
         choices:
           - name: private
@@ -178,7 +196,7 @@ nodes:
         label: "Routing"
         optional: false
         default_value: bgp
-        order_weight: 300
+        order_weight: 2020
         choices:
           - name: bgp
             label: BGP
@@ -190,7 +208,7 @@ nodes:
         kind: Number
         label: "VLAN ID"
         optional: true
-        order_weight: 350
+        order_weight: 2030
         description: "The VLAN of the peering on its transport (a VLAN-based peering)"
         parameters:
           min_value: 1
@@ -199,42 +217,34 @@ nodes:
         kind: Number
         label: "Tunnel"
         optional: true
-        order_weight: 360
+        order_weight: 2040
         description: "Which tunnel of the VPN connection (a tunnel-based peering)"
         parameters:
           min_value: 1
           max_value: 4
-      - name: mtu
-        kind: Number
-        label: "MTU"
-        optional: true
-        order_weight: 400
-        parameters:
-          min_value: 576
-          max_value: 9216
       - name: bfd
         kind: Boolean
         label: "BFD"
         optional: true
         default_value: false
-        order_weight: 450
+        order_weight: 2050
       - name: service_id
         kind: Text
         label: "Service / Tenant ID"
         optional: true
-        order_weight: 500
+        order_weight: 2060
         description: "The provider's identifier of the tenant or service where there is no account (Webex org, Zscaler org)"  # yamllint disable-line rule:line-length
       - name: endpoint_ip
         kind: IPHost
         label: "Endpoint IP"
         optional: true
-        order_weight: 370
+        order_weight: 2070
         description: "A tunnel: the provider's public address this tunnel terminates on"
       - name: tunnel_mode
         kind: Dropdown
         label: "Tunnel Mode"
         optional: true
-        order_weight: 380
+        order_weight: 2080
         description: "A tunnel: how it is encapsulated"
         choices:
           - name: ipsec
@@ -246,45 +256,18 @@ nodes:
             description: "GRE tunnel, no encryption"
             color: "#95A5A6"
     relationships:
-      - name: transport
-        peer: CloudTransport
+      # The port, LAG or virtual interface of the transport this one rides on (a VIF on its LAG, a VLAN attachment on
+      # its port). A one-sided edge of its own: DcimVirtualInterface.parent_interface and its inverse are the
+      # sub-interface edge of the managed devices. The same-transport rule is checks/cloud_connection.py.
+      - name: parent_interface
+        peer: DcimInterface
+        label: "Rides On"
         cardinality: one
         kind: Attribute
         optional: true
-        identifier: "cloud_peering__transport"
-        order_weight: 600
-        description: "What it rides on: a Direct Connect / circuit / Interconnect or the VPN connection; empty for a SaaS peering"  # yamllint disable-line rule:line-length
-      - name: account
-        peer: CloudAccount
-        cardinality: one
-        kind: Attribute
-        optional: true
-        identifier: "cloud_peering__account"
-        order_weight: 650
-        description: "The account it belongs to; empty for a SaaS (see owner)"
-      - name: region
-        peer: TopologyCloudRegion
-        cardinality: one
-        kind: Attribute
-        optional: true
-        identifier: "cloud_peering__region"
-        order_weight: 700
-      - name: saas_region
-        label: SaaS Region
-        peer: TopologySaasRegion
-        cardinality: one
-        kind: Attribute
-        optional: true
-        identifier: "cloud_peering__saas_region"
-        order_weight: 750
-      - name: owner
-        peer: OrganizationCustomer
-        cardinality: one
-        kind: Attribute
-        optional: true
-        identifier: "cloud_peering__owner"
-        order_weight: 800
-        description: "The customer, only for a SaaS where there is no account"
+        identifier: "cloud_peering__parent_interface"
+        order_weight: 2200
+        description: "The port, LAG or tunnel base of the same transport this interface rides on"
       - name: gateway
         label: Gateway
         peer: CloudGateway
@@ -292,8 +275,8 @@ nodes:
         kind: Attribute
         optional: true
         identifier: "cloud_peering__gateway"
-        order_weight: 850
-        description: "Where it lands at the provider (edge gateway, hub, DRG); empty for a VPN tunnel: it lands through transport.gateway"  # yamllint disable-line rule:line-length
+        order_weight: 2210
+        description: "Where it lands at the provider (edge gateway, hub, DRG); empty for a VPN tunnel: it lands through the transport's gateway"  # yamllint disable-line rule:line-length
       - name: auth
         label: BGP Key
         peer: RoutingPassword
@@ -301,7 +284,7 @@ nodes:
         kind: Attribute
         optional: true
         identifier: "cloud_peering__auth"
-        order_weight: 1000
+        order_weight: 2220
       - name: tunnel_key
         label: Tunnel Key
         peer: RoutingPassword
@@ -309,7 +292,7 @@ nodes:
         kind: Attribute
         optional: true
         identifier: "cloud_peering__tunnel_key"
-        order_weight: 1010
+        order_weight: 2230
         description: "A tunnel: the pre-shared key of the IPsec tunnel (the BGP key is `auth`)"
       - name: crypto_profile
         label: Crypto Profile
@@ -318,7 +301,7 @@ nodes:
         kind: Attribute
         optional: true
         identifier: "cloud_peering__crypto_profile"
-        order_weight: 1020
+        order_weight: 2240
         description: "A tunnel: the IKE and ESP parameters of an IPsec tunnel"
       - name: advertised_prefixes
         label: Advertised Prefixes
@@ -327,7 +310,7 @@ nodes:
         kind: Attribute
         optional: true
         identifier: "cloud_peering__advertised_prefixes"
-        order_weight: 1050
+        order_weight: 2250
         description: "Prefixes WE announce to the cloud: only public (provider-verified) and static; empty for private"  # yamllint disable-line rule:line-length
 
   # What a peering lands on inside the provider, the routing hub of a network, or our side of a VPN. One kind, three
@@ -521,40 +504,26 @@ nodes:
     namespace: Cloud
     label: Cloud VPN Connection
     icon: mdi:vpn
-    description: "Transport with no physical object: a site-to-site VPN; its tunnels are its peerings; not a circuit end"  # yamllint disable-line rule:line-length
+    description: "Transport device with no port: a site-to-site VPN or a SaaS tunnel; its tunnels are interfaces"
     include_in_menu: false
     inherit_from:
       - CloudResource
       - CloudTransport
+      - DcimDevice
     human_friendly_id:
       - name__value
     display_label: "{{ name__value }}"
     order_by:
       - name__value
-    uniqueness_constraints:
-      - [account, name__value]
     relationships:
-      - name: account
-        peer: CloudAccount
-        cardinality: one
-        kind: Attribute
-        optional: false
-        order_weight: 600
-      - name: region
-        peer: TopologyCloudRegion
-        cardinality: one
-        kind: Attribute
-        optional: false
-        identifier: "cloud_vpn__region"
-        order_weight: 650
       - name: customer_gateway
         peer: CloudGateway
         cardinality: one
         kind: Attribute
-        optional: false
+        optional: true
         identifier: "cloud_vpn__customer_gateway"
         order_weight: 700
-        description: "Our side (a gateway of type customer)"
+        description: "Our side (a gateway of type customer); empty for a SaaS tunnel, where the provider takes our address from the tunnel"  # yamllint disable-line rule:line-length
       - name: gateway
         label: Provider Gateway
         peer: CloudGateway
@@ -592,6 +561,7 @@ nodes:
     inherit_from:
       - CoreArtifactTarget
       - DcimDevice
+      - DcimDeviceManaged
       - DcimCapabilities
     uniqueness_constraints:
       - ["name__value"]

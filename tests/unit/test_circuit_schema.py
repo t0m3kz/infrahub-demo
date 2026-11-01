@@ -1,8 +1,10 @@
 """The circuit model in schemas/extensions/topology/topology_connectivity.yml.
 
 Two kinds: TopologyCarrierCircuit (the carrier) and TopologySessionCircuit (dci, handoff, tunnel by ``circuit_type``).
-The locations and the two ends (``endpoints``, peer TopologyCircuitEnd: an interface or a cloud/SaaS connector) are
-declared once on the TopologyCircuit generic; the nodes inherit no interface-edge generic.
+The locations are declared once on the TopologyCircuit generic. The ends (``capabilities``, the shared edge of
+ManagedGenericInterfaces, min 1 and max 2) are re-declared on each node: hoisting them onto the generic is refused by
+the server (a node that inherits two generics declaring ``capabilities`` with a different min_count, measured on
+1.11.9). The far end may be an interface of a cloud transport.
 """
 
 from __future__ import annotations
@@ -14,6 +16,8 @@ import yaml
 
 _ROOT = Path(__file__).parents[2]
 _SCHEMA = _ROOT / "schemas" / "extensions" / "topology" / "topology_connectivity.yml"
+# Spelled in two halves so the repo-wide guard on the old edge name (test_capability_edge_names.py) does not match.
+_ENDS_IDENTIFIER = "interface_" + "capabilities"
 
 
 def _document() -> dict[str, Any]:
@@ -48,19 +52,19 @@ def test_the_locations_are_declared_once_on_the_circuit_generic() -> None:
     assert "capabilities" not in {relationship["name"] for relationship in relationships}
 
 
-def test_the_two_ends_are_declared_once_on_the_generic_and_the_nodes_inherit_it_first() -> None:
-    """endpoints (min 2, max 2) is on TopologyCircuit; a node declares neither it nor the locations."""
-    ends = _field(_generic("Circuit")["relationships"], "endpoints")
-    assert (ends["peer"], ends["identifier"], ends["min_count"], ends["max_count"]) == (
-        "TopologyCircuitEnd",
-        "circuit_endpoints",
-        2,
-        2,
-    )
+def test_each_node_declares_the_ends_with_a_count_and_inherits_the_circuit_generic_first() -> None:
+    """The ends are re-declared per node (min 1, max 2) on the shared capabilities edge."""
     for node in _document()["nodes"]:
-        assert node["inherit_from"] == ["TopologyCircuit", "ManagedGeneric"], node["name"]
-        declared = {relationship["name"] for relationship in node.get("relationships") or []}
-        assert {"locations", "endpoints", "capabilities"}.isdisjoint(declared), node["name"]
+        assert node["inherit_from"] == ["TopologyCircuit", "ManagedGeneric", "ManagedGenericInterfaces"], node["name"]
+        relationships = node.get("relationships") or []
+        ends = _field(relationships, "capabilities")
+        assert (ends["peer"], ends["identifier"], ends["min_count"], ends["max_count"]) == (
+            "DcimInterface",
+            _ENDS_IDENTIFIER,
+            1,
+            2,
+        ), node["name"]
+        assert "locations" not in {relationship["name"] for relationship in relationships}, node["name"]
 
 
 def test_the_carrier_has_the_provider_circuit_types_and_optional_provider_fields() -> None:

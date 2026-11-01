@@ -72,7 +72,7 @@ nodes:
         description: "OS platform this image belongs to"
 
       - name: devices
-        peer: DcimDevice
+        peer: DcimDeviceManaged
         label: "Devices"
         cardinality: many
         kind: Attribute
@@ -83,7 +83,7 @@ nodes:
 
 extensions:
   nodes:
-    - kind: DcimDevice
+    - kind: DcimDeviceManaged
       relationships:
         - name: software_image
           peer: DcimSoftwareImage

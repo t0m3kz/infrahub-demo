@@ -10,7 +10,7 @@ version: "1.0"
 # (controller_type + managed_devices). The controller is itself compute —
 # not "attached to" a separate device via capabilities — so the two concrete
 # nodes below inherit the SAME generics DcimPhysicalDevice/DcimVirtualDevice
-# do (DcimDevice, DcimCapabilities, AppInstance, CoreArtifactTarget) rather
+# do (DcimDevice, DcimDeviceManaged, DcimCapabilities, AppInstance, CoreArtifactTarget) rather
 # than the concrete Dcim*Device kinds themselves (concrete nodes can't be
 # inherit_from targets — confirmed: "Unable to find the generic
 # DcimPhysicalDevice"). Physical/virtual-specific fields (position/serial/
@@ -18,7 +18,7 @@ version: "1.0"
 # node rather than inherited, since there is no shared generic that carries
 # them without the concrete Dcim*Device node.
 #
-# `managed_devices` peers the generic DcimDevice so one controller can manage
+# `managed_devices` peers the generic DcimDeviceManaged so one controller can manage
 # a mix of physical and virtual devices (e.g. a WLC managing physical APs,
 # an SD-WAN orchestrator managing physical edges + virtual gateways).
 # ============================================================================
@@ -80,7 +80,7 @@ generics:
             color: "#808080"
     relationships:
       - name: managed_devices
-        peer: DcimDevice
+        peer: DcimDeviceManaged
         label: "Managed Devices"
         description: "Devices under this controller's management"  # yamllint disable-line rule:line-length
         cardinality: many
@@ -125,6 +125,7 @@ nodes:
       - ManagedController
       - CoreArtifactTarget
       - DcimDevice
+      - DcimDeviceManaged
       - DcimCapabilities
       - AppInstance
     uniqueness_constraints:
@@ -170,6 +171,7 @@ nodes:
       - ManagedController
       - CoreArtifactTarget
       - DcimDevice
+      - DcimDeviceManaged
       - DcimCapabilities
       - AppInstance
     uniqueness_constraints:

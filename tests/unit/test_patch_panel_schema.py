@@ -156,7 +156,7 @@ def test_the_rack_edge_pairs_by_identifier_and_the_hosting_generic_has_no_panels
 def test_the_panel_role_is_gone_from_the_device_roles() -> None:
     """A panel is not a device: no ``patch-panel`` role."""
     dcim = yaml.safe_load((_ROOT / "schemas" / "base" / "dcim.yml").read_text())
-    device = _item(dcim["generics"], "Device")
+    device = _item(dcim["generics"], "DeviceManaged")
     roles = {choice["name"] for choice in _item(device["attributes"], "role")["choices"]}
 
     assert "patch-panel" not in roles

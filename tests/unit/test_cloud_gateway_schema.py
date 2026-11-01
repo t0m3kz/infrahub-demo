@@ -103,12 +103,36 @@ def test_a_peering_lands_through_its_gateway_only() -> None:
     assert "advertised_prefixes" in _names(peering, "relationships")
 
 
-def test_a_vpn_connection_keeps_the_provider_gateway_and_loses_the_other_landings() -> None:
-    """customer_gateway is required, gateway is the one provider-side edge."""
+def test_a_vpn_connection_keeps_the_provider_gateway_and_an_optional_customer_gateway() -> None:
+    """customer_gateway is optional (a SaaS tunnel has none), gateway is the one provider-side edge."""
     vpn = _nodes()["CloudVPNConnection"]
 
-    assert _names(vpn, "relationships") == {"account", "region", "customer_gateway", "gateway"}
-    assert _field(vpn, "relationships", "customer_gateway")["optional"] is False
+    assert _names(vpn, "relationships") == {"customer_gateway", "gateway"}
+    assert _field(vpn, "relationships", "customer_gateway")["optional"] is True
+
+
+def test_a_transport_is_a_slim_device_with_its_place_on_the_transport_generic() -> None:
+    """Both transports hold interfaces (DcimDevice) and no managed-device field; the place is one generic's."""
+    nodes = _nodes()
+    transport = nodes["CloudTransport"]
+
+    for kind in ("CloudDirectConnect", "CloudVPNConnection"):
+        inherited = nodes[kind]["inherit_from"]
+        assert "CloudTransport" in inherited and "DcimDevice" in inherited
+        assert "DcimDeviceManaged" not in inherited and "DcimCapabilities" not in inherited
+    assert _names(transport, "relationships") == {"account", "region", "saas_region", "owner"}
+    assert all(_field(transport, "relationships", name)["optional"] for name in _names(transport, "relationships"))
+
+
+def test_a_peering_is_an_interface_of_its_transport_and_keeps_no_transport_edges() -> None:
+    """DcimInterface gives device, name and mtu; account, region, saas_region, owner and transport are the transport's."""
+    peering = _nodes()["CloudPeeringInterface"]
+    parent = _field(peering, "relationships", "parent_interface")
+
+    assert "DcimInterface" in peering["inherit_from"]
+    assert not {"transport", "account", "region", "saas_region", "owner"} & _names(peering, "relationships")
+    assert "mtu" not in _names(peering, "attributes") and "vlan_id" in _names(peering, "attributes")
+    assert parent["peer"] == "DcimInterface" and parent["identifier"] == "cloud_peering__parent_interface"
 
 
 def test_virtual_network_peers_are_symmetric_on_one_identifier() -> None:

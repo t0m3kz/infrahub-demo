@@ -66,7 +66,7 @@ generics:
         order_weight: 100
     relationships:
       - name: devices
-        peer: DcimDevice
+        peer: DcimDeviceManaged
         kind: Generic
         cardinality: many
         identifier: "topology__devices"

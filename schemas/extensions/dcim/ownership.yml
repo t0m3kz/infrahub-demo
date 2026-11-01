@@ -19,7 +19,7 @@ version: "1.0"
 
 extensions:
   nodes:
-    - kind: DcimDevice
+    - kind: DcimDeviceManaged
       relationships:
         - name: owner
           peer: OrganizationEntity

@@ -125,21 +125,6 @@ generics:
         order_weight: 3000
         description: "Facilities where this circuit terminates (both ends may sit in one facility, e.g. the cage)"
 
-      # The two ends of the circuit in ONE field: an interface, or the object that terminates the circuit (Direct
-      # Connect, cloud virtual interface, VPN connection, SaaS connection). Its own identifier: it does not touch the
-      # interface edge (ManagedGenericInterfaces.capabilities) the peerings, contexts, VIPs and OSPF use.
-      - name: endpoints
-        label: "Endpoints"
-        peer: TopologyCircuitEnd
-        kind: Generic
-        cardinality: many
-        optional: true
-        min_count: 2
-        max_count: 2
-        identifier: circuit_endpoints
-        order_weight: 1100
-        description: "The two ends: an interface, or a cloud/SaaS connector that terminates the circuit"
-
 nodes:
   # The carrier: fibre, cross-connect, internet access, or a provider-delivered virtual connection. It
   # is the underlay a session circuit rides on, never a routing role. Carries no session and no routing.
@@ -152,6 +137,7 @@ nodes:
     inherit_from:
       - TopologyCircuit
       - ManagedGeneric
+      - ManagedGenericInterfaces
     human_friendly_id:
       - circuit_id__value
     display_label: "{{ circuit_id__value }} - {{ provider__name__value }}"
@@ -229,6 +215,25 @@ nodes:
         description: >-
           Connections sharing a value are a primary/secondary pair (mirrors Fabric redundancy.group); the name
           tells which
+    relationships:
+      # The two ends. ManagedGenericInterfaces carries the interface-side edge (a circuit in a port's `capabilities`);
+      # this re-declares the circuit side with a count. It cannot be hoisted onto TopologyCircuit: a node that
+      # inherits two generics declaring `capabilities` with a different min_count is refused (measured on 1.11.9).
+      # The cap holds when the circuit side is written; checks/carrier_circuit_ports.py and
+      # checks/circuit_placement.py hold the rest. A cloud transport is a device of its own (CloudDirectConnect,
+      # CloudVPNConnection) whose ports, LAGs and virtual interfaces are DcimInterface, so the far end of a cloud
+      # circuit is an interface on this same edge.
+      - name: capabilities
+        peer: DcimInterface
+        label: "Interface Ends"
+        kind: Generic
+        cardinality: many
+        optional: false
+        min_count: 1
+        max_count: 2
+        identifier: interface_capabilities
+        order_weight: 1100
+        description: "The interface ends of this circuit: two ports (ours and the far device's, a cloud transport's included)"  # yamllint disable-line rule:line-length
 
   # One kind for every circuit that rides a carrier, told apart by `circuit_type` (the role is an attribute,
   # not a kind). The session generator builds the ManagedBGPPeerings of dci and handoff; a tunnel is an
@@ -253,6 +258,7 @@ nodes:
     inherit_from:
       - TopologyCircuit
       - ManagedGeneric
+      - ManagedGenericInterfaces
     human_friendly_id:
       - name__value
     uniqueness_constraints:
@@ -288,6 +294,24 @@ nodes:
             color: "#d35400"
 
     relationships:
+      # The two ends. ManagedGenericInterfaces carries the interface-side edge (a circuit in a port's `capabilities`);
+      # this re-declares the circuit side with a count. It cannot be hoisted onto TopologyCircuit: a node that
+      # inherits two generics declaring `capabilities` with a different min_count is refused (measured on 1.11.9).
+      # The cap holds when the circuit side is written; checks/carrier_circuit_ports.py and
+      # checks/circuit_placement.py hold the rest. A cloud transport is a device of its own (CloudDirectConnect,
+      # CloudVPNConnection) whose ports, LAGs and virtual interfaces are DcimInterface, so the far end of a cloud
+      # circuit is an interface on this same edge.
+      - name: capabilities
+        peer: DcimInterface
+        label: "Interface Ends"
+        kind: Generic
+        cardinality: many
+        optional: false
+        min_count: 1
+        max_count: 2
+        identifier: interface_capabilities
+        order_weight: 1100
+        description: "The interface ends of this circuit: two ports (ours and the far device's, a cloud transport's included)"  # yamllint disable-line rule:line-length
 
       # The same concept as TopologyCustomerOffice.lan_prefixes (a PROD prefix a customer registers behind the
       # SD-WAN gateway, so the gateway's border session accepts it), for space the tunnel reaches that no office

@@ -359,7 +359,7 @@ nodes:
         identifier: "customer_office__lan_prefixes"
         order_weight: 1150
       - name: sdwan_gateway
-        peer: DcimDevice
+        peer: DcimDeviceManaged
         label: "SD-WAN Gateway"
         description: "Gateway device to attach to — presence opts this office into automated SD-WAN edge provisioning"  # yamllint disable-line rule:line-length
         cardinality: one
