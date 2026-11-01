@@ -17,7 +17,9 @@ version: "1.0"
 # registered_prefixes.
 #
 # It owns neither circuit kind: the carrier circuits are shared underlay and survive it (no-action), the session
-# circuits are the routing it carries and go with it (cascade).
+# circuits are the routing it carries and go with it (cascade). A delete only cascades: what the generators wrote for
+# the connection (interfaces, addresses, link prefix, peerings, the generated carrier) is reclaimed by setting its
+# `status` to `decommissioned` FIRST (add_provider_connection tears it down), then deleting the empty connection.
 #
 # The provider is derived, never stored: `account.provider` for a cloud, the far facility's provider otherwise. The
 # vendor flavour (addressing, session model) is `OrganizationProvider.connection_profile`, because the provider knows

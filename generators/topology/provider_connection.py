@@ -42,7 +42,9 @@ Flow, every failure before the first write:
 1. the locks: ``pc-near-<near facility id>`` (dedicated only: the choice of a free port and the creation of the carrier
    that claims it, so two connections cannot take the same port), then ``pc-<connection id>``; then the stubs'
    ``pc-device-<id>`` and the parent port locks (taken in sorted order). Nothing waits for ``pc-near`` while holding a
-   port lock, and no ``vc-port-*`` lock of add_virtual_circuit is taken;
+   port lock. The teardown (below) takes add_virtual_circuit's ``vc-port-<end>`` locks (sorted) and then its
+   ``vc-session-<circuit>`` locks, in that generator's own order, after the build's locks are released; add_virtual_circuit
+   never takes a ``pc-*`` lock, so the two cannot wait on each other in a cycle;
 2. read the facts and decide the ends (the near-port choice raises ValueError, turned into ``self.fail``), plan the links
    (generators/helpers/provider_connection.py), track the connection (the run's group is never empty, so the SDK cleanup
    runs: a changed path_type, a dropped link or a removed VLAN deletes the circuits and interfaces the run no longer
@@ -59,10 +61,25 @@ Flow, every failure before the first write:
 
 Ownership (tracking group, delete_unused_nodes): the session circuits and the sub-interfaces / tunnels they end on belong
 to this run. The connection itself is tracked (never deleted); the carriers, the far NIC (shared underlay, like the
-carriers that end on it), the stubs, processes and prefixes are not. Accepted leftovers of a deleted or changed link,
-which only a decommission-style cleanup removes: the link addresses and the peering add_virtual_circuit built on the old
-circuit, an address left on a deleted sub-interface, the carrier and the NIC of a connection that moved to another port
-or to the internet.
+carriers that end on it), the stubs, processes and prefixes are not.
+
+Teardown (``status: decommissioned``, a link that left the plan, a changed path type): the SDK cleanup above only
+deletes the circuits and interfaces, and a deleted circuit never runs add_virtual_circuit again, so this generator also
+removes what that one built for them, by EDGES, in an order with no dangling reference (generators/helpers/
+provider_teardown.py, pure; generators/helpers/session_teardown.py reads and executes): the peerings on the removed ends,
+the addresses, the link prefix the circuit allocated (its pool allocation goes with it; the provider's authored
+``link_prefixes`` are never deleted), the session circuit, its sub-interfaces / tunnels, then the carrier ``<connection>-XC``
+the generator created (deleted while still the untouched placeholder, ``decommissioned`` once a person filled in its
+``circuit_id``) with its ``vnic-<connection>`` NIC, only when no other connection, carrier, session or sub-interface
+uses it. Never touched: physical ports, the stub device, its Loopback0 and BGP process, a NIC another connection uses,
+an authored or reused carrier. A decommissioned connection stays, empty, for a person to delete; a rerun writes
+nothing. The VRF memberships of the devices of the removed legs are converged at the end (``reconcile_vrfs``).
+A kept session whose ends changed loses only the old interfaces (its link addresses are reused by the new ends).
+
+Accepted leftovers, only a person removes them: the carrier of a connection that moved to another ``near_port``
+(it is no longer listed), the generated ``vc-p2p`` allocation group objects of add_virtual_circuit, a BGP peering or
+address that add_virtual_circuit builds AFTER the teardown ran on a circuit it was still processing (the check
+``provider_decommission`` reports them).
 
 Failure convention: ``self.fail`` (logged and raised) for a spec that cannot be built; a run that fails writes
 nothing and, because it raises, the SDK does not run its group cleanup.
@@ -73,7 +90,7 @@ from __future__ import annotations
 from contextlib import AsyncExitStack
 from typing import Any
 
-from utils.circuit_underlay import SESSION_CIRCUIT, session_circuits_on, subinterface_vlan
+from utils.circuit_underlay import DECOMMISSIONED, SESSION_CIRCUIT, session_circuits_on, subinterface_vlan
 from utils.data_cleaning import clean_data
 from utils.limits import GROUP_CARRIER_CIRCUITS, GROUP_VIRTUAL_CIRCUITS
 from utils.provider_services import ADDRESS_SOURCE_OUR_POOL, PATH_DEDICATED
@@ -99,6 +116,9 @@ from ..helpers.provider_connection import (
     tunnel_names,
     validate_spec,
 )
+from ..helpers.provider_teardown import TeardownPlan, sessions_to_remove
+from ..helpers.session_teardown import SessionRef, SessionTeardownMixin
+from ..helpers.vrf import VrfMixin
 from ..pools import PoolMixin
 from ..protocols import (
     DcimInterface,
@@ -112,10 +132,14 @@ from ..provider_stub import ProviderStubMixin
 _KIND = TopologyProviderConnection.__name__
 
 
-class ProviderConnectionGenerator(ProviderStubMixin, NearPortFactsMixin, CablingMixin, PoolMixin, CommonGenerator):
+class ProviderConnectionGenerator(
+    SessionTeardownMixin, ProviderStubMixin, NearPortFactsMixin, VrfMixin, CablingMixin, PoolMixin, CommonGenerator
+):
     """add_provider_connection — the carrier, the session circuits and their end interfaces of a provider connection."""
 
     client: Any
+    # The ends each link's circuit has after this run (link name -> interface ids), to find the ends it no longer has.
+    _built: dict[str, list[str]]
 
     async def generate(self, data: dict[str, Any]) -> None:
         connections = clean_data(data).get(_KIND) or []
@@ -130,9 +154,17 @@ class ProviderConnectionGenerator(ProviderStubMixin, NearPortFactsMixin, Cabling
 
         try:
             spec = parse_connection(raw)
+        except ValueError as exc:
+            self.fail(f"{name}: {exc}")
+        if spec.status == DECOMMISSIONED:
+            await self._decommission(spec)
+            return
+        try:
             flavour, _ = validate_spec(spec)
         except ValueError as exc:
             self.fail(f"{name}: {exc}")
+        self._built = {}
+        reconcile: set[str] = set()
         dedicated = spec.path_type == PATH_DEDICATED
         if flavour.address_source == ADDRESS_SOURCE_OUR_POOL and spec.link_prefixes:
             self.logger.warning(f"{name}: link_prefixes are ignored, this flavour allocates from our pool")
@@ -163,7 +195,67 @@ class ProviderConnectionGenerator(ProviderStubMixin, NearPortFactsMixin, Cabling
             else:
                 await self._write_carrier_list(spec, [])
                 await self._build_vpn(spec, links, by_name)
+            # What the plan no longer wants goes only after the new circuits are saved, so an interface a new circuit
+            # reuses is seen as in use and kept.
+            plan, devices = await self._teardown(
+                spec,
+                sessions_to_remove(
+                    [(session.id, session.name) for session in spec.sessions], [link.name for link in links], False
+                ),
+            )
+            reconcile |= devices
+            reconcile |= await self._remove_stale_ends(spec, by_name)
+            if resolution is None and spec.carriers:
+                plan += await self.teardown_carriers(spec.id, spec.name, spec.carriers)
+            self.client.group_context.related_node_ids.extend(plan.held)
+        await self.reconcile_vrfs(reconcile)
         self.logger.info(f"Provider connection {name} - completed")
+
+    # -- teardown: a decommissioned connection, a link that left the plan -----------------------------------------
+
+    async def _decommission(self, spec: ConnectionSpec) -> None:
+        """Status ``decommissioned``: remove everything the connection built; the (empty) connection stays.
+
+        Same teardown as a link that leaves the plan, applied to every session and to the carrier the generator
+        created (generators/helpers/provider_teardown.py: the order and what is never touched). A rerun finds nothing
+        and writes nothing; a half-torn state converges. The connection is tracked so the SDK cleanup still runs for
+        a tracked leftover; what the plan keeps on purpose is tracked too, so that cleanup does not delete it.
+        """
+        self.logger.info(f"Provider connection {spec.name} is decommissioned - tearing down what it built")
+        async with AsyncExitStack() as locks:
+            if spec.near_id:
+                await locks.enter_async_context(self.resource_lock(f"pc-near-{spec.near_id}"))
+            await locks.enter_async_context(self.resource_lock(f"pc-{spec.id}"))
+            self.client.group_context.related_node_ids.append(spec.id)
+            plan, devices = await self._teardown(spec, [session.id for session in spec.sessions])
+            plan += await self.teardown_carriers(spec.id, spec.name, spec.carriers)
+            self.client.group_context.related_node_ids.extend(plan.held)
+        await self.reconcile_vrfs(devices)
+        self.logger.info(f"Provider connection {spec.name} - decommissioned")
+
+    async def _teardown(self, spec: ConnectionSpec, session_ids: list[str]) -> tuple[TeardownPlan, set[str]]:
+        """Remove the connection's sessions with these ids and what they own; the plan and the devices touched."""
+        wanted = set(session_ids)
+        refs = [
+            SessionRef(session.id, session.name, session.link_prefix_id, tuple(end.id for end in session.ends))
+            for session in spec.sessions
+            if session.id in wanted
+        ]
+        return await self.teardown_sessions(refs)
+
+    async def _remove_stale_ends(self, spec: ConnectionSpec, by_name: dict[str, ExistingSession]) -> set[str]:
+        """Delete the interfaces a kept session circuit lost when this run saved its new ends (not their addresses)."""
+        refs = []
+        for name, built in self._built.items():
+            session = by_name.get(name)
+            if session is None:
+                continue
+            stale = tuple(end.id for end in session.ends if end.id not in set(built))
+            if stale:
+                refs.append(SessionRef(session.id, session.name, session.link_prefix_id, stale))
+        plan, devices = await self.teardown_stale_ends(refs)
+        self.client.group_context.related_node_ids.extend(plan.held)
+        return devices
 
     # -- the carrier of a dedicated connection ----------------------------------------------------------------------
 
@@ -374,6 +466,7 @@ class ProviderConnectionGenerator(ProviderStubMixin, NearPortFactsMixin, Cabling
     ) -> None:
         """Save the link's session circuit with both ends in ONE save, or only track it when it is already right."""
         assert spec.provider_id and spec.namespace_id and spec.near_id and spec.far_id
+        self._built[link.name] = list(end_ids)
         locations = list(dict.fromkeys([spec.near_id, spec.far_id]))
         desired = {
             "circuit_type": link.circuit_type,

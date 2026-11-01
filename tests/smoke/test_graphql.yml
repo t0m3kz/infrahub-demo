@@ -494,6 +494,14 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
+    resource_name: provider_decommission
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/provider_decommission.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
     resource_name: customer_cloud_account
     tests:
       - name: syntax_check

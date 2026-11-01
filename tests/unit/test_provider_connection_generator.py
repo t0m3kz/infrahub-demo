@@ -109,12 +109,6 @@ class TestDedicatedCreation:
         assert names == ["vnic-AWS-FR2", "Ethernet1/1.1100", "vnic-AWS-FR2.1100"]
         assert client.of("save", "TopologyProviderConnection") == []
 
-    @pytest.mark.asyncio
-    async def test_the_connection_status_is_the_circuits(self) -> None:
-        client = await _run(h.connection(status="decommissioned", vlan_id=100))
-
-        assert _circuits(client)[0]["status"] == "decommissioned"
-
 
 class TestVlanAllocation:
     @pytest.mark.asyncio

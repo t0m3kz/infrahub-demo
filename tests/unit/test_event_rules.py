@@ -341,7 +341,7 @@ def test_a_change_of_the_segment_ports_runs_nothing() -> None:
 _CONNECTION_ATTRIBUTE_RULES = {
     "path-type": "path_type",
     "vlan-id": "vlan_id",
-    "status": "status",
+    "status": "status",  # the decommission trigger: `decommissioned` tears down the connection's outputs
 }
 _CONNECTION_RELATIONSHIP_RULES = {
     "near": "near",
@@ -384,6 +384,24 @@ def test_the_provider_connection_has_a_created_rule_and_one_updated_rule_per_inp
         rule = rules[f"trigger-provider-connection-on-{suffix}-updated"]
         assert rule["mutation_action"] == "updated"
         assert _match_fields(rule) == [("CoreNodeTriggerRelationshipMatch", field)]
+
+
+def test_the_status_updated_rule_is_the_decommission_trigger_of_a_provider_connection() -> None:
+    """Setting `status` to `decommissioned` re-runs add_provider_connection, which tears down what it owns: the one rule
+    on the attribute matches any value (the generator reads the new status, the rule cannot know which), and it is the
+    only trigger of that teardown (the connection is then deleted by a person)."""
+    rules = _rules_for("TopologyProviderConnection")
+    rule = rules["trigger-provider-connection-on-status-updated"]
+    assert rule["action"] == "run-provider-connection-generator"
+    assert rule["mutation_action"] == "updated"
+    assert rule["matches"]["data"] == [{"attribute_name": "status", "value_match": "any"}]
+    assert _CONNECTION_ATTRIBUTE_RULES["status"] == "status", (
+        "the expected-rule list documents the decommission trigger"
+    )
+    status_rules = [
+        name for name, r in rules.items() if ("CoreNodeTriggerAttributeMatch", "status") in _match_fields(r)
+    ]
+    assert status_rules == ["trigger-provider-connection-on-status-updated"]
 
 
 def test_the_output_edges_have_no_rule_because_the_generator_writes_them() -> None:

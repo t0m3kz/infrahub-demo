@@ -38,7 +38,8 @@ from the ports (``utils/circuit_underlay.py``).
 Also two consistency rules of the cloud models, no removal behind them: a ``CloudNetworkSegment`` is owned by the owner
 of its customer footprint, and a vpc ``CloudTransitGatewayAttachment`` lives in the account of its virtual network.
 
-A decommissioned connection or session is exempt (nothing is built for it).
+A decommissioned connection or session is exempt (nothing is built for it) from the rules above; what it must no longer
+have (PC14) and the debris of deleted connections (PC15) are judged by ``checks/provider_decommission.py``.
 """
 
 from __future__ import annotations

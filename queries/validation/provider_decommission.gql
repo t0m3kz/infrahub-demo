@@ -1,0 +1,116 @@
+# The rows of checks/provider_decommission.py (rules PC14 and PC15): what a decommissioned provider connection leaves
+# behind, and what the generators wrote for a connection that no longer exists.
+#
+# - TopologyProviderConnection: status and the carriers it lists (PC14).
+# - TopologySessionCircuit (every circuit_type): the connection and the end interfaces (ids only). The ids are the
+#   "is an end of a session circuit" test of PC15.
+# - DcimHasIPAddress (physical port, LAG, virtual interface): the address each interface holds. IpamIPAddress has no
+#   reverse edge to its interface, so "an address on no interface" is read from this side. A virtual interface also
+#   carries its parent, its device (kind and role) and what hangs on it.
+# - CoreIPPrefixPool: the link pools (Handoff-<namespace>-IPv4), their resource prefixes, the child prefixes allocated
+#   from them and the addresses in each.
+# - ManagedBGPPeering: name, role and the interfaces it rides on (ids only).
+query provider_decommission {
+  TopologyProviderConnection {
+    edges {
+      node {
+        id
+        name { value }
+        status { value }
+        carrier_circuits {
+          edges {
+            node {
+              id
+              name { value }
+              status { value }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  TopologySessionCircuit {
+    edges {
+      node {
+        id
+        name { value }
+        status { value }
+        connection { node { id name { value } } }
+        capabilities { edges { node { id } } }
+      }
+    }
+  }
+
+  DcimHasIPAddress {
+    edges {
+      node {
+        id
+        __typename
+        ip_address { node { id } }
+        ... on DcimVirtualInterface {
+          name { value }
+          parent_interface { node { id name { value } role { value } } }
+          device {
+            node {
+              id
+              __typename
+              name { value }
+              ... on DcimDevice { role { value } }
+            }
+          }
+          capabilities { edges { node { id __typename } } }
+        }
+      }
+    }
+  }
+
+  CoreIPPrefixPool {
+    edges {
+      node {
+        id
+        name { value }
+        resources {
+          edges {
+            node {
+              id
+              ... on IpamPrefix {
+                prefix { value }
+                children {
+                  edges {
+                    node {
+                      id
+                      ... on IpamPrefix {
+                        prefix { value }
+                        description { value }
+                        ip_addresses {
+                          edges {
+                            node {
+                              id
+                              ... on IpamIPAddress { address { value } }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  ManagedBGPPeering {
+    edges {
+      node {
+        id
+        name { value }
+        peering_role { value }
+        capabilities { edges { node { id } } }
+      }
+    }
+  }
+}

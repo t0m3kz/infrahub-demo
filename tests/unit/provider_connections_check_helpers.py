@@ -6,9 +6,11 @@ an AWS Direct Connect connection FR2 -> eu-central-1 on VLAN 3101 with one hando
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any, cast
 
 from checks.provider_connections import CheckProviderConnections
+from checks.provider_decommission import CheckProviderDecommission
 
 
 def edges(nodes: list[dict[str, Any]]) -> dict[str, Any]:
@@ -250,6 +252,134 @@ def run(
             "TopologyCarrierCircuit": edges(carriers or []),
             "CloudNetworkSegment": edges(segments or []),
             "CloudTransitGatewayAttachment": edges(attachments or []),
+        }
+    )
+    for error in errors:
+        assert error["object_id"] and error["object_type"]
+    return [error["message"] for error in errors], infos
+
+
+# ----------------------------------------------------------------------
+# queries/validation/provider_decommission.gql (CheckProviderDecommission, rules PC14 and PC15)
+# ----------------------------------------------------------------------
+
+
+def dc_connection(
+    name: str = "PC-AWS-FR2", status: str = "decommissioned", carriers: Sequence[tuple[str, str]] = ()
+) -> dict:
+    """A connection as provider_decommission.gql selects it; ``carriers`` are (name, status) pairs."""
+    return {
+        "id": f"id-{name}",
+        "name": {"value": name},
+        "status": {"value": status},
+        "carrier_circuits": edges(
+            [{"id": f"id-{c}", "name": {"value": c}, "status": {"value": s}} for c, s in carriers]
+        ),
+    }
+
+
+def dc_session(name: str, connection_name: str | None = "PC-AWS-FR2", ends: tuple[str, ...] = ()) -> dict:
+    """A session circuit as provider_decommission.gql selects it."""
+    return {
+        "id": f"id-{name}",
+        "name": {"value": name},
+        "status": {"value": "active"},
+        "connection": node(
+            {"id": f"id-{connection_name}", "name": {"value": connection_name}} if connection_name else None
+        ),
+        "capabilities": edges([{"id": end} for end in ends]),
+    }
+
+
+def dc_interface(
+    iface_id: str,
+    name: str,
+    device: str = "eg-fr201",
+    device_kind: str = "DcimPhysicalDevice",
+    device_role: str = "edge",
+    parent: tuple[str, str | None] | None = ("Ethernet1/13", "cloud"),
+    address: str | None = None,
+    capabilities: tuple[str, ...] = (),
+) -> dict:
+    """A virtual interface as the DcimHasIPAddress root selects it (``parent`` is (name, role))."""
+    return {
+        "id": iface_id,
+        "__typename": "DcimVirtualInterface",
+        "ip_address": node({"id": address} if address else None),
+        "name": {"value": name},
+        "parent_interface": node(
+            {"id": f"id-{parent[0]}", "name": {"value": parent[0]}, "role": {"value": parent[1]}} if parent else None
+        ),
+        "device": node(
+            {
+                "id": f"id-{device}",
+                "__typename": device_kind,
+                "name": {"value": device},
+                "role": {"value": device_role},
+            }
+        ),
+        "capabilities": edges([{"id": f"id-{c}", "__typename": c} for c in capabilities]),
+    }
+
+
+def dc_physical(iface_id: str, address: str | None = None) -> dict:
+    """A physical interface as the DcimHasIPAddress root selects it (only its address)."""
+    return {
+        "id": iface_id,
+        "__typename": "DcimPhysicalInterface",
+        "ip_address": node({"id": address} if address else None),
+    }
+
+
+def dc_pool(children: list[dict], name: str = "Handoff-PROD-IPv4") -> dict:
+    """A link pool with one resource prefix and the given child prefixes."""
+    return {
+        "id": f"id-{name}",
+        "name": {"value": name},
+        "resources": edges([{"id": "id-res", "prefix": {"value": "10.255.128.0/20"}, "children": edges(children)}]),
+    }
+
+
+def dc_child(prefix: str, addresses: tuple[str, ...] = ()) -> dict:
+    """A child prefix of a link pool with its addresses (ids are the address strings)."""
+    return {
+        "id": f"id-{prefix}",
+        "prefix": {"value": prefix},
+        "description": {"value": "Handoff"},
+        "ip_addresses": edges([{"id": a, "address": {"value": a}} for a in addresses]),
+    }
+
+
+def dc_peering(name: str, ends: tuple[str, ...] = (), role: str = "regular") -> dict:
+    """A BGP peering as provider_decommission.gql selects it."""
+    return {
+        "id": f"id-{name}",
+        "name": {"value": name},
+        "peering_role": {"value": role},
+        "capabilities": edges([{"id": e} for e in ends]),
+    }
+
+
+def run_decommission(
+    connections: list[dict] | None = None,
+    sessions: list[dict] | None = None,
+    interfaces: list[dict] | None = None,
+    pools: list[dict] | None = None,
+    peerings: list[dict] | None = None,
+) -> tuple[list[str], list[str]]:
+    """Validate and return (error messages, warning messages without the prefix handling)."""
+    check = cast(Any, CheckProviderDecommission.__new__(CheckProviderDecommission))
+    errors: list[dict[str, Any]] = []
+    infos: list[str] = []
+    check.log_error = lambda **kwargs: errors.append(kwargs)
+    check.log_info = lambda **kwargs: infos.append(kwargs["message"])
+    check.validate(
+        {
+            "TopologyProviderConnection": edges(connections or []),
+            "TopologySessionCircuit": edges(sessions or []),
+            "DcimHasIPAddress": edges(interfaces or []),
+            "CoreIPPrefixPool": edges(pools or []),
+            "ManagedBGPPeering": edges(peerings or []),
         }
     )
     for error in errors:

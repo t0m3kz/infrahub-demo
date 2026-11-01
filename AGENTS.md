@@ -384,9 +384,9 @@ class MyCheck(InfrahubCheck):
   colocation, else `cross_connect`; provider from `connection_provider`; ends = near port and far port; locations left
   to `add_circuit`), the far port being a `vnic-<connection>` NIC on the service edge or the first free port of a
   physical provider device. A virtual colocation (Network Edge ordered by us) gets no selection or creation: its
-  carrier must exist on the explicit `near_port`. Accepted leftovers: a generated carrier and NIC stay after a deleted
-  connection or a changed path type (untracked, PC2 reports the carrier); the least-loaded count comes from the query
-  and may be stale (balance only, freedom is read under the lock).
+  carrier must exist on the explicit `near_port`. The carrier and NIC are untracked shared underlay and are reclaimed by
+  the decommission below, not by a delete; the least-loaded count comes from the query and may be stale (balance only,
+  freedom is read under the lock).
   A provider-assigned flavour gets its `link_prefix` paired from `link_prefixes` sorted by address (count mismatch is
   PC7). The provider-side STUB is authored in data, shared per provider and facility: in a cloud region, a SaaS region or
   a virtual colocation a `CloudNetworkAppliance` listed in `appliances` (the service edge, see **Service edge**), in a
@@ -398,8 +398,36 @@ class MyCheck(InfrahubCheck):
   `provider_as`, or a process in another AS than `provider_as`, is a refused run before any write. The key stays
   authored. Outputs (the
   circuits and the interfaces they end on) are tracked, so a changed `path_type`, a dropped link or a removed VLAN
-  cleans them on the next run; accepted leftovers: the link addresses and the peering `add_virtual_circuit` built on
-  a deleted circuit. `checks/provider_connections.py` (PC1 to PC13) is the rule set: PC1/PC2 above, PC3 the (profile,
+  cleans them on the next run.
+  **Decommission** (`status: decommissioned`, which the existing updated rule on `status` turns into a run of
+  `add_provider_connection`; there is no delete event that could carry a living target, and deleting a connection only
+  cascades its session circuits, so a person decommissions FIRST and deletes the empty connection after): the generator
+  tears down what it owns, by edges, in an order with no dangling reference (pure planner
+  `generators/helpers/provider_teardown.py`, reads and executes in `generators/helpers/session_teardown.py`): the
+  `ManagedBGPPeering` on the removed legs, their addresses, the link prefix the circuit allocated from the pool
+  (identifier `vc-p2p__<circuit id>`; releasing the prefix frees the range; a provider-assigned `link_prefixes` range is
+  authored and stays), the session circuits, the `<port>.<vlan>` sub-interfaces and `Tunnel<n>` interfaces of the
+  legs, and last the carrier `<connection>-XC` it generated (deleted while the untouched placeholder, status
+  `provisioning` with `circuit_id` equal to its name; set to `decommissioned` once a person replaced the `circuit_id`:
+  the record of a real order) with its `vnic-<connection>` NIC, but only when no other connection lists it and no other
+  carrier, session or sub-interface still ends on its ports. Never touched: physical ports (the near port is free
+  again because its carrier end is gone or no longer live), the stub device, its `Loopback0` and BGP process, a NIC
+  or sub-interface another connection or session uses (kept and tracked so the SDK cleanup keeps it too), an authored
+  or reused carrier (any name other than `<connection>-XC`). The connection stays, empty; a rerun writes nothing and a
+  half-torn state converges. The same teardown runs for a link that leaves the plan (a session circuit of the
+  connection no link names) and, for a kept circuit whose ends changed (path type, VLAN), removes only the old
+  interfaces (the link addresses are reused by the new ends), then the generated carrier of a connection that became an
+  `internet_vpn`. The VRF memberships of the touched devices are converged at the end. The locks are the build's
+  `pc-near-<facility>`, `pc-<connection>`, then add_virtual_circuit's `vc-port-<end>` and `vc-session-<circuit>`
+  (sorted, that generator's own order). `add_virtual_circuit` does NOT use the edge-based teardown: its own tracked
+  cleanup already removes the prefix, addresses and peerings of a decommissioned or shrunk circuit and knows by creation
+  what it owns, while edges cannot tell an address it assigned from an authored one on a hand-made handoff end. Accepted
+  leftovers, which a person removes: the carrier of a connection that moved to another `near_port` (no longer listed),
+  the tracking group objects of the deleted circuits, and anything add_virtual_circuit wrote after the teardown ran on
+  a circuit it was still processing; the targetless sweep `checks/provider_decommission.py` reports them (WARNING,
+  never deleted): PC14 a decommissioned connection still has session circuits (ERROR) or a live generated carrier
+  (WARNING), PC15 an orphan leg interface, a link prefix or address of a `Handoff-*` pool on no interface, a session
+  peering of no circuit. `checks/provider_connections.py` (PC1 to PC13) is the rule set: PC1/PC2 above, PC3 the (profile,
   path type) pair has a flavour, a VLAN and the session count and type, and at most one attachment, PC4 the VLAN,
   PC5 the owner, PC6 the stubs, PC7 the link ranges, PC8 the unrendered `vpn`, PC9 the environment class, PC10 no
   `dci` or `tunnel` in a connection, PC11 (WARNING) the generator's `carrier_circuits` output has a carrier with an

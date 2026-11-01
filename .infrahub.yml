@@ -345,6 +345,11 @@ check_definitions:
   - name: validate_provider_connections
     class_name: CheckProviderConnections
     file_path: checks/provider_connections.py
+  # Targetless: what a decommissioned provider connection leaves behind (PC14) and the debris of connections that no
+  # longer exist (PC15, warnings only, nothing is deleted).
+  - name: validate_provider_decommission
+    class_name: CheckProviderDecommission
+    file_path: checks/provider_decommission.py
   # Targetless: a cloud footprint is judged against its account (owner) and the networks its segments use.
   - name: validate_customer_cloud_account
     class_name: CheckCustomerCloudAccount
@@ -710,6 +715,8 @@ queries:
     file_path: queries/validation/circuit_placement.gql
   - name: provider_connections
     file_path: queries/validation/provider_connections.gql
+  - name: provider_decommission
+    file_path: queries/validation/provider_decommission.gql
   - name: customer_cloud_account
     file_path: queries/validation/customer_cloud_account.gql
   - name: patch_panel_pairing

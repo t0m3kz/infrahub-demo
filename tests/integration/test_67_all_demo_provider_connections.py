@@ -17,15 +17,22 @@ TopologySessionCircuit per link of its provider's flavour (utils/provider_servic
   * test_04 creates a connection from INTENT only (near, far, path_type, ip_namespace, the hub account: no carrier, no
     near_port) and judges it against the choice generators.helpers.near_port makes from the stack's own facts: the
     carrier `<name>-XC` (provisioning) between the chosen `cloud` port and the NIC `vnic-<name>`, the handoff and its
-    session. test_05 reruns it (a no-op), test_06 deletes it (sessions cascade, the carrier stays).
-  * test_07 requests a connection with an explicit near_port on that carrier's port: the carrier is adopted, none is
-    created. test_08 requests one on a busy port: refused, nothing written. test_09 changes the adopter to an
-    internet_vpn: tunnels, `carrier_circuits` cleared, no carrier created, the adopted carrier left. test_10 deletes it
-    (circuits cascade, carriers stay) and restores the branch.
+    session. test_05 reruns it (a no-op), test_06 DECOMMISSIONS it (status `decommissioned`): the peerings, addresses,
+    allocated prefix, circuit, sub-interfaces, then the generated carrier and the NIC are gone (asserted by the ids
+    recorded before), the stub, its Loopback0, its BGP processes and the physical near port are as they were, the near
+    port is free, a rerun writes nothing; only then the test deletes the (empty) connection.
+  * test_07 authors a carrier on the freed port (a person's: the provider's circuit id, status active) and requests a
+    connection with an explicit near_port on that port: the carrier is adopted, none is created. test_08 requests one on
+    a busy port: refused, nothing written. test_09 decommissions the adopter: its outputs are gone and the authored
+    carrier is exactly as it was; it is set active again and rebuilt. test_10 changes the adopter to an internet_vpn:
+    tunnels, `carrier_circuits` cleared, no carrier created, the adopted carrier left, the handoff's sub-interfaces
+    removed (the circuit is kept and retyped by name, so its link addresses and peering stay for add_virtual_circuit
+    to reassign). test_11 decommissions then deletes it (the authored ranges survive) and restores the branch.
 
-It runs AFTER test_66 because it adds and deletes objects on the branch the other modules read. What a delete leaves
-behind (the link interfaces, the peering and the addresses add_virtual_circuit built) is the generator's documented
-leftover: the test removes the interfaces and the peering itself at the end so the branch is as it found it.
+It runs AFTER test_66 because it adds and deletes objects on the branch the other modules read. A delete alone leaves
+the generator's outputs behind (the link interfaces, the peering, the addresses, the allocated prefix, a generated
+carrier): a person decommissions first, then deletes. The `finally` blocks still remove what a failed step left, so the
+branch is as it found it either way.
 """
 
 from __future__ import annotations
@@ -51,13 +58,27 @@ from .all_demo_provider_connection_constants import (
 )
 from .circuit_helpers import fetch_interconnect_inventory
 from .conftest import TestInfrahubDockerWithClient
-from .interconnect_queries import (
-    CIRCUIT_PREFIXES_QUERY,
-    EDGE_PAIR_POOL_QUERY,
-    GROUP_MEMBERS_QUERY,
-    SESSIONS_QUERY,
-)
+from .interconnect_queries import CIRCUIT_PREFIXES_QUERY, EDGE_PAIR_POOL_QUERY, GROUP_MEMBERS_QUERY, SESSIONS_QUERY
 from .interconnect_rules import _prefixes_by_description, _sessions_by_name
+from .provider_connection_decommission_helpers import (
+    AUTHORED_CARRIER,
+    AUTHORED_NIC,
+    DECOMMISSIONED,
+    KIND_CARRIER,
+    KIND_INTERFACE,
+    LEG_KINDS,
+    Recorded,
+    create_authored_carrier,
+    decommissioned_row_errors,
+    fetch_alive,
+    fetch_ids,
+    fetch_peering_names,
+    fetch_recorded,
+    moved_ids_errors,
+    port_free_errors,
+    presence_errors,
+    recorded_errors,
+)
 from .provider_connection_helpers import (
     carrier_membership_errors,
     carrier_state,
@@ -72,12 +93,7 @@ from .provider_connection_helpers import (
     unexpected_failed_tasks,
     unowned_circuit_errors,
 )
-from .routed_link_rules import (
-    LABEL_HANDOFF,
-    LABEL_VPN,
-    LinkFlavour,
-    routed_session_errors,
-)
+from .routed_link_rules import LABEL_HANDOFF, LABEL_VPN, LinkFlavour, routed_session_errors
 from .snapshot_helpers import diff_snapshots, snapshot_topology
 from .wait_helpers import wait_for_condition
 from .workflow_helpers import run_generator, verify_no_failed_tasks, wait_for_tasks_completion
@@ -125,6 +141,7 @@ ADOPTER = "PC-TEST67-ADOPT-PROD"
 REFUSED = "PC-TEST67-BUSY-PROD"
 CREATED_CARRIER = f"{CREATED}-XC"
 CREATED_NIC = f"vnic-{CREATED}"
+DECOMMISSION_KINDS = (*LEG_KINDS, KIND_CARRIER)
 # The path-type change: the VPN of the AWS gateway (its own Amazon-side AS), leaving by the port of an FR2 internet
 # carrier, two provider-assigned /30 ranges that the test creates and removes.
 VPN_ASN = 64513
@@ -420,32 +437,24 @@ class TestAllDemoProviderConnections(TestInfrahubDockerWithClient):
         scope="session", name="all_demo_provider_created_deleted", depends=["all_demo_provider_created_rerun"]
     )
     @pytest.mark.asyncio
-    async def test_06_deleting_the_connection_cascades_its_sessions_and_keeps_the_carrier(
+    async def test_06_decommissioning_the_created_connection_tears_down_its_outputs_then_it_is_deleted(
         self, async_client_main: InfrahubClient, scenario_branch: str
     ) -> None:
-        """Deleting the connection deletes its session circuit (cascade); the carrier and the NIC it created are shared
-        underlay and stay, with their ends and no connection listing them (the next request adopts it). The link
-        interfaces and the peering are the generator's documented leftover: the test removes them, so the carrier's
-        port is free of sub-interfaces for the next scenario."""
-        logging.info("=== %s - Step 6: Delete the created connection ===", SCENARIO_NAME)
+        """Status `decommissioned` re-runs the generator, which removes what it built (peering, addresses, allocated
+        prefix, circuit, sub-interfaces, then the generated carrier and its NIC); the connection stays, the stub, its
+        Loopback0 and BGP processes and the physical near port are untouched, the near port is free again. Deleting the
+        empty connection then leaves nothing behind (before this, a delete left all of it for the test to remove)."""
+        logging.info("=== %s - Step 6: Decommission and delete the created connection ===", SCENARIO_NAME)
         client, branch = async_client_main, scenario_branch
-        circuit = f"{CREATED}-L1"
         try:
-            connection = await client.get(kind="TopologyProviderConnection", branch=branch, name__value=CREATED)
-            await connection.delete()
-            await wait_for_tasks_completion(client, branch)
-            await _poll(f"{circuit} cascaded", lambda: self._circuits_of(client, branch, CREATED, expected=0))
+            gone = await self._decommission(
+                client, branch, CREATED, SERVICE_EDGE, STATE["near"], carrier=CREATED_CARRIER
+            )
+            ports = await fetch_role_ports(client, branch, NEAR_FACILITY, FAR_KIND)
             inventory = await fetch_interconnect_inventory(client=client, branch=branch)
-            assert CREATED not in await fetch_connections(client, branch)
-            carrier = next((c for c in inventory["physical"] if c["circuit_id"] == CREATED_CARRIER), None)
-            assert carrier is not None, "the carrier went with the connection that created it"
-            assert carrier["ends"] == sorted([STATE["near"], (SERVICE_EDGE, CREATED_NIC)])
-            assert carrier["status"] == "provisioning"
-            # PC2 (checks/provider_connections.py) reports this carrier from now on: it ends in a provider-hosted
-            # place and no connection lists it. That is the accepted leftover of a deleted request.
-            assert carrier["connections"] == []
-            assert not other_carrier_errors(STATE["carriers_before"], inventory, {CREATED_CARRIER})
-            STATE["adoptable"] = carrier_state(inventory)
+            assert not port_free_errors(ports, inventory, STATE["near"]), "the near port is not free after the teardown"
+            await self._delete_empty(client, branch, CREATED, gone)
+            assert carrier_state(inventory) == STATE["carriers_before"], "the generated carrier was not reclaimed"
         finally:
             await self._remove_leftovers(client, branch, [CREATED])
             await wait_for_tasks_completion(client, branch)
@@ -459,13 +468,23 @@ class TestAllDemoProviderConnections(TestInfrahubDockerWithClient):
     async def test_07_an_explicit_near_port_adopts_the_carrier_that_ends_on_it(
         self, async_client_main: InfrahubClient, scenario_branch: str
     ) -> None:
-        """A new request whose `near_port` is the port the leftover carrier ends on reuses it (found by its end, never
-        by name or list): no `<name>-XC` carrier, no `vnic-<name>`, `carrier_circuits` is exactly that carrier, and the
+        """A new request whose `near_port` is the port an AUTHORED carrier (a person's: the provider's circuit id, status
+        active, test_07 creates it on the port test_06 freed) ends on reuses it (found by its end, never by name or list): no `<name>-XC` carrier, no `vnic-<name>`, `carrier_circuits` is exactly that carrier, and the
         session rides the carrier's own two ends (the NIC of the first request)."""
         logging.info("=== %s - Step 7: Adopt an existing carrier ===", SCENARIO_NAME)
         client, branch = async_client_main, scenario_branch
         near = STATE["near"]
         port_id = await _port_id(client, branch, *near)
+        account = await client.get(kind="CloudAccount", branch=branch, name__value=ACCOUNT, include=["provider"])
+        await create_authored_carrier(
+            client,
+            branch,
+            near_port_id=port_id,
+            stub_device_id=await _id(client, branch, "DcimDevice", name__value=SERVICE_EDGE),
+            provider_id=str(getattr(account, "provider").id),  # noqa: B009 - SDK relationships are dynamic
+        )
+        await wait_for_tasks_completion(client, branch)
+        STATE["adoptable"] = carrier_state(await fetch_interconnect_inventory(client=client, branch=branch))
         STATE["adopter_id"] = await _request(client, branch, ADOPTER, near_port=port_id)
         await _converge(client, branch, STATE["adopter_id"])
 
@@ -474,21 +493,21 @@ class TestAllDemoProviderConnections(TestInfrahubDockerWithClient):
             row = (await fetch_connections(client, branch)).get(ADOPTER)
             if row is None:
                 return [f"{ADOPTER}: no such connection"]
-            errors = [] if row["carriers"] == [CREATED_CARRIER] else [f"carrier_circuits {row['carriers']}"]
+            errors = [] if row["carriers"] == [AUTHORED_CARRIER] else [f"carrier_circuits {row['carriers']}"]
             if row.get("near") != near:
                 errors.append(f"near_port {row.get('near')}, expected {near}")
-            carrier = next((c for c in inventory["physical"] if c["circuit_id"] == CREATED_CARRIER), None)
+            carrier = next((c for c in inventory["physical"] if c["circuit_id"] == AUTHORED_CARRIER), None)
             if carrier is None or carrier["connections"] != [ADOPTER]:
-                errors.append(f"{CREATED_CARRIER} lists {carrier and carrier['connections']}, expected [{ADOPTER}]")
+                errors.append(f"{AUTHORED_CARRIER} lists {carrier and carrier['connections']}, expected [{ADOPTER}]")
             # nothing new: no carrier of its own, no NIC of its own, every other carrier as it was
-            errors += other_carrier_errors(STATE["adoptable"], inventory, {CREATED_CARRIER})
+            errors += other_carrier_errors(STATE["adoptable"], inventory, {AUTHORED_CARRIER})
             if any(c["circuit_id"] == f"{ADOPTER}-XC" for c in inventory["physical"]):
                 errors.append(f"{ADOPTER}-XC was created, the existing carrier had to be reused")
             if await fetch_interface_ids(client, branch, [SERVICE_EDGE], [f"vnic-{ADOPTER}"]):
                 errors.append(f"vnic-{ADOPTER} was created")
-            return errors + await self._dedicated_errors(client, branch, ADOPTER, near, (SERVICE_EDGE, CREATED_NIC))
+            return errors + await self._dedicated_errors(client, branch, ADOPTER, near, (SERVICE_EDGE, AUTHORED_NIC))
 
-        await _poll(f"{ADOPTER} adopts {CREATED_CARRIER}", _judge)
+        await _poll(f"{ADOPTER} adopts {AUTHORED_CARRIER}", _judge)
         await verify_no_failed_tasks(client=client, branch=branch)
 
     @pytest.mark.order(437)
@@ -523,9 +542,40 @@ class TestAllDemoProviderConnections(TestInfrahubDockerWithClient):
         await wait_for_tasks_completion(client, branch)
 
     @pytest.mark.order(438)
-    @pytest.mark.dependency(scope="session", name="all_demo_provider_changed", depends=["all_demo_provider_refused"])
+    @pytest.mark.dependency(
+        scope="session", name="all_demo_provider_adopter_decommissioned", depends=["all_demo_provider_refused"]
+    )
     @pytest.mark.asyncio
-    async def test_09_changing_the_path_type_to_a_vpn_clears_the_carrier_list_and_the_old_outputs(
+    async def test_09_decommissioning_an_adopter_leaves_the_authored_carrier_as_it_was(
+        self, async_client_main: InfrahubClient, scenario_branch: str
+    ) -> None:
+        """Decommissioning the adopter removes its outputs (peering, addresses, prefix, circuit, sub-interfaces) but the
+        carrier is authored: it, its NIC and every other carrier are exactly as they were (same status, ends,
+        connections). The connection stays; set active again it is rebuilt on the same carrier (not part of the
+        decommission contract: it proves the teardown left the carrier usable)."""
+        logging.info("=== %s - Step 9: Decommission the adopter ===", SCENARIO_NAME)
+        client, branch = async_client_main, scenario_branch
+        near = STATE["near"]
+        await self._decommission(client, branch, ADOPTER, SERVICE_EDGE, near)
+        connection = await client.get(kind="TopologyProviderConnection", branch=branch, id=STATE["adopter_id"])
+        getattr(connection, "status").value = "active"  # noqa: B009 - SDK attributes are dynamic
+        await connection.save()
+        await _converge(client, branch, STATE["adopter_id"])
+
+        async def _judge() -> list[str]:
+            inventory = await fetch_interconnect_inventory(client=client, branch=branch)
+            errors = other_carrier_errors(STATE["adoptable"], inventory, set())
+            return errors + await self._dedicated_errors(client, branch, ADOPTER, near, (SERVICE_EDGE, AUTHORED_NIC))
+
+        await _poll(f"{ADOPTER} active again on {AUTHORED_CARRIER}", _judge)
+        await _assert_no_other_failures(client, branch)
+
+    @pytest.mark.order(439)
+    @pytest.mark.dependency(
+        scope="session", name="all_demo_provider_changed", depends=["all_demo_provider_adopter_decommissioned"]
+    )
+    @pytest.mark.asyncio
+    async def test_10_changing_the_path_type_to_a_vpn_clears_the_carrier_list_and_the_old_outputs(
         self, async_client_main: InfrahubClient, scenario_branch: str
     ) -> None:
         """The adopter becomes an internet_vpn in one save (the AWS VPN gateway's AS, the FR2 internet carrier port of
@@ -533,9 +583,11 @@ class TestAllDemoProviderConnections(TestInfrahubDockerWithClient):
         (the near ones riding the internet port), the sub-interfaces are deleted, `carrier_circuits` is cleared, no
         carrier is created, and the carrier it had adopted is left alone: shared underlay, listed by nobody (PC2 reports
         it, the accepted leftover of a request that moved to the internet)."""
-        logging.info("=== %s - Step 9: Path type change ===", SCENARIO_NAME)
+        logging.info("=== %s - Step 10: Path type change ===", SCENARIO_NAME)
         client, branch = async_client_main, scenario_branch
         before = carrier_state(await fetch_interconnect_inventory(client=client, branch=branch))
+        _, old_legs = await fetch_recorded(client, branch, ADOPTER)  # the handoff's outputs: a leg that leaves the plan
+        assert not recorded_errors(old_legs), "the adopter holds no handoff to replace"
         namespace_id = await _id(client, branch, "IpamNamespace", name__value=NAMESPACE)
         range_ids = []
         for prefix in VPN_RANGES:
@@ -567,30 +619,33 @@ class TestAllDemoProviderConnections(TestInfrahubDockerWithClient):
         await _converge(client, branch, STATE["adopter_id"])
 
         async def _judge() -> list[str]:
-            return await self._vpn_errors(client, branch, ADOPTER, before)
+            gone = presence_errors(
+                old_legs, await fetch_alive(client, branch, old_legs), expect_present=False, kinds=(KIND_INTERFACE,)
+            )
+            return gone + await self._vpn_errors(client, branch, ADOPTER, before)
 
         await _poll(f"{ADOPTER} as a vpn, old outputs cleaned", _judge)
         await _assert_no_other_failures(client, branch)
 
-    @pytest.mark.order(439)
+    @pytest.mark.order(440)
     @pytest.mark.dependency(scope="session", name="all_demo_provider_deleted", depends=["all_demo_provider_changed"])
     @pytest.mark.asyncio
-    async def test_10_deleting_the_vpn_connection_cascades_its_circuits_and_restores_the_branch(
+    async def test_11_decommissioning_then_deleting_the_vpn_connection_cascades_its_circuits_and_restores_the_branch(
         self, async_client_main: InfrahubClient, scenario_branch: str
     ) -> None:
-        """Deleting the connection deletes its circuits (cascade) and moves no carrier and no other connection; the
-        test then removes the generator's leftovers (tunnels, peerings, ranges) and the carrier and NIC the first
-        request created, and the carriers are exactly those test_01 found."""
-        logging.info("=== %s - Step 10: Delete the VPN connection ===", SCENARIO_NAME)
+        """Decommissioning the VPN connection removes its tunnels, addresses, peerings and circuits (the two authored
+        ranges stay: a person's data) and moves no carrier; deleting the empty connection leaves nothing. The test
+        then removes its own ranges and the authored carrier and NIC, and the carriers are exactly those test_01 found."""
+        logging.info("=== %s - Step 11: Decommission and delete the VPN connection ===", SCENARIO_NAME)
         client, branch = async_client_main, scenario_branch
         try:
-            connection = await client.get(kind="TopologyProviderConnection", branch=branch, name__value=ADOPTER)
-            await connection.delete()
-            await wait_for_tasks_completion(client, branch)
-            await _poll(f"{ADOPTER} circuits cascaded", lambda: self._circuits_of(client, branch, ADOPTER, expected=0))
+            gone = await self._decommission(
+                client, branch, ADOPTER, VPN_STUB, VPN_NEAR, allocated=False, ranges=VPN_RANGES
+            )
+            await self._delete_empty(client, branch, ADOPTER, gone)
             inventory = await fetch_interconnect_inventory(client=client, branch=branch)
-            assert not other_carrier_errors(STATE["carriers_before"], inventory, {CREATED_CARRIER})
-            assert CREATED_CARRIER in carrier_state(inventory), "a carrier went with the connection that listed it"
+            assert not other_carrier_errors(STATE["carriers_before"], inventory, {AUTHORED_CARRIER})
+            assert AUTHORED_CARRIER in carrier_state(inventory), "a carrier went with the connection that listed it"
             connections = await fetch_connections(client, branch)
             assert not {ADOPTER, CREATED, REFUSED} & set(connections)
             errors: list[str] = []
@@ -734,14 +789,14 @@ class TestAllDemoProviderConnections(TestInfrahubDockerWithClient):
             errors.append(f"connection is {row.get('path_type')} with vlan {row.get('vlan_id')}")
         if row.get("carriers") != []:
             errors.append(f"connection still lists carriers {row.get('carriers')}")
-        errors += other_carrier_errors(carriers_before, inventory, {CREATED_CARRIER})
-        carrier = next((c for c in inventory["physical"] if c["circuit_id"] == CREATED_CARRIER), None)
+        errors += other_carrier_errors(carriers_before, inventory, {AUTHORED_CARRIER})
+        carrier = next((c for c in inventory["physical"] if c["circuit_id"] == AUTHORED_CARRIER), None)
         if (
             carrier is None
             or carrier["connections"] != []
-            or carrier["ends"] != sorted([STATE["near"], (SERVICE_EDGE, CREATED_NIC)])
+            or carrier["ends"] != sorted([STATE["near"], (SERVICE_EDGE, AUTHORED_NIC)])
         ):
-            errors.append(f"the adopted carrier {CREATED_CARRIER} was touched: {carrier}")
+            errors.append(f"the adopted carrier {AUTHORED_CARRIER} was touched: {carrier}")
         old = {
             device: sorted(n for n in names if not TUNNEL.fullmatch(n)) for device, names in STATE["interfaces"].items()
         }
@@ -750,13 +805,108 @@ class TestAllDemoProviderConnections(TestInfrahubDockerWithClient):
             errors += [f"old sub-interface still exists: {item}" for item in left]
         return errors
 
+    async def _decommission(
+        self,
+        client: InfrahubClient,
+        branch: str,
+        name: str,
+        stub: str,
+        near: tuple[str, str],
+        *,
+        carrier: str | None = None,
+        allocated: bool = True,
+        ranges: tuple[str, ...] = (),
+    ) -> Recorded:
+        """Record what ``name`` owns, set its status to `decommissioned`, wait for the generator and assert the teardown.
+
+        ``carrier`` is the generated `<name>-XC` (None when the carrier is authored/adopted or absent): it and the NIC
+        `vnic-<name>` must go too, otherwise every carrier must be exactly as before. In both cases: the leg objects
+        recorded by id are gone, no `<name>-L<n>-bgp` is left, the connection stays and lists no circuit, the stub, its
+        Loopback0, the physical near port (same ids) and the BGP processes are untouched, the authored ``ranges`` exist,
+        and a second run writes nothing. Returns the recorded ids (to assert again after the delete)."""
+        connection_id, gone = await fetch_recorded(client, branch, name)
+        inventory = await fetch_interconnect_inventory(client=client, branch=branch)
+        before_carriers = carrier_state(inventory)
+        if carrier:
+            generated = next(c for c in inventory["physical"] if c["circuit_id"] == carrier)
+            gone[KIND_CARRIER] = {generated["id"]: carrier}
+            nic = await fetch_ids(client, branch, KIND_INTERFACE, device__name__value=stub, name__value=f"vnic-{name}")
+            assert nic, f"no NIC vnic-{name} to reclaim"
+            gone[KIND_INTERFACE] |= {node_id: f"NIC {label}" for label, node_id in nic.items()}
+        assert connection_id and not recorded_errors(gone, allocated=allocated), f"{name}: {gone}"
+        untouched = await self._untouched(client, branch, stub, near)
+        bgp_before, labels = await snapshot_topology(client, branch, ("ManagedBGP",))
+
+        connection = await client.get(kind="TopologyProviderConnection", branch=branch, id=connection_id)
+        getattr(connection, "status").value = DECOMMISSIONED  # noqa: B009 - SDK attributes are dynamic
+        await connection.save()
+        await _converge(
+            client, branch, connection_id
+        )  # the rule's run, then one more: the second run sees the end state
+
+        async def _judge() -> list[str]:
+            inv = await fetch_interconnect_inventory(client=client, branch=branch)
+            row = (await fetch_connections(client, branch)).get(name)
+            errors = presence_errors(
+                gone, await fetch_alive(client, branch, gone), expect_present=False, kinds=DECOMMISSION_KINDS
+            )
+            errors += decommissioned_row_errors(row, name, carriers=[] if carrier else None)
+            errors += [f"peering {n} exists" for n in await fetch_peering_names(client, branch, name)]
+            return errors + other_carrier_errors(before_carriers, inv, {carrier} if carrier else set())
+
+        await _poll(f"{name} decommissioned", _judge)
+        moved = moved_ids_errors(untouched, await self._untouched(client, branch, stub, near))
+        bgp_after, labels_after = await snapshot_topology(client, branch, ("ManagedBGP",))
+        assert not moved + diff_snapshots(bgp_before, bgp_after, {**labels, **labels_after}), (
+            "the teardown touched what it must not"
+        )
+        if ranges:
+            kept = await client.filters(kind="IpamPrefix", branch=branch, prefix__values=list(ranges))
+            assert len(kept) == len(ranges), "a provider-assigned (authored) range was deleted with the connection"
+
+        before, labels = await snapshot_topology(client, branch, CONNECTION_SNAPSHOT_KINDS)
+        outcome = await run_generator(client=client, generator_name=GENERATOR, node_ids=[connection_id], branch=branch)
+        assert outcome["success"], f"{GENERATOR} failed on a decommissioned connection: {outcome}"
+        await wait_for_tasks_completion(client, branch)
+        after, labels_after = await snapshot_topology(client, branch, CONNECTION_SNAPSHOT_KINDS)
+        changes = diff_snapshots(before, after, {**labels_after, **labels})
+        assert not changes, "a rerun on a decommissioned connection wrote:\n  - " + "\n  - ".join(changes[:50])
+        return gone
+
+    @staticmethod
+    async def _untouched(client: InfrahubClient, branch: str, stub: str, near: tuple[str, str]) -> dict[str, str]:
+        """name -> id of what a teardown never touches: the stub device, its Loopback0 and the physical near port."""
+        return {
+            f"device {stub}": await _id(client, branch, "DcimDevice", name__value=stub),
+            f"{stub}/Loopback0": await _id(
+                client, branch, "DcimInterface", device__name__value=stub, name__value="Loopback0"
+            ),
+            f"{near[0]}/{near[1]}": await _port_id(client, branch, *near),
+        }
+
+    async def _delete_empty(self, client: InfrahubClient, branch: str, name: str, gone: Recorded) -> None:
+        """Delete the decommissioned (empty) connection and assert nothing of it remains: not the connection, a circuit,
+        a peering nor any object recorded before the status change."""
+        connection = await client.get(kind="TopologyProviderConnection", branch=branch, name__value=name)
+        await connection.delete()
+        await wait_for_tasks_completion(client, branch)
+        await _poll(f"{name} deleted, nothing left", lambda: self._nothing_left(client, branch, name, gone))
+
+    async def _nothing_left(self, client: InfrahubClient, branch: str, name: str, gone: Recorded) -> list[str]:
+        errors = await self._circuits_of(client, branch, name, expected=0)
+        errors += presence_errors(
+            gone, await fetch_alive(client, branch, gone), expect_present=False, kinds=DECOMMISSION_KINDS
+        )
+        errors += [f"peering {n} exists" for n in await fetch_peering_names(client, branch, name)]
+        return errors + ([f"{name} still exists"] if name in await fetch_connections(client, branch) else [])
+
     @staticmethod
     async def _remove_leftovers(
         client: InfrahubClient, branch: str, connections: list[str], *, final: bool = False
     ) -> None:
-        """Remove what the deletes leave (the generator's documented leftovers): the connections themselves if a failed
-        step kept them, the peerings add_virtual_circuit built, the sub-interfaces and tunnels the test noted, and,
-        once the last connection of the module is gone, the carrier and NIC the first request created and the ranges."""
+        """The safety net of a failed step (a decommission that worked leaves nothing for it): the connections if the step
+        kept them, the peerings, the sub-interfaces and tunnels the test noted, and, once the last connection of the module
+        is gone, the carriers and NICs (generated and authored) and the ranges."""
         for name in connections:
             for node in await client.filters(kind="TopologyProviderConnection", branch=branch, name__value=name):
                 await node.delete()
@@ -771,14 +921,15 @@ class TestAllDemoProviderConnections(TestInfrahubDockerWithClient):
             ):
                 await interface.delete()
         if final:
-            for carrier in await client.filters(
-                kind="TopologyCarrierCircuit", branch=branch, circuit_id__value=CREATED_CARRIER
-            ):
-                await carrier.delete()
-            for nic in await client.filters(
-                kind="DcimVirtualInterface", branch=branch, device__name__value=SERVICE_EDGE, name__value=CREATED_NIC
-            ):
-                await nic.delete()
+            for carrier_id, nic_name in ((CREATED_CARRIER, CREATED_NIC), (AUTHORED_CARRIER, AUTHORED_NIC)):
+                for carrier in await client.filters(
+                    kind="TopologyCarrierCircuit", branch=branch, circuit_id__value=carrier_id
+                ):
+                    await carrier.delete()
+                for nic in await client.filters(
+                    kind="DcimVirtualInterface", branch=branch, device__name__value=SERVICE_EDGE, name__value=nic_name
+                ):
+                    await nic.delete()
             for prefix in await client.filters(kind="IpamPrefix", branch=branch, prefix__values=list(VPN_RANGES)):
                 try:
                     await prefix.delete()
