@@ -110,7 +110,7 @@ fragment PodFields on TopologyPod {
             node {
               id
               controller_type { value }
-              ... on DcimDevice {
+              ... on DcimDeviceManaged {
                 platform {
                   node {
                     id
@@ -125,7 +125,7 @@ fragment PodFields on TopologyPod {
             node {
               id
               controller_type { value }
-              ... on DcimDevice {
+              ... on DcimDeviceManaged {
                 platform {
                   node {
                     id

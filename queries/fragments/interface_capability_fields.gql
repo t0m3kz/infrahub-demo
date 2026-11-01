@@ -67,7 +67,7 @@ fragment FirewallContextInterfaceCapabilityFields on ManagedFirewallContext {
     edges {
       node {
         name { value }
-        device { node { name { value } role { value } } }
+        device { node { name { value } ... on DcimDeviceManaged { role { value } } } }
         ... on DcimVirtualInterface {
           ip_address {
             node {
@@ -105,7 +105,7 @@ fragment LoadbalancerContextInterfaceCapabilityFields on ManagedLoadbalancerCont
     edges {
       node {
         name { value }
-        device { node { name { value } role { value } } }
+        device { node { name { value } ... on DcimDeviceManaged { role { value } } } }
         ... on DcimVirtualInterface {
           ip_address {
             node {

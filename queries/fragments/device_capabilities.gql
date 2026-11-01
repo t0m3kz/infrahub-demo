@@ -45,7 +45,7 @@ fragment ManagedBGPServiceFields on ManagedBGP {
               # __typename: a far end that is a CloudNetworkAppliance (provider-hosted) is never ours
               # (transforms/helpers/bgp.py _far_end_is_ours). role: a relaying far end (a spine) may pass on a
               # default route its client could not (utils/bgp_expectation.py).
-              device { node { __typename name { value } role { value } } }
+              device { node { __typename name { value } ... on DcimDeviceManaged { role { value } } } }
             }
           }
         }
@@ -98,8 +98,7 @@ fragment DeviceCapabilitiesFields on DcimCapabilities {
               node {
                 name { value }
                 ... on DcimDevice {
-                  role { value }
-                  primary_address { node { address { value } } }
+                  ... on DcimDeviceManaged { role { value } primary_address { node { address { value } } } }
                   interfaces(role__values: ["mlag-control", "mlag-peer"]) {
                     edges {
                       node {

@@ -13,7 +13,7 @@ fragment FirewallContextLegFields on ManagedFirewallContext {
     edges {
       node {
         name { value }
-        device { node { role { value } } }
+        device { node { ... on DcimDeviceManaged { role { value } } } }
         ... on DcimVirtualInterface {
           ip_address {
             node {

@@ -9,10 +9,12 @@
 
 fragment DeviceGroupPolicyFields on DcimDevice {
   name { value }
-  role { value }
-  platform { node { name { value } } }
-  device_type { node { name { value } memory_gb { value } } }
-  software_image { node { version { value } } }
+  ... on DcimDeviceManaged {
+    role { value }
+    platform { node { name { value } } }
+    device_type { node { name { value } memory_gb { value } } }
+    software_image { node { version { value } } }
+  }
 }
 
 fragment GroupPolicyProfileFields on DcimGroupPolicyProfile {

@@ -29,7 +29,7 @@ query bgp_expectations {
               ... on DcimVirtualInterface {
                 ip_address { node { address { value } ip_namespace { node { name { value } namespace_type { value } } } } }
               }
-              device { node { __typename name { value } role { value } } }
+              device { node { __typename name { value } ... on DcimDeviceManaged { role { value } } } }
             }
           }
         }
@@ -46,7 +46,8 @@ query bgp_expectations {
     }
   }
 
-  DcimDevice {
+  # Managed devices only (a cloud transport is a DcimDevice with no role or platform); the alias keeps the result key.
+  DcimDevice: DcimDeviceManaged {
     edges {
       node {
         __typename
@@ -71,16 +72,18 @@ query bgp_expectations {
             }
           }
         }
-        interfaces {
-          edges {
-            node {
-              name { value }
-              role { value }
-              ... on DcimPhysicalInterface {
-                ip_address { node { address { value } ip_namespace { node { name { value } } } } }
-              }
-              ... on DcimVirtualInterface {
-                ip_address { node { address { value } ip_namespace { node { name { value } } } } }
+        ... on DcimDevice {
+          interfaces {
+            edges {
+              node {
+                name { value }
+                role { value }
+                ... on DcimPhysicalInterface {
+                  ip_address { node { address { value } ip_namespace { node { name { value } } } } }
+                }
+                ... on DcimVirtualInterface {
+                  ip_address { node { address { value } ip_namespace { node { name { value } } } } }
+                }
               }
             }
           }
@@ -96,7 +99,7 @@ query bgp_expectations {
         device {
           node {
             name { value }
-            role { value }
+            ... on DcimDeviceManaged { role { value } }
             interfaces(role__values: ["loopback", "loopback-vtep"]) {
               edges {
                 node {
@@ -128,7 +131,7 @@ query bgp_expectations {
     edges {
       node {
         namespace { node { name { value } namespace_type { value } } }
-        shared_devices { edges { node { name { value } ... on DcimDevice { role { value } } } } }
+        shared_devices { edges { node { name { value } ... on DcimDeviceManaged { role { value } } } } }
       }
     }
   }

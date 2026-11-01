@@ -10,11 +10,7 @@ query firewall_config(
       node {
         id
         name { value }
-        platform {
-          node {
-            name { value }
-          }
-        }
+        ... on DcimDeviceManaged { platform { node { name { value } } } }
         ... on DcimCapabilities {
         capabilities {
           edges {

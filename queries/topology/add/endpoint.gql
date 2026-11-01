@@ -77,7 +77,7 @@ query GetEndpointForConnectivity($device_name: String!) {
       node {
         id
         name { value }
-        role { value }
+        ... on DcimDeviceManaged { role { value } }
         ... on DcimPhysicalDevice {
           deployment {
             node {

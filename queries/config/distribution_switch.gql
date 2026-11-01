@@ -10,22 +10,11 @@ query distribution_switch_config(
         __typename
         id
         name { value }
-        role { value }
-        platform {
-          node {
-            name { value }
-          }
-        }
-        primary_address {
-          node {
-            address { value }
-            ip_namespace { node { name { value } } }
-          }
-        }
-        tags {
-          edges {
-            node { name { value } }
-          }
+        ... on DcimDeviceManaged {
+          role { value }
+          platform { node { name { value } } }
+          primary_address { node { address { value } ip_namespace { node { name { value } } } } }
+          tags { edges { node { name { value } } } }
         }
 
         # Device Services (BGP, OSPF) with nested peerings

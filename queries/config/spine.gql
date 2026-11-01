@@ -5,23 +5,11 @@ query spine_config($device: String!) {
         __typename
         id
         name { value }
-        role { value }
-        platform {
-          node {
-            id
-            name { value }
-          }
-        }
-        primary_address {
-          node {
-            address { value }
-            ip_namespace { node { name { value } } }
-          }
-        }
-        tags {
-          edges {
-            node { name { value } }
-          }
+        ... on DcimDeviceManaged {
+          role { value }
+          platform { node { id name { value } } }
+          primary_address { node { address { value } ip_namespace { node { name { value } } } } }
+          tags { edges { node { name { value } } } }
         }
 
         # Device Services (BGP, OSPF) with nested peerings
@@ -127,7 +115,7 @@ query spine_config($device: String!) {
         device {
           node {
             name { value }
-            role { value }
+            ... on DcimDeviceManaged { role { value } }
             interfaces(role__values: ["loopback", "loopback-vtep"]) {
               edges {
                 node {
@@ -165,7 +153,7 @@ query spine_config($device: String!) {
     edges {
       node {
         namespace { node { name { value } namespace_type { value } } }
-        shared_devices { edges { node { name { value } ... on DcimDevice { role { value } } } } }
+        shared_devices { edges { node { name { value } ... on DcimDeviceManaged { role { value } } } } }
       }
     }
   }
