@@ -42,17 +42,25 @@ def _external_handoffs() -> list[dict[str, Any]]:
     ]
 
 
+def _connections() -> list[dict[str, Any]]:
+    """Every TopologyProviderConnection of the 30_all interconnects."""
+    return _objects(_INTERCONNECTS, "TopologyProviderConnection")
+
+
 class TestAllDemoData:
-    def test_the_cloud_vif_and_sdwan_handoffs_are_external_peers(self) -> None:
-        """Every tenant-VRF eBGP handoff of 30_all is in the external mode's scope, all in PROD."""
-        assert sorted(p["name"] for p in _external_handoffs()) == [
-            "HANDOFF-AMNE-AWS-EUC1-PROD",
-            "HANDOFF-FR2-AMNE-PROD",
-            "HANDOFF-FR2-AWS-EUC1-PROD",
-            "HANDOFF-FR2-SDWAN-GW1-PROD",
-            "HANDOFF-PA4-MEGAPORT-PROD",
-        ]
+    def test_the_sdwan_handoff_is_authored_and_the_provider_sessions_are_generated(self) -> None:
+        """The only authored tenant-VRF handoff is the SD-WAN gateway's; every provider session is generated from a
+        connection (add_provider_connection), so none of them is in the data."""
+        assert [p["name"] for p in _external_handoffs()] == ["HANDOFF-FR2-SDWAN-GW1-PROD"]
         assert {p["ip_namespace"] for p in _external_handoffs()} == {"PROD"}
+        assert not [c for c in _objects(_INTERCONNECTS, "TopologySessionCircuit") if c.get("connection")]
+
+    def test_every_provider_connection_is_in_a_tenant_namespace_and_a_member_of_its_group(self) -> None:
+        """The edge reads a connection's registrations in its own namespace; the generator needs the group."""
+        connections = _connections()
+        assert connections
+        assert {c["ip_namespace"] for c in connections} <= {"PROD", "NON-PROD"}
+        assert all("provider_connections" in c["member_of_groups"] for c in connections)
 
     @pytest.mark.parametrize("peering", _external_handoffs(), ids=lambda p: p["name"])
     def test_handoff_has_one_namespace(self, peering: dict[str, Any]) -> None:
@@ -60,27 +68,29 @@ class TestAllDemoData:
         assert len(set(peering["namespaces"])) == 1, peering["namespaces"]
 
     @pytest.mark.parametrize(
-        ("vif_name", "handoff_name"),
-        [
-            ("vif-transit-hub-euc1", "HANDOFF-FR2-AWS-EUC1-PROD"),
-            ("vif-transit-am-euc1", "HANDOFF-AMNE-AWS-EUC1-PROD"),
-        ],
+        "connection", [c for c in _connections() if c["path_type"] == "dedicated"], ids=lambda c: c["name"]
     )
-    def test_vif_handoff_is_port_dot_vlan_on_the_direct_connect_device(self, vif_name: str, handoff_name: str) -> None:
-        """The session's sub-interface is <port>.<vif.vlan_id> on the DX's physical device, in PROD; the VIF names it."""
-        (vif,) = [v for v in _objects(_INTERCONNECTS, "CloudVirtualInterface") if v["name"] == vif_name]
-        (dx,) = [d for d in _objects(_INTERCONNECTS, "CloudDirectConnect") if d["name"] == vif["direct_connect"]]
-        (peering,) = [p for p in _external_handoffs() if p["name"] == handoff_name]
-        assert vif["virtual_circuit"] == handoff_name
-        (device, interface) = next(end for end in peering["capabilities"] if end[0] in dx["physical_devices"])
-        port, _, vlan = interface.rpartition(".")
-        assert int(vlan) == vif["vlan_id"]
-        assert peering["namespaces"] == ["PROD", "PROD"]
-        # the dedicated port of the FR2 cage is the cross-connect's own; the hosted connection of the NE router is not
-        crossconnects = [
-            c for c in _objects(_INTERCONNECTS, "TopologyCarrierCircuit") if c["name"] == "XC-EQXFR2-AWS-EUC1"
-        ]
-        assert ([device, port] in crossconnects[0]["capabilities"]) == (dx["connection_type"] == "dedicated")
+    def test_dedicated_connection_names_its_vlan_and_its_carriers(self, connection: dict[str, Any]) -> None:
+        """The session's sub-interface is <port>.<vlan_id> (the border policy matches the circuit's own end port):
+        the connection has a VLAN and rides carrier circuits that exist."""
+        carriers = {c["name"] for c in _objects(_INTERCONNECTS, "TopologyCarrierCircuit")}
+        assert 1 <= connection["vlan_id"] <= 4094
+        assert connection["carrier_circuits"]
+        assert set(connection["carrier_circuits"]) <= carriers
+
+    @pytest.mark.parametrize(
+        "connection", [c for c in _connections() if c["service"] == "transit"], ids=lambda c: c["name"]
+    )
+    def test_transit_connection_names_the_gateway_and_the_attachment_that_decides_its_blocks(
+        self, connection: dict[str, Any]
+    ) -> None:
+        """connection_registered reads attached_gateway's attachments and transit_attachment's route table. A
+        transit connection with no transit_attachment (a second hop without a hybrid attachment of its own) accepts
+        nothing: a deny-all session."""
+        attachments = {a["name"]: a for a in _objects(_INTERCONNECTS / "02_cloud_hub", "CloudTransitGatewayAttachment")}
+        assert connection["attached_gateway"]
+        attachment = connection.get("transit_attachment")
+        assert attachment is None or attachments[attachment]["attachment_type"] == "hybrid"
 
     def test_vif_accounts_are_prod_like_the_handoff(self) -> None:
         """Every account behind the PROD VIF is environment p (a non-prod account needs its own VIF)."""

@@ -15,7 +15,6 @@ import yaml
 
 _ROOT = Path(__file__).parents[2]
 _SCHEMA = _ROOT / "schemas" / "extensions" / "topology" / "topology_connectivity.yml"
-_CLOUD = _ROOT / "schemas" / "extensions" / "topology" / "topology_cloud_network.yml"
 # Spelled in two halves so the repo-wide guard on the old edge name (test_capability_edge_names.py) does not match.
 _ENDS_IDENTIFIER = "interface_" + "capabilities"
 
@@ -89,29 +88,24 @@ def test_the_carrier_order_weights_are_unique_after_inheritance() -> None:
     assert len(weights) == len(set(weights))
 
 
-def test_the_session_circuit_type_is_required_with_three_choices() -> None:
-    """circuit_type is a Dropdown with no default and no optional flag: dci, handoff, tunnel."""
+def test_the_session_circuit_type_is_required_with_four_choices() -> None:
+    """circuit_type is a Dropdown with no default and no optional flag: dci, handoff, tunnel, vpn."""
     circuit_type = _field(_node("SessionCircuit")["attributes"], "circuit_type")
 
     assert circuit_type["kind"] == "Dropdown"
     assert not circuit_type.get("optional") and "default_value" not in circuit_type
-    assert [choice["name"] for choice in circuit_type["choices"]] == ["dci", "handoff", "tunnel"]
+    assert [choice["name"] for choice in circuit_type["choices"]] == ["dci", "handoff", "tunnel", "vpn"]
 
 
 def test_the_session_fields_of_one_type_are_optional_in_the_schema() -> None:
     """The rules per type live in checks/circuit_placement.py, so the schema requires none of them."""
     session = _node("SessionCircuit")
-    for name in ("ip_namespace", "password", "cloud_endpoint", "registered_prefixes"):
+    for name in ("ip_namespace", "password", "registered_prefixes", "link_prefix", "connection"):
         assert _field(session["relationships"], name)["optional"] is True, name
 
 
-def test_the_cloud_attachment_peers_the_session_kind() -> None:
-    """CloudHybridAttachment.virtual_circuit points at TopologySessionCircuit on the shared cloud_endpoint identifier."""
-    extensions = yaml.safe_load(_CLOUD.read_text())["extensions"]["nodes"]
-    attachment = next(item for item in extensions if item["kind"] == "CloudHybridAttachment")
-    relationship = _field(attachment["relationships"], "virtual_circuit")
-
-    assert relationship["peer"] == "TopologySessionCircuit"
-    assert (
-        relationship["identifier"] == _field(_node("SessionCircuit")["relationships"], "cloud_endpoint")["identifier"]
-    )
+def test_no_cloud_endpoint_and_no_owner_on_a_circuit() -> None:
+    """The cloud end is the provider connection; the owner is derived (utils/ownership.py circuit_owner)."""
+    for name in ("SessionCircuit", "CarrierCircuit"):
+        assert "cloud_endpoint" not in [r["name"] for r in _node(name).get("relationships") or []]
+    assert "owner" not in [r["name"] for r in _generic("Circuit").get("relationships") or []]

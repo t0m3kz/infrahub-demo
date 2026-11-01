@@ -1,6 +1,6 @@
 ---
 # Reusable identity/access group referenced by ZTNA (private-access) publishing policies —
-# same "shared named entity referenced by many" pattern as ProxyURLCategory. Deliberately
+# a shared named entity referenced by many. Deliberately
 # NOT a real SAML/SCIM integration: `source` is just enough to track where the
 # group name came from, not to federate identity.
 version: "1.0"

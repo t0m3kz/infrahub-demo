@@ -11,3 +11,16 @@ spec:
     - prefix: "10.10.0.0/16"
       ip_namespace: "PROD"
       status: active
+---
+# VPC aggregate of the second Nordix VPC, nordix-vpc-vpn (04_virtual_network.yml): reachable only behind the AWS
+# Site-to-Site VPN connection PC-FR2-AWS-EUC1-VPN-PROD
+# (08_interconnects/05_provider_connections/03_aws_vpn.yml), so its owner C001 is registered behind that one session.
+# Registered in the PROD namespace like the first block.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamPrefix
+  data:
+    - prefix: "10.20.0.0/16"
+      ip_namespace: "PROD"
+      status: active

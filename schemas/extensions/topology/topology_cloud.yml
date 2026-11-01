@@ -33,11 +33,6 @@ generics:
             description: Resource is being provisioned.
             color: "#7f7fff"
 
-  - name: HybridAttachment
-    namespace: Cloud
-    description: "Cloud-side endpoint of a hybrid (on-prem/VRF) routing attachment — DX private VIF."
-    include_in_menu: false
-
 nodes:
 
   - name: Cloud
@@ -54,7 +49,7 @@ nodes:
       - name__value
     display_label: "{{ name__value|upper }}"
 
-  # A Direct Connect or an ExpressRoute lands in a region, so the region is the
+  # A provider connection (Direct Connect, ExpressRoute) lands in a region, so the region is the
   # cloud-side endpoint of a shared circuit. Not the zone (an AZ is finer than
   # any provider commits to) and not TopologyCloud (which groups the provider's
   # regions and identifies no location at all).

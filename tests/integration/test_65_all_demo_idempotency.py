@@ -40,6 +40,7 @@ from .all_demo_circuit_constants import (
     HANDOFF_TYPE,
     INTERCONNECT_TYPE,
 )
+from .all_demo_provider_connection_constants import ALL_DEMO_CONNECTION_CIRCUITS
 from .conftest import TestInfrahubDockerWithClient
 from .snapshot_helpers import diff_snapshots, snapshot_topology
 from .workflow_helpers import run_generator, verify_no_failed_tasks, wait_for_tasks_completion
@@ -68,7 +69,6 @@ RERUN_GENERATORS = {
     "add_customer_colocation_orchestrator_routing": "customer_deployments_colocation",
     "add_customer_cloud_orchestrator_routing": "customer_deployments_cloud",
     "add_customer_office_orchestrator_routing": "customer_deployments_office",
-    "add_virtual_colocation_orchestrator_routing": "virtual_colocations",
 }
 # These must have targets in 30_all; the others are skipped when their group is empty.
 REQUIRED_RERUN_GENERATORS = {
@@ -204,6 +204,9 @@ TOPOLOGY_RERUN_GENERATORS = {
     "add_colocation_zone": "colocation_zones",
     "add_virtual_colocation": "virtual_colocations",
     "add_circuit": "carrier_circuits",
+    # provider_connections: the handoff and vpn session circuits, their `<port>.<vlan>` / `Tunnel<n>` ends and the VLAN
+    # written back to the connection. It runs before add_virtual_circuit, which addresses what it created.
+    "add_provider_connection": "provider_connections",
     # virtual_circuits holds the Interconnect and Handoff circuits (no Tunnel: it has no session). The rerun must
     # keep each one's /31 (/127), the addresses on its ports, its <name>-bgp or <name>-underlay/<name>-evpn
     # peerings and a DCI's per-circuit key exactly as they were: same ids, same values (snapshot_topology).
@@ -477,7 +480,8 @@ class TestAllDemoIdempotency(TestInfrahubDockerWithClient):
             assert len(holders) == 1, f"the shared zone VIP {vip} is {len(holders)} IpamIPAddress object(s), not 1"
         # The sessions add_virtual_circuit builds must be in the snapshot, one object each, or a duplicate session
         # (new id) or a re-created per-circuit key would go unnoticed: an Interconnect holds <name>-underlay,
-        # <name>-evpn and <name>-dci-key, a Handoff <name>-bgp and no key of its own (its key is data-loaded).
+        # <name>-evpn and <name>-dci-key, a Handoff <name>-bgp and no key of its own (its key is data-loaded). The
+        # session circuits of the other provider connections (test_67) hold one <name>-bgp each too.
         for circuit, expected in ALL_DEMO_VIRTUAL_CIRCUITS.items():
             if expected["circuit_type"] == INTERCONNECT_TYPE:
                 peerings = [f"{circuit}-underlay", f"{circuit}-evpn"]
@@ -494,6 +498,14 @@ class TestAllDemoIdempotency(TestInfrahubDockerWithClient):
             for key in keys:
                 held = [n for n, state in before["RoutingPassword"].items() if repr(("value", key)) in repr(state)]
                 assert len(held) == 1, f"{key} is {len(held)} RoutingPassword object(s) in the snapshot, not 1"
+
+        for circuit in sorted(ALL_DEMO_CONNECTION_CIRCUITS):
+            held = [
+                n
+                for n, state in before["ManagedBGPPeering"].items()
+                if repr(("value", f"{circuit}-bgp")) in repr(state)
+            ]
+            assert len(held) == 1, f"{circuit}-bgp is {len(held)} ManagedBGPPeering object(s) in the snapshot, not 1"
 
         targets = await self._targets(client, scenario_branch, TOPOLOGY_RERUN_GENERATORS, set())
         await self._rerun(client, scenario_branch, "Topology rerun", targets, security_before, before, labels)

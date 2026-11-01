@@ -1,0 +1,243 @@
+---
+version: "1.0"
+
+# The one object that says "this facility of ours is connected to that provider facility (a cloud region, a SaaS
+# region), for this owner": the path from the near facility to the far one, over carriers (dedicated) or the internet
+# (VPN), and the sessions routed on it. It owns neither: the carrier circuits are shared underlay and survive it
+# (no-action), the session circuits are the routing it carries and go with it (cascade).
+#
+# The provider is derived, never stored: `account.provider` for a cloud, the far facility's provider otherwise. The
+# vendor flavour (addressing, session model) is `OrganizationProvider.connection_profile`, because the provider knows
+# its own model. Deliberately not a ManagedGeneric (name collisions with the circuits it groups) and not a circuit:
+# it is a connection, not a wire.
+#
+nodes:
+  - name: ProviderConnection
+    namespace: Topology
+    label: Provider Connection
+    description: "A facility of ours connected to a provider facility: its carriers, sessions and attachments"
+    icon: "mdi:transit-connection-variant"
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value }}"
+    order_by:
+      - name__value
+    uniqueness_constraints:
+      - [name__value]
+    attributes:
+      - name: name
+        kind: Text
+        label: Name
+        unique: true
+        optional: false
+        order_weight: 100
+      - name: description
+        kind: Text
+        label: Description
+        optional: true
+        order_weight: 150
+      - name: path_type
+        kind: Dropdown
+        label: Path Type
+        optional: false
+        order_weight: 200
+        description: "How the near facility reaches the far one: over dedicated carriers or over the internet"
+        choices:
+          - name: dedicated
+            label: Dedicated
+            description: "Carrier circuits (cross-connect, fibre, virtual connection) from the near to the far facility"
+            color: "#2980b9"
+          - name: internet_vpn
+            label: Internet VPN
+            description: "Tunnels over an internet carrier circuit of the near facility"
+            color: "#8e44ad"
+      - name: service
+        kind: Dropdown
+        label: Service
+        optional: false
+        order_weight: 300
+        description: "What the provider side attaches to, whatever the vendor calls it (orthogonal to the path type)"
+        choices:
+          - name: private
+            label: Private
+            description: "A virtual network of the provider (private VIF, private peering, VLAN attachment, VPC VPN)"
+            color: "#3498db"
+          - name: transit
+            label: Transit
+            description: "A transit gateway or hub of the provider (transit VIF, hub attachment)"
+            color: "#9b59b6"
+          - name: public
+            label: Public
+            description: "The provider's public endpoints or a SaaS edge (public VIF, Microsoft peering, SWG tunnels)"
+            color: "#27ae60"
+      - name: status
+        kind: Dropdown
+        label: Status
+        order_weight: 400
+        default_value: provisioning
+        choices:
+          - name: provisioning
+            label: Provisioning
+            color: "#ffff7f"
+          - name: active
+            label: Active
+            color: "#7fbf7f"
+          - name: maintenance
+            label: Maintenance
+            color: "#ffd27f"
+          - name: down
+            label: Down
+            color: "#ff7f7f"
+          - name: decommissioned
+            label: Decommissioned
+            color: "#bfbfbf"
+      - name: bandwidth
+        kind: Number
+        label: Bandwidth
+        optional: true
+        order_weight: 500
+        description: "Committed bandwidth in Mbps (inventory)"
+      - name: vlan_id
+        kind: Number
+        label: VLAN ID
+        optional: true
+        order_weight: 550
+        description: "The VLAN of the connection towards the provider, when it is one"
+        parameters:
+          min_value: 1
+          max_value: 4094
+    relationships:
+      # Both ends are facilities, never a pod, rack or tenant footprint, as a carrier circuit's locations are.
+      # One-sided: a facility lists no connections; the reverse walk is the filter near__ids / far__ids.
+      - name: near
+        label: Near Facility
+        peer: TopologyFacility
+        cardinality: one
+        kind: Attribute
+        optional: false
+        identifier: provider_connection__near
+        order_weight: 1000
+        description: "Our facility the connection starts in (a data center, a colocation zone)"
+      - name: far
+        label: Far Facility
+        peer: TopologyFacility
+        cardinality: one
+        kind: Attribute
+        optional: false
+        identifier: provider_connection__far
+        order_weight: 1050
+        description: "The provider facility it lands in (a cloud region, a SaaS region)"
+      - name: ip_namespace
+        label: IP Namespace
+        peer: IpamNamespace
+        cardinality: one
+        kind: Attribute
+        optional: false
+        identifier: provider_connection__ip_namespace
+        order_weight: 1100
+        description: "Environment namespace of its sessions and link ranges"
+      - name: owner
+        label: Owner
+        peer: OrganizationCustomer
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: provider_connection__owner
+        order_weight: 1150
+        description: "The customer the connection is for; empty for shared underlay"
+      - name: account
+        label: Cloud Account
+        peer: CloudAccount
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: provider_connection__account
+        order_weight: 1200
+        description: "The provider account it lands in; its provider is the connection's provider (a cloud)"
+      - name: provider_as
+        label: Provider AS
+        peer: RoutingAutonomousSystem
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: provider_connection__provider_as
+        order_weight: 1250
+        description: "The AS the provider side speaks BGP with, when it is not the gateway's own"
+      - name: attached_network
+        label: Attached Network
+        peer: CloudVirtualNetwork
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: provider_connection__attached_network
+        order_weight: 1300
+        description: "The virtual network a private connection attaches to"
+      - name: attached_gateway
+        label: Attached Gateway
+        peer: CloudTransitGateway
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: provider_connection__attached_gateway
+        order_weight: 1350
+        description: "The transit gateway a transit connection attaches to"
+      # Reverse of CloudTransitGatewayAttachment.hybrid_endpoint.
+      - name: transit_attachment
+        label: Transit Attachment
+        peer: CloudTransitGatewayAttachment
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: transit_gateway_attachment__hybrid_endpoint
+        order_weight: 1380
+        description: "The transit gateway attachment this connection feeds (a transit connection)"
+      - name: password
+        label: Password
+        peer: RoutingPassword
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: provider_connection__password
+        order_weight: 1360
+        description: "The BGP key of the connection's sessions: every session circuit it generates takes it"
+      - name: registered_prefixes
+        label: Registered Prefixes
+        peer: IpamPrefix
+        cardinality: many
+        kind: Attribute
+        optional: true
+        identifier: provider_connection__registered_prefixes
+        order_weight: 1400
+        description: "Prefixes reachable behind the far side that the owner registers (a SaaS range, a partner range)"
+      - name: link_prefixes
+        label: Link Prefixes
+        peer: IpamPrefix
+        cardinality: many
+        kind: Attribute
+        optional: true
+        identifier: provider_connection__link_prefixes
+        order_weight: 1450
+        description: "Link ranges the provider assigns to its sessions (never allocated from our pools)"
+      # Shared underlay: deleting the connection leaves the carriers (no-action).
+      - name: carrier_circuits
+        label: Carrier Circuits
+        peer: TopologyCarrierCircuit
+        cardinality: many
+        kind: Generic
+        optional: true
+        on_delete: no-action
+        identifier: provider_connection__carriers
+        order_weight: 1500
+        description: "The carriers a dedicated connection rides (a connection with internet_vpn rides the near facility's internet carrier, derived)"  # yamllint disable-line rule:line-length
+      # The routing the connection carries: deleting the connection deletes its sessions.
+      - name: session_circuits
+        label: Session Circuits
+        peer: TopologySessionCircuit
+        cardinality: many
+        kind: Generic
+        optional: true
+        on_delete: cascade
+        identifier: provider_connection__sessions
+        order_weight: 1550
+        description: "The handoff or vpn circuits routed on this connection"

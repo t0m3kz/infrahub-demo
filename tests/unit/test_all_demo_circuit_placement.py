@@ -95,16 +95,16 @@ def test_session_circuits_share_no_port() -> None:
 
 
 def test_without_the_cables_the_cable_carried_handoffs_are_reported() -> None:
-    """The gateway handoff and the Fabric hop to AM-NE have only a cable under them: without it the check says so."""
+    """The gateway handoff has only a cable under it (the Fabric hop to AM-NE rides a virtual connection now)."""
     messages = [finding["message"] for finding in _findings(build_payloads(without_cables=True))]
     reported = {circuit for circuit in ALL_DEMO_VIRTUAL_CIRCUITS if any(f"'{circuit}'" in m for m in messages)}
-    assert reported == {"HANDOFF-FR2-SDWAN-GW1-PROD", "HANDOFF-FR2-AMNE-PROD"}
+    assert reported == {"HANDOFF-FR2-SDWAN-GW1-PROD"}
 
 
 def test_without_the_megaport_cross_connect_its_handoff_is_reported() -> None:
-    """HANDOFF-PA4-MEGAPORT-PROD is carried by XC-EQXPA4-MEGAPORT on the parent ports only."""
+    """PC-PA4-MEGAPORT-PROD-L1 is carried by XC-EQXPA4-MEGAPORT on the parent ports only."""
     messages = [finding["message"] for finding in _findings(build_payloads(without_circuits=["XC-EQXPA4-MEGAPORT"]))]
-    assert len(messages) == 1 and "HANDOFF-PA4-MEGAPORT-PROD" in messages[0]
+    assert len(messages) == 1 and "PC-PA4-MEGAPORT-PROD-L1" in messages[0]
 
 
 def test_without_the_partner_internet_access_the_partner_tunnel_is_reported() -> None:

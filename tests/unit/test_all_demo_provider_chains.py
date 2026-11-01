@@ -1,8 +1,8 @@
-"""Offline data tests for the Megaport handoff, the partner tunnel and the SD-WAN gateway handoff of 30_all.
+"""Offline data tests for the Megaport stub, the partner tunnel and the SD-WAN gateway handoff of 30_all.
 
-- Megaport (05_cloud_endpoints/03_megaport_handoff.yml): ``HANDOFF-PA4-MEGAPORT-PROD`` from eg-pa401 `Ethernet1/1.1300` to
-  the stub Cloud Router EXT-MEGAPORT-MCR1, carried by the cross-connect ``XC-EQXPA4-MEGAPORT``; the Azure cross-connect has
-  no handoff and stays an idle carrier.
+- Megaport (05_provider_connections/04_megaport.yml): the connection ``PC-PA4-MEGAPORT-PROD`` (its session circuit is
+  generated) from eg-pa401 to the stub Cloud Router EXT-MEGAPORT-MCR1, carried by the cross-connect
+  ``XC-EQXPA4-MEGAPORT``.
 - Partner tunnel (07_zone_policies/01_partner_tunnel.yml): ``C001-PARTNER-ACME-FR2``, a tunnel TopologySessionCircuit from the
   gateway's eth1 to a partner stub, each end on its own internet access.
 - Gateway handoff (04_sdwan/06_vrf_handoff.yml): ``HANDOFF-FR2-SDWAN-GW1-PROD`` on eth0 <-> eg-fr201 `Ethernet1/12`,
@@ -13,20 +13,17 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
-
 from tasks import ALL_DEMO_DATA
 from tests.integration.all_demo_circuit_constants import (
     ALL_DEMO_DECLARED_PHYSICAL_LOCATIONS,
     ALL_DEMO_DECLARED_PHYSICAL_PORTS,
     ALL_DEMO_PARTNER_ACCESS_CIRCUITS,
     ALL_DEMO_PARTNER_ACCESS_LOCATIONS,
-    ALL_DEMO_VIRTUAL_CIRCUITS,
 )
 from tests.integration.demo_data import ROOT, Declared, declared, declared_session, distinct, name, object_templates
 
 _ALL = ROOT / ALL_DEMO_DATA
-_MEGAPORT = "HANDOFF-PA4-MEGAPORT-PROD"
+_MEGAPORT = "PC-PA4-MEGAPORT-PROD"
 _XC = "XC-EQXPA4-MEGAPORT"
 _MCR = "EXT-MEGAPORT-MCR1"
 _PARTNER_TUNNEL = "C001-PARTNER-ACME-FR2"
@@ -63,18 +60,18 @@ def _sub_interface(device: str, port: str) -> Declared:
 # ---------------------------------------------------------------------------
 
 
-def test_the_megaport_handoff_is_an_unowned_prod_handoff_provided_by_megaport() -> None:
-    """P033 (Megaport sells the MCR service; Equinix only the cross-connect), PROD, VLAN 1300, no cloud endpoint."""
-    circuit = _one_session("handoff", _MEGAPORT).item
+def test_the_megaport_connection_is_a_prod_connection_to_the_mcr_zone_on_its_cross_connect() -> None:
+    """PROD, VLAN 1300, no account (a cloud-neutral provider), the PA4 cage to the MCR zone over XC-EQXPA4-MEGAPORT."""
+    connection = _one("TopologyProviderConnection", _MEGAPORT).item
 
-    assert "owner" not in circuit and "cloud_endpoint" not in circuit
-    assert circuit["provider"] == "P033"
-    assert circuit["ip_namespace"] == "PROD"
-    assert circuit["status"] == "active"
-    assert circuit["member_of_groups"] == ["virtual_circuits"]
-    assert circuit["locations"] == ["PA4", "MCR-PAR1"]
-    assert circuit["capabilities"] == [["eg-pa401", "Ethernet1/1.1300"], [_MCR, "et-0/0/0.1300"]]
-    assert circuit["password"] in {name(k) for k in declared("RoutingPassword", _ALL)}
+    assert connection["ip_namespace"] == "PROD"
+    assert connection["status"] == "active"
+    assert connection["member_of_groups"] == ["provider_connections"]
+    assert (connection["near"], connection["far"], connection["vlan_id"]) == ("PA4", "MCR-PAR1", 1300)
+    assert connection["carrier_circuits"] == [_XC]
+    assert connection["provider_as"] == "AS133937"
+    assert not {"account", "owner", "attached_network", "attached_gateway"} & set(connection)
+    assert {name(k) for k in declared("RoutingPassword", _ALL)} >= {"eqx-pa4-megaport-key"}
 
 
 def test_the_megaport_stub_is_a_provider_owned_router_in_the_megaport_zone() -> None:
@@ -102,12 +99,9 @@ def test_the_megaport_cross_connect_is_an_unowned_shared_carrier_listing_only_th
     assert circuit["capabilities"] == [["eg-pa401", "Ethernet1/1"], [_MCR, "et-0/0/0"]]
 
 
-def test_the_megaport_handoff_rides_the_cross_connect_on_the_parent_ports() -> None:
-    """Each sub-interface's parent is one end of the cross-connect: that is the carrier derived from the ports."""
-    circuit = _one_session("handoff", _MEGAPORT).item
-    parents = {tuple(_sub_interface(*end).item["parent_interface"]) for end in circuit["capabilities"]}
-    assert parents == set(ALL_DEMO_DECLARED_PHYSICAL_PORTS[_XC]) == {("eg-pa401", "Ethernet1/1"), (_MCR, "et-0/0/0")}
-    assert ALL_DEMO_VIRTUAL_CIRCUITS[_MEGAPORT]["carrier"] == (_XC,)
+def test_the_megaport_cross_connect_ends_on_the_cage_edge_and_the_mcr() -> None:
+    """The generated sub-interfaces ride the cross-connect's two ports: eg-pa401 Ethernet1/1 and the MCR's et-0/0/0."""
+    assert ALL_DEMO_DECLARED_PHYSICAL_PORTS[_XC] == {("eg-pa401", "Ethernet1/1"), (_MCR, "et-0/0/0")}
 
 
 def test_the_megaport_asn_is_megaports_and_the_mcr_has_a_single_bgp_process_on_it() -> None:
@@ -125,15 +119,6 @@ def test_the_megaport_asn_is_megaports_and_the_mcr_has_a_single_bgp_process_on_i
     assert loopback.item["ip_address"]["data"] == {"address": "10.255.64.3/32", "ip_namespace": "PROD"}
 
 
-def test_the_azure_cross_connect_is_an_idle_carrier_with_no_handoff() -> None:
-    """No Azure attachment or VIF exists, so no virtual circuit ends on the Azure stub or rides its cross-connect."""
-    azure = ALL_DEMO_DECLARED_PHYSICAL_PORTS["XC-EQXPA4-AZURE-WEU"]
-    for circuit_name, expected in ALL_DEMO_VIRTUAL_CIRCUITS.items():
-        assert not set(expected["ends"]) & azure, circuit_name
-        assert "XC-EQXPA4-AZURE-WEU" not in expected["carrier"], circuit_name
-    assert {d for d, _ in azure} == {"eg-pa401", "EXT-AZURE-ER-PA4"}
-
-
 def test_the_cage_edge_port_of_the_megaport_handoff_is_free() -> None:
     """eg-pa401 Ethernet1/1 is a `customer` port, and the only carrier circuit on it is the Megaport cross-connect."""
     edge = object_templates()["N9K-C9316D-GX_EDGE"]["interfaces"]["data"]
@@ -147,11 +132,11 @@ def test_the_cage_edge_port_of_the_megaport_handoff_is_free() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_the_partner_tunnel_is_a_tunnel_owned_by_c001_from_the_gateway_to_the_partner_stub() -> None:
+def test_the_partner_tunnel_is_a_tunnel_of_c001_from_the_gateway_to_the_partner_stub() -> None:
     """A tunnel session circuit (no session, but in `virtual_circuits`), owner C001, provider the overlay operator."""
     tunnel = _one_session("tunnel", _PARTNER_TUNNEL)
 
-    assert tunnel.item["owner"] == "C001"
+    assert "owner" not in tunnel.item  # derived from the office among its locations
     assert tunnel.item["provider"] == "P035"
     assert tunnel.item["status"] == "active"
     assert tunnel.groups() == ["virtual_circuits"]
@@ -161,11 +146,11 @@ def test_the_partner_tunnel_is_a_tunnel_owned_by_c001_from_the_gateway_to_the_pa
     assert not {"bandwidth", "link_type", "transport_mode", "tunnel_id", "peering_role"} & set(tunnel.item)
 
 
-def test_the_tunnels_office_is_owned_by_the_tunnels_owner_and_its_other_place_is_the_gateways_zone() -> None:
-    """The check wants one TopologyCustomerOffice location of the owner; the other is where the gateway is deployed."""
+def test_the_tunnels_owner_is_its_offices_and_its_other_place_is_the_gateways_zone() -> None:
+    """The owner is derived: the check wants one TopologyCustomerOffice location (C001's); the other is the gateway's."""
     tunnel = _one_session("tunnel", _PARTNER_TUNNEL)
     (office,) = [o for o in declared("TopologyCustomerOffice", _ALL) if name(o) == "C001-OFFICE"]
-    assert office.item["owner"] == tunnel.item["owner"]
+    assert office.item["owner"] == "C001" and "C001-OFFICE" in tunnel.item["locations"]
     assert _one("DcimPhysicalDevice", _GATEWAY).item["deployment"] == "FR2"
 
 
@@ -228,7 +213,7 @@ def test_the_gateway_handoff_is_a_prod_handoff_in_one_cage_carried_by_a_cable() 
     """GW1 eth0.1900 <-> eg-fr201 Ethernet1/12.1900, locations the cage only, VeloCloud as provider, no cloud end."""
     circuit = _one_session("handoff", _GATEWAY_HANDOFF).item
 
-    assert "owner" not in circuit and "cloud_endpoint" not in circuit
+    assert "owner" not in circuit
     assert circuit["provider"] == "P035"
     assert circuit["ip_namespace"] == "PROD"
     assert circuit["locations"] == ["FR2"]
@@ -252,10 +237,9 @@ def test_the_gateway_has_an_asn_a_loopback_router_id_and_one_bgp_process() -> No
     assert process.item["router_id"] == ["10.255.64.2/32", "PROD"]
 
 
-@pytest.mark.parametrize("circuit_name", [_MEGAPORT, _GATEWAY_HANDOFF])
-def test_the_handoff_sub_interfaces_have_the_vlan_in_their_name_and_no_address(circuit_name: str) -> None:
+def test_the_handoff_sub_interfaces_have_the_vlan_in_their_name_and_no_address() -> None:
     """`<parent>.<vlan>` on both ends, the same VLAN, nothing authored on them (the /31 is generated)."""
-    ends: list[Any] = _one_session("handoff", circuit_name).item["capabilities"]
+    ends: list[Any] = _one_session("handoff", _GATEWAY_HANDOFF).item["capabilities"]
     vlans = {port.rpartition(".")[2] for _, port in ends}
     assert len(vlans) == 1 and vlans.pop().isdigit()
     for end in ends:

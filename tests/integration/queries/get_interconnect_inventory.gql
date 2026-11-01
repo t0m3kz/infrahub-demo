@@ -1,8 +1,10 @@
 # The circuit layer of a branch. A location carries its kind, its parent (a cage's or virtual colocation's metro, a
 # footprint's facility) and a footprint's owner, an end its device's deployment (an on-ramp edge: its zone or virtual
 # colocation, with that one's metro): what test_62 checks circuit placement against.
-# A session circuit is one of three `circuit_type`s (tunnel, dci, handoff); a handoff adds its namespace,
-# its accepted-prefix limit, its key and its cloud endpoint (with the VLAN the VIF states). Its carrier is derived: the
+# A session circuit is one of four `circuit_type`s (tunnel, dci, handoff, vpn); a handoff or a vpn adds its namespace,
+# its key, its provider connection (with the connection's VLAN, owner and account owner: a circuit has no owner of its
+# own, it is derived from the offices among its locations and from the connection) and the link range the provider
+# assigned. Its carrier is derived: the
 # carrier circuits in the `capabilities` of each end port, or of the port's `parent_interface` for a sub-interface,
 # else the cable on the port or on that parent (a hop inside one facility is a cable, not a circuit).
 query GetInterconnectInventory {
@@ -26,11 +28,13 @@ query GetInterconnectInventory {
             }
           }
         }
-        owner {
-          node {
-            id
-            name {
-              value
+        provider_connections {
+          edges {
+            node {
+              id
+              name {
+                value
+              }
             }
           }
         }
@@ -70,14 +74,6 @@ query GetInterconnectInventory {
         circuit_type {
           value
         }
-        owner {
-          node {
-            id
-            name {
-              value
-            }
-          }
-        }
         locations {
           edges {
             node {
@@ -100,18 +96,38 @@ query GetInterconnectInventory {
             }
           }
         }
-        cloud_endpoint {
+        link_prefix {
           node {
             id
-            __typename
-            ... on CloudResource {
-              name {
-                value
+            prefix {
+              value
+            }
+          }
+        }
+        connection {
+          node {
+            id
+            name {
+              value
+            }
+            path_type {
+              value
+            }
+            vlan_id {
+              value
+            }
+            owner {
+              node {
+                ...CircuitOwner
               }
             }
-            ... on CloudVirtualInterface {
-              vlan_id {
-                value
+            account {
+              node {
+                owner {
+                  node {
+                    ...CircuitOwner
+                  }
+                }
               }
             }
           }
@@ -267,17 +283,29 @@ fragment CircuitLocation on TopologyConnectableLocation {
   ... on TopologyCustomer {
     owner {
       node {
-        id
-        __typename
+        ...CircuitOwner
       }
     }
   }
   ... on TopologyCustomerOffice {
     owner {
       node {
-        id
-        __typename
+        ...CircuitOwner
       }
+    }
+  }
+}
+
+# An owner is only a customer when it is an OrganizationCustomer (utils.ownership.customer_owner); its org_id is the key.
+fragment CircuitOwner on OrganizationEntity {
+  id
+  __typename
+  org_id {
+    value
+  }
+  ... on OrganizationCustomer {
+    name {
+      value
     }
   }
 }

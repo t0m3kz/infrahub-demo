@@ -77,7 +77,7 @@ generics:
   # rented in, or the cloud footprint of a customer. A relationship peer, so it carries a name and an hfid as
   # DeviceHosting does. Not DeviceHosting: a deployment of this kind has no physical or virtual device of ours, only
   # what the provider hosts for us, so its link is typed to the appliance and not to any DcimDevice.
-  - name: ProviderHosting
+  - name: ApplianceHosting
     namespace: Topology
     description: "Deployment in which a provider-hosted network function is rented"
     human_friendly_id:
@@ -99,9 +99,10 @@ generics:
   # The provider account a provider-hosted presence's appliances are ordered under: its account_id is the billing
   # account number, its provider the operator, and its owner's notification_emails receive the provider's order
   # notices. One declaration for every provider-hosted presence (a virtual colocation, a SaaS region). Not on
-  # ProviderHosting: a customer cloud is hosted too, but its accounts are the CloudAccounts it is built from.
-  # Optional because only a presence routed to terraform needs it (checks/colocation_placement.py).
-  - name: ProviderAccount
+  # ApplianceHosting: a customer cloud is hosted too, but its accounts are the CloudAccounts it is built from.
+  # Optional because only a presence whose provider order needs it (a billing account) has one
+  # (checks/colocation_placement.py).
+  - name: BilledAccount
     namespace: Topology
     description: "Deployment whose provider-hosted appliances are ordered under one provider account"
     include_in_menu: false
@@ -114,7 +115,7 @@ generics:
         kind: Attribute
         optional: true
         order_weight: 1050
-        identifier: "topology__provider_account"
+        identifier: "topology__billed_account"
 
   # Where a customer's cloud compute runs: the cloud footprint (TopologyCustomerCloud). The instances (EC2, GCE, ...)
   # belong to a CloudAccount and a zone; this is the footprint they serve, so a deployment reads its instances
@@ -272,7 +273,7 @@ extensions:
     - kind: CloudNetworkAppliance
       relationships:
         - name: deployment
-          peer: TopologyProviderHosting
+          peer: TopologyApplianceHosting
           cardinality: one
           kind: Attribute
           optional: true

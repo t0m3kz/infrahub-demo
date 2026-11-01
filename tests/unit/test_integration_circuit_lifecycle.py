@@ -133,11 +133,11 @@ def test_the_interconnect_subject_is_the_dci_and_its_ports() -> None:
     assert ALL_DEMO_VIRTUAL_CIRCUITS[INTERCONNECT_CIRCUIT]["carrier"] == ("DF-DC12-EQXPA4-B",)
 
 
-def test_the_handoff_subject_is_the_aws_vif_and_its_subinterfaces() -> None:
+def test_the_handoff_subject_is_the_aws_connection_link_and_its_subinterfaces() -> None:
     """A handoff has one session, a prefix described 'Handoff <name>' and VLAN sub-interface ends."""
     assert HANDOFF.kind == HANDOFF_TYPE
-    assert HANDOFF.peerings == ("HANDOFF-FR2-AWS-EUC1-PROD-bgp",)
-    assert HANDOFF.description == "Handoff HANDOFF-FR2-AWS-EUC1-PROD"
+    assert HANDOFF.peerings == ("PC-FR2-AWS-EUC1-PROD-L1-bgp",)
+    assert HANDOFF.description == "Handoff PC-FR2-AWS-EUC1-PROD-L1"
     assert set(HANDOFF.ports) == {("eg-fr201", "Ethernet1/13.1000"), ("EXT-AWS-DX-FR2", "et-0/0/0.1000")}
     assert HANDOFF.port_kind == "DcimVirtualInterface"
 
@@ -145,7 +145,10 @@ def test_the_handoff_subject_is_the_aws_vif_and_its_subinterfaces() -> None:
 def test_the_bystanders_are_every_other_session_of_the_branch() -> None:
     """The sibling DCI and the other handoffs are watched; the subject's own sessions and any tunnel are not."""
     assert "ICX-DC12-EQXPA4-underlay" in DCI.bystanders
-    assert "HANDOFF-FR2-AWS-EUC1-PROD-bgp" in DCI.bystanders
+    assert "PC-FR2-AWS-EUC1-PROD-L1-bgp" in DCI.bystanders
+    # the sessions of the connections the generator builds that test_62 does not list (Azure, VPN, Zscaler)
+    assert {"PC-PA4-AZURE-WEU-PRI-PROD-L1-bgp", "PC-FR2-AWS-EUC1-VPN-PROD-L2-bgp"} <= set(DCI.bystanders)
+    assert HANDOFF.circuit + "-bgp" not in HANDOFF.bystanders
     assert not set(DCI.peerings) & set(DCI.bystanders)
     assert not any("SDWAN" in name and "HANDOFF" not in name for name in HANDOFF.bystanders)
 

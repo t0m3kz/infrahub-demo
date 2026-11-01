@@ -1,7 +1,7 @@
 """HA (High Availability) configuration helpers for device transforms.
 
 Mirrors the MLAG helper pattern (transforms/helpers/mlag.py) but for
-ManagedFirewallHA / ManagedLoadbalancerHA / ManagedCloudFirewallHA capabilities
+ManagedFirewallHA / ManagedLoadbalancerHA / ManagedProxyHA capabilities
 instead of ManagedMLAG.
 """
 
@@ -18,10 +18,8 @@ HA_LINK_ADDRESSES = {"primary": "169.254.255.1/30", "secondary": "169.254.255.2/
 
 _HA_TYPENAMES = (
     "ManagedFirewallHA",
-    "ManagedCloudFirewallHA",
     "ManagedLoadbalancerHA",
     "ManagedProxyHA",
-    "ManagedCloudProxy",
 )
 
 
@@ -33,7 +31,7 @@ def get_ha(
     """Extract HA domain configuration for template rendering.
 
     Scans device_capabilities for a ManagedInlineService entry (ManagedFirewallHA,
-    ManagedLoadbalancerHA, or ManagedCloudFirewallHA).
+    ManagedLoadbalancerHA, or ManagedProxyHA).
     Both peer devices reference the same HA node via device_capabilities, so
     this function returns the first matching capability found, or None if the
     device has no HA domain.

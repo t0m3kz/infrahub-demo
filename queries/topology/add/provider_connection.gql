@@ -1,0 +1,220 @@
+# add_provider_connection (generators/topology/provider_connection.py). Filters on name, the generator's registered
+# parameter (.infrahub.yml `name: name__value`).
+#
+# The provider (account, far facility, else the owner of the far kit) is utils/provider_services.py connection_provider.
+# Paths of the cleaned connection (utils/data_cleaning.clean_data: edges/node/value flattened, `__typename` becomes
+# `typename`, a node selecting only `id` becomes the id string):
+#   id, name, path_type, service, status, vlan_id, ip_namespace.id, provider_as (id), password (id), link_prefixes[].id, .prefix
+#   account.provider.id, .name, .connection_profile        (a cloud's provider)
+#   far.id, far.typename
+#   far.provider / far.parent.provider / far.account.provider    (the provider of a facility that is not a cloud)
+#   device.owner (typename OrganizationProvider, name, connection_profile) of a far stub or carrier end: the provider of
+#   a facility with none of its own (a colocation zone of a cloud-neutral operator)
+#   far.devices[] / far.appliances[]: id, name, capabilities[] (a ManagedBGP also name, local_as)   (the stubs)
+#   near.id, near.circuits[]: the carrier circuits of the near facility (a VPN leaves by an internet one). The spread
+#   is at node level: inside `... on X { ...F }` a live Infrahub resolves F to nulls (tests/unit/test_query_fragment_spreads.py)
+#   carrier_circuits[] and the near internet carriers: id, name, circuit_type, status, capabilities[] (the ends)
+#   session_circuits[]: what an earlier run wrote (found by name, so a rerun writes nothing)
+query provider_connection_data($name: String!) {
+  TopologyProviderConnection(name__value: $name) {
+    edges {
+      node {
+        id
+        name { value }
+        path_type { value }
+        service { value }
+        status { value }
+        vlan_id { value }
+        ip_namespace { node { id } }
+        provider_as { node { id } }
+        password { node { id } }
+        link_prefixes {
+          edges {
+            node {
+              id
+              prefix { value }
+            }
+          }
+        }
+        account {
+          node {
+            provider { node { ...ConnectionProvider } }
+          }
+        }
+        near {
+          node {
+            id
+            ... on TopologyConnectableLocation {
+              circuits {
+                edges {
+                  node {
+                    __typename
+                    ...ConnectionCarrier
+                  }
+                }
+              }
+            }
+          }
+        }
+        far {
+          node {
+            id
+            __typename
+            ... on TopologyExternalProviders {
+              provider { node { ...ConnectionProvider } }
+            }
+            ... on TopologySaasRegion {
+              parent {
+                node {
+                  ... on TopologySaas {
+                    provider { node { ...ConnectionProvider } }
+                  }
+                }
+              }
+            }
+            ... on TopologyBilledAccount {
+              account {
+                node {
+                  provider { node { ...ConnectionProvider } }
+                }
+              }
+            }
+            ... on TopologyDeviceHosting {
+              devices {
+                edges {
+                  node {
+                    ...ConnectionStub
+                  }
+                }
+              }
+            }
+            ... on TopologyApplianceHosting {
+              appliances {
+                edges {
+                  node {
+                    ...ConnectionStub
+                  }
+                }
+              }
+            }
+          }
+        }
+        carrier_circuits {
+          edges {
+            node {
+              ...ConnectionCarrier
+            }
+          }
+        }
+        session_circuits {
+          edges {
+            node {
+              id
+              name { value }
+              circuit_type { value }
+              status { value }
+              provider { node { id } }
+              ip_namespace { node { id } }
+              connection { node { id } }
+              link_prefix { node { id } }
+              password { node { id } }
+              locations { edges { node { id } } }
+              member_of_groups { edges { node { name { value } } } }
+              capabilities {
+                edges {
+                  node {
+                    id
+                    ... on DcimInterface {
+                      name { value }
+                      device { node { id } }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment ConnectionProvider on OrganizationProvider {
+  id
+  name { value }
+  connection_profile { value }
+}
+
+fragment ConnectionCarrier on TopologyCarrierCircuit {
+  id
+  name { value }
+  circuit_type { value }
+  status { value }
+  capabilities {
+    edges {
+      node {
+        ...ConnectionEnd
+      }
+    }
+  }
+}
+
+fragment ConnectionEnd on DcimInterface {
+  id
+  name { value }
+  device {
+    node {
+      id
+      name { value }
+      owner { node { id __typename ... on OrganizationProvider { name { value } connection_profile { value } } } }
+      ... on DcimPhysicalDevice {
+        deployment { node { ...ConnectionDeployment } }
+      }
+      ... on DcimVirtualDevice {
+        deployment { node { ...ConnectionDeployment } }
+      }
+      ... on CloudNetworkAppliance {
+        deployment { node { ...ConnectionDeployment } }
+      }
+      ... on DcimCapabilities {
+        capabilities {
+          edges {
+            node {
+              id
+              __typename
+              ... on ManagedBGP {
+                name { value }
+                local_as { node { id } }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment ConnectionStub on DcimDevice {
+  id
+  name { value }
+  owner { node { id __typename ... on OrganizationProvider { name { value } connection_profile { value } } } }
+  ... on DcimCapabilities {
+    capabilities {
+      edges {
+        node {
+          id
+          __typename
+          ... on ManagedBGP {
+            name { value }
+            local_as { node { id } }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment ConnectionDeployment on TopologyDeployment {
+  id
+  __typename
+}

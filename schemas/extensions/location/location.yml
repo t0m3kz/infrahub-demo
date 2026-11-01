@@ -54,12 +54,6 @@ nodes:
     parent: "LocationMetro"
     children: "LocationSuite"
     icon: "ri:building-line"
-    relationships:
-      - name: owner
-        peer: OrganizationGeneric
-        optional: true
-        cardinality: one
-        order_weight: 2000
   - name: Suite
     namespace: Location
     inherit_from:
@@ -116,11 +110,6 @@ nodes:
         order_weight: 160
         parameters:
           min_value: 1
-    relationships:
-      - name: owner
-        peer: OrganizationGeneric
-        optional: true
-        cardinality: one
   - name: Rack
     namespace: Location
     generate_template: true
@@ -168,10 +157,6 @@ nodes:
         kind: Number
         order_weight: 4500
     relationships:
-      - name: owner
-        peer: OrganizationGeneric
-        optional: true
-        cardinality: one
       - name: fabric_templates
         peer: TopologyElement
         label: Network Elements

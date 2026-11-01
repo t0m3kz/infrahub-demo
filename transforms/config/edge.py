@@ -2,6 +2,7 @@ from typing import Any, ClassVar
 
 from transforms.common import BaseDeviceTransform
 from transforms.helpers.bgp_external import (
+    connections_by_interface,
     get_external_peer_prefixes,
     get_external_session_policies,
     get_internet_prefixes,
@@ -36,11 +37,12 @@ class Edge(BaseDeviceTransform):
         # it, what it may send in and what it is announced out: the same owners' on-prem prefixes and
         # what they registered behind another external session, never another owner's, never back
         # to the session it was learned on (utils/ownership.py exchange_policies).
+        connections = connections_by_interface(roots.get("TopologyProviderConnection"), data.get("name") or "")
         config["external_policies"] = get_external_session_policies(
             data.get("interfaces"),
             get_external_peer_prefixes(
                 data.get("interfaces"),
-                roots.get("CloudVirtualInterface"),
+                connections,
                 data.get("name") or "",
                 device_capabilities=data.get("capabilities"),
                 offices=roots.get("TopologyCustomerOffice"),
@@ -52,6 +54,7 @@ class Edge(BaseDeviceTransform):
             # Any tag in the model: what an external session accepts gets the owner's customer community, and
             # our communities never leave (utils/routing_identity.py).
             routing_identity=identity_in_use(tags, roots.get("ManagedNetworkSegment")),
+            connections=connections,
         )
         # The expressions of the community-list that selects our communities (edges/cisco_nxos.j2).
         config["routing_community_regexes"] = routing_community_regexes()

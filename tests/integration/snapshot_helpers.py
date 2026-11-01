@@ -1,5 +1,6 @@
 """In-process renders and graph snapshots (shared by test_64, test_65, test_71)."""
 
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
@@ -86,16 +87,22 @@ TOPOLOGY_SNAPSHOT_KINDS = {
     "LocationRack": "name { value }",
     "TopologyPod": "name { value }",
     "TopologyDataCenter": "name { value }",
-    # add_circuit/add_sdwan_edge output (the carrier circuit and the tunnel); an Interconnect and a Handoff are
-    # data-loaded and only gain sessions, so their own selection must not move either.
+    # add_circuit/add_sdwan_edge output (the carrier circuit and the tunnel); an Interconnect is data-loaded and only
+    # gains sessions, a Handoff or a VPN is add_provider_connection output (below), so their selection must not move.
     "TopologyCarrierCircuit": (
         "name { value } locations { edges { node { id } } } capabilities { edges { node { id } } }"
     ),
     "TopologySessionCircuit": (
         "name { value } circuit_type { value } locations { edges { node { id } } } "
         "capabilities { edges { node { id capabilities { edges { node { id } } } } } } "
-        "ip_namespace { node { id } } password { node { id } } cloud_endpoint { node { id } } "
-        "registered_prefixes { edges { node { id } } }"
+        "ip_namespace { node { id } } password { node { id } } connection { node { id } } "
+        "link_prefix { node { id } } registered_prefixes { edges { node { id } } }"
+    ),
+    # add_provider_connection writes the VLAN it chose back to the connection and attaches the session circuits and
+    # carriers by edge: a rerun that renumbered, re-created or detached one is a diff.
+    "TopologyProviderConnection": (
+        "name { value } path_type { value } vlan_id { value } session_circuits { edges { node { id } } } "
+        "carrier_circuits { edges { node { id } } } link_prefixes { edges { node { id } } }"
     ),
     "ManagedController": "name { value } managed_devices { edges { node { id } } }",
     "ManagedFirewallHA": "name { value }",
@@ -150,12 +157,15 @@ def snapshot_query(kind: str, selection: str, offset: int) -> str:
     )
 
 
-async def snapshot_topology(client: InfrahubClient, branch: str) -> tuple[dict[str, dict[str, Any]], dict[str, str]]:
-    """Kind -> {id: comparable state} for TOPOLOGY_SNAPSHOT_KINDS, paged, plus
+async def snapshot_topology(
+    client: InfrahubClient, branch: str, kinds: Iterable[str] | None = None
+) -> tuple[dict[str, dict[str, Any]], dict[str, str]]:
+    """Kind -> {id: comparable state} for TOPOLOGY_SNAPSHOT_KINDS (or only ``kinds`` of it), paged, plus
     id -> "<concrete kind> <display_label>" so a diff can name what moved."""
     snapshot: dict[str, dict[str, Any]] = {}
     labels: dict[str, str] = {}
-    for kind, selection in TOPOLOGY_SNAPSHOT_KINDS.items():
+    wanted = TOPOLOGY_SNAPSHOT_KINDS if kinds is None else {kind: TOPOLOGY_SNAPSHOT_KINDS[kind] for kind in kinds}
+    for kind, selection in wanted.items():
         objects: dict[str, Any] = {}
         offset = 0
         while True:

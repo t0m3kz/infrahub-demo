@@ -2,8 +2,7 @@
 
 Mirrors get_zone_policies() (transforms/helpers/firewall.py) but for
 ProxyPolicy/ProxyPolicyRule — normalizes proxy-level and customer-owned policies
-into a flat, render-ready rule list. Category-type rules expand ProxyURLCategory.entries
-into a flat destination list so templates never need to know about categories.
+into a flat, render-ready rule list.
 """
 
 from __future__ import annotations
@@ -41,18 +40,11 @@ def get_proxy_policies(policies_data: list[dict[str, Any]] | None = None) -> lis
     for policy in enabled_policies(policies_data):
         rules: list[dict[str, Any]] = []
         for rule in active_rules(policy, order_by="priority"):
-            destination_type = rule.get("destination_type") or "category"
+            destination_type = rule.get("destination_type") or "fqdn"
             destinations: list[str] = []
-            if destination_type == "category":
-                for category in rule.get("categories") or []:
-                    for entry in (category.get("entries") or "").splitlines():
-                        entry = entry.strip()
-                        if entry:
-                            destinations.append(entry)
-            else:
-                destination = str(rule.get("destination") or "").strip()
-                if destination:
-                    destinations.append(destination)
+            destination = str(rule.get("destination") or "").strip()
+            if destination:
+                destinations.append(destination)
 
             if not destinations:
                 continue
@@ -106,11 +98,11 @@ _VERDICTS = {"allow": "allow", "bypass": "allow", "inspect": "allow", "block": "
 # on every allowed flow, so an `inspect` rule is a plain allow there: squid bumps all (`ssl_bump bump all`).
 _TLS_INSPECTING_RENDERERS = frozenset({"squid_cache"})
 
-# The destination types each renderer matches. Every one matches hostnames (fqdn, category entries);
+# The destination types each renderer matches. Every one matches hostnames (fqdn);
 # squid also has ACL types for an address range (`dst`) and a URL regex (`url_regex`), and the generic
-# and ZIA payloads list non-category destinations untyped. Anywhere else a CIDR would match as a hostname
+# and ZIA payloads list their destinations untyped. Anywhere else a CIDR would match as a hostname
 # and a regex as a literal string.
-_HOSTNAME_DESTINATIONS = frozenset({"fqdn", "category"})
+_HOSTNAME_DESTINATIONS = frozenset({"fqdn"})
 _DESTINATION_TYPES: dict[str, frozenset[str]] = {
     "squid_cache": _HOSTNAME_DESTINATIONS | {"cidr", "regex"},
     "generic": _HOSTNAME_DESTINATIONS | {"cidr"},

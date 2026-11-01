@@ -1,0 +1,61 @@
+---
+# The two hops of the Equinix Network Edge chain, one provider connection each. They replace the hand-authored
+# handoff circuits HANDOFF-FR2-AMNE-PROD and HANDOFF-AMNE-AWS-EUC1-PROD and the hosted Direct Connect
+# dx-eqx-am-euc1 with its transit VIF of earlier versions.
+#
+# Hop 1, PC-FR2-AMNE-PROD: our FR2 cage edge eg-fr201 into the Network Edge router eg-am-ne01 of AM-NE, VLAN 1200 on
+# both sub-interfaces (Ethernet1/1.1200). The carrier is the Equinix Fabric virtual connection FABRIC-FR2-AMNE01
+# (../01_colo_onramp/03_carrier_circuits.yml), delivered by Equinix inside its own platform: the NE end is a virtual NIC
+# of a provider-hosted appliance and needs no port of ours. eBGP IPv4, not EVPN: a Cisco C8000V is not an EVPN peer; the
+# session is between the overlay processes the devices already have (eg-am-ne01's eg-am-ne01-bgp-overlay is generated
+# by add_virtual_colocation). The far facility is the provider-hosted presence AM-NE, so there is no provider AS to
+# name: the far process is the appliance's own.
+#
+# Hop 2, PC-AMNE-AWS-EUC1-PROD: the Network Edge router eg-am-ne02 into the AWS transit hub, VLAN 1100 on
+# eg-am-ne02 Ethernet1/1.1100 and EXT-AWS-DX-FR2 et-0/0/0.1100. It is a HOSTED Direct Connect:
+# Equinix Fabric delivers it, so its carriers are the Fabric connection FABRIC-AMNE02-AWS-EUC1 and, on the stub's
+# port, the cross-connect XC-EQXFR2-AWS-EUC1 the first connection of the hub (01_aws_fr2_euc1.yml) also rides. It names
+# the hub's Transit Gateway but no `transit_attachment`: a hybrid attachment has one endpoint and tgwa-hybrid-eqx-fr2
+# already has the FR2 one (a second hybrid attachment is the follow-up 02_cloud_hub/05_attachments.yml describes).
+# The AWS side is the shared stub of 00_aws_dx_stub.yml (EXT-AWS-DX-FR2-bgp, AS64512).
+#
+# Both are unowned platform handoffs (the routers are the shared Network Edge pair, ordered under the Equinix account
+# equinix-network-edge, owned by Internal), in PROD like every handoff of the cage edges, with a /31 from
+# Handoff-PROD-IPv4 per session (the Equinix and AWS Direct Connect flavours address from OUR pool).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyProviderConnection
+  data:
+    - name: "PC-FR2-AMNE-PROD"
+      member_of_groups: [provider_connections]
+      description: "PROD Equinix Fabric connection FR2 cage <-> Network Edge router eg-am-ne01 (AM-NE)"
+      path_type: dedicated
+      service: private
+      status: active
+      bandwidth: 1000
+      vlan_id: 1200
+      near: "FR2"
+      far: "AM-NE"
+      ip_namespace: "PROD"
+      carrier_circuits:
+        - "FABRIC-FR2-AMNE01"
+
+    - name: "PC-AMNE-AWS-EUC1-PROD"
+      member_of_groups: [provider_connections]
+      description: "PROD hosted Direct Connect Network Edge router eg-am-ne02 (AM-NE) <-> AWS eu-central-1 (tgw-30all-euc1, AS64512)"  # yamllint disable-line rule:line-length
+      path_type: dedicated
+      service: transit
+      status: active
+      bandwidth: 1000
+      vlan_id: 1100
+      near: "AM-NE"
+      far: "eu-central-1"
+      ip_namespace: "PROD"
+      account: "net-hub-aws-prod"
+      provider_as: "AS64512"
+      attached_gateway: "tgw-30all-euc1"
+      password: "eqx-am-ne-aws-vif-key"
+      carrier_circuits:
+        - "FABRIC-AMNE02-AWS-EUC1"
+        - "XC-EQXFR2-AWS-EUC1"

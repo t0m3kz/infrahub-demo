@@ -7,11 +7,10 @@
 # zone and virtual colocation names share the device-name and pool-name space.
 # AM-NE hosts an edge pair of its own: eg-am-ne01 and eg-am-ne02 are
 # CloudNetworkAppliances (C8000V_EDGE), two independent Network Edge routers we rent,
-# not hardware we rack, ordered through Terraform (02_account.yml holds the
+# not hardware we rack, ordered from the provider (02_account.yml holds the
 # billing account of that order). They are the one virtual edge pair of this demo;
-# the handoff circuits HANDOFF-FR2-AMNE-PROD (08_interconnects/03_virtual_circuits/02_am_ne_handoff.yml)
-# and HANDOFF-AMNE-AWS-EUC1-PROD (08_interconnects/05_cloud_endpoints/00_vif_handoff_am_ne.yml)
-# terminate on their Ethernet1/1 sub-interfaces.
+# the provider connections PC-FR2-AMNE-PROD and PC-AMNE-AWS-EUC1-PROD
+# (08_interconnects/05_provider_connections/02_amne_chain.yml) terminate on their Ethernet1/1 sub-interfaces.
 # AM-NE still joins virtual_colocations because the created-trigger fires per kind and
 # would raise on a non-member. data/demos/10_colocation gives it the same pair on its own.
 apiVersion: infrahub.app/v1
@@ -35,8 +34,9 @@ spec:
               data:
                 - name: AM-NE
                   design: "EDGE"
-                  # Routed to the virtual_colocation_terraform group: one Equinix Network Edge
-                  # Terraform artifact, one equinix_network_device per router (eg-am-ne01, eg-am-ne02).
+                  # Marked for Terraform: one Equinix Network Edge
+                  # order (no transform renders it today), one equinix_network_device per router (eg-am-ne01, eg-am-
+                  # ne02).
                   infrastructure_orchestrator: terraform
                   # The provider order's contract data, printed into that file (02_account.yml).
                   account: "equinix-network-edge"

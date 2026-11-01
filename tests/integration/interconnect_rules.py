@@ -16,6 +16,7 @@ from .all_demo_circuit_constants import (
     TUNNEL_TYPE,
 )
 from .all_demo_firewall_constants import ALL_DEMO_TRANSIT_RESOURCES, transit_namespace_type
+from .all_demo_provider_connection_constants import ALL_DEMO_CIRCUIT_OWNERS, ALL_DEMO_CONNECTION_CIRCUITS, VPN_TYPE
 
 
 def _rules(result: dict) -> list[dict]:
@@ -58,6 +59,15 @@ _ZONE_KINDS = frozenset({"TopologyColocationZone", "TopologyVirtualColocation"})
 _OFFICE_KIND = "TopologyCustomerOffice"
 
 _ISP_KIND = "TopologyExternalProviders"
+
+#: The deployments a provider hosts (a cloud region, a SaaS region, a virtual colocation, an external provider): a
+#: session circuit with an end device deployed in one belongs to a provider connection (PC1 of
+#: checks/provider_connections.py).
+_PROVIDER_HOSTED_KINDS = frozenset(
+    {"TopologyCloudRegion", "TopologySaasRegion", "TopologyVirtualColocation", _ISP_KIND}
+)
+
+_TUNNEL_INTERFACE_PREFIX = "Tunnel"
 
 _DECOMMISSIONED = "decommissioned"
 
@@ -205,8 +215,8 @@ def _tunnel_errors(circuit: dict[str, Any], physical_by_id: dict[str, dict[str, 
     offices = [location for location in locations if location["kind"] == _OFFICE_KIND]
     if not circuit["owner_id"] or not any(office["owner_id"] == circuit["owner_id"] for office in offices):
         errors.append(
-            f"{name}: owned by {circuit['owner']}, but none of its locations {[_label(loc) for loc in locations]} is "
-            "an office of that owner"
+            f"{name}: owner {circuit['owner']} (derived from its office), but none of its locations "
+            f"{[_label(loc) for loc in locations]} is an office with a customer owner"
         )
     gateway = [
         device
@@ -244,8 +254,11 @@ def _interconnect_errors(circuit: dict[str, Any], physical_by_id: dict[str, dict
     name = circuit["name"]
     errors: list[str] = []
     locations = circuit["location_nodes"]
-    if circuit["owner_id"]:
-        errors.append(f"{name}: owned by {circuit['owner']}, a DCI between border gateways is shared platform")
+    if circuit["owner_id"] or circuit["connection"]:
+        errors.append(
+            f"{name}: owned by {circuit['owner']} / connection {circuit['connection']}, "
+            "a DCI between border gateways is shared platform"
+        )
     strays = [_label(location) for location in locations if location["kind"] not in ALL_DEMO_FACILITY_KINDS]
     if strays:
         errors.append(f"{name}: a DCI ends on facilities, but {strays} is not one")
@@ -281,18 +294,18 @@ def _interconnect_errors(circuit: dict[str, Any], physical_by_id: dict[str, dict
     return errors
 
 
-def _handoff_errors(circuit: dict[str, Any]) -> list[str]:
-    """A Handoff: unowned, one or two facilities that are where its two ends are deployed, both ends VLAN
-    sub-interfaces on one VLAN (the VIF's, when it has a cloud endpoint), at least one end carried by a live
-    carrier circuit or a cable at the port or its parent, and its namespace stated."""
+def _routed_link_errors(circuit: dict[str, Any], kind: str) -> list[str]:
+    """What a handoff and a vpn share: one or two facilities that are where its two ends are deployed, its namespace
+    stated, at least one end carried by a live carrier circuit or a cable, and a provider connection when an end
+    device is deployed in a provider-hosted facility (the connection generates the circuit, the owner derives from it)."""
     name = circuit["name"]
     errors: list[str] = []
     locations = circuit["location_nodes"]
-    if circuit["owner_id"]:
-        errors.append(f"{name}: owned by {circuit['owner']}, a handoff is a shared on-ramp")
     strays = [_label(location) for location in locations if location["kind"] not in ALL_DEMO_FACILITY_KINDS]
     if strays:
-        errors.append(f"{name}: a handoff ends on facilities, but {strays} is not one")
+        errors.append(f"{name}: a {kind} ends on facilities, but {strays} is not one")
+    if any(location["kind"] == _OFFICE_KIND and location["owner_id"] for location in locations):
+        errors.append(f"{name}: a {kind} names an office with an owner among {circuit['locations']}")
     deployed = {device["deployment_id"] for device in circuit["end_devices"]}
     if {location["id"] for location in locations} != deployed:
         errors.append(
@@ -303,6 +316,21 @@ def _handoff_errors(circuit: dict[str, Any]) -> list[str]:
         errors.append(f"{name}: no ip_namespace")
     if not any(_live(end["carriers"]) or end["cabled"] for end in circuit["end_nodes"]):
         errors.append(f"{name}: no end is on a live carrier circuit or a cable (at the port or its parent)")
+    hosted = sorted(
+        str(device["device"])
+        for device in circuit["end_devices"]
+        if device["deployment_kind"] in _PROVIDER_HOSTED_KINDS
+    )
+    if hosted and not circuit["connection"]:
+        errors.append(f"{name}: ends on provider-hosted {hosted} but belongs to no provider connection")
+    return errors
+
+
+def _handoff_errors(circuit: dict[str, Any]) -> list[str]:
+    """A Handoff: the shared rules (_routed_link_errors), both ends VLAN sub-interfaces `<port>.<vlan>` on one VLAN
+    (the connection's, when it has one), and a dedicated connection when it has one."""
+    name = circuit["name"]
+    errors = _routed_link_errors(circuit, "handoff")
     vlans = {_vlan(end["interface"]) for end in circuit["end_nodes"]}
     for end in circuit["end_nodes"]:
         if end["kind"] != "DcimVirtualInterface" or _vlan(end["interface"]) is None:
@@ -312,13 +340,34 @@ def _handoff_errors(circuit: dict[str, Any]) -> list[str]:
                 f"{name}: end {end['device']}:{end['interface']} has parent '{end['parent_name']}', "
                 "expected <parent>.<vlan>"
             )
+    connection = circuit["connection_node"]
+    if connection and connection["path_type"] != "dedicated":
+        errors.append(f"{name}: a handoff belongs to a {connection['path_type']} connection {connection['name']}")
     if len(vlans) > 1:
         errors.append(f"{name}: the ends are on different VLANs {sorted(v for v in vlans if v is not None)}")
-    elif circuit["cloud_endpoint_vlan"] is not None and circuit["cloud_endpoint_vlan"] not in vlans:
+    elif connection and connection["vlan_id"] is not None and connection["vlan_id"] not in vlans:
         errors.append(
-            f"{name}: its ends are on VLAN {sorted(v for v in vlans if v is not None)} but cloud endpoint "
-            f"{circuit['cloud_endpoint']} states vlan_id {circuit['cloud_endpoint_vlan']}"
+            f"{name}: its ends are on VLAN {sorted(v for v in vlans if v is not None)} but connection "
+            f"{connection['name']} states vlan_id {connection['vlan_id']}"
         )
+    return errors
+
+
+def _vpn_errors(circuit: dict[str, Any]) -> list[str]:
+    """A VPN: the shared rules (_routed_link_errors), both ends `Tunnel<n>` virtual interfaces, and an internet_vpn
+    provider connection (a vpn is generated by one; it states no VLAN)."""
+    name = circuit["name"]
+    errors = _routed_link_errors(circuit, "vpn")
+    for end in circuit["end_nodes"]:
+        if end["kind"] != "DcimVirtualInterface" or not end["interface"].startswith(_TUNNEL_INTERFACE_PREFIX):
+            errors.append(
+                f"{name}: end {end['device']}:{end['interface']} is not a {_TUNNEL_INTERFACE_PREFIX}<n> interface"
+            )
+    connection = circuit["connection_node"]
+    if not connection:
+        errors.append(f"{name}: a vpn belongs to a provider connection, it has none")
+    elif connection["path_type"] != "internet_vpn":
+        errors.append(f"{name}: a vpn belongs to a {connection['path_type']} connection {connection['name']}")
     return errors
 
 
@@ -339,14 +388,14 @@ def _session_port_errors(virtual: list[dict[str, Any]]) -> list[str]:
 
 def _environment_errors(virtual: list[dict[str, Any]]) -> list[str]:
     """Prod and non-prod never connect: circuits meeting at a device share an environment class. A Tunnel is PROD (its
-    office is always production), a Handoff takes the type of its namespace (INTERNET and MANAGEMENT state none), an
+    office is always production), a Handoff or a VPN takes the type of its namespace (INTERNET and MANAGEMENT state none), an
     Interconnect runs in the underlay and states none."""
     by_device: dict[str, tuple[str, list[tuple[str, str]]]] = {}
     for circuit in virtual:
         env_class: str | None = None
         if circuit["circuit_type"] == TUNNEL_TYPE:
             env_class = PROD_TYPE
-        elif circuit["circuit_type"] == HANDOFF_TYPE and circuit["ip_namespace"]:
+        elif circuit["circuit_type"] in (HANDOFF_TYPE, VPN_TYPE) and circuit["ip_namespace"]:
             namespace_type = transit_namespace_type(circuit["ip_namespace"])
             env_class = namespace_type if namespace_type in TENANT_NAMESPACE_TYPES else None
         if env_class is None:
@@ -362,13 +411,14 @@ def _environment_errors(virtual: list[dict[str, Any]]) -> list[str]:
 
 def _expectation_errors(virtual: list[dict[str, Any]]) -> list[str]:
     """Where the virtual circuits of the branch differ from ALL_DEMO_VIRTUAL_CIRCUITS: a missing or an unexpected
-    one, and per circuit its kind, owner, locations, ends, derived carrier, namespace and cloud endpoint."""
+    one, and per circuit its kind, derived owner, locations, ends, derived carrier and namespace. The session circuits
+    of the other provider connections (ALL_DEMO_CONNECTION_CIRCUITS) are allowed here and asserted by test_67."""
     by_name = {circuit["name"]: circuit for circuit in virtual}
     errors: list[str] = []
     missing = sorted(set(ALL_DEMO_VIRTUAL_CIRCUITS) - set(by_name))
     if missing:
         errors.append(f"virtual circuit(s) missing: {missing}")
-    unexpected = sorted(set(by_name) - set(ALL_DEMO_VIRTUAL_CIRCUITS))
+    unexpected = sorted(set(by_name) - set(ALL_DEMO_VIRTUAL_CIRCUITS) - ALL_DEMO_CONNECTION_CIRCUITS)
     if unexpected:
         errors.append(f"unexpected virtual circuit(s): {unexpected}")
 
@@ -378,8 +428,8 @@ def _expectation_errors(virtual: list[dict[str, Any]]) -> list[str]:
             continue
         if circuit["circuit_type"] != expected["circuit_type"]:
             errors.append(f"{name}: circuit_type '{circuit['circuit_type']}', expected '{expected['circuit_type']}'")
-        if circuit["owner"] != expected["owner"]:
-            errors.append(f"{name}: owner '{circuit['owner']}', expected '{expected['owner']}'")
+        if circuit["owner_org"] != ALL_DEMO_CIRCUIT_OWNERS[name]:
+            errors.append(f"{name}: derived owner '{circuit['owner_org']}', expected '{ALL_DEMO_CIRCUIT_OWNERS[name]}'")
         if circuit["locations"] != sorted(expected["locations"]):
             errors.append(f"{name}: locations {circuit['locations']}, expected {sorted(expected['locations'])}")
         if circuit["ends"] != sorted(expected["ends"]):
@@ -394,10 +444,6 @@ def _expectation_errors(virtual: list[dict[str, Any]]) -> list[str]:
             )
         if circuit["ip_namespace"] != expected["ip_namespace"]:
             errors.append(f"{name}: ip_namespace '{circuit['ip_namespace']}', expected '{expected['ip_namespace']}'")
-        if circuit["cloud_endpoint"] != expected["cloud_endpoint"]:
-            errors.append(
-                f"{name}: cloud_endpoint '{circuit['cloud_endpoint']}', expected '{expected['cloud_endpoint']}'"
-            )
     return errors
 
 

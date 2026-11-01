@@ -71,11 +71,15 @@ def _hub_registered_blocks(owner: str) -> set[tuple[str, str]]:
 
 
 def _tunnel_registered_prefixes(owner: str) -> set[tuple[str, str]]:
-    """(prefix, namespace) of the ``registered_prefixes`` of every tunnel circuit owned by ``owner``."""
+    """(prefix, namespace) of the ``registered_prefixes`` of every tunnel circuit owned by ``owner``.
+
+    A circuit has no owner field: a tunnel's owner is the owner of the office among its locations.
+    """
+    offices = {name(o): o.item["owner"] for o in declared("TopologyCustomerOffice", _ALL)}
     return {
         (prefix[0], prefix[1])
         for tunnel in distinct(declared_session("tunnel", _ALL))
-        if tunnel.item.get("owner") == owner
+        if owner in {offices.get(location) for location in tunnel.item["locations"]}
         for prefix in tunnel.item.get("registered_prefixes") or []
     }
 

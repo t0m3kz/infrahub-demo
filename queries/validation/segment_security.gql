@@ -14,8 +14,14 @@
 # behind an external session, selected as transforms/helpers/bgp_external.py
 # registered_by_attachment reads it (the same fields as routing_invariants.gql,
 # with each prefix's namespace_type): an office's lan_prefixes and hosted
-# segments, a tunnel's registered_prefixes (with the end ports' devices), and a
-# cloud virtual interface's VPC blocks.
+# segments, a tunnel's registered_prefixes (with the end ports' devices; its owner is
+# derived from the office among its locations), and what a provider connection
+# registers (a private network's VPC blocks, a transit gateway's, its own
+# registered_prefixes).
+#
+# A registered destination must belong to the owner of the rule's source segment (the
+# edge announces an owner's prefixes only to that owner's sessions), so the segments
+# carry their owner (`owner`, merged with the fragment's own selection).
 query segment_security {
   ManagedNetworkSegment {
     edges {
@@ -24,6 +30,7 @@ query segment_security {
         # and gateway prefix; only what it lacks is added here.
         ...SegmentGroupPolicyFields
         environment { value }
+        owner { node { __typename org_id { value } display_label } }
         security_zone { node { id } }
         gateway { node { ip_prefix { node { id } } } }
         ... on CloudNetworkSegment {
@@ -123,40 +130,40 @@ query segment_security {
   TopologySessionCircuit(circuit_type__value: "tunnel") {
     edges {
       node {
-        owner { node { __typename org_id { value } display_label } }
+        locations { edges { node { ... on TopologyCustomerOffice { owner { node { __typename org_id { value } display_label } } } } } }
         registered_prefixes { edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } } }
         capabilities { edges { node { device { node { name { value } } } } } }
       }
     }
   }
 
-  CloudVirtualInterface {
+  TopologyProviderConnection {
     edges {
       node {
         name { value }
-        virtual_circuit { node { name { value } } }
-        virtual_network {
+        service { value }
+        owner { node { __typename org_id { value } display_label } }
+        account { node { owner { node { __typename org_id { value } display_label } } } }
+        session_circuits { edges { node { name { value } } } }
+        registered_prefixes { edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } } }
+        attached_network {
           node {
             cidr_blocks { edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } } }
             account { node { owner { node { __typename org_id { value } display_label } } } }
           }
         }
-        transit_gateway_attachment {
+        transit_attachment { node { associated_route_table { node { id } } } }
+        attached_gateway {
           node {
-            associated_route_table { node { id } }
-            transit_gateway {
-              node {
-                attachments {
-                  edges {
+            attachments {
+              edges {
+                node {
+                  attachment_type { value }
+                  propagates_to_route_tables { edges { node { id } } }
+                  virtual_network {
                     node {
-                      attachment_type { value }
-                      propagates_to_route_tables { edges { node { id } } }
-                      virtual_network {
-                        node {
-                          cidr_blocks { edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } } }
-                          account { node { owner { node { __typename org_id { value } display_label } } } }
-                        }
-                      }
+                      cidr_blocks { edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } } }
+                      account { node { owner { node { __typename org_id { value } display_label } } } }
                     }
                   }
                 }

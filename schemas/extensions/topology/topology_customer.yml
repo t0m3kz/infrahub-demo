@@ -25,9 +25,10 @@ version: "1.0"
 generics:
   # The automation system that provisions the infrastructure of a deployment:
   # one definition for everything that is routed by it. The customer footprints
-  # (TopologyCustomerDC / Colocation / Cloud / Office) and TopologyVirtualColocation
-  # inherit it, and generators/topology/orchestrator_routing.py puts each into the
-  # routing group of its value (artifact definitions target those groups). A
+  # (TopologyCustomerDC / Colocation / Cloud / Office) inherit it, and
+  # generators/topology/orchestrator_routing.py puts each into the routing group of
+  # its value (artifact definitions target those groups). TopologyVirtualColocation
+  # inherits it too but is not routed (checks/colocation_placement.py reads it). A
   # generic cannot inherit another generic, so every node lists it.
   - name: OrchestratorScoped
     namespace: Topology
@@ -410,7 +411,7 @@ nodes:
       - TopologyOrchestratorScoped
       - TopologyDeployment
       - TopologyCloudHosting
-      - TopologyProviderHosting
+      - TopologyApplianceHosting
       - TopologyConnectableLocation
     parent: TopologyCloudRegion
     children: ""

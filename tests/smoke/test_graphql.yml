@@ -43,30 +43,6 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
-    resource_name: loadbalancer_cloud
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/config/loadbalancer_cloud.gql
-          kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
-    resource_name: cloud_vpc_config
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/config/cloud_vpc.gql
-          kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
-    resource_name: virtual_colocation_config
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/config/virtual_colocation.gql
-          kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
     resource_name: oob_config
     tests:
       - name: syntax_check
@@ -300,6 +276,14 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
+    resource_name: provider_connection_data
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/provider_connection.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
     resource_name: proposed_change_artifacts
     tests:
       - name: syntax_check
@@ -402,14 +386,6 @@ infrahub_tests:
       - name: syntax_check
         spec:
           path: queries/topology/add/topology_orchestrator_routing_data.gql
-          kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
-    resource_name: virtual_colocation_orchestrator_routing
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/topology/add/virtual_colocation_orchestrator_routing.gql
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
@@ -523,6 +499,14 @@ infrahub_tests:
       - name: syntax_check
         spec:
           path: queries/validation/circuit_placement.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: provider_connections
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/provider_connections.gql
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery

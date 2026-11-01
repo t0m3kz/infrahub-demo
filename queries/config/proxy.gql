@@ -44,7 +44,6 @@ query proxy_config($device: String!) {
                             log { value }
                             description { value }
                             disabled { value }
-                            categories { edges { node { name { value } entries { value } } } }
                           }
                         }
                       }
@@ -72,7 +71,6 @@ query proxy_config($device: String!) {
                                   log { value }
                                   description { value }
                                   disabled { value }
-                                  categories { edges { node { name { value } entries { value } } } }
                                 }
                               }
                             }

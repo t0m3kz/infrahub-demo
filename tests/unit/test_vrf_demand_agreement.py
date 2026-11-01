@@ -45,7 +45,7 @@ def _as_vrf_instances_node(device: dict[str, Any]) -> dict[str, Any]:
     return node
 
 
-# Only the device config inputs: the cloud, load-balancer and virtual-colocation Terraform inputs of the same directory
+# Only the device config inputs: the cloud load-balancer and proxy inputs of the same directory
 # carry no device and no VRF, so they are not parametrized here (a skip per case would only add noise).
 INPUTS = [path for path in sorted(CONFIGS.glob("*/input.json")) if _prepared(path) is not None]
 

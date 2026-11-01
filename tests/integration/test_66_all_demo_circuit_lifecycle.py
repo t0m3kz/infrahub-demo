@@ -47,6 +47,7 @@ from transforms.config.access_leaf import AccessLeaf
 from utils.circuit_underlay import SESSION_CIRCUIT
 
 from .all_demo_circuit_constants import ALL_DEMO_VIRTUAL_CIRCUITS, HANDOFF_TYPE, INTERCONNECT_TYPE
+from .all_demo_provider_connection_constants import ALL_DEMO_CONNECTION_CIRCUITS
 from .circuit_lifecycle_helpers import (
     _HOST_CABLES_QUERY,
     _SWITCH_VRF_QUERY,
@@ -94,16 +95,18 @@ CARRIER_CIRCUIT_KIND = "TopologyCarrierCircuit"
 
 # The DCI under test: the *-B fibre of DC12 to PA4. Its sibling ICX-DC12-EQXPA4 shares both devices and must not move.
 INTERCONNECT_CIRCUIT = "ICX-DC12-EQXPA4-B"
-# The AWS transit VIF handoff. Its key is data-loaded (data/demos/30_all/08_interconnects/05_cloud_endpoints/
-# 00_vif_handoff.yml), not generated: it must be there before and after.
-HANDOFF_CIRCUIT = "HANDOFF-FR2-AWS-EUC1-PROD"
+# The AWS transit handoff add_provider_connection generates for PC-FR2-AWS-EUC1-PROD (the generated circuit is
+# `<connection>-L<n>`). Its key is data-loaded (data/demos/30_all/08_interconnects/05_provider_connections/
+# 00_aws_dx_stub.yml) and put on the circuit by the connection's `password`, not generated: it must be there before and
+# after.
+HANDOFF_CIRCUIT = "PC-FR2-AWS-EUC1-PROD-L1"
 HANDOFF_KEY = "eqx-fr2-aws-vif-key"
-# The second AWS VIF, held by the Network Edge router eg-am-ne02. That router is on no other circuit of 30_all (data:
-# 05_cloud_endpoints/00_vif_handoff_am_ne.yml; no segment, no other handoff, no transit), so the /31 of this handoff is
-# the only thing that demands its PROD VRF membership: decommissioning the circuit must remove the device from the AM
-# metro's PROD instance (which stays: eg-am-ne01 is still a member), and the rebuild must add it back. (eg-fr201, the
-# end of HANDOFF_CIRCUIT, has other PROD handoffs and segments: there it must stay a member.)
-SOLE_DEMAND_HANDOFF = "HANDOFF-AMNE-AWS-EUC1-PROD"
+# The second AWS connection, held by the Network Edge router eg-am-ne02. That router is on no other circuit of 30_all
+# (data: 05_provider_connections/02_amne_chain.yml; no segment, no other connection, no transit), so the /31 of this
+# handoff is the only thing that demands its PROD VRF membership: decommissioning the circuit must remove the device
+# from the AM metro's PROD instance (which stays: eg-am-ne01 is still a member), and the rebuild must add it back.
+# (eg-fr201, the end of HANDOFF_CIRCUIT, has other PROD handoffs and segments: there it must stay a member.)
+SOLE_DEMAND_HANDOFF = "PC-AMNE-AWS-EUC1-PROD-L1"
 SOLE_DEMAND_DEVICE = "eg-am-ne02"
 # The other router of the AM metro's PROD instance: it keeps the instance alive when SOLE_DEMAND_DEVICE leaves.
 SOLE_DEMAND_PEER = "eg-am-ne01"
@@ -229,13 +232,14 @@ class Subject:
 
     @property
     def bystanders(self) -> tuple[str, ...]:
-        """The sessions of every OTHER interconnect and handoff circuit of 30_all."""
-        return tuple(
+        """The sessions of every OTHER interconnect, handoff and provider-connection (handoff, vpn) circuit of 30_all."""
+        sessions = tuple(
             f"{name}-{suffix}"
             for name, expected in sorted(ALL_DEMO_VIRTUAL_CIRCUITS.items())
             if name != self.circuit and expected["circuit_type"] in _PEERING_SUFFIXES
             for suffix in _PEERING_SUFFIXES[expected["circuit_type"]]
         )
+        return sessions + tuple(f"{name}-bgp" for name in sorted(ALL_DEMO_CONNECTION_CIRCUITS) if name != self.circuit)
 
 
 def subject_for(circuit: str, key: str | None = None) -> Subject:

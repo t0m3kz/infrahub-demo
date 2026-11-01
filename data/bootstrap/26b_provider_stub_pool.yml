@@ -1,0 +1,26 @@
+---
+# Router-id loopbacks of the provider-side stubs (the AWS VPN gateway, the Zscaler node, ...) that
+# add_provider_connection builds when a stub has no Loopback0 yet (generators/provider_stub.py): a /32 per stub device,
+# allocated with the identifier `stub-lo0__<device id>`, so a rerun gets the same address. Loopbacks authored in data
+# stay valid and are reused: they sit in 10.255.64.0/24, this pool is the next /24, clear of the handoff pools
+# (10.255.128.0/18), the azure ranges (10.255.72.0/24) and every authored range. Sorts after 22_namespaces.yml.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CoreIPAddressPool
+  data:
+    - name: Provider-Stub-Loopback-IPv4
+      description: "Router-id /32 loopbacks of provider-side stub devices, PROD namespace"
+      default_address_type: IpamIPAddress
+      default_prefix_length: 32
+      resources:
+        kind: IpamPrefix
+        data:
+          - prefix: 10.255.65.0/24
+            description: "Provider stub loopback space, PROD namespace"
+            status: active
+            member_type: address
+            is_pool: true
+            role: technical
+            ip_namespace: "PROD"
+      ip_namespace: "PROD"

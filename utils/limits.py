@@ -152,6 +152,9 @@ LB_LEG_POOL_TEMPLATE = "LB-Leg-{namespace}-IPv4"
 LB_VIP_POOL_TEMPLATE = "LB-VIP-{namespace}-IPv4"
 TENANT_POOL_TEMPLATE = "Tenant-{namespace}-IPv4"
 HANDOFF_POOL_TEMPLATE = "Handoff-{namespace}-IPv4"
+# The router-id loopbacks /32 of provider-side stubs the provider connection generator builds (26b_provider_stub_pool.yml,
+# an address pool in the PROD namespace, generators/provider_stub.py). Authored stub loopbacks (10.255.64.0/24) stay valid.
+PROVIDER_STUB_LOOPBACK_POOL = "Provider-Stub-Loopback-IPv4"
 # The public SNAT address of a firewall context (23_transit_pools.yml, an address pool in the INTERNET namespace).
 FW_SNAT_POOL = "FW-SNAT-INTERNET-IPv4"
 
@@ -169,10 +172,10 @@ GROUP_APP_COMPONENTS = "app_components"
 GROUP_CARRIER_CIRCUITS = "carrier_circuits"
 # Every session circuit (dci, handoff and tunnel): the target group of add_virtual_circuit, whose created-trigger needs it.
 GROUP_VIRTUAL_CIRCUITS = "virtual_circuits"
-GROUP_CLOUD_LOADBALANCERS = "cloud_loadbalancers"
 # Devices that are never a border gateway of a VLAN domain: the SD-WAN hubs and the provider stub routers.
 GROUP_SDWAN_GATEWAYS = "sdwan_gateways"
 GROUP_PROVIDER_STUBS = "provider_stubs"
+GROUP_PROVIDER_CONNECTIONS = "provider_connections"
 
 # device_role -> the group its devices join, for roles whose group does not follow the f"{device_role}s" convention.
 # One map for every create_devices() caller: a group created on a branch because a caller missed it collides with
@@ -184,8 +187,7 @@ ROLE_GROUP_NAMES: dict[str, str] = {
 }
 
 # infrastructure_orchestrator / application_orchestrator -> the group the artifact definitions of that orchestrator
-# target (generators/topology/orchestrator_routing.py). A customer footprint, an application and a provider-hosted
-# colocation each have their own set.
+# target (generators/topology/orchestrator_routing.py). A customer footprint and an application each have their own set.
 TOPOLOGY_ORCHESTRATOR_GROUPS: dict[str, str] = {
     "ansible_automation_platform": "topology_ansible",
     "github_actions": "topology_github_actions",
@@ -197,7 +199,6 @@ APPLICATION_ORCHESTRATOR_GROUPS: dict[str, str] = {
     "github_actions": "application_github_actions",
     "argocd": "application_argocd",
 }
-VIRTUAL_COLOCATION_ORCHESTRATOR_GROUPS: dict[str, str] = {"terraform": "virtual_colocation_terraform"}
 
 # --- 4. Retry and polling policy -------------------------------------------------------------------------------
 

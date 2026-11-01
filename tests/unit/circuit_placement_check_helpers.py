@@ -42,11 +42,6 @@ def _edges(nodes: list[dict[str, Any]]) -> dict[str, Any]:
     return {"edges": [{"node": node} for node in nodes]}
 
 
-def _owner(owner: str | None) -> dict[str, Any]:
-    """A circuit's owner edge, as the query selects it (empty when unowned)."""
-    return {"node": {"id": f"id-{owner}", "org_id": {"value": owner}} if owner else None}
-
-
 def _end(device: str, name: str, deployment: dict[str, Any] | None) -> dict[str, Any]:
     """An end port of a carrier circuit, with the device's deployment (id, kind and name only)."""
     deployment = {key: deployment[key] for key in ("id", "__typename", "name")} if deployment else None
@@ -76,13 +71,11 @@ def _carrier_circuit(
     name: str,
     locations: list[dict[str, Any]],
     ends: list[dict[str, Any]],
-    owner: str | None = None,
 ) -> dict[str, Any]:
     """A carrier circuit as the query selects it: its locations and the end ports it terminates on."""
     return {
         "id": f"id-{name}",
         "name": {"value": name},
-        "owner": _owner(owner),
         "locations": _edges(locations),
         "capabilities": _edges(ends),
     }
@@ -92,9 +85,7 @@ DF10 = _carrier_circuit("DF-DC10-EQXFR2", [DC10, FR2], [BL10_END, EG_FR_DF10_END
 DF11 = _carrier_circuit("DF-DC11-EQXFR2", [DC11, FR2], [BL11_END, EG_FR_DF11_END])
 XC = _carrier_circuit("XC-EQXFR2-AWS-EUC1", [FR2, EUC1], [EG_FR_END, AWS_END])
 XC_AM_NE = _carrier_circuit("XC-EQXAMNE-AWS-EUC1", [AM_NE, EUC1], [EG_AM_NE_END, AWS_END])
-INET_OFFICE = _carrier_circuit(
-    "INET-C001-OFFICE", [C001_OFFICE, ORANGE], [OFFICE_EDGE_END, ORANGE_PE_END], owner="C001"
-)
+INET_OFFICE = _carrier_circuit("INET-C001-OFFICE", [C001_OFFICE, ORANGE], [OFFICE_EDGE_END, ORANGE_PE_END])
 INET_GW = _carrier_circuit("INET-LUMEN-EQXFR2-GW", [FR2, LUMEN], [GW_END, LUMEN_PE_END])
 
 
@@ -211,18 +202,14 @@ def _virtual(
     }
 
 
-def _tunnel(
-    name: str, locations: list[dict[str, Any]], ends: list[dict[str, Any]], owner: str | None = "C001"
-) -> dict[str, Any]:
-    """A tunnel circuit, owned by C001 (the owner of the C001 office) unless told otherwise."""
-    return {**_virtual(name, "tunnel", locations, ends), "owner": _owner(owner)}
+def _tunnel(name: str, locations: list[dict[str, Any]], ends: list[dict[str, Any]]) -> dict[str, Any]:
+    """A tunnel circuit; its owner is derived from the office among its locations."""
+    return _virtual(name, "tunnel", locations, ends)
 
 
-def _interconnect(
-    name: str, locations: list[dict[str, Any]], ends: list[dict[str, Any]], owner: str | None = None
-) -> dict[str, Any]:
-    """An interconnect (DCI) circuit; unowned unless told otherwise, since a DCI is shared platform."""
-    return {**_virtual(name, "dci", locations, ends), "owner": _owner(owner)}
+def _interconnect(name: str, locations: list[dict[str, Any]], ends: list[dict[str, Any]]) -> dict[str, Any]:
+    """An interconnect (DCI) circuit; shared platform."""
+    return _virtual(name, "dci", locations, ends)
 
 
 def _handoff(
@@ -230,9 +217,8 @@ def _handoff(
     locations: list[dict[str, Any]] | None,
     ends: list[dict[str, Any]],
     namespace: tuple[str, str | None] | None = ("PROD", "prod"),
-    vif: tuple[str, int | None] | None = None,
 ) -> dict[str, Any]:
-    """A handoff in ``namespace`` (name, namespace_type); ``vif`` is its cloud endpoint (name, vlan_id).
+    """A handoff in ``namespace`` (name, namespace_type).
 
     ``locations=None`` places the handoff where its ends are deployed (what the check requires); a list states them.
     """
@@ -243,12 +229,31 @@ def _handoff(
     node["ip_namespace"] = {
         "node": {"name": {"value": namespace[0]}, "namespace_type": {"value": namespace[1]}} if namespace else None
     }
-    endpoint: dict[str, Any] | None = None
-    if vif is not None:
-        endpoint = {"name": {"value": vif[0]}}
-        if vif[1] is not None:
-            endpoint["vlan_id"] = {"value": vif[1]}
-    node["cloud_endpoint"] = {"node": endpoint}
+    return node
+
+
+def _vpn(
+    name: str,
+    locations: list[dict[str, Any]],
+    ends: list[dict[str, Any]],
+    namespace: tuple[str, str | None] | None = ("PROD", "prod"),
+    connection: tuple[str, str, dict[str, Any]] | None = ("PC-VPN", "internet_vpn", DC10),
+) -> dict[str, Any]:
+    """A vpn circuit in ``namespace`` on ``connection`` (name, path_type, near facility)."""
+    node = _virtual(name, "vpn", locations, ends)
+    node["ip_namespace"] = {
+        "node": {"name": {"value": namespace[0]}, "namespace_type": {"value": namespace[1]}} if namespace else None
+    }
+    node["connection"] = {"node": None}
+    if connection:
+        node["connection"] = {
+            "node": {
+                "id": f"id-{connection[0]}",
+                "name": {"value": connection[0]},
+                "path_type": {"value": connection[1]},
+                "near": {"node": {"id": connection[2]["id"]}},
+            }
+        }
     return node
 
 
@@ -257,6 +262,7 @@ def _run(
     tunnels: list[dict[str, Any]] | None = None,
     interconnects: list[dict[str, Any]] | None = None,
     handoffs: list[dict[str, Any]] | None = None,
+    vpns: list[dict[str, Any]] | None = None,
 ) -> list[str]:
     """Validate the circuits and return the logged error messages."""
     check = cast(Any, CheckCircuitPlacement.__new__(CheckCircuitPlacement))
@@ -265,7 +271,9 @@ def _run(
     check.validate(
         {
             "TopologyCarrierCircuit": _edges(carrier or []),
-            "TopologySessionCircuit": _edges([*(tunnels or []), *(interconnects or []), *(handoffs or [])]),
+            "TopologySessionCircuit": _edges(
+                [*(tunnels or []), *(interconnects or []), *(handoffs or []), *(vpns or [])]
+            ),
         }
     )
     for finding in findings:
@@ -273,9 +281,13 @@ def _run(
     return [finding["message"] for finding in findings]
 
 
+# A VPN tunnel from the border leaf of DC10 (its uplink rides the Orange internet circuit) to the AWS side.
+INET_DC10 = _carrier_circuit("INET-ORANGE-DC10", [DC10, ORANGE], [BL10_END, ORANGE_PE_END])
+BL10_TUNNEL = _vport("bl-dc101101", "Tunnel1", parent=("Ethernet1/36", (INET_DC10,)))
+AWS_TUNNEL = _vport("EXT-AWS-VPN-EUC1", "Tunnel1")
+VPN_CIRCUIT = _vpn("PC-VPN-L1", [DC10, EUC1], [BL10_TUNNEL, AWS_TUNNEL])
+
 # A tunnel, an interconnect and a handoff that pass; the tests below break one thing at a time.
 TUNNEL = _tunnel("C001-OFFICE-SDWAN-FR2", [C001_OFFICE, FR2], [OFFICE_EDGE, GW_PUBLIC])
 DCI = _interconnect("DCI-DC10-FR2", [DC10, FR2], [BL10, EG_FR_DF10])
-HANDOFF = _handoff(
-    "HO-C005-P-AWS-EUC1", None, [EG_FR_VLAN, AWS_VLAN], namespace=("PROD", "prod"), vif=("VIF-C005-P", 3101)
-)
+HANDOFF = _handoff("HO-C005-P-AWS-EUC1", None, [EG_FR_VLAN, AWS_VLAN], namespace=("PROD", "prod"))

@@ -92,8 +92,8 @@ class TestEdgeRender:
     def test_registered_default_route_is_not_accepted(self) -> None:
         """Even a VPC block of 0/0 in the data does not reach the inbound prefix-list."""
         data = _fixture()
-        vpc = data["CloudVirtualInterface"]["edges"][0]["node"]["transit_gateway_attachment"]["node"]
-        blocks = vpc["transit_gateway"]["node"]["attachments"]["edges"][1]["node"]["virtual_network"]["node"]
+        connection = data["TopologyProviderConnection"]["edges"][0]["node"]
+        blocks = connection["attached_gateway"]["node"]["attachments"]["edges"][1]["node"]["virtual_network"]["node"]
         blocks["cidr_blocks"]["edges"].append(
             {"node": {"prefix": {"value": "0.0.0.0/0"}, "ip_namespace": {"node": {"name": {"value": "PROD"}}}}}
         )

@@ -369,50 +369,6 @@ nodes:
         identifier: loadbalancer_context__vip_prefix
         order_weight: 1100
 
-  # ── Cloud Firewall HA ─────────────────────────────────────────────────────
-  - name: CloudFirewallHA
-    namespace: Managed
-    description: "Cloud-native firewall HA service (AWS NFW, Azure Firewall, GCP NGFW, Zscaler)"
-    label: Cloud Firewall HA
-    icon: "mdi:cloud-lock"
-    include_in_menu: false
-    human_friendly_id:
-      - "name__value"
-    inherit_from:
-      - ManagedHA
-      - ManagedGeneric
-      - ManagedInlineService
-    uniqueness_constraints:
-      - ["name__value"]
-    display_label: "{{name__value}}"
-    order_by:
-      - name__value
-    attributes:
-      - name: provider
-        kind: Dropdown
-        label: "Cloud Provider / Product"
-        optional: false
-        order_weight: 1400
-        choices:
-          - name: aws_nfw
-            label: "AWS Network Firewall"
-            color: "#FF9900"
-          - name: azure_firewall
-            label: "Azure Firewall"
-            color: "#0078D4"
-          - name: gcp_ngfw
-            label: "GCP Cloud NGFW"
-            color: "#4285F4"
-          - name: other
-            label: "Other"
-            color: "#95A5A6"
-      - name: region
-        kind: Text
-        label: "Region / Zone"
-        optional: true
-        order_weight: 1500
-        description: "Cloud region or availability zone"
-
   # ── On-prem Proxy HA ─────────────────────────────────────────────────────
   - name: ProxyHA
     namespace: Managed
@@ -585,16 +541,6 @@ nodes:
         description: "Cloud region or availability zone (e.g. eu-west-1, westeurope)"
         optional: true
         order_weight: 1500
-    relationships:
-      - name: owner
-        peer: OrganizationCustomer
-        cardinality: one
-        kind: Attribute
-        optional: true
-        identifier: "cloudproxy__owner"
-        order_weight: 1600
-        label: "Dedicated Customer"
-        description: "Customer this broker is dedicated to; unset means shared across all customers"
 
 extensions:
   nodes:

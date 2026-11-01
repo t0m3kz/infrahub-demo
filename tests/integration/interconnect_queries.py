@@ -288,7 +288,6 @@ query ($names: [String]) {
         scheme { value }
         virtual_network { node { name { value } } }
         network_segments { edges { node { name { value } } } }
-        member_of_groups { edges { node { name { value } } } }
         vips { edges { node { id } } }
       }
     }

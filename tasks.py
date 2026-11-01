@@ -290,7 +290,8 @@ def test_integration_all_demo(
     policy check + render (64), and reruns of the security generators that
     must leave the branch unchanged (65), and the sessions of an Interconnect and a Handoff
     following the status of their carrier or of the circuit itself, both ways (66, mutates the
-    branch, so it runs last).
+    branch), and the provider connections with the session circuits add_provider_connection builds, their
+    rerun, a disposable connection's path type change and delete (67, adds and deletes objects, so it runs last).
     """
     _run_integration_suite(
         context,
@@ -303,7 +304,8 @@ def test_integration_all_demo(
         "tests/integration/test_64b_all_demo_management_lb_config.py "
         "tests/integration/test_64c_all_demo_terminated_segment.py "
         "tests/integration/test_65_all_demo_idempotency.py "
-        "tests/integration/test_66_all_demo_circuit_lifecycle.py",
+        "tests/integration/test_66_all_demo_circuit_lifecycle.py "
+        "tests/integration/test_67_all_demo_provider_connections.py",
         basetemp=basetemp,
         server_port=server_port,
     )

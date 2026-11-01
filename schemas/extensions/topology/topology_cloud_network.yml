@@ -174,16 +174,16 @@ nodes:
         identifier: "transit_gateway_attachment__virtual_network"
         order_weight: 700
         description: "Spoke virtual network — set when attachment_type is vpc"
-      # The hybrid endpoint is the CloudHybridAttachment generic (today CloudVirtualInterface only).
+      # The reverse side is TopologyProviderConnection.transit_attachment (one connection feeds the attachment).
       - name: hybrid_endpoint
         label: "Hybrid Endpoint"
-        peer: CloudHybridAttachment
-        kind: Generic
+        peer: TopologyProviderConnection
         cardinality: one
+        kind: Attribute
         optional: true
         identifier: "transit_gateway_attachment__hybrid_endpoint"
         order_weight: 800
-        description: "Transit VIF — set when attachment_type is hybrid"
+        description: "The provider connection a hybrid attachment feeds on (set when attachment_type is hybrid)"
       - name: associated_route_table
         label: "Associated Route Table"
         peer: CloudTransitGatewayRouteTable
@@ -204,133 +204,6 @@ nodes:
         identifier: "transit_gateway_attachment__propagated_route_tables"
         order_weight: 900
         description: "Route tables this spoke's prefixes are advertised into — who can reach it"
-
-  - name: DirectConnect
-    namespace: Cloud
-    label: Direct Connect
-    icon: mdi:lan-connect
-    description: Dedicated physical connection to cloud provider.
-    include_in_menu: false
-    inherit_from:
-      - CloudResource
-    human_friendly_id:
-      - name__value
-    display_label: "{{ name__value }}"
-    order_by:
-      - name__value
-    attributes:
-      - name: bandwidth
-        kind: Text
-        label: "Bandwidth"
-        description: "Connection bandwidth (e.g., 1Gbps, 10Gbps)"
-        optional: false
-        order_weight: 320
-      - name: connection_type
-        kind: Dropdown
-        order_weight: 350
-        optional: false
-        choices:
-          - name: dedicated
-            label: Dedicated
-            description: Physical connection at colocation
-            color: "#3498DB"
-          - name: hosted
-            label: Hosted
-            description: Hosted connection via partner
-            color: "#2ECC71"
-      - name: vlan_id
-        kind: Number
-        label: "VLAN ID"
-        optional: true
-        order_weight: 420
-        parameters:
-          min_value: 1
-          max_value: 4094
-    relationships:
-      - name: account
-        peer: CloudAccount
-        cardinality: one
-        optional: false
-        order_weight: 600
-      - name: physical_devices
-        peer: DcimDevice
-        cardinality: many
-        optional: true
-        kind: Attribute
-        order_weight: 625
-        description: "Physical or virtual routers/switches for direct connect"
-      - name: region
-        peer: TopologyCloudRegion
-        cardinality: one
-        optional: false
-        order_weight: 650
-      - name: location
-        peer: LocationFacility
-        cardinality: one
-        optional: true
-        order_weight: 700
-        description: "Physical location/data center"
-    uniqueness_constraints:
-      - [account, name__value]
-
-  - name: VirtualInterface
-    namespace: Cloud
-    label: Virtual Interface
-    icon: mdi:ethernet
-    description: Virtual interface on Direct Connect/ExpressRoute.
-    include_in_menu: false
-    inherit_from:
-      - CloudResource
-      - CloudHybridAttachment
-    human_friendly_id:
-      - name__value
-    display_label: "{{ name__value }}"
-    order_by:
-      - name__value
-    attributes:
-      - name: vif_type
-        kind: Dropdown
-        order_weight: 280
-        optional: false
-        choices:
-          - name: private
-            label: Private
-            description: Access to virtual network resources
-            color: "#3498DB"
-          - name: public
-            label: Public
-            description: Access to public endpoints
-            color: "#2ECC71"
-          - name: transit
-            label: Transit
-            description: Transit gateway attachment
-            color: "#9B59B6"
-      - name: vlan_id
-        kind: Number
-        label: "VLAN ID"
-        optional: false
-        order_weight: 350
-        parameters:
-          min_value: 1
-          max_value: 4094
-    relationships:
-      - name: direct_connect
-        peer: CloudDirectConnect
-        cardinality: one
-        optional: false
-        order_weight: 600
-      - name: virtual_network
-        peer: CloudVirtualNetwork
-        cardinality: one
-        optional: true
-        order_weight: 650
-      - name: transit_gateway
-        peer: CloudTransitGateway
-        cardinality: one
-        optional: true
-        order_weight: 700
-    uniqueness_constraints:
-      - [direct_connect, vlan_id__value]
 
   # --------------------  Network Appliance  --------------------
   # A network function a provider hosts for us (Equinix Network Edge, Megaport MVE;
@@ -403,30 +276,3 @@ extensions:
           identifier: "transit_gateway__attachments"
           order_weight: 2000
           description: "All attachments landing on this Transit Gateway, across accounts"
-
-    # On the generic, so every hybrid endpoint (CloudVirtualInterface, the transit VIF) gets it from one declaration.
-    - kind: CloudHybridAttachment
-      relationships:
-        - name: transit_gateway_attachment
-          label: "Transit Gateway Attachment"
-          peer: CloudTransitGatewayAttachment
-          cardinality: one
-          kind: Attribute
-          optional: true
-          identifier: "transit_gateway_attachment__hybrid_endpoint"
-          order_weight: 2000
-          description: "Transit Gateway attachment this hybrid endpoint feeds"
-        # The edge that closes the handoff leg. A handoff circuit's customer end is a DcimInterface, but its
-        # cloud end is a CloudVirtualInterface, not a device port. Without this the traversal
-        # walks from a DC border leaf out to the colo cage and then stops at an island boundary. 1:1: one VIF
-        # has one handoff circuit; the other side is TopologySessionCircuit.cloud_endpoint. The peer is the session
-        # kind, so only a handoff may hold it: checks/circuit_placement.py refuses cloud_endpoint on a dci or a tunnel.
-        - name: virtual_circuit
-          label: "Handoff Circuit"
-          peer: TopologySessionCircuit
-          cardinality: one
-          kind: Attribute
-          optional: true
-          identifier: "handoff_circuit__cloud_endpoint"
-          order_weight: 2100
-          description: "Handoff circuit terminating on this cloud attachment"

@@ -1,4 +1,4 @@
-"""Proxy, load-balancer and cloud load-balancer fixtures."""
+"""Proxy and load-balancer fixtures."""
 
 from __future__ import annotations
 
@@ -6,7 +6,6 @@ from typing import Any
 
 from tests.smoke.fixture_builders.common import _edges, _node, _v, write_data_fixtures
 from transforms.config.loadbalancer import LoadBalancer
-from transforms.config.loadbalancer_cloud import LoadBalancerCloud
 from transforms.config.proxy import Proxy
 
 _PROXY_PLATFORM_VENDOR: dict[str, str] = {
@@ -136,11 +135,6 @@ def _server_member(address: str) -> dict:
         "name": _v(f"srv-{address.split('/')[0].replace('.', '-')}"),
         "primary_address": _node({"address": _v(address)}),
     }
-
-
-def _instance_member(name: str, cloud_id: str, private_ip: str) -> dict:
-    """A pool member of a cloud VIP as queries/config/loadbalancer_cloud.gql selects it: a cloud instance."""
-    return {"__typename": "CloudInstance", "name": _v(name), "cloud_id": _v(cloud_id), "private_ip": _v(private_ip)}
 
 
 def _lb_vip(
@@ -294,117 +288,8 @@ def build_lb_context_data(*, device_name: str, platform: str) -> dict:
     return {"DcimPhysicalDevice": _edges([device_node]), "DcimVirtualDevice": _edges([])}
 
 
-# provider -> (OrganizationProvider name, scheme, [(protocol, port, health checks)])
-_LB_CLOUD_SPECS: dict[str, tuple[str, str, list[tuple[str, int, list[dict]]]]] = {
-    "aws": (
-        "AWS",
-        "internet_facing",
-        [("tcp", 443, [{"check": "tcp", "rise": 3, "fall": 3, "timeout": 2000}]), ("udp", 443, [])],
-    ),
-    "azure": ("Azure", "internet_facing", [("tcp", 443, [{"check": "http", "rise": 2, "fall": 4, "timeout": 1000}])]),
-    "gcp": ("Google Cloud", "internal", [("tcp", 8443, [{"check": "tcp", "rise": 3, "fall": 3, "timeout": 1000}])]),
-}
-
-# provider -> (OrganizationProvider name, scheme, dns_names, certificate reference,
-#              [(protocol, port, health checks)]): an http and an https listener of one layer 7 load balancer
-_LB_CLOUD_L7_SPECS: dict[str, tuple[str, str, list[str], str, list[tuple[str, int, list[dict]]]]] = {
-    "aws": (
-        "AWS",
-        "internet_facing",
-        ["frontend-custody-api-c0-a9ea4206-1234567890.eu-central-1.elb.amazonaws.com"],
-        "arn:aws:acm:eu-central-1:123456789012:certificate/0a1b2c3d-4e5f-6789-abcd-ef0123456789",
-        [
-            ("http", 80, [{"check": "http", "rise": 2, "fall": 3, "timeout": 5000}]),
-            ("https", 443, [{"check": "http", "rise": 3, "fall": 3, "timeout": 2000}]),
-        ],
-    ),
-    "azure": (
-        "Azure",
-        "internet_facing",
-        ["frontend-custody-api-c0-a9ea4206.westeurope.cloudapp.azure.com"],
-        "https://c003-vaultex-kv.vault.azure.net/secrets/frontend-custody-api-cert/4f2a9c1e7b3d4e5f8a6b0c1d2e3f4a5b",
-        [
-            ("http", 80, [{"check": "http", "rise": 2, "fall": 3, "timeout": 5000}]),
-            ("https", 443, [{"check": "ssl", "rise": 3, "fall": 3, "timeout": 2000}]),
-        ],
-    ),
-    "gcp": (
-        "Google Cloud",
-        "internet_facing",
-        ["frontend-custody-api-c0-a9ea4206.lb.example.com", "frontend-custody-api-c0-a9ea4206-b.lb.example.com"],
-        "frontend-custody-api-cert",
-        [
-            ("http", 80, [{"check": "http", "rise": 2, "fall": 3, "timeout": 5000}]),
-            ("https", 443, [{"check": "tcp", "rise": 3, "fall": 3, "timeout": 2000}]),
-        ],
-    ),
-}
-
-
-def build_lb_cloud_data(
-    *,
-    provider: str,
-    layer: str = "l4",
-) -> dict:
-    """The CloudLoadBalancer of a load_balanced cloud component as generators/lb_vip.py writes it
-    (queries/config/loadbalancer_cloud.gql): l4_cloud (tcp/udp) or l7_cloud (an http and an https listener with a
-    certificate and dns_names), one VIP per port without vip_ip, the component's cloud instances as pool members,
-    the component's health checks."""
-    if layer == "l7":
-        provider_name, scheme, dns_names, certificate, ports = _LB_CLOUD_L7_SPECS[provider]
-    else:
-        (provider_name, scheme, ports), dns_names, certificate = _LB_CLOUD_SPECS[provider], None, None
-    fqdn = "frontend.custody-api.c003.demo.local"
-    lb_name = "frontend-custody-api-c0-a9ea4206"
-    load_balancer = {
-        "id": f"lb-{provider}",
-        "name": _v(lb_name),
-        "lb_type": _v(f"{layer}_cloud"),
-        "scheme": _v(scheme),
-        "dns_names": _v(dns_names),
-        "virtual_network": _node(
-            {
-                "id": f"vnet-{provider}",
-                "name": _v(f"c003-vaultex-{provider}-vpc-prod"),
-                "account": _node({"name": _v(f"c003-{provider}-prod"), "provider": _node({"name": _v(provider_name)})}),
-            }
-        ),
-        "network_segments": _edges(
-            [
-                {
-                    "id": f"seg-{provider}-{zone}",
-                    "name": _v(f"c003-vaultex-subnet-prod-{zone}"),
-                    "availability_zone": _node({"name": _v(f"euc1-az{zone}")}),
-                }
-                for zone in (1, 2)
-            ]
-        ),
-    }
-    vips = [
-        {
-            "id": f"vip-{provider}-{protocol}-{port}",
-            "hostname": _v(fqdn),
-            "protocol": _v(protocol),
-            "port": _v(port),
-            "ssl_certificate": _v(certificate if protocol == "https" else None),
-            "load_balancing_algorithm": _v(None),
-            "session_persistence": _v(None),
-            # unsorted on purpose: the renderers order the members by address
-            "pool_members": _edges(
-                [
-                    _instance_member("c003-frontend-prod-2", "i-0a1b2c3d4e5f60002", "10.20.2.11/24"),
-                    _instance_member("c003-frontend-prod-1", "i-0a1b2c3d4e5f60001", "10.20.1.10/24"),
-                ]
-            ),
-            "health_checks": _edges([{key: _v(value) for key, value in check.items()} for check in checks]),
-        }
-        for protocol, port, checks in ports
-    ]
-    return {"CloudLoadBalancer": _edges([load_balancer]), "LoadbalancerVIP": _edges(vips)}
-
-
 def write_fixtures() -> tuple[int, int]:
-    """Write the proxy, load-balancer and cloud load-balancer fixtures."""
+    """Write the proxy and load-balancer fixtures."""
     generated = errors = 0
 
     # Proxy scenarios: platform × proxy_type
@@ -435,15 +320,4 @@ def write_fixtures() -> tuple[int, int]:
     generated += g
     errors += e
 
-    # Cloud load balancer of a load_balanced cloud component, per provider (Terraform HCL)
-    print("\nGenerating cloud load-balancer fixtures:")
-    g, e = write_data_fixtures(
-        (
-            LoadBalancerCloud,
-            f"loadbalancer_cloud_{provider}{'_l7' if layer == 'l7' else ''}",
-            build_lb_cloud_data(provider=provider, layer=layer),
-        )
-        for layer in ("l4", "l7")
-        for provider in _LB_CLOUD_SPECS
-    )
-    return generated + g, errors + e
+    return generated, errors

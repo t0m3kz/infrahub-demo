@@ -536,25 +536,6 @@ spec:
           - attribute_name: infrastructure_orchestrator
             value_match: any
 
-    # Virtual colocation: every one joins `virtual_colocations` (the colocation
-    # created-trigger requires it), the target of this definition too.
-    - name: trigger-virtual-colocation-orchestrator-routing-on-created
-      branch_scope: "other_branches"
-      node_kind: TopologyVirtualColocation
-      mutation_action: "created"
-      action: run-virtual-colocation-orchestrator-routing-generator
-
-    - name: trigger-virtual-colocation-orchestrator-routing-on-orchestrator-updated
-      branch_scope: "other_branches"
-      node_kind: TopologyVirtualColocation
-      mutation_action: "updated"
-      action: run-virtual-colocation-orchestrator-routing-generator
-      matches:
-        kind: CoreNodeTriggerAttributeMatch
-        data:
-          - attribute_name: infrastructure_orchestrator
-            value_match: any
-
     # ── Customer Deployment (FirewallContext/dedicated LB) ────────────────────
     # Same generator/query shape for both deployment kinds that still have
     # on-site fabric to provision a FirewallContext on (see
@@ -801,4 +782,191 @@ spec:
         kind: CoreNodeTriggerRelationshipMatch
         data:
           - relationship_name: password
+            modification_type: updated
+
+    # ── Provider connections ──────────────────────────────────────────────────
+    # add_provider_connection targets provider_connections and builds the per-link session circuits (and their end
+    # interfaces) of a TopologyProviderConnection, so every connection must be a member of the group, or its
+    # created-trigger raises (see the endpoint note above).
+    # The `updated` rules watch what the connection is made of: its path (`path_type`, `service`, `vlan_id`,
+    # `status`), its two facilities (`near`, `far`), its `ip_namespace` and `account` (the provider, hence the
+    # flavour), `provider_as` and `link_prefixes` (the stub's AS and the provider-assigned ranges), `password` (the
+    # key of its sessions), the authored
+    # `carrier_circuits` it rides, and the attachments (`attached_network`, `attached_gateway`,
+    # `transit_attachment`; the transforms read them, the generator only reruns idempotently).
+    # `session_circuits` is deliberately absent: the generator writes it (through the circuit's `connection`), so a
+    # rule would loop. `owner`, `registered_prefixes`, `bandwidth` and `description` have no rule:
+    # nothing the generator writes depends on them.
+    # No loop: the only write to the connection is `vlan_id`, once, when the VLAN was chosen by the run; the rerun
+    # finds it set and writes nothing.
+
+    - name: trigger-provider-connection-on-created
+      branch_scope: "other_branches"
+      node_kind: TopologyProviderConnection
+      mutation_action: "created"
+      action: run-provider-connection-generator
+
+    - name: trigger-provider-connection-on-path-type-updated
+      branch_scope: "other_branches"
+      node_kind: TopologyProviderConnection
+      mutation_action: "updated"
+      action: run-provider-connection-generator
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: path_type
+            value_match: any
+
+    - name: trigger-provider-connection-on-service-updated
+      branch_scope: "other_branches"
+      node_kind: TopologyProviderConnection
+      mutation_action: "updated"
+      action: run-provider-connection-generator
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: service
+            value_match: any
+
+    - name: trigger-provider-connection-on-vlan-id-updated
+      branch_scope: "other_branches"
+      node_kind: TopologyProviderConnection
+      mutation_action: "updated"
+      action: run-provider-connection-generator
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: vlan_id
+            value_match: any
+
+    - name: trigger-provider-connection-on-status-updated
+      branch_scope: "other_branches"
+      node_kind: TopologyProviderConnection
+      mutation_action: "updated"
+      action: run-provider-connection-generator
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: status
+            value_match: any
+
+    - name: trigger-provider-connection-on-near-updated
+      branch_scope: "other_branches"
+      node_kind: TopologyProviderConnection
+      mutation_action: "updated"
+      action: run-provider-connection-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: near
+            modification_type: updated
+
+    - name: trigger-provider-connection-on-far-updated
+      branch_scope: "other_branches"
+      node_kind: TopologyProviderConnection
+      mutation_action: "updated"
+      action: run-provider-connection-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: far
+            modification_type: updated
+
+    - name: trigger-provider-connection-on-ip-namespace-updated
+      branch_scope: "other_branches"
+      node_kind: TopologyProviderConnection
+      mutation_action: "updated"
+      action: run-provider-connection-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: ip_namespace
+            modification_type: updated
+
+    - name: trigger-provider-connection-on-account-updated
+      branch_scope: "other_branches"
+      node_kind: TopologyProviderConnection
+      mutation_action: "updated"
+      action: run-provider-connection-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: account
+            modification_type: updated
+
+    - name: trigger-provider-connection-on-attached-network-updated
+      branch_scope: "other_branches"
+      node_kind: TopologyProviderConnection
+      mutation_action: "updated"
+      action: run-provider-connection-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: attached_network
+            modification_type: updated
+
+    - name: trigger-provider-connection-on-attached-gateway-updated
+      branch_scope: "other_branches"
+      node_kind: TopologyProviderConnection
+      mutation_action: "updated"
+      action: run-provider-connection-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: attached_gateway
+            modification_type: updated
+
+    - name: trigger-provider-connection-on-transit-attachment-updated
+      branch_scope: "other_branches"
+      node_kind: TopologyProviderConnection
+      mutation_action: "updated"
+      action: run-provider-connection-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: transit_attachment
+            modification_type: updated
+
+    - name: trigger-provider-connection-on-provider-as-updated
+      branch_scope: "other_branches"
+      node_kind: TopologyProviderConnection
+      mutation_action: "updated"
+      action: run-provider-connection-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: provider_as
+            modification_type: updated
+
+    - name: trigger-provider-connection-on-password-updated
+      branch_scope: "other_branches"
+      node_kind: TopologyProviderConnection
+      mutation_action: "updated"
+      action: run-provider-connection-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: password
+            modification_type: updated
+
+    - name: trigger-provider-connection-on-link-prefixes-updated
+      branch_scope: "other_branches"
+      node_kind: TopologyProviderConnection
+      mutation_action: "updated"
+      action: run-provider-connection-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: link_prefixes
+            modification_type: updated
+
+    - name: trigger-provider-connection-on-carrier-circuits-updated
+      branch_scope: "other_branches"
+      node_kind: TopologyProviderConnection
+      mutation_action: "updated"
+      action: run-provider-connection-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: carrier_circuits
             modification_type: updated

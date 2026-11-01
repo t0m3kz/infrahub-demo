@@ -424,7 +424,6 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
             {"owner": _customer("C003"), "gateway": _node(None)},
         ]
     )
-    on_this_edge = _node({"physical_devices": _edges([{"name": _v(device_name)}])})
 
     def vpc(owner: dict | None, *blocks: tuple[str, str]) -> dict:
         """A cloud virtual network: its cidr_blocks and the owner of its account."""
@@ -442,52 +441,68 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
             "virtual_network": virtual_network,
         }
 
-    data["CloudVirtualInterface"] = _edges(
-        [
-            {
-                "name": _v("vif-transit-hub-euc1"),
-                "vlan_id": _v(1000),
-                "direct_connect": on_this_edge,
-                "virtual_network": _node(None),
-                "transit_gateway_attachment": _node(
+    def connection(name: str, service: str, ends: tuple[tuple[str, str], ...], **fields: Any) -> dict:
+        """A provider connection: unset relationships are null, ``registered_prefixes`` empty. ``ends`` are the
+        (device, interface) end ports of its session circuit."""
+        return {
+            "name": _v(name),
+            "service": _v(service),
+            "owner": _node(None),
+            "account": _node(None),
+            "session_circuits": _edges(
+                [
                     {
-                        "associated_route_table": _node({"id": "rt-shared"}),
-                        "transit_gateway": _node(
-                            {
-                                "attachments": _edges(
-                                    [
-                                        {
-                                            "attachment_type": _v("hybrid"),
-                                            "propagates_to_route_tables": _edges([{"id": "rt-shared"}]),
-                                            "virtual_network": _node(None),
-                                        },
-                                        vpc_attachment("rt-shared", vpc(_customer("C003"), ("10.30.0.0/16", "PROD"))),
-                                        vpc_attachment("rt-shared", vpc(_customer("C015"), ("10.32.0.0/16", "PROD"))),
-                                        vpc_attachment("rt-shared", vpc(_PROVIDER, ("10.33.0.0/16", "PROD"))),
-                                        vpc_attachment(
-                                            "rt-isolated", vpc(_customer("C003"), ("10.150.0.0/16", "PROD"))
-                                        ),
-                                    ]
-                                )
-                            }
-                        ),
+                        "capabilities": _edges(
+                            [{"name": _v(iface), "device": _node({"name": _v(device)})} for device, iface in ends]
+                        )
+                    }
+                ]
+            ),
+            "registered_prefixes": _edges([]),
+            "attached_network": _node(None),
+            "attached_gateway": _node(None),
+            "transit_attachment": _node(None),
+            **fields,
+        }
+
+    data["TopologyProviderConnection"] = _edges(
+        [
+            connection(
+                "aws-transit-hub-euc1",
+                "transit",
+                ((device_name, "Ethernet1/13.1000"),),
+                transit_attachment=_node({"associated_route_table": _node({"id": "rt-shared"})}),
+                attached_gateway=_node(
+                    {
+                        "attachments": _edges(
+                            [
+                                {
+                                    "attachment_type": _v("hybrid"),
+                                    "propagates_to_route_tables": _edges([{"id": "rt-shared"}]),
+                                    "virtual_network": _node(None),
+                                },
+                                vpc_attachment("rt-shared", vpc(_customer("C003"), ("10.30.0.0/16", "PROD"))),
+                                vpc_attachment("rt-shared", vpc(_customer("C015"), ("10.32.0.0/16", "PROD"))),
+                                vpc_attachment("rt-shared", vpc(_PROVIDER, ("10.33.0.0/16", "PROD"))),
+                                vpc_attachment("rt-isolated", vpc(_customer("C003"), ("10.150.0.0/16", "PROD"))),
+                            ]
+                        )
                     }
                 ),
-            },
-            {
-                "name": _v("vif-private-dev-euc1"),
-                "vlan_id": _v(1001),
-                "direct_connect": on_this_edge,
-                "virtual_network": vpc(_customer("C003"), ("10.60.0.0/16", "NON-PROD"), ("10.31.0.0/16", "PROD")),
-                "transit_gateway_attachment": _node(None),
-            },
-            {
-                "name": _v("vif-elsewhere"),
-                "vlan_id": _v(1000),
-                "direct_connect": _node({"physical_devices": _edges([{"name": _v("dc1-edge-02")}])}),
-                "virtual_network": vpc(_customer("C003"), ("10.99.0.0/16", "PROD")),
-                "transit_gateway_attachment": _node(None),
-            },
+            ),
+            connection(
+                "aws-private-dev-euc1",
+                "private",
+                ((device_name, "Ethernet1/13.1001"),),
+                attached_network=vpc(_customer("C003"), ("10.60.0.0/16", "NON-PROD"), ("10.31.0.0/16", "PROD")),
+            ),
+            # The same sub-interface name on ANOTHER edge: matched by device, never accepted here.
+            connection(
+                "aws-private-elsewhere",
+                "private",
+                (("dc1-edge-02", "Ethernet1/13.1000"),),
+                attached_network=vpc(_customer("C003"), ("10.99.0.0/16", "PROD")),
+            ),
         ]
     )
 
@@ -544,9 +559,10 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
     )
 
     def tunnel(owner: dict, prefixes: tuple[tuple[str, str], ...], *ends: str) -> dict:
-        """A tunnel circuit: its owner, the (prefix, namespace) pairs it registers and the device of each end port."""
+        """A tunnel circuit: the office (of ``owner``) in its locations, the (prefix, namespace) pairs it registers
+        and the device of each end port. The tunnel stores no owner: it is the office's."""
         return {
-            "owner": owner,
+            "locations": _edges([{"owner": owner}]),
             "registered_prefixes": _cidr_blocks(*prefixes),
             "capabilities": _edges([{"device": _node({"name": _v(end)})} for end in ends]),
         }

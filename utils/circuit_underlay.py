@@ -32,8 +32,9 @@ SESSION_CIRCUIT = "TopologySessionCircuit"
 DCI_TYPE = "dci"
 HANDOFF_TYPE = "handoff"
 TUNNEL_TYPE = "tunnel"
+VPN_TYPE = "vpn"
 # The circuit types that have a session generated (a tunnel has none): a port is an end of at most one.
-SESSION_CIRCUIT_TYPES = (DCI_TYPE, HANDOFF_TYPE)
+SESSION_CIRCUIT_TYPES = (DCI_TYPE, HANDOFF_TYPE, VPN_TYPE)
 
 BGP_PROCESS = "ManagedBGP"
 OVERLAY_ROLE = "overlay"
@@ -113,7 +114,7 @@ def derived_underlay(circuit: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 async def session_circuits_on(client: Any, port_ids: list[str]) -> list[Any]:
-    """Every session circuit (dci or handoff) with one of ``port_ids`` among its ends.
+    """Every session circuit (dci, handoff or vpn) with one of ``port_ids`` among its ends.
 
     A tunnel shares its ports by design (one gateway port serves many tunnels), so it stays out: the filter is on
     ``circuit_type``, not on the kind.

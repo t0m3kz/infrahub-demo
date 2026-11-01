@@ -13,6 +13,8 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+from infrahub_sdk.exceptions import GraphQLError
+
 from generators.logger import GeneratorError
 from generators.topology.circuit import CarrierCircuitGenerator
 from generators.topology.virtual_circuit import VirtualCircuitSessionGenerator
@@ -269,6 +271,8 @@ def session_payload(
     namespace: str | None = "PROD",
     password: str | None = None,
     circuit_id: str = VC_ID,
+    connection: dict[str, Any] | None = None,
+    link_prefix: str | None = None,
 ) -> dict[str, Any]:
     """A TopologySessionCircuit payload of ``circuit_type`` (dci, handoff, tunnel); a handoff also carries its
     namespace and password.
@@ -281,9 +285,13 @@ def session_payload(
         "status": {"value": status},
         "circuit_type": {"value": circuit_type},
     }
-    if circuit_type == "handoff":
+    if circuit_type in ("handoff", "vpn"):
         node["ip_namespace"] = {"node": {"name": {"value": namespace}} if namespace else None}
         node["password"] = {"node": {"id": password} if password else None}
+        node["link_prefix"] = {
+            "node": {"id": "link-prefix-1", "prefix": {"value": link_prefix}} if link_prefix else None
+        }
+        node["connection"] = {"node": connection}
     node["capabilities"] = {"edges": [{"node": port} for port in ends]}
     return {"TopologySessionCircuit": {"edges": [{"node": node}]}}
 
@@ -298,6 +306,58 @@ def handoff_payload(**kwargs: Any) -> dict[str, Any]:
     """A handoff between the cage edge sub-interface and the provider router's (override with ``ends=``)."""
     ends = kwargs.pop("ends", None) or [handoff_edge_port(), handoff_party_port()]
     return session_payload("handoff", ends, **kwargs)
+
+
+def connection_node(
+    *, path_type: str = "dedicated", profile: str | None = None, via: str = "account", conn_id: str = "pc-1"
+) -> dict[str, Any]:
+    """The ``connection`` of a session circuit as the query selects it (the profile via the account or the far facility)."""
+    provider = {"node": {"id": "prov-1", "name": {"value": "PROV"}, "connection_profile": {"value": profile}}}
+    owner = {"node": {"id": "prov-1", "__typename": "OrganizationProvider", **provider["node"]}}
+    node: dict[str, Any] = {
+        "id": conn_id,
+        "path_type": {"value": path_type},
+        "account": {"node": {"provider": provider} if via == "account" else None},
+        "far": {"node": {"id": "far-1", "provider": provider} if via == "external" else None},
+        "carrier_circuits": {"edges": []},
+    }
+    if via == "saas":
+        node["far"] = {"node": {"id": "far-1", "parent": {"node": {"provider": provider}}}}
+    if via == "billed":
+        node["far"] = {"node": {"id": "far-1", "account": {"node": {"provider": provider}}}}
+    if via == "kit":
+        kit = {"id": "dev-1", "owner": owner}
+        end = {
+            "node": {
+                "id": "if-1",
+                "device": {"node": {"id": "dev-1", "owner": owner, "deployment": {"node": {"id": "far-1"}}}},
+            }
+        }
+        node["far"] = {
+            "node": {"id": "far-1", "devices": {"edges": [{"node": kit}]}, "appliances": {"edges": [{"node": kit}]}}
+        }
+        node["carrier_circuits"] = {"edges": [{"node": {"capabilities": {"edges": [end]}}}]}
+    return node
+
+
+def vpn_payload(**kwargs: Any) -> dict[str, Any]:
+    """A VPN between a cage edge tunnel interface and the provider stub's (override with ``ends=``)."""
+    ends = kwargs.pop("ends", None) or [tunnel_edge_port(), tunnel_party_port()]
+    kwargs.setdefault("name", "VC-C001-ZS-VPN")
+    return session_payload("vpn", ends, **kwargs)
+
+
+def tunnel_edge_port(**kwargs: Any) -> dict[str, Any]:
+    """Our end of a VPN: a tunnel interface of the cage edge (no carrier of its own)."""
+    kwargs.setdefault("where", deployment("TopologyColocationZone", "FR2"))
+    return session_port("if-tun-hs", "Tunnel1", "eg-fr201", kind="DcimVirtualInterface", **kwargs)
+
+
+def tunnel_party_port(**kwargs: Any) -> dict[str, Any]:
+    """The provider stub's end of a VPN: a tunnel interface of the provider device with one ManagedBGP."""
+    kwargs.setdefault("where", deployment("TopologyCloudRegion", "eu-central-1"))
+    kwargs.setdefault("roles", ("regular",))
+    return session_port("if-tun-aws", "Tunnel1", "EXT-ZS-FR2", kind="DcimVirtualInterface", **kwargs)
 
 
 def tunnel_payload() -> dict[str, Any]:
@@ -383,6 +443,8 @@ class FakeClient:
         self.addresses: dict[str, MagicMock] = {}
         self.prefixes: dict[str, MagicMock] = {}
         self.allocations: list[dict[str, Any]] = []
+        # id -> a provider-assigned IpamPrefix node (the circuit's link_prefix), read with get(IpamPrefix, id=...)
+        self.assigned_prefixes: dict[str, MagicMock] = {}
         # Session circuits ending on a port: kind name -> [(id, name) or (id, name, status)], returned by
         # filters(capabilities__ids=...); the status defaults to active.
         # circuit_type (dci, handoff, tunnel) -> (id, name[, status]) of the session circuits of that type
@@ -439,6 +501,8 @@ class FakeClient:
             return self.keys.get(kwargs["name__value"])
         if name == "CoreIPPrefixPool":
             return self.pools.get(kwargs["name__value"])
+        if name == "IpamPrefix":  # the provider-assigned link prefix of a circuit
+            return self.assigned_prefixes.get(kwargs["id"])
         if name == "IpamIPAddress":
             return self.addresses.get(kwargs["address__value"])
         raise AssertionError(f"unexpected get({name}, {kwargs})")
@@ -482,9 +546,20 @@ class FakeClient:
         self.allocations.append(kwargs)
         identifier = kwargs["identifier"]
         prefix = self.prefixes.get(identifier)
+        length = kwargs.get("prefix_length")
+        same_pool = prefix is not None and prefix.pool_name == kwargs["resource_pool"].pool_name
+        if same_pool and length is not None and not prefix.prefix.value.endswith(f"/{length}"):
+            # The server refuses another length for an identifier it already allocated (measured on 1.11.x).
+            raise GraphQLError(
+                [{"message": f"already allocated as {prefix.prefix.value}; its prefix length cannot be changed"}]
+            )
         if prefix is None:
             prefix = MagicMock(id=f"prefix-{identifier}")
-            prefix.prefix = MagicMock(value=POOL_NETWORKS[kwargs["resource_pool"].pool_name])
+            prefix.pool_name = kwargs["resource_pool"].pool_name
+            network = POOL_NETWORKS[kwargs["resource_pool"].pool_name]
+            if length is not None and not network.startswith("fd00"):
+                network = f"{network.split('/')[0]}/{length}"
+            prefix.prefix = MagicMock(value=network)
             prefix.ip_namespace = MagicMock(id="ns-pool")
             self.prefixes[identifier] = prefix
         self.writes.append(("allocate", prefix.id, kwargs))

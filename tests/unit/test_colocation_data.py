@@ -334,10 +334,10 @@ def test_virtual_colocation_carries_the_edge_pair(demo: str) -> None:
 
 @pytest.mark.parametrize("demo", sorted(_DEMO_SETS))
 class TestVirtualColocationTerraform:
-    """AM-NE is the one Terraform-orchestrated presence, in both demos: routed by infrastructure_orchestrator, ordered from its template."""
+    """AM-NE is the one Terraform-marked presence, in both demos: marked by infrastructure_orchestrator, ordered from its template."""
 
     def test_am_ne_is_orchestrated_by_terraform(self, demo: str) -> None:
-        """The virtual_colocation_terraform routing group is picked from this value."""
+        """The orchestrator value the provider order (checks/colocation_placement.py rules 7, 8) is judged on."""
         am_ne = next(obj for obj in _objects(demo, _VIRTUAL) if name(obj) == "AM-NE")
 
         assert am_ne.item["infrastructure_orchestrator"] == "terraform"
@@ -357,7 +357,7 @@ class TestVirtualColocationTerraform:
         assert used <= choices
 
     def test_the_template_it_uses_names_the_offer_through_its_device_type_and_software_image(self, demo: str) -> None:
-        """The Terraform artifact reads type_code off the device type name, package and version off the software
+        """The provider order reads type_code off the device type name, package and version off the software
         image, and the term off the appliance; the three catalogue attributes are gone."""
         am_ne = next(obj for obj in _objects(demo, _VIRTUAL) if name(obj) == "AM-NE")
         template_names = {row[2] for row in am_ne.item["fabric_templates"]}

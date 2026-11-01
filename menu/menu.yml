@@ -214,7 +214,14 @@ spec:
                   label: Session Circuits
                   kind: TopologySessionCircuit
                   icon: "mdi:cloud-sync"
-                  description: "DCI, handoff and tunnel circuits: the connections routing is generated on"
+                  description: "DCI, handoff, tunnel and vpn circuits: the connections routing is generated on"
+
+                - namespace: Topology
+                  name: ProviderConnectionItem
+                  label: Provider Connections
+                  kind: TopologyProviderConnection
+                  icon: "mdi:transit-connection-variant"
+                  description: "Facility to cloud region or SaaS region: its carriers, sessions and attachments"
 
           # --------- Cloud Inventory ---------
           - namespace: Cloud
@@ -394,12 +401,6 @@ spec:
             label: Security Tags
             kind: SecurityTag
             icon: "mdi:tag-outline"
-
-          - namespace: Proxy
-            name: ProxyURLCategoryItem
-            label: URL Categories
-            kind: ProxyURLCategory
-            icon: "mdi:web"
 
           - namespace: Proxy
             name: ProxyPolicyItem

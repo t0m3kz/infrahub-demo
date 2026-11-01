@@ -97,16 +97,6 @@ generics:
         order_weight: 3000
         description: "Facilities where this circuit terminates (both ends may sit in one facility, e.g. the cage)"
 
-      - name: owner
-        label: "Customer"
-        peer: OrganizationCustomer
-        cardinality: one
-        kind: Attribute
-        optional: true
-        identifier: "circuit__owner"
-        order_weight: 3100
-        description: "Customer this circuit belongs to; unset for shared/backbone circuits"
-
 nodes:
   # The carrier: fibre, cross-connect, internet access, or a provider-delivered virtual connection. It
   # is the underlay a session circuit rides on, never a routing role. Carries no session and no routing.
@@ -230,9 +220,21 @@ nodes:
         order_weight: 1100
         description: "The two ports this circuit terminates on, one at each end"
 
+      # The reverse side of TopologyProviderConnection.carrier_circuits (no-action: the carrier outlives it).
+      - name: provider_connections
+        label: "Provider Connections"
+        peer: TopologyProviderConnection
+        cardinality: many
+        kind: Generic
+        optional: true
+        on_delete: no-action
+        identifier: "provider_connection__carriers"
+        order_weight: 1500
+        description: "The provider connections that ride this carrier"
+
   - name: SessionCircuit
     namespace: Topology
-    description: "Circuit that rides carriers: a DCI or a handoff with generated routing, or a tunnel kept as inventory"
+    description: "Circuit that rides carriers: a DCI, a handoff or a vpn with generated routing, or a tunnel kept as inventory"  # yamllint disable-line rule:line-length
     label: "Session Circuit"
     icon: "mdi:swap-horizontal-bold"
     include_in_menu: false
@@ -249,7 +251,7 @@ nodes:
         kind: Dropdown
         label: "Circuit Type"
         order_weight: 300
-        description: "The role of the circuit: dci, handoff or tunnel"
+        description: "The role of the circuit: dci, handoff, tunnel or vpn"
         choices:
           - name: dci
             label: "DCI"
@@ -268,6 +270,12 @@ nodes:
             description: >-
               Office edge to SD-WAN gateway tunnel, owned by the office; inventory only, no session generated
             color: "#8e44ad"
+          - name: vpn
+            label: "VPN"
+            description: >-
+              Routing session over a tunnel interface pair to a provider VPN gateway, riding an internet carrier;
+              owner derived from its provider connection
+            color: "#d35400"
 
     relationships:
       # The two ends. ManagedGenericInterfaces carries the interface-side edge (a circuit in a port's `capabilities`);
@@ -321,13 +329,25 @@ nodes:
         order_weight: 1300
         description: "Shared authentication key of the session (handoff only, optional)"
 
-      # The reverse side, CloudHybridAttachment.virtual_circuit, is declared in topology_cloud_network.yml.
-      - name: cloud_endpoint
-        label: "Cloud Endpoint"
-        peer: CloudHybridAttachment
+      # The provider-handed link range (a /30 the provider assigns, never allocated from our pools) the session
+      # runs on. Schema stage: the generator that writes it and the check that reads it follow.
+      - name: link_prefix
+        label: "Link Prefix"
+        peer: IpamPrefix
         cardinality: one
         kind: Attribute
         optional: true
-        identifier: "handoff_circuit__cloud_endpoint"
-        order_weight: 1400
-        description: "Cloud-side termination of this handoff (a VIF); one endpoint has one handoff (handoff only)"
+        identifier: "session_circuit__link_prefix"
+        order_weight: 1450
+        description: "The link range the provider handed this session (vpn, or a provider-assigned handoff)"
+
+      # The reverse side of TopologyProviderConnection.session_circuits (cascade on the connection's side).
+      - name: connection
+        label: "Provider Connection"
+        peer: TopologyProviderConnection
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "provider_connection__sessions"
+        order_weight: 1500
+        description: "The provider connection this session is routed on; its owner is the session's owner"

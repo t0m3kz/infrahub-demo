@@ -1,0 +1,49 @@
+---
+# The dedicated 10G Direct Connect of the FR2 cage into AWS eu-central-1, as one provider connection. It replaces the
+# hand-authored chain of earlier versions (a Direct Connect object, a transit VIF, the hybrid attachment's endpoint
+# and the handoff circuit with its two sub-interfaces): the connection is the one object that says "FR2 is connected
+# to eu-central-1, for the hub account, over this carrier", and add_provider_connection builds the rest.
+#
+#   near / far            the cage FR2 and the region eu-central-1 (a carrier circuit's kind of ends)
+#   carrier_circuits      XC-EQXFR2-AWS-EUC1 (../01_colo_onramp/03_carrier_circuits.yml), the shared cross-connect
+#                         on eg-fr201 Ethernet1/13 and the stub's et-0/0/0. Shared underlay: the connection does not
+#                         own it, a second connection (PC-AMNE-AWS-EUC1-PROD) ends on the same stub port.
+#   vlan_id               1000, the VLAN of the transit VIF: the sub-interfaces are eg-fr201 Ethernet1/13.1000 and
+#                         EXT-AWS-DX-FR2 et-0/0/0.1000
+#   service / attached    a transit connection onto the hub tgw-30all-euc1, whose hybrid attachment
+#                         tgwa-hybrid-eqx-fr2 is `transit_attachment` (the route table that decides which VPC blocks
+#                         the session may accept, transforms/helpers/bgp_external.py)
+#   account               the hub's network account, owned by Internal (P028): no customer owns the connection, the
+#                         VPC blocks keep their own owners (CloudVirtualNetwork.account.owner)
+#   provider_as           AS64512, the Amazon side
+#
+# What add_provider_connection generates, per link (the AWS Direct Connect flavour has one): the session circuit
+# PC-FR2-AWS-EUC1-PROD-L1 (handoff, member of virtual_circuits) with both sub-interfaces, the namespace, the connection;
+# add_virtual_circuit then allocates a /31 from Handoff-PROD-IPv4 (for Direct Connect the customer specifies the peer
+# addresses, so the AWS side is addressed from OUR pool too) and builds the eBGP session between eg-fr201's overlay
+# process and EXT-AWS-DX-FR2-bgp (../05_provider_connections/00_aws_dx_stub.yml). The session renders under `vrf PROD`
+# on eg-fr201 with RM-<session>-IN (the reachable PROD VPC blocks, never a default) and RM-<session>-OUT (the on-prem
+# PROD prefixes of the blocks' owners C003 and C015, and nordix C001); it sends no communities.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyProviderConnection
+  data:
+    - name: "PC-FR2-AWS-EUC1-PROD"
+      member_of_groups: [provider_connections]
+      description: "PROD transit connection FR2 cage <-> AWS eu-central-1 (Direct Connect 10G, tgw-30all-euc1, AS64512)"
+      path_type: dedicated
+      service: transit
+      status: active
+      bandwidth: 10000
+      vlan_id: 1000
+      near: "FR2"
+      far: "eu-central-1"
+      ip_namespace: "PROD"
+      account: "net-hub-aws-prod"
+      provider_as: "AS64512"
+      attached_gateway: "tgw-30all-euc1"
+      password: "eqx-fr2-aws-vif-key"
+      transit_attachment: "tgwa-hybrid-eqx-fr2"
+      carrier_circuits:
+        - "XC-EQXFR2-AWS-EUC1"

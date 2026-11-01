@@ -33,7 +33,7 @@ from transforms.helpers.vxlan import _PLATFORM_VXLAN_KEYS
 # The roles of the transforms that set no ``device_role`` (it is the VXLAN knob of the fabric transforms).
 _SERVICE_ROLE_BY_SUBDIR = {"firewalls": "firewall", "proxies": "proxy", "loadbalancers": "load-balancer"}
 # Template directories under templates/configs/ that are not a role subdirectory keyed by platform.
-_NOT_ROLE_SUBDIRS = {"common", "equinix", "loadbalancers_cloud", "proxies_cloud"}
+_NOT_ROLE_SUBDIRS = {"common", "equinix", "proxies_cloud"}
 
 
 def _device_transforms() -> list[type[BaseDeviceTransform]]:

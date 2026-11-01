@@ -3,7 +3,7 @@
 Covers:
 - merge_policies()             — dedupe across shared + customer-owned lists
 - get_proxy_policies()         — ProxyPolicy/ProxyPolicyRule -> render-ready shape,
-                                  category expansion, disabled/enabled filtering
+                                  disabled/enabled filtering
 - flatten_proxy_rules()        — global ordering + unique acl_name assignment
 - proxy_rules()                — per-renderer verdicts; refusal of what a renderer cannot express
 - _render_ports()              — protocol/port specs -> render-ready port dicts
@@ -44,19 +44,6 @@ def _fqdn_rule(
         "log": False,
         "description": "",
         "disabled": disabled,
-    }
-
-
-def _category_rule(name: str, priority: int, categories: list[dict], action: str = "block") -> dict:
-    return {
-        "name": name,
-        "priority": priority,
-        "action": action,
-        "destination_type": "category",
-        "categories": categories,
-        "log": False,
-        "description": "",
-        "disabled": False,
     }
 
 
@@ -118,18 +105,10 @@ class TestGetProxyPolicies:
         result = get_proxy_policies(policies)
         assert result[0]["rules"][0]["destinations"] == ["api.stripe.com"]
 
-    def test_category_rule_expands_entries_into_destinations(self) -> None:
-        categories = [{"name": "saas-allowed", "entries": "good.example.com\nother.example.com\n"}]
-        policies = [
-            {
-                "name": "p1",
-                "enabled": True,
-                "default_action": "block",
-                "rules": [_category_rule("r1", 10, categories, action="allow")],
-            }
-        ]
-        result = get_proxy_policies(policies)
-        assert result[0]["rules"][0]["destinations"] == ["good.example.com", "other.example.com"]
+    def test_rule_without_a_destination_type_is_an_fqdn_rule(self) -> None:
+        rule = {**_fqdn_rule("r1", 10, "api.stripe.com"), "destination_type": None}
+        policies = [{"name": "p1", "enabled": True, "default_action": "block", "rules": [rule]}]
+        assert get_proxy_policies(policies)[0]["rules"][0]["destination_type"] == "fqdn"
 
     def test_rule_with_no_resolvable_destination_is_dropped(self) -> None:
         policies = [

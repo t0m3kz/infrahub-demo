@@ -41,6 +41,12 @@ from .all_demo_firewall_constants import (
     OFFICE_NAMESPACE,
     transit_namespace_type,
 )
+from .all_demo_provider_connection_constants import (
+    ADDRESS_PROVIDER,
+    ALL_DEMO_CONNECTION_HANDOFFS,
+    ALL_DEMO_CONNECTION_LINKS,
+    ALL_DEMO_CONNECTIONS,
+)
 from .circuit_helpers import fetch_interconnect_inventory
 from .conftest import TestInfrahubDockerWithClient
 from .interconnect_queries import (
@@ -58,16 +64,14 @@ from .interconnect_queries import (
 from .interconnect_rules import (
     DCI_POOL_NETWORK,
     _address,
-    _address_namespace,
     _interfaces,
     _p2p_errors,
     _prefixes_by_description,
-    _process_nodes,
     _process_roles,
     _session_errors,
     _sessions_by_name,
-    _vlan,
 )
+from .routed_link_rules import DEFAULT_LINK_FLAVOUR, LABEL_HANDOFF, LinkFlavour, routed_session_errors
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -366,9 +370,13 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         errors: list[str] = []
         inventory = await fetch_interconnect_inventory(client=client, branch=scenario_branch)
         handoffs = {c["name"]: c for c in inventory["virtual"] if c["circuit_type"] == HANDOFF_TYPE}
-        expected = sorted(n for n, e in ALL_DEMO_VIRTUAL_CIRCUITS.items() if e["circuit_type"] == HANDOFF_TYPE)
-        if sorted(handoffs) != expected:
-            errors.append(f"handoff circuits {sorted(handoffs)}, expected {expected}")
+        expected = {n for n, e in ALL_DEMO_VIRTUAL_CIRCUITS.items() if e["circuit_type"] == HANDOFF_TYPE}
+        # the Azure legs are handoffs too (provider-assigned /30): test_67 asserts the connections that test_62 does not list
+        allowed = expected | ALL_DEMO_CONNECTION_HANDOFFS
+        if not expected <= set(handoffs) or set(handoffs) - allowed:
+            errors.append(
+                f"handoff circuits {sorted(handoffs)}, expected {sorted(expected)} (and {sorted(allowed - expected)})"
+            )
 
         sessions = _sessions_by_name(
             await client.execute_graphql(
@@ -399,90 +407,31 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                 errors.append(f"pool Handoff-{namespace}-IPv4 is missing or has no prefix")
 
         for name, circuit in sorted(handoffs.items()):
-            session = sessions.get(f"{name}-bgp")
-            if session is None:
-                errors.append(f"{name}: no {name}-bgp session")
-                continue
+            link = ALL_DEMO_CONNECTION_LINKS.get(name)
+            flavour = DEFAULT_LINK_FLAVOUR
+            if link is not None:
+                connection = ALL_DEMO_CONNECTIONS[link[0]]
+                flavour = LinkFlavour(
+                    connection["prefix_length"],
+                    connection["lower_end"],
+                    connection["ttl"],
+                    connection["bfd"],
+                    connection["address_source"] == ADDRESS_PROVIDER,
+                )
+                if circuit["password"] != connection["password"]:
+                    errors.append(f"{name}: key {circuit['password']}, expected {connection['password']}")
             errors.extend(
-                _session_errors(
-                    session,
-                    {
-                        "status": "active",
-                        "peering_role": "regular",
-                        "session_type": "EBGP",
-                        "ttl": 1,
-                        "bfd_enabled": True,
-                        "send_extended_community": False,
-                        "key": circuit["password"],
-                        "families": [("ipv4", "unicast")],
-                    },
+                routed_session_errors(
+                    name,
+                    circuit,
+                    sessions.get(f"{name}-bgp"),
+                    label=LABEL_HANDOFF,
+                    flavour=flavour,
+                    pools=pools.get(circuit["ip_namespace"] or "", []),
+                    prefixes=prefixes.get(f"{LABEL_HANDOFF} {name}"),
+                    party=ALL_DEMO_HANDOFF_PARTY_ASNS.get(name),
                 )
             )
-            if circuit["password"] is None:
-                errors.append(f"{name}: key {circuit['password']}, it is authored")
-
-            # the two sub-interfaces: the circuit's ends, one namespace, one /31 of its pool
-            ports = _interfaces(session)
-            if sorted(ports) != circuit["ends"]:
-                errors.append(f"{name}-bgp: on interfaces {sorted(ports)}, expected {circuit['ends']}")
-                continue
-            by_end = {(end["device"], end["interface"]): end for end in circuit["end_nodes"]}
-            for end, node in sorted(ports.items()):
-                namespace = _address_namespace(node)
-                if namespace != circuit["ip_namespace"]:
-                    errors.append(
-                        f"{name}-bgp: {end[0]}:{end[1]} is addressed in '{namespace}', expected '{circuit['ip_namespace']}'"
-                    )
-                if _address(node) != by_end[end]["address"]:
-                    errors.append(
-                        f"{name}-bgp: {end[0]}:{end[1]} address {_address(node)} differs from the circuit's end {by_end[end]['address']}"
-                    )
-                if node.get("status", {}).get("value") != "active":
-                    errors.append(
-                        f"{name}-bgp: {end[0]}:{end[1]} status {node.get('status', {}).get('value')}, expected active"
-                    )
-                if not str(node.get("description", {}).get("value") or "").startswith(f"Handoff {name} to "):
-                    errors.append(
-                        f"{name}-bgp: {end[0]}:{end[1]} description '{node.get('description', {}).get('value')}'"
-                    )
-                parent = ((node.get("parent_interface") or {}).get("node") or {}).get("name", {}).get("value")
-                if parent != by_end[end]["parent_name"] or end[1] != f"{parent}.{_vlan(end[1])}":
-                    errors.append(f"{name}-bgp: {end[0]}:{end[1]} is not <parent>.<vlan> of its parent ({parent})")
-            addresses = {end: _address(node) for end, node in ports.items()}
-            errors.extend(
-                _p2p_errors(
-                    f"{name}-bgp",
-                    list(addresses.values()),
-                    31,
-                    pools.get(circuit["ip_namespace"] or "", []),
-                    prefixes.get(f"Handoff {name}"),
-                )
-            )
-
-            # processes: one per device; remote ASN is the party stub's local_as, ours differs (eBGP)
-            processes = _process_nodes(session)
-            devices = sorted(device for device, _ in circuit["ends"])
-            if sorted(processes) != devices:
-                errors.append(f"{name}-bgp: runs on processes of {sorted(processes)}, expected {devices}")
-                continue
-            asns = {device: node["local_as"]["node"]["asn"]["value"] for device, node in processes.items()}
-            if len(set(asns.values())) != len(asns):
-                errors.append(
-                    f"{name}-bgp: both processes are in AS {sorted(set(asns.values()))}, an eBGP session needs two"
-                )
-            if name in ALL_DEMO_HANDOFF_PARTY_ASNS:
-                party, asn = ALL_DEMO_HANDOFF_PARTY_ASNS[name]
-                if asns.get(party) != asn:
-                    errors.append(f"{name}-bgp: party {party} is in AS {asns.get(party)}, expected the data's AS{asn}")
-            # our end (the overlay process), else the first device by name, has the lower address
-            lower = min(devices, key=lambda device: (processes[device]["process_role"]["value"] != "overlay", device))
-            lower_end = next(end for end in addresses if end[0] == lower)
-            if all(addresses.values()) and lower_end != min(
-                addresses, key=lambda end: ipaddress.IPv4Interface(str(addresses[end]))
-            ):
-                errors.append(
-                    f"{name}-bgp: {lower} (the lower end) has {addresses[lower_end]}, not the lower address of the /31"
-                )
 
         assert not errors, f"30_all handoff sessions are wrong on branch '{scenario_branch}':\n" + "\n".join(
             f"  - {e}" for e in errors

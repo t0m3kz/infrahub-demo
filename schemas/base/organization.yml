@@ -16,7 +16,7 @@ generics:
       - name: notification_emails
         kind: List
         label: "Notification E-mails"
-        description: "Addresses a provider notifies about what this organization owns (the Terraform order of a virtual colocation uses them)"  # yamllint disable-line rule:line-length
+        description: "Addresses a provider notifies about what this organization owns (the provider order of a virtual colocation uses them)"  # yamllint disable-line rule:line-length
         optional: true
         order_weight: 950
 
@@ -91,6 +91,48 @@ nodes:
     human_friendly_id:
       - org_id__value
     display_label: "{{name__value}} ({{org_id__value}})"
+    attributes:
+      # The provider knows its own addressing and session model, so the profile is here and not on the
+      # TopologyProviderConnection that rides it: one connection kind serves every provider.
+      - name: connection_profile
+        kind: Dropdown
+        label: Connection Profile
+        optional: true
+        order_weight: 1000
+        description: "The addressing and session model of the provider's connections (what a provider connection to it looks like)"  # yamllint disable-line rule:line-length
+        choices:
+          - name: aws
+            label: AWS
+            description: "Direct Connect and Site-to-Site VPN: the customer specifies the peer addresses (Direct Connect), the provider hands a /30 link range (VPN)"  # yamllint disable-line rule:line-length
+            color: "#FF9900"
+          - name: azure
+            label: Azure
+            description: "ExpressRoute (provider /30 pair, two sessions) and VPN Gateway"
+            color: "#0078D4"
+          - name: gcp
+            label: Google Cloud
+            description: "Cloud Interconnect (VLAN attachment, link-local /29) and Cloud VPN"
+            color: "#4285F4"
+          - name: oci
+            label: Oracle Cloud
+            description: "FastConnect virtual circuit and Site-to-Site VPN"
+            color: "#C74634"
+          - name: equinix
+            label: Equinix
+            description: "Equinix Fabric connection: a layer 2 service, the BGP session is ours or the far party's"
+            color: "#ED1C24"
+          - name: megaport
+            label: Megaport
+            description: "Megaport VXC: a layer 2 service, the BGP session is ours or the far party's"
+            color: "#00C2A8"
+          - name: zscaler
+            label: Zscaler
+            description: "GRE or IPsec tunnels to the nearest Zscaler node over the internet"
+            color: "#0066CC"
+          - name: generic
+            label: Generic
+            description: "Any other provider: addresses from our own pool"
+            color: "#95A5A6"
 
   - name: Customer
     namespace: Organization

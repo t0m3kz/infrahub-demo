@@ -12,8 +12,8 @@ as design.dedicated_firewall gating dedicated provisioning elsewhere. When
 set, this generator provisions the per-office slice of SD-WAN: an Edge
 device, the internet-underlay TopologyCarrierCircuit INET-<office> (the
 Edge's uplink to a free ``customer`` port of the ISP's access PE) and the
-SD-WAN tunnel (a TopologySessionCircuit of type tunnel) <office>-SDWAN-<gateway zone> (owned by the
-office's owner, ending on the Gateway's public port and the Edge's uplink) —
+SD-WAN tunnel (a TopologySessionCircuit of type tunnel) <office>-SDWAN-<gateway zone> (its owner is derived from the
+office among its locations, ending on the Gateway's public port and the Edge's uplink) —
 then attaches the new Edge to the Gateway's own Orchestrator (VCO) via
 managed_devices. It is the only path: no office's Edge, tunnel or underlay is
 hand-authored.
@@ -176,7 +176,6 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
         await self._ensure_internet_circuit(
             office_name=office_name,
             office_id=office_id,
-            owner_id=owner_id,
             provider_id=internet_provider_id,
             edge_uplink_id=edge_uplink.id,
             isp_location_id=isp_location_id,
@@ -185,7 +184,6 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
         await self._ensure_tunnel_circuit(
             office_name=office_name,
             office_id=office_id,
-            owner_id=owner_id,
             provider_id=overlay_provider_id,
             gateway_zone_id=gateway_zone_id,
             gateway_zone_name=gateway_zone_name,
@@ -261,7 +259,6 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
         *,
         office_name: str,
         office_id: str,
-        owner_id: str,
         provider_id: str,
         edge_uplink_id: str,
         isp_location_id: str,
@@ -284,7 +281,6 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
                     "circuit_type": "internet",
                     "status": "active",
                     "provider": {"id": provider_id},
-                    "owner": {"id": owner_id},
                     "description": f"{office_name} internet access (SD-WAN underlay)",
                     # locations peers TopologyFacility, and both the office itself
                     # (not the edge device) and the ISP the far end sits in are facilities.
@@ -331,7 +327,6 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
         *,
         office_name: str,
         office_id: str,
-        owner_id: str,
         provider_id: str,
         gateway_zone_id: str,
         gateway_zone_name: str,
@@ -352,7 +347,6 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
                 "circuit_type": "tunnel",
                 "status": "active",
                 "provider": {"id": provider_id},
-                "owner": {"id": owner_id},
                 "description": f"{office_name} SD-WAN tunnel to {gateway_zone_name} gateway",
                 "locations": [{"id": office_id}, {"id": gateway_zone_id}],
                 "capabilities": [{"id": end_id} for end_id in end_ids],

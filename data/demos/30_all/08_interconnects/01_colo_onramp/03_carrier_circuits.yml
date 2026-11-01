@@ -5,8 +5,9 @@
 # shared facilities carrying every tenant. A carrier circuit is a pure carrier:
 # it has no role and builds no session. What rides it is a virtual circuit of a
 # kind, listed in ../03_virtual_circuits/ (the DCI sessions of the dark fibres,
-# one Interconnect circuit per fibre) or in ../05_cloud_endpoints/ (the handoff
-# onto the cross-connect). Tenant impact is a traversal, not a circuit: from a
+# one Interconnect circuit per fibre) or generated for a provider connection
+# (../05_provider_connections/, whose `carrier_circuits` list the carriers it rides). Tenant impact is a traversal,
+# not a circuit: from a
 # fibre or a cage port, circuit -> its ports -> the segments, peerings and
 # circuits on them.
 #
@@ -141,26 +142,45 @@ spec:
         - ["eg-fr201", "Ethernet1/13"]
         - ["EXT-AWS-DX-FR2", "et-0/0/0"]
 
-    # No handoff rides this one: no Azure attachment or VIF is modelled for westeurope, so the carrier
-    # (and the stub EXT-AZURE-ER-PA4 it ends on) stays idle, kept as the shape of an unused on-ramp.
-    - circuit_id: "XC-EQXPA4-AZURE-WEU"
+    # The Azure ExpressRoute on-ramp: one cross-connect per ExpressRoute leg, each the carrier of its own provider
+    # connection (../05_provider_connections/05_azure_er.yml: PC-PA4-AZURE-WEU-PRI-PROD and -SEC-PROD). The legs
+    # land on two different cage edges (eg-pa401, eg-pa402) and on two ports of the one ExpressRoute router stub
+    # (et-0/0/0, et-0/0/1), the way Microsoft asks for them; the two carriers share `redundancy_group`, which is
+    # what relates the two connections (one connection per leg).
+    - circuit_id: "XC-EQXPA4-AZURE-WEU-PRI"
       member_of_groups: [carrier_circuits]
-      name: "XC-EQXPA4-AZURE-WEU"
+      name: "XC-EQXPA4-AZURE-WEU-PRI"
       circuit_type: cross_connect
       status: active
       bandwidth: 10000
+      redundancy_group: "AZURE-WEU-PA4"
       provider: "P016"
-      description: "Equinix PA4 cage to Azure westeurope, shared 10G fabric port"
+      description: "Equinix PA4 cage to Azure westeurope, ExpressRoute primary leg, 10G fabric port"
       locations:
         - "PA4"
       capabilities:
         - ["eg-pa401", "Ethernet1/13"]
         - ["EXT-AZURE-ER-PA4", "et-0/0/0"]
 
+    - circuit_id: "XC-EQXPA4-AZURE-WEU-SEC"
+      member_of_groups: [carrier_circuits]
+      name: "XC-EQXPA4-AZURE-WEU-SEC"
+      circuit_type: cross_connect
+      status: active
+      bandwidth: 10000
+      redundancy_group: "AZURE-WEU-PA4"
+      provider: "P016"
+      description: "Equinix PA4 cage to Azure westeurope, ExpressRoute secondary leg, 10G fabric port"
+      locations:
+        - "PA4"
+      capabilities:
+        - ["eg-pa402", "Ethernet1/13"]
+        - ["EXT-AZURE-ER-PA4", "et-0/0/1"]
+
     # Megaport: the Cloud Router (MCR) of Megaport's Paris facility, reached from the PA4 cage over one
     # cross-connect. The stub EXT-MEGAPORT-MCR1 is deployed to the zone MCR-PAR1 (../../02_colo/megaport/par),
-    # which add_circuit derives as the far end. The handoff HANDOFF-PA4-MEGAPORT-PROD rides this port
-    # (../05_cloud_endpoints/03_megaport_handoff.yml). Equinix sells the cross-connect, Megaport the service.
+    # which add_circuit derives as the far end. The provider connection PC-PA4-MEGAPORT-PROD rides this port
+    # (../05_provider_connections/04_megaport.yml). Equinix sells the cross-connect, Megaport the service.
     - circuit_id: "XC-EQXPA4-MEGAPORT"
       member_of_groups: [carrier_circuits]
       name: "XC-EQXPA4-MEGAPORT"
@@ -174,3 +194,39 @@ spec:
       capabilities:
         - ["eg-pa401", "Ethernet1/1"]
         - ["EXT-MEGAPORT-MCR1", "et-0/0/0"]
+
+    # --- Equinix Fabric virtual connections ----------------------------------
+    # A provider-delivered virtual connection is a carrier like a cross-connect: Equinix runs it inside its own
+    # platform, so an end may be the virtual NIC of a provider-hosted Network Edge router (no cable) and a port
+    # hosts several of them (checks/carrier_circuit_ports.py). They are the carriers of the provider connections
+    # PC-FR2-AMNE-PROD and PC-AMNE-AWS-EUC1-PROD (../05_provider_connections/), which is how the generator finds
+    # the port the session sub-interface rides. The first one leaves eg-fr201 on the port that is also cabled to
+    # Equinix's own Fabric port (05_cage_cabling.yml); the second lands on the AWS Direct Connect router's port,
+    # which the cross-connect XC-EQXFR2-AWS-EUC1 also ends on.
+    - circuit_id: "FABRIC-FR2-AMNE01"
+      member_of_groups: [carrier_circuits]
+      name: "FABRIC-FR2-AMNE01"
+      circuit_type: virtual_connection
+      status: active
+      bandwidth: 1000
+      provider: "P016"
+      description: "Equinix Fabric virtual connection, FR2 cage to the Network Edge router eg-am-ne01 in AM-NE, 1G"
+      locations:
+        - "FR2"
+      capabilities:
+        - ["eg-fr201", "Ethernet1/1"]
+        - ["eg-am-ne01", "Ethernet1/1"]
+
+    - circuit_id: "FABRIC-AMNE02-AWS-EUC1"
+      member_of_groups: [carrier_circuits]
+      name: "FABRIC-AMNE02-AWS-EUC1"
+      circuit_type: virtual_connection
+      status: active
+      bandwidth: 1000
+      provider: "P016"
+      description: "Equinix Fabric virtual connection, Network Edge router eg-am-ne02 to AWS eu-central-1 (hosted Direct Connect), 1G"  # yamllint disable-line rule:line-length
+      locations:
+        - "AM-NE"
+      capabilities:
+        - ["eg-am-ne02", "Ethernet1/1"]
+        - ["EXT-AWS-DX-FR2", "et-0/0/0"]

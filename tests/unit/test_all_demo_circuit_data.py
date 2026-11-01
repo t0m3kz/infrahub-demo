@@ -1,7 +1,7 @@
 """Consistency of the circuit data the circuit generators run on.
 
-add_circuit (carrier circuits) and add_virtual_circuit (session circuits of type dci and handoff) only run for members of
-their target groups. The loader accepts a circuit outside its group, or a handoff the generator would refuse, so both
+add_circuit (carrier circuits), add_virtual_circuit (session circuits of type dci and handoff) and add_provider_connection
+(provider connections, whose handoff and vpn session circuits it generates) only run for members of their target groups. The loader accepts a circuit outside its group, or a handoff the generator would refuse, so both
 only surface as a missing session or a failed task after the 30_all load - and a hand-written peering left next to a
 generated one is a duplicate session to the same neighbour. A tunnel (a TopologySessionCircuit of type tunnel) builds nothing but is a member
 too: the created-trigger raises for a non-member.
@@ -30,6 +30,7 @@ _BOOTSTRAP_GROUPS = BOOTSTRAP / "00_groups.yml"
 _TARGET_GROUPS = {
     "TopologyCarrierCircuit": "carrier_circuits",
     "TopologySessionCircuit": "virtual_circuits",
+    "TopologyProviderConnection": "provider_connections",
 }
 _ALL = _DEMOS / "30_all"
 _ONRAMP = _ALL / "08_interconnects" / "01_colo_onramp"
@@ -90,7 +91,7 @@ def test_a_tunnel_circuit_is_in_the_virtual_circuits_group_and_has_no_session_fi
     rows = _session_rows("tunnel", _DEMOS)
     assert [_circuit_name(entry) for entry in rows] == ["C001-PARTNER-ACME-FR2"]
     assert all("virtual_circuits" in entry["member_of_groups"] for entry in rows)
-    assert not [e["name"] for e in rows if {"ip_namespace", "password", "cloud_endpoint"} & set(e)]
+    assert not [e["name"] for e in rows if {"ip_namespace", "password", "connection", "owner"} & set(e)]
 
 
 def test_no_circuit_is_declared_as_a_removed_kind() -> None:
@@ -106,7 +107,7 @@ def test_no_circuit_is_declared_as_a_removed_kind() -> None:
 
 
 def test_every_session_circuit_declares_a_circuit_type_of_the_schema() -> None:
-    """circuit_type is required and one of dci, handoff, tunnel."""
+    """circuit_type is required and one of dci, handoff, tunnel (a vpn is generated from a provider connection)."""
     rows = _rows("TopologySessionCircuit", _DEMOS)
     assert rows and {entry["circuit_type"] for entry in rows} == {"dci", "handoff", "tunnel"}
 
@@ -124,7 +125,9 @@ _REMOVED_CIRCUIT_KEYS = ("peering_role", "link_type", "transport_mode", "tunnel_
 def test_a_session_circuit_row_uses_no_removed_attribute(circuit_type: str) -> None:
     """The role is circuit_type: no `peering_role`, `link_type`, `transport_mode`, `tunnel_id`, and no carrier key."""
     for entry in _session_rows(circuit_type, _DEMOS):
-        assert not [key for key in (*_REMOVED_CIRCUIT_KEYS, "carrier_circuits") if key in entry], _circuit_name(entry)
+        assert not [
+            key for key in (*_REMOVED_CIRCUIT_KEYS, "carrier_circuits", "owner", "cloud_endpoint") if key in entry
+        ], _circuit_name(entry)
 
 
 def test_no_carrier_circuit_names_a_peering_role() -> None:
@@ -181,6 +184,10 @@ def test_generated_peering_and_key_names_do_not_collide_with_data() -> None:
     for e in _session_rows("dci", _DEMOS):
         generated |= {f"{e['name']}-underlay", f"{e['name']}-evpn", f"{e['name']}-dci-key"}
     generated |= {f"{e['name']}-bgp" for e in _session_rows("handoff", _DEMOS)}
+    # A provider connection's session circuits are `<connection>-L<n>` (add_provider_connection), each with its `-bgp`.
+    for connection in _rows("TopologyProviderConnection", _DEMOS):
+        generated |= {f"{connection['name']}-L{n}" for n in (1, 2)}
+        generated |= {f"{connection['name']}-L{n}-bgp" for n in (1, 2)}
 
     assert generated
     assert not generated & names
@@ -188,7 +195,12 @@ def test_generated_peering_and_key_names_do_not_collide_with_data() -> None:
 
 def test_every_dci_fibre_lands_on_its_own_free_port() -> None:
     """No two fibres share a port: each DC border leaf uses Ethernet1/35 and 1/36, each cage edge its dci ports."""
-    ends = [tuple(i) for e in _rows("TopologyCarrierCircuit", _ONRAMP) for i in e["capabilities"]]
+    ends = [
+        tuple(i)
+        for e in _rows("TopologyCarrierCircuit", _ONRAMP)
+        if e["circuit_type"] != "virtual_connection"
+        for i in e["capabilities"]
+    ]
     assert len(ends) == len(set(ends))
     border_leaf_ports = {port for device, port in ends if device.startswith("bl-dc")}
     assert border_leaf_ports == {"Ethernet1/35", "Ethernet1/36"}
@@ -213,7 +225,8 @@ def test_generated_fabric_peering_names_do_not_collide_with_data() -> None:
 
 
 def test_every_carrier_circuit_row_has_two_distinct_ends_and_no_port_is_in_two_rows() -> None:
-    """A carrier circuit terminates on exactly two ports (the schema's min/max count), each port on one circuit.
+    """A carrier circuit terminates on exactly two ports (the schema's min/max count), each port on one circuit
+    (a virtual_connection is exempt: a provider port hosts one connection per S-tag).
 
     The INET-<office> circuits are not data rows: add_sdwan_edge creates them with both ends in one write.
     """
@@ -223,6 +236,8 @@ def test_every_carrier_circuit_row_has_two_distinct_ends_and_no_port_is_in_two_r
     for row in rows:
         ends = [tuple(end) for end in row["capabilities"]]
         assert len(ends) == 2 and len(set(ends)) == 2, f"{_circuit_name(row)}: {ends}"
+        if row["circuit_type"] == "virtual_connection":
+            continue
         for end in ends:
             assert end not in seen, f"{end} is an end of {seen[end]} and {_circuit_name(row)}"
             seen[end] = _circuit_name(row)
@@ -234,7 +249,8 @@ def test_every_cross_connect_far_end_is_a_declared_cloud_provider_edge() -> None
     cross_connects = [e for e in _rows("TopologyCarrierCircuit", _ONRAMP) if e["circuit_type"] == "cross_connect"]
     assert sorted(_circuit_name(e) for e in cross_connects) == [
         "XC-EQXFR2-AWS-EUC1",
-        "XC-EQXPA4-AZURE-WEU",
+        "XC-EQXPA4-AZURE-WEU-PRI",
+        "XC-EQXPA4-AZURE-WEU-SEC",
         "XC-EQXPA4-MEGAPORT",
     ]
     for circuit in cross_connects:
@@ -343,10 +359,17 @@ def test_every_authored_handoff_password_is_a_declared_key() -> None:
         assert handoff.get("password") in keys, handoff["name"]
 
 
-def test_every_party_device_of_a_handoff_has_exactly_one_bgp_process_with_a_declared_asn_and_router_id() -> None:
+def test_the_authored_handoff_party_has_exactly_one_bgp_process_with_a_declared_asn_and_router_id() -> None:
     """The session generator takes the party's ONLY ManagedBGP process (a stub has no overlay one); its local_as is the
-    party ASN and its router_id a loopback of the device. Our edge and the NE routers are generated, not declared."""
+    party ASN and its router_id a loopback of the device. Our edge is generated, not declared."""
     declared_devices = _declared_devices()
+    parties = {device for handoff in _handoffs() for device, _ in handoff["capabilities"] if device in declared_devices}
+    assert parties == {"EQX-FR2-SDWAN-GW1"}
+    _assert_party_processes(parties)
+
+
+def _assert_party_processes(parties: set[str]) -> None:
+    """Each party device has one ManagedBGP process whose AS is declared and whose router-id is its own loopback."""
     processes = _rows("ManagedBGP", _ALL)
     asns = {f"AS{e['asn']}" for e in _rows("RoutingAutonomousSystem", _ALL)}
     loopbacks = {
@@ -354,8 +377,6 @@ def test_every_party_device_of_a_handoff_has_exactly_one_bgp_process_with_a_decl
         for e in _rows("DcimVirtualInterface", _ALL)
         if e.get("role") == "loopback"
     }
-    parties = {device for handoff in _handoffs() for device, _ in handoff["capabilities"] if device in declared_devices}
-    assert parties == {"EXT-AWS-DX-FR2", "EQX-FR2-SDWAN-GW1", "EXT-MEGAPORT-MCR1"}
     for device in parties:
         own = [entry for entry in processes if device in entry["capabilities"]]
         assert len(own) == 1, f"{device}: {[e['name'] for e in own]}"
@@ -365,29 +386,49 @@ def test_every_party_device_of_a_handoff_has_exactly_one_bgp_process_with_a_decl
         assert address.startswith(_STUB_LOOPBACKS) and address.endswith("/32"), device
 
 
-def test_the_stub_loopbacks_are_distinct_and_in_the_reserved_range() -> None:
-    """10.255.64.0/24 holds the router-ids of the party stubs, clear of the handoff pools and every authored range."""
+#: The stubs whose Loopback0 and BGP process add_provider_connection builds (generators/provider_stub.py): the data
+#: authors only the device and the AS, the process speaks the connection's `provider_as`.
+_GENERATED_STUBS = {"EXT-AWS-VPN-EUC1", "EXT-ZSCALER-MUC1"}
+
+
+def test_every_stub_of_a_provider_connection_has_one_bgp_process_with_the_connections_provider_as() -> None:
+    """The far stub of each connection (a cloud router, an MCR, a VPN gateway, a SaaS node) either keeps its authored
+    AS, BGP process and loopback, or (`_GENERATED_STUBS`) has only its device and its AS authored and the generator
+    builds the rest. Its AS is the connection's `provider_as`, except the Network Edge hop whose far end is our own
+    generated router."""
+    stubs = {
+        "PC-FR2-AWS-EUC1-PROD": "EXT-AWS-DX-FR2",
+        "PC-AMNE-AWS-EUC1-PROD": "EXT-AWS-DX-FR2",
+        "PC-PA4-MEGAPORT-PROD": "EXT-MEGAPORT-MCR1",
+        "PC-FR2-AWS-EUC1-VPN-PROD": "EXT-AWS-VPN-EUC1",
+        "PC-PA4-AZURE-WEU-PRI-PROD": "EXT-AZURE-ER-PA4",
+        "PC-PA4-AZURE-WEU-SEC-PROD": "EXT-AZURE-ER-PA4",
+        "PC-FR2-ZSCALER-MUC-PROD": "EXT-ZSCALER-MUC1",
+    }
+    connections = {e["name"]: e for e in _rows("TopologyProviderConnection", _ALL)}
+    assert set(stubs) | {"PC-FR2-AMNE-PROD"} == set(connections)
+    authored = set(stubs.values()) - _GENERATED_STUBS
+    _assert_party_processes(authored)
+    processes = {device: e for e in _rows("ManagedBGP", _ALL) for device in e["capabilities"]}
+    asns = {f"AS{e['asn']}" for e in _rows("RoutingAutonomousSystem", _ALL)}
+    for connection_name, device in stubs.items():
+        provider_as = connections[connection_name]["provider_as"]
+        if device in _GENERATED_STUBS:
+            assert device not in processes and provider_as in asns, connection_name
+        else:
+            assert processes[device]["local_as"] == provider_as, connection_name
+
+
+def test_the_authored_stub_loopbacks_are_distinct_and_in_the_reserved_range() -> None:
+    """10.255.64.0/24 holds the authored router-ids of the party stubs, clear of the handoff pools and every authored
+    range; the generated ones (`_GENERATED_STUBS`) come from Provider-Stub-Loopback-IPv4 (10.255.65.0/24)."""
     addresses = [
         e["ip_address"]["data"]["address"]
         for e in _rows("DcimVirtualInterface", _ALL)
         if e["device"].startswith(("EXT-", "EQX-FR2-SDWAN-GW")) and e.get("role") == "loopback"
     ]
-    assert sorted(addresses) == ["10.255.64.1/32", "10.255.64.2/32", "10.255.64.3/32"]
-
-
-def test_a_cloud_endpoint_is_set_from_its_vif_and_mirrors_the_sub_interface_vlan() -> None:
-    """A VIF names its one handoff (`virtual_circuit`); the handoff cannot name the VIF back. The VIF's vlan_id is the
-    sub-interface VLAN, and a handoff has at most one VIF."""
-    handoffs = {h["name"]: h for h in _handoffs()}
-    vifs = _rows("CloudVirtualInterface", _ALL)
-    assert vifs
-    circuits = [vif["virtual_circuit"] for vif in vifs]
-    assert len(circuits) == len(set(circuits))
-    for vif in vifs:
-        handoff = handoffs[vif["virtual_circuit"]]
-        assert "cloud_endpoint" not in handoff
-        for _, port in handoff["capabilities"]:
-            assert port.rpartition(".")[2] == str(vif["vlan_id"]), vif["name"]
+    assert sorted(addresses) == ["10.255.64.1/32", "10.255.64.2/32", "10.255.64.3/32", "10.255.64.5/32"]
+    assert not {e["device"] for e in _rows("DcimVirtualInterface", _ALL)} & _GENERATED_STUBS
 
 
 def test_provider_stubs_deployed_to_a_zone_are_in_the_provider_stubs_group() -> None:

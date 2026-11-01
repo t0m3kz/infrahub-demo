@@ -2,26 +2,22 @@
 
 Everything here is the part of the model that leaves a single site: the dark
 fibre and cross-connects into the colocation on-ramps, the virtual circuits
-riding them (the DCI between the border gateways, the handoffs into AWS, the
-Network Edge chain, Megaport and the SD-WAN gateway), the SD-WAN branches'
-tunnels and internet underlay, and the cloud-side terminations that close the
-on-prem-to-cloud path.
+riding them (the DCI between the border gateways, the SD-WAN gateway handoff and
+the session circuits add_provider_connection generates for the AWS, Network Edge,
+Megaport, Azure and Zscaler connections), the SD-WAN branches' tunnels and internet
+underlay.
 
-A carrier circuit is a pure carrier. The role of a virtual circuit is its KIND:
-a Tunnel (inventory only, no session), an Interconnect (a DCI: an underlay and
-an EVPN session) or a Handoff (one eBGP session in one environment namespace).
-Their carrier is never declared: it is derived from the circuit's own ports.
+A carrier circuit is a pure carrier. The role of a session circuit is its
+`circuit_type`: a Tunnel (inventory only, no session), an Interconnect (a DCI: an
+underlay and an EVPN session), a Handoff (one eBGP session in one environment
+namespace) or a VPN (model only). Their carrier is never declared: it is derived
+from the circuit's own ports. A circuit has no owner of its own: it is derived
+from its office and from its provider connection (utils.ownership.circuit_owner).
+The connections themselves are asserted by test_67.
 
-Two edges get special attention because the schema deliberately has exactly one
-way to express each of them, and a regression would silently split the graph
-into islands:
-
-  * ``capabilities`` — how a circuit surfaces on the port it
-    terminates on. It is the single uniform "what is this port doing" edge, and
-    replaced the bespoke ``interfaces`` relationship the node used to declare.
-  * ``cloud_endpoint`` — how a Handoff reaches its cloud side, which is a
-    CloudVirtualInterface, not a device port. Without it the traversal walks
-    from a border leaf out to the cage and then stops at an island boundary.
+The edge that matters here is ``capabilities`` — how a circuit surfaces on the
+port it terminates on. It is the single uniform "what is this port doing" edge,
+and a regression would silently split the graph into islands.
 
 Circuit placement is checked from both sides: a carrier circuit ends on two
 facilities where its end devices sit (the end the data leaves out is the one
@@ -70,6 +66,7 @@ from .all_demo_circuit_constants import (
     INTERCONNECT_TYPE,
     TUNNEL_TYPE,
 )
+from .all_demo_provider_connection_constants import VPN_TYPE
 from .circuit_helpers import fetch_interconnect_inventory
 from .conftest import TestInfrahubDockerWithClient
 from .interconnect_queries import CIRCUIT_LOCATIONS_QUERY, GROUP_MEMBERS_QUERY, SCENARIO_NAME
@@ -84,6 +81,7 @@ from .interconnect_rules import (
     _label,
     _session_port_errors,
     _tunnel_errors,
+    _vpn_errors,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -337,7 +335,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
     ) -> None:
         """Verify each virtual circuit's kind, owner, locations, ends, derived carrier and placement.
 
-        The role of a virtual circuit is its kind (Tunnel, Interconnect, Handoff). The carrier is derived, never
+        The role of a virtual circuit is its kind (Tunnel, Interconnect, Handoff, VPN). The carrier is derived, never
         declared: the carrier circuits on the circuit's own ports (or on the parent of a sub-interface), compared
         with ALL_DEMO_VIRTUAL_CIRCUITS. The per-kind rules (_virtual_placement_errors) hold on the live data.
         """
@@ -394,8 +392,10 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                 errors.extend(_interconnect_errors(circuit, physical_by_id))
             elif circuit["circuit_type"] == HANDOFF_TYPE:
                 errors.extend(_handoff_errors(circuit))
+            elif circuit["circuit_type"] == VPN_TYPE:
+                errors.extend(_vpn_errors(circuit))
             else:
-                errors.append(f"{name}: kind '{circuit['kind']}' is none of the three virtual circuit kinds")
+                errors.append(f"{name}: kind '{circuit['circuit_type']}' is none of the four session circuit kinds")
         errors.extend(_session_port_errors(virtual))
         errors.extend(_environment_errors(virtual))
         return errors

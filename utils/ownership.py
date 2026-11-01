@@ -21,6 +21,35 @@ def customer_owner(owner: Any) -> str | None:
     return owner.get("org_id") or owner.get("display_label") or None
 
 
+class CircuitOwnerError(ValueError):
+    """A circuit whose locations name two offices of different owners."""
+
+
+def circuit_owner(office_owners: Iterable[str | None], connection_owner: str | None = None) -> str | None:
+    """The owner of a circuit, derived and never stored (the ``owner`` relationship of the circuit is gone).
+
+    ``office_owners`` is the owner key (``customer_owner``) of each ``TopologyCustomerOffice`` among the circuit's
+    ``locations`` (a location that is no office contributes nothing; pass only offices, or None entries which are
+    ignored). ``connection_owner`` is the owner of the circuit's provider connection already resolved by
+    ``connection_owner``: it applies to a ``vpn`` circuit, which has no office in its locations.
+
+    - one distinct office owner: that owner;
+    - no office: the connection's owner (None when the circuit has no connection or the connection has none);
+    - two offices of different owners: ``CircuitOwnerError`` (an office pair of one owner is fine).
+    """
+    distinct = sorted({owner for owner in office_owners if owner})
+    if len(distinct) > 1:
+        raise CircuitOwnerError(f"locations are offices of different owners ({', '.join(distinct)})")
+    if distinct:
+        return distinct[0]
+    return connection_owner or None
+
+
+def connection_owner(owner: str | None, account_owner: str | None) -> str | None:
+    """The owner of a provider connection: its ``account``'s owner when it has an account, else its own ``owner``."""
+    return account_owner or owner or None
+
+
 class OwnershipConflict(NamedTuple):
     """A registration that would leak one owner's prefix to another owner, or that is reachable twice."""
 
@@ -96,18 +125,34 @@ def exchange_policies(
 
 
 def ownership_conflicts(
-    segments: Mapping[str, Iterable[str]], learned: Mapping[str, Mapping[str, Iterable[str]]]
+    segments: Mapping[str, Iterable[str]],
+    learned: Mapping[str, Mapping[str, Iterable[str]]],
+    *,
+    session_groups: Mapping[str, str] | None = None,
+    provider_space: Iterable[str] = (),
 ) -> list[OwnershipConflict]:
     """The registrations of ONE namespace that break the exchange rule (same arguments as exchange_policies).
 
     - a prefix registered by more than one owner (segments and sessions together): it would be announced to
       another owner's session;
-    - a prefix of one owner registered behind more than one session: an owner's registered prefix is local or
-      reachable through exactly one session.
+    - a prefix of one owner registered behind more than one attachment point: an owner's registered prefix is
+      local or reachable through exactly one session.
+
+    ``session_groups`` maps a session to its attachment point (the provider connection it is routed on): the
+    sessions of one connection (the two circuits of a dual connection) are ONE attachment point, so a prefix
+    behind both is not "behind more than one session". A session absent from the map is its own group.
+
+    ``provider_space`` holds the prefixes registered through a provider connection (a SaaS range): space of the
+    provider, not of any owner. Several owners may register it, each behind its own session, without leaking
+    anything: the first rule does not apply when every one of its owners holds it behind a session (an owner
+    that also holds it as an on-prem segment prefix still conflicts). The second rule still applies per owner.
 
     Exact prefix strings; overlapping but different prefixes are the business of the overlap rules.
     """
+    groups = session_groups or {}
+    shared_space = frozenset(provider_space)
     owners_of: dict[str, set[str]] = {}
+    session_owners_of: dict[str, set[str]] = {}
     sessions_of: dict[tuple[str, str], set[str]] = {}
     for owner, prefixes in segments.items():
         for prefix in prefixes:
@@ -116,6 +161,7 @@ def ownership_conflicts(
         for owner, prefixes in by_owner.items():
             for prefix in prefixes:
                 owners_of.setdefault(prefix, set()).add(owner)
+                session_owners_of.setdefault(prefix, set()).add(owner)
                 sessions_of.setdefault((prefix, owner), set()).add(session)
 
     conflicts = [
@@ -126,11 +172,11 @@ def ownership_conflicts(
             tuple(sorted({s for owner in owners for s in sessions_of.get((prefix, owner), ())})),
         )
         for prefix, owners in sorted(owners_of.items())
-        if len(owners) > 1
+        if len(owners) > 1 and not (prefix in shared_space and owners <= session_owners_of.get(prefix, set()))
     ]
     conflicts += [
         OwnershipConflict(MULTIPLE_SESSIONS, prefix, (owner,), tuple(sorted(sessions)))
         for (prefix, owner), sessions in sorted(sessions_of.items())
-        if len(sessions) > 1
+        if len({groups.get(session, session) for session in sessions}) > 1
     ]
     return conflicts

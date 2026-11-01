@@ -530,7 +530,7 @@ class TestOnePortOneSession:
         assert asked == [
             (
                 SESSION_CIRCUIT,
-                {"capabilities__ids": ["if-hs", "if-aws"], "circuit_type__values": ["dci", "handoff"]},
+                {"capabilities__ids": ["if-hs", "if-aws"], "circuit_type__values": ["dci", "handoff", "vpn"]},
             )
         ]
 

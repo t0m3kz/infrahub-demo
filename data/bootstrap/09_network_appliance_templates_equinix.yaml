@@ -4,11 +4,12 @@
 # from them. The interfaces are the instance's ports, virtual NICs (the appliance has no hardware); the provider's
 # own routing service is not modelled.
 #
-# The Equinix Network Edge Terraform artifact orders the device type name (type_code) and cpu_count, the software
-# image's package (package_code) and version, and the term_length (transforms/colocation/virtual_colocation.py).
+# An Equinix Network Edge order takes the device type name (type_code) and cpu_count, the software
+# image's package (package_code) and version, and the term_length (checks/colocation_placement.py rule 8).
 # DEMO VALUES: not verified against the Equinix API, check type/package/version/term in the Equinix portal before
 # applying.
-# The account and its notification list live on the CloudAccount; licence tokens are never stored (Terraform variables).
+# The account and its notification list live on the CloudAccount; licence tokens are never stored (provider-order
+# variables).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

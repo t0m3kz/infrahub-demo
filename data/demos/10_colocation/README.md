@@ -117,7 +117,7 @@ Spread a pair across two zones and none of those would be generated, because the
 **Links involving virtual kit.** A virtual colocation gets no cabling: two rented instances are joined by a
 connection inside the provider's platform, which is neither a cable nor something this schema has a node kind for.
 `AM-NE` therefore has two routers (`eg-am-ne01`, `eg-am-ne02`) and no cables. They are two independent appliances: a
-router pair has no redundancy representation in the model, and each is its own Terraform device. A firewall pair would
+router pair has no redundancy representation in the model, and each is its own provider device. A firewall pair would
 be a `ManagedFirewallHA` (`active-passive`, an Equinix cluster) whose members the provider wires, so it gets no sync
 port or cable.
 
@@ -136,14 +136,13 @@ zone and virtual colocation names share the device-name and pool-name space, so 
 BGP and a config like any device, but consumed like a cloud resource. It has no hardware, so the template's ports are
 virtual NICs (`TemplateDcimVirtualInterface`, no cable, no host) and a physical template there would be rejected.
 
-`AM-NE` is routed to Terraform (`infrastructure_orchestrator: terraform`) and ordered under one `CloudAccount`,
+`AM-NE` is marked `infrastructure_orchestrator: terraform` (no Terraform transform exists today) and ordered under one `CloudAccount`,
 `equinix-network-edge` (`equinix/am/02_account.yml`): its `account_id` is the Equinix billing account number (a demo
 value), its provider is Equinix (P016) and its owner Internal (P028), whose `notification_emails` are the people the
 provider notifies. The ordering parameters of each appliance come from structured models, through its template: `type_code`
 is the Device Type name (`C8000V`) and `core_count` its `cpu_count`; `package_code` and `version` are the Software
 Image's `package` and `version` (`cisco_xe-17.12.01a`: `network-essentials`, `17.12.01a`); `term_length` is the
-appliance's. The generated `virtual-colocation-terraform` artifact prints all of
-it; licence tokens are Terraform variables and never live in Infrahub.
+appliance's. No artifact prints the order today (the Terraform transform was removed); licence tokens never live in Infrahub.
 
 ### Zones with no kit
 

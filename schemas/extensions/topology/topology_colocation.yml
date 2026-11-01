@@ -247,8 +247,8 @@ nodes:
     inherit_from:
       - CoreArtifactTarget
       - TopologyDeployment
-      - TopologyProviderHosting
-      - TopologyProviderAccount
+      - TopologyApplianceHosting
+      - TopologyBilledAccount
       - TopologyOrchestratorScoped
       - TopologyColocationFabric
       - TopologyConnectableLocation

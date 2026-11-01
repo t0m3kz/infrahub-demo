@@ -23,4 +23,5 @@ spec:
     - name: "Dell"
     - name: "Arista SD-WAN"
     - name: "Palo Alto Networks"
+    - name: "Zscaler"
     - name: "Generic"

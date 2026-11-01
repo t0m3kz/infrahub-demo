@@ -24,7 +24,6 @@ query proxy_cloud_config($instance: String!) {
                     log { value }
                     description { value }
                     disabled { value }
-                    categories { edges { node { name { value } entries { value } } } }
                   }
                 }
               }
@@ -52,7 +51,6 @@ query proxy_cloud_config($instance: String!) {
                           log { value }
                           description { value }
                           disabled { value }
-                          categories { edges { node { name { value } entries { value } } } }
                         }
                       }
                     }

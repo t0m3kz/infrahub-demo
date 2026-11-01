@@ -24,6 +24,7 @@ from graphql import (
 
 from tests.unit.simulators.circuit_fakes import (
     colo_edge_port,
+    connection_node,
     dc_border_port,
     handoff_edge_port,
     handoff_party_port,
@@ -143,6 +144,43 @@ _GENERATOR_READS = [
     # a handoff
     "ip_namespace.name",
     "password.id",
+    # the provider connection decides the addressing flavour (utils/provider_services.py): the provider's profile
+    # (the account's, else the far facility's, else its SaaS cloud's) and the path type; a provider-assigned range
+    "connection.id",
+    "connection.path_type",
+    # (utils/provider_services.py connection_provider: account, far facility, SaaS parent, billed account, far kit owner)
+    "connection.account.provider.id",
+    "connection.account.provider.name",
+    "connection.account.provider.connection_profile",
+    "connection.far.id",
+    "connection.far.provider.id",
+    "connection.far.provider.name",
+    "connection.far.provider.connection_profile",
+    "connection.far.parent.provider.id",
+    "connection.far.parent.provider.name",
+    "connection.far.parent.provider.connection_profile",
+    "connection.far.account.provider.id",
+    "connection.far.account.provider.name",
+    "connection.far.account.provider.connection_profile",
+    "connection.far.devices.id",
+    "connection.far.devices.owner.id",
+    "connection.far.devices.owner.__typename",
+    "connection.far.devices.owner.name",
+    "connection.far.devices.owner.connection_profile",
+    "connection.far.appliances.id",
+    "connection.far.appliances.owner.id",
+    "connection.far.appliances.owner.__typename",
+    "connection.far.appliances.owner.name",
+    "connection.far.appliances.owner.connection_profile",
+    "connection.carrier_circuits.capabilities.id",
+    "connection.carrier_circuits.capabilities.device.id",
+    "connection.carrier_circuits.capabilities.device.deployment.id",
+    "connection.carrier_circuits.capabilities.device.owner.id",
+    "connection.carrier_circuits.capabilities.device.owner.__typename",
+    "connection.carrier_circuits.capabilities.device.owner.name",
+    "connection.carrier_circuits.capabilities.device.owner.connection_profile",
+    "link_prefix.id",
+    "link_prefix.prefix",
 ]
 
 # Fields the redesign removed from the virtual circuit (and the physical one): selecting one fails on a real stack.
@@ -180,7 +218,8 @@ def test_the_generator_query_selects_what_the_generator_reads(path: str, generat
 @pytest.mark.parametrize("field", _REMOVED_FIELDS)
 def test_the_generator_query_selects_no_removed_field(field: str, generator_paths: set[str]) -> None:
     """No path of virtual_circuit.gql ends in a field of the old virtual circuit."""
-    assert not {p for p in generator_paths if p.split(".")[-1] == field}
+    # `connection.…owner` is the owner of the far kit (the provider chain), not the circuit's removed owner
+    assert not {p for p in generator_paths if p.split(".")[-1] == field and not p.startswith("connection.")}
 
 
 def test_every_selected_field_is_read(generator_paths: set[str]) -> None:
@@ -211,6 +250,15 @@ def test_the_fakes_return_only_selected_fields(payload: dict[str, Any], generato
     assert not unselected, f"fake payload fields the query does not select: {sorted(unselected)}"
 
 
+def _fake_connection_paths() -> set[str]:
+    """The paths of a handoff on a provider connection, the provider reached by each of its three routes."""
+    paths: set[str] = set()
+    for via in ("account", "external", "saas", "billed", "kit"):
+        payload = handoff_payload(connection=connection_node(profile="azure", via=via), link_prefix="10.0.0.0/30")
+        paths |= _fake_paths(payload)
+    return paths
+
+
 def test_the_fakes_carry_every_field_the_generator_reads() -> None:
     """A field the generator reads that no fake carries is read nowhere in the unit tests."""
     carried = (
@@ -218,6 +266,7 @@ def test_the_fakes_carry_every_field_the_generator_reads() -> None:
         | _fake_paths(handoff_payload(password="pw-1"))
         | _fake_paths(_cabled_handoff())
         | _fake_paths(_cabled_interconnect())
+        | _fake_connection_paths()
     )
     assert not set(_GENERATOR_READS) - carried, f"read but never faked: {sorted(set(_GENERATOR_READS) - carried)}"
 

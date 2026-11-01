@@ -9,7 +9,11 @@ BGP processes and deployment. What the generators add at load time is rebuilt he
 - the colocation edges (``eg-<zone><NN>``: a ``CloudNetworkAppliance`` in a virtual colocation, else a physical
   device), the DC border leaves (``bl-<dc>...``) and the SD-WAN offices' edges, each with its one ``overlay`` process,
 - the facility locations of each carrier circuit, derived by the real ``plan_locations`` of ``add_circuit``,
-- per SD-WAN office the ``INET-<office>`` underlay and the ``<office>-SDWAN-<zone>`` tunnel ``add_sdwan_edge`` builds.
+- per SD-WAN office the ``INET-<office>`` underlay and the ``<office>-SDWAN-<zone>`` tunnel ``add_sdwan_edge`` builds,
+- per dedicated provider connection with ONE link on our pool (``connection_sessions``) the ``<connection>-L1`` handoff
+  ``add_provider_connection`` builds, its ends the ``<port>.<vlan>`` sub-interfaces of the carrier's two ports. A vpn
+  and a provider-assigned multi-link connection are not simulated: the tunnel interfaces and the per-link VLANs are
+  the generator's choice, asserted by test_67.
 
 Anything the data names that this module cannot resolve (a device, a place, a namespace) raises ``KeyError``: a payload
 that silently dropped an end would make "zero findings" meaningless.
@@ -29,6 +33,7 @@ BOOTSTRAP = ROOT / "data" / "bootstrap"
 
 CARRIER = "TopologyCarrierCircuit"
 SESSION = "TopologySessionCircuit"
+CONNECTION = "TopologyProviderConnection"
 # The circuit_type of a session circuit.
 TUNNEL = "tunnel"
 INTERCONNECT = "dci"
@@ -91,6 +96,10 @@ class _Model:
                     if end["kind"] == "DcimPhysicalInterface":  # a patch panel port end has a panel, not a device
                         self.cabled.add((str(end["data"]["device"]), str(end["data"]["name"])))
         self.carriers = self._carrier_circuits()
+        self.connection_sessions = self._connection_sessions()
+        for session in self.connection_sessions:
+            for device, port in session["ends"]:
+                self.parents[(device, port)] = port.rsplit(".", 1)[0]
 
     # -- places and devices --------------------------------------------------------------------------------------
 
@@ -179,6 +188,41 @@ class _Model:
         for row in rows:
             row["locations"] = self._complete_locations(row)
         return rows
+
+    def _connection_sessions(self) -> list[dict[str, Any]]:
+        """The ``<connection>-L1`` handoffs add_provider_connection builds for the one-link dedicated connections.
+
+        The near port is the end of a listed carrier whose device is deployed at the near facility, the far port the
+        end deployed at the far facility, both on the first carrier that has the two; each end is ``<port>.<vlan>``.
+        """
+        # Unfiltered: dropping a carrier from the payloads must not drop the session it carried.
+        rows = {
+            str(c.value("circuit_id")): {"ends": [(str(d), str(p)) for d, p in c.item["capabilities"]]}
+            for c in _all(CARRIER)
+        }
+        sessions: list[dict[str, Any]] = []
+        for connection in _all(CONNECTION):
+            if connection.value("path_type") != "dedicated" or connection.item.get("link_prefixes"):
+                continue
+            near, far = str(connection.item["near"]), str(connection.item["far"])
+            for carrier_name in connection.item.get("carrier_circuits") or []:
+                ends = rows[str(carrier_name)]["ends"]
+                near_ends = [end for end in ends if self.devices[end[0]]["deployment"] == near]
+                far_ends = [end for end in ends if self.devices[end[0]]["deployment"] == far]
+                if near_ends and far_ends:
+                    vlan = connection.value("vlan_id")
+                    sessions.append(
+                        {
+                            "name": f"{name(connection)}-L1",
+                            "connection": connection,
+                            "locations": [near, far],
+                            "ends": [(device, f"{port}.{vlan}") for device, port in (near_ends[0], far_ends[0])],
+                        }
+                    )
+                    break
+            else:
+                raise KeyError(f"{name(connection)}: no listed carrier joins {near} and {far}")
+        return sessions
 
     def _complete_locations(self, row: dict[str, Any]) -> list[str]:
         """The authored locations plus the facilities add_circuit derives from the end devices' deployments."""
@@ -310,6 +354,24 @@ class _Model:
         }
 
 
+def _handoff(
+    model: _Model,
+    circuit_name: str,
+    locations: list[str],
+    ends: list[tuple[str, str]],
+    namespace: str,
+    connection: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """A handoff as the query selects it: a circuit has no owner, a generated one names its provider connection."""
+    payload = model.virtual_payload(circuit_name, locations, ends, facility_only=True)
+    del payload["owner"]
+    payload["ip_namespace"] = {
+        "node": {"name": {"value": namespace}, "namespace_type": {"value": model.namespaces[namespace]}}
+    }
+    payload["connection"] = {"node": connection}
+    return payload
+
+
 def build_payloads(without_cables: bool = False, without_circuits: Iterable[str] = ()) -> dict[str, Any]:
     """The raw GraphQL response of ``circuit_placement.gql`` over the 30_all data.
 
@@ -346,26 +408,35 @@ def build_payloads(without_cables: bool = False, without_circuits: Iterable[str]
         )
         for circuit in session_circuits(INTERCONNECT)
     ]
-    endpoints = {
-        str(vif.item["virtual_circuit"]): {"name": {"value": name(vif)}, "vlan_id": {"value": vif.item["vlan_id"]}}
-        for vif in _all("CloudVirtualInterface")
-        if vif.item.get("virtual_circuit")
-    }
     handoffs = []
     for circuit in session_circuits(HANDOFF):
-        payload = model.virtual_payload(
-            name(circuit),
-            [str(p) for p in circuit.item["locations"]],
-            [(str(d), str(p)) for d, p in circuit.item["capabilities"]],
-            facility_only=True,
+        handoffs.append(
+            _handoff(
+                model,
+                name(circuit),
+                [str(p) for p in circuit.item["locations"]],
+                [(str(d), str(p)) for d, p in circuit.item["capabilities"]],
+                str(circuit.item["ip_namespace"]),
+                None,
+            )
         )
-        del payload["owner"]
-        namespace = str(circuit.item["ip_namespace"])
-        payload["ip_namespace"] = {
-            "node": {"name": {"value": namespace}, "namespace_type": {"value": model.namespaces[namespace]}}
-        }
-        payload["cloud_endpoint"] = {"node": endpoints.get(name(circuit))}
-        handoffs.append(payload)
+    for session in model.connection_sessions:
+        connection = session["connection"]
+        handoffs.append(
+            _handoff(
+                model,
+                session["name"],
+                session["locations"],
+                session["ends"],
+                str(connection.item["ip_namespace"]),
+                {
+                    "id": f"id-{name(connection)}",
+                    "name": {"value": name(connection)},
+                    "path_type": {"value": str(connection.value("path_type"))},
+                    "near": {"node": {"id": model.places[str(connection.item["near"])]["id"]}},
+                },
+            )
+        )
 
     sessions = [
         {**circuit, "circuit_type": {"value": circuit_type}}

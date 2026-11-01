@@ -5,7 +5,7 @@ spec:
   kind: TopologySaas
   data:
     - name: Zscaler
-      provider: zscaler
+      provider: "P030"
       service_type: sase
       description: Zscaler SASE Cloud
       children:

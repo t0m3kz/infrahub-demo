@@ -8,6 +8,7 @@ from infrahub_sdk import InfrahubClient
 
 from utils.circuit_underlay import derived_underlay, port_cabled, port_underlay
 from utils.data_cleaning import clean_data
+from utils.ownership import circuit_owner, connection_owner, customer_owner
 
 from .query_files import QUERY_GET_INTERCONNECT_INVENTORY
 from .suite_constants import DATA_PROPAGATION_DELAY
@@ -20,33 +21,37 @@ async def fetch_interconnect_inventory(client: InfrahubClient, branch: str) -> d
 
     Returns:
         {"physical": [{"id", "circuit_id", "circuit_type", "status", "provider",
-                       "owner", "owner_id", "locations": [str],
+                       "owner", "owner_id", "owner_org", "connections": [str], "locations": [str],
                        "location_nodes": [location], "end_devices": [device],
                        "end_ids": [str], "ends": [(device, interface)]}],
-         "virtual": [{"id", "name", "circuit_type", "owner", "owner_id", "locations": [str],
+         "virtual": [{"id", "name", "circuit_type", "owner", "owner_id", "owner_org", "locations": [str],
                       "location_nodes": [location], "end_devices": [device],
                       "ends": [(device, interface)], "end_nodes": [end],
                       "carrier": [str], "carriers": [carrier],
                       "ip_namespace", "password",
-                      "cloud_endpoint", "cloud_endpoint_vlan"}]}
+                      "connection", "connection_node", "link_prefix"}]}
 
-        A location is {"id", "kind", "name", "parent_id", "parent_kind",
-        "parent_name", "owner_id"}: the parent of a colocation zone (its
-        metro; likewise a virtual colocation's) or of a TopologyCustomer footprint (its facility), the owner
-        of a footprint or an office, None where the kind has none. An end
+        A circuit has no owner of its own: "owner" (the customer's name), "owner_id" and "owner_org" (its org_id) are
+        derived by utils.ownership.circuit_owner from the offices among its locations and, for a session circuit,
+        from its provider connection (the account's customer, else the connection's own); None for shared platform
+        (a provider's or the operator's own account is no customer). A location is {"id", "kind", "name",
+        "parent_id", "parent_kind", "parent_name", "owner_id", "owner_org"}: the parent of a colocation zone (its
+        metro; likewise a virtual colocation's) or of a TopologyCustomer footprint (its facility), the customer
+        owner of a footprint or an office, None where the kind has none. An end
         device is {"device", "device_id", "deployment_id", "deployment_kind",
         "deployment_name", "deployment_parent_id"}, one per circuit end, in end order; the parent is the metro
         of a zone or virtual colocation deployment, None otherwise.
 
-        A session circuit's "circuit_type" is its role (tunnel, dci or handoff), "ends" its sorted (device, interface) pairs and "end_nodes" the same ends in query
+        A session circuit's "circuit_type" is its role (tunnel, dci, handoff or vpn), "ends" its sorted (device, interface) pairs and "end_nodes" the same ends in query
         order, each {"id", "device", "device_id", "interface", "kind", "address", "parent_id", "parent_name",
         "carriers", "cabled"}: the address ("10.255.128.0/31", None when unaddressed), the parent interface of a
         sub-interface, the carriers found on the port or on its parent (utils.circuit_underlay.port_underlay) and
         whether a cable terminates there (port_cabled). The "carrier" of the circuit is derived, never declared:
         the circuit_ids of the carrier circuits on its ends (derived_underlay), deduped and sorted, "carriers" the
-        same circuits as {"id", "circuit_id", "status"}. A Handoff also carries "ip_namespace",
-        "password" (its key's name), "cloud_endpoint" (the VIF's name) and the "cloud_endpoint_vlan" the VIF states;
-        the other kinds have None for those.
+        same circuits as {"id", "circuit_id", "status"}. A Handoff or a VPN also carries "ip_namespace", "password" (its
+        key's name), "link_prefix" (the range the provider assigned, authored; None when it came from our pool) and the
+        provider connection that generated it: "connection" (its name) and "connection_node" ({"id", "name",
+        "path_type", "vlan_id"}); the other kinds have None for those.
     """
     client.default_branch = branch
     await asyncio.sleep(DATA_PROPAGATION_DELAY)
@@ -61,8 +66,10 @@ async def fetch_interconnect_inventory(client: InfrahubClient, branch: str) -> d
             "circuit_type": str(circuit.get("circuit_type") or ""),
             "status": str(circuit.get("status") or ""),
             "provider": (circuit.get("provider") or {}).get("name"),
-            "owner": (circuit.get("owner") or {}).get("name"),
-            "owner_id": (circuit.get("owner") or {}).get("id"),
+            **_derived_owner(circuit),
+            "connections": sorted(
+                str(connection.get("name") or "") for connection in circuit.get("provider_connections", []) or []
+            ),
             "locations": sorted(str(loc.get("name") or "") for loc in circuit.get("locations", []) or []),
             "location_nodes": _circuit_locations(circuit),
             "end_devices": _circuit_end_devices(circuit),
@@ -96,7 +103,7 @@ async def fetch_interconnect_inventory(client: InfrahubClient, branch: str) -> d
         )
     for circuit in sorted(virtual, key=lambda c: str(c["name"])):
         logger.info(
-            "  VC  %s [%s] owner=%s locations=%s ends=%s carrier=%s ns=%s cloud=%s",
+            "  VC  %s [%s] owner=%s locations=%s ends=%s carrier=%s ns=%s connection=%s",
             circuit["name"],
             circuit["circuit_type"],
             circuit["owner"],
@@ -104,7 +111,7 @@ async def fetch_interconnect_inventory(client: InfrahubClient, branch: str) -> d
             circuit["ends"],
             circuit["carrier"],
             circuit["ip_namespace"],
-            circuit["cloud_endpoint"],
+            circuit["connection"],
         )
     return {"physical": physical, "virtual": virtual}
 
@@ -121,13 +128,13 @@ def _virtual_circuit(circuit: dict[str, Any]) -> dict[str, Any]:
         }
         for carrier in derived_underlay(circuit)
     ]
-    endpoint = circuit.get("cloud_endpoint") or {}
+    connection = circuit.get("connection") or {}
+    link_prefix = circuit.get("link_prefix") or {}
     return {
         "id": str(circuit.get("id") or ""),
         "name": str(circuit.get("name") or ""),
         "circuit_type": str(circuit.get("circuit_type") or ""),
-        "owner": (circuit.get("owner") or {}).get("name"),
-        "owner_id": (circuit.get("owner") or {}).get("id"),
+        **_derived_owner(circuit),
         "locations": sorted(str(loc.get("name") or "") for loc in circuit.get("locations", []) or []),
         "location_nodes": _circuit_locations(circuit),
         "end_devices": _circuit_end_devices(circuit),
@@ -137,8 +144,46 @@ def _virtual_circuit(circuit: dict[str, Any]) -> dict[str, Any]:
         "carriers": carriers,
         "ip_namespace": (circuit.get("ip_namespace") or {}).get("name"),
         "password": (circuit.get("password") or {}).get("name"),
-        "cloud_endpoint": endpoint.get("name") if endpoint else None,
-        "cloud_endpoint_vlan": endpoint.get("vlan_id") if endpoint else None,
+        "link_prefix": link_prefix.get("prefix"),
+        "connection": connection.get("name") if connection else None,
+        "connection_node": (
+            {key: connection.get(key) for key in ("id", "name", "path_type", "vlan_id")} if connection else None
+        ),
+    }
+
+
+def _customer(owner: Any) -> dict[str, Any] | None:
+    """A cleaned owner as {"id", "name", "org_id"} when it is a customer, None for a provider or no owner at all."""
+    key = customer_owner(owner)
+    if key is None:
+        return None
+    return {"id": owner.get("id"), "name": owner.get("name"), "org_id": key}
+
+
+def _derived_owner(circuit: dict[str, Any]) -> dict[str, Any]:
+    """{"owner", "owner_id", "owner_org"} of a circuit, derived like checks/circuit_placement.py does (a circuit has no
+    owner relationship): the customer of the offices among its locations, else the one of its provider connection
+    (the account's customer, else the connection's own). Raises CircuitOwnerError for offices of two customers."""
+    offices = [
+        owner
+        for location in circuit.get("locations", []) or []
+        if location.get("typename") == "TopologyCustomerOffice" and (owner := _customer(location.get("owner")))
+    ]
+    connection = circuit.get("connection") or {}
+    account_owner = _customer((connection.get("account") or {}).get("owner"))
+    own_owner = _customer(connection.get("owner"))
+    by_key = {owner["org_id"]: owner for owner in (*offices, account_owner, own_owner) if owner}
+    key = circuit_owner(
+        [owner["org_id"] for owner in offices],
+        connection_owner(
+            own_owner["org_id"] if own_owner else None, account_owner["org_id"] if account_owner else None
+        ),
+    )
+    owner = by_key.get(key) if key else None
+    return {
+        "owner": owner["name"] if owner else None,
+        "owner_id": owner["id"] if owner else None,
+        "owner_org": key,
     }
 
 
@@ -172,7 +217,7 @@ def _circuit_locations(circuit: dict[str, Any]) -> list[dict[str, Any]]:
     locations = []
     for location in circuit.get("locations", []) or []:
         parent = location.get("parent") or {}
-        owner = location.get("owner") or {}
+        owner = _customer(location.get("owner")) or {}
         locations.append(
             {
                 "id": str(location.get("id") or ""),
@@ -182,6 +227,7 @@ def _circuit_locations(circuit: dict[str, Any]) -> list[dict[str, Any]]:
                 "parent_kind": parent.get("typename"),
                 "parent_name": parent.get("name"),
                 "owner_id": owner.get("id"),
+                "owner_org": owner.get("org_id"),
             }
         )
     return sorted(locations, key=lambda location: location["name"])

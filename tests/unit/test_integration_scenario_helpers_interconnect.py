@@ -48,7 +48,14 @@ async def test_fetch_interconnect_inventory_parses_location_and_end_placement() 
 
     metro = {"node": {"id": "id-FR", "__typename": "TopologyColocationMetro", "name": value("FR")}}
     dc = {"node": {"id": "id-DC10", "__typename": "TopologyDataCenter", "name": value("DC10")}}
-    owner = {"node": {"id": "org-C005", "name": value("Drentec BV")}}
+    customer = {
+        "node": {
+            "id": "org-C005",
+            "__typename": "OrganizationCustomer",
+            "org_id": value("C005"),
+            "name": value("Drentec BV"),
+        }
+    }
     physical = {
         "id": "pc1",
         "circuit_id": value("DF-DC10-EQXFR2"),
@@ -91,15 +98,18 @@ async def test_fetch_interconnect_inventory_parses_location_and_end_placement() 
         "__typename": "TopologySessionCircuit",
         "circuit_type": value("handoff"),
         "name": value("HANDOFF-C005-DC10-AWS-EUC1"),
-        "owner": owner,
         "ip_namespace": {"node": {"id": "ns-prod", "name": value("PROD")}},
         "password": {"node": {"name": value("eqx-fr2-aws-vif-key")}},
-        "cloud_endpoint": {
+        # a circuit has no owner of its own: the customer of the connection's account is its owner
+        "link_prefix": {"node": None},
+        "connection": {
             "node": {
-                "id": "vif1",
-                "__typename": "CloudVirtualInterface",
-                "name": value("vif-1"),
+                "id": "pconn1",
+                "name": value("PC-C005-AWS-EUC1"),
+                "path_type": value("dedicated"),
                 "vlan_id": value(1000),
+                "owner": {"node": None},
+                "account": {"node": {"owner": customer}},
             }
         },
         "locations": {
@@ -110,7 +120,7 @@ async def test_fetch_interconnect_inventory_parses_location_and_end_placement() 
                         "__typename": "TopologyCustomerDC",
                         "name": value("C005-P-DC10"),
                         "parent": dc,
-                        "owner": {"node": {"id": "org-C005", "__typename": "OrganizationCustomer"}},
+                        "owner": customer,
                     }
                 },
             ]
@@ -176,6 +186,7 @@ async def test_fetch_interconnect_inventory_parses_location_and_end_placement() 
             "parent_kind": None,
             "parent_name": None,
             "owner_id": None,
+            "owner_org": None,
         },
         {
             "id": "id-FR2",
@@ -185,6 +196,7 @@ async def test_fetch_interconnect_inventory_parses_location_and_end_placement() 
             "parent_kind": "TopologyColocationMetro",
             "parent_name": "FR",
             "owner_id": None,
+            "owner_org": None,
         },
     ]
     assert circuit["end_devices"] == [
@@ -241,7 +253,11 @@ async def test_fetch_interconnect_inventory_parses_location_and_end_placement() 
         "PROD",
         "eqx-fr2-aws-vif-key",
     )
-    assert (handoff["cloud_endpoint"], handoff["cloud_endpoint_vlan"]) == ("vif-1", 1000)
+    assert (handoff["connection"], handoff["connection_node"]["vlan_id"], handoff["owner_org"]) == (
+        "PC-C005-AWS-EUC1",
+        1000,
+        "C005",
+    )
 
 
 async def test_fetch_interconnect_inventory_leaves_the_handoff_fields_empty_on_the_other_kinds() -> None:
@@ -266,4 +282,4 @@ async def test_fetch_interconnect_inventory_leaves_the_handoff_fields_empty_on_t
     assert circuit["circuit_type"] == "tunnel"
     assert (circuit["owner"], circuit["ends"], circuit["carrier"], circuit["end_nodes"]) == (None, [], [], [])
     assert (circuit["ip_namespace"], circuit["password"]) == (None, None)
-    assert (circuit["cloud_endpoint"], circuit["cloud_endpoint_vlan"]) == (None, None)
+    assert (circuit["connection"], circuit["connection_node"], circuit["link_prefix"]) == (None, None, None)

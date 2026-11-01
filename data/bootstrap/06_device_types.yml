@@ -572,3 +572,9 @@ spec:
       height: 1
       full_depth: false
       manufacturer: Generic
+    # Zscaler Enforcement Node (ZEN): the SaaS-hosted function a tunnel lands on
+    # (09_network_appliance_templates_zscaler)
+    - name: ZEN
+      height: 0
+      full_depth: false
+      manufacturer: Zscaler

@@ -1,6 +1,6 @@
 ---
 # The provider edges we meet in the cages, as seen from our side of the handoffs and cross-connects:
-# AWS's Direct Connect router at FR2 (the far end of the transit VIF), Azure's ExpressRoute router at
+# AWS's Direct Connect router at FR2 (the far end of the transit connections), Azure's ExpressRoute router at
 # PA4, Megaport's Cloud Router (MCR) next to PA4, and Equinix's own Fabric port in the FR2 IBX.
 # They are the provider's kit, not ours: owned by the provider, in no device group (the two stubs deployed
 # to a colocation zone are in `provider_stubs`, which keeps them out of the border-gateway lookup of
@@ -12,14 +12,15 @@
 # cross-connect or cable and the parent of the handoff sub-interface (plus a Loopback0 router-id for the
 # routers that peer with us).
 #
-# Created before ../05_cloud_endpoints/00_vif_handoff.yml, whose sub-interface references the AWS router
-# by device name, and before 03_carrier_circuits.yml and 05_cage_cabling.yml (this directory), whose
+# Created before ../05_provider_connections/, whose stubs' loopbacks reference the routers by device name, and before
+# 03_carrier_circuits.yml and 05_cage_cabling.yml (this directory), whose
 # cross-connects and cable end on these routers' et-0/0/0. `deployment` is the router's facility:
 # add_circuit derives each cross-connect's far end from it (the circuit data lists only the cage):
 #
 #   EXT-AWS-DX-FR2      the cloud region eu-central-1 it serves
-#   EXT-AZURE-ER-PA4    the cloud region westeurope; the far end of XC-EQXPA4-AZURE-WEU only, no handoff
-#                       rides it (no Azure VIF or attachment is modelled), the carrier stays idle
+#   EXT-AZURE-ER-PA4    the cloud region westeurope; the far end of XC-EQXPA4-AZURE-WEU-PRI (et-0/0/0) and
+#                       -SEC (et-0/0/1), the carriers of the ExpressRoute provider connections
+#                       PC-PA4-AZURE-WEU-PRI-PROD and PC-PA4-AZURE-WEU-SEC-PROD
 #   EXT-MEGAPORT-MCR1   the Megaport zone MCR-PAR1 (../../02_colo/megaport/par). A Megaport MCR is a
 #                       cloud-neutral virtual router that Megaport runs in its own enabled facility, so the
 #                       facility it is deployed to is Megaport's, not a cloud region; a zone is a facility a
@@ -34,12 +35,12 @@ spec:
     - name: "EXT-AWS-DX-FR2"
       object_template: MX204_ISP_PE
       owner: "P004"
-      description: "AWS Direct Connect router at Equinix FR2 (far end of dx-eqx-fr2-euc1)"
+      description: "AWS Direct Connect router at Equinix FR2 (far end of the Direct Connect connections)"
       deployment: "eu-central-1"
     - name: "EXT-AZURE-ER-PA4"
       object_template: MX204_ISP_PE
       owner: "P005"
-      description: "Azure ExpressRoute router at Equinix PA4 (far end of XC-EQXPA4-AZURE-WEU)"
+      description: "Azure ExpressRoute router at Equinix PA4 (far end of XC-EQXPA4-AZURE-WEU-PRI and -SEC)"
       deployment: "westeurope"
     - name: "EXT-MEGAPORT-MCR1"
       object_template: MX204_ISP_PE

@@ -8,7 +8,7 @@
 # Both cables carry a handoff: the session generator (add_virtual_circuit) treats a cabled port, or
 # the parent of a cabled sub-interface, as carried. Nothing reruns that generator when a cable is
 # added later, so this file is loaded BEFORE the handoff circuits: it sorts earlier in this tree
-# (01_colo_onramp before 03_virtual_circuits, 04_sdwan and 05_cloud_endpoints).
+# (01_colo_onramp before 03_virtual_circuits, 04_sdwan and 05_provider_connections).
 #
 # 1. The SD-WAN gateway's own port in the cage router. The gateway (EQX-FR2-SDWAN-GW1) and the cage
 #    router eg-fr201 sit in one cage. The gateway's eth0 gets a port of its own, Ethernet1/12, so the
@@ -23,7 +23,8 @@
 #    EXT-EQX-FABRIC-FR2, deployed to the cage FR2); the cable runs from eg-fr201 Ethernet1/1 (a
 #    `customer` port: Ethernet1/[15-16] face the cage's firewall pair and are cabled by add_colocation_zone,
 #    Ethernet1/[13-14] are the cloud and ISP uplinks, Ethernet1/12 the gateway) to the Fabric port's
-#    et-0/0/0. Carries ../03_virtual_circuits/02_am_ne_handoff.yml, whose VLAN sub-interface
+#    et-0/0/0. Carries the provider connection PC-FR2-AMNE-PROD (../05_provider_connections/02_amne_chain.yml), whose
+# VLAN sub-interface
 #    Ethernet1/1.1200 rides this cable on its parent.
 apiVersion: infrahub.app/v1
 kind: Object

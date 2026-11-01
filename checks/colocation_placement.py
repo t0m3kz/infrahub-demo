@@ -29,17 +29,17 @@ fixed fallback, and is only held to these rules where the rule names the design)
 Order data (the presence's ``account`` with its ``owner``, and the appliances it hosts; not part of the design
 envelope):
 
-7. Terraform order data. A virtual colocation routed to terraform has what the Terraform artifact prints and cannot
-   order without: an ``account`` whose ``account_id`` (the billing account number) is set, whose provider is the
+7. Provider order data. A virtual colocation routed to terraform has what a provider order (the Terraform transform
+   was removed; this is the input contract its rebuild needs) cannot be placed without: an ``account`` whose ``account_id`` (the billing account number) is set, whose provider is the
    colocation operator above the metro (case-insensitive: operator "EQUINIX", provider "Equinix"), and whose owner has
    at least one notification address, each an e-mail address. Every appliance (CloudNetworkAppliance) of the presence
    is ordered under that account. A router (edge) is an independent appliance with no redundancy representation; a
    firewall pair is an HA domain (a ManagedHA on its ``capabilities`` edge, the same as every other HA pair) whose
    ``mode`` active-passive is the Equinix cluster, and an appliance with no domain is a single device. An appliance is
    in at most one domain; a domain has exactly two members, both appliances of the presence that list it, and the
-   mode is active-passive (the artifact renders no other). A pair-level problem is reported once, on the first member
+   mode is active-passive (the only cluster mode). A pair-level problem is reported once, on the first member
    by name.
-8. Terraform appliance model. The artifact orders the appliance's device type name (type_code), its software image's
+8. Provider appliance model. The order is made from the appliance's device type name (type_code), its software image's
    ``package`` (package_code) and ``version``, and its ``term_length``; an appliance has no hardware, so every
    interface is a ``DcimVirtualInterface``. Each appliance of a terraform presence reports a missing device type,
    software image, image package or term_length, and any interface of another kind.
@@ -59,7 +59,7 @@ METRO = "TopologyColocationMetro"
 ZONE = "TopologyColocationZone"
 VIRTUAL_COLOCATION = "TopologyVirtualColocation"
 TERRAFORM = "terraform"
-"""The infrastructure_orchestrator value that makes a virtual colocation render its Terraform artifact."""
+"""The infrastructure_orchestrator value of a virtual colocation ordered through Terraform (no transform renders it today)."""
 
 APPLIANCE = "CloudNetworkAppliance"
 """The kind of a device hosted by the provider on a virtual colocation."""
@@ -303,7 +303,7 @@ def _account_findings(node: dict[str, Any], account: dict[str, Any]) -> list[str
 
 
 HA_MODES = ("active-passive",)
-"""The HA domain modes the Terraform artifact can render: a cluster."""
+"""The HA domain modes a provider order supports: a cluster."""
 
 
 def _ha_domains(appliance: dict[str, Any]) -> list[dict[str, Any]]:

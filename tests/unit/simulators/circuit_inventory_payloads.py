@@ -1,8 +1,9 @@
 """The raw response of ``tests/integration/queries/get_interconnect_inventory.gql`` over the 30_all data.
 
 Built on the simulator of the placement check (``circuit_data_payloads``, shaped like ``circuit_placement.gql``) and
-completed with what the inventory query selects on top: the carrier circuits' ``circuit_id`` and status, owner names,
-each end device's deployment, the interface kind, the parent of a sub-interface, a handoff's key and route limit. No
+completed with what the inventory query selects on top: the carrier circuits' ``circuit_id`` and status, the owners (a
+circuit has none: the office locations and the provider connection carry them, as customers), the connection's VLAN,
+each end device's deployment, the interface kind, the parent of a sub-interface, a handoff's key (its own, else its connection's) and route limit. No
 address is set (nothing generated it offline): ``addresses`` puts them on named ports.
 """
 
@@ -48,10 +49,45 @@ def inventory_payload(
     }
     status = {row["name"]: row["status"] for row in model.carriers}
 
-    def named_owner(circuit: dict[str, Any]) -> None:
-        owner = circuit["owner"]["node"]
-        if owner:
-            owner["name"] = {"value": organisations[owner["org_id"]["value"]]}
+    connections = {name(c): c for c in distinct(declared("TopologyProviderConnection", ALL_DEMO))}
+    accounts = {name(a): a for a in distinct(declared("CloudAccount", ALL_DEMO))}
+
+    def customer(org_id: str | None) -> dict[str, Any]:
+        """An owner as CircuitOwner selects it: only an OrganizationCustomer carries a name (the operator's own
+        account belongs to a provider, which is no customer)."""
+        if org_id is None:
+            return {"node": None}
+        if org_id in organisations:
+            return {
+                "node": {
+                    "id": f"id-{org_id}",
+                    "__typename": "OrganizationCustomer",
+                    "org_id": {"value": org_id},
+                    "name": {"value": organisations[org_id]},
+                }
+            }
+        return {"node": {"id": f"id-{org_id}", "__typename": "OrganizationProvider", "org_id": {"value": org_id}}}
+
+    def named_owners(circuit: dict[str, Any]) -> None:
+        """A circuit has no owner of its own: drop the leftover key and name the owners of its office locations."""
+        circuit.pop("owner", None)
+        for location in circuit["locations"]["edges"]:
+            owner = location["node"].get("owner")
+            if owner and owner["node"]:
+                location["node"]["owner"] = customer(owner["node"]["org_id"]["value"])
+
+    def full_connection(circuit: dict[str, Any]) -> None:
+        """The connection of a generated session circuit with what the inventory query selects of it."""
+        node = (circuit.get("connection") or {}).get("node")
+        if not node:
+            return
+        row = connections[node["name"]["value"]]
+        account = row.item.get("account")
+        node["vlan_id"] = {"value": row.item.get("vlan_id")}
+        node["owner"] = customer(str(row.item["owner"]) if row.item.get("owner") else None)
+        node["account"] = {"node": {"owner": customer(str(accounts[str(account)].item["owner"]))} if account else None}
+        if row.item.get("password"):  # the connection puts its key on every session circuit it generates
+            circuit["password"] = {"node": {"name": {"value": str(row.item["password"])}}}
 
     physical = []
     for edge in payloads[CARRIER]["edges"]:
@@ -60,7 +96,8 @@ def inventory_payload(
         circuit["circuit_type"] = {"value": "dark_fiber"}
         circuit["status"] = {"value": status[circuit["name"]["value"]]}
         circuit["provider"] = {"node": {"name": {"value": "P016"}}}
-        named_owner(circuit)
+        named_owners(circuit)
+        circuit["provider_connections"] = _edges([])
         physical.append(circuit)
 
     passwords = {name(h): h.item["password"] for h in session_circuits(HANDOFF)}
@@ -71,10 +108,13 @@ def inventory_payload(
             if circuit["circuit_type"]["value"] != circuit_type:
                 continue
             circuit["__typename"] = SESSION
-            if "owner" in circuit:
-                named_owner(circuit)
+            named_owners(circuit)
+            full_connection(circuit)
             if circuit_type == HANDOFF:
-                circuit["password"] = {"node": {"name": {"value": passwords[circuit["name"]["value"]]}}}
+                # An authored handoff names its key; a generated one takes its connection's (full_connection above).
+                key = passwords.get(circuit["name"]["value"])
+                if key:
+                    circuit["password"] = {"node": {"name": {"value": key}}}
             for port_edge in circuit["capabilities"]["edges"]:
                 port = port_edge["node"]
                 device = port["device"]["node"]["name"]["value"]

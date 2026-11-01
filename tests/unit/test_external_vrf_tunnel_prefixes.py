@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import pytest
 import yaml
 
 from tests.integration.demo_data import relationship_names
@@ -14,8 +15,10 @@ from transforms.helpers.bgp_external import (
     get_external_peer_prefixes,
     get_external_session_policies,
     registered_by_gateway,
+    session_circuit_owner,
 )
 from utils.data_cleaning import clean_data
+from utils.ownership import CircuitOwnerError
 
 _ROOT = Path(__file__).parents[2]
 _GW1 = "EQX-FR2-SDWAN-GW1"
@@ -38,15 +41,21 @@ def _tunnels(*raw: dict[str, Any]) -> list[dict[str, Any]]:
     return clean_data({"TopologySessionCircuit": {"edges": [{"node": n} for n in raw]}})["TopologySessionCircuit"]
 
 
+def _office_location(owner: str | None, owner_type: str = "OrganizationCustomer") -> dict[str, Any]:
+    """A raw ``locations`` node as the edge query selects it for a TopologyCustomerOffice (owner, or null)."""
+    return {"node": {"owner": _raw_owner(owner, owner_type) if owner else {"node": None}}}
+
+
 def _tunnel(
     owner: str | None,
     *prefixes: tuple[str, str],
     ends: tuple[str, ...] = (_GW1, "EXT-ACME-EDGE1"),
     owner_type: str = "OrganizationCustomer",
 ) -> dict[str, Any]:
-    """A raw tunnel node: owner, the device of each end port, registered (prefix, namespace) pairs."""
+    """A raw tunnel node: the office of ``owner`` in its locations (the tunnel stores no owner), the device of
+    each end port, registered (prefix, namespace) pairs. A second location that is no office selects nothing."""
     return {
-        "owner": _raw_owner(owner, owner_type) if owner else {"node": None},
+        "locations": {"edges": [_office_location(owner, owner_type), {"node": {}}]},
         "registered_prefixes": {"edges": [_raw_prefix(prefix, namespace) for prefix, namespace in prefixes]},
         "capabilities": {"edges": [{"node": {"device": {"node": {"name": {"value": device}}}}} for device in ends]},
     }
@@ -120,7 +129,7 @@ class TestGatewayHandoffAcceptsTunnelPrefixes:
         assert found == {_HANDOFF: {"C001": [_ACME], "C002": ["10.210.2.0/24"]}}
 
     def test_the_tunnel_owner_is_the_owner_not_the_office(self) -> None:
-        """The range is owned by the tunnel's owner even when the only office behind the gateway is another's."""
+        """The range is owned by the tunnel's derived owner even when the only office behind the gateway is another's."""
         found = _peers(_offices((_GW1, "C002", ())), _tunnels(_tunnel("C001", (_ACME, "PROD"))))
         assert found == {_HANDOFF: {"C001": [_ACME]}}
 
@@ -135,6 +144,17 @@ class TestGatewayHandoffAcceptsTunnelPrefixes:
         assert _peers(_offices((_GW1, "C002", ())), provider) == {_HANDOFF: {}}
         assert _peers(_offices((_GW1, "C002", ())), _tunnels(_tunnel(None, (_ACME, "PROD")))) == {_HANDOFF: {}}
 
+    def test_a_tunnel_between_offices_of_two_owners_is_accepted_from_nobody(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """No single owner can be derived: fail closed and say so."""
+        tunnel = _tunnel("C001", (_ACME, "PROD"))
+        tunnel["locations"]["edges"].append(_office_location("C009"))
+        with caplog.at_level("WARNING"):
+            found = _peers(_offices((_GW1, "C002", ())), _tunnels(tunnel))
+        assert found == {_HANDOFF: {}}
+        assert "different owners" in caplog.text
+
     def test_a_tunnel_of_another_gateway_is_not_accepted(self) -> None:
         """A tunnel whose ends are not this gateway adds nothing to this session."""
         tunnels = _tunnels(_tunnel("C001", (_ACME, "PROD"), ends=("EQX-AM5-SDWAN-GW1", "EXT-ACME-EDGE1")))
@@ -145,6 +165,42 @@ class TestGatewayHandoffAcceptsTunnelPrefixes:
         """Like an office LAN, a tunnel's 0/0 or IPv6 range never reaches the filter."""
         tunnels = _tunnels(_tunnel("C001", ("0.0.0.0/0", "PROD"), ("2001:db8::/32", "PROD"), (_ACME, "PROD")))
         assert _peers(_offices((_GW1, "C002", ())), tunnels) == {_HANDOFF: {"C001": [_ACME]}}
+
+
+class TestSessionCircuitOwner:
+    """The owner of a session circuit is derived from its office locations and its connection."""
+
+    def test_two_offices_of_one_owner_are_fine(self) -> None:
+        """An office pair of one owner derives that owner."""
+        tunnel = _tunnel("C001")
+        tunnel["locations"]["edges"].append(_office_location("C001"))
+        (cleaned,) = _tunnels(tunnel)
+        assert session_circuit_owner(cleaned) == "C001"
+
+    def test_offices_of_two_owners_raise(self) -> None:
+        """Two customers' offices on one circuit have no single owner."""
+        tunnel = _tunnel("C001")
+        tunnel["locations"]["edges"].append(_office_location("C009"))
+        (cleaned,) = _tunnels(tunnel)
+        with pytest.raises(CircuitOwnerError):
+            session_circuit_owner(cleaned)
+
+    def test_no_office_takes_the_connection_owner(self) -> None:
+        """A vpn circuit has no office: its connection's account owner, else the connection's owner."""
+        customer = {"typename": "OrganizationCustomer", "org_id": "C003", "display_label": "C003"}
+        other = {"typename": "OrganizationCustomer", "org_id": "C005", "display_label": "C005"}
+        assert session_circuit_owner({"locations": [{}], "connection": {"owner": customer}}) == "C003"
+        assert session_circuit_owner({"connection": {"owner": other, "account": {"owner": customer}}}) == "C003"
+
+    def test_no_office_and_no_connection_has_no_owner(self) -> None:
+        """A dci or handoff circuit is unowned."""
+        assert session_circuit_owner({"locations": [{}, {}]}) is None
+        assert session_circuit_owner({}) is None
+
+    def test_a_non_customer_office_owner_is_no_owner(self) -> None:
+        """A provider-owned office does not own the circuit (never accepted at the border)."""
+        (cleaned,) = _tunnels(_tunnel("P035", owner_type="OrganizationProvider"))
+        assert session_circuit_owner(cleaned) is None
 
 
 class TestTunnelPrefixesInThePolicies:
@@ -176,24 +232,29 @@ class TestEdgeQueryAndData:
         """Owner, registered prefixes with their namespace and the device of each end port."""
         selected = _selected_paths(_QUERIES / "config" / "edge.gql", "TopologySessionCircuit")
         reads = [
-            "owner.org_id",
-            "owner.display_label",
+            "locations.owner.org_id",
+            "locations.owner.display_label",
             "registered_prefixes.prefix",
             "registered_prefixes.ip_namespace.name",
             "capabilities.device.name",
         ]
         assert not [item for item in reads if item not in selected]
-        assert {"owner", "registered_prefixes", "capabilities"} <= relationship_names("TopologySessionCircuit")
+        assert {"locations", "registered_prefixes", "capabilities"} <= relationship_names("TopologySessionCircuit")
 
     def test_a_cleaned_response_has_the_shape_the_helper_reads(self) -> None:
-        """clean_data: owner dict with typename, registered_prefixes a list of dicts, capabilities device names."""
+        """clean_data: office owner dict with typename in locations, registered_prefixes a list of dicts, device names."""
         (tunnel,) = _tunnels(_tunnel("C001", (_ACME, "PROD")))
-        assert tunnel["owner"] == {"typename": "OrganizationCustomer", "org_id": "C001", "display_label": "C001 label"}
+        assert tunnel["locations"][0]["owner"] == {
+            "typename": "OrganizationCustomer",
+            "org_id": "C001",
+            "display_label": "C001 label",
+        }
+        assert tunnel["locations"][1] == {}
         assert tunnel["registered_prefixes"] == [{"prefix": _ACME, "ip_namespace": {"name": "PROD"}}]
         assert [port["device"]["name"] for port in tunnel["capabilities"]] == [_GW1, "EXT-ACME-EDGE1"]
 
     def test_the_partner_tunnel_registers_the_acme_range_in_prod(self) -> None:
-        """01_partner_tunnel.yml creates the PROD prefix and lists it on the tunnel, owned by C001."""
+        """01_partner_tunnel.yml creates the PROD prefix and lists it on the tunnel, owned by C001 through its office."""
         path = _ROOT / "data/demos/30_all/08_interconnects/07_zone_policies/01_partner_tunnel.yml"
         documents = [doc for doc in yaml.safe_load_all(path.read_text()) if doc]
         by_kind = {doc["spec"]["kind"]: doc["spec"]["data"] for doc in documents}
@@ -201,5 +262,6 @@ class TestEdgeQueryAndData:
             key: by_kind["IpamPrefix"][0][key] for key in ("prefix", "ip_namespace")
         }
         (tunnel,) = by_kind["TopologySessionCircuit"]
-        assert tunnel["owner"] == "C001"
+        assert "owner" not in tunnel
+        assert "C001-OFFICE" in tunnel["locations"]
         assert tunnel["registered_prefixes"] == [[_ACME, "PROD"]]

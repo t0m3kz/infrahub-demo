@@ -20,7 +20,6 @@ from generators.helpers.lb_vip import (
     lb_layer,
     listener_protocol,
 )
-from generators.lb_vip import CLOUD_LB_GROUP
 from generators.protocols import CloudLoadBalancer, LoadbalancerVIP
 from tests.unit.lb_vip_helpers import (
     _CLOUD_FQDN,
@@ -159,10 +158,8 @@ class TestCloudProducer:
                 "scheme": "internet_facing",
                 "virtual_network": {"id": "vpc-1"},
                 "network_segments": ["sub-a"],
-                "member_of_groups": [CLOUD_LB_GROUP],
             }
         ]
-        assert CLOUD_LB_GROUP == {"hfid": ["cloud_loadbalancers"], "kind": "CoreStandardGroup"}
         payloads = _vip_payloads(gen)
         assert [(p["protocol"], p["port"]) for p in payloads] == [("tcp", 443), ("udp", 53)]
         first = payloads[0]

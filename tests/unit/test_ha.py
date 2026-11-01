@@ -415,7 +415,7 @@ class TestDC1FirewallHAScenario:
 
 
 # ---------------------------------------------------------------------------
-# get_ha — ManagedProxyHA and ManagedCloudProxy are matched
+# get_ha — ManagedProxyHA is matched
 # ---------------------------------------------------------------------------
 
 
@@ -427,17 +427,6 @@ class TestGetHaProxyHA:
             "group_id": 3,
             "mode": "active-passive",
             "capabilities": [{"name": "dc3-prx-01"}, {"name": "dc3-prx-02"}],
-        }
-        result = get_ha([cap])
-        assert result is not None
-
-    def test_managed_cloud_proxy_ha_typename_is_matched(self) -> None:
-        cap = {
-            "typename": "ManagedCloudProxy",
-            "name": "DC3-CPRX-HA",
-            "group_id": 5,
-            "mode": "active-passive",
-            "capabilities": [{"name": "dc3-cprx-01"}, {"name": "dc3-cprx-02"}],
         }
         result = get_ha([cap])
         assert result is not None

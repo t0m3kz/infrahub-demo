@@ -1,6 +1,6 @@
 ---
 # Cloud account for C001 (Nordix) in AWS. It owns the VPC below, which is what makes the
-# VPC block an owned prefix of C001 behind the AWS transit VIF session (the border policy
+# VPC block an owned prefix of C001 behind the AWS transit connection session (the border policy
 # derives a block's owner from CloudVirtualNetwork.account.owner).
 apiVersion: infrahub.app/v1
 kind: Object

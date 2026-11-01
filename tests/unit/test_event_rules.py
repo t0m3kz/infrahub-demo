@@ -191,27 +191,6 @@ def test_colocation_generators_are_fired_by_exactly_the_expected_rules() -> None
     }
 
 
-def test_virtual_colocation_orchestrator_routing_rules() -> None:
-    """A virtual colocation is routed on creation and whenever its infrastructure_orchestrator changes, by a
-    definition targeting the group every virtual colocation already joins."""
-    action = "run-virtual-colocation-orchestrator-routing-generator"
-    definition = "add_virtual_colocation_orchestrator_routing"
-    assert action_generators()[action] == definition
-    assert definition_targets()[definition] == _COLOCATION_KIND_WIRING["TopologyVirtualColocation"][2]
-    rules = {name: rule for name, rule in _rules_for("TopologyVirtualColocation").items() if rule["action"] == action}
-    assert sorted(rules) == [
-        "trigger-virtual-colocation-orchestrator-routing-on-created",
-        "trigger-virtual-colocation-orchestrator-routing-on-orchestrator-updated",
-    ]
-    created = rules["trigger-virtual-colocation-orchestrator-routing-on-created"]
-    assert created["mutation_action"] == "created"
-    assert not created.get("matches")
-    updated = rules["trigger-virtual-colocation-orchestrator-routing-on-orchestrator-updated"]
-    assert updated["mutation_action"] == "updated"
-    assert updated["matches"]["kind"] == "CoreNodeTriggerAttributeMatch"
-    assert [match["attribute_name"] for match in updated["matches"]["data"]] == ["infrastructure_orchestrator"]
-
-
 def test_colocation_generators_are_registered_in_infrahub_yml() -> None:
     """Each definition names its query, class and file, and the query file exists."""
     config = yaml.safe_load((ROOT / ".infrahub.yml").read_text())
@@ -353,3 +332,82 @@ def test_a_change_of_the_segment_ports_runs_nothing() -> None:
     for rule in trigger_rules():
         assert "switched" not in str(rule), rule["name"]
         assert "segments" not in [field for _kind, field in _match_fields(rule)], rule["name"]
+
+
+# ---------------------------------------------------------------------------
+# Provider connections: add_provider_connection builds the session circuits, it is never fed by them
+# ---------------------------------------------------------------------------
+
+_CONNECTION_ATTRIBUTE_RULES = {
+    "path-type": "path_type",
+    "service": "service",
+    "vlan-id": "vlan_id",
+    "status": "status",
+}
+_CONNECTION_RELATIONSHIP_RULES = {
+    "near": "near",
+    "far": "far",
+    "ip-namespace": "ip_namespace",
+    "account": "account",
+    "attached-network": "attached_network",
+    "attached-gateway": "attached_gateway",
+    "transit-attachment": "transit_attachment",
+    "provider-as": "provider_as",
+    "password": "password",
+    "link-prefixes": "link_prefixes",
+    "carrier-circuits": "carrier_circuits",
+}
+
+
+def test_the_provider_connection_action_runs_its_generator_on_the_provider_connections_group() -> None:
+    """One action, one definition, one group for the one connection kind."""
+    assert action_generators()["run-provider-connection-generator"] == "add_provider_connection"
+    assert definition_targets()["add_provider_connection"] == "provider_connections"
+
+
+def test_the_provider_connection_has_a_created_rule_and_one_updated_rule_per_input() -> None:
+    """Created, every attribute and relationship the generator reads; nothing else."""
+    rules = _rules_for("TopologyProviderConnection")
+    expected = {
+        "created",
+        *(f"{suffix}-updated" for suffix in (*_CONNECTION_ATTRIBUTE_RULES, *_CONNECTION_RELATIONSHIP_RULES)),
+    }
+    assert sorted(rules) == sorted(f"trigger-provider-connection-on-{suffix}" for suffix in expected)
+    assert {rule["action"] for rule in rules.values()} == {"run-provider-connection-generator"}
+    created = rules["trigger-provider-connection-on-created"]
+    assert created["mutation_action"] == "created" and not created.get("matches")
+    for suffix, field in _CONNECTION_ATTRIBUTE_RULES.items():
+        rule = rules[f"trigger-provider-connection-on-{suffix}-updated"]
+        assert rule["mutation_action"] == "updated"
+        assert _match_fields(rule) == [("CoreNodeTriggerAttributeMatch", field)]
+        assert rule["matches"]["data"] == [{"attribute_name": field, "value_match": "any"}]
+    for suffix, field in _CONNECTION_RELATIONSHIP_RULES.items():
+        rule = rules[f"trigger-provider-connection-on-{suffix}-updated"]
+        assert rule["mutation_action"] == "updated"
+        assert _match_fields(rule) == [("CoreNodeTriggerRelationshipMatch", field)]
+
+
+def test_the_session_circuits_edge_has_no_rule_because_the_generator_writes_it() -> None:
+    """A rule on `session_circuits` would loop: the generator writes it (through the circuit's `connection`)."""
+    fields = {field for rule in _rules_for("TopologyProviderConnection").values() for _, field in _match_fields(rule)}
+    assert "session_circuits" not in fields
+
+
+def test_every_rule_of_the_provider_connection_action_is_on_the_connection_kind() -> None:
+    """Only the connection kind triggers add_provider_connection."""
+    kinds = {rule["node_kind"] for rule in trigger_rules() if rule["action"] == "run-provider-connection-generator"}
+    assert kinds == {"TopologyProviderConnection"}
+
+
+def test_the_provider_connection_generator_is_registered_in_infrahub_yml() -> None:
+    """The definition names its class, file, query and target group, and the files exist."""
+    config = yaml.safe_load((ROOT / ".infrahub.yml").read_text())
+    definition = {d["name"]: d for d in config["generator_definitions"]}["add_provider_connection"]
+    queries = {query["name"]: query["file_path"] for query in config["queries"]}
+    assert definition["class_name"] == "ProviderConnectionGenerator"
+    assert definition["file_path"] == "generators/topology/provider_connection.py"
+    assert definition["query"] == "provider_connection_data"
+    assert definition["targets"] == "provider_connections"
+    assert definition["parameters"] == {"name": "name__value"}
+    assert (ROOT / queries["provider_connection_data"]).is_file()
+    assert (ROOT / definition["file_path"]).is_file()
