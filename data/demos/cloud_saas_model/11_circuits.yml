@@ -35,13 +35,39 @@ spec:
             name: Ethernet1/3
         - kind: CloudDirectConnect
           data:
-            name: dx-c900-fra-1
-            description: AWS Direct Connect, dedicated 10G port
+            name: dx-c900-fra-1a
+            description: AWS Direct Connect dedicated 10G port, member of the LAG dx-c900-fra-lag
             status: active
-            connection_type: dedicated
+            connection_type: physical
             bandwidth: 10000
             account: c900-aws-prod
             region: eu-central-1
+            rides_on: dx-c900-fra-lag
+    - name: XC-DC90-AWS-DX2
+      circuit_id: XC-DC90-AWS-DX2
+      description: Cross-connect from dc90-edge-01 to the second AWS Direct Connect port of the LAG
+      provider: P004
+      circuit_type: cross_connect
+      status: active
+      bandwidth: 10000
+      locations:
+        - DC90
+        - eu-central-1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: dc90-edge-01
+            name: Ethernet1/8
+        - kind: CloudDirectConnect
+          data:
+            name: dx-c900-fra-1b
+            description: AWS Direct Connect dedicated 10G port, member of the LAG dx-c900-fra-lag
+            status: active
+            connection_type: physical
+            bandwidth: 10000
+            account: c900-aws-prod
+            region: eu-central-1
+            rides_on: dx-c900-fra-lag
     - name: VC-DC90-AZ-ER-PRI
       circuit_id: VC-DC90-AZ-ER-PRI
       description: Virtual connection to the ExpressRoute circuit, primary link
@@ -62,7 +88,7 @@ spec:
             name: er-c900-weu
             description: Azure ExpressRoute circuit, two links (primary and secondary), one service key
             status: active
-            connection_type: hosted
+            connection_type: logical
             bandwidth: 1000
             service_key: "11111111-2222-3333-4444-555555555555"
             account: c900-azure-prod
@@ -87,7 +113,7 @@ spec:
             name: er-c900-weu
             description: Azure ExpressRoute circuit, two links (primary and secondary), one service key
             status: active
-            connection_type: hosted
+            connection_type: logical
             bandwidth: 1000
             service_key: "11111111-2222-3333-4444-555555555555"
             account: c900-azure-prod
@@ -110,9 +136,9 @@ spec:
         - kind: CloudDirectConnect
           data:
             name: ic-c900-fra-1
-            description: GCP Partner Interconnect attachment of the partner
+            description: GCP Partner Interconnect attachment, a logical connection on the partner's port
             status: active
-            connection_type: hosted
+            connection_type: logical
             bandwidth: 1000
             account: c900-gcp-prod
             partner_account: partner-fabric-gcp
@@ -173,7 +199,7 @@ kind: Object
 spec:
   kind: TopologySessionCircuit
   data:
-    # AWS Direct Connect, transit: virtual interface (scope transit) -> Direct Connect Gateway -> transit gateway.
+    # AWS Direct Connect, transit: virtual interface (scope private) -> Direct Connect Gateway -> transit gateway.
     - name: SC-C900-AWS-DX-PROD
       description: 'Handoff: edge sub-interface to the transit virtual interface'
       provider: P004
@@ -194,20 +220,18 @@ spec:
         - kind: CloudPeeringInterface
           data:
             name: vif-c900-aws-transit
-            description: AWS transit virtual interface
+            description: AWS transit virtual interface (private scope, lands on the DX Gateway of the TGW)
             status: active
-            scope: transit
+            scope: private
             routing: bgp
             vlan_id: 1000
             mtu: 8500
             bfd: true
-            transport: dx-c900-fra-1
+            transport: dx-c900-fra-lag
             account: c900-aws-prod
             region: eu-central-1
             gateway: dxgw-c900
             auth: c900-aws-dx-bgp-key
-            advertised_prefixes:
-              - ["10.200.0.0/16", "PROD"]
             peer_ip: ["10.255.128.1/31", "PROD"]
             peer_asn: AS64512
     # AWS Direct Connect, private: virtual interface (scope private) -> virtual private gateway -> VPC.
@@ -238,7 +262,7 @@ spec:
             vlan_id: 1100
             mtu: 9001
             bfd: true
-            transport: dx-c900-fra-1
+            transport: dx-c900-fra-lag
             account: c900-aws-prod
             region: eu-central-1
             gateway: vgw-c900-euc1
@@ -405,6 +429,10 @@ spec:
             scope: private
             routing: bgp
             tunnel_index: 1
+            endpoint_ip: "203.0.113.50/32"
+            tunnel_mode: ipsec
+            crypto_profile: IPSEC-AES256-SHA256-DH14
+            tunnel_key: c900-aws-vpn-t1-key
             mtu: 1436
             transport: vpn-c900-aws-euc1
             account: c900-aws-prod
@@ -436,6 +464,10 @@ spec:
             scope: private
             routing: bgp
             tunnel_index: 2
+            endpoint_ip: "203.0.113.51/32"
+            tunnel_mode: ipsec
+            crypto_profile: IPSEC-AES256-SHA256-DH14
+            tunnel_key: c900-aws-vpn-t2-key
             mtu: 1436
             transport: vpn-c900-aws-euc1
             account: c900-aws-prod
@@ -463,6 +495,8 @@ spec:
             scope: saas
             routing: static
             tunnel_index: 1
+            endpoint_ip: "203.0.113.80/32"
+            tunnel_mode: gre
             service_id: zscaler-org-c900
             saas_region: ZSCALER-MUNICH I
             owner: C900

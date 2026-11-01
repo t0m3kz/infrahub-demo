@@ -72,15 +72,17 @@ QUERIES = {
     "session": f"""TopologySessionCircuit {{ edges {{ node {{ id name {{ value }} circuit_type {{ value }} endpoints {{ edges {{ node {{ {EP} }} }} }} }} }} }}""",
     "vif": f"""DcimVirtualInterface {{ edges {{ node {{ {IF_TOP} parent_interface {{ node {{ id }} }} }} }} }}""",
     "dx": """CloudDirectConnect { edges { node { id name { value } connection_type { value } service_key { value } bandwidth { value }
-      account { node { name { value } } } partner_account { node { name { value } } } region { node { name { value } } } } } }""",
+      account { node { name { value } } } partner_account { node { name { value } } } rides_on { node { id name { value } } }
+      region { node { name { value } } } } } }""",
     "peer": """CloudPeeringInterface { edges { node { id name { value } scope { value } routing { value } vlan_id { value }
-      tunnel_index { value } mtu { value } bfd { value } service_id { value }
+      tunnel_index { value } mtu { value } bfd { value } service_id { value } endpoint_ip { value } tunnel_mode { value }
+      crypto_profile { node { name { value } } } tunnel_key { node { name { value } } }
       transport { node { id __typename display_label } } account { node { name { value } } }
       region { node { name { value } } } saas_region { node { display_label } } owner { node { name { value } } }
       gateway { node { id } } transit_gateway { node { id } } virtual_network { node { id } }
       auth { node { name { value } } } advertised_prefixes { edges { node { prefix { value } } } }
       peer_ip { node { address { value } } } peer_asn { node { asn { value } } } } } }""",
-    "vpn": """CloudVPNConnection { edges { node { id name { value } tunnel_count { value } account { node { name { value } } }
+    "vpn": """CloudVPNConnection { edges { node { id name { value } account { node { name { value } } }
       customer_gateway { node { id } } gateway { node { id } } transit_gateway { node { id } } virtual_network { node { id } } } } }""",
     "gw": """CloudGateway { edges { node { id name { value } gateway_type { value } ip_address { value } asn { value }
       account { node { name { value } } } transit_gateway { node { id } } virtual_network { node { id } } } } }""",
@@ -191,8 +193,20 @@ def main_walk(d: dict[str, list[dict]], dc_seg: str, cloud_seg: str, quiet: bool
                     return r
         return None
 
+    def bundle_of(transport_id: str) -> list[str]:
+        """The transport and the ones it rides on (member port -> bundle), nearest first; a loop ends the walk."""
+        chain = [transport_id]
+        while transport_id in dxs:
+            up = (dxs[transport_id].get("rides_on") or {}).get("node")
+            if not up or up["id"] in chain:
+                break
+            chain.append(up["id"])
+            transport_id = up["id"]
+        return chain
+
     def peers_on(transport_id: str) -> list[dict]:
-        return [p for p in d["peer"] if (rel(p, "transport") or [{}])[0].get("id") == transport_id]
+        ids = set(bundle_of(transport_id))
+        return [p for p in d["peer"] if (rel(p, "transport") or [{}])[0].get("id") in ids]
 
     def peer_text(p: dict) -> str:
         return f"{val(p, 'scope')} peering {val(p, 'name')}"
@@ -269,6 +283,7 @@ def main_walk(d: dict[str, list[dict]], dc_seg: str, cloud_seg: str, quiet: bool
                 if not tails:
                     continue
                 found += 1
+                ride = bundle_of(conn_obj["id"])[1:] if conn_obj is not None else []
                 say("  " + "\n  ".join(hops))
                 say(f"  [device {dev}: {epname(last)} ... {epname(near[0])}]  (L2/L3 inside the device, no cable)")
                 say(
@@ -278,6 +293,8 @@ def main_walk(d: dict[str, list[dict]], dc_seg: str, cloud_seg: str, quiet: bool
                     say(
                         f"  [tunnels {[v['name']['value'] for v in tunnels]} ride on {epname(near[0])} through the carrier]"
                     )
+                for rid in ride:
+                    say(f"  --rides_on--> bundle {val(dxs[rid], 'name')}")
                 for p, text in tails:
                     acct = (p.get("account") or {}).get("node") or {}
                     result["l1"].append(
@@ -290,7 +307,12 @@ def main_walk(d: dict[str, list[dict]], dc_seg: str, cloud_seg: str, quiet: bool
                             "peering": val(p, "name"),
                             "scope": val(p, "scope"),
                             "chain": text,
-                            "hops": [*hops, f"carrier {car['name']['value']}", f"{peer_text(p)} --> {text}"],
+                            "hops": [
+                                *hops,
+                                f"carrier {car['name']['value']}",
+                                *[f"rides_on bundle {val(dxs[r], 'name')}" for r in ride],
+                                f"{peer_text(p)} --> {text}",
+                            ],
                         }
                     )
                     say(f"  --> {peer_text(p)} --> {text}   [account {(acct.get('name') or {}).get('value')}]")
@@ -411,6 +433,13 @@ def main_walk(d: dict[str, list[dict]], dc_seg: str, cloud_seg: str, quiet: bool
         tr = (rel(p, "transport") or [None])[0]
         trd = dxs.get(tr["id"]) if tr else None
         trd = trd or (vpns.get(tr["id"]) if tr else None)
+        tunnel = (
+            f" endpoint {val(p, 'endpoint_ip')} {val(p, 'tunnel_mode')}"
+            f" profile {((p.get('crypto_profile') or {}).get('node') or {}).get('name', {}).get('value')}"
+            f" tunnel key {((p.get('tunnel_key') or {}).get('node') or {}).get('name', {}).get('value')}"
+            if val(p, "tunnel_mode") or val(p, "endpoint_ip")
+            else ""
+        )
         chain = to_vnet("peer", p, None)
         acct = ((p.get("account") or {}).get("node") or {}).get("name", {}).get("value")
         where = acct or f"owner {((p.get('owner') or {}).get('node') or {}).get('name', {}).get('value')}"
@@ -420,13 +449,18 @@ def main_walk(d: dict[str, list[dict]], dc_seg: str, cloud_seg: str, quiet: bool
         )
         say(
             f"      provider {((p.get('peer_ip') or {}).get('node') or {}).get('address', {}).get('value')} "
-            f"AS{((p.get('peer_asn') or {}).get('node') or {}).get('asn', {}).get('value')}"
+            f"AS{((p.get('peer_asn') or {}).get('node') or {}).get('asn', {}).get('value')}{tunnel}"
             f"   advertised {[val(x, 'prefix') for x in rel(p, 'advertised_prefixes')]}"
         )
         if tr:
             extra = ""
             if trd and "service_key" in trd:
-                extra = f" service_key {val(trd, 'service_key')} partner {((trd.get('partner_account') or {}).get('node') or {}).get('name', {}).get('value')}"
+                up = (trd.get("rides_on") or {}).get("node") or {}
+                extra = (
+                    f" {val(trd, 'connection_type')} service_key {val(trd, 'service_key')}"
+                    f" partner {((trd.get('partner_account') or {}).get('node') or {}).get('name', {}).get('value')}"
+                    f" rides_on {up.get('name', {}).get('value')}"
+                )
             if trd and "customer_gateway" in trd:
                 cg = [objs["gw"][x["id"]] for x in rel(trd, "customer_gateway")]
                 extra = "".join(

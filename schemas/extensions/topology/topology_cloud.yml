@@ -266,20 +266,12 @@ nodes:
         kind: Dropdown
         optional: false
         order_weight: 250
-        description: "Segmentation technology (cloud provider or on-prem)"
+        description: "Segmentation technology (VXLAN on-prem, subnet in the cloud)"
         choices:
-          - name: aws_vpc_subnet
-            label: AWS VPC Subnet
-            description: "AWS VPC subnet"
+          - name: cloud_subnet
+            label: Cloud Subnet
+            description: "Subnet of a cloud virtual network (the provider is the network's account provider)"
             color: "#FF9900"
-          - name: gcp_vpc_subnet
-            label: GCP VPC Subnet
-            description: "Google Cloud VPC subnet"
-            color: "#4285F4"
-          - name: azure_vnet_subnet
-            label: Azure VNet Subnet
-            description: "Azure Virtual Network subnet"
-            color: "#0078D4"
       - name: cidr_block
         label: CIDR Block
         kind: Text

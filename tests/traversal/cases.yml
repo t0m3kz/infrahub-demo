@@ -19,7 +19,7 @@ cases:
         # legs per carrier type (L1) and per session circuit type (L3)
         l1_legs:
           internet: 2
-          cross_connect: 2
+          cross_connect: 4
         l3_legs:
           handoff: 2
           vpn: 2

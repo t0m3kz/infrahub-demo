@@ -1,6 +1,6 @@
 ---
 # The cloud side: AWS eu-central-1 and Azure westeurope (regions host nothing), one account each, a VPC with a
-# subnet and an instance on AWS, a transit gateway with its VPC attachment, a VNet on Azure.
+# subnet and an instance on AWS, a transit gateway with its VPC attachment, a VNet on Azure, an IPsec profile.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -78,6 +78,39 @@ spec:
       region: "europe-west3"
       cidr_blocks:
         - ["10.202.0.0/16", "PROD"]
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityIPsecProfile
+  data:
+    - name: "IPSEC-AES256-SHA256-DH14"
+      description: "IKEv2 AES-256 SHA-256 DH14, ESP AES-256 SHA-256 with PFS 14 (the AWS VPN tunnel options)"
+      status: active
+      ike_version: ikev2
+      ike_encryption: aes256
+      ike_integrity: sha256
+      ike_dh_group: 14
+      ike_lifetime: 28800
+      esp_encryption: aes256
+      esp_integrity: sha256
+      pfs_group: 14
+      esp_lifetime: 3600
+---
+# The bundle of the AWS Direct Connect ports: two member ports (11_circuits.yml) ride on it, the virtual interfaces ride
+# on the bundle, not on a member.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudDirectConnect
+  data:
+    - name: "dx-c900-fra-lag"
+      description: "AWS Direct Connect LAG: two dedicated 10G ports"
+      status: active
+      connection_type: physical
+      bandwidth: 20000
+      account: "c900-aws-prod"
+      region: "eu-central-1"
 ---
 apiVersion: infrahub.app/v1
 kind: Object
@@ -161,9 +194,6 @@ spec:
     - name: "vpn-c900-aws-euc1"
       description: "AWS site-to-site VPN: two tunnels, BGP inside each /30"
       status: active
-      tunnel_count: 2
-      customer_gateway_ip: "198.51.100.10/32"
-      provider_endpoint_ip: "203.0.113.50/32"
       account: "c900-aws-prod"
       region: "eu-central-1"
       customer_gateway: "cgw-c900-dc90"
@@ -187,7 +217,7 @@ spec:
     - owner: "C900"
       customer_name: "demo-subnet"
       environment: "p"
-      segment_type: "aws_vpc_subnet"
+      segment_type: "cloud_subnet"
       virtual_network: "vpc-c900-prod"
       availability_zone: ["eu-central-1", "eu-central-1a"]
       cidr_block: "10.200.1.0/24"

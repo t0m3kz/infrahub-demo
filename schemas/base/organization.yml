@@ -129,6 +129,14 @@ nodes:
             label: Zscaler
             description: "GRE or IPsec tunnels to the nearest Zscaler node over the internet"
             color: "#0066CC"
+          - name: ibm
+            label: IBM Cloud
+            description: "Direct Link (Connect/Dedicated) and VPN for VPC"
+            color: "#0F62FE"
+          - name: alibaba
+            label: Alibaba Cloud
+            description: "Express Connect (virtual border router) and VPN Gateway"
+            color: "#FF6A00"
           - name: generic
             label: Generic
             description: "Any other provider: addresses from our own pool"

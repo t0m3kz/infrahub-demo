@@ -230,7 +230,7 @@ nodes:
     namespace: Cloud
     label: Cloud Transport (port or circuit)
     icon: mdi:lan-connect
-    description: "Transport: a dedicated port or hosted connection (Direct Connect, ExpressRoute circuit, Interconnect); peerings ride on it"  # yamllint disable-line rule:line-length
+    description: "Transport: a physical port or bundle, or a logical connection (Direct Connect, ExpressRoute, Interconnect); peerings ride on it"  # yamllint disable-line rule:line-length
     include_in_menu: false
     inherit_from:
       - CloudResource
@@ -250,13 +250,13 @@ nodes:
         optional: false
         order_weight: 250
         choices:
-          - name: dedicated
-            label: Dedicated
-            description: "A port of our own at the provider's location (AWS dedicated connection, GCP Dedicated Interconnect)"  # yamllint disable-line rule:line-length
+          - name: physical
+            label: Physical
+            description: "A port of our own, or a bundle of ports, at the provider's location (dedicated connection, LAG, Direct port)"  # yamllint disable-line rule:line-length
             color: "#3498DB"
-          - name: hosted
-            label: Hosted
-            description: "A slice of a partner's port (AWS hosted connection, GCP Partner Interconnect, ExpressRoute through a provider)"  # yamllint disable-line rule:line-length
+          - name: logical
+            label: Logical
+            description: "A circuit on a partner's port or on our own physical port (hosted connection, ExpressRoute circuit, VLAN attachment)"  # yamllint disable-line rule:line-length
             color: "#2ECC71"
       - name: bandwidth
         kind: Number
@@ -278,7 +278,7 @@ nodes:
         label: "Service Key"
         optional: true
         order_weight: 360
-        description: "The operator's identifier of the circuit where it has one (ExpressRoute service key)"
+        description: "The operator's key or identifier of the connection (service key, pairing key, connection id)"
     relationships:
       - name: account
         peer: CloudAccount
@@ -301,7 +301,28 @@ nodes:
         optional: true
         identifier: "cloud_direct_connect__partner_account"
         order_weight: 700
-        description: "A hosted connection lives in the partner's account while its peerings are in `account`"
+        description: "A logical connection lives in the partner's account while its peerings are in `account`"
+      # A member port rides on its bundle; a logical circuit on its own port or bundle. Same identifier on both sides.
+      - name: rides_on
+        label: Rides On
+        peer: CloudDirectConnect
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "cloud_direct_connect__rides_on"
+        direction: outbound
+        order_weight: 750
+        description: "The bundle a member port belongs to, or the port or bundle a logical circuit rides on"
+      - name: riders
+        label: Riders
+        peer: CloudDirectConnect
+        cardinality: many
+        kind: Generic
+        optional: true
+        identifier: "cloud_direct_connect__rides_on"
+        direction: inbound
+        order_weight: 760
+        description: "The member ports and logical circuits that ride on this one"
 
   # The interface of the cloud: the L3 termination of one session, the same for every operator. The provider side
   # address and AS are the TopologyConnectorRouting edges (peer_ip, peer_asn); OUR side is a sub-interface of ours
@@ -330,20 +351,16 @@ nodes:
         label: "Scope"
         optional: false
         order_weight: 250
-        description: "What it reaches (private, public, transit, saas); the operator word is in the name and the blueprint"  # yamllint disable-line rule:line-length
+        description: "What it reaches (private, public, saas); the operator word is in the name and the blueprint"  # yamllint disable-line rule:line-length
         choices:
           - name: private
             label: Private
-            description: "One virtual network, directly or through a cloud edge gateway"
+            description: "A virtual network or a transit hub, directly or through a cloud edge gateway"
             color: "#3498DB"
           - name: public
             label: Public
             description: "The provider's public endpoints"
             color: "#2ECC71"
-          - name: transit
-            label: Transit
-            description: "A transit/hub gateway, through a cloud edge gateway"
-            color: "#9B59B6"
           - name: saas
             label: SaaS
             description: "A SaaS service (Webex, Zscaler, Microsoft 365)"
@@ -399,6 +416,27 @@ nodes:
         optional: true
         order_weight: 500
         description: "The provider's identifier of the tenant or service where there is no account (Webex org, Zscaler org)"  # yamllint disable-line rule:line-length
+      - name: endpoint_ip
+        kind: IPHost
+        label: "Endpoint IP"
+        optional: true
+        order_weight: 370
+        description: "A tunnel: the provider's public address this tunnel terminates on"
+      - name: tunnel_mode
+        kind: Dropdown
+        label: "Tunnel Mode"
+        optional: true
+        order_weight: 380
+        description: "A tunnel: how it is encapsulated"
+        choices:
+          - name: ipsec
+            label: IPsec
+            description: "IPsec tunnel (needs a crypto profile and a tunnel key)"
+            color: "#3498DB"
+          - name: gre
+            label: GRE
+            description: "GRE tunnel, no encryption"
+            color: "#95A5A6"
     relationships:
       - name: transport
         peer: CloudTransport
@@ -472,6 +510,24 @@ nodes:
         optional: true
         identifier: "cloud_peering__auth"
         order_weight: 1000
+      - name: tunnel_key
+        label: Tunnel Key
+        peer: RoutingPassword
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "cloud_peering__tunnel_key"
+        order_weight: 1010
+        description: "A tunnel: the pre-shared key of the IPsec tunnel (the BGP key is `auth`)"
+      - name: crypto_profile
+        label: Crypto Profile
+        peer: SecurityIPsecProfile
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "cloud_peering__crypto_profile"
+        order_weight: 1020
+        description: "A tunnel: the IKE and ESP parameters of an IPsec tunnel"
       - name: advertised_prefixes
         label: Advertised Prefixes
         peer: IpamPrefix
@@ -480,7 +536,7 @@ nodes:
         optional: true
         identifier: "cloud_peering__advertised_prefixes"
         order_weight: 1050
-        description: "The prefixes we announce on it (public/Microsoft peering, the allowed prefixes of a gateway association)"  # yamllint disable-line rule:line-length
+        description: "The prefixes WE announce to the cloud; only public (provider-verified) and static; empty for private"  # yamllint disable-line rule:line-length
 
   # What a peering lands on inside the provider, between the peering and the network, and our side of a VPN.
   # Neutral roles; the operator word is in the name (see the blueprint in the sample README).
@@ -577,28 +633,6 @@ nodes:
       - name__value
     uniqueness_constraints:
       - [account, name__value]
-    attributes:
-      - name: tunnel_count
-        kind: Number
-        label: "Tunnels"
-        optional: false
-        default_value: 2
-        order_weight: 300
-        parameters:
-          min_value: 1
-          max_value: 4
-      - name: customer_gateway_ip
-        kind: IPHost
-        label: "Customer Gateway IP"
-        optional: false
-        order_weight: 350
-        description: "The public address of our edge the tunnels come from"
-      - name: provider_endpoint_ip
-        kind: IPHost
-        label: "Provider Endpoint IP"
-        optional: true
-        order_weight: 400
-        description: "The public address of the provider's VPN endpoint"
     relationships:
       - name: account
         peer: CloudAccount
@@ -617,7 +651,7 @@ nodes:
         peer: CloudGateway
         cardinality: one
         kind: Attribute
-        optional: true
+        optional: false
         identifier: "cloud_vpn__customer_gateway"
         order_weight: 700
         description: "Our side (a gateway of type customer_gateway)"

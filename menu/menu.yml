@@ -73,6 +73,11 @@ spec:
             label: Cloud VPN Connections
             kind: CloudVPNConnection
             icon: "mdi:vpn"
+          - namespace: Security
+            name: CsIPsecProfileItem
+            label: IPsec Profiles
+            kind: SecurityIPsecProfile
+            icon: "mdi:shield-key-outline"
           - namespace: Topology
             name: CsCarrierCircuitItem
             label: Carrier Circuits
