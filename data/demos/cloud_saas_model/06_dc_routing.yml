@@ -33,6 +33,14 @@ spec:
       parent_interface: ["dc90-edge-01", "Ethernet1/3"]
       vrf: ["DC90", "PROD"]
       ip_address: {data: {address: "10.255.128.0/31", ip_namespace: "PROD"}}
+    - name: "Ethernet1/3.1100"
+      device: "dc90-edge-01"
+      role: cloud
+      status: active
+      description: "AWS Direct Connect private VIF, VLAN 1100"
+      parent_interface: ["dc90-edge-01", "Ethernet1/3"]
+      vrf: ["DC90", "PROD"]
+      ip_address: {data: {address: "10.255.128.2/31", ip_namespace: "PROD"}}
     - name: "Ethernet1/4.200"
       device: "dc90-edge-01"
       role: cloud
@@ -40,7 +48,7 @@ spec:
       description: "ExpressRoute primary, private peering VLAN 200"
       parent_interface: ["dc90-edge-01", "Ethernet1/4"]
       vrf: ["DC90", "PROD"]
-      ip_address: {data: {address: "10.255.128.2/31", ip_namespace: "PROD"}}
+      ip_address: {data: {address: "10.255.128.9/30", ip_namespace: "PROD"}}
     - name: "Ethernet1/5.200"
       device: "dc90-edge-01"
       role: cloud
@@ -48,7 +56,7 @@ spec:
       description: "ExpressRoute secondary, private peering VLAN 200"
       parent_interface: ["dc90-edge-01", "Ethernet1/5"]
       vrf: ["DC90", "PROD"]
-      ip_address: {data: {address: "10.255.128.4/31", ip_namespace: "PROD"}}
+      ip_address: {data: {address: "10.255.128.13/30", ip_namespace: "PROD"}}
     - name: "Ethernet1/6.300"
       device: "dc90-edge-01"
       role: saas
@@ -57,18 +65,35 @@ spec:
       parent_interface: ["dc90-edge-01", "Ethernet1/6"]
       vrf: ["DC90", "PROD"]
       ip_address: {data: {address: "10.255.128.6/31", ip_namespace: "PROD"}}
+    - name: "Ethernet1/7.400"
+      device: "dc90-edge-01"
+      role: cloud
+      status: active
+      description: "GCP Partner Interconnect, VLAN attachment VLAN 400"
+      parent_interface: ["dc90-edge-01", "Ethernet1/7"]
+      vrf: ["DC90", "PROD"]
+      ip_address: {data: {address: "169.254.20.2/29", ip_namespace: "PROD"}}
     - name: "Tunnel1"
       device: "dc90-edge-01"
       role: cloud
       status: active
-      description: "AWS site-to-site VPN tunnel 1 (source: the internet port)"
+      description: "AWS site-to-site VPN tunnel 1 (rides on the internet port Ethernet1/2)"
+      parent_interface: ["dc90-edge-01", "Ethernet1/2"]
       ip_address: {data: {address: "169.254.10.2/30", ip_namespace: "PROD"}}
     - name: "Tunnel2"
+      device: "dc90-edge-01"
+      role: cloud
+      status: active
+      description: "AWS site-to-site VPN tunnel 2 (rides on the internet port Ethernet1/2)"
+      parent_interface: ["dc90-edge-01", "Ethernet1/2"]
+      ip_address: {data: {address: "169.254.10.6/30", ip_namespace: "PROD"}}
+    - name: "Tunnel3"
       device: "dc90-edge-01"
       role: saas
       status: active
       description: "Zscaler tunnel"
-      ip_address: {data: {address: "169.254.10.6/30", ip_namespace: "PROD"}}
+      parent_interface: ["dc90-edge-01", "Ethernet1/2"]
+      ip_address: {data: {address: "169.254.10.10/30", ip_namespace: "PROD"}}
 ---
 apiVersion: infrahub.app/v1
 kind: Object

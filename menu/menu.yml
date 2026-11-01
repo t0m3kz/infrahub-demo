@@ -53,31 +53,26 @@ spec:
       icon: "mdi:cloud-sync-outline"
       children:
         data:
-          - namespace: Topology
-            name: CsProviderConnectionItem
-            label: Provider Connections
-            kind: TopologyProviderConnection
-            icon: "mdi:transit-connection-variant"
           - namespace: Cloud
             name: CsDirectConnectItem
-            label: Direct Connect
+            label: Cloud Transports (port / circuit)
             kind: CloudDirectConnect
             icon: "mdi:lan-connect"
           - namespace: Cloud
-            name: CsVirtualInterfaceItem
-            label: Virtual Interfaces
-            kind: CloudVirtualInterface
+            name: CsPeeringInterfaceItem
+            label: Cloud Peering Interfaces
+            kind: CloudPeeringInterface
             icon: "mdi:ethernet"
           - namespace: Cloud
+            name: CsGatewayItem
+            label: Cloud Gateways
+            kind: CloudGateway
+            icon: "mdi:router-network"
+          - namespace: Cloud
             name: CsVPNConnectionItem
-            label: VPN Connections
+            label: Cloud VPN Connections
             kind: CloudVPNConnection
             icon: "mdi:vpn"
-          - namespace: Topology
-            name: CsSaasConnectionItem
-            label: SaaS Connections
-            kind: TopologySaasConnection
-            icon: "mdi:cloud-lock-outline"
           - namespace: Topology
             name: CsCarrierCircuitItem
             label: Carrier Circuits

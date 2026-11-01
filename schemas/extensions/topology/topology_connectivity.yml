@@ -311,7 +311,7 @@ nodes:
         optional: true
         identifier: "handoff_circuit__ip_namespace"
         order_weight: 1200
-        description: "Environment namespace in which the /31 is allocated and the session runs (required for a handoff)"
+        description: "Namespace of the session; our link /31 is from pool Handoff-<namespace>-IPv4, our private AS from PRIVATE-ASN32"  # yamllint disable-line rule:line-length
 
       - name: password
         label: "Password"

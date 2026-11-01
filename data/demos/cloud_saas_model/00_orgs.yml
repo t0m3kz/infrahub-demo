@@ -36,6 +36,9 @@ spec:
     - asn: 13445
       owner: "P901"
       description: "Webex (private peering)"
+    - asn: 16550
+      owner: "P006"
+      description: "Google (Partner Interconnect, Cloud Router)"
     # Our side. A pool (PRIVATE-ASN32) hands these out once the generator exists; an object file cannot ask a pool.
     - asn: 4200090001
       owner: "P028"

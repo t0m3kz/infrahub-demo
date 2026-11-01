@@ -3,6 +3,21 @@ version: "1.0"
 
 # Gateways, routing, hybrid connectivity, appliances.
 # The generics and the account/network/compute core: topology_cloud.yml.
+generics:
+  # Marker for the transport a cloud peering rides on: a Direct Connect / circuit / Interconnect or a VPN connection.
+  # Both inherit CloudResource too; the name is declared here so a peering can name its transport by HFID.
+  - name: Transport
+    namespace: Cloud
+    label: Cloud Transport
+    description: "The physical or virtual way to the cloud edge that peerings ride on"
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 100
+
 nodes:
   - name: TransitGateway
     namespace: Cloud
@@ -195,20 +210,31 @@ nodes:
         order_weight: 900
         description: "Route tables this spoke's prefixes are advertised into — who can reach it"
 
-  # ── Hybrid connectivity: the cloud side of a provider connection (names are global: dx-c900-fra-1) ──────────
-  # Three objects realize a Topology.ProviderConnection on the cloud side. All three are CloudResources (account,
-  # region) and are linked FROM the connection (one-sided); the VIF and the VPN connection are also circuit ends.
-  #   CloudDirectConnect     the port or hosted connection (AWS Direct Connect, Azure ExpressRoute circuit)
-  #   CloudVirtualInterface  one VLAN on it, private / public / transit (AWS VIF, ExpressRoute peering)
-  #   CloudVPNConnection     a site-to-site VPN to a gateway or a virtual network
+  # ── Hybrid connectivity: the cloud side of a circuit, in the words every cloud shares ──────────
+  # The operators differ in vocabulary, not in structure. Five common elements describe AWS, Azure, GCP, a VPN and a
+  # SaaS; the operator's own word is in the names, the descriptions and the blueprint of the sample README, and the
+  # flavour per operator is OrganizationProvider.connection_profile (aws, azure, gcp, oci, equinix, megaport, ...).
+  #   transport           the physical or virtual way to the cloud edge: CloudDirectConnect (a port or hosted
+  #                       connection, with a service key where the operator has one) or CloudVPNConnection (the
+  #                       encrypted way, which holds the tunnels)
+  #   peering             CloudPeeringInterface: the L3/BGP termination on the cloud side, the "interface of the
+  #                       cloud". A circuit's session ends on it (circuit `endpoints`), our side is a sub-interface
+  #   cloud edge gateway  CloudGateway: what a peering lands on inside the provider, before the network
+  #   transit/hub gateway CloudTransitGateway (routing hub, unchanged)
+  #   virtual network     CloudVirtualNetwork
+  # Names are global (dx-c900-fra-1). The circuits point at them (`endpoints`); nothing points back.
+  # Addressing is a convention, not a field: our link /31 (a /30 tunnel pair) comes from the pool
+  # Handoff-<namespace>-IPv4, our private AS from PRIVATE-ASN32; the provider's address and AS are the peering's peer_ip
+  # and peer_asn. The operator flavour is OrganizationProvider.connection_profile.
   - name: DirectConnect
     namespace: Cloud
-    label: Direct Connect
+    label: Cloud Transport (port or circuit)
     icon: mdi:lan-connect
-    description: "The cloud side of a dedicated or hosted port: AWS Direct Connect, Azure ExpressRoute circuit"
+    description: "Transport: a dedicated port or hosted connection (Direct Connect, ExpressRoute circuit, Interconnect); peerings ride on it"  # yamllint disable-line rule:line-length
     include_in_menu: false
     inherit_from:
       - CloudResource
+      - CloudTransport
       - TopologyCircuitEnd
     human_friendly_id:
       - name__value
@@ -226,11 +252,11 @@ nodes:
         choices:
           - name: dedicated
             label: Dedicated
-            description: "A port of our own at the provider's location"
+            description: "A port of our own at the provider's location (AWS dedicated connection, GCP Dedicated Interconnect)"  # yamllint disable-line rule:line-length
             color: "#3498DB"
           - name: hosted
             label: Hosted
-            description: "A slice of a partner's port (Equinix, Megaport)"
+            description: "A slice of a partner's port (AWS hosted connection, GCP Partner Interconnect, ExpressRoute through a provider)"  # yamllint disable-line rule:line-length
             color: "#2ECC71"
       - name: bandwidth
         kind: Number
@@ -247,6 +273,12 @@ nodes:
         parameters:
           min_value: 1
           max_value: 4094
+      - name: service_key
+        kind: Text
+        label: "Service Key"
+        optional: true
+        order_weight: 360
+        description: "The operator's identifier of the circuit where it has one (ExpressRoute service key)"
     relationships:
       - name: account
         peer: CloudAccount
@@ -261,12 +293,25 @@ nodes:
         optional: false
         identifier: "cloud_direct_connect__region"
         order_weight: 650
+      - name: partner_account
+        label: Partner Account
+        peer: CloudAccount
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "cloud_direct_connect__partner_account"
+        order_weight: 700
+        description: "A hosted connection lives in the partner's account while its peerings are in `account`"
 
-  - name: VirtualInterface
+  # The interface of the cloud: the L3 termination of one session, the same for every operator. The provider side
+  # address and AS are the TopologyConnectorRouting edges (peer_ip, peer_asn); OUR side is a sub-interface of ours
+  # and our BGP process. What it rides on is the transport; where it lands is the cloud edge gateway, the transit
+  # gateway or the virtual network.
+  - name: PeeringInterface
     namespace: Cloud
-    label: Virtual Interface
+    label: Cloud Peering Interface
     icon: mdi:ethernet
-    description: "One VLAN on a Direct Connect or ExpressRoute: private, public or transit; a circuit can end on it"
+    description: "The interface of the cloud: where a session ends (virtual interface, peering, VLAN attachment, VPN tunnel, SaaS peering)"  # yamllint disable-line rule:line-length
     include_in_menu: false
     inherit_from:
       - CloudResource
@@ -274,73 +319,179 @@ nodes:
       - TopologyConnectorRouting
     human_friendly_id:
       - name__value
-    display_label: "{{ name__value }} {{ vif_type__value }} vlan {{ vlan_id__value }}"
+    display_label: "{{ name__value }} {{ scope__value }}"
     order_by:
       - name__value
     uniqueness_constraints:
-      - [direct_connect, vlan_id__value]
+      - [name__value]
     attributes:
-      - name: vif_type
+      - name: scope
         kind: Dropdown
-        label: "VIF Type"
+        label: "Scope"
         optional: false
         order_weight: 250
+        description: "What it reaches (private, public, transit, saas); the operator word is in the name and the blueprint"  # yamllint disable-line rule:line-length
         choices:
           - name: private
             label: Private
-            description: "Access to one virtual network"
+            description: "One virtual network, directly or through a cloud edge gateway"
             color: "#3498DB"
           - name: public
             label: Public
-            description: "Access to the provider's public endpoints"
+            description: "The provider's public endpoints"
             color: "#2ECC71"
           - name: transit
             label: Transit
-            description: "Access to a transit gateway"
+            description: "A transit/hub gateway, through a cloud edge gateway"
             color: "#9B59B6"
+          - name: saas
+            label: SaaS
+            description: "A SaaS service (Webex, Zscaler, Microsoft 365)"
+            color: "#D35400"
+      - name: routing
+        kind: Dropdown
+        label: "Routing"
+        optional: false
+        default_value: bgp
+        order_weight: 300
+        choices:
+          - name: bgp
+            label: BGP
+            color: "#3498DB"
+          - name: static
+            label: Static
+            color: "#95A5A6"
       - name: vlan_id
         kind: Number
         label: "VLAN ID"
-        optional: false
+        optional: true
         order_weight: 350
+        description: "The VLAN of the peering on its transport (a VLAN-based peering)"
         parameters:
           min_value: 1
           max_value: 4094
+      - name: tunnel_index
+        kind: Number
+        label: "Tunnel"
+        optional: true
+        order_weight: 360
+        description: "Which tunnel of the VPN connection (a tunnel-based peering)"
+        parameters:
+          min_value: 1
+          max_value: 4
+      - name: mtu
+        kind: Number
+        label: "MTU"
+        optional: true
+        order_weight: 400
+        parameters:
+          min_value: 576
+          max_value: 9216
+      - name: bfd
+        kind: Boolean
+        label: "BFD"
+        optional: true
+        default_value: false
+        order_weight: 450
+      - name: service_id
+        kind: Text
+        label: "Service / Tenant ID"
+        optional: true
+        order_weight: 500
+        description: "The provider's identifier of the tenant or service where there is no account (Webex org, Zscaler org)"  # yamllint disable-line rule:line-length
     relationships:
-      - name: direct_connect
-        label: "Direct Connect"
-        peer: CloudDirectConnect
-        cardinality: one
-        kind: Attribute
-        optional: false
-        order_weight: 600
-      - name: virtual_network
-        peer: CloudVirtualNetwork
+      - name: transport
+        peer: CloudTransport
         cardinality: one
         kind: Attribute
         optional: true
-        identifier: "cloud_vif__virtual_network"
+        identifier: "cloud_peering__transport"
+        order_weight: 600
+        description: "What it rides on: a Direct Connect / circuit / Interconnect or the VPN connection; empty for a SaaS peering"  # yamllint disable-line rule:line-length
+      - name: account
+        peer: CloudAccount
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "cloud_peering__account"
         order_weight: 650
-        description: "Set on a private VIF"
+        description: "The account it belongs to; empty for a SaaS (see owner)"
+      - name: region
+        peer: TopologyCloudRegion
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "cloud_peering__region"
+        order_weight: 700
+      - name: saas_region
+        label: SaaS Region
+        peer: TopologySaasRegion
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "cloud_peering__saas_region"
+        order_weight: 750
+      - name: owner
+        peer: OrganizationCustomer
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "cloud_peering__owner"
+        order_weight: 800
+        description: "The customer, only for a SaaS where there is no account"
+      - name: gateway
+        label: Cloud Edge Gateway
+        peer: CloudGateway
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "cloud_peering__gateway"
+        order_weight: 850
+        description: "What it lands on inside the provider (Direct Connect Gateway, virtual private gateway, ExpressRoute gateway, Cloud Router)"  # yamllint disable-line rule:line-length
       - name: transit_gateway
         peer: CloudTransitGateway
         cardinality: one
         kind: Attribute
         optional: true
-        identifier: "cloud_vif__transit_gateway"
-        order_weight: 700
-        description: "Set on a transit VIF"
+        identifier: "cloud_peering__transit_gateway"
+        order_weight: 900
+        description: "Directly on a transit/hub gateway (a gateway-less landing)"
+      - name: virtual_network
+        peer: CloudVirtualNetwork
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "cloud_peering__virtual_network"
+        order_weight: 950
+        description: "Directly on one virtual network (a gateway-less landing)"
+      - name: auth
+        label: BGP Key
+        peer: RoutingPassword
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "cloud_peering__auth"
+        order_weight: 1000
+      - name: advertised_prefixes
+        label: Advertised Prefixes
+        peer: IpamPrefix
+        cardinality: many
+        kind: Attribute
+        optional: true
+        identifier: "cloud_peering__advertised_prefixes"
+        order_weight: 1050
+        description: "The prefixes we announce on it (public/Microsoft peering, the allowed prefixes of a gateway association)"  # yamllint disable-line rule:line-length
 
-  - name: VPNConnection
+  # What a peering lands on inside the provider, between the peering and the network, and our side of a VPN.
+  # Neutral roles; the operator word is in the name (see the blueprint in the sample README).
+  - name: Gateway
     namespace: Cloud
-    label: VPN Connection
-    icon: mdi:vpn
-    description: "Site-to-site VPN from our edge to a transit gateway or a virtual network; a circuit can end on it"
+    label: Cloud Gateway
+    icon: mdi:router-network
+    description: "A gateway between a peering and the network (cloud edge, VPN) or our side of a VPN (customer gateway)"  # yamllint disable-line rule:line-length
     include_in_menu: false
     inherit_from:
       - CloudResource
-      - TopologyCircuitEnd
-      - TopologyConnectorRouting
     human_friendly_id:
       - name__value
     display_label: "{{ name__value }}"
@@ -349,18 +500,84 @@ nodes:
     uniqueness_constraints:
       - [account, name__value]
     attributes:
-      - name: routing
+      - name: gateway_type
         kind: Dropdown
-        label: "Routing"
+        label: "Gateway Type"
         optional: false
         order_weight: 250
         choices:
-          - name: static
-            label: Static
-            color: "#95A5A6"
-          - name: bgp
-            label: BGP
+          - name: cloud_edge_gateway
+            label: Cloud Edge Gateway
+            description: "Where a peering lands in the provider: Direct Connect Gateway (AWS), ExpressRoute Gateway (Azure), Cloud Router (GCP). Associates with a transit gateway or a virtual network"  # yamllint disable-line rule:line-length
             color: "#3498DB"
+          - name: vpn_gateway
+            label: VPN Gateway
+            description: "The provider's VPN/private endpoint of one network: virtual private gateway (AWS), VPN gateway (Azure)"  # yamllint disable-line rule:line-length
+            color: "#8E44AD"
+          - name: customer_gateway
+            label: Customer Gateway
+            description: "OUR side of a VPN as the provider knows it: public address and AS (AWS customer gateway, Azure local network gateway)"  # yamllint disable-line rule:line-length
+            color: "#D35400"
+      - name: ip_address
+        kind: IPHost
+        label: "Public Address"
+        optional: true
+        order_weight: 300
+        description: "A customer gateway: our public address"
+      - name: asn
+        kind: Number
+        label: "AS Number"
+        optional: true
+        order_weight: 350
+        description: "A customer gateway: the AS we speak with"
+    relationships:
+      - name: account
+        peer: CloudAccount
+        cardinality: one
+        kind: Attribute
+        optional: false
+        order_weight: 600
+      - name: region
+        peer: TopologyCloudRegion
+        cardinality: one
+        kind: Attribute
+        optional: false
+        identifier: "cloud_gateway__region"
+        order_weight: 650
+      - name: transit_gateway
+        peer: CloudTransitGateway
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "cloud_gateway__transit_gateway"
+        order_weight: 700
+        description: "Associated with this transit gateway (Direct Connect Gateway -> TGW); set this or virtual_network"
+      - name: virtual_network
+        peer: CloudVirtualNetwork
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "cloud_gateway__virtual_network"
+        order_weight: 750
+        description: "Attached to this virtual network (virtual private gateway, ExpressRoute gateway, Cloud Router); set this or transit_gateway"  # yamllint disable-line rule:line-length
+
+  - name: VPNConnection
+    namespace: Cloud
+    label: Cloud VPN Connection
+    icon: mdi:vpn
+    description: "Transport with no physical object: a site-to-site VPN; its tunnels are its peerings; not a circuit end"  # yamllint disable-line rule:line-length
+    include_in_menu: false
+    inherit_from:
+      - CloudResource
+      - CloudTransport
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value }}"
+    order_by:
+      - name__value
+    uniqueness_constraints:
+      - [account, name__value]
+    attributes:
       - name: tunnel_count
         kind: Number
         label: "Tunnels"
@@ -396,22 +613,39 @@ nodes:
         optional: false
         identifier: "cloud_vpn__region"
         order_weight: 650
+      - name: customer_gateway
+        peer: CloudGateway
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "cloud_vpn__customer_gateway"
+        order_weight: 700
+        description: "Our side (a gateway of type customer_gateway)"
+      - name: gateway
+        label: VPN Gateway
+        peer: CloudGateway
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "cloud_vpn__gateway"
+        order_weight: 710
+        description: "The provider side: a gateway of type vpn_gateway (set this, transit_gateway or virtual_network)"
       - name: transit_gateway
         peer: CloudTransitGateway
         cardinality: one
         kind: Attribute
         optional: true
         identifier: "cloud_vpn__transit_gateway"
-        order_weight: 700
-        description: "Gateway the tunnels end on; set this or virtual_network"
+        order_weight: 720
+        description: "The provider side: a transit gateway"
       - name: virtual_network
         peer: CloudVirtualNetwork
         cardinality: one
         kind: Attribute
         optional: true
         identifier: "cloud_vpn__virtual_network"
-        order_weight: 750
-        description: "Virtual network the tunnels end on; set this or transit_gateway"
+        order_weight: 730
+        description: "The provider side: one virtual network"
 
   # --------------------  Network Appliance  --------------------
   # A network function a provider hosts for us (Equinix Network Edge, Megaport MVE;

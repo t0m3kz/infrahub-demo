@@ -10,13 +10,18 @@ spec:
     - {prefix: "10.90.1.0/24", ip_namespace: "PROD", status: active, description: "DC segment c900-demo-web-p"}
     - {prefix: "10.200.0.0/16", ip_namespace: "PROD", status: active, description: "AWS VPC block"}
     - {prefix: "10.201.0.0/16", ip_namespace: "PROD", status: active, description: "Azure VNet block"}
+    - {prefix: "10.202.0.0/16", ip_namespace: "PROD", status: active, description: "GCP VPC block"}
     - {prefix: "10.90.255.0/24", ip_namespace: "PROD", status: active, description: "DC90 loopbacks"}
-    - {prefix: "10.255.128.0/31", ip_namespace: "PROD", status: active, description: "Link: AWS Direct Connect VIF"}
-    - {prefix: "10.255.128.2/31", ip_namespace: "PROD", status: active, description: "Link: ExpressRoute primary"}
-    - {prefix: "10.255.128.4/31", ip_namespace: "PROD", status: active, description: "Link: ExpressRoute secondary"}
+    - {prefix: "10.255.128.0/31", ip_namespace: "PROD", status: active, description: "Link: AWS transit VIF"}
+    - {prefix: "10.255.128.2/31", ip_namespace: "PROD", status: active, description: "Link: AWS private VIF"}
     - {prefix: "10.255.128.6/31", ip_namespace: "PROD", status: active, description: "Link: Webex private peering"}
+    # Azure assigns a /30 per peering (the link range is the circuit's, not the pool's), GCP a /29, AWS VPN a /30.
+    - {prefix: "10.255.128.8/30", ip_namespace: "PROD", status: active, description: "Link: ExpressRoute primary peering"}  # yamllint disable-line rule:line-length
+    - {prefix: "10.255.128.12/30", ip_namespace: "PROD", status: active, description: "Link: ExpressRoute secondary peering"}  # yamllint disable-line rule:line-length
+    - {prefix: "169.254.20.0/29", ip_namespace: "PROD", status: active, description: "Link: GCP VLAN attachment"}
     - {prefix: "169.254.10.0/30", ip_namespace: "PROD", status: active, description: "Link: AWS VPN tunnel 1 (by AWS)"}
-    - {prefix: "169.254.10.4/30", ip_namespace: "PROD", status: active, description: "Link: Zscaler tunnel"}
+    - {prefix: "169.254.10.4/30", ip_namespace: "PROD", status: active, description: "Link: AWS VPN tunnel 2 (by AWS)"}
+    - {prefix: "169.254.10.8/30", ip_namespace: "PROD", status: active, description: "Link: Zscaler tunnel"}
 ---
 apiVersion: infrahub.app/v1
 kind: Object
@@ -28,7 +33,10 @@ spec:
     - {address: "10.90.255.2/32", ip_namespace: "PROD", description: "dc90-leaf-01 loopback"}
     # Provider side of each leg (the connector's peer_ip). Our side is the sub-interface address, 03_edge.yml.
     - {address: "10.255.128.1/31", ip_namespace: "PROD", description: "AWS side of the Direct Connect VIF"}
-    - {address: "10.255.128.3/31", ip_namespace: "PROD", description: "Microsoft side, ExpressRoute primary"}
-    - {address: "10.255.128.5/31", ip_namespace: "PROD", description: "Microsoft side, ExpressRoute secondary"}
+    - {address: "10.255.128.3/31", ip_namespace: "PROD", description: "AWS side of the private VIF"}
+    - {address: "10.255.128.10/30", ip_namespace: "PROD", description: "Microsoft side, ExpressRoute primary"}
+    - {address: "10.255.128.14/30", ip_namespace: "PROD", description: "Microsoft side, ExpressRoute secondary"}
     - {address: "10.255.128.7/31", ip_namespace: "PROD", description: "Webex side"}
+    - {address: "169.254.20.1/29", ip_namespace: "PROD", description: "Google side (Cloud Router) of the VLAN attachment"}  # yamllint disable-line rule:line-length
     - {address: "169.254.10.1/30", ip_namespace: "PROD", description: "AWS side of VPN tunnel 1"}
+    - {address: "169.254.10.5/30", ip_namespace: "PROD", description: "AWS side of VPN tunnel 2"}
