@@ -2,14 +2,12 @@ from typing import Any
 
 from transforms.common import BaseDeviceTransform
 from transforms.helpers.addressing import management_ip
-from transforms.helpers.ha import get_ha, inline_addresses
+from transforms.helpers.ha import get_ha
 from transforms.helpers.proxy import proxy_rules
-from transforms.helpers.segments import interface_segments
 
 
-def _build_proxy_interfaces(interfaces: list[dict[str, Any]], ha: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-    """Every interface, with the HA pair's virtual_ip on a segment
-    it terminates inline (transforms.helpers.ha.inline_addresses)."""
+def _build_proxy_interfaces(interfaces: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Every interface with its address, or None when it has none."""
     proxy_ifaces = []
     for iface in interfaces:
         ip_obj = iface.get("ip_address") or {}
@@ -20,7 +18,6 @@ def _build_proxy_interfaces(interfaces: list[dict[str, Any]], ha: dict[str, Any]
                 "status": iface.get("status"),
                 "role": iface.get("role"),
                 "ip_address": ip_obj if ip_obj.get("address") else None,
-                **inline_addresses(interface_segments(iface), ha),
             }
         )
     return proxy_ifaces
@@ -39,7 +36,7 @@ class Proxy(BaseDeviceTransform):
         capabilities = device.get("capabilities") or []
         interfaces = device.get("interfaces") or []
         ha_config = get_ha(capabilities, interfaces, device.get("name"))
-        proxy_interfaces = _build_proxy_interfaces(interfaces, ha_config)
+        proxy_interfaces = _build_proxy_interfaces(interfaces)
 
         # Extract proxy-specific config from the HA capability
         proxy_ha = next(

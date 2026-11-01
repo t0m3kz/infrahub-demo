@@ -34,7 +34,7 @@ from utils.limits import (
     TRANSIT_VLAN_BAND,
     TRANSIT_VNI_BASE,
 )
-from utils.segment_addressing import segment_namespace
+from utils.segment_addressing import routed_segment_namespace
 
 PROD_TYPE = "prod"
 """namespace_type of the PROD VRF namespace (every office, and every `p` environment, lives here)."""
@@ -173,8 +173,9 @@ def is_exchange_zone(zone: str | None) -> bool:
 
 
 def is_routed_tenant_segment(segment: dict[str, Any]) -> bool:
-    """A VLAN/VXLAN segment with a gateway in a PROD/NON-PROD namespace, outside the exchange zones.
+    """A VLAN/VXLAN segment the fabric routes with a gateway in a PROD/NON-PROD namespace, outside the exchange zones.
 
+    A segment a firewall context terminates (``terminated_on``) has no SVI and is not one.
     The one definition of a tenant SVI in a shared VRF: the L0 SVI protection
     check and the segment group tags (generators/helpers/security_tag.py,
     transforms/helpers/group_policy/) read it. ``segment`` is cleaned query
@@ -183,7 +184,7 @@ def is_routed_tenant_segment(segment: dict[str, Any]) -> bool:
     """
     if segment.get("typename") not in ROUTED_SEGMENT_KINDS:
         return False
-    namespace_type = segment_namespace(segment).get("namespace_type")
+    namespace_type = routed_segment_namespace(segment).get("namespace_type")
     zone = (segment.get("security_zone") or {}).get("name")
     return namespace_type in TENANT_NAMESPACE_TYPES and not is_exchange_zone(zone)
 

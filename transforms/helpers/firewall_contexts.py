@@ -9,7 +9,7 @@ from typing import Any
 
 from transforms.helpers.addressing import sub_interface_parent
 from transforms.helpers.firewall import _snat_host
-from transforms.helpers.ha import inline_addresses
+from transforms.helpers.ha import leg_virtual_ip
 from transforms.helpers.policy import segment_rule_policies
 from utils.exchange_transit import FIREWALL_CONTEXT_KIND, TRANSIT_SLOT, ZONE_BY_NS_TYPE, transit_addresses, transit_vlan
 from utils.segment_addressing import segment_hosting_candidates
@@ -29,6 +29,7 @@ def _new_context(cap: dict[str, Any], legs: list[dict[str, Any]]) -> dict[str, A
         "vlan_id": cap.get("vlan_id"),
         "tenant_name": (cap.get("tenant") or {}).get("name"),
         "segments": list(segments.values()),
+        "terminated_segments": cap.get("terminated_segments") or [],
         "snat": _snat_host(cap),
         "legs": legs,
     }
@@ -59,7 +60,8 @@ def get_firewall_contexts(
 
     ``segments`` are the segments terminating on the context: every segment
     of a deployment it serves (served_deployments, written by each
-    deployment's own boarding run), de-duplicated by id.
+    deployment's own boarding run), de-duplicated by id. ``terminated_segments`` are the ones among them the pair
+    gateways itself (``ManagedVxlanSegment.terminated_on``; transforms/helpers/firewall_terminated.py).
     """
     contexts: dict[str, dict[str, Any]] = {}
     legs_by_context: dict[str, list[dict[str, Any]]] = {}
@@ -91,7 +93,7 @@ def get_firewall_contexts(
                     "parent_interface": parent_iface,
                     "vlan": transit_vlan(cap["vlan_id"], ns_type),
                     "own_ip": address,
-                    **inline_addresses(None, ha, address),
+                    **leg_virtual_ip(ha, address),
                     "anycast": addresses["anycast"],
                     "vip": addresses["vip"],
                     "vrf": namespace.get("name"),

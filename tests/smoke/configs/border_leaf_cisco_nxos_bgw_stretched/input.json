@@ -747,9 +747,6 @@
                       }
                     }
                   },
-                  "inline_segment": {
-                    "node": null
-                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -1832,9 +1829,6 @@
                       }
                     }
                   },
-                  "inline_segment": {
-                    "node": null
-                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -1952,9 +1946,6 @@
                       "segment": {
                         "node": {
                           "id": "seg-seg-shared",
-                          "inline_service": {
-                            "node": null
-                          },
                           "__typename": "ManagedVxlanSegment",
                           "name": {
                             "value": "seg-shared"
@@ -2125,9 +2116,6 @@
                       "segment": {
                         "node": {
                           "id": "seg-seg-acme",
-                          "inline_service": {
-                            "node": null
-                          },
                           "__typename": "ManagedVxlanSegment",
                           "name": {
                             "value": "seg-acme"

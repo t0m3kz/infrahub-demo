@@ -223,15 +223,11 @@ spec:
           - relationship_name: customer_deployments
             modification_type: updated
 
-    # Re-run generator when a port is assigned to, or removed from, the segment
-    # (its `switched_interfaces`): the segment owns its port tags and its VLAN rows
-    # (generators/topology/segment_ports.py), so a port added by hand gets its
-    # VLAN row and is removed again unless an AppComponent instance lands on it.
-    # The reconcile's own tag writes raise this event once more; that run finds
-    # nothing to change and writes no `switched_interfaces`, so it ends there.
-    # Unchanged by `inline_segment`: the generator writes that one-sided link on an inline
-    # sub-interface itself and it has no reverse field on the segment, so no event is raised here.
-    - name: trigger-vxlan-segment-switched-interfaces-updated
+    # Re-run generator when the segment is terminated on, or moved to, another firewall context: the reconcile
+    # tags the border service ports of the context facing its HA pair (generators/topology/segment_ports.py) and
+    # removes the ones of the context it left. The reconcile writes the ports' edges, not this relationship, so the
+    # run raises no event of this rule.
+    - name: trigger-vxlan-segment-terminated-on-updated
       branch_scope: "other_branches"
       node_kind: ManagedVxlanSegment
       mutation_action: "updated"
@@ -239,7 +235,7 @@ spec:
       matches:
         kind: CoreNodeTriggerRelationshipMatch
         data:
-          - relationship_name: switched_interfaces
+          - relationship_name: terminated_on
             modification_type: updated
 
     # Re-run generator when stretch_scope changes (e.g. local -> dc_pair) —

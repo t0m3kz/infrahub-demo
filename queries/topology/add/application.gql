@@ -52,6 +52,8 @@ fragment SegmentSecurityFields on ManagedNetworkSegment {
         }
       }
     }
+    # A segment a firewall context terminates has no SVI: it gets no group or routing tag (is_routed_tenant_segment).
+    terminated_on { node { id } }
   }
 }
 

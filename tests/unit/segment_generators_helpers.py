@@ -27,8 +27,6 @@ def _make_gen() -> Any:
     # deployment missing its vni_pool (see customer_dc.py's identical
     # wait) — no in-flight parent in these unit tests, so no-op.
     gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
-    # Inline termination has its own test classes below — no legs by default.
-    gen._reconcile_inline_service_ports = AsyncMock(return_value=[])
     # The port tag and VLAN row reconciliation has its own tests
     # (tests/unit/test_vlan_domain_reconcile.py, test_app_instance_segment_generator.py) — stubbed at the boundary.
     gen.reconcile_vxlan_segment = AsyncMock()
@@ -41,8 +39,7 @@ def _make_gen() -> Any:
 def ensure_zone(monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
     """Stub the shared zone helper (own tests: test_security_zone_helper.py).
 
-    Keeps generate()-level tests focused on SegmentDeployment/interface/
-    inline-sub-interface behavior; returned so tests can assert the call.
+    Keeps generate()-level tests focused on SegmentDeployment behavior; returned so tests can assert the call.
     """
     mock = AsyncMock(return_value="PROD-ZONE")
     monkeypatch.setattr("generators.topology.segment.ensure_security_zone", mock)

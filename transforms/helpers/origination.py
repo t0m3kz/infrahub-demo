@@ -19,8 +19,8 @@ def get_origination(activations: list[dict[str, Any]] | None, vrfs: Iterable[str
     One entry per tagged segment, sorted by name: ``name`` (the segment name, safe in a prefix-list name),
     ``vrf``, ``prefix`` (the gateway's subnet, the route redistributed into EVPN) and ``communities`` (customer
     first, then segment; only the tags that exist). A segment is skipped when it has neither tag, when the
-    fabric does not route it (terminate_inline, no gateway, IPv6) or when its VRF is not one of ``vrfs`` (the
-    VRFs that redistribute into EVPN), so an untagged device renders exactly as before.
+    fabric does not route it (terminated on a firewall context, no gateway, IPv6) or when its VRF is not one of
+    ``vrfs`` (the VRFs that redistribute into EVPN), so an untagged device renders exactly as before.
 
     ``activations`` are the cleaned segment activations of the device (``segment_deployments``); a segment's
     ``routing_tag`` and its owner's come from the query (queries/fragments/network_segment.gql).

@@ -30,7 +30,7 @@ def _vlan(vlan_id: int, gateway: str | None, vrf: str | None = "PROD", **extra: 
         "gateway_ip": gateway,
         "gateway_ipv6": None,
         "vrf": vrf,
-        "terminate_inline": False,
+        "terminated": False,
     } | extra
 
 
@@ -90,8 +90,8 @@ class TestGatewaySvis:
         assert config["VLAN_INTERFACE"]["Vlan100"] == {"vrf_name": "PROD"}
         assert "SAG" not in config
 
-    def test_l2_only_and_inline_terminated_vlans_get_no_svi_address(self) -> None:
-        config = _render(vlans=[_vlan(100, None), _vlan(200, "10.2.0.1/24", terminate_inline=True)])
+    def test_l2_only_and_terminated_vlans_get_no_svi_address(self) -> None:
+        config = _render(vlans=[_vlan(100, None), _vlan(200, "10.2.0.1/24", terminated=True)])
         assert config["VLAN_INTERFACE"]["Vlan100"] == {}
         assert "Vlan200" not in config["VLAN_INTERFACE"]
         assert not [key for key in config["VLAN_INTERFACE"] if "|" in key]

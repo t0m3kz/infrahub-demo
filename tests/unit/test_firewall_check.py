@@ -79,8 +79,8 @@ def _payload(*capabilities: dict[str, Any]) -> dict[str, Any]:
     interfaces = [
         {
             "name": _v(f"eth0.{i}"),
-            # A carried segment is the sub-interface's inline_segment; a context stays on its capabilities.
-            "inline_segment": _node(None if capability["__typename"] == "ManagedFirewallContext" else capability),
+            # A carried segment is on the interface's segments; a context stays on its capabilities.
+            "segments": _edges([] if capability["__typename"] == "ManagedFirewallContext" else [capability]),
             "capabilities": _edges([capability] if capability["__typename"] == "ManagedFirewallContext" else []),
         }
         for i, capability in enumerate(capabilities)

@@ -93,54 +93,6 @@ def build_proxy_data(
     return {"DcimPhysicalDevice": _edges([device_node])}
 
 
-def _inline_segment(*, ha_name: str, gateway: str, members: dict[str, str]) -> dict:
-    """A terminate_inline segment (an ``inline_segment``) gatewayed by the HA pair ``ha_name``;
-    ``members`` maps each member device to its own address on the segment."""
-    return {
-        "__typename": "ManagedVxlanSegment",
-        "id": "seg-inline",
-        "name": _v("c001-web-p"),
-        "terminate_inline": _v(True),
-        "inline_service": _node({"name": _v(ha_name)}),
-        "gateway": _node({"address": _v(gateway)}),
-        "capabilities": _edges(
-            [
-                {"device": _node({"name": _v(device)}), "ip_address": _node({"address": _v(address)})}
-                for device, address in members.items()
-            ]
-        ),
-    }
-
-
-def _inline_member_interface(*, name: str, address: str, segment: dict) -> dict:
-    """The primary member's <port>.<vlan> sub-interface carrying ``segment``."""
-    return {
-        "__typename": "DcimVirtualInterface",
-        "name": _v(name),
-        "description": _v("Inline web segment"),
-        "status": _v("active"),
-        "role": _v("service"),
-        "ip_address": _node({"address": _v(address)}),
-        "parent_interface": _node({"name": _v(name.split(".")[0])}),
-        "inline_segment": _node(segment),
-        "capabilities": _edges([]),
-    }
-
-
-def build_proxy_inline_data(*, device_name: str, platform: str) -> dict:
-    """Proxy HA pair (device = primary member) terminating a segment inline on eth1.210."""
-    data = build_proxy_data(device_name=device_name, platform=platform, proxy_type="transparent")
-    segment = _inline_segment(
-        ha_name=f"{device_name}-HA",
-        gateway="10.2.0.1/24",
-        members={device_name: "10.2.0.2/24", device_name.replace("01", "02"): "10.2.0.3/24"},
-    )
-    data["DcimPhysicalDevice"]["edges"][0]["node"]["interfaces"]["edges"].append(
-        {"node": _inline_member_interface(name="eth1.210", address="10.2.0.2/24", segment=segment)}
-    )
-    return data
-
-
 LB_PLATFORMS = ["f5_tmos", "haproxy_technologies", "netscaler"]
 
 
@@ -150,55 +102,6 @@ def _lb_members(device_name: str, peer_name: str) -> list[dict]:
         {"name": _v(member), "primary_address": _node({"address": _v(f"192.168.2.{host}/32")})}
         for host, member in enumerate((device_name, peer_name), start=1)
     ]
-
-
-def build_lb_inline_data(*, device_name: str, platform: str) -> dict:
-    """Load-balancer HA pair (device = primary member) terminating a segment
-    inline on eth2.220, next to a management port."""
-    peer_name = device_name.replace("01", "02")
-    ha_cap = {
-        "__typename": "ManagedLoadbalancerHA",
-        "name": _v(f"{device_name}-{peer_name}-ha"),
-        "group_id": _v(2),
-        "mode": _v("active-passive"),
-        "priority": _v(100),
-        "preempt": _v(False),
-        "capabilities": _edges(_lb_members(device_name, peer_name)),
-    }
-    segment = _inline_segment(
-        ha_name=f"{device_name}-{peer_name}-ha",
-        gateway="10.3.0.1/24",
-        members={device_name: "10.3.0.2/24", peer_name: "10.3.0.3/24"},
-    )
-    interfaces = [
-        {
-            "__typename": "DcimPhysicalInterface",
-            "name": _v("mgmt"),
-            "description": _v("OOB management"),
-            "status": _v("active"),
-            "role": _v("management"),
-            "ip_address": _node({"address": _v("192.168.2.1/24")}),
-            "capabilities": _edges([]),
-        },
-        _inline_member_interface(name="eth2.220", address="10.3.0.2/24", segment=segment),
-    ]
-    device_node: dict = {
-        "__typename": "DcimPhysicalDevice",
-        "id": f"dev-{device_name}",
-        "name": _v(device_name),
-        "role": _v("load-balancer"),
-        "platform": _node(
-            {
-                "id": f"plat-{platform}",
-                "name": _v(platform),
-            }
-        ),
-        "primary_address": _node(None),
-        "tags": _edges([]),
-        "capabilities": _edges([ha_cap]),
-        "interfaces": _edges(interfaces),
-    }
-    return {"DcimPhysicalDevice": _edges([device_node])}
 
 
 _LB_CONTEXT_NAMESPACES: dict[str, dict[str, Any]] = {
@@ -515,31 +418,6 @@ def write_fixtures() -> tuple[int, int]:
         )
         for platform in proxy_platforms
         for proxy_type in ["explicit", "transparent", "reverse"]
-    )
-    generated += g
-    errors += e
-
-    # Proxy / load-balancer HA pairs terminating a segment inline: virtual IP per vendor
-    print("\nGenerating proxy and load-balancer inline-segment fixtures:")
-    g, e = write_data_fixtures(
-        [
-            *(
-                (
-                    Proxy,
-                    f"proxy_{platform}_inline_segment",
-                    build_proxy_inline_data(device_name="DC3-PRX-01", platform=platform),
-                )
-                for platform in proxy_platforms
-            ),
-            *(
-                (
-                    LoadBalancer,
-                    f"loadbalancer_{platform}_inline_segment",
-                    build_lb_inline_data(device_name="DC3-LB-01", platform=platform),
-                )
-                for platform in LB_PLATFORMS
-            ),
-        ]
     )
     generated += g
     errors += e

@@ -1184,9 +1184,6 @@
                       }
                     }
                   },
-                  "inline_segment": {
-                    "node": null
-                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -1223,9 +1220,6 @@
                   },
                   "capabilities": {
                     "edges": []
-                  },
-                  "inline_segment": {
-                    "node": null
                   }
                 }
               },
@@ -1260,9 +1254,6 @@
                   },
                   "capabilities": {
                     "edges": []
-                  },
-                  "inline_segment": {
-                    "node": null
                   }
                 }
               },
@@ -1300,9 +1291,6 @@
                         }
                       }
                     }
-                  },
-                  "inline_segment": {
-                    "node": null
                   },
                   "capabilities": {
                     "edges": []
@@ -1343,9 +1331,6 @@
                         }
                       }
                     }
-                  },
-                  "inline_segment": {
-                    "node": null
                   },
                   "capabilities": {
                     "edges": []

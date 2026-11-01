@@ -747,9 +747,6 @@
                       }
                     }
                   },
-                  "inline_segment": {
-                    "node": null
-                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -982,9 +979,6 @@
                           "isolation_mode": {
                             "value": "isolated"
                           },
-                          "inline_service": {
-                            "node": null
-                          },
                           "__typename": "ManagedVxlanSegment",
                           "name": {
                             "value": "seg-100"
@@ -1150,9 +1144,6 @@
                           "id": "seg-seg-200",
                           "isolation_mode": {
                             "value": "isolated"
-                          },
-                          "inline_service": {
-                            "node": null
                           },
                           "__typename": "ManagedVxlanSegment",
                           "name": {
@@ -1397,9 +1388,6 @@
                           "isolation_mode": {
                             "value": "isolated"
                           },
-                          "inline_service": {
-                            "node": null
-                          },
                           "__typename": "ManagedVxlanSegment",
                           "name": {
                             "value": "seg-100"
@@ -1594,9 +1582,6 @@
                           "id": "seg-seg-200",
                           "isolation_mode": {
                             "value": "isolated"
-                          },
-                          "inline_service": {
-                            "node": null
                           },
                           "__typename": "ManagedVxlanSegment",
                           "name": {

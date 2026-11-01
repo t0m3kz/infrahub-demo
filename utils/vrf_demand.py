@@ -4,8 +4,8 @@ An instance is one namespace realized in one topology: the device's hosting depl
 an office, utils/segment_addressing.py ``hosting_deployment``). A device is a member of its topology's instance of
 exactly the non-``default`` namespaces it routes in (demand-driven, never pre-provisioned):
 
-- the gateway namespace of each ROUTED segment row on its VLAN domain (a gateway, not ``terminate_inline``: an
-  inline-terminated or gateway-less segment is pure L2 on the fabric), border gateways' stretched rows included;
+- the gateway namespace of each ROUTED segment row on its VLAN domain (a gateway-less or firewall-terminated segment,
+  ``terminated_on``, is pure L2 on the fabric), border gateways' stretched rows included;
 - the VRF of each of its SVI objects (an instance is never removed while an SVI still routes in it);
 - the namespace of each address on its own interfaces (handoff /31s, WAN exit sub-interfaces, the upstream
   transit address of a border gateway: a BGP session's local address is one of them);
@@ -237,7 +237,7 @@ class DeviceVrfFacts:
 
 
 def _routed_row(row: dict[str, Any]) -> RoutedRow | None:
-    """The row as a RoutedRow, or None when the fabric does not route its segment (no gateway, inline)."""
+    """The row as a RoutedRow, or None when the fabric does not route its segment (no gateway, or terminated)."""
     segment = (row.get("segment_deployment") or {}).get("segment") or {}
     namespace = routed_segment_namespace(segment).get("name")
     if not namespace or not row.get("id") or not isinstance(row.get("vlan_id"), int):

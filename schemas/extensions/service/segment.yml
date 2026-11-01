@@ -35,13 +35,6 @@ nodes:
         default_value: true
         order_weight: 10
         description: "EVPN ARP suppression for this VXLAN segment."
-      - name: terminate_inline
-        kind: Boolean
-        label: Terminate Inline
-        optional: true
-        default_value: false
-        order_weight: 11
-        description: "When true, the inline_service HA pair is the segment's gateway. Leaf is pure L2."
       - name: stretch_scope
         kind: Dropdown
         label: Stretch Scope
@@ -246,19 +239,6 @@ extensions:
           order_weight: 1460
           identifier: "vlandomainsegment__svi"
           description: "The VLAN-domain row this SVI realizes (role svi only)"
-        # The inline L3 termination of a segment (terminate_inline) on an HA member's `<port>.<vlan>` sub-interface.
-        # One-sided, like `vrf`: nobody assigns a virtual interface to a segment, only the segment generator writes
-        # it (generators/topology/segment.py), so there is no reverse field and the segment page has ONE interface
-        # list, `switched_interfaces`. The segment is no longer on the interface edge (ManagedGenericInterfaces).
-        - name: inline_segment
-          peer: ManagedVxlanSegment
-          label: Inline Segment
-          cardinality: one
-          kind: Attribute
-          optional: true
-          order_weight: 1480
-          identifier: "inline_segment__sub_interface"
-          description: "Segment this HA member sub-interface terminates inline (written by the generator)"
 
     - kind: ManagedVxlanSegment
       relationships:
@@ -269,29 +249,20 @@ extensions:
           identifier: "segmentdeployment__segment"
           order_weight: 9000
           description: "Per-deployment VNI allocations for this segment"
-        # The typed L2 membership: the switch ports (physical or LAG) the segment is a VLAN on, written by the
-        # segment reconcile (generators/topology/segment_ports.py) and by its inline termination's border service ports
-        # (generators/topology/segment.py). A change of it re-runs add_vxlan_segment (data/events/99_actions.yml).
-        # The inline L3 termination on an HA member's sub-interface is `DcimVirtualInterface.inline_segment`.
-        - name: switched_interfaces
-          label: Switched Interfaces
-          peer: DcimSwitchedInterface
-          kind: Generic
-          cardinality: many
-          optional: true
-          identifier: "segment__switched_interfaces"
-          order_weight: 9100
-          description: "Switch ports (physical or LAG) carrying this segment as a VLAN"
 
     - kind: DcimSwitchedInterface
       relationships:
+        # The ONE edge between a switch port and a segment, one-sided (the segment has no list of its ports): written by
+        # a person from the port or by the segment reconcile (generators/topology/segment_ports.py), which stamps
+        # its own edges with its account as the relationship `source`. A reader of a segment's ports queries the ports
+        # (`segments__ids`).
         - name: segments
           label: Segments
           peer: ManagedVxlanSegment
           kind: Generic
           cardinality: many
           optional: true
-          identifier: "segment__switched_interfaces"
+          identifier: "port__segments"
           order_weight: 1850
           description: "VXLAN segments this port carries as VLANs (its switchport membership)"
 

@@ -747,9 +747,6 @@
                       }
                     }
                   },
-                  "inline_segment": {
-                    "node": null
-                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -1580,9 +1577,6 @@
           "stretch_scope": {
             "value": "local"
           },
-          "inline_service": {
-            "node": null
-          },
           "segment_deployments": {
             "edges": [
               {
@@ -1765,9 +1759,6 @@
           },
           "stretch_scope": {
             "value": "local"
-          },
-          "inline_service": {
-            "node": null
           },
           "segment_deployments": {
             "edges": [
@@ -1952,9 +1943,6 @@
           "stretch_scope": {
             "value": "dc_pair"
           },
-          "inline_service": {
-            "node": null
-          },
           "segment_deployments": {
             "edges": [
               {
@@ -2114,9 +2102,6 @@
           "stretch_scope": {
             "value": "local"
           },
-          "inline_service": {
-            "node": null
-          },
           "segment_deployments": {
             "edges": [
               {
@@ -2258,9 +2243,6 @@
           },
           "stretch_scope": {
             "value": "local"
-          },
-          "inline_service": {
-            "node": null
           },
           "segment_deployments": {
             "edges": [

@@ -452,8 +452,7 @@ class BaseDeviceTransform(InfrahubTransform):
         if not self.device_role:
             return {}
         activations = data.get("segment_deployments")
-        # PBR and the zero-trust ACLs hang off the segment's SVI; a
-        # terminate_inline segment has none here (its HA pair routes it).
+        # PBR and the zero-trust ACLs hang off the segment's SVI; a segment a firewall context terminates has none.
         routed = routed_activations(activations)
         # A border gateway's stitched segments are hostless (no customer-facing port),
         # so its anycast SVI carries no tenant traffic: hosts are served by the leaf

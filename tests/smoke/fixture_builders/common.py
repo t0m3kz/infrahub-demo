@@ -224,12 +224,8 @@ def _make_interface(
                 ),
             }
         )
-    # A switch port or LAG carries its segments on `segments` (DcimSwitchedInterface); a sub-interface carries the
-    # inline L3 termination of one segment on `inline_segment` (transforms/helpers/segments.py interface_segments).
-    if typename == "DcimVirtualInterface":
-        assert len(segments or []) <= 1, "a sub-interface terminates at most one segment inline"
-        iface["inline_segment"] = _node(segments[0] if segments else None)
-    else:
+    # A switch port or LAG carries its segments on `segments` (transforms/helpers/segments.py interface_segments).
+    if typename != "DcimVirtualInterface" or segments:
         iface["segments"] = _edges(segments or [])
     iface["capabilities"] = _edges(services)
     return iface
@@ -283,7 +279,6 @@ def _make_segment_node(
     security_policy: dict | None = None,
     num_deployments: int = 1,
     isolation_mode: str | None = None,
-    has_firewall: bool = False,
     row_device_id: str | None = None,
     l3_vni: int | None = None,
     routing_identity: tuple[int | None, int | None] | None = None,
@@ -305,7 +300,7 @@ def _make_segment_node(
     by the transform, so ``row_device_id`` must match or no VXLAN is rendered.
 
     The VRF and its L3 VNI are reached ONLY via
-    ``gateway.ip_prefix.ip_namespace`` (see utils.segment_addressing.routed_segment_namespace and
+    ``gateway.ip_prefix.ip_namespace`` (see utils.segment_addressing.segment_namespace and
     _get_segment_gateways in transforms/helpers/segments.py). A flat
     ``segment.prefix`` key — which this generator used to emit — is read by
     nothing, which is why no fixture ever rendered a VRF or an L3 VNI.
@@ -315,12 +310,6 @@ def _make_segment_node(
 
     if isolation_mode is not None:
         seg["isolation_mode"] = _v(isolation_mode)
-
-    # Embed a firewall node reference so acl.py seg_has_firewall detects it
-    if has_firewall:
-        seg["inline_service"] = _node({"id": "fw-dc1-01", "name": _v("dc1-fw-01")})
-    else:
-        seg["inline_service"] = _node(None)
 
     security_zone_node = _node(None)
 

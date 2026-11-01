@@ -747,9 +747,6 @@
                       }
                     }
                   },
-                  "inline_segment": {
-                    "node": null
-                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -979,9 +976,6 @@
                       {
                         "node": {
                           "id": "seg-web-np",
-                          "inline_service": {
-                            "node": null
-                          },
                           "__typename": "ManagedVxlanSegment",
                           "name": {
                             "value": "web-np"
@@ -1060,9 +1054,6 @@
                       {
                         "node": {
                           "id": "seg-app-np",
-                          "inline_service": {
-                            "node": null
-                          },
                           "__typename": "ManagedVxlanSegment",
                           "name": {
                             "value": "app-np"
@@ -1141,9 +1132,6 @@
                       {
                         "node": {
                           "id": "seg-pay-p",
-                          "inline_service": {
-                            "node": null
-                          },
                           "__typename": "ManagedVxlanSegment",
                           "name": {
                             "value": "pay-p"
@@ -1222,9 +1210,6 @@
                       {
                         "node": {
                           "id": "seg-portal-p",
-                          "inline_service": {
-                            "node": null
-                          },
                           "__typename": "ManagedVxlanSegment",
                           "name": {
                             "value": "portal-p"
@@ -1339,9 +1324,6 @@
                       {
                         "node": {
                           "id": "seg-pay-p",
-                          "inline_service": {
-                            "node": null
-                          },
                           "__typename": "ManagedVxlanSegment",
                           "name": {
                             "value": "pay-p"
@@ -2198,9 +2180,6 @@
           "stretch_scope": {
             "value": "local"
           },
-          "inline_service": {
-            "node": null
-          },
           "segment_deployments": {
             "edges": [
               {
@@ -2383,9 +2362,6 @@
           },
           "stretch_scope": {
             "value": "local"
-          },
-          "inline_service": {
-            "node": null
           },
           "segment_deployments": {
             "edges": [
@@ -2570,9 +2546,6 @@
           "stretch_scope": {
             "value": "dc_pair"
           },
-          "inline_service": {
-            "node": null
-          },
           "segment_deployments": {
             "edges": [
               {
@@ -2732,9 +2705,6 @@
           "stretch_scope": {
             "value": "local"
           },
-          "inline_service": {
-            "node": null
-          },
           "segment_deployments": {
             "edges": [
               {
@@ -2876,9 +2846,6 @@
           },
           "stretch_scope": {
             "value": "local"
-          },
-          "inline_service": {
-            "node": null
           },
           "segment_deployments": {
             "edges": [

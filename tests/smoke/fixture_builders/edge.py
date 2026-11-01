@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from tests.smoke.fixture_builders.common import (
     _af_edges,
     _deployment_record,
@@ -10,11 +12,12 @@ from tests.smoke.fixture_builders.common import (
     _make_interface,
     _make_policy_rule,
     _make_security_policy,
+    _make_segment_node,
     _node,
     _v,
     _write_data_fixture,
 )
-from tests.smoke.fixture_builders.fabric import _INLINE_SEGMENT_KWARGS, _make_inline_segment_node, build_device_data
+from tests.smoke.fixture_builders.fabric import build_device_data
 from tests.smoke.fixture_builders.route_protection_roots import TENANT_NAMESPACE, add_environment_roots
 from tests.smoke.fixture_builders.transit import build_exchange_transit_bl_data
 from tests.smoke.fixture_builders.vrf import _vrf_node
@@ -248,7 +251,6 @@ def build_edge_unfiltered_appliance_data(*, device_name: str) -> dict:
             port["__typename"] = "DcimVirtualInterface"
             for physical_only in ("cable", "interface_type", "mtu", "segments"):
                 port.pop(physical_only, None)
-            port["inline_segment"] = _node(None)
     prod = _node({"name": _v("PROD"), "l3_vni": _v(60000), "namespace_type": _v("prod")})
     peerings = []
     for iface, local_ip, remote_ip, remote, remote_iface, remote_asn, name, far_role in (
@@ -563,6 +565,10 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
     return data
 
 
+# A VNI segment without a gateway: pure L2 on the fabric (VLAN + L2 VNI, no SVI / VRF / L3 VNI).
+_BGW_SEGMENT_KWARGS: dict[str, Any] = {"vlan_id": 150, "vni": 10150, "seg_name": "seg-l2-150"}
+
+
 def build_edge_bgw_pair_data(*, device_name: str, platform: str, enforce: bool = True) -> dict:
     """A colocation metro edge that is one of two BGWs sharing a site VIP.
 
@@ -607,7 +613,7 @@ def build_edge_bgw_pair_data(*, device_name: str, platform: str, enforce: bool =
     )
     # One segment on a firewall-role port gives the BGW its VXLAN block (an edge
     # without a stretched segment or an INTERNET session renders none).
-    seg = _make_inline_segment_node(row_device_id=device_node["id"])
+    seg = _make_segment_node(**_BGW_SEGMENT_KWARGS, row_device_id=device_node["id"])
     interfaces.append(
         {
             "node": _make_interface(
@@ -620,7 +626,7 @@ def build_edge_bgw_pair_data(*, device_name: str, platform: str, enforce: bool =
         }
     )
     device_node["deployment"]["node"]["segment_deployments"] = _edges(
-        [_deployment_record(seg, _INLINE_SEGMENT_KWARGS["vni"])]
+        [_deployment_record(seg, _BGW_SEGMENT_KWARGS["vni"])]
     )
     sibling = "dc1-edge-02"
     interfaces.append(

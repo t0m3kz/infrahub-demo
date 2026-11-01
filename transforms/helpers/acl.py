@@ -3,7 +3,6 @@
 from typing import Any
 
 from transforms.helpers.policy import is_internet_destination, rule_endpoint, rule_zone, segment_flows
-from utils.group_policy import is_microsegmented
 from utils.internet_space import NON_INTERNET_PREFIXES
 from utils.limits import ACL_CLOSING_SEQ, ACL_INTERNET_BAND_SEQ_START, ACL_RETURN_LEG_SEQ_START
 from utils.segment_addressing import segment_prefix
@@ -145,22 +144,6 @@ def _inbound_permits(seg: dict[str, Any]) -> list[dict[str, Any]]:
     )
 
 
-def _leaf_enforces(seg: dict[str, Any]) -> bool:
-    """Whether the segment's policy is enforced on its leaf SVI.
-
-    A segment with a dedicated firewall (inline_service) is enforced there,
-    not on the leaf, unless it is microsegmented or one of its own active
-    rules is apply_on_switch: such a rule must hold on the switch regardless
-    of the firewall, and an ACL is all-or-nothing on the SVI (its implicit
-    deny drops whatever it does not permit), so the segment then gets its
-    whole ACL, like a microsegmented one.
-    """
-    inline = seg.get("inline_service") or {}
-    if not (inline.get("id") or inline.get("name")) or is_microsegmented(seg):
-        return True
-    return any(rule.get("apply_on_switch") for rule in segment_flows(seg)[0]["rules"])
-
-
 def get_acls(activations: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     """Build ACL list from SegmentDeployment security policies (zero-trust).
 
@@ -233,10 +216,6 @@ def get_acls(activations: list[dict[str, Any]] | None = None) -> list[dict[str, 
         seg = act.get("segment") or {}
 
         isolation_mode = seg.get("isolation_mode") or "normal"
-        if not _leaf_enforces(seg):
-            seen_vlans.add(vlan_id)
-            continue
-
         # Only render ACLs when security_policy is explicitly in the data
         # (i.e. the query included it). Missing key = field not queried → skip.
         if "security_policy" not in seg:

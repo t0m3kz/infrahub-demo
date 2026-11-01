@@ -625,6 +625,7 @@ class ManagedFirewallContext(ManagedGeneric, ManagedGenericInterfaces, ManagedIn
     cluster: RelationshipAttribute[ManagedFirewallHA]
     tenant: RelationshipAttribute[ManagedTenantScoped]
     served_deployments: RelationshipManager[ManagedTenantScoped]
+    terminated_segments: RelationshipManager[ManagedVxlanSegment]
     snat_address: RelationshipAttribute[IpamIPAddress]
 
 
@@ -1070,7 +1071,6 @@ class DcimVirtualDevice(CoreArtifactTarget, DcimDevice, DcimCapabilities, AppIns
 
 
 class DcimVirtualInterface(DcimInterface, DcimHasSubInterface, DcimHasIPAddress):
-    inline_segment: RelationshipAttribute[ManagedVxlanSegment]
     parent_interface: RelationshipAttribute[DcimInterface]
     vlan_domain_segment: RelationshipAttribute[ManagedVlanDomainSegment]
     vrf: RelationshipAttribute[ManagedVRF]
@@ -1097,10 +1097,8 @@ class CloudVirtualNetwork(CloudResource):
 class ManagedVxlanSegment(ManagedGeneric, ManagedNetworkSegment):
     arp_suppression: Boolean
     segment_type: Dropdown
-    terminate_inline: Boolean
     customer_deployments: RelationshipManager[TopologyDeployment]
-    inline_service: RelationshipAttribute[ManagedGeneric]
-    switched_interfaces: RelationshipManager[DcimSwitchedInterface]
+    terminated_on: RelationshipAttribute[ManagedFirewallContext]
 
 
 class SecurityZone(CoreNode):

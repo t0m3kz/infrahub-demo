@@ -239,9 +239,8 @@ generics:
         order_weight: 1900
 
   # Ports that can be switchport members of VXLAN segments: a physical port and a LAG. Its one relationship,
-  # `segments` (the typed L2 membership, reverse `switched_interfaces` on ManagedVxlanSegment), is declared in
-  # schemas/extensions/service/segment.yml next to the segment. The inline L3 termination of a segment on a virtual
-  # sub-interface stays on the `capabilities` edge.
+  # `segments` (the typed L2 membership, one-sided: the segment has no list of its ports), is declared in
+  # schemas/extensions/service/segment.yml next to the segment.
   - name: SwitchedInterface
     namespace: Dcim
     label: Switched Interface
@@ -393,7 +392,7 @@ generics:
             color: "#A7F3D0"
           - name: service
             label: Service
-            description: "VLAN-tagged sub-interface terminating a tenant-facing service (e.g. FirewallContext, inline FW/LB)"  # yamllint disable-line rule:line-length
+            description: "VLAN-tagged sub-interface terminating a tenant-facing service (e.g. FirewallContext)"  # yamllint disable-line rule:line-length
             color: "#F97316"
         order_weight: 1250
       - name: index

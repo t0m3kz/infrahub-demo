@@ -1,6 +1,5 @@
-{#- keepalived VRRP for a Linux HA pair (HAProxy, Squid) terminating segments
-    inline: one instance per interface whose segment gateway is the pair's
-    virtual_ip. Rendered as comments — keepalived.conf is its own file next
+{#- keepalived VRRP for a Linux HA pair (HAProxy): one instance per context leg
+    whose floating address is the pair's virtual_ip. Rendered as comments — keepalived.conf is its own file next
     to the service's config. The primary member is MASTER and outranks the
     secondary by 10. -#}
 {%- macro vrrp_instances(interfaces, ha) -%}

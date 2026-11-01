@@ -1650,9 +1650,6 @@
                       }
                     }
                   },
-                  "inline_segment": {
-                    "node": null
-                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -1879,9 +1876,6 @@
                       }
                     }
                   },
-                  "inline_segment": {
-                    "node": null
-                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -1915,9 +1909,6 @@
                         }
                       }
                     }
-                  },
-                  "inline_segment": {
-                    "node": null
                   },
                   "capabilities": {
                     "edges": []
@@ -1955,18 +1946,10 @@
                     "edges": [
                       {
                         "node": {
-                          "id": "seg-seg-inline-150",
-                          "inline_service": {
-                            "node": {
-                              "id": "fw-ha-dc1",
-                              "name": {
-                                "value": "dc1-fw-ha"
-                              }
-                            }
-                          },
+                          "id": "seg-seg-l2-150",
                           "__typename": "ManagedVxlanSegment",
                           "name": {
-                            "value": "seg-inline-150"
+                            "value": "seg-l2-150"
                           },
                           "customer_name": {
                             "value": "Customer-A"
@@ -1978,28 +1961,7 @@
                             "node": null
                           },
                           "gateway": {
-                            "node": {
-                              "address": {
-                                "value": "10.150.0.1/24"
-                              },
-                              "ip_prefix": {
-                                "node": {
-                                  "prefix": {
-                                    "value": "10.150.0.0/24"
-                                  },
-                                  "ip_namespace": {
-                                    "node": {
-                                      "name": {
-                                        "value": "VRF_A"
-                                      },
-                                      "l3_vni": {
-                                        "value": 50001
-                                      }
-                                    }
-                                  }
-                                }
-                              }
-                            }
+                            "node": null
                           },
                           "segment_deployments": {
                             "edges": [
@@ -2036,9 +1998,6 @@
                                 }
                               }
                             ]
-                          },
-                          "terminate_inline": {
-                            "value": true
                           }
                         }
                       }
@@ -2380,18 +2339,10 @@
                       },
                       "segment": {
                         "node": {
-                          "id": "seg-seg-inline-150",
-                          "inline_service": {
-                            "node": {
-                              "id": "fw-ha-dc1",
-                              "name": {
-                                "value": "dc1-fw-ha"
-                              }
-                            }
-                          },
+                          "id": "seg-seg-l2-150",
                           "__typename": "ManagedVxlanSegment",
                           "name": {
-                            "value": "seg-inline-150"
+                            "value": "seg-l2-150"
                           },
                           "customer_name": {
                             "value": "Customer-A"
@@ -2403,28 +2354,7 @@
                             "node": null
                           },
                           "gateway": {
-                            "node": {
-                              "address": {
-                                "value": "10.150.0.1/24"
-                              },
-                              "ip_prefix": {
-                                "node": {
-                                  "prefix": {
-                                    "value": "10.150.0.0/24"
-                                  },
-                                  "ip_namespace": {
-                                    "node": {
-                                      "name": {
-                                        "value": "VRF_A"
-                                      },
-                                      "l3_vni": {
-                                        "value": 50001
-                                      }
-                                    }
-                                  }
-                                }
-                              }
-                            }
+                            "node": null
                           },
                           "segment_deployments": {
                             "edges": [
@@ -2461,9 +2391,6 @@
                                 }
                               }
                             ]
-                          },
-                          "terminate_inline": {
-                            "value": true
                           }
                         }
                       }

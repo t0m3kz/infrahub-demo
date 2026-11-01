@@ -349,7 +349,7 @@ class TestLispContext:
 
 class TestBuildLispInputs:
     def test_the_border_reads_the_eid_records_of_the_active_vni_segments(self) -> None:
-        """A segment without a VNI has no instance, an inline-terminated one is L2 only, one outside a VRF has no record."""
+        """A segment without a VNI has no instance, one outside a VRF has no record."""
         deployment = {
             "name": "C005-OFFICE",
             "lisp_map_servers": _MAP_SERVERS,
@@ -361,15 +361,6 @@ class TestBuildLispInputs:
                         "gateway": {
                             "ip_prefix": {"prefix": "10.1.0.0/24", "ip_namespace": {"name": "PROD", "l3_vni": 50001}}
                         }
-                    },
-                },
-                {
-                    "vni": 10200,
-                    "segment": {
-                        "terminate_inline": True,
-                        "gateway": {
-                            "ip_prefix": {"prefix": "10.2.0.0/24", "ip_namespace": {"name": "PROD", "l3_vni": 50001}}
-                        },
                     },
                 },
                 {
@@ -396,7 +387,7 @@ class TestBuildLispInputs:
             site_name="C005-OFFICE",
             site_key="k",
             l3_records=(EidRecord(50001, "PROD", "10.1.0.0/24"),),
-            l2_instance_ids=(10100, 10200, 10300),
+            l2_instance_ids=(10100, 10300),
         )
 
     @pytest.mark.parametrize("deployment", [None, {}, {"lisp_site_key": None, "lisp_map_servers": None}])

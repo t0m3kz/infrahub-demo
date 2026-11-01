@@ -252,7 +252,7 @@ class MyCheck(InfrahubCheck):
 - **Segments are VXLAN only**: there is no VLAN segment kind. The VLAN of a port is generated per switch (see
   **VLAN rows**), a segment has no manual `vlan_id` and lists its footprints in `customer_deployments`.
   An infrastructure VLAN (a transfer or management L2 link) is a segment too: a `ManagedVxlanSegment` with no
-  `gateway`, owned by the `INFRA` pseudo-customer, given to its ports (`switched_interfaces`) like any segment. The fabric
+  `gateway`, owned by the `INFRA` pseudo-customer, given to its ports (their `segments` edge) like any segment. The fabric
   renders it pure L2 (VLAN and L2 VNI, no SVI, VRF or ACL) and its VLAN is chosen per switch like any other; a firewall
   sub-interface takes the facing leaf's VLAN. A fixed VLAN number is only needed towards an outside party, and that is
   a handoff circuit's `<port>.<vlan>` sub-interface, not a segment.
@@ -378,11 +378,40 @@ class MyCheck(InfrahubCheck):
   serves from is removed, the shared context itself stays (untracked, so `delete_unused_nodes` never reclaims it). The transform
   reads the other end, `FirewallContext.served_deployments`, so each firewall places the footprint's rules in its own
   contexts. Locks are per context and a run holds one at a time.
+- **Terminated segments**: `ManagedVxlanSegment.terminated_on` (Attribute, one, optional) peers a
+  `ManagedFirewallContext`; the reverse is `terminated_segments` on the context (Generic, many; both ends declared in
+  `schemas/extensions/capabilities/ha.yml`, identifier `firewall_context__terminated_segments`, narrowed to the concrete
+  firewall kind so a load-balancer context cannot be named). The pair of that context is the segment's gateway:
+  `segment.gateway` is the pair's floating VIP (the `.1` the segment generator allocates from the tenant pool, like any
+  DC segment; no per-member address) and the fabric only bridges it. ONE gate, `utils/segment_addressing.py`
+  `is_terminated` / `routed_segment_namespace`, hides the gateway from every fabric reader: the VRF demand (no routed
+  row, so no SVI and no VRF instance), `_get_segment_gateways` (no gateway, VRF or L3 VNI), `routed_activations` (no PBR
+  or SVI ACL), the overlay and VXLAN L3 instances, the origination, and `is_routed_tenant_segment` (no group or routing
+  tag, no SVI protection to demand). The firewall keeps reading `segment_namespace` and `segment_prefix` (its zone
+  members, rules and PBR next hops). A query that returns a segment's gateway for the fabric must select
+  `terminated_on { node { id } }` (`tests/unit/test_terminated_on_queries.py`), else the segment reads as routed.
+  - **Ports**: `add_vxlan_segment` and `add_app_component_segment` tag the border service ports of the context (the
+    `capabilities` of the context that are a physical port or a LAG with the firewall service role, read by
+    `queries/topology/add/segment_vlan_domains.gql`) with the segment as generated `segments` edges, in the SAME
+    reconcile as the component ports (same provenance: an account as `source`, removed only by that account). The ports
+    are not host-facing: `checks/customer_quota.py` does not count them. A change of `terminated_on` re-runs
+    `add_vxlan_segment` (`data/events/99_actions.yml`).
+  - **Firewall side**: the sub-interface is derived, never stored. `transforms/helpers/firewall_terminated.py` names it
+    `<uplink trunk>.<vlan>` (the trunk is the `parent_interface` of the context's legs; the VLAN is the segment's row on
+    the device at the far end of the trunk's cable, the tag both ends use), gives it the gateway as `virtual_ip` and the
+    segment's zone, and `Firewall.transform` renders it through the same interface path as any other. A segment with no
+    row on the facing leaf yet, no gateway, or a trunk with no facing device (a hosted firewall's NIC, a colocation
+    context with no legs) is left out with a warning. The context never routes a terminated prefix to the border leaves
+    (`apply_context_routes`), and `get_firewall_static_routes` skips an interface with a `virtual_ip`.
+  - **Check**: `checks/segment_placement.py` holds a termination to a gateway inside the segment prefix, DC footprints
+    only, each served by the context (`served_deployments`). Demo: C005's `firewalled-dc10` in
+    `data/demos/30_all/07_applications/c005/00_segments.yml`, on DC10's shared PROD context (`test_64c`).
 - **Footprint segments**: `network_segments` (the reverse of `segment__customer_deployments`) is declared per kind in
   `schemas/extensions/service/segment.yml`: `ManagedVxlanSegment` on `TopologyCustomerDC`, `TopologyCustomerColocation`
   and `TopologyCustomerOffice`, `CloudNetworkSegment` on `TopologyCustomerCloud`, never on the `TopologyCustomer`
   generic. A query reaches it through a per-kind inline fragment (`... on TopologyCustomerDC { network_segments }`),
-  not through a generic one.
+  not through a generic one. The segment lists footprints only, never its ports: the port-to-segment edge is the port's
+  `segments` (see **Interface addresses and layers**), so a reader of a segment's ports queries the ports.
 - **Fabric design**: `TopologyDataCenter.design` (`TopologyTemplateDC`: S, M, L, XL) and `TopologyPod.design`
   (`TopologyTemplatePod`: S_MIDDLE, S_TOR, ...) are required and hold only the envelope (`max_*`); the rows live in
   `data/bootstrap/14b_fabric_templates.yml`. Every fabric pool size is derived from them by
@@ -487,15 +516,18 @@ class MyCheck(InfrahubCheck):
   multisite VIP is one address on two loopbacks), so an address goes with its run's tracking or with decommission's
   explicit deletes, never with its port; a hand-deleted device leaves its port addresses behind. A switch port's L2
   membership is the typed edge `segments` (on the marker generic `DcimSwitchedInterface`, a physical port or a LAG;
-  peer `ManagedVxlanSegment`, reverse `switched_interfaces`: the segment's ONE interface list, physical ports and LAGs
-  only; a virtual interface is never assigned to a segment by anyone). The inline L3 termination of a segment
-  (`terminate_inline`) on an HA member's `<port>.<vlan>` sub-interface is the one-sided `DcimVirtualInterface.inline_segment`
-  (Attribute, one, no reverse field, written only by `generators/topology/segment.py`; the sub-interface takes the facing
-  border leaf's VLAN and is never a customer port). A segment is on no interface's `capabilities`. The layer of a port is its content, not its kind: a
+  peer `ManagedVxlanSegment`, many) is the ONE edge between a port and a segment, one-sided: the segment has no list of
+  its ports, a reader asks the ports (`segments__ids`, `segments__isnull: false`), and a change of it raises no event.
+  Physical ports and LAGs only; a virtual interface is never assigned to a segment by anyone. The edge carries its
+  provenance, the relationship `source` property (a `CoreAccount`; `generators/helpers/edge_source.py` is the one writer,
+  a raw `RelationshipAdd` with `_relation__source`; read with `edges { properties { source { id } } node { id } }`, which
+  `clean_data` drops, so the reader takes it from the raw response): a person sets an edge from the port with no source,
+  the segment reconcile writes the ports its components derive with its own account (the client token's, `AccountProfile`,
+  asked once per run) as the source. A segment is on no interface's `capabilities`. The layer of a port is its content, not its kind: a
   segment or a firewall/load-balancer context means switchport, an address, sub-interfaces or a routed capability
   (BGP or OSPF peering, routed exchange, interconnect, tunnel or handoff circuit) means routed;
-  `checks/interface_layers.py` refuses both on one port (R1), either on a LAG member (R2), an inline termination not
-  named `<parent>.<vlan>` (R4, `checks/interface_parents.py`, tested on `inline_segment`); a segment on a switch port's `capabilities` is
+  `checks/interface_layers.py` refuses both on one port (R1), or on a LAG member (R2); a border service port tagged with a
+  context AND a terminated segment is a switchport on both counts; a segment on a switch port's `capabilities` is
   impossible by schema (`ManagedVxlanSegment` is not on the interface edge).
 - **VLAN rows**: a VLAN ID is local to a switch. There is no VLAN domain object and no marker generic: the row
   points straight at its device. The chain is segment -> `ManagedSegmentDeployment` (the realization in a DC, metro or
@@ -503,7 +535,7 @@ class MyCheck(InfrahubCheck):
   `Parent`-mandatory child of the deployment its switch sits in (`device.deployment` is the hosting parent or one of its
   pods and zones) and goes with it (`on_delete: cascade`), so the VLAN and the VNI of a port come from one lineage; its
   `device` is an Attribute (mandatory), unique on [segment_deployment, device] and [device, vlan_id]. The row is an
-  output and has no port: a port is given a SEGMENT (the segment's `switched_interfaces`), never a VLAN, and the VLAN of
+  output and has no port: a port is given a SEGMENT (the port's `segments` edge), never a VLAN, and the VLAN of
   a port is found by port -> device -> row of the segment. **MLAG pairs**: the two peers of a `ManagedMLAG` each have
   their own row for a segment and MUST carry the same `vlan_id` (a dual-homed port-channel is one L2 broadcast domain).
   The allocator holds it: the segment reconcile gives every device with a port of the segment AND its MLAG peers (even
@@ -516,13 +548,14 @@ class MyCheck(InfrahubCheck):
   no `mlag <id>` / `vpc <id>` on the host-facing port-channels today (only the domain-level block and the peer-link).
   Deleting an MLAG never orphans a row. The segment owns its port tags and its rows
   (`generators/topology/segment_ports.py`): `add_vxlan_segment` and `add_app_component_segment` run the same reconcile,
-  and a change of the segment's `switched_interfaces` re-runs `add_vxlan_segment` (`data/events/99_actions.yml`), so a port
-  assigned by hand is removed unless an `AppComponent` instance lands on it; a segment with no component keeps the ports
-  it has. A switch with no deployment of the segment, or a pair whose members map to two deployments, is a WARNING and its
+  by provenance: it removes a port edge ONLY when its `source` is the generator's account and no `AppComponent` instance
+  lands on the port any more (an instance moved, a component left, the segment has no component), and it never removes or
+  changes an edge with no source (set by a person from the port), whatever the components say. A person's edge on a port
+  that is also derived stays as it is (it is not re-stamped, so it survives the component leaving). The edge is one-sided and
+  no trigger follows it: a port a person adds gets its VLAN row at the next run of either generator on the segment. A switch with no deployment of the segment, or a pair whose members map to two deployments, is a WARNING and its
   rows are left alone (the next run converges once the deployment exists). The rows are untracked and their deployment
   tracked: a deployment that is not re-saved by its run is deleted with its rows; the rows of a device that is gone or
-  no longer needs the segment are deleted by the next reconcile (check rule S2 reports them meanwhile). A routed row (a gateway, not
-  `terminate_inline`) is realized on its switch as ONE SVI: a `DcimVirtualInterface` with role
+  no longer needs the segment are deleted by the next reconcile (check rule S2 reports them meanwhile). A routed row (a gateway, and no `terminated_on`: a terminated segment is pure L2 on the fabric) is realized on its switch as ONE SVI: a `DcimVirtualInterface` with role
   `svi` named `Vlan<vlan_id>`, a Component of the row (`svi`, `on_delete: cascade`), with no address (the anycast
   gateway is `segment.gateway`) and with `vrf` pointing at the `ManagedVRF` of its device's topology; the SVI is not a
   port. `generators/helpers/svi.py` writes it in the VRF pass of the segment reconcile, upserted by (device, `Vlan<id>`), and
@@ -628,7 +661,7 @@ class MyCheck(InfrahubCheck):
     `shared_capabilities { __typename ... on <Kind> {...} }` once, inside `... on DcimCapabilities` (the field is not on
     `DcimDevice`), in `DeviceCapabilitiesOnDeviceFields`, and filter on the typename (`device_memberships`).
   - `ManagedVRF`'s SVIs reach it through `DcimVirtualInterface.vrf`. A segment is not on the interface edge: a switch
-    port's membership is `segments` and an inline termination is `inline_segment` (see **Interface addresses and
+    port's membership is `segments` (see **Interface addresses and
     layers**); the kinds left on `ManagedGenericInterfaces` are circuits, contexts, the routed exchange, peerings and OSPF.
     A circuit re-declares the circuit side of that edge once, on the `TopologyCircuit` generic (`capabilities`, same
     `interface_capabilities` identifier, min and max 2), and the circuit nodes inherit `TopologyCircuit` before
@@ -873,7 +906,7 @@ uv run pytest --cov=.
 
 Integration runs go through `uv run invoke test-integration` (see the `infrahub-running-integration-tests` skill), one
 stack at a time. The full 30_all subset is `test_01, 02, 59, 60, 61, 62, 64, 65, 66` (`62` is `test_62`, `62b`, `62c`;
-`64` is `test_64`, `64b`); `test_65` (idempotency) is the last ~20 of its ~55 minutes, `test_66` (circuit lifecycle, mutates the branch) runs after it. Match the run to the change:
+`64` is `test_64`, `64b`, `64c`); `test_65` (idempotency) is the last ~20 of its ~55 minutes, `test_66` (circuit lifecycle, mutates the branch) runs after it. Match the run to the change:
 
 | Change touches | Run |
 | --- | --- |

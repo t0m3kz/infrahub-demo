@@ -2,7 +2,7 @@
 
 ``parent_interface`` is one link with two meanings, and the schema holds neither (no ``common_parent``):
 
-* a sub-interface (a context leg, a segment termination, an SVI's port) rides on a NIC, port or LAG of ITS OWN device;
+* a sub-interface (a context leg, an SVI's port) rides on a NIC, port or LAG of ITS OWN device;
 * a base NIC of a virtual device (a DcimVirtualInterface with the role management, uplink or ha, which
   generators/virtual_nics.py pins) rides on a port of the hosting device, and that port carries the cable, so the
   border leaf -> host port -> NIC path is a path in the graph.
@@ -15,15 +15,11 @@ Rules:
    rule 1 when its parent is elsewhere);
 3. the host port of an uplink NIC is cabled (otherwise nothing reaches the border leaf through it);
 4. a NIC without a parent is not reported: a machine can have more uplinks than its host;
-5. the parent of a NIC is a DcimPhysicalInterface (a host port, not a LAG, a NIC or a sub-interface);
-6. an ``inline_segment`` on a virtual interface is the inline termination, which sits on the sub-interface
-   ``<parent name>.<vlan>`` (generators/connections.py ``ensure_vlan_subinterface``). A segment on a switch port is
-   ``segments``; the schema gives it no ``capabilities`` edge.
+5. the parent of a NIC is a DcimPhysicalInterface (a host port, not a LAG, a NIC or a sub-interface).
 """
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
 from infrahub_sdk.checks import InfrahubCheck
@@ -78,20 +74,6 @@ def interface_parent_errors(iface: dict[str, Any]) -> list[str]:
     return errors
 
 
-def inline_termination_errors(iface: dict[str, Any]) -> list[str]:
-    """Rule 6 of one cleaned DcimVirtualInterface node: an inline_segment sits on ``<parent name>.<vlan>``."""
-    if not iface.get("inline_segment"):
-        return []
-    parent = (iface.get("parent_interface") or {}).get("name")
-    if parent and re.fullmatch(re.escape(parent) + r"\.\d+", str(iface.get("name"))):
-        return []
-    return [
-        f"{_label(iface.get('device') or {})} {_label(iface)} has an inline_segment but is not the sub-interface "
-        f"'<parent>.<vlan>' of its parent_interface ({parent or 'none'}): an inline termination rides on a "
-        "sub-interface of a port."
-    ]
-
-
 class CheckInterfaceParents(InfrahubCheck):
     """A sub-interface rides on an interface of its own device; a NIC of a virtual device on a cabled port of its host."""
 
@@ -99,5 +81,5 @@ class CheckInterfaceParents(InfrahubCheck):
 
     def validate(self, data: Any) -> None:
         for iface in clean_data(data).get("DcimVirtualInterface") or []:
-            for message in (*interface_parent_errors(iface), *inline_termination_errors(iface)):
+            for message in interface_parent_errors(iface):
                 self.log_error(message=message, object_id=iface.get("id"), object_type=_VIRTUAL_INTERFACE)

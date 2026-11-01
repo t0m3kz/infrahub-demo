@@ -133,9 +133,6 @@
                       }
                     }
                   },
-                  "inline_segment": {
-                    "node": null
-                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -290,9 +287,6 @@
                       {
                         "node": {
                           "id": "seg-seg-100",
-                          "inline_service": {
-                            "node": null
-                          },
                           "__typename": "ManagedVxlanSegment",
                           "name": {
                             "value": "seg-100"
@@ -402,9 +396,6 @@
                     "value": "mlag-peer"
                   },
                   "ip_address": {
-                    "node": null
-                  },
-                  "inline_segment": {
                     "node": null
                   },
                   "capabilities": {

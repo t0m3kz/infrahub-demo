@@ -84,39 +84,16 @@ def get_ha(
     return None
 
 
-def inline_addresses(
-    segments: list[dict[str, Any]] | None,
-    ha: dict[str, Any] | None,
-    leg_address: str | None = None,
-) -> dict[str, str | None]:
-    """The HA pair's virtual IP on an interface.
+def leg_virtual_ip(ha: dict[str, Any] | None, leg_address: str) -> dict[str, str | None]:
+    """The HA pair's virtual IP on an exchange transit leg.
 
-    Two sources, one result shape:
-
-    - an interface carrying (``segments``) a segment the pair terminates inline
-      (terminate_inline, inline_service == this pair): virtual_ip is the
-      segment gateway — the address hosts use, owned by the active member
-      (floating IP / VIP / VRRP address, per vendor).
-    - an exchange transit leg (``leg_address`` is the member's own address in
-      the leg's /29, see utils/exchange_transit.py): virtual_ip is the /29's
-      firewall VIP, a fixed offset that needs no lookup of the peer.
-
-    The interface's own ip_address is this member's own address. virtual_ip is
-    None when the interface carries no such segment/leg, or the device has no HA.
+    ``leg_address`` is the member's own address in the leg's /29 (see utils/exchange_transit.py): virtual_ip is the
+    /29's firewall VIP, a fixed offset that needs no lookup of the peer. virtual_ip is None when the device has no
+    HA or the leg is not IPv4.
     """
-    none: dict[str, str | None] = {"virtual_ip": None}
     if not ha:
-        return none
-    if leg_address:
-        network = ip_interface(leg_address).network
-        if network.version != 4:
-            return none
-        return {"virtual_ip": f"{network[OFFSET_VIP]}/{network.prefixlen}"}
-    for seg in segments or []:
-        if not seg.get("terminate_inline") or (seg.get("inline_service") or {}).get("name") != ha.get("name"):
-            continue
-        virtual_ip = (seg.get("gateway") or {}).get("address")
-        if not virtual_ip:
-            continue
-        return {"virtual_ip": virtual_ip}
-    return none
+        return {"virtual_ip": None}
+    network = ip_interface(leg_address).network
+    if network.version != 4:
+        return {"virtual_ip": None}
+    return {"virtual_ip": f"{network[OFFSET_VIP]}/{network.prefixlen}"}

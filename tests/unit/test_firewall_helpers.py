@@ -379,7 +379,6 @@ class TestGetExchangeTransits:
             "prefix": "100.66.0.0/29",
             "ip_namespace": {"name": "PROD", "l3_vni": 50001, "namespace_type": "prod"},
         }
-        assert prod["terminate_inline"] is False
 
     def test_default_namespace_legacy_leg_is_skipped(self) -> None:
         legacy = _context([_leg("10.65.0.1/30", {"name": "default", "namespace_type": None, "l3_vni": None})])

@@ -30,11 +30,21 @@ def test_l2_only_segment_needs_no_instance() -> None:
     assert facts.unrouted_row_ids == frozenset({"r1"})
 
 
-def test_inline_terminated_segment_needs_no_instance() -> None:
-    """terminate_inline keeps its gateway but the fabric does not route it."""
-    facts = facts_of(raw_device("d1", "leaf-1", rows=[raw_row("r1", 100, inline=True)]))
+def test_terminated_segment_needs_no_instance_nor_svi() -> None:
+    """A row of a segment terminated on a firewall context keeps its gateway (the VIP) but is pure L2 on the fabric."""
+    row = raw_row("r1", 100, "PROD", terminated=True)
+    facts = facts_of(raw_device("d1", "leaf-1", rows=[row]))
     assert facts.demand == frozenset()
+    assert facts.routed_rows == ()
     assert facts.desired_svis() == {}
+    assert facts.unrouted_row_ids == frozenset({"r1"})
+
+
+def test_terminated_and_routed_segments_on_one_device_demand_only_the_routed_one() -> None:
+    """Only the routed row is realized by an SVI; the terminated one is bridged."""
+    rows = [raw_row("r1", 100, "PROD", "routed"), raw_row("r2", 101, "PROD", "terminated", terminated=True)]
+    facts = facts_of(raw_device("d1", "leaf-1", rows=rows))
+    assert list(facts.desired_svis()) == ["Vlan100"]
 
 
 def test_routed_row_needs_its_gateway_namespace() -> None:

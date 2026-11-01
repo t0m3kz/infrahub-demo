@@ -51,7 +51,6 @@ from utils.data_cleaning import clean_data
 from utils.limits import CUSTOMER_VLAN_ID_MAX, CUSTOMER_VLAN_ID_MIN, GROUP_PROVIDER_STUBS, GROUP_SDWAN_GATEWAYS
 from utils.vlan_domain import mlag_id
 
-from .connections import BORDER_ROLE_FOR_SERVICES
 from .protocols import DcimPhysicalDevice, ManagedMLAG, ManagedVlanDomainSegment
 
 if TYPE_CHECKING:
@@ -69,9 +68,6 @@ BORDER_GATEWAY_ROLES = frozenset({"border-leaf", "edge"})
 # router, so the zone lookup finds it. Neither terminates VXLAN segments and no generator gives it a VLAN domain,
 # so it is never a border gateway. (The missing-domain error for a real border gateway stays.)
 NON_BORDER_GATEWAY_GROUPS = frozenset({GROUP_SDWAN_GATEWAYS, GROUP_PROVIDER_STUBS})
-# Border-leaf ports facing a firewall/load-balancer: tagged with a segment
-# only by its inline termination (segment.py), never by its AppComponents.
-SERVICE_PORT_ROLES = frozenset(BORDER_ROLE_FOR_SERVICES.values())
 
 _SEGMENT_VLAN_DOMAINS_QUERY_PATH = Path(__file__).resolve().parents[1] / "queries/topology/add/segment_vlan_domains.gql"
 
@@ -245,6 +241,7 @@ class VlanDomainMixin:
         segments = cleaned.get("ManagedVxlanSegment") or []
         if not segments:
             return None
+        segments[0]["ports"] = self._segment_ports(result, segment_id)
         deployments: list[dict[str, Any]] = []
         for segment_deployment in cleaned.get("ManagedSegmentDeployment") or []:
             rows = {
@@ -260,15 +257,6 @@ class VlanDomainMixin:
                 }
             )
         return {"segment": segments[0], "deployments": deployments}
-
-    async def segment_vlan_by_device(self, segment_id: str) -> dict[str, int]:
-        """{device id: vlan_id} of the segment's rows, whatever deployment they sit under."""
-        state = await self._fetch_segment_vlan_state(segment_id)
-        return {
-            device_id: row["vlan_id"]
-            for segment_deployment in (state or {}).get("deployments", [])
-            for device_id, row in segment_deployment["rows"].items()
-        }
 
     @classmethod
     def _deployment_by_device_deployment(cls, state: dict[str, Any]) -> dict[str, str]:
@@ -287,28 +275,33 @@ class VlanDomainMixin:
         return mapping
 
     @staticmethod
-    def tagged_interface_ids(segment: dict[str, Any], *, service_ports: bool = False) -> set[str]:
-        """Ids of the switch ports (physical or port-channel) carrying the
-        segment: its customer-facing ports, or with service_ports the
-        border-leaf ports facing its inline-terminating HA pair."""
-        return {
-            iface["id"]
-            for iface in segment.get("switched_interfaces") or []
-            if iface.get("id") and (iface.get("role") in SERVICE_PORT_ROLES) == service_ports
-        }
+    def _segment_ports(result: dict[str, Any], segment_id: str) -> list[dict[str, Any]]:
+        """The switch ports (physical, port-channel) carrying the segment, read from the RAW response (clean_data
+        drops the edge's ``properties``): ``{"id", "device_id", "source_id"}``, ``source_id`` being the account that
+        wrote the port's edge to the segment, None for an edge no generator wrote (a person did)."""
+        ports: list[dict[str, Any]] = []
+        for kind in ("DcimPhysicalInterface", "DcimLAGInterface"):
+            for port_edge in (result.get(kind) or {}).get("edges") or []:
+                node = port_edge["node"]
+                edge = next((e for e in node["segments"]["edges"] if e["node"]["id"] == segment_id), None)
+                if edge is None:
+                    continue
+                source = (edge.get("properties") or {}).get("source") or {}
+                ports.append(
+                    {
+                        "id": node["id"],
+                        "device_id": ((node.get("device") or {}).get("node") or {}).get("id"),
+                        "source_id": source.get("id"),
+                    }
+                )
+        return ports
 
     async def _segment_vlan_devices(self, segment: dict[str, Any]) -> list[Any]:
         """Every device that needs a row of the segment, capabilities and deployment
         included: the devices of the switch ports tagged with it, plus — for
         a stretched segment — every border gateway of each hosting parent, plus the MLAG peer of each of them
         (a peer with no port of the segment still carries its VLAN: a dual-homed port-channel is on both)."""
-        tagged_device_ids = sorted(
-            {
-                device_id
-                for iface in segment.get("switched_interfaces") or []
-                if (device_id := (iface.get("device") or {}).get("id"))
-            }
-        )
+        tagged_device_ids = sorted({port["device_id"] for port in segment.get("ports") or [] if port.get("device_id")})
         devices: dict[str, Any] = {}
         if tagged_device_ids:
             for device in await self.client.filters(

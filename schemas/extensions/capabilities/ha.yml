@@ -160,9 +160,7 @@ nodes:
   # per customer whose design sets dedicated_firewall, plus a
   # shared context (tenant unset) for everyone else — see
   # docs/firewall_service_insertion.md's namespace-per-zone pattern, now with
-  # an explicit node instead of an implicit VDOM name. network_segment.
-  # inline_service (peer: ManagedGeneric) can target this directly, the same
-  # way it targets a bare ManagedFirewallHA today.
+  # an explicit node instead of an implicit VDOM name.
   - name: FirewallContext
     namespace: Managed
     description: "Tenant-scoped firewall context (VDOM/vsys) on a shared FirewallHA cluster"
@@ -228,6 +226,17 @@ nodes:
         optional: true
         identifier: firewall_context__served_deployments
         order_weight: 1000
+      # Reverse of ManagedVxlanSegment.terminated_on (extensions below): the segments whose gateway this context's
+      # pair owns as a floating VIP. Written only from the segment side.
+      - name: terminated_segments
+        peer: ManagedVxlanSegment
+        label: "Terminated Segments"
+        description: "Segments this context terminates: their gateway is the pair's floating VIP and the fabric only bridges them"  # yamllint disable-line rule:line-length
+        cardinality: many
+        kind: Generic
+        optional: true
+        identifier: firewall_context__terminated_segments
+        order_weight: 1050
       - name: snat_address
         peer: IpamIPAddress
         label: "SNAT Address"
@@ -589,17 +598,22 @@ nodes:
 
 extensions:
   nodes:
+    # A segment the firewall pair terminates: its `gateway` is the pair's floating VIP (no per-member address) and the
+    # fabric only bridges it (VLAN row and L2 VNI, no SVI, VRF or ACL). The firewall transform derives the
+    # `<uplink trunk>.<vlan>` sub-interface from the facing border leaf's VLAN row; the segment reconcile tags the
+    # context's border service ports with the segment (generators/topology/segment_ports.py).
     - kind: ManagedVxlanSegment
       relationships:
-        - name: inline_service
-          peer: ManagedGeneric
-          label: Inline Service
+        - name: terminated_on
+          peer: ManagedFirewallContext
+          label: Terminated On
           cardinality: one
           kind: Attribute
           optional: true
           order_weight: 3100
-          identifier: network_segment__inline_service
-          description: "Inline service (firewall or load balancer HA) terminating this segment."
+          identifier: firewall_context__terminated_segments
+          description: "Firewall context whose pair owns this segment's gateway as a floating VIP (the fabric only bridges it)."  # yamllint disable-line rule:line-length
+
     # Reverse lookup for FirewallContext.cluster (above) — lets a device
     # query find every context (shared + dedicated) on its own cluster in
     # one hop, without a name-based lookup.

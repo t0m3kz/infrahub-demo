@@ -1,4 +1,4 @@
-"""Fabric-switch fixtures: the device x platform x scenario matrix, segment ACLs, BGP hardening, inline segments."""
+"""Fabric-switch fixtures: the device x platform x scenario matrix, segment ACLs, BGP hardening, terminated segments."""
 
 from __future__ import annotations
 
@@ -392,8 +392,6 @@ def build_device_data(
         # transform skips the VxlanSegment.
         row_device_id = f"dev-{device_name}"
 
-        # microsegmented: assign firewall but still render leaf ACL
-        microseg = isolation_mode == "microsegmented"
         segment_kwargs.append(
             {
                 "vlan_id": 100,
@@ -409,7 +407,6 @@ def build_device_data(
                 "security_policy": policy_vxlan,
                 "num_deployments": 1,
                 "isolation_mode": isolation_mode,
-                "has_firewall": microseg,
                 "row_device_id": row_device_id,
                 **({"routing_identity": (12, 5)} if routing_identity else {}),
             }
@@ -503,42 +500,38 @@ def build_device_data(
     return {"DcimDevice": _edges([device_node])}
 
 
-# terminate_inline segment: gatewayed by a firewall HA pair (its gateway is
-# the pair's VIP), so every fabric switch carries it as pure L2 — VLAN + L2
-# VNI, no SVI / VRF / L3 VNI. The gateway still sits in VRF_A with an L3 VNI
-# so the fixtures prove the fabric drops both.
-_INLINE_SEGMENT_KWARGS: dict[str, Any] = {
+# A segment terminated on a firewall context: gatewayed by the context's pair (its gateway is the pair's floating VIP),
+# so every fabric switch carries it as pure L2 - VLAN + L2 VNI, no SVI / VRF / L3 VNI. The gateway still sits in VRF_A
+# with an L3 VNI so the fixtures prove the fabric drops both.
+_TERMINATED_SEGMENT_KWARGS: dict[str, Any] = {
     "vlan_id": 150,
     "vni": 10150,
-    "seg_name": "seg-inline-150",
+    "seg_name": "seg-terminated-150",
     "gateway_ip": "10.150.0.1/24",
     "ns_name": "VRF_A",
     "l3_vni": 50001,
 }
 
 
-def _make_inline_segment_node(row_device_id: str) -> dict:
-    """The terminate_inline VXLAN segment, with this device's row under its deployment."""
-    seg = _make_segment_node(**_INLINE_SEGMENT_KWARGS, row_device_id=row_device_id)
-    seg["terminate_inline"] = _v(True)
-    seg["inline_service"] = _node({"id": "fw-ha-dc1", "name": _v("dc1-fw-ha")})
+def _make_terminated_segment_node(row_device_id: str) -> dict:
+    """The VXLAN segment terminated on a firewall context, with this device's row under its deployment."""
+    seg = _make_segment_node(**_TERMINATED_SEGMENT_KWARGS, row_device_id=row_device_id)
+    seg["terminated_on"] = _node({"id": "ctx-dc1-fw-prod"})
     return seg
 
 
-def build_inline_segment_data(*, device_name: str, role: str, platform: str) -> dict:
-    """A leaf or border-leaf carrying one terminate_inline segment.
+def build_terminated_segment_data(*, device_name: str, role: str, platform: str) -> dict:
+    """A leaf or border-leaf carrying one segment terminated on a firewall context.
 
-    leaf: the segment is on the customer port (Ethernet10, access) — VLAN +
-    L2 VNI, no SVI. border-leaf: the segment is on a firewall-role service
-    port (Ethernet20) facing an HA member, which the generator tags with it —
-    rendered as a tagged trunk. Either way the segment is in the device's own
-    row (its device id).
+    leaf: the segment is on the customer port (Ethernet10, access) - VLAN + L2 VNI, no SVI. border-leaf: the segment
+    is on a firewall-role service port (Ethernet20) facing a pair member, which the segment generator tags with it -
+    rendered as a tagged trunk. Either way the segment is in the device's own row (its device id).
     """
     data = build_device_data(
         device_name=device_name, role=role, platform=platform, scenario="ebgp_ibgp", include_segments=False
     )
     device_node = data["DcimDevice"]["edges"][0]["node"]
-    seg = _make_inline_segment_node(row_device_id=device_node["id"])
+    seg = _make_terminated_segment_node(row_device_id=device_node["id"])
     interfaces = device_node["interfaces"]["edges"]
     if role == "border-leaf":
         interfaces.append(
@@ -558,7 +551,7 @@ def build_inline_segment_data(*, device_name: str, role: str, platform: str) -> 
         customer_port["segments"] = _edges([seg])
     # DC-wide view (border-leaf PBR / BGW): the same segment, still no PBR.
     device_node["deployment"]["node"]["segment_deployments"] = _edges(
-        [_deployment_record(seg, _INLINE_SEGMENT_KWARGS["vni"])]
+        [_deployment_record(seg, _TERMINATED_SEGMENT_KWARGS["vni"])]
     )
     return data
 
@@ -626,7 +619,7 @@ def _write_fixture(
 
 
 def write_fixtures() -> tuple[int, int]:
-    """Write the fabric-switch fixtures: the device x platform x scenario matrix, ACLs, BGP hardening, inline segments."""
+    """Write the fabric-switch fixtures: the device x platform x scenario matrix, ACLs, BGP hardening, terminated segments."""
     generated = errors = 0
 
     # Standard scenarios (no ACLs)
@@ -678,14 +671,14 @@ def write_fixtures() -> tuple[int, int]:
         generated += g
         errors += e
 
-    # terminate_inline segment: pure L2 on the fabric (no SVI / VRF / L3 VNI);
-    # the border-leaf trunks it tagged towards the HA pair gatewaying it.
-    print("\nGenerating inline-terminated segment fixtures (leaf, border-leaf):")
+    # Segment terminated on a firewall context: pure L2 on the fabric (no SVI / VRF / L3 VNI);
+    # the border-leaf trunks it on the service port facing the pair gatewaying it.
+    print("\nGenerating terminated segment fixtures (leaf, border-leaf):")
     g, e = write_data_fixtures(
         (
             transform_cls,
-            f"{type_prefix}_{platform}_inline_segment",
-            build_inline_segment_data(
+            f"{type_prefix}_{platform}_terminated_segment",
+            build_terminated_segment_data(
                 device_name=f"dc1-{type_prefix.replace('_', '-')}-01", role=role, platform=platform
             ),
         )

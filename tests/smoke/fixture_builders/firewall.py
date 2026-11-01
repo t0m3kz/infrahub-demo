@@ -82,7 +82,7 @@ def _make_firewall_interface(
             }
         ),
         "ha_domain": _node(None),
-        "inline_segment": _node(seg_node),
+        "segments": _edges([seg_node]),
         "capabilities": _edges([]),
     }
 
@@ -650,39 +650,6 @@ def build_firewall_ha_data(*, device_name: str, platform: str) -> dict:
     return data
 
 
-def build_firewall_inline_data(*, device_name: str, platform: str) -> dict:
-    """Firewall HA pair (device = primary member) terminating a segment inline.
-
-    Adds ethernet1/1.210 carrying a terminate_inline VXLAN segment whose
-    inline_service is this HA pair: the member's own address is 10.1.0.2/24,
-    the secondary's 10.1.0.3/24, and the segment gateway 10.1.0.1/24 is the
-    pair's virtual IP.
-    """
-    data = build_firewall_ha_data(device_name=device_name, platform=platform)
-    inline_iface = _make_firewall_interface(
-        name="ethernet1/1.210",
-        ip_address="10.1.0.1/24",
-        zone_name="web",
-        trust_level=60,
-        description="Inline web segment",
-        vlan_id=210,
-        parent_interface_name="ethernet1/1",
-        namespace_name="PROD",
-    )
-    inline_iface["ip_address"] = _node({"address": _v("10.1.0.2/24"), "ip_namespace": _node({"name": _v("PROD")})})
-    segment = inline_iface["inline_segment"]["node"]
-    segment["terminate_inline"] = _v(True)
-    segment["inline_service"] = _node({"id": "ha-1", "name": _v("dc1-fw-ha")})
-    segment["capabilities"] = _edges(
-        [
-            {"device": _node({"name": _v("dc1-fw-01")}), "ip_address": _node({"address": _v("10.1.0.2/24")})},
-            {"device": _node({"name": _v("dc1-fw-02")}), "ip_address": _node({"address": _v("10.1.0.3/24")})},
-        ]
-    )
-    data["DcimPhysicalDevice"]["edges"][0]["node"]["interfaces"]["edges"].append({"node": inline_iface})
-    return data
-
-
 def write_fixtures() -> tuple[int, int]:
     """Write the firewall fixtures, and the leaf fixtures of the firewall-context features (permit, PBR, LB client)."""
     generated = errors = 0
@@ -737,19 +704,6 @@ def write_fixtures() -> tuple[int, int]:
     g, e = write_data_fixtures(
         (Firewall, f"firewall_{platform}_with_ha", build_firewall_ha_data(device_name="dc1-fw-01", platform=platform))
         for platform in FIREWALL_PLATFORMS
-    )
-    generated += g
-    errors += e
-
-    # Firewall HA pair terminating a segment inline: virtual IP + standby per vendor
-    print("\nGenerating firewall inline-segment fixtures:")
-    g, e = write_data_fixtures(
-        (
-            Firewall,
-            f"firewall_{platform}_inline_segment",
-            build_firewall_inline_data(device_name="dc1-fw-01", platform=platform),
-        )
-        for platform in [*FIREWALL_PLATFORMS, "juniper_junos"]
     )
     generated += g
     errors += e

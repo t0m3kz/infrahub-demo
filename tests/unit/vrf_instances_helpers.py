@@ -32,15 +32,18 @@ def address(addr: str, namespace: str, namespace_type: str | None = None) -> dic
 
 
 def raw_row(
-    row_id: str, vlan_id: int, namespace: str | None = "PROD", segment: str = "seg", inline: bool = False
+    row_id: str, vlan_id: int, namespace: str | None = "PROD", segment: str = "seg", *, terminated: bool = False
 ) -> dict[str, Any]:
-    """A ManagedVlanDomainSegment row; ``namespace`` None means a segment without a gateway (pure L2)."""
+    """A ManagedVlanDomainSegment row; ``namespace`` None means a segment without a gateway (pure L2).
+
+    ``terminated`` is a segment terminated on a firewall context: it keeps its gateway (the pair's VIP) and is pure
+    L2 on the fabric all the same."""
     seg: dict[str, Any] = {
         "__typename": "ManagedVxlanSegment",
         "id": f"seg-{segment}",
         "name": {"value": segment},
-        "terminate_inline": {"value": inline},
         "gateway": None,
+        "terminated_on": {"node": {"id": "ctx-1"}} if terminated else None,
     }
     if namespace:
         seg["gateway"] = {

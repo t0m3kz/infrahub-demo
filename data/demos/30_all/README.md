@@ -189,6 +189,17 @@ every zone of its metro that has a firewall pair, one shared firewall context pe
 so `C001-P-FR` and `C005-P-FR` share the context of its HA cluster). A metro whose zones have no firewalls gives its
 footprints no context.
 
+### A Segment Terminated on a Firewall Context
+
+Every other DC segment is routed by the fabric. C005's `firewalled-dc10` (`07_applications/c005/00_segments.yml`)
+names DC10's shared PROD firewall context in `terminated_on` (`shared-fw-dc10101-fw-dc10102-prod`: the context is
+generated when C005-P-DC10 is boarded, in an earlier stage, so the name is the one the generators derive from the
+firewall pair). The firewall pair is its default gateway: the gateway (the `.1` the segment generator allocates from
+`Tenant-PROD-IPv4`, as for every DC segment) is the pair's floating VIP, the border leaves only bridge the segment (a
+VLAN, the L2 VNI, a tagged trunk on the service ports facing the pair, no SVI) and each firewall member renders the
+`<uplink trunk>.<vlan>` sub-interface with the VLAN of the border leaf it is cabled to. `test_64c` asserts the three
+sides on the loaded branch.
+
 ### Equinix Network Edge (AM-NE)
 
 `AM-NE` hosts two `CloudNetworkAppliance` routers, `eg-am-ne01` and `eg-am-ne02` (template `C8000V_EDGE`, Cisco

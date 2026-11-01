@@ -178,15 +178,6 @@ class TestScope:
         }
         assert {group["name"]: group["vlan_id"] for group in access["groups"] if group["vlan_id"]} == {"app-np": 777}
 
-    def test_an_inline_terminated_segment_is_not_classified_by_vlan(self) -> None:
-        roots = _roots()
-        view = _view(
-            roots,
-            activations=[{"vlan_id": 110, "segment": {"id": "seg-web-np", "terminate_inline": True}}],
-        )
-        assert view is not None
-        assert next(group for group in view["groups"] if group["name"] == "web-np")["vlan_id"] is None
-
     def test_only_the_vrfs_the_device_carries_are_rendered(self) -> None:
         view = _view(_roots(), vrfs=["NONPROD"])
         assert view is not None
@@ -427,15 +418,6 @@ class TestEnforcement:
         assert view is not None
         assert view["vrfs"]["NONPROD"]["unenforced"] == "segment app-np has no group classifier on this device"
         assert view["vrfs"]["NONPROD"]["enforce_tag"] is None
-
-    def test_an_inline_terminated_segment_leaves_its_vrf_unenforced(self) -> None:
-        activations = [
-            {**item, "segment": {**item["segment"], "terminate_inline": True}} if item["vlan_id"] == 110 else item
-            for item in LEAF_ACTIVATIONS
-        ]
-        view = _view(_roots(), activations=activations)
-        assert view is not None
-        assert view["vrfs"]["NONPROD"]["unenforced"] == "segment web-np has no group classifier on this device"
 
     def test_every_segment_without_a_classifier_is_named(self) -> None:
         view = _view(

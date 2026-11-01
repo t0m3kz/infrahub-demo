@@ -134,7 +134,8 @@ fragment VrfDemandRowFields on ManagedVlanDomainSegment {
           id
           ... on ManagedVxlanSegment {
             name { value }
-            terminate_inline { value }
+            # A terminated segment is pure L2 on the fabric: its row is no routed row (utils/vrf_demand.py).
+            terminated_on { node { id } }
           }
           gateway { node { address { value } ip_prefix { node { ip_namespace { node { name { value } } } } } } }
         }

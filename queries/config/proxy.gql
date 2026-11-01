@@ -101,7 +101,6 @@ query proxy_config($device: String!) {
               ... on DcimVirtualInterface {
                 ip_address { node { address { value } ip_namespace { node { name { value } } } } }
                 parent_interface { node { name { value } } }
-                inline_segment { node { __typename ...InlineTerminationFields } }
               }
             }
           }

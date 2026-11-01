@@ -2,8 +2,7 @@
 
 There is no ``l2_mode`` attribute: the layer of a port is its content.
 
-* An L2 tag on a switch port (physical or LAG) is its ``segments`` (switchport membership, ManagedVxlanSegment
-  ``switched_interfaces``) or a firewall / load-balancer context in its ``capabilities``.
+* An L2 tag on a switch port (physical or LAG) is its ``segments`` edge (switchport membership, one-sided, ManagedVxlanSegment) or a firewall / load-balancer context in its ``capabilities``.
 * An L3 signal is an ``ip_address``, any ``sub_interfaces``, or a routing capability (a BGP or OSPF session, an OSPF
   interface, a routed exchange, an interconnect, tunnel or handoff circuit). A carrier circuit is L1 and never a signal.
 
@@ -13,8 +12,7 @@ Rules:
 * R2 a LAG member (``lag`` set) has an L2 tag or an L3 signal: its LAG carries them;
 
 A segment cannot sit in the ``capabilities`` of a port: ManagedVxlanSegment does not inherit the interface-edge generic
-(tests/unit/test_capability_edge_names.py), so switchport membership is only ``segments``. The inline termination on a
-virtual sub-interface is ``inline_segment`` (rule 6 of checks/interface_parents.py).
+(tests/unit/test_capability_edge_names.py), so switchport membership is only ``segments``.
 """
 
 from __future__ import annotations
