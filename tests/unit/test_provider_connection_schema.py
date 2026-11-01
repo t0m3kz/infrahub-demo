@@ -295,3 +295,33 @@ def test_the_unread_owner_relationships_are_gone(path: Path, kind: str) -> None:
     node = _node(path, kind)
 
     assert "owner" not in [r["name"] for r in node.get("relationships") or []]
+
+
+def test_a_facility_lists_the_connections_that_start_or_land_in_it() -> None:
+    """The two ends of a connection are two edges; the Facility generic lists each back on the same identifier, so a
+    cloud region, a SaaS region and a colocation zone show their connections (all of them inherit the generic)."""
+    facility = next(g for g in _document(_CONNECTIVITY_FILE)["generics"] if g["name"] == "Facility")
+    connection = {r["name"]: r for r in _relationships()}
+
+    for end, back in (("near", "near_connections"), ("far", "far_connections")):
+        listed = _field(facility["relationships"], back)
+
+        assert (listed["peer"], listed["cardinality"], listed["kind"]) == (
+            "TopologyProviderConnection",
+            "many",
+            "Generic",
+        )
+        assert listed["identifier"] == connection[end]["identifier"], back
+
+
+def test_a_customer_lists_the_cloud_accounts_it_owns_on_the_owner_edge() -> None:
+    """The customer's list is the other end of CloudAccount.owner (the default identifier of that edge), so no second
+    owner field exists and the list cannot disagree with the account."""
+    cloud = _TOPOLOGY / "topology_cloud.yml"
+    account = _field(_node(cloud, "Account")["relationships"], "owner")
+    customer = next(e for e in _document(cloud)["extensions"]["nodes"] if e["kind"] == "OrganizationCustomer")
+    listed = _field(customer["relationships"], "cloud_accounts")
+
+    assert (listed["peer"], listed["cardinality"]) == ("CloudAccount", "many")
+    assert account["peer"] == "OrganizationEntity" and "identifier" not in account
+    assert listed["identifier"] == "cloudaccount__organizationentity"

@@ -694,7 +694,7 @@ class MyCheck(InfrahubCheck):
 - **What a deployment hosts is typed by its kind**: a device's `deployment` is its host's, and each kind of host has a generic
   of its own, so the picker and the schema refuse the rest. `TopologyDeviceHosting` (DC, pod, colocation zone, office,
   external provider, cloud region for the provider routers) lists the physical devices and controllers;
-  `TopologyApplianceHosting` (virtual colocation, customer cloud) lists its `appliances` (`CloudNetworkAppliance`, identifier
+  `TopologyApplianceHosting` (virtual colocation, SaaS region) lists its `appliances` (`CloudNetworkAppliance`, identifier
   `topology__appliances`); `TopologyCloudHosting` (customer cloud) lists its `instances` (`CloudInstance`, the EC2 of the
   tenant). A virtual device keeps `deployment` on the `TopologyDeployment` generic: it runs for a customer footprint. The
   colocation metro hosts nothing and cables nothing. `LocationRack.deployment` (peer `TopologyRackHosting`: a pod or a colocation

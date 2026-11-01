@@ -39,6 +39,27 @@ generics:
       - name: name
         kind: Text
         order_weight: 100
+    relationships:
+      # The provider connections that start here (a data center, a colocation zone) or land here (a cloud region, a
+      # SaaS region). Two lists because the two ends are two edges of the connection; the connection declares them.
+      - name: near_connections
+        label: Provider Connections (near)
+        peer: TopologyProviderConnection
+        kind: Generic
+        cardinality: many
+        optional: true
+        identifier: provider_connection__near
+        order_weight: 2200
+        description: "Provider connections that start in this facility"
+      - name: far_connections
+        label: Provider Connections (far)
+        peer: TopologyProviderConnection
+        kind: Generic
+        cardinality: many
+        optional: true
+        identifier: provider_connection__far
+        order_weight: 2250
+        description: "Provider connections that land in this facility"
 
   - name: Circuit
     namespace: Topology

@@ -109,7 +109,7 @@ nodes:
           max_value: 4094
     relationships:
       # Both ends are facilities, never a pod, rack or tenant footprint, as a carrier circuit's locations are.
-      # One-sided: a facility lists no connections; the reverse walk is the filter near__ids / far__ids.
+      # A facility lists them back: near_connections and far_connections on TopologyFacility.
       - name: near
         label: Near Facility
         peer: TopologyFacility

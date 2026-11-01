@@ -411,7 +411,6 @@ nodes:
       - TopologyOrchestratorScoped
       - TopologyDeployment
       - TopologyCloudHosting
-      - TopologyApplianceHosting
       - TopologyConnectableLocation
     parent: TopologyCloudRegion
     children: ""

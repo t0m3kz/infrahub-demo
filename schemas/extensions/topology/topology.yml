@@ -73,8 +73,8 @@ generics:
         order_weight: 1200
         on_delete: cascade
 
-  # Where a provider-hosted network function (a CloudNetworkAppliance) can be deployed: the virtual colocation it is
-  # rented in, or the cloud footprint of a customer. A relationship peer, so it carries a name and an hfid as
+  # Where a provider-hosted network function (a CloudNetworkAppliance) can be deployed: the virtual colocation or the
+  # SaaS region it is rented in. A relationship peer, so it carries a name and an hfid as
   # DeviceHosting does. Not DeviceHosting: a deployment of this kind has no physical or virtual device of ours, only
   # what the provider hosts for us, so its link is typed to the appliance and not to any DcimDevice.
   - name: ApplianceHosting
@@ -99,7 +99,8 @@ generics:
   # The provider account a provider-hosted presence's appliances are ordered under: its account_id is the billing
   # account number, its provider the operator, and its owner's notification_emails receive the provider's order
   # notices. One declaration for every provider-hosted presence (a virtual colocation, a SaaS region). Not on
-  # ApplianceHosting: a customer cloud is hosted too, but its accounts are the CloudAccounts it is built from.
+  # ApplianceHosting: a customer cloud is not a provider-hosted function: it hosts instances, and its accounts are the
+  # CloudAccounts it is built from.
   # Optional because only a presence whose provider order needs it (a billing account) has one
   # (checks/colocation_placement.py).
   - name: BilledAccount

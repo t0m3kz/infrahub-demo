@@ -425,7 +425,7 @@ class TestCloudNetworkAppliance:
         self,
     ) -> None:
         """TopologyApplianceHosting.appliances lists the appliances through the identifier of their own. The peer is the
-        generic TopologyApplianceHosting (the virtual colocation or the customer cloud a provider function is rented
+        generic TopologyApplianceHosting (the virtual colocation or the SaaS region a provider function is rented
         in), so the schema refuses any other deployment and the picker offers nothing else. A query that selects
         `deployment` across the device kinds spreads fragments per kind, and a fragment for a kind that peer cannot
         be (a zone) is a schema error. A physical device (and a physical controller) is deployed to a
@@ -465,7 +465,7 @@ class TestCloudNetworkAppliance:
             for node in _document(path).get("nodes") or []
             if "TopologyApplianceHosting" in (node.get("inherit_from") or [])
         ]
-        assert sorted(inheritors) == ["CustomerCloud", "SaasRegion", "VirtualColocation"]
+        assert sorted(inheritors) == ["SaasRegion", "VirtualColocation"]
         appliances = next(r for r in generic["relationships"] if r["name"] == "appliances")
         assert (appliances["peer"], appliances["cardinality"], appliances["identifier"]) == (
             "CloudNetworkAppliance",
