@@ -4,19 +4,52 @@
 cases:
   - name: cloud_saas_model
     schema: schemas
+    # loaded in this order. A directory with its own sentinel (a kind and a name that exist only after it was loaded)
+    # is skipped when the branch already inherits it from main: the additions load on top of a stack holding the base.
     data:
       - data/demos/cloud_saas_model
+      - path: data/demos/cloud_saas_model_pod
+        sentinel: {kind: DcimPhysicalDevice, name: dc90-leaf-02}
+      - path: data/demos/cloud_saas_model_internet
+        sentinel: {kind: ManagedBGPPeering, name: BGP-DC90-EDGE01-ISP-DEMO}
+      - path: data/demos/cloud_saas_model_pairs
+        sentinel: {kind: CloudVirtualNetwork, name: vpc-c900-isolated}
     # present on the branch only when the data was loaded (or already sits on main): used to skip a duplicate load
     sentinel:
       kind: ManagedVxlanSegment
       name: c900-demo-web-p
+    # steps after the object files: modules with `async apply(client, branch) -> str` (idempotent)
+    after_load:
+      - data/demos/cloud_saas_model_pod/vlan_row.py
     # python module with `load(client, branch) -> dict` and `main_walk(d, dc, cloud, quiet) -> dict`
     tracer: data/demos/cloud_saas_model/trace.py
+    # the small pod in front of the edge: server (bond0) -> vPC leaf pair -> spine -> border leaves -> edge
+    pod:
+      server: dc90-srv-01
+      bond: bond0
+      leaves: [dc90-leaf-01, dc90-leaf-02]
+      edge: dc90-edge-01
+      segment: c900-demo-web-p
+      mlag: dc90-mlag-01
+      # 4 = 2 leaves x 1 spine x 2 border leaves; +1 = the direct uplink leaf-01 -> panel -> edge of the base sample
+      l1_paths_to_edge: 5
+      l1_paths_via_spine: 4
+    # the INTERNET scenario: edge -> internet carrier -> ISP router -> internet -> a SaaS and a cloud public service
+    internet:
+      edge: dc90-edge-01
+      edge_port: Ethernet1/2
+      isp_device: EXT-ISP-DEMO-PE1
+      isp_port: et-0/0/0
+      isp_provider: P014
+      namespace: INTERNET
+      targets:
+        - {endpoint: s3-public, prefix: 192.0.2.0/24, kind: cloud}
+        - {endpoint: webex-public, prefix: 203.0.113.0/24, kind: saas}
     pairs:
       - dc_segment: c900-demo-web-p
         cloud_segment: c900-demo-subnet-p
         golden: cloud_saas_model__c900-demo-web-p__c900-demo-subnet-p.txt
-        # legs per carrier type (L1) and per session circuit type (L3)
+        # legs per carrier type (L1) and per session circuit type (L3, a session circuit counted once)
         l1_legs:
           internet: 2
           cross_connect: 4
@@ -32,4 +65,47 @@ cases:
         # the graph kinds (keys of the tracer's `load`) that must not be empty
         non_empty:
           [seg, iface, front, rear, carrier, session, vif, lag, dx, peer, vpn, gw, att, sep, vnet, csg, inst, bgp,
-           peering]
+           peering, dev, mlag, vrf, prefix]
+      # DC -> cloud through the AWS VPN tunnels only: the internet carrier and the two tunnels, no handoff leg
+      - dc_segment: c900-demo-web-p
+        cloud_segment: c900-demo-subnet-p
+        via: [CloudVPNConnection]
+        golden: cloud_saas_model__web__subnet__vpn-only.txt
+        l1_legs: {internet: 2}
+        l3_legs: {vpn: 2}
+        far_end_kinds: [CloudVPNConnection]
+        transport_kinds:
+          vpn-c900-aws-euc1: [vif]
+      # DC -> SaaS over a private cross-connect and a BGP handoff (Webex)
+      - dc_segment: c900-demo-web-p
+        saas_region: WEBEX-FRANKFURT
+        golden: cloud_saas_model__web__saas-webex.txt
+        l1_legs: {cross_connect: 1}
+        l3_legs: {handoff: 1}
+        far_end_kinds: [CloudDirectConnect]
+        transport_kinds:
+          webex-c900-fra-xc: [port, vif]
+      # DC -> SaaS over a tunnel on the internet carrier, no session (Zscaler)
+      - dc_segment: c900-demo-web-p
+        saas_region: ZSCALER-MUNICH I
+        golden: cloud_saas_model__web__saas-zscaler.txt
+        l1_legs: {internet: 1}
+        l3_legs: {tunnel: 1}
+        far_end_kinds: [CloudVPNConnection]
+        transport_kinds:
+          zscaler-c900-muc: [vif]
+      # cloud <-> cloud: the spoke VNet has no gateway of its own, the DC reaches it across `peers` of the hub VNet
+      - dc_segment: c900-demo-web-p
+        cloud_segment: c900-demo-spoke-p
+        golden: cloud_saas_model__web__spoke.txt
+        reverse: false
+        l1_legs: {virtual_connection: 2}
+        l3_legs: {handoff: 2}
+        far_end_kinds: [CloudDirectConnect]
+      # negative: a segment in a VPC with no attachment is reached by nothing, and the walk says exactly that
+      - dc_segment: c900-demo-web-p
+        cloud_segment: c900-demo-isolated-p
+        expect_unreachable: true
+        expect_missing:
+          - "L1: no physical path found"
+          - "L3: no routed path found"

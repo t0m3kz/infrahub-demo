@@ -1,0 +1,20 @@
+---
+# The INTERNET scenario: no private circuit and no tunnel. Our edge port Ethernet1/2 already rides the internet carrier
+# INET-DC90-ISP-DEMO to the ISP router EXT-ISP-DEMO-PE1 (data/demos/cloud_saas_model). Here the edge and the ISP router
+# get an address and an eBGP session in the INTERNET namespace, and two public ranges stand for the services behind
+# the ISP. Documentation ranges only (RFC 5737 / RFC 5398).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingAutonomousSystem
+  data:
+    - {asn: 64496, owner: "P014", description: "ISP-DEMO (documentation AS)"}
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamPrefix
+  data:
+    - {prefix: "198.51.100.10/31", ip_namespace: "INTERNET", status: active, description: "Transit: dc90-edge-01 to EXT-ISP-DEMO-PE1"}  # yamllint disable-line rule:line-length
+    - {prefix: "192.0.2.0/24", ip_namespace: "INTERNET", status: active, description: "Public range of the object store API in eu-central-1 (cloud public endpoint s3-public)"}  # yamllint disable-line rule:line-length
+    - {prefix: "203.0.113.0/24", ip_namespace: "INTERNET", status: active, description: "Public range of Webex Frankfurt (SaaS public service webex-public)"}  # yamllint disable-line rule:line-length

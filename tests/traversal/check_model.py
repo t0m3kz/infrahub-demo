@@ -25,6 +25,10 @@ import yaml
 from infrahub_sdk import Config, InfrahubClient
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+
+from tests.traversal import walks  # noqa: E402 - needs ROOT on the path (the script runs from its own directory)
+
 GOLDEN_DIR = Path(__file__).resolve().parent / "golden"
 CASES_FILE = Path(__file__).resolve().parent / "cases.yml"
 DEFAULT_TOKEN = "06438eb2-8019-4776-878c-0941b1f1d1ec"  # noqa: S105 - the local test stack's demo token
@@ -140,23 +144,48 @@ def first_broken_hop(leg_hops: list[str]) -> str:
     return leg_hops[-1] if leg_hops else "(no hop)"
 
 
+def count_legs(legs: list[dict], layer: str) -> Counter[str]:
+    """Legs per type. An L3 leg is counted once per session circuit: every leaf of the pod reaches it."""
+    counted: Counter[str] = Counter()
+    if layer == "l1":
+        for leg in legs:
+            counted[leg["carrier_type"]] += 1
+        return counted
+    circuits = {tuple(leg["session_circuits"]): leg["session_types"] for leg in legs}
+    for types in circuits.values():
+        counted.update(types)
+    return counted
+
+
+def check_unreachable(rep: Report, tag: str, pair: dict, result: dict[str, Any]) -> None:
+    """The negative pair: nothing reaches the segment, and the walk says so with the expected messages."""
+    want = sorted(pair["expect_missing"])
+    rep.add(f"[{tag}] unreachable: no L1 and no L3 leg", not result["l1"] and not result["l3"], "a leg reached it")
+    rep.add(
+        f"[{tag}] unreachable: the walk reports exactly {want}",
+        sorted(result["missing"]) == want,
+        str(result["missing"]),
+    )
+
+
 def check_pair(rep: Report, case: dict, pair: dict, tracer: ModuleType, d: dict, update_golden: bool) -> None:
-    dc, cloud = pair["dc_segment"], pair["cloud_segment"]
-    tag = f"{dc} -> {cloud}"
+    dc, cloud, saas = pair["dc_segment"], pair.get("cloud_segment"), pair.get("saas_region")
+    tag = f"{dc} -> {cloud or 'SaaS ' + str(saas)}" + (f" via {','.join(pair['via'])}" if pair.get("via") else "")
     empty = [k for k in pair.get("non_empty", []) if not d.get(k)]
     rep.add(f"[{tag}] every object kind of the model non-empty", not empty, f"empty: {empty}")
-    result = tracer.main_walk(d, dc, cloud, quiet=True)
+    via = tuple(pair["via"]) if pair.get("via") else None
+    result = tracer.main_walk(d, dc, cloud, quiet=True, via=via, saas=saas)
+    if pair.get("expect_unreachable"):
+        check_unreachable(rep, tag, pair, result)
+        return
     missing = result["missing"]
     rep.add(f"[{tag}] no hop marked missing", not missing, "\n".join(missing))
     for layer, expected_key, field in (("l1", "l1_legs", "carrier_type"), ("l3", "l3_legs", "session_types")):
         legs = result[layer]
         rep.add(f"[{tag}] {layer.upper()} reaches the cloud segment", bool(legs), "no leg reaches it")
-        counted: Counter[str] = Counter()
-        for leg in legs:
-            for kind in leg[field] if isinstance(leg[field], list) else [leg[field]]:
-                counted[kind] += 1
-        want = pair.get(expected_key) or {}
-        if want:
+        counted = count_legs(legs, layer)
+        want = pair.get(expected_key)
+        if want is not None:
             rep.add(
                 f"[{tag}] {layer.upper()} legs per {'carrier' if layer == 'l1' else 'session circuit'} type",
                 dict(counted) == want,
@@ -181,15 +210,17 @@ def check_pair(rep: Report, case: dict, pair: dict, tracer: ModuleType, d: dict,
         lacking = [k for k in wanted if not held.get(k)]
         rep.add(f"[{tag}] transport {name} holds {', '.join(wanted)}", not lacking, f"empty: {lacking} in {held}")
     # reverse: from the cloud segment's virtual network, every peering that lands in it is reached from the DC segment
-    csg = next((s for s in d["csg"] if s["name"]["value"] == cloud), None)
-    vname = ((csg or {}).get("virtual_network") or {}).get("node", {}).get("name", {}).get("value")
-    reverse = {p["name"] for p in result["peerings"] if vname and f"virtual network {vname}" in (p["lands"] or "")}
-    forward = {leg["peering"] for leg in result["l1"]} | {leg["peering"] for leg in result["l3"]}
-    rep.add(
-        f"[{cloud} -> {dc}] reverse: peerings landing in {vname} are the ones the DC reaches",
-        bool(reverse) and reverse == forward,
-        f"only from the cloud side: {sorted(reverse - forward)}; only from the DC side: {sorted(forward - reverse)}",
-    )
+    # (only for a pair with all its transports: a pair restricted to some transports reaches fewer on purpose)
+    if cloud and not via and pair.get("reverse", True):
+        csg = next((s for s in d["csg"] if s["name"]["value"] == cloud), None)
+        vname = ((csg or {}).get("virtual_network") or {}).get("node", {}).get("name", {}).get("value")
+        reverse = {p["name"] for p in result["peerings"] if vname and f"virtual network {vname}" in (p["lands"] or "")}
+        forward = {leg["peering"] for leg in result["l1"]} | {leg["peering"] for leg in result["l3"]}
+        rep.add(
+            f"[{cloud} -> {dc}] reverse: peerings landing in {vname} are the ones the DC reaches",
+            bool(reverse) and reverse == forward,
+            f"only from the cloud side: {sorted(reverse - forward)}; only from the DC side: {sorted(forward - reverse)}",
+        )
     golden = GOLDEN_DIR / pair["golden"]
     text = render_golden(result)
     if update_golden:
@@ -233,24 +264,41 @@ async def run_case(
         lap(f"schema loaded (exit {schema.returncode})")
         if not ok:
             return
-        present = await sentinel_present(client, branch, case["sentinel"])
-        if present and not args.force_load:
-            say("  UWAGA: dane przykladowe sa juz na main (galaz je dziedziczy): ladowanie pominiete, bo zdublowaloby")
-            say("         zagniezdzone segment_deployments. Nie sprawdzono, czy pliki danych sie laduja;")
-            say("         pelny test ladowania: --rebuild (czysty stos bez danych przykladowych).")
-            rep.add(f"[{case['name']}] data load", True, "note: skipped, inherited from main")
-        else:
-            for data_dir in case["data"]:
-                load = run(["uv", "run", "infrahubctl", "object", "load", data_dir, "--branch", branch], env)
-                rep.add(f"[{case['name']}] data load {data_dir}", load.returncode == 0, tail(load.stdout + load.stderr))
-                lap(f"data loaded {data_dir} (exit {load.returncode})")
-                if load.returncode != 0:
-                    return
+        for entry in case["data"]:
+            data_dir, sentinel = (
+                (entry, case["sentinel"]) if isinstance(entry, str) else (entry["path"], entry["sentinel"])
+            )
+            if await sentinel_present(client, branch, sentinel) and not args.force_load:
+                say(
+                    f"  data {data_dir} is already on main (the branch inherits it): load skipped, its sentinel is there"
+                )
+                rep.add(f"[{case['name']}] data load {data_dir}", True, "note: skipped, inherited from main")
+                continue
+            load = run(["uv", "run", "infrahubctl", "object", "load", data_dir, "--branch", branch], env)
+            rep.add(f"[{case['name']}] data load {data_dir}", load.returncode == 0, tail(load.stdout + load.stderr))
+            lap(f"data loaded {data_dir} (exit {load.returncode})")
+            if load.returncode != 0:
+                return
+        for hook in case.get("after_load", []):
+            done = await load_tracer(ROOT / hook).apply(client, branch)
+            rep.add(f"[{case['name']}] after_load {hook}", True, f"note: {done}")
+            lap(f"after_load {hook}: {done}")
         tracer = load_tracer(ROOT / case["tracer"])
         d = await tracer.load(client, branch)
         lap("graph read")
         for pair in case["pairs"]:
             check_pair(rep, case, pair, tracer, d, args.update_golden)
+        if case.get("pod"):
+            for row in walks.pod_rows(d, case["pod"]):
+                rep.add(*row)
+        if case.get("internet"):
+            for row in walks.internet_rows(d, case["internet"]):
+                rep.add(*row)
+        declared = walks.declared_rides_on(
+            [s for p in case["data"] for s in walks.yaml_documents(ROOT / (p if isinstance(p, str) else p["path"]))]
+        )
+        for row in walks.rides_on_rows(d, declared):
+            rep.add(*row)
         lap("asserted")
     finally:
         if args.keep_branch:

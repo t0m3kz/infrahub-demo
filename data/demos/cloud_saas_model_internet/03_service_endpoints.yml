@@ -1,0 +1,25 @@
+---
+# The two targets behind the ISP, as service endpoints with access `address`: a cloud public endpoint (the object store
+# API of the AWS account) and a SaaS public service (Webex). CloudServiceEndpoint has no address of its own and must
+# sit in a virtual network, so each hangs on vpc-c900-prod and is paired with its public range in the INTERNET namespace
+# (00_ipam_asn.yml) by name and description only: the schema has no edge between the two.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudServiceEndpoint
+  data:
+    - name: "s3-public"
+      description: "Object store API of eu-central-1 over its public range 192.0.2.0/24, through the internet (no VPN, no endpoint in the VPC)"  # yamllint disable-line rule:line-length
+      status: active
+      service_name: "s3"
+      access: address
+      virtual_network: "vpc-c900-prod"
+      provider: "P004"
+    - name: "webex-public"
+      description: "Webex Frankfurt over its public range 203.0.113.0/24, through the internet (no tunnel, no private peering)"  # yamllint disable-line rule:line-length
+      status: active
+      service_name: "webex"
+      access: address
+      virtual_network: "vpc-c900-prod"
+      provider: "P901"
+      saas_region: "WEBEX-FRANKFURT"

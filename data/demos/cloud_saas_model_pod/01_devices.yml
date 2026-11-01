@@ -1,0 +1,28 @@
+---
+# The pod: a second leaf (the MLAG/vPC peer of dc90-leaf-01), one spine, two border leaves and one server. Devices come
+# from bootstrap templates (their interfaces with them). All in DC90, which hosts devices directly; nothing generated.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: "dc90-leaf-02"
+      object_template: N9K-C9364C-GX_LEAF_MR
+      description: "Leaf, vPC peer of dc90-leaf-01"
+      deployment: "DC90"
+    - name: "dc90-spine-01"
+      object_template: N9K-C9336C-FX2_SPINE
+      description: "Spine: leaf-01/02 on Ethernet1/1-2, border leaves on Ethernet1/3-4"
+      deployment: "DC90"
+    - name: "dc90-bl-01"
+      object_template: N9K-C9336C-FX2_BORDER_LEAF
+      description: "Border leaf 1: spine on Ethernet1/33, edge through the patch panel (jack 2)"
+      deployment: "DC90"
+    - name: "dc90-bl-02"
+      object_template: N9K-C9336C-FX2_BORDER_LEAF
+      description: "Border leaf 2: spine on Ethernet1/33, edge on a direct cable"
+      deployment: "DC90"
+    - name: "dc90-srv-01"
+      object_template: PowerEdge-R640_SERVER
+      description: "Server of the tenant, bond0 over eno1 and eno2, dual-homed to the vPC pair"
+      deployment: "DC90"

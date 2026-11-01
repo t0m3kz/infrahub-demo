@@ -10,7 +10,7 @@ R2  a route table belongs to a ``hub`` gateway, and an attachment's route tables
 R3  ``rides_on``: no loop; a physical transport rides only on a physical one; a logical transport that rides on a
     transport of ours has no ``partner_account``
 R4  a service endpoint's segments belong to the endpoint's virtual network; a tunnel key needs an IPsec tunnel
-R5  a crypto profile belongs to an IPsec tunnel
+R5  a crypto profile belongs to an IPsec tunnel, and an IPsec tunnel has one (GRE has none, a key only with IPsec)
 R6  a VPN tunnel has the provider's ``endpoint_ip`` and is an interface of a VPN connection
 R7  every interface of a transport is on that transport: the members of its LAG and the ``parent_interface`` of its
     peering (the server refuses the first, not the one-sided second)
@@ -180,6 +180,12 @@ class CheckCloudConnection(InfrahubCheck):
                 PEERING,
                 f"R5: peering '{_name(peering)}' has a crypto_profile but tunnel_mode '{peering.get('tunnel_mode')}': "
                 "a crypto profile belongs to an IPsec tunnel.",
+            )
+        elif peering.get("tunnel_mode") == IPSEC and not peering.get("crypto_profile"):
+            self._error(
+                peering,
+                PEERING,
+                f"R5: peering '{_name(peering)}' is an IPsec tunnel with no crypto_profile: set the IKE/ESP profile.",
             )
 
     def _r7_lag_members(self, lag: dict[str, Any], transport: dict[str, Any]) -> None:

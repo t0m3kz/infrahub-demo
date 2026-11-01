@@ -266,6 +266,30 @@ class TestR5CryptoProfile:
             )
             assert len(errors) == 1 and "R5" in errors[0]
 
+    def test_an_ipsec_tunnel_without_a_profile_fails(self) -> None:
+        """IPsec needs the IKE/ESP profile, with or without a key."""
+        errors = _run(
+            CloudDirectConnect=[_transport("dx")],
+            CloudPeeringInterface=[_peering(tunnel_mode=_v("ipsec"), tunnel_key=_node("key"))],
+        )
+        assert len(errors) == 1 and "R5" in errors[0] and "no crypto_profile" in errors[0]
+
+    def test_a_gre_tunnel_without_a_profile_passes(self) -> None:
+        """GRE has no crypto profile; no mode and no profile is legal too (a SaaS tunnel of unknown mode)."""
+        for mode in ("gre", None):
+            assert (
+                _run(CloudDirectConnect=[_transport("dx")], CloudPeeringInterface=[_peering(tunnel_mode=_v(mode))])
+                == []
+            )
+
+    def test_a_tunnel_key_without_ipsec_still_fails_once(self) -> None:
+        """R4 owns the key rule: a GRE tunnel with a key reports R4 only, R5 stays silent."""
+        errors = _run(
+            CloudDirectConnect=[_transport("dx")],
+            CloudPeeringInterface=[_peering(tunnel_mode=_v("gre"), tunnel_key=_node("key"))],
+        )
+        assert len(errors) == 1 and "R4" in errors[0]
+
 
 class TestR6Tunnels:
     """A VPN tunnel has the provider's endpoint and is an interface of a VPN connection."""
