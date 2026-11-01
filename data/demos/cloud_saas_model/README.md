@@ -103,6 +103,12 @@ uv run infrahubctl object load data/demos/cloud_saas_model/
 
 Nie ładować `data/demos/30_all/08_interconnects/05_provider_connections/`: używa usuniętych rodzajów.
 
+## Szybki test modelu
+
+`uv run invoke check-model` ładuje schemat i te dane na jednorazową gałąź, uruchamia `trace.py` jako bibliotekę
+(`main_walk(..., quiet=True)` zwraca listy przeskoków L1 i L3) i sprawdza asercje oraz pliki wzorcowe, w kilka minut.
+Opis: `tests/traversal/README.md`.
+
 ## Przejście po grafie
 
 ```bash

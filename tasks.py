@@ -364,6 +364,41 @@ def upgrade(context: Context) -> None:
     log.info("All dependencies and hooks upgraded. Review the changes and commit.")
 
 
+@_task(optional=["case", "server_port"])
+def check_model(
+    context: Context,
+    case: str = "",
+    server_port: int = 8100,
+    update_golden: bool = False,
+    keep_branch: bool = False,
+    rebuild: bool = False,
+    force_load: bool = False,
+) -> None:
+    """Fast model check (minutes): schema + small topology on a throwaway tv-* branch, then L1/L3 traversal asserts.
+
+    Needs the test stack on :8100 (started once, ~5 minutes, if it is not up). Cases: tests/traversal/cases.yml.
+
+    Example:
+        uv run invoke check-model
+        uv run invoke check-model --update-golden
+        uv run invoke check-model --keep-branch --rebuild
+    """
+    flags = [f"--server-port {server_port}"]
+    if case:
+        flags.append(f"--case {case}")
+    for on, flag in (
+        (update_golden, "--update-golden"),
+        (keep_branch, "--keep-branch"),
+        (rebuild, "--rebuild"),
+        (force_load, "--force-load"),
+    ):
+        if on:
+            flags.append(flag)
+    result = context.run(f"uv run python tests/traversal/check_model.py {' '.join(flags)}", pty=True, warn=True)
+    if result is not None and result.failed:
+        raise Exit(code=result.return_code)
+
+
 @_task
 def clean_testcontainers(context: Context) -> None:
     """Remove leftover Docker resources created by integration tests."""
@@ -787,6 +822,7 @@ ns.add_task(cast(Task, test_integration_fast), name="test-integration-fast")
 ns.add_task(cast(Task, test_integration_routing), name="test-integration-routing")
 ns.add_task(cast(Task, test_integration_all_demo), name="test-integration-all-demo")
 ns.add_task(cast(Task, test_integration_arista_mssg), name="test-integration-arista-mssg")
+ns.add_task(cast(Task, check_model), name="check-model")
 ns.add_task(cast(Task, clean_testcontainers), name="clean-testcontainers")
 ns.add_task(cast(Task, upgrade))
 ns.add_task(cast(Task, release))

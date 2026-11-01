@@ -122,12 +122,24 @@ def epname(n: dict) -> str:
     return f"{t.replace('Cloud', '').replace('Topology', '')} {n['display_label']}"
 
 
-def main_walk(d: dict[str, list[dict]], dc_seg: str, cloud_seg: str) -> None:
+def _silent(text: str = "") -> None:
+    return None
+
+
+def main_walk(d: dict[str, list[dict]], dc_seg: str, cloud_seg: str, quiet: bool = False) -> dict[str, Any]:
+    """Walk DC segment -> cloud segment; print the trace (unless `quiet`) and return it as structured hop lists.
+
+    Returns {"l1": [leg], "l3": [leg], "missing": [str], "peerings": [{name, scope, transport, lands}]}; a leg is a
+    dict with its hop strings under "hops" plus the facts a test asserts on (carrier, peering, session circuit).
+    """
+    result: dict[str, Any] = {"l1": [], "l3": [], "missing": [], "peerings": []}
+    say = _silent if quiet else emit
     by_id = {n["id"]: n for k in d for n in d[k] if "id" in n}
     seg = next((s for s in d["seg"] if val(s, "name") == dc_seg), None)
     csg = next((s for s in d["csg"] if val(s, "name") == cloud_seg), None)
     if not seg or not csg:
-        sys.exit(f"segment not found: {dc_seg if not seg else cloud_seg}")
+        result["missing"].append(f"segment not found: {dc_seg if not seg else cloud_seg}")
+        return result
     cloud_vnet = (csg["virtual_network"]["node"] or {})["id"]
     vnet_by_tgw: dict[str, set[str]] = {
         t["id"]: {v["id"] for v in rel(t, "attached_virtual_networks")} for t in d["tgw"]
@@ -186,7 +198,7 @@ def main_walk(d: dict[str, list[dict]], dc_seg: str, cloud_seg: str) -> None:
         return f"{val(p, 'scope')} peering {val(p, 'name')}"
 
     # ------------------------------ L1
-    emit(f"=== L1 (physical): {dc_seg} -> {cloud_seg}")
+    say(f"=== L1 (physical): {dc_seg} -> {cloud_seg}")
     cable_of: dict[str, tuple[str, dict]] = {}
     for k in ("iface", "front", "rear"):
         for p in d[k]:
@@ -223,7 +235,8 @@ def main_walk(d: dict[str, list[dict]], dc_seg: str, cloud_seg: str) -> None:
         last = by_id.get(cur) or {}
         dev = (last.get("device") or {}).get("node", {}).get("name", {}).get("value")
         if not dev:
-            emit("  " + "\n  ".join(hops) + "\n  (path stops: no device at the far end)")
+            say("  " + "\n  ".join(hops) + "\n  (path stops: no device at the far end)")
+            result["missing"].append(f"L1: path from {epname(port)} stops with no device at the far end")
             continue
         # device hop: every carrier with an end on a port of that device
         for car in d["carrier"]:
@@ -256,27 +269,41 @@ def main_walk(d: dict[str, list[dict]], dc_seg: str, cloud_seg: str) -> None:
                 if not tails:
                     continue
                 found += 1
-                emit("  " + "\n  ".join(hops))
-                emit(f"  [device {dev}: {epname(last)} ... {epname(near[0])}]  (L2/L3 inside the device, no cable)")
-                emit(
+                say("  " + "\n  ".join(hops))
+                say(f"  [device {dev}: {epname(last)} ... {epname(near[0])}]  (L2/L3 inside the device, no cable)")
+                say(
                     f"  --carrier {car['name']['value']} ({val(car, 'circuit_type')}): {' <-> '.join(epname(e) for e in ends)}"
                 )
                 if conn_obj is None:
-                    emit(
+                    say(
                         f"  [tunnels {[v['name']['value'] for v in tunnels]} ride on {epname(near[0])} through the carrier]"
                     )
                 for p, text in tails:
                     acct = (p.get("account") or {}).get("node") or {}
-                    emit(f"  --> {peer_text(p)} --> {text}   [account {(acct.get('name') or {}).get('value')}]")
-                emit(f"  --> cloud segment {cloud_seg} ({val(csg, 'cidr_block')})\n")
+                    result["l1"].append(
+                        {
+                            "port": epname(port),
+                            "device": dev,
+                            "carrier": car["name"]["value"],
+                            "carrier_type": val(car, "circuit_type"),
+                            "carrier_ends": [epname(e) for e in ends],
+                            "peering": val(p, "name"),
+                            "scope": val(p, "scope"),
+                            "chain": text,
+                            "hops": [*hops, f"carrier {car['name']['value']}", f"{peer_text(p)} --> {text}"],
+                        }
+                    )
+                    say(f"  --> {peer_text(p)} --> {text}   [account {(acct.get('name') or {}).get('value')}]")
+                say(f"  --> cloud segment {cloud_seg} ({val(csg, 'cidr_block')})\n")
     if not found:
-        emit("  no physical path found")
+        say("  no physical path found")
+        result["missing"].append("L1: no physical path found")
 
     # ------------------------------ L3
-    emit(f"=== L3 (routed): {dc_seg} -> {cloud_seg}")
+    say(f"=== L3 (routed): {dc_seg} -> {cloud_seg}")
     gw = (seg.get("gateway") or {}).get("node") or {}
     pfx = ((gw.get("ip_prefix") or {}).get("node") or {}).get("prefix", {}).get("value")
-    emit(f"  segment {dc_seg}: gateway {gw.get('address', {}).get('value')} prefix {pfx}")
+    say(f"  segment {dc_seg}: gateway {gw.get('address', {}).get('value')} prefix {pfx}")
     procs = {p["id"]: p for p in d["bgp"]}
     proc_by_dev = {rel(p, "capabilities")[0]["display_label"]: p for p in d["bgp"] if rel(p, "capabilities")}
     rows = [
@@ -290,12 +317,15 @@ def main_walk(d: dict[str, list[dict]], dc_seg: str, cloud_seg: str) -> None:
         dev = row["device"]["node"]["name"]["value"]
         svi = row["svi"]["node"]
         vrf = svi["vrf"]["node"] if svi and svi.get("vrf") else None
-        emit(
+        say(
             f"  --> SVI {dev}:{svi['name']['value'] if svi else '-'} (VLAN {val(row, 'vlan_id')}) in VRF {vrf['name']['value'] if vrf else '-'}"
             f" [{vrf['namespace']['node']['name']['value'] if vrf else '-'}]  (deployment {sd['deployment']['node']['name']['value']})"
         )
+        if not vrf:
+            result["missing"].append(f"L3: SVI of {dev} has no VRF")
         start = proc_by_dev.get(dev)
         if not start:
+            result["missing"].append(f"L3: no BGP process on {dev}")
             continue
         # BFS over peerings between BGP processes, then handoff peerings (one process, connector end)
         queue = [
@@ -345,23 +375,38 @@ def main_walk(d: dict[str, list[dict]], dc_seg: str, cloud_seg: str) -> None:
                     peer = ((obj.get("peer_ip") or {}).get("node") or {}).get("address", {}).get("value")
                     pas = ((obj.get("peer_asn") or {}).get("node") or {}).get("asn", {}).get("value")
                     legs += 1
-                    emit("      " + "\n      ".join(path))
-                    emit(
+                    result["l3"].append(
+                        {
+                            "device": dev,
+                            "svi": svi["name"]["value"] if svi else None,
+                            "vrf": vrf["name"]["value"] if vrf else None,
+                            "bgp_path": list(path),
+                            "handoff_peering": pe["name"]["value"],
+                            "session_circuits": [s["name"]["value"] for s in sc],
+                            "session_types": [val(s, "circuit_type") for s in sc],
+                            "peering": val(obj, "name"),
+                            "scope": val(obj, "scope"),
+                            "chain": tail,
+                            "hops": [*path, f"handoff peering {pe['name']['value']}", f"{peer_text(obj)} --> {tail}"],
+                        }
+                    )
+                    say("      " + "\n      ".join(path))
+                    say(
                         f"      --handoff peering {pe['name']['value']} ({val(pe, 'peering_role')}) via {epname(subs[0]) if subs else '?'}-->"
                     )
                     for s in sc:
-                        emit(
+                        say(
                             f"      --session circuit {s['name']['value']} ({val(s, 'circuit_type')}): ends {[epname(e) for e in rel(s, 'endpoints')]}"
                         )
-                    emit(f"      --> {peer_text(obj)} (provider {peer} AS{pas}) --> {tail}")
+                    say(f"      --> {peer_text(obj)} (provider {peer} AS{pas}) --> {tail}")
                     vnet = by_id[cloud_vnet]
                     blocks = [val(b, "prefix") for b in rel(vnet, "cidr_blocks")]
-                    emit(f"      --> prefix {blocks} --> cloud segment {cloud_seg} {val(csg, 'cidr_block')}")
+                    say(f"      --> prefix {blocks} --> cloud segment {cloud_seg} {val(csg, 'cidr_block')}")
                     for i in [i for i in d["inst"] if (i["network_segment"]["node"] or {}).get("id") == csg["id"]]:
-                        emit(f"      --> instance {val(i, 'name')} {val(i, 'private_ip')}")
-                    emit()
+                        say(f"      --> instance {val(i, 'name')} {val(i, 'private_ip')}")
+                    say()
     # every peering interface and where it lands, for all clouds (the ones that do not reach the target too)
-    emit("=== peering interfaces (the common cloud interface, every operator)")
+    say("=== peering interfaces (the common cloud interface, every operator)")
     for p in sorted(d["peer"], key=lambda x: val(x, "name")):
         tr = (rel(p, "transport") or [None])[0]
         trd = dxs.get(tr["id"]) if tr else None
@@ -369,11 +414,11 @@ def main_walk(d: dict[str, list[dict]], dc_seg: str, cloud_seg: str) -> None:
         chain = to_vnet("peer", p, None)
         acct = ((p.get("account") or {}).get("node") or {}).get("name", {}).get("value")
         where = acct or f"owner {((p.get('owner') or {}).get('node') or {}).get('name', {}).get('value')}"
-        emit(
+        say(
             f"  {val(p, 'name')} [{val(p, 'scope')}, {val(p, 'routing')}] vlan {val(p, 'vlan_id')} tunnel {val(p, 'tunnel_index')} "
             f"mtu {val(p, 'mtu')} bfd {val(p, 'bfd')} key {((p.get('auth') or {}).get('node') or {}).get('name', {}).get('value')}  ({where})"
         )
-        emit(
+        say(
             f"      provider {((p.get('peer_ip') or {}).get('node') or {}).get('address', {}).get('value')} "
             f"AS{((p.get('peer_asn') or {}).get('node') or {}).get('asn', {}).get('value')}"
             f"   advertised {[val(x, 'prefix') for x in rel(p, 'advertised_prefixes')]}"
@@ -387,14 +432,25 @@ def main_walk(d: dict[str, list[dict]], dc_seg: str, cloud_seg: str) -> None:
                 extra = "".join(
                     f" customer gateway {val(g, 'name')} ({val(g, 'ip_address')} AS{val(g, 'asn')})" for g in cg
                 )
-            emit(f"      rides on {tr['__typename'].replace('Cloud', '')} {tr['display_label']}{extra}")
+            say(f"      rides on {tr['__typename'].replace('Cloud', '')} {tr['display_label']}{extra}")
         else:
-            emit(
+            say(
                 f"      rides on (no transport object) region {((p.get('saas_region') or {}).get('node') or {}).get('display_label')}"
             )
-        emit(f"      lands: {chain or '(no virtual network: SaaS)'}")
+        say(f"      lands: {chain or '(no virtual network: SaaS)'}")
     if not legs:
-        emit("  no routed path found")
+        say("  no routed path found")
+        result["missing"].append("L3: no routed path found")
+    result["peerings"] = [
+        {
+            "name": val(p, "name"),
+            "scope": val(p, "scope"),
+            "transport": (rel(p, "transport") or [{}])[0].get("display_label"),
+            "lands": to_vnet("peer", p, None),
+        }
+        for p in sorted(d["peer"], key=lambda x: val(x, "name"))
+    ]
+    return result
 
 
 async def main() -> None:
@@ -410,7 +466,9 @@ async def main() -> None:
         )
     )
     d = await load(client, a.branch)
-    main_walk(d, a.dc_segment, a.cloud_segment)
+    result = main_walk(d, a.dc_segment, a.cloud_segment)
+    if result["missing"] and result["missing"][0].startswith("segment not found"):
+        sys.exit(result["missing"][0])
 
 
 if __name__ == "__main__":

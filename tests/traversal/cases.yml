@@ -1,0 +1,28 @@
+---
+# Cases of the traversal check (`uv run invoke check-model`). A case = a schema dir, the data dirs that build a
+# small topology on a throwaway branch, and the segment pairs whose L1/L3 path must be visible.
+cases:
+  - name: cloud_saas_model
+    schema: schemas
+    data:
+      - data/demos/cloud_saas_model
+    # present on the branch only when the data was loaded (or already sits on main): used to skip a duplicate load
+    sentinel:
+      kind: ManagedVxlanSegment
+      name: c900-demo-web-p
+    # python module with `load(client, branch) -> dict` and `main_walk(d, dc, cloud, quiet) -> dict`
+    tracer: data/demos/cloud_saas_model/trace.py
+    pairs:
+      - dc_segment: c900-demo-web-p
+        cloud_segment: c900-demo-subnet-p
+        golden: cloud_saas_model__c900-demo-web-p__c900-demo-subnet-p.txt
+        # legs per carrier type (L1) and per session circuit type (L3)
+        l1_legs:
+          internet: 2
+          cross_connect: 2
+        l3_legs:
+          handoff: 2
+          vpn: 2
+        # the graph kinds (keys of the tracer's `load`) that must not be empty
+        non_empty:
+          [seg, iface, front, rear, carrier, session, vif, dx, peer, vpn, gw, tgw, vnet, csg, inst, bgp, peering]
