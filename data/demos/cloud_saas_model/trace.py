@@ -7,11 +7,12 @@ Reads the graph in a few bulk GraphQL reads (one per kind), then walks it in mem
     uv run python data/demos/cloud_saas_model/trace.py c900-demo-web-p c900-demo-subnet-p [--branch main]
 
 L1  segment -> leaf port (segments edge) -> cable -> patch panel (front, paired rear) -> cable -> edge port
-    -> [device] -> carrier circuit (physical, its two ends) -> transport (Direct Connect / SaaS peering)
-    -> transport (CloudDirectConnect / VPN connection) -> peering interface -> gateway (edge)
+    -> [device] -> carrier circuit (found from OUR port through its `capabilities`; its far end is an interface of a
+    transport) -> port of the transport (CloudDirectConnect / CloudVPNConnection are devices) -> its LAG
+    -> peering interface (CloudPeeringInterface riding on the port or the LAG) -> gateway (edge)
     -> attachment -> gateway (hub) -> attachment -> virtual network [-> peers] -> cloud segment
-L3  segment prefix/SVI/VRF -> BGP processes and peerings (overlay, then the handoff) -> session circuit
-    -> CloudPeeringInterface (VIF / peering / VLAN attachment / VPN tunnel / SaaS) -> gateway (edge)
+L3  segment prefix/SVI/VRF -> BGP processes and peerings (overlay, then the handoff) -> our sub-interface or routed
+    port -> its `capabilities` -> session circuit -> the peering interface at its far end -> gateway (edge)
     -> attachment (allowed prefixes) -> gateway (hub) -> attachment -> virtual network -> prefix -> cloud segment
     (-> service endpoint of the segment)
 Then every peering interface and where it lands (all clouds, not only the ones that reach the target).
@@ -26,15 +27,15 @@ from typing import Any
 
 from infrahub_sdk import Config, InfrahubClient
 
-EP = """__typename id display_label
-  ... on DcimPhysicalInterface { name { value } device { node { name { value } } } }
-  ... on DcimVirtualInterface { name { value } device { node { name { value } } } }"""
+EP = """__typename id display_label name { value } device { node { __typename id name { value } } }"""
 EPC = """__typename id display_label
   ... on DcimPhysicalInterface { name { value } device { node { name { value } } } }
   ... on DcimFrontPatchPanelPort { port_id { value } }
   ... on DcimRearPatchPanelPort { port_id { value } }"""
-IF_TOP = "__typename id display_label name { value } device { node { name { value } } }"
+IF_TOP = "__typename id display_label name { value } device { node { __typename id name { value } } }"
+CAPS = "capabilities { edges { node { __typename id } } }"
 PP_TOP = "__typename id display_label port_id { value }"
+TRANSPORT_KINDS = ("CloudDirectConnect", "CloudVPNConnection")
 
 
 def emit(text: str = "") -> None:
@@ -48,16 +49,6 @@ def rel(d: dict, k: str) -> list[dict]:
     return [v["node"]] if v.get("node") else []
 
 
-def iface_ends(c: dict) -> list[dict]:
-    """The endpoints of a circuit that are interfaces of ours."""
-    return [e for e in rel(c, "endpoints") if e["__typename"].startswith("Dcim")]
-
-
-def conn_ends(c: dict) -> list[dict]:
-    """The endpoints of a circuit that are a cloud or SaaS connector."""
-    return [e for e in rel(c, "endpoints") if not e["__typename"].startswith("Dcim")]
-
-
 def val(d: dict, k: str) -> Any:
     return (d.get(k) or {}).get("value")
 
@@ -67,24 +58,24 @@ QUERIES = {
       segment_deployments { edges { node { deployment { node { name { value } } }
         vlan_domain_segments { edges { node { vlan_id { value } device { node { name { value } } }
           svi { node { name { value } vrf { node { name { value } namespace { node { name { value } } } } } } } } } } } } } } } }""",
-    "iface": f"""DcimPhysicalInterface {{ edges {{ node {{ {IF_TOP} segments {{ edges {{ node {{ id }} }} }} cable {{ node {{ name {{ value }} endpoints {{ edges {{ node {{ {EPC} }} }} }} }} }} }} }} }}""",
+    "iface": f"""DcimPhysicalInterface {{ edges {{ node {{ {IF_TOP} {CAPS} lag {{ node {{ id name {{ value }} }} }} segments {{ edges {{ node {{ id }} }} }} cable {{ node {{ name {{ value }} endpoints {{ edges {{ node {{ {EPC} }} }} }} }} }} }} }} }}""",
     "front": f"""DcimFrontPatchPanelPort {{ edges {{ node {{ {PP_TOP} rear_port {{ node {{ port_id {{ value }} }} }} cable {{ node {{ name {{ value }} endpoints {{ edges {{ node {{ {EPC} }} }} }} }} }} }} }} }}""",
     "rear": f"""DcimRearPatchPanelPort {{ edges {{ node {{ {PP_TOP} cable {{ node {{ name {{ value }} endpoints {{ edges {{ node {{ {EPC} }} }} }} }} }} }} }} }}""",
-    "carrier": f"""TopologyCarrierCircuit {{ edges {{ node {{ id name {{ value }} circuit_type {{ value }} endpoints {{ edges {{ node {{ {EP} }} }} }} }} }} }}""",
-    "session": f"""TopologySessionCircuit {{ edges {{ node {{ id name {{ value }} circuit_type {{ value }} endpoints {{ edges {{ node {{ {EP} }} }} }} }} }} }}""",
-    "vif": f"""DcimVirtualInterface {{ edges {{ node {{ {IF_TOP} parent_interface {{ node {{ id }} }} }} }} }}""",
+    "carrier": f"""TopologyCarrierCircuit {{ edges {{ node {{ id name {{ value }} circuit_type {{ value }} capabilities {{ edges {{ node {{ {EP} }} }} }} }} }} }}""",
+    "session": f"""TopologySessionCircuit {{ edges {{ node {{ id name {{ value }} circuit_type {{ value }} capabilities {{ edges {{ node {{ {EP} }} }} }} }} }} }}""",
+    "vif": f"""DcimVirtualInterface {{ edges {{ node {{ {IF_TOP} {CAPS} parent_interface {{ node {{ id }} }} }} }} }}""",
+    "lag": f"""DcimLAGInterface {{ edges {{ node {{ {IF_TOP} {CAPS} member_interfaces {{ edges {{ node {{ id name {{ value }} }} }} }} }} }} }}""",
     "dx": """CloudDirectConnect { edges { node { id name { value } connection_type { value } service_key { value } bandwidth { value }
       account { node { name { value } } } partner_account { node { name { value } } } rides_on { node { id name { value } } }
-      region { node { name { value } } } } } }""",
-    "peer": """CloudPeeringInterface { edges { node { id name { value } scope { value } routing { value } vlan_id { value }
-      tunnel_index { value } mtu { value } bfd { value } service_id { value } endpoint_ip { value } tunnel_mode { value }
-      crypto_profile { node { name { value } } } tunnel_key { node { name { value } } }
-      transport { node { id __typename display_label } } account { node { name { value } } }
-      region { node { name { value } } } saas_region { node { display_label } } owner { node { name { value } } }
-      gateway { node { id } }
-      auth { node { name { value } } } advertised_prefixes { edges { node { prefix { value } } } }
-      peer_ip { node { address { value } } } peer_asn { node { asn { value } } } } } }""",
+      region { node { name { value } } } saas_region { node { display_label } } owner { node { name { value } } } } } }""",
+    "peer": f"""CloudPeeringInterface {{ edges {{ node {{ {IF_TOP} {CAPS} scope {{ value }} routing {{ value }} vlan_id {{ value }}
+      tunnel_index {{ value }} mtu {{ value }} bfd {{ value }} service_id {{ value }} endpoint_ip {{ value }} tunnel_mode {{ value }}
+      crypto_profile {{ node {{ name {{ value }} }} }} tunnel_key {{ node {{ name {{ value }} }} }}
+      parent_interface {{ node {{ id name {{ value }} }} }} gateway {{ node {{ id }} }}
+      auth {{ node {{ name {{ value }} }} }} advertised_prefixes {{ edges {{ node {{ prefix {{ value }} }} }} }}
+      peer_ip {{ node {{ address {{ value }} }} }} peer_asn {{ node {{ asn {{ value }} }} }} }} }} }}""",
     "vpn": """CloudVPNConnection { edges { node { id name { value } account { node { name { value } } }
+      saas_region { node { display_label } } owner { node { name { value } } }
       customer_gateway { node { id } } gateway { node { id } } } } }""",
     "gw": """CloudGateway { edges { node { id name { value } gateway_type { value } ip_address { value } asn { value }
       account { node { name { value } } } } } }""",
@@ -125,10 +116,10 @@ async def load(client: InfrahubClient, branch: str) -> dict[str, list[dict]]:
 
 def epname(n: dict) -> str:
     t = n["__typename"]
-    if t in ("DcimPhysicalInterface", "DcimVirtualInterface"):
-        return f"{n['device']['node']['name']['value']}:{n['name']['value']}"
     if t in ("DcimFrontPatchPanelPort", "DcimRearPatchPanelPort"):
         return f"panel {n['port_id']['value']} ({'front' if 'Front' in t else 'rear'})"
+    if "device" in n:
+        return f"{n['device']['node']['name']['value']}:{n['name']['value']}"
     return f"{t.replace('Cloud', '').replace('Topology', '')} {n['display_label']}"
 
 
@@ -139,10 +130,12 @@ def _silent(text: str = "") -> None:
 def main_walk(d: dict[str, list[dict]], dc_seg: str, cloud_seg: str, quiet: bool = False) -> dict[str, Any]:
     """Walk DC segment -> cloud segment; print the trace (unless `quiet`) and return it as structured hop lists.
 
-    Returns {"l1": [leg], "l3": [leg], "missing": [str], "peerings": [{name, scope, transport, lands}]}; a leg is a
-    dict with its hop strings under "hops" plus the facts a test asserts on (carrier, peering, session circuit).
+    Returns {"l1": [leg], "l3": [leg], "missing": [str], "peerings": [{name, scope, transport, lands}],
+    "transports": {name: {kind, port, lag, vif}}}; a leg is a dict with its hop strings under "hops" plus the facts a
+    test asserts on (carrier, peering, session circuit, the interface of ours the circuit was found from, the kind of
+    the device at the far end). `transport` of a peering is its `device`.
     """
-    result: dict[str, Any] = {"l1": [], "l3": [], "missing": [], "peerings": []}
+    result: dict[str, Any] = {"l1": [], "l3": [], "missing": [], "peerings": [], "transports": {}}
     say = _silent if quiet else emit
     by_id = {n["id"]: n for k in d for n in d[k] if "id" in n}
     seg = next((s for s in d["seg"] if val(s, "name") == dc_seg), None)
@@ -152,6 +145,8 @@ def main_walk(d: dict[str, list[dict]], dc_seg: str, cloud_seg: str, quiet: bool
         return result
     cloud_vnet = (csg["virtual_network"]["node"] or {})["id"]
     peers = {p["id"]: p for p in d["peer"]}
+    carriers = {c["id"]: c for c in d["carrier"]}
+    sessions = {c["id"]: c for c in d["session"]}
     vpns = {v["id"]: v for v in d["vpn"]}
     dxs = {v["id"]: v for v in d["dx"]}
     objs = {"gw": {g["id"]: g for g in d["gw"]}, "vnet": {v["id"]: v for v in d["vnet"]}}
@@ -193,10 +188,9 @@ def main_walk(d: dict[str, list[dict]], dc_seg: str, cloud_seg: str, quiet: bool
         for ref in rel(peering, "gateway"):
             start = ref["id"]
         if start is None:
-            for ref in rel(peering, "transport"):
-                vpn = vpns.get(ref["id"])
-                if vpn and rel(vpn, "gateway"):
-                    start, via = rel(vpn, "gateway")[0]["id"], f"transport VPN {val(vpn, 'name')} --> "
+            vpn = vpns.get(peering["device"]["node"]["id"])
+            if vpn and rel(vpn, "gateway"):
+                start, via = rel(vpn, "gateway")[0]["id"], f"transport VPN {val(vpn, 'name')} --> "
         if start is None:
             return None
         for text, vid, allowed in gateway_paths(start):
@@ -213,20 +207,15 @@ def main_walk(d: dict[str, list[dict]], dc_seg: str, cloud_seg: str, quiet: bool
         found = landing(n, target)
         return found[0] if found else None
 
-    def bundle_of(transport_id: str) -> list[str]:
-        """The transport and the ones it rides on (member port -> bundle), nearest first; a loop ends the walk."""
-        chain = [transport_id]
-        while transport_id in dxs:
-            up = (dxs[transport_id].get("rides_on") or {}).get("node")
-            if not up or up["id"] in chain:
-                break
-            chain.append(up["id"])
-            transport_id = up["id"]
-        return chain
+    lag_of = {p["id"]: p["lag"]["node"]["id"] for p in d["iface"] if (p.get("lag") or {}).get("node")}
 
-    def peers_on(transport_id: str) -> list[dict]:
-        ids = set(bundle_of(transport_id))
-        return [p for p in d["peer"] if (rel(p, "transport") or [{}])[0].get("id") in ids]
+    def peers_on(port_id: str) -> list[dict]:
+        """The peering interfaces riding on a port of a transport, or on the LAG that port is a member of."""
+        parents = {port_id, *([lag_of[port_id]] if port_id in lag_of else [])}
+        return [p for p in d["peer"] if ((p.get("parent_interface") or {}).get("node") or {}).get("id") in parents]
+
+    def caps_of(iface: dict) -> list[str]:
+        return [x["id"] for x in rel(iface, "capabilities")]
 
     def peer_text(p: dict) -> str:
         return f"{val(p, 'scope')} peering {val(p, 'name')}"
@@ -272,71 +261,79 @@ def main_walk(d: dict[str, list[dict]], dc_seg: str, cloud_seg: str, quiet: bool
             say("  " + "\n  ".join(hops) + "\n  (path stops: no device at the far end)")
             result["missing"].append(f"L1: path from {epname(port)} stops with no device at the far end")
             continue
-        # device hop: every carrier with an end on a port of that device
-        for car in d["carrier"]:
-            ends = rel(car, "endpoints")
-            near = [
-                e
-                for e in ends
-                if e["__typename"] == "DcimPhysicalInterface" and e["device"]["node"]["name"]["value"] == dev
-            ]
-            far_c = conn_ends(car)
-            if not near:
-                continue
-            # a carrier whose far end is a transport or a peering, or an internet carrier that tunnels ride: a tunnel
-            # (virtual interface) names the physical port it rides on as its parent_interface
-            tunnels = [
-                v for v in d["vif"] if ((v.get("parent_interface") or {}).get("node") or {}).get("id") == near[0]["id"]
-            ]
-            tunnel_peers = [
-                peers[e["id"]]
-                for sc_ in d["session"]
-                if not far_c and {v["id"] for v in tunnels} & {e["id"] for e in iface_ends(sc_)}
-                for e in conn_ends(sc_)
-                if e["id"] in peers
-            ]
-            for conn_obj, behind in [
-                (c, [peers[c["id"]]] if c["id"] in peers else peers_on(c["id"])) for c in far_c
-            ] + [(None, tunnel_peers)]:
-                tails = [(p, to_vnet("peer", p, cloud_vnet)) for p in behind]
-                tails = [(p, t) for p, t in tails if t]
-                if not tails:
-                    continue
-                found += 1
-                ride = bundle_of(conn_obj["id"])[1:] if conn_obj is not None else []
-                say("  " + "\n  ".join(hops))
-                say(f"  [device {dev}: {epname(last)} ... {epname(near[0])}]  (L2/L3 inside the device, no cable)")
-                say(
-                    f"  --carrier {car['name']['value']} ({val(car, 'circuit_type')}): {' <-> '.join(epname(e) for e in ends)}"
-                )
-                if conn_obj is None:
+        # device hop: the circuits of every port of that device are found through the port's `capabilities`
+        for near in [x for x in d["iface"] if x["device"]["node"]["name"]["value"] == dev]:
+            for car in [carriers[c] for c in caps_of(near) if c in carriers]:
+                ends = rel(car, "capabilities")
+                far_ends = [e for e in ends if e["id"] != near["id"]]
+                # the far end is a port of a transport, or the carrier is an internet carrier that tunnels ride: a tunnel
+                # (virtual interface) names the physical port it rides on as its parent_interface
+                tunnels = [
+                    v for v in d["vif"] if ((v.get("parent_interface") or {}).get("node") or {}).get("id") == near["id"]
+                ]
+                tunnel_peers = [
+                    peers[e["id"]]
+                    for sc_ in d["session"]
+                    if {v["id"] for v in tunnels} & {e["id"] for e in rel(sc_, "capabilities")}
+                    for e in rel(sc_, "capabilities")
+                    if e["id"] in peers
+                ]
+                routes: list[tuple[dict | None, list[dict]]] = [
+                    (e, peers_on(e["id"])) for e in far_ends if e["device"]["node"]["__typename"] in TRANSPORT_KINDS
+                ]
+                if not routes and tunnel_peers:
+                    routes = [(None, tunnel_peers)]
+                for far, behind in routes:
+                    tails = [(p, to_vnet("peer", p, cloud_vnet)) for p in behind]
+                    tails = [(p, t) for p, t in tails if t]
+                    if not tails:
+                        continue
+                    found += 1
+                    far_dev = far["device"]["node"] if far else None
+                    lag = lag_of.get(far["id"]) if far else None
+                    lag_name = val(by_id[lag], "name") if lag else None
+                    say("  " + "\n  ".join(hops))
+                    say(f"  [device {dev}: {epname(last)} ... {epname(near)}]  (L2/L3 inside the device, no cable)")
                     say(
-                        f"  [tunnels {[v['name']['value'] for v in tunnels]} ride on {epname(near[0])} through the carrier]"
+                        f"  --carrier {car['name']['value']} ({val(car, 'circuit_type')}): {' <-> '.join(epname(e) for e in ends)}"
                     )
-                for rid in ride:
-                    say(f"  --rides_on--> bundle {val(dxs[rid], 'name')}")
-                for p, text in tails:
-                    acct = (p.get("account") or {}).get("node") or {}
-                    result["l1"].append(
-                        {
-                            "port": epname(port),
-                            "device": dev,
-                            "carrier": car["name"]["value"],
-                            "carrier_type": val(car, "circuit_type"),
-                            "carrier_ends": [epname(e) for e in ends],
-                            "peering": val(p, "name"),
-                            "scope": val(p, "scope"),
-                            "chain": text,
-                            "hops": [
-                                *hops,
-                                f"carrier {car['name']['value']}",
-                                *[f"rides_on bundle {val(dxs[r], 'name')}" for r in ride],
-                                f"{peer_text(p)} --> {text}",
-                            ],
-                        }
-                    )
-                    say(f"  --> {peer_text(p)} --> {text}   [account {(acct.get('name') or {}).get('value')}]")
-                say(f"  --> cloud segment {cloud_seg} ({val(csg, 'cidr_block')})\n")
+                    if far is None:
+                        say(
+                            f"  [tunnels {[v['name']['value'] for v in tunnels]} ride on {epname(near)} through the carrier]"
+                        )
+                    else:
+                        say(
+                            f"  --> transport {(far_dev or {}).get('name', {}).get('value')} port {far['name']['value']}"
+                            + (f" in {lag_name}" if lag_name else "")
+                        )
+                    for p, text in tails:
+                        result["l1"].append(
+                            {
+                                "port": epname(port),
+                                "device": dev,
+                                "start_interface": epname(near),
+                                "carrier": car["name"]["value"],
+                                "carrier_type": val(car, "circuit_type"),
+                                "carrier_ends": [epname(e) for e in ends],
+                                "carrier_far_kind": far_dev["__typename"] if far_dev else None,
+                                "peering": val(p, "name"),
+                                "scope": val(p, "scope"),
+                                "chain": text,
+                                "hops": [
+                                    *hops,
+                                    f"carrier {car['name']['value']}",
+                                    *(
+                                        [f"transport {far_dev['name']['value']} port {far['name']['value']}"]
+                                        + ([f"lag {lag_name}"] if lag_name else [])
+                                        if far and far_dev
+                                        else []
+                                    ),
+                                    f"{peer_text(p)} --> {text}",
+                                ],
+                            }
+                        )
+                        say(f"  --> {peer_text(p)} --> {text}")
+                    say(f"  --> cloud segment {cloud_seg} ({val(csg, 'cidr_block')})\n")
     if not found:
         say("  no physical path found")
         result["missing"].append("L1: no physical path found")
@@ -401,11 +398,11 @@ def main_walk(d: dict[str, list[dict]], dc_seg: str, cloud_seg: str, quiet: bool
                             )
                         )
                     continue
-                # the peering's end is our sub-interface; the far end is the connector of the session circuit on it
-                subs = rel(pe, "capabilities")
-                sub_ids = {e["id"] for e in subs}
-                circuits = [s for s in d["session"] if sub_ids & {e["id"] for e in iface_ends(s)}]
-                conns = [x for s in circuits for x in conn_ends(s)]
+                # the peering's end is our sub-interface or routed port; its session circuit is found through the
+                # interface's `capabilities`, and the far end of the circuit is the peering interface of a transport
+                subs = [by_id[e["id"]] for e in rel(pe, "capabilities") if e["id"] in by_id]
+                circuits = [sessions[c] for sub in subs for c in caps_of(sub) if c in sessions]
+                conns = [x for s in circuits for x in rel(s, "capabilities") if x["id"] not in {y["id"] for y in subs}]
                 for cn in conns:
                     obj = peers.get(cn["id"])
                     if not obj:
@@ -414,13 +411,15 @@ def main_walk(d: dict[str, list[dict]], dc_seg: str, cloud_seg: str, quiet: bool
                     if not landed:
                         continue
                     tail, allowed = landed
-                    sc = [s for s in circuits if cn["id"] in [e["id"] for e in conn_ends(s)]]
+                    sc = [s for s in circuits if cn["id"] in [e["id"] for e in rel(s, "capabilities")]]
                     peer = ((obj.get("peer_ip") or {}).get("node") or {}).get("address", {}).get("value")
                     pas = ((obj.get("peer_asn") or {}).get("node") or {}).get("asn", {}).get("value")
                     legs += 1
                     result["l3"].append(
                         {
                             "device": dev,
+                            "start_interface": epname(subs[0]),
+                            "far_kind": obj["device"]["node"]["__typename"],
                             "svi": svi["name"]["value"] if svi else None,
                             "vrf": vrf["name"]["value"] if vrf else None,
                             "bgp_path": list(path),
@@ -439,7 +438,7 @@ def main_walk(d: dict[str, list[dict]], dc_seg: str, cloud_seg: str, quiet: bool
                     )
                     for s in sc:
                         say(
-                            f"      --session circuit {s['name']['value']} ({val(s, 'circuit_type')}): ends {[epname(e) for e in rel(s, 'endpoints')]}"
+                            f"      --session circuit {s['name']['value']} ({val(s, 'circuit_type')}): ends {[epname(e) for e in rel(s, 'capabilities')]}"
                         )
                     say(f"      --> {peer_text(obj)} (provider {peer} AS{pas}) --> {tail}")
                     vnet = by_id[cloud_vnet]
@@ -454,9 +453,8 @@ def main_walk(d: dict[str, list[dict]], dc_seg: str, cloud_seg: str, quiet: bool
     # every peering interface and where it lands, for all clouds (the ones that do not reach the target too)
     say("=== peering interfaces (the common cloud interface, every operator)")
     for p in sorted(d["peer"], key=lambda x: val(x, "name")):
-        tr = (rel(p, "transport") or [None])[0]
-        trd = dxs.get(tr["id"]) if tr else None
-        trd = trd or (vpns.get(tr["id"]) if tr else None)
+        tr = p["device"]["node"]
+        trd = dxs.get(tr["id"]) or vpns.get(tr["id"]) or {}
         tunnel = (
             f" endpoint {val(p, 'endpoint_ip')} {val(p, 'tunnel_mode')}"
             f" profile {((p.get('crypto_profile') or {}).get('node') or {}).get('name', {}).get('value')}"
@@ -465,36 +463,36 @@ def main_walk(d: dict[str, list[dict]], dc_seg: str, cloud_seg: str, quiet: bool
             else ""
         )
         chain = to_vnet("peer", p, None)
-        acct = ((p.get("account") or {}).get("node") or {}).get("name", {}).get("value")
-        where = acct or f"owner {((p.get('owner') or {}).get('node') or {}).get('name', {}).get('value')}"
+        acct = ((trd.get("account") or {}).get("node") or {}).get("name", {}).get("value")
+        where = acct or f"owner {((trd.get('owner') or {}).get('node') or {}).get('name', {}).get('value')}"
+        parent = ((p.get("parent_interface") or {}).get("node") or {}).get("name", {}).get("value")
         say(
             f"  {val(p, 'name')} [{val(p, 'scope')}, {val(p, 'routing')}] vlan {val(p, 'vlan_id')} tunnel {val(p, 'tunnel_index')} "
-            f"mtu {val(p, 'mtu')} bfd {val(p, 'bfd')} key {((p.get('auth') or {}).get('node') or {}).get('name', {}).get('value')}  ({where})"
+            f"parent {parent} mtu {val(p, 'mtu')} bfd {val(p, 'bfd')} key {((p.get('auth') or {}).get('node') or {}).get('name', {}).get('value')}  ({where})"
         )
         say(
             f"      provider {((p.get('peer_ip') or {}).get('node') or {}).get('address', {}).get('value')} "
             f"AS{((p.get('peer_asn') or {}).get('node') or {}).get('asn', {}).get('value')}{tunnel}"
             f"   advertised {[val(x, 'prefix') for x in rel(p, 'advertised_prefixes')]}"
         )
-        if tr:
-            extra = ""
-            if trd and "service_key" in trd:
-                up = (trd.get("rides_on") or {}).get("node") or {}
-                extra = (
-                    f" {val(trd, 'connection_type')} service_key {val(trd, 'service_key')}"
-                    f" partner {((trd.get('partner_account') or {}).get('node') or {}).get('name', {}).get('value')}"
-                    f" rides_on {up.get('name', {}).get('value')}"
-                )
-            if trd and "customer_gateway" in trd:
-                cg = [objs["gw"][x["id"]] for x in rel(trd, "customer_gateway")]
-                extra = "".join(
-                    f" customer gateway {val(g, 'name')} ({val(g, 'ip_address')} AS{val(g, 'asn')})" for g in cg
-                )
-            say(f"      rides on {tr['__typename'].replace('Cloud', '')} {tr['display_label']}{extra}")
-        else:
-            say(
-                f"      rides on (no transport object) region {((p.get('saas_region') or {}).get('node') or {}).get('display_label')}"
+        extra = ""
+        if trd and "service_key" in trd:
+            up = (trd.get("rides_on") or {}).get("node") or {}
+            extra = (
+                f" {val(trd, 'connection_type')} service_key {val(trd, 'service_key')}"
+                f" partner {((trd.get('partner_account') or {}).get('node') or {}).get('name', {}).get('value')}"
+                f" rides_on {up.get('name', {}).get('value')}"
             )
+        if trd and "customer_gateway" in trd:
+            cg = [objs["gw"][x["id"]] for x in rel(trd, "customer_gateway")]
+            extra = "".join(
+                f" customer gateway {val(g, 'name')} ({val(g, 'ip_address')} AS{val(g, 'asn')})" for g in cg
+            )
+        region = ((trd.get("saas_region") or {}).get("node") or {}).get("display_label")
+        say(
+            f"      interface of {tr['__typename'].replace('Cloud', '')} {tr['name']['value']}{extra}"
+            + (f" (SaaS region {region})" if region else "")
+        )
         say(f"      lands: {chain or '(no virtual network: SaaS)'}")
     if not legs:
         say("  no routed path found")
@@ -503,11 +501,27 @@ def main_walk(d: dict[str, list[dict]], dc_seg: str, cloud_seg: str, quiet: bool
         {
             "name": val(p, "name"),
             "scope": val(p, "scope"),
-            "transport": (rel(p, "transport") or [{}])[0].get("display_label"),
+            "transport": p["device"]["node"]["name"]["value"],
             "lands": to_vnet("peer", p, None),
         }
         for p in sorted(d["peer"], key=lambda x: val(x, "name"))
     ]
+    # what each transport holds: ports, LAGs, peering interfaces (VIFs, VLAN attachments, tunnels)
+    for t in [*d["dx"], *d["vpn"]]:
+        name = val(t, "name")
+        held = {
+            "port": [x for x in d["iface"] if x["device"]["node"]["id"] == t["id"]],
+            "lag": [x for x in d["lag"] if x["device"]["node"]["id"] == t["id"]],
+            "vif": [x for x in d["peer"] if x["device"]["node"]["id"] == t["id"]],
+        }
+        result["transports"][name] = {"kind": "DirectConnect" if t in d["dx"] else "VPNConnection"}
+        result["transports"][name].update({k: len(v) for k, v in held.items()})
+    # a circuit is listed by every interface it ends on (`capabilities` is the one edge, both ways)
+    for circuit in [*d["carrier"], *d["session"]]:
+        for end in rel(circuit, "capabilities"):
+            node = by_id.get(end["id"])
+            if node is not None and circuit["id"] not in caps_of(node):
+                result["missing"].append(f"{val(circuit, 'name')} ends on {epname(end)} which does not list it")
     return result
 
 

@@ -23,6 +23,13 @@ cases:
         l3_legs:
           handoff: 2
           vpn: 2
+        # the device kinds a circuit may end on (the transport of the cloud side)
+        far_end_kinds: [CloudDirectConnect, CloudVPNConnection]
+        # what a transport holds as its own interfaces (keys of the tracer's `transports`): ports, LAG, VIFs
+        transport_kinds:
+          dx-c900-fra-lag: [port, lag, vif]
+          vpn-c900-aws-euc1: [vif]
         # the graph kinds (keys of the tracer's `load`) that must not be empty
         non_empty:
-          [seg, iface, front, rear, carrier, session, vif, dx, peer, vpn, gw, att, sep, vnet, csg, inst, bgp, peering]
+          [seg, iface, front, rear, carrier, session, vif, lag, dx, peer, vpn, gw, att, sep, vnet, csg, inst, bgp,
+           peering]

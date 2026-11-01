@@ -1,15 +1,24 @@
-"""Validate the cloud side of a connection: gateways, transports, tunnels and service endpoints (R1 to R6).
+"""Validate the cloud side of a connection: gateways, transports, their interfaces and tunnels (R1 to R9).
 
-The schema accepts what these rules refuse (measured on 1.11.9): an attachment with no target or with two, a transport
-riding on itself. Each rule is one method and reports ERRORs.
+A transport (``CloudDirectConnect``, ``CloudVPNConnection``) is a device that holds interfaces: ports, a LAG, and the
+``CloudPeeringInterface`` that ride on them. The schema accepts what these rules refuse (measured on 1.11.9): an
+attachment with no target or with two, a transport riding on itself, a peering whose ``parent_interface`` (a one-sided
+edge) is a port of another device. Each rule is one method and reports ERRORs.
 
 R1  an attachment has exactly one target, ``virtual_network`` or ``peer_gateway``, and its peer gateway is not its own
 R2  a route table belongs to a ``hub`` gateway, and an attachment's route tables belong to the attachment's gateway
 R3  ``rides_on``: no loop; a physical transport rides only on a physical one; a logical transport that rides on a
-    port of ours has no ``partner_account``; a peering names a bundle or a circuit, not a member of a bundle
+    transport of ours has no ``partner_account``
 R4  a service endpoint's segments belong to the endpoint's virtual network; a tunnel key needs an IPsec tunnel
 R5  a crypto profile belongs to an IPsec tunnel
-R6  a VPN tunnel has the provider's ``endpoint_ip`` and rides on a VPN connection
+R6  a VPN tunnel has the provider's ``endpoint_ip`` and is an interface of a VPN connection
+R7  every interface of a transport is on that transport: the members of its LAG and the ``parent_interface`` of its
+    peering (the server refuses the first, not the one-sided second)
+R8  a peering that has a ``vlan_id`` rides on a port or LAG (a tunnel needs no parent), the parent of a peering is a
+    port or LAG, and the VLANs of the peerings of one parent are distinct
+R9  placement: a transport has exactly one of ``region`` and ``saas_region``; with an ``account`` it has no ``owner``,
+    without one it needs ``saas_region`` and ``owner``; a peering is an interface of a transport and one of scope
+    ``saas`` is on a transport with a ``saas_region``
 """
 
 from __future__ import annotations
@@ -24,6 +33,8 @@ ATTACHMENT = "CloudGatewayAttachment"
 ROUTE_TABLE = "CloudGatewayRouteTable"
 DIRECT_CONNECT = "CloudDirectConnect"
 PEERING = "CloudPeeringInterface"
+PORT = "DcimPhysicalInterface"
+LAG = "DcimLAGInterface"
 ENDPOINT = "CloudServiceEndpoint"
 VPN_CONNECTION = "CloudVPNConnection"
 HUB = "hub"
@@ -49,7 +60,7 @@ def _dicts(values: Any) -> list[dict[str, Any]]:
 
 
 class CheckCloudConnection(InfrahubCheck):
-    """The cloud side of a connection is consistent where the schema cannot say it (rules R1 to R6)."""
+    """The cloud side of a connection is consistent where the schema cannot say it (rules R1 to R9)."""
 
     query = "cloud_connection"
 
@@ -60,14 +71,25 @@ class CheckCloudConnection(InfrahubCheck):
             self._r2_attachment_tables(attachment)
         for table in _dicts(cleaned.get(ROUTE_TABLE)):
             self._r2_table_gateway(table)
-        transports = {str(t["id"]): t for t in _dicts(cleaned.get(DIRECT_CONNECT)) if t.get("id")}
+        direct = [t for t in _dicts(cleaned.get(DIRECT_CONNECT)) if t.get("id")]
+        transports = {str(t["id"]): t for t in [*direct, *_dicts(cleaned.get(VPN_CONNECTION))] if t.get("id")}
+        by_id = {str(t["id"]): t for t in direct}
         for transport in transports.values():
-            self._r3_transport(transport, transports)
-        for peering in _dicts(cleaned.get(PEERING)):
-            self._r3_peering_transport(peering, transports)
+            if transport.get("typename") == DIRECT_CONNECT:
+                self._r3_transport(transport, by_id)
+            self._r9_transport(transport)
+        for lag in _dicts(cleaned.get(LAG)):
+            if _ref(lag.get("device")) in transports:
+                self._r7_lag_members(lag, transports[_ref(lag.get("device")) or ""])
+        peerings = _dicts(cleaned.get(PEERING))
+        for peering in peerings:
             self._r4_tunnel_key(peering)
             self._r5_crypto_profile(peering)
             self._r6_tunnel(peering)
+            self._r7_parent(peering)
+            self._r8_parent(peering)
+            self._r9_peering(peering, transports)
+        self._r8_vlans(peerings)
         for endpoint in _dicts(cleaned.get(ENDPOINT)):
             self._r4_endpoint_segments(endpoint)
 
@@ -127,18 +149,8 @@ class CheckCloudConnection(InfrahubCheck):
             self._error(
                 transport,
                 DIRECT_CONNECT,
-                f"{label} is logical on a port of ours ('{_name(up)}') and also has a partner_account: "
+                f"{label} is logical on a transport of ours ('{_name(up)}') and also has a partner_account: "
                 "a partner's connection rides on the partner's port.",
-            )
-
-    def _r3_peering_transport(self, peering: dict[str, Any], transports: dict[str, dict[str, Any]]) -> None:
-        transport = transports.get(_ref(peering.get("transport")) or "")
-        if transport and transport.get("connection_type") == PHYSICAL and transport.get("rides_on"):
-            self._error(
-                peering,
-                PEERING,
-                f"R3: peering '{_name(peering)}' rides on '{_name(transport)}', a member of "
-                f"'{_name(transport['rides_on'])}': a peering names the bundle, not a member.",
             )
 
     def _r4_endpoint_segments(self, endpoint: dict[str, Any]) -> None:
@@ -170,15 +182,92 @@ class CheckCloudConnection(InfrahubCheck):
                 "a crypto profile belongs to an IPsec tunnel.",
             )
 
+    def _r7_lag_members(self, lag: dict[str, Any], transport: dict[str, Any]) -> None:
+        for member in _dicts(lag.get("member_interfaces")):
+            if _ref(member.get("device")) != str(transport["id"]):
+                self._error(
+                    lag,
+                    LAG,
+                    f"R7: LAG '{_name(lag)}' of transport '{_name(transport)}' has member '{_name(member)}' of "
+                    "another device: the members of a LAG are ports of its transport.",
+                )
+
+    def _r7_parent(self, peering: dict[str, Any]) -> None:
+        parent = peering.get("parent_interface")
+        if isinstance(parent, dict) and _ref(parent.get("device")) != _ref(peering.get("device")):
+            self._error(
+                peering,
+                PEERING,
+                f"R7: peering '{_name(peering)}' rides on '{_name(parent)}', an interface of another device than its "
+                f"transport '{_name(peering.get('device'))}'.",
+            )
+
+    def _r8_parent(self, peering: dict[str, Any]) -> None:
+        parent = peering.get("parent_interface")
+        label = f"R8: peering '{_name(peering)}'"
+        if isinstance(parent, dict):
+            if parent.get("typename") not in (PORT, LAG):
+                self._error(
+                    peering, PEERING, f"{label} rides on a {parent.get('typename')}: a port or a LAG of its transport."
+                )
+        elif peering.get("vlan_id") is not None:
+            self._error(peering, PEERING, f"{label} has vlan_id {peering['vlan_id']} but no parent_interface.")
+
+    def _r8_vlans(self, peerings: list[dict[str, Any]]) -> None:
+        seen: dict[tuple[str, Any], dict[str, Any]] = {}
+        for peering in peerings:
+            parent = _ref(peering.get("parent_interface"))
+            vlan = peering.get("vlan_id")
+            if parent is None or vlan is None:
+                continue
+            first = seen.setdefault((parent, vlan), peering)
+            if first is not peering:
+                self._error(
+                    peering,
+                    PEERING,
+                    f"R8: peering '{_name(peering)}' has vlan_id {vlan} like '{_name(first)}' on the same parent "
+                    f"'{_name(peering.get('parent_interface'))}'.",
+                )
+
+    def _r9_transport(self, transport: dict[str, Any]) -> None:
+        kind = str(transport.get("typename") or DIRECT_CONNECT)
+        label = f"R9: transport '{_name(transport)}'"
+        places = [field for field in ("region", "saas_region") if transport.get(field)]
+        if len(places) != 1:
+            found = " and ".join(places) if places else "none"
+            self._error(transport, kind, f"{label} has {found} as place: exactly one of region, saas_region.")
+        if transport.get("account"):
+            if transport.get("owner"):
+                self._error(transport, kind, f"{label} has an account and an owner: the owner is for a SaaS only.")
+        elif not (transport.get("saas_region") and transport.get("owner")):
+            self._error(transport, kind, f"{label} has no account: it needs a saas_region and an owner.")
+
+    def _r9_peering(self, peering: dict[str, Any], transports: dict[str, dict[str, Any]]) -> None:
+        device = peering.get("device")
+        transport = transports.get(_ref(device) or "")
+        if transport is None:
+            kind = device.get("typename") if isinstance(device, dict) else None
+            self._error(
+                peering,
+                PEERING,
+                f"R9: peering '{_name(peering)}' is an interface of '{_name(device)}' ({kind}), not of a transport.",
+            )
+        elif peering.get("scope") == "saas" and not transport.get("saas_region"):
+            self._error(
+                peering,
+                PEERING,
+                f"R9: peering '{_name(peering)}' has scope saas but its transport '{_name(transport)}' has no "
+                "saas_region.",
+            )
+
     def _r6_tunnel(self, peering: dict[str, Any]) -> None:
-        transport = peering.get("transport")
+        device = peering.get("device")
         # clean_data renames the "__typename" key to "typename"
-        kind = transport.get("typename") if isinstance(transport, dict) else None
-        is_tunnel = peering.get("tunnel_index") is not None or kind == VPN_CONNECTION
-        if not is_tunnel:
+        kind = device.get("typename") if isinstance(device, dict) else None
+        if peering.get("tunnel_index") is None and kind != VPN_CONNECTION:
             return
         label = f"R6: tunnel '{_name(peering)}'"
         if not peering.get("endpoint_ip"):
             self._error(peering, PEERING, f"{label} has no endpoint_ip (the provider's public address).")
-        if transport and kind != VPN_CONNECTION:
-            self._error(peering, PEERING, f"{label} rides on a {kind}, not on a VPN connection.")
+        if kind != VPN_CONNECTION:
+            self._error(peering, PEERING, f"{label} is an interface of a {kind}, not of a VPN connection.")

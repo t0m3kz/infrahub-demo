@@ -95,6 +95,19 @@ spec:
       parent_interface: ["dc90-edge-01", "Ethernet1/2"]
       ip_address: {data: {address: "169.254.10.10/30", ip_namespace: "PROD"}}
 ---
+# A routed port: Ethernet1/9 carries the address of the link itself (no VLAN, no sub-interface).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - device: "dc90-edge-01"
+      name: "Ethernet1/9"
+      role: cloud
+      status: active
+      description: "GCP Dedicated Interconnect, routed port (no VLAN)"
+      ip_address: {data: {address: "169.254.30.2/29", ip_namespace: "PROD"}}
+---
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

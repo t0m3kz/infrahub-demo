@@ -1,0 +1,73 @@
+---
+# The transports: one device-shaped object per way to the cloud edge. A transport holds interfaces (its ports, its LAG,
+# the peering interfaces that ride on them, 10c to 10e) and has no role, platform or artifact. Exactly one of `region`
+# (a cloud region, with the `account`) and `saas_region` (a SaaS, with the `owner` and no account) places it
+# (checks/cloud_connection.py R9). Loaded after the SaaS regions (09_saas.yml) and the gateways (08_cloud.yml).
+#
+#   dx-c900-fra-lag       AWS Direct Connect, physical: two dedicated 10G ports bundled in lag1
+#   er-c900-weu           Azure ExpressRoute, logical: owns the MSEE port pair of the circuit
+#   ic-c900-fra-1         GCP Partner Interconnect, logical, lives in the partner's account
+#   ic-ded-c900-fra       GCP Dedicated Interconnect, physical: one port, a routed port (no VLAN)
+#   webex-c900-fra-xc     Webex cross-connect, physical, SaaS: owner C900, no account
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudDirectConnect
+  data:
+    - name: "dx-c900-fra-lag"
+      description: "AWS Direct Connect: two dedicated 10G ports in one LAG"
+      status: active
+      connection_type: physical
+      bandwidth: 20000
+      account: "c900-aws-prod"
+      region: "eu-central-1"
+    - name: "er-c900-weu"
+      description: "Azure ExpressRoute circuit, two links (primary and secondary), one service key"
+      status: active
+      connection_type: logical
+      bandwidth: 1000
+      service_key: "11111111-2222-3333-4444-555555555555"
+      account: "c900-azure-prod"
+      region: "westeurope"
+    - name: "ic-c900-fra-1"
+      description: "GCP Partner Interconnect attachment, a logical connection on the partner's port"
+      status: active
+      connection_type: logical
+      bandwidth: 1000
+      account: "c900-gcp-prod"
+      partner_account: "partner-fabric-gcp"
+      region: "europe-west3"
+    - name: "ic-ded-c900-fra"
+      description: "GCP Dedicated Interconnect: one 10G port of ours at the Google location, routed (no VLAN)"
+      status: active
+      connection_type: physical
+      bandwidth: 10000
+      account: "c900-gcp-prod"
+      region: "europe-west3"
+    - name: "webex-c900-fra-xc"
+      description: "Webex cross-connect at the Frankfurt peering point, tenant of C900 (SaaS: no account)"
+      status: active
+      connection_type: physical
+      bandwidth: 1000
+      saas_region: "WEBEX-FRANKFURT"
+      owner: "C900"
+---
+# The VPN transports hold the tunnels (10e). AWS: the provider side is the hub, our side the customer gateway. Zscaler
+# (SaaS): a SaaS region and an owner, no account and no customer gateway.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudVPNConnection
+  data:
+    - name: "vpn-c900-aws-euc1"
+      description: "AWS site-to-site VPN: two tunnels, BGP inside each /30"
+      status: active
+      account: "c900-aws-prod"
+      region: "eu-central-1"
+      customer_gateway: "cgw-c900-dc90"
+      gateway: "tgw-c900-euc1"
+    - name: "zscaler-c900-muc"
+      description: "Zscaler tunnel to the Munich node, tenant of C900 (SaaS: no account, no customer gateway)"
+      status: active
+      saas_region: "ZSCALER-MUNICH I"
+      owner: "C900"

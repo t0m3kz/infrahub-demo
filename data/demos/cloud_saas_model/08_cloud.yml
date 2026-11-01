@@ -106,21 +106,6 @@ spec:
       pfs_group: 14
       esp_lifetime: 3600
 ---
-# The bundle of the AWS Direct Connect ports: two member ports (11_circuits.yml) ride on it, the virtual interfaces ride
-# on the bundle, not on a member.
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: CloudDirectConnect
-  data:
-    - name: "dx-c900-fra-lag"
-      description: "AWS Direct Connect LAG: two dedicated 10G ports"
-      status: active
-      connection_type: physical
-      bandwidth: 20000
-      account: "c900-aws-prod"
-      region: "eu-central-1"
----
 # The gateways, one kind in three types (the operator word is in the name):
 #   hub       tgw (AWS transit gateway): attachments and route tables hang off it
 #   edge      dxgw (AWS Direct Connect gateway, global: no region), vgw (AWS virtual private gateway), ergw (Azure
@@ -228,21 +213,6 @@ spec:
       gateway: "cr-c900-euw3"
       virtual_network: "vpc-c900-gcp"
       owner_account: "c900-gcp-prod"
----
-# The VPN transport: no physical object, it holds the tunnels (two peering interfaces, 11_circuits.yml). Its provider
-# side is the hub (a virtual private gateway would do as well), its customer side our customer gateway.
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: CloudVPNConnection
-  data:
-    - name: "vpn-c900-aws-euc1"
-      description: "AWS site-to-site VPN: two tunnels, BGP inside each /30"
-      status: active
-      account: "c900-aws-prod"
-      region: "eu-central-1"
-      customer_gateway: "cgw-c900-dc90"
-      gateway: "tgw-c900-euc1"
 ---
 apiVersion: infrahub.app/v1
 kind: Object

@@ -116,6 +116,11 @@ def render_golden(result: dict[str, Any]) -> str:
     lines += sorted("  " + " | ".join(leg["hops"]) for leg in result["l3"])
     lines.append("# peering interfaces")
     lines += sorted(f"  {p['name']} [{p['scope']}] on {p['transport']} -> {p['lands']}" for p in result["peerings"])
+    lines.append("# transports")
+    lines += sorted(
+        f"  {name} [{t['kind']}] port {t['port']} lag {t['lag']} vif {t['vif']}"
+        for name, t in result["transports"].items()
+    )
     lines.append("# missing")
     lines += sorted("  " + m for m in result["missing"]) or ["  (none)"]
     return "\n".join(lines) + "\n"
@@ -157,6 +162,24 @@ def check_pair(rep: Report, case: dict, pair: dict, tracer: ModuleType, d: dict,
                 dict(counted) == want,
                 f"expected {want}, got {dict(counted)}",
             )
+    # every leg starts at a circuit found from an interface of ours through its `capabilities`
+    unstarted = [leg["hops"][-1] for leg in result["l1"] + result["l3"] if not leg.get("start_interface")]
+    rep.add(f"[{tag}] every leg starts at an interface of ours that lists its circuit", not unstarted, str(unstarted))
+    # a circuit ends on an interface of a transport: the device at the far end is a Direct Connect or a VPN connection
+    kinds = set(pair.get("far_end_kinds") or [])
+    stray = [
+        f"{leg['carrier']} -> {leg['carrier_far_kind']}"
+        for leg in result["l1"]
+        if leg["carrier_type"] != "internet" and leg["carrier_far_kind"] not in kinds
+    ] + [f"{leg['session_circuits']} -> {leg['far_kind']}" for leg in result["l3"] if leg["far_kind"] not in kinds]
+    rep.add(
+        f"[{tag}] every circuit ends on an interface of a transport ({', '.join(sorted(kinds))})", not stray, str(stray)
+    )
+    # a transport holds its ports, its LAG and its virtual interfaces as interfaces of its own
+    for name, wanted in (pair.get("transport_kinds") or {}).items():
+        held = result["transports"].get(name) or {}
+        lacking = [k for k in wanted if not held.get(k)]
+        rep.add(f"[{tag}] transport {name} holds {', '.join(wanted)}", not lacking, f"empty: {lacking} in {held}")
     # reverse: from the cloud segment's virtual network, every peering that lands in it is reached from the DC segment
     csg = next((s for s in d["csg"] if s["name"]["value"] == cloud), None)
     vname = ((csg or {}).get("virtual_network") or {}).get("node", {}).get("name", {}).get("value")

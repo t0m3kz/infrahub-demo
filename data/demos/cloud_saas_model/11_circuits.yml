@@ -1,18 +1,13 @@
 ---
-# The circuits of the legs. The two ends of a circuit are ONE field, `endpoints`: an interface of ours or the object
-# that terminates the circuit: a transport (CloudDirectConnect) for a carrier, a cloud peering interface
-# (CloudPeeringInterface,
-# "the interface of the cloud") for a session. The peer is a marker generic without a human friendly id (the kinds have
-# different ones), so every end is a nested object with its kind and an existing object cannot be named by a string.
-# The transports are therefore created here, by the carrier that ends on them, and the peering interfaces by the
-# session circuit that ends on them; a peering names its transport, gateway, account, key by HFID (they exist by then).
-# The ExpressRoute transport and the Webex peering end two circuits, so they are spelled out twice with the same values.
-# peer_ip and peer_asn are the PROVIDER side of the leg; our side is the sub-interface address of 06_dc_routing.yml and
-# the local_as of dc90-edge-01-bgp. `locations` are authored here (no generator derives them).
+# The circuits of the legs. A circuit ends on interfaces through ONE edge, `capabilities` (the shared interface edge,
+# min 1, max 2): an interface of ours and an interface of the other side, given by its HFID `[device, interface]`. The
+# far end of a carrier is a port of a transport (10c), the far end of a session is a peering interface of it (10e), so
+# the transports and their interfaces exist by now (earlier files) and nothing is created here. `locations` are
+# authored here (no generator derives them on the throwaway branch).
 #
-# Carrier circuits are the physical wire: our edge port to the provider's port (the transport; a SaaS peering has no
-# transport object, so the peering is the far end). Session circuits are the routing on top: handoff (BGP) for the
-# private legs, vpn for the two AWS tunnels, tunnel for Zscaler.
+# Carrier circuits are the physical wire: our edge port to the provider's port. Session circuits are the routing on
+# top: handoff (BGP) for the private legs, vpn for the two AWS tunnels, tunnel for Zscaler. peer_ip and peer_asn are
+# the PROVIDER side of the leg (on the peering interface); our side is the sub-interface address of 06_dc_routing.yml.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -20,7 +15,7 @@ spec:
   data:
     - name: XC-DC90-AWS-DX1
       circuit_id: XC-DC90-AWS-DX1
-      description: Cross-connect from dc90-edge-01 to the AWS Direct Connect port
+      description: Cross-connect from dc90-edge-01 to the first AWS Direct Connect port of the LAG
       provider: P004
       circuit_type: cross_connect
       status: active
@@ -28,21 +23,9 @@ spec:
       locations:
         - DC90
         - eu-central-1
-      endpoints:
-        - kind: DcimPhysicalInterface
-          data:
-            device: dc90-edge-01
-            name: Ethernet1/3
-        - kind: CloudDirectConnect
-          data:
-            name: dx-c900-fra-1a
-            description: AWS Direct Connect dedicated 10G port, member of the LAG dx-c900-fra-lag
-            status: active
-            connection_type: physical
-            bandwidth: 10000
-            account: c900-aws-prod
-            region: eu-central-1
-            rides_on: dx-c900-fra-lag
+      capabilities:
+        - ["dc90-edge-01", "Ethernet1/3"]
+        - ["dx-c900-fra-lag", "dxcon-1a"]
     - name: XC-DC90-AWS-DX2
       circuit_id: XC-DC90-AWS-DX2
       description: Cross-connect from dc90-edge-01 to the second AWS Direct Connect port of the LAG
@@ -53,21 +36,9 @@ spec:
       locations:
         - DC90
         - eu-central-1
-      endpoints:
-        - kind: DcimPhysicalInterface
-          data:
-            device: dc90-edge-01
-            name: Ethernet1/8
-        - kind: CloudDirectConnect
-          data:
-            name: dx-c900-fra-1b
-            description: AWS Direct Connect dedicated 10G port, member of the LAG dx-c900-fra-lag
-            status: active
-            connection_type: physical
-            bandwidth: 10000
-            account: c900-aws-prod
-            region: eu-central-1
-            rides_on: dx-c900-fra-lag
+      capabilities:
+        - ["dc90-edge-01", "Ethernet1/8"]
+        - ["dx-c900-fra-lag", "dxcon-1b"]
     - name: VC-DC90-AZ-ER-PRI
       circuit_id: VC-DC90-AZ-ER-PRI
       description: Virtual connection to the ExpressRoute circuit, primary link
@@ -78,21 +49,9 @@ spec:
       locations:
         - DC90
         - westeurope
-      endpoints:
-        - kind: DcimPhysicalInterface
-          data:
-            device: dc90-edge-01
-            name: Ethernet1/4
-        - kind: CloudDirectConnect
-          data:
-            name: er-c900-weu
-            description: Azure ExpressRoute circuit, two links (primary and secondary), one service key
-            status: active
-            connection_type: logical
-            bandwidth: 1000
-            service_key: "11111111-2222-3333-4444-555555555555"
-            account: c900-azure-prod
-            region: westeurope
+      capabilities:
+        - ["dc90-edge-01", "Ethernet1/4"]
+        - ["er-c900-weu", "msee-pri"]
     - name: VC-DC90-AZ-ER-SEC
       circuit_id: VC-DC90-AZ-ER-SEC
       description: Virtual connection to the ExpressRoute circuit, secondary link
@@ -103,21 +62,9 @@ spec:
       locations:
         - DC90
         - westeurope
-      endpoints:
-        - kind: DcimPhysicalInterface
-          data:
-            device: dc90-edge-01
-            name: Ethernet1/5
-        - kind: CloudDirectConnect
-          data:
-            name: er-c900-weu
-            description: Azure ExpressRoute circuit, two links (primary and secondary), one service key
-            status: active
-            connection_type: logical
-            bandwidth: 1000
-            service_key: "11111111-2222-3333-4444-555555555555"
-            account: c900-azure-prod
-            region: westeurope
+      capabilities:
+        - ["dc90-edge-01", "Ethernet1/5"]
+        - ["er-c900-weu", "msee-sec"]
     - name: VC-DC90-GCP-IC1
       circuit_id: VC-DC90-GCP-IC1
       description: Virtual connection to the Google Partner Interconnect
@@ -128,24 +75,25 @@ spec:
       locations:
         - DC90
         - europe-west3
-      endpoints:
-        - kind: DcimPhysicalInterface
-          data:
-            device: dc90-edge-01
-            name: Ethernet1/7
-        - kind: CloudDirectConnect
-          data:
-            name: ic-c900-fra-1
-            description: GCP Partner Interconnect attachment, a logical connection on the partner's port
-            status: active
-            connection_type: logical
-            bandwidth: 1000
-            account: c900-gcp-prod
-            partner_account: partner-fabric-gcp
-            region: europe-west3
+      capabilities:
+        - ["dc90-edge-01", "Ethernet1/7"]
+        - ["ic-c900-fra-1", "ic-port-1"]
+    - name: XC-DC90-GCP-DED1
+      circuit_id: XC-DC90-GCP-DED1
+      description: Cross-connect to the Google Dedicated Interconnect port (routed port on both ends, no VLAN)
+      provider: P006
+      circuit_type: cross_connect
+      status: active
+      bandwidth: 10000
+      locations:
+        - DC90
+        - europe-west3
+      capabilities:
+        - ["dc90-edge-01", "Ethernet1/9"]
+        - ["ic-ded-c900-fra", "ic-dedicated-port"]
     - name: XC-DC90-WEBEX-1
       circuit_id: XC-DC90-WEBEX-1
-      description: "Cross-connect to the Webex peering point (the SaaS peering is the far end, no transport object)"
+      description: Cross-connect to the Webex peering point
       provider: P901
       circuit_type: cross_connect
       status: active
@@ -153,26 +101,9 @@ spec:
       locations:
         - DC90
         - WEBEX-FRANKFURT
-      endpoints:
-        - kind: DcimPhysicalInterface
-          data:
-            device: dc90-edge-01
-            name: Ethernet1/6
-        - kind: CloudPeeringInterface
-          data:
-            name: webex-c900-fra
-            description: Webex private peering, tenant of C900
-            status: active
-            scope: saas
-            routing: bgp
-            vlan_id: 300
-            bfd: false
-            service_id: webex-org-c900
-            saas_region: WEBEX-FRANKFURT
-            owner: C900
-            auth: c900-webex-bgp-key
-            peer_ip: ["10.255.128.7/31", "PROD"]
-            peer_asn: AS13445
+      capabilities:
+        - ["dc90-edge-01", "Ethernet1/6"]
+        - ["webex-c900-fra-xc", "wbx-port-1"]
     - name: INET-DC90-ISP-DEMO
       circuit_id: INET-DC90-ISP-DEMO
       description: Internet access of dc90-edge-01 (carries the VPN tunnels and the Zscaler tunnel)
@@ -183,16 +114,9 @@ spec:
       locations:
         - DC90
         - ISP-DEMO
-      endpoints:
-        - kind: DcimPhysicalInterface
-          data:
-            device: dc90-edge-01
-            name: Ethernet1/2
-        - kind: DcimPhysicalInterface
-          data:
-            device: EXT-ISP-DEMO-PE1
-            name: et-0/0/0
-
+      capabilities:
+        - ["dc90-edge-01", "Ethernet1/2"]
+        - ["EXT-ISP-DEMO-PE1", "et-0/0/0"]
 ---
 apiVersion: infrahub.app/v1
 kind: Object
@@ -212,28 +136,9 @@ spec:
       locations:
         - DC90
         - eu-central-1
-      endpoints:
-        - kind: DcimVirtualInterface
-          data:
-            device: dc90-edge-01
-            name: Ethernet1/3.1000
-        - kind: CloudPeeringInterface
-          data:
-            name: vif-c900-aws-transit
-            description: AWS transit virtual interface (private scope, lands on the DX Gateway of the TGW)
-            status: active
-            scope: private
-            routing: bgp
-            vlan_id: 1000
-            mtu: 8500
-            bfd: true
-            transport: dx-c900-fra-lag
-            account: c900-aws-prod
-            region: eu-central-1
-            gateway: dxgw-c900
-            auth: c900-aws-dx-bgp-key
-            peer_ip: ["10.255.128.1/31", "PROD"]
-            peer_asn: AS64512
+      capabilities:
+        - ["dc90-edge-01", "Ethernet1/3.1000"]
+        - ["dx-c900-fra-lag", "lag1.1000"]
     # AWS Direct Connect, private: virtual interface (scope private) -> virtual private gateway -> VPC.
     - name: SC-C900-AWS-DX-PRIV
       description: 'Handoff: edge sub-interface to the private virtual interface'
@@ -247,28 +152,9 @@ spec:
       locations:
         - DC90
         - eu-central-1
-      endpoints:
-        - kind: DcimVirtualInterface
-          data:
-            device: dc90-edge-01
-            name: Ethernet1/3.1100
-        - kind: CloudPeeringInterface
-          data:
-            name: vif-c900-aws-private
-            description: AWS private virtual interface
-            status: active
-            scope: private
-            routing: bgp
-            vlan_id: 1100
-            mtu: 9001
-            bfd: true
-            transport: dx-c900-fra-lag
-            account: c900-aws-prod
-            region: eu-central-1
-            gateway: vgw-c900-euc1
-            auth: c900-aws-dx-bgp-key
-            peer_ip: ["10.255.128.3/31", "PROD"]
-            peer_asn: AS64512
+      capabilities:
+        - ["dc90-edge-01", "Ethernet1/3.1100"]
+        - ["dx-c900-fra-lag", "lag1.1100"]
     # Azure ExpressRoute: ONE transport (the circuit), two peerings, a /30 each, both on the ExpressRoute Gateway.
     - name: SC-C900-AZ-ER-PRI
       description: 'Handoff: edge sub-interface to the primary private peering'
@@ -282,27 +168,9 @@ spec:
       locations:
         - DC90
         - westeurope
-      endpoints:
-        - kind: DcimVirtualInterface
-          data:
-            device: dc90-edge-01
-            name: Ethernet1/4.200
-        - kind: CloudPeeringInterface
-          data:
-            name: er-c900-weu-pri
-            description: ExpressRoute private peering, primary link
-            status: active
-            scope: private
-            routing: bgp
-            vlan_id: 200
-            mtu: 1500
-            bfd: true
-            transport: er-c900-weu
-            account: c900-azure-prod
-            region: westeurope
-            gateway: ergw-c900-weu
-            peer_ip: ["10.255.128.10/30", "PROD"]
-            peer_asn: AS12076
+      capabilities:
+        - ["dc90-edge-01", "Ethernet1/4.200"]
+        - ["er-c900-weu", "er-c900-weu-pri"]
     - name: SC-C900-AZ-ER-SEC
       description: 'Handoff: edge sub-interface to the secondary private peering'
       provider: P005
@@ -315,27 +183,9 @@ spec:
       locations:
         - DC90
         - westeurope
-      endpoints:
-        - kind: DcimVirtualInterface
-          data:
-            device: dc90-edge-01
-            name: Ethernet1/5.200
-        - kind: CloudPeeringInterface
-          data:
-            name: er-c900-weu-sec
-            description: ExpressRoute private peering, secondary link
-            status: active
-            scope: private
-            routing: bgp
-            vlan_id: 200
-            mtu: 1500
-            bfd: true
-            transport: er-c900-weu
-            account: c900-azure-prod
-            region: westeurope
-            gateway: ergw-c900-weu
-            peer_ip: ["10.255.128.14/30", "PROD"]
-            peer_asn: AS12076
+      capabilities:
+        - ["dc90-edge-01", "Ethernet1/5.200"]
+        - ["er-c900-weu", "er-c900-weu-sec"]
     # GCP Partner Interconnect: VLAN attachment (scope private) -> Cloud Router -> VPC.
     - name: SC-C900-GCP-IC
       description: 'Handoff: edge sub-interface to the VLAN attachment'
@@ -349,27 +199,26 @@ spec:
       locations:
         - DC90
         - europe-west3
-      endpoints:
-        - kind: DcimVirtualInterface
-          data:
-            device: dc90-edge-01
-            name: Ethernet1/7.400
-        - kind: CloudPeeringInterface
-          data:
-            name: gcp-c900-vlan-att-1
-            description: GCP VLAN attachment of the Partner Interconnect
-            status: active
-            scope: private
-            routing: bgp
-            vlan_id: 400
-            mtu: 1460
-            bfd: true
-            transport: ic-c900-fra-1
-            account: c900-gcp-prod
-            region: europe-west3
-            gateway: cr-c900-euw3
-            peer_ip: ["169.254.20.1/29", "PROD"]
-            peer_asn: AS16550
+      capabilities:
+        - ["dc90-edge-01", "Ethernet1/7.400"]
+        - ["ic-c900-fra-1", "gcp-c900-vlan-att-1"]
+    # GCP Dedicated Interconnect: a ROUTED PORT leg. Both ends are physical interfaces with an address and no VLAN
+    # (Ethernet1/9 carries 169.254.30.2/29 itself, no sub-interface).
+    - name: SC-C900-GCP-DED
+      description: 'Handoff on a routed port: edge Ethernet1/9 to the Cloud Router peering, no VLAN'
+      provider: P006
+      circuit_type: handoff
+      status: active
+      ip_namespace: PROD
+      link_prefix:
+        - 169.254.30.0/29
+        - PROD
+      locations:
+        - DC90
+        - europe-west3
+      capabilities:
+        - ["dc90-edge-01", "Ethernet1/9"]
+        - ["ic-ded-c900-fra", "gcp-c900-ded-1"]
     - name: SC-C900-WEBEX-PROD
       description: 'Handoff: edge sub-interface to the Webex peering'
       provider: P901
@@ -382,26 +231,9 @@ spec:
       locations:
         - DC90
         - WEBEX-FRANKFURT
-      endpoints:
-        - kind: DcimVirtualInterface
-          data:
-            device: dc90-edge-01
-            name: Ethernet1/6.300
-        - kind: CloudPeeringInterface
-          data:
-            name: webex-c900-fra
-            description: Webex private peering, tenant of C900
-            status: active
-            scope: saas
-            routing: bgp
-            vlan_id: 300
-            bfd: false
-            service_id: webex-org-c900
-            saas_region: WEBEX-FRANKFURT
-            owner: C900
-            auth: c900-webex-bgp-key
-            peer_ip: ["10.255.128.7/31", "PROD"]
-            peer_asn: AS13445
+      capabilities:
+        - ["dc90-edge-01", "Ethernet1/6.300"]
+        - ["webex-c900-fra-xc", "webex-c900-fra"]
     # AWS site-to-site VPN: ONE transport (the VPN connection), two tunnels, each a peering and the end of its own
     # session circuit, BGP inside a /30 each. The provider side (transit gateway) is on the transport.
     - name: SC-C900-AWS-VPN-1
@@ -416,29 +248,9 @@ spec:
       locations:
         - DC90
         - eu-central-1
-      endpoints:
-        - kind: DcimVirtualInterface
-          data:
-            device: dc90-edge-01
-            name: Tunnel1
-        - kind: CloudPeeringInterface
-          data:
-            name: vpn-c900-aws-euc1-t1
-            description: AWS VPN tunnel 1
-            status: active
-            scope: private
-            routing: bgp
-            tunnel_index: 1
-            endpoint_ip: "203.0.113.50/32"
-            tunnel_mode: ipsec
-            crypto_profile: IPSEC-AES256-SHA256-DH14
-            tunnel_key: c900-aws-vpn-t1-key
-            mtu: 1436
-            transport: vpn-c900-aws-euc1
-            account: c900-aws-prod
-            region: eu-central-1
-            peer_ip: ["169.254.10.1/30", "PROD"]
-            peer_asn: AS64512
+      capabilities:
+        - ["dc90-edge-01", "Tunnel1"]
+        - ["vpn-c900-aws-euc1", "Tunnel1"]
     - name: SC-C900-AWS-VPN-2
       description: VPN tunnel 2 from the edge to the AWS VPN connection
       provider: P004
@@ -451,29 +263,9 @@ spec:
       locations:
         - DC90
         - eu-central-1
-      endpoints:
-        - kind: DcimVirtualInterface
-          data:
-            device: dc90-edge-01
-            name: Tunnel2
-        - kind: CloudPeeringInterface
-          data:
-            name: vpn-c900-aws-euc1-t2
-            description: AWS VPN tunnel 2
-            status: active
-            scope: private
-            routing: bgp
-            tunnel_index: 2
-            endpoint_ip: "203.0.113.51/32"
-            tunnel_mode: ipsec
-            crypto_profile: IPSEC-AES256-SHA256-DH14
-            tunnel_key: c900-aws-vpn-t2-key
-            mtu: 1436
-            transport: vpn-c900-aws-euc1
-            account: c900-aws-prod
-            region: eu-central-1
-            peer_ip: ["169.254.10.5/30", "PROD"]
-            peer_asn: AS64512
+      capabilities:
+        - ["dc90-edge-01", "Tunnel2"]
+        - ["vpn-c900-aws-euc1", "Tunnel2"]
     - name: SC-C900-ZSCALER-TUN1
       description: Tunnel to the Zscaler enforcement node, no BGP
       provider: P030
@@ -482,21 +274,6 @@ spec:
       locations:
         - DC90
         - ZSCALER-MUNICH I
-      endpoints:
-        - kind: DcimVirtualInterface
-          data:
-            device: dc90-edge-01
-            name: Tunnel3
-        - kind: CloudPeeringInterface
-          data:
-            name: zscaler-c900-muc
-            description: Zscaler tunnel, tenant of C900 (static, no BGP)
-            status: active
-            scope: saas
-            routing: static
-            tunnel_index: 1
-            endpoint_ip: "203.0.113.80/32"
-            tunnel_mode: gre
-            service_id: zscaler-org-c900
-            saas_region: ZSCALER-MUNICH I
-            owner: C900
+      capabilities:
+        - ["dc90-edge-01", "Tunnel3"]
+        - ["zscaler-c900-muc", "Tunnel1"]

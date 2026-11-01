@@ -22,6 +22,7 @@ spec:
     - {prefix: "169.254.20.0/29", ip_namespace: "PROD", status: active, description: "Link: GCP VLAN attachment"}
     - {prefix: "169.254.10.0/30", ip_namespace: "PROD", status: active, description: "Link: AWS VPN tunnel 1 (by AWS)"}
     - {prefix: "169.254.10.4/30", ip_namespace: "PROD", status: active, description: "Link: AWS VPN tunnel 2 (by AWS)"}
+    - {prefix: "169.254.30.0/29", ip_namespace: "PROD", status: active, description: "Link: GCP dedicated routed port"}
     - {prefix: "169.254.10.8/30", ip_namespace: "PROD", status: active, description: "Link: Zscaler tunnel"}
 ---
 apiVersion: infrahub.app/v1
@@ -39,5 +40,6 @@ spec:
     - {address: "10.255.128.14/30", ip_namespace: "PROD", description: "Microsoft side, ExpressRoute secondary"}
     - {address: "10.255.128.7/31", ip_namespace: "PROD", description: "Webex side"}
     - {address: "169.254.20.1/29", ip_namespace: "PROD", description: "Google side (Cloud Router) of the VLAN attachment"}  # yamllint disable-line rule:line-length
+    - {address: "169.254.30.1/29", ip_namespace: "PROD", description: "Google side (Cloud Router) of the dedicated routed port"}  # yamllint disable-line rule:line-length
     - {address: "169.254.10.1/30", ip_namespace: "PROD", description: "AWS side of VPN tunnel 1"}
     - {address: "169.254.10.5/30", ip_namespace: "PROD", description: "AWS side of VPN tunnel 2"}

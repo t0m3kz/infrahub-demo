@@ -1,8 +1,8 @@
 # Szybki test modelu (traversal)
 
 Zamiast godziny testów integracyjnych: schemat + mały model na jednorazowej gałęzi, potem asercje na przejściu po
-grafie (L1: kable, porty, patch panele, obwody nośników; L3: SVI/VRF, peeringi BGP, obwody sesji, interfejs peeringu
-chmury, brama, hub, sieć wirtualna, segment chmurowy) w obu kierunkach. Cel: kilka minut.
+grafie (L1: kable, porty, patch panele, obwody nośników, transport z portami i pakietem; L3: SVI/VRF, peeringi BGP, obwody sesji,
+interfejs peeringu chmury, brama, hub, sieć wirtualna, segment chmurowy) w obu kierunkach. Cel: kilka minut.
 
 ```bash
 uv run invoke check-model                      # wszystkie przypadki z cases.yml
@@ -19,8 +19,11 @@ na tej gałęzi (odmowy serwera są wypisane dosłownie); (4) `infrahubctl objec
 (5) dla każdej pary segmentów: odczyt grafu, przejście L1 i L3, asercje, porównanie z plikiem wzorcowym; (6) usunięcie
 gałęzi (także po błędzie) i czas całkowity. Nic nie jest zapisywane na `main`.
 
-Asercje na parę: wszystkie rodzaje obiektów modelu niepuste, żaden przeskok oznaczony jako brakujący, L1 i L3 docierają
-do segmentu chmurowego, liczba nóg wg typu obwodu (`l1_legs`, `l3_legs` w `cases.yml`), kierunek odwrotny (peeringi
+Asercje na parę: wszystkie rodzaje obiektów modelu niepuste, żaden przeskok oznaczony jako brakujący (także obwód, którego
+koniec nie wymienia go w swoich `capabilities`), każdy odcinek zaczyna się od obwodu znalezionego z NASZEGO interfejsu przez
+`capabilities`, każdy obwód kończy się na interfejsie transportu (`far_end_kinds`: `CloudDirectConnect`,
+`CloudVPNConnection`), transport trzyma wymagane rodzaje interfejsów (`transport_kinds`: porty, pakiet, VIF), L1 i L3
+docierają do segmentu chmurowego, liczba nóg wg typu obwodu (`l1_legs`, `l3_legs` w `cases.yml`), kierunek odwrotny (peeringi
 lądujące w sieci wirtualnej segmentu chmurowego = te, do których dochodzi segment DC), zgodność z plikiem wzorcowym
 (posortowane listy przeskoków, więc kolejność odpowiedzi API nie ma znaczenia). Przy błędzie tabela PASS/FAIL podaje
 przeskok, który się urwał, albo różnicę względem wzorca.

@@ -1,4 +1,4 @@
-"""CheckCloudConnection: rules R1 to R6 on canned query responses, and its registration."""
+"""CheckCloudConnection: rules R1 to R9 on canned query responses, and its registration."""
 
 from __future__ import annotations
 
@@ -48,27 +48,72 @@ def _attachment(name: str = "att", **overrides: Any) -> dict[str, Any]:
 
 
 def _transport(name: str, connection_type: str = "physical", rides_on: str | None = None, **overrides: Any) -> dict:
+    """A well-placed Direct Connect (account and region), the fields the rules read."""
     transport = {
+        "__typename": "CloudDirectConnect",
         "id": name,
         "name": _v(name),
         "connection_type": _v(connection_type),
         "partner_account": _node(None),
         "rides_on": _node(rides_on, connection_type=_v("physical")) if rides_on else _node(None),
+        "account": _node("acct"),
+        "owner": _node(None),
+        "region": _node("region"),
+        "saas_region": _node(None),
     }
     transport.update(overrides)
     return transport
 
 
-def _peering(name: str = "p1", **overrides: Any) -> dict[str, Any]:
+def _vpn(name: str = "vpn", **overrides: Any) -> dict[str, Any]:
+    """A well-placed VPN connection."""
+    vpn = {
+        "__typename": "CloudVPNConnection",
+        "id": name,
+        "name": _v(name),
+        "account": _node("acct"),
+        "owner": _node(None),
+        "region": _node("region"),
+        "saas_region": _node(None),
+    }
+    vpn.update(overrides)
+    return vpn
+
+
+def _saas_transport(name: str = "saas", **overrides: Any) -> dict[str, Any]:
+    """A SaaS Direct Connect: a SaaS region and an owner, no account."""
+    fields: dict[str, Any] = {
+        "account": _node(None),
+        "region": _node(None),
+        "saas_region": _node("webex"),
+        "owner": _node("c900"),
+    }
+    fields.update(overrides)
+    transport = _transport(name)
+    transport.update(fields)
+    return transport
+
+
+def _port(name: str, kind: str = "DcimPhysicalInterface", device: str | None = "dx") -> dict[str, Any]:
+    """The parent_interface of a peering: an interface of ``device``."""
+    return _node(name, __typename=kind, device=_node(device))
+
+
+def _peering(
+    name: str = "p1", device: str = "dx", kind: str = "CloudDirectConnect", **overrides: Any
+) -> dict[str, Any]:
     peering = {
         "id": name,
         "name": _v(name),
+        "scope": _v("private"),
+        "vlan_id": _v(None),
         "tunnel_index": _v(None),
         "endpoint_ip": _v(None),
         "tunnel_mode": _v(None),
         "crypto_profile": _node(None),
         "tunnel_key": _node(None),
-        "transport": _node(None),
+        "device": _node(device, __typename=kind),
+        "parent_interface": _node(None),
     }
     peering.update(overrides)
     return peering
@@ -141,11 +186,11 @@ class TestR2RouteTables:
 
 
 class TestR3Transports:
-    """rides_on: no loop, physical on physical, a logical circuit on a port of ours has no partner."""
+    """rides_on: no loop, physical on physical, a logical circuit on a transport of ours has no partner."""
 
-    def test_a_member_riding_on_its_bundle_passes(self) -> None:
-        """The bundle and a member that rides on it."""
-        assert _run(CloudDirectConnect=[_transport("lag"), _transport("m1", rides_on="lag")]) == []
+    def test_a_logical_circuit_riding_on_a_physical_transport_passes(self) -> None:
+        """The circuit and the transport that holds its port."""
+        assert _run(CloudDirectConnect=[_transport("port"), _transport("vc", "logical", rides_on="port")]) == []
 
     def test_riding_on_itself_fails(self) -> None:
         """The server accepts it (measured); the check does not."""
@@ -157,38 +202,22 @@ class TestR3Transports:
         errors = _run(CloudDirectConnect=[_transport("a", rides_on="b"), _transport("b", rides_on="a")])
         assert len(errors) == 2 and all("loop" in error for error in errors)
 
-    def test_a_physical_port_on_a_logical_circuit_fails(self) -> None:
+    def test_a_physical_transport_on_a_logical_circuit_fails(self) -> None:
         """A port cannot ride on a circuit."""
         rider = _transport("m1", rides_on="circuit")
         rider["rides_on"] = _node("circuit", connection_type=_v("logical"))
         errors = _run(CloudDirectConnect=[rider, _transport("circuit", "logical")])
         assert len(errors) == 1 and "physical but rides on the logical" in errors[0]
 
-    def test_a_logical_circuit_on_our_port_with_a_partner_fails(self) -> None:
+    def test_a_logical_circuit_on_our_transport_with_a_partner_fails(self) -> None:
         """A partner's connection rides on the partner's port, not on ours."""
-        circuit = _transport("vc", "logical", rides_on="lag", partner_account=_node("partner"))
-        errors = _run(CloudDirectConnect=[circuit, _transport("lag")])
+        circuit = _transport("vc", "logical", rides_on="port", partner_account=_node("partner"))
+        errors = _run(CloudDirectConnect=[circuit, _transport("port")])
         assert len(errors) == 1 and "partner_account" in errors[0]
 
     def test_a_logical_circuit_with_a_partner_and_no_rides_on_passes(self) -> None:
         """The partner-hosted case: a partner account and nothing to ride on."""
         assert _run(CloudDirectConnect=[_transport("vc", "logical", partner_account=_node("partner"))]) == []
-
-    def test_a_peering_on_a_bundle_passes(self) -> None:
-        """A peering names the bundle."""
-        transports = [_transport("lag"), _transport("m1", rides_on="lag")]
-        assert _run(CloudDirectConnect=transports, CloudPeeringInterface=[_peering(transport=_node("lag"))]) == []
-
-    def test_a_peering_on_a_member_fails(self) -> None:
-        """A peering on a member of a bundle names the member, not the bundle."""
-        transports = [_transport("lag"), _transport("m1", rides_on="lag")]
-        errors = _run(CloudDirectConnect=transports, CloudPeeringInterface=[_peering(transport=_node("m1"))])
-        assert len(errors) == 1 and "a member of" in errors[0]
-
-    def test_a_peering_on_a_logical_circuit_on_our_port_passes(self) -> None:
-        """A circuit that rides on a port is a transport a peering may name."""
-        transports = [_transport("port"), _transport("vc", "logical", rides_on="port")]
-        assert _run(CloudDirectConnect=transports, CloudPeeringInterface=[_peering(transport=_node("vc"))]) == []
 
 
 class TestR4ServiceEndpointsAndKeys:
@@ -211,7 +240,7 @@ class TestR4ServiceEndpointsAndKeys:
     def test_a_tunnel_key_on_a_gre_tunnel_fails(self) -> None:
         """GRE has no pre-shared key."""
         peering = _peering(tunnel_mode=_v("gre"), tunnel_key=_node("key"), endpoint_ip=_v("203.0.113.1/32"))
-        errors = _run(CloudPeeringInterface=[peering])
+        errors = _run(CloudDirectConnect=[_transport("dx")], CloudPeeringInterface=[peering])
         assert len(errors) == 1 and "tunnel_key" in errors[0]
 
 
@@ -226,47 +255,175 @@ class TestR5CryptoProfile:
             tunnel_key=_node("key"),
             endpoint_ip=_v("203.0.113.1/32"),
         )
-        assert _run(CloudPeeringInterface=[peering]) == []
+        assert _run(CloudDirectConnect=[_transport("dx")], CloudPeeringInterface=[peering]) == []
 
     def test_a_profile_without_ipsec_fails(self) -> None:
         """A profile on a GRE tunnel, or on a peering with no tunnel mode."""
         for mode in ("gre", None):
-            errors = _run(CloudPeeringInterface=[_peering(tunnel_mode=_v(mode), crypto_profile=_node("prof"))])
+            errors = _run(
+                CloudDirectConnect=[_transport("dx")],
+                CloudPeeringInterface=[_peering(tunnel_mode=_v(mode), crypto_profile=_node("prof"))],
+            )
             assert len(errors) == 1 and "R5" in errors[0]
 
 
 class TestR6Tunnels:
-    """A VPN tunnel has the provider's endpoint and rides on a VPN connection."""
+    """A VPN tunnel has the provider's endpoint and is an interface of a VPN connection."""
 
     @staticmethod
-    def _vpn() -> dict[str, Any]:
-        return {"node": {"__typename": "CloudVPNConnection", "id": "vpn", "name": _v("vpn")}}
+    def _tunnel(**overrides: Any) -> dict[str, Any]:
+        return _peering("Tunnel1", device="vpn", kind="CloudVPNConnection", **overrides)
 
     def test_a_tunnel_on_a_vpn_connection_passes(self) -> None:
         """Index, endpoint and a VPN connection."""
-        peering = _peering(tunnel_index=_v(1), endpoint_ip=_v("203.0.113.1/32"), transport=self._vpn())
-        assert _run(CloudPeeringInterface=[peering]) == []
-
-    def test_a_saas_tunnel_without_a_transport_passes(self) -> None:
-        """A SaaS tunnel has no connection, only the endpoint."""
-        assert _run(CloudPeeringInterface=[_peering(tunnel_index=_v(1), endpoint_ip=_v("203.0.113.80/32"))]) == []
+        tunnel = self._tunnel(tunnel_index=_v(1), endpoint_ip=_v("203.0.113.1/32"))
+        assert _run(CloudVPNConnection=[_vpn()], CloudPeeringInterface=[tunnel]) == []
 
     def test_a_tunnel_without_an_endpoint_fails(self) -> None:
         """No provider address."""
-        errors = _run(CloudPeeringInterface=[_peering(tunnel_index=_v(1), transport=self._vpn())])
+        errors = _run(CloudVPNConnection=[_vpn()], CloudPeeringInterface=[self._tunnel(tunnel_index=_v(1))])
         assert len(errors) == 1 and "endpoint_ip" in errors[0]
 
     def test_a_peering_on_a_vpn_connection_without_an_index_needs_an_endpoint(self) -> None:
-        """Riding on a VPN connection makes it a tunnel."""
-        errors = _run(CloudPeeringInterface=[_peering(transport=self._vpn())])
+        """Being an interface of a VPN connection makes it a tunnel."""
+        errors = _run(CloudVPNConnection=[_vpn()], CloudPeeringInterface=[self._tunnel()])
         assert len(errors) == 1 and "endpoint_ip" in errors[0]
 
     def test_a_tunnel_on_a_direct_connect_fails(self) -> None:
-        """A tunnel index with a transport that is no VPN connection."""
-        transport = {"node": {"__typename": "CloudDirectConnect", "id": "dx", "name": _v("dx")}}
-        peering = _peering(tunnel_index=_v(1), endpoint_ip=_v("203.0.113.1/32"), transport=transport)
-        errors = _run(CloudPeeringInterface=[peering])
-        assert len(errors) == 1 and "not on a VPN connection" in errors[0]
+        """A tunnel index on an interface of a transport that is no VPN connection."""
+        tunnel = _peering("t", tunnel_index=_v(1), endpoint_ip=_v("203.0.113.1/32"))
+        errors = _run(CloudDirectConnect=[_transport("dx")], CloudPeeringInterface=[tunnel])
+        assert len(errors) == 1 and "not of a VPN connection" in errors[0]
+
+
+class TestR7InterfacesOfATransport:
+    """The members of a LAG and the parent of a peering are interfaces of the same transport."""
+
+    @staticmethod
+    def _lag(device: str, member_device: str) -> dict[str, Any]:
+        member = {"id": "m1", "name": _v("m1"), "device": _node(member_device)}
+        return {"id": "lag1", "name": _v("lag1"), "device": _node(device), "member_interfaces": _edges(member)}
+
+    def test_a_lag_of_its_own_ports_passes(self) -> None:
+        """The members sit on the LAG's transport."""
+        assert _run(CloudDirectConnect=[_transport("dx")], DcimLAGInterface=[self._lag("dx", "dx")]) == []
+
+    def test_a_lag_member_of_another_device_fails(self) -> None:
+        """The server refuses it on a LAG; the check holds it where it is accepted."""
+        errors = _run(CloudDirectConnect=[_transport("dx")], DcimLAGInterface=[self._lag("dx", "other")])
+        assert len(errors) == 1 and "R7" in errors[0] and "m1" in errors[0]
+
+    def test_a_lag_of_a_managed_device_is_not_this_checks_business(self) -> None:
+        """Only the LAGs of a transport are read."""
+        assert _run(CloudDirectConnect=[_transport("dx")], DcimLAGInterface=[self._lag("leaf", "other")]) == []
+
+    def test_a_peering_riding_on_a_port_of_its_transport_passes(self) -> None:
+        """The parent is on the peering's own device."""
+        peering = _peering(parent_interface=_port("dxcon-1a"), vlan_id=_v(1000))
+        assert _run(CloudDirectConnect=[_transport("dx")], CloudPeeringInterface=[peering]) == []
+
+    def test_a_peering_riding_on_a_port_of_another_transport_fails(self) -> None:
+        """An ExpressRoute peering on the partner's port: the one-sided edge accepts it."""
+        peering = _peering(parent_interface=_port("partner-port", device="partner"), vlan_id=_v(200))
+        errors = _run(CloudDirectConnect=[_transport("dx")], CloudPeeringInterface=[peering])
+        assert len(errors) == 1 and "R7" in errors[0] and "another device" in errors[0]
+
+
+class TestR8VlanPeerings:
+    """A VLAN peering rides on a port or LAG; the VLANs of one parent are distinct."""
+
+    def test_a_vlan_peering_on_a_lag_passes(self) -> None:
+        """Two VIFs on one LAG with distinct VLANs."""
+        peerings = [
+            _peering("a", parent_interface=_port("lag1", "DcimLAGInterface"), vlan_id=_v(1000)),
+            _peering("b", parent_interface=_port("lag1", "DcimLAGInterface"), vlan_id=_v(1100)),
+        ]
+        assert _run(CloudDirectConnect=[_transport("dx")], CloudPeeringInterface=peerings) == []
+
+    def test_a_routed_port_peering_without_a_vlan_passes(self) -> None:
+        """A parent port and no VLAN: a routed port."""
+        peering = _peering(parent_interface=_port("ic-dedicated-port"))
+        assert _run(CloudDirectConnect=[_transport("dx")], CloudPeeringInterface=[peering]) == []
+
+    def test_a_vlan_without_a_parent_fails(self) -> None:
+        """A VLAN has to ride on something."""
+        errors = _run(CloudDirectConnect=[_transport("dx")], CloudPeeringInterface=[_peering(vlan_id=_v(300))])
+        assert len(errors) == 1 and "R8" in errors[0] and "no parent_interface" in errors[0]
+
+    def test_a_parent_that_is_no_port_or_lag_fails(self) -> None:
+        """A peering on a peering."""
+        peering = _peering(parent_interface=_port("other", "CloudPeeringInterface"), vlan_id=_v(7))
+        errors = _run(CloudDirectConnect=[_transport("dx")], CloudPeeringInterface=[peering])
+        assert len(errors) == 1 and "port or a LAG" in errors[0]
+
+    def test_a_duplicate_vlan_on_one_parent_fails(self) -> None:
+        """Two VIFs with VLAN 1000 on the same LAG."""
+        peerings = [
+            _peering("a", parent_interface=_port("lag1", "DcimLAGInterface"), vlan_id=_v(1000)),
+            _peering("b", parent_interface=_port("lag1", "DcimLAGInterface"), vlan_id=_v(1000)),
+        ]
+        errors = _run(CloudDirectConnect=[_transport("dx")], CloudPeeringInterface=peerings)
+        assert len(errors) == 1 and "like 'a'" in errors[0]
+
+    def test_the_same_vlan_on_two_parents_passes(self) -> None:
+        """ExpressRoute: VLAN 200 on the primary and on the secondary port."""
+        peerings = [
+            _peering("pri", parent_interface=_port("msee-pri"), vlan_id=_v(200)),
+            _peering("sec", parent_interface=_port("msee-sec"), vlan_id=_v(200)),
+        ]
+        assert _run(CloudDirectConnect=[_transport("dx")], CloudPeeringInterface=peerings) == []
+
+
+class TestR9Placement:
+    """A transport is in a region or a SaaS region, with an account or an owner."""
+
+    def test_a_cloud_transport_with_account_and_region_passes(self) -> None:
+        """The usual case, for both kinds."""
+        assert _run(CloudDirectConnect=[_transport("dx")], CloudVPNConnection=[_vpn()]) == []
+
+    def test_a_saas_transport_passes(self) -> None:
+        """A SaaS region and an owner, no account."""
+        assert _run(CloudDirectConnect=[_saas_transport()]) == []
+
+    def test_no_place_fails(self) -> None:
+        """Neither region nor SaaS region."""
+        errors = _run(CloudDirectConnect=[_transport("dx", region=_node(None))])
+        assert len(errors) == 1 and "exactly one of region, saas_region" in errors[0] and "none" in errors[0]
+
+    def test_both_places_fail(self) -> None:
+        """A region and a SaaS region together."""
+        errors = _run(CloudDirectConnect=[_transport("dx", saas_region=_node("webex"))])
+        assert len(errors) == 1 and "region and saas_region" in errors[0]
+
+    def test_an_owner_next_to_an_account_fails(self) -> None:
+        """The owner is for a SaaS where there is no account."""
+        errors = _run(CloudVPNConnection=[_vpn(owner=_node("c900"))])
+        assert len(errors) == 1 and "account and an owner" in errors[0]
+
+    def test_no_account_and_no_owner_fails(self) -> None:
+        """A SaaS transport without its owner."""
+        errors = _run(CloudDirectConnect=[_saas_transport(owner=_node(None))])
+        assert len(errors) == 1 and "saas_region and an owner" in errors[0]
+
+    def test_no_account_in_a_cloud_region_fails(self) -> None:
+        """An account-less transport needs a SaaS region, not a cloud region."""
+        errors = _run(CloudDirectConnect=[_transport("dx", account=_node(None), owner=_node("c900"))])
+        assert len(errors) == 1 and "saas_region" in errors[0]
+
+    def test_a_saas_peering_on_a_saas_transport_passes(self) -> None:
+        """Scope saas where the transport has a SaaS region."""
+        peering = _peering(device="saas", scope=_v("saas"))
+        assert _run(CloudDirectConnect=[_saas_transport()], CloudPeeringInterface=[peering]) == []
+
+    def test_a_saas_peering_on_a_cloud_transport_fails(self) -> None:
+        """Scope saas needs the SaaS region."""
+        errors = _run(CloudDirectConnect=[_transport("dx")], CloudPeeringInterface=[_peering(scope=_v("saas"))])
+        assert len(errors) == 1 and "no saas_region" in errors[0]
+
+    def test_a_peering_on_a_device_that_is_no_transport_fails(self) -> None:
+        """The schema lets a peering sit on any DcimDevice."""
+        errors = _run(CloudPeeringInterface=[_peering(device="leaf-1")])
+        assert len(errors) == 1 and "not of a transport" in errors[0]
 
 
 def test_the_check_is_registered_with_its_query_and_a_smoke_entry() -> None:

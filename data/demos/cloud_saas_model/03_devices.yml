@@ -12,7 +12,7 @@ spec:
       deployment: "DC90"
     - name: "dc90-edge-01"
       object_template: N9K-C9316D-GX_EDGE
-      description: "Edge: Ethernet1/3 AWS, 1/4-1/5 Azure, 1/6 Webex, 1/7 GCP, 1/2 internet, 1/13 towards the leaf"
+      description: "Edge: 1/3 1/8 AWS, 1/4-5 Azure, 1/6 Webex, 1/7 GCP, 1/9 GCP routed port, 1/2 internet, 1/13 leaf"
       deployment: "DC90"
     - name: "EXT-ISP-DEMO-PE1"
       object_template: MX204_ISP_PE
