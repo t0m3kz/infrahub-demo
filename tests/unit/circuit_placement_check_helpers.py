@@ -237,23 +237,12 @@ def _vpn(
     locations: list[dict[str, Any]],
     ends: list[dict[str, Any]],
     namespace: tuple[str, str | None] | None = ("PROD", "prod"),
-    connection: tuple[str, str, dict[str, Any]] | None = ("PC-VPN", "internet_vpn", DC10),
 ) -> dict[str, Any]:
-    """A vpn circuit in ``namespace`` on ``connection`` (name, path_type, near facility)."""
+    """A vpn circuit in ``namespace``."""
     node = _virtual(name, "vpn", locations, ends)
     node["ip_namespace"] = {
         "node": {"name": {"value": namespace[0]}, "namespace_type": {"value": namespace[1]}} if namespace else None
     }
-    node["connection"] = {"node": None}
-    if connection:
-        node["connection"] = {
-            "node": {
-                "id": f"id-{connection[0]}",
-                "name": {"value": connection[0]},
-                "path_type": {"value": connection[1]},
-                "near": {"node": {"id": connection[2]["id"]}},
-            }
-        }
     return node
 
 

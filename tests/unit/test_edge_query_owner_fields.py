@@ -105,9 +105,9 @@ class TestChangedFilesParse:
         """graphql-core parses the file (fragment spreads are validated by the repository sync of test-integration-fast)."""
         assert parse(path.read_text()).definitions
 
-    def test_the_edge_operation_keeps_its_four_extra_roots(self) -> None:
+    def test_the_edge_operation_keeps_its_three_extra_roots(self) -> None:
         """The roots the owner filter reads are all still selected."""
-        for root in ("IpamPrefix", "ManagedNetworkSegment", "TopologyProviderConnection", "TopologyCustomerOffice"):
+        for root in ("IpamPrefix", "ManagedNetworkSegment", "TopologyCustomerOffice"):
             assert _root(root) is not None
 
 
@@ -136,118 +136,6 @@ class TestSegmentRoot:
         assert segment["owner"] == _cleaned_owner()
 
 
-class TestProviderConnectionRoot:
-    """The provider connections deliver the end ports of their sessions and their registrations."""
-
-    def _connection(self) -> FieldNode:
-        """The node selection of the TopologyProviderConnection root."""
-        return _node(_root("TopologyProviderConnection"))
-
-    def test_the_root_is_not_a_second_session_circuit_root(self) -> None:
-        """The only TopologySessionCircuit root is the tunnel one: the sessions are read through the connection."""
-        text = _EDGE.read_text()
-
-        assert text.count("TopologySessionCircuit(") == 1
-        assert 'TopologySessionCircuit(circuit_type__value: "tunnel")' in text
-
-    def test_the_connection_selects_the_end_ports_of_its_sessions(self) -> None:
-        """session_circuits.capabilities (interface name and device) match the port; no name is compared."""
-        sessions = _node(_child(self._connection(), "session_circuits"))
-        ends = _node(_child(sessions, "capabilities"))
-
-        assert {"name", "device"} <= {c.name.value for c in _children(ends)}
-
-    def test_the_connection_selects_what_connection_registered_reads(self) -> None:
-        """the two owners, registered_prefixes, the network and the transit chain."""
-        names = {c.name.value for c in _children(self._connection())}
-
-        assert {
-            "name",
-            "owner",
-            "account",
-            "session_circuits",
-            "registered_prefixes",
-            "attached_network",
-            "transit_attachment",
-            "attached_gateway",
-        } <= names
-        assert _owner_selection_names(_select_owner(self._connection())) == list(_OWNER_FIELDS)
-        assert _owner_selection_names(_select_owner(_node(_child(self._connection(), "account")))) == list(
-            _OWNER_FIELDS
-        )
-
-    def test_the_network_and_every_gateway_attachment_select_the_account_owner(self) -> None:
-        """Two virtual_network selections (attached_network, the attachments'), both with account.owner and blocks."""
-        networks = [
-            d for d in _descendants(self._connection()) if d.name.value in {"virtual_network", "attached_network"}
-        ]
-
-        assert len(networks) == 2
-        for network in networks:
-            account = _child(_node(network), "account")
-            assert _owner_selection_names(_select_owner(_node(account))) == list(_OWNER_FIELDS)
-            assert "cidr_blocks" in [c.name.value for c in _children(_node(network))]
-
-    def test_the_fields_exist_on_the_schema(self) -> None:
-        """The connection's relationships, the circuit's `connection` edge and the account's owner."""
-        assert _peer("TopologyProviderConnection", "session_circuits") == "TopologySessionCircuit"
-        assert {
-            "owner",
-            "account",
-            "registered_prefixes",
-            "attached_network",
-            "attached_gateway",
-            "transit_attachment",
-        } <= demo_data.relationship_names("TopologyProviderConnection")
-        assert _peer("TopologyProviderConnection", "attached_network") == "CloudVirtualNetwork"
-        assert _peer("CloudVirtualNetwork", "account") == "CloudAccount"
-        assert _peer("CloudAccount", "owner") == "OrganizationEntity"
-        assert "org_id" in demo_data.attribute_names("OrganizationEntity")
-
-    def test_a_raw_response_cleans_to_the_transform_shape(self) -> None:
-        """connection -> attached_network.account.owner (and the gateway attachments') is the cleaned dict."""
-        network = {"node": {"cidr_blocks": {"edges": []}, "account": {"node": {"owner": _raw_owner()}}}}
-        end = {"node": {"name": {"value": "Ethernet1/13.1000"}, "device": {"node": {"name": {"value": "e1"}}}}}
-        raw = {
-            "TopologyProviderConnection": {
-                "edges": [
-                    {
-                        "node": {
-                            "name": {"value": "aws-1"},
-                            "owner": _raw_owner("C005"),
-                            "session_circuits": {"edges": [{"node": {"capabilities": {"edges": [end]}}}]},
-                            "attached_network": network,
-                            "attached_gateway": {
-                                "node": {
-                                    "attachments": {
-                                        "edges": [
-                                            {
-                                                "node": {
-                                                    "attachment_type": {"value": "vpc"},
-                                                    "virtual_network": network,
-                                                }
-                                            }
-                                        ]
-                                    }
-                                }
-                            },
-                        }
-                    }
-                ]
-            }
-        }
-
-        connection = clean_data(raw)["TopologyProviderConnection"][0]
-        attachment = connection["attached_gateway"]["attachments"][0]
-
-        assert connection["session_circuits"][0]["capabilities"] == [
-            {"name": "Ethernet1/13.1000", "device": {"name": "e1"}}
-        ]
-        assert connection["owner"] == _cleaned_owner("C005")
-        assert connection["attached_network"]["account"]["owner"] == _cleaned_owner()
-        assert attachment["virtual_network"]["account"]["owner"] == _cleaned_owner()
-
-
 class TestTunnelRoot:
     """A tunnel stores no owner: the owner of the office among its locations is selected."""
 
@@ -256,7 +144,7 @@ class TestTunnelRoot:
         tunnel = _node(_root("TopologySessionCircuit"))
         names = {c.name.value for c in _children(tunnel)}
 
-        assert {"locations", "registered_prefixes", "capabilities"} <= names
+        assert {"locations", "registered_prefixes", "endpoints"} <= names
         assert "owner" not in names
         text = _EDGE.read_text()
         assert (
@@ -400,6 +288,6 @@ class TestOrganizationEntityOwner:
     def test_the_entity_generic_has_no_name_so_the_query_does_not_select_it(self) -> None:
         """name lives on OrganizationGeneric, not on OrganizationEntity: display_label is selected instead."""
         assert "name" not in demo_data.attribute_names("OrganizationEntity")
-        for root in ("ManagedNetworkSegment", "TopologyProviderConnection", "TopologyCustomerOffice"):
+        for root in ("ManagedNetworkSegment", "TopologyCustomerOffice"):
             for owner in (d for d in _descendants(_root(root)) if d.name.value == "owner"):
                 assert "name" not in _owner_selection_names(owner)

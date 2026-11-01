@@ -88,21 +88,15 @@ TOPOLOGY_SNAPSHOT_KINDS = {
     "TopologyPod": "name { value }",
     "TopologyDataCenter": "name { value }",
     # add_circuit/add_sdwan_edge output (the carrier circuit and the tunnel); an Interconnect is data-loaded and only
-    # gains sessions, a Handoff or a VPN is add_provider_connection output (below), so their selection must not move.
+    # gains sessions, so their selection must not move.
     "TopologyCarrierCircuit": (
         "name { value } locations { edges { node { id } } } capabilities { edges { node { id } } }"
     ),
     "TopologySessionCircuit": (
         "name { value } circuit_type { value } locations { edges { node { id } } } "
         "capabilities { edges { node { id capabilities { edges { node { id } } } } } } "
-        "ip_namespace { node { id } } password { node { id } } connection { node { id } } "
+        "ip_namespace { node { id } } password { node { id } } "
         "link_prefix { node { id } } registered_prefixes { edges { node { id } } }"
-    ),
-    # add_provider_connection writes the VLAN it chose back to the connection and attaches the session circuits and
-    # carriers by edge: a rerun that renumbered, re-created or detached one is a diff.
-    "TopologyProviderConnection": (
-        "name { value } path_type { value } vlan_id { value } session_circuits { edges { node { id } } } "
-        "carrier_circuits { edges { node { id } } } link_prefixes { edges { node { id } } }"
     ),
     "ManagedController": "name { value } managed_devices { edges { node { id } } }",
     "ManagedFirewallHA": "name { value }",

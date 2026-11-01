@@ -74,30 +74,11 @@ class TestEdgeRender:
         assert "    neighbor 10.255.5.6\n" in prod
         assert "      remote-as 64512\n" in block
         assert "      bfd\n" in block
-        # Derived from the allowed set (two registered VPC blocks plus the slack), warning-only while staged.
-        assert "        maximum-prefix 4 warning-only\n" in block
+        # Derived from the allowed set (nothing registered behind a cloud gateway: the slack only), warning-only while staged.
+        assert "        maximum-prefix 2 warning-only\n" in block
         assert "        route-map RM-VRF-PROD-EQXFR2-AWS-EUC1-IN in\n" in block
         assert "        route-map RM-VRF-PROD-EQXFR2-AWS-EUC1-OUT out\n" in block
         assert "EXTERNAL-OUT" not in output
-
-    def test_inbound_prefix_list_is_exactly_the_reachable_vpc_blocks_of_customers(self) -> None:
-        """Both customers' rt-shared blocks; not the isolated one, the provider-owned one or a default."""
-        output = _run_edge(_fixture())
-        assert _prefix_list(output, "PL-VRF-PROD-EQXFR2-AWS-EUC1-IN") == ["10.30.0.0/16", "10.32.0.0/16"]
-        assert _prefix_list(output, "PL-VRF-NONPROD-EQXFR2-AWS-EUC1-IN") == ["10.60.0.0/16"]
-        for excluded in ("10.150.0.0/16", "10.33.0.0/16", "10.99.0.0/16", "10.31.0.0/16"):
-            assert excluded not in output
-        assert not [line for line in output.splitlines() if line.startswith("ip prefix-list") and "0.0.0.0/0" in line]
-
-    def test_registered_default_route_is_not_accepted(self) -> None:
-        """Even a VPC block of 0/0 in the data does not reach the inbound prefix-list."""
-        data = _fixture()
-        connection = data["TopologyProviderConnection"]["edges"][0]["node"]
-        blocks = connection["attached_gateway"]["node"]["attachments"]["edges"][1]["node"]["virtual_network"]["node"]
-        blocks["cidr_blocks"]["edges"].append(
-            {"node": {"prefix": {"value": "0.0.0.0/0"}, "ip_namespace": {"node": {"name": {"value": "PROD"}}}}}
-        )
-        assert "0.0.0.0/0" not in _run_edge(data)
 
     def test_sdwan_peer_accepts_what_the_offices_behind_its_gateway_registered(self) -> None:
         """C005's hosted segment, C002's and C003's LANs and C001's tunnel range: not the provider's LAN, another
@@ -128,28 +109,24 @@ class TestEdgeRender:
     def test_the_policy_names_its_owners(self) -> None:
         output = _run_edge(_fixture())
         assert "! VRF-PROD-EQXFR2-SDWAN: owners C001, C002, C003, C005\n" in output
-        assert "! VRF-PROD-EQXFR2-AWS-EUC1: owners C003, C015\n" in output
-        assert "! VRF-NONPROD-EQXFR2-AWS-EUC1: owners C003\n" in output
+        assert (
+            "! VRF-PROD-EQXFR2-AWS-EUC1: no registered customer owner, announces nothing and accepts nothing\n"
+            in output
+        )
 
     def test_outbound_is_per_session_and_only_its_owners_prefixes(self) -> None:
         """Each session announces its owners' space in its own namespace (their segments and what they registered
         behind another session), nobody else's, and never what it learned itself."""
         output = _run_edge(_fixture())
-        assert _prefix_list(output, "PL-VRF-PROD-EQXFR2-AWS-EUC1-OUT") == [
-            "10.5.10.0/24",
-            "10.5.20.0/24",
-            "10.7.10.0/24",
-            "10.210.3.0/24",
-        ]
+        assert _prefix_list(output, "PL-VRF-PROD-EQXFR2-AWS-EUC1-OUT") == []
         assert _prefix_list(output, "PL-VRF-PROD-EQXFR2-SDWAN-OUT") == [
             "10.5.10.0/24",
             "10.5.20.0/24",
             "10.8.2.0/24",
             "10.9.1.0/24",
-            "10.30.0.0/16",
         ]
-        assert _prefix_list(output, "PL-VRF-NONPROD-EQXFR2-AWS-EUC1-OUT") == ["10.6.10.0/24"]
-        assert "route-map RM-VRF-PROD-EQXFR2-AWS-EUC1-OUT deny 20" in output
+        assert _prefix_list(output, "PL-VRF-NONPROD-EQXFR2-AWS-EUC1-OUT") == []
+        assert "route-map RM-VRF-PROD-EQXFR2-AWS-EUC1-OUT deny 10\n" in output
         assert "        route-map RM-VRF-NONPROD-EQXFR2-AWS-EUC1-OUT out\n" in _neighbor_block(output, "10.255.6.6")
         assert "le " not in output and "ge " not in output
 
@@ -230,15 +207,6 @@ class TestEdgeRender:
         """Idempotency: the same input renders the same bytes, however the dicts were ordered."""
         assert _run_edge(_fixture()) == _run_edge(_fixture())
 
-    def test_two_owners_on_one_transit_vif_share_one_out_list_without_a_third_customer(self) -> None:
-        """C003 and C015 behind the PROD transit VIF: one OUT list with both; C002 and C005 space is not in it."""
-        output = _run_edge(_fixture())
-        out = _prefix_list(output, "PL-VRF-PROD-EQXFR2-AWS-EUC1-OUT")
-        assert out == ["10.5.10.0/24", "10.5.20.0/24", "10.7.10.0/24", "10.210.3.0/24"]
-        assert len(re.findall(r"^route-map RM-VRF-PROD-EQXFR2-AWS-EUC1-OUT permit 10$", output, re.M)) == 1
-        for third in ("10.8.2.0/24", "10.176.5.0/24", "10.9.1.0/24"):
-            assert third not in out
-
     def test_peer_without_registered_prefixes_is_accepted_nothing(self) -> None:
         """No office footprint registered: the SD-WAN inbound map denies everything."""
         data = _fixture()
@@ -249,31 +217,22 @@ class TestEdgeRender:
         assert "        route-map RM-VRF-PROD-EQXFR2-SDWAN-IN in\n" in _neighbor_block(output, "10.255.5.1")
 
     def test_session_with_no_onprem_prefixes_announces_only_what_its_owners_registered_elsewhere(self) -> None:
-        """No segment at all: an owner with nothing behind another session gets a bare deny; C003 still passes its
-        VPC block to GW1 and its office LAN to the hub VIF."""
+        """No segment at all: the owners behind GW1 have nothing on-prem and nothing registered behind another
+        session, so its OUT map is a bare deny."""
         data = _fixture()
         data["ManagedNetworkSegment"] = {"edges": []}
         output = _run_edge(data)
-        assert _prefix_list(output, "PL-VRF-PROD-EQXFR2-AWS-EUC1-OUT") == ["10.210.3.0/24"]
-        assert _prefix_list(output, "PL-VRF-PROD-EQXFR2-SDWAN-OUT") == ["10.30.0.0/16"]
-        assert "route-map RM-VRF-NONPROD-EQXFR2-AWS-EUC1-OUT deny 10\n" in output
-        assert "PL-VRF-NONPROD-EQXFR2-AWS-EUC1-OUT" not in output
+        assert _prefix_list(output, "PL-VRF-PROD-EQXFR2-SDWAN-OUT") == []
+        assert "route-map RM-VRF-PROD-EQXFR2-SDWAN-OUT deny 10\n" in output
+        assert "PL-VRF-PROD-EQXFR2-SDWAN-OUT" not in output
 
-    def test_the_gateway_session_is_announced_c003s_vpc_and_segments_but_nothing_of_c015(self) -> None:
-        """C003 has an office behind GW1 and a VPC on the hub VIF: GW1 gets that VPC block and C003's segments."""
+    def test_the_gateway_session_is_announced_c003s_segments_but_nothing_of_c015(self) -> None:
+        """C003 has an office behind GW1: GW1 gets C003's segments, nothing of C015 (behind no session)."""
         output = _run_edge(_fixture())
         out = _prefix_list(output, "PL-VRF-PROD-EQXFR2-SDWAN-OUT")
-        assert {"10.30.0.0/16", "10.5.10.0/24", "10.5.20.0/24"} <= set(out)
+        assert {"10.5.10.0/24", "10.5.20.0/24"} <= set(out)
         for c015 in ("10.7.10.0/24", "10.32.0.0/16", "10.150.0.0/16"):
             assert c015 not in out
-
-    def test_the_hub_vif_session_is_announced_c003s_office_lan_and_both_owners_segments(self) -> None:
-        """The hub VIF's owners are C003 and C015: C003's office LAN and both owners' segments, no one else's."""
-        output = _run_edge(_fixture())
-        out = _prefix_list(output, "PL-VRF-PROD-EQXFR2-AWS-EUC1-OUT")
-        assert {"10.210.3.0/24", "10.5.10.0/24", "10.7.10.0/24"} <= set(out)
-        for other in ("10.210.2.0/24", "10.8.2.0/24", "10.176.5.0/24"):
-            assert other not in out
 
     def test_a_prefix_learned_on_a_session_is_never_in_its_out(self) -> None:
         """C005's office-hosted segment is registered behind GW1: not announced back to it, not local anywhere."""
@@ -282,8 +241,6 @@ class TestEdgeRender:
         assert "10.176.5.0/24" in _prefix_list(output, "PL-VRF-PROD-EQXFR2-SDWAN-IN")
         assert "10.176.5.0/24" not in sdwan_out
         assert not set(sdwan_out) & set(_prefix_list(output, "PL-VRF-PROD-EQXFR2-SDWAN-IN"))
-        aws_out = _prefix_list(output, "PL-VRF-PROD-EQXFR2-AWS-EUC1-OUT")
-        assert not set(aws_out) & set(_prefix_list(output, "PL-VRF-PROD-EQXFR2-AWS-EUC1-IN"))
 
     def test_an_owner_behind_one_session_only_announces_its_local_segments_there(self) -> None:
         """C002 sits behind GW1 alone: GW1 is announced its segment 10.8.2.0/24, and neither that segment nor its
@@ -293,17 +250,6 @@ class TestEdgeRender:
         for session in ("AWS-EUC1", "MEGAPORT"):
             assert "10.8.2.0/24" not in _prefix_list(output, f"PL-VRF-PROD-EQXFR2-{session}-OUT")
             assert "10.210.2.0/24" not in _prefix_list(output, f"PL-VRF-PROD-EQXFR2-{session}-OUT")
-
-    def test_the_two_owners_of_one_vif_never_see_each_others_prefixes_elsewhere(self) -> None:
-        """C015 is on the hub VIF only: it never reaches the GW1 or the NON-PROD session, and C003's office LAN
-        reaches C015's session only because it is the same VIF as C003's."""
-        output = _run_edge(_fixture())
-        everywhere_else = "\n".join(
-            line for line in output.splitlines() if "-OUT seq" in line and "VRF-PROD-EQXFR2-AWS-EUC1-OUT" not in line
-        )
-        assert "10.7.10.0/24" not in everywhere_else
-        assert "10.32.0.0/16" not in everywhere_else
-        assert "10.6.20.0/24" not in everywhere_else
 
     def test_other_vrf_sessions_render_unfiltered_as_before(self) -> None:
         """A non-regular VRF session keeps the old stanza: no route-maps, no filter definitions."""

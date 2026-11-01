@@ -13,7 +13,6 @@ from utils.ownership import (
     CircuitOwnerError,
     OwnershipConflict,
     circuit_owner,
-    connection_owner,
     customer_owner,
     exchange_policies,
     ownership_conflicts,
@@ -210,79 +209,6 @@ class TestOwnershipConflicts:
         assert ownership_conflicts({}, {}) == []
 
 
-class TestOwnershipConflictsOfConnections:
-    """session_groups: the sessions of one provider connection are one attachment point; provider_space is shared."""
-
-    _GROUPS = {"hub-pri": "hub", "hub-sec": "hub", "direct": "direct"}
-
-    def test_the_two_circuits_of_a_dual_connection_are_one_attachment_point(self) -> None:
-        """C003's block behind both circuits of the hub connection: reachable through exactly one connection."""
-        learned = {"hub-pri": {"C003": ["10.30.0.0/16"]}, "hub-sec": {"C003": ["10.30.0.0/16"]}}
-
-        assert ownership_conflicts({}, learned) != []
-        assert ownership_conflicts({}, learned, session_groups=self._GROUPS) == []
-
-    def test_a_block_behind_two_connections_is_still_a_conflict(self) -> None:
-        """Grouping merges the circuits of a connection, not two connections: the sessions are all listed."""
-        learned = {"hub-pri": {"C003": ["10.30.0.0/16"]}, "direct": {"C003": ["10.30.0.0/16"]}}
-
-        assert ownership_conflicts({}, learned, session_groups=self._GROUPS) == [
-            OwnershipConflict(MULTIPLE_SESSIONS, "10.30.0.0/16", ("C003",), ("direct", "hub-pri"))
-        ]
-
-    def test_a_session_without_a_group_is_its_own_group(self) -> None:
-        """Absent from the map (an SD-WAN gateway session): counted on its own."""
-        learned = {"hub-pri": {"C003": ["10.30.0.0/16"]}, "gw1": {"C003": ["10.30.0.0/16"]}}
-
-        assert len(ownership_conflicts({}, learned, session_groups=self._GROUPS)) == 1
-
-    def test_provider_space_registered_by_two_owners_behind_their_own_sessions_is_not_shared(self) -> None:
-        """A SaaS range subscribed by two customers, each behind its own session: not a leak."""
-        learned = {"zs-c003": {"C003": ["198.51.100.0/24"]}, "zs-c015": {"C015": ["198.51.100.0/24"]}}
-
-        assert ownership_conflicts({}, learned) != []
-        assert ownership_conflicts({}, learned, provider_space=["198.51.100.0/24"]) == []
-
-    def test_only_listed_provider_space_is_exempt(self) -> None:
-        """Another prefix of the same two owners is still a conflict."""
-        learned = {
-            "zs-c003": {"C003": ["198.51.100.0/24", "10.30.0.0/16"]},
-            "zs-c015": {"C015": ["198.51.100.0/24", "10.30.0.0/16"]},
-        }
-
-        found = ownership_conflicts({}, learned, provider_space={"198.51.100.0/24"})
-
-        assert [(c.kind, c.prefix) for c in found] == [(SHARED_PREFIX, "10.30.0.0/16")]
-
-    def test_provider_space_held_as_an_onprem_segment_is_still_shared(self) -> None:
-        """An owner that holds the prefix as a segment is not behind a session: the exemption does not apply."""
-        found = ownership_conflicts(
-            {"C015": ["198.51.100.0/24"]},
-            {"zs-c003": {"C003": ["198.51.100.0/24"]}},
-            provider_space=["198.51.100.0/24"],
-        )
-
-        assert [(c.kind, c.owners) for c in found] == [(SHARED_PREFIX, ("C003", "C015"))]
-
-    def test_one_owner_with_provider_space_behind_two_connections_is_multiple_sessions(self) -> None:
-        """The exemption is for distinct owners; one owner behind two connections still breaks the one-point rule."""
-        learned = {"zs-a": {"C003": ["198.51.100.0/24"]}, "zs-b": {"C003": ["198.51.100.0/24"]}}
-
-        found = ownership_conflicts(
-            {}, learned, session_groups={"zs-a": "a", "zs-b": "b"}, provider_space=["198.51.100.0/24"]
-        )
-
-        assert [c.kind for c in found] == [MULTIPLE_SESSIONS]
-
-    def test_the_new_arguments_are_optional(self) -> None:
-        """Existing callers (segments, learned) keep their behaviour."""
-        learned = {"a": {"C003": ["10.0.0.0/24"]}, "b": {"C003": ["10.0.0.0/24"]}}
-
-        assert ownership_conflicts({}, learned) == ownership_conflicts(
-            {}, learned, session_groups=None, provider_space=()
-        )
-
-
 class TestCircuitOwner:
     """circuit_owner derives the owner of a circuit from its office locations and its connection."""
 
@@ -301,27 +227,10 @@ class TestCircuitOwner:
         with pytest.raises(CircuitOwnerError, match="C001, C002"):
             circuit_owner(["C002", "C001"])
 
-    def test_without_an_office_the_connection_owner_applies(self) -> None:
-        """A vpn circuit: its connection's resolved owner; none at all gives None."""
-        assert circuit_owner([], "C003") == "C003"
-        assert circuit_owner([None], None) is None
+    def test_without_an_office_there_is_no_owner(self) -> None:
+        """A handoff or carrier circuit: no office, no owner."""
         assert circuit_owner([]) is None
-
-    def test_an_office_wins_over_the_connection(self) -> None:
-        """The office is the stronger signal."""
-        assert circuit_owner(["C001"], "C003") == "C001"
-
-
-class TestConnectionOwner:
-    """connection_owner: the account's owner wins, else the connection's own."""
-
-    @pytest.mark.parametrize(
-        ("owner", "account_owner", "expected"),
-        [("C005", "C003", "C003"), ("C005", None, "C005"), (None, "C003", "C003"), (None, None, None), ("", "", None)],
-    )
-    def test_precedence(self, owner: str | None, account_owner: str | None, expected: str | None) -> None:
-        """Account owner, else own owner, else None (an empty key is no owner)."""
-        assert connection_owner(owner, account_owner) == expected
+        assert circuit_owner([None]) is None
 
 
 class TestCustomerOwner:

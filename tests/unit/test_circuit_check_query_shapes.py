@@ -71,7 +71,7 @@ _PORT_READS = [
 ]
 
 # What it reads from a session circuit, for every circuit_type: the office locations (with their owner), a dci's and
-# a handoff's status, the namespace of a handoff or vpn, a vpn's connection, and the fields it refuses on the other types.
+# a handoff's status, the namespace of a handoff or vpn, and the fields it refuses on the other types.
 _SESSION_READS = [
     "id",
     "name",
@@ -86,10 +86,6 @@ _SESSION_READS = [
     "ip_namespace.namespace_type",
     "password.id",
     "registered_prefixes.id",
-    "connection.id",
-    "connection.name",
-    "connection.path_type",
-    "connection.near.id",
 ]
 _ROOTS = ["TopologyCarrierCircuit", "TopologySessionCircuit"]
 

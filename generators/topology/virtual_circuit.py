@@ -35,17 +35,12 @@ The flow, shared by both types (what differs is a planner per ``circuit_type``: 
 Every precondition fails before the first write, so a refused run never returns after a partial save, which its
 tracked cleanup would turn into deletions.
 
-Link addressing of a handoff and a vpn is the flavour of the circuit's provider connection
-(``utils/provider_services.py``): ``our_pool`` allocates a prefix of the flavour's length from the namespace pool and
-addresses the ends at its ``end_offsets`` ((0, 1) for a /31, (1, 2) for a /30 or /29, our end lower unless the
-provider takes the lower address); ``provider_assigned`` allocates nothing and uses the circuit's ``link_prefix``
-(refused when it is missing or of another length). A circuit with no connection is the default flavour, a /31 from
-our pool as before. The server refuses another length for an identifier it already allocated, so a flavour whose
-length changed after the first run is reported with the remedy, never re-allocated silently.
+Link addressing of a handoff and a vpn is a /31 from the pool of the circuit's namespace (``Handoff-<NAMESPACE>-IPv4``), our
+end the lower address. The server refuses another length for an identifier it already allocated, so a changed length is
+reported with its remedy, never re-allocated silently.
 
 VPN: the two ends are tunnel interfaces (``DcimVirtualInterface``) and need no carrier of their own (the tunnel
-rides the near facility's internet carrier). One eBGP session (``regular``), TTL from the flavour (a multihop session
-type above 1), BFD per flavour. No IPsec or tunnel configuration is generated.
+rides the near facility's internet carrier). One eBGP session (``regular``), TTL 1, BFD on. No IPsec or tunnel configuration is generated.
 
 Handoff: the two ends are the sub-interfaces (``<parent>.<vlan>``) of our edge and of the party-owned device,
 inside the circuit's ``ip_namespace``. The /31 comes from the pool named after that namespace (``Handoff-<NAMESPACE>-
@@ -114,13 +109,6 @@ from utils.circuit_underlay import (
 )
 from utils.data_cleaning import clean_data
 from utils.limits import DCI_TECHNICAL_IPV4_POOL, DCI_TECHNICAL_IPV6_POOL, HANDOFF_POOL_TEMPLATE, UNDERLAY_MTU
-from utils.provider_services import (
-    ADDRESS_SOURCE_PROVIDER,
-    DEFAULT_FLAVOUR,
-    ConnectionFlavour,
-)
-from utils.provider_services import connection_flavour as flavour_of_connection
-from utils.provider_services import end_offsets
 
 from ..common import CommonGenerator
 from ..connections import CablingMixin
@@ -129,6 +117,9 @@ from ..pools import PoolMixin
 from ..protocols import DcimPhysicalInterface, DcimVirtualInterface
 from ..routing import EVPN_AF, IPV4_UNICAST_AF, IPV6_UNICAST_AF, RoutingMixin, _dci_key_name
 from .circuit import CARRIER_CIRCUIT_GENERATOR
+
+# A handoff or vpn link: a /31 (RFC 3021), the lower address is ours.
+HANDOFF_PREFIX_LENGTH = 31
 
 # DCI P2P pools (data/bootstrap/20_dci_pools.yml) by address family, with the prefix length allocated from them.
 _DCI_POOLS: dict[int, tuple[str, int]] = {4: (DCI_TECHNICAL_IPV4_POOL, 31), 6: (DCI_TECHNICAL_IPV6_POOL, 127)}
@@ -149,22 +140,6 @@ _INTERFACE_STATUS_FOR_CIRCUIT = {
 def handoff_pool_name(namespace: str) -> str:
     """The /31 pool of an environment namespace (data/bootstrap/26_handoff_pools.yml)."""
     return HANDOFF_POOL_TEMPLATE.format(namespace=namespace)
-
-
-def connection_flavour(circuit: dict[str, Any]) -> ConnectionFlavour:
-    """The addressing flavour of the circuit's provider connection; ``DEFAULT_FLAVOUR`` (today's /31 from our pool) without one."""
-    connection = circuit.get("connection")
-    if not isinstance(connection, dict) or not connection.get("id"):
-        return DEFAULT_FLAVOUR
-    return flavour_of_connection(connection)
-
-
-def _prefix_length(prefix: Any) -> int | None:
-    """The length of a "10.0.0.0/30" string; None for anything else."""
-    try:
-        return int(str(prefix).rsplit("/", 1)[1])
-    except (IndexError, ValueError):
-        return None
 
 
 @dataclass(frozen=True)
@@ -293,8 +268,8 @@ class SessionPlan:
     first: SessionEnd
     second: SessionEnd
     port_kind: type[DcimPhysicalInterface] | type[DcimVirtualInterface]
-    # The pool the link prefix is allocated from; None when the provider assigns it (``link_prefix_id``).
-    pool_name: str | None
+    # The pool the link prefix is allocated from.
+    pool_name: str
     prefix_length: int
     process_ids: tuple[str, str]
     peerings: tuple[PeeringPlan, ...]
@@ -306,8 +281,6 @@ class SessionPlan:
     password_id: str | None = None
     mtu: int | None = None
     offsets: tuple[int, int] = (0, 1)
-    # provider_assigned: the circuit's own ``link_prefix`` (never allocated, never tracked).
-    link_prefix_id: str | None = None
 
 
 class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfMixin, CommonGenerator):
@@ -412,13 +385,9 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
         plan = planner(self, circuit, name, ends)
         async with self._hold_ports(ends):
             await self._refuse_shared_ports(circuit["id"], name, ends)
-            pool = None
-            if plan.pool_name is not None:
-                pool = await self.client.get(
-                    kind=CoreIPPrefixPool, name__value=plan.pool_name, raise_when_missing=False
-                )
-                if pool is None:
-                    self.fail(f"{name}: pool '{plan.pool_name}' not found (data/bootstrap/)")
+            pool = await self.client.get(kind=CoreIPPrefixPool, name__value=plan.pool_name, raise_when_missing=False)
+            if pool is None:
+                self.fail(f"{name}: pool '{plan.pool_name}' not found (data/bootstrap/)")
             await self._write_session(circuit, name, plan, pool)
         self.logger.info(f"Virtual circuit {name} — completed")
 
@@ -518,7 +487,7 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
     # -- planners (pure: no client call) -------------------------------------------------------------------------
 
     def _plan_handoff(self, circuit: dict[str, Any], name: str, ends: list[SessionEnd]) -> SessionPlan:
-        """One eBGP session over the circuit's link prefix; our end (overlay process) takes ``end_offsets`` [0]."""
+        """One eBGP session over the circuit's link prefix; our end (overlay process) takes the lower address."""
         for end in ends:
             if end.port_kind != DcimVirtualInterface.__name__ or subinterface_vlan(end.port_name) is None:
                 self.fail(f"{name}: {end.label} must be a DcimVirtualInterface named <parent>.<vlan>")
@@ -536,45 +505,18 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
     def _plan_routed_link(
         self, circuit: dict[str, Any], name: str, ends: list[SessionEnd], *, label: str
     ) -> SessionPlan:
-        """The shared plan of a handoff and a vpn: addressing from the connection's flavour, one eBGP session.
-
-        The flavour (``utils/provider_services.py``, keyed by the provider's connection profile and the connection's
-        path type) decides where the link prefix comes from (our ``Handoff-<NAMESPACE>-IPv4`` pool at its length, or
-        the circuit's ``link_prefix`` the provider assigned), the host offset of each end and the session's TTL. A
-        circuit with no connection gets ``DEFAULT_FLAVOUR``: a /31 from our pool, our end the lower address.
-        """
+        """The shared plan of a handoff and a vpn: a /31 from the namespace's pool, one eBGP session."""
         namespace = circuit.get("ip_namespace")
         if not isinstance(namespace, dict) or not namespace.get("name"):
             self.fail(f"{name}: a {label.lower()} circuit needs its ip_namespace")
-        flavour = connection_flavour(circuit)
         first, second = sorted(ends, key=lambda e: (e.overlay_process() is None, e.device_name, e.port_name))
-        pool_name: str | None = handoff_pool_name(namespace["name"])
-        link_prefix_id: str | None = None
-        if flavour.address_source == ADDRESS_SOURCE_PROVIDER:
-            link_prefix = circuit.get("link_prefix") or {}
-            link_prefix_id = link_prefix.get("id")
-            if not link_prefix_id:
-                self.fail(
-                    f"{name}: its provider assigns the link range (/{flavour.prefix_length}) but the circuit has no "
-                    "link_prefix (the connection's link_prefixes, paired by add_provider_connection)"
-                )
-            actual = _prefix_length(link_prefix.get("prefix"))
-            if actual != flavour.prefix_length:
-                self.fail(
-                    f"{name}: link_prefix {link_prefix.get('prefix')} is a /{actual}, the provider's link range is a "
-                    f"/{flavour.prefix_length}"
-                )
-            pool_name = None
-        ttl = flavour.ttl or 1
         return SessionPlan(
             label=label,
             first=first,
             second=second,
             port_kind=DcimVirtualInterface,
-            pool_name=pool_name,
-            prefix_length=flavour.prefix_length,
-            offsets=end_offsets(flavour),
-            link_prefix_id=link_prefix_id,
+            pool_name=handoff_pool_name(namespace["name"]),
+            prefix_length=HANDOFF_PREFIX_LENGTH,
             process_ids=self._process_ids(name, first, second),
             namespace=namespace["name"],
             peerings=(
@@ -582,11 +524,9 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
                     suffix="bgp",
                     description=f"{label} eBGP {first.label} <-> {second.label} over {name}",
                     peering_role="regular",
-                    session_type="EBGP_MULTIHOP" if ttl > 1 else "EBGP",
+                    session_type="EBGP",
                     address_family=IPV4_UNICAST_AF,
                     send_community=False,
-                    ttl=ttl,
-                    bfd_enabled=flavour.bfd,
                     interface_ids=(first.port_id, second.port_id),
                 ),
             ),
@@ -743,19 +683,12 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
                 )
 
     async def _link_prefix(self, name: str, circuit_id: str, plan: SessionPlan, pool: Any) -> Any:
-        """The link prefix of the session: allocated from our pool, or the one the provider assigned.
+        """The link prefix of the session, allocated from our pool.
 
         Allocation is idempotent per identifier (``vc-p2p__<circuit id>``) but the server refuses a different length
-        for an identifier it already allocated, so a flavour whose prefix length changed since the first run is
-        reported here with the remedy and never worked around: nothing is re-allocated or deleted behind the data.
-        A provider-assigned prefix is authored (the connection's ``link_prefixes``): fetched, not tracked.
+        for an identifier it already allocated, so a changed prefix length is reported here with the remedy and never
+        worked around: nothing is re-allocated or deleted behind the data.
         """
-        if plan.link_prefix_id is not None:
-            prefix = await self.client.get(kind="IpamPrefix", id=plan.link_prefix_id, raise_when_missing=False)
-            if prefix is None:
-                self.fail(f"{name}: link_prefix {plan.link_prefix_id} not found")
-            self.logger.info(f"  {plan.label} prefix {prefix.prefix.value} for {name} (assigned by the provider)")
-            return prefix
         try:
             prefix = await self.client.allocate_next_ip_prefix(
                 resource_pool=pool,
@@ -768,7 +701,7 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
             if "cannot be changed" not in str(exc):
                 raise
             self.fail(
-                f"{name}: its link prefix is already allocated with another length than the flavour's "
+                f"{name}: its link prefix is already allocated with another length than "
                 f"/{plan.prefix_length}; a prefix length cannot change in place. Delete the old prefix "
                 f"(identifier vc-p2p__{circuit_id}) and its addresses, then rerun; the server said: {exc}"
             )

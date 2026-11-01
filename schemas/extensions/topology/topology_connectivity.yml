@@ -284,8 +284,7 @@ nodes:
           - name: vpn
             label: "VPN"
             description: >-
-              Routing session over a tunnel interface pair to a provider VPN gateway, riding an internet carrier;
-              owner derived from its provider connection
+              Routing session over a tunnel interface pair to a provider VPN gateway, riding an internet carrier
             color: "#d35400"
 
     relationships:

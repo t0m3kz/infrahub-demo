@@ -339,15 +339,6 @@ check_definitions:
   - name: validate_circuit_placement
     class_name: CheckCircuitPlacement
     file_path: checks/circuit_placement.py
-  # Targetless: a carrier circuit and a session circuit are judged against every
-  # provider connection (rules PC1 to PC13), plus the cloud owner/account
-  # consistency rules, so one query reads all of them.
-  # UNREGISTERED on model/cloud-saas (kind changed, no generator in this exercise): validate_provider_connections
-  # Targetless: what a decommissioned provider connection leaves behind (PC14) and the debris of connections that no
-  # longer exist (PC15, warnings only, nothing is deleted).
-  - name: validate_provider_decommission
-    class_name: CheckProviderDecommission
-    file_path: checks/provider_decommission.py
   # Targetless: a cloud footprint is judged against its account (owner) and the networks its segments use.
   - name: validate_customer_cloud_account
     class_name: CheckCustomerCloudAccount
@@ -682,7 +673,6 @@ queries:
     file_path: queries/topology/add/circuit.gql
   - name: virtual_circuit_data
     file_path: queries/topology/add/virtual_circuit.gql
-  # UNREGISTERED on model/cloud-saas (kind changed, no generator in this exercise): provider_connection_data
   - name: patch_panel_data
     file_path: queries/topology/add/patch_panel.gql
   - name: segment_placement
@@ -715,9 +705,6 @@ queries:
     file_path: queries/validation/carrier_circuit_ports.gql
   - name: circuit_placement
     file_path: queries/validation/circuit_placement.gql
-  # UNREGISTERED on model/cloud-saas (kind changed, no generator in this exercise): provider_connections
-  - name: provider_decommission
-    file_path: queries/validation/provider_decommission.gql
   - name: customer_cloud_account
     file_path: queries/validation/customer_cloud_account.gql
   - name: cloud_connection
@@ -910,7 +897,6 @@ generator_definitions:
       files:
         - generators/
         - utils/
-  # UNREGISTERED on model/cloud-saas (kind changed, no generator in this exercise): add_provider_connection
   - name: add_patch_panel
     file_path: generators/topology/patch_panel.py
     targets: patch_panels

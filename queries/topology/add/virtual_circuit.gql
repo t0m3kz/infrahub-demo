@@ -25,11 +25,7 @@
 #                                                                  (loopback and loopback-vtep only: the DCI EVPN
 #                                                                   session sources its loopbacks from them; the
 #                                                                   address only on a DcimVirtualInterface)
-# A handoff or vpn adds ip_namespace.name; password.id (null when unkeyed); link_prefix.id and .prefix (the range a
-# provider assigns); connection.id, .path_type, .account.provider and the far facility's provider
-# (an external provider's own `provider`, a SaaS region's `parent.provider`, a billed account's, else the owner of the far kit): the flavour of the connection
-# (utils/provider_services.py connection_provider, flavour_for) takes the link prefix length, address source and session shape from them.
-# A circuit with no connection is addressed as before (/31 from our pool).
+# A handoff or vpn adds ip_namespace.name and password.id (null when unkeyed).
 # The ends' own addresses are not selected: the generator allocates them and reads the interface nodes it writes.
 query virtual_circuit_data($name: String!) {
   TopologySessionCircuit(name__value: $name) {
@@ -42,37 +38,6 @@ query virtual_circuit_data($name: String!) {
         circuit_type { value }
         ip_namespace { node { name { value } } }
         password { node { id } }
-        link_prefix { node { id prefix { value } } }
-        connection {
-          node {
-            id
-            path_type { value }
-            account { node { provider { node { ...ConnectionProvider } } } }
-            far {
-              node {
-                id
-                ... on TopologyExternalProviders {
-                  provider { node { ...ConnectionProvider } }
-                }
-                ... on TopologySaasRegion {
-                  parent { node { ... on TopologySaas { provider { node { ...ConnectionProvider } } } } }
-                }
-                ... on TopologyBilledAccount {
-                  account { node { provider { node { ...ConnectionProvider } } } }
-                }
-                ... on TopologyDeviceHosting {
-                  devices { edges { node { ...ConnectionKitOwner } } }
-                }
-                ... on TopologyApplianceHosting {
-                  appliances { edges { node { ...ConnectionKitOwner } } }
-                }
-              }
-            }
-            carrier_circuits {
-              edges { node { capabilities { edges { node { ...ConnectionKitEnd } } } } }
-            }
-          }
-        }
         capabilities {
           edges {
             node {
@@ -171,38 +136,5 @@ fragment VirtualCircuitDeployment on TopologyDeployment {
   ... on TopologyDataCenter {
     name { value }
     underlay_protocol { value }
-  }
-}
-
-# The provider of a connection (utils/provider_services.py connection_provider): the account's, the far facility's
-# (external provider, SaaS region's parent, billed account), else the owner of the far kit (a carrier end deployed in
-# the far facility, or a device the far facility hosts).
-fragment ConnectionProvider on OrganizationProvider {
-  id
-  name { value }
-  connection_profile { value }
-}
-
-fragment ConnectionKitOwner on DcimDevice {
-  id
-  owner { node { id __typename ... on OrganizationProvider { name { value } connection_profile { value } } } }
-}
-
-fragment ConnectionKitEnd on DcimInterface {
-  id
-  device {
-    node {
-      id
-      owner { node { id __typename ... on OrganizationProvider { name { value } connection_profile { value } } } }
-      ... on DcimPhysicalDevice {
-        deployment { node { id } }
-      }
-      ... on DcimVirtualDevice {
-        deployment { node { id } }
-      }
-      ... on CloudNetworkAppliance {
-        deployment { node { id } }
-      }
-    }
   }
 }

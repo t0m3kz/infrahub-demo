@@ -31,14 +31,13 @@ from tests.integration.all_demo_circuit_constants import (
     INTERCONNECT_TYPE,
     TUNNEL_TYPE,
 )
-from tests.integration.all_demo_provider_connection_constants import VPN_TYPE
 from tests.integration.circuit_helpers import fetch_interconnect_inventory
 from tests.integration.snapshot_helpers import TOPOLOGY_SNAPSHOT_KINDS, snapshot_query
 from tests.unit.simulators.circuit_inventory_payloads import inventory_payload
 
 _QUERIES = Path(__file__).parents[1] / "integration" / "queries"
-# The handoff add_provider_connection generates for the Direct Connect of the FR2 cage.
-AWS_HANDOFF = "PC-FR2-AWS-EUC1-PROD-L1"
+# The one handoff the data authors: the SD-WAN gateway's PROD handoff in the FR2 cage.
+SDWAN_HANDOFF = "HANDOFF-FR2-SDWAN-GW1-PROD"
 
 
 async def inventory(
@@ -77,25 +76,18 @@ async def test_the_shipped_data_passes_every_per_kind_placement_rule(monkeypatch
 
 
 async def test_every_kind_is_in_the_inventory_with_its_own_fields(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The parser keeps what only one kind has: a handoff's namespace, key and provider connection (with its VLAN)."""
+    """The parser keeps what only one kind has: a handoff's namespace and key."""
     data = await inventory(monkeypatch)
     kinds = {c["circuit_type"] for c in data["virtual"]}
     assert kinds == {TUNNEL_TYPE, INTERCONNECT_TYPE, HANDOFF_TYPE}
-    aws = _circuit(data, AWS_HANDOFF)
-    assert (aws["ip_namespace"], aws["connection"], aws["connection_node"]["vlan_id"]) == (
-        "PROD",
-        "PC-FR2-AWS-EUC1-PROD",
-        1000,
-    )
-    assert (aws["owner_org"], aws["link_prefix"]) == (None, None)
-    assert aws["password"] == "eqx-fr2-aws-vif-key"
-    assert [end["parent_name"] for end in aws["end_nodes"]] == ["Ethernet1/13", "vnic-fr2"]
-    # a sub-interface rides its parent's carrier, a cable-carried handoff has no circuit but a cable
-    assert {c["circuit_id"] for end in aws["end_nodes"] for c in end["carriers"]} == {"XC-EQXFR2-AWS-EUC1"}
-    sdwan = _circuit(data, "HANDOFF-FR2-SDWAN-GW1-PROD")
+    sdwan = _circuit(data, SDWAN_HANDOFF)
+    assert (sdwan["ip_namespace"], sdwan["owner_org"]) == ("PROD", None)
+    assert sdwan["password"] == "eqx-fr2-sdwan-handoff-key"
+    assert [end["parent_name"] for end in sdwan["end_nodes"]] == ["Ethernet1/12", "eth0"]
+    # a cable-carried handoff has no carrier circuit but a cable
     assert sdwan["carrier"] == [] and all(end["cabled"] for end in sdwan["end_nodes"])
     for tunnel in (c for c in data["virtual"] if c["circuit_type"] == TUNNEL_TYPE):
-        assert tunnel["ip_namespace"] is None and tunnel["connection"] is None and tunnel["password"] is None
+        assert tunnel["ip_namespace"] is None and tunnel["password"] is None
         assert tunnel["owner_org"]
 
 
@@ -119,30 +111,27 @@ async def test_without_the_fibre_a_dci_is_on_no_carrier_circuit(monkeypatch: pyt
 
 
 async def test_without_the_cables_the_cable_carried_handoffs_have_no_carrier(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The SD-WAN gateway handoff sits in one cage: carried by a cable, not a circuit (the Fabric hop to the Network
-    Edge rides a virtual connection)."""
+    """The SD-WAN gateway handoff sits in one cage: carried by a cable, not a circuit."""
     errors = _placement(await inventory(monkeypatch, without_cables=True))
     carrierless = {e.split(":")[0] for e in errors if "no end is on a live carrier circuit or a cable" in e}
     assert carrierless == {"HANDOFF-FR2-SDWAN-GW1-PROD"}
 
 
-async def test_a_handoff_whose_vlans_differ_or_miss_the_connection_is_reported(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Connection VLAN 4000 against 1000 on the ends, ends on 1000 and 1001, and a bare port are each reported."""
+async def test_a_handoff_whose_vlans_differ_or_miss_the_vlan_are_reported(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ends on 1900 and 1901, and a bare port, are each reported."""
     data = await inventory(monkeypatch)
-    aws = _circuit(data, AWS_HANDOFF)
-    aws["connection_node"]["vlan_id"] = 4000
-    assert any("states vlan_id 4000" in e for e in _placement(data))
-    aws["end_nodes"][0]["interface"] = "Ethernet1/13.1001"
+    handoff = _circuit(data, SDWAN_HANDOFF)
+    handoff["end_nodes"][0]["interface"] = "eth0.1901"
     assert any("different VLANs" in e for e in _placement(data))
-    aws["end_nodes"][0]["interface"] = "Ethernet1/13"
+    handoff["end_nodes"][0]["interface"] = "eth0"
     assert any("is not a VLAN sub-interface" in e for e in _placement(data))
 
 
 async def test_a_handoff_placed_elsewhere_than_its_ends_is_reported(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A handoff left with one of its two locations is not where its ends are deployed."""
+    """A handoff whose location is not where its ends are deployed."""
     data = await inventory(monkeypatch)
-    megaport = _circuit(data, "PC-PA4-MEGAPORT-PROD-L1")
-    megaport["location_nodes"] = megaport["location_nodes"][:1]
+    handoff = _circuit(data, SDWAN_HANDOFF)
+    handoff["location_nodes"][0]["id"] = "elsewhere"
     assert any("are not where its ends are deployed" in e for e in _placement(data))
 
 
@@ -187,49 +176,9 @@ async def test_two_session_circuits_on_one_port_and_prod_meeting_non_prod_are_re
     second = _circuit(data, "ICX-DC11-EQXFR2")
     second["end_nodes"][1] = dict(second["end_nodes"][1], id=first["end_nodes"][1]["id"])
     assert any("one port carries one interconnect or handoff session" in e for e in _placement(data))
-    handoff = _circuit(data, AWS_HANDOFF)
+    handoff = _circuit(data, SDWAN_HANDOFF)
     handoff["ip_namespace"] = "NON-PROD"
     assert any("different environments" in e for e in _placement(data))
-
-
-async def test_a_session_circuit_on_a_provider_hosted_end_without_its_connection_is_reported(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The AWS stub is deployed in a cloud region: its handoff must belong to a provider connection."""
-    data = await inventory(monkeypatch)
-    _circuit(data, AWS_HANDOFF)["connection"] = None
-    assert any("belongs to no provider connection" in e for e in _placement(data))
-
-
-async def test_a_handoff_of_a_vpn_connection_and_a_vpn_without_tunnel_interfaces_are_reported(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A handoff of an internet_vpn connection, and a vpn of a dedicated connection on `<port>.<vlan>` ends, are findings."""
-    data = await inventory(monkeypatch)
-    _circuit(data, AWS_HANDOFF)["connection_node"]["path_type"] = "internet_vpn"
-    assert any(e.startswith(f"{AWS_HANDOFF}: a handoff belongs to a internet_vpn connection") for e in _placement(data))
-    data = await inventory(monkeypatch)
-    vpn = _circuit(data, AWS_HANDOFF)
-    vpn["circuit_type"] = VPN_TYPE
-    errors = _placement(data)
-    assert any(e.startswith(f"{AWS_HANDOFF}: a vpn belongs to a dedicated connection") for e in errors)
-    assert any("is not a Tunnel<n> interface" in e for e in errors)
-
-
-async def test_a_vpn_with_tunnel_interfaces_of_an_internet_vpn_connection_passes(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The vpn rules accept what add_provider_connection builds: Tunnel<n> ends, an internet_vpn connection."""
-    data = await inventory(monkeypatch)
-    vpn = _circuit(data, AWS_HANDOFF)
-    vpn["circuit_type"] = VPN_TYPE
-    vpn["connection_node"]["path_type"] = "internet_vpn"
-    vpn["connection_node"]["vlan_id"] = None
-    for number, end in enumerate(vpn["end_nodes"], start=1):
-        end["interface"] = "Tunnel1"
-        end["parent_name"] = None
-    vpn["end_nodes"][0]["id"], vpn["end_nodes"][1]["id"] = "tun-a", "tun-b"
-    assert [e for e in _placement(data) if e.startswith(f"{AWS_HANDOFF}:")] == []
 
 
 # -- helpers --------------------------------------------------------------------------------------------------------------
@@ -346,14 +295,10 @@ def test_p2p_errors_hold_a_pair_of_addresses_to_its_pool_and_its_one_prefix() ->
 
 
 def test_every_handoff_party_asn_is_a_declared_process() -> None:
-    """The party of a handoff is the one end that has a declared process; the Network Edge pair has none."""
+    """The party of a handoff is the one end that has a declared process."""
     handoffs = {n for n, e in ALL_DEMO_VIRTUAL_CIRCUITS.items() if e["circuit_type"] == HANDOFF_TYPE}
-    assert set(ALL_DEMO_HANDOFF_PARTY_ASNS) == handoffs - {"PC-FR2-AMNE-PROD-L1"}
-    assert {party for party, _ in ALL_DEMO_HANDOFF_PARTY_ASNS.values()} == {
-        "EXT-AWS-DX-FR2",
-        "EQX-FR2-SDWAN-GW1",
-        "EXT-MEGAPORT-MCR1",
-    }
+    assert set(ALL_DEMO_HANDOFF_PARTY_ASNS) == handoffs
+    assert {party for party, _ in ALL_DEMO_HANDOFF_PARTY_ASNS.values()} == {"EQX-FR2-SDWAN-GW1"}
 
 
 # -- the GraphQL the stack run sends --------------------------------------------------------------------------------------

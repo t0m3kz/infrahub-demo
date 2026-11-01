@@ -152,9 +152,6 @@ LB_LEG_POOL_TEMPLATE = "LB-Leg-{namespace}-IPv4"
 LB_VIP_POOL_TEMPLATE = "LB-VIP-{namespace}-IPv4"
 TENANT_POOL_TEMPLATE = "Tenant-{namespace}-IPv4"
 HANDOFF_POOL_TEMPLATE = "Handoff-{namespace}-IPv4"
-# The router-id loopbacks /32 of provider-side stubs the provider connection generator builds (26b_provider_stub_pool.yml,
-# an address pool in the PROD namespace, generators/provider_stub.py). Authored stub loopbacks (10.255.64.0/24) stay valid.
-PROVIDER_STUB_LOOPBACK_POOL = "Provider-Stub-Loopback-IPv4"
 # The public SNAT address of a firewall context (23_transit_pools.yml, an address pool in the INTERNET namespace).
 FW_SNAT_POOL = "FW-SNAT-INTERNET-IPv4"
 
@@ -175,7 +172,6 @@ GROUP_VIRTUAL_CIRCUITS = "virtual_circuits"
 # Devices that are never a border gateway of a VLAN domain: the SD-WAN hubs and the provider stub routers.
 GROUP_SDWAN_GATEWAYS = "sdwan_gateways"
 GROUP_PROVIDER_STUBS = "provider_stubs"
-GROUP_PROVIDER_CONNECTIONS = "provider_connections"
 # Every DcimPatchPanel: the target group of add_patch_panel, whose created-trigger needs it (the panel templates join it).
 GROUP_PATCH_PANELS = "patch_panels"
 

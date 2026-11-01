@@ -6,7 +6,7 @@ is one kind whose role is its ``circuit_type`` (dci, handoff, tunnel, vpn), so e
 the fields only it may carry (the schema leaves them all optional).
 
 A circuit has no owner of its own: it is derived (``utils.ownership.circuit_owner``) from the offices among its
-``locations`` (each office carries its owner) and, for a vpn, from its provider connection. Two offices of different
+``locations`` (each office carries its owner). Two offices of different
 owners among the locations of any circuit is an error; a tunnel needs an office; a dci, a handoff and a vpn name no
 office with an owner.
 
@@ -54,13 +54,9 @@ environment namespace)
     3. both end ports are sub-interfaces named ``<port>.<vlan>`` with the same VLAN.
 
 Vpn circuit (``circuit_type`` vpn: an IPsec or GRE tunnel over the internet, one session on the tunnel interface pair;
-model only, the unrendered warning is checks/provider_connections.py PC8)
+model only)
     0. no office owner, no ``registered_prefixes``, an ``ip_namespace`` (its environment class), one or two locations,
-    1. a provider connection with ``path_type`` internet_vpn (the owner and the provider side come from it),
-    2. two end ports,
-    3. the end port deployed in the connection's near facility rides a live internet carrier circuit (one with an end
-       on a TopologyExternalProviders), at the port or its parent interface; the far end is the provider's and needs
-       none.
+    1. two end ports.
 
 All session circuits (dci, handoff and vpn)
     A port is an end of at most one of them, so two circuits never share the same pair of ports: one session per
@@ -125,7 +121,6 @@ from utils.data_cleaning import clean_data
 from utils.exchange_transit import PROD_TYPE, TENANT_NAMESPACE_TYPES
 from utils.limits import CIRCUIT_ENDS
 from utils.ownership import CircuitOwnerError, circuit_owner
-from utils.provider_services import PATH_INTERNET_VPN
 
 CARRIER = "TopologyCarrierCircuit"
 # The session circuit types, keyed by their ``circuit_type`` value.
@@ -369,7 +364,7 @@ class CheckCircuitPlacement(InfrahubCheck):
     def _validate_owner(self, circuit: dict[str, Any], kind: str, locations: list[dict[str, Any]]) -> None:
         """The owner is derived from the offices among the locations (``circuit_owner``): they are of one owner. A
         tunnel needs an office; every other session circuit names no office with an owner (a dci, a handoff and a vpn
-        are shared platform or the provider connection's)."""
+        are shared platform)."""
         noun = "Carrier" if kind == CARRIER else NOUNS[kind]
         name = _name(circuit)
         try:
@@ -581,39 +576,6 @@ class CheckCircuitPlacement(InfrahubCheck):
                 circuit,
                 VPN,
                 f"Vpn circuit '{name}' has no ip_namespace: its session runs in an environment namespace.",
-            )
-        connection = circuit.get("connection") if isinstance(circuit.get("connection"), dict) else None
-        if not connection or connection.get("path_type") != PATH_INTERNET_VPN:
-            found = (
-                f"its connection '{connection.get('name')}' is {connection.get('path_type')}"
-                if connection
-                else ("it is on no connection")
-            )
-            self._error(
-                circuit,
-                VPN,
-                f"Vpn circuit '{name}' needs a provider connection with path_type {PATH_INTERNET_VPN}: {found}.",
-            )
-            return
-        near = str((connection.get("near") or {}).get("id") or "")
-        near_ports = [port for port in ports if ((port.get("device") or {}).get("deployment") or {}).get("id") == near]
-        if not near_ports:
-            self._error(
-                circuit,
-                VPN,
-                f"Vpn circuit '{name}' has no end port on a device deployed in its connection's near facility "
-                f"({connection.get('name')}): one end of a tunnel is ours.",
-            )
-        for port in near_ports:
-            live = _live_carriers(port)
-            if any(location.get("typename") == INTERNET for carrier in live for location in _locations(carrier)):
-                continue
-            found = f"its live carrier circuits are {_carriers_label(live)}" if live else "it is on no live one"
-            self._error(
-                circuit,
-                VPN,
-                f"Vpn circuit '{name}' end '{_port_label(port)}' rides no live internet carrier circuit (one with an "
-                f"end on a {INTERNET}): {found}. The tunnel is carried over the near facility's internet access.",
             )
 
     # ------------------------------------------------------------------

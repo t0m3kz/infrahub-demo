@@ -13,10 +13,7 @@ skips the whole tracked cleanup when a run tracked nothing, so the sessions of a
   * test_02 does the same for a Handoff through the circuit's OWN status (its rule runs add_virtual_circuit
     directly): the sub-interfaces, the circuit, both BGP processes and the data-loaded key stay.
 
-  * test_03 (and the sole-demand handoff it uses) proves the VRF membership of a handoff follows its only demand: the
-    device leaves the topology's instance (one per hosting deployment and namespace), which survives while other
-    members remain and goes with its last one.
-  * test_04 does the same for a segment: the SVIs a segment's rows demand on a switch go, and so does the switch's
+  * test_04 proves the VRF membership follows its demand for a segment: the SVIs a segment's rows demand on a switch go, and so does the switch's
     membership of the DC's instance, when the segment no longer lands there (see the module-level constants of that
     test); the instance survives through the other switches, and the switches rejoin it with the segment.
   * test_05 deletes the ManagedMLAG of an access-leaf pair and builds it again (add_rack): a VLAN row hangs off its
@@ -47,7 +44,6 @@ from transforms.config.access_leaf import AccessLeaf
 from utils.circuit_underlay import SESSION_CIRCUIT
 
 from .all_demo_circuit_constants import ALL_DEMO_VIRTUAL_CIRCUITS, HANDOFF_TYPE, INTERCONNECT_TYPE
-from .all_demo_provider_connection_constants import ALL_DEMO_CONNECTION_CIRCUITS
 from .circuit_lifecycle_helpers import (
     _HOST_CABLES_QUERY,
     _SWITCH_VRF_QUERY,
@@ -59,7 +55,6 @@ from .circuit_lifecycle_helpers import (
     back_errors,
     parse_switch_vrf_state,
     precondition_errors,
-    sole_demand_instance_errors,
     svis_gone_errors,
     switches_of_host,
     vrf_gone_errors,
@@ -95,22 +90,11 @@ CARRIER_CIRCUIT_KIND = "TopologyCarrierCircuit"
 
 # The DCI under test: the *-B fibre of DC12 to PA4. Its sibling ICX-DC12-EQXPA4 shares both devices and must not move.
 INTERCONNECT_CIRCUIT = "ICX-DC12-EQXPA4-B"
-# The AWS transit handoff add_provider_connection generates for PC-FR2-AWS-EUC1-PROD (the generated circuit is
-# `<connection>-L<n>`). Its key is data-loaded (data/demos/30_all/08_interconnects/05_provider_connections/
-# 00_aws_dx_stub.yml) and put on the circuit by the connection's `password`, not generated: it must be there before and
-# after.
-HANDOFF_CIRCUIT = "PC-FR2-AWS-EUC1-PROD-L1"
-HANDOFF_KEY = "eqx-fr2-aws-vif-key"
-# The second AWS connection, held by the Network Edge router eg-am-ne02. That router is on no other circuit of 30_all
-# (data: 05_provider_connections/02_amne_chain.yml; no segment, no other connection, no transit), so the /31 of this
-# handoff is the only thing that demands its PROD VRF membership: decommissioning the circuit must remove the device
-# from the AM metro's PROD instance (which stays: eg-am-ne01 is still a member), and the rebuild must add it back.
-# (eg-fr201, the end of HANDOFF_CIRCUIT, has other PROD handoffs and segments: there it must stay a member.)
-SOLE_DEMAND_HANDOFF = "PC-AMNE-AWS-EUC1-PROD-L1"
-SOLE_DEMAND_DEVICE = "eg-am-ne02"
-# The other router of the AM metro's PROD instance: it keeps the instance alive when SOLE_DEMAND_DEVICE leaves.
-SOLE_DEMAND_PEER = "eg-am-ne01"
-SOLE_DEMAND_KEY = "eqx-am-ne-aws-vif-key"
+# The SD-WAN gateway's PROD handoff (data/demos/30_all/08_interconnects/04_sdwan/06_vrf_handoff.yml). Its key is
+# data-loaded: it must be there before and after. eg-fr201, its end, has other PROD handoffs and segments, so it stays
+# a member of its VRF instance.
+HANDOFF_CIRCUIT = "HANDOFF-FR2-SDWAN-GW1-PROD"
+HANDOFF_KEY = "eqx-fr2-sdwan-handoff-key"
 
 _PORT_KINDS = {INTERCONNECT_TYPE: "DcimPhysicalInterface", HANDOFF_TYPE: "DcimVirtualInterface"}
 _PEERING_SUFFIXES = {INTERCONNECT_TYPE: ("underlay", "evpn"), HANDOFF_TYPE: ("bgp",)}
@@ -232,14 +216,13 @@ class Subject:
 
     @property
     def bystanders(self) -> tuple[str, ...]:
-        """The sessions of every OTHER interconnect, handoff and provider-connection (handoff, vpn) circuit of 30_all."""
-        sessions = tuple(
+        """The sessions of every OTHER interconnect and handoff circuit of 30_all."""
+        return tuple(
             f"{name}-{suffix}"
             for name, expected in sorted(ALL_DEMO_VIRTUAL_CIRCUITS.items())
             if name != self.circuit and expected["circuit_type"] in _PEERING_SUFFIXES
             for suffix in _PEERING_SUFFIXES[expected["circuit_type"]]
         )
-        return sessions + tuple(f"{name}-bgp" for name in sorted(ALL_DEMO_CONNECTION_CIRCUITS) if name != self.circuit)
 
 
 def subject_for(circuit: str, key: str | None = None) -> Subject:
@@ -535,8 +518,6 @@ async def decommission_and_restore(
     branch: str,
     subject: Subject,
     toggled_kind: str,
-    *,
-    sole_demand: str | None = None,
     **toggled: Any,
 ) -> None:
     """The lifecycle of one circuit's session, driven through the status of the node ``toggled_kind`` / ``toggled``
@@ -546,9 +527,7 @@ async def decommission_and_restore(
 
     The VRF memberships follow (vrf_down_errors / vrf_up_errors): an end device leaves its topology's instance of the
     circuit's namespace with the session when nothing else demands it there and stays a member when something does;
-    the instance survives (same id) while other members remain, and every other instance is untouched.
-    ``sole_demand`` names an end device the circuit is the only demand for: the test asserts that precondition on the
-    state read first, so the "leaves" branch is really exercised."""
+    the instance survives (same id) while other members remain, and every other instance is untouched."""
     await wait_for_tasks_completion(client, branch)
     before = await fetch_state(client, branch, subject)
     errors = rebuilt_errors(before, subject)
@@ -556,17 +535,6 @@ async def decommission_and_restore(
         f"{subject.circuit} has no complete session on '{branch}' to decommission:\n  - " + "\n  - ".join(errors)
     )
     assert before["bystanders"], "no other circuit has a session: nothing proves they are left alone"
-    if sole_demand:
-        assert sole_demand in before["vrfs"]["memberships"], (
-            f"{sole_demand} is a member of no {subject.namespace} VRF instance before the decommission"
-        )
-        instance_errors = sole_demand_instance_errors(before["vrfs"], sole_demand, SOLE_DEMAND_PEER)
-        assert not instance_errors, "the premise of the sole-demand handoff does not hold:\n  - " + "\n  - ".join(
-            instance_errors
-        )
-        assert sole_demand not in before["vrfs"]["other_demand"], (
-            f"{sole_demand} has other demand for {subject.namespace}: it would stay a member"
-        )
     processes = sorted({pid for peering in before["peerings"].values() for pid in peering["process_ids"]})
     assert processes, f"{subject.circuit}'s session runs on no BGP process"
     toggled_id = (await client.get(kind=toggled_kind, branch=branch, **toggled)).id
@@ -744,7 +712,7 @@ class TestAllDemoCircuitLifecycle(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Decommissioning the AWS handoff removes its session, /31 and sub-interface addresses; the sub-interfaces,
+        """Decommissioning the SD-WAN gateway handoff removes its session, /31 and sub-interface addresses; the sub-interfaces,
         the circuit, the BGP processes and the data-loaded key stay; setting it active again rebuilds the session."""
         logging.info("=== %s - Step 2: Handoff via its own status ===", SCENARIO_NAME)
 
@@ -757,38 +725,11 @@ class TestAllDemoCircuitLifecycle(TestInfrahubDockerWithClient):
         )
         logging.info("%s: session removed with its status, rebuilt on the same key", HANDOFF_CIRCUIT)
 
-    @pytest.mark.order(422)
-    @pytest.mark.dependency(
-        scope="session",
-        name="all_demo_handoff_vrf_lifecycle",
-        depends=["all_demo_handoff_lifecycle"],
-    )
-    @pytest.mark.asyncio
-    async def test_03_handoff_vrf_instance_follows_its_only_demand(
-        self,
-        async_client_main: InfrahubClient,
-        scenario_branch: str,
-    ) -> None:
-        """The handoff is the only thing eg-am-ne02 routes in PROD: decommissioning it removes the device from the AM
-        metro's PROD instance (add_virtual_circuit reconciles after its cleanup), which stays for eg-am-ne01; the
-        rebuild adds the device back, and every other instance keeps its id and members."""
-        logging.info("=== %s - Step 3: Handoff VRF instance ===", SCENARIO_NAME)
-
-        await decommission_and_restore(
-            async_client_main,
-            scenario_branch,
-            subject_for(SOLE_DEMAND_HANDOFF, key=SOLE_DEMAND_KEY),
-            SESSION_CIRCUIT,
-            sole_demand=SOLE_DEMAND_DEVICE,
-            name__value=SOLE_DEMAND_HANDOFF,
-        )
-        logging.info("%s: membership removed with its only demand, back with the rebuild", SOLE_DEMAND_DEVICE)
-
     @pytest.mark.order(423)
     @pytest.mark.dependency(
         scope="session",
         name="all_demo_segment_vrf_lifecycle",
-        depends=["all_demo_handoff_vrf_lifecycle"],
+        depends=["all_demo_handoff_lifecycle"],
     )
     @pytest.mark.asyncio
     async def test_04_segment_vrf_instance_follows_its_rows(

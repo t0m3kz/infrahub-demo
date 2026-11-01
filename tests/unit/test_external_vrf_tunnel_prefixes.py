@@ -57,7 +57,7 @@ def _tunnel(
     return {
         "locations": {"edges": [_office_location(owner, owner_type), {"node": {}}]},
         "registered_prefixes": {"edges": [_raw_prefix(prefix, namespace) for prefix, namespace in prefixes]},
-        "capabilities": {"edges": [{"node": {"device": {"node": {"name": {"value": device}}}}} for device in ends]},
+        "endpoints": {"edges": [{"node": {"device": {"node": {"name": {"value": device}}}}} for device in ends]},
     }
 
 
@@ -79,7 +79,6 @@ def _peers(offices: list[dict[str, Any]], tunnels: list[dict[str, Any]] | None) 
     """The accepted prefixes of a PROD handoff facing the SD-WAN gateway."""
     return get_external_peer_prefixes(
         [_subif(_HANDOFF, "PROD")],
-        None,
         "eg-fr201",
         device_capabilities=_bgp_facing((_HANDOFF, _GW1)),
         offices=offices,
@@ -168,7 +167,7 @@ class TestGatewayHandoffAcceptsTunnelPrefixes:
 
 
 class TestSessionCircuitOwner:
-    """The owner of a session circuit is derived from its office locations and its connection."""
+    """The owner of a session circuit is derived from its office locations."""
 
     def test_two_offices_of_one_owner_are_fine(self) -> None:
         """An office pair of one owner derives that owner."""
@@ -185,15 +184,8 @@ class TestSessionCircuitOwner:
         with pytest.raises(CircuitOwnerError):
             session_circuit_owner(cleaned)
 
-    def test_no_office_takes_the_connection_owner(self) -> None:
-        """A vpn circuit has no office: its connection's account owner, else the connection's owner."""
-        customer = {"typename": "OrganizationCustomer", "org_id": "C003", "display_label": "C003"}
-        other = {"typename": "OrganizationCustomer", "org_id": "C005", "display_label": "C005"}
-        assert session_circuit_owner({"locations": [{}], "connection": {"owner": customer}}) == "C003"
-        assert session_circuit_owner({"connection": {"owner": other, "account": {"owner": customer}}}) == "C003"
-
     def test_no_office_and_no_connection_has_no_owner(self) -> None:
-        """A dci or handoff circuit is unowned."""
+        """A dci, handoff or vpn circuit is unowned."""
         assert session_circuit_owner({"locations": [{}, {}]}) is None
         assert session_circuit_owner({}) is None
 
@@ -236,10 +228,10 @@ class TestEdgeQueryAndData:
             "locations.owner.display_label",
             "registered_prefixes.prefix",
             "registered_prefixes.ip_namespace.name",
-            "capabilities.device.name",
+            "endpoints.device.name",
         ]
         assert not [item for item in reads if item not in selected]
-        assert {"locations", "registered_prefixes", "capabilities"} <= relationship_names("TopologySessionCircuit")
+        assert {"locations", "registered_prefixes", "endpoints"} <= relationship_names("TopologySessionCircuit")
 
     def test_a_cleaned_response_has_the_shape_the_helper_reads(self) -> None:
         """clean_data: office owner dict with typename in locations, registered_prefixes a list of dicts, device names."""
@@ -251,7 +243,7 @@ class TestEdgeQueryAndData:
         }
         assert tunnel["locations"][1] == {}
         assert tunnel["registered_prefixes"] == [{"prefix": _ACME, "ip_namespace": {"name": "PROD"}}]
-        assert [port["device"]["name"] for port in tunnel["capabilities"]] == [_GW1, "EXT-ACME-EDGE1"]
+        assert [port["device"]["name"] for port in tunnel["endpoints"]] == [_GW1, "EXT-ACME-EDGE1"]
 
     def test_the_partner_tunnel_registers_the_acme_range_in_prod(self) -> None:
         """01_partner_tunnel.yml creates the PROD prefix and lists it on the tunnel, owned by C001 through its office."""

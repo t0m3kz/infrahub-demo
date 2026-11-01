@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 import pytest
@@ -11,7 +10,6 @@ from tests.unit.external_vrf_peers_helpers import (
     _C2,
     _C3,
     _C5,
-    _C15,
     _GW1,
     _NON_PROD,
     _PROD,
@@ -21,48 +19,13 @@ from tests.unit.external_vrf_peers_helpers import (
     _subif,
 )
 from transforms.helpers.bgp import _build_session_from_peering
-from transforms.helpers.bgp_external import connections_by_interface, get_external_peer_prefixes
+from transforms.helpers.bgp_external import get_external_peer_prefixes
 from utils.ownership import customer_owner
 
 
 def _blocks(*pairs: tuple[str, str]) -> list[dict[str, Any]]:
     """Cleaned cidr_blocks: (prefix, namespace name)."""
     return [{"prefix": prefix, "ip_namespace": {"name": ns}} for prefix, ns in pairs]
-
-
-def _transit_connection(*, attachments: list[dict[str, Any]], name: str = "aws-transit-hub") -> dict[str, Any]:
-    """A cleaned transit provider connection whose hybrid attachment is associated with rt-shared."""
-    return {
-        "name": name,
-        "service": "transit",
-        "transit_attachment": {"associated_route_table": {"id": "rt-shared"}},
-        "attached_gateway": {"attachments": attachments},
-    }
-
-
-def _private_connection(
-    *blocks: tuple[str, str], owner: dict[str, Any] | None = _C3, name: str = "aws-private"
-) -> dict[str, Any]:
-    """A cleaned private provider connection attached to a virtual network of an account owned by ``owner``."""
-    return {
-        "name": name,
-        "service": "private",
-        "attached_network": {"cidr_blocks": _blocks(*blocks), "account": {"owner": owner}},
-    }
-
-
-def _on(iface: str, connection: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    """The interface -> connection map of one handoff sub-interface (connections_by_interface)."""
-    return {iface: connection}
-
-
-def _vpc_attachment(tables: list[str], *blocks: tuple[str, str], owner: dict[str, Any] | None = _C3) -> dict[str, Any]:
-    """A VPC attachment propagating to ``tables``; its account is owned by ``owner``."""
-    return {
-        "attachment_type": "vpc",
-        "propagates_to_route_tables": [{"id": table} for table in tables],
-        "virtual_network": {"cidr_blocks": _blocks(*blocks), "account": {"owner": owner}},
-    }
 
 
 _NO_SDWAN: dict[str, Any] = {"device_capabilities": None, "offices": None, "tunnels": None}
@@ -152,158 +115,9 @@ class TestExternalFlag:
 
 
 class TestExternalPeerPrefixes:
-    def test_transit_connection_accepts_only_vpcs_on_its_route_table_in_its_namespace(self) -> None:
-        """rt-shared VPCs in PROD only: an isolated-table VPC and a NON-PROD block are not accepted."""
-        connection = _transit_connection(
-            attachments=[
-                _vpc_attachment(["rt-shared"], ("10.30.0.0/16", "PROD")),
-                _vpc_attachment(["rt-isolated"], ("10.150.0.0/16", "PROD")),
-                _vpc_attachment(["rt-shared"], ("10.60.0.0/16", "NON-PROD")),
-                {"attachment_type": "hybrid", "propagates_to_route_tables": [{"id": "rt-shared"}]},
-            ]
-        )
-        found = get_external_peer_prefixes(
-            [_subif("Ethernet1/13.1000", "PROD")],
-            _on("Ethernet1/13.1000", connection),
-            "eg-fr201",
-            **_NO_SDWAN,
-        )
-        assert found == {"Ethernet1/13.1000": {"C003": ["10.30.0.0/16"]}}
-
-    def test_private_connection_accepts_its_own_vpc_blocks_in_its_namespace(self) -> None:
-        """A NON-PROD sub-interface never accepts the PROD block of the same VPC."""
-        connection = _private_connection(("10.60.0.0/16", "NON-PROD"), ("10.31.0.0/16", "PROD"))
-        found = get_external_peer_prefixes(
-            [_subif("Ethernet1/13.1001", "NON-PROD")], _on("Ethernet1/13.1001", connection), "eg-fr201", **_NO_SDWAN
-        )
-        assert found == {"Ethernet1/13.1001": {"C003": ["10.60.0.0/16"]}}
-
-    def test_public_connection_accepts_its_registered_prefixes_for_its_owner(self) -> None:
-        """A SaaS range registered on a public connection belongs to the connection's owner."""
-        connection = {
-            "name": "zscaler-fr2",
-            "service": "public",
-            "owner": _C5,
-            "registered_prefixes": _blocks(("198.51.100.0/24", "PROD"), ("198.51.101.0/24", "NON-PROD")),
-        }
-        found = get_external_peer_prefixes(
-            [_subif("Ethernet1/13.1300", "PROD")], _on("Ethernet1/13.1300", connection), "eg-fr201", **_NO_SDWAN
-        )
-        assert found == {"Ethernet1/13.1300": {"C005": ["198.51.100.0/24"]}}
-
-    def test_the_account_owner_wins_over_the_connection_owner_for_registered_prefixes(self) -> None:
-        """When the connection has an account, its owner is the account's (connection_owner)."""
-        connection = {
-            "name": "c",
-            "service": "public",
-            "owner": _C5,
-            "account": {"owner": _C3},
-            "registered_prefixes": _blocks(("198.51.100.0/24", "PROD")),
-        }
-        found = get_external_peer_prefixes(
-            [_subif("Ethernet1/13.1300", "PROD")], _on("Ethernet1/13.1300", connection), "eg-fr201", **_NO_SDWAN
-        )
-        assert found == {"Ethernet1/13.1300": {"C003": ["198.51.100.0/24"]}}
-
-    def test_registered_prefixes_of_a_connection_without_a_customer_owner_are_never_accepted(self) -> None:
-        """A provider-owned or ownerless connection registers a prefix nobody may announce to the far end."""
-        for owner in (_PROVIDER, None):
-            connection = {
-                "name": "c",
-                "service": "public",
-                "owner": owner,
-                "registered_prefixes": _blocks(("198.51.100.0/24", "PROD")),
-            }
-            found = get_external_peer_prefixes(
-                [_subif("Ethernet1/13.1300", "PROD")], _on("Ethernet1/13.1300", connection), "eg-fr201", **_NO_SDWAN
-            )
-            assert found == {"Ethernet1/13.1300": {}}
-
-    def test_default_route_and_ipv6_are_never_accepted(self) -> None:
-        """A registered 0/0 (or any IPv6 block) is dropped from the inbound list."""
-        connection = _transit_connection(
-            attachments=[
-                _vpc_attachment(
-                    ["rt-shared"], ("0.0.0.0/0", "PROD"), ("2001:db8::/56", "PROD"), ("10.30.0.0/16", "PROD")
-                )
-            ]
-        )
-        found = get_external_peer_prefixes(
-            [_subif("Ethernet1/13.1000", "PROD")], _on("Ethernet1/13.1000", connection), "eg-fr201", **_NO_SDWAN
-        )
-        assert found == {"Ethernet1/13.1000": {"C003": ["10.30.0.0/16"]}}
-
-    def test_an_interface_that_is_no_session_end_is_ignored(self) -> None:
-        """Only the interface a session circuit has as an end is matched: not its parent, not a sibling."""
-        connection = _transit_connection(attachments=[_vpc_attachment(["rt-shared"], ("10.30.0.0/16", "PROD"))])
-        interfaces = [_subif("Ethernet1/13.1002", "PROD"), _subif("Ethernet1/13", "PROD"), _subif("Loopback0", None)]
-        found = get_external_peer_prefixes(interfaces, _on("Ethernet1/13.1000", connection), "eg-fr201", **_NO_SDWAN)
-        assert found == {}
-
-    def test_transit_connection_without_route_table_accepts_nothing(self) -> None:
-        """No associated route table: nothing is reachable over the connection."""
-        connection = _transit_connection(attachments=[_vpc_attachment(["rt-shared"], ("10.30.0.0/16", "PROD"))])
-        connection["transit_attachment"]["associated_route_table"] = None
-        found = get_external_peer_prefixes(
-            [_subif("Ethernet1/13.1000", "PROD")], _on("Ethernet1/13.1000", connection), "eg-fr201", **_NO_SDWAN
-        )
-        assert found == {"Ethernet1/13.1000": {}}
-
-    def test_transit_connection_without_a_transit_attachment_accepts_nothing(self) -> None:
-        """The attachment is the edge to the table: absent, the gateway's VPCs are unreachable."""
-        connection = _transit_connection(attachments=[_vpc_attachment(["rt-shared"], ("10.30.0.0/16", "PROD"))])
-        connection["transit_attachment"] = None
-        found = get_external_peer_prefixes(
-            [_subif("Ethernet1/13.1000", "PROD")], _on("Ethernet1/13.1000", connection), "eg-fr201", **_NO_SDWAN
-        )
-        assert found == {"Ethernet1/13.1000": {}}
-
-    def test_no_connections_is_empty(self) -> None:
-        """A sub-interface with neither a connection nor an SD-WAN gateway behind it is absent."""
-        assert get_external_peer_prefixes([_subif("Ethernet1/13.1900", "PROD")], None, "eg-fr201", **_NO_SDWAN) == {}
-
-
-class TestConnectionsByInterface:
-    """The session circuits' own ends and the connection that lists them name the connection: no name or VLAN is
-    compared."""
-
-    @staticmethod
-    def _with_sessions(connection: dict[str, Any], *ends: tuple[str, str]) -> dict[str, Any]:
-        """``connection`` with one session circuit per (device, interface) end port."""
-        sessions = [{"capabilities": [{"name": iface, "device": {"name": device}}]} for device, iface in ends]
-        return {**connection, "session_circuits": sessions}
-
-    def test_the_end_port_of_this_device_maps_to_the_connection_of_its_circuit(self) -> None:
-        """Same interface name on another device, and a connection with no session circuit, are ignored."""
-        mine = self._with_sessions(
-            _private_connection(("10.60.0.0/16", "NON-PROD"), name="mine"), ("eg-fr201", "Ethernet1/13.1001")
-        )
-        other = self._with_sessions(_private_connection(name="other"), ("eg-fr202", "Ethernet1/13.1001"))
-        idle = {**_private_connection(name="idle"), "session_circuits": []}
-        assert connections_by_interface([mine, other, idle], "eg-fr201") == {"Ethernet1/13.1001": mine}
-
-    def test_two_circuits_of_one_dual_connection_both_map_to_it(self) -> None:
-        """The primary and secondary legs are two circuits of ONE connection."""
-        dual = self._with_sessions(
-            _private_connection(("10.60.0.0/16", "NON-PROD"), name="dual"),
-            ("eg-fr201", "Ethernet1/13.1001"),
-            ("eg-fr201", "Ethernet1/14.1001"),
-        )
-        assert connections_by_interface([dual], "eg-fr201") == {"Ethernet1/13.1001": dual, "Ethernet1/14.1001": dual}
-
-    def test_a_port_on_two_connections_accepts_nothing(self, caplog: pytest.LogCaptureFixture) -> None:
-        """Ambiguous data: fail closed and say so."""
-        a = self._with_sessions(_private_connection(name="a"), ("eg-fr201", "Ethernet1/13.1001"))
-        b = self._with_sessions(_private_connection(name="b"), ("eg-fr201", "Ethernet1/13.1001"))
-        with caplog.at_level(logging.WARNING):
-            found = connections_by_interface([a, b], "eg-fr201")
-        assert found == {}
-        assert "accepts nothing" in caplog.text
-
-    def test_no_connections_is_empty(self) -> None:
-        """The older query shape (no root) maps nothing."""
-        assert connections_by_interface(None, "eg-fr201") == {}
-        assert connections_by_interface([], "eg-fr201") == {}
+    def test_nothing_behind_the_interface_is_empty(self) -> None:
+        """A sub-interface with no SD-WAN gateway behind it is absent."""
+        assert get_external_peer_prefixes([_subif("Ethernet1/13.1900", "PROD")], "eg-fr201", **_NO_SDWAN) == {}
 
 
 class TestSdwanGatewayPrefixes:
@@ -317,7 +131,6 @@ class TestSdwanGatewayPrefixes:
         ]
         found = get_external_peer_prefixes(
             [_subif("Ethernet1/13.1900", "PROD")],
-            None,
             "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
             offices=offices,
@@ -334,7 +147,6 @@ class TestSdwanGatewayPrefixes:
         ]
         found = get_external_peer_prefixes(
             [_subif("Ethernet1/13.1900", "PROD")],
-            None,
             "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
             offices=offices,
@@ -355,7 +167,6 @@ class TestSdwanGatewayPrefixes:
         ]
         found = get_external_peer_prefixes(
             [_subif("Ethernet1/13.1900", "PROD")],
-            None,
             "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
             offices=offices,
@@ -367,7 +178,6 @@ class TestSdwanGatewayPrefixes:
         """A NON-PROD handoff to the same gateway accepts only NON-PROD LANs (here: none)."""
         found = get_external_peer_prefixes(
             [_subif("Ethernet1/13.1901", "NON-PROD")],
-            None,
             "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1901", _GW1)),
             offices=[_office(_GW1, ("10.210.5.0/24", "PROD"), ("10.210.2.0/24", "PROD"))],
@@ -379,7 +189,6 @@ class TestSdwanGatewayPrefixes:
         """A known gateway with no registered LAN maps to [] (deny), not to a VIF guess."""
         found = get_external_peer_prefixes(
             [_subif("Ethernet1/13.1900", "PROD")],
-            None,
             "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
             offices=[_office(_GW1)],
@@ -395,7 +204,6 @@ class TestSdwanGatewayPrefixes:
         ]
         found = get_external_peer_prefixes(
             [_subif("Ethernet1/13.1900", "PROD")],
-            None,
             "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
             offices=offices,
@@ -409,7 +217,6 @@ class TestSdwanGatewayPrefixes:
         ]
         found = get_external_peer_prefixes(
             [_subif("Ethernet1/13.1900", "PROD")],
-            None,
             "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
             offices=offices,
@@ -425,7 +232,6 @@ class TestSdwanGatewayPrefixes:
         ]
         found = get_external_peer_prefixes(
             [_subif("Ethernet1/13.1900", "PROD")],
-            None,
             "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
             offices=offices,
@@ -448,7 +254,6 @@ class TestSdwanGatewayPrefixes:
         offices[0]["segment_deployments"].append({"segment": {"gateway": None}})
         found = get_external_peer_prefixes(
             [_subif("Ethernet1/13.1900", "PROD"), _subif("Ethernet1/13.1901", "NON-PROD")],
-            None,
             "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1), ("Ethernet1/13.1901", _GW1)),
             offices=offices,
@@ -464,7 +269,6 @@ class TestSdwanGatewayPrefixes:
         office = {"owner": _C2, "sdwan_gateway": {"name": _GW1}, "lan_prefixes": _blocks(("10.210.2.0/24", "PROD"))}
         found = get_external_peer_prefixes(
             [_subif("Ethernet1/13.1900", "PROD")],
-            None,
             "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
             offices=[office],
@@ -476,7 +280,6 @@ class TestSdwanGatewayPrefixes:
         """No office footprint at all: the gateway is not known, so the handoff accepts nothing."""
         found = get_external_peer_prefixes(
             [_subif("Ethernet1/13.1900", "PROD")],
-            None,
             "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
             offices=[],
@@ -488,7 +291,6 @@ class TestSdwanGatewayPrefixes:
         """Office LANs go only to the session whose far end is their gateway, not to any PROD handoff."""
         found = get_external_peer_prefixes(
             [_subif("Ethernet1/13.1900", "PROD"), _subif("Ethernet1/14.1900", "PROD")],
-            None,
             "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1), ("Ethernet1/14.1900", "EXT-PARTNER-01")),
             offices=[_office(_GW1, ("10.210.5.0/24", "PROD"))],
@@ -500,7 +302,6 @@ class TestSdwanGatewayPrefixes:
         """Ambiguous far end on one sub-interface: fail closed rather than trust one of them."""
         found = get_external_peer_prefixes(
             [_subif("Ethernet1/13.1900", "PROD")],
-            None,
             "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1), ("Ethernet1/13.1900", "EXT-PARTNER-01")),
             offices=[_office(_GW1, ("10.210.5.0/24", "PROD"))],
@@ -515,7 +316,6 @@ class TestSdwanGatewayPrefixes:
         with pytest.raises(ValueError, match="expected 2 capabilities"):
             get_external_peer_prefixes(
                 [_subif("Ethernet1/13.1900", "PROD")],
-                None,
                 "eg-fr201",
                 device_capabilities=capabilities,
                 offices=[_office(_GW1, ("10.210.5.0/24", "PROD"))],
@@ -573,51 +373,6 @@ class TestCustomerOwner:
 class TestPeerPrefixOwners:
     """get_external_peer_prefixes attributes each registered prefix to the object that registered it."""
 
-    def test_vpc_blocks_take_the_owner_of_their_own_vpcs_account(self) -> None:
-        """Two VPCs of two customers behind one transit connection: each owner keeps its own blocks."""
-        connection = _transit_connection(
-            attachments=[
-                _vpc_attachment(["rt-shared"], ("10.30.0.0/16", "PROD"), owner=_C3),
-                _vpc_attachment(["rt-shared"], ("10.32.0.0/16", "PROD"), ("10.31.0.0/16", "PROD"), owner=_C15),
-                _vpc_attachment(["rt-isolated"], ("10.150.0.0/16", "PROD"), owner=_C3),
-            ]
-        )
-        found = get_external_peer_prefixes(
-            [_subif("Ethernet1/13.1000", "PROD")], _on("Ethernet1/13.1000", connection), "eg-fr201", **_NO_SDWAN
-        )
-        assert found == {"Ethernet1/13.1000": {"C003": ["10.30.0.0/16"], "C015": ["10.31.0.0/16", "10.32.0.0/16"]}}
-
-    @pytest.mark.parametrize("owner", [_PROVIDER, None], ids=["provider", "no-owner"])
-    def test_a_vpc_block_without_a_customer_owner_is_never_accepted(self, owner: dict[str, Any] | None) -> None:
-        """A provider-owned or ownerless account registers a prefix nobody may announce to the far end."""
-        connection = _transit_connection(
-            attachments=[
-                _vpc_attachment(["rt-shared"], ("10.33.0.0/16", "PROD"), owner=owner),
-                _vpc_attachment(["rt-shared"], ("10.30.0.0/16", "PROD")),
-            ]
-        )
-        found = get_external_peer_prefixes(
-            [_subif("Ethernet1/13.1000", "PROD")], _on("Ethernet1/13.1000", connection), "eg-fr201", **_NO_SDWAN
-        )
-        assert found == {"Ethernet1/13.1000": {"C003": ["10.30.0.0/16"]}}
-
-    def test_a_vpc_without_an_account_is_never_accepted(self) -> None:
-        """A virtual network whose account (or its owner) is null registers nothing acceptable."""
-        connection = _transit_connection(attachments=[_vpc_attachment(["rt-shared"], ("10.30.0.0/16", "PROD"))])
-        connection["attached_gateway"]["attachments"][0]["virtual_network"]["account"] = None
-        found = get_external_peer_prefixes(
-            [_subif("Ethernet1/13.1000", "PROD")], _on("Ethernet1/13.1000", connection), "eg-fr201", **_NO_SDWAN
-        )
-        assert found == {"Ethernet1/13.1000": {}}
-
-    def test_private_connection_blocks_take_the_owner_of_its_vpc(self) -> None:
-        """A private connection reads attached_network.account.owner."""
-        connection = _private_connection(("10.60.0.0/16", "NON-PROD"), owner=_C15)
-        found = get_external_peer_prefixes(
-            [_subif("Ethernet1/13.1001", "NON-PROD")], _on("Ethernet1/13.1001", connection), "eg-fr201", **_NO_SDWAN
-        )
-        assert found == {"Ethernet1/13.1001": {"C015": ["10.60.0.0/16"]}}
-
     def test_office_lans_take_the_office_owner_and_hosted_segments_their_own(self) -> None:
         """C002's LAN, C005's hosted office-lan segment: one sub-interface, two owners."""
         offices = [
@@ -626,7 +381,6 @@ class TestPeerPrefixOwners:
         ]
         found = get_external_peer_prefixes(
             [_subif("Ethernet1/13.1900", "PROD")],
-            None,
             "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
             offices=offices,
@@ -638,7 +392,6 @@ class TestPeerPrefixOwners:
         """An office of C002 hosting a segment of C005: the prefix is C005's."""
         found = get_external_peer_prefixes(
             [_subif("Ethernet1/13.1900", "PROD")],
-            None,
             "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
             offices=[_office(_GW1, hosted=(("10.176.5.0/24", "PROD"),), owner=_C2, segment_owner=_C5)],
@@ -656,7 +409,6 @@ class TestPeerPrefixOwners:
         ]
         found = get_external_peer_prefixes(
             [_subif("Ethernet1/13.1900", "PROD")],
-            None,
             "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
             offices=offices,

@@ -57,7 +57,6 @@ ALL_DEMO_EXPECTED_GENERATORS: dict[str, int] = {
         "add_customer_deployment_colocation",
         "add_sdwan_edge",
         "add_office_fabric",
-        "add_provider_connection",
         "add_application_orchestrator_routing",
         "add_app_component_segment",
         "add_customer_dc_orchestrator_routing",
@@ -97,7 +96,6 @@ ALL_DEMO_EXPECTED_OBJECTS: dict[str, int] = {
         "DcimVirtualDevice",
         "TopologyCarrierCircuit",
         "TopologySessionCircuit",
-        "TopologyProviderConnection",
         "CloudInstance",
         "ManagedCloudProxy",
     )

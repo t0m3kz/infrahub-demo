@@ -7,11 +7,8 @@
 # and the namespaces must exist first).
 #
 # These pools serve a session circuit whose link range comes from OUR pool: a handoff (cloud on-ramp, Equinix or
-# Megaport service, SD-WAN gateway handoff) and a vpn. The prefix length is the provider connection's flavour
-# (utils/provider_services.py: a /31 by default, a /30 for a tunnel pair), allocated per circuit. Both ends are
-# addressed from it, and for AWS Direct Connect the customer specifies the peer addresses. A provider that assigns the
-# range itself (Azure /30, GCP /29, AWS VPN 169.254/30) allocates nothing here: the range is the circuit's
-# `link_prefix`, authored on the connection as `link_prefixes`.
+# Megaport service, SD-WAN gateway handoff) and a vpn. A /31 is allocated per circuit (HANDOFF_PREFIX_LENGTH), both
+# ends are addressed from it.
 #
 # 10.255.128.0/18 split in /20s (2048 /31 links each): PROD .128, NON-PROD .144, INTERNET .160, MANAGEMENT .176.
 # Clear of the authored 10.255.5.x handoffs of data/demos/30_all/08_interconnects/.

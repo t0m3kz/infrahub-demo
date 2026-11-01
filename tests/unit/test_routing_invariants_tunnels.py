@@ -36,7 +36,7 @@ def _tunnel(
         "id": f"tunnel-{name}",
         "name": _v(name),
         "locations": {"edges": [{"node": {"owner": _owner(owner)}}, {"node": {}}]},
-        "capabilities": {"edges": [{"node": {"device": {"node": {"name": _v(device)}}}} for device in ends]},
+        "endpoints": {"edges": [{"node": {"device": {"node": {"name": _v(device)}}}} for device in ends]},
         "registered_prefixes": {"edges": [{"node": prefix} for prefix in prefixes]},
     }
 
@@ -158,7 +158,7 @@ class TestTunnelOwnershipConflicts:
         assert len(errors) == 1
         assert _ACME in errors[0]
         assert "more than one owner" in errors[0]
-        assert "SD-WAN gateway" in errors[0]
+        assert f"behind {_GW1}" in errors[0]
 
     def test_a_prefix_behind_two_gateways_is_a_conflict(self) -> None:
         """One owner's range registered by tunnels at two gateways is reachable through two sessions."""
@@ -229,13 +229,13 @@ def test_the_query_selects_what_the_tunnel_rules_read() -> None:
     reads = [
         "name",
         "locations.owner.org_id",
-        "capabilities.device.name",
+        "endpoints.device.name",
         "registered_prefixes.prefix",
         "registered_prefixes.ip_namespace.name",
         "registered_prefixes.ip_namespace.namespace_type",
     ]
     assert not [item for item in reads if item not in selected]
-    assert {"locations", "registered_prefixes", "capabilities"} <= relationship_names("TopologySessionCircuit")
+    assert {"locations", "registered_prefixes", "endpoints"} <= relationship_names("TopologySessionCircuit")
     assert "owner" not in relationship_names("TopologySessionCircuit")
     definition = relationship("TopologySessionCircuit", "registered_prefixes")
     assert definition is not None

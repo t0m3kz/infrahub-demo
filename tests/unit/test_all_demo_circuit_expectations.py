@@ -26,13 +26,6 @@ _ZONES = {
     for kind in ("TopologyColocationZone", "TopologyVirtualColocation")
     for zone in distinct(declared(kind, ROOT / ALL_DEMO_DATA))
 }
-# The handoffs add_provider_connection builds (one link, on our pool) for the dedicated connections.
-_GENERATED_HANDOFFS = {
-    "PC-FR2-AWS-EUC1-PROD-L1",
-    "PC-FR2-AMNE-PROD-L1",
-    "PC-AMNE-AWS-EUC1-PROD-L1",
-    "PC-PA4-MEGAPORT-PROD-L1",
-}
 _ISPS = {name(isp) for isp in distinct(declared("TopologyExternalProviders", ROOT / ALL_DEMO_DATA))}
 
 
@@ -87,14 +80,13 @@ def test_carrier_circuit_type_counts_are_the_shipped_ones() -> None:
 
 
 def test_the_declared_virtual_circuits_are_the_dci_the_handoffs_and_the_partner_tunnel() -> None:
-    """Six Interconnects, the gateway Handoff and the partner Tunnel are declared; the five office tunnels and the
-    four connection handoffs (`<connection>-L1`) are generated."""
+    """Six Interconnects, the gateway Handoff and the partner Tunnel are declared; the office tunnels are generated."""
     kinds = _declared_virtual()
     assert sorted(n for n, kind in kinds.items() if kind == INTERCONNECT_TYPE) == sorted(ALL_DEMO_DCI_CIRCUITS)
     assert [n for n, kind in kinds.items() if kind == HANDOFF_TYPE] == ["HANDOFF-FR2-SDWAN-GW1-PROD"]
     assert [n for n, kind in kinds.items() if kind == TUNNEL_TYPE] == ["C001-PARTNER-ACME-FR2"]
     assert set(kinds) <= set(ALL_DEMO_VIRTUAL_CIRCUITS)
-    assert set(ALL_DEMO_VIRTUAL_CIRCUITS) - set(kinds) == _GENERATED_HANDOFFS | {
+    assert set(ALL_DEMO_VIRTUAL_CIRCUITS) - set(kinds) == {
         f"{office}-SDWAN-FR2" for office in ALL_DEMO_SDWAN_UNDERLAY_CIRCUITS.values()
     }
 

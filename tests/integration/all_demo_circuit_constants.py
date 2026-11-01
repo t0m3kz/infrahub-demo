@@ -293,10 +293,8 @@ def _sdwan_tunnel(office: Declared) -> tuple[str, VirtualCircuitExpectation]:
 
 
 # The virtual-circuit fabric test_62 compares with the inventory: the generated tunnels (one per SD-WAN office), the
-# partner tunnel, the six DCI Interconnects (one per dark fibre, carrier = the fibre), the gateway Handoff and the
-# four one-link handoffs of the provider connections, all PROD. A circuit has no owner of its own: its derived owner is
-# in ALL_DEMO_CIRCUIT_OWNERS. The other connection circuits (provider-assigned or multi-link) are
-# ALL_DEMO_CONNECTION_CIRCUITS. `carrier` is the expected derived underlay: the carrier circuits on the circuit's own ports, or on the parent
+# partner tunnel, the six DCI Interconnects (one per dark fibre, carrier = the fibre) and the gateway Handoff, all PROD.
+# A circuit has no owner of its own: its derived owner is in ALL_DEMO_TUNNEL_OWNERS. `carrier` is the expected derived underlay: the carrier circuits on the circuit's own ports, or on the parent
 # of a sub-interface; the data declares none.
 ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
     # One generated tunnel per SD-WAN office (_sdwan_tunnel).
@@ -358,8 +356,7 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
             ),
         )
     },
-    # The SD-WAN gateway's LAN handoff (04_sdwan/06_vrf_handoff.yml): both ends in one cage, carried by a cable. The
-    # only declared handoff; it belongs to no provider connection, so it is unowned.
+    # The SD-WAN gateway's LAN handoff (04_sdwan/06_vrf_handoff.yml): both ends in one cage, carried by a cable. Unowned.
     "HANDOFF-FR2-SDWAN-GW1-PROD": {
         "circuit_type": HANDOFF_TYPE,
         "locations": ("FR2",),
@@ -367,45 +364,11 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
         "carrier": (),
         "ip_namespace": "PROD",
     },
-    # The handoffs add_provider_connection builds, one link on our pool each (`<connection>-L1`; the multi-link and
-    # provider-assigned connections are in all_demo_provider_connection_constants and asserted by test_67). The party
-    # end rides the parent port of the carrier: the AWS Direct Connect virtual connection XC-EQXFR2-AWS-EUC1 on the
-    # service edge's NIC vnic-fr2 and the Fabric virtual connection FABRIC-AMNE02-AWS-EUC1 on its NIC vnic-amne, the
-    # Fabric connections of the Network Edge chain, the Megaport cross-connect.
-    "PC-FR2-AWS-EUC1-PROD-L1": {
-        "circuit_type": HANDOFF_TYPE,
-        "locations": ("FR2", "eu-central-1"),
-        "ends": (("EXT-AWS-DX-FR2", "vnic-fr2.1000"), ("eg-fr201", "Ethernet1/13.1000")),
-        "carrier": ("XC-EQXFR2-AWS-EUC1",),
-        "ip_namespace": "PROD",
-    },
-    "PC-FR2-AMNE-PROD-L1": {
-        "circuit_type": HANDOFF_TYPE,
-        "locations": ("AM-NE", "FR2"),
-        "ends": (("eg-am-ne01", "Ethernet1/1.1200"), ("eg-fr201", "Ethernet1/1.1200")),
-        "carrier": ("FABRIC-FR2-AMNE01",),
-        "ip_namespace": "PROD",
-    },
-    "PC-AMNE-AWS-EUC1-PROD-L1": {
-        "circuit_type": HANDOFF_TYPE,
-        "locations": ("AM-NE", "eu-central-1"),
-        "ends": (("EXT-AWS-DX-FR2", "vnic-amne.1100"), ("eg-am-ne02", "Ethernet1/1.1100")),
-        "carrier": ("FABRIC-AMNE02-AWS-EUC1",),
-        "ip_namespace": "PROD",
-    },
-    "PC-PA4-MEGAPORT-PROD-L1": {
-        "circuit_type": HANDOFF_TYPE,
-        "locations": ("MCR-PAR1", "PA4"),
-        "ends": (("EXT-MEGAPORT-MCR1", "et-0/0/0.1300"), ("eg-pa401", "Ethernet1/1.1300")),
-        "carrier": ("XC-EQXPA4-MEGAPORT",),
-        "ip_namespace": "PROD",
-    },
 }
 
 
 # A circuit has no owner of its own: it is derived (utils.ownership.circuit_owner) from the office among its locations.
-# The tunnel -> the org_id of its office's customer; every other circuit's owner is in
-# ALL_DEMO_CIRCUIT_OWNERS (all_demo_provider_connection_constants), which adds the connection circuits.
+# The tunnel -> the org_id of its office's customer; every other circuit is unowned.
 ALL_DEMO_TUNNEL_OWNERS: dict[str, str] = {
     **{_sdwan_tunnel(office)[0]: render(office, "{{ owner__org_id__value }}") for office in _SDWAN_OFFICES},
     "C001-PARTNER-ACME-FR2": "C001",
@@ -456,8 +419,7 @@ ALL_DEMO_DECLARED_VIRTUAL_PORTS: dict[str, frozenset[tuple[str, str]]] = {
 
 # Handoff circuit -> (the party device, its ASN): the ASN is the `local_as` of the ManagedBGP process the data declares on
 # the party stub (EXT-AWS-DX-FR2 AS64512, EQX-FR2-SDWAN-GW1 AS65028, EXT-MEGAPORT-MCR1 AS133937), which add_virtual_circuit
-# makes the session's remote process. A handoff whose both ends are devices whose processes are generated (the Network
-# Edge pair, PC-FR2-AMNE-PROD-L1) has no declared party and is absent.
+# makes the session's remote process. A handoff whose both ends are devices whose processes are generated has no declared party and is absent.
 _DECLARED_PROCESS_ASNS: dict[str, int] = {
     str(device): int(str(process.item["local_as"]).removeprefix("AS"))
     for process in _all_demo("ManagedBGP")

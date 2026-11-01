@@ -8,8 +8,7 @@
 # The per-office tunnels are not here: add_sdwan_edge (generators/topology/
 # sdwan_edge.py) builds each office's `<office>-SDWAN-FR2` tunnel circuit and its
 # `INET-<office>` internet underlay when the office opts in with sdwan_gateway. The
-# gateway has no backhaul circuit into the cloud: the AWS leg is the handoff of
-# ../05_provider_connections/01_aws_fr2_euc1.yml (a provider connection), not the gateway's.
+# gateway has no backhaul circuit into the cloud: a cloud leg is a handoff of its own, not the gateway's.
 #
 # GW1 reaches eg-fr201 over its own cage port: eth0 <-> Ethernet1/12, a cable in one
 # cage (../01_colo_onramp/05_cage_cabling.yml, loaded earlier on purpose), and a dot1q
@@ -42,8 +41,8 @@ spec:
       description: "PROD handoff to eg-fr201"
       parent_interface: ["EQX-FR2-SDWAN-GW1", "eth0"]
     # GW1's router-id: a loopback, not a handoff address (those are generated at circuit
-    # creation). 10.255.64.0/24 holds the loopbacks of the party devices modelled as stubs
-    # (see ../05_provider_connections/00_aws_dx_stub.yml), clear of the handoff pools.
+    # creation). 10.255.64.0/24 holds the loopbacks of the party devices modelled as stubs,
+    # clear of the handoff pools.
     - name: "Loopback0"
       device: "EQX-FR2-SDWAN-GW1"
       role: loopback
@@ -101,8 +100,8 @@ spec:
 # The session is the generated HANDOFF-FR2-SDWAN-GW1-PROD-bgp, peering_role regular on a
 # PROD address: the local interface's address being in PROD (not `default`) is what makes
 # transforms/helpers/bgp.py render it under `vrf PROD` on eg-fr201, outside every peer
-# group. peering_role regular there makes it an external tenant-VRF peer, filtered like
-# the cloud connection (../05_provider_connections/01_aws_fr2_euc1.yml): RM-<session>-IN accepts only the
+# group. peering_role regular there makes it an external tenant-VRF peer, filtered by
+# RM-<session>-IN, which accepts only the
 # far end's registered prefixes, and RM-<session>-OUT announces only the PROD on-prem segment
 # prefixes of the customers who registered them. The far end here is EQX-FR2-SDWAN-GW1, so the
 # registered prefixes are the PROD lan_prefixes (owner: the office's owner) and the PROD
@@ -112,7 +111,7 @@ spec:
 # C005's hosted office-lan segment (get_external_peer_prefixes in transforms/helpers/bgp_external.py), plus the
 # prefixes registered on a tunnel behind the gateway. The session's owners are those customers, so each
 # owner's PROD segments are announced.
-# No provider connection: this is no cloud service.
+# This is no cloud service.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

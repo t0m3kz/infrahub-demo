@@ -27,7 +27,7 @@
 # not route-table separation. An AWS Transit Gateway attachment has exactly one
 # association, so the single hybrid attachment cannot sit on both tables.
 # Follow-up (not modelled here): true isolation between the two tenants while
-# both reach on-prem needs a second hybrid attachment (its own provider connection)
+# both reach on-prem needs a second hybrid attachment (its own peer gateway)
 # associated with rt-hub-isolated, so novantis propagates only into
 # rt-hub-isolated again.
 apiVersion: infrahub.app/v1
@@ -35,7 +35,7 @@ kind: Object
 spec:
   kind: CloudGatewayAttachment
   data:
-    # The on-prem side: the transit connection PC-FR2-AWS-EUC1-PROD, owned by the network account itself.
+    # The on-prem side, owned by the network account itself.
     - name: "tgwa-hybrid-eqx-fr2"
       cloud_id: "tgw-attach-0hybridfr2"
       description: "Hybrid attachment carrying on-prem DC traffic in over Equinix FR2"

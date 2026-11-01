@@ -6,7 +6,7 @@ check then runs unchanged: this is the offline proof that the suites, the racks 
 The tests that break the data on purpose show the proof is not vacuous.
 
 The demo roots below are the sets that load together (one stack at a time): the DC demo, the DC6 build-up on top of
-it (switch, rack, pod and server stages), the colocation demo, the 30_all demo and the Arista MSS-G fabric.
+it (switch, rack, pod and server stages), the colocation demo, the 30_all demo, the Arista MSS-G fabric and the cloud/SaaS model sample.
 """
 
 from __future__ import annotations
@@ -29,6 +29,7 @@ DEMO_SETS: dict[str, tuple[str, ...]] = {
     "10_colocation": ("10_colocation",),
     "30_all": ("30_all",),
     "32_arista_mssg": ("32_arista_mssg",),
+    "cloud_saas_model": ("cloud_saas_model",),
 }
 QUERY = _QUERIES / "validation" / "suite_capacity.gql"
 

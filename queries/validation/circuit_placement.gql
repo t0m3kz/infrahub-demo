@@ -1,15 +1,13 @@
 # The rows of checks/circuit_placement.py, one root per circuit kind (the role of a session circuit is its
 # `circuit_type`: dci, handoff, tunnel or vpn). A circuit has no owner of its own: it is derived from the offices
-# among its locations (each office carries its owner) and, for a vpn, from its connection.
+# among its locations (each office carries its owner).
 #
 # - TopologyCarrierCircuit: the places it terminates on (locations, an office location with its owner) and the
 #   device each end port sits on with where that device is deployed.
 # - TopologySessionCircuit: circuit_type, status (a decommissioned dci, handoff or vpn is exempt: nothing is built for
 #   it), locations (an office location carries its owner), end ports; each port's device carries its BGP
 #   processes (a dci needs exactly one overlay process on it). What only one type may carry is selected for all:
-#   ip_namespace (with its namespace_type) for a handoff or a vpn, password and registered_prefixes (their ids only),
-#   and the provider connection (a vpn needs one with path_type internet_vpn, its near facility is the side whose
-#   end port must ride an internet carrier).
+#   ip_namespace (with its namespace_type) for a handoff or a vpn, password and registered_prefixes (their ids only).
 #   A handoff's locations are exactly where its two end devices are deployed, so every end port's device carries
 #   its deployment.
 #
@@ -89,7 +87,6 @@ query circuit_placement {
         ip_namespace { node { name { value } namespace_type { value } } }
         password { node { id } }
         registered_prefixes { edges { node { id } } }
-        connection { node { id name { value } path_type { value } near { node { id } } } }
         capabilities { edges { node { ...VirtualPort } } }
       }
     }

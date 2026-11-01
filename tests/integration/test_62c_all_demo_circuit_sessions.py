@@ -41,12 +41,6 @@ from .all_demo_firewall_constants import (
     OFFICE_NAMESPACE,
     transit_namespace_type,
 )
-from .all_demo_provider_connection_constants import (
-    ADDRESS_PROVIDER,
-    ALL_DEMO_CONNECTION_HANDOFFS,
-    ALL_DEMO_CONNECTION_LINKS,
-    ALL_DEMO_CONNECTIONS,
-)
 from .circuit_helpers import fetch_interconnect_inventory
 from .conftest import TestInfrahubDockerWithClient
 from .interconnect_queries import (
@@ -71,7 +65,7 @@ from .interconnect_rules import (
     _session_errors,
     _sessions_by_name,
 )
-from .routed_link_rules import DEFAULT_LINK_FLAVOUR, LABEL_HANDOFF, LinkFlavour, routed_session_errors
+from .routed_link_rules import LABEL_HANDOFF, routed_session_errors
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -371,12 +365,8 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         inventory = await fetch_interconnect_inventory(client=client, branch=scenario_branch)
         handoffs = {c["name"]: c for c in inventory["virtual"] if c["circuit_type"] == HANDOFF_TYPE}
         expected = {n for n, e in ALL_DEMO_VIRTUAL_CIRCUITS.items() if e["circuit_type"] == HANDOFF_TYPE}
-        # the Azure legs are handoffs too (provider-assigned /30): test_67 asserts the connections that test_62 does not list
-        allowed = expected | ALL_DEMO_CONNECTION_HANDOFFS
-        if not expected <= set(handoffs) or set(handoffs) - allowed:
-            errors.append(
-                f"handoff circuits {sorted(handoffs)}, expected {sorted(expected)} (and {sorted(allowed - expected)})"
-            )
+        if set(handoffs) != expected:
+            errors.append(f"handoff circuits {sorted(handoffs)}, expected {sorted(expected)}")
 
         sessions = _sessions_by_name(
             await client.execute_graphql(
@@ -407,26 +397,11 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                 errors.append(f"pool Handoff-{namespace}-IPv4 is missing or has no prefix")
 
         for name, circuit in sorted(handoffs.items()):
-            link = ALL_DEMO_CONNECTION_LINKS.get(name)
-            flavour = DEFAULT_LINK_FLAVOUR
-            if link is not None:
-                connection = ALL_DEMO_CONNECTIONS[link[0]]
-                flavour = LinkFlavour(
-                    connection["prefix_length"],
-                    connection["lower_end"],
-                    connection["ttl"],
-                    connection["bfd"],
-                    connection["address_source"] == ADDRESS_PROVIDER,
-                )
-                if circuit["password"] != connection["password"]:
-                    errors.append(f"{name}: key {circuit['password']}, expected {connection['password']}")
             errors.extend(
                 routed_session_errors(
                     name,
                     circuit,
                     sessions.get(f"{name}-bgp"),
-                    label=LABEL_HANDOFF,
-                    flavour=flavour,
                     pools=pools.get(circuit["ip_namespace"] or "", []),
                     prefixes=prefixes.get(f"{LABEL_HANDOFF} {name}"),
                     party=ALL_DEMO_HANDOFF_PARTY_ASNS.get(name),

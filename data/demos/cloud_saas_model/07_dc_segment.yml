@@ -19,6 +19,8 @@ spec:
   data:
     - name: "Cloud Demo GmbH"
       org_id: "C900"
+      member_of_groups:
+        - customers
       network_segments:
         - kind: ManagedVxlanSegment
           data:

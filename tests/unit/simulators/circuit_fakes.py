@@ -271,8 +271,6 @@ def session_payload(
     namespace: str | None = "PROD",
     password: str | None = None,
     circuit_id: str = VC_ID,
-    connection: dict[str, Any] | None = None,
-    link_prefix: str | None = None,
 ) -> dict[str, Any]:
     """A TopologySessionCircuit payload of ``circuit_type`` (dci, handoff, tunnel); a handoff also carries its
     namespace and password.
@@ -288,10 +286,6 @@ def session_payload(
     if circuit_type in ("handoff", "vpn"):
         node["ip_namespace"] = {"node": {"name": {"value": namespace}} if namespace else None}
         node["password"] = {"node": {"id": password} if password else None}
-        node["link_prefix"] = {
-            "node": {"id": "link-prefix-1", "prefix": {"value": link_prefix}} if link_prefix else None
-        }
-        node["connection"] = {"node": connection}
     node["capabilities"] = {"edges": [{"node": port} for port in ends]}
     return {"TopologySessionCircuit": {"edges": [{"node": node}]}}
 
@@ -306,38 +300,6 @@ def handoff_payload(**kwargs: Any) -> dict[str, Any]:
     """A handoff between the cage edge sub-interface and the provider router's (override with ``ends=``)."""
     ends = kwargs.pop("ends", None) or [handoff_edge_port(), handoff_party_port()]
     return session_payload("handoff", ends, **kwargs)
-
-
-def connection_node(
-    *, path_type: str = "dedicated", profile: str | None = None, via: str = "account", conn_id: str = "pc-1"
-) -> dict[str, Any]:
-    """The ``connection`` of a session circuit as the query selects it (the profile via the account or the far facility)."""
-    provider = {"node": {"id": "prov-1", "name": {"value": "PROV"}, "connection_profile": {"value": profile}}}
-    owner = {"node": {"id": "prov-1", "__typename": "OrganizationProvider", **provider["node"]}}
-    node: dict[str, Any] = {
-        "id": conn_id,
-        "path_type": {"value": path_type},
-        "account": {"node": {"provider": provider} if via == "account" else None},
-        "far": {"node": {"id": "far-1", "provider": provider} if via == "external" else None},
-        "carrier_circuits": {"edges": []},
-    }
-    if via == "saas":
-        node["far"] = {"node": {"id": "far-1", "parent": {"node": {"provider": provider}}}}
-    if via == "billed":
-        node["far"] = {"node": {"id": "far-1", "account": {"node": {"provider": provider}}}}
-    if via == "kit":
-        kit = {"id": "dev-1", "owner": owner}
-        end = {
-            "node": {
-                "id": "if-1",
-                "device": {"node": {"id": "dev-1", "owner": owner, "deployment": {"node": {"id": "far-1"}}}},
-            }
-        }
-        node["far"] = {
-            "node": {"id": "far-1", "devices": {"edges": [{"node": kit}]}, "appliances": {"edges": [{"node": kit}]}}
-        }
-        node["carrier_circuits"] = {"edges": [{"node": {"capabilities": {"edges": [end]}}}]}
-    return node
 
 
 def vpn_payload(**kwargs: Any) -> dict[str, Any]:
@@ -443,8 +405,6 @@ class FakeClient:
         self.addresses: dict[str, MagicMock] = {}
         self.prefixes: dict[str, MagicMock] = {}
         self.allocations: list[dict[str, Any]] = []
-        # id -> a provider-assigned IpamPrefix node (the circuit's link_prefix), read with get(IpamPrefix, id=...)
-        self.assigned_prefixes: dict[str, MagicMock] = {}
         # Session circuits ending on a port: kind name -> [(id, name) or (id, name, status)], returned by
         # filters(capabilities__ids=...); the status defaults to active.
         # circuit_type (dci, handoff, tunnel) -> (id, name[, status]) of the session circuits of that type
@@ -501,8 +461,6 @@ class FakeClient:
             return self.keys.get(kwargs["name__value"])
         if name == "CoreIPPrefixPool":
             return self.pools.get(kwargs["name__value"])
-        if name == "IpamPrefix":  # the provider-assigned link prefix of a circuit
-            return self.assigned_prefixes.get(kwargs["id"])
         if name == "IpamIPAddress":
             return self.addresses.get(kwargs["address__value"])
         raise AssertionError(f"unexpected get({name}, {kwargs})")

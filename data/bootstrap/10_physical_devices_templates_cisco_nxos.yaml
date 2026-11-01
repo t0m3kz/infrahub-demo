@@ -421,8 +421,8 @@ spec:
         parameters:
           expand_range: true
         data:
-          # Provider-facing ports: add_provider_connection picks the near port among the free ports with the role of
-          # the far facility's kind (partner: Fabric, Megaport, a partner; cloud: a cloud region; saas: a SaaS region).
+          # Provider-facing ports: the role is the far facility's kind (partner: Fabric, Megaport, a partner;
+          # cloud: a cloud region; saas: a SaaS region).
           - template_name: N9K-C9316D-GX_EDGE_Ethernet1/[1-2]
             name: Ethernet1/[1-2]
             role: partner

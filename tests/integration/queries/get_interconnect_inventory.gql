@@ -1,10 +1,8 @@
 # The circuit layer of a branch. A location carries its kind, its parent (a cage's or virtual colocation's metro, a
 # footprint's facility) and a footprint's owner, an end its device's deployment (an on-ramp edge: its zone or virtual
 # colocation, with that one's metro): what test_62 checks circuit placement against.
-# A session circuit is one of four `circuit_type`s (tunnel, dci, handoff, vpn); a handoff or a vpn adds its namespace,
-# its key, its provider connection (with the connection's VLAN, owner and account owner: a circuit has no owner of its
-# own, it is derived from the offices among its locations and from the connection) and the link range the provider
-# assigned. Its carrier is derived: the
+# A session circuit is one of four `circuit_type`s (tunnel, dci, handoff, vpn); a handoff or a vpn adds its namespace
+# and its key. A circuit has no owner of its own, it is derived from the offices among its locations. Its carrier is derived: the
 # carrier circuits in the `capabilities` of each end port, or of the port's `parent_interface` for a sub-interface,
 # else the cable on the port or on that parent (a hop inside one facility is a cable, not a circuit).
 query GetInterconnectInventory {
@@ -25,16 +23,6 @@ query GetInterconnectInventory {
           node {
             name {
               value
-            }
-          }
-        }
-        provider_connections {
-          edges {
-            node {
-              id
-              name {
-                value
-              }
             }
           }
         }
@@ -93,42 +81,6 @@ query GetInterconnectInventory {
           node {
             name {
               value
-            }
-          }
-        }
-        link_prefix {
-          node {
-            id
-            prefix {
-              value
-            }
-          }
-        }
-        connection {
-          node {
-            id
-            name {
-              value
-            }
-            path_type {
-              value
-            }
-            vlan_id {
-              value
-            }
-            owner {
-              node {
-                ...CircuitOwner
-              }
-            }
-            account {
-              node {
-                owner {
-                  node {
-                    ...CircuitOwner
-                  }
-                }
-              }
             }
           }
         }

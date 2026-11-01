@@ -100,18 +100,6 @@ async def test_fetch_interconnect_inventory_parses_location_and_end_placement() 
         "name": value("HANDOFF-C005-DC10-AWS-EUC1"),
         "ip_namespace": {"node": {"id": "ns-prod", "name": value("PROD")}},
         "password": {"node": {"name": value("eqx-fr2-aws-vif-key")}},
-        # a circuit has no owner of its own: the customer of the connection's account is its owner
-        "link_prefix": {"node": None},
-        "connection": {
-            "node": {
-                "id": "pconn1",
-                "name": value("PC-C005-AWS-EUC1"),
-                "path_type": value("dedicated"),
-                "vlan_id": value(1000),
-                "owner": {"node": None},
-                "account": {"node": {"owner": customer}},
-            }
-        },
         "locations": {
             "edges": [
                 {
@@ -221,8 +209,8 @@ async def test_fetch_interconnect_inventory_parses_location_and_end_placement() 
     assert (handoff["id"], handoff["circuit_type"], handoff["owner"], handoff["owner_id"]) == (
         "vc1",
         "handoff",
-        "Drentec BV",
-        "org-C005",
+        None,
+        None,
     )
     (footprint,) = handoff["location_nodes"]
     assert (footprint["kind"], footprint["parent_id"], footprint["parent_name"], footprint["owner_id"]) == (
@@ -253,11 +241,8 @@ async def test_fetch_interconnect_inventory_parses_location_and_end_placement() 
         "PROD",
         "eqx-fr2-aws-vif-key",
     )
-    assert (handoff["connection"], handoff["connection_node"]["vlan_id"], handoff["owner_org"]) == (
-        "PC-C005-AWS-EUC1",
-        1000,
-        "C005",
-    )
+    # a circuit has no owner of its own: only an office among its locations gives one
+    assert handoff["owner_org"] is None
 
 
 async def test_fetch_interconnect_inventory_leaves_the_handoff_fields_empty_on_the_other_kinds() -> None:
@@ -282,4 +267,3 @@ async def test_fetch_interconnect_inventory_leaves_the_handoff_fields_empty_on_t
     assert circuit["circuit_type"] == "tunnel"
     assert (circuit["owner"], circuit["ends"], circuit["carrier"], circuit["end_nodes"]) == (None, [], [], [])
     assert (circuit["ip_namespace"], circuit["password"]) == (None, None)
-    assert (circuit["connection"], circuit["connection_node"], circuit["link_prefix"]) == (None, None, None)

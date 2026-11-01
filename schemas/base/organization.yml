@@ -92,14 +92,14 @@ nodes:
       - org_id__value
     display_label: "{{name__value}} ({{org_id__value}})"
     attributes:
-      # The provider knows its own addressing and session model, so the profile is here and not on the
-      # TopologyProviderConnection that rides it: one connection kind serves every provider.
+      # The provider knows its own addressing and session model, so the profile is here: one connection model
+      # serves every provider.
       - name: connection_profile
         kind: Dropdown
         label: Connection Profile
         optional: true
         order_weight: 1000
-        description: "The addressing and session model of the provider's connections (what a provider connection to it looks like)"  # yamllint disable-line rule:line-length
+        description: "The addressing and session model of the provider's connections (what a connection to it looks like)"  # yamllint disable-line rule:line-length
         choices:
           - name: aws
             label: AWS

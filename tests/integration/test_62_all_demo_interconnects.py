@@ -3,17 +3,15 @@
 Everything here is the part of the model that leaves a single site: the dark
 fibre and cross-connects into the colocation on-ramps, the virtual circuits
 riding them (the DCI between the border gateways, the SD-WAN gateway handoff and
-the session circuits add_provider_connection generates for the AWS, Network Edge,
-Megaport, Azure and Zscaler connections), the SD-WAN branches' tunnels and internet
+the SD-WAN branches' tunnels and internet
 underlay.
 
 A carrier circuit is a pure carrier. The role of a session circuit is its
 `circuit_type`: a Tunnel (inventory only, no session), an Interconnect (a DCI: an
 underlay and an EVPN session), a Handoff (one eBGP session in one environment
-namespace) or a VPN (model only). Their carrier is never declared: it is derived
+namespace) or a VPN (model only, none in 30_all). Their carrier is never declared: it is derived
 from the circuit's own ports. A circuit has no owner of its own: it is derived
-from its office and from its provider connection (utils.ownership.circuit_owner).
-The connections themselves are asserted by test_67.
+from its office (utils.ownership.circuit_owner).
 
 The edge that matters here is ``capabilities`` — how a circuit surfaces on the
 port it terminates on. It is the single uniform "what is this port doing" edge,
@@ -66,7 +64,6 @@ from .all_demo_circuit_constants import (
     INTERCONNECT_TYPE,
     TUNNEL_TYPE,
 )
-from .all_demo_provider_connection_constants import VPN_TYPE
 from .circuit_helpers import fetch_interconnect_inventory
 from .conftest import TestInfrahubDockerWithClient
 from .interconnect_queries import CIRCUIT_LOCATIONS_QUERY, GROUP_MEMBERS_QUERY, SCENARIO_NAME
@@ -81,7 +78,6 @@ from .interconnect_rules import (
     _label,
     _session_port_errors,
     _tunnel_errors,
-    _vpn_errors,
 )
 from .wait_helpers import wait_for_condition
 
@@ -393,8 +389,6 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                 errors.extend(_interconnect_errors(circuit, physical_by_id))
             elif circuit["circuit_type"] == HANDOFF_TYPE:
                 errors.extend(_handoff_errors(circuit))
-            elif circuit["circuit_type"] == VPN_TYPE:
-                errors.extend(_vpn_errors(circuit))
             else:
                 errors.append(f"{name}: kind '{circuit['circuit_type']}' is none of the four session circuit kinds")
         errors.extend(_session_port_errors(virtual))

@@ -36,7 +36,7 @@ Each scenario creates infrastructure incrementally and merges to main:
 - `test_18_dc6_add_spine.py` - **Scenario 5:** Add a spine to DC6-1-POD-1 by swapping its spine element
 - `test_19_dc6_segments.py` - **Scenario 6:** Board C001 into DC6 and deploy two VXLAN segments (`data/20_segments`)
 - `test_20_dc6_add_endpoints.py` - **Scenario 7:** Endpoint servers across DC6's pods (`data/demos/06_servers`)
-- `test_59` - `test_67` - **Scenario 8:** The `30_all` demo, end to end (see [The 30_all Suite](#the-30_all-suite)). This one deviates from the pattern above: it loads in stages, shares one branch across twelve modules, and does not merge to main.
+- `test_59` - `test_66` - **Scenario 8:** The `30_all` demo, end to end (see [The 30_all Suite](#the-30_all-suite)). This one deviates from the pattern above: it loads in stages, shares one branch across eleven modules, and does not merge to main.
 - `test_71` - **Scenario 9:** The Arista EOS MSS-G demo fabric (`data/demos/32_arista_mssg`), on its own branch (see [The Arista MSS-G Suite](#the-arista-mss-g-suite)).
 
 Scenarios 2-7 form one chain on DC6: `test_12` depends on `dc6_verify_after_merge` from `test_10`, and each
@@ -100,7 +100,7 @@ The DC6 chain (`test_12`-`test_20`) loads its switch, rack, pod and server data 
 test-local exception: `data/demos/07_customers` and `08_segments` depend on the `30_all` customer organizations
 and still use the old `[org_id, environment]` footprint HFID (a footprint's HFID is now its `name`), so they cannot be loaded on their own.
 
-The `30_all` suite (`test_59`-`test_67`) is the exception: it loads from `data/demos/30_all/` at the repository
+The `30_all` suite (`test_59`-`test_66`) is the exception: it loads from `data/demos/30_all/` at the repository
 root, not from here, because it exercises the shipped demo rather than test-only fixtures.
 
 ## Running Tests
@@ -159,7 +159,7 @@ The fast profile intentionally stops after setup and repository synchronization.
 
 ### The 30_all Suite
 
-`test_59` through `test_67` are one scenario split across twelve modules. They share a single branch (`ALL_DEMO_BRANCH`) and run in dependency order:
+`test_59` through `test_66` are one scenario split across eleven modules. They share a single branch (`ALL_DEMO_BRANCH`) and run in dependency order:
 
 | Module | Covers |
 | --- | --- |
@@ -173,10 +173,9 @@ The fast profile intentionally stops after setup and repository synchronization.
 | `test_64b_all_demo_management_lb_config.py` | The management exchange and services rules, the leaf without PBR to them, the load-balancer renders (F5 contexts, border-leaf legs, client-leaf bypass). Office LISP fabrics: `CheckLispFabric` passes and every access-switch and distribution-switch renders its LISP site in-process (`router lisp`, the map-server `site` and EID records, `proxy-etr` / `use-petr` where the office has an SD-WAN edge; every IOS-XE line is unverified-no-lab) |
 | `test_64c_all_demo_terminated_segment.py` | The segment C005 terminates on DC10's shared firewall context: the border service ports facing the pair carry it as generated edges, each border leaf has its VLAN row and renders the VLAN and L2 VNI with no SVI, and each firewall member renders the derived `<trunk>.<vlan>` sub-interface with the gateway as the pair's VIP |
 | `test_65_all_demo_idempotency.py` | Two more runs of the security generators, then of the topology generators, leave rules, contexts, devices, cables, addresses, pools and allocated numbers unchanged |
-| `test_66_all_demo_circuit_lifecycle.py` | Runs after `test_65` because it mutates the branch. Decommissioning an Interconnect's carrier, and a provider connection's Handoff, removes its BGP sessions, its `/31` (`/127`) and the port addresses (ports, key and other circuits' sessions untouched); setting it active again rebuilds them on the same key. Each test restores the status it changed |
-| `test_67_all_demo_provider_connections.py` | Runs after `test_66` because it adds and deletes objects. Every provider connection of `data/demos/30_all/08_interconnects/05_provider_connections` yields the session circuits its provider's flavour plans (`<connection>-L<n>`: `handoff` on `<port>.<vlan>` ends or `vpn` on `Tunnel<n>` ends), with their ends, locations, key, provider-assigned range, derived owner and carrier, and a `/31` or `/30` session addressed as the flavour says; the authored carriers are adopted through the connection's explicit `near_port` and an internet VPN lists none; a rerun of `add_provider_connection` changes nothing. A throwaway connection created from intent only gets the near port the pure `near_port` module chooses (a `cloud` port, least loaded device, first free by name), a generated `<name>-XC` carrier (`provisioning`) and the NIC `vnic-<name>`; its rerun is a no-op; a second request with an explicit `near_port` adopts the leftover carrier, one on a busy port is refused with nothing written; changing the adopter to an internet VPN clears `carrier_circuits` and creates no carrier; decommissioning (status `decommissioned`) a connection removes its peerings, addresses, allocated prefix, circuits and sub-interfaces/tunnels, and its generated carrier and NIC, while the stub, its Loopback0 and BGP processes, the physical near port, authored ranges and an authored/adopted carrier are untouched, a rerun writes nothing, and only then is the empty connection deleted (a delete alone leaves the outputs behind); the adoption runs on a carrier the test authors on the freed port |
+| `test_66_all_demo_circuit_lifecycle.py` | Runs after `test_65` because it mutates the branch. Decommissioning an Interconnect's carrier, and the SD-WAN gateway's Handoff, removes its BGP sessions, its `/31` (`/127`) and the port addresses (ports, key and other circuits' sessions untouched); setting it active again rebuilds them on the same key. Each test restores the status it changed |
 
-Only `test_59` loads data, and the load is deliberately staged — later stages reference objects that only exist once an earlier stage's generators have finished. `ALL_DEMO_LOAD_STAGES` in `tasks.py` (shared with `invoke load-all-demo`, imported from `tasks` by the tests) documents which stage needs what. Running `test_60`-`test_67` on their own will skip: their session-scoped dependencies are unmet without `test_59`.
+Only `test_59` loads data, and the load is deliberately staged — later stages reference objects that only exist once an earlier stage's generators have finished. `ALL_DEMO_LOAD_STAGES` in `tasks.py` (shared with `invoke load-all-demo`, imported from `tasks` by the tests) documents which stage needs what. Running `test_60`-`test_66` on their own will skip: their session-scoped dependencies are unmet without `test_59`.
 
 ### The Arista MSS-G Suite
 

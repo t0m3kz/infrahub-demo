@@ -299,16 +299,12 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
 
     ebgp_ebgp edge (no VTEP) plus five peering_role regular sessions, as add_virtual_circuit writes a
     handoff (send_community and send_extended_community both False), on sub-interfaces:
-      - Ethernet1/13.1000 PROD: the AWS transit VIF (vlan 1000). Its hybrid attachment sits on
-        rt-shared, so only the VPCs propagating there are accepted: 10.30.0.0/16 (account owner C003)
-        and 10.32.0.0/16 (C015). 10.150.0.0/16 propagates to rt-isolated only, and 10.33.0.0/16 sits
-        in a provider-owned account: neither is accepted. Owners C003 and C015.
-      - Ethernet1/13.1001 NON-PROD: a private VIF whose VPC (owner C003) lists a NON-PROD and a PROD
-        block; only the NON-PROD one is accepted.
+      - Ethernet1/13.1000 PROD and Ethernet1/13.1001 NON-PROD: the AWS VIFs. The far end registers no
+        prefix (a cloud gateway registers nothing on the edge), so the session has no owner: deny-all
+        both ways, with a comment.
       - Ethernet1/13.1900 PROD: the SD-WAN gateway handoff. It accepts what the offices behind
         EQX-FR2-SDWAN-GW1 register: C002's PROD lan_prefixes (10.210.2.0/24), C003's (10.210.3.0/24)
-        and C005's hosted office-lan segment (10.176.5.0/24). C003 therefore has a VPC block on the hub VIF AND an office LAN behind GW1. A
-        NON-PROD LAN, an office owned by a provider, an office registering nothing, an office behind another
+        and C005's hosted office-lan segment (10.176.5.0/24). A NON-PROD LAN, an office owned by a provider, an office registering nothing, an office behind another
         gateway and an office without a gateway are not accepted.
       - Ethernet1/13.1300 PROD: EXT-MEGAPORT-MCR1, no far end registers a prefix, so the session has
         no owner: deny-all both ways, with a comment.
@@ -316,10 +312,9 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
         BGP process in the peering has process_role overlay. An appliance is never ours, so the hop is
         external; nothing is registered behind it: deny-all both ways, with a comment.
     Out (the same-owner exchange, utils/ownership.py): per session, for each of its owners, that owner's
-    on-prem segments in the namespace plus what it registered behind another session of the namespace
-    (C003's office LAN goes to the hub VIF, C003's VPC block to GW1), minus the session's own IN (C005's
-    office-hosted segment is registered behind GW1, so it is never announced back to it). Never another
-    owner's prefix: C015 sits on the hub VIF only, so GW1 never learns of it. Segments of C003, C015,
+    on-prem segments in the namespace plus what it registered behind another session of the namespace,
+    minus the session's own IN (C005's office-hosted segment is registered behind GW1, so it is never
+    announced back to it). Never another owner's prefix. Segments of C003, C015,
     C002 and C005 in PROD and NON-PROD; C001's segment is behind no session and never announced, a
     segment without a customer owner, a PROD container, a MANAGEMENT segment and
     a segment without a gateway are never announced. A VIF on another device with the same VLAN is
@@ -425,83 +420,6 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
         ]
     )
 
-    def vpc(owner: dict | None, *blocks: tuple[str, str]) -> dict:
-        """A cloud virtual network: its cidr_blocks and the owner of its account."""
-        return _node(
-            {
-                "cidr_blocks": _cidr_blocks(*blocks),
-                "account": _node({"owner": owner if owner is not None else _node(None)}),
-            }
-        )
-
-    def vpc_attachment(table: str, virtual_network: dict) -> dict:
-        return {
-            "attachment_type": _v("vpc"),
-            "propagates_to_route_tables": _edges([{"id": table}]),
-            "virtual_network": virtual_network,
-        }
-
-    def connection(name: str, ends: tuple[tuple[str, str], ...], **fields: Any) -> dict:
-        """A provider connection: unset relationships are null, ``registered_prefixes`` empty. ``ends`` are the
-        (device, interface) end ports of its session circuit."""
-        return {
-            "name": _v(name),
-            "owner": _node(None),
-            "account": _node(None),
-            "session_circuits": _edges(
-                [
-                    {
-                        "capabilities": _edges(
-                            [{"name": _v(iface), "device": _node({"name": _v(device)})} for device, iface in ends]
-                        )
-                    }
-                ]
-            ),
-            "registered_prefixes": _edges([]),
-            "attached_network": _node(None),
-            "attached_gateway": _node(None),
-            "transit_attachment": _node(None),
-            **fields,
-        }
-
-    data["TopologyProviderConnection"] = _edges(
-        [
-            connection(
-                "aws-transit-hub-euc1",
-                ((device_name, "Ethernet1/13.1000"),),
-                transit_attachment=_node({"associated_route_table": _node({"id": "rt-shared"})}),
-                attached_gateway=_node(
-                    {
-                        "attachments": _edges(
-                            [
-                                {
-                                    "attachment_type": _v("hybrid"),
-                                    "propagates_to_route_tables": _edges([{"id": "rt-shared"}]),
-                                    "virtual_network": _node(None),
-                                },
-                                vpc_attachment("rt-shared", vpc(_customer("C003"), ("10.30.0.0/16", "PROD"))),
-                                vpc_attachment("rt-shared", vpc(_customer("C015"), ("10.32.0.0/16", "PROD"))),
-                                vpc_attachment("rt-shared", vpc(_PROVIDER, ("10.33.0.0/16", "PROD"))),
-                                vpc_attachment("rt-isolated", vpc(_customer("C003"), ("10.150.0.0/16", "PROD"))),
-                            ]
-                        )
-                    }
-                ),
-            ),
-            connection(
-                "aws-private-dev-euc1",
-                ((device_name, "Ethernet1/13.1001"),),
-                attached_network=vpc(_customer("C003"), ("10.60.0.0/16", "NON-PROD"), ("10.31.0.0/16", "PROD")),
-            ),
-            # The same sub-interface name on ANOTHER edge: matched by device, never accepted here.
-            connection(
-                "aws-private-elsewhere",
-                (("dc1-edge-02", "Ethernet1/13.1000"),),
-                attached_network=vpc(_customer("C003"), ("10.99.0.0/16", "PROD")),
-            ),
-        ]
-    )
-
     def office(
         gateway: str | None,
         owner: dict,
@@ -560,7 +478,7 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
         return {
             "locations": _edges([{"owner": owner}]),
             "registered_prefixes": _cidr_blocks(*prefixes),
-            "capabilities": _edges([{"device": _node({"name": _v(end)})} for end in ends]),
+            "endpoints": _edges([{"device": _node({"name": _v(end)})} for end in ends]),
         }
 
     # The tunnels registering space behind a gateway: C001's partner range behind GW1 (accepted from GW1's

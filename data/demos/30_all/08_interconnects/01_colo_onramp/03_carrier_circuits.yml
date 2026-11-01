@@ -5,9 +5,7 @@
 # shared facilities carrying every tenant. A carrier circuit is a pure carrier:
 # it has no role and builds no session. What rides it is a virtual circuit of a
 # kind, listed in ../03_virtual_circuits/ (the DCI sessions of the dark fibres,
-# one Interconnect circuit per fibre) or generated for a provider connection
-# (../05_provider_connections/, whose `carrier_circuits` is the generator's output: the carriers listed here are
-# EXISTING carriers it adopts through the explicit `near_port` of the connection, found by their end on that port).
+# one Interconnect circuit per fibre) or the handoffs of ../04_sdwan/.
 # Tenant impact is a traversal,
 # not a circuit: from a
 # fibre or a cage port, circuit -> its ports -> the segments, peerings and
@@ -149,8 +147,7 @@ spec:
         - ["eg-fr201", "Ethernet1/13"]
         - ["EXT-AWS-DX-FR2", "vnic-fr2"]
 
-    # The Azure ExpressRoute on-ramp: one virtual connection per ExpressRoute leg, each the existing carrier of its own
-    # provider connection (../05_provider_connections/05_azure_er.yml: PC-PA4-AZURE-WEU-PRI-PROD and -SEC-PROD).
+    # The Azure ExpressRoute on-ramp: one virtual connection per ExpressRoute leg, each its own carrier.
     # The legs land on two different cage edges (eg-pa401, eg-pa402) and on two NICs of the one ExpressRoute
     # service edge (vnic-pri, vnic-sec), the way Microsoft asks for them; the two carriers share
     # `redundancy_group`, which is what relates the two connections (one connection per leg).
@@ -186,8 +183,7 @@ spec:
 
     # Megaport: the Cloud Router (MCR) of Megaport's Paris facility, reached from the PA4 cage over one
     # cross-connect. The stub EXT-MEGAPORT-MCR1 is deployed to the zone MCR-PAR1 (../../02_colo/megaport/par),
-    # which add_circuit derives as the far end. The provider connection PC-PA4-MEGAPORT-PROD rides this port
-    # (../05_provider_connections/04_megaport.yml). Equinix sells the cross-connect, Megaport the service.
+    # which add_circuit derives as the far end. Equinix sells the cross-connect, Megaport the service.
     - circuit_id: "XC-EQXPA4-MEGAPORT"
       member_of_groups: [carrier_circuits]
       name: "XC-EQXPA4-MEGAPORT"
@@ -205,9 +201,7 @@ spec:
     # --- Equinix Fabric virtual connections ----------------------------------
     # A provider-delivered virtual connection is a carrier like a cross-connect: Equinix runs it inside its own
     # platform, so an end may be the virtual NIC of a provider-hosted Network Edge router (no cable) and a port hosts
-    # several of them (checks/carrier_circuit_ports.py). They are existing carriers that the provider connections
-    # PC-FR2-AMNE-PROD and PC-AMNE-AWS-EUC1-PROD (../05_provider_connections/) adopt through their explicit `near_port`
-    # (Ethernet1/1, a `partner` port), which is the port the session sub-interface rides. The first one leaves
+    # several of them (checks/carrier_circuit_ports.py). The first one leaves
     # eg-fr201 on the port that is also cabled to Equinix's own Fabric port (05_cage_cabling.yml); the second lands on
     # its own NIC (vnic-amne) of the AWS Direct Connect service edge, next to the one (vnic-fr2) of
     # XC-EQXFR2-AWS-EUC1.

@@ -136,8 +136,6 @@ export INFRAHUB_ADDRESS=http://localhost:8100 INFRAHUB_API_TOKEN=06438eb2-8019-4
 uv run infrahubctl object load data/demos/cloud_saas_model/
 ```
 
-Nie ładować `data/demos/30_all/08_interconnects/05_provider_connections/`: używa usuniętych rodzajów.
-
 ## Szybki test modelu
 
 `uv run invoke check-model` ładuje schemat i te dane na jednorazową gałąź, uruchamia `trace.py` jako bibliotekę

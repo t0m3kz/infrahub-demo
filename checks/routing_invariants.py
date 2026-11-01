@@ -9,15 +9,10 @@ rendered config; each is a property of data that spans topologies.
 2. The INTERNET VRF has no host-facing interface: no segment gateway and no
    address on a host, a customer port or any device other than a transit
    edge, a provider or a firewall.
-3. A cloud Transit Gateway route table is environment-pure: every attachment
-   associated with or propagating into it resolves to one namespace type. A
-   VPC attachment resolves through its account's environment; a hybrid
-   attachment through the namespace of the provider connection it is the
-   endpoint of (falling back to its owner account's environment while it has
-   no connection).
-4. A provider connection to a virtual network lies in the namespace type of
-   that network's account environment (the connection has one namespace, so it
-   never mixes environments).
+4. A cloud hub route table is environment-pure: every gateway attachment
+   associated with or propagating into it resolves to one namespace type,
+   through its network's account environment (a peer-gateway attachment
+   through its owner account's).
 
 5. Cloud VPC aggregates. Each `CloudVirtualNetwork.cidr_blocks` prefix is
    registered in the namespace whose type matches its account's environment
@@ -44,10 +39,9 @@ rendered config; each is a property of data that spans topologies.
    (`network_segments`) needs a customer owner, and so does every tunnel with
    `registered_prefixes` (the tunnel's owner is derived: the owner of the
    single office among its `locations`, utils/ownership.py circuit_owner; two
-   offices of different owners is reported here) and every provider connection
-   with `registered_prefixes` (its account's owner, else its own `owner`); a
-   provider-owned (or ownerless) account, office, tunnel or connection is
-   silently never accepted or announced at the border.
+   offices of different owners is reported here); a provider-owned (or
+   ownerless) account, office or tunnel is silently never accepted or announced
+   at the border.
    This covers every registered block and LAN, not only those currently
    behind a handoff: that is cheaper, and any of them can be put behind one.
    A segment needs no check: `ManagedNetworkSegment.owner` is a required
@@ -60,17 +54,11 @@ rendered config; each is a property of data that spans topologies.
    on the edge), the offices' `lan_prefixes` and
    hosted segments grouped by their `sdwan_gateway` (one attachment point per
    gateway) together with the `registered_prefixes` of the tunnels ending on
-   that gateway, and what each provider connection registers, one attachment
-   point per connection whatever its number of session circuits
-   (transforms/helpers/bgp_external.py registered_by_attachment: the very
-   walk the edge uses, a private connection's own VPC, every VPC propagating
-   into the route table of a transit connection's hybrid attachment, the
-   connection's `registered_prefixes`; a connection without a session circuit
-   has no session and is skipped). It reports a prefix registered by more than
-   one owner (it would be announced to another owner's session) and an owner's
+   that gateway (transforms/helpers/bgp_external.py registered_by_gateway: the
+   very walk the edge uses). It reports a prefix registered by more than one
+   owner (it would be announced to another owner's session) and an owner's
    prefix reachable behind more than one attachment point (local or through
-   exactly one session). A prefix registered through a connection is provider
-   space: several owners may each register it behind their own session.
+   exactly one session).
 9. Every office behind an SD-WAN gateway registers something. An office with an
    `sdwan_gateway` needs at least one `lan_prefixes` entry or a segment it
    hosts (the same registrations as the edge reads, office_registered):
@@ -86,10 +74,9 @@ import ipaddress
 from typing import Any, NamedTuple
 
 from transforms.helpers.bgp_external import (
-    connection_provider_space,
     get_onprem_prefixes,
     office_registered,
-    registered_by_attachment,
+    registered_by_gateway,
     registered_by_namespace,
     session_circuit_owner,
 )
@@ -137,8 +124,6 @@ class CheckRoutingInvariants(WarningCheck):
             segments=cleaned.get("ManagedNetworkSegment") or [],
             interfaces=[iface for key in _INTERNET_INTERFACE_KEYS for iface in cleaned.get(key) or []],
         )
-        connections = cleaned.get("TopologyProviderConnection") or []
-        self._validate_connection_namespaces(connections)
         self._validate_hub_route_tables(cleaned.get("CloudGatewayAttachment") or [])
         networks = cleaned.get("CloudVirtualNetwork") or []
         offices = cleaned.get("TopologyCustomerOffice") or []
@@ -147,8 +132,8 @@ class CheckRoutingInvariants(WarningCheck):
         self._validate_aggregate_namespaces(aggregates)
         self._validate_subnets_in_vpc(networks, cleaned.get("CloudNetworkSegment") or [])
         self._validate_aggregate_overlaps(aggregates, cleaned.get("ManagedNetworkSegment") or [])
-        self._validate_registered_prefix_owners(networks, offices, tunnels, connections)
-        self._validate_ownership_conflicts(cleaned.get("ManagedNetworkSegment") or [], offices, tunnels, connections)
+        self._validate_registered_prefix_owners(networks, offices, tunnels)
+        self._validate_ownership_conflicts(cleaned.get("ManagedNetworkSegment") or [], offices, tunnels)
         self._validate_offices_register(offices)
 
     # ------------------------------------------------------------------
@@ -197,26 +182,6 @@ class CheckRoutingInvariants(WarningCheck):
                         f"Interface '{device.get('name')}:{iface.get('name')}' (device role {device_role}, "
                         f"interface role {iface.get('role')}) holds an address in the INTERNET namespace "
                         f"'{namespace.get('name')}': only transit, provider and firewall-leg interfaces may"
-                    )
-                )
-
-    # ------------------------------------------------------------------
-    # 3. Provider connections
-    # ------------------------------------------------------------------
-
-    def _validate_connection_namespaces(self, connections: list[dict[str, Any]]) -> None:
-        """Check each connection's namespace against its network."""
-        for connection in connections:
-            namespace = connection.get("ip_namespace") or {}
-            actual = namespace.get("namespace_type")
-            if not actual:
-                continue
-            expected = _type_for_environment(_account_environment(connection.get("attached_network")))
-            if expected and actual != expected:
-                self.log_error(
-                    message=(
-                        f"provider connection '{connection.get('name', '<unnamed-connection>')}' attaches to a "
-                        f"{expected} virtual network but lies in the {actual} namespace '{namespace.get('name')}'"
                     )
                 )
 
@@ -351,32 +316,20 @@ class CheckRoutingInvariants(WarningCheck):
         networks: list[dict[str, Any]],
         offices: list[dict[str, Any]],
         tunnels: list[dict[str, Any]],
-        connections: list[dict[str, Any]],
     ) -> None:
-        registrants = (
-            [
-                (
-                    f"VPC '{network.get('name')}' registers blocks, but its account "
-                    f"'{(network.get('account') or {}).get('name')}'",
-                    (network.get("account") or {}).get("owner"),
-                )
-                for network in networks
-                if network.get("cidr_blocks")
-            ]
-            + [
-                (f"office '{office.get('name')}' registers LANs or hosts segments, but it", office.get("owner"))
-                for office in offices
-                if office.get("lan_prefixes") or office.get("network_segments")
-            ]
-            + [
-                (
-                    f"provider connection '{connection.get('name')}' registers prefixes, but it",
-                    _connection_owner(connection),
-                )
-                for connection in connections
-                if connection.get("registered_prefixes")
-            ]
-        )
+        registrants = [
+            (
+                f"VPC '{network.get('name')}' registers blocks, but its account "
+                f"'{(network.get('account') or {}).get('name')}'",
+                (network.get("account") or {}).get("owner"),
+            )
+            for network in networks
+            if network.get("cidr_blocks")
+        ] + [
+            (f"office '{office.get('name')}' registers LANs or hosts segments, but it", office.get("owner"))
+            for office in offices
+            if office.get("lan_prefixes") or office.get("network_segments")
+        ]
         for tunnel in tunnels:
             if not tunnel.get("registered_prefixes"):
                 continue
@@ -408,22 +361,18 @@ class CheckRoutingInvariants(WarningCheck):
         segments: list[dict[str, Any]],
         offices: list[dict[str, Any]],
         tunnels: list[dict[str, Any]],
-        connections: list[dict[str, Any]],
     ) -> None:
         # namespace -> attachment point -> owner -> prefixes, read as the edge reads them.
         learned: dict[str, dict[str, dict[str, set[str]]]] = {}
-        for point, registered in registered_by_attachment(offices, tunnels, connections).items():
+        for point, registered in registered_by_gateway(offices, tunnels).items():
             for namespace, by_owner in registered_by_namespace(registered).items():
                 behind = learned.setdefault(namespace, {}).setdefault(point, {})
                 for owner, prefixes in by_owner.items():
                     behind.setdefault(owner, set()).update(prefixes)
 
         onprem = get_onprem_prefixes(segments)
-        provider_space = connection_provider_space(connections)
         for namespace in sorted(set(onprem) | set(learned)):
-            for conflict in ownership_conflicts(
-                onprem.get(namespace, {}), learned.get(namespace, {}), provider_space=provider_space
-            ):
+            for conflict in ownership_conflicts(onprem.get(namespace, {}), learned.get(namespace, {})):
                 self.log_error(message=f"Namespace '{namespace}': {conflict.message}")
 
     # ------------------------------------------------------------------
@@ -485,12 +434,6 @@ def _tunnel_aggregates(tunnels: list[dict[str, Any]]) -> list[_Aggregate]:
         for tunnel in tunnels
         for prefix in tunnel.get("registered_prefixes") or []
     ]
-
-
-def _connection_owner(connection: dict[str, Any]) -> dict[str, Any] | None:
-    """The owner node that makes a connection's registered prefixes accepted: its account's, else its own."""
-    nodes = [node for node in ((connection.get("account") or {}).get("owner"), connection.get("owner")) if node]
-    return next((node for node in nodes if customer_owner(node)), nodes[0] if nodes else None)
 
 
 def _describe_owner(owner: dict[str, Any] | None) -> str:

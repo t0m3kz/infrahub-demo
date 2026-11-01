@@ -49,13 +49,13 @@ nodes:
       - name__value
     display_label: "{{ name__value|upper }}"
 
-  # A provider connection (Direct Connect, ExpressRoute) lands in a region, so the region is the
+  # A cloud connection (Direct Connect, ExpressRoute) lands in a region, so the region is the
   # cloud-side location of a connection and of the circuits it carries. Not the zone (an AZ is finer than
   # any provider commits to) and not TopologyCloud (which groups the provider's regions and identifies no
   # location at all).
   #
   # A region is a provider place and hosts NOTHING: no devices, no appliances. The cloud resources of a region
-  # (accounts, networks, gateways, Direct Connect, virtual interfaces, VPN connections) are the CloudResource nodes
+  # (accounts, networks, gateways, Direct Connect, peering interfaces, VPN connections) are the CloudResource nodes
   # that point at it. The provider-side device of a handoff, where a BGP session needs one, is a physical stub in the
   # colocation zone where the legs meet, or in the provider's TopologyExternalProviders, never in the region.
   - name: CloudRegion

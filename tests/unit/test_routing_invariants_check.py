@@ -6,14 +6,11 @@ from typing import Any
 
 from tests.integration.demo_data import relationship_names
 from tests.unit.routing_invariants_helpers import (
-    _CUSTOMER,
     _PROVIDER,
     _block,
-    _connection,
     _ns,
     _office,
     _onprem,
-    _owner,
     _run,
     _subnet,
     _v,
@@ -190,35 +187,6 @@ class TestTgwRouteTables:
         check = _run(CloudGatewayAttachment=[_attachment("a", "vpc", None, "shared", [])])
         assert check._captured_errors == []
         assert check._captured_infos and check._captured_infos[0].startswith("WARNING")
-
-
-class TestConnectionNamespace:
-    """A provider connection to a virtual network lies in the namespace type of that network's account environment."""
-
-    @staticmethod
-    def _to_network(conn_id: str, ns_type: str | None, env: str | None) -> dict[str, Any]:
-        """A private connection to a VPC whose account has the environment ``env``."""
-        return _connection(conn_id, ns_type, network=_vpc("vn", env) if env else None)
-
-    def test_connection_in_the_account_environment_passes(self) -> None:
-        """A prod connection to a prod virtual network, and a non-prod one to a development account."""
-        assert _run(TopologyProviderConnection=[self._to_network("c-1", "prod", "p")])._captured_errors == []
-        assert _run(TopologyProviderConnection=[self._to_network("c-2", "non_prod", "d")])._captured_errors == []
-
-    def test_namespace_differs_from_the_network_fails(self) -> None:
-        """A non_prod connection to a prod virtual network is an error naming the connection and namespace."""
-        check = _run(TopologyProviderConnection=[self._to_network("c-1", "non_prod", "p")])
-        assert check._captured_errors == [
-            "provider connection 'c-1' attaches to a prod virtual network but lies in the non_prod namespace 'NS'"
-        ]
-
-    def test_connection_without_a_namespace_type_passes(self) -> None:
-        """A namespace with no namespace_type resolves to no type and raises nothing."""
-        assert _run(TopologyProviderConnection=[self._to_network("c-1", None, "p")])._captured_errors == []
-
-    def test_connection_without_an_environment_is_not_judged(self) -> None:
-        """No attached network (a transit or public connection): any namespace passes."""
-        assert _run(TopologyProviderConnection=[self._to_network("c-1", "non_prod", None)])._captured_errors == []
 
 
 class TestVpcNamespaces:
@@ -485,30 +453,6 @@ class TestRegisteredPrefixOwners:
         """A customer-owned office hosting segments raises nothing."""
         assert _run(TopologyCustomerOffice=[_office("C003-OFFICE", segments=2)])._captured_errors == []
 
-    def test_connection_registering_prefixes_needs_a_customer_owner(self) -> None:
-        """A provider connection with registered_prefixes owned by a provider, or by nobody, is an error."""
-        for owner in (_PROVIDER, None):
-            connection = _connection("zscaler", owner=owner, registered=(_block("198.51.100.0/24"),))
-            check = _run(TopologyProviderConnection=[connection])
-            assert len(check._captured_errors) == 1
-            assert "provider connection 'zscaler' registers prefixes" in check._captured_errors[0]
-            assert "never accepted or announced at the border" in check._captured_errors[0]
-
-    def test_connection_owned_by_a_customer_passes(self) -> None:
-        """The owner of the connection is a customer: the registered range is accepted."""
-        connection = _connection("zscaler", owner=_CUSTOMER, registered=(_block("198.51.100.0/24"),))
-        assert _run(TopologyProviderConnection=[connection])._captured_errors == []
-
-    def test_connection_takes_its_accounts_owner(self) -> None:
-        """With an account, the account's owner counts (connection_owner): a customer account passes."""
-        connection = _connection("aws", registered=(_block("198.51.100.0/24"),))
-        connection["account"] = {"node": {"owner": _owner(_CUSTOMER)}}
-        assert _run(TopologyProviderConnection=[connection])._captured_errors == []
-
-    def test_connection_without_registered_prefixes_is_ignored(self) -> None:
-        """A connection that registers nothing announces nothing, whoever owns it."""
-        assert _run(TopologyProviderConnection=[_connection("c", owner=None)])._captured_errors == []
-
     def test_cleaned_owner_shape(self) -> None:
         """The cleaned query selection reads as `typename`, `org_id` and `display_label` on the owner."""
         cleaned = clean_data({"TopologyCustomerOffice": {"edges": [{"node": _office("C003-OFFICE", segments=1)}]}})
@@ -539,22 +483,12 @@ def test_the_query_selects_what_rule_seven_reads() -> None:
             "lan_prefixes",
         ],
         "TopologySessionCircuit": ["locations.owner.__typename", "locations.owner.org_id", "registered_prefixes"],
-        "TopologyProviderConnection": [
-            "owner.org_id",
-            "account.owner.org_id",
-            "registered_prefixes.prefix",
-            "ip_namespace.namespace_type",
-            "attached_network.account.environment",
-        ],
     }.items():
         selected = _selected_paths(_QUERIES / "validation" / "routing_invariants.gql", root)
         assert not [path for path in reads if path not in selected]
     assert {"owner", "network_segments", "lan_prefixes"} <= relationship_names("TopologyCustomerOffice")
     assert {"account", "cidr_blocks"} <= relationship_names("CloudVirtualNetwork")
     assert "owner" in relationship_names("CloudAccount")
-    assert {"owner", "account", "registered_prefixes", "attached_network", "ip_namespace"} <= relationship_names(
-        "TopologyProviderConnection"
-    )
     assert "owner" not in relationship_names("TopologySessionCircuit")
 
 

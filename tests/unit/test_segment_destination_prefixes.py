@@ -65,28 +65,7 @@ def _tunnel(
     return {
         "locations": _edges({"owner": _owner(owner)}, {}),
         "registered_prefixes": _edges(*prefixes),
-        "capabilities": _edges(*({"device": {"node": {"name": _v(device)}}} for device in ends)),
-    }
-
-
-def _connection(
-    owner: str | None,
-    *blocks: dict[str, Any],
-    sessions: tuple[str, ...] = ("HANDOFF-AWS",),
-    registered: tuple[dict[str, Any], ...] = (),
-    connection_owner: str | None = None,
-) -> dict[str, Any]:
-    """A private TopologyProviderConnection onto one VPC (``owner`` owns its account) with its blocks, the names of
-    its session circuits (none: no session) and the ``registered`` prefixes of ``connection_owner``."""
-    return {
-        "name": _v("conn"),
-        "owner": _owner(connection_owner),
-        "account": {"node": None},
-        "session_circuits": _edges(*({"name": _v(name)} for name in sessions)),
-        "registered_prefixes": _edges(*registered),
-        "attached_network": {"node": {"cidr_blocks": _edges(*blocks), "account": {"node": {"owner": _owner(owner)}}}},
-        "transit_attachment": {"node": None},
-        "attached_gateway": {"node": None},
+        "endpoints": _edges(*({"device": {"node": {"name": _v(device)}}} for device in ends)),
     }
 
 
@@ -185,33 +164,7 @@ class TestOnPremDestinations:
 
 
 class TestRegisteredDestinations:
-    """Registered behind an external session: a VPC block, an office LAN or hosted segment, a tunnel's range."""
-
-    def test_a_vpc_block_behind_a_handoff_is_reachable(self) -> None:
-        """The VPC of a private connection that has a session circuit."""
-        connection = _connection("C001", _prefix("10.10.0.0/16"))
-        assert _unreachable(_run([_dest_rule("r", "10.10.0.0/16")], TopologyProviderConnection=[connection])) == []
-
-    def test_a_vpc_block_of_a_connection_without_a_session_is_unreachable(self) -> None:
-        """No session circuit, no session: the block is registered but nothing carries it."""
-        connection = _connection("C001", _prefix("10.10.0.0/16"), sessions=())
-        assert len(_unreachable(_run([_dest_rule("r", "10.10.0.0/16")], TopologyProviderConnection=[connection]))) == 1
-
-    def test_a_vpc_block_of_a_provider_account_is_unreachable(self) -> None:
-        """Only a customer-owned prefix is accepted at the border."""
-        connection = _connection("P027", _prefix("10.10.0.0/16"))
-        connection["attached_network"]["node"]["account"]["node"]["owner"] = _owner("P027", "OrganizationProvider")
-        assert len(_unreachable(_run([_dest_rule("r", "10.10.0.0/16")], TopologyProviderConnection=[connection]))) == 1
-
-    def test_a_saas_range_registered_on_a_connection_is_reachable(self) -> None:
-        """A connection's registered_prefixes, owned by the connection's owner, behind its session circuit."""
-        connection = {
-            **_connection(None, sessions=("HANDOFF-ZS",), registered=(_prefix("198.51.100.0/24"),)),
-            "owner": _owner("C001"),
-            "attached_network": {"node": None},
-        }
-        check = _run([_dest_rule("r", "198.51.100.8/29")], TopologyProviderConnection=[connection])
-        assert _unreachable(check) == []
+    """Registered behind an external session: an office LAN or hosted segment, a tunnel's range."""
 
     def test_an_office_lan_behind_a_gateway_is_reachable(self) -> None:
         """An office's lan_prefixes entry."""
@@ -272,19 +225,14 @@ class TestOwnerOfTheDestination:
         return [m for m in check._captured_errors if "not by the owner of its source segment" in m]
 
     def test_a_destination_of_the_same_owner_passes(self) -> None:
-        """C001's segment to C001's VPC block."""
-        connection = _connection("C001", _prefix("10.10.0.0/16"))
-        check = _run([_dest_rule("r", "10.10.0.0/16")], src_owner="C001", TopologyProviderConnection=[connection])
+        """C001's segment to C001's partner range."""
+        check = _run(
+            [_dest_rule("r", _ACME)],
+            src_owner="C001",
+            TopologyCustomerOffice=[_office(_GW1, "C001")],
+            TopologySessionCircuit=[_tunnel("C001", _prefix(_ACME))],
+        )
         assert check._captured_errors == []
-
-    def test_a_destination_of_another_owner_fails(self) -> None:
-        """C001's segment to C015's VPC block: the edge never announces C001's prefixes to C015's session."""
-        connection = _connection("C015", _prefix("10.10.0.0/16"))
-        check = _run([_dest_rule("r", "10.10.0.0/16")], src_owner="C001", TopologyProviderConnection=[connection])
-        assert len(self._owned(check)) == 1
-        assert "registered by C015" in self._owned(check)[0]
-        assert "(C001)" in self._owned(check)[0]
-        assert _unreachable(check) == []
 
     def test_a_destination_of_another_owner_through_a_tunnel_fails(self) -> None:
         """A partner range registered by C001's tunnel is not reachable from C015's segment."""
@@ -304,17 +252,11 @@ class TestOwnerOfTheDestination:
 
     def test_a_source_without_an_owner_is_not_compared(self) -> None:
         """No customer owner on the source segment: nothing to compare with."""
-        connection = _connection("C015", _prefix("10.10.0.0/16"))
-        check = _run([_dest_rule("r", "10.10.0.0/16")], TopologyProviderConnection=[connection])
-        assert check._captured_errors == []
-
-    def test_a_range_registered_by_the_source_owner_too_passes(self) -> None:
-        """The same SaaS range registered by two owners: the source owner's own registration is enough."""
-        connections = [
-            _connection("C015", _prefix("10.10.0.0/16")),
-            _connection("C001", _prefix("10.10.0.0/16")),
-        ]
-        check = _run([_dest_rule("r", "10.10.0.0/16")], src_owner="C001", TopologyProviderConnection=connections)
+        check = _run(
+            [_dest_rule("r", _ACME)],
+            TopologyCustomerOffice=[_office(_GW1, "C001")],
+            TopologySessionCircuit=[_tunnel("C001", _prefix(_ACME))],
+        )
         assert check._captured_errors == []
 
 
@@ -369,18 +311,7 @@ def test_the_query_selects_what_the_destination_rule_reads() -> None:
             "locations.owner.org_id",
             "registered_prefixes.prefix",
             "registered_prefixes.ip_namespace.namespace_type",
-            "capabilities.device.name",
-        ],
-        "TopologyProviderConnection": [
-            "session_circuits.name",
-            "owner.org_id",
-            "registered_prefixes.prefix",
-            "registered_prefixes.ip_namespace.namespace_type",
-            "attached_network.cidr_blocks.prefix",
-            "attached_network.cidr_blocks.ip_namespace.namespace_type",
-            "attached_network.account.owner.org_id",
-            "transit_attachment.associated_route_table.id",
-            "attached_gateway.attachments.virtual_network.cidr_blocks.prefix",
+            "endpoints.device.name",
         ],
     }
     # The segment root spreads a fragment from another file (not resolvable here): environment is selected beside it.
@@ -395,7 +326,4 @@ def test_the_query_selects_what_the_destination_rule_reads() -> None:
         selected = _selected_paths(path, root)
         assert not [item for item in paths if item not in selected], root
     assert {"sdwan_gateway", "lan_prefixes", "segment_deployments"} <= relationship_names("TopologyCustomerOffice")
-    assert {"registered_prefixes", "capabilities", "locations"} <= relationship_names("TopologySessionCircuit")
-    assert {"session_circuits", "attached_network", "registered_prefixes"} <= relationship_names(
-        "TopologyProviderConnection"
-    )
+    assert {"registered_prefixes", "endpoints", "locations"} <= relationship_names("TopologySessionCircuit")

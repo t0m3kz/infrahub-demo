@@ -264,52 +264,6 @@ class TestExternalSessionPolicies:
             )
         assert caplog.records == []
 
-    def test_the_circuits_of_one_connection_are_one_attachment_point(self, caplog: pytest.LogCaptureFixture) -> None:
-        """A dual connection: the same block behind both of its ports is no "more than one session" warning, and
-        the policy is unchanged (nothing is announced back to either leg)."""
-        interfaces = [_subif("Ethernet1/13.1000", "PROD"), _subif("Ethernet1/14.1000", "PROD")]
-        peers = {"Ethernet1/13.1000": {"C003": ["10.30.0.0/16"]}, "Ethernet1/14.1000": {"C003": ["10.30.0.0/16"]}}
-        dual = {"name": "aws-dual"}
-        with caplog.at_level("WARNING", logger="transforms.helpers.bgp_external"):
-            grouped = get_external_session_policies(
-                interfaces, peers, {}, connections={"Ethernet1/13.1000": dual, "Ethernet1/14.1000": dual}
-            )
-        assert caplog.records == []
-        assert grouped["Ethernet1/13.1000"] == {"owners": ["C003"], "in": ["10.30.0.0/16"], "out": []}
-        assert get_external_session_policies(interfaces, peers, {}) == grouped
-
-    def test_the_circuits_of_two_connections_still_warn(self, caplog: pytest.LogCaptureFixture) -> None:
-        """Two connections registering one owner's block: two attachment points, one WARNING."""
-        interfaces = [_subif("Ethernet1/13.1000", "PROD"), _subif("Ethernet1/14.1000", "PROD")]
-        peers = {"Ethernet1/13.1000": {"C003": ["10.30.0.0/16"]}, "Ethernet1/14.1000": {"C003": ["10.30.0.0/16"]}}
-        with caplog.at_level("WARNING", logger="transforms.helpers.bgp_external"):
-            get_external_session_policies(
-                interfaces,
-                peers,
-                {},
-                connections={"Ethernet1/13.1000": {"name": "a"}, "Ethernet1/14.1000": {"name": "b"}},
-            )
-        assert len([r for r in caplog.records if "more than one session" in r.getMessage()]) == 1
-
-    def test_a_saas_range_of_two_owners_is_provider_space(self, caplog: pytest.LogCaptureFixture) -> None:
-        """C003 and C015 each registered the SaaS range through their own connection: no shared-prefix WARNING, and
-        neither session is announced the other owner's space."""
-        interfaces = [_subif("Ethernet1/13.1300", "PROD"), _subif("Ethernet1/13.1301", "PROD")]
-        peers = {"Ethernet1/13.1300": {"C003": ["198.51.100.0/24"]}, "Ethernet1/13.1301": {"C015": ["198.51.100.0/24"]}}
-        saas = {"registered_prefixes": [{"prefix": "198.51.100.0/24"}]}
-        connections = {
-            "Ethernet1/13.1300": {"name": "zs-c003", **saas},
-            "Ethernet1/13.1301": {"name": "zs-c015", **saas},
-        }
-        with caplog.at_level("WARNING", logger="transforms.helpers.bgp_external"):
-            policies = get_external_session_policies(interfaces, peers, {}, connections=connections)
-        assert caplog.records == []
-        assert policies["Ethernet1/13.1300"]["out"] == []
-        assert policies["Ethernet1/13.1301"]["out"] == []
-        with caplog.at_level("WARNING", logger="transforms.helpers.bgp_external"):
-            get_external_session_policies(interfaces, peers, {})
-        assert any("registered by more than one owner" in r.getMessage() for r in caplog.records)
-
 
 # ---------------------------------------------------------------------------
 # Internal vs external

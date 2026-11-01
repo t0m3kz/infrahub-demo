@@ -529,12 +529,15 @@ async def test_the_handoff_sessions_the_generator_plans_pass(stack: FakeStack) -
 @pytest.mark.parametrize(
     ("mutate", "message"),
     [
-        (lambda s: s.sessions["PC-FR2-AWS-EUC1-PROD-L1-bgp"].update(ttl=_value(255)), "ttl 255"),
-        (lambda s: s.sessions.pop("PC-PA4-MEGAPORT-PROD-L1-bgp"), "no PC-PA4-MEGAPORT-PROD-L1-bgp session"),
+        (lambda s: s.sessions["HANDOFF-FR2-SDWAN-GW1-PROD-bgp"].update(ttl=_value(255)), "ttl 255"),
+        (
+            lambda s: s.sessions.pop("HANDOFF-FR2-SDWAN-GW1-PROD-bgp"),
+            "no HANDOFF-FR2-SDWAN-GW1-PROD-bgp session",
+        ),
         (lambda s: s.prefixes.pop("Handoff HANDOFF-FR2-SDWAN-GW1-PROD"), "0 prefix object(s)"),
         (lambda s: s.pool_resources.update({"Handoff-PROD-IPv4": ["10.0.0.0/20"]}), "is not a /31 from"),
         (
-            lambda s: _addresses(s, "PC-FR2-AWS-EUC1-PROD-L1-bgp")[0]["ip_address"]["node"]["ip_namespace"]["node"][
+            lambda s: _addresses(s, "HANDOFF-FR2-SDWAN-GW1-PROD-bgp")[0]["ip_address"]["node"]["ip_namespace"]["node"][
                 "name"
             ].update(value="NON-PROD"),
             "is addressed in 'NON-PROD', expected 'PROD'",
@@ -544,18 +547,18 @@ async def test_the_handoff_sessions_the_generator_plans_pass(stack: FakeStack) -
 async def test_a_handoff_session_that_differs_from_the_plan_fails_naming_the_field(
     stack: FakeStack, mutate: Any, message: str
 ) -> None:
-    """Each single deviation from the plan (ttl, route limit, missing, pool) fails naming its field."""
+    """Each single deviation from the plan (ttl, missing, pool, namespace) fails naming its field."""
     mutate(stack)
     with pytest.raises(AssertionError, match=message.replace("(", r"\(").replace(")", r"\)")):
         await _tests().test_06b_verify_handoff_sessions(_client(stack), "main")
 
 
 async def test_a_handoff_with_the_remote_asn_of_the_data_changed_fails(stack: FakeStack) -> None:
-    """The party's ASN is the data's (AS64512 for AWS DX); AS 64999 is also private but not the declared one."""
-    for edge in stack.sessions["PC-FR2-AWS-EUC1-PROD-L1-bgp"]["bgp_processes"]["edges"]:
-        if edge["node"]["capabilities"]["edges"][0]["node"]["name"]["value"] == "EXT-AWS-DX-FR2":
+    """The party's ASN is the data's (AS65028 for the SD-WAN gateway); AS 64999 is also private but not the declared one."""
+    for edge in stack.sessions["HANDOFF-FR2-SDWAN-GW1-PROD-bgp"]["bgp_processes"]["edges"]:
+        if edge["node"]["capabilities"]["edges"][0]["node"]["name"]["value"] == "EQX-FR2-SDWAN-GW1":
             edge["node"]["local_as"]["node"]["asn"]["value"] = 64999
-    with pytest.raises(AssertionError, match=r"party EXT-AWS-DX-FR2 is in AS 64999, expected the data's AS64512"):
+    with pytest.raises(AssertionError, match=r"party EQX-FR2-SDWAN-GW1 is in AS 64999, expected the data's AS65028"):
         await _tests().test_06b_verify_handoff_sessions(_client(stack), "main")
 
 

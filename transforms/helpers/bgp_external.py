@@ -1,7 +1,7 @@
 """External BGP session policy helpers: what an external (tenant VRF, handoff) session accepts and is announced.
 
 Split out of ``transforms.helpers.bgp`` (session building and peer groups stay there). The prefix registries
-(on-prem segments, office LANs, the prefixes registered through a provider connection) and the per-session policy built from them by the same-owner
+(on-prem segments, office LANs, tunnel ranges) and the per-session policy built from them by the same-owner
 exchange rule in ``utils/ownership.py``.
 """
 
@@ -15,7 +15,6 @@ from utils.exchange_transit import EXCHANGE_PEERS
 from utils.ownership import (
     CircuitOwnerError,
     circuit_owner,
-    connection_owner,
     customer_owner,
     exchange_policies,
     ownership_conflicts,
@@ -82,98 +81,13 @@ def get_onprem_prefixes(segments: list[dict[str, Any]] | None) -> dict[str, dict
     }
 
 
-def connection_owner_key(connection: dict[str, Any]) -> str | None:
-    """The customer key of a cleaned provider connection: its account's owner, else its own ``owner``."""
-    return connection_owner(
-        customer_owner(connection.get("owner")), customer_owner((connection.get("account") or {}).get("owner"))
-    )
-
-
 def session_circuit_owner(circuit: dict[str, Any]) -> str | None:
     """The customer key of a cleaned session circuit, derived (the circuit stores no owner).
 
-    The owner of the single ``TopologyCustomerOffice`` among its ``locations`` (a tunnel), else the owner of its
-    ``connection`` (a vpn circuit); ``utils/ownership.py`` circuit_owner. Raises ``CircuitOwnerError`` for two offices
-    of different owners.
+    The owner of the single ``TopologyCustomerOffice`` among its ``locations`` (a tunnel); ``utils/ownership.py``
+    circuit_owner. Raises ``CircuitOwnerError`` for two offices of different owners.
     """
-    offices = [customer_owner(location.get("owner")) for location in circuit.get("locations") or []]
-    connection = circuit.get("connection")
-    return circuit_owner(offices, connection_owner_key(connection) if connection else None)
-
-
-def connection_registered(connection: dict[str, Any]) -> list[tuple[str | None, dict[str, Any]]]:
-    """The (owner, prefix) pairs registered behind a provider connection, by what it is attached to.
-
-    ``attached_network`` (private): the blocks of that virtual network, owned by the owner of its account.
-    ``attached_gateway`` (transit): the blocks of every VPC attachment propagating into the route table its
-    ``transit_attachment`` is associated with, the table the Transit Gateway looks traffic from the connection up in;
-    a VPC propagating only elsewhere is unreachable over it. A connection has at most one of the two (a check). The owner of a block is the owner of its own VPC's
-    account (None when it is not a customer, or the account is unknown). Whatever it is attached to, the connection's
-    ``registered_prefixes`` (a SaaS range, a partner range) are owned by the connection's owner
-    (``connection_owner_key``).
-    """
-
-    def blocks(virtual_network: dict[str, Any] | None) -> list[tuple[str | None, dict[str, Any]]]:
-        network = virtual_network or {}
-        owner = customer_owner(((network.get("account") or {}).get("owner")))
-        return [(owner, block) for block in network.get("cidr_blocks") or []]
-
-    registered: list[tuple[str | None, dict[str, Any]]] = []
-    if connection.get("attached_network"):
-        registered += blocks(connection["attached_network"])
-    elif connection.get("attached_gateway"):
-        table_id = ((connection.get("transit_attachment") or {}).get("associated_route_table") or {}).get("id")
-        if table_id:
-            registered += [
-                found
-                for attachment in (connection.get("attached_gateway") or {}).get("attachments") or []
-                if attachment.get("attachment_type") == "vpc"
-                and table_id in {table.get("id") for table in attachment.get("propagates_to_route_tables") or []}
-                for found in blocks(attachment.get("virtual_network"))
-            ]
-    owner = connection_owner_key(connection)
-    return registered + [(owner, prefix) for prefix in connection.get("registered_prefixes") or []]
-
-
-def connection_provider_space(connections: Iterable[dict[str, Any]] | None) -> frozenset[str]:
-    """The prefixes registered through a provider connection (``registered_prefixes``): provider space, not an owner's.
-
-    Passed to ``ownership_conflicts`` so two owners may each register the same SaaS range behind their own session.
-    """
-    return frozenset(
-        prefix["prefix"]
-        for connection in connections or []
-        for prefix in connection.get("registered_prefixes") or []
-        if prefix.get("prefix")
-    )
-
-
-def connections_by_interface(connections: list[dict[str, Any]] | None, device_name: str) -> dict[str, dict[str, Any]]:
-    """Interface name of ``device_name`` -> the provider connection of the session circuit it is an end of.
-
-    ``connections`` is the cleaned TopologyProviderConnection root with, per ``session_circuits``, the end ports
-    (``capabilities``: interface name and device): the relationship edges name the connection, no name or VLAN is
-    compared. A port is an end of at most one session circuit; if data puts one port on two connections the
-    interface is dropped with a WARNING and accepts nothing.
-    """
-    found: dict[str, dict[str, dict[str, Any]]] = {}
-    for connection in connections or []:
-        for session in connection.get("session_circuits") or []:
-            for end in session.get("capabilities") or []:
-                if end.get("name") and (end.get("device") or {}).get("name") == device_name:
-                    found.setdefault(end["name"], {})[str(connection.get("name"))] = connection
-    unique: dict[str, dict[str, Any]] = {}
-    for name, by_name in found.items():
-        if len(by_name) > 1:
-            _log.warning(
-                "%s: %s is an end of sessions of several provider connections (%s); it accepts nothing",
-                device_name,
-                name,
-                ", ".join(sorted(by_name)),
-            )
-            continue
-        unique[name] = next(iter(by_name.values()))
-    return unique
+    return circuit_owner(customer_owner(location.get("owner")) for location in circuit.get("locations") or [])
 
 
 def _far_end_devices(device_capabilities: list[dict[str, Any]] | None, device_name: str) -> dict[str, set[str]]:
@@ -232,34 +146,10 @@ def registered_by_gateway(
         except CircuitOwnerError as exc:
             _log.warning("tunnel %s: %s; its registered prefixes are accepted from nobody", tunnel.get("name"), exc)
             tunnel_owner = None
-        ends = {(port.get("device") or {}).get("name") for port in tunnel.get("capabilities") or []}
+        ends = {(port.get("device") or {}).get("name") for port in tunnel.get("endpoints") or []}
         for gateway in sorted(name for name in ends if name in registered_by):
             registered_by[gateway].extend((tunnel_owner, prefix) for prefix in tunnel.get("registered_prefixes") or [])
     return registered_by
-
-
-def registered_by_attachment(
-    offices: list[dict[str, Any]] | None,
-    tunnels: list[dict[str, Any]] | None,
-    connections: list[dict[str, Any]] | None,
-) -> dict[str, list[tuple[str | None, dict[str, Any]]]]:
-    """Attachment point -> the (owner, prefix) pairs registered behind it, as the edge reads them.
-
-    An attachment point is where an external session lands: an SD-WAN gateway (registered_by_gateway: its
-    offices and tunnels) or a provider connection (connection_registered; a connection with no session circuit
-    has no session and is skipped). The sessions of one connection (the two circuits of a dual connection) are one
-    point. Shared by checks/routing_invariants.py rule 8 and checks/segment_security.py, so both see the
-    registrations the edge accepts.
-    """
-    points = {
-        f"SD-WAN gateway '{gateway}'": found for gateway, found in registered_by_gateway(offices, tunnels).items()
-    }
-    for connection in connections or []:
-        if connection.get("name") and connection.get("session_circuits"):
-            points.setdefault(f"provider connection '{connection['name']}'", []).extend(
-                connection_registered(connection)
-            )
-    return points
 
 
 def registered_by_namespace(registered: list[tuple[str | None, dict[str, Any]]]) -> dict[str, dict[str, set[str]]]:
@@ -279,7 +169,6 @@ def registered_by_namespace(registered: list[tuple[str | None, dict[str, Any]]])
 
 def get_external_peer_prefixes(
     interfaces: list[dict[str, Any]] | None,
-    connections: Mapping[str, dict[str, Any]] | None,
     device_name: str,
     *,
     device_capabilities: list[dict[str, Any]] | None,
@@ -288,7 +177,7 @@ def get_external_peer_prefixes(
 ) -> dict[str, dict[str, list[str]]]:
     """Handoff sub-interface name -> owner -> the far end's registered IPv4 prefixes of that owner, sorted.
 
-    Two kinds of far end are known, each with its registered prefixes:
+    One kind of far end is known, with its registered prefixes:
 
     - The SD-WAN gateway: a handoff whose only BGP far end
       (``device_capabilities`` peerings) is the ``sdwan_gateway`` of some
@@ -296,10 +185,6 @@ def get_external_peer_prefixes(
       and the hosted segments' prefixes (owner: the segment's owner) of every
       office behind that gateway, and the ``registered_prefixes`` (owner: the
       tunnel's derived owner) of every tunnel ending on it (registered_by_gateway).
-    - A provider connection: ``connections`` (connections_by_interface) maps the sub-interface to the connection
-      of the session circuit it is an end of, and the session accepts what the connection registers
-      (connection_registered): a private network's blocks, a transit gateway's reachable blocks, the
-      connection's own ``registered_prefixes``.
 
     Ownership belongs to the object that registers the prefix, never to the
     handoff circuit, and only a customer owner counts (customer_owner): a
@@ -318,8 +203,6 @@ def get_external_peer_prefixes(
         far = far_ends.get(name) or set()
         if len(far) == 1 and next(iter(far)) in registered_behind:
             registered = registered_behind[next(iter(far))]
-        elif name in (connections or {}):
-            registered = connection_registered((connections or {})[name])
         else:
             continue
         namespace = ((iface.get("ip_address") or {}).get("ip_namespace") or {}).get("name")
@@ -336,7 +219,6 @@ def get_external_session_policies(
     device_name: str = "",
     customer_tags: Mapping[str, int] | None = None,
     routing_identity: bool = False,
-    connections: Mapping[str, dict[str, Any]] | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Handoff sub-interface name -> the prefix policy of its external session.
 
@@ -350,9 +232,7 @@ def get_external_session_policies(
     behind another session of the namespace, minus ``in`` (never announced
     back to where it was learned), and nothing of any other customer. A prefix
     registered by two owners, or one owner's prefix behind two sessions, is
-    logged as a WARNING (ownership_conflicts) with ``device_name``; ``connections`` (connections_by_interface) tells it
-    that the sessions of one provider connection are one attachment point and which prefixes are provider space
-    (connection_provider_space). Exact
+    logged as a WARNING (ownership_conflicts) with ``device_name``. Exact
     prefixes only; a session with no owner has empty lists and the template
     renders deny-all both ways, a sub-interface without a namespace exchanges
     with nothing.
@@ -375,14 +255,10 @@ def get_external_session_policies(
         namespace = namespaces.get(name)
         groups.setdefault((namespace, None) if namespace else (None, name), {})[name] = by_owner
 
-    session_groups = {name: str(connection.get("name")) for name, connection in (connections or {}).items()}
-    provider_space = connection_provider_space((connections or {}).values())
     policies: dict[str, dict[str, Any]] = {}
     for (namespace, _), learned in groups.items():
         segments = onprem_prefixes.get(namespace or "", {})
-        for conflict in ownership_conflicts(
-            segments, learned, session_groups=session_groups, provider_space=provider_space
-        ):
+        for conflict in ownership_conflicts(segments, learned):
             _log.warning("%s: namespace %s: %s", device_name, namespace or "<none>", conflict.message)
         for name, policy in exchange_policies(segments, learned).items():
             policies[name] = {

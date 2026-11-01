@@ -465,7 +465,7 @@ class TestCloudNetworkAppliance:
             for node in _document(path).get("nodes") or []
             if "TopologyApplianceHosting" in (node.get("inherit_from") or [])
         ]
-        assert sorted(inheritors) == ["CloudRegion", "SaasRegion", "VirtualColocation"]
+        assert sorted(inheritors) == ["SaasRegion", "VirtualColocation"]
         appliances = next(r for r in generic["relationships"] if r["name"] == "appliances")
         assert (appliances["peer"], appliances["cardinality"], appliances["identifier"]) == (
             "CloudNetworkAppliance",
@@ -473,15 +473,13 @@ class TestCloudNetworkAppliance:
             "topology__appliances",
         )
 
-    def test_a_cloud_region_hosts_appliances_and_no_devices(self) -> None:
-        """A region is a provider place with no hardware: the provider's service edge is a CloudNetworkAppliance listed
-        in `appliances`. No kind inherits both hosting generics, so an appliance can never sit on a region through
-        `devices` (the peer of TopologyDeviceHosting.devices is DcimDevice, which a CloudNetworkAppliance is)."""
+    def test_a_cloud_region_hosts_nothing(self) -> None:
+        """A region is a provider place with no hardware and no appliance: the cloud side of a connection is the
+        cloud model (transport, peering interface, gateway), not a device. No kind inherits both hosting generics."""
         region = _kind("TopologyCloudRegion")
-        assert "TopologyApplianceHosting" in region["inherit_from"]
+        assert "TopologyApplianceHosting" not in region["inherit_from"]
         assert "TopologyDeviceHosting" not in region["inherit_from"]
-        assert "devices" not in _relationship_names("TopologyCloudRegion")
-        assert "appliances" not in _relationship_names("TopologyCloudRegion")
+        assert {"devices", "appliances"}.isdisjoint(_relationship_names("TopologyCloudRegion"))
         generics = {g["name"]: g for g in _document(_TOPOLOGY / "topology.yml")["generics"]}
         appliances = next(r for r in generics["ApplianceHosting"]["relationships"] if r["name"] == "appliances")
         assert appliances["identifier"] == "topology__appliances"
@@ -492,7 +490,7 @@ class TestCloudNetworkAppliance:
                     if hosting in (node.get("inherit_from") or []):
                         by_hosting[hosting].add(node["name"])
         assert by_hosting["TopologyDeviceHosting"].isdisjoint(by_hosting["TopologyApplianceHosting"])
-        assert "CloudRegion" not in by_hosting["TopologyDeviceHosting"]
+        assert "CloudRegion" not in by_hosting["TopologyDeviceHosting"] | by_hosting["TopologyApplianceHosting"]
 
     def test_the_provider_account_is_declared_once_for_the_presences_a_provider_hosts(self) -> None:
         """A virtual colocation and a SaaS region order their appliances under one account; neither declares it itself."""

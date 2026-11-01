@@ -42,7 +42,7 @@ spec:
             destination_prefixes:
               - ["10.10.0.0/16", "PROD"]
             log: false
-            description: "Nordix web/app tier to its AWS VPC over PC-FR2-AWS-EUC1-PROD"
+            description: "Nordix web/app tier to its AWS VPC over Direct Connect"
 
           - index: 20
             name: nordix-prod-to-partner-acme

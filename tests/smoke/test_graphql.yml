@@ -268,14 +268,6 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
-    resource_name: provider_connection_data
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/topology/add/provider_connection.gql
-          kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
     resource_name: proposed_change_artifacts
     tests:
       - name: syntax_check
@@ -483,22 +475,6 @@ infrahub_tests:
       - name: syntax_check
         spec:
           path: queries/validation/circuit_placement.gql
-          kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
-    resource_name: provider_connections
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/validation/provider_connections.gql
-          kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
-    resource_name: provider_decommission
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/validation/provider_decommission.gql
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
