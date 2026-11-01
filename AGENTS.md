@@ -348,8 +348,8 @@ class MyCheck(InfrahubCheck):
   `account` it has no `owner`, without one (Webex, Zscaler) it has `saas_region` and an `owner` customer.
   `CloudPeeringInterface` is the L3/BGP termination on the cloud side, a `DcimInterface` of its transport (an AWS VIF, an
   ExpressRoute peering, a GCP VLAN attachment, a VPN tunnel, a SaaS peering) riding on a port or LAG of it
-  (`parent_interface`, a one-sided edge of its own: the port's `sub_interfaces` does not list it, walk back with
-  `CloudPeeringInterface(parent_interface__ids: ...)`): `scope` (`private`, `public`, `saas`), `routing`, `vlan_id` or
+  (`parent_interface`, the edge of the marker `DcimSubInterface` it shares with a sub-interface: the port's and the LAG's
+  `sub_interfaces` list it, and it holds its `ip_address` like any interface): `scope` (`private`, `public`, `saas`), `routing`, `vlan_id` or
   `tunnel_index`, the provider's `peer_ip` and `peer_asn`, `auth`, and for a tunnel `endpoint_ip`, `tunnel_mode`,
   `crypto_profile` (`SecurityIPsecProfile`) and `tunnel_key`. A circuit ends on a transport port, LAG or peering through
   `capabilities` like on any interface; our side is always an interface of one of our devices (a sub-interface, or a
@@ -564,21 +564,23 @@ class MyCheck(InfrahubCheck):
   rides on the NIC through `parent_interface` too, so border leaf -> host port -> NIC -> sub-interface is a path in the
   graph. `_resolve_transit_members` follows `parent_interface`, not a name. A controller keeps physical ports;
   a provider-hosted `CloudNetworkAppliance` has no hardware, so its ports are virtual NICs with no host (and no cable).
-- **Interface parents**: `parent_interface` is the one "rides on" link of a `DcimVirtualInterface`: a sub-interface's
-  parent is a port, LAG or NIC of its own device, a VM NIC's is the port of its `hosting_device` it is pinned to. It and
-  its inverse `sub_interfaces` (declared once on the marker generic `DcimHasSubInterface`, many: a NIC parents several
-  sub-interfaces, a host port several NICs; `checks/interface_layers.py` reads it as an L3 signal, a port with
-  sub-interfaces is routed; the generators filter on `parent_interface__ids`) carry
-  no `common_parent`, so the cross-device rule is `checks/interface_parents.py`: a parent on another device is an ERROR
-  unless the interface is a NIC of a `DcimVirtualDevice` pinned to a port of its `hosting_device`, a NIC's parent is a
-  physical port, and an uplink's host port is cabled. The transforms render a `parent_interface` only for a
-  `<parent>.<n>` sub-interface (`transforms/helpers/addressing.py` `sub_interface_parent`). `common_parent: device`
+- **Interface parents**: `parent_interface` is the one "rides on" link, declared once on the marker generic
+  `DcimSubInterface` that `DcimVirtualInterface` and `CloudPeeringInterface` inherit (a generic cannot inherit a generic,
+  so each kind lists it): a sub-interface's parent is a port, LAG or NIC of its own device, a VM NIC's is the port of its
+  `hosting_device` it is pinned to, a cloud peering's is a port or LAG of its transport. It and its inverse
+  `sub_interfaces` (declared once on the marker generic `DcimHasSubInterface`, many, peer `DcimSubInterface`: a NIC
+  parents several sub-interfaces, a host port several NICs, a transport LAG several peerings; `checks/interface_layers.py`
+  reads it as an L3 signal, a port with sub-interfaces is routed; the generators filter on `parent_interface__ids`) carry
+  no `common_parent`, so the cross-device rule is `checks/interface_parents.py` (rooted on `DcimSubInterface`): a parent
+  on another device is an ERROR unless the interface is a NIC of a `DcimVirtualDevice` pinned to a port of its
+  `hosting_device`, a NIC's parent is a physical port, and an uplink's host port is cabled. The transforms render a
+  `parent_interface` only for a `<parent>.<n>` sub-interface (`transforms/helpers/addressing.py` `sub_interface_parent`). `common_parent: device`
   stays on the LAG pair `lag` / `member_interfaces`; `common_parent` works only on a node with a `kind: Parent`
   relationship and a peer with one (the interfaces' `device`, `CloudNetworkSegment`'s `virtual_network`), every other
   "same parent" rule is a check.
 - **Interface addresses and layers**: `ip_address` is declared once, on the marker generic `DcimHasIPAddress`
-  (inherited by a physical port, a LAG and a virtual interface, not a console port): an Attribute with no cascade (a
-  multisite VIP is one address on two loopbacks), so an address goes with its run's tracking or with decommission's
+  (inherited by a physical port, a LAG, a virtual interface and a cloud peering interface, not a console port): an
+  Attribute with no cascade (a multisite VIP is one address on two loopbacks), so an address goes with its run's tracking or with decommission's
   explicit deletes, never with its port; a hand-deleted device leaves its port addresses behind. A switch port's L2
   membership is the typed edge `segments` (on the marker generic `DcimSwitchedInterface`, a physical port or a LAG;
   peer `ManagedVxlanSegment`, many) is the ONE edge between a port and a segment, one-sided: the segment has no list of

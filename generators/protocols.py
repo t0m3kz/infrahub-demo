@@ -201,7 +201,11 @@ class AppInstance(CoreNode):
 
 
 class DcimHasSubInterface(CoreNode):
-    sub_interfaces: RelationshipManager[DcimVirtualInterface]
+    sub_interfaces: RelationshipManager[DcimSubInterface]
+
+
+class DcimSubInterface(CoreNode):
+    parent_interface: RelationshipAttribute[DcimInterface]
 
 
 class DcimHasIPAddress(CoreNode):
@@ -1050,8 +1054,7 @@ class DcimVirtualDevice(CoreArtifactTarget, DcimDevice, DcimDeviceManaged, DcimC
     hosting_device: RelationshipAttribute[DcimPhysicalDevice]
 
 
-class DcimVirtualInterface(DcimInterface, DcimHasSubInterface, DcimHasIPAddress):
-    parent_interface: RelationshipAttribute[DcimInterface]
+class DcimVirtualInterface(DcimInterface, DcimHasSubInterface, DcimHasIPAddress, DcimSubInterface):
     vlan_domain_segment: RelationshipAttribute[ManagedVlanDomainSegment]
     vrf: RelationshipAttribute[ManagedVRF]
 
@@ -1093,7 +1096,7 @@ class SecurityIPsecProfile(ManagedGeneric):
     pfs_group: IntegerOptional
 
 
-class CloudPeeringInterface(DcimInterface, TopologyConnectorRouting):
+class CloudPeeringInterface(DcimInterface, DcimHasIPAddress, DcimSubInterface, TopologyConnectorRouting):
     bfd: Boolean
     cloud_id: StringOptional
     endpoint_ip: IPHostOptional
@@ -1107,7 +1110,6 @@ class CloudPeeringInterface(DcimInterface, TopologyConnectorRouting):
     auth: RelationshipAttribute[RoutingPassword]
     crypto_profile: RelationshipAttribute[SecurityIPsecProfile]
     gateway: RelationshipAttribute[CloudGateway]
-    parent_interface: RelationshipAttribute[DcimInterface]
     tunnel_key: RelationshipAttribute[RoutingPassword]
 
 

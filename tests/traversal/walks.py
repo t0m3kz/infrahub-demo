@@ -282,3 +282,22 @@ def internet_rows(d: dict, cfg: dict) -> list[Row]:
         label = f"internet target {target['endpoint']} ({target['kind']}): access=address, {target['prefix']} in {ns}"
         rows.append((label, ok, f"endpoint {bool(endpoint)}, prefix {target['prefix'] in prefixes}"))
     return rows
+
+
+# ------------------------------------------------------------------ peerings on the sub-interface edge
+
+
+def sub_interface_rows(d: dict) -> list[Row]:
+    """A port or LAG of a transport lists every peering that rides on it in `sub_interfaces` (the shared marker edge)."""
+    parents = {p["id"]: p for p in [*d["iface"], *d["lag"]]}
+    riding = [p for p in d["peer"] if rel(p, "parent_interface")]
+    unlisted = [
+        f"{val(p, 'name')} on {rel(p, 'parent_interface')[0]['name']['value']}"
+        for p in riding
+        if (parent := parents.get(rel(p, "parent_interface")[0]["id"])) is None
+        or p["id"] not in _ids(rel(parent, "sub_interfaces"))
+    ]
+    return [
+        ("a transport port or LAG lists its peerings in sub_interfaces", bool(riding) and not unlisted, f"{unlisted}"),
+        ("note: peerings on a parent", True, f"note: {len(riding)}"),
+    ]

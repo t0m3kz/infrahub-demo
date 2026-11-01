@@ -49,6 +49,17 @@ def _iface(name: str, role: str, device: dict[str, Any], parent: dict[str, Any] 
     }
 
 
+def _peering(name: str, parent: dict[str, Any] | None) -> dict[str, Any]:
+    """A raw CloudPeeringInterface row of the transport ``dx``: it has no role and its device is no virtual device."""
+    return {
+        "id": f"peering-{name}",
+        "__typename": "CloudPeeringInterface",
+        "name": {"value": name},
+        "device": _device("dx", kind="CloudDirectConnect"),
+        "parent_interface": parent if parent is not None else {"node": None},
+    }
+
+
 def _nic(name: str, role: str, host_device: str | None = None, cabled: bool = True, kind: str | None = None) -> dict:
     """A NIC of the VM ``vm-1`` hosted by ``fw-1``; ``host_device`` None is an unpinned NIC."""
     parent = _parent(name, host_device, kind or "DcimPhysicalInterface", cabled) if host_device else None
@@ -59,7 +70,7 @@ def _run(*ifaces: dict[str, Any]) -> list[dict[str, Any]]:
     check = cast(Any, CheckInterfaceParents.__new__(CheckInterfaceParents))
     findings: list[dict[str, Any]] = []
     check.log_error = lambda **kwargs: findings.append(kwargs)
-    check.validate({"DcimVirtualInterface": {"edges": [{"node": iface} for iface in ifaces]}})
+    check.validate({"DcimSubInterface": {"edges": [{"node": iface} for iface in ifaces]}})
     return findings
 
 
@@ -146,8 +157,26 @@ def test_nic_of_a_device_without_a_host_is_not_reported_on_its_own_device() -> N
 
 def test_the_fixtures_emit_only_fields_the_query_selects_and_the_parent_fields_are_selected() -> None:
     """The builders match interface_parents.gql, which must select parent_interface and its cable."""
-    node = query_tree(QUERY)["DcimVirtualInterface"]["edges"]["node"]
+    node = query_tree(QUERY)["DcimSubInterface"]["edges"]["node"]
     assert {"parent_interface", "role", "device"} <= set(node)
     assert "cable" in node["parent_interface"]["node"]
     fixtures = [_nic("eth1", "uplink", "fw-1")]
     assert unselected(fixtures, node) == []
+
+
+def test_a_peering_riding_on_a_port_of_its_transport_passes() -> None:
+    """Rule 1 covers the cloud peering interface: the parent is on its own transport."""
+    assert _run(_peering("lag1.1000", _parent("lag1", "dx", "DcimLAGInterface"))) == []
+
+
+def test_a_peering_riding_on_a_port_of_another_device_fails() -> None:
+    """Rule 1: the one-sided edge accepts the port of the partner's transport; the check reports it."""
+    findings = _run(_peering("er-pri", _parent("partner-port", "partner")))
+
+    assert len(findings) == 1 and "'partner'" in findings[0]["message"]
+    assert findings[0]["object_type"] == "CloudPeeringInterface"
+
+
+def test_a_peering_with_no_parent_is_not_reported() -> None:
+    """A routed port needs no parent."""
+    assert _run(_peering("gcp-ded", None)) == []

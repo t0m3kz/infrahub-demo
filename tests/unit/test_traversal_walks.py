@@ -222,3 +222,20 @@ def test_rides_on_rows_flag_a_lost_edge() -> None:
     graph = {"dx": [{"name": _v("a"), "rides_on": {"node": None}}, {"name": _v("b"), "rides_on": _node(name=_v("x"))}]}
     assert walks.rides_on_rows(graph, {"b": "x"})[0][1] is True
     assert walks.rides_on_rows(graph, {"a": "a"})[0][1] is False
+
+
+def _sub_graph(listed: bool) -> dict[str, list]:
+    peering = {"id": "p1", "name": _v("lag1.1000"), "parent_interface": _node(id="lag1", name=_v("lag1"))}
+    lag = {"id": "lag1", "sub_interfaces": _edges({"id": "p1"} if listed else {"id": "other"})}
+    return {"iface": [], "lag": [lag], "peer": [peering]}
+
+
+def test_a_lag_that_lists_its_peering_in_sub_interfaces_passes() -> None:
+    """The shared marker edge is read from the parent side."""
+    assert walks.sub_interface_rows(_sub_graph(True))[0][1] is True
+
+
+def test_a_lag_that_does_not_list_its_peering_fails() -> None:
+    """The parent side must show the child: it is the point of the shared marker."""
+    row = walks.sub_interface_rows(_sub_graph(False))[0]
+    assert row[1] is False and "lag1.1000" in row[2]

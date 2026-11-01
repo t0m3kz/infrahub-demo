@@ -291,6 +291,9 @@ async def run_case(
         if case.get("pod"):
             for row in walks.pod_rows(d, case["pod"]):
                 rep.add(*row)
+        if case.get("transport_sub_interfaces"):
+            for row in walks.sub_interface_rows(d):
+                rep.add(*row)
         if case.get("internet"):
             for row in walks.internet_rows(d, case["internet"]):
                 rep.add(*row)

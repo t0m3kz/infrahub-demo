@@ -127,12 +127,11 @@ def test_a_transport_is_a_slim_device_with_its_place_on_the_transport_generic() 
 def test_a_peering_is_an_interface_of_its_transport_and_keeps_no_transport_edges() -> None:
     """DcimInterface gives device, name and mtu; account, region, saas_region, owner and transport are the transport's."""
     peering = _nodes()["CloudPeeringInterface"]
-    parent = _field(peering, "relationships", "parent_interface")
 
-    assert "DcimInterface" in peering["inherit_from"]
+    assert {"DcimInterface", "DcimSubInterface", "DcimHasIPAddress"} <= set(peering["inherit_from"])
+    assert "parent_interface" not in _names(peering, "relationships")  # the marker DcimSubInterface holds it
     assert not {"transport", "account", "region", "saas_region", "owner"} & _names(peering, "relationships")
     assert "mtu" not in _names(peering, "attributes") and "vlan_id" in _names(peering, "attributes")
-    assert parent["peer"] == "DcimInterface" and parent["identifier"] == "cloud_peering__parent_interface"
 
 
 def test_virtual_network_peers_are_symmetric_on_one_identifier() -> None:

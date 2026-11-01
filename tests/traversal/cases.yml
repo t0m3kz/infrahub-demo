@@ -23,6 +23,8 @@ cases:
       - data/demos/cloud_saas_model_pod/vlan_row.py
     # python module with `load(client, branch) -> dict` and `main_walk(d, dc, cloud, quiet) -> dict`
     tracer: data/demos/cloud_saas_model/trace.py
+    # a transport port or LAG lists its peerings in `sub_interfaces` (DcimSubInterface, the marker shared with VIFs)
+    transport_sub_interfaces: true
     # the small pod in front of the edge: server (bond0) -> vPC leaf pair -> spine -> border leaves -> edge
     pod:
       server: dc90-srv-01

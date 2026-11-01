@@ -61,13 +61,13 @@ QUERIES = {
       segment_deployments { edges { node { deployment { node { name { value } } }
         vlan_domain_segments { edges { node { vlan_id { value } device { node { name { value } } }
           svi { node { name { value } vrf { node { name { value } namespace { node { name { value } } } } } } } } } } } } } } } }""",
-    "iface": f"""DcimPhysicalInterface {{ edges {{ node {{ {IF_TOP} {CAPS} lag {{ node {{ id name {{ value }} }} }} segments {{ edges {{ node {{ id }} }} }} ip_address {{ node {{ address {{ value }} ip_namespace {{ node {{ name {{ value }} }} }} }} }} cable {{ node {{ name {{ value }} endpoints {{ edges {{ node {{ {EPC} }} }} }} }} }} }} }} }}""",
+    "iface": f"""DcimPhysicalInterface {{ edges {{ node {{ {IF_TOP} {CAPS} lag {{ node {{ id name {{ value }} }} }} segments {{ edges {{ node {{ id }} }} }} sub_interfaces {{ edges {{ node {{ id }} }} }} ip_address {{ node {{ address {{ value }} ip_namespace {{ node {{ name {{ value }} }} }} }} }} cable {{ node {{ name {{ value }} endpoints {{ edges {{ node {{ {EPC} }} }} }} }} }} }} }} }}""",
     "front": f"""DcimFrontPatchPanelPort {{ edges {{ node {{ {PP_TOP} rear_port {{ node {{ port_id {{ value }} }} }} cable {{ node {{ name {{ value }} endpoints {{ edges {{ node {{ {EPC} }} }} }} }} }} }} }} }}""",
     "rear": f"""DcimRearPatchPanelPort {{ edges {{ node {{ {PP_TOP} cable {{ node {{ name {{ value }} endpoints {{ edges {{ node {{ {EPC} }} }} }} }} }} }} }} }}""",
     "carrier": f"""TopologyCarrierCircuit {{ edges {{ node {{ id name {{ value }} circuit_type {{ value }} capabilities {{ edges {{ node {{ {EP} }} }} }} }} }} }}""",
     "session": f"""TopologySessionCircuit {{ edges {{ node {{ id name {{ value }} circuit_type {{ value }} capabilities {{ edges {{ node {{ {EP} }} }} }} }} }} }}""",
     "vif": f"""DcimVirtualInterface {{ edges {{ node {{ {IF_TOP} {CAPS} parent_interface {{ node {{ id }} }} }} }} }}""",
-    "lag": f"""DcimLAGInterface {{ edges {{ node {{ {IF_TOP} {CAPS} lag_id {{ value }} segments {{ edges {{ node {{ id }} }} }}
+    "lag": f"""DcimLAGInterface {{ edges {{ node {{ {IF_TOP} {CAPS} lag_id {{ value }} segments {{ edges {{ node {{ id }} }} }} sub_interfaces {{ edges {{ node {{ id }} }} }}
       member_interfaces {{ edges {{ node {{ id name {{ value }} }} }} }} }} }} }}""",
     "dev": """DcimPhysicalDevice { edges { node { id name { value } role { value } deployment { node { __typename name { value }
       ... on TopologyExternalProviders { provider { node { org_id { value } } } } } } } } }""",

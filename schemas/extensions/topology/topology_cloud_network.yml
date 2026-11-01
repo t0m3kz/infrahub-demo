@@ -164,6 +164,8 @@ nodes:
     include_in_menu: false
     inherit_from:
       - DcimInterface
+      - DcimHasIPAddress
+      - DcimSubInterface
       - TopologyConnectorRouting
     attributes:
       - name: cloud_id
@@ -256,18 +258,8 @@ nodes:
             description: "GRE tunnel, no encryption"
             color: "#95A5A6"
     relationships:
-      # The port, LAG or virtual interface of the transport this one rides on (a VIF on its LAG, a VLAN attachment on
-      # its port). A one-sided edge of its own: DcimVirtualInterface.parent_interface and its inverse are the
-      # sub-interface edge of the managed devices. The same-transport rule is checks/cloud_connection.py.
-      - name: parent_interface
-        peer: DcimInterface
-        label: "Rides On"
-        cardinality: one
-        kind: Attribute
-        optional: true
-        identifier: "cloud_peering__parent_interface"
-        order_weight: 2200
-        description: "The port, LAG or tunnel base of the same transport this interface rides on"
+      # What it rides on (a VIF on its LAG, a VLAN attachment on its port) is parent_interface of DcimSubInterface, the
+      # same edge as a sub-interface of a managed device; the same-transport rule is checks/interface_parents.py.
       - name: gateway
         label: Gateway
         peer: CloudGateway

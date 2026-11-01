@@ -1,8 +1,10 @@
-"""Validate what a virtual interface rides on (``parent_interface``).
+"""Validate what an interface rides on (``parent_interface`` of a ``DcimSubInterface``).
 
-``parent_interface`` is one link with two meanings, and the schema holds neither (no ``common_parent``):
+``parent_interface`` is one link of the marker generic ``DcimSubInterface`` (a virtual interface and a cloud peering
+interface inherit it) and the schema holds no same-device rule (no ``common_parent``):
 
-* a sub-interface (a context leg, an SVI's port) rides on a NIC, port or LAG of ITS OWN device;
+* a sub-interface (a context leg, an SVI's port) rides on a NIC, port or LAG of ITS OWN device; so does the cloud
+  peering interface of a transport (a port or LAG of that transport);
 * a base NIC of a virtual device (a DcimVirtualInterface with the role management, uplink or ha, which
   generators/virtual_nics.py pins) rides on a port of the hosting device, and that port carries the cable, so the
   border leaf -> host port -> NIC path is a path in the graph.
@@ -27,7 +29,7 @@ from infrahub_sdk.checks import InfrahubCheck
 from generators.virtual_nics import PINNED_ROLES
 from utils.data_cleaning import clean_data
 
-_VIRTUAL_INTERFACE = "DcimVirtualInterface"
+_SUB_INTERFACE = "DcimSubInterface"
 _VIRTUAL_DEVICE = "DcimVirtualDevice"
 _PHYSICAL_INTERFACE = "DcimPhysicalInterface"
 _UPLINK_ROLE = "uplink"
@@ -38,7 +40,7 @@ def _label(node: dict[str, Any]) -> str:
 
 
 def interface_parent_errors(iface: dict[str, Any]) -> list[str]:
-    """The messages (rules 1, 2, 3, 5) of one cleaned DcimVirtualInterface node of interface_parents.gql."""
+    """The messages (rules 1, 2, 3, 5) of one cleaned DcimSubInterface node of interface_parents.gql."""
     parent = iface.get("parent_interface")
     if not isinstance(parent, dict):
         return []
@@ -75,11 +77,13 @@ def interface_parent_errors(iface: dict[str, Any]) -> list[str]:
 
 
 class CheckInterfaceParents(InfrahubCheck):
-    """A sub-interface rides on an interface of its own device; a NIC of a virtual device on a cabled port of its host."""
+    """A sub-interface or a peering rides on an interface of its own device; a NIC of a virtual device on a cabled host port."""
 
     query = "interface_parents"
 
     def validate(self, data: Any) -> None:
-        for iface in clean_data(data).get("DcimVirtualInterface") or []:
+        for iface in clean_data(data).get("DcimSubInterface") or []:
             for message in interface_parent_errors(iface):
-                self.log_error(message=message, object_id=iface.get("id"), object_type=_VIRTUAL_INTERFACE)
+                self.log_error(
+                    message=message, object_id=iface.get("id"), object_type=iface.get("typename") or _SUB_INTERFACE
+                )

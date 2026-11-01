@@ -25,8 +25,8 @@ Nasza strona to zawsze podinterfejs urządzenia i nasz proces BGP; nie ma jej w 
 ma `device` (transport), `name`, `mtu` (domyślnie 9000) i `capabilities` jak każdy port. Własne pola: `scope` (private,
 public, saas), `routing` (bgp, static), `vlan_id` albo `tunnel_index`, `bfd`, `service_id`; tunel: `endpoint_ip`,
 `tunnel_mode` (ipsec, gre), `crypto_profile` (`SecurityIPsecProfile`), `tunnel_key` (`RoutingPassword`, klucz IPsec; BGP
-to `auth`); relacje `parent_interface` (port lub pakiet TEGO SAMEGO transportu; krawędź jednostronna o własnym
-identyfikatorze, port nie widzi jej w `sub_interfaces`), `gateway` (puste dla tunelu VPN: ląduje przez
+to `auth`); relacje `parent_interface` (port lub pakiet TEGO SAMEGO transportu; marker `DcimSubInterface`, ta sama krawędź
+`sub__interface` co podinterfejs urządzenia: port i pakiet widzą peering w `sub_interfaces`, a peering ma `ip_address`), `gateway` (puste dla tunelu VPN: ląduje przez
 `transport.gateway`), `auth` (`RoutingPassword`), `advertised_prefixes`, oraz `peer_ip`, `peer_asn` z
 `TopologyConnectorRouting`. Konto, region i `owner` są transportu, nie peeringu.
 
@@ -103,8 +103,8 @@ nie powie (serwer przyjmuje załącznik bez celu, z dwoma celami, pętlę `rides
 urządzenia): R1 załącznik ma dokładnie jeden cel, R2 tabela routingu należy do huba i do bramy załącznika, R3 `rides_on`
 bez pętli, fizyczny tylko na fizycznym, logiczny na naszym transporcie bez `partner_account`, R4 segmenty punktu usługi są z
 jego sieci i klucz tunelu wymaga IPsec, R5 profil krypto tylko przy IPsec, R6 tunel VPN ma `endpoint_ip` i jest
-interfejsem `CloudVPNConnection`, R7 każdy interfejs transportu jest na tym transporcie (członkowie pakietu i
-`parent_interface` peeringu), R8 peering z `vlan_id` jedzie na porcie lub pakiecie, rodzicem peeringu jest port lub pakiet,
+interfejsem `CloudVPNConnection`, R7 wycofana (członków pakietu pilnuje serwer, `parent_interface` peeringu
+`checks/interface_parents.py`), R8 peering z `vlan_id` jedzie na porcie lub pakiecie, rodzicem peeringu jest port lub pakiet,
 VLAN-y jednego rodzica są różne (ten sam VLAN na dwóch portach jest dozwolony: ExpressRoute), R9 miejsce transportu:
 dokładnie jedno z `region` i `saas_region`, z kontem bez `owner`, bez konta z `saas_region` i `owner`; peering jest
 interfejsem transportu, a `scope: saas` leży na transporcie z `saas_region`.
@@ -172,7 +172,7 @@ odwrotny i plik wzorcowy.
 | L1 | obwód -> port po drugiej stronie | `TopologyCarrierCircuit.capabilities` |
 | L1 | port -> transport | `device` portu (`CloudDirectConnect`) |
 | L1 | port -> pakiet | `lag` portu (`lag__members`) |
-| L1 | port lub pakiet -> VIF | `CloudPeeringInterface(parent_interface__ids: [...])` (krawędź jednostronna) |
+| L1 | port lub pakiet -> VIF | `sub_interfaces` portu lub pakietu albo `CloudPeeringInterface(parent_interface__ids: [...])` |
 | L1 | VIF -> brama -> załączniki -> sieć wirtualna -> segment chmurowy | `gateway`, `CloudGatewayAttachment`, `virtual_network`, `network_segments` |
 | L1 | tunel: nasz `Tunnel<n>` jedzie na porcie nośnika internetowego | `DcimVirtualInterface.parent_interface` |
 | L3 | podinterfejs lub port routowany -> obwód sesji | `DcimInterface.capabilities` |
@@ -328,8 +328,9 @@ Wynik z instancji 8100:
   prefiksów, timery BFD, wpisy tras. Powstaną w generatorze danego operatora (`connection_profile`) ze stałych w `utils/limits.py`.
 - Pętla `rides_on` na samego siebie: serwer ją przyjmuje, ale odczyt zwraca `rides_on` puste (i kasuje poprzednią krawędź),
   więc check R3 widzi pętle co najmniej dwóch obiektów.
-- `parent_interface` peeringu jest krawędzią jednostronną i serwer nie pilnuje, że rodzic jest na tym samym transporcie
-  (pakiet i jego członkowie: serwer pilnuje): to R7. Pierwszy peering na porcie transportu partnera przejdzie schemat.
+- `parent_interface` peeringu (marker `DcimSubInterface`, ta sama krawędź co podinterfejs urządzenia) nie ma `common_parent`,
+  więc serwer nie pilnuje, że rodzic jest na tym samym transporcie (pakiet i jego członkowie: serwer pilnuje): to
+  `checks/interface_parents.py` (reguła 1). Pierwszy peering na porcie transportu partnera przejdzie schemat.
 - Sesje BGP nóg chmurowych są ręczne; nic nie alokuje /31 ani AS dla obwodu, którego koniec to peering chmury.
 - Segment VXLAN ma prefiks w `gateway.ip_prefix`, segment chmurowy w `cidr_block` (tekst): skrypt traktuje je różnie.
 - Krawędź `segments` na porcie jest jednostronna (segment nie ma listy portów): skrypt czyta porty i filtruje po segmencie.

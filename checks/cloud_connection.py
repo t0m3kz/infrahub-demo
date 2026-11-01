@@ -12,8 +12,9 @@ R3  ``rides_on``: no loop; a physical transport rides only on a physical one; a 
 R4  a service endpoint's segments belong to the endpoint's virtual network; a tunnel key needs an IPsec tunnel
 R5  a crypto profile belongs to an IPsec tunnel, and an IPsec tunnel has one (GRE has none, a key only with IPsec)
 R6  a VPN tunnel has the provider's ``endpoint_ip`` and is an interface of a VPN connection
-R7  every interface of a transport is on that transport: the members of its LAG and the ``parent_interface`` of its
-    peering (the server refuses the first, not the one-sided second)
+R7  retired: that every interface of a transport is on that transport is held twice already, by the server for the
+    members of a LAG (``common_parent: device``) and by ``checks/interface_parents.py`` for the ``parent_interface`` of
+    a peering (a ``DcimSubInterface``, like a sub-interface of a managed device)
 R8  a peering that has a ``vlan_id`` rides on a port or LAG (a tunnel needs no parent), the parent of a peering is a
     port or LAG, and the VLANs of the peerings of one parent are distinct
 R9  placement: a transport has exactly one of ``region`` and ``saas_region``; with an ``account`` it has no ``owner``,
@@ -78,15 +79,11 @@ class CheckCloudConnection(InfrahubCheck):
             if transport.get("typename") == DIRECT_CONNECT:
                 self._r3_transport(transport, by_id)
             self._r9_transport(transport)
-        for lag in _dicts(cleaned.get(LAG)):
-            if _ref(lag.get("device")) in transports:
-                self._r7_lag_members(lag, transports[_ref(lag.get("device")) or ""])
         peerings = _dicts(cleaned.get(PEERING))
         for peering in peerings:
             self._r4_tunnel_key(peering)
             self._r5_crypto_profile(peering)
             self._r6_tunnel(peering)
-            self._r7_parent(peering)
             self._r8_parent(peering)
             self._r9_peering(peering, transports)
         self._r8_vlans(peerings)
@@ -186,26 +183,6 @@ class CheckCloudConnection(InfrahubCheck):
                 peering,
                 PEERING,
                 f"R5: peering '{_name(peering)}' is an IPsec tunnel with no crypto_profile: set the IKE/ESP profile.",
-            )
-
-    def _r7_lag_members(self, lag: dict[str, Any], transport: dict[str, Any]) -> None:
-        for member in _dicts(lag.get("member_interfaces")):
-            if _ref(member.get("device")) != str(transport["id"]):
-                self._error(
-                    lag,
-                    LAG,
-                    f"R7: LAG '{_name(lag)}' of transport '{_name(transport)}' has member '{_name(member)}' of "
-                    "another device: the members of a LAG are ports of its transport.",
-                )
-
-    def _r7_parent(self, peering: dict[str, Any]) -> None:
-        parent = peering.get("parent_interface")
-        if isinstance(parent, dict) and _ref(parent.get("device")) != _ref(peering.get("device")):
-            self._error(
-                peering,
-                PEERING,
-                f"R7: peering '{_name(peering)}' rides on '{_name(parent)}', an interface of another device than its "
-                f"transport '{_name(peering.get('device'))}'.",
             )
 
     def _r8_parent(self, peering: dict[str, Any]) -> None:

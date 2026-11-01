@@ -320,37 +320,18 @@ class TestR6Tunnels:
         assert len(errors) == 1 and "not of a VPN connection" in errors[0]
 
 
-class TestR7InterfacesOfATransport:
-    """The members of a LAG and the parent of a peering are interfaces of the same transport."""
-
-    @staticmethod
-    def _lag(device: str, member_device: str) -> dict[str, Any]:
-        member = {"id": "m1", "name": _v("m1"), "device": _node(member_device)}
-        return {"id": "lag1", "name": _v("lag1"), "device": _node(device), "member_interfaces": _edges(member)}
-
-    def test_a_lag_of_its_own_ports_passes(self) -> None:
-        """The members sit on the LAG's transport."""
-        assert _run(CloudDirectConnect=[_transport("dx")], DcimLAGInterface=[self._lag("dx", "dx")]) == []
-
-    def test_a_lag_member_of_another_device_fails(self) -> None:
-        """The server refuses it on a LAG; the check holds it where it is accepted."""
-        errors = _run(CloudDirectConnect=[_transport("dx")], DcimLAGInterface=[self._lag("dx", "other")])
-        assert len(errors) == 1 and "R7" in errors[0] and "m1" in errors[0]
-
-    def test_a_lag_of_a_managed_device_is_not_this_checks_business(self) -> None:
-        """Only the LAGs of a transport are read."""
-        assert _run(CloudDirectConnect=[_transport("dx")], DcimLAGInterface=[self._lag("leaf", "other")]) == []
+class TestParentsOfAPeering:
+    """The parent of a peering: R7 is retired (interface_parents holds the same-device rule); R8 keeps port or LAG."""
 
     def test_a_peering_riding_on_a_port_of_its_transport_passes(self) -> None:
         """The parent is on the peering's own device."""
         peering = _peering(parent_interface=_port("dxcon-1a"), vlan_id=_v(1000))
         assert _run(CloudDirectConnect=[_transport("dx")], CloudPeeringInterface=[peering]) == []
 
-    def test_a_peering_riding_on_a_port_of_another_transport_fails(self) -> None:
-        """An ExpressRoute peering on the partner's port: the one-sided edge accepts it."""
+    def test_the_other_device_rule_is_not_this_checks_business_any_more(self) -> None:
+        """A peering on a port of another device passes here; checks/interface_parents.py reports it."""
         peering = _peering(parent_interface=_port("partner-port", device="partner"), vlan_id=_v(200))
-        errors = _run(CloudDirectConnect=[_transport("dx")], CloudPeeringInterface=[peering])
-        assert len(errors) == 1 and "R7" in errors[0] and "another device" in errors[0]
+        assert _run(CloudDirectConnect=[_transport("dx")], CloudPeeringInterface=[peering]) == []
 
 
 class TestR8VlanPeerings:
