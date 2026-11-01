@@ -11,6 +11,7 @@ from ipaddress import ip_address
 from typing import Any
 
 from transforms.helpers.bgp import _peering_ends
+from transforms.helpers.bgp_cloud import CloudLeg
 from utils.exchange_transit import EXCHANGE_PEERS
 from utils.ownership import (
     CircuitOwnerError,
@@ -97,7 +98,11 @@ def _far_end_devices(device_capabilities: list[dict[str, Any]] | None, device_na
         if service.get("typename") != "ManagedBGP":
             continue
         for peering in service.get("peerings") or []:
-            local_iface, remote_iface = _peering_ends(peering, device_name)
+            try:
+                local_iface, remote_iface = _peering_ends(peering, device_name)
+            except ValueError:
+                # Not two ends, one of them ours: the session builder refuses it; it has no far end to name here.
+                continue
             remote = (remote_iface.get("device") or {}).get("name")
             if local_iface.get("name") and remote:
                 far.setdefault(local_iface["name"], set()).add(remote)
@@ -146,10 +151,28 @@ def registered_by_gateway(
         except CircuitOwnerError as exc:
             _log.warning("tunnel %s: %s; its registered prefixes are accepted from nobody", tunnel.get("name"), exc)
             tunnel_owner = None
-        ends = {(port.get("device") or {}).get("name") for port in tunnel.get("endpoints") or []}
+        ends = {(port.get("device") or {}).get("name") for port in tunnel.get("capabilities") or []}
         for gateway in sorted(name for name in ends if name in registered_by):
             registered_by[gateway].extend((tunnel_owner, prefix) for prefix in tunnel.get("registered_prefixes") or [])
     return registered_by
+
+
+def registered_by_attachment(
+    offices: list[dict[str, Any]] | None,
+    tunnels: list[dict[str, Any]] | None,
+    legs: Iterable[CloudLeg] | None,
+) -> dict[str, list[tuple[str | None, dict[str, Any]]]]:
+    """Attachment point -> the (owner, prefix) pairs registered behind it, as the edge reads them.
+
+    An attachment point is where an external session lands: an SD-WAN gateway (registered_by_gateway: its offices and
+    tunnels, keyed by the gateway's name) or a cloud gateway (the legs of ``transforms/helpers/bgp_cloud.py``; the primary and secondary peering of
+    one gateway are one point). Shared by checks/routing_invariants.py rule 8 and checks/segment_security.py, so both
+    see the registrations the edge accepts.
+    """
+    points = dict(registered_by_gateway(offices, tunnels))
+    for leg in legs or []:
+        points.setdefault(leg.point, []).extend(leg.registered)
+    return points
 
 
 def registered_by_namespace(registered: list[tuple[str | None, dict[str, Any]]]) -> dict[str, dict[str, set[str]]]:
@@ -174,10 +197,11 @@ def get_external_peer_prefixes(
     device_capabilities: list[dict[str, Any]] | None,
     offices: list[dict[str, Any]] | None,
     tunnels: list[dict[str, Any]] | None,
+    cloud_legs: Mapping[str, CloudLeg] | None = None,
 ) -> dict[str, dict[str, list[str]]]:
     """Handoff sub-interface name -> owner -> the far end's registered IPv4 prefixes of that owner, sorted.
 
-    One kind of far end is known, with its registered prefixes:
+    Two kinds of far end are known, each with its registered prefixes:
 
     - The SD-WAN gateway: a handoff whose only BGP far end
       (``device_capabilities`` peerings) is the ``sdwan_gateway`` of some
@@ -185,6 +209,9 @@ def get_external_peer_prefixes(
       and the hosted segments' prefixes (owner: the segment's owner) of every
       office behind that gateway, and the ``registered_prefixes`` (owner: the
       tunnel's derived owner) of every tunnel ending on it (registered_by_gateway).
+    - A cloud peering: ``cloud_legs`` (transforms/helpers/bgp_cloud.py legs_by_interface) maps the interface to the
+      leg of the session circuit it ends, and the session accepts what the leg registers: the allowed prefixes or
+      the network blocks behind the peering's gateway, owned by the transport's owner.
 
     Ownership belongs to the object that registers the prefix, never to the
     handoff circuit, and only a customer owner counts (customer_owner): a
@@ -203,6 +230,8 @@ def get_external_peer_prefixes(
         far = far_ends.get(name) or set()
         if len(far) == 1 and next(iter(far)) in registered_behind:
             registered = registered_behind[next(iter(far))]
+        elif name in (cloud_legs or {}):
+            registered = list((cloud_legs or {})[name].registered)
         else:
             continue
         namespace = ((iface.get("ip_address") or {}).get("ip_namespace") or {}).get("name")
@@ -219,6 +248,7 @@ def get_external_session_policies(
     device_name: str = "",
     customer_tags: Mapping[str, int] | None = None,
     routing_identity: bool = False,
+    cloud_legs: Mapping[str, CloudLeg] | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Handoff sub-interface name -> the prefix policy of its external session.
 
@@ -232,7 +262,9 @@ def get_external_session_policies(
     behind another session of the namespace, minus ``in`` (never announced
     back to where it was learned), and nothing of any other customer. A prefix
     registered by two owners, or one owner's prefix behind two sessions, is
-    logged as a WARNING (ownership_conflicts) with ``device_name``. Exact
+    logged as a WARNING (ownership_conflicts) with ``device_name``; ``cloud_legs`` (legs_by_interface) tells it that
+    the sessions of one cloud gateway are one attachment point and which prefixes a public or static cloud peering
+    announces to its session alone (``advertised``). Exact
     prefixes only; a session with no owner has empty lists and the template
     renders deny-all both ways, a sub-interface without a namespace exchanges
     with nothing.
@@ -255,12 +287,15 @@ def get_external_session_policies(
         namespace = namespaces.get(name)
         groups.setdefault((namespace, None) if namespace else (None, name), {})[name] = by_owner
 
+    legs = cloud_legs or {}
+    session_groups = {name: leg.point for name, leg in legs.items()}
+    announced = {name: [p for p in leg.advertised if _routable_ipv4(p)] for name, leg in legs.items()}
     policies: dict[str, dict[str, Any]] = {}
     for (namespace, _), learned in groups.items():
         segments = onprem_prefixes.get(namespace or "", {})
-        for conflict in ownership_conflicts(segments, learned):
+        for conflict in ownership_conflicts(segments, learned, session_groups=session_groups):
             _log.warning("%s: namespace %s: %s", device_name, namespace or "<none>", conflict.message)
-        for name, policy in exchange_policies(segments, learned).items():
+        for name, policy in exchange_policies(segments, learned, announced=announced).items():
             policies[name] = {
                 "owners": sorted(policy["owners"]),
                 "in": _sorted_prefixes(policy["in"]),

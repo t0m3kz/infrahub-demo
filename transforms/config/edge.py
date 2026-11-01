@@ -1,6 +1,7 @@
 from typing import Any, ClassVar
 
 from transforms.common import BaseDeviceTransform
+from transforms.helpers.bgp_cloud import cloud_legs, graft_cloud_far_ends, legs_by_interface
 from transforms.helpers.bgp_external import (
     get_external_peer_prefixes,
     get_external_session_policies,
@@ -26,6 +27,20 @@ class Edge(BaseDeviceTransform):
     # Only edges/cisco_nxos.j2 defines the RM-<session>-IN/-OUT maps of an external session.
     external_policy_platforms: ClassVar[frozenset[str]] = frozenset({"cisco_nxos"})
 
+    @staticmethod
+    def _cloud_legs(device_name: str, extra_roots: dict | None) -> dict[str, Any]:
+        """This device's cloud legs by interface name: the cloud far end of the sessions it terminates."""
+        roots = extra_roots or {}
+        return legs_by_interface(
+            cloud_legs(roots.get("CloudPeeringInterface"), roots.get("CloudGatewayAttachment")), device_name
+        )
+
+    def prepared_device(self, data: Any) -> tuple[dict, dict, str | None]:
+        """The prepared device, with the cloud peering interface of each cloud leg grafted on as its peering's far end."""
+        device_data, extra_roots, platform_name = super().prepared_device(data)
+        graft_cloud_far_ends(device_data, self._cloud_legs(device_data.get("name") or "", extra_roots))
+        return device_data, extra_roots, platform_name
+
     def _extra_config(self, data: dict, platform_name: str, extra_roots: dict | None = None) -> dict[str, Any]:
         config = super()._extra_config(data, platform_name, extra_roots=extra_roots)
         roots = extra_roots or {}
@@ -36,6 +51,7 @@ class Edge(BaseDeviceTransform):
         # it, what it may send in and what it is announced out: the same owners' on-prem prefixes and
         # what they registered behind another external session, never another owner's, never back
         # to the session it was learned on (utils/ownership.py exchange_policies).
+        legs = self._cloud_legs(data.get("name") or "", roots)
         config["external_policies"] = get_external_session_policies(
             data.get("interfaces"),
             get_external_peer_prefixes(
@@ -44,6 +60,7 @@ class Edge(BaseDeviceTransform):
                 device_capabilities=data.get("capabilities"),
                 offices=roots.get("TopologyCustomerOffice"),
                 tunnels=roots.get(SESSION_CIRCUIT),
+                cloud_legs=legs,
             ),
             get_onprem_prefixes(roots.get("ManagedNetworkSegment")),
             device_name=data.get("name") or "",
@@ -51,6 +68,7 @@ class Edge(BaseDeviceTransform):
             # Any tag in the model: what an external session accepts gets the owner's customer community, and
             # our communities never leave (utils/routing_identity.py).
             routing_identity=identity_in_use(tags, roots.get("ManagedNetworkSegment")),
+            cloud_legs=legs,
         )
         # The expressions of the community-list that selects our communities (edges/cisco_nxos.j2).
         config["routing_community_regexes"] = routing_community_regexes()

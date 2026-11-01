@@ -309,18 +309,18 @@ class TestSdwanGatewayPrefixes:
         )
         assert found == {}
 
-    def test_malformed_peering_raises(self) -> None:
-        """A peering without exactly two ends is refused, as when the session itself is built."""
+    def test_peering_with_one_end_names_no_far_end(self) -> None:
+        """A peering of one end has no far end to name (the session builder refuses it): never a crash here."""
         capabilities = _bgp_facing(("Ethernet1/13.1900", _GW1))
         capabilities[1]["peerings"][0]["capabilities"].pop()
-        with pytest.raises(ValueError, match="expected 2 capabilities"):
-            get_external_peer_prefixes(
-                [_subif("Ethernet1/13.1900", "PROD")],
-                "eg-fr201",
-                device_capabilities=capabilities,
-                offices=[_office(_GW1, ("10.210.5.0/24", "PROD"))],
-                tunnels=None,
-            )
+        found = get_external_peer_prefixes(
+            [_subif("Ethernet1/13.1900", "PROD")],
+            "eg-fr201",
+            device_capabilities=capabilities,
+            offices=[_office(_GW1, ("10.210.5.0/24", "PROD"))],
+            tunnels=None,
+        )
+        assert found == {}
 
 
 # ---------------------------------------------------------------------------

@@ -27,7 +27,7 @@ query routing_invariants {
     edges {
       node {
         __typename
-        id name { value } role { value } device { node { id name { value } role { value } } }
+        id name { value } role { value } device { node { id name { value } ... on DcimDeviceManaged { role { value } } } }
         ip_address { node { address { value } ip_namespace { node { id name { value } l3_vni { value } namespace_type { value } } } } }
       }
     }
@@ -37,7 +37,7 @@ query routing_invariants {
     edges {
       node {
         __typename
-        id name { value } role { value } device { node { id name { value } role { value } } }
+        id name { value } role { value } device { node { id name { value } ... on DcimDeviceManaged { role { value } } } }
         ip_address { node { address { value } ip_namespace { node { id name { value } l3_vni { value } namespace_type { value } } } } }
       }
     }
@@ -47,7 +47,7 @@ query routing_invariants {
     edges {
       node {
         __typename
-        id name { value } role { value } device { node { id name { value } role { value } } }
+        id name { value } role { value } device { node { id name { value } ... on DcimDeviceManaged { role { value } } } }
         ip_address { node { address { value } ip_namespace { node { id name { value } l3_vni { value } namespace_type { value } } } } }
       }
     }
@@ -127,7 +127,7 @@ query routing_invariants {
         id
         name { value }
         locations { edges { node { ... on TopologyCustomerOffice { owner { node { __typename org_id { value } display_label } } } } } }
-        endpoints { edges { node { ... on DcimInterface { device { node { name { value } } } } } } }
+        capabilities { edges { node { device { node { name { value } } } } } }
         registered_prefixes {
           edges {
             node {
@@ -152,14 +152,66 @@ query routing_invariants {
     }
   }
 
+  # The cloud side of an external session (transforms/helpers/bgp_cloud.py cloud_legs, shared with the checks): our
+  # sub-interface (or routed port) and the CloudPeeringInterface end the same handoff or vpn session circuit
+  # (capabilities of the peering -> circuit -> its other ends). The peering gives the neighbor (peer_ip, peer_asn), the
+  # BGP key (auth) and what we announce to the cloud (advertised_prefixes); its transport (device) gives the owner (the
+  # account's, else its own for a SaaS) and, for a VPN tunnel, the gateway. One root rather than a field per kind.
+  CloudPeeringInterface {
+    edges {
+      node {
+        name { value }
+        scope { value }
+        routing { value }
+        peer_ip { node { address { value } } }
+        peer_asn { node { asn { value } } }
+        auth { node { password { value } } }
+        gateway { node { id name { value } } }
+        advertised_prefixes { edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } } }
+        device {
+          node {
+            __typename
+            name { value }
+            ... on CloudTransport { account { node { owner { node { __typename org_id { value } display_label } } } } owner { node { __typename org_id { value } display_label } } }
+            ... on CloudVPNConnection { gateway { node { id name { value } } } }
+          }
+        }
+        capabilities {
+          edges {
+            node {
+              __typename
+              ... on TopologySessionCircuit {
+                name { value }
+                circuit_type { value }
+                capabilities { edges { node { name { value } device { node { name { value } } } } } }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  # What a cloud gateway lets through, cloud to us (bgp_cloud.py reachable_prefixes): an attachment joins its gateway
+  # to a virtual network (its allowed_prefixes, else its CIDR blocks) or to a peer gateway (a hop to a hub, with the
+  # route table the hub receives it in).
   CloudGatewayAttachment {
     edges {
       node {
         id
         name { value }
         owner_account { node { id name { value } environment { value } } }
-        virtual_network { node { id name { value } account { node { id name { value } environment { value } } } } }
-        peer_gateway { node { id } }
+        virtual_network {
+          node {
+            id
+            name { value }
+            account { node { id name { value } environment { value } } }
+            cidr_blocks { edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } } }
+          }
+        }
+        gateway { node { id name { value } } }
+        peer_gateway { node { id name { value } } }
+        allowed_prefixes { edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } } }
         associated_route_table { node { id name { value } } }
         propagates_to_route_tables { edges { node { id name { value } } } }
       }

@@ -478,7 +478,7 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
         return {
             "locations": _edges([{"owner": owner}]),
             "registered_prefixes": _cidr_blocks(*prefixes),
-            "endpoints": _edges([{"device": _node({"name": _v(end)})} for end in ends]),
+            "capabilities": _edges([{"device": _node({"name": _v(end)})} for end in ends]),
         }
 
     # The tunnels registering space behind a gateway: C001's partner range behind GW1 (accepted from GW1's

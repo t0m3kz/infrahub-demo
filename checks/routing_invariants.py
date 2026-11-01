@@ -54,7 +54,9 @@ rendered config; each is a property of data that spans topologies.
    on the edge), the offices' `lan_prefixes` and
    hosted segments grouped by their `sdwan_gateway` (one attachment point per
    gateway) together with the `registered_prefixes` of the tunnels ending on
-   that gateway (transforms/helpers/bgp_external.py registered_by_gateway: the
+   that gateway, and what a cloud peering registers behind its gateway (the
+   transport's owner; one attachment point per cloud gateway)
+   (transforms/helpers/bgp_external.py registered_by_attachment: the
    very walk the edge uses). It reports a prefix registered by more than one
    owner (it would be announced to another owner's session) and an owner's
    prefix reachable behind more than one attachment point (local or through
@@ -73,10 +75,11 @@ from __future__ import annotations
 import ipaddress
 from typing import Any, NamedTuple
 
+from transforms.helpers.bgp_cloud import CloudLeg, cloud_legs
 from transforms.helpers.bgp_external import (
     get_onprem_prefixes,
     office_registered,
-    registered_by_gateway,
+    registered_by_attachment,
     registered_by_namespace,
     session_circuit_owner,
 )
@@ -132,8 +135,9 @@ class CheckRoutingInvariants(WarningCheck):
         self._validate_aggregate_namespaces(aggregates)
         self._validate_subnets_in_vpc(networks, cleaned.get("CloudNetworkSegment") or [])
         self._validate_aggregate_overlaps(aggregates, cleaned.get("ManagedNetworkSegment") or [])
-        self._validate_registered_prefix_owners(networks, offices, tunnels)
-        self._validate_ownership_conflicts(cleaned.get("ManagedNetworkSegment") or [], offices, tunnels)
+        legs = cloud_legs(cleaned.get("CloudPeeringInterface"), cleaned.get("CloudGatewayAttachment"))
+        self._validate_registered_prefix_owners(networks, offices, tunnels, legs)
+        self._validate_ownership_conflicts(cleaned.get("ManagedNetworkSegment") or [], offices, tunnels, legs)
         self._validate_offices_register(offices)
 
     # ------------------------------------------------------------------
@@ -316,7 +320,18 @@ class CheckRoutingInvariants(WarningCheck):
         networks: list[dict[str, Any]],
         offices: list[dict[str, Any]],
         tunnels: list[dict[str, Any]],
+        legs: list[CloudLeg],
     ) -> None:
+        for leg in legs:
+            if leg.registered and leg.owner is None:
+                self.log_error(
+                    message=(
+                        f"cloud peering '{leg.peering}' registers prefixes behind {leg.point}, but its transport "
+                        f"'{leg.transport}' has no customer owner (its account's owner, or its own for a SaaS): "
+                        "only a customer-owned prefix is accepted from or announced to an external BGP peer, so "
+                        "its prefixes are never accepted or announced at the border"
+                    )
+                )
         registrants = [
             (
                 f"VPC '{network.get('name')}' registers blocks, but its account "
@@ -361,10 +376,11 @@ class CheckRoutingInvariants(WarningCheck):
         segments: list[dict[str, Any]],
         offices: list[dict[str, Any]],
         tunnels: list[dict[str, Any]],
+        legs: list[CloudLeg],
     ) -> None:
         # namespace -> attachment point -> owner -> prefixes, read as the edge reads them.
         learned: dict[str, dict[str, dict[str, set[str]]]] = {}
-        for point, registered in registered_by_gateway(offices, tunnels).items():
+        for point, registered in registered_by_attachment(offices, tunnels, legs).items():
             for namespace, by_owner in registered_by_namespace(registered).items():
                 behind = learned.setdefault(namespace, {}).setdefault(point, {})
                 for owner, prefixes in by_owner.items():

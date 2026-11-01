@@ -144,7 +144,7 @@ class TestTunnelRoot:
         tunnel = _node(_root("TopologySessionCircuit"))
         names = {c.name.value for c in _children(tunnel)}
 
-        assert {"locations", "registered_prefixes", "endpoints"} <= names
+        assert {"locations", "registered_prefixes", "capabilities"} <= names
         assert "owner" not in names
         text = _EDGE.read_text()
         assert (

@@ -65,7 +65,7 @@ def _tunnel(
     return {
         "locations": _edges({"owner": _owner(owner)}, {}),
         "registered_prefixes": _edges(*prefixes),
-        "endpoints": _edges(*({"device": {"node": {"name": _v(device)}}} for device in ends)),
+        "capabilities": _edges(*({"device": {"node": {"name": _v(device)}}} for device in ends)),
     }
 
 
@@ -311,7 +311,7 @@ def test_the_query_selects_what_the_destination_rule_reads() -> None:
             "locations.owner.org_id",
             "registered_prefixes.prefix",
             "registered_prefixes.ip_namespace.namespace_type",
-            "endpoints.device.name",
+            "capabilities.device.name",
         ],
     }
     # The segment root spreads a fragment from another file (not resolvable here): environment is selected beside it.
@@ -326,4 +326,4 @@ def test_the_query_selects_what_the_destination_rule_reads() -> None:
         selected = _selected_paths(path, root)
         assert not [item for item in paths if item not in selected], root
     assert {"sdwan_gateway", "lan_prefixes", "segment_deployments"} <= relationship_names("TopologyCustomerOffice")
-    assert {"registered_prefixes", "endpoints", "locations"} <= relationship_names("TopologySessionCircuit")
+    assert {"registered_prefixes", "capabilities", "locations"} <= relationship_names("TopologySessionCircuit")

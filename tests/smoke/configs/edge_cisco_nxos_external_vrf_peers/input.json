@@ -3085,7 +3085,7 @@
               }
             ]
           },
-          "endpoints": {
+          "capabilities": {
             "edges": [
               {
                 "node": {
@@ -3150,7 +3150,7 @@
               }
             ]
           },
-          "endpoints": {
+          "capabilities": {
             "edges": [
               {
                 "node": {
@@ -3215,7 +3215,7 @@
               }
             ]
           },
-          "endpoints": {
+          "capabilities": {
             "edges": [
               {
                 "node": {
@@ -3265,7 +3265,7 @@
           "registered_prefixes": {
             "edges": []
           },
-          "endpoints": {
+          "capabilities": {
             "edges": [
               {
                 "node": {

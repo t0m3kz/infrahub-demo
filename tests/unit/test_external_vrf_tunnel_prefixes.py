@@ -57,7 +57,7 @@ def _tunnel(
     return {
         "locations": {"edges": [_office_location(owner, owner_type), {"node": {}}]},
         "registered_prefixes": {"edges": [_raw_prefix(prefix, namespace) for prefix, namespace in prefixes]},
-        "endpoints": {"edges": [{"node": {"device": {"node": {"name": {"value": device}}}}} for device in ends]},
+        "capabilities": {"edges": [{"node": {"device": {"node": {"name": {"value": device}}}}} for device in ends]},
     }
 
 
@@ -228,10 +228,10 @@ class TestEdgeQueryAndData:
             "locations.owner.display_label",
             "registered_prefixes.prefix",
             "registered_prefixes.ip_namespace.name",
-            "endpoints.device.name",
+            "capabilities.device.name",
         ]
         assert not [item for item in reads if item not in selected]
-        assert {"locations", "registered_prefixes", "endpoints"} <= relationship_names("TopologySessionCircuit")
+        assert {"locations", "registered_prefixes", "capabilities"} <= relationship_names("TopologySessionCircuit")
 
     def test_a_cleaned_response_has_the_shape_the_helper_reads(self) -> None:
         """clean_data: office owner dict with typename in locations, registered_prefixes a list of dicts, device names."""
@@ -243,7 +243,7 @@ class TestEdgeQueryAndData:
         }
         assert tunnel["locations"][1] == {}
         assert tunnel["registered_prefixes"] == [{"prefix": _ACME, "ip_namespace": {"name": "PROD"}}]
-        assert [port["device"]["name"] for port in tunnel["endpoints"]] == [_GW1, "EXT-ACME-EDGE1"]
+        assert [port["device"]["name"] for port in tunnel["capabilities"]] == [_GW1, "EXT-ACME-EDGE1"]
 
     def test_the_partner_tunnel_registers_the_acme_range_in_prod(self) -> None:
         """01_partner_tunnel.yml creates the PROD prefix and lists it on the tunnel, owned by C001 through its office."""

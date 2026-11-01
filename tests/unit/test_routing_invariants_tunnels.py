@@ -36,7 +36,7 @@ def _tunnel(
         "id": f"tunnel-{name}",
         "name": _v(name),
         "locations": {"edges": [{"node": {"owner": _owner(owner)}}, {"node": {}}]},
-        "endpoints": {"edges": [{"node": {"device": {"node": {"name": _v(device)}}}} for device in ends]},
+        "capabilities": {"edges": [{"node": {"device": {"node": {"name": _v(device)}}}} for device in ends]},
         "registered_prefixes": {"edges": [{"node": prefix} for prefix in prefixes]},
     }
 
@@ -229,13 +229,13 @@ def test_the_query_selects_what_the_tunnel_rules_read() -> None:
     reads = [
         "name",
         "locations.owner.org_id",
-        "endpoints.device.name",
+        "capabilities.device.name",
         "registered_prefixes.prefix",
         "registered_prefixes.ip_namespace.name",
         "registered_prefixes.ip_namespace.namespace_type",
     ]
     assert not [item for item in reads if item not in selected]
-    assert {"locations", "registered_prefixes", "endpoints"} <= relationship_names("TopologySessionCircuit")
+    assert {"locations", "registered_prefixes", "capabilities"} <= relationship_names("TopologySessionCircuit")
     assert "owner" not in relationship_names("TopologySessionCircuit")
     definition = relationship("TopologySessionCircuit", "registered_prefixes")
     assert definition is not None
