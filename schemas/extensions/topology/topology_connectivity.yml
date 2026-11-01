@@ -39,27 +39,51 @@ generics:
       - name: name
         kind: Text
         order_weight: 100
+
+  # A connector is a circuit end that is an object and not an interface: a Direct Connect, a cloud virtual interface, a
+  # VPN connection, a SaaS connection. A circuit's `capabilities` stay the interface ends (peer DcimInterface, paired
+  # with the interface side by the identifier interface_capabilities, which this model does not touch); a circuit whose
+  # far end is a connector lists it in `connector_end`, a one-sided edge. The connector lists nothing back: walk from
+  # the circuit. Names of connectors are unique across the four kinds (the generic's human friendly id).
+  - name: CircuitConnector
+    namespace: Topology
+    description: "Cloud or SaaS object a circuit ends on"
+    label: "Circuit Connector"
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 100
+
+  # The provider side of a routed leg, on the connector. OUR side is not here: our address is the sub-interface of the
+  # session circuit (allocated from Handoff-<ip_namespace>-IPv4) and our AS is the local_as of our ManagedBGP (a private
+  # AS from PRIVATE-ASN32 when the provider needs one).
+  - name: ConnectorRouting
+    namespace: Topology
+    description: "Provider-side address and AS of a routed leg"
+    label: "Connector Routing"
+    include_in_menu: false
     relationships:
-      # The provider connections that start here (a data center, a colocation zone) or land here (a cloud region, a
-      # SaaS region). Two lists because the two ends are two edges of the connection; the connection declares them.
-      - name: near_connections
-        label: Provider Connections (near)
-        peer: TopologyProviderConnection
-        kind: Generic
-        cardinality: many
+      - name: peer_ip
+        label: "Provider Address"
+        peer: IpamIPAddress
+        cardinality: one
+        kind: Attribute
         optional: true
-        identifier: provider_connection__near
-        order_weight: 2200
-        description: "Provider connections that start in this facility"
-      - name: far_connections
-        label: Provider Connections (far)
-        peer: TopologyProviderConnection
-        kind: Generic
-        cardinality: many
+        identifier: connector_routing__peer_ip
+        order_weight: 2100
+        description: "The provider's address on the link range of the leg (the other end of our sub-interface)"
+      - name: peer_asn
+        label: "Provider AS"
+        peer: RoutingAutonomousSystem
+        cardinality: one
+        kind: Attribute
         optional: true
-        identifier: provider_connection__far
-        order_weight: 2250
-        description: "Provider connections that land in this facility"
+        identifier: connector_routing__peer_asn
+        order_weight: 2150
+        description: "The AS the provider speaks with on this leg"
 
   - name: Circuit
     namespace: Topology
@@ -126,7 +150,7 @@ nodes:
     description: "Carrier circuit (dark fiber, cross connect, internet access, virtual connection, metro ethernet)"
     label: "Carrier Circuit"
     icon: "mdi:transit-connection-variant"
-    include_in_menu: false
+    include_in_menu: true
     inherit_from:
       - TopologyCircuit
       - ManagedGeneric
@@ -231,34 +255,35 @@ nodes:
       # checks/circuit_placement.py hold the rest.
       - name: capabilities
         peer: DcimInterface
-        label: "Ends"
+        label: "Interface Ends"
         kind: Generic
         cardinality: many
         optional: false
-        min_count: 2
+        min_count: 1
         max_count: 2
         identifier: interface_capabilities
         order_weight: 1100
-        description: "The two ports this circuit terminates on, one at each end"
+        description: "The interface ends of this circuit: two ports, or one port when the other end is a connector"
 
-      # The reverse side of TopologyProviderConnection.carrier_circuits (no-action: the carrier outlives it).
-      - name: provider_connections
-        label: "Provider Connections"
-        peer: TopologyProviderConnection
-        cardinality: many
-        kind: Generic
+      # The end that is an object, not an interface (a Direct Connect, a virtual interface, a VPN connection, a SaaS
+      # connection). One-sided. With `capabilities` a circuit has two ends; the checks hold that count (min_count of
+      # `capabilities` is 1 here, 2 at HEAD: the circuit side only).
+      - name: connector_end
+        label: "Connector End"
+        peer: TopologyCircuitConnector
+        kind: Attribute
+        cardinality: one
         optional: true
-        on_delete: no-action
-        identifier: "provider_connection__carriers"
-        order_weight: 1500
-        description: "The provider connections that ride this carrier"
+        identifier: circuit__connector_end
+        order_weight: 1120
+        description: "The cloud or SaaS object this circuit ends on, when one end is not an interface"
 
   - name: SessionCircuit
     namespace: Topology
     description: "Circuit that rides carriers: a DCI, a handoff or a vpn with generated routing, or a tunnel kept as inventory"  # yamllint disable-line rule:line-length
     label: "Session Circuit"
     icon: "mdi:swap-horizontal-bold"
-    include_in_menu: false
+    include_in_menu: true
     inherit_from:
       - TopologyCircuit
       - ManagedGeneric
@@ -306,15 +331,28 @@ nodes:
       # checks/circuit_placement.py hold the rest.
       - name: capabilities
         peer: DcimInterface
-        label: "Ends"
+        label: "Interface Ends"
         kind: Generic
         cardinality: many
         optional: false
-        min_count: 2
+        min_count: 1
         max_count: 2
         identifier: interface_capabilities
         order_weight: 1100
-        description: "The two ports this circuit terminates on, one at each end"
+        description: "The interface ends of this circuit: two ports, or one port when the other end is a connector"
+
+      # The end that is an object, not an interface (a Direct Connect, a virtual interface, a VPN connection, a SaaS
+      # connection). One-sided. With `capabilities` a circuit has two ends; the checks hold that count (min_count of
+      # `capabilities` is 1 here, 2 at HEAD: the circuit side only).
+      - name: connector_end
+        label: "Connector End"
+        peer: TopologyCircuitConnector
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: circuit__connector_end
+        order_weight: 1120
+        description: "The cloud or SaaS object this circuit ends on, when one end is not an interface"
 
 
       # The same concept as TopologyCustomerOffice.lan_prefixes (a PROD prefix a customer registers behind the
@@ -361,14 +399,3 @@ nodes:
         identifier: "session_circuit__link_prefix"
         order_weight: 1450
         description: "The link range the provider handed this session (vpn, or a provider-assigned handoff)"
-
-      # The reverse side of TopologyProviderConnection.session_circuits (cascade on the connection's side).
-      - name: connection
-        label: "Provider Connection"
-        peer: TopologyProviderConnection
-        cardinality: one
-        kind: Attribute
-        optional: true
-        identifier: "provider_connection__sessions"
-        order_weight: 1500
-        description: "The provider connection this session is routed on; its owner is the session's owner"

@@ -45,6 +45,51 @@ spec:
       kind: TopologyDeployment
 
     # ──────────────────────────────────────────────────────────────────────────
+    # CLOUD & SAAS CONNECTIONS — the request, what realizes it, the circuits
+    # ──────────────────────────────────────────────────────────────────────────
+    - namespace: Topology
+      name: CloudSaasMenu
+      label: Cloud & SaaS connections
+      icon: "mdi:cloud-sync-outline"
+      children:
+        data:
+          - namespace: Topology
+            name: CsProviderConnectionItem
+            label: Provider Connections
+            kind: TopologyProviderConnection
+            icon: "mdi:transit-connection-variant"
+          - namespace: Cloud
+            name: CsDirectConnectItem
+            label: Direct Connect
+            kind: CloudDirectConnect
+            icon: "mdi:lan-connect"
+          - namespace: Cloud
+            name: CsVirtualInterfaceItem
+            label: Virtual Interfaces
+            kind: CloudVirtualInterface
+            icon: "mdi:ethernet"
+          - namespace: Cloud
+            name: CsVPNConnectionItem
+            label: VPN Connections
+            kind: CloudVPNConnection
+            icon: "mdi:vpn"
+          - namespace: Topology
+            name: CsSaasConnectionItem
+            label: SaaS Connections
+            kind: TopologySaasConnection
+            icon: "mdi:cloud-lock-outline"
+          - namespace: Topology
+            name: CsCarrierCircuitItem
+            label: Carrier Circuits
+            kind: TopologyCarrierCircuit
+            icon: "mdi:transit-connection-variant"
+          - namespace: Topology
+            name: CsSessionCircuitItem
+            label: Session Circuits
+            kind: TopologySessionCircuit
+            icon: "mdi:swap-horizontal-bold"
+
+    # ──────────────────────────────────────────────────────────────────────────
     # CUSTOMER DEPLOYMENTS — customer footprints inside DC/Colo/Cloud topology
     # ──────────────────────────────────────────────────────────────────────────
     - namespace: Topology
@@ -196,33 +241,6 @@ spec:
                   kind: DcimGroupPolicyProfile
                   icon: "mdi:shield-half-full"
                   description: "Reference fabric profile per platform: device types, release, memory, group-tag pool"
-          # ── Circuits ───────────────────────────────────────────────────────
-          - namespace: Topology
-            name: CircuitsMenu
-            label: Circuits
-            icon: "mdi:transit-connection-variant"
-            children:
-              data:
-                - namespace: Topology
-                  name: CarrierCircuitItem
-                  label: Carrier Circuits
-                  kind: TopologyCarrierCircuit
-                  icon: "mdi:cable-data"
-
-                - namespace: Topology
-                  name: SessionCircuitItem
-                  label: Session Circuits
-                  kind: TopologySessionCircuit
-                  icon: "mdi:cloud-sync"
-                  description: "DCI, handoff, tunnel and vpn circuits: the connections routing is generated on"
-
-                - namespace: Topology
-                  name: ProviderConnectionItem
-                  label: Provider Connections
-                  kind: TopologyProviderConnection
-                  icon: "mdi:transit-connection-variant"
-                  description: "Facility to cloud region or SaaS region: its carriers, sessions and attachments"
-
           # --------- Cloud Inventory ---------
           - namespace: Cloud
             name: Resource

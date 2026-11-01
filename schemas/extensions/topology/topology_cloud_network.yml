@@ -174,16 +174,6 @@ nodes:
         identifier: "transit_gateway_attachment__virtual_network"
         order_weight: 700
         description: "Spoke virtual network — set when attachment_type is vpc"
-      # The reverse side is TopologyProviderConnection.transit_attachment (one connection feeds the attachment).
-      - name: hybrid_endpoint
-        label: "Hybrid Endpoint"
-        peer: TopologyProviderConnection
-        cardinality: one
-        kind: Attribute
-        optional: true
-        identifier: "transit_gateway_attachment__hybrid_endpoint"
-        order_weight: 800
-        description: "The provider connection a hybrid attachment feeds on (set when attachment_type is hybrid)"
       - name: associated_route_table
         label: "Associated Route Table"
         peer: CloudTransitGatewayRouteTable
@@ -204,6 +194,224 @@ nodes:
         identifier: "transit_gateway_attachment__propagated_route_tables"
         order_weight: 900
         description: "Route tables this spoke's prefixes are advertised into — who can reach it"
+
+  # ── Hybrid connectivity: the cloud side of a provider connection (names are global: dx-c900-fra-1) ──────────
+  # Three objects realize a Topology.ProviderConnection on the cloud side. All three are CloudResources (account,
+  # region) and are linked FROM the connection (one-sided); the VIF and the VPN connection are also circuit ends.
+  #   CloudDirectConnect     the port or hosted connection (AWS Direct Connect, Azure ExpressRoute circuit)
+  #   CloudVirtualInterface  one VLAN on it, private / public / transit (AWS VIF, ExpressRoute peering)
+  #   CloudVPNConnection     a site-to-site VPN to a gateway or a virtual network
+  - name: DirectConnect
+    namespace: Cloud
+    label: Direct Connect
+    icon: mdi:lan-connect
+    description: "The cloud side of a dedicated or hosted port: AWS Direct Connect, Azure ExpressRoute circuit"
+    include_in_menu: false
+    inherit_from:
+      - CloudResource
+      - TopologyCircuitConnector
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value }}"
+    order_by:
+      - name__value
+    uniqueness_constraints:
+      - [account, name__value]
+    attributes:
+      - name: connection_type
+        kind: Dropdown
+        label: "Connection Type"
+        optional: false
+        order_weight: 250
+        choices:
+          - name: dedicated
+            label: Dedicated
+            description: "A port of our own at the provider's location"
+            color: "#3498DB"
+          - name: hosted
+            label: Hosted
+            description: "A slice of a partner's port (Equinix, Megaport)"
+            color: "#2ECC71"
+      - name: bandwidth
+        kind: Number
+        label: "Bandwidth (Mbps)"
+        optional: false
+        order_weight: 300
+        description: "Port or connection speed in megabits per second"
+      - name: vlan_id
+        kind: Number
+        label: "VLAN ID"
+        optional: true
+        order_weight: 350
+        description: "The outer VLAN of a hosted connection"
+        parameters:
+          min_value: 1
+          max_value: 4094
+    relationships:
+      - name: account
+        peer: CloudAccount
+        cardinality: one
+        kind: Attribute
+        optional: false
+        order_weight: 600
+      - name: region
+        peer: TopologyCloudRegion
+        cardinality: one
+        kind: Attribute
+        optional: false
+        identifier: "cloud_direct_connect__region"
+        order_weight: 650
+
+  - name: VirtualInterface
+    namespace: Cloud
+    label: Virtual Interface
+    icon: mdi:ethernet
+    description: "One VLAN on a Direct Connect or ExpressRoute: private, public or transit; a circuit can end on it"
+    include_in_menu: false
+    inherit_from:
+      - CloudResource
+      - TopologyCircuitConnector
+      - TopologyConnectorRouting
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value }} {{ vif_type__value }} vlan {{ vlan_id__value }}"
+    order_by:
+      - name__value
+    uniqueness_constraints:
+      - [direct_connect, vlan_id__value]
+    attributes:
+      - name: vif_type
+        kind: Dropdown
+        label: "VIF Type"
+        optional: false
+        order_weight: 250
+        choices:
+          - name: private
+            label: Private
+            description: "Access to one virtual network"
+            color: "#3498DB"
+          - name: public
+            label: Public
+            description: "Access to the provider's public endpoints"
+            color: "#2ECC71"
+          - name: transit
+            label: Transit
+            description: "Access to a transit gateway"
+            color: "#9B59B6"
+      - name: vlan_id
+        kind: Number
+        label: "VLAN ID"
+        optional: false
+        order_weight: 350
+        parameters:
+          min_value: 1
+          max_value: 4094
+    relationships:
+      - name: direct_connect
+        label: "Direct Connect"
+        peer: CloudDirectConnect
+        cardinality: one
+        kind: Attribute
+        optional: false
+        order_weight: 600
+      - name: virtual_network
+        peer: CloudVirtualNetwork
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "cloud_vif__virtual_network"
+        order_weight: 650
+        description: "Set on a private VIF"
+      - name: transit_gateway
+        peer: CloudTransitGateway
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "cloud_vif__transit_gateway"
+        order_weight: 700
+        description: "Set on a transit VIF"
+
+  - name: VPNConnection
+    namespace: Cloud
+    label: VPN Connection
+    icon: mdi:vpn
+    description: "Site-to-site VPN from our edge to a transit gateway or a virtual network; a circuit can end on it"
+    include_in_menu: false
+    inherit_from:
+      - CloudResource
+      - TopologyCircuitConnector
+      - TopologyConnectorRouting
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value }}"
+    order_by:
+      - name__value
+    uniqueness_constraints:
+      - [account, name__value]
+    attributes:
+      - name: routing
+        kind: Dropdown
+        label: "Routing"
+        optional: false
+        order_weight: 250
+        choices:
+          - name: static
+            label: Static
+            color: "#95A5A6"
+          - name: bgp
+            label: BGP
+            color: "#3498DB"
+      - name: tunnel_count
+        kind: Number
+        label: "Tunnels"
+        optional: false
+        default_value: 2
+        order_weight: 300
+        parameters:
+          min_value: 1
+          max_value: 4
+      - name: customer_gateway_ip
+        kind: IPHost
+        label: "Customer Gateway IP"
+        optional: false
+        order_weight: 350
+        description: "The public address of our edge the tunnels come from"
+      - name: provider_endpoint_ip
+        kind: IPHost
+        label: "Provider Endpoint IP"
+        optional: true
+        order_weight: 400
+        description: "The public address of the provider's VPN endpoint"
+    relationships:
+      - name: account
+        peer: CloudAccount
+        cardinality: one
+        kind: Attribute
+        optional: false
+        order_weight: 600
+      - name: region
+        peer: TopologyCloudRegion
+        cardinality: one
+        kind: Attribute
+        optional: false
+        identifier: "cloud_vpn__region"
+        order_weight: 650
+      - name: transit_gateway
+        peer: CloudTransitGateway
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "cloud_vpn__transit_gateway"
+        order_weight: 700
+        description: "Gateway the tunnels end on; set this or virtual_network"
+      - name: virtual_network
+        peer: CloudVirtualNetwork
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "cloud_vpn__virtual_network"
+        order_weight: 750
+        description: "Virtual network the tunnels end on; set this or transit_gateway"
 
   # --------------------  Network Appliance  --------------------
   # A network function a provider hosts for us (Equinix Network Edge, Megaport MVE;

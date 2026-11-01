@@ -1,0 +1,38 @@
+---
+# The tenant footprint in the DC and its VXLAN segment, realized on the leaf: segment -> deployment (VNI) -> VLAN row
+# of the leaf (VLAN 100, its SVI) and the port Ethernet1/1 of the leaf, which is a member of the segment. The gateway
+# 10.90.1.1/24 gives the segment its prefix 10.90.1.0/24.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCustomerDC
+  data:
+    - owner: "C900"
+      environment: "p"
+      infrastructure_orchestrator: ansible_automation_platform
+      parent: "DC90"
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: OrganizationCustomer
+  data:
+    - name: "Cloud Demo GmbH"
+      org_id: "C900"
+      network_segments:
+        - kind: ManagedVxlanSegment
+          data:
+            customer_name: "demo-web"
+            environment: "p"
+            customer_deployments:
+              - "C900-P-DC90"
+            gateway: ["10.90.1.1/24", "PROD"]
+            segment_deployments:
+              data:
+                - deployment: "DC90"
+                  vni: 10100
+                  vlan_domain_segments:
+                    data:
+                      - device: "dc90-leaf-01"
+                        vlan_id: 100
+                        svi: ["dc90-leaf-01", "Vlan100"]

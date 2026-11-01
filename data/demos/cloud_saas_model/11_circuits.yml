@@ -1,0 +1,208 @@
+---
+# The circuits of the five legs. A circuit's interface ends are `capabilities` (nested objects with their kind, as the
+# generic port has no short reference); the end that is an object (a Direct Connect, a virtual interface, a VPN
+# connection, a SaaS connection) is `connector_end`, one-sided, by the name of the connector.
+# `locations` are authored here (no generator derives them): our DC and the provider's region.
+#
+# Carrier circuits are the physical wire: they end on our edge port and on the connector that stands for the
+# provider's port. Session circuits are the routing on top: handoff (BGP) for the private legs, tunnel for Zscaler,
+# vpn for the AWS VPN.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCarrierCircuit
+  data:
+    - name: XC-DC90-AWS-DX1
+      circuit_id: XC-DC90-AWS-DX1
+      description: Cross-connect from dc90-edge-01 to the AWS Direct Connect port
+      provider: P004
+      circuit_type: cross_connect
+      status: active
+      bandwidth: 10000
+      locations:
+        - DC90
+        - eu-central-1
+      capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: dc90-edge-01
+            name: Ethernet1/3
+      connector_end: dx-c900-fra-1
+    - name: VC-DC90-AZ-ER-PRI
+      circuit_id: VC-DC90-AZ-ER-PRI
+      description: Virtual connection to the ExpressRoute circuit, primary
+      provider: P016
+      circuit_type: virtual_connection
+      status: active
+      bandwidth: 1000
+      locations:
+        - DC90
+        - westeurope
+      capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: dc90-edge-01
+            name: Ethernet1/4
+      connector_end: er-c900-weu-pri
+    - name: VC-DC90-AZ-ER-SEC
+      circuit_id: VC-DC90-AZ-ER-SEC
+      description: Virtual connection to the ExpressRoute circuit, secondary
+      provider: P016
+      circuit_type: virtual_connection
+      status: active
+      bandwidth: 1000
+      locations:
+        - DC90
+        - westeurope
+      capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: dc90-edge-01
+            name: Ethernet1/5
+      connector_end: er-c900-weu-sec
+    - name: XC-DC90-WEBEX-1
+      circuit_id: XC-DC90-WEBEX-1
+      description: Cross-connect to the Webex peering point
+      provider: P901
+      circuit_type: cross_connect
+      status: active
+      bandwidth: 1000
+      locations:
+        - DC90
+        - WEBEX-FRANKFURT
+      capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: dc90-edge-01
+            name: Ethernet1/6
+      connector_end: saas-c900-webex-fra
+    - name: INET-DC90-ISP-DEMO
+      circuit_id: INET-DC90-ISP-DEMO
+      description: Internet access of dc90-edge-01 (carries the VPN and the Zscaler tunnel)
+      provider: P014
+      circuit_type: internet
+      status: active
+      bandwidth: 1000
+      locations:
+        - DC90
+        - ISP-DEMO
+      capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: dc90-edge-01
+            name: Ethernet1/2
+        - kind: DcimPhysicalInterface
+          data:
+            device: EXT-ISP-DEMO-PE1
+            name: et-0/0/0
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologySessionCircuit
+  data:
+    - name: SC-C900-AWS-DX-PROD
+      description: 'Handoff: edge sub-interface to the transit VIF'
+      provider: P004
+      circuit_type: handoff
+      status: active
+      ip_namespace: PROD
+      link_prefix:
+        - 10.255.128.0/31
+        - PROD
+      locations:
+        - DC90
+        - eu-central-1
+      capabilities:
+        - kind: DcimVirtualInterface
+          data:
+            device: dc90-edge-01
+            name: Ethernet1/3.1000
+      connector_end: vif-c900-aws-transit
+    - name: SC-C900-AZ-ER-PRI
+      description: 'Handoff: edge sub-interface to the primary private peering'
+      provider: P005
+      circuit_type: handoff
+      status: active
+      ip_namespace: PROD
+      link_prefix:
+        - 10.255.128.2/31
+        - PROD
+      locations:
+        - DC90
+        - westeurope
+      capabilities:
+        - kind: DcimVirtualInterface
+          data:
+            device: dc90-edge-01
+            name: Ethernet1/4.200
+      connector_end: vif-c900-azure-pri
+    - name: SC-C900-AZ-ER-SEC
+      description: 'Handoff: edge sub-interface to the secondary private peering'
+      provider: P005
+      circuit_type: handoff
+      status: active
+      ip_namespace: PROD
+      link_prefix:
+        - 10.255.128.4/31
+        - PROD
+      locations:
+        - DC90
+        - westeurope
+      capabilities:
+        - kind: DcimVirtualInterface
+          data:
+            device: dc90-edge-01
+            name: Ethernet1/5.200
+      connector_end: vif-c900-azure-sec
+    - name: SC-C900-WEBEX-PROD
+      description: 'Handoff: edge sub-interface to the Webex connection'
+      provider: P901
+      circuit_type: handoff
+      status: active
+      ip_namespace: PROD
+      link_prefix:
+        - 10.255.128.6/31
+        - PROD
+      locations:
+        - DC90
+        - WEBEX-FRANKFURT
+      capabilities:
+        - kind: DcimVirtualInterface
+          data:
+            device: dc90-edge-01
+            name: Ethernet1/6.300
+      connector_end: saas-c900-webex-fra
+    - name: SC-C900-AWS-VPN-1
+      description: VPN tunnel 1 from the edge to the AWS VPN connection
+      provider: P004
+      circuit_type: vpn
+      status: active
+      ip_namespace: PROD
+      link_prefix:
+        - 169.254.10.0/30
+        - PROD
+      locations:
+        - DC90
+        - eu-central-1
+      capabilities:
+        - kind: DcimVirtualInterface
+          data:
+            device: dc90-edge-01
+            name: Tunnel1
+      connector_end: vpn-c900-aws-euc1
+    - name: SC-C900-ZSCALER-TUN1
+      description: Tunnel to the Zscaler enforcement node, no BGP
+      provider: P030
+      circuit_type: tunnel
+      status: active
+      locations:
+        - DC90
+        - ZSCALER-MUNICH I
+      capabilities:
+        - kind: DcimVirtualInterface
+          data:
+            device: dc90-edge-01
+            name: Tunnel2
+      connector_end: saas-c900-zscaler-muc

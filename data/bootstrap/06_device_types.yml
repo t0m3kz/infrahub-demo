@@ -560,12 +560,3 @@ spec:
       height: 0
       full_depth: false
       manufacturer: Zscaler
-    # The provider-side service edge of a cloud region (09_network_appliance_templates_cloud_service_edge)
-    - name: AWS-SERVICE-EDGE
-      height: 0
-      full_depth: false
-      manufacturer: "Amazon Web Services"
-    - name: AZURE-SERVICE-EDGE
-      height: 0
-      full_depth: false
-      manufacturer: "Microsoft Azure"

@@ -1,0 +1,34 @@
+---
+# L1 of the DC segment: leaf Ethernet1/1 (carries the segment) -- front 1 | rear 1 of PP-DC90-01 -- edge Ethernet1/13.
+# Cables in data are never generated. A panel port end repeats the connector of its template.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+    - name: "CBL-DC90-LEAF01-PP01-F1"
+      type: smf
+      deployment: "DC90"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "dc90-leaf-01"
+            name: "Ethernet1/1"
+        - kind: DcimFrontPatchPanelPort
+          data:
+            panel: ["dmo-1-s-1-r-1-1", "PP-DC90-01"]
+            name: "1"
+            connector: "lc-upc"
+    - name: "CBL-DC90-PP01-R1-EDGE01"
+      type: smf
+      deployment: "DC90"
+      endpoints:
+        - kind: DcimRearPatchPanelPort
+          data:
+            panel: ["dmo-1-s-1-r-1-1", "PP-DC90-01"]
+            name: "1"
+            connector: "lc-upc"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "dc90-edge-01"
+            name: "Ethernet1/13"

@@ -1,0 +1,75 @@
+---
+version: "1.0"
+
+# The SaaS side of one leg of a Topology.ProviderConnection (Zscaler, Webex, Microsoft 365): the tenant or service
+# the leg reaches, in a SaaS region, for an owner. A circuit can end on it (it is a circuit connector), so a handoff
+# session circuit or a tunnel has an object to end on where the far side is not a device interface.
+nodes:
+  - name: SaasConnection
+    namespace: Topology
+    label: SaaS Connection
+    icon: "mdi:cloud-lock-outline"
+    description: "The SaaS-side endpoint of one connection leg: tenant, region, registered prefixes"
+    include_in_menu: false
+    inherit_from:
+      - TopologyCircuitConnector
+      - TopologyConnectorRouting
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value }}"
+    order_by:
+      - name__value
+    uniqueness_constraints:
+      - [name__value]
+    attributes:
+      - name: name
+        kind: Text
+        label: Name
+        optional: false
+        order_weight: 100
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 150
+      - name: service_id
+        kind: Text
+        label: Service / Tenant ID
+        optional: true
+        order_weight: 200
+        description: "The provider's identifier of the tenant or service (Zscaler org, Webex org, M365 tenant)"
+      - name: status
+        kind: Dropdown
+        label: Status
+        default_value: provisioning
+        order_weight: 250
+        choices:
+          - name: provisioning
+            label: Provisioning
+            color: "#ffff7f"
+          - name: active
+            label: Active
+            color: "#7fbf7f"
+          - name: down
+            label: Down
+            color: "#ff7f7f"
+          - name: decommissioned
+            label: Decommissioned
+            color: "#bfbfbf"
+    relationships:
+      - name: region
+        label: SaaS Region
+        peer: TopologySaasRegion
+        cardinality: one
+        kind: Attribute
+        optional: false
+        identifier: saas_connection__region
+        order_weight: 600
+      - name: registered_prefixes
+        label: Registered Prefixes
+        peer: IpamPrefix
+        cardinality: many
+        kind: Attribute
+        optional: true
+        identifier: saas_connection__registered_prefixes
+        order_weight: 700
+        description: "Prefixes reachable behind the SaaS side"

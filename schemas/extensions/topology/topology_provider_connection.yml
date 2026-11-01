@@ -1,41 +1,35 @@
 ---
 version: "1.0"
 
-# A SERVICE REQUEST: "realize a connection between this facility of ours and that provider facility (a cloud region,
-# a SaaS region), for this owner". The connection is intent; the generator `add_provider_connection` realizes
-# everything it can choose.
+# A SERVICE REQUEST: "connect these facilities, for this owner". It is the one object that ties everything for one
+# leg of a connection from our topology to a cloud or a SaaS: the request (intent) and, one-sided, everything that
+# realizes it. Nothing points back at the connection: no facility, circuit or cloud object lists connections.
 #
-# Intent (authored): near, far, path_type, ip_namespace, the optional near_port (an explicit port always wins, a port
-# in conflict is an error, never replaced), bandwidth, vlan_id, owner or account, attached_network / attached_gateway,
-# provider_as, registered_prefixes, link_prefixes, password, transit_attachment.
-# Output of the generator (nobody authors them): carrier_circuits (a carrier created with status provisioning, or an
-# existing one reused through its end on the near port), the sub-interfaces and NICs, session_circuits, link_prefix and
-# the vlan_id write-back.
+# Intent (authored): connection_type, locations (the two facilities, max 2: ours and the provider's), the optional
+# near_port, ip_namespace, bandwidth, owner, account, redundancy, and the two POOLS the addresses and AS numbers are
+# taken from: ip_pool (a CoreIPPrefixPool, the repo's Handoff-<namespace>-IPv4 pools) and asn_pool (a
+# CoreNumberPool, PRIVATE-ASN32).
 #
-# What the provider side attaches to is derived, there is no `service` field: attached_network is a private
-# connection (the blocks of that network), attached_gateway (with transit_attachment) a transit one, neither only the
-# registered_prefixes.
+# Realization (one-sided links to what exists for this leg): carrier_circuits (physical), session_circuits (virtual),
+# cloud_direct_connect, cloud_virtual_interfaces, cloud_vpn_connection, saas_connection. Today they are authored; a
+# generator will create them from the request and link them. The allocated values sit on the realized objects: our
+# address is the sub-interface of the session circuit, our AS the local_as of our BGP process, the provider's address
+# and AS (peer_ip, peer_asn) are on the connector. VLAN, prefixes, password and gateway live there too.
 #
-# It owns neither circuit kind: the carrier circuits are shared underlay and survive it (no-action), the session
-# circuits are the routing it carries and go with it (cascade). A delete only cascades: what the generators wrote for
-# the connection (interfaces, addresses, link prefix, peerings, the generated carrier) is reclaimed by setting its
-# `status` to `decommissioned` FIRST (add_provider_connection tears it down), then deleting the empty connection.
-#
-# The provider is derived, never stored: `account.provider` for a cloud, the far facility's provider otherwise. The
-# vendor flavour (addressing, session model) is `OrganizationProvider.connection_profile`, because the provider knows
-# its own model. Deliberately not a ManagedGeneric (name collisions with the circuits it groups) and not a circuit:
-# it is a connection, not a wire.
+# The provider-hosted end is derived from the kind of the facility in `locations` (a TopologyCloudRegion, a
+# TopologySaasRegion, a TopologyExternalProviders); the provider from `account.provider` or that facility. The vendor
+# flavour is `OrganizationProvider.connection_profile`.
 #
 nodes:
   - name: ProviderConnection
     namespace: Topology
     label: Provider Connection
-    description: "A facility of ours connected to a provider facility: its carriers, sessions and attachments"
+    description: "Service request: connect our facility to a cloud or SaaS, with everything that realizes it"
     icon: "mdi:transit-connection-variant"
     include_in_menu: false
     human_friendly_id:
       - name__value
-    display_label: "{{ name__value }}"
+    display_label: "{{ name__value }} ({{ connection_type__value }})"
     order_by:
       - name__value
     uniqueness_constraints:
@@ -44,7 +38,6 @@ nodes:
       - name: name
         kind: Text
         label: Name
-        unique: true
         optional: false
         order_weight: 100
       - name: description
@@ -52,21 +45,49 @@ nodes:
         label: Description
         optional: true
         order_weight: 150
-      - name: path_type
+      - name: connection_type
         kind: Dropdown
-        label: Path Type
+        label: Connection Type
         optional: false
         order_weight: 200
-        description: "Intent: how the near facility reaches the far one, over dedicated carriers or over the internet"
+        description: "What is connected and how: tells which realization objects the leg has"
         choices:
-          - name: dedicated
-            label: Dedicated
-            description: "Carrier circuits (cross-connect, fibre, virtual connection) from the near to the far facility"
+          - name: direct_connect
+            label: Direct Connect
+            description: "Dedicated port to a cloud: carrier, handoff session, Direct Connect, virtual interface"
             color: "#2980b9"
-          - name: internet_vpn
-            label: Internet VPN
-            description: "Tunnels over an internet carrier circuit of the near facility"
+          - name: hosted
+            label: Hosted Connection
+            description: "Connection through a partner's port (ExpressRoute, hosted Direct Connect, Equinix, Megaport)"
+            color: "#16a085"
+          - name: vpn
+            label: Site-to-Site VPN
+            description: "Tunnels over an internet carrier circuit to a cloud gateway"
             color: "#8e44ad"
+          - name: saas_private
+            label: SaaS Private Peering
+            description: "Dedicated carrier and BGP session to a SaaS provider (Webex, Microsoft 365)"
+            color: "#d35400"
+          - name: saas_internet
+            label: SaaS over Internet
+            description: "Tunnel over the internet to a SaaS provider (Zscaler), no BGP"
+            color: "#c0392b"
+      - name: redundancy
+        kind: Dropdown
+        label: Redundancy
+        optional: true
+        order_weight: 250
+        description: "Which leg of a pair this is; the two legs are two connections"
+        choices:
+          - name: single
+            label: Single
+            color: "#95a5a6"
+          - name: primary
+            label: Primary
+            color: "#27ae60"
+          - name: secondary
+            label: Secondary
+            color: "#e67e22"
       - name: status
         kind: Dropdown
         label: Status
@@ -94,36 +115,19 @@ nodes:
         optional: true
         order_weight: 500
         description: "Committed bandwidth in Mbps (inventory)"
-      - name: vlan_id
-        kind: Number
-        label: VLAN ID
-        optional: true
-        order_weight: 550
-        description: "The VLAN of the connection towards the provider, when it is one"
-        parameters:
-          min_value: 1
-          max_value: 4094
     relationships:
-      # Both ends are facilities, never a pod, rack or tenant footprint, as a carrier circuit's locations are.
-      # A facility lists them back: near_connections and far_connections on TopologyFacility.
-      - name: near
-        label: Near Facility
+      # Both are facilities, never a pod, rack or tenant footprint, as a carrier circuit's locations are. One edge, no
+      # reverse list on the facility: the provider-hosted end is the facility whose kind says so.
+      - name: locations
+        label: Locations
         peer: TopologyFacility
-        cardinality: one
+        cardinality: many
+        max_count: 2
         kind: Attribute
         optional: false
-        identifier: provider_connection__near
+        identifier: provider_connection__locations
         order_weight: 1000
-        description: "Intent: our facility the connection starts in (a data center, a colocation zone)"
-      - name: far
-        label: Far Facility
-        peer: TopologyFacility
-        cardinality: one
-        kind: Attribute
-        optional: false
-        identifier: provider_connection__far
-        order_weight: 1050
-        description: "Intent: the provider facility it lands in (a cloud region, a SaaS region)"
+        description: "Intent: the two facilities connected: ours (a data center, a colocation zone) and the provider's (a cloud region, a SaaS region)"  # yamllint disable-line rule:line-length
       - name: near_port
         label: Near Port
         peer: DcimInterface
@@ -131,8 +135,8 @@ nodes:
         kind: Attribute
         optional: true
         identifier: provider_connection__near_port
-        order_weight: 1075
-        description: "Intent, optional: the near port to use; left empty, the generator picks a free one"
+        order_weight: 1050
+        description: "Intent, optional: our port to use; left empty, the generator picks a free one"
       - name: ip_namespace
         label: IP Namespace
         peer: IpamNamespace
@@ -141,7 +145,7 @@ nodes:
         optional: false
         identifier: provider_connection__ip_namespace
         order_weight: 1100
-        description: "Environment namespace of its sessions and link ranges"
+        description: "Environment namespace of its sessions; our link addresses come from Handoff-<namespace>-IPv4"
       - name: owner
         label: Owner
         peer: OrganizationCustomer
@@ -159,90 +163,79 @@ nodes:
         optional: true
         identifier: provider_connection__account
         order_weight: 1200
-        description: "The provider account it lands in; its provider is the connection's provider (a cloud)"
-      - name: provider_as
-        label: Provider AS
-        peer: RoutingAutonomousSystem
+        description: "The cloud account it lands in; its provider is the connection's provider"
+      # Pools: where a generator takes the values from. IPs and AS numbers are never typed for a leg that our pools
+      # serve; the allocated values land on the connector (local_ip, peer_ip, local_asn, peer_asn).
+      - name: ip_pool
+        label: IP Pool
+        peer: CoreIPPrefixPool
         cardinality: one
         kind: Attribute
         optional: true
-        identifier: provider_connection__provider_as
-        order_weight: 1250
-        description: "The AS the provider side speaks BGP with, when it is not the gateway's own"
-      - name: attached_network
-        label: Attached Network
-        peer: CloudVirtualNetwork
+        identifier: provider_connection__ip_pool
+        order_weight: 1470
+        description: "Pool our side of the leg is addressed from (Handoff-<namespace>-IPv4, a /31 per leg)"
+      - name: asn_pool
+        label: ASN Pool
+        peer: CoreNumberPool
         cardinality: one
         kind: Attribute
         optional: true
-        identifier: provider_connection__attached_network
-        order_weight: 1300
-        description: "The virtual network a private connection attaches to"
-      - name: attached_gateway
-        label: Attached Gateway
-        peer: CloudTransitGateway
-        cardinality: one
-        kind: Attribute
-        optional: true
-        identifier: provider_connection__attached_gateway
-        order_weight: 1350
-        description: "The transit gateway a transit connection attaches to"
-      # Reverse of CloudTransitGatewayAttachment.hybrid_endpoint.
-      - name: transit_attachment
-        label: Transit Attachment
-        peer: CloudTransitGatewayAttachment
-        cardinality: one
-        kind: Attribute
-        optional: true
-        identifier: transit_gateway_attachment__hybrid_endpoint
-        order_weight: 1380
-        description: "The transit gateway attachment this connection feeds (a transit connection)"
-      - name: password
-        label: Password
-        peer: RoutingPassword
-        cardinality: one
-        kind: Attribute
-        optional: true
-        identifier: provider_connection__password
-        order_weight: 1360
-        description: "The BGP key of the connection's sessions: every session circuit it generates takes it"
-      - name: registered_prefixes
-        label: Registered Prefixes
-        peer: IpamPrefix
-        cardinality: many
-        kind: Attribute
-        optional: true
-        identifier: provider_connection__registered_prefixes
-        order_weight: 1400
-        description: "Prefixes reachable behind the far side that the owner registers (a SaaS range, a partner range)"
-      - name: link_prefixes
-        label: Link Prefixes
-        peer: IpamPrefix
-        cardinality: many
-        kind: Attribute
-        optional: true
-        identifier: provider_connection__link_prefixes
-        order_weight: 1450
-        description: "Link ranges the provider assigns to its sessions (never allocated from our pools)"
-      # Output of add_provider_connection, never authored. Shared underlay: deleting the connection leaves the carriers.
+        identifier: provider_connection__asn_pool
+        order_weight: 1480
+        description: "Pool our private AS is taken from when the provider needs one (PRIVATE-ASN32)"
+      # Realization, one-sided. Shared underlay: deleting the connection leaves the carriers.
       - name: carrier_circuits
         label: Carrier Circuits
         peer: TopologyCarrierCircuit
         cardinality: many
-        kind: Generic
+        kind: Attribute
         optional: true
-        on_delete: no-action
         identifier: provider_connection__carriers
         order_weight: 1500
-        description: "Output: the carriers it rides, created or reused by the generator (internet_vpn has none)"
-      # Output of add_provider_connection, never authored. The routing the connection carries: deleting it deletes them.
+        description: "Realization (physical): the carriers it rides"
       - name: session_circuits
         label: Session Circuits
         peer: TopologySessionCircuit
         cardinality: many
-        kind: Generic
+        kind: Attribute
         optional: true
-        on_delete: cascade
         identifier: provider_connection__sessions
         order_weight: 1550
-        description: "Output: the handoff or vpn circuits the generator routes on this connection"
+        description: "Realization (virtual): the handoff or vpn circuits routed on this connection"
+      - name: cloud_direct_connect
+        label: Direct Connect
+        peer: CloudDirectConnect
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: provider_connection__direct_connect
+        order_weight: 1600
+        description: "Realization (cloud): the port or hosted connection on the cloud side"
+      - name: cloud_virtual_interfaces
+        label: Virtual Interfaces
+        peer: CloudVirtualInterface
+        cardinality: many
+        kind: Attribute
+        optional: true
+        identifier: provider_connection__virtual_interfaces
+        order_weight: 1650
+        description: "Realization (cloud): the VLANs on it (private, public, transit)"
+      - name: cloud_vpn_connection
+        label: VPN Connection
+        peer: CloudVPNConnection
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: provider_connection__vpn_connection
+        order_weight: 1700
+        description: "Realization (cloud): the site-to-site VPN"
+      - name: saas_connection
+        label: SaaS Connection
+        peer: TopologySaasConnection
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: provider_connection__saas_connection
+        order_weight: 1750
+        description: "Realization (SaaS): the provider-side endpoint of the leg"

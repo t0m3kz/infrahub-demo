@@ -1,0 +1,84 @@
+---
+# The handoff sessions. A BGP peering has one process of ours and, as capabilities, our sub-interface. The other
+# end is the connector of the session circuit that has the same sub-interface as an end (the peer address and AS are the
+# connector's peer_ip and peer_asn), so no provider stub device is needed.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGPPeering
+  data:
+    - name: BGP-DC90-EDGE01-AWS-DX
+      description: eBGP to the AWS transit VIF
+      session_type: EBGP
+      peering_role: regular
+      ttl: 1
+      address_families:
+        - - ipv4
+          - unicast
+      bgp_processes:
+        - dc90-edge-01-bgp
+      capabilities:
+        - kind: DcimVirtualInterface
+          data:
+            device: dc90-edge-01
+            name: Ethernet1/3.1000
+    - name: BGP-DC90-EDGE01-AZ-ER-PRI
+      description: eBGP to the ExpressRoute primary peering
+      session_type: EBGP
+      peering_role: regular
+      ttl: 1
+      address_families:
+        - - ipv4
+          - unicast
+      bgp_processes:
+        - dc90-edge-01-bgp
+      capabilities:
+        - kind: DcimVirtualInterface
+          data:
+            device: dc90-edge-01
+            name: Ethernet1/4.200
+    - name: BGP-DC90-EDGE01-AZ-ER-SEC
+      description: eBGP to the ExpressRoute secondary peering
+      session_type: EBGP
+      peering_role: regular
+      ttl: 1
+      address_families:
+        - - ipv4
+          - unicast
+      bgp_processes:
+        - dc90-edge-01-bgp
+      capabilities:
+        - kind: DcimVirtualInterface
+          data:
+            device: dc90-edge-01
+            name: Ethernet1/5.200
+    - name: BGP-DC90-EDGE01-WEBEX
+      description: eBGP to Webex
+      session_type: EBGP
+      peering_role: regular
+      ttl: 1
+      address_families:
+        - - ipv4
+          - unicast
+      bgp_processes:
+        - dc90-edge-01-bgp
+      capabilities:
+        - kind: DcimVirtualInterface
+          data:
+            device: dc90-edge-01
+            name: Ethernet1/6.300
+    - name: BGP-DC90-EDGE01-AWS-VPN
+      description: eBGP through the tunnel to the AWS VPN
+      session_type: EBGP
+      peering_role: regular
+      ttl: 1
+      address_families:
+        - - ipv4
+          - unicast
+      bgp_processes:
+        - dc90-edge-01-bgp
+      capabilities:
+        - kind: DcimVirtualInterface
+          data:
+            device: dc90-edge-01
+            name: Tunnel1

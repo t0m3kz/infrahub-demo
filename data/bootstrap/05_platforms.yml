@@ -50,10 +50,3 @@ spec:
     # nothing is rendered for it), so it has no config template.
     - name: zscaler_zen
       containerlab_os: linux
-
-    # The service edge a cloud provider runs in one of its regions (AWS Direct Connect and Site-to-Site VPN, Azure
-    # ExpressRoute): a CloudNetworkAppliance stub, role provider, nothing is rendered for it, so no config template.
-    - name: aws_service_edge
-      containerlab_os: linux
-    - name: azure_service_edge
-      containerlab_os: linux
