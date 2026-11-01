@@ -28,6 +28,17 @@ lądujące w sieci wirtualnej segmentu chmurowego = te, do których dochodzi seg
 (posortowane listy przeskoków, więc kolejność odpowiedzi API nie ma znaczenia). Przy błędzie tabela PASS/FAIL podaje
 przeskok, który się urwał, albo różnicę względem wzorca.
 
+## Katalogi danych, pod, internet, pary
+
+`data:` w przypadku to lista katalogów ładowanych po kolei; wpis `{path, sentinel}` ma własny sentinel i jest pomijany, gdy
+gałąź dziedziczy go z `main` (dodatki ładują się na stos, który ma już bazę). `after_load:` to moduły z
+`async apply(client, branch)` (idempotentne), np. wiersz VLAN drugiego liścia. Klucze przypadku: `pod` (MLAG, bond
+dwunogi, wiersze VLAN, liczba ścieżek L1 serwer -> krawędź, overlay z obu liści), `internet` (L1 do routera ISP, L3
+przez przestrzeń INTERNET, brak tunelu), `transport_sub_interfaces` (port i pakiet transportu widzą swoje peeringi w
+`sub_interfaces`); asercje w `tests/traversal/walks.py` (z testami jednostkowymi). Klucze pary: `cloud_segment` albo
+`saas_region`, `via` (tylko transporty tych rodzajów), `reverse: false`, `expect_unreachable` + `expect_missing`
+(para ujemna). Nogi L3 liczy się raz na obwód sesji (każdy liść pary MLAG je widzi).
+
 ## Nowy przypadek
 
 Dopisz wpis do `cases.yml`: katalog schematu, katalogi danych (kolejno), obiekt `sentinel` (rodzaj i nazwa obiektu,

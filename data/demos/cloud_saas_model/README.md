@@ -150,7 +150,16 @@ uv run invoke clean-testcontainers
 INFRAHUB_TESTING_ENABLE_INTEGRATION=1 INFRAHUB_TESTING_KEEP_STACK=1 uv run invoke test-integration --tests tests/integration/test_01_setup.py
 export INFRAHUB_ADDRESS=http://localhost:8100 INFRAHUB_API_TOKEN=06438eb2-8019-4776-878c-0941b1f1d1ec
 uv run infrahubctl object load data/demos/cloud_saas_model/
+uv run infrahubctl object load data/demos/cloud_saas_model_pod/
+uv run python data/demos/cloud_saas_model_pod/vlan_row.py main
+uv run infrahubctl object load data/demos/cloud_saas_model_internet/
+uv run infrahubctl object load data/demos/cloud_saas_model_pairs/
 ```
+
+Trzy katalogi obok ładują się po głównym (w tej kolejności): `cloud_saas_model_pod` (mały pod przed krawędzią),
+`cloud_saas_model_internet` (internet przez ISP) i `cloud_saas_model_pairs` (dwa segmenty chmurowe na dodatkowe pary).
+Wiersz VLAN `dc90-leaf-02` dodaje `vlan_row.py`: plik obiektów nie może wskazać wdrożenia segmentu
+(`ManagedSegmentDeployment` nie ma HFID), a zagnieżdżenie go drugi raz łamie unikalność wdrożenia.
 
 ## Szybki test modelu
 
@@ -310,6 +319,34 @@ Wynik z instancji 8100:
       lands: (no virtual network: SaaS)
 ```
 
+## Pod, internet przez ISP i dodatkowe pary
+
+**Pod** (`cloud_saas_model_pod`): serwer `dc90-srv-01` (`bond0` na `eno1`/`eno2`) jest dwunogi do pary liści
+`dc90-leaf-01`/`-02` przez vPC (po jednym `Port-Channel10` na liść, ten sam `lag_id`, oba z segmentem
+`c900-demo-web-p` w krawędzi `segments`, jedna autorska `ManagedMLAG`), liście do spine, spine do dwóch border leaves,
+border leaf 1 do krawędzi przez przepust 2 panelu, border leaf 2 kablem bezpośrednim. Wiersz VLAN leaf-02 ma to samo
+`vlan_id` 100 co leaf-01. Overlay EVPN: leaf-01/02 - spine - BL - krawędź. Ścieżek L1 serwer -> krawędź jest 5: 4 przez
+spine i border leaf (2 liście x 1 spine x 2 BL) i 1 stare bezpośrednie połączenie leaf-01 -> panel -> krawędź z próbki
+bazowej (zostawione, żeby dane dołożyły się do działającego stosu bez usuwania kabli). Asercje: `walks.pod_rows`.
+
+**Internet przez ISP** (`cloud_saas_model_internet`): port krawędzi `Ethernet1/2` -> nośnik internetowy
+`INET-DC90-ISP-DEMO` -> router ISP `EXT-ISP-DEMO-PE1` (`TopologyExternalProviders` `ISP-DEMO`, dostawca P014; ten sam
+router i ten sam nośnik co nogi VPN, a ISP z `30_all` wymagają generatorów i kolokacji, więc tu się ich nie używa).
+Oba końce mają /31 w przestrzeni `INTERNET`, krawędź jest członkiem `dc90-vrf-internet`, jedna sesja eBGP
+(`BGP-DC90-EDGE01-ISP-DEMO`, dwa AS) na dwóch portach fizycznych: bez tunelu i bez obwodu sesji. Cele: `s3-public`
+(publiczny punkt usługi chmury, `192.0.2.0/24`) i `webex-public` (publiczna usługa SaaS, `203.0.113.0/24`), oba
+`CloudServiceEndpoint` z `access: address`. Luki: `CloudServiceEndpoint` nie ma adresu i musi leżeć w sieci wirtualnej,
+więc para punkt usługi - zakres publiczny to tylko nazwa i opis; wymiana PROD -> INTERNET przez firewall nie jest
+w próbce (wyjście do internetu z chmury i biura to znana luka `checks/internet_egress.py`).
+
+**Dodatkowe pary** (`cases.yml`): tylko tunele VPN (`via: [CloudVPNConnection]`: 2 nogi L1 przez nośnik internetowy, 2 L3
+typu `vpn`, żadnego handoffu), SaaS Webex (cross-connect + handoff) i Zscaler (tunel na nośniku internetowym, obwód
+`tunnel` bez sesji), cloud <-> cloud (segment w sieci `vnet-c900-weu-spoke` osiągany przez `peers` huba ExpressRoute) i
+jedna para ujemna (segment w VPC bez załącznika: oczekiwane dokładnie `L1: no physical path found` i
+`L3: no routed path found`). R5 jest dwustronna: profil krypto tylko przy IPsec i zawsze przy IPsec (tunel GRE nie ma
+profilu). Azure ExpressRoute: obwód `logical` bez `partner_account` jest poprawny (dostawca jest `provider` nośnika), więc
+żadnej nowej reguły.
+
 ## Czego model nie wyraża (szczerze)
 
 - L1: między portem `Ethernet1/13` krawędzi (koniec panelu) a portem nośnika (`Ethernet1/3`, `Ethernet1/2`) nie ma kabla:
@@ -327,7 +364,9 @@ Wynik z instancji 8100:
   FastPath, GatewaySubnet, import-distribution OCI, Global Reach, listy propozycji IKE, NAT-T, certyfikaty, DNS, limity
   prefiksów, timery BFD, wpisy tras. Powstaną w generatorze danego operatora (`connection_profile`) ze stałych w `utils/limits.py`.
 - Pętla `rides_on` na samego siebie: serwer ją przyjmuje, ale odczyt zwraca `rides_on` puste (i kasuje poprzednią krawędź),
-  więc check R3 widzi pętle co najmniej dwóch obiektów.
+  więc check R3 widzi pętle co najmniej dwóch obiektów. Pilnuje tego wejście: test jednostkowy
+  `tests/unit/test_cloud_demo_data.py` odrzuca `rides_on` na samego siebie w plikach YAML (nie chroni zmian z API ani z UI),
+  a `check-model` sprawdza, że każdy `rides_on` z danych jest w grafie.
 - `parent_interface` peeringu (marker `DcimSubInterface`, ta sama krawędź co podinterfejs urządzenia) nie ma `common_parent`,
   więc serwer nie pilnuje, że rodzic jest na tym samym transporcie (pakiet i jego członkowie: serwer pilnuje): to
   `checks/interface_parents.py` (reguła 1). Pierwszy peering na porcie transportu partnera przejdzie schemat.
