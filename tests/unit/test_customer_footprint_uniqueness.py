@@ -35,9 +35,9 @@ def test_environment_scoped_footprints_are_unique_per_parent_and_environment(kin
     assert _entries()[kind]["uniqueness_constraints"] == [["name__value", "parent", "environment__value"]]
 
 
-def test_cloud_footprint_is_unique_per_parent_without_an_environment() -> None:
-    """A cloud footprint has no environment (its CloudAccount carries it): name and parent only."""
-    assert _entries()["TopologyCustomerCloud"]["uniqueness_constraints"] == [["name__value", "parent"]]
+def test_cloud_footprint_is_unique_per_parent_and_per_account_without_an_environment() -> None:
+    """A cloud footprint has no environment (its CloudAccount carries it): name and parent, and one per account."""
+    assert _entries()["TopologyCustomerCloud"]["uniqueness_constraints"] == [["name__value", "parent"], ["account"]]
 
 
 def test_office_is_unique_on_its_owner_derived_name() -> None:

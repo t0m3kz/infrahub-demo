@@ -1,10 +1,23 @@
 ---
 version: "1.0"
 
-# The one object that says "this facility of ours is connected to that provider facility (a cloud region, a SaaS
-# region), for this owner": the path from the near facility to the far one, over carriers (dedicated) or the internet
-# (VPN), and the sessions routed on it. It owns neither: the carrier circuits are shared underlay and survive it
-# (no-action), the session circuits are the routing it carries and go with it (cascade).
+# A SERVICE REQUEST: "realize a connection between this facility of ours and that provider facility (a cloud region,
+# a SaaS region), for this owner". The connection is intent; the generator `add_provider_connection` realizes
+# everything it can choose.
+#
+# Intent (authored): near, far, path_type, ip_namespace, the optional near_port (an explicit port always wins, a port
+# in conflict is an error, never replaced), bandwidth, vlan_id, owner or account, attached_network / attached_gateway,
+# provider_as, registered_prefixes, link_prefixes, password, transit_attachment.
+# Output of the generator (nobody authors them): carrier_circuits (a carrier created with status provisioning, or an
+# existing one reused through its end on the near port), the sub-interfaces and NICs, session_circuits, link_prefix and
+# the vlan_id write-back.
+#
+# What the provider side attaches to is derived, there is no `service` field: attached_network is a private
+# connection (the blocks of that network), attached_gateway (with transit_attachment) a transit one, neither only the
+# registered_prefixes.
+#
+# It owns neither circuit kind: the carrier circuits are shared underlay and survive it (no-action), the session
+# circuits are the routing it carries and go with it (cascade).
 #
 # The provider is derived, never stored: `account.provider` for a cloud, the far facility's provider otherwise. The
 # vendor flavour (addressing, session model) is `OrganizationProvider.connection_profile`, because the provider knows
@@ -42,7 +55,7 @@ nodes:
         label: Path Type
         optional: false
         order_weight: 200
-        description: "How the near facility reaches the far one: over dedicated carriers or over the internet"
+        description: "Intent: how the near facility reaches the far one, over dedicated carriers or over the internet"
         choices:
           - name: dedicated
             label: Dedicated
@@ -52,25 +65,6 @@ nodes:
             label: Internet VPN
             description: "Tunnels over an internet carrier circuit of the near facility"
             color: "#8e44ad"
-      - name: service
-        kind: Dropdown
-        label: Service
-        optional: false
-        order_weight: 300
-        description: "What the provider side attaches to, whatever the vendor calls it (orthogonal to the path type)"
-        choices:
-          - name: private
-            label: Private
-            description: "A virtual network of the provider (private VIF, private peering, VLAN attachment, VPC VPN)"
-            color: "#3498db"
-          - name: transit
-            label: Transit
-            description: "A transit gateway or hub of the provider (transit VIF, hub attachment)"
-            color: "#9b59b6"
-          - name: public
-            label: Public
-            description: "The provider's public endpoints or a SaaS edge (public VIF, Microsoft peering, SWG tunnels)"
-            color: "#27ae60"
       - name: status
         kind: Dropdown
         label: Status
@@ -118,7 +112,7 @@ nodes:
         optional: false
         identifier: provider_connection__near
         order_weight: 1000
-        description: "Our facility the connection starts in (a data center, a colocation zone)"
+        description: "Intent: our facility the connection starts in (a data center, a colocation zone)"
       - name: far
         label: Far Facility
         peer: TopologyFacility
@@ -127,7 +121,16 @@ nodes:
         optional: false
         identifier: provider_connection__far
         order_weight: 1050
-        description: "The provider facility it lands in (a cloud region, a SaaS region)"
+        description: "Intent: the provider facility it lands in (a cloud region, a SaaS region)"
+      - name: near_port
+        label: Near Port
+        peer: DcimInterface
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: provider_connection__near_port
+        order_weight: 1075
+        description: "Intent, optional: the near port to use; left empty, the generator picks a free one"
       - name: ip_namespace
         label: IP Namespace
         peer: IpamNamespace
@@ -219,7 +222,7 @@ nodes:
         identifier: provider_connection__link_prefixes
         order_weight: 1450
         description: "Link ranges the provider assigns to its sessions (never allocated from our pools)"
-      # Shared underlay: deleting the connection leaves the carriers (no-action).
+      # Output of add_provider_connection, never authored. Shared underlay: deleting the connection leaves the carriers.
       - name: carrier_circuits
         label: Carrier Circuits
         peer: TopologyCarrierCircuit
@@ -229,8 +232,8 @@ nodes:
         on_delete: no-action
         identifier: provider_connection__carriers
         order_weight: 1500
-        description: "The carriers a dedicated connection rides (a connection with internet_vpn rides the near facility's internet carrier, derived)"  # yamllint disable-line rule:line-length
-      # The routing the connection carries: deleting the connection deletes its sessions.
+        description: "Output: the carriers it rides, created or reused by the generator (internet_vpn has none)"
+      # Output of add_provider_connection, never authored. The routing the connection carries: deleting it deletes them.
       - name: session_circuits
         label: Session Circuits
         peer: TopologySessionCircuit
@@ -240,4 +243,4 @@ nodes:
         on_delete: cascade
         identifier: provider_connection__sessions
         order_weight: 1550
-        description: "The handoff or vpn circuits routed on this connection"
+        description: "Output: the handoff or vpn circuits the generator routes on this connection"

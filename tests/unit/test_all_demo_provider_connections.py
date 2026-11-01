@@ -1,7 +1,7 @@
 """The provider connections of 30_all (08_interconnects/05_provider_connections) as data.
 
 A connection replaces the hand-authored handoff circuit, VIF and Direct Connect of earlier versions: the data holds the
-connection, the shared carriers it rides (01_colo_onramp/03_carrier_circuits.yml) and the stubs of the provider side (AS,
+connection (intent only), the existing carriers it adopts through its near_port (01_colo_onramp/03_carrier_circuits.yml) and the stubs of the provider side (AS,
 BGP process, loopback, key); add_provider_connection builds the ``<connection>-L<n>`` session circuits and their
 sub-interfaces. What these tests pin is what the loader and the generator cannot: the references resolve, the carriers
 join the near and far facilities, the stubs are the ones the generator expects, and the flavour of each provider gives
@@ -22,16 +22,17 @@ from utils.provider_services import ADDRESS_SOURCE_PROVIDER, flavour_for
 _ALL = ROOT / ALL_DEMO_DATA
 _BOOTSTRAP = ROOT / "data" / "bootstrap"
 
-#: connection -> (path_type, service, near, far, vlan_id, provider connection_profile)
+#: connection -> (path_type, attachment, near, far, vlan_id, provider connection_profile); the attachment (the derived
+#: meaning of the removed `service` field) is the field the provider side attaches through, or none.
 _EXPECTED: dict[str, tuple[str, str, str, str, int | None, str | None]] = {
-    "PC-FR2-AWS-EUC1-PROD": ("dedicated", "transit", "FR2", "eu-central-1", 1000, "aws"),
-    "PC-FR2-AMNE-PROD": ("dedicated", "private", "FR2", "AM-NE", 1200, None),
-    "PC-AMNE-AWS-EUC1-PROD": ("dedicated", "transit", "AM-NE", "eu-central-1", 1100, "aws"),
-    "PC-PA4-MEGAPORT-PROD": ("dedicated", "private", "PA4", "MCR-PAR1", 1300, None),
-    "PC-FR2-AWS-EUC1-VPN-PROD": ("internet_vpn", "private", "FR2", "eu-central-1", None, "aws"),
-    "PC-PA4-AZURE-WEU-PRI-PROD": ("dedicated", "private", "PA4", "westeurope", 1400, "azure"),
-    "PC-PA4-AZURE-WEU-SEC-PROD": ("dedicated", "private", "PA4", "westeurope", 1400, "azure"),
-    "PC-FR2-ZSCALER-MUC-PROD": ("internet_vpn", "private", "FR2", "ZSCALER-MUNICH I", None, "zscaler"),
+    "PC-FR2-AWS-EUC1-PROD": ("dedicated", "attached_gateway", "FR2", "eu-central-1", 1000, "aws"),
+    "PC-FR2-AMNE-PROD": ("dedicated", "none", "FR2", "AM-NE", 1200, None),
+    "PC-AMNE-AWS-EUC1-PROD": ("dedicated", "attached_gateway", "AM-NE", "eu-central-1", 1100, "aws"),
+    "PC-PA4-MEGAPORT-PROD": ("dedicated", "none", "PA4", "MCR-PAR1", 1300, None),
+    "PC-FR2-AWS-EUC1-VPN-PROD": ("internet_vpn", "attached_network", "FR2", "eu-central-1", None, "aws"),
+    "PC-PA4-AZURE-WEU-PRI-PROD": ("dedicated", "attached_network", "PA4", "westeurope", 1400, "azure"),
+    "PC-PA4-AZURE-WEU-SEC-PROD": ("dedicated", "attached_network", "PA4", "westeurope", 1400, "azure"),
+    "PC-FR2-ZSCALER-MUC-PROD": ("internet_vpn", "none", "FR2", "ZSCALER-MUNICH I", None, "zscaler"),
 }
 
 
@@ -62,10 +63,12 @@ def test_the_connections_are_the_expected_ones_in_the_generator_group() -> None:
     assert set(connections) == set(_EXPECTED)
     for connection_name, row in connections.items():
         assert row["member_of_groups"] == ["provider_connections"], connection_name
-        path_type, service, near, far, vlan, _ = _EXPECTED[connection_name]
-        assert (row["path_type"], row["service"], row["near"], row["far"], row.get("vlan_id")) == (
+        path_type, attachment, near, far, vlan, _ = _EXPECTED[connection_name]
+        assert "service" not in row and "carrier_circuits" not in row, connection_name
+        attached = {key for key in ("attached_network", "attached_gateway") if row.get(key)}
+        assert attached == (set() if attachment == "none" else {attachment}), connection_name
+        assert (row["path_type"], row["near"], row["far"], row.get("vlan_id")) == (
             path_type,
-            service,
             near,
             far,
             vlan,
@@ -75,27 +78,31 @@ def test_the_connections_are_the_expected_ones_in_the_generator_group() -> None:
             assert row["password"] in _keys(), connection_name
 
 
+def _end_of(near_port: list[str]) -> list[str]:
+    """The `[device, port]` of a near_port as it is authored."""
+    return list(near_port)
+
+
 def test_a_dedicated_connection_has_a_vlan_and_a_vpn_none() -> None:
-    """vlan_id is the sub-interface VLAN of a dedicated connection; a vpn rides tunnels and lists at most the internet
-    carrier it leaves by (FR2 has two internet-fed edges)."""
-    carriers = _carriers()
+    """vlan_id is the sub-interface VLAN of a dedicated connection; a vpn rides tunnels. No data file authors
+    `carrier_circuits` or `service`: both are gone from the intent (the first is the generator's output)."""
     for connection_name, row in _connections().items():
+        assert "carrier_circuits" not in row and "service" not in row, connection_name
         if row["path_type"] == "dedicated":
             assert isinstance(row["vlan_id"], int), connection_name
-            assert row["carrier_circuits"], connection_name
         else:
             assert "vlan_id" not in row, connection_name
-            for carrier_name in row.get("carrier_circuits") or []:
-                assert carriers[carrier_name]["circuit_type"] == "internet", connection_name
 
 
-def test_every_listed_carrier_exists_and_joins_the_near_or_the_far_facility() -> None:
-    """The generator finds the near port on a carrier end deployed at `near` and the far port on one deployed at `far`:
-    the carriers listed together must offer both (the first carrier with both is used)."""
+def test_every_connection_names_its_near_port_and_the_carrier_ending_there_joins_the_far_facility() -> None:
+    """The connection is intent: it names `near_port` and the generator adopts the carrier whose end is that port. For a
+    dedicated connection exactly one such carrier exists, its other end is deployed in the far facility; for a VPN the
+    port is the end of an internet carrier deployed at the near facility."""
     deployments = {name(d): d.item.get("deployment") for d in declared("DcimPhysicalDevice", _ALL)}
     deployments |= {name(d): d.item.get("deployment") for d in declared("CloudNetworkAppliance", _ALL)}
     deployments |= {
         "eg-fr201": "FR2",
+        "eg-fr202": "FR2",
         "eg-pa401": "PA4",
         "eg-pa402": "PA4",
         "eg-am-ne01": "AM-NE",
@@ -103,15 +110,46 @@ def test_every_listed_carrier_exists_and_joins_the_near_or_the_far_facility() ->
     }
     carriers = _carriers()
     for connection_name, row in _connections().items():
-        for carrier_name in row.get("carrier_circuits") or []:
-            assert carrier_name in carriers, f"{connection_name}: {carrier_name}"
-        joined = [
-            carrier_name
-            for carrier_name in row.get("carrier_circuits") or []
-            if {deployments[device] for device, _ in carriers[carrier_name]["capabilities"]}
-            >= {row["near"], row["far"]}
-        ]
-        assert bool(joined) == (row["path_type"] == "dedicated"), connection_name
+        near_port = _end_of(row["near_port"])
+        ending = [c for c in carriers.values() if near_port in [list(end) for end in c["capabilities"]]]
+        if row["path_type"] == "dedicated":
+            (carrier,) = ending
+            assert deployments[near_port[0]] == row["near"], connection_name
+            assert {deployments[device] for device, _ in carrier["capabilities"]} == {row["near"], row["far"]}
+        else:
+            assert [c["circuit_type"] for c in ending] == ["internet"], connection_name
+            assert row["near"] in ending[0]["locations"], connection_name
+
+
+def test_the_fr2_vpns_leave_by_the_lumen_edge_of_two_internet_edges() -> None:
+    """FR2 has two edges with an internet carrier (eg-fr201 on Lumen, eg-fr202 on Cogent, both on Ethernet1/14): the two
+    VPN connections name the edge they leave by, since a VPN with no near_port would be ambiguous."""
+    internet = {
+        cid: end
+        for cid, c in _carriers().items()
+        if c["circuit_type"] == "internet" and "FR2" in c.get("locations", [])
+        for end in c["capabilities"]
+        if end[0].startswith("eg-fr2")
+    }
+    assert internet == {
+        "INET-LUMEN-EQXFR2": ["eg-fr201", "Ethernet1/14"],
+        "INET-COGENT-EQXFR2": ["eg-fr202", "Ethernet1/14"],
+    }
+    for connection_name in ("PC-FR2-AWS-EUC1-VPN-PROD", "PC-FR2-ZSCALER-MUC-PROD"):
+        assert _connections()[connection_name]["near_port"] == ["eg-fr201", "Ethernet1/14"]
+
+
+def test_the_explicit_near_ports_of_the_dedicated_connections() -> None:
+    """The six dedicated connections adopt their existing carrier through an explicit near port."""
+    ports = {n: tuple(r["near_port"]) for n, r in _connections().items() if r["path_type"] == "dedicated"}
+    assert ports == {
+        "PC-FR2-AWS-EUC1-PROD": ("eg-fr201", "Ethernet1/13"),
+        "PC-FR2-AMNE-PROD": ("eg-fr201", "Ethernet1/1"),
+        "PC-AMNE-AWS-EUC1-PROD": ("eg-am-ne02", "Ethernet1/1"),
+        "PC-PA4-MEGAPORT-PROD": ("eg-pa401", "Ethernet1/1"),
+        "PC-PA4-AZURE-WEU-PRI-PROD": ("eg-pa401", "Ethernet1/13"),
+        "PC-PA4-AZURE-WEU-SEC-PROD": ("eg-pa402", "Ethernet1/13"),
+    }
 
 
 def test_the_network_edge_hops_ride_fabric_virtual_connections() -> None:
@@ -125,11 +163,9 @@ def test_the_network_edge_hops_ride_fabric_virtual_connections() -> None:
         ["eg-am-ne02", "Ethernet1/1"],
         ["EXT-AWS-DX-FR2", "vnic-amne"],
     ]
-    connections = _connections()
-    assert connections["PC-FR2-AMNE-PROD"]["carrier_circuits"] == ["FABRIC-FR2-AMNE01"]
     # each leg of the AWS service edge is its own NIC (vnic-amne, vnic-fr2) with its own carrier: no carrier is shared
-    assert connections["PC-AMNE-AWS-EUC1-PROD"]["carrier_circuits"] == ["FABRIC-AMNE02-AWS-EUC1"]
-    assert connections["PC-FR2-AWS-EUC1-PROD"]["carrier_circuits"] == ["XC-EQXFR2-AWS-EUC1"]
+    ends = {cid: row["capabilities"][0] for cid, row in carriers.items()}
+    assert ends["XC-EQXFR2-AWS-EUC1"] == ["eg-fr201", "Ethernet1/13"]
 
 
 def _template_ports(template: str) -> dict[str, dict[str, Any]]:
@@ -206,14 +242,15 @@ def test_the_azure_legs_are_two_connections_on_two_carriers_of_one_redundancy_gr
     connections = _connections()
     flavour = flavour_for("azure", "dedicated")
     assert flavour.address_source == ADDRESS_SOURCE_PROVIDER and flavour.links == 1 and flavour.prefix_length == 30
+    carriers = _carriers()
     legs = {"PRI": ("XC-EQXPA4-AZURE-WEU-PRI", "10.255.72.0/30"), "SEC": ("XC-EQXPA4-AZURE-WEU-SEC", "10.255.72.4/30")}
     for leg, (carrier_name, link_prefix) in legs.items():
         row = connections[f"PC-PA4-AZURE-WEU-{leg}-PROD"]
-        assert row["carrier_circuits"] == [carrier_name]
+        assert carriers[carrier_name]["capabilities"][0] == list(row["near_port"])
         assert row["link_prefixes"] == [[link_prefix, "PROD"]]
         assert row["attached_network"] == "peakora-vnet-prod" and row["account"] == "peakora-azure-prod"
         assert row["vlan_id"] == 1400 and row["password"] == "eqx-pa4-azure-er-key"
-    primary, secondary = (_carriers()[legs[leg][0]] for leg in ("PRI", "SEC"))
+    primary, secondary = (carriers[legs[leg][0]] for leg in ("PRI", "SEC"))
     assert primary["redundancy_group"] == secondary["redundancy_group"]
     assert [d for d, _ in primary["capabilities"]] == ["eg-pa401", "EXT-AZURE-ER-PA4"]
     assert [d for d, _ in secondary["capabilities"]] == ["eg-pa402", "EXT-AZURE-ER-PA4"]

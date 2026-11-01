@@ -50,7 +50,9 @@ class ConnectionExpectation(TypedDict):
     """One TopologyProviderConnection and the sessions it generates."""
 
     path_type: str
-    service: str
+    #: The explicit `near_port` of the data (device, interface): the port the connection rides, the one it adopts the
+    #: carrier of (dedicated) or the internet carrier port its tunnels leave by (internet_vpn).
+    near_port: tuple[str, str]
     ip_namespace: str
     #: The VLAN of a dedicated connection (authored); None for an internet_vpn.
     vlan_id: int | None
@@ -58,7 +60,8 @@ class ConnectionExpectation(TypedDict):
     owner: str | None
     #: The two facilities, sorted: the connection's near and far.
     locations: tuple[str, ...]
-    #: The authored `carrier_circuits`, sorted.
+    #: The `carrier_circuits` the generator writes, sorted: the existing carrier it adopts through `near_port` (a
+    #: dedicated connection), none for an internet_vpn. Nobody authors the list.
     carriers: tuple[str, ...]
     #: The name of the key put on every session, None when there is none.
     password: str | None
@@ -133,7 +136,7 @@ ALL_DEMO_CONNECTIONS: dict[str, ConnectionExpectation] = {
     # pool (a /31). The account net-hub-aws-prod belongs to the operator ("Internal"), not to a customer: unowned.
     "PC-FR2-AWS-EUC1-PROD": {
         "path_type": "dedicated",
-        "service": "transit",
+        "near_port": ("eg-fr201", "Ethernet1/13"),
         "ip_namespace": "PROD",
         "vlan_id": 1000,
         "owner": None,
@@ -160,7 +163,7 @@ ALL_DEMO_CONNECTIONS: dict[str, ConnectionExpectation] = {
     # The Equinix Fabric connection cage -> Network Edge router eg-am-ne01: both ends are ours (a layer 2 service).
     "PC-FR2-AMNE-PROD": {
         "path_type": "dedicated",
-        "service": "private",
+        "near_port": ("eg-fr201", "Ethernet1/1"),
         "ip_namespace": "PROD",
         "vlan_id": 1200,
         "owner": None,
@@ -185,7 +188,7 @@ ALL_DEMO_CONNECTIONS: dict[str, ConnectionExpectation] = {
     # The hosted Direct Connect of the second Network Edge router, through the Fabric connection.
     "PC-AMNE-AWS-EUC1-PROD": {
         "path_type": "dedicated",
-        "service": "transit",
+        "near_port": ("eg-am-ne02", "Ethernet1/1"),
         "ip_namespace": "PROD",
         "vlan_id": 1100,
         "owner": None,
@@ -213,12 +216,12 @@ ALL_DEMO_CONNECTIONS: dict[str, ConnectionExpectation] = {
     # account nordix-aws-prod belongs to C001. Model only: nothing renders the tunnel.
     "PC-FR2-AWS-EUC1-VPN-PROD": {
         "path_type": "internet_vpn",
-        "service": "private",
+        "near_port": ("eg-fr201", "Ethernet1/14"),
         "ip_namespace": "PROD",
         "vlan_id": None,
         "owner": "C001",
         "locations": ("FR2", "eu-central-1"),
-        "carriers": ("INET-LUMEN-EQXFR2",),
+        "carriers": (),
         "password": None,
         "address_source": ADDRESS_PROVIDER,
         "prefix_length": 30,
@@ -249,7 +252,7 @@ ALL_DEMO_CONNECTIONS: dict[str, ConnectionExpectation] = {
     # Megaport Cloud Router, the cloud-neutral example: a /31 from our pool.
     "PC-PA4-MEGAPORT-PROD": {
         "path_type": "dedicated",
-        "service": "private",
+        "near_port": ("eg-pa401", "Ethernet1/1"),
         "ip_namespace": "PROD",
         "vlan_id": 1300,
         "owner": None,
@@ -277,7 +280,7 @@ ALL_DEMO_CONNECTIONS: dict[str, ConnectionExpectation] = {
     # connection per leg, the two legs on two cage edges and two NICs of the one service edge. C004's account.
     "PC-PA4-AZURE-WEU-PRI-PROD": {
         "path_type": "dedicated",
-        "service": "private",
+        "near_port": ("eg-pa401", "Ethernet1/13"),
         "ip_namespace": "PROD",
         "vlan_id": 1400,
         "owner": "C004",
@@ -304,7 +307,7 @@ ALL_DEMO_CONNECTIONS: dict[str, ConnectionExpectation] = {
     },
     "PC-PA4-AZURE-WEU-SEC-PROD": {
         "path_type": "dedicated",
-        "service": "private",
+        "near_port": ("eg-pa402", "Ethernet1/13"),
         "ip_namespace": "PROD",
         "vlan_id": 1400,
         "owner": "C004",
@@ -333,12 +336,12 @@ ALL_DEMO_CONNECTIONS: dict[str, ConnectionExpectation] = {
     # connection is C001's (no account) and registers its private application range.
     "PC-FR2-ZSCALER-MUC-PROD": {
         "path_type": "internet_vpn",
-        "service": "private",
+        "near_port": ("eg-fr201", "Ethernet1/14"),
         "ip_namespace": "PROD",
         "vlan_id": None,
         "owner": "C001",
         "locations": ("FR2", "ZSCALER-MUNICH I"),
-        "carriers": ("INET-LUMEN-EQXFR2",),
+        "carriers": (),
         "password": None,
         "address_source": ADDRESS_OUR_POOL,
         "prefix_length": 30,

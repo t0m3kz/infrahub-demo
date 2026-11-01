@@ -441,12 +441,11 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
             "virtual_network": virtual_network,
         }
 
-    def connection(name: str, service: str, ends: tuple[tuple[str, str], ...], **fields: Any) -> dict:
+    def connection(name: str, ends: tuple[tuple[str, str], ...], **fields: Any) -> dict:
         """A provider connection: unset relationships are null, ``registered_prefixes`` empty. ``ends`` are the
         (device, interface) end ports of its session circuit."""
         return {
             "name": _v(name),
-            "service": _v(service),
             "owner": _node(None),
             "account": _node(None),
             "session_circuits": _edges(
@@ -469,7 +468,6 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
         [
             connection(
                 "aws-transit-hub-euc1",
-                "transit",
                 ((device_name, "Ethernet1/13.1000"),),
                 transit_attachment=_node({"associated_route_table": _node({"id": "rt-shared"})}),
                 attached_gateway=_node(
@@ -492,14 +490,12 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
             ),
             connection(
                 "aws-private-dev-euc1",
-                "private",
                 ((device_name, "Ethernet1/13.1001"),),
                 attached_network=vpc(_customer("C003"), ("10.60.0.0/16", "NON-PROD"), ("10.31.0.0/16", "PROD")),
             ),
             # The same sub-interface name on ANOTHER edge: matched by device, never accepted here.
             connection(
                 "aws-private-elsewhere",
-                "private",
                 (("dc1-edge-02", "Ethernet1/13.1000"),),
                 attached_network=vpc(_customer("C003"), ("10.99.0.0/16", "PROD")),
             ),

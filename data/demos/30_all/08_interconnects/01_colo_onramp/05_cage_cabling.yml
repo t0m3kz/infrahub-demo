@@ -21,10 +21,10 @@
 #    routers of AM-NE) enter our cage on a Fabric port of Equinix's, patched to one of our edge ports.
 #    The port is modelled as a stub provider device (../01_colo_onramp/02_cloud_provider_edges.yml,
 #    EXT-EQX-FABRIC-FR2, deployed to the cage FR2); the cable runs from eg-fr201 Ethernet1/1 (a
-#    `customer` port: Ethernet1/[15-16] face the cage's firewall pair and are cabled by add_colocation_zone,
-#    Ethernet1/[13-14] are the cloud and ISP uplinks, Ethernet1/12 the gateway) to the Fabric port's
-#    et-0/0/0. Carries the provider connection PC-FR2-AMNE-PROD (../05_provider_connections/02_amne_chain.yml), whose
-# VLAN sub-interface
+#    `partner` port: Ethernet1/[15-16] face the cage's firewall pair and are cabled by add_colocation_zone,
+#    Ethernet1/[13-14] are `uplink` ports that the connections adopt explicitly (Ethernet1/13 the AWS Direct Connect,
+#    Ethernet1/14 the internet carrier), Ethernet1/12 the gateway) to the Fabric port's et-0/0/0. Carries the
+#    provider connection PC-FR2-AMNE-PROD (../05_provider_connections/02_amne_chain.yml), whose VLAN sub-interface
 #    Ethernet1/1.1200 rides this cable on its parent.
 apiVersion: infrahub.app/v1
 kind: Object

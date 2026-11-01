@@ -6,8 +6,9 @@
 # cloud region of its own. The far facility is the Megaport zone MCR-PAR1 the stub is deployed to
 # (../01_colo_onramp/02_cloud_provider_edges.yml).
 #
-# The carrier is the cross-connect XC-EQXPA4-MEGAPORT (../01_colo_onramp/03_carrier_circuits.yml): eg-pa401 Ethernet1/1
-# and the stub's et-0/0/0. Equinix sells the cross-connect, Megaport the service (profile megaport: a /31 from OUR pool,
+# The near port is eg-pa401 Ethernet1/1 (a `partner` port) and the carrier that ends on it is the cross-connect
+# XC-EQXPA4-MEGAPORT (../01_colo_onramp/03_carrier_circuits.yml), an existing carrier the generator adopts, to the
+# stub's et-0/0/0. Equinix sells the cross-connect, Megaport the service (profile megaport: a /31 from OUR pool,
 # one session). Nothing of the session is authored: add_provider_connection builds the session circuit
 # PC-PA4-MEGAPORT-PROD-L1 with its sub-interfaces and add_virtual_circuit the /31 from Handoff-PROD-IPv4 and the eBGP
 # session between eg-pa401's overlay process and EXT-MEGAPORT-MCR1-bgp. The party's ASN is that process's local_as
@@ -76,14 +77,12 @@ spec:
       member_of_groups: [provider_connections]
       description: "PROD Megaport connection PA4 cage <-> Megaport Cloud Router EXT-MEGAPORT-MCR1 (AS133937)"
       path_type: dedicated
-      service: private
       status: active
       bandwidth: 10000
       vlan_id: 1300
       near: "PA4"
       far: "MCR-PAR1"
+      near_port: ["eg-pa401", "Ethernet1/1"]
       ip_namespace: "PROD"
       provider_as: "AS133937"
       password: "eqx-pa4-megaport-key"
-      carrier_circuits:
-        - "XC-EQXPA4-MEGAPORT"

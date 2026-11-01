@@ -469,6 +469,7 @@ class TopologyCustomerCloud(
 ):
     customer_name: String
     name: StringOptional
+    account: RelationshipAttribute[CloudAccount]
     network_segments: RelationshipManager[CloudNetworkSegment]
 
 
@@ -1031,7 +1032,6 @@ class TopologyProviderConnection(CoreNode):
     description: StringOptional
     name: String
     path_type: Dropdown
-    service: Dropdown
     status: Dropdown
     vlan_id: IntegerOptional
     account: RelationshipAttribute[CloudAccount]
@@ -1040,6 +1040,7 @@ class TopologyProviderConnection(CoreNode):
     far: RelationshipAttribute[TopologyFacility]
     ip_namespace: RelationshipAttribute[IpamNamespace]
     near: RelationshipAttribute[TopologyFacility]
+    near_port: RelationshipAttribute[DcimInterface]
     owner: RelationshipAttribute[OrganizationCustomer]
     password: RelationshipAttribute[RoutingPassword]
     provider_as: RelationshipAttribute[RoutingAutonomousSystem]

@@ -6,24 +6,22 @@ flavour, the ends of each link, the link prefix of each session) and raises ``Va
 generator refuses a spec before its first write. The VLAN and the tunnel names depend on what the devices already
 hold, so the generator reads that under its locks and asks :func:`choose_vlan` / :func:`choose_tunnel_name`.
 
-Where the two ends of a link come from (the decision the schema leaves open):
+The connection is a service request: it names the facilities, never the ports. Where the two ends of a link come from:
 
-- dedicated: the connection's authored ``carrier_circuits``. A carrier end whose device is deployed in the near
-  facility is a near port, one deployed in the far facility is a far port; each side needs exactly one port per link
-  of the flavour, paired in carrier order. The far port's device IS the provider stub (a stub shared per provider and
-  facility, authored in data). A provider-hosted near end (a Network Edge NIC) is found the same way, through a
-  virtual-connection carrier that ends on it.
-- internet_vpn: no sub-interface. The near device is the one device deployed in the near facility that ends an
-  internet carrier circuit: the connection's ``carrier_circuits`` when it lists any (they must be internet carriers;
-  this is how a facility with several internet-fed edges says which one the tunnels leave by), else the near
-  facility's own internet carriers (then exactly one device may end one). The tunnel rides on that carrier's port
-  (``parent_interface``). The far device is the stub of the far facility: the one whose BGP process speaks
-  ``provider_as`` when several are deployed there, so two stubs of a facility need two distinct ASes.
+- dedicated: :class:`DedicatedEnds`, decided by the generator (generators/helpers/near_port_facts.py, which reads the
+  facts the choice needs and calls generators/helpers/near_port.py): the near port (the one the connection's own
+  carrier ends on, else the explicit ``near_port``, else a free port of the right role), the provider device of the far
+  facility (:func:`choose_stub`) and its far port (the far end of the reused carrier, or ``None``: a virtual NIC the
+  generator creates). One link: a dedicated connection is ONE leg (a primary and a secondary leg are two connections).
+- internet_vpn: no sub-interface, no carrier. The near device and port are an end of one of the near facility's own
+  internet carrier circuits: the one whose port is the explicit ``near_port``, else (no ``near_port``) the one device
+  that ends one (several edges need ``near_port`` to say which one the tunnels leave by). The tunnel rides on that
+  carrier's port (``parent_interface``); ``near_port`` is never a dedicated port selection for a VPN. The far device is the stub of the far facility (:func:`choose_stub`).
 
 The stub carries ONE ManagedBGP process. An authored one is reused (its AS must be ``provider_as``); a stub without
 one gets it from the generator (generators/provider_stub.py), which needs the connection's ``provider_as`` for the AS:
-such a link plans ``far_process_id = None``. A VPN picks its stub among those whose process speaks ``provider_as``,
-else among those with no process at all.
+such a link plans ``far_process_id = None``. The stub is the one whose process speaks ``provider_as`` when several are
+deployed in the far facility, else the one without a process.
 """
 
 from __future__ import annotations
@@ -31,7 +29,7 @@ from __future__ import annotations
 import ipaddress
 import re
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from utils.circuit_underlay import DECOMMISSIONED, HANDOFF_TYPE, subinterface_vlan
@@ -46,6 +44,11 @@ from utils.provider_services import (
 
 VPN_TYPE = "vpn"
 INTERNET_CARRIER = "internet"
+# The far facility kinds the generator can land a carrier on by creating the far end itself: a virtual NIC on the
+# service-edge appliance of the region. A virtual colocation is ordered by us elsewhere: its carrier must exist.
+NIC_FAR_KINDS = ("TopologyCloudRegion", "TopologySaasRegion")
+ORDERED_FAR_KIND = "TopologyVirtualColocation"
+NIC_PREFIX = "vnic-"
 # A VLAN a generated sub-interface may take: 1 is the default VLAN, 4095 is reserved.
 VLAN_MIN = 2
 VLAN_MAX = 4094
@@ -152,9 +155,11 @@ class ConnectionSpec:
     id: str
     name: str
     path_type: str
-    service: str
     status: str
     vlan_id: int | None
+    bandwidth: int | None
+    near_port_id: str | None
+    far_kind: str
     namespace_id: str | None
     provider_id: str | None
     provider_name: str | None
@@ -164,10 +169,25 @@ class ConnectionSpec:
     near_id: str | None
     far_id: str | None
     link_prefixes: tuple[tuple[str, str], ...]
-    carriers: tuple[Carrier, ...]
+    carriers: tuple[Carrier, ...]  # the connection's own carrier_circuits (its output of an earlier run)
     near_internet: tuple[Carrier, ...]
+    near_devices: tuple[tuple[str, str], ...]  # (id, name) of the devices the near facility hosts
+    near_load: tuple[frozenset[str], ...]  # per OTHER connection of the near facility: the ids of its end devices
     stubs: tuple[Stub, ...]
     sessions: tuple[ExistingSession, ...]
+
+    @property
+    def near_device_ids(self) -> frozenset[str]:
+        return frozenset(device_id for device_id, _ in self.near_devices)
+
+    @property
+    def stub_ids(self) -> frozenset[str]:
+        return frozenset(stub.id for stub in self.stubs)
+
+    @property
+    def creates_carrier_ends(self) -> bool:
+        """The generator can create the far end (and so the carrier) itself; False: the carrier must already exist."""
+        return self.far_kind != ORDERED_FAR_KIND
 
 
 @dataclass(frozen=True)
@@ -177,6 +197,18 @@ class Side:
     device_id: str
     device_name: str
     port: Port | None
+
+
+@dataclass(frozen=True)
+class DedicatedEnds:
+    """The ends of a dedicated link, as decided by the generator.
+
+    ``far`` is None while the virtual NIC of the service edge is still to be created (:func:`nic_name`).
+    """
+
+    near: Port
+    far_device: Stub
+    far: Port | None
 
 
 @dataclass(frozen=True)
@@ -285,6 +317,18 @@ def parse_connection(raw: dict[str, Any]) -> ConnectionSpec:
     namespace = raw.get("ip_namespace")
     carriers = tuple(_carrier(c) for c in raw.get("carrier_circuits") or [] if isinstance(c, dict) and c.get("id"))
     stubs = _stubs(far)
+    near_load = tuple(
+        frozenset(
+            device_id
+            for key in ("carrier_circuits", "session_circuits")
+            for circuit in other.get(key) or []
+            if isinstance(circuit, dict)
+            for end in circuit.get("capabilities") or []
+            if isinstance(end, dict) and (device_id := _id(end.get("device")))
+        )
+        for other in near.get("near_connections") or []
+        if isinstance(other, dict) and other.get("id") != raw["id"]
+    )
     near_circuits = [
         circuit
         for circuit in near.get("circuits") or []
@@ -299,9 +343,11 @@ def parse_connection(raw: dict[str, Any]) -> ConnectionSpec:
         id=raw["id"],
         name=name,
         path_type=raw.get("path_type") or "",
-        service=raw.get("service") or "",
         status=raw.get("status") or "",
         vlan_id=raw.get("vlan_id"),
+        bandwidth=raw.get("bandwidth"),
+        near_port_id=_id(raw.get("near_port")),
+        far_kind=far.get("typename") or "",
         namespace_id=_id(namespace),
         provider_id=provider.get("id"),
         provider_name=provider.get("name"),
@@ -315,6 +361,12 @@ def parse_connection(raw: dict[str, Any]) -> ConnectionSpec:
         near_internet=tuple(
             _carrier(c) for c in near_circuits if c.get("id") and c.get("circuit_type") == INTERNET_CARRIER
         ),
+        near_devices=tuple(
+            (device["id"], device.get("name") or "?")
+            for device in near.get("devices") or []
+            if isinstance(device, dict) and device.get("id")
+        ),
+        near_load=near_load,
         stubs=stubs,
         sessions=tuple(_session(s) for s in raw.get("session_circuits") or [] if isinstance(s, dict) and s.get("id")),
     )
@@ -387,11 +439,9 @@ def stubs_to_build(links: Iterable[LinkPlan]) -> list[Side]:
     )
 
 
-def plan_links(spec: ConnectionSpec) -> tuple[ConnectionFlavour, list[LinkPlan]]:
-    """The flavour and the links of a connection; ValueError for anything that cannot be built.
-
-    Every failure here precedes the first write of the generator.
-    """
+def validate_spec(spec: ConnectionSpec) -> tuple[ConnectionFlavour, list[str | None]]:
+    """The flavour of the connection and the link prefix id of each of its links; ValueError for a spec that cannot
+    be built whatever the ports are."""
     if spec.path_type not in PATH_TYPES:
         raise ValueError(f"unknown path_type '{spec.path_type}'")
     if not spec.near_id or not spec.far_id:
@@ -406,10 +456,26 @@ def plan_links(spec: ConnectionSpec) -> tuple[ConnectionFlavour, list[LinkPlan]]
             "(external provider, SaaS region) or bill it to an account"
         )
     flavour = flavour_for(spec.profile, spec.path_type)
-    prefix_ids = pair_link_prefixes(flavour, spec.link_prefixes)
+    if spec.path_type == PATH_DEDICATED and flavour.links != 1:
+        raise ValueError(
+            f"a dedicated connection is one leg, the provider flavour has {flavour.links} links: "
+            "model each leg as its own connection"
+        )
+    return flavour, pair_link_prefixes(flavour, spec.link_prefixes)
+
+
+def plan_links(spec: ConnectionSpec, ends: DedicatedEnds | None = None) -> tuple[ConnectionFlavour, list[LinkPlan]]:
+    """The flavour and the links of a connection; ValueError for anything that cannot be built.
+
+    A dedicated connection needs the ``ends`` the generator decided (:class:`DedicatedEnds`); a VPN finds its own.
+    Every failure here precedes the first write of the generator.
+    """
+    flavour, prefix_ids = validate_spec(spec)
     circuit_type = circuit_type_of(spec.path_type)
     if spec.path_type == PATH_DEDICATED:
-        sides = _dedicated_sides(spec, flavour)
+        if ends is None:
+            raise ValueError("a dedicated connection needs its near and far ends")
+        sides = _dedicated_sides(spec, ends)
     else:
         sides = _vpn_sides(spec, flavour)
     links = []
@@ -430,66 +496,132 @@ def plan_links(spec: ConnectionSpec) -> tuple[ConnectionFlavour, list[LinkPlan]]
     return flavour, links
 
 
-def _dedicated_sides(spec: ConnectionSpec, flavour: ConnectionFlavour) -> list[tuple[Side, Side, BgpProcess | None]]:
-    """The (near, far, far process) of each link, from the authored carriers' ends."""
-    assert spec.near_id and spec.far_id
-    if not spec.carriers:
-        raise ValueError("a dedicated connection needs its carrier_circuits")
-    near_ports = _carrier_ends(spec.carriers, spec.near_id)
-    far_ports = _carrier_ends(spec.carriers, spec.far_id)
-    if len(near_ports) != flavour.links or len(far_ports) != flavour.links:
-        raise ValueError(
-            f"the flavour has {flavour.links} link(s): the carriers must end on exactly that many ports in the near "
-            f"facility and in the far facility, found {len(near_ports)} near and {len(far_ports)} far"
-        )
-    stub_ids = {stub.id for stub in spec.stubs}
-    if not stub_ids:
-        raise ValueError("the far facility holds no provider appliance or device to land the connection on")
-    off_stub = sorted({port.label for port in far_ports if port.device_id not in stub_ids})
-    if off_stub:
-        raise ValueError(
-            f"far carrier end(s) {', '.join(off_stub)} are not on a provider appliance or device of the far facility"
-        )
-    sides = []
-    for near, far in zip(near_ports, far_ports, strict=True):
-        process = _single_process(far.device_name, far.processes, spec.provider_as_id)
-        sides.append((Side(near.device_id, near.device_name, near), Side(far.device_id, far.device_name, far), process))
-    return sides
+def _dedicated_sides(spec: ConnectionSpec, ends: DedicatedEnds) -> list[tuple[Side, Side, BgpProcess | None]]:
+    """The (near, far, far process) of the one link, from the ends the generator decided."""
+    stub = ends.far_device
+    process = _single_process(stub.name, stub.processes, spec.provider_as_id)
+    return [(Side(ends.near.device_id, ends.near.device_name, ends.near), Side(stub.id, stub.name, ends.far), process)]
 
 
-def _vpn_sides(spec: ConnectionSpec, flavour: ConnectionFlavour) -> list[tuple[Side, Side, BgpProcess | None]]:
-    """The (near, far, far process) of each tunnel: one near device and one stub shared by every tunnel.
+def bind_far_port(links: list[LinkPlan], port: Port) -> list[LinkPlan]:
+    """The links with the far port that was still to be created."""
+    return [replace(link, far=replace(link.far, port=port)) for link in links]
 
-    The near side keeps the internet carrier's port it leaves by: the tunnel interface rides on it
-    (``parent_interface``), which is how the path from the tunnel to the internet carrier is a graph path.
+
+def nic_name(connection_name: str) -> str:
+    """The virtual NIC of the service edge that ends the carrier of a connection."""
+    return f"{NIC_PREFIX}{connection_name}"
+
+
+def choose_stub(spec: ConnectionSpec) -> Stub:
+    """The provider device of the far facility that terminates the connection.
+
+    Among the devices whose ManagedBGP process speaks ``provider_as`` when the connection names it (else among those with
+    a process); with no such device, the one device without a process (the generator builds it). ValueError unless
+    exactly one is left.
     """
-    assert spec.near_id
-    internet = spec.carriers or spec.near_internet
-    wrong = sorted(carrier.name for carrier in internet if carrier.circuit_type != INTERNET_CARRIER)
-    if wrong:
-        raise ValueError(f"a VPN rides internet carrier circuits, not {', '.join(wrong)}")
-    devices = {port.device_id: port for port in _carrier_ends(internet, spec.near_id)}
-    if len(devices) != 1:
-        names = ", ".join(sorted(port.device_name for port in devices.values())) or "none"
-        raise ValueError(
-            f"a VPN leaves the near facility by exactly one device that ends an internet carrier circuit there "
-            f"(list the carrier in carrier_circuits when the facility has several), found: {names}"
-        )
-    near_port = next(iter(devices.values()))
     if not spec.stubs:
-        raise ValueError("the far facility holds no provider appliance or device to terminate the tunnels on")
+        raise ValueError("the far facility holds no provider appliance or device to terminate the connection on")
     candidates = [stub for stub in spec.stubs if stub.processes]
     if spec.provider_as_id:
         candidates = [stub for stub in candidates if any(p.local_as_id == spec.provider_as_id for p in stub.processes)]
         if not candidates:  # no stub speaks the AS yet: the one stub without a process gets it
             candidates = [stub for stub in spec.stubs if not stub.processes]
+    elif not candidates and len(spec.stubs) == 1:
+        candidates = list(spec.stubs)  # the plan then says it needs provider_as to build the process
     if len(candidates) != 1:
         names = ", ".join(sorted(stub.name for stub in candidates)) or "none"
         raise ValueError(
             f"the far facility must hold exactly one provider stub whose ManagedBGP process speaks provider_as (or, "
             f"with no such stub, exactly one stub without a process), found: {names}"
         )
-    stub = candidates[0]
+    return candidates[0]
+
+
+def port_of(spec: ConnectionSpec, interface_id: str, name: str, device_id: str, device_name: str) -> Port:
+    """A port of the near facility or of a provider device of the far one, as the generator read it."""
+    stub = next((stub for stub in spec.stubs if stub.id == device_id), None)
+    if stub is not None:
+        deployment = spec.far_id
+    elif device_id in spec.near_device_ids:
+        deployment = spec.near_id
+    else:
+        deployment = None
+    return Port(
+        id=interface_id,
+        name=name,
+        device_id=device_id,
+        device_name=device_name,
+        deployment_id=deployment,
+        processes=stub.processes if stub else (),
+    )
+
+
+def carrier_ends(spec: ConnectionSpec, ends: Iterable[Port]) -> tuple[Port, Port] | None:
+    """(the end on a device of the near facility, the end on a device of the far one) of a carrier; None unless it
+    has exactly one of each."""
+    ends = list(ends)
+    near = [end for end in ends if end.device_id in spec.near_device_ids]
+    far = [end for end in ends if end.device_id in spec.stub_ids]
+    return (near[0], far[0]) if len(near) == 1 and len(far) == 1 else None
+
+
+def reused_ends(spec: ConnectionSpec, carrier_name: str, ends: Iterable[Port]) -> DedicatedEnds:
+    """The ends of the link when an existing carrier is reused: its end on the near facility and its end on the far
+    one. ValueError unless it has exactly one of each."""
+    pair = carrier_ends(spec, ends)
+    if pair is None:
+        raise ValueError(
+            f"carrier circuit {carrier_name} must end once on a device of the near facility and once on a device "
+            "of the far one"
+        )
+    far = pair[1]
+    stub = next(stub for stub in spec.stubs if stub.id == far.device_id)
+    return DedicatedEnds(pair[0], stub, far)
+
+
+def own_carriers(spec: ConnectionSpec) -> list[tuple[Carrier, Port, Port]]:
+    """The live carriers the connection already lists (its own output) that join the near and the far facility, with
+    their (near end, far end)."""
+    found = []
+    for carrier in spec.carriers:
+        if carrier.status == DECOMMISSIONED:
+            continue
+        pair = carrier_ends(spec, carrier.ends)
+        if pair is not None:
+            found.append((carrier, *pair))
+    return found
+
+
+def _vpn_sides(spec: ConnectionSpec, flavour: ConnectionFlavour) -> list[tuple[Side, Side, BgpProcess | None]]:
+    """The (near, far, far process) of each tunnel: one near device and one stub shared by every tunnel.
+
+    The near side keeps the internet carrier's port it leaves by: the tunnel interface rides on it
+    (``parent_interface``), which is how the path from the tunnel to the internet carrier is a graph path. With
+    ``near_port`` set, it must be the end port of one of the near facility's internet carriers (it picks the edge);
+    without it, exactly one device may end an internet carrier there.
+    """
+    assert spec.near_id
+    ends = _carrier_ends(spec.near_internet, spec.near_id)
+    if spec.near_port_id:
+        matching = [port for port in ends if port.id == spec.near_port_id]
+        if not matching:
+            raise ValueError(
+                f"near_port {spec.near_port_id} is not the end port of an internet carrier circuit of the near "
+                "facility: a VPN leaves by the port of one of them"
+            )
+        near_port = matching[0]
+    else:
+        devices = {port.device_id: port for port in ends}
+        if len(devices) != 1:
+            names = ", ".join(sorted(port.device_name for port in devices.values())) or "none"
+            raise ValueError(
+                f"a VPN leaves the near facility by exactly one device that ends an internet carrier circuit there "
+                f"(a connection lists no carrier: fix the internet carriers of the near facility, or set near_port "
+                f"to the internet carrier port the tunnels leave by), found: {names}"
+            )
+        near_port = next(iter(devices.values()))
+    stub = choose_stub(spec)
     process = _single_process(stub.name, stub.processes, spec.provider_as_id)
     near = Side(near_port.device_id, near_port.device_name, near_port)
     far = Side(stub.id, stub.name, None)

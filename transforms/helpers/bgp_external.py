@@ -102,13 +102,13 @@ def session_circuit_owner(circuit: dict[str, Any]) -> str | None:
 
 
 def connection_registered(connection: dict[str, Any]) -> list[tuple[str | None, dict[str, Any]]]:
-    """The (owner, prefix) pairs registered behind a provider connection, by its service.
+    """The (owner, prefix) pairs registered behind a provider connection, by what it is attached to.
 
-    ``private``: the blocks of its ``attached_network``, owned by the owner of that virtual network's account.
-    ``transit``: the blocks of every VPC attachment propagating into the route table its ``transit_attachment`` is
-    associated with, the table the Transit Gateway (``attached_gateway``) looks traffic from the connection up in;
-    a VPC propagating only elsewhere is unreachable over it. The owner of a block is the owner of its own VPC's
-    account (None when it is not a customer, or the account is unknown). Whatever the service, the connection's
+    ``attached_network`` (private): the blocks of that virtual network, owned by the owner of its account.
+    ``attached_gateway`` (transit): the blocks of every VPC attachment propagating into the route table its
+    ``transit_attachment`` is associated with, the table the Transit Gateway looks traffic from the connection up in;
+    a VPC propagating only elsewhere is unreachable over it. A connection has at most one of the two (a check). The owner of a block is the owner of its own VPC's
+    account (None when it is not a customer, or the account is unknown). Whatever it is attached to, the connection's
     ``registered_prefixes`` (a SaaS range, a partner range) are owned by the connection's owner
     (``connection_owner_key``).
     """
@@ -119,10 +119,9 @@ def connection_registered(connection: dict[str, Any]) -> list[tuple[str | None, 
         return [(owner, block) for block in network.get("cidr_blocks") or []]
 
     registered: list[tuple[str | None, dict[str, Any]]] = []
-    service = connection.get("service")
-    if service == "private":
-        registered += blocks(connection.get("attached_network"))
-    elif service == "transit":
+    if connection.get("attached_network"):
+        registered += blocks(connection["attached_network"])
+    elif connection.get("attached_gateway"):
         table_id = ((connection.get("transit_attachment") or {}).get("associated_route_table") or {}).get("id")
         if table_id:
             registered += [

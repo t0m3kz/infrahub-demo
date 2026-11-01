@@ -1,4 +1,4 @@
-"""CheckProviderConnections: rules PC1 to PC9, a passing case and a failing case each.
+"""CheckProviderConnections: rules PC1 to PC13, a passing case and a failing case each.
 
 Payload builders: tests/unit/provider_connections_check_helpers.py.
 """
@@ -20,9 +20,11 @@ from tests.unit.provider_connections_check_helpers import (
     XC,
     account,
     carrier,
-    carrier_ref,
     connection,
+    edges,
+    kit_end,
     namespace,
+    node,
     place,
     port,
     prefix,
@@ -112,13 +114,16 @@ class TestPc3Flavour:
         errors, _ = run([BASE], [session("S1", circuit_type="vpn")])
         assert any("PC3: session 'S1' is a vpn circuit but connection 'PC-AWS-FR2' is dedicated" in e for e in errors)
 
-    def test_gateway_attachment_needs_the_transit_service(self) -> None:
-        errors, _ = run([connection(attached_gateway=True)], [SESSION])
-        assert any("transit gateway but its service is 'private'" in e for e in errors)
+    def test_network_and_gateway_together_fail(self) -> None:
+        errors, _ = run([connection(attached_gateway=True, attached_network=True)], [SESSION])
+        assert any(
+            "PC3: connection 'PC-AWS-FR2' attaches to both a virtual network and a transit gateway" in e for e in errors
+        )
 
-    def test_network_attachment_needs_the_private_service(self) -> None:
-        errors, _ = run([connection(service="transit", attached_network=True)], [SESSION])
-        assert any("virtual network but its service is 'transit'" in e for e in errors)
+    @pytest.mark.parametrize(("gateway", "network"), [(True, False), (False, True), (False, False)])
+    def test_at_most_one_attachment_passes(self, gateway: bool, network: bool) -> None:
+        errors, _ = run([connection(attached_gateway=gateway, attached_network=network)], [SESSION])
+        assert [e for e in errors if e.startswith("PC3")] == []
 
     def test_default_flavour_without_a_profile_passes(self) -> None:
         errors, _ = run([connection(profile=None)], [SESSION])
@@ -313,6 +318,8 @@ class TestPc8VpnUnrendered:
 
 
 class TestPc9Environment:
+    """The namespace class is the account's environment class."""
+
     def test_prod_namespace_on_a_non_prod_account_fails(self) -> None:
         errors, _ = run([connection(account=account(env="d"))], [SESSION])
         assert any(
@@ -325,60 +332,174 @@ class TestPc9Environment:
         conn = connection(account=account(env="s"), ns=namespace("NON-PROD", "non_prod"))
         assert [e for e in run([conn], [SESSION])[0] if "namespace" in e] == []
 
+
+class TestPc10SessionTypes:
+    """A dci or a tunnel is routed on no provider connection."""
+
     def test_dci_in_a_connection_fails(self) -> None:
         errors, _ = run([BASE], [session("DCI-1", circuit_type="dci")])
-        assert any("PC9: dci circuit 'DCI-1' belongs to provider connection 'PC-AWS-FR2'" in e for e in errors)
+        assert any("PC10: dci circuit 'DCI-1' belongs to provider connection 'PC-AWS-FR2'" in e for e in errors)
 
     def test_tunnel_in_a_connection_fails(self) -> None:
         errors, _ = run([BASE], [session("T-1", circuit_type="tunnel")])
-        assert any("PC9: tunnel circuit 'T-1'" in e for e in errors)
+        assert any("PC10: tunnel circuit 'T-1'" in e for e in errors)
 
-    def test_carrier_not_reaching_the_far_facility_fails(self) -> None:
+
+class TestPc11CarriersOutput:
+    """carrier_circuits is the generator's output: sanity, at WARNING level (it can lag the generator)."""
+
+    @staticmethod
+    def _warnings(infos: list[str], rule: str) -> list[str]:
+        return [i for i in infos if i.startswith(f"WARNING: {rule}")]
+
+    def test_listed_carrier_in_the_near_facility_passes(self) -> None:
+        _, infos = run([BASE], [SESSION])
+        assert self._warnings(infos, "PC11") == []
+
+    def test_dedicated_with_sessions_and_no_carrier_warns(self) -> None:
+        errors, infos = run([connection(carriers=[])], [SESSION])
+        assert [e for e in errors if "PC11" in e] == []
+        assert len(self._warnings(infos, "PC11")) == 1 and "lists no carrier circuit" in infos[-1]
+
+    def test_dedicated_without_sessions_needs_no_carrier(self) -> None:
+        _, infos = run([connection(carriers=[])], [])
+        assert self._warnings(infos, "PC11") == []
+
+    def test_carrier_without_an_end_in_the_near_facility_warns(self) -> None:
         conn = connection()
-        conn["carrier_circuits"] = {
-            "edges": [
-                {
-                    "node": {
-                        "id": "id-XC-FR2-EUC1",
-                        "name": {"value": "XC-FR2-EUC1"},
-                        "locations": {"edges": [{"node": {"id": FR2["id"]}}]},
-                    }
-                }
-            ]
-        }
-        errors, _ = run([conn], [SESSION])
-        assert any("no carrier circuit of connection 'PC-AWS-FR2' terminates in its far facility" in e for e in errors)
+        conn["carrier_circuits"]["edges"][0]["node"]["locations"] = edges([{"id": EUC1["id"]}])
+        conn["carrier_circuits"]["edges"][0]["node"]["capabilities"] = edges([kit_end("x", "e1", EUC1)])
+        _, infos = run([conn], [SESSION])
+        assert any("PC11: carrier circuit 'XC-FR2-EUC1' of connection 'PC-AWS-FR2' has no end" in i for i in infos)
 
-    def test_listed_carriers_must_equal_the_derived_underlay(self) -> None:
-        errors, _ = run([connection(carriers=["XC-OTHER"])], [SESSION])
+    def test_carrier_with_a_near_end_passes_without_locations(self) -> None:
+        conn = connection()
+        node_ = conn["carrier_circuits"]["edges"][0]["node"]
+        node_["locations"] = edges([])
+        node_["capabilities"] = edges([kit_end("eg-fr201", "Ethernet1/13", FR2)])
+        _, infos = run([conn], [SESSION])
+        assert self._warnings(infos, "PC11") == []
+
+    def test_decommissioned_carrier_is_not_listed(self) -> None:
+        conn = connection()
+        conn["carrier_circuits"]["edges"][0]["node"]["status"] = {"value": "decommissioned"}
+        _, infos = run([conn], [SESSION])
+        assert "lists no carrier circuit" in infos[-1]
+
+    def test_internet_vpn_needs_no_carrier(self) -> None:
+        _, infos = run([connection(path_type="internet_vpn", vlan_id=None, carriers=[])], [])
+        assert self._warnings(infos, "PC11") == []
+
+
+class TestPc12NearPort:
+    """An explicit near_port is an end of one of the listed carriers."""
+
+    def _with_end(self, port_id: str) -> dict[str, Any]:
+        conn = connection(near_port="eg-fr201:Ethernet1/13")
+        conn["carrier_circuits"]["edges"][0]["node"]["capabilities"] = edges(
+            [{"id": port_id, "device": node({"id": "id-d", "deployment": node({"id": FR2["id"]})})}]
+        )
+        return conn
+
+    def test_near_port_that_is_a_carrier_end_passes(self) -> None:
+        errors, _ = run([self._with_end("eg-fr201:Ethernet1/13")], [SESSION])
+        assert [e for e in errors if "PC12" in e] == []
+
+    def test_near_port_that_is_no_carrier_end_fails(self) -> None:
+        errors, _ = run([self._with_end("eg-fr201:Ethernet1/2")], [SESSION])
+        assert any("PC12: near_port of connection 'PC-AWS-FR2' is not an end of any" in e for e in errors)
+
+    def test_no_near_port_is_not_judged(self) -> None:
+        errors, _ = run([BASE], [SESSION])
+        assert [e for e in errors if "PC12" in e] == []
+
+    def test_near_port_with_no_carrier_fails(self) -> None:
+        errors, _ = run([connection(near_port="eg-fr201:Ethernet1/13", carriers=[])], [SESSION])
+        assert any("PC12" in e for e in errors)
+
+    @staticmethod
+    def _internet_carrier(end_port: str, status: str = "active", circuit_type: str = "internet") -> dict[str, Any]:
+        """A root carrier circuit of FR2 with one end on ``end_port``."""
+        root = carrier("INET-FR2", [FR2], [], ends=[kit_end(end_port.split(":")[0], end_port.split(":")[1], FR2)])
+        root["status"] = {"value": status}
+        root["circuit_type"] = {"value": circuit_type}
+        return root
+
+    @staticmethod
+    def _vpn(near_port: str) -> dict[str, Any]:
+        return connection(path_type="internet_vpn", vlan_id=None, carriers=[], near_port=near_port)
+
+    def test_vpn_near_port_on_an_internet_carrier_end_passes(self) -> None:
+        carriers = [self._internet_carrier("eg-fr201:Ethernet1/14")]
+        errors, _ = run([self._vpn("eg-fr201:Ethernet1/14")], [], carriers)
+        assert [e for e in errors if "PC12" in e] == []
+
+    def test_vpn_near_port_that_is_no_internet_carrier_end_fails(self) -> None:
+        carriers = [self._internet_carrier("eg-fr201:Ethernet1/14")]
+        errors, _ = run([self._vpn("eg-fr201:Ethernet1/13")], [], carriers)
         assert any(
-            "PC9: carrier_circuits of connection 'PC-AWS-FR2' differ" in e
-            and "missing: XC-FR2-EUC1" in e
-            and "not under any session: XC-OTHER" in e
-            for e in errors
+            "PC12: near_port of VPN connection 'PC-AWS-FR2' is not an end of an internet carrier" in e for e in errors
         )
 
-    def test_decommissioned_carrier_is_no_underlay(self) -> None:
-        ends = [
-            port("eg-fr201", "Ethernet1/13.3101", FR2, (carrier_ref("XC-FR2-EUC1", "decommissioned"),)),
-            port("EXT-AWS-DX-FR2", "et-0/0/0.3101", EUC1, asns=(64512,)),
+    @pytest.mark.parametrize(("status", "circuit_type"), [("decommissioned", "internet"), ("active", "cross_connect")])
+    def test_vpn_near_port_on_a_dead_or_non_internet_carrier_fails(self, status: str, circuit_type: str) -> None:
+        carriers = [self._internet_carrier("eg-fr201:Ethernet1/14", status=status, circuit_type=circuit_type)]
+        errors, _ = run([self._vpn("eg-fr201:Ethernet1/14")], [], carriers)
+        assert any("PC12: near_port of VPN connection" in e for e in errors)
+
+    def test_dedicated_near_port_is_still_judged_against_the_listed_carriers(self) -> None:
+        """An internet carrier ending on the port does not make it the near port of a dedicated connection."""
+        conn = connection(near_port="eg-fr201:Ethernet1/14")
+        errors, _ = run([conn], [SESSION], [self._internet_carrier("eg-fr201:Ethernet1/14")])
+        assert any("PC12: near_port of connection 'PC-AWS-FR2' is not an end of any" in e for e in errors)
+
+
+class TestPc13Redundancy:
+    """Two legs of one redundancy group on one near device are a WARNING."""
+
+    @staticmethod
+    def _run(devices: tuple[str, str], group: str | None = "RG-1", status: str = "active") -> list[str]:
+        conn = connection(carriers=["XC-A", "XC-B"])
+        carriers = [
+            carrier(
+                "XC-A",
+                [FR2, EUC1],
+                ["PC-AWS-FR2"],
+                group,
+                [kit_end(devices[0], "e1", FR2), kit_end("far-1", "x", EUC1)],
+            ),
+            carrier(
+                "XC-B",
+                [FR2, EUC1],
+                ["PC-AWS-FR2"],
+                group,
+                [kit_end(devices[1], "e1", FR2), kit_end("far-1", "y", EUC1)],
+                status,
+            ),
         ]
-        errors, _ = run([connection(carriers=[])], [session("S1", ends=ends)])
-        assert [e for e in errors if "carrier_circuits" in e] == []
+        for edge in conn["carrier_circuits"]["edges"]:
+            edge["node"]["capabilities"] = edges([kit_end("eg-fr201", "e", FR2)])
+        errors, infos = run([conn], [SESSION], carriers)
+        assert errors == [] or all("PC13" not in e for e in errors)
+        return [i for i in infos if i.startswith("WARNING: PC13")]
 
-    def test_vpn_may_list_the_internet_carrier_it_leaves_by(self) -> None:
-        conn = connection(path_type="internet_vpn", vlan_id=None, carriers=["INET-1"])
-        errors, _ = run([conn], [])
-        assert [e for e in errors if "carrier" in e] == []
+    def test_two_legs_on_one_device_warn(self) -> None:
+        warnings = self._run(("eg-fr201", "eg-fr201"))
+        assert len(warnings) == 1 and "redundancy group 'RG-1' has 2 carrier circuits" in warnings[0]
+        assert "end on 1 device(s) (eg-fr201)" in warnings[0]
 
-    def test_vpn_lists_no_other_carrier(self) -> None:
-        conn = connection(path_type="internet_vpn", vlan_id=None, carriers=["XC-1"])
-        errors, _ = run([conn], [])
-        assert any(
-            "PC9: internet_vpn connection 'PC-AWS-FR2' lists carrier circuits that are not internet carriers" in e
-            and "(XC-1)" in e
-            for e in errors
-        )
+    def test_two_legs_on_two_devices_pass(self) -> None:
+        assert self._run(("eg-fr201", "eg-fr202")) == []
+
+    def test_no_group_is_not_judged(self) -> None:
+        assert self._run(("eg-fr201", "eg-fr201"), group=None) == []
+
+    def test_decommissioned_leg_is_ignored(self) -> None:
+        assert self._run(("eg-fr201", "eg-fr201"), status="decommissioned") == []
+
+    def test_far_side_devices_do_not_count(self) -> None:
+        """Both legs share the far device but have distinct near devices: no finding."""
+        assert self._run(("eg-fr201", "eg-fr202")) == []
 
 
 class TestCloudConsistency:

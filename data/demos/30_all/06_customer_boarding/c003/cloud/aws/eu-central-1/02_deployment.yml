@@ -6,6 +6,7 @@ spec:
   kind: TopologyCustomerCloud
   data:
     - owner: "C003"
+      account: "vaultex-aws-prod"
       customer_name: "vaultex-aws"
       parent: "eu-central-1"
       member_of_groups: [customer_deployments_cloud]

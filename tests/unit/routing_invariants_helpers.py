@@ -182,7 +182,6 @@ def _connection(
     conn_id: str,
     ns_type: str | None = "prod",
     *,
-    service: str = "private",
     network: dict[str, Any] | None = None,
     sessions: tuple[str, ...] = ("HO",),
     owner: tuple[str, str, str] | None = None,
@@ -216,7 +215,6 @@ def _connection(
     return {
         "id": conn_id,
         "name": _v(conn_id),
-        "service": _v(service),
         "ip_namespace": {"node": {"name": _v("NS"), "namespace_type": _v(ns_type)}} if ns_type else {"node": None},
         "owner": _owner(owner),
         "account": {"node": None},
@@ -241,4 +239,4 @@ def _transit_connection(
     conn_id: str, table: str, attachments: list[tuple[str, dict[str, Any]]], sessions: tuple[str, ...] = ("HO-HUB",)
 ) -> dict[str, Any]:
     """A transit connection whose hybrid attachment sits on ``table``; ``attachments`` are (propagated table, VPC)."""
-    return _connection(conn_id, service="transit", sessions=sessions, table=table, attachments=attachments)
+    return _connection(conn_id, sessions=sessions, table=table, attachments=attachments)

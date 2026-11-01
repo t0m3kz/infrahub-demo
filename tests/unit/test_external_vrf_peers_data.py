@@ -70,16 +70,16 @@ class TestAllDemoData:
     @pytest.mark.parametrize(
         "connection", [c for c in _connections() if c["path_type"] == "dedicated"], ids=lambda c: c["name"]
     )
-    def test_dedicated_connection_names_its_vlan_and_its_carriers(self, connection: dict[str, Any]) -> None:
+    def test_dedicated_connection_names_its_vlan_and_its_near_port(self, connection: dict[str, Any]) -> None:
         """The session's sub-interface is <port>.<vlan_id> (the border policy matches the circuit's own end port):
-        the connection has a VLAN and rides carrier circuits that exist."""
-        carriers = {c["name"] for c in _objects(_INTERCONNECTS, "TopologyCarrierCircuit")}
+        the connection has a VLAN and names the near port an existing carrier ends on (it authors no carrier list)."""
+        ends = [c["capabilities"] for c in _objects(_INTERCONNECTS, "TopologyCarrierCircuit")]
         assert 1 <= connection["vlan_id"] <= 4094
-        assert connection["carrier_circuits"]
-        assert set(connection["carrier_circuits"]) <= carriers
+        assert "carrier_circuits" not in connection
+        assert any(list(connection["near_port"]) in carrier_ends for carrier_ends in ends)
 
     @pytest.mark.parametrize(
-        "connection", [c for c in _connections() if c["service"] == "transit"], ids=lambda c: c["name"]
+        "connection", [c for c in _connections() if c.get("attached_gateway")], ids=lambda c: c["name"]
     )
     def test_transit_connection_names_the_gateway_and_the_attachment_that_decides_its_blocks(
         self, connection: dict[str, Any]

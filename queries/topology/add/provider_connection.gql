@@ -4,7 +4,7 @@
 # The provider (account, far facility, else the owner of the far kit) is utils/provider_services.py connection_provider.
 # Paths of the cleaned connection (utils/data_cleaning.clean_data: edges/node/value flattened, `__typename` becomes
 # `typename`, a node selecting only `id` becomes the id string):
-#   id, name, path_type, service, status, vlan_id, ip_namespace.id, provider_as (id), password (id), link_prefixes[].id, .prefix
+#   id, name, path_type, status, vlan_id, bandwidth, near_port (id), ip_namespace.id, provider_as (id), password (id), link_prefixes[].id, .prefix
 #   account.provider.id, .name, .connection_profile        (a cloud's provider)
 #   far.id, far.typename
 #   far.provider / far.parent.provider / far.account.provider    (the provider of a facility that is not a cloud)
@@ -14,9 +14,12 @@
 #   or SaaS region and a virtual colocation host appliances (their `devices` is not selected: they are no
 #   TopologyDeviceHosting); an external provider or a colocation zone hosts devices. A dedicated carrier's far end may be a
 #   DcimVirtualInterface NIC of the appliance (ConnectionEnd is `on DcimInterface`).
-#   near.id, near.circuits[]: the carrier circuits of the near facility (a VPN leaves by an internet one). The spread
+#   near.id, near.devices[] (id, name: the devices of the near facility, the candidates of the near-port choice and the
+#   ends of the connection's carrier), near.near_connections[] (id, carrier_circuits[] and session_circuits[] with the
+#   id of the device of each end: the load of a device is the number of connections that end on it, it only balances).
+#   near.circuits[]: the carrier circuits of the near facility (a VPN leaves by an internet one). The spread
 #   is at node level: inside `... on X { ...F }` a live Infrahub resolves F to nulls (tests/unit/test_query_fragment_spreads.py)
-#   carrier_circuits[] and the near internet carriers: id, name, circuit_type, status, capabilities[] (the ends)
+#   carrier_circuits[] (the connection's own carrier, its output) and the near internet carriers: id, name, circuit_type, status, capabilities[] (the ends)
 #   session_circuits[]: what an earlier run wrote (found by name, so a rerun writes nothing)
 query provider_connection_data($name: String!) {
   TopologyProviderConnection(name__value: $name) {
@@ -25,7 +28,8 @@ query provider_connection_data($name: String!) {
         id
         name { value }
         path_type { value }
-        service { value }
+        bandwidth { value }
+        near_port { node { id } }
         status { value }
         vlan_id { value }
         ip_namespace { node { id } }
@@ -47,6 +51,25 @@ query provider_connection_data($name: String!) {
         near {
           node {
             id
+            near_connections {
+              edges {
+                node {
+                  id
+                  carrier_circuits { edges { node { ...ConnectionEndDevices } } }
+                  session_circuits { edges { node { ...ConnectionEndDevices } } }
+                }
+              }
+            }
+            ... on TopologyDeviceHosting {
+              devices {
+                edges {
+                  node {
+                    id
+                    name { value }
+                  }
+                }
+              }
+            }
             ... on TopologyConnectableLocation {
               circuits {
                 edges {
@@ -157,6 +180,18 @@ fragment ConnectionCarrier on TopologyCarrierCircuit {
     edges {
       node {
         ...ConnectionEnd
+      }
+    }
+  }
+}
+
+fragment ConnectionEndDevices on TopologyCircuit {
+  capabilities {
+    edges {
+      node {
+        ... on DcimInterface {
+          device { node { id } }
+        }
       }
     }
   }

@@ -1,16 +1,17 @@
-"""Validate the provider connections: who owns them, what they ride, what they route (rules PC1 to PC9).
+"""Validate the provider connections: who owns them, what they ride, what they route (rules PC1 to PC13).
 
 A ``TopologyProviderConnection`` says "this facility of ours is connected to that provider facility": its carriers
 (dedicated) or the internet (VPN), and the sessions routed on it. The schema holds the shape; what it cannot hold is
 here. Targetless: a carrier circuit and a session circuit are judged against every connection.
 
 PC1  a session circuit (handoff, vpn) that lands in a provider-hosted place (cloud region, SaaS region, virtual
-     colocation) belongs to a connection; a dci or a tunnel belongs to none (PC9)
+     colocation) belongs to a connection
 PC2  a carrier circuit that ends in a provider-hosted place belongs to at least one connection (a cross-connect may
      carry several); a carrier between two zones of ours is no provider connection
 PC3  the (provider profile, path type) pair has a flavour, a dedicated connection states its VLAN, the sessions are as
-     many as the flavour's links, of the circuit type the path type says (dedicated: handoff, internet_vpn: vpn),
-     and an attachment (network, gateway) agrees with the service
+     many as the flavour's links, of the circuit type the path type says (dedicated: handoff, internet_vpn: vpn), and
+     a connection has at most one of attached_network / attached_gateway (its meaning, private or transit, is derived
+     from the attachment)
 PC4  the VLAN of a handoff session is the connection's VLAN and both ends are named ``<port>.<vlan>``
 PC5  owner: with an ``account`` the connection has no owner of its own (it is the account's); registered prefixes need
      an owner that is a customer and sit in the connection's ip_namespace
@@ -19,10 +20,20 @@ PC6  stub consistency: each provider-side device of the sessions runs one BGP pr
 PC7  link ranges: a provider-assigned flavour has as many ``link_prefixes`` as sessions, of the flavour's length, in the
      connection's namespace, one on each session; an our-pool flavour has none
 PC8  WARNING: a vpn session is model only, no tunnel configuration is rendered for it
-PC9  environment class (the namespace's class is the account's environment), no dci or tunnel in a connection, the
-     connection's carriers cover its near and far facility, and for a dedicated connection they are exactly the
-     carriers derived from its sessions' ports (``utils/circuit_underlay.py``); an internet_vpn lists at most the
-     internet carrier of its near facility it leaves by (it rides the near facility's internet access, derived)
+PC9  environment class: the namespace's class is the account's environment
+PC10 a dci or a tunnel circuit belongs to no connection
+PC11 WARNING: the generator's output, ``carrier_circuits``: a dedicated connection with sessions lists at least one
+     carrier, and each listed carrier has an end in the near facility (a warning, not an error: the list is written by
+     ``add_provider_connection`` after the carrier exists, so it can lag the generator by one run)
+PC12 ``near_port``, when set: dedicated, an end of one of the connection's listed carriers; internet_vpn, an end of a
+     live internet carrier circuit of the near facility (the port the tunnels leave by); the generator never uses
+     another port than the explicit one
+PC13 WARNING: the carriers of one ``redundancy_group`` end, on the near side, on fewer distinct devices than there are
+     carriers (two legs on one device); every carrier is judged, the near side of a carrier being the ends deployed in
+     the near facility of a connection that lists it
+
+``carrier_circuits`` is the OUTPUT of the generator, not a second source of a session's carrier: that stays derived
+from the ports (``utils/circuit_underlay.py``).
 
 Also two consistency rules of the cloud models, no removal behind them: a ``CloudNetworkSegment`` is owned by the owner
 of its customer footprint, and a vpc ``CloudTransitGatewayAttachment`` lives in the account of its virtual network.
@@ -35,13 +46,7 @@ from __future__ import annotations
 from typing import Any
 
 from checks.base import WarningCheck
-from utils.circuit_underlay import (
-    DECOMMISSIONED,
-    HANDOFF_TYPE,
-    VPN_TYPE,
-    derived_underlay,
-    subinterface_vlan,
-)
+from utils.circuit_underlay import DECOMMISSIONED, HANDOFF_TYPE, VPN_TYPE, subinterface_vlan
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import PROD_TYPE
 from utils.ownership import connection_owner, customer_owner
@@ -57,7 +62,6 @@ from utils.provider_services import (
 CONNECTION = "TopologyProviderConnection"
 SESSION = "TopologySessionCircuit"
 CARRIER = "TopologyCarrierCircuit"
-INTERNET_CARRIER = "internet"
 # The places a provider hosts: a circuit that lands in one belongs to a provider connection.
 PROVIDER_HOSTED = frozenset({"TopologyCloudRegion", "TopologySaasRegion", "TopologyVirtualColocation"})
 CONNECTION_SESSIONS = (HANDOFF_TYPE, VPN_TYPE)
@@ -84,6 +88,16 @@ def _name(node: dict[str, Any]) -> str:
 
 def _dicts(values: Any) -> list[dict[str, Any]]:
     return [value for value in values or [] if isinstance(value, dict)]
+
+
+def _carrier_ends(carrier: dict[str, Any]) -> list[dict[str, Any]]:
+    """The end ports of a carrier circuit (``capabilities``)."""
+    return _dicts(carrier.get("capabilities"))
+
+
+def _near_ends(carrier: dict[str, Any], near_id: str) -> list[dict[str, Any]]:
+    """The ends of a carrier whose device is deployed in the facility ``near_id``."""
+    return [end for end in _carrier_ends(carrier) if _ref((end.get("device") or {}).get("deployment")) == near_id]
 
 
 def _live(node: dict[str, Any]) -> bool:
@@ -123,7 +137,7 @@ def _far_ports(session: dict[str, Any], near_id: str | None) -> list[dict[str, A
 
 
 class CheckProviderConnections(WarningCheck):
-    """Provider connections own their circuits, sessions and addressing (rules PC1 to PC9)."""
+    """Provider connections own their circuits, sessions and addressing (rules PC1 to PC13)."""
 
     query = "provider_connections"
 
@@ -137,18 +151,19 @@ class CheckProviderConnections(WarningCheck):
             if connection_id:
                 by_connection.setdefault(connection_id, []).append(session)
 
+        self._carriers = _dicts(cleaned.get(CARRIER))
         self._validate_sessions(sessions)
-        self._validate_carriers(_dicts(cleaned.get(CARRIER)))
-        for connection in connections:
-            if not _live(connection):
-                continue
+        self._validate_carriers(self._carriers)
+        live_connections = [c for c in connections if _live(c)]
+        for connection in live_connections:
             live_sessions = [s for s in by_connection.get(str(connection.get("id")), []) if _live(s)]
             self._validate_connection(connection, live_sessions)
+        self._validate_redundancy(live_connections, _dicts(cleaned.get(CARRIER)))
         self._validate_cloud_segments(_dicts(cleaned.get("CloudNetworkSegment")))
         self._validate_attachments(_dicts(cleaned.get("CloudTransitGatewayAttachment")))
 
     # ------------------------------------------------------------------
-    # PC1, PC2 and the session types (PC9): every circuit
+    # PC1, PC2 and the session types (PC10): every circuit
     # ------------------------------------------------------------------
 
     def _validate_sessions(self, sessions: list[dict[str, Any]]) -> None:
@@ -171,7 +186,7 @@ class CheckProviderConnections(WarningCheck):
                 self._error(
                     session,
                     SESSION,
-                    f"PC9: {circuit_type} circuit '{_name(session)}' belongs to provider connection "
+                    f"PC10: {circuit_type} circuit '{_name(session)}' belongs to provider connection "
                     f"'{_name(session['connection'])}': only a {HANDOFF_TYPE} or a {VPN_TYPE} circuit is routed on a "
                     "provider connection.",
                 )
@@ -200,7 +215,7 @@ class CheckProviderConnections(WarningCheck):
         self._validate_link_prefixes(connection, sessions)
         self._validate_vpn_unrendered(connection, sessions)
         self._validate_environment(connection)
-        self._validate_carrier_cover(connection, sessions)
+        self._validate_carriers_output(connection, sessions)
 
     def _validate_flavour(self, connection: dict[str, Any], sessions: list[dict[str, Any]]) -> None:
         """PC3."""
@@ -222,18 +237,12 @@ class CheckProviderConnections(WarningCheck):
                 CONNECTION,
                 f"PC3: dedicated connection '{name}' has no vlan_id: its handoff sub-interfaces are <port>.<vlan>.",
             )
-        service = connection.get("service")
-        if _ref(connection.get("attached_gateway")) and service != "transit":
+        if _ref(connection.get("attached_gateway")) and _ref(connection.get("attached_network")):
             self._error(
                 connection,
                 CONNECTION,
-                f"PC3: connection '{name}' attaches to a transit gateway but its service is '{service}', not transit.",
-            )
-        if _ref(connection.get("attached_network")) and service != "private":
-            self._error(
-                connection,
-                CONNECTION,
-                f"PC3: connection '{name}' attaches to a virtual network but its service is '{service}', not private.",
+                f"PC3: connection '{name}' attaches to both a virtual network and a transit gateway: it has at most "
+                "one of attached_network (private) and attached_gateway (transit).",
             )
         wanted = SESSION_TYPE_OF.get(path_type or "")
         for session in sessions:
@@ -430,56 +439,84 @@ class CheckProviderConnections(WarningCheck):
                 "non-prod never connect.",
             )
 
-    def _validate_carrier_cover(self, connection: dict[str, Any], sessions: list[dict[str, Any]]) -> None:
-        """PC9: the listed carriers cover near and far and equal the derived underlay of the sessions."""
+    def _validate_carriers_output(self, connection: dict[str, Any], sessions: list[dict[str, Any]]) -> None:
+        """PC11 (WARNING) and PC12: what the generator wrote into ``carrier_circuits`` and the explicit near port."""
         name = _name(connection)
-        listed = _dicts(connection.get("carrier_circuits"))
-        listed_ids = {str(carrier["id"]) for carrier in listed}
-        if connection.get("path_type") == PATH_INTERNET_VPN:
-            # An internet_vpn rides the near facility's internet access, derived; it may list the internet carrier
-            # it leaves by (the only way to choose among several internet-fed edges), and nothing else.
-            near_id = _ref(connection.get("near"))
-            wrong = [
+        listed = [c for c in _dicts(connection.get("carrier_circuits")) if _live(c)]
+        near_id = _ref(connection.get("near"))
+        if connection.get("path_type") == PATH_DEDICATED and sessions:
+            if not listed:
+                self.log_warning(
+                    message=f"PC11: dedicated connection '{name}' has sessions but lists no carrier circuit: "
+                    "add_provider_connection writes carrier_circuits (it has not run, or the carrier is missing)."
+                )
+            for carrier in listed:
+                if near_id and not _near_ends(carrier, near_id) and near_id not in _ids(carrier.get("locations")):
+                    self.log_warning(
+                        message=f"PC11: carrier circuit '{_name(carrier)}' of connection '{name}' has no end in its "
+                        f"near facility '{_name(connection['near']) if isinstance(connection.get('near'), dict) else near_id}'."
+                    )
+        near_port = _ref(connection.get("near_port"))
+        if near_port and connection.get("path_type") == PATH_INTERNET_VPN:
+            # A VPN lists no carrier: its near_port picks, among several internet-fed edges, the internet carrier's
+            # port the tunnels leave by.
+            internet = [
                 carrier
-                for carrier in listed
-                if carrier.get("circuit_type") != INTERNET_CARRIER
-                or (near_id and near_id not in _ids(carrier.get("locations")))
+                for carrier in self._carriers
+                if carrier.get("circuit_type") == "internet"
+                and _live(carrier)
+                and near_id in _ids(carrier.get("locations"))
             ]
-            if wrong:
+            if near_port not in {_ref(end) for carrier in internet for end in _carrier_ends(carrier)}:
                 self._error(
                     connection,
                     CONNECTION,
-                    f"PC9: internet_vpn connection '{name}' lists carrier circuits that are not internet carriers of "
-                    f"its near facility ({', '.join(_name(c) for c in wrong)}): it rides the near facility's "
-                    "internet access, and lists only the one it leaves by.",
+                    f"PC12: near_port of VPN connection '{name}' is not an end of an internet carrier circuit of its "
+                    "near facility: the tunnels leave by the port of an internet carrier.",
                 )
-            return
-        locations: set[str] = set()
-        for carrier in listed:
-            locations |= _ids(carrier.get("locations"))
-        for label, place in (("near", connection.get("near")), ("far", connection.get("far"))):
-            place_id = _ref(place)
-            if listed and place_id and place_id not in locations:
+        elif near_port:
+            ends = {
+                _ref(end) for carrier in _dicts(connection.get("carrier_circuits")) for end in _carrier_ends(carrier)
+            }
+            if near_port not in ends:
                 self._error(
                     connection,
                     CONNECTION,
-                    f"PC9: no carrier circuit of connection '{name}' terminates in its {label} facility "
-                    f"'{_name(place) if isinstance(place, dict) else place_id}'.",
+                    f"PC12: near_port of connection '{name}' is not an end of any of its carrier circuits: the "
+                    "generator uses the explicit port or fails, it never picks another.",
                 )
-        derived: dict[str, dict[str, Any]] = {}
-        for session in sessions:
-            for carrier in derived_underlay(session):
-                if carrier.get("status") != DECOMMISSIONED:
-                    derived.setdefault(str(carrier["id"]), carrier)
-        missing = sorted(_name(carrier) for cid, carrier in derived.items() if cid not in listed_ids)
-        extra = sorted(_name(carrier) for carrier in listed if str(carrier["id"]) not in derived)
-        if missing or extra:
-            self._error(
-                connection,
-                CONNECTION,
-                f"PC9: carrier_circuits of connection '{name}' differ from the carriers found at its sessions' ports "
-                f"(missing: {', '.join(missing) or 'none'}; not under any session: {', '.join(extra) or 'none'}).",
-            )
+
+    def _validate_redundancy(self, connections: list[dict[str, Any]], carriers: list[dict[str, Any]]) -> None:
+        """PC13 (WARNING): two legs of one redundancy group on one near device."""
+        near_of: dict[str, set[str]] = {}
+        for connection in connections:
+            near_id = _ref(connection.get("near"))
+            for carrier in _dicts(connection.get("carrier_circuits")):
+                if near_id and carrier.get("id"):
+                    near_of.setdefault(str(carrier["id"]), set()).add(near_id)
+        groups: dict[str, list[dict[str, Any]]] = {}
+        for carrier in carriers:
+            group = carrier.get("redundancy_group")
+            if group and _live(carrier):
+                groups.setdefault(str(group), []).append(carrier)
+        for group, members in sorted(groups.items()):
+            devices: set[str] = set()
+            legs = 0
+            for carrier in members:
+                near_ends = [
+                    end
+                    for end in _carrier_ends(carrier)
+                    if _ref((end.get("device") or {}).get("deployment")) in near_of.get(str(carrier.get("id")), set())
+                ]
+                if near_ends:
+                    legs += 1
+                    devices |= {str((end.get("device") or {}).get("name")) for end in near_ends}
+            if legs > 1 and len(devices) < legs:
+                self.log_warning(
+                    message=f"PC13: redundancy group '{group}' has {legs} carrier circuits on the near side but they "
+                    f"end on {len(devices)} device(s) ({', '.join(sorted(devices))}): two legs on one device are no "
+                    "redundancy."
+                )
 
     # ------------------------------------------------------------------
     # Cloud consistency (no removal behind them)

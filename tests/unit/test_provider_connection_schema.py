@@ -69,16 +69,33 @@ def test_the_connection_has_no_redundancy_reach_or_provider_field() -> None:
     assert names.isdisjoint({"redundancy", "reach", "provider", "provider_type", "connection_profile"})
 
 
-def test_the_path_type_and_service_are_required_dropdowns() -> None:
-    """path_type is dedicated or internet_vpn; service is what the provider side attaches to."""
+def test_the_path_type_is_a_required_dropdown_and_service_is_gone() -> None:
+    """path_type is dedicated or internet_vpn; what the provider side attaches to is derived from the attachments."""
     attributes = _connection()["attributes"]
 
     path_type = _field(attributes, "path_type")
     assert path_type["kind"] == "Dropdown" and path_type["optional"] is False
     assert [c["name"] for c in path_type["choices"]] == ["dedicated", "internet_vpn"]
-    service = _field(attributes, "service")
-    assert service["kind"] == "Dropdown" and service["optional"] is False
-    assert [c["name"] for c in service["choices"]] == ["private", "transit", "public"]
+    assert "service" not in {a["name"] for a in attributes}
+    assert "service" not in _CONNECTION_FILE.read_text().replace("there is no `service` field", "")
+
+
+def test_the_near_port_is_an_optional_explicit_port() -> None:
+    """The intent field that wins over the automatic choice: one DcimInterface, optional, its own identifier."""
+    near_port = _field(_relationships(), "near_port")
+
+    assert (near_port["peer"], near_port["cardinality"], near_port["optional"]) == ("DcimInterface", "one", True)
+    assert near_port["identifier"] == "provider_connection__near_port"
+    assert near_port["order_weight"] == 1075
+
+
+def test_the_generator_outputs_are_described_as_outputs() -> None:
+    """carrier_circuits and session_circuits are written by add_provider_connection; nobody authors them."""
+    for name in ("carrier_circuits", "session_circuits"):
+        assert _field(_relationships(), name)["description"].startswith("Output:"), name
+    for name in ("near", "far", "path_type"):
+        item = _field(_relationships() + _connection()["attributes"], name)
+        assert item["description"].startswith("Intent:"), name
 
 
 def test_the_vlan_is_a_bounded_optional_number() -> None:
@@ -96,6 +113,7 @@ def test_the_vlan_is_a_bounded_optional_number() -> None:
     [
         ("near", "TopologyFacility", "one", False),
         ("far", "TopologyFacility", "one", False),
+        ("near_port", "DcimInterface", "one", True),
         ("ip_namespace", "IpamNamespace", "one", False),
         ("owner", "OrganizationCustomer", "one", True),
         ("account", "CloudAccount", "one", True),

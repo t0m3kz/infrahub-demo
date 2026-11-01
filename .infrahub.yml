@@ -340,11 +340,15 @@ check_definitions:
     class_name: CheckCircuitPlacement
     file_path: checks/circuit_placement.py
   # Targetless: a carrier circuit and a session circuit are judged against every
-  # provider connection (rules PC1 to PC9), plus the cloud owner/account
+  # provider connection (rules PC1 to PC13), plus the cloud owner/account
   # consistency rules, so one query reads all of them.
   - name: validate_provider_connections
     class_name: CheckProviderConnections
     file_path: checks/provider_connections.py
+  # Targetless: a cloud footprint is judged against its account (owner) and the networks its segments use.
+  - name: validate_customer_cloud_account
+    class_name: CheckCustomerCloudAccount
+    file_path: checks/customer_cloud_account.py
   # Targetless: the pairing is written by add_patch_panel from the ports, and a person can edit it; the check
   # compares every panel with what the generator would write.
   - name: validate_patch_panel_pairing
@@ -706,6 +710,8 @@ queries:
     file_path: queries/validation/circuit_placement.gql
   - name: provider_connections
     file_path: queries/validation/provider_connections.gql
+  - name: customer_cloud_account
+    file_path: queries/validation/customer_cloud_account.gql
   - name: patch_panel_pairing
     file_path: queries/validation/patch_panel_pairing.gql
   - name: suite_capacity

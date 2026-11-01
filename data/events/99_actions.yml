@@ -824,17 +824,16 @@ spec:
     # add_provider_connection targets provider_connections and builds the per-link session circuits (and their end
     # interfaces) of a TopologyProviderConnection, so every connection must be a member of the group, or its
     # created-trigger raises (see the endpoint note above).
-    # The `updated` rules watch what the connection is made of: its path (`path_type`, `service`, `vlan_id`,
-    # `status`), its two facilities (`near`, `far`), its `ip_namespace` and `account` (the provider, hence the
+    # The `updated` rules watch the intent of the connection: its path (`path_type`, `vlan_id`, `status`), its two
+    # facilities (`near`, `far`) and the explicit `near_port`, its `ip_namespace` and `account` (the provider, hence the
     # flavour), `provider_as` and `link_prefixes` (the stub's AS and the provider-assigned ranges), `password` (the
-    # key of its sessions), the authored
-    # `carrier_circuits` it rides, and the attachments (`attached_network`, `attached_gateway`,
-    # `transit_attachment`; the transforms read them, the generator only reruns idempotently).
-    # `session_circuits` is deliberately absent: the generator writes it (through the circuit's `connection`), so a
-    # rule would loop. `owner`, `registered_prefixes`, `bandwidth` and `description` have no rule:
-    # nothing the generator writes depends on them.
-    # No loop: the only write to the connection is `vlan_id`, once, when the VLAN was chosen by the run; the rerun
-    # finds it set and writes nothing.
+    # key of its sessions), and the attachments (`attached_network`, `attached_gateway`, `transit_attachment`; the
+    # transforms read them, the generator only reruns idempotently).
+    # `session_circuits` and `carrier_circuits` are deliberately absent: the generator writes them (the sessions
+    # through the circuit's `connection`), so a rule would loop. `owner`, `registered_prefixes`, `bandwidth` and
+    # `description` have no rule: nothing the generator writes depends on them after the carrier exists.
+    # No loop: the writes to the connection are `vlan_id`, once, when the VLAN was chosen by the run, and
+    # `carrier_circuits`, only when the list differs; the rerun finds both set and writes nothing.
 
     - name: trigger-provider-connection-on-created
       branch_scope: "other_branches"
@@ -851,17 +850,6 @@ spec:
         kind: CoreNodeTriggerAttributeMatch
         data:
           - attribute_name: path_type
-            value_match: any
-
-    - name: trigger-provider-connection-on-service-updated
-      branch_scope: "other_branches"
-      node_kind: TopologyProviderConnection
-      mutation_action: "updated"
-      action: run-provider-connection-generator
-      matches:
-        kind: CoreNodeTriggerAttributeMatch
-        data:
-          - attribute_name: service
             value_match: any
 
     - name: trigger-provider-connection-on-vlan-id-updated
@@ -996,7 +984,7 @@ spec:
           - relationship_name: link_prefixes
             modification_type: updated
 
-    - name: trigger-provider-connection-on-carrier-circuits-updated
+    - name: trigger-provider-connection-on-near-port-updated
       branch_scope: "other_branches"
       node_kind: TopologyProviderConnection
       mutation_action: "updated"
@@ -1004,5 +992,5 @@ spec:
       matches:
         kind: CoreNodeTriggerRelationshipMatch
         data:
-          - relationship_name: carrier_circuits
+          - relationship_name: near_port
             modification_type: updated

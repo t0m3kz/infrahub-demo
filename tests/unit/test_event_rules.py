@@ -340,7 +340,6 @@ def test_a_change_of_the_segment_ports_runs_nothing() -> None:
 
 _CONNECTION_ATTRIBUTE_RULES = {
     "path-type": "path_type",
-    "service": "service",
     "vlan-id": "vlan_id",
     "status": "status",
 }
@@ -355,7 +354,7 @@ _CONNECTION_RELATIONSHIP_RULES = {
     "provider-as": "provider_as",
     "password": "password",
     "link-prefixes": "link_prefixes",
-    "carrier-circuits": "carrier_circuits",
+    "near-port": "near_port",
 }
 
 
@@ -387,10 +386,10 @@ def test_the_provider_connection_has_a_created_rule_and_one_updated_rule_per_inp
         assert _match_fields(rule) == [("CoreNodeTriggerRelationshipMatch", field)]
 
 
-def test_the_session_circuits_edge_has_no_rule_because_the_generator_writes_it() -> None:
-    """A rule on `session_circuits` would loop: the generator writes it (through the circuit's `connection`)."""
+def test_the_output_edges_have_no_rule_because_the_generator_writes_them() -> None:
+    """A rule on `session_circuits` or `carrier_circuits` would loop: the generator writes both."""
     fields = {field for rule in _rules_for("TopologyProviderConnection").values() for _, field in _match_fields(rule)}
-    assert "session_circuits" not in fields
+    assert not fields & {"session_circuits", "carrier_circuits"}
 
 
 def test_every_rule_of_the_provider_connection_action_is_on_the_connection_kind() -> None:

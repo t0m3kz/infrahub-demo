@@ -11,31 +11,12 @@ from typing import Any
 
 import pytest
 
-from generators.helpers.provider_connection import choose_tunnel_parent, parse_connection, plan_links
+from generators.helpers.provider_connection import choose_stub, choose_tunnel_parent, parse_connection
 from generators.logger import GeneratorError
 from tests.unit import provider_connection_helpers as h
 
-SERVICE_EDGE = "AWS-EUC1-SE"
-SERVICE_EDGE_ID = f"dev-{SERVICE_EDGE}"
-
-
-def _nic_carrier(index: int, nic: str) -> dict[str, Any]:
-    """A virtual connection from our cage edge to one NIC of the region's service edge appliance."""
-    return h.carrier(
-        f"vc-{index}",
-        f"VC-{index}",
-        [
-            h.port(f"near-port-{index}", f"Ethernet1/{index}", f"eg-{index}", h.NEAR),
-            h.port(nic, nic, SERVICE_EDGE, h.FAR, processes=[h.bgp()]),
-        ],
-        circuit_type="virtual_connection",
-    )
-
-
-def _connection(name: str, index: int, nic: str, **kwargs: Any) -> dict[str, Any]:
-    payload = h.connection(name=name, carriers=[_nic_carrier(index, nic)], **kwargs)
-    payload["TopologyProviderConnection"][0]["id"] = name
-    return payload
+SERVICE_EDGE = h.SERVICE_EDGE[1]
+SERVICE_EDGE_ID = h.SERVICE_EDGE[0]
 
 
 async def _run(payload: dict[str, Any], client: h.FakeClient | None = None) -> h.FakeClient:
@@ -46,92 +27,90 @@ async def _run(payload: dict[str, Any], client: h.FakeClient | None = None) -> h
 
 class TestRegionHasNoDevices:
     def test_the_far_region_of_the_payload_lists_only_appliances_and_the_stub_is_found_there(self) -> None:
-        payload = h.connection(carriers=[_nic_carrier(1, "vnic-fr2")])
+        payload = h.connection()
         far = payload["TopologyProviderConnection"][0]["far"]
 
         assert "devices" not in far
         assert [stub["id"] for stub in far["appliances"]] == [SERVICE_EDGE_ID]
-        _, (link,) = plan_links(parse_connection(payload["TopologyProviderConnection"][0]))
-        assert (link.far.device_id, link.far.port.name if link.far.port else None) == (SERVICE_EDGE_ID, "vnic-fr2")
+        assert choose_stub(parse_connection(payload["TopologyProviderConnection"][0])).id == SERVICE_EDGE_ID
 
     def test_a_stub_listed_under_devices_is_still_found_for_an_external_provider(self) -> None:
-        raw = h.connection(carriers=[_nic_carrier(1, "vnic-fr2")])["TopologyProviderConnection"][0]
+        raw = h.connection()["TopologyProviderConnection"][0]
         raw["far"] = {"id": h.FAR, "typename": "TopologyExternalProviders", "devices": raw["far"].pop("appliances")}
 
-        _, (link,) = plan_links(parse_connection(raw))
-
-        assert link.far.device_id == SERVICE_EDGE_ID
+        assert choose_stub(parse_connection(raw)).id == SERVICE_EDGE_ID
 
 
 class TestPlanRefusals:
     def test_no_appliance_in_the_far_region_is_refused(self) -> None:
-        raw = h.connection(carriers=[_nic_carrier(1, "vnic-fr2")], stubs=[])["TopologyProviderConnection"][0]
+        raw = h.connection(stubs=[])["TopologyProviderConnection"][0]
 
         with pytest.raises(ValueError, match="no provider appliance or device"):
-            plan_links(parse_connection(raw))
+            choose_stub(parse_connection(raw))
 
-    def test_a_far_end_that_is_not_on_a_stub_of_the_far_facility_is_refused(self) -> None:
-        other = h.stub_device("dev-other", "OTHER")
-        raw = h.connection(carriers=[_nic_carrier(1, "vnic-fr2")], stubs=[other])["TopologyProviderConnection"][0]
-
-        with pytest.raises(ValueError, match="not on a provider appliance or device of the far facility"):
-            plan_links(parse_connection(raw))
-
-    def test_two_candidate_appliances_for_a_vpn_are_refused_without_the_provider_as_to_choose(self) -> None:
+    def test_two_candidate_appliances_are_refused_without_the_provider_as_to_choose(self) -> None:
         stubs = [h.stub_device(), h.stub_device("dev-2", "EXT-2", [h.bgp("bgp-2", "as-other")])]
-        raw = h.connection(
-            path_type="internet_vpn",
-            internet=[h.internet_carrier("edge-1")],
-            stubs=stubs,
-            link_prefixes=[h.prefix("p-1", "169.254.9.0/30"), h.prefix("p-2", "169.254.10.0/30")],
-        )["TopologyProviderConnection"][0]
+        raw = h.connection(stubs=stubs)["TopologyProviderConnection"][0]
 
         with pytest.raises(ValueError, match="exactly one provider stub"):
-            plan_links(parse_connection(raw))
+            choose_stub(parse_connection(raw))
+
+    def test_the_provider_as_chooses_among_two_appliances(self) -> None:
+        stubs = [h.stub_device(), h.stub_device("dev-2", "EXT-2", [h.bgp("bgp-2", "as-other")])]
+        raw = h.connection(stubs=stubs, provider_as=h.AWS_AS)["TopologyProviderConnection"][0]
+
+        assert choose_stub(parse_connection(raw)).name == SERVICE_EDGE
 
 
 class TestSharedServiceEdge:
     @pytest.mark.asyncio
     async def test_two_connections_of_one_region_get_distinct_nics_and_sub_interfaces_on_one_appliance(self) -> None:
-        first = await _run(_connection("PC-A", 1, "vnic-a", vlan_id=100))
-        second = await _run(_connection("PC-B", 2, "vnic-b", vlan_id=100))
+        first = await _run(h.connection(name="PC-A", conn_id="c-a", vlan_id=100))
+        second = await _run(h.connection(name="PC-B", conn_id="c-b", vlan_id=100))
 
+        nic_ids = {
+            data["data"]["name"]: data["id"]
+            for client in (first, second)
+            for _, data in client.of("save", "DcimVirtualInterface")
+            if data["data"]["name"].startswith("vnic-") and "." not in data["data"]["name"]
+        }
         far = [
             data
             for client in (first, second)
             for _, data in client.of("create", "DcimVirtualInterface")
-            if data["device"]["id"] == SERVICE_EDGE_ID
+            if data["device"]["id"] == SERVICE_EDGE_ID and "." in data["name"]
         ]
         # same appliance, same VLAN, distinct NICs: distinct sub-interfaces, each riding its own NIC
         assert [(d["name"], d["parent_interface"]) for d in far] == [
-            ("vnic-a.100", {"id": "vnic-a"}),
-            ("vnic-b.100", {"id": "vnic-b"}),
+            ("vnic-PC-A.100", {"id": nic_ids["vnic-PC-A"]}),
+            ("vnic-PC-B.100", {"id": nic_ids["vnic-PC-B"]}),
         ]
 
     @pytest.mark.asyncio
     async def test_a_second_run_with_the_appliance_stub_writes_nothing(self) -> None:
-        first = await _run(_connection("PC-A", 1, "vnic-a", vlan_id=100))
-        assert first.writes > 0
+        near = h.pid("eg-1", "Ethernet1/1")
+        nic = h.pid("AWS-SE", "vnic-PC-A")
+        client = h.FakeClient(subs=[h.sub("s-near", "Ethernet1/1.100", near), h.sub("s-far", "vnic-PC-A.100", nic)])
+        client.add_far_end("vnic-PC-A")
         existing = h.session(
             "PC-A-L1",
-            ends=[h.end("s-near", "Ethernet1/1.100", "eg-1"), h.end("s-far", "vnic-a.100", SERVICE_EDGE)],
+            ends=[h.end("s-near", "Ethernet1/1.100", "eg-1"), h.end("s-far", "vnic-PC-A.100", SERVICE_EDGE)],
             session_id="sess-1",
         )
-        existing["connection"] = "PC-A"
-        subs = [h.sub("s-near", "Ethernet1/1.100", "near-port-1"), h.sub("s-far", "vnic-a.100", "vnic-a")]
-        client = h.FakeClient(subs=subs)
+        existing["connection"] = "c-a"
+        own = h.own_carrier(far_if="vnic-PC-A")
 
-        await _run(_connection("PC-A", 1, "vnic-a", vlan_id=100, sessions=[existing]), client)
+        await _run(h.connection(name="PC-A", conn_id="c-a", vlan_id=100, carriers=[own], sessions=[existing]), client)
 
         assert client.log == []
-        assert set(client.group_context.related_node_ids) == {"PC-A", "s-near", "s-far", "sess-1"}
+        assert set(client.group_context.related_node_ids) == {"c-a", "s-near", "s-far", "sess-1"}
 
 
 class TestFailuresWriteNothing:
     @pytest.mark.asyncio
     async def test_no_appliance_in_the_far_region_fails_before_the_first_write(self) -> None:
         client = h.FakeClient()
-        payload = h.connection(carriers=[_nic_carrier(1, "vnic-fr2")], stubs=[])
+        payload = h.connection(stubs=[])
 
         with pytest.raises(GeneratorError):
             await _run(payload, client)
@@ -160,28 +139,27 @@ class TestTunnelOnTheApplianceNic:
         return h.connection(
             path_type="internet_vpn",
             internet=[h.internet_carrier("edge-1")],
-            stubs=[h.stub_device("dev-stub", "EXT-STUB")],
             link_prefixes=[h.prefix("p-1", "169.254.9.0/30"), h.prefix("p-2", "169.254.10.0/30")],
         )
 
     @pytest.mark.asyncio
     async def test_the_far_tunnels_ride_the_first_nic_of_the_appliance(self) -> None:
         client = h.FakeClient()
-        client.nics["dev-stub"] = ["Loopback0", "vnic-b", "vnic-a"]
+        client.nics["dev-AWS-SE"] = ["Loopback0", "vnic-b", "vnic-a"]
 
         await _run(self._vpn(), client)
 
-        far = [data for _, data in client.of("create", "DcimVirtualInterface") if data["device"]["id"] == "dev-stub"]
+        far = [data for _, data in client.of("create", "DcimVirtualInterface") if data["device"]["id"] == "dev-AWS-SE"]
         assert [d["parent_interface"] for d in far] == [{"id": "nic-vnic-a"}, {"id": "nic-vnic-a"}]
 
     @pytest.mark.asyncio
     async def test_an_appliance_without_a_nic_keeps_a_free_standing_tunnel(self) -> None:
         client = h.FakeClient()
-        client.nics["dev-stub"] = ["Loopback0"]
+        client.nics["dev-AWS-SE"] = ["Loopback0"]
 
         await _run(self._vpn(), client)
 
-        far = [data for _, data in client.of("create", "DcimVirtualInterface") if data["device"]["id"] == "dev-stub"]
+        far = [data for _, data in client.of("create", "DcimVirtualInterface") if data["device"]["id"] == "dev-AWS-SE"]
         assert all("parent_interface" not in d for d in far)
 
     def test_loopbacks_tunnels_and_sub_interfaces_are_no_nic(self) -> None:

@@ -158,12 +158,11 @@ class TestProviderConnectionRoot:
         assert {"name", "device"} <= {c.name.value for c in _children(ends)}
 
     def test_the_connection_selects_what_connection_registered_reads(self) -> None:
-        """service, the two owners, registered_prefixes, the network and the transit chain."""
+        """the two owners, registered_prefixes, the network and the transit chain."""
         names = {c.name.value for c in _children(self._connection())}
 
         assert {
             "name",
-            "service",
             "owner",
             "account",
             "session_circuits",

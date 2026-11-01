@@ -193,36 +193,28 @@ class _Model:
     def _connection_sessions(self) -> list[dict[str, Any]]:
         """The ``<connection>-L1`` handoffs add_provider_connection builds for the one-link dedicated connections.
 
-        The near port is the end of a listed carrier whose device is deployed at the near facility, the far port the
-        end deployed at the far facility, both on the first carrier that has the two; each end is ``<port>.<vlan>``.
+        The near port is the connection's ``near_port``, the far port the other end of the carrier that ends on it (the
+        generator adopts that carrier); each end is ``<port>.<vlan>``.
         """
         # Unfiltered: dropping a carrier from the payloads must not drop the session it carried.
-        rows = {
-            str(c.value("circuit_id")): {"ends": [(str(d), str(p)) for d, p in c.item["capabilities"]]}
-            for c in _all(CARRIER)
-        }
+        rows = [[(str(d), str(p)) for d, p in c.item["capabilities"]] for c in _all(CARRIER)]
         sessions: list[dict[str, Any]] = []
         for connection in _all(CONNECTION):
             if connection.value("path_type") != "dedicated" or connection.item.get("link_prefixes"):
                 continue
             near, far = str(connection.item["near"]), str(connection.item["far"])
-            for carrier_name in connection.item.get("carrier_circuits") or []:
-                ends = rows[str(carrier_name)]["ends"]
-                near_ends = [end for end in ends if self.devices[end[0]]["deployment"] == near]
-                far_ends = [end for end in ends if self.devices[end[0]]["deployment"] == far]
-                if near_ends and far_ends:
-                    vlan = connection.value("vlan_id")
-                    sessions.append(
-                        {
-                            "name": f"{name(connection)}-L1",
-                            "connection": connection,
-                            "locations": [near, far],
-                            "ends": [(device, f"{port}.{vlan}") for device, port in (near_ends[0], far_ends[0])],
-                        }
-                    )
-                    break
-            else:
-                raise KeyError(f"{name(connection)}: no listed carrier joins {near} and {far}")
+            near_port = (str(connection.item["near_port"][0]), str(connection.item["near_port"][1]))
+            (ends,) = [ends for ends in rows if near_port in ends]
+            (far_end,) = [end for end in ends if end != near_port]
+            vlan = connection.value("vlan_id")
+            sessions.append(
+                {
+                    "name": f"{name(connection)}-L1",
+                    "connection": connection,
+                    "locations": [near, far],
+                    "ends": [(device, f"{port}.{vlan}") for device, port in (near_port, far_end)],
+                }
+            )
         return sessions
 
     def _complete_locations(self, row: dict[str, Any]) -> list[str]:

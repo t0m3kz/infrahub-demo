@@ -4,10 +4,13 @@
 # generated, but no IPsec or tunnel template exists (no lab-verified syntax), so the transform and the check report
 # the tunnel as unrendered (WARNING) and nothing is configured on eg-fr201 for it.
 #
-#   path_type / service   internet_vpn / private: tunnels over the near facility's internet carrier onto one virtual
-#                         network. FR2 has two internet-fed edges (eg-fr201 on Lumen, eg-fr202 on Cogent), so the
-#                         connection lists the carrier it leaves by, INET-LUMEN-EQXFR2: the tunnels are
-#                         Tunnel<n> interfaces of eg-fr201 riding on its Ethernet1/14
+#   path_type             internet_vpn: tunnels over the near facility's internet carrier onto one virtual network
+#                         (the blocks of `attached_network`: a private connection).
+#   near_port             eg-fr201 Ethernet1/14, the port of the internet carrier the tunnels leave by. FR2 has two
+#                         internet-fed edges (eg-fr201 on Lumen, INET-LUMEN-EQXFR2, and eg-fr202 on Cogent,
+#                         INET-COGENT-EQXFR2, both on Ethernet1/14), so the connection names its edge: the tunnels
+#                         are Tunnel<n> interfaces of eg-fr201 riding on that port. An internet_vpn creates and
+#                         lists no carrier.
 #   account               nordix-aws-prod: the connection has no `owner` of its own, it is C001's through the account
 #   attached_network      nordix-vpc-vpn, 10.20.0.0/16 (../../06_customer_boarding/c001/cloud/aws/eu-central-1/)
 #   provider_as           AS64513, the Amazon side of the VPN gateway (its own ASN, so it is told from the Direct
@@ -68,17 +71,15 @@ spec:
       member_of_groups: [provider_connections]
       description: "PROD Site-to-Site VPN FR2 cage <-> AWS eu-central-1, two tunnels onto nordix-vpc-vpn (AS64513)"
       path_type: internet_vpn
-      service: private
       status: active
       bandwidth: 1250
       near: "FR2"
       far: "eu-central-1"
+      near_port: ["eg-fr201", "Ethernet1/14"]
       ip_namespace: "PROD"
       account: "nordix-aws-prod"
       provider_as: "AS64513"
       attached_network: "nordix-vpc-vpn"
-      carrier_circuits:
-        - "INET-LUMEN-EQXFR2"
       link_prefixes:
         - ["169.254.10.0/30", "PROD"]
         - ["169.254.10.4/30", "PROD"]

@@ -6,6 +6,7 @@ spec:
   kind: TopologyCustomerCloud
   data:
     - owner: "C004"
+      account: "peakora-azure-prod"
       customer_name: "peakora-azure"
       parent: "westeurope"
       member_of_groups: [customer_deployments_cloud]

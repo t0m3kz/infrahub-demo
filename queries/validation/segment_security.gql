@@ -141,7 +141,6 @@ query segment_security {
     edges {
       node {
         name { value }
-        service { value }
         owner { node { __typename org_id { value } display_label } }
         account { node { owner { node { __typename org_id { value } display_label } } } }
         session_circuits { edges { node { name { value } } } }

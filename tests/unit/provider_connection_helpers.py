@@ -16,7 +16,14 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from generators.topology.provider_connection import ProviderConnectionGenerator
-from utils.provider_services import ADDRESS_SOURCE_PROVIDER, END_US, FLAVOURS, PATH_DEDICATED, ConnectionFlavour
+from utils.provider_services import (
+    ADDRESS_SOURCE_PROVIDER,
+    END_US,
+    FLAVOURS,
+    PATH_DEDICATED,
+    PATH_INTERNET_VPN,
+    ConnectionFlavour,
+)
 
 CONNECTION_ID = "conn-1"
 NEAR = "fac-near"
@@ -24,22 +31,28 @@ FAR = "fac-far"
 NAMESPACE = "ns-prod"
 PROVIDER = "prov-aws"
 AWS_AS = "as-64512"
-# The carrier ports aws_cross_connect() builds, by id: the name the fake client answers for them.
-PORT_NAMES = {
-    **{f"near-port-{i}": f"Ethernet1/{i}" for i in range(1, 5)},
-    **{f"far-port-{i}": "et-0/0/0" for i in range(1, 5)},
-}
+FAR_KIND = "TopologyCloudRegion"
+#: The devices of the near facility (cage edges) and the service-edge appliance of the far region.
+NEAR_DEVICES = (("dev-eg-1", "eg-1"), ("dev-eg-2", "eg-2"))
+SERVICE_EDGE = ("dev-AWS-SE", "AWS-SE")
+
+
+def pid(device: str, name: str) -> str:
+    """The id of a port in these fixtures."""
+    return f"p-{device}-{name}"
 
 
 @pytest.fixture
 def dual_link_profile(monkeypatch: pytest.MonkeyPatch) -> str:
-    """Register a provider profile whose dedicated flavour has two provider-assigned /30 links (test-only).
+    """Register a provider profile with two provider-assigned /30 links, dedicated and over the internet (test-only).
 
-    The shipped table has one link per dedicated connection (a primary and a secondary leg are two connections), so
-    the pairing of several links, ports and link prefixes is exercised with this row. Import the fixture and mark
-    the module ``pytestmark = pytest.mark.usefixtures("dual_link_profile")``.
+    The shipped table has one link per dedicated connection (a primary and a secondary leg are two connections) and
+    two per VPN; the pairing of several links and link prefixes is exercised with these rows. Import the fixture and
+    mark the module ``pytestmark = pytest.mark.usefixtures("dual_link_profile")``.
     """
-    monkeypatch.setitem(FLAVOURS, ("dual", PATH_DEDICATED), ConnectionFlavour(ADDRESS_SOURCE_PROVIDER, 30, 2, END_US))
+    two_links = ConnectionFlavour(ADDRESS_SOURCE_PROVIDER, 30, 2, END_US)
+    monkeypatch.setitem(FLAVOURS, ("dual", PATH_DEDICATED), two_links)
+    monkeypatch.setitem(FLAVOURS, ("dual", PATH_INTERNET_VPN), two_links)
     return "dual"
 
 
@@ -93,16 +106,27 @@ def carrier(
     }
 
 
-def aws_cross_connect(index: int = 1, *, stub_processes: list[dict[str, Any]] | None = None) -> dict[str, Any]:
-    """A cross-connect between our cage edge and the provider stub (the far port carries the stub's process)."""
+def own_carrier(
+    near: str = "eg-1",
+    near_if: str = "Ethernet1/1",
+    *,
+    far_if: str = "vnic-AWS-FR2",
+    stub_processes: list[dict[str, Any]] | None = None,
+    carrier_id: str = "xc-1",
+    status: str = "provisioning",
+    circuit_type: str = "virtual_connection",
+) -> dict[str, Any]:
+    """The carrier a connection lists (its own output): our cage edge port to a NIC of the service edge."""
     processes = [bgp()] if stub_processes is None else stub_processes
     return carrier(
-        f"xc-{index}",
-        f"XC-{index}",
+        carrier_id,
+        carrier_id.upper(),
         [
-            port(f"near-port-{index}", f"Ethernet1/{index}", f"eg-{index}", NEAR),
-            port(f"far-port-{index}", "et-0/0/0", f"EXT-STUB-{index}", FAR, processes=processes),
+            port(pid(near, near_if), near_if, near, NEAR),
+            port(pid("AWS-SE", far_if), far_if, "AWS-SE", FAR, processes=processes),
         ],
+        circuit_type=circuit_type,
+        status=status,
     )
 
 
@@ -112,7 +136,7 @@ def provider(profile: str | None = "aws") -> dict[str, Any]:
 
 
 def stub_device(
-    stub_id: str = "dev-stub", name: str = "EXT-STUB", processes: list[dict[str, Any]] | None = None
+    stub_id: str = SERVICE_EDGE[0], name: str = SERVICE_EDGE[1], processes: list[dict[str, Any]] | None = None
 ) -> dict:
     """A device of the far facility, as the query lists it."""
     return {"id": stub_id, "name": name, "capabilities": [bgp()] if processes is None else processes}
@@ -166,9 +190,11 @@ def connection(
     *,
     path_type: str = "dedicated",
     name: str = "AWS-FR2",
+    conn_id: str = CONNECTION_ID,
     status: str = "active",
     vlan_id: int | None = None,
     profile: str | None = "aws",
+    near_port: str | None = None,
     carriers: list[dict[str, Any]] | None = None,
     internet: list[dict[str, Any]] | None = None,
     stubs: list[dict[str, Any]] | None = None,
@@ -177,42 +203,51 @@ def connection(
     password: str | None = None,
     sessions: list[dict[str, Any]] | None = None,
     with_provider: bool = True,
+    far_kind: str = FAR_KIND,
+    near_load: list[dict[str, Any]] | None = None,
+    near_devices: tuple[tuple[str, str], ...] = NEAR_DEVICES,
+    bandwidth: int | None = None,
 ) -> dict[str, Any]:
-    """The payload of one TopologyProviderConnection (a dedicated AWS connection by default)."""
-    dedicated = path_type == "dedicated"
-    carrier_list = (carriers if carriers is not None else [aws_cross_connect()]) if dedicated else carriers or []
-    if stubs is None:
-        # A dedicated link lands on the stub that owns the far carrier port: an appliance of the region.
-        stubs = list(
-            {
-                end["device"]["id"]: stub_device(
-                    end["device"]["id"], end["device"]["name"], end["device"]["capabilities"]
-                )
-                for c in carrier_list
-                for end in c["capabilities"]
-                if end["device"]["deployment"]["id"] == FAR
-            }.values()
-        )
+    """The payload of one TopologyProviderConnection: a dedicated AWS request with no port and no carrier by default."""
     return {
         "TopologyProviderConnection": [
             {
-                "id": CONNECTION_ID,
+                "id": conn_id,
                 "name": name,
                 "path_type": path_type,
-                "service": "private",
                 "status": status,
                 "vlan_id": vlan_id,
+                "bandwidth": bandwidth,
+                "near_port": near_port,
                 "ip_namespace": NAMESPACE,
                 "provider_as": provider_as,
                 "password": password,
                 "link_prefixes": link_prefixes or [],
                 "account": {"provider": provider(profile)} if with_provider else None,
-                "near": {"id": NEAR, "circuits": internet or []},
-                "far": {"id": FAR, "typename": "TopologyCloudRegion", "appliances": stubs},
-                "carrier_circuits": carrier_list,
+                "near": {
+                    "id": NEAR,
+                    "circuits": internet or [],
+                    "devices": [{"id": device_id, "name": device} for device_id, device in near_devices],
+                    "near_connections": near_load or [],
+                },
+                "far": {
+                    "id": FAR,
+                    "typename": far_kind,
+                    "appliances": [stub_device()] if stubs is None else stubs,
+                },
+                "carrier_circuits": carriers or [],
                 "session_circuits": sessions or [],
             }
         ]
+    }
+
+
+def other_connection(conn_id: str, *devices: str) -> dict[str, Any]:
+    """Another connection of the near facility whose carrier ends on these devices (for the load)."""
+    return {
+        "id": conn_id,
+        "carrier_circuits": [{"capabilities": [{"device": f"dev-{device}"} for device in devices]}],
+        "session_circuits": [],
     }
 
 
@@ -226,6 +261,35 @@ def sub(sub_id: str, name: str, parent_id: str) -> SimpleNamespace:
     return SimpleNamespace(id=sub_id, name=SimpleNamespace(value=name), parent_interface=SimpleNamespace(id=parent_id))
 
 
+def carrier_node(
+    carrier_id: str,
+    end_ids: list[str],
+    *,
+    name: str | None = None,
+    circuit_type: str = "virtual_connection",
+    status: str = "active",
+    claimed_by: tuple[str, ...] = (),
+) -> SimpleNamespace:
+    """A TopologyCarrierCircuit node as ``filters`` returns it (included capabilities and provider_connections)."""
+    return SimpleNamespace(
+        id=carrier_id,
+        name=SimpleNamespace(value=name or carrier_id.upper()),
+        circuit_type=SimpleNamespace(value=circuit_type),
+        status=SimpleNamespace(value=status),
+        capabilities=SimpleNamespace(peers=[SimpleNamespace(id=i) for i in end_ids]),
+        provider_connections=SimpleNamespace(peers=[SimpleNamespace(id=i) for i in claimed_by]),
+    )
+
+
+def session_node(session_id: str, end_ids: list[str], *, connection: str | None = None) -> SimpleNamespace:
+    """A session circuit node as the near-port facts read it (included capabilities and connection)."""
+    return SimpleNamespace(
+        id=session_id,
+        capabilities=SimpleNamespace(peers=[SimpleNamespace(id=i) for i in end_ids]),
+        connection=SimpleNamespace(id=connection, initialized=connection is not None),
+    )
+
+
 class FakeClient:
     """In-memory client: ordered ``log`` of creates/saves, ``group_context`` appends, canned reads."""
 
@@ -235,6 +299,8 @@ class FakeClient:
         self.subs = subs or []
         self.taken_tunnels = taken_tunnels or {}
         self.foreign: list[SimpleNamespace] = []
+        #: session circuits found on the ports by the near-port choice (included capabilities and connection).
+        self.port_sessions: list[SimpleNamespace] = []
         #: device id -> the names of the virtual interfaces (NICs, loopback) the device already holds.
         self.nics: dict[str, list[str]] = {}
         #: device id -> the Loopback0 node an earlier run or the data left; device id -> its ManagedBGP nodes.
@@ -242,8 +308,55 @@ class FakeClient:
         self.processes: dict[str, list[SimpleNamespace]] = {}
         #: The stub loopback pool (None: the data does not define it).
         self.pool: SimpleNamespace | None = SimpleNamespace(id="pool-stub-lo")
+        #: interface id -> (name, device id, device name); physical ports also in ``physical`` (as nodes).
+        self.interfaces: dict[str, tuple[str, str, str]] = {}
+        self.physical: list[SimpleNamespace] = []
+        self.carriers: list[SimpleNamespace] = []
+        #: (device id, name) -> id of the NICs already on a service-edge appliance.
+        self.service_edge_nics: dict[tuple[str, str], str] = {}
         self.events: list[str] = []
         self._counter = 0
+        for device_id, device in NEAR_DEVICES:
+            for index in (1, 2, 3):
+                self.add_port(device, f"Ethernet1/{index}", role="cloud")
+
+    def add_port(
+        self,
+        device: str,
+        name: str,
+        *,
+        role: str | None = "cloud",
+        cabled: bool = False,
+        lag: bool = False,
+        device_id: str | None = None,
+    ) -> str:
+        """A physical port of a device; returns its id (``pid``)."""
+        port_id = pid(device, name)
+        device_id = device_id or f"dev-{device}"
+        self.interfaces[port_id] = (name, device_id, device)
+        self.physical.append(
+            SimpleNamespace(
+                id=port_id,
+                name=SimpleNamespace(value=name),
+                role=SimpleNamespace(value=role),
+                device=SimpleNamespace(id=device_id, display_label=device),
+                cable=SimpleNamespace(id="cable-1" if cabled else None, initialized=cabled),
+                lag=SimpleNamespace(id="lag-1" if lag else None, initialized=lag),
+            )
+        )
+        return port_id
+
+    def add_carrier(self, carrier_id: str, end_ids: list[str], **kwargs: Any) -> None:
+        """A carrier circuit already in the database, with its ends (interface ids, registered by ``add_port`` or
+        ``add_far_end``)."""
+        self.carriers.append(carrier_node(carrier_id, end_ids, **kwargs))
+
+    def add_far_end(self, name: str = "vnic-AWS-FR2", device: str = SERVICE_EDGE[1]) -> str:
+        """A virtual NIC of a far device (known to ``filters(DcimInterface)``); returns its id."""
+        port_id = pid(device, name)
+        self.interfaces[port_id] = (name, f"dev-{device}", device)
+        self.service_edge_nics[(f"dev-{device}", name)] = port_id
+        return port_id
 
     def of(self, action: str, kind: str | None = None) -> list[tuple[str, dict[str, Any]]]:
         """(kind, data or kwargs) of the log entries of one action (``create`` or ``save``), optionally one kind."""
@@ -254,17 +367,44 @@ class FakeClient:
         """How many saves the run made."""
         return len(self.of("save"))
 
+    def _interface(self, interface_id: str) -> SimpleNamespace:
+        name, device_id, device = self.interfaces.get(interface_id, (interface_id, "dev-unknown", "unknown"))
+        return SimpleNamespace(
+            id=interface_id,
+            name=SimpleNamespace(value=name),
+            device=SimpleNamespace(id=device_id, display_label=device),
+        )
+
     async def filters(self, kind: Any, **kwargs: Any) -> list[Any]:
         name = kind_name(kind)
         self.events.append(f"filters:{name}")
+        if name == "DcimPhysicalInterface":
+            if "ids" in kwargs:
+                return [p for p in self.physical if p.id in kwargs["ids"]]
+            role = kwargs.get("role__value")
+            return [
+                p
+                for p in self.physical
+                if p.device.id in kwargs["device__ids"] and (role is None or p.role.value == role)
+            ]
         if name == "DcimInterface":
-            return [SimpleNamespace(id=i, name=SimpleNamespace(value=PORT_NAMES.get(i, i))) for i in kwargs["ids"]]
+            return [self._interface(i) for i in kwargs["ids"] if i in self.interfaces]
+        if name == "TopologyCarrierCircuit":
+            wanted = set(kwargs["capabilities__ids"])
+            return [c for c in self.carriers if wanted & {peer.id for peer in c.capabilities.peers}]
         if name == "DcimVirtualInterface" and "parent_interface__ids" in kwargs:
             return [s for s in self.subs if s.parent_interface.id in kwargs["parent_interface__ids"]]
         if name == "DcimVirtualInterface" and kwargs.get("name__values") == ["Loopback0"]:
             return [self.loopbacks[i] for i in kwargs["device__ids"] if i in self.loopbacks]
         if name == "ManagedBGP":
             return [p for i in kwargs["capabilities__ids"] for p in self.processes.get(i, [])]
+        if name == "DcimVirtualInterface" and (kwargs.get("name__values") or [""])[0].startswith("vnic-"):
+            device_id = kwargs["device__ids"][0]
+            return [
+                SimpleNamespace(id=nic_id, name=SimpleNamespace(value=nic))
+                for (dev, nic), nic_id in self.service_edge_nics.items()
+                if dev == device_id and nic in kwargs["name__values"]
+            ]
         if name == "DcimVirtualInterface" and "name__values" not in kwargs and "device__ids" in kwargs:
             return [
                 SimpleNamespace(id=f"nic-{n}", name=SimpleNamespace(value=n), device=SimpleNamespace(id=device_id))
@@ -275,7 +415,7 @@ class FakeClient:
             names = self.taken_tunnels.get(kwargs["device__ids"][0], [])
             return [SimpleNamespace(id=f"t-{n}", name=SimpleNamespace(value=n)) for n in names]
         if name == "TopologySessionCircuit":
-            return self.foreign
+            return self.port_sessions if "include" in kwargs else self.foreign
         return []
 
     def _remember_stub_objects(self, label: str, node_id: str, data: dict[str, Any]) -> None:
@@ -308,6 +448,8 @@ class FakeClient:
         self._counter += 1
         node = MagicMock()
         node.id = data.get("id") or f"new-{label}-{self._counter}"
+        if label == "DcimVirtualInterface" and "device" in data:
+            self.interfaces[node.id] = (data["name"], data["device"]["id"], data["device"]["id"])
         node.name = SimpleNamespace(value=data.get("name"))
 
         async def _save(**kwargs: Any) -> None:

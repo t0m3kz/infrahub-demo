@@ -218,8 +218,8 @@ query edge_config($device: String!) {
   # edge's port may accept. A port is matched to its connection through the circuit's own ends (session_circuits.
   # capabilities: the interface name and its device), no name or VLAN is compared (transforms/helpers/bgp_external.py
   # connections_by_interface, connection_registered).
-  # service: private (attached_network's blocks), transit (the VPCs propagating into the route table of
-  # transit_attachment, found through attached_gateway), public (only registered_prefixes).
+  # attached_network: its blocks (private); attached_gateway: the VPCs propagating into the route table of
+  # transit_attachment (transit); neither: only registered_prefixes.
   # attached_network.account.owner: the owner of a registered VPC aggregate (only an OrganizationCustomer owner
   # counts), so the session accepts only its own owner's VPCs. owner and account.owner: the owner of the
   # connection's registered_prefixes (the account's wins).
@@ -227,7 +227,6 @@ query edge_config($device: String!) {
     edges {
       node {
         name { value }
-        service { value }
         owner { node { __typename org_id { value } display_label } }
         account { node { owner { node { __typename org_id { value } display_label } } } }
         session_circuits {

@@ -266,7 +266,10 @@ class MyCheck(InfrahubCheck):
   alongside the facility nodes so a circuit endpoint is one shared relationship, not a duplicated model. The
   `TopologyCustomer` generic carries only the owner-derived `name`, `infrastructure_orchestrator` and `owner`.
   `TopologyEnvironmentScoped` adds the required `environment` and only DC and Colocation footprints inherit it;
-  a cloud footprint has no environment (`CloudAccount.environment` and the segments carry it).
+  a cloud footprint has no environment (`CloudAccount.environment` and the segments carry it). A cloud footprint
+  has exactly one `account` (required, unique: one footprint per account); `checks/customer_cloud_account.py` pins
+  that the footprint's owner is the account's owner (CA1) and that its cloud segments use virtual networks of that
+  account (CA2).
 - **Office**: `TopologyCustomerOffice` is not a `TopologyCustomer`. The owner sits directly on it, its name is
   `{OWNER}-OFFICE` (for example `C005-OFFICE`), it is always PROD (no `environment`) and its parent is the
   "Campus and Office" `TopologyLabel`.
@@ -307,10 +310,11 @@ class MyCheck(InfrahubCheck):
   - **Provider-hosted circuits belong to a provider connection** (`checks/provider_connections.py`): PC1, a `handoff` or
     `vpn` session circuit that lands in a cloud region, a SaaS region or a virtual colocation (a location, or the
     `deployment` of an end device) belongs to a `TopologyProviderConnection` (reverse `connection`, at most one by the
-    schema); PC2, a carrier circuit with such a location lists in at least one connection's `carrier_circuits` (a
-    cross-connect may carry several: `provider_connections` on the carrier). An external provider
+    schema); PC2, a carrier circuit with such a location lists in at least one connection's `carrier_circuits` (written by
+    the generator, or by hand for an adopted one; a cross-connect may carry several: `provider_connections` on the
+    carrier). An external provider
     (`TopologyExternalProviders`, an ISP) is NOT provider-hosted here, so an internet or transit carrier needs no
-    connection, and neither does a carrier between two zones of ours. A `dci` or a `tunnel` in a connection is PC9.
+    connection, and neither does a carrier between two zones of ours. A `dci` or a `tunnel` in a connection is PC10.
   - **Tunnel** (`circuit_type: tunnel`): two locations and two ports, one location a `TopologyCustomerOffice` (its owner
     is the tunnel's, derived; the only type with `registered_prefixes`), no handoff-only field, every end port rides a
     live internet carrier circuit of its own (no contiguity rule).
@@ -335,11 +339,17 @@ class MyCheck(InfrahubCheck):
 - **Provider connection**: `TopologyProviderConnection` (own `name`, not a `ManagedGeneric`; HFID `name`) is the one
   object that says "this facility of ours (`near`) is connected to that provider facility (`far`: a cloud region, a SaaS
   region, a virtual colocation), both `TopologyFacility`, in an `ip_namespace`". Its `path_type` is `dedicated`
-  (carrier circuits) or `internet_vpn` (tunnels over the near facility's internet carrier), its `service` what the
-  provider side attaches to (`private`, `transit`, `public`), `vlan_id` the VLAN of a dedicated one. It lists its
-  `carrier_circuits` (shared underlay, `no-action`: the carriers survive it; reverse `provider_connections` on the
-  carrier) and its `session_circuits` (`cascade`: the routing it carries goes with it; reverse `connection` on the
-  session circuit, written by the generator, never authored). One connection is ONE leg: an Azure ExpressRoute primary
+  (carrier circuits) or `internet_vpn` (tunnels over the near facility's internet carrier), `vlan_id` the VLAN of a
+  dedicated one. It is a SERVICE REQUEST: the intent (`near`, `far`, `path_type`, `ip_namespace`, optional `near_port`,
+  `bandwidth`, `vlan_id`, `account` or `owner`, the attachments, `provider_as`, `registered_prefixes`,
+  `link_prefixes`, `password`) is authored, everything the generator can choose is its OUTPUT: `carrier_circuits`
+  (shared underlay, `no-action`: the carriers survive the connection; reverse `provider_connections` on the carrier),
+  `session_circuits` (`cascade`: the routing it carries goes with it; reverse `connection` on the session circuit),
+  the sub-interfaces and NICs, the `link_prefix` pairing and the written-back `vlan_id`. There is no `service`
+  attribute: what the connection reaches is derived from its attachments (`attached_network` is the private blocks of
+  that network, `attached_gateway` with `transit_attachment` the transit logic of the gateway's route table, neither
+  only `registered_prefixes`; PC3 refuses both attachments). A session circuit's carrier stays DERIVED from its ports
+  (`utils/circuit_underlay.py`); the connection's `carrier_circuits` is the generator's output, not a second source. One connection is ONE leg: an Azure ExpressRoute primary
   and secondary are two connections, related by the `redundancy_group` of their carriers. The provider is never stored:
   `connection_provider` (`utils/provider_services.py`, the one derivation, called by the generator, the session
   planner and the check) takes `account.provider`, else the far facility's provider (or its parent's, or its account's),
@@ -356,7 +366,27 @@ class MyCheck(InfrahubCheck):
   generator does not call it). Dedicated: the `<port>.<vlan>` sub-interfaces on the near and far carrier ports (a
   `handoff` circuit); the VLAN is `vlan_id`, else the lowest free on the parent ports (written back). `internet_vpn`: a
   `Tunnel<n>` interface pair, the near one riding on the port of the internet carrier through `parent_interface` (the
-  connection may list that internet carrier to say which of several edges the tunnels leave by), a `vpn` circuit.
+  connection's `near_port` names that carrier port when the facility has several internet-fed edges), a `vpn`
+  circuit; it creates no carrier and clears `carrier_circuits`.
+  **Near port and carrier** (a dedicated connection; pure planner `generators/helpers/near_port.py`, facts read by
+  `generators/helpers/near_port_facts.py`, under the lock `pc-near-<near facility id>`, then `pc-<connection id>`,
+  then the device and port locks in sorted order): the near port is, in order, the explicit `near_port` (wins; in
+  conflict (LAG member, sub-interfaces or sessions of another use) the run is refused, never another port), the near
+  end of the connection's own live carrier (a rerun never selects again), else a selection among the near facility's
+  device ports with the interface role of the far kind: `cloud` for a `TopologyCloudRegion`, `saas` for a
+  `TopologySaasRegion`, `partner` for any other far side (an external provider or another operator's zone; an ISP is
+  never a far side, its access is an internet carrier). A port is FREE when it is not cabled, ends no carrier, has no
+  sub-interfaces, is no LAG member and ends no session; the device with the fewest connections (carriers or sessions
+  ending on it) is tried first, ties by name, then the first free port by natural name order. A carrier that already
+  ends on the chosen port, is live, reaches the far facility and is claimed by no other connection is REUSED (found by
+  the end edge, never by name). Otherwise the generator creates `<connection>-XC` (status `provisioning`, `circuit_id`
+  the same placeholder for the human to replace, `virtual_connection` towards a cloud or SaaS region or a virtual
+  colocation, else `cross_connect`; provider from `connection_provider`; ends = near port and far port; locations left
+  to `add_circuit`), the far port being a `vnic-<connection>` NIC on the service edge or the first free port of a
+  physical provider device. A virtual colocation (Network Edge ordered by us) gets no selection or creation: its
+  carrier must exist on the explicit `near_port`. Accepted leftovers: a generated carrier and NIC stay after a deleted
+  connection or a changed path type (untracked, PC2 reports the carrier); the least-loaded count comes from the query
+  and may be stale (balance only, freedom is read under the lock).
   A provider-assigned flavour gets its `link_prefix` paired from `link_prefixes` sorted by address (count mismatch is
   PC7). The provider-side STUB is authored in data, shared per provider and facility: in a cloud region, a SaaS region or
   a virtual colocation a `CloudNetworkAppliance` listed in `appliances` (the service edge, see **Service edge**), in a
@@ -365,15 +395,16 @@ class MyCheck(InfrahubCheck):
   gets its `Loopback0` (a /32 from `Provider-Stub-Loopback-IPv4`, identifier `stub-lo0__<device id>`, 10.255.65.0/24) and
   its `<stub>-bgp` process in the connection's `provider_as` from the run (`generators/provider_stub.py`, untracked so
   a deleted connection leaves them, one `pc-device-<stub>` lock released before the rest). A missing pool or
-  `provider_as`, or a process in another AS than `provider_as`, is a refused run before any write. The carrier circuits
-  and the key stay authored. Outputs (the
+  `provider_as`, or a process in another AS than `provider_as`, is a refused run before any write. The key stays
+  authored. Outputs (the
   circuits and the interfaces they end on) are tracked, so a changed `path_type`, a dropped link or a removed VLAN
   cleans them on the next run; accepted leftovers: the link addresses and the peering `add_virtual_circuit` built on
-  a deleted circuit. `checks/provider_connections.py` (PC1 to PC9) is the rule set: PC1/PC2 above, PC3 the (profile,
-  path type) pair has a flavour and the session count, type and attachment agree, PC4 the VLAN, PC5 the owner,
-  PC6 the stubs, PC7 the link ranges, PC8 the unrendered `vpn`, PC9 the environment class, no `dci` or `tunnel` in a
-  connection, carriers that cover near and far and, for a dedicated one, equal the underlay derived from its
-  sessions. It also holds two consistency rules (a `CloudNetworkSegment` has the owner of its footprint; a vpc
+  a deleted circuit. `checks/provider_connections.py` (PC1 to PC13) is the rule set: PC1/PC2 above, PC3 the (profile,
+  path type) pair has a flavour, a VLAN and the session count and type, and at most one attachment, PC4 the VLAN,
+  PC5 the owner, PC6 the stubs, PC7 the link ranges, PC8 the unrendered `vpn`, PC9 the environment class, PC10 no
+  `dci` or `tunnel` in a connection, PC11 (WARNING) the generator's `carrier_circuits` output has a carrier with an
+  end in the near facility, PC12 the `near_port` is an end of a listed carrier (an internet carrier for a vpn), PC13
+  (WARNING) the legs of one carrier `redundancy_group` end on one near device. It also holds two consistency rules (a `CloudNetworkSegment` has the owner of its footprint; a vpc
   `CloudTransitGatewayAttachment` lives in the account of its virtual network).
 - **Service edge**: a cloud region and a SaaS region are provider places with no hardware of ours, so the provider side
   of a connection is ONE `CloudNetworkAppliance` with role `provider` per provider and region, hosted through

@@ -80,7 +80,6 @@ def _connection(
     its session circuits (none: no session) and the ``registered`` prefixes of ``connection_owner``."""
     return {
         "name": _v("conn"),
-        "service": _v("private"),
         "owner": _owner(connection_owner),
         "account": {"node": None},
         "session_circuits": _edges(*({"name": _v(name)} for name in sessions)),

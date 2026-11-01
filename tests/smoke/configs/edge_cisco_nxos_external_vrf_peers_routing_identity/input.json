@@ -2746,9 +2746,6 @@
           "name": {
             "value": "aws-transit-hub-euc1"
           },
-          "service": {
-            "value": "transit"
-          },
           "owner": {
             "node": null
           },
@@ -3034,9 +3031,6 @@
           "name": {
             "value": "aws-private-dev-euc1"
           },
-          "service": {
-            "value": "private"
-          },
           "owner": {
             "node": null
           },
@@ -3133,9 +3127,6 @@
         "node": {
           "name": {
             "value": "aws-private-elsewhere"
-          },
-          "service": {
-            "value": "private"
           },
           "owner": {
             "node": null

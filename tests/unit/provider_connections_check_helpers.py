@@ -122,7 +122,6 @@ def session(
 def connection(
     name: str = "PC-AWS-FR2",
     path_type: str = "dedicated",
-    service: str = "private",
     vlan_id: int | None = 3101,
     profile: str | None = "aws",
     near: dict[str, Any] = FR2,
@@ -137,6 +136,7 @@ def connection(
     attached_gateway: bool = False,
     attached_network: bool = False,
     status: str = "active",
+    near_port: str | None = None,
 ) -> dict[str, Any]:
     """A provider connection as the query selects it (the profile comes from a cloud account when there is one)."""
     if account is None and profile:
@@ -146,8 +146,8 @@ def connection(
         "name": {"value": name},
         "status": {"value": status},
         "path_type": {"value": path_type},
-        "service": {"value": service},
         "vlan_id": {"value": vlan_id} if vlan_id is not None else {"value": None},
+        "near_port": node({"id": near_port, "name": {"value": near_port}} if near_port else None),
         "near": node({k: near[k] for k in ("id", "__typename", "name")}),
         "far": node(
             {
@@ -174,6 +174,7 @@ def connection(
                 {
                     "id": f"id-{c}",
                     "name": {"value": c},
+                    "status": {"value": "active"},
                     "circuit_type": {"value": "internet" if c.startswith("INET") else "cross_connect"},
                     "locations": edges([{"id": FR2["id"]}, {"id": EUC1["id"]}]),
                 }
@@ -194,11 +195,36 @@ def account(env: str = "p", owner: dict[str, Any] | None = None, profile: str = 
     }
 
 
-def carrier(name: str, locations: list[dict[str, Any]], connections: list[str]) -> dict[str, Any]:
+def kit_end(device: str, port_name: str, deployment: dict[str, Any]) -> dict[str, Any]:
+    """A carrier end port as ConnectionKitEnd selects it: the port id is ``<device>:<port>``."""
+    return {
+        "id": f"{device}:{port_name}",
+        "device": node(
+            {
+                "id": f"id-{device}",
+                "name": {"value": device},
+                "owner": node(None),
+                "deployment": node({"id": deployment["id"]}),
+            }
+        ),
+    }
+
+
+def carrier(
+    name: str,
+    locations: list[dict[str, Any]],
+    connections: list[str],
+    redundancy_group: str | None = None,
+    ends: list[dict[str, Any]] | None = None,
+    status: str = "active",
+) -> dict[str, Any]:
     """A carrier circuit as the query selects it at the root."""
     return {
         "id": f"id-{name}",
         "name": {"value": name},
+        "status": {"value": status},
+        "redundancy_group": {"value": redundancy_group},
+        "capabilities": edges(ends or []),
         "locations": edges(locations),
         "provider_connections": edges([{"id": f"id-{c}"} for c in connections]),
     }

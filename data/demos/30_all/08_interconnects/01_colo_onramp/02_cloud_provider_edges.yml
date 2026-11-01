@@ -22,8 +22,8 @@
 #                         gateway speaks its own Amazon-side AS64513 and a device carries ONE BGP process, so the
 #                         two services of the one provider in the one region are two appliances.
 #     EXT-AZURE-ER-PA4    the ExpressRoute service edge of westeurope (AS12076): vnic-pri and vnic-sec are the
-#                         primary and secondary leg (XC-EQXPA4-AZURE-WEU-PRI and -SEC), the carriers of the
-#                         provider connections PC-PA4-AZURE-WEU-PRI-PROD and PC-PA4-AZURE-WEU-SEC-PROD
+#                         primary and secondary leg (XC-EQXPA4-AZURE-WEU-PRI and -SEC), the existing carriers
+#                         the provider connections PC-PA4-AZURE-WEU-PRI-PROD and PC-PA4-AZURE-WEU-SEC-PROD adopt
 #
 #   Physical provider kit stays a DcimPhysicalDevice (MX204_ISP_PE is the generic provider-edge stand-in template;
 #   only its et-0/0/0 port is used, as the far end of the cross-connect or cable and the parent of the handoff

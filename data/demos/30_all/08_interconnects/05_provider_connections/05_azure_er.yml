@@ -4,9 +4,11 @@
 # their carriers, not by a shared connection. It used to be the idle on-ramp of the demo: the appliance existed, nothing
 # rode it.
 #
-#   PC-PA4-AZURE-WEU-PRI-PROD   carrier XC-EQXPA4-AZURE-WEU-PRI: eg-pa401 Ethernet1/13 <-> EXT-AZURE-ER-PA4 vnic-pri,
+#   PC-PA4-AZURE-WEU-PRI-PROD   near port eg-pa401 Ethernet1/13 (an `uplink` port adopted explicitly), the existing
+#                               carrier XC-EQXPA4-AZURE-WEU-PRI <-> EXT-AZURE-ER-PA4 vnic-pri,
 #                               link range 10.255.72.0/30, session circuit PC-PA4-AZURE-WEU-PRI-PROD-L1
-#   PC-PA4-AZURE-WEU-SEC-PROD   carrier XC-EQXPA4-AZURE-WEU-SEC: eg-pa402 Ethernet1/13 <-> EXT-AZURE-ER-PA4 vnic-sec,
+#   PC-PA4-AZURE-WEU-SEC-PROD   near port eg-pa402 Ethernet1/13, the existing carrier
+#                               XC-EQXPA4-AZURE-WEU-SEC <-> EXT-AZURE-ER-PA4 vnic-sec,
 #                               link range 10.255.72.4/30, session circuit PC-PA4-AZURE-WEU-SEC-PROD-L1
 #                               (../01_colo_onramp/03_carrier_circuits.yml;
 #                               ../01_colo_onramp/02_cloud_provider_edges.yml: EXT-AZURE-ER-PA4 is the ExpressRoute
@@ -91,12 +93,12 @@ spec:
       member_of_groups: [provider_connections]
       description: "PROD ExpressRoute private peering PA4 <-> Azure westeurope, primary leg (AS12076)"
       path_type: dedicated
-      service: private
       status: active
       bandwidth: 10000
       vlan_id: 1400
       near: "PA4"
       far: "westeurope"
+      near_port: ["eg-pa401", "Ethernet1/13"]
       ip_namespace: "PROD"
       account: "peakora-azure-prod"
       provider_as: "AS12076"
@@ -104,18 +106,16 @@ spec:
       password: "eqx-pa4-azure-er-key"
       link_prefixes:
         - ["10.255.72.0/30", "PROD"]
-      carrier_circuits:
-        - "XC-EQXPA4-AZURE-WEU-PRI"
     - name: "PC-PA4-AZURE-WEU-SEC-PROD"
       member_of_groups: [provider_connections]
       description: "PROD ExpressRoute private peering PA4 <-> Azure westeurope, secondary leg (AS12076)"
       path_type: dedicated
-      service: private
       status: active
       bandwidth: 10000
       vlan_id: 1400
       near: "PA4"
       far: "westeurope"
+      near_port: ["eg-pa402", "Ethernet1/13"]
       ip_namespace: "PROD"
       account: "peakora-azure-prod"
       provider_as: "AS12076"
@@ -123,5 +123,3 @@ spec:
       password: "eqx-pa4-azure-er-key"
       link_prefixes:
         - ["10.255.72.4/30", "PROD"]
-      carrier_circuits:
-        - "XC-EQXPA4-AZURE-WEU-SEC"

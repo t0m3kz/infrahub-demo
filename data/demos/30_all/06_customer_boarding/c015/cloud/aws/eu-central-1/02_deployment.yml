@@ -6,6 +6,7 @@ spec:
   kind: TopologyCustomerCloud
   data:
     - owner: "C015"
+      account: "novantis-aws-prod"
       customer_name: "novantis-aws"
       parent: "eu-central-1"
       member_of_groups: [customer_deployments_cloud]

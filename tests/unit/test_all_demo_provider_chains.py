@@ -68,7 +68,7 @@ def test_the_megaport_connection_is_a_prod_connection_to_the_mcr_zone_on_its_cro
     assert connection["status"] == "active"
     assert connection["member_of_groups"] == ["provider_connections"]
     assert (connection["near"], connection["far"], connection["vlan_id"]) == ("PA4", "MCR-PAR1", 1300)
-    assert connection["carrier_circuits"] == [_XC]
+    assert "carrier_circuits" not in connection and connection["near_port"] == ["eg-pa401", "Ethernet1/1"]
     assert connection["provider_as"] == "AS133937"
     assert not {"account", "owner", "attached_network", "attached_gateway"} & set(connection)
     assert {name(k) for k in declared("RoutingPassword", _ALL)} >= {"eqx-pa4-megaport-key"}
@@ -120,9 +120,9 @@ def test_the_megaport_asn_is_megaports_and_the_mcr_has_a_single_bgp_process_on_i
 
 
 def test_the_cage_edge_port_of_the_megaport_handoff_is_free() -> None:
-    """eg-pa401 Ethernet1/1 is a `customer` port, and the only carrier circuit on it is the Megaport cross-connect."""
+    """eg-pa401 Ethernet1/1 is a `partner` port, and the only carrier circuit on it is the Megaport cross-connect."""
     edge = object_templates()["N9K-C9316D-GX_EDGE"]["interfaces"]["data"]
-    assert next(row for row in edge if row["name"] == "Ethernet1/[1-7]")["role"] == "customer"
+    assert next(row for row in edge if row["name"] == "Ethernet1/[1-2]")["role"] == "partner"
     on_port = [cid for cid, ports in ALL_DEMO_DECLARED_PHYSICAL_PORTS.items() if ("eg-pa401", "Ethernet1/1") in ports]
     assert on_port == [_XC]
 

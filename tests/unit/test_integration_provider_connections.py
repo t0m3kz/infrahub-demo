@@ -16,7 +16,7 @@ from typing import Any
 
 import pytest
 
-from generators.helpers.provider_connection import parse_connection, plan_links
+from generators.helpers.provider_connection import parse_connection, validate_spec
 from tasks import ALL_DEMO_DATA
 from tests.integration import test_65_all_demo_idempotency as idempotency
 from tests.integration import test_67_all_demo_provider_connections as provider_connections
@@ -39,6 +39,7 @@ from tests.integration.provider_connection_helpers import (
 )
 from tests.integration.routed_link_rules import END_PROVIDER, LinkFlavour, _assigned_errors, link_hosts
 from tests.unit.test_all_demo_provider_connection_plans import _connections, _payload
+from tests.unit.test_all_demo_provider_connection_plans import _plan as _links
 
 _ALL = ROOT / ALL_DEMO_DATA
 _ROWS = {row["name"]: row for row in _connections()}
@@ -54,8 +55,9 @@ _PARTY_ASNS = {
 
 
 def _plan(row: dict[str, Any]) -> Any:
-    """(flavour, links) the offline planner yields for a connection row."""
-    return plan_links(parse_connection(_payload(row)))
+    """(flavour, links) the offline planner yields for a connection row (the ends of a dedicated one are the carrier
+    that ends on its explicit near_port)."""
+    return validate_spec(parse_connection(_payload(row)))[0], _links(row)
 
 
 def test_the_table_names_exactly_the_connections_of_the_data() -> None:
@@ -65,16 +67,24 @@ def test_the_table_names_exactly_the_connections_of_the_data() -> None:
 
 @pytest.mark.parametrize("connection", sorted(ALL_DEMO_CONNECTIONS))
 def test_the_table_row_states_what_the_data_says(connection: str) -> None:
-    """Path type, service, namespace, VLAN, key, carriers, link ranges and the places of the connection."""
+    """Path type, near port, namespace, VLAN, key, carriers, link ranges and the places of the connection."""
     expected, row = ALL_DEMO_CONNECTIONS[connection], _ROWS[connection]
-    assert (expected["path_type"], expected["service"], expected["ip_namespace"], expected["vlan_id"]) == (
+    assert (expected["path_type"], expected["near_port"], expected["ip_namespace"], expected["vlan_id"]) == (
         row["path_type"],
-        row["service"],
+        tuple(row["near_port"]),
         row["ip_namespace"],
         row.get("vlan_id"),
     )
+    assert "carrier_circuits" not in row and "service" not in row
     assert expected["password"] == row.get("password")
-    assert list(expected["carriers"]) == sorted(row["carrier_circuits"])
+    # the carriers the generator will list are the existing carrier ending on the near port (none for a VPN)
+    ending = sorted(
+        str(c.item["circuit_id"])
+        for c in declared("TopologyCarrierCircuit", _ALL)
+        if list(row["near_port"]) in [list(end) for end in c.item["capabilities"]]
+        and (c.item["circuit_type"] != "internet" or row["path_type"] != "internet_vpn")
+    )
+    assert list(expected["carriers"]) == (ending if row["path_type"] == "dedicated" else [])
     assert sorted(expected["locations"]) == sorted([row["near"], row["far"]])
     assert sorted(link["link_prefix"] for link in expected["links"] if link["link_prefix"]) == sorted(
         prefix for prefix, _ in row.get("link_prefixes") or []
@@ -175,51 +185,6 @@ def test_every_circuit_has_a_derived_owner_entry_and_only_customers_own() -> Non
     assert all(owner is None or owner.startswith("C") for owner in ALL_DEMO_CIRCUIT_OWNERS.values())
 
 
-# -- the premises of the disposable connection of test_67 ------------------------------------------------------------
-
-
-def _disposable_row(**changes: Any) -> dict[str, Any]:
-    """The Megaport connection row made into the disposable one (name, VLAN), with ``changes`` applied."""
-    return {
-        **_ROWS["PC-PA4-MEGAPORT-PROD"],
-        "name": provider_connections.DISPOSABLE,
-        "vlan_id": provider_connections.DISPOSABLE_VLAN,
-        **changes,
-    }
-
-
-def test_the_disposable_connection_plans_a_handoff_on_the_vlan_that_no_data_uses() -> None:
-    """test_67 test_04 creates it from the Megaport carrier: its two ends are `<port>.1399` of the carrier's ports, and
-    VLAN 1399 is on no authored connection or sub-interface."""
-    flavour, (link,) = _plan(_disposable_row())
-    assert (flavour.address_source, flavour.prefix_length) == (ADDRESS_OUR_POOL, 31)
-    assert link.name == provider_connections.DISPOSABLE_CIRCUIT and link.circuit_type == "handoff"
-    assert (link.near.device_name, link.near.port.name) == provider_connections.DISPOSABLE_NEAR[1:]  # type: ignore[union-attr]
-    assert (link.far.device_name, link.far.port.name) == provider_connections.DISPOSABLE_FAR[1:]  # type: ignore[union-attr]
-    assert provider_connections.DISPOSABLE_VLAN not in {row.get("vlan_id") for row in _ROWS.values()}
-    assert {device: name for device, name in provider_connections.DISPOSABLE_SUB_INTERFACES.items()} == {
-        link.near.device_name: f"{link.near.port.name}.1399",  # type: ignore[union-attr]
-        link.far.device_name: f"{link.far.port.name}.1399",  # type: ignore[union-attr]
-    }
-    assert provider_connections.DISPOSABLE_KEY == _ROWS["PC-PA4-MEGAPORT-PROD"]["password"]
-    assert provider_connections.DISPOSABLE_AS == _ROWS["PC-PA4-MEGAPORT-PROD"]["provider_as"]
-
-
-def test_the_disposable_connection_plans_a_vpn_over_the_pa4_transit_after_the_change() -> None:
-    """With path_type internet_vpn and the Lumen transit as its carrier, the link is a vpn that leaves eg-pa401 by the
-    transit's port and ends on the Megaport stub: the near tunnel's parent is the one test_04 expects."""
-    row = _disposable_row(
-        path_type="internet_vpn", vlan_id=None, carrier_circuits=[provider_connections.DISPOSABLE_VPN_CARRIER]
-    )
-    _, (link,) = _plan(row)
-    assert link.circuit_type == "vpn"
-    assert (link.near.device_name, link.near.port.name) == (  # type: ignore[union-attr]
-        provider_connections.DISPOSABLE_NEAR[1],
-        provider_connections.DISPOSABLE_VPN_PORT,
-    )
-    assert link.far.device_name == provider_connections.DISPOSABLE_FAR[1] and link.far.port is None
-
-
 # -- the judges --------------------------------------------------------------------------------------------------------
 
 
@@ -228,9 +193,9 @@ def _row_for(connection: str) -> dict[str, Any]:
     expected = ALL_DEMO_CONNECTIONS[connection]
     return {
         "path_type": expected["path_type"],
-        "service": expected["service"],
         "status": "active",
         "vlan_id": expected["vlan_id"],
+        "near": expected["near_port"],
         "ip_namespace": {"name": expected["ip_namespace"]},
         "password": {"name": expected["password"]} if expected["password"] else None,
         "owner": None,

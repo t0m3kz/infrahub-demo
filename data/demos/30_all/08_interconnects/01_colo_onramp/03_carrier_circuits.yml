@@ -6,7 +6,9 @@
 # it has no role and builds no session. What rides it is a virtual circuit of a
 # kind, listed in ../03_virtual_circuits/ (the DCI sessions of the dark fibres,
 # one Interconnect circuit per fibre) or generated for a provider connection
-# (../05_provider_connections/, whose `carrier_circuits` list the carriers it rides). Tenant impact is a traversal,
+# (../05_provider_connections/, whose `carrier_circuits` is the generator's output: the carriers listed here are
+# EXISTING carriers it adopts through the explicit `near_port` of the connection, found by their end on that port).
+# Tenant impact is a traversal,
 # not a circuit: from a
 # fibre or a cage port, circuit -> its ports -> the segments, peerings and
 # circuits on them.
@@ -147,7 +149,7 @@ spec:
         - ["eg-fr201", "Ethernet1/13"]
         - ["EXT-AWS-DX-FR2", "vnic-fr2"]
 
-    # The Azure ExpressRoute on-ramp: one virtual connection per ExpressRoute leg, each the carrier of its own
+    # The Azure ExpressRoute on-ramp: one virtual connection per ExpressRoute leg, each the existing carrier of its own
     # provider connection (../05_provider_connections/05_azure_er.yml: PC-PA4-AZURE-WEU-PRI-PROD and -SEC-PROD).
     # The legs land on two different cage edges (eg-pa401, eg-pa402) and on two NICs of the one ExpressRoute
     # service edge (vnic-pri, vnic-sec), the way Microsoft asks for them; the two carriers share
@@ -202,12 +204,13 @@ spec:
 
     # --- Equinix Fabric virtual connections ----------------------------------
     # A provider-delivered virtual connection is a carrier like a cross-connect: Equinix runs it inside its own
-    # platform, so an end may be the virtual NIC of a provider-hosted Network Edge router (no cable) and a port
-    # hosts several of them (checks/carrier_circuit_ports.py). They are the carriers of the provider connections
-    # PC-FR2-AMNE-PROD and PC-AMNE-AWS-EUC1-PROD (../05_provider_connections/), which is how the generator finds
-    # the port the session sub-interface rides. The first one leaves eg-fr201 on the port that is also cabled to
-    # Equinix's own Fabric port (05_cage_cabling.yml); the second lands on its own NIC (vnic-amne) of the AWS
-    # Direct Connect service edge, next to the one (vnic-fr2) of XC-EQXFR2-AWS-EUC1.
+    # platform, so an end may be the virtual NIC of a provider-hosted Network Edge router (no cable) and a port hosts
+    # several of them (checks/carrier_circuit_ports.py). They are existing carriers that the provider connections
+    # PC-FR2-AMNE-PROD and PC-AMNE-AWS-EUC1-PROD (../05_provider_connections/) adopt through their explicit `near_port`
+    # (Ethernet1/1, a `partner` port), which is the port the session sub-interface rides. The first one leaves
+    # eg-fr201 on the port that is also cabled to Equinix's own Fabric port (05_cage_cabling.yml); the second lands on
+    # its own NIC (vnic-amne) of the AWS Direct Connect service edge, next to the one (vnic-fr2) of
+    # XC-EQXFR2-AWS-EUC1.
     - circuit_id: "FABRIC-FR2-AMNE01"
       member_of_groups: [carrier_circuits]
       name: "FABRIC-FR2-AMNE01"

@@ -128,8 +128,11 @@ def test_each_connection_leg_has_its_own_nic_on_the_service_edge() -> None:
         row = connection.item
         if row["path_type"] != "dedicated":
             continue
-        for circuit_id in row.get("carrier_circuits") or []:
-            for device, port in carriers[circuit_id]["capabilities"]:
+        # the carrier the connection adopts is the one ending on its explicit near port
+        for carrier in carriers.values():
+            if list(row["near_port"]) not in [list(end) for end in carrier["capabilities"]]:
+                continue
+            for device, port in carrier["capabilities"]:
                 if device in stubs:
                     previous = legs.setdefault((device, port), row["name"])
                     assert previous == row["name"], f"{device}/{port} is a leg of {previous} and {row['name']}"

@@ -328,6 +328,20 @@ generics:
             label: Customer/Access
             description: "Customer-facing, endpoint access, or external"
             color: "#F472B6"
+          # Provider-facing edge ports: the near port of a TopologyProviderConnection is chosen among the free ports
+          # with the role of the far facility's kind (generators/helpers/near_port.py)
+          - name: cloud
+            label: Cloud Connect
+            description: "Edge port for a connection to a cloud region (cross-connect or virtual connection)"
+            color: "#38BDF8"
+          - name: saas
+            label: SaaS Connect
+            description: "Edge port for a connection to a SaaS region"
+            color: "#2DD4BF"
+          - name: partner
+            label: Partner Connect
+            description: "Edge port for a connection to a partner or another operator (never an ISP)"
+            color: "#FB923C"
 
           # Special interface types
           - name: management

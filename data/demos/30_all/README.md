@@ -216,7 +216,7 @@ both are unowned and members of `provider_connections`, and the generator builds
 for each (a /31 from `Handoff-PROD-IPv4`, an eBGP IPv4 session between the two BGP processes; a C8000V cannot be an EVPN peer,
 so no EVPN):
 
-| Connection | Session circuit (generated) | Ends | Carrier |
+| Connection | Session circuit (generated) | Ends | Existing carrier adopted through `near_port` |
 | --- | --- | --- | --- |
 | `PC-FR2-AMNE-PROD` (VLAN 1200) | `PC-FR2-AMNE-PROD-L1` | `eg-fr201` `Ethernet1/1.1200` to `eg-am-ne01` `Ethernet1/1.1200` | the Fabric virtual connection `FABRIC-FR2-AMNE01` (`01_colo_onramp/03_carrier_circuits.yml`) |
 | `PC-AMNE-AWS-EUC1-PROD` (VLAN 1100) | `PC-AMNE-AWS-EUC1-PROD-L1` | `eg-am-ne02` `Ethernet1/1.1100` to `EXT-AWS-DX-FR2` `vnic-amne.1100` | `FABRIC-AMNE02-AWS-EUC1`, the virtual connection onto the service edge's own NIC `vnic-amne` |
@@ -230,8 +230,12 @@ port. Nothing of the sessions is authored, no sub-interface, address or BGP peer
 ### Provider Connections
 
 A `TopologyProviderConnection` says that a facility of ours is connected to a provider facility (a cloud region, a SaaS region, a
-virtual colocation) for an owner: `near`, `far`, the carriers it rides (`carrier_circuits`, shared underlay that survives it), the
-`ip_namespace`, and what the provider side attaches to. `add_provider_connection` creates its `<connection>-L<n>` session circuits
+virtual colocation) for an owner: `near`, `far`, the optional `near_port`, the
+`ip_namespace`, and what the provider side attaches to (`attached_network`: private, `attached_gateway`: transit, neither: only
+`registered_prefixes`). The connection is intent; its `carrier_circuits` are the generator's output (shared underlay that survives it):
+an existing carrier is adopted through its end on the near port, otherwise one is created (`provisioning`, `<connection>-XC`). The demo
+adopts the existing carriers of `01_colo_onramp/03_carrier_circuits.yml` through explicit near ports (`partner` `Ethernet1/1`, `uplink`
+`Ethernet1/13`); the two VPN connections name `eg-fr201` `Ethernet1/14`, the port of its internet carrier `INET-LUMEN-EQXFR2`. `add_provider_connection` creates its `<connection>-L<n>` session circuits
 (one per link of the provider's flavour, `OrganizationProvider.connection_profile` keyed in `utils/provider_services.py`), their
 sub-interfaces and tunnel interfaces; the stubs of the provider side (device, loopback, AS, BGP process) and the BGP keys stay authored.
 
@@ -246,14 +250,14 @@ AS (64513) and a device carries one BGP process. Physical provider kit stays a `
 Cloud Router `EXT-MEGAPORT-MCR1` and the Equinix Fabric port `EXT-EQX-FABRIC-FR2`. The carrier ids `XC-EQXFR2-AWS-EUC1` and
 `XC-EQXPA4-AZURE-WEU-PRI`/`-SEC` keep the name of the cross-connects they were, but their `circuit_type` is `virtual_connection`.
 
-| Connection | Path / service | Flavour | Owner | Notes |
+| Connection | Path / attached | Flavour | Owner | Notes |
 | --- | --- | --- | --- | --- |
-| `PC-FR2-AWS-EUC1-PROD` | dedicated / transit, VLAN 1000 | aws: 1 link, /31 from our pool | none (account `net-hub-aws-prod`, Internal) | Direct Connect 10G on `XC-EQXFR2-AWS-EUC1` (a virtual connection onto `vnic-fr2`); `transit_attachment` `tgwa-hybrid-eqx-fr2` decides the VPC blocks the session accepts |
+| `PC-FR2-AWS-EUC1-PROD` | dedicated / `attached_gateway`, VLAN 1000 | aws: 1 link, /31 from our pool | none (account `net-hub-aws-prod`, Internal) | Direct Connect 10G on `XC-EQXFR2-AWS-EUC1` (a virtual connection onto `vnic-fr2`); `transit_attachment` `tgwa-hybrid-eqx-fr2` decides the VPC blocks the session accepts |
 | `PC-FR2-AMNE-PROD`, `PC-AMNE-AWS-EUC1-PROD` | dedicated, VLAN 1200 / 1100 | default / aws | none | The AM-NE chain above |
-| `PC-PA4-MEGAPORT-PROD` | dedicated / private, VLAN 1300 | megaport: 1 link, /31 | none | Cloud-neutral: no account, no attached network |
-| `PC-FR2-AWS-EUC1-VPN-PROD` | internet_vpn / private | aws: 2 tunnels, /30 assigned by AWS (`link_prefixes` `169.254.10.0/30`, `.4/30`) | C001 (account `nordix-aws-prod`) | MODEL ONLY. Attaches `nordix-vpc-vpn` (`10.20.0.0/16`); leaves FR2 by `INET-LUMEN-EQXFR2` (listed in `carrier_circuits`, FR2 has two internet-fed edges), the VPN gateway appliance `EXT-AWS-VPN-EUC1` speaks AS64513 |
-| `PC-PA4-AZURE-WEU-PRI-PROD`, `PC-PA4-AZURE-WEU-SEC-PROD` | dedicated / private, VLAN 1400 | azure: one leg and one /30 per connection, assigned (`link_prefixes` `10.255.72.0/30` and `.4/30`) | C004 (account `peakora-azure-prod`) | One connection per ExpressRoute leg, related by the `redundancy_group` of their carriers `XC-EQXPA4-AZURE-WEU-PRI` (`eg-pa401` to `EXT-AZURE-ER-PA4` `et-0/0/0`) and `-SEC` (`eg-pa402` to `et-0/0/1`); one shared key |
-| `PC-FR2-ZSCALER-MUC-PROD` | internet_vpn / private | zscaler: 2 tunnels, /30 from our pool | C001 (own `owner`: a SaaS has no account) | Leaves by `INET-LUMEN-EQXFR2`. Far end `ZSCALER-MUNICH I`, the hosted node `EXT-ZSCALER-MUC1` (`CloudNetworkAppliance`, device type `ZEN`); registers `198.18.1.0/24` |
+| `PC-PA4-MEGAPORT-PROD` | dedicated, VLAN 1300 | megaport: 1 link, /31 | none | Cloud-neutral: no account, no attached network |
+| `PC-FR2-AWS-EUC1-VPN-PROD` | internet_vpn / `attached_network` | aws: 2 tunnels, /30 assigned by AWS (`link_prefixes` `169.254.10.0/30`, `.4/30`) | C001 (account `nordix-aws-prod`) | MODEL ONLY. Attaches `nordix-vpc-vpn` (`10.20.0.0/16`); leaves FR2 by `INET-LUMEN-EQXFR2` (explicit `near_port` `eg-fr201` `Ethernet1/14`: FR2 has two internet-fed edges), the VPN gateway appliance `EXT-AWS-VPN-EUC1` speaks AS64513 |
+| `PC-PA4-AZURE-WEU-PRI-PROD`, `PC-PA4-AZURE-WEU-SEC-PROD` | dedicated / `attached_network`, VLAN 1400 | azure: one leg and one /30 per connection, assigned (`link_prefixes` `10.255.72.0/30` and `.4/30`) | C004 (account `peakora-azure-prod`) | One connection per ExpressRoute leg, related by the `redundancy_group` of their carriers `XC-EQXPA4-AZURE-WEU-PRI` (`eg-pa401` to `EXT-AZURE-ER-PA4` `et-0/0/0`) and `-SEC` (`eg-pa402` to `et-0/0/1`); one shared key |
+| `PC-FR2-ZSCALER-MUC-PROD` | internet_vpn / `registered_prefixes` | zscaler: 2 tunnels, /30 from our pool | C001 (own `owner`: a SaaS has no account) | Leaves by `INET-LUMEN-EQXFR2` (explicit `near_port` `eg-fr201` `Ethernet1/14`). Far end `ZSCALER-MUNICH I`, the hosted node `EXT-ZSCALER-MUC1` (`CloudNetworkAppliance`, device type `ZEN`); registers `198.18.1.0/24` |
 
 The FR2 cage also shows a patch panel (`01_colo_onramp/06_patch_panel.yml`, `07_patch_panel_cabling.yml`): `eg-fr202`
 `Ethernet1/2` is cabled to front port `fr2-s1-r-1:PP-EQX-FR2-01:F1` and rear port `fr2-s1-r-1:PP-EQX-FR2-01:1` to `EXT-EQX-FABRIC-FR2` `et-0/0/1`, so the

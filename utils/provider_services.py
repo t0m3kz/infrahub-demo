@@ -11,7 +11,7 @@ and ``checks/provider_connections.py`` all call it; their queries select the sam
 
 Consumers: ``generators/topology/provider_connection.py`` (how many sessions, the link prefixes),
 ``generators/topology/virtual_circuit.py`` (the length of the allocation, the offsets),
-``checks/provider_connections.py`` (PC3, PC7). Change a row here and nothing else.
+``checks/provider_connections.py``. Change a row here and nothing else.
 """
 
 from __future__ import annotations
@@ -28,7 +28,6 @@ END_PROVIDER = "provider"
 PATH_DEDICATED = "dedicated"
 PATH_INTERNET_VPN = "internet_vpn"
 PATH_TYPES = (PATH_DEDICATED, PATH_INTERNET_VPN)
-SERVICES = ("private", "transit", "public")
 
 # Host offsets inside a link prefix of a given length: (lower end, upper end). A /31 has no network or broadcast
 # address (RFC 3021) so its two hosts are offsets 0 and 1; a /30 or /29 keeps the network address, so 1 and 2.

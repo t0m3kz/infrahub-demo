@@ -176,7 +176,6 @@ query routing_invariants {
       node {
         id
         name { value }
-        service { value }
         ip_namespace { node { name { value } namespace_type { value } } }
         owner { node { __typename org_id { value } display_label } }
         account { node { id name { value } environment { value } owner { node { __typename org_id { value } display_label } } } }

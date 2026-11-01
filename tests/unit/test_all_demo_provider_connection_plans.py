@@ -18,7 +18,16 @@ from typing import Any
 
 import pytest
 
-from generators.helpers.provider_connection import LinkPlan, parse_connection, plan_links
+from generators.helpers.provider_connection import (
+    ConnectionSpec,
+    DedicatedEnds,
+    LinkPlan,
+    parse_connection,
+    plan_links,
+    port_of,
+    reused_ends,
+    validate_spec,
+)
 from tasks import ALL_DEMO_DATA
 from tests.integration.demo_data import ROOT, declared, distinct, name, object_templates
 from utils.provider_services import ADDRESS_SOURCE_PROVIDER
@@ -163,7 +172,6 @@ def _payload(row: dict[str, Any]) -> dict[str, Any]:
         "id": row["name"],
         "name": row["name"],
         "path_type": row["path_type"],
-        "service": row["service"],
         "status": row["status"],
         "vlan_id": row.get("vlan_id"),
         "ip_namespace": row["ip_namespace"],
@@ -171,22 +179,43 @@ def _payload(row: dict[str, Any]) -> dict[str, Any]:
         "password": row.get("password"),
         "link_prefixes": [{"id": f"{prefix}|{ns}", "prefix": prefix} for prefix, ns in row.get("link_prefixes") or []],
         "account": provider["account"],
+        "near_port": f"{row['near_port'][0]}/{row['near_port'][1]}" if row.get("near_port") else None,
         "near": {
             "id": near,
+            "devices": [
+                {"id": device, "name": device}
+                for device, device_row in _devices().items()
+                if device_row["deployment"] == near
+            ],
+            "near_connections": [],
             "circuits": [
                 {"id": c["id"], "typename": "TopologyCarrierCircuit", **{k: v for k, v in c.items() if k != "typename"}}
                 for c in internet
             ],
         },
         "far": far_node,
-        "carrier_circuits": [_carrier(circuit_id) for circuit_id in row.get("carrier_circuits") or []],
+        "carrier_circuits": [],
         "session_circuits": [],
     }
 
 
+def _adopted_ends(spec: ConnectionSpec, near_port: str) -> DedicatedEnds:
+    """The ends of a dedicated link, as the generator decides them for an explicit near port: the existing carrier whose
+    end is that port is adopted, its far end is the stub's port."""
+    ((carrier_name, ends),) = [
+        (circuit_id, row["capabilities"])
+        for circuit_id, row in _carriers().items()
+        if near_port in {f"{device}/{port}" for device, port in row["capabilities"]}
+    ]
+    ports = [port_of(spec, f"{device}/{port}", port, device, device) for device, port in ends]
+    return reused_ends(spec, carrier_name, ports)
+
+
 def _plan(row: dict[str, Any]) -> list[LinkPlan]:
     """The links the generator would build for one connection row."""
-    _, links = plan_links(parse_connection(_payload(row)))
+    spec = parse_connection(_payload(row))
+    ends = _adopted_ends(spec, spec.near_port_id or "") if row["path_type"] == "dedicated" else None
+    _, links = plan_links(spec, ends)
     return links
 
 
@@ -245,7 +274,8 @@ def test_the_planned_circuit_type_and_link_count_follow_the_path_type_and_flavou
     connection's own for a provider-assigned flavour."""
     (row,) = [r for r in _connections() if r["name"] == connection_name]
 
-    flavour, links = plan_links(parse_connection(_payload(row)))
+    flavour, _ = validate_spec(parse_connection(_payload(row)))
+    links = _plan(row)
 
     assert {link.circuit_type for link in links} == {"handoff" if row["path_type"] == "dedicated" else "vpn"}
     assert len(links) == flavour.links

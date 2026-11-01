@@ -491,7 +491,7 @@ class TestRegisteredPrefixOwners:
     def test_connection_registering_prefixes_needs_a_customer_owner(self) -> None:
         """A provider connection with registered_prefixes owned by a provider, or by nobody, is an error."""
         for owner in (_PROVIDER, None):
-            connection = _connection("zscaler", service="public", owner=owner, registered=(_block("198.51.100.0/24"),))
+            connection = _connection("zscaler", owner=owner, registered=(_block("198.51.100.0/24"),))
             check = _run(TopologyProviderConnection=[connection])
             assert len(check._captured_errors) == 1
             assert "provider connection 'zscaler' registers prefixes" in check._captured_errors[0]
@@ -499,12 +499,12 @@ class TestRegisteredPrefixOwners:
 
     def test_connection_owned_by_a_customer_passes(self) -> None:
         """The owner of the connection is a customer: the registered range is accepted."""
-        connection = _connection("zscaler", service="public", owner=_CUSTOMER, registered=(_block("198.51.100.0/24"),))
+        connection = _connection("zscaler", owner=_CUSTOMER, registered=(_block("198.51.100.0/24"),))
         assert _run(TopologyProviderConnection=[connection])._captured_errors == []
 
     def test_connection_takes_its_accounts_owner(self) -> None:
         """With an account, the account's owner counts (connection_owner): a customer account passes."""
-        connection = _connection("aws", service="public", registered=(_block("198.51.100.0/24"),))
+        connection = _connection("aws", registered=(_block("198.51.100.0/24"),))
         connection["account"] = {"node": {"owner": _owner(_CUSTOMER)}}
         assert _run(TopologyProviderConnection=[connection])._captured_errors == []
 

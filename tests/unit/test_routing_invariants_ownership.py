@@ -184,7 +184,7 @@ class TestProviderSpace:
     @staticmethod
     def _saas(conn_id: str, owner: tuple[str, str, str], prefix: str = "198.51.100.0/24") -> dict[str, Any]:
         """A public connection of ``owner`` registering ``prefix`` (a SaaS range)."""
-        return _connection(conn_id, service="public", owner=owner, registered=(_block(prefix),))
+        return _connection(conn_id, owner=owner, registered=(_block(prefix),))
 
     def test_two_owners_registering_one_saas_range_behind_their_own_connections_pass(self) -> None:
         """C003 and C015 each subscribe to the same range: not a leak, each is announced only its own."""
@@ -237,7 +237,6 @@ def test_the_query_selects_what_rule_eight_reads() -> None:
         ],
         "TopologyProviderConnection": [
             "name",
-            "service",
             "session_circuits.name",
             "registered_prefixes.prefix",
             "registered_prefixes.ip_namespace.name",

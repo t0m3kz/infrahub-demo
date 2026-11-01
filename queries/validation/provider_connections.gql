@@ -1,14 +1,15 @@
-# The rows of checks/provider_connections.py (rules PC1 to PC9) and the cloud consistency rules, one global query:
+# The rows of checks/provider_connections.py (rules PC1 to PC13) and the cloud consistency rules, one global query:
 #
-# - TopologyProviderConnection: path_type, service, vlan_id, the near and far facility (a SaaS region carries its
+# - TopologyProviderConnection: path_type, vlan_id, the near and far facility (a SaaS region carries its
 #   SaaS cloud's provider, whose connection_profile picks the flavour when there is no account; the full chain is
 #   utils/provider_services.py connection_provider), the account (its
 #   provider's connection_profile, its environment and owner), the connection's own owner, provider_as, the prefixes
-#   it registers and the link ranges it is handed, the carriers it lists.
+#   it registers and the link ranges it is handed, the near_port, the carriers it lists (the generator's output: status,
+#   locations, end ports with their device and deployment).
 # - TopologySessionCircuit (every circuit_type: a dci or a tunnel on a connection is a finding): status, the
 #   connection, ip_namespace, link_prefix, locations and both end ports. Each port carries the carrier circuits on it
 #   and on its parent interface (the derived underlay) and its device with its deployment and BGP processes.
-# - TopologyCarrierCircuit: locations and the connections it belongs to (PC2).
+# - TopologyCarrierCircuit: locations, the connections it belongs to (PC2), its redundancy_group and end ports (PC13).
 # - CloudNetworkSegment and CloudTransitGatewayAttachment: owner and account consistency.
 query provider_connections {
   TopologyProviderConnection {
@@ -18,8 +19,8 @@ query provider_connections {
         name { value }
         status { value }
         path_type { value }
-        service { value }
         vlan_id { value }
+        near_port { node { id name { value } } }
         near { node { id __typename name { value } } }
         far {
           node {
@@ -69,6 +70,7 @@ query provider_connections {
             node {
               id
               name { value }
+              status { value }
               circuit_type { value }
               locations { edges { node { id } } }
               capabilities { edges { node { ...ConnectionKitEnd } } }
@@ -100,8 +102,11 @@ query provider_connections {
       node {
         id
         name { value }
+        status { value }
+        redundancy_group { value }
         locations { edges { node { id __typename name { value } } } }
         provider_connections { edges { node { id } } }
+        capabilities { edges { node { ...ConnectionKitEnd } } }
       }
     }
   }
@@ -215,6 +220,7 @@ fragment ConnectionKitEnd on DcimInterface {
   device {
     node {
       id
+      name { value }
       owner { node { id __typename ... on OrganizationProvider { name { value } connection_profile { value } } } }
       ... on DcimPhysicalDevice {
         deployment { node { id } }

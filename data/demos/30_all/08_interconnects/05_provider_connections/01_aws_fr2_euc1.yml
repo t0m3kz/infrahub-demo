@@ -5,12 +5,14 @@
 # to eu-central-1, for the hub account, over this carrier", and add_provider_connection builds the rest.
 #
 #   near / far            the cage FR2 and the region eu-central-1 (a carrier circuit's kind of ends)
-#   carrier_circuits      XC-EQXFR2-AWS-EUC1 (../01_colo_onramp/03_carrier_circuits.yml), the Direct Connect virtual
-#                         connection from eg-fr201 Ethernet1/13 to the NIC vnic-fr2 of the service edge. Shared
-#                         underlay: the connection does not own it.
+#   near_port             eg-fr201 Ethernet1/13, an `uplink` port adopted explicitly. A carrier already ends on it,
+#                         XC-EQXFR2-AWS-EUC1 (../01_colo_onramp/03_carrier_circuits.yml), the Direct Connect virtual
+#                         connection to the NIC vnic-fr2 of the service edge: the generator reuses it (found by its
+#                         end on the port) and lists it in the connection's `carrier_circuits`, which nobody authors.
+#                         Shared underlay: the connection does not own it.
 #   vlan_id               1000, the VLAN of the transit VIF: the sub-interfaces are eg-fr201 Ethernet1/13.1000 and
 #                         EXT-AWS-DX-FR2 vnic-fr2.1000
-#   service / attached    a transit connection onto the hub tgw-30all-euc1, whose hybrid attachment
+#   attached_gateway      a transit connection onto the hub tgw-30all-euc1, whose hybrid attachment
 #                         tgwa-hybrid-eqx-fr2 is `transit_attachment` (the route table that decides which VPC blocks
 #                         the session may accept, transforms/helpers/bgp_external.py)
 #   account               the hub's network account, owned by Internal (P028): no customer owns the connection, the
@@ -33,17 +35,15 @@ spec:
       member_of_groups: [provider_connections]
       description: "PROD transit connection FR2 cage <-> AWS eu-central-1 (Direct Connect 10G, tgw-30all-euc1, AS64512)"
       path_type: dedicated
-      service: transit
       status: active
       bandwidth: 10000
       vlan_id: 1000
       near: "FR2"
       far: "eu-central-1"
+      near_port: ["eg-fr201", "Ethernet1/13"]
       ip_namespace: "PROD"
       account: "net-hub-aws-prod"
       provider_as: "AS64512"
       attached_gateway: "tgw-30all-euc1"
       password: "eqx-fr2-aws-vif-key"
       transit_attachment: "tgwa-hybrid-eqx-fr2"
-      carrier_circuits:
-        - "XC-EQXFR2-AWS-EUC1"

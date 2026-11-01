@@ -14,17 +14,20 @@ from tests.integration.test_66_all_demo_circuit_lifecycle import SOLE_DEMAND_DEV
 
 _ALL = ROOT / ALL_DEMO_DATA
 _NAMESPACE = "PROD"
-# The Network Edge router each connection ends on: the connection's carrier lists the router's port (the NIC).
-_NE_ROUTER_BY_CARRIER = {"FABRIC-FR2-AMNE01": "eg-am-ne01", "FABRIC-AMNE02-AWS-EUC1": "eg-am-ne02"}
 
 
 def _prod_connections_of(device: str) -> list[Declared]:
-    """The PROD provider connections one of whose carriers ends on a port of ``device``."""
+    """The PROD provider connections whose carrier (the one that ends on the connection's near port) ends on a port of
+    ``device``."""
+    carriers = [c.item["capabilities"] for c in declared("TopologyCarrierCircuit", _ALL)]
     return [
         connection
         for connection in declared("TopologyProviderConnection", _ALL)
         if connection.item["ip_namespace"] == _NAMESPACE
-        and any(_NE_ROUTER_BY_CARRIER.get(carrier) == device for carrier in connection.item.get("carrier_circuits", []))
+        and any(
+            list(connection.item["near_port"]) in ends and device in {end_device for end_device, _ in ends}
+            for ends in carriers
+        )
     ]
 
 

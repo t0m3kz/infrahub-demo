@@ -18,13 +18,13 @@ from utils.limits import PROVIDER_STUB_LOOPBACK_POOL
 
 pytestmark = pytest.mark.usefixtures("dual_link_profile")
 
-STUB = "dev-EXT-STUB-1"
+STUB = "dev-AWS-SE"
 
 
 def _processless(**kwargs: Any) -> dict[str, Any]:
     """A dedicated connection whose far stub has no BGP process yet, in the AWS AS."""
     kwargs.setdefault("provider_as", h.AWS_AS)
-    return h.connection(carriers=[h.aws_cross_connect(1, stub_processes=[])], **kwargs)
+    return h.connection(stubs=[h.stub_device(processes=[])], **kwargs)
 
 
 async def _run(payload: dict[str, Any], client: h.FakeClient | None = None) -> h.FakeClient:
@@ -57,7 +57,7 @@ class TestBuild:
         assert lo["data"]["name"] == "Loopback0" and lo["data"]["role"] == "loopback"
         assert lo["data"]["device"] == {"id": STUB}
         (_, bgp) = client.of("save", "ManagedBGP")[0]
-        assert bgp["data"]["name"] == "EXT-STUB-1-bgp"
+        assert bgp["data"]["name"] == "AWS-SE-bgp"
         assert bgp["data"]["local_as"] == {"id": h.AWS_AS}
         assert bgp["data"]["router_id"] == {"id": lo["data"]["ip_address"]["id"]}
         assert bgp["data"]["capabilities"] == [{"id": STUB}]
@@ -81,7 +81,12 @@ class TestBuild:
         client = await _run(_processless())
 
         locks = [e for e in client.events if e.startswith(("lock:", "unlock:"))]
-        assert locks[:3] == ["lock:pc-conn-1", f"lock:pc-device-{STUB}", f"unlock:pc-device-{STUB}"]
+        assert locks[:4] == [
+            f"lock:pc-near-{h.NEAR}",
+            "lock:pc-conn-1",
+            f"lock:pc-device-{STUB}",
+            f"unlock:pc-device-{STUB}",
+        ]
         assert not [e for e in locks if e.startswith("lock:vc-")]
 
     @pytest.mark.asyncio
@@ -92,40 +97,12 @@ class TestBuild:
         assert len(client.of("save", "ManagedBGP")) == 1
         assert len(client.of("save", "TopologySessionCircuit")) == 2
 
-    @pytest.mark.asyncio
-    async def test_two_ports_of_one_stub_build_it_once(self) -> None:
-        both = h.carrier(
-            "xc-1",
-            "XC-1",
-            [
-                h.port("near-port-1", "Ethernet1/1", "eg-1", h.NEAR),
-                h.port("far-port-1", "et-0/0/0", "EXT-STUB-1", h.FAR),
-            ],
-        )
-        second = h.carrier(
-            "xc-2",
-            "XC-2",
-            [
-                h.port("near-port-2", "Ethernet1/2", "eg-2", h.NEAR),
-                h.port("far-port-2", "et-0/0/1", "EXT-STUB-1", h.FAR),
-            ],
-        )
-        payload = h.connection(profile="dual", provider_as=h.AWS_AS, carriers=[both, second], vlan_id=5)
-        payload["TopologyProviderConnection"][0]["link_prefixes"] = [
-            h.prefix("p-1", "10.9.0.0/30"),
-            h.prefix("p-2", "10.9.0.4/30"),
-        ]
-
-        client = await _run(payload)
-
-        assert len(client.of("save", "ManagedBGP")) == 1
-
 
 class TestReuse:
     @pytest.mark.asyncio
     async def test_an_authored_loopback_is_reused_never_duplicated(self) -> None:
         client = h.FakeClient()
-        client.loopbacks[STUB] = h.loopback("EXT-STUB-1", "addr-authored")
+        client.loopbacks[STUB] = h.loopback("AWS-SE", "addr-authored")
 
         await _run(_processless(), client)
 
@@ -137,19 +114,19 @@ class TestReuse:
     @pytest.mark.asyncio
     async def test_an_authored_loopback_without_an_address_is_updated_in_place(self) -> None:
         client = h.FakeClient()
-        client.loopbacks[STUB] = h.loopback("EXT-STUB-1", None)
+        client.loopbacks[STUB] = h.loopback("AWS-SE", None)
 
         await _run(_processless(), client)
 
         (alloc,) = client.of("allocate")
         lo = next(d for _, d in client.of("save", "DcimVirtualInterface") if d["data"]["name"] == "Loopback0")
-        assert lo["data"]["id"] == "lo-EXT-STUB-1"
+        assert lo["data"]["id"] == "lo-AWS-SE"
         assert alloc[1]["identifier"] == f"stub-lo0__{STUB}"
 
     @pytest.mark.asyncio
     async def test_a_stub_that_got_its_process_meanwhile_is_left_alone(self) -> None:
         client = h.FakeClient()
-        client.processes[STUB] = [h.process_node("EXT-STUB-1-bgp")]
+        client.processes[STUB] = [h.process_node("AWS-SE-bgp")]
 
         await _run(_processless(), client)
 
@@ -170,7 +147,7 @@ class TestRefusals:
     @pytest.mark.asyncio
     async def test_a_process_of_another_as_found_under_the_lock_fails_before_any_write(self) -> None:
         client = h.FakeClient()
-        client.processes[STUB] = [h.process_node("EXT-STUB-1-bgp", "as-other")]
+        client.processes[STUB] = [h.process_node("AWS-SE-bgp", "as-other")]
 
         with pytest.raises(GeneratorError, match="not in the connection's provider_as"):
             await _run(_processless(), client)
@@ -189,7 +166,7 @@ class TestRefusals:
         client = h.FakeClient()
 
         with pytest.raises(GeneratorError, match="no provider_as"):
-            await _run(h.connection(carriers=[h.aws_cross_connect(1, stub_processes=[])]), client)
+            await _run(h.connection(stubs=[h.stub_device(processes=[])]), client)
 
         assert client.of("save") == [] and client.of("allocate") == []
 
@@ -207,7 +184,7 @@ class TestRefusals:
     async def test_no_pool_is_fine_when_the_loopback_is_authored(self) -> None:
         client = h.FakeClient()
         client.pool = None
-        client.loopbacks[STUB] = h.loopback("EXT-STUB-1")
+        client.loopbacks[STUB] = h.loopback("AWS-SE")
 
         await _run(_processless(), client)
 

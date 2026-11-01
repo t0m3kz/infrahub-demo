@@ -4,10 +4,11 @@
 # with an `owner` of its own: a SaaS has no cloud account to derive the owner from, so the subscribing customer, C001,
 # is named on the connection, and it registers ONE range behind the far side (`registered_prefixes`, below).
 #
-#   path_type / service   internet_vpn / private: tunnels over the near facility's internet carrier (FR2 has two
-#                         internet-fed edges, so the connection lists the one it leaves by, INET-LUMEN-EQXFR2), two of
-# them (primary and secondary node, flavour
-#                         zscaler/internet_vpn: a /30 per tunnel from OUR pool Handoff-PROD-IPv4, multihop TTL 2)
+#   path_type             internet_vpn: two tunnels (primary and secondary node, flavour zscaler/internet_vpn: a /30
+#                         per tunnel from OUR pool Handoff-PROD-IPv4, multihop TTL 2) over the near facility's
+#                         internet carrier
+#   near_port             eg-fr201 Ethernet1/14, the port of INET-LUMEN-EQXFR2 the tunnels leave by (FR2 has two
+#                         internet-fed edges, eg-fr202 on Cogent is the other), so the connection names its edge
 #   far                   ZSCALER-MUNICH I, a TopologySaasRegion; the node is the hosted function EXT-ZSCALER-MUC1, a
 #                         CloudNetworkAppliance of device type ZEN on platform zscaler_zen (data/bootstrap/
 #                         09_network_appliance_templates_zscaler.yaml) with role `provider`: nothing is rendered for it
@@ -57,15 +58,13 @@ spec:
       member_of_groups: [provider_connections]
       description: "PROD Zscaler private peering FR2 cage <-> Zscaler Munich I, two tunnels, C001 range 198.18.1.0/24"
       path_type: internet_vpn
-      service: private
       status: active
       bandwidth: 500
       near: "FR2"
       far: "ZSCALER-MUNICH I"
+      near_port: ["eg-fr201", "Ethernet1/14"]
       ip_namespace: "PROD"
       owner: "C001"
       provider_as: "AS22616"
-      carrier_circuits:
-        - "INET-LUMEN-EQXFR2"
       registered_prefixes:
         - ["198.18.1.0/24", "PROD"]
