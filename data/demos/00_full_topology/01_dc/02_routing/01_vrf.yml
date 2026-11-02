@@ -9,25 +9,25 @@ kind: Object
 spec:
   kind: ManagedVRF
   data:
-    - name: "dc90-vrf-prod"
+    - name: "dc-ktw1-vrf-prod"
       namespace: "PROD"
-      deployment: "DC90"
+      deployment: "DC-KTW1"
       shared_devices:
-        - "dc90-leaf-01"
-        - "dc90-edge-01"
+        - "ktw1-leaf-01"
+        - "ktw1-edge-01"
 ---
-# The pod: the VRF of DC90 gets the new routing devices (the whole list, an upsert replaces it).
+# The pod: the VRF of DC-KTW1 gets the new routing devices (the whole list, an upsert replaces it).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: ManagedVRF
   data:
-    - name: "dc90-vrf-prod"
+    - name: "dc-ktw1-vrf-prod"
       namespace: "PROD"
-      deployment: "DC90"
+      deployment: "DC-KTW1"
       shared_devices:
-        - "dc90-leaf-01"
-        - "dc90-leaf-02"
-        - "dc90-bl-01"
-        - "dc90-bl-02"
-        - "dc90-edge-01"
+        - "ktw1-leaf-01"
+        - "ktw1-leaf-02"
+        - "ktw1-bl-01"
+        - "ktw1-bl-02"
+        - "ktw1-edge-01"

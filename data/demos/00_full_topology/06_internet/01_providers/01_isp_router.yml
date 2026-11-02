@@ -1,22 +1,22 @@
 ---
 # The router of the second ISP, at its own external-provider facility. Its port towards the cage edge carries the
-# transit /31 of the access INET-DMC1-ISP-DEMO-B and is nested under it (the prefix is in 06_internet/00_addressing).
+# transit /31 of the access INET-PAR1-ISP-B and is nested under it (the prefix is in 06_internet/00_addressing).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: DcimPhysicalDevice
   data:
-    - name: EXT-ISP-DEMO-B-PE1
+    - name: EXT-ISP-B-PE1
       object_template: MX204_ISP_PE
       owner: P023
       description: "Second ISP router: far end of the internet carrier on Ethernet1/1, uplink to INTERNET"
-      deployment: ISP-DEMO-B
+      deployment: ISP-B
       interfaces:
         - kind: DcimPhysicalInterface
           data:
             name: et-0/0/1
             status: active
-            description: "Transit customer: eg-dmc101"
+            description: "Transit customer: par-colo1-edge-01"
             ip_address:
               data:
                 address: "198.51.100.15/31"

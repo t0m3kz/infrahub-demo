@@ -5,7 +5,7 @@ kind: Object
 spec:
   kind: RoutingAutonomousSystem
   data:
-    - {asn: 4200090003, owner: "P028", description: "dc90-leaf-02 (would come from PRIVATE-ASN32)"}
-    - {asn: 4200090004, owner: "P028", description: "dc90-spine-01 (would come from PRIVATE-ASN32)"}
-    - {asn: 4200090005, owner: "P028", description: "dc90-bl-01 (would come from PRIVATE-ASN32)"}
-    - {asn: 4200090006, owner: "P028", description: "dc90-bl-02 (would come from PRIVATE-ASN32)"}
+    - {asn: 4200090003, owner: "P028", description: "ktw1-leaf-02 (would come from PRIVATE-ASN32)"}
+    - {asn: 4200090004, owner: "P028", description: "ktw1-spine-01 (would come from PRIVATE-ASN32)"}
+    - {asn: 4200090005, owner: "P028", description: "ktw1-bl-01 (would come from PRIVATE-ASN32)"}
+    - {asn: 4200090006, owner: "P028", description: "ktw1-bl-02 (would come from PRIVATE-ASN32)"}

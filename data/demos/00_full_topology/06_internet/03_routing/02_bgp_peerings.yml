@@ -4,21 +4,21 @@ kind: Object
 spec:
   kind: ManagedBGPPeering
   data:
-    - name: "BGP-DC90-EDGE01-ISP-DEMO"
+    - name: "BGP-KTW1-EDGE01-ISP-A"
       description: "eBGP transit to the ISP: default route in, our public prefixes out"
       session_type: EBGP
       peering_role: regular
       address_families:
         - ["ipv4", "unicast"]
       bgp_processes:
-        - "dc90-edge-01-inet-bgp"
-        - "EXT-ISP-DEMO-PE1-bgp"
+        - "ktw1-edge-01-inet-bgp"
+        - "EXT-ISP-A-PE1-bgp"
       capabilities:
         - kind: DcimPhysicalInterface
           data:
-            device: dc90-edge-01
+            device: ktw1-edge-01
             name: Ethernet1/2
         - kind: DcimPhysicalInterface
           data:
-            device: EXT-ISP-DEMO-PE1
+            device: EXT-ISP-A-PE1
             name: et-0/0/0

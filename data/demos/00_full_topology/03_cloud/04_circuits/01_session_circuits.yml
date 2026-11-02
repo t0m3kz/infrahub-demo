@@ -18,10 +18,10 @@ spec:
         - 10.255.128.0/31
         - PROD
       locations:
-        - DMC1
+        - PAR-COLO1
         - eu-central-1
       capabilities:
-        - ["eg-dmc101", "Ethernet1/3.1000"]
+        - ["par-colo1-edge-01", "Ethernet1/3.1000"]
         - ["dx-c900-fra-lag", "lag1.1000"]
     # AWS Direct Connect, private: virtual interface (scope private) -> virtual private gateway -> VPC.
     - name: SC-C900-AWS-DX-PRIV
@@ -34,10 +34,10 @@ spec:
         - 10.255.128.2/31
         - PROD
       locations:
-        - DMC1
+        - PAR-COLO1
         - eu-central-1
       capabilities:
-        - ["eg-dmc101", "Ethernet1/3.1100"]
+        - ["par-colo1-edge-01", "Ethernet1/3.1100"]
         - ["dx-c900-fra-lag", "lag1.1100"]
     # Azure ExpressRoute: ONE transport (the circuit), two peerings, a /30 each, both on the ExpressRoute Gateway.
     - name: SC-C900-AZ-ER-PRI
@@ -50,10 +50,10 @@ spec:
         - 10.255.128.8/30
         - PROD
       locations:
-        - DMC1
+        - PAR-COLO1
         - westeurope
       capabilities:
-        - ["eg-dmc101", "Ethernet1/1.200"]
+        - ["par-colo1-edge-01", "Ethernet1/1.200"]
         - ["er-c900-weu", "er-c900-weu-pri"]
     - name: SC-C900-AZ-ER-SEC
       description: 'Handoff: edge sub-interface to the secondary private peering'
@@ -65,10 +65,10 @@ spec:
         - 10.255.128.12/30
         - PROD
       locations:
-        - DMC1
+        - PAR-COLO1
         - westeurope
       capabilities:
-        - ["eg-dmc101", "Ethernet1/1.201"]
+        - ["par-colo1-edge-01", "Ethernet1/1.201"]
         - ["er-c900-weu", "er-c900-weu-sec"]
     # GCP Partner Interconnect: VLAN attachment (scope private) -> Cloud Router -> VPC.
     - name: SC-C900-GCP-IC
@@ -81,10 +81,10 @@ spec:
         - 169.254.20.0/29
         - PROD
       locations:
-        - DMC1
+        - PAR-COLO1
         - europe-west3
       capabilities:
-        - ["eg-dmc101", "Ethernet1/1.400"]
+        - ["par-colo1-edge-01", "Ethernet1/1.400"]
         - ["ic-c900-fra-1", "gcp-c900-vlan-att-1"]
     # GCP Dedicated Interconnect: a ROUTED PORT leg. Both ends are physical interfaces with an address and no VLAN
     # (Ethernet1/5 of the cage edge carries 169.254.30.2/29 itself, no sub-interface).
@@ -98,10 +98,10 @@ spec:
         - 169.254.30.0/29
         - PROD
       locations:
-        - DMC1
+        - PAR-COLO1
         - europe-west3
       capabilities:
-        - ["eg-dmc101", "Ethernet1/5"]
+        - ["par-colo1-edge-01", "Ethernet1/5"]
         - ["ic-ded-c900-fra", "gcp-c900-ded-1"]
     # AWS site-to-site VPN: ONE transport (the VPN connection), two tunnels, each a peering and the end of its own
     # session circuit, BGP inside a /30 each. The provider side (transit gateway) is on the transport.
@@ -115,10 +115,10 @@ spec:
         - 169.254.10.0/30
         - PROD
       locations:
-        - DC90
+        - DC-KTW1
         - eu-central-1
       capabilities:
-        - ["dc90-edge-01", "Tunnel1"]
+        - ["ktw1-edge-01", "Tunnel1"]
         - ["vpn-c900-aws-euc1", "Tunnel1"]
     - name: SC-C900-AWS-VPN-2
       description: VPN tunnel 2 from the edge to the AWS VPN connection
@@ -130,8 +130,8 @@ spec:
         - 169.254.10.4/30
         - PROD
       locations:
-        - DC90
+        - DC-KTW1
         - eu-central-1
       capabilities:
-        - ["dc90-edge-01", "Tunnel2"]
+        - ["ktw1-edge-01", "Tunnel2"]
         - ["vpn-c900-aws-euc1", "Tunnel2"]

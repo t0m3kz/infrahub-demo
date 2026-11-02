@@ -5,104 +5,104 @@
 # under the transport in 03_cloud/03_transport), so the transports and their interfaces exist by now and nothing is
 # created here. `locations` are authored here (no generator derives them on the throwaway branch).
 #
-# Carrier circuits are the physical wire. Every cloud leg lands in the colocation cage DMC1 (02_colo), where the cage
-# edge eg-dmc101 is: the Direct Connect and the Google Dedicated Interconnect are cross-connects from an edge port to
-# the provider's port; ExpressRoute and the Google Partner Interconnect are Equinix Fabric virtual connections that
-# start on the Fabric port of the cage (EXT-EQX-FABRIC-DMC1), which the edge reaches through the patch panel
-# (02_colo/01_physical/02_cables.yml). The last carrier, INET-DC90-ISP-DEMO, is the internet access of the DC edge.
+# Carrier circuits are the physical wire. Every cloud leg lands in the colocation cage PAR-COLO1 (02_colo), where the
+# cage edge par-colo1-edge-01 is: the Direct Connect and the Google Dedicated Interconnect are cross-connects from an
+# edge port to the provider's port; ExpressRoute and the Google Partner Interconnect are Equinix Fabric virtual
+# connections that start on the Fabric port of the cage (EXT-FABRIC-PAR), which the edge reaches through the patch
+# panel (02_colo/01_physical/02_cables.yml). The last carrier, INET-KTW1-ISP-A, is the internet access of the DC edge.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: TopologyCarrierCircuit
   data:
-    - name: XC-DMC1-AWS-DX1
-      circuit_id: XC-DMC1-AWS-DX1
-      description: Cross-connect from the cage edge eg-dmc101 to the first AWS Direct Connect port of the LAG
+    - name: XC-PAR1-AWS-DX1
+      circuit_id: XC-PAR1-AWS-DX1
+      description: Cross-connect from the cage edge par-colo1-edge-01 to the first AWS Direct Connect port of the LAG
       provider: P004
       circuit_type: cross_connect
       status: active
       bandwidth: 10000
       locations:
-        - DMC1
+        - PAR-COLO1
         - eu-central-1
       capabilities:
-        - ["eg-dmc101", "Ethernet1/3"]
+        - ["par-colo1-edge-01", "Ethernet1/3"]
         - ["dx-c900-fra-lag", "dxcon-1a"]
-    - name: XC-DMC1-AWS-DX2
-      circuit_id: XC-DMC1-AWS-DX2
-      description: Cross-connect from the cage edge eg-dmc101 to the second AWS Direct Connect port of the LAG
+    - name: XC-PAR1-AWS-DX2
+      circuit_id: XC-PAR1-AWS-DX2
+      description: Cross-connect from the cage edge par-colo1-edge-01 to the second AWS Direct Connect port of the LAG
       provider: P004
       circuit_type: cross_connect
       status: active
       bandwidth: 10000
       locations:
-        - DMC1
+        - PAR-COLO1
         - eu-central-1
       capabilities:
-        - ["eg-dmc101", "Ethernet1/4"]
+        - ["par-colo1-edge-01", "Ethernet1/4"]
         - ["dx-c900-fra-lag", "dxcon-1b"]
-    - name: VC-DMC1-AZ-ER-PRI
-      circuit_id: VC-DMC1-AZ-ER-PRI
+    - name: VC-PAR1-AZ-ER-PRI
+      circuit_id: VC-PAR1-AZ-ER-PRI
       description: Fabric virtual connection from the cage Fabric port to the ExpressRoute circuit, primary link
       provider: P016
       circuit_type: virtual_connection
       status: active
       bandwidth: 1000
       locations:
-        - DMC1
+        - PAR-COLO1
         - westeurope
       capabilities:
-        - ["EXT-EQX-FABRIC-DMC1", "et-0/0/0"]
+        - ["EXT-FABRIC-PAR", "et-0/0/0"]
         - ["er-c900-weu", "msee-pri"]
-    - name: VC-DMC1-AZ-ER-SEC
-      circuit_id: VC-DMC1-AZ-ER-SEC
+    - name: VC-PAR1-AZ-ER-SEC
+      circuit_id: VC-PAR1-AZ-ER-SEC
       description: Fabric virtual connection from the cage Fabric port to the ExpressRoute circuit, secondary link
       provider: P016
       circuit_type: virtual_connection
       status: active
       bandwidth: 1000
       locations:
-        - DMC1
+        - PAR-COLO1
         - westeurope
       capabilities:
-        - ["EXT-EQX-FABRIC-DMC1", "et-0/0/0"]
+        - ["EXT-FABRIC-PAR", "et-0/0/0"]
         - ["er-c900-weu", "msee-sec"]
-    - name: VC-DMC1-GCP-IC1
-      circuit_id: VC-DMC1-GCP-IC1
+    - name: VC-PAR1-GCP-IC1
+      circuit_id: VC-PAR1-GCP-IC1
       description: Equinix Fabric virtual connection from the cage Fabric port to the Google Partner Interconnect
       provider: P016
       circuit_type: virtual_connection
       status: active
       bandwidth: 1000
       locations:
-        - DMC1
+        - PAR-COLO1
         - europe-west3
       capabilities:
-        - ["EXT-EQX-FABRIC-DMC1", "et-0/0/0"]
+        - ["EXT-FABRIC-PAR", "et-0/0/0"]
         - ["ic-c900-fra-1", "ic-port-1"]
-    - name: XC-DMC1-GCP-DED1
-      circuit_id: XC-DMC1-GCP-DED1
+    - name: XC-PAR1-GCP-DED1
+      circuit_id: XC-PAR1-GCP-DED1
       description: Cross-connect to the Google Dedicated Interconnect port (routed port on both ends, no VLAN)
       provider: P006
       circuit_type: cross_connect
       status: active
       bandwidth: 10000
       locations:
-        - DMC1
+        - PAR-COLO1
         - europe-west3
       capabilities:
-        - ["eg-dmc101", "Ethernet1/5"]
+        - ["par-colo1-edge-01", "Ethernet1/5"]
         - ["ic-ded-c900-fra", "ic-dedicated-port"]
-    - name: INET-DC90-ISP-DEMO
-      circuit_id: INET-DC90-ISP-DEMO
-      description: Internet access of dc90-edge-01 (carries the AWS VPN tunnels and the office tunnel to the DC)
+    - name: INET-KTW1-ISP-A
+      circuit_id: INET-KTW1-ISP-A
+      description: Internet access of ktw1-edge-01 (carries the AWS VPN tunnels and the office tunnel to the DC)
       provider: P014
       circuit_type: internet
       status: active
       bandwidth: 1000
       locations:
-        - DC90
-        - ISP-DEMO
+        - DC-KTW1
+        - ISP-A
       capabilities:
-        - ["dc90-edge-01", "Ethernet1/2"]
-        - ["EXT-ISP-DEMO-PE1", "et-0/0/0"]
+        - ["ktw1-edge-01", "Ethernet1/2"]
+        - ["EXT-ISP-A-PE1", "et-0/0/0"]

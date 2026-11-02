@@ -23,10 +23,10 @@ spec:
     # Our side. A pool (PRIVATE-ASN32) hands these out once the generator exists; an object file cannot ask a pool.
     - asn: 4200090001
       owner: "P028"
-      description: "dc90-edge-01 (would come from PRIVATE-ASN32)"
+      description: "ktw1-edge-01 (would come from PRIVATE-ASN32)"
     - asn: 4200090002
       owner: "P028"
-      description: "dc90-leaf-01 (would come from PRIVATE-ASN32)"
+      description: "ktw1-leaf-01 (would come from PRIVATE-ASN32)"
     - asn: 4200091001
       owner: "P028"
-      description: "eg-dmc101, the cage edge of the colocation DMC1 (would come from PRIVATE-ASN32)"
+      description: "par-colo1-edge-01, the cage edge of the colocation PAR-COLO1 (would come from PRIVATE-ASN32)"

@@ -1,5 +1,5 @@
 ---
-# DC <-> cage: two dark fibres, one from each border leaf of DC90 to the cage edge (the pair of fibres of 30_all's
+# DC <-> cage: two dark fibres, one from each border leaf of DC-KTW1 to the cage edge (the pair of fibres of 30_all's
 # DF-DC10-EQXFR2 and DF-DC10-EQXFR2-B). A fibre is a pure carrier: no role, no session (the DCI that rides it is
 # 01_dci_circuits.yml). Ethernet1/35 is a free uplink of the border leaf template, Ethernet1/10-11 are the `dci`
 # ports of the edge template. Unowned shared underlay.
@@ -12,29 +12,29 @@ kind: Object
 spec:
   kind: TopologyCarrierCircuit
   data:
-    - name: DF-DC90-DMC1
-      circuit_id: DF-DC90-DMC1
-      description: DC90 border leaf 1 to the DMC1 cage edge, 100G dark fibre
+    - name: DF-KTW1-PAR1-A
+      circuit_id: DF-KTW1-PAR1-A
+      description: DC-KTW1 border leaf 1 to the PAR-COLO1 cage edge, 100G dark fibre
       provider: P016
       circuit_type: dark_fiber
       status: active
       bandwidth: 100000
       locations:
-        - DC90
-        - DMC1
+        - DC-KTW1
+        - PAR-COLO1
       capabilities:
-        - ["dc90-bl-01", "Ethernet1/35"]
-        - ["eg-dmc101", "Ethernet1/10"]
-    - name: DF-DC90-DMC1-B
-      circuit_id: DF-DC90-DMC1-B
-      description: DC90 border leaf 2 to the DMC1 cage edge, 100G dark fibre
+        - ["ktw1-bl-01", "Ethernet1/35"]
+        - ["par-colo1-edge-01", "Ethernet1/10"]
+    - name: DF-KTW1-PAR1-B
+      circuit_id: DF-KTW1-PAR1-B
+      description: DC-KTW1 border leaf 2 to the PAR-COLO1 cage edge, 100G dark fibre
       provider: P016
       circuit_type: dark_fiber
       status: active
       bandwidth: 100000
       locations:
-        - DC90
-        - DMC1
+        - DC-KTW1
+        - PAR-COLO1
       capabilities:
-        - ["dc90-bl-02", "Ethernet1/35"]
-        - ["eg-dmc101", "Ethernet1/11"]
+        - ["ktw1-bl-02", "Ethernet1/35"]
+        - ["par-colo1-edge-01", "Ethernet1/11"]

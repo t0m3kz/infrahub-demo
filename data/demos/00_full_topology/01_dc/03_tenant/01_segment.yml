@@ -9,13 +9,13 @@ spec:
   kind: ManagedVxlanSegment
   data:
     - owner: C900
-      customer_name: demo-web
+      customer_name: web
       environment: p
-      customer_deployments: ["C900-P-DC90"]
+      customer_deployments: ["C900-P-DC-KTW1"]
       gateway:
         data:
           address: "10.90.1.1/24"
-          description: Gateway of c900-demo-web-p
+          description: Gateway of c900-web-p
           ip_namespace: PROD
           ip_prefix:
             kind: IpamPrefix
@@ -23,13 +23,13 @@ spec:
               prefix: "10.90.1.0/24"
               ip_namespace: PROD
               status: active
-              description: DC segment c900-demo-web-p
+              description: DC segment c900-web-p
       segment_deployments:
         data:
-          - deployment: DC90
+          - deployment: DC-KTW1
             vni: 10100
             vlan_domain_segments:
               data:
-                - device: dc90-leaf-01
+                - device: ktw1-leaf-01
                   vlan_id: 100
-                  svi: ["dc90-leaf-01", "Vlan100"]
+                  svi: ["ktw1-leaf-01", "Vlan100"]

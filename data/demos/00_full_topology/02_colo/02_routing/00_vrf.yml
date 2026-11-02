@@ -6,8 +6,8 @@ kind: Object
 spec:
   kind: ManagedVRF
   data:
-    - name: "dmc-vrf-prod"
+    - name: "par-vrf-prod"
       namespace: "PROD"
-      deployment: "DMC"
+      deployment: "PAR"
       shared_devices:
-        - "eg-dmc101"
+        - "par-colo1-edge-01"

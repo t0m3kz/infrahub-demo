@@ -27,8 +27,8 @@ spec:
       gateway_type: edge
       account: "c900-aws-prod"
       region: "eu-central-1"
-    - name: "cgw-c900-dc90"
-      description: "AWS customer gateway: the public address and AS of dc90-edge-01"
+    - name: "cgw-c900-ktw1"
+      description: "AWS customer gateway: the public address and AS of ktw1-edge-01"
       status: active
       gateway_type: customer
       ip_address: "198.51.100.10/32"

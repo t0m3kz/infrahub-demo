@@ -6,7 +6,7 @@ kind: Object
 spec:
   kind: ManagedBGP
   data:
-    - name: dc90-edge-01-bgp
+    - name: ktw1-edge-01-bgp
       status: active
       process_role: overlay
       local_as: AS4200090001
@@ -14,9 +14,9 @@ spec:
         data:
           address: "10.90.255.1/32"
           ip_namespace: PROD
-          description: dc90-edge-01 loopback
-      capabilities: ["dc90-edge-01"]
-    - name: dc90-leaf-01-bgp
+          description: ktw1-edge-01 loopback
+      capabilities: ["ktw1-edge-01"]
+    - name: ktw1-leaf-01-bgp
       status: active
       process_role: overlay
       local_as: AS4200090002
@@ -24,8 +24,8 @@ spec:
         data:
           address: "10.90.255.2/32"
           ip_namespace: PROD
-          description: dc90-leaf-01 loopback
-      capabilities: ["dc90-leaf-01"]
+          description: ktw1-leaf-01 loopback
+      capabilities: ["ktw1-leaf-01"]
 ---
 # The pod: each device an overlay process.
 apiVersion: infrahub.app/v1
@@ -33,7 +33,7 @@ kind: Object
 spec:
   kind: ManagedBGP
   data:
-    - name: dc90-leaf-02-bgp
+    - name: ktw1-leaf-02-bgp
       status: active
       process_role: overlay
       local_as: AS4200090003
@@ -41,9 +41,9 @@ spec:
         data:
           address: "10.90.255.3/32"
           ip_namespace: PROD
-          description: dc90-leaf-02 loopback
-      capabilities: ["dc90-leaf-02"]
-    - name: dc90-spine-01-bgp
+          description: ktw1-leaf-02 loopback
+      capabilities: ["ktw1-leaf-02"]
+    - name: ktw1-spine-01-bgp
       status: active
       process_role: overlay
       local_as: AS4200090004
@@ -51,9 +51,9 @@ spec:
         data:
           address: "10.90.255.4/32"
           ip_namespace: PROD
-          description: dc90-spine-01 loopback
-      capabilities: ["dc90-spine-01"]
-    - name: dc90-bl-01-bgp
+          description: ktw1-spine-01 loopback
+      capabilities: ["ktw1-spine-01"]
+    - name: ktw1-bl-01-bgp
       status: active
       process_role: overlay
       local_as: AS4200090005
@@ -61,9 +61,9 @@ spec:
         data:
           address: "10.90.255.5/32"
           ip_namespace: PROD
-          description: dc90-bl-01 loopback
-      capabilities: ["dc90-bl-01"]
-    - name: dc90-bl-02-bgp
+          description: ktw1-bl-01 loopback
+      capabilities: ["ktw1-bl-01"]
+    - name: ktw1-bl-02-bgp
       status: active
       process_role: overlay
       local_as: AS4200090006
@@ -71,5 +71,5 @@ spec:
         data:
           address: "10.90.255.6/32"
           ip_namespace: PROD
-          description: dc90-bl-02 loopback
-      capabilities: ["dc90-bl-02"]
+          description: ktw1-bl-02 loopback
+      capabilities: ["ktw1-bl-02"]

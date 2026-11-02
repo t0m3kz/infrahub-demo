@@ -8,23 +8,23 @@ kind: Object
 spec:
   kind: DcimLAGInterface
   data:
-    - device: dc90-leaf-01
+    - device: ktw1-leaf-01
       name: Port-Channel10
-      description: vPC to dc90-srv-01 (bond0)
+      description: vPC to ktw1-srv-01 (bond0)
       status: active
       lag_id: 10
       lacp_mode: active
       minimum_links: 1
       member_interfaces:
-        - ["dc90-leaf-01", "Ethernet1/2"]
-      segments: ["c900-demo-web-p"]
-    - device: dc90-leaf-02
+        - ["ktw1-leaf-01", "Ethernet1/2"]
+      segments: ["c900-web-p"]
+    - device: ktw1-leaf-02
       name: Port-Channel10
-      description: vPC to dc90-srv-01 (bond0)
+      description: vPC to ktw1-srv-01 (bond0)
       status: active
       lag_id: 10
       lacp_mode: active
       minimum_links: 1
       member_interfaces:
-        - ["dc90-leaf-02", "Ethernet1/2"]
-      segments: ["c900-demo-web-p"]
+        - ["ktw1-leaf-02", "Ethernet1/2"]
+      segments: ["c900-web-p"]

@@ -5,11 +5,11 @@ kind: Object
 spec:
   kind: ManagedMLAG
   data:
-    - name: "dc90-mlag-01"
+    - name: "ktw1-mlag-01"
       description: "vPC domain of the leaf pair"
       status: active
-      peer_devices: "dc90-leaf-01,dc90-leaf-02"
+      peer_devices: "ktw1-leaf-01,ktw1-leaf-02"
       domain_id: 1
       capabilities:
-        - "dc90-leaf-01"
-        - "dc90-leaf-02"
+        - "ktw1-leaf-01"
+        - "ktw1-leaf-02"

@@ -14,8 +14,8 @@ spec:
         - 10.255.128.6/31
         - PROD
       locations:
-        - DMC1
+        - PAR-COLO1
         - WEBEX-FRANKFURT
       capabilities:
-        - ["eg-dmc101", "Ethernet1/6.300"]
+        - ["par-colo1-edge-01", "Ethernet1/6.300"]
         - ["webex-c900-fra-xc", "webex-c900-fra"]

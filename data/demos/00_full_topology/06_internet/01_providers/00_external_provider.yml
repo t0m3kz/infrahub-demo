@@ -5,7 +5,7 @@ kind: Object
 spec:
   kind: TopologyExternalProviders
   data:
-    - name: ISP-DEMO-B
+    - name: ISP-B
       parent: "Internet"
       status: active
       provider: "P023"

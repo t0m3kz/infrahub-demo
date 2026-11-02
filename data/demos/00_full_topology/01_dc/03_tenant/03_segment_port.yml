@@ -5,7 +5,7 @@ kind: Object
 spec:
   kind: DcimPhysicalInterface
   data:
-    - device: "dc90-leaf-01"
+    - device: "ktw1-leaf-01"
       name: "Ethernet1/1"
       segments:
-        - "c900-demo-web-p"
+        - "c900-web-p"

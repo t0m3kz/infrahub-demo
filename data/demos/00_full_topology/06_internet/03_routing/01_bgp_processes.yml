@@ -4,15 +4,15 @@ kind: Object
 spec:
   kind: ManagedBGP
   data:
-    - name: "dc90-edge-01-inet-bgp"
+    - name: "ktw1-edge-01-inet-bgp"
       status: active
       process_role: regular
       local_as: "AS4200090001"
       router_id: ["198.51.100.10/31", "INTERNET"]
-      capabilities: ["dc90-edge-01"]
-    - name: "EXT-ISP-DEMO-PE1-bgp"
+      capabilities: ["ktw1-edge-01"]
+    - name: "EXT-ISP-A-PE1-bgp"
       status: active
       process_role: regular
       local_as: "AS64496"
       router_id: ["198.51.100.11/31", "INTERNET"]
-      capabilities: ["EXT-ISP-DEMO-PE1"]
+      capabilities: ["EXT-ISP-A-PE1"]

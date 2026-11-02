@@ -12,23 +12,23 @@ kind: Object
 spec:
   kind: ManagedBGPPeering
   data:
-    - name: "BGP-DMC1-EDGE01-BL01-DCI-EVPN"
-      description: "DCI EVPN multihop eg-dmc101 <-> dc90-bl-01 over ICX-DC90-DMC1"
+    - name: "BGP-PAR1-EDGE01-BL01-DCI-EVPN"
+      description: "DCI EVPN multihop par-colo1-edge-01 <-> ktw1-bl-01 over ICX-KTW1-PAR1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
       ttl: 2
       address_families:
         - ["l2vpn", "evpn"]
       bgp_processes:
-        - "eg-dmc101-bgp"
-        - "dc90-bl-01-bgp"
-    - name: "BGP-DMC1-EDGE01-BL02-DCI-EVPN"
-      description: "DCI EVPN multihop eg-dmc101 <-> dc90-bl-02 over ICX-DC90-DMC1-B"
+        - "par-colo1-edge-01-bgp"
+        - "ktw1-bl-01-bgp"
+    - name: "BGP-PAR1-EDGE01-BL02-DCI-EVPN"
+      description: "DCI EVPN multihop par-colo1-edge-01 <-> ktw1-bl-02 over ICX-KTW1-PAR1-B"
       session_type: EBGP_MULTIHOP
       peering_role: dci
       ttl: 2
       address_families:
         - ["l2vpn", "evpn"]
       bgp_processes:
-        - "eg-dmc101-bgp"
-        - "dc90-bl-02-bgp"
+        - "par-colo1-edge-01-bgp"
+        - "ktw1-bl-02-bgp"

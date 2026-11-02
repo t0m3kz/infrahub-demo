@@ -54,7 +54,7 @@ to 100; a pair from a tenant segment crosses the whole pod, so it asks for 100) 
 on the shortest chains of a pair without a waypoint: carriers in L1, session circuits in L3; an empty list means none).
 
 The three sites of the sample (DC, colocation, office): the pairs between them and to INTERNET are in `pairs` (the ends
-are the segment `c900-demo-web-p`, the cage edge `eg-dmc101`, the office edge `C900-OFFICE-EDGE1`,
+are the segment `c900-web-p`, the cage edge `par-colo1-edge-01`, the office edge `bcn-office-edge-01`,
 `TopologyInternet:INTERNET`; to INTERNET only `layers: [l1]`, because INTERNET does not route). Two more case keys:
 `sites` (every site reaches INTERNET in L1 through its own access carrier and the uplink of an ISP router:
 `chain_rows.site_internet_rows`) and `layout` (a data read: the cloud and SaaS carriers start in the cage, the dark

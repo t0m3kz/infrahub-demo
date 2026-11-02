@@ -3,8 +3,8 @@
   INFRAHUB_ADDRESS=http://localhost:8100 INFRAHUB_API_TOKEN=... uv run python tests/traversal/load_topology.py [--branch main] [--force]
 
 The SDK loads a directory recursively, files sorted by name, one after the other, so the numbered folders and files of
-the sample are the dependency order. One step is left for after the load: the VLAN-domain row of dc90-leaf-02 for the
-segment c900-demo-web-p (VLAN 100, as on dc90-leaf-01), because an object file cannot name the segment's deployment the
+the sample are the dependency order. One step is left for after the load: the VLAN-domain row of ktw1-leaf-02 for the
+segment c900-web-p (VLAN 100, as on ktw1-leaf-01), because an object file cannot name the segment's deployment the
 row hangs under (ManagedSegmentDeployment has no human friendly id, and nesting it a second time breaks the
 deployment's uniqueness). Idempotent as a whole: when the sentinel segment is already on the branch (nested
 `segment_deployments` are not idempotent on a second load) the object load is skipped and only the row step runs (a row
@@ -25,8 +25,8 @@ from infrahub_sdk import Config, InfrahubClient
 
 ROOT = Path(__file__).resolve().parents[2]
 TOPOLOGY = ROOT / "data" / "demos" / "00_full_topology"
-SENTINEL = {"kind": "ManagedVxlanSegment", "name": "c900-demo-web-p"}
-SEGMENT, DEPLOYMENT, DEVICE, SVI, VLAN_ID = "c900-demo-web-p", "DC90", "dc90-leaf-02", "Vlan100", 100
+SENTINEL = {"kind": "ManagedVxlanSegment", "name": "c900-web-p"}
+SEGMENT, DEPLOYMENT, DEVICE, SVI, VLAN_ID = "c900-web-p", "DC-KTW1", "ktw1-leaf-02", "Vlan100", 100
 
 
 def object_load(address: str, token: str, branch: str) -> subprocess.CompletedProcess[str]:
@@ -44,7 +44,7 @@ async def is_loaded(client: InfrahubClient, branch: str) -> bool:
 
 
 async def add_vlan_row(client: InfrahubClient, branch: str) -> str:
-    """Create the VLAN-domain row of dc90-leaf-02 for the sample segment; returns what was done."""
+    """Create the VLAN-domain row of ktw1-leaf-02 for the sample segment; returns what was done."""
     deployments = await client.filters(
         kind="ManagedSegmentDeployment", branch=branch, segment__name__value=SEGMENT, deployment__name__value=DEPLOYMENT
     )

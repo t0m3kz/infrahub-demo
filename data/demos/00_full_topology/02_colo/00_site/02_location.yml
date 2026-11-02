@@ -1,5 +1,5 @@
 ---
-# The building of the cage in the Demo Metro (01_dc/00_site/00_location.yml): one suite, one rack. The rack holds the
+# The building of the cage in the Paris metro (02_colo/00_site/00_metro.yml): one suite, one rack. The rack holds the
 # patch
 # panel of the cage (02_colo/01_physical/00_patch_panels.yml) and is pinned to the zone. `topologies_rack` membership
 # is what keeps
@@ -10,23 +10,23 @@ kind: Object
 spec:
   kind: LocationFacility
   data:
-    - name: "DMC1"
-      shortname: "dmc1"
-      parent: "dmo"
+    - name: "PAR-COLO1"
+      shortname: "par-colo1"
+      parent: "par"
       children:
         kind: LocationSuite
         data:
-          - name: DMC1-Suite-1
+          - name: PAR-COLO1-SUITE-1
             index: 1
-            shortname: "dmc1-s-1"
+            shortname: "par-colo1-suite-1"
             rows: 1
             racks_per_row: 1
             children:
               kind: LocationRack
               data:
-                - name: DMC1-S1-R1-1
-                  shortname: dmc1-s-1-r-1-1
+                - name: PAR-COLO1-RACK-01
+                  shortname: par-colo1-rack-01
                   index: 1
                   row_index: 1
-                  deployment: DMC1
+                  deployment: PAR-COLO1
                   member_of_groups: [topologies_rack]

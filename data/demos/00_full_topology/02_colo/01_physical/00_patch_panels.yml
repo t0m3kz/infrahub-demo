@@ -7,13 +7,13 @@ kind: Object
 spec:
   kind: DcimPatchPanel
   data:
-    - name: PP-DMC1-01
+    - name: PP-PAR-COLO1-01
       object_template: PP-24-LC
-      description: "DMC1 cage patch panel: jack 1 joins eg-dmc101 to the Equinix Fabric port"
-      rack: dmc1-s-1-r-1-1
+      description: "PAR-COLO1 cage patch panel: jack 1 joins par-colo1-edge-01 to the Equinix Fabric port"
+      rack: par-colo1-rack-01
       front_ports:
         - kind: DcimFrontPatchPanelPort
           data:
             name: "1"
             connector: lc-upc
-            rear_port: "dmc1-s-1-r-1-1:PP-DMC1-01:1"
+            rear_port: "par-colo1-rack-01:PP-PAR-COLO1-01:1"

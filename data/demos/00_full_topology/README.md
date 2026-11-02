@@ -18,29 +18,41 @@ order (`infrahubctl object load` of the directory runs them one after the other)
 | Folder | What it holds | Depends on |
 | ------ | ------------- | ---------- |
 | `00_common/` | providers, the customer C900, AS numbers, the shared prefixes (links, VPC block, loopback ranges), BGP keys (`00`-`04`) | bootstrap |
-| `01_dc/00_site/` | metro, building, suite and the first rack, DC90, pod `DC90-9-POD-1` (design `S_MIDDLE`), the racks of the pod, the ISP facility `ISP-DEMO` | `00_common` |
-| `01_dc/01_physical/` | patch panels with their front ports, devices (the edge `dc90-edge-01` has the internet access, the AWS VPN tunnels and the end of the office tunnel as nested interfaces; it has NO cloud legs; the server nests its bond), cables | `00_site` |
+| `01_dc/00_site/` | metro Katowice, building `KTW1`, suite and the first rack, DC-KTW1, pod `DC-KTW1-9-POD-1` (design `S_MIDDLE`), the racks of the pod, the ISP facility `ISP-A` | `00_common` |
+| `01_dc/01_physical/` | patch panels with their front ports, devices (the edge `ktw1-edge-01` has the internet access, the AWS VPN tunnels and the end of the office tunnel as nested interfaces; it has NO cloud legs; the server nests its bond), cables | `00_site` |
 | `01_dc/02_routing/` | AS numbers of the pod, the VRF, the SVIs, the BGP processes (loopbacks nested), the EVPN overlay sessions | `01_physical` |
-| `01_dc/03_tenant/` | the footprint of C900, the segment `c900-demo-web-p` (gateway and prefix nested), the vPC port-channels, the segment port, the MLAG | `02_routing` |
-| `02_colo/` | `00_site` colocation `COLO-DEMO` / metro `DMC` / ONE zone (cage) `DMC1`, building and rack; `01_physical` patch panel `PP-DMC1-01`, the cage edge `eg-dmc101` and the provider's Fabric port `EXT-EQX-FABRIC-DMC1`, cables; `02_routing` VRF, sub-interfaces of the cloud legs, overlay process; `03_dci` two dark fibres DC - cage, DCI circuits and EVPN sessions | `01_dc` |
-| `03_cloud/` | `00_regions`, `01_network` (accounts, VPC/VNet, IPsec profile, gateways, route tables, attachments), `02_tenant` (footprints, segments, instance, S3 endpoint), `03_transport` (Direct Connect, ExpressRoute, Interconnect, VPN with ports, bundle and peerings nested), `04_circuits` (the carriers end in the cage `DMC1`, session circuits, BGP sessions of the cage edge) | `02_colo` |
+| `01_dc/03_tenant/` | the footprint of C900, the segment `c900-web-p` (gateway and prefix nested), the vPC port-channels, the segment port, the MLAG | `02_routing` |
+| `02_colo/` | `00_site` the metro Paris, colocation `COLO-PAR` / metro `PAR` / ONE zone (cage) `PAR-COLO1`, building and rack; `01_physical` patch panel `PP-PAR-COLO1-01`, the cage edge `par-colo1-edge-01` and the provider's Fabric port `EXT-FABRIC-PAR`, cables; `02_routing` VRF, sub-interfaces of the cloud legs, overlay process; `03_dci` two dark fibres DC - cage, DCI circuits and EVPN sessions | `01_dc` |
+| `03_cloud/` | `00_regions`, `01_network` (accounts, VPC/VNet, IPsec profile, gateways, route tables, attachments), `02_tenant` (footprints, segments, instance, S3 endpoint), `03_transport` (Direct Connect, ExpressRoute, Interconnect, VPN with ports, bundle and peerings nested), `04_circuits` (the carriers end in the cage `PAR-COLO1`, session circuits, BGP sessions of the cage edge) | `02_colo` |
 | `04_saas/` | Webex (cross-connect in the cage + BGP) and Zscaler (tunnel): SaaS regions, transports with ports and peerings nested, circuits, sessions, service endpoint | `02_colo`, `03_cloud` |
-| `05_office/` | the customer office C900 (`C900-OFFICE`), its SD-WAN edge `C900-OFFICE-EDGE1` (tunnel interfaces nested) and two `tunnel` circuits: to the DC edge and to Zscaler | `04_saas` |
+| `05_office/` | the metro Barcelona and the building of the office, the customer office C900 (`C900-OFFICE`), its SD-WAN edge `bcn-office-edge-01` (tunnel interfaces nested) and two `tunnel` circuits: to the DC edge and to Zscaler | `04_saas` |
 | `06_internet/` | `00_addressing` (AS, transit prefixes), `01_providers` (the second ISP and its router, the public sides of SaaS and cloud, the public service endpoints), `02_circuits` (ports with their transit addresses, the internet carriers of the DC, the cage and the office), `03_routing` (the eBGP session to the ISP) | `01_dc`, `02_colo`, `03_cloud`, `04_saas`, `05_office` |
 
 The sixth folder `06_internet` and the shared `00_common` were not on the owner's list (DC, Colo, Cloud, SaaS, Office):
 the internet (ISP, INTERNET, public sides) is none of the five kinds of objects, and the customers, AS and addressing
 are shared by several of them. The office comes after SaaS because its `tunnel` circuit ends on the Zscaler transport;
 the internet comes after the office because the office's access to its ISP is in
-`06_internet/02_circuits/01_carrier_circuits.yml`. The pod `DC90-9-POD-1` holds the spine, the two leaves and the
+`06_internet/02_circuits/01_carrier_circuits.yml`. The pod `DC-KTW1-9-POD-1` holds the spine, the two leaves and the
 server; the border leaves and the edge stay at DC level (a border role belongs to the DC).
+
+## Names and places
+
+A name says where and what: `<place>-<role>-<number>` for devices (`ktw1-leaf-01`, `par-colo1-edge-01`,
+`bcn-office-edge-01`), `<type>-<from>-<to>` for circuits (`DF-KTW1-PAR1-A`, `XC-PAR1-AWS-DX1`, `INET-PAR1-ISP-B`,
+`SC-OFFICE-KTW1`). The three sites are three cities: the DC in Katowice (`DC-KTW1`, metro `ktw` under Poland), the
+colocation cage in Paris (`PAR-COLO1`, metro `par` under France, `02_colo/00_site/00_metro.yml`) and the office in
+Barcelona (metro `bcn` under Spain, `05_office/00_metro.yml`). The cloud regions stay `eu-central-1` and `westeurope`: a Direct Connect from a
+Paris cage to a Frankfurt region is valid. Some names are computed from their parent and cannot be chosen: the pod
+`DC-KTW1-9-POD-1` is `{DC}-{DC index}-POD-{index}`, the tenant footprint `C900-P-DC-KTW1` is
+`{owner}-{environment}-{DC}`, the VRF of a topology is `{deployment lower}-vrf-{namespace}` (`dc-ktw1-vrf-prod`,
+`par-vrf-prod`).
 
 ## The topology: three sites, the internet and the cloud
 
 The sample has three sites from which a path can be traced to every other one, to INTERNET and to the cloud or SaaS:
-the office (`C900-OFFICE-EDGE1`), the colocation cage (`eg-dmc101`) and the DC (the segment `c900-demo-web-p` in the
-pod, the edge `dc90-edge-01`). The cloud and SaaS do NOT hang on the DC edge: Direct Connect, ExpressRoute and Webex end
-in the cage, as in reality.
+the office in Barcelona (`bcn-office-edge-01`), the colocation cage in Paris (`par-colo1-edge-01`) and the DC in Katowice
+(the segment `c900-web-p` in the pod, the edge `ktw1-edge-01`). The cloud and SaaS do NOT hang on the DC edge: Direct
+Connect, ExpressRoute and Webex end in the cage, as in reality.
 
 Links between the sites, the cloud and SaaS (a solid line is a cable or a carrier, a dashed line is a tunnel or a
 session; the label is the name of the carrier, circuit or cable from the data; the pod and racks of the DC are in the
@@ -49,21 +61,21 @@ second diagram below):
 ```mermaid
 flowchart LR
   subgraph OFFICE["Office C900-OFFICE"]
-    OE["C900-OFFICE-EDGE1"]
+    OE["bcn-office-edge-01"]
   end
-  subgraph DC["DC90"]
-    DPOD["pod DC90-9-POD-1: server, leaves, spine"]
-    BL["dc90-bl-01, dc90-bl-02"]
-    DE["dc90-edge-01"]
+  subgraph DC["DC-KTW1"]
+    DPOD["pod DC-KTW1-9-POD-1: server, leaves, spine"]
+    BL["ktw1-bl-01, ktw1-bl-02"]
+    DE["ktw1-edge-01"]
   end
-  subgraph COLO["Colocation DMC1 - cage"]
-    CE["eg-dmc101"]
-    CP["PP-DMC1-01"]
-    CF["EXT-EQX-FABRIC-DMC1"]
+  subgraph COLO["Colocation PAR-COLO1 - cage"]
+    CE["par-colo1-edge-01"]
+    CP["PP-PAR-COLO1-01"]
+    CF["EXT-FABRIC-PAR"]
   end
   subgraph ISP["ISP"]
-    PA["EXT-ISP-DEMO-PE1"]
-    PB["EXT-ISP-DEMO-B-PE1"]
+    PA["EXT-ISP-A-PE1"]
+    PB["EXT-ISP-B-PE1"]
   end
   NET(("INTERNET bus"))
   subgraph AWS["AWS"]
@@ -90,26 +102,26 @@ flowchart LR
   end
   DPOD --- BL
   BL --- DE
-  BL ---|"DF-DC90-DMC1, DF-DC90-DMC1-B"| CE
-  BL -.-|"ICX-DC90-DMC1, ICX-DC90-DMC1-B: EVPN DCI"| CE
-  OE -.-|"SC-C900-OFFICE-DC90"| DE
+  BL ---|"DF-KTW1-PAR1-A, DF-KTW1-PAR1-B"| CE
+  BL -.-|"ICX-KTW1-PAR1, ICX-KTW1-PAR1-B: EVPN DCI"| CE
+  OE -.-|"SC-OFFICE-KTW1"| DE
   OE -.-|"SC-C900-ZSCALER-TUN1"| ZS
   DE -.-|"SC-C900-AWS-VPN-1, SC-C900-AWS-VPN-2"| VPN
-  OE ---|"INET-C900-OFFICE"| PA
-  DE ---|"INET-DC90-ISP-DEMO"| PA
-  DE ---|"INET-DC90-ISP-DEMO-B"| PB
-  CE ---|"INET-DMC1-ISP-DEMO-B"| PB
-  PA ---|"UPL-ISP-DEMO"| NET
-  PB ---|"UPL-ISP-DEMO-B"| NET
+  OE ---|"INET-BCN-OFFICE-ISP-A"| PA
+  DE ---|"INET-KTW1-ISP-A"| PA
+  DE ---|"INET-KTW1-ISP-B"| PB
+  CE ---|"INET-PAR1-ISP-B"| PB
+  PA ---|"UPL-ISP-A"| NET
+  PB ---|"UPL-ISP-B"| NET
   NET ---|"PUB-S3-EUC1"| S3
   NET ---|"PUB-WEBEX-FRA"| WXP
-  CE ---|"XC-DMC1-AWS-DX1, XC-DMC1-AWS-DX2"| DX
-  CE ---|"XC-DMC1-GCP-DED1"| GDED
-  CE ---|"XC-DMC1-WEBEX-1"| WX
+  CE ---|"XC-PAR1-AWS-DX1, XC-PAR1-AWS-DX2"| DX
+  CE ---|"XC-PAR1-GCP-DED1"| GDED
+  CE ---|"XC-PAR1-WEBEX-1"| WX
   CE ---|"Ethernet1/1"| CP
   CP --- CF
-  CF ---|"VC-DMC1-AZ-ER-PRI, VC-DMC1-AZ-ER-SEC"| ER
-  CF ---|"VC-DMC1-GCP-IC1"| GIC
+  CF ---|"VC-PAR1-AZ-ER-PRI, VC-PAR1-AZ-ER-SEC"| ER
+  CF ---|"VC-PAR1-GCP-IC1"| GIC
   DX -.-|"SC-C900-AWS-DX-PROD"| DXGW
   DXGW --- TGW
   TGW --- VPC
@@ -121,64 +133,64 @@ The diagram shows that the cloud and SaaS (Direct Connect, ExpressRoute, GCP, We
 edge; the DC edge has only the internet access, the tunnels (office, AWS VPN) and the dark fibres to the cage through
 the border leaves.
 
-Inside DC90 (suite `DMO-1-Suite-1`, row 1; the pod `DC90-9-POD-1` spans racks 2-5, rack 1 is the border rack and
+Inside DC-KTW1 (suite `KTW1-SUITE-1`, row 1; the pod `DC-KTW1-9-POD-1` spans racks 2-5, rack 1 is the border rack and
 belongs to the DC; a cable label is its name from the data):
 
 ```mermaid
 flowchart LR
-  subgraph POD["pod DC90-9-POD-1"]
-    subgraph R2["rack DMO-1-S1-R1-2: compute"]
-      SRV["dc90-srv-01: bond0 eno1, eno2"]
-      PP2["PP-DC90-02"]
+  subgraph POD["pod DC-KTW1-9-POD-1"]
+    subgraph R2["rack KTW1-RACK-02: compute"]
+      SRV["ktw1-srv-01: bond0 eno1, eno2"]
+      PP2["PP-KTW1-02"]
     end
-    subgraph R3["rack DMO-1-S1-R1-3: leaf 1"]
-      PP3["PP-DC90-03"]
-      L1["dc90-leaf-01"]
+    subgraph R3["rack KTW1-RACK-03: leaf 1"]
+      PP3["PP-KTW1-03"]
+      L1["ktw1-leaf-01"]
     end
-    subgraph R4["rack DMO-1-S1-R1-4: leaf 2"]
-      PP4["PP-DC90-04"]
-      L2["dc90-leaf-02"]
+    subgraph R4["rack KTW1-RACK-04: leaf 2"]
+      PP4["PP-KTW1-04"]
+      L2["ktw1-leaf-02"]
     end
-    subgraph R5["rack DMO-1-S1-R1-5: spine"]
-      SP["dc90-spine-01"]
+    subgraph R5["rack KTW1-RACK-05: spine"]
+      SP["ktw1-spine-01"]
     end
   end
-  subgraph R1["rack DMO-1-S1-R1-1: border, outside the pod"]
-    PP1["PP-DC90-01"]
-    BL1["dc90-bl-01"]
-    BL2["dc90-bl-02"]
-    EDGE["dc90-edge-01"]
+  subgraph R1["rack KTW1-RACK-01: border, outside the pod"]
+    PP1["PP-KTW1-01"]
+    BL1["ktw1-bl-01"]
+    BL2["ktw1-bl-02"]
+    EDGE["ktw1-edge-01"]
   end
-  SRV ---|"CBL-DC90-SRV01-ENO1-PP02-F1"| PP2
-  PP2 ---|"CBL-DC90-PP02-R1-PP03-F1"| PP3
-  PP3 ---|"CBL-DC90-PP03-R1-LEAF01"| L1
-  SRV ---|"CBL-DC90-SRV01-ENO2-PP02-F2"| PP2
-  PP2 ---|"CBL-DC90-PP02-R2-PP04-F1"| PP4
-  PP4 ---|"CBL-DC90-PP04-R1-LEAF02"| L2
-  L1 ---|"CBL-DC90-LEAF01-LEAF02-PEER"| L2
-  L1 ---|"CBL-DC90-LEAF01-SPINE01"| SP
-  L2 ---|"CBL-DC90-LEAF02-SPINE01"| SP
-  SP ---|"CBL-DC90-SPINE01-BL01"| BL1
-  SP ---|"CBL-DC90-SPINE01-BL02"| BL2
-  L1 ---|"CBL-DC90-LEAF01-PP01-F1"| PP1
-  PP1 ---|"CBL-DC90-PP01-R1-EDGE01"| EDGE
-  BL1 ---|"CBL-DC90-BL01-PP01-F2"| PP1
-  PP1 ---|"CBL-DC90-PP01-R2-EDGE01"| EDGE
-  BL2 ---|"CBL-DC90-BL02-EDGE01"| EDGE
+  SRV ---|"CBL-KTW1-SRV01-ENO1-PP02-F1"| PP2
+  PP2 ---|"CBL-KTW1-PP02-R1-PP03-F1"| PP3
+  PP3 ---|"CBL-KTW1-PP03-R1-LEAF01"| L1
+  SRV ---|"CBL-KTW1-SRV01-ENO2-PP02-F2"| PP2
+  PP2 ---|"CBL-KTW1-PP02-R2-PP04-F1"| PP4
+  PP4 ---|"CBL-KTW1-PP04-R1-LEAF02"| L2
+  L1 ---|"CBL-KTW1-LEAF01-LEAF02-PEER"| L2
+  L1 ---|"CBL-KTW1-LEAF01-SPINE01"| SP
+  L2 ---|"CBL-KTW1-LEAF02-SPINE01"| SP
+  SP ---|"CBL-KTW1-SPINE01-BL01"| BL1
+  SP ---|"CBL-KTW1-SPINE01-BL02"| BL2
+  L1 ---|"CBL-KTW1-LEAF01-PP01-F1"| PP1
+  PP1 ---|"CBL-KTW1-PP01-R1-EDGE01"| EDGE
+  BL1 ---|"CBL-KTW1-BL01-PP01-F2"| PP1
+  PP1 ---|"CBL-KTW1-PP01-R2-EDGE01"| EDGE
+  BL2 ---|"CBL-KTW1-BL02-EDGE01"| EDGE
 ```
 
 Internet access of each site (every ISP router has an uplink to `INTERNET:bus`, rule I3):
 
 ```text
                          THE INTERNET (INTERNET:bus)
-                  UPL-ISP-DEMO                        UPL-ISP-DEMO-B
+                  UPL-ISP-A                        UPL-ISP-B
                        |                                    |
-             EXT-ISP-DEMO-PE1                       EXT-ISP-DEMO-B-PE1
+             EXT-ISP-A-PE1                       EXT-ISP-B-PE1
             et-0/0/0     et-0/0/1                  et-0/0/0     et-0/0/1
                |            |                         |            |
-   INET-DC90-ISP-DEMO  INET-C900-OFFICE   INET-DC90-ISP-DEMO-B  INET-DMC1-ISP-DEMO-B
+   INET-KTW1-ISP-A  INET-BCN-OFFICE-ISP-A   INET-KTW1-ISP-B  INET-PAR1-ISP-B
                |            |                         |            |
-    dc90-edge-01 Eth1/2   C900-OFFICE-EDGE1 GE1   dc90-edge-01 Eth1/1   eg-dmc101 Eth1/14
+    ktw1-edge-01 Eth1/2   bcn-office-edge-01 GE1   ktw1-edge-01 Eth1/1   par-colo1-edge-01 Eth1/14
 ```
 
 The shortest paths between the sites (L1 = cables and carriers, L3 = BGP, session circuits, tunnels; details in the
@@ -186,12 +198,12 @@ golden files `tests/traversal/golden/`):
 
 | Pair | L1 | L3 |
 | ---- | -- | -- |
-| office - DC | `GE1` - `INET-C900-OFFICE` - `EXT-ISP-DEMO-PE1` - `INET-DC90-ISP-DEMO` - `dc90-edge-01` - DC panel - leaf - segment | tunnel `SC-C900-OFFICE-DC90` to `dc90-edge-01`, overlay process, leaf, segment |
-| office - colocation | `INET-C900-OFFICE` - ISP-DEMO - `UPL-ISP-DEMO` - `INTERNET:bus` - `UPL-ISP-DEMO-B` - ISP-DEMO-B - `INET-DMC1-ISP-DEMO-B` - `eg-dmc101` | tunnel to the DC edge, border leaf, EVPN DCI session to `eg-dmc101` |
-| colocation - DC | `eg-dmc101` - `DF-DC90-DMC1` (or `-B`) - border leaf - spine - leaf - segment | EVPN DCI session to the border leaf, edge / spine, leaf, segment |
+| office - DC | `GE1` - `INET-BCN-OFFICE-ISP-A` - `EXT-ISP-A-PE1` - `INET-KTW1-ISP-A` - `ktw1-edge-01` - DC panel - leaf - segment | tunnel `SC-OFFICE-KTW1` to `ktw1-edge-01`, overlay process, leaf, segment |
+| office - colocation | `INET-BCN-OFFICE-ISP-A` - ISP-A - `UPL-ISP-A` - `INTERNET:bus` - `UPL-ISP-B` - ISP-B - `INET-PAR1-ISP-B` - `par-colo1-edge-01` | tunnel to the DC edge, border leaf, EVPN DCI session to `par-colo1-edge-01` |
+| colocation - DC | `par-colo1-edge-01` - `DF-KTW1-PAR1-A` (or `-B`) - border leaf - spine - leaf - segment | EVPN DCI session to the border leaf, edge / spine, leaf, segment |
 | DC, colocation, office - INTERNET | its own access carrier (`internet`), ISP router, `UPL-*` carrier, `INTERNET:bus` | not applicable (INTERNET does not route) |
-| office - AWS | L1: office access - internet - cage access - `XC-DMC1-AWS-DX1/2` - Direct Connect | tunnel to the DC edge and AWS VPN to the transit gateway |
-| colocation - cloud | `eg-dmc101` - carrier - transport port (AWS: directly; Azure and GCP Partner: panel and Fabric port) | sub-interface, handoff circuit, cloud peering |
+| office - AWS | L1: office access - internet - cage access - `XC-PAR1-AWS-DX1/2` - Direct Connect | tunnel to the DC edge and AWS VPN to the transit gateway |
+| colocation - cloud | `par-colo1-edge-01` - carrier - transport port (AWS: directly; Azure and GCP Partner: panel and Fabric port) | sub-interface, handoff circuit, cloud peering |
 
 ## Shared vocabulary for all clouds
 
@@ -260,14 +272,14 @@ cell: the shared element, with the operator's word in parentheses.
 
 | Kind | Role | Example |
 | ---- | ---- | ------- |
-| `TopologyCarrierCircuit` | physics: wire, cross-connect, virtual connection, internet; the ends are `capabilities` (our port and the transport's port) | `XC-DMC1-AWS-DX1`, `DF-DC90-DMC1`, `INET-DC90-ISP-DEMO` |
+| `TopologyCarrierCircuit` | physics: wire, cross-connect, virtual connection, internet; the ends are `capabilities` (our port and the transport's port) | `XC-PAR1-AWS-DX1`, `DF-KTW1-PAR1-A`, `INET-KTW1-ISP-A` |
 | `TopologySessionCircuit` | virtual: handoff / vpn / tunnel; the ends are `capabilities` (our sub-interface or routed port and the transport's peering) | `SC-C900-AWS-DX-PROD`, `SC-C900-GCP-DED` |
 | `CloudDirectConnect` | transport-device: ports, bundle (LAG) and peerings; logical: `service_key`, `partner_account`, `rides_on` | `dx-c900-fra-lag`, `er-c900-weu`, `ic-c900-fra-1`, `ic-ded-c900-fra`, `webex-c900-fra-xc` |
 | `DcimPhysicalInterface`, `DcimLAGInterface` | ports and bundle of a transport (`device` = the transport) | `dxcon-1a`, `dxcon-1b`, `lag1`, `msee-pri`, `ic-dedicated-port` |
 | `SecurityIPsecProfile` | IKE/ESP parameters of a tunnel, one profile for many tunnels | `IPSEC-AES256-SHA256-DH14` |
 | `CloudVPNConnection` | a transport without ports: holds the tunnels (interfaces); SaaS: `saas_region` and `owner` | `vpn-c900-aws-euc1`, `zscaler-c900-muc` |
 | `CloudPeeringInterface` | the BGP termination in the cloud, an interface of the transport | `lag1.1000`, `er-c900-weu-pri`, `gcp-c900-vlan-att-1`, `gcp-c900-ded-1`, `Tunnel1`, `webex-c900-fra` |
-| `CloudGateway` | hub, edge gateway, customer gateway | `tgw-c900-euc1` (hub), `dxgw-c900`, `vgw-c900-euc1`, `ergw-c900-weu`, `cr-c900-euw3` (edge), `cgw-c900-dc90` (customer) |
+| `CloudGateway` | hub, edge gateway, customer gateway | `tgw-c900-euc1` (hub), `dxgw-c900`, `vgw-c900-euc1`, `ergw-c900-weu`, `cr-c900-euw3` (edge), `cgw-c900-ktw1` (customer) |
 | `CloudGatewayAttachment`, `CloudGatewayRouteTable` | gateway connections and the routing domain of a hub | `tgwa-c900-vpc`, `tgwa-c900-dxgw`, `rt-c900-prod` |
 | `CloudVirtualNetwork` | a virtual network; `peers` | `vpc-c900-prod`, `vnet-c900-weu` + `vnet-c900-weu-spoke` |
 | `CloudServiceEndpoint` | a private path to a service | `vpce-c900-s3`, `vpce-c900-webex` |
@@ -279,7 +291,7 @@ the circuits and their `capabilities` do) and `CloudTransitGateway` (it is a `Cl
 A circuit ends on interfaces through ONE edge, `capabilities` (the shared edge `ManagedGenericInterfaces.capabilities`,
 peer `DcimInterface`, min 1, max 2 on every circuit). An interface has only `capabilities` as a circuit edge; there is
 no `endpoints` field, no `TopologyCircuitEnd` generic and no `far_end`. An end in an object file is the HFID of the
-interface `[device, interface]`: `["eg-dmc101", "Ethernet1/3"]`, `["dx-c900-fra-lag", "dxcon-1a"]`. So the objects must
+interface `[device, interface]`: `["par-colo1-edge-01", "Ethernet1/3"]`, `["dx-c900-fra-lag", "dxcon-1a"]`. So the objects must
 exist earlier, and the files load alphabetically and in order: `03_cloud/01_network` (accounts, gateways) ->
 `03_transport` (the transports, each with its ports, bundle and peerings nested, in that order) -> `04_circuits`
 (carriers, session circuits, hand-written BGP sessions), then the same in `04_saas`. Dependent objects are in a later
@@ -318,13 +330,13 @@ Full = in the model and in the data; partial = a field exists but simplified; no
 | -------- | -------- | ----- |
 | AWS DX dedicated, transit VIF -> DX Gateway -> TGW -> VPC | full | `dx-c900-fra-lag`, `lag1.1000` (scope `private`), `dxgw-c900` (edge) -> `tgwa-c900-dxgw` (`allowed_prefixes 10.200.0.0/16`) -> `tgw-c900-euc1` (hub) -> `tgwa-c900-vpc` |
 | AWS DX, private VIF -> VGW -> VPC | full | `lag1.1100`, `vgw-c900-euc1` |
-| AWS DX hosted (partner account), LAG | full | `partner_account` (GCP Partner Interconnect); LAG: one transport `dx-c900-fra-lag` with ports `dxcon-1a/1b` and bundle `lag1`, two carriers `XC-DMC1-AWS-DX1/2` |
+| AWS DX hosted (partner account), LAG | full | `partner_account` (GCP Partner Interconnect); LAG: one transport `dx-c900-fra-lag` with ports `dxcon-1a/1b` and bundle `lag1`, two carriers `XC-PAR1-AWS-DX1/2` |
 | GCP Dedicated Interconnect: a routed port without a VLAN | full | `ic-ded-c900-fra`, port `ic-dedicated-port`, peering `gcp-c900-ded-1` without `vlan_id`; our end is the physical `Ethernet1/5` of the cage edge with an address, circuit `SC-C900-GCP-DED` |
 | AWS public VIF | partial | `scope: public` and `advertised_prefixes` (US -> cloud) are in the model, no example |
 | Azure ExpressRoute: a circuit, two links, two /30 peerings, ExpressRoute Gateway in the VNet | full | one `er-c900-weu` with ports `msee-pri/-sec` (carrier ends), `er-c900-weu-pri/-sec`, `ergw-c900-weu` + `ergwa-c900-weu`; the spoke through `peers` |
 | Azure Microsoft peering | partial | `scope: public` + `advertised_prefixes`, no example; route filters not modelled |
 | GCP Interconnect: VLAN attachment -> Cloud Router -> VPC | full | Partner Interconnect, `gcp-c900-vlan-att-1`, `cr-c900-euw3` |
-| AWS S2S VPN: customer gateway, two tunnels with BGP, the TGW side | full | `cgw-c900-dc90` (`customer`), two tunnels; the provider side is `CloudVPNConnection.gateway` (a hub here; VGW has no example) |
+| AWS S2S VPN: customer gateway, two tunnels with BGP, the TGW side | full | `cgw-c900-ktw1` (`customer`), two tunnels; the provider side is `CloudVPNConnection.gateway` (a hub here; VGW has no example) |
 | SaaS: Webex BGP peering, Zscaler tunnel without BGP | full | transports with `saas_region` and `owner` without an account (`webex-c900-fra-xc`, `zscaler-c900-muc`), `scope: saas`, `routing: bgp / static` |
 | IKE/IPsec parameters, tunnel key | full | `SecurityIPsecProfile` (9 fields), `tunnel_key`, `tunnel_mode`, `endpoint_ip` on the tunnel |
 | DX allowed-prefix list | full | `allowed_prefixes` of the attachment `tgwa-c900-dxgw` |
@@ -347,9 +359,9 @@ uv run python tests/traversal/load_topology.py --branch main
 
 The SDK loads a directory recursively, the files sorted by name, in order, so the whole directory is ONE
 `infrahubctl object load data/demos/00_full_topology/`. One step remains after the load that an object file cannot
-express: the VLAN row of `dc90-leaf-02` (function `add_vlan_row`; `ManagedSegmentDeployment` has no HFID, and nesting it a
+express: the VLAN row of `ktw1-leaf-02` (function `add_vlan_row`; `ManagedSegmentDeployment` has no HFID, and nesting it a
 second time breaks the uniqueness of the deployment). Hence the small script `tests/traversal/load_topology.py` (the
-data directory holds no code): one directory load and that step. It is idempotent: when the segment `c900-demo-web-p` is
+data directory holds no code): one directory load and that step. It is idempotent: when the segment `c900-web-p` is
 already on the branch the object load is skipped (the nested `segment_deployments` does not survive a second load) and
 the row is checked again. `invoke check-model` and the test `tests/integration/test_03_full_topology.py` use the same
 script.
@@ -392,7 +404,7 @@ the Fabric port).
 
 ```bash
 INFRAHUB_ADDRESS=http://localhost:8100 INFRAHUB_API_TOKEN=06438eb2-8019-4776-878c-0941b1f1d1ec \
-  uv run python utils/path_trace.py ManagedVxlanSegment:c900-demo-web-p CloudNetworkSegment:c900-demo-subnet-p [--layer l1|l3|both] [--max-paths 64] [--via <node>]
+  uv run python utils/path_trace.py ManagedVxlanSegment:c900-web-p CloudNetworkSegment:c900-subnet-p [--layer l1|l3|both] [--max-paths 64] [--via <node>]
 ```
 
 A node is `kind:hfid` (the HFID parts joined with `/`, only the last may contain `/`:
@@ -403,52 +415,52 @@ equal-cost (ECMP) path set, then the longer alternatives. Server limits: depth 3
 (when the forward search exhausts the budget it is repeated from the target). Exit code 1 when a leg has no path.
 
 The result (equal cost, `kind:hfid`) is in the golden files `tests/traversal/golden/full_topology__*.txt`, for example
-L1 from the cage to DX (`full_topology__colo__aws.txt`): `eg-dmc101` -> port `Ethernet1/3` -> carrier `XC-DMC1-AWS-DX1`
+L1 from the cage to DX (`full_topology__colo__aws.txt`): `par-colo1-edge-01` -> port `Ethernet1/3` -> carrier `XC-PAR1-AWS-DX1`
 -> `dx-c900-fra-lag/dxcon-1a` -> transport -> VIF -> gateway -> attachment -> virtual network -> cloud segment; and from
-the segment in the DC (`full_topology__c900-demo-web-p__c900-demo-subnet-p.txt`): segment -> port or bundle of the leaf
--> leaf -> spine -> border leaf -> carrier `DF-DC90-DMC1` (dark fibre) -> `eg-dmc101` -> carrier `XC-DMC1-AWS-DX1` ->
+the segment in the DC (`full_topology__c900-web-p__c900-subnet-p.txt`): segment -> port or bundle of the leaf
+-> leaf -> spine -> border leaf -> carrier `DF-KTW1-PAR1-A` (dark fibre) -> `par-colo1-edge-01` -> carrier `XC-PAR1-AWS-DX1` ->
 `dxcon-1a` -> bundle `lag1` -> `lag1.1100`. The path to ExpressRoute goes through the port `Ethernet1/1` of the cage
-edge, through the panel (front, rear) to the Fabric port and the carrier `VC-DMC1-AZ-ER-PRI`. The VPN tunnels and the
+edge, through the panel (front, rear) to the Fabric port and the carrier `VC-PAR1-AZ-ER-PRI`. The VPN tunnels and the
 SaaS tunnels (Zscaler, office - DC) exist only in L3 (a session circuit); their internet carrier is checked by the case
 `internet` and the row about tunnel interfaces.
 
 ## Pod, internet through the ISP and extra pairs
 
-**Pod** (`01_dc`, pod `DC90-9-POD-1`): the server `dc90-srv-01` (`bond0` on `eno1`/`eno2`) is dual-homed to the
-leaf pair `dc90-leaf-01`/`-02` through a vPC (one `Port-Channel10` per leaf, the same `lag_id`, both with the segment
-`c900-demo-web-p` in the `segments` edge, one authored `ManagedMLAG`), the leaves to the spine, the spine to the two
+**Pod** (`01_dc`, pod `DC-KTW1-9-POD-1`): the server `ktw1-srv-01` (`bond0` on `eno1`/`eno2`) is dual-homed to the
+leaf pair `ktw1-leaf-01`/`-02` through a vPC (one `Port-Channel10` per leaf, the same `lag_id`, both with the segment
+`c900-web-p` in the `segments` edge, one authored `ManagedMLAG`), the leaves to the spine, the spine to the two
 border leaves, border leaf 1 to the edge through jack 2 of the panel, border leaf 2 on a direct cable. The VLAN row of
 leaf-02 has the same `vlan_id` 100 as leaf-01. EVPN overlay: leaf-01/02 - spine - BL - edge. There are 5 L1 paths
 server -> edge: 4 through the spine and a border leaf (2 leaves x 1 spine x 2 BL) and 1 old direct connection
-leaf-01 -> panel -> edge from the base sample. The leaves, spine and server are deployed to the pod `DC90-9-POD-1`
-(`TopologyPod`, design `S_MIDDLE`), the border leaves and the edge to DC90. Assertions: `walks.pod_rows`.
+leaf-01 -> panel -> edge from the base sample. The leaves, spine and server are deployed to the pod `DC-KTW1-9-POD-1`
+(`TopologyPod`, design `S_MIDDLE`), the border leaves and the edge to DC-KTW1. Assertions: `walks.pod_rows`.
 
-**DC hall** (suite `DMO-1-Suite-1`, 2 rows x 9 slots: the `S_MIDDLE` envelope, which `checks/suite_capacity.py` holds
+**DC hall** (suite `KTW1-SUITE-1`, 2 rows x 9 slots: the `S_MIDDLE` envelope, which `checks/suite_capacity.py` holds
 for every pod that has racks; rows and slots are data, nothing generates them, the racks are not in the group
 `topologies_rack`). Every device stands in a rack (`rack`, `position` in U, `rack_face`), every rack in row 1:
 
 | Rack (slot) | Kind | Pod | Devices (U) | Panel |
 | ----------- | ---- | --- | ----------- | ----- |
-| `DMO-1-S1-R1-1` (1) | network | none (DC) | `dc90-edge-01` (40), `dc90-bl-01` (38), `dc90-bl-02` (36) | `PP-DC90-01` |
-| `DMO-1-S1-R1-2` (2) | compute | `DC90-9-POD-1` | `dc90-srv-01` (20) | `PP-DC90-02` |
-| `DMO-1-S1-R1-3` (3) | network | `DC90-9-POD-1` | `dc90-leaf-01` (41) | `PP-DC90-03` |
-| `DMO-1-S1-R1-4` (4) | network | `DC90-9-POD-1` | `dc90-leaf-02` (41) | `PP-DC90-04` |
-| `DMO-1-S1-R1-5` (5) | network | `DC90-9-POD-1` | `dc90-spine-01` (41) | none |
+| `KTW1-RACK-01` (1) | network | none (DC) | `ktw1-edge-01` (40), `ktw1-bl-01` (38), `ktw1-bl-02` (36) | `PP-KTW1-01` |
+| `KTW1-RACK-02` (2) | compute | `DC-KTW1-9-POD-1` | `ktw1-srv-01` (20) | `PP-KTW1-02` |
+| `KTW1-RACK-03` (3) | network | `DC-KTW1-9-POD-1` | `ktw1-leaf-01` (41) | `PP-KTW1-03` |
+| `KTW1-RACK-04` (4) | network | `DC-KTW1-9-POD-1` | `ktw1-leaf-02` (41) | `PP-KTW1-04` |
+| `KTW1-RACK-05` (5) | network | `DC-KTW1-9-POD-1` | `ktw1-spine-01` (41) | none |
 
-The panels are `PP-24-LC`; only the used jacks are paired (front n -> rear n): `PP-DC90-01` 1 and 2, `PP-DC90-02` 1
-and 2, `PP-DC90-03` 1, `PP-DC90-04` 1. The server's cable goes through two panels (port, cable, front and rear, cable, front
+The panels are `PP-24-LC`; only the used jacks are paired (front n -> rear n): `PP-KTW1-01` 1 and 2, `PP-KTW1-02` 1
+and 2, `PP-KTW1-03` 1, `PP-KTW1-04` 1. The server's cable goes through two panels (port, cable, front and rear, cable, front
 and rear, cable, port), the other uplinks stay on direct cables:
 
 ```text
  rack 2 (compute)            rack 3 (leaf 1)                  rack 4 (leaf 2)
- dc90-srv-01 eno1 -- PP-DC90-02 front 1 | rear 1 -- PP-DC90-03 front 1 | rear 1 -- dc90-leaf-01 Eth1/2
- dc90-srv-01 eno2 -- PP-DC90-02 front 2 | rear 2 -- PP-DC90-04 front 1 | rear 1 -- dc90-leaf-02 Eth1/2
+ ktw1-srv-01 eno1 -- PP-KTW1-02 front 1 | rear 1 -- PP-KTW1-03 front 1 | rear 1 -- ktw1-leaf-01 Eth1/2
+ ktw1-srv-01 eno2 -- PP-KTW1-02 front 2 | rear 2 -- PP-KTW1-04 front 1 | rear 1 -- ktw1-leaf-02 Eth1/2
 
  rack 3/4 -> rack 5:  leaf-01 Eth1/31 -- spine Eth1/1,  leaf-02 Eth1/31 -- spine Eth1/2   (direct cables)
  leaf-01 Eth1/33 -- leaf-02 Eth1/33 (vPC peer link)
  rack 5 -> rack 1:    spine Eth1/3 -- bl-01 Eth1/33,   spine Eth1/4 -- bl-02 Eth1/33        (direct cables)
- rack 1 (border):     leaf-01 Eth1/1 -- PP-DC90-01 front 1 | rear 1 -- edge Eth1/13         (unchanged)
-                      bl-01 Eth1/1   -- PP-DC90-01 front 2 | rear 2 -- edge Eth1/14         (unchanged)
+ rack 1 (border):     leaf-01 Eth1/1 -- PP-KTW1-01 front 1 | rear 1 -- edge Eth1/13         (unchanged)
+                      bl-01 Eth1/1   -- PP-KTW1-01 front 2 | rear 2 -- edge Eth1/14         (unchanged)
                       bl-02 Eth1/1   -- edge Eth1/10                                        (direct cable)
 ```
 
@@ -465,20 +477,20 @@ location of a carrier circuit, but it has no role, platform, address, VRF or art
 prefixes stay in the `INTERNET` space. It has ONE interface `bus` of its own kind `TopologyInternetInterface`, and the
 kind lets many carrier circuits end on the same interface (`checks/carrier_circuit_ports.py` exempts it from "a port is
 the end of at most one carrier" by kind, not by name). Each attachment has its own carrier circuit (the graph says who is
-attached): the uplink of an ISP router (`UPL-ISP-DEMO`, `UPL-ISP-DEMO-B`) and the public side of a service
+attached): the uplink of an ISP router (`UPL-ISP-A`, `UPL-ISP-B`) and the public side of a service
 (`PUB-WEBEX-FRA`, `PUB-S3-EUC1`), and the public side is a port of an ordinary `CloudDirectConnect`
-(`webex-c900-fra-pub`, `s3-c900-euc1-pub`, no new kind). Two ISPs: `ISP-DEMO` (router `EXT-ISP-DEMO-PE1`, edge port
-`Ethernet1/2`, carrier `INET-DC90-ISP-DEMO` from the base sample) and `ISP-DEMO-B` (`EXT-ISP-DEMO-B-PE1`, `Ethernet1/1`,
-`INET-DC90-ISP-DEMO-B`):
+(`webex-c900-fra-pub`, `s3-c900-euc1-pub`, no new kind). Two ISPs: `ISP-A` (router `EXT-ISP-A-PE1`, edge port
+`Ethernet1/2`, carrier `INET-KTW1-ISP-A` from the base sample) and `ISP-B` (`EXT-ISP-B-PE1`, `Ethernet1/1`,
+`INET-KTW1-ISP-B`):
 
 ```text
-dc90-edge-01:Ethernet1/2 | INET-DC90-ISP-DEMO | EXT-ISP-DEMO-PE1:et-0/0/0 | (device) | EXT-ISP-DEMO-PE1:xe-0/1/0
-  | UPL-ISP-DEMO | INTERNET:bus | PUB-WEBEX-FRA | webex-c900-fra-pub:pub-1
+ktw1-edge-01:Ethernet1/2 | INET-KTW1-ISP-A | EXT-ISP-A-PE1:et-0/0/0 | (device) | EXT-ISP-A-PE1:xe-0/1/0
+  | UPL-ISP-A | INTERNET:bus | PUB-WEBEX-FRA | webex-c900-fra-pub:pub-1
 ```
 
-The same path through `EXT-ISP-DEMO-B-PE1` and `INET-DC90-ISP-DEMO-B` ends in the same place: two ISPs, one INTERNET. L3
+The same path through `EXT-ISP-B-PE1` and `INET-KTW1-ISP-B` ends in the same place: two ISPs, one INTERNET. L3
 (only the first ISP, the second is L1 only): both ends of the access carrier have a /31 in the `INTERNET` space, the
-edge is a member of `dc90-vrf-internet`, one eBGP session (`BGP-DC90-EDGE01-ISP-DEMO`, two AS) on two physical ports:
+edge is a member of `dc-ktw1-vrf-internet`, one eBGP session (`BGP-KTW1-EDGE01-ISP-A`, two AS) on two physical ports:
 no tunnel and no session circuit. Targets: `s3-public` (`192.0.2.0/24`) and `webex-public` (`203.0.113.0/24`), both
 `CloudServiceEndpoint` with `access: public` and the range in the `prefix` field (the `INTERNET` space).
 `virtual_network` is now an ordinary optional edge (a Parent cannot be optional), so a SaaS service endpoint has only
@@ -491,8 +503,8 @@ exchange through a firewall is not in the sample (the internet egress from the c
 
 **Cage and office access** (`06_internet/02_circuits`): the cage and the office have their own ISP access next to
 the DC's, following the pattern `INET-LUMEN-EQXFR2` of 30_all and `INET-<office>` of `add_sdwan_edge`:
-`eg-dmc101:Ethernet1/14` - `INET-DMC1-ISP-DEMO-B` - `EXT-ISP-DEMO-B-PE1:et-0/0/1` and `C900-OFFICE-EDGE1:GE1` -
-`INET-C900-OFFICE` - `EXT-ISP-DEMO-PE1:et-0/0/1`. Both ISP routers already have an uplink to `INTERNET:bus` (rule I3), so
+`par-colo1-edge-01:Ethernet1/14` - `INET-PAR1-ISP-B` - `EXT-ISP-B-PE1:et-0/0/1` and `bcn-office-edge-01:GE1` -
+`INET-BCN-OFFICE-ISP-A` - `EXT-ISP-A-PE1:et-0/0/1`. Both ISP routers already have an uplink to `INTERNET:bus` (rule I3), so
 each of the three sites reaches INTERNET in L1 (the assertion `sites` in `cases.yml`: the carriers of every chain are
 exactly the site's access and the router's uplink). Many carriers on one `bus` are allowed by interface kind; the
 accesses of the cage and the office are NOT INTERNET attachments (an attachment is an ISP uplink or the public side of a
@@ -508,7 +520,7 @@ the cage, never in the DC; the dark fibres join the DC and the cage; every tunne
 reaches the Fabric port through one jack of a panel. For pairs from a tenant segment the equal-cost path set is large
 (three start ports, two border leaves, two variants of the BGP hop): the pair asks for `max_paths: 100` (the server
 limit), and the sessions without ports (only overlay processes) keep the set under the limit. The `dci` circuit
-(`ICX-DC90-DMC1`) is not on the shortest L3 chain (the chain goes through the BGP processes and the EVPN peering), so the
+(`ICX-KTW1-PAR1`) is not on the shortest L3 chain (the chain goes through the BGP processes and the EVPN peering), so the
 L3 circuit types on the DC - cloud chains are `handoff`, not `dci`.
 
 **Extra pairs** (`cases.yml`): the VPN tunnels only (`via: [CloudVPNConnection]`: 2 L1 legs through the internet
@@ -519,9 +531,9 @@ reached through `peers` of the ExpressRoute hub) and one negative pair (a segmen
 IPsec and always with IPsec (a GRE tunnel has no profile). Azure ExpressRoute: a `logical` circuit without
 `partner_account` is correct (the provider is the carrier's `provider`), so there is no new rule.
 
-**Office, its edge and the tunnels** (`05_office`): the office has its own SD-WAN edge `C900-OFFICE-EDGE1` (template
-`VCE-610_EDGE` as in `add_sdwan_edge`, `GE1` is the uplink to the ISP: `INET-C900-OFFICE`). Two `tunnel` circuits end on
-its interfaces `Tunnel1` and `Tunnel2` (parent `GE1`): `SC-C900-OFFICE-DC90` to `Tunnel4` of the edge `dc90-edge-01` (the
+**Office, its edge and the tunnels** (`05_office`): the office has its own SD-WAN edge `bcn-office-edge-01` (template
+`VCE-610_EDGE` as in `add_sdwan_edge`, `GE1` is the uplink to the ISP: `INET-BCN-OFFICE-ISP-A`). Two `tunnel` circuits end on
+its interfaces `Tunnel1` and `Tunnel2` (parent `GE1`): `SC-OFFICE-KTW1` to `Tunnel4` of the edge `ktw1-edge-01` (the
 SD-WAN hub, the same internet access as the AWS VPN) and `SC-C900-ZSCALER-TUN1` to Zscaler. Both have the office among
 their locations (the owner is derived, `utils/ownership.py`), and each end lies on the ports of an internet carrier (the
 tunnel rule in `checks/circuit_placement.py`). A tunnel is L3 only (a session circuit); its internet carrier is checked
@@ -535,7 +547,7 @@ office - Zscaler tunnel.
 - The cable goes from the leaf's segment port to the patch panel, while the carrier starts on another port of the edge.
   A physically consistent path would need additional devices. The first hop of the tenant segment is the leaf port with
   the `segments` edge.
-- The cage has ONE panel pair (`PP-DMC1-01`, jack 1): only the `virtual_connection` carriers from the Fabric port go
+- The cage has ONE panel pair (`PP-PAR-COLO1-01`, jack 1): only the `virtual_connection` carriers from the Fabric port go
   through it (ExpressRoute and Partner Interconnect, three VLANs on `Ethernet1/1`: 200, 201, 400). The cross-connects
   (AWS, Dedicated Interconnect, Webex) end directly on edge ports, without a panel. The L1 path cage - cloud through the
   panel is physically consistent: edge - cable - panel - cable - Fabric port - carrier - transport port.

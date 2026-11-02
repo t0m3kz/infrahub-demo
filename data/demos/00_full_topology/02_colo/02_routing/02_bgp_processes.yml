@@ -6,7 +6,7 @@ kind: Object
 spec:
   kind: ManagedBGP
   data:
-    - name: eg-dmc101-bgp
+    - name: par-colo1-edge-01-bgp
       status: active
       process_role: overlay
       local_as: AS4200091001
@@ -14,5 +14,5 @@ spec:
         data:
           address: "10.91.255.1/32"
           ip_namespace: PROD
-          description: eg-dmc101 loopback
-      capabilities: ["eg-dmc101"]
+          description: par-colo1-edge-01 loopback
+      capabilities: ["par-colo1-edge-01"]

@@ -8,7 +8,7 @@ from infrahub_sdk.graph_traversal import PathNode
 
 from tests.traversal import walks
 
-LEAVES = ["dc90-leaf-01", "dc90-leaf-02"]
+LEAVES = ["ktw1-leaf-01", "ktw1-leaf-02"]
 CFG = {
     "server": "srv",
     "bond": "bond0",

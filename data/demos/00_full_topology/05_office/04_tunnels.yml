@@ -1,7 +1,7 @@
 ---
 # The tunnels of the C900 office (inventory only, no BGP). The office is the first location (its owner is the tunnel's,
 # derived) and each end rides a live internet carrier circuit of its own (checks/circuit_placement.py): the office
-# edge the access INET-C900-OFFICE (06_internet/02_circuits/01_carrier_circuits.yml), the DC edge INET-DC90-ISP-DEMO
+# edge the access INET-BCN-OFFICE-ISP-A (06_internet/02_circuits/01_carrier_circuits.yml), the DC edge INET-KTW1-ISP-A
 # (03_cloud/04_circuits/00_carrier_circuits.yml).
 # The Zscaler end is a tunnel of the SaaS transport zscaler-c900-muc, which has no carrier of its own.
 apiVersion: infrahub.app/v1
@@ -9,17 +9,17 @@ kind: Object
 spec:
   kind: TopologySessionCircuit
   data:
-    - name: SC-C900-OFFICE-DC90
+    - name: SC-OFFICE-KTW1
       description: SD-WAN tunnel from the C900 office edge to the DC edge over the internet, no BGP
       provider: P035
       circuit_type: tunnel
       status: active
       locations:
         - C900-OFFICE
-        - DC90
+        - DC-KTW1
       capabilities:
-        - ["C900-OFFICE-EDGE1", "Tunnel1"]
-        - ["dc90-edge-01", "Tunnel4"]
+        - ["bcn-office-edge-01", "Tunnel1"]
+        - ["ktw1-edge-01", "Tunnel4"]
     - name: SC-C900-ZSCALER-TUN1
       description: Tunnel to the Zscaler enforcement node, no BGP
       provider: P030
@@ -29,5 +29,5 @@ spec:
         - C900-OFFICE
         - ZSCALER-MUNICH I
       capabilities:
-        - ["C900-OFFICE-EDGE1", "Tunnel2"]
+        - ["bcn-office-edge-01", "Tunnel2"]
         - ["zscaler-c900-muc", "Tunnel1"]

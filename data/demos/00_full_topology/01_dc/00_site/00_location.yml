@@ -8,28 +8,28 @@ kind: Object
 spec:
   kind: LocationMetro
   data:
-    - name: "Demo Metro"
-      shortname: "dmo"
-      parent: de
+    - name: "Katowice"
+      shortname: "ktw"
+      parent: pl
       children:
         kind: LocationFacility
         data:
-          - name: "DMO-1"
-            shortname: "dmo-1"
+          - name: "KTW1"
+            shortname: "ktw1"
             children:
               kind: LocationSuite
               data:
-                - name: DMO-1-Suite-1
+                - name: KTW1-SUITE-1
                   index: 1
-                  shortname: "dmo-1-s-1"
-                  parent: dmo-1
+                  shortname: "ktw1-suite-1"
+                  parent: ktw1
                   rows: 2
                   racks_per_row: 9
                   children:
                     kind: LocationRack
                     data:
-                      - name: DMO-1-S1-R1-1
-                        shortname: dmo-1-s-1-r-1-1
+                      - name: KTW1-RACK-01
+                        shortname: ktw1-rack-01
                         index: 1
                         row_index: 1
                         rack_type: network

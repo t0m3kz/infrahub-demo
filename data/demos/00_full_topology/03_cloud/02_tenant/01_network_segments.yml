@@ -6,7 +6,7 @@ spec:
   kind: CloudNetworkSegment
   data:
     - owner: "C900"
-      customer_name: "demo-subnet"
+      customer_name: "subnet"
       environment: "p"
       segment_type: "cloud_subnet"
       virtual_network: "vpc-c900-prod"
@@ -23,7 +23,7 @@ spec:
   kind: CloudNetworkSegment
   data:
     - owner: "C900"
-      customer_name: "demo-spoke"
+      customer_name: "spoke"
       environment: "p"
       segment_type: "cloud_subnet"
       virtual_network: "vnet-c900-weu-spoke"
@@ -31,7 +31,7 @@ spec:
       cidr_block: "10.203.1.0/24"
       customer_deployment: "C900-DEMO-AZURE-WESTEUROPE"
     - owner: "C900"
-      customer_name: "demo-isolated"
+      customer_name: "isolated"
       environment: "p"
       segment_type: "cloud_subnet"
       virtual_network: "vpc-c900-isolated"

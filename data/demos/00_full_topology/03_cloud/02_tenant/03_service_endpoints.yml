@@ -13,4 +13,4 @@ spec:
       virtual_network: "vpc-c900-prod"
       provider: "P004"
       segments:
-        - "c900-demo-subnet-p"
+        - "c900-subnet-p"

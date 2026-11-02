@@ -10,14 +10,14 @@ kind: Object
 spec:
   kind: TopologyColocation
   data:
-    - name: COLO-DEMO
+    - name: COLO-PAR
       parent: "Colocation"
       children:
         kind: TopologyColocationMetro
         data:
-          - name: DMC
-            location: ["dmo"]
+          - name: PAR
+            location: ["par"]
             children:
               kind: TopologyColocationZone
               data:
-                - name: DMC1
+                - name: PAR-COLO1

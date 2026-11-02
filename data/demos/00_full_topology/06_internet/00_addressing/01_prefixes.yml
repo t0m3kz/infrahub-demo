@@ -6,11 +6,11 @@ spec:
   kind: IpamPrefix
   data:
     # yamllint disable-line rule:line-length
-    - {prefix: "198.51.100.10/31", ip_namespace: "INTERNET", status: active, description: "Transit: dc90-edge-01 to EXT-ISP-DEMO-PE1"}  # yamllint disable-line rule:line-length
+    - {prefix: "198.51.100.10/31", ip_namespace: "INTERNET", status: active, description: "Transit: ktw1-edge-01 to EXT-ISP-A-PE1"}  # yamllint disable-line rule:line-length
     # yamllint disable-line rule:line-length
-    - {prefix: "198.51.100.12/31", ip_namespace: "INTERNET", status: active, description: "Transit: C900-OFFICE-EDGE1 to EXT-ISP-DEMO-PE1"}  # yamllint disable-line rule:line-length
+    - {prefix: "198.51.100.12/31", ip_namespace: "INTERNET", status: active, description: "Transit: bcn-office-edge-01 to EXT-ISP-A-PE1"}  # yamllint disable-line rule:line-length
     # yamllint disable-line rule:line-length
-    - {prefix: "198.51.100.14/31", ip_namespace: "INTERNET", status: active, description: "Transit: eg-dmc101 to EXT-ISP-DEMO-B-PE1"}  # yamllint disable-line rule:line-length
+    - {prefix: "198.51.100.14/31", ip_namespace: "INTERNET", status: active, description: "Transit: par-colo1-edge-01 to EXT-ISP-B-PE1"}  # yamllint disable-line rule:line-length
     # yamllint disable-line rule:line-length
     - {prefix: "192.0.2.0/24", ip_namespace: "INTERNET", status: active, description: "Public range of the object store API in eu-central-1 (cloud public endpoint s3-public)"}  # yamllint disable-line rule:line-length
     # yamllint disable-line rule:line-length
