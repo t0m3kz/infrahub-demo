@@ -267,29 +267,61 @@ def test_climbing_keeps_the_rising_device_sequences_once() -> None:
     assert walks.climbing(chains, ROLE) == [("srv", LEAVES[0], "edge"), ("srv", LEAVES[0], "sp", "b1", "edge")]
 
 
+CFG_PATHS = {**CFG, "border_leaves": ["b1", "b2"]}
+
+
+def _expected_chains() -> tuple[list, dict, dict]:
+    direct = [_chain("srv", LEAVES[0], "edge")]
+    via = {(leaf, b): [_chain(leaf, "sp", b)] for leaf in LEAVES for b in ("b1", "b2")}
+    l3 = {leaf: [_chain(leaf, "edge")] for leaf in LEAVES}
+    return direct, via, l3
+
+
 def test_the_pod_paths_pass_on_the_expected_chains() -> None:
-    """5 L1 chains (4 via leaf, spine, border leaf) and the second leaf only through the spine in L3."""
-    l1 = [_chain("srv", LEAVES[0], "edge")] + [
-        _chain("srv", leaf, "sp", b, "edge") for leaf in LEAVES for b in ("b1", "b2")
+    """1 direct uplink + 4 (leaf, border leaf) pairs through the spine, both leaves reach the edge in L3."""
+    direct, via, l3 = _expected_chains()
+    assert _failed(walks.pod_path_rows(CFG_PATHS, ROLE, direct, via, l3)) == []
+
+
+def test_a_pair_that_does_not_go_through_the_spine_changes_the_count() -> None:
+    """A leaf reaching a border leaf only through the edge (a descent) is no leaf, spine, border leaf path."""
+    direct, via, l3 = _expected_chains()
+    via[(LEAVES[0], "b2")] = [_chain(LEAVES[0], "edge", "b2")]
+    assert len(_failed(walks.pod_path_rows(CFG_PATHS, ROLE, direct, via, l3))) == 1
+
+
+def test_a_leaf_that_does_not_reach_the_edge_in_l3_fails() -> None:
+    """Both leaves must reach the edge."""
+    direct, via, l3 = _expected_chains()
+    l3[LEAVES[1]] = []
+    assert _failed(walks.pod_path_rows(CFG_PATHS, ROLE, direct, via, l3)) == [
+        "pod: L3 reaches the edge from both leaves"
     ]
-    l3 = {
-        LEAVES[0]: [_chain(LEAVES[0], "edge")],
-        LEAVES[1]: [_chain(LEAVES[1], "sp", b, "edge") for b in ("b1", "b2")],
-    }
-    assert _failed(walks.pod_path_rows(CFG, ROLE, l1, l3)) == []
 
 
-def test_a_missing_uplink_changes_the_chain_count() -> None:
-    """Without the chains through border leaf 2 the L1 count and the second leaf's L3 fail."""
-    l1 = [_chain("srv", LEAVES[0], "edge")] + [_chain("srv", leaf, "sp", "b1", "edge") for leaf in LEAVES]
-    l3 = {LEAVES[0]: [_chain(LEAVES[0], "edge")], LEAVES[1]: [_chain(LEAVES[1], "sp", "b1", "edge")]}
-    assert len(_failed(walks.pod_path_rows(CFG, ROLE, l1, l3))) == 2
+def test_overlay_rows_need_the_second_leaf_to_peer_only_upwards() -> None:
+    """The first leaf peers with the edge, the second does not."""
+    assert walks.overlay_rows(_graph(), CFG)[0][1] is True
+    d = _graph()
+    d["peering"].append(
+        {"peering_role": _v("overlay"), "bgp_processes": _edges({"id": f"p-{LEAVES[1]}"}, {"id": "p-edge"})}
+    )
+    assert walks.overlay_rows(d, CFG)[0][1] is False
+
+
+def test_tunnel_interfaces_must_ride_on_an_internet_carrier_port() -> None:
+    """A tunnel whose parent port ends no internet carrier is reported."""
+    carrier = {"circuit_type": _v("internet"), "capabilities": _edges({"id": "port-1"})}
+    ok = {"name": _v("Tunnel1"), "device": _node(name=_v("e")), "parent_interface": _node(id="port-1")}
+    bad = {"name": _v("Tunnel2"), "device": _node(name=_v("e")), "parent_interface": _node(id="port-2")}
+    assert walks.tunnel_underlay_rows({"carrier": [carrier], "vif": [ok]})[0][1] is True
+    assert walks.tunnel_underlay_rows({"carrier": [carrier], "vif": [ok, bad]})[0][1] is False
 
 
 def test_transport_rows_need_the_interfaces_of_the_transport() -> None:
     """A transport holds the kinds listed: a port of its own device passes, a LAG it lacks fails."""
     port = {"name": _v("p1"), "device": _node(name=_v("dx"))}
-    d = {"iface": [port], "lag": [], "vif": []}
+    d = {"iface": [port], "lag": [], "peer": []}
     assert walks.transport_rows(d, "t", {"dx": ["port"]})[0][1] is True
     assert walks.transport_rows(d, "t", {"dx": ["port", "lag"]})[0][1] is False
 

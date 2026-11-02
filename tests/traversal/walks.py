@@ -120,6 +120,7 @@ def pod_rows(d: dict, cfg: dict) -> list[Row]:
     }
     ok = sorted(vlans) == sorted(leaves) and len(set(vlans.values())) == 1
     rows.append(("pod: VLAN row of the segment on both MLAG peers, same vlan_id", ok, str(vlans)))
+    rows += overlay_rows(d, cfg)
     if cfg.get("deployed_to"):
         placed = {
             val(x, "name"): ((x.get("deployment") or {}).get("node") or {}).get("name", {}).get("value")
@@ -160,29 +161,70 @@ def climbing(paths: list[list[Any]], role: dict[str, str]) -> list[tuple[str, ..
 
 
 def pod_path_rows(
-    cfg: dict, role: dict[str, str], l1_paths: list[list[Any]], l3_paths: dict[str, list[list[Any]]]
+    cfg: dict,
+    role: dict[str, str],
+    direct: list[list[Any]],
+    via_spine: dict[tuple[str, str], list[list[Any]]],
+    l3: dict[str, list[list[Any]]],
 ) -> list[Row]:
-    """The server's L1 chains server -> edge (5: one direct uplink, 4 through leaf, spine, border leaf) and the overlay
-    L3 chains of both leaves to the edge (the second leaf only through spine and border leaf)."""
-    leaves = cfg["leaves"]
-    chains = climbing(l1_paths, role)
-    via_spine = [c for c in chains if any(role.get(x) == "spine" for x in c)]
-    tiers = all([role.get(x) for x in c[1:-1]] == ["leaf", "spine", "border-leaf"] for c in via_spine)
+    """The pod's L1 paths server -> edge from the server's chains: the shortest set is the direct uplink, and each
+    (leaf, border leaf) pair is reached leaf -> spine -> border leaf (the chains of the first leg of a `--via` trace);
+    both leaves reach the edge in L3."""
+    uplinks = climbing(direct, role)
+    spine_ok = {pair: climbing(chains, role) for pair, chains in via_spine.items()}
+    right = [
+        pair
+        for pair, found in spine_ok.items()
+        if [[role.get(x) for x in c] for c in found] == [["leaf", "spine", "border-leaf"]]
+    ]
     want, want_spine = cfg["l1_paths_to_edge"], cfg["l1_paths_via_spine"]
-    ok = len(chains) == want and len(via_spine) == want_spine and tiers
-    detail = f"{len(chains)} paths, {len(via_spine)} via the spine: {[' > '.join(c) for c in chains]}"
+    ok = len(uplinks) + len(right) == want and len(right) == want_spine
+    detail = f"direct {[' > '.join(c) for c in uplinks]}; via the spine {sorted(right)}; found {spine_ok}"
     rows: list[Row] = [(f"pod: {want} L1 paths server -> edge, {want_spine} via leaf, spine, border leaf", ok, detail)]
-    reach = {leaf: climbing(l3_paths.get(leaf, []), role) for leaf in leaves}
-    second = reach[leaves[1]]
-    ok = (
-        bool(reach[leaves[0]])
-        and len(second) == 2
-        and all([role.get(x) for x in c[1:-1]] == ["spine", "border-leaf"] for c in second)
-    )
-    rows.append(
-        ("pod: overlay L3 from both leaves to the edge, the second through spine and border leaf", ok, str(reach))
-    )
+    missing = [leaf for leaf in cfg["leaves"] if not climbing(l3.get(leaf, []), role)]
+    rows.append(("pod: L3 reaches the edge from both leaves", not missing, f"no chain from {missing}"))
     return rows
+
+
+def overlay_rows(d: dict, cfg: dict) -> list[Row]:
+    """The overlay sessions (attribute read): the first leaf has one to the edge, the second only to the spine."""
+    proc_dev = {p["id"]: next(iter(rel(p, "capabilities")), {}).get("display_label") for p in d["bgp"]}
+    neighbours: dict[str, set[str]] = {leaf: set() for leaf in cfg["leaves"]}
+    for pe in d["peering"]:
+        ends = [proc_dev.get(x["id"]) for x in rel(pe, "bgp_processes")]
+        if val(pe, "peering_role") == "overlay" and len(ends) == 2 and None not in ends:
+            for here, there in (ends, ends[::-1]):
+                if here in neighbours:
+                    neighbours[here].add(str(there))
+    first, second = cfg["leaves"]
+    ok = cfg["edge"] in neighbours[first] and cfg["edge"] not in neighbours[second] and neighbours[second]
+    return [
+        (
+            "pod: overlay sessions: the first leaf peers with the edge, the second only upwards",
+            bool(ok),
+            str(neighbours),
+        )
+    ]
+
+
+def tunnel_underlay_rows(d: dict) -> list[Row]:
+    """Every tunnel interface rides (parent_interface) on a port that is an end of an internet carrier circuit."""
+    internet_ends = {
+        e["id"] for c in d["carrier"] if val(c, "circuit_type") == "internet" for e in rel(c, "capabilities")
+    }
+    tunnels = [v for v in d["vif"] if str(val(v, "name")).startswith("Tunnel")]
+    loose = [
+        f"{_dev(v)}:{val(v, 'name')}"
+        for v in tunnels
+        if next(iter(rel(v, "parent_interface")), {}).get("id") not in internet_ends
+    ]
+    return [
+        (
+            "tunnel interfaces ride on a port of an internet carrier",
+            bool(tunnels) and not loose,
+            f"{len(tunnels)} tunnels, loose: {loose}",
+        )
+    ]
 
 
 # ------------------------------------------------------------------ internet through an ISP
@@ -345,7 +387,7 @@ def sub_interface_rows(d: dict) -> list[Row]:
 
 def transport_rows(d: dict, tag: str, wanted: dict[str, list[str]]) -> list[Row]:
     """A transport holds its ports, its LAG and its virtual interfaces as interfaces of its own (`port`, `lag`, `vif`)."""
-    keys = {"port": "iface", "lag": "lag", "vif": "vif"}
+    keys = {"port": "iface", "lag": "lag", "vif": "peer"}  # a transport's virtual interfaces are its peering interfaces
     rows: list[Row] = []
     for name, kinds in wanted.items():
         held = {k: [val(x, "name") for x in d[keys[k]] if _dev(x) == name] for k in kinds}
@@ -368,7 +410,7 @@ def inventory_lines(d: dict) -> list[str]:
             f"{_dev(p)}:{val(p, 'name')} [{val(p, 'scope')}] on {val(parent, 'name')} gateway {gateway}"
             f" peer AS {asn} advertises {adv}"
         )
-    held = {"port": "iface", "lag": "lag", "vif": "vif"}
+    held = {"port": "iface", "lag": "lag", "vif": "peer"}
     sections = {
         "peering interfaces": peerings,
         "gateways": [f"{val(g, 'name')} [{val(g, 'gateway_type')}] AS {val(g, 'asn')}" for g in d["gw"]],

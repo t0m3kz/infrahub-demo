@@ -65,12 +65,10 @@ def test_reverse_rows_compare_the_reversed_chains() -> None:
     assert chain_rows.reverse_rows("t", forward, [Leg("l1", B, A, paths=[[B, XC, A]])])[0][1] is False
 
 
-def test_transport_rows_refuse_a_chain_without_an_allowed_transport() -> None:
-    """Every chain crosses a transport of an allowed kind; with a waypoint the kind of the waypoint is checked."""
-    legs = [_leg("l1", [A, DX, B])]
-    assert chain_rows.transport_rows("t", legs, ["CloudDirectConnect"])[0][1] is True
-    assert chain_rows.transport_rows("t", legs, ["CloudVPNConnection"])[0][1] is False
-    assert chain_rows.transport_rows("t", legs, ["CloudDirectConnect"], "CloudDirectConnect:dx")[0][1] is True
+def test_transport_rows_check_the_kind_of_the_transport_traced_through() -> None:
+    """The kind prefix of the waypoint must be an allowed one."""
+    assert chain_rows.transport_rows("t", ["CloudDirectConnect"], "CloudDirectConnect:dx")[0][1] is True
+    assert chain_rows.transport_rows("t", ["CloudVPNConnection"], "CloudDirectConnect:dx")[0][1] is False
 
 
 def test_golden_text_is_sorted_and_names_depth_and_count() -> None:

@@ -24,7 +24,7 @@ D = {
     "session": [{"name": {"value": "SC-1"}, "circuit_type": {"value": "handoff"}}],
     "iface": [],
     "lag": [],
-    "vif": [],
+    "peer": [],
 }
 PAIR = {
     "src": "ManagedVxlanSegment:a",

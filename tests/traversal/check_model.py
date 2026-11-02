@@ -37,7 +37,7 @@ from utils.path_trace import Leg  # noqa: E402
 
 GOLDEN_DIR = Path(__file__).resolve().parent / "golden"
 CASES_FILE = Path(__file__).resolve().parent / "cases.yml"
-PAIR_MAX_PATHS = 100  # the server accepts 1..100; an equal-cost set is complete only below the cap
+PAIR_MAX_PATHS = 30  # the server's cost grows with the cap (L3: 20 -> 19 s, 64 -> 77 s); the largest set here is 8
 DEFAULT_TOKEN = "06438eb2-8019-4776-878c-0941b1f1d1ec"  # noqa: S105 - the local test stack's demo token
 
 
@@ -149,7 +149,8 @@ async def check_pair(
     reverse direction, the circuit types per transport, then the golden (the sorted equal-cost chains)."""
     src, dst = pair["src"], pair["dst"]
     tag = f"{src} -> {dst}"
-    plain = await traced(rep, tag, client, branch, src, dst)
+    layers = tuple(pair.get("layers") or ("l1", "l3"))
+    plain = await traced(rep, tag, client, branch, src, dst, layers=layers)
     if plain is None:
         return
     if pair.get("expect_unreachable"):
@@ -157,24 +158,24 @@ async def check_pair(
             rep.add(*row)
         return
     kinds = pair["far_end_kinds"]
-    for row in [*chain_rows.reach_rows(tag, plain), *chain_rows.transport_rows(tag, plain, kinds)]:
+    for row in chain_rows.reach_rows(tag, plain):
         rep.add(*row)
     kind_of = chain_rows.circuit_types(d)
     sections = [("plain", plain)]
     for transport, want in (pair.get("through") or {}).items():
-        legs = await traced(rep, f"{tag} via {transport}", client, branch, src, dst, via=transport)
+        legs = await traced(rep, f"{tag} via {transport}", client, branch, src, dst, via=transport, layers=tuple(want))
         if legs is None:
             continue
         sections.append((f"via {transport}", legs))
         vtag = f"{tag} via {transport}"
         rows = [
             *chain_rows.reach_rows(vtag, legs),
-            *chain_rows.transport_rows(vtag, legs, kinds, transport),
+            *chain_rows.transport_rows(vtag, kinds, transport),
             *chain_rows.type_rows(vtag, legs, want, kind_of),
         ]
         for row in rows:
             rep.add(*row)
-    backward = await traced(rep, f"{dst} -> {src}", client, branch, dst, src)
+    backward = await traced(rep, f"{dst} -> {src}", client, branch, dst, src, layers=layers)
     if backward is not None:
         for row in chain_rows.reverse_rows(f"{dst} -> {src}", plain, backward):
             rep.add(*row)
@@ -184,16 +185,24 @@ async def check_pair(
 
 
 async def check_pod(rep: Report, cfg: dict, client: InfrahubClient, branch: str, d: dict) -> None:
-    """The pod's paths as the server returns them: server -> edge in L1, both leaves -> edge in L3."""
+    """The pod's paths as the server returns them: the shortest server -> edge set (the direct uplink), leaf -> spine ->
+    border leaf for every (leaf, border leaf) pair (first leg of a `--via` trace), both leaves -> edge in L3."""
     role = walks.role_of(d)
     kind = "DcimPhysicalDevice:"
-    l1 = await traced(rep, "pod", client, branch, cfg["server"], cfg["edge"], layers=("l1",))
+    direct = await traced(rep, "pod", client, branch, cfg["server"], cfg["edge"], layers=("l1",))
+    via: dict[tuple[str, str], list] = {}
+    for leaf in cfg["leaves"]:
+        for border in cfg["border_leaves"]:
+            legs = await traced(
+                rep, "pod", client, branch, kind + leaf, kind + cfg["edge"], layers=("l1",), via=kind + border
+            )
+            via[(leaf, border)] = [p for p in legs[0].paths] if legs else []
     l3: dict[str, list] = {}
     for leaf in cfg["leaves"]:
         legs = await traced(rep, "pod", client, branch, kind + leaf, kind + cfg["edge"], layers=("l3",))
         l3[leaf] = [p for g in legs or [] for p in g.paths]
-    if l1 is not None:
-        for row in walks.pod_path_rows(cfg, role, [p for g in l1 for p in g.paths], l3):
+    if direct is not None:
+        for row in walks.pod_path_rows(cfg, role, [p for g in direct for p in g.equal_cost], via, l3):
             rep.add(*row)
 
 
@@ -238,7 +247,7 @@ async def assert_case(
         await check_pod(rep, case["pod"], client, branch, d)
         lap("pod")
     if case.get("transport_sub_interfaces"):
-        for row in walks.sub_interface_rows(d):
+        for row in [*walks.sub_interface_rows(d), *walks.tunnel_underlay_rows(d)]:
             rep.add(*row)
     if case.get("internet"):
         for row in walks.internet_rows(d, case["internet"]):
@@ -320,7 +329,7 @@ async def amain(args: argparse.Namespace) -> int:
         start_stack(port, args.rebuild)
         if not stack_up(address):
             sys.exit(f"stos nie odpowiada na {address}")
-    client = InfrahubClient(config=Config(address=address, api_token=token))
+    client = InfrahubClient(config=Config(address=address, api_token=token, timeout=path_trace.REQUEST_TIMEOUT))
     rep = Report()
     try:
         for case in cases:

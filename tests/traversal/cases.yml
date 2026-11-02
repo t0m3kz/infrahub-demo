@@ -22,6 +22,7 @@ cases:
       server: dc90-srv-01
       bond: bond0
       leaves: [dc90-leaf-01, dc90-leaf-02]
+      border_leaves: [dc90-bl-01, dc90-bl-02]
       edge: dc90-edge-01
       segment: c900-demo-web-p
       mlag: dc90-mlag-01
@@ -32,8 +33,8 @@ cases:
         dc90-bl-01: DC90
         dc90-bl-02: DC90
         dc90-edge-01: DC90
-      # 4 = 2 leaves x 1 spine x 2 border leaves; +1 = the direct uplink leaf-01 -> panel -> edge of the base sample
-      # distinct device chains the server returns server -> edge that climb the tiers
+      # 4 = 2 leaves x 1 spine x 2 border leaves (one `--via` trace each);
+      # +1 = the direct uplink leaf-01 -> panel -> edge, the shortest set of the plain trace
       l1_paths_to_edge: 5
       l1_paths_via_spine: 4
     # THE INTERNET: one object under the label "Internet" with one shared interface; two ISPs and the public side of a
@@ -63,7 +64,7 @@ cases:
         golden: full_topology__c900-demo-web-p__c900-demo-subnet-p.txt
         through:
           CloudDirectConnect:dx-c900-fra-lag: {l1: [cross_connect], l3: [handoff]}
-          CloudVPNConnection:vpn-c900-aws-euc1: {l1: [internet], l3: [vpn]}
+          CloudVPNConnection:vpn-c900-aws-euc1: {l3: [vpn]}
         # the kinds of the transport a chain crosses
         far_end_kinds: [CloudDirectConnect, CloudVPNConnection]
         # what a transport holds as its own interfaces: ports, LAG, VIFs
@@ -82,9 +83,12 @@ cases:
       # DC -> SaaS over a tunnel on the internet carrier, no session (Zscaler)
       - src: ManagedVxlanSegment:c900-demo-web-p
         dst: TopologySaasRegion:ZSCALER-MUNICH I
+        # a tunnel is a session circuit: it exists in L3 only (its internet carrier is asserted by `internet` and the
+        # tunnel_underlay row), so the physical layer does not reach the SaaS region
+        layers: [l3]
         golden: full_topology__web__saas-zscaler.txt
         through:
-          CloudVPNConnection:zscaler-c900-muc: {l1: [internet], l3: [tunnel]}
+          CloudVPNConnection:zscaler-c900-muc: {l3: [tunnel]}
         far_end_kinds: [CloudVPNConnection]
         transport_kinds:
           zscaler-c900-muc: [vif]

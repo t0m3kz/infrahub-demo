@@ -28,6 +28,7 @@ from infrahub_sdk.graph_traversal import PathNode
 
 MAX_DEPTH = 30  # the server refuses a larger max_depth
 MAX_PATHS = 64  # default cap; the server accepts 1..100
+REQUEST_TIMEOUT = 300  # seconds: a dense L3 search can take the server over a minute (the SDK default is 60)
 # The kinds a path may cross, per layer. Measured on the 30_all scenario (README): L1 is what is cabled or carried,
 # L3 what is routed (BGP processes and peerings, session circuits; physical ports stay for the tunnel and DCI circuits
 # that end on them). Shared containers (platform, region, account, VRF, namespace) are never crossed.
@@ -224,7 +225,9 @@ async def main() -> int:
     ap.add_argument("--branch", default="main")
     a = ap.parse_args()
     address = os.environ.get("INFRAHUB_ADDRESS", "http://localhost:8100")
-    client = InfrahubClient(config=Config(address=address, api_token=os.environ.get("INFRAHUB_API_TOKEN")))
+    client = InfrahubClient(
+        config=Config(address=address, api_token=os.environ.get("INFRAHUB_API_TOKEN"), timeout=REQUEST_TIMEOUT)
+    )
     layers = ("l1", "l3") if a.layer == "both" else (a.layer,)
     try:
         legs = await trace(client, a.src, a.dst, layers, a.via, a.max_paths, a.branch)

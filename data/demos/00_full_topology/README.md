@@ -219,124 +219,12 @@ niezależne śledzenia, src -> X i X -> dst. Narzędzie nie czyta grafu: jedno `
 rodzajów, które ścieżka może przekroczyć (tabela na górze pliku); wypisuje zbiór ścieżek równego kosztu (ECMP), potem dłuższe
 alternatywy. Limity serwera: głębokość 30, `max_paths` 1..100, budżet na wywołanie (gdy wyszukiwanie w przód wyczerpie
 budżet, powtarza się od celu). Kod wyjścia 1, gdy któraś noga nie ma ścieżki.
-Wynik z instancji 8100:
 
-```text
-=== L1 (physical): c900-demo-web-p -> c900-demo-subnet-p
-  segment c900-demo-web-p --segments edge--> dc90-leaf-01:Ethernet1/1
-  --cable CBL-DC90-LEAF01-PP01-F1--> panel dmo-1-s-1-r-1-1:PP-DC90-01:F1 (front)
-  == jack pairing (front.rear_port) ==> panel dmo-1-s-1-r-1-1:PP-DC90-01:1 (rear)
-  --cable CBL-DC90-PP01-R1-EDGE01--> dc90-edge-01:Ethernet1/13
-  [device dc90-edge-01: dc90-edge-01:Ethernet1/13 ... dc90-edge-01:Ethernet1/2]  (L2/L3 inside the device, no cable)
-  --carrier INET-DC90-ISP-DEMO (internet): EXT-ISP-DEMO-PE1:et-0/0/0 <-> dc90-edge-01:Ethernet1/2
-  [tunnels ['Tunnel1', 'Tunnel2', 'Tunnel3'] ride on dc90-edge-01:Ethernet1/2 through the carrier]
-  --> private peering Tunnel1 --> transport VPN vpn-c900-aws-euc1 --> cloud gateway hub tgw-c900-euc1 --attachment tgwa-c900-vpc--> virtual network vpc-c900-prod
-  --> private peering Tunnel2 --> transport VPN vpn-c900-aws-euc1 --> cloud gateway hub tgw-c900-euc1 --attachment tgwa-c900-vpc--> virtual network vpc-c900-prod
-  --> cloud segment c900-demo-subnet-p (10.200.1.0/24)
-
-  segment c900-demo-web-p --segments edge--> dc90-leaf-01:Ethernet1/1
-  --cable CBL-DC90-LEAF01-PP01-F1--> panel dmo-1-s-1-r-1-1:PP-DC90-01:F1 (front)
-  == jack pairing (front.rear_port) ==> panel dmo-1-s-1-r-1-1:PP-DC90-01:1 (rear)
-  --cable CBL-DC90-PP01-R1-EDGE01--> dc90-edge-01:Ethernet1/13
-  [device dc90-edge-01: dc90-edge-01:Ethernet1/13 ... dc90-edge-01:Ethernet1/3]  (L2/L3 inside the device, no cable)
-  --carrier XC-DC90-AWS-DX1 (cross_connect): dc90-edge-01:Ethernet1/3 <-> dx-c900-fra-lag:dxcon-1a
-  --> transport dx-c900-fra-lag port dxcon-1a in lag1
-  --> private peering lag1.1000 --> cloud gateway edge dxgw-c900 --attachment tgwa-c900-dxgw (allowed 10.200.0.0/16)--> cloud gateway hub tgw-c900-euc1 --attachment tgwa-c900-vpc--> virtual network vpc-c900-prod
-  --> private peering lag1.1100 --> cloud gateway edge vgw-c900-euc1 --attachment vgwa-c900-vpc--> virtual network vpc-c900-prod
-  --> cloud segment c900-demo-subnet-p (10.200.1.0/24)
-
-  segment c900-demo-web-p --segments edge--> dc90-leaf-01:Ethernet1/1
-  --cable CBL-DC90-LEAF01-PP01-F1--> panel dmo-1-s-1-r-1-1:PP-DC90-01:F1 (front)
-  == jack pairing (front.rear_port) ==> panel dmo-1-s-1-r-1-1:PP-DC90-01:1 (rear)
-  --cable CBL-DC90-PP01-R1-EDGE01--> dc90-edge-01:Ethernet1/13
-  [device dc90-edge-01: dc90-edge-01:Ethernet1/13 ... dc90-edge-01:Ethernet1/8]  (L2/L3 inside the device, no cable)
-  --carrier XC-DC90-AWS-DX2 (cross_connect): dc90-edge-01:Ethernet1/8 <-> dx-c900-fra-lag:dxcon-1b
-  --> transport dx-c900-fra-lag port dxcon-1b in lag1
-  --> private peering lag1.1000 --> cloud gateway edge dxgw-c900 --attachment tgwa-c900-dxgw (allowed 10.200.0.0/16)--> cloud gateway hub tgw-c900-euc1 --attachment tgwa-c900-vpc--> virtual network vpc-c900-prod
-  --> private peering lag1.1100 --> cloud gateway edge vgw-c900-euc1 --attachment vgwa-c900-vpc--> virtual network vpc-c900-prod
-  --> cloud segment c900-demo-subnet-p (10.200.1.0/24)
-
-=== L3 (routed): c900-demo-web-p -> c900-demo-subnet-p
-  segment c900-demo-web-p: gateway 10.90.1.1/24 prefix 10.90.1.0/24
-  --> SVI dc90-leaf-01:Vlan100 (VLAN 100) in VRF dc90-vrf-prod [PROD]  (deployment DC90)
-      BGP process dc90-leaf-01-bgp (AS4200090002)
-      --peering BGP-DC90-LEAF01-EDGE01 (overlay)--> BGP process dc90-edge-01-bgp (AS4200090001)
-      --handoff peering BGP-DC90-EDGE01-AWS-DX (regular) via dc90-edge-01:Ethernet1/3.1000-->
-      --session circuit SC-C900-AWS-DX-PROD (handoff): ends ['dc90-edge-01:Ethernet1/3.1000', 'dx-c900-fra-lag:lag1.1000']
-      --> private peering lag1.1000 (provider 10.255.128.1/31 AS64512) --> cloud gateway edge dxgw-c900 --attachment tgwa-c900-dxgw (allowed 10.200.0.0/16)--> cloud gateway hub tgw-c900-euc1 --attachment tgwa-c900-vpc--> virtual network vpc-c900-prod
-      --> prefix ['10.200.0.0/16'] --> cloud segment c900-demo-subnet-p 10.200.1.0/24
-      --> service endpoint vpce-c900-s3 (route, provider P004)
-      --> instance c900-app-euc1-1 10.200.1.11/24
-
-      BGP process dc90-leaf-01-bgp (AS4200090002)
-      --peering BGP-DC90-LEAF01-EDGE01 (overlay)--> BGP process dc90-edge-01-bgp (AS4200090001)
-      --handoff peering BGP-DC90-EDGE01-AWS-DX-PRIV (regular) via dc90-edge-01:Ethernet1/3.1100-->
-      --session circuit SC-C900-AWS-DX-PRIV (handoff): ends ['dc90-edge-01:Ethernet1/3.1100', 'dx-c900-fra-lag:lag1.1100']
-      --> private peering lag1.1100 (provider 10.255.128.3/31 AS64512) --> cloud gateway edge vgw-c900-euc1 --attachment vgwa-c900-vpc--> virtual network vpc-c900-prod
-      --> prefix ['10.200.0.0/16'] --> cloud segment c900-demo-subnet-p 10.200.1.0/24
-      --> service endpoint vpce-c900-s3 (route, provider P004)
-      --> instance c900-app-euc1-1 10.200.1.11/24
-
-      BGP process dc90-leaf-01-bgp (AS4200090002)
-      --peering BGP-DC90-LEAF01-EDGE01 (overlay)--> BGP process dc90-edge-01-bgp (AS4200090001)
-      --handoff peering BGP-DC90-EDGE01-AWS-VPN-1 (regular) via dc90-edge-01:Tunnel1-->
-      --session circuit SC-C900-AWS-VPN-1 (vpn): ends ['dc90-edge-01:Tunnel1', 'vpn-c900-aws-euc1:Tunnel1']
-      --> private peering Tunnel1 (provider 169.254.10.1/30 AS64512) --> transport VPN vpn-c900-aws-euc1 --> cloud gateway hub tgw-c900-euc1 --attachment tgwa-c900-vpc--> virtual network vpc-c900-prod
-      --> prefix ['10.200.0.0/16'] --> cloud segment c900-demo-subnet-p 10.200.1.0/24
-      --> service endpoint vpce-c900-s3 (route, provider P004)
-      --> instance c900-app-euc1-1 10.200.1.11/24
-
-      BGP process dc90-leaf-01-bgp (AS4200090002)
-      --peering BGP-DC90-LEAF01-EDGE01 (overlay)--> BGP process dc90-edge-01-bgp (AS4200090001)
-      --handoff peering BGP-DC90-EDGE01-AWS-VPN-2 (regular) via dc90-edge-01:Tunnel2-->
-      --session circuit SC-C900-AWS-VPN-2 (vpn): ends ['dc90-edge-01:Tunnel2', 'vpn-c900-aws-euc1:Tunnel2']
-      --> private peering Tunnel2 (provider 169.254.10.5/30 AS64512) --> transport VPN vpn-c900-aws-euc1 --> cloud gateway hub tgw-c900-euc1 --attachment tgwa-c900-vpc--> virtual network vpc-c900-prod
-      --> prefix ['10.200.0.0/16'] --> cloud segment c900-demo-subnet-p 10.200.1.0/24
-      --> service endpoint vpce-c900-s3 (route, provider P004)
-      --> instance c900-app-euc1-1 10.200.1.11/24
-
-=== peering interfaces (the common cloud interface, every operator)
-  Tunnel1 [private, bgp] vlan None tunnel 1 parent None mtu 1436 bfd False key None  (c900-aws-prod)
-      provider 169.254.10.1/30 AS64512 endpoint 203.0.113.50/32 ipsec profile IPSEC-AES256-SHA256-DH14 tunnel key c900-aws-vpn-t1-key   advertised []
-      interface of VPNConnection vpn-c900-aws-euc1 customer gateway cgw-c900-dc90 (198.51.100.10/32 AS4200090001)
-      lands: transport VPN vpn-c900-aws-euc1 --> cloud gateway hub tgw-c900-euc1 --attachment tgwa-c900-vpc--> virtual network vpc-c900-prod
-  Tunnel1 [saas, static] vlan None tunnel 1 parent None mtu 9000 bfd False key None  (owner Cloud Demo GmbH)
-      provider None ASNone endpoint 203.0.113.80/32 gre profile None tunnel key None   advertised []
-      interface of VPNConnection zscaler-c900-muc (SaaS region ZSCALER-MUNICH I)
-      lands: (no virtual network: SaaS)
-  Tunnel2 [private, bgp] vlan None tunnel 2 parent None mtu 1436 bfd False key None  (c900-aws-prod)
-      provider 169.254.10.5/30 AS64512 endpoint 203.0.113.51/32 ipsec profile IPSEC-AES256-SHA256-DH14 tunnel key c900-aws-vpn-t2-key   advertised []
-      interface of VPNConnection vpn-c900-aws-euc1 customer gateway cgw-c900-dc90 (198.51.100.10/32 AS4200090001)
-      lands: transport VPN vpn-c900-aws-euc1 --> cloud gateway hub tgw-c900-euc1 --attachment tgwa-c900-vpc--> virtual network vpc-c900-prod
-  er-c900-weu-pri [private, bgp] vlan 200 tunnel None parent msee-pri mtu 1500 bfd True key None  (c900-azure-prod)
-      provider 10.255.128.10/30 AS12076   advertised []
-      interface of DirectConnect er-c900-weu logical service_key 11111111-2222-3333-4444-555555555555 partner None rides_on None
-      lands: cloud gateway edge ergw-c900-weu --attachment ergwa-c900-weu--> virtual network vnet-c900-weu (peered with vnet-c900-weu-spoke)
-  er-c900-weu-sec [private, bgp] vlan 200 tunnel None parent msee-sec mtu 1500 bfd True key None  (c900-azure-prod)
-      provider 10.255.128.14/30 AS12076   advertised []
-      interface of DirectConnect er-c900-weu logical service_key 11111111-2222-3333-4444-555555555555 partner None rides_on None
-      lands: cloud gateway edge ergw-c900-weu --attachment ergwa-c900-weu--> virtual network vnet-c900-weu (peered with vnet-c900-weu-spoke)
-  gcp-c900-ded-1 [private, bgp] vlan None tunnel None parent ic-dedicated-port mtu 1500 bfd True key None  (c900-gcp-prod)
-      provider 169.254.30.1/29 AS16550   advertised []
-      interface of DirectConnect ic-ded-c900-fra physical service_key None partner None rides_on None
-      lands: cloud gateway edge cr-c900-euw3 --attachment cra-c900-euw3--> virtual network vpc-c900-gcp
-  gcp-c900-vlan-att-1 [private, bgp] vlan 400 tunnel None parent ic-port-1 mtu 1460 bfd True key None  (c900-gcp-prod)
-      provider 169.254.20.1/29 AS16550   advertised []
-      interface of DirectConnect ic-c900-fra-1 logical service_key None partner partner-fabric-gcp rides_on None
-      lands: cloud gateway edge cr-c900-euw3 --attachment cra-c900-euw3--> virtual network vpc-c900-gcp
-  lag1.1000 [private, bgp] vlan 1000 tunnel None parent lag1 mtu 8500 bfd True key c900-aws-dx-bgp-key  (c900-aws-prod)
-      provider 10.255.128.1/31 AS64512   advertised []
-      interface of DirectConnect dx-c900-fra-lag physical service_key None partner None rides_on None
-      lands: cloud gateway edge dxgw-c900 --attachment tgwa-c900-dxgw (allowed 10.200.0.0/16)--> cloud gateway hub tgw-c900-euc1 --attachment tgwa-c900-vpc--> virtual network vpc-c900-prod
-  lag1.1100 [private, bgp] vlan 1100 tunnel None parent lag1 mtu 9001 bfd True key c900-aws-dx-bgp-key  (c900-aws-prod)
-      provider 10.255.128.3/31 AS64512   advertised []
-      interface of DirectConnect dx-c900-fra-lag physical service_key None partner None rides_on None
-      lands: cloud gateway edge vgw-c900-euc1 --attachment vgwa-c900-vpc--> virtual network vpc-c900-prod
-  webex-c900-fra [saas, bgp] vlan 300 tunnel None parent wbx-port-1 mtu 9000 bfd False key c900-webex-bgp-key  (owner Cloud Demo GmbH)
-      provider 10.255.128.7/31 AS13445   advertised []
-      interface of DirectConnect webex-c900-fra-xc physical service_key None partner None rides_on None (SaaS region WEBEX-FRANKFURT)
-      lands: (no virtual network: SaaS)
-```
+Wynik (równy koszt, `kind:hfid`) jest w plikach wzorcowych `tests/traversal/golden/full_topology__*.txt`, np. L1 do DX:
+segment -> `dc90-leaf-01/Ethernet1/1` -> kabel -> panel (front, tylna) -> kabel -> `dc90-edge-01/Ethernet1/13` -> urządzenie ->
+port z nośnikiem `XC-DC90-AWS-DX1` -> `dx-c900-fra-lag/dxcon-1a` -> pakiet `lag1` -> `lag1.1100` -> brama -> załącznik ->
+sieć wirtualna -> segment chmurowy. Tunele VPN i SaaS-owy tunel Zscaler istnieją tylko w L3 (obwód sesji), ich nośnik
+internetowy sprawdza przypadek `internet` i wiersz o interfejsach tuneli.
 
 ## Pod, internet przez ISP i dodatkowe pary
 

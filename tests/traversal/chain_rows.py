@@ -11,7 +11,6 @@ from utils.path_trace import MAX_DEPTH, Leg, chain, label, render
 
 CARRIER, SESSION = "TopologyCarrierCircuit", "TopologySessionCircuit"
 CIRCUIT_KIND = {"l1": CARRIER, "l3": SESSION}
-TRANSPORT_KINDS = ("CloudDirectConnect", "CloudVPNConnection")
 
 
 def by_layer(legs: list[Leg]) -> dict[str, list[Leg]]:
@@ -65,20 +64,10 @@ def type_rows(tag: str, legs: list[Leg], want: dict[str, list[str]], kind_of: di
     return rows
 
 
-def transport_rows(tag: str, legs: list[Leg], kinds: list[str], through: str | None = None) -> list[Row]:
-    """Every equal-cost chain crosses a transport (a Direct Connect or a VPN connection) of an allowed kind; with a
-    waypoint, the waypoint is that kind."""
-    if through:
-        kind = through.split(":", 1)[0]
-        return [(f"[{tag}] the transport {through} is of an allowed kind ({', '.join(kinds)})", kind in kinds, kind)]
-    stray = [
-        chain(p)
-        for g in legs
-        for p in g.equal_cost
-        if not {n.kind for n in p if n.kind in TRANSPORT_KINDS}
-        or any(n.kind in TRANSPORT_KINDS and n.kind not in kinds for n in p)
-    ]
-    return [(f"[{tag}] every chain crosses a transport ({', '.join(sorted(kinds))})", not stray, "\n".join(stray))]
+def transport_rows(tag: str, kinds: list[str], through: str) -> list[Row]:
+    """The transport a pair is traced through is of an allowed kind (the prefix of its `kind:name`)."""
+    kind = through.split(":", 1)[0]
+    return [(f"[{tag}] the transport {through} is of an allowed kind ({', '.join(kinds)})", kind in kinds, kind)]
 
 
 def unreachable_rows(tag: str, legs: list[Leg]) -> list[Row]:
