@@ -1,4 +1,3 @@
----
 # THE INTERNET (one passive object with one shared interface, bootstrap data: data/bootstrap/03b_internet.yml) and the
 # L1 that meets on it. Our edge port -> internet carrier -> ISP router; the ISP router's uplink -> internet carrier ->
 # the interface of INTERNET; the public side of a SaaS region and of a cloud region -> internet carrier -> the same
