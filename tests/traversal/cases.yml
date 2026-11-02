@@ -8,8 +8,12 @@ cases:
     # this file) loads it in one `infrahubctl object load` run and then adds the VLAN-domain row of dc90-leaf-02
     data:
       - data/demos/00_full_topology
-    # python module with `load(client, branch) -> dict` and `main_walk(d, dc, cloud, quiet) -> dict`
-    tracer: utils/path_trace.py
+    # every object kind of the bulk read (tests/traversal/graph_read.py QUERIES keys) that must not be empty
+    non_empty:
+      [seg, iface, front, rear, carrier, session, vif, lag, dx, peer, vpn, gw, att, sep, vnet, csg, inst, bgp,
+       peering, dev, mlag, vrf, prefix]
+    # what the chains do not show (peering scope, AS numbers, allowed prefixes, transport interfaces), sorted
+    inventory_golden: full_topology__inventory.txt
     # a transport port or LAG lists its peerings in `sub_interfaces` (DcimSubInterface, the marker shared with VIFs)
     transport_sub_interfaces: true
     # the pod DC90-9-POD-1 (leaves, spine) in front of the edge: server (bond0) -> vPC leaf pair -> spine -> border
@@ -29,6 +33,7 @@ cases:
         dc90-bl-02: DC90
         dc90-edge-01: DC90
       # 4 = 2 leaves x 1 spine x 2 border leaves; +1 = the direct uplink leaf-01 -> panel -> edge of the base sample
+      # distinct device chains the server returns server -> edge that climb the tiers
       l1_paths_to_edge: 5
       l1_paths_via_spine: 4
     # THE INTERNET: one object under the label "Internet" with one shared interface; two ISPs and the public side of a
@@ -39,7 +44,7 @@ cases:
       label: Internet
       bus: bus
       namespace: INTERNET
-      golden: full_topology__internet.txt
+      golden: full_topology__internet.txt  # the L1 chains edge port -> public side port, through each ISP
       isps:
         - {isp_device: EXT-ISP-DEMO-PE1, access_port: Ethernet1/2, access_carrier: INET-DC90-ISP-DEMO, uplink_carrier: UPL-ISP-DEMO}  # yamllint disable-line rule:line-length
         - {isp_device: EXT-ISP-DEMO-B-PE1, access_port: Ethernet1/1, access_carrier: INET-DC90-ISP-DEMO-B, uplink_carrier: UPL-ISP-DEMO-B}  # yamllint disable-line rule:line-length
@@ -48,67 +53,49 @@ cases:
         - {endpoint: webex-public, prefix: 203.0.113.0/24, kind: saas, transport: webex-c900-fra-pub, port: pub-1, carrier: PUB-WEBEX-FRA}  # yamllint disable-line rule:line-length
       # L3 of the first ISP: the eBGP session on the two physical ports of the access carrier
       l3: {isp_device: EXT-ISP-DEMO-PE1, edge_port: Ethernet1/2, isp_port: et-0/0/0}
+    # A pair names its ends as `kind:name` (or `kind:hfid`, parts joined by `/`) and is traced by the server
+    # (utils/path_trace.py): the plain trace must reach the target in L1 and L3 with a COMPLETE equal-cost set, the
+    # reverse direction gives the same chains, and `through` lists each transport the target must also be reached
+    # through (a `--via` trace each) with the circuit types on its chains: carriers in l1, session circuits in l3.
     pairs:
-      - dc_segment: c900-demo-web-p
-        cloud_segment: c900-demo-subnet-p
+      - src: ManagedVxlanSegment:c900-demo-web-p
+        dst: CloudNetworkSegment:c900-demo-subnet-p
         golden: full_topology__c900-demo-web-p__c900-demo-subnet-p.txt
-        # legs per carrier type (L1) and per session circuit type (L3, a session circuit counted once)
-        l1_legs:
-          internet: 2
-          cross_connect: 4
-        l3_legs:
-          handoff: 2
-          vpn: 2
-        # the device kinds a circuit may end on (the transport of the cloud side)
+        through:
+          CloudDirectConnect:dx-c900-fra-lag: {l1: [cross_connect], l3: [handoff]}
+          CloudVPNConnection:vpn-c900-aws-euc1: {l1: [internet], l3: [vpn]}
+        # the kinds of the transport a chain crosses
         far_end_kinds: [CloudDirectConnect, CloudVPNConnection]
-        # what a transport holds as its own interfaces (keys of the tracer's `transports`): ports, LAG, VIFs
+        # what a transport holds as its own interfaces: ports, LAG, VIFs
         transport_kinds:
           dx-c900-fra-lag: [port, lag, vif]
           vpn-c900-aws-euc1: [vif]
-        # the graph kinds (keys of the tracer's `load`) that must not be empty
-        non_empty:
-          [seg, iface, front, rear, carrier, session, vif, lag, dx, peer, vpn, gw, att, sep, vnet, csg, inst, bgp,
-           peering, dev, mlag, vrf, prefix]
-      # DC -> cloud through the AWS VPN tunnels only: the internet carrier and the two tunnels, no handoff leg
-      - dc_segment: c900-demo-web-p
-        cloud_segment: c900-demo-subnet-p
-        via: [CloudVPNConnection]
-        golden: full_topology__web__subnet__vpn-only.txt
-        l1_legs: {internet: 2}
-        l3_legs: {vpn: 2}
-        far_end_kinds: [CloudVPNConnection]
-        transport_kinds:
-          vpn-c900-aws-euc1: [vif]
       # DC -> SaaS over a private cross-connect and a BGP handoff (Webex)
-      - dc_segment: c900-demo-web-p
-        saas_region: WEBEX-FRANKFURT
+      - src: ManagedVxlanSegment:c900-demo-web-p
+        dst: TopologySaasRegion:WEBEX-FRANKFURT
         golden: full_topology__web__saas-webex.txt
-        l1_legs: {cross_connect: 1}
-        l3_legs: {handoff: 1}
+        through:
+          CloudDirectConnect:webex-c900-fra-xc: {l1: [cross_connect], l3: [handoff]}
         far_end_kinds: [CloudDirectConnect]
         transport_kinds:
           webex-c900-fra-xc: [port, vif]
       # DC -> SaaS over a tunnel on the internet carrier, no session (Zscaler)
-      - dc_segment: c900-demo-web-p
-        saas_region: ZSCALER-MUNICH I
+      - src: ManagedVxlanSegment:c900-demo-web-p
+        dst: TopologySaasRegion:ZSCALER-MUNICH I
         golden: full_topology__web__saas-zscaler.txt
-        l1_legs: {internet: 1}
-        l3_legs: {tunnel: 1}
+        through:
+          CloudVPNConnection:zscaler-c900-muc: {l1: [internet], l3: [tunnel]}
         far_end_kinds: [CloudVPNConnection]
         transport_kinds:
           zscaler-c900-muc: [vif]
       # cloud <-> cloud: the spoke VNet has no gateway of its own, the DC reaches it across `peers` of the hub VNet
-      - dc_segment: c900-demo-web-p
-        cloud_segment: c900-demo-spoke-p
+      - src: ManagedVxlanSegment:c900-demo-web-p
+        dst: CloudNetworkSegment:c900-demo-spoke-p
         golden: full_topology__web__spoke.txt
-        reverse: false
-        l1_legs: {virtual_connection: 2}
-        l3_legs: {handoff: 2}
+        through:
+          CloudDirectConnect:er-c900-weu: {l1: [virtual_connection], l3: [handoff]}
         far_end_kinds: [CloudDirectConnect]
-      # negative: a segment in a VPC with no attachment is reached by nothing, and the walk says exactly that
-      - dc_segment: c900-demo-web-p
-        cloud_segment: c900-demo-isolated-p
+      # negative: a segment in a VPC with no attachment is reached by nothing: a complete empty result in both layers
+      - src: ManagedVxlanSegment:c900-demo-web-p
+        dst: CloudNetworkSegment:c900-demo-isolated-p
         expect_unreachable: true
-        expect_missing:
-          - "L1: no physical path found"
-          - "L3: no routed path found"

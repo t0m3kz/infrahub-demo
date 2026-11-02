@@ -183,15 +183,15 @@ Dwa wejścia, te same asercje (`tests/traversal/check_model.py`, przypadek `full
 (jednorazowa gałąź `tv-*`, nic na `main`) i `uv run invoke test-integration-fast` (test_01 + test_02 + `test_03_full_topology.py`:
 ładuje próbkę na `main` stosu i uruchamia te asercje; po nim stos z próbką zostaje, gdy `INFRAHUB_TESTING_KEEP_STACK=1`).
 
-`uv run invoke check-model` ładuje schemat i te dane (`tests/traversal/load_topology.py`) na jednorazową gałąź, uruchamia `utils/path_trace.py` jako bibliotekę
-(`main_walk(..., quiet=True)` zwraca listy przeskoków L1 i L3) i sprawdza asercje oraz pliki wzorcowe, w kilka minut.
+`uv run invoke check-model` ładuje schemat i te dane (`tests/traversal/load_topology.py`) na jednorazową gałąź, pyta serwer o ścieżki (`utils/path_trace.py`, `traverse_paths`, łańcuchy `rodzaj:hfid`) i sprawdza asercje oraz pliki wzorcowe, w kilka minut.
 Opis: `tests/traversal/README.md`.
 
-Asercje na parę segmentów: wszystkie rodzaje obiektów niepuste (także `lag`), żaden przeskok nie jest oznaczony jako
-brakujący (m.in. każdy obwód jest wymieniony w `capabilities` interfejsów, na których się kończy), L1 i L3 docierają do
-segmentu chmurowego, liczba nóg wg typu obwodu, każdy obwód nośnika i sesji kończy się na interfejsie transportu
-(`CloudDirectConnect` albo `CloudVPNConnection`), transport `dx-c900-fra-lag` trzyma port, pakiet i VIF, kierunek
-odwrotny i plik wzorcowy.
+Asercje na parę (końce `src` i `dst`, `through` = transporty, przez które cel ma być osiągalny): L1 i L3 docierają do
+celu, zbiór ścieżek równego kosztu jest kompletny, każdy łańcuch przechodzi przez transport (`CloudDirectConnect` albo
+`CloudVPNConnection`), typy obwodów na łańcuchach każdego transportu (nośniki w L1, obwody sesji w L3), transport
+`dx-c900-fra-lag` trzyma port, pakiet i VIF, kierunek odwrotny i plik wzorcowy (posortowane łańcuchy). Para ujemna daje
+kompletny pusty wynik. Wszystkie rodzaje obiektów niepuste (także `lag`) i inwentarz (zakres peeringów, AS, dozwolone
+prefiksy) w osobnym pliku wzorcowym.
 
 ## Przejście po grafie
 
@@ -210,21 +210,15 @@ odwrotny i plik wzorcowy.
 
 ```bash
 INFRAHUB_ADDRESS=http://localhost:8100 INFRAHUB_API_TOKEN=06438eb2-8019-4776-878c-0941b1f1d1ec \
-  uv run python utils/path_trace.py segment:c900-demo-web-p segment:c900-demo-subnet-p --full
+  uv run python utils/path_trace.py ManagedVxlanSegment:c900-demo-web-p CloudNetworkSegment:c900-demo-subnet-p [--layer l1|l3|both] [--max-paths 64] [--via <węzeł>]
 ```
 
-Ścieżka między dowolną parą węzłów: `uv run python utils/path_trace.py <src> <dst> [--layer l1|l3|both] [--via <węzeł>]`.
-Węzeł to `kind:nazwa` (`segment:`, `iface:dev:port`, `transport:`, `vnet:`, `gateway:`, `attachment:`, `endpoint:`,
-`saas:`, `instance:`, `circuit:`, `panel:`, `server:`, `isp:`, `internet`) albo sama nazwa; `--full` dodaje raport
-segment DC -> segment w chmurze.
-
-`utils/path_trace.py` czyta graf hurtowo (po jednym zapytaniu GraphQL na rodzaj) i idzie po nim w pamięci, od końców obwodów do
-peeringu, bramy, załączników (i `allowed_prefixes`), huba, sieci wirtualnej (z `peers`) i segmentu chmurowego, z punktem
-usługi segmentu. Trzy sekcje: L1 (fizyka), L3 (routing) i
-lista wszystkich peeringów z miejscem lądowania (także Azure, GCP, SaaS, które nie dochodzą do segmentu AWS).
-Obwód jest znajdowany od NASZEGO interfejsu przez jego `capabilities`; jego drugi koniec to interfejs transportu
-(`device` = `CloudDirectConnect` albo `CloudVPNConnection`). Tunele VPN są łączone z nośnikiem internetowym przez
-`parent_interface` interfejsu `Tunnel<n>` (port `Ethernet1/2`).
+Węzeł to `rodzaj:hfid` (części HFID złączone `/`, tylko ostatnia może mieć `/`: `DcimPhysicalInterface:eg-fr201/Ethernet1/13`),
+`rodzaj:nazwa` albo sama nazwa (odmowa, gdy niejednoznaczna; przy braku trafienia podpowiedzi). `--via X` to dwa
+niezależne śledzenia, src -> X i X -> dst. Narzędzie nie czyta grafu: jedno `traverse_paths` serwera na warstwę, z listą
+rodzajów, które ścieżka może przekroczyć (tabela na górze pliku); wypisuje zbiór ścieżek równego kosztu (ECMP), potem dłuższe
+alternatywy. Limity serwera: głębokość 30, `max_paths` 1..100, budżet na wywołanie (gdy wyszukiwanie w przód wyczerpie
+budżet, powtarza się od celu). Kod wyjścia 1, gdy któraś noga nie ma ścieżki.
 Wynik z instancji 8100:
 
 ```text

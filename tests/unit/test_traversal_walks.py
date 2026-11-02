@@ -1,8 +1,10 @@
-"""The pod, internet and rides_on walks of the traversal check, on a canned graph (no server)."""
+"""The pod, transport, inventory and rides_on assertions of the traversal check, on a canned graph (no server)."""
 
 from __future__ import annotations
 
 from typing import Any
+
+from infrahub_sdk.graph_traversal import PathNode
 
 from tests.traversal import walks
 
@@ -171,15 +173,8 @@ def _failed(rows: list) -> list[str]:
 
 
 def test_the_pod_passes_on_the_full_graph() -> None:
-    """MLAG, dual-homed bond, equal VLAN rows, 5 paths (4 via the spine), overlay from both leaves."""
+    """MLAG, dual-homed bond, equal VLAN rows."""
     assert _failed(walks.pod_rows(_graph(), CFG)) == []
-
-
-def test_cable_links_follow_a_cable_through_a_patch_panel() -> None:
-    """b1:e1 -> front 2 | rear 2 -> edge:e14 is one link with both cables."""
-    links = walks.cable_links(_graph())
-    panel = [x for x in links if {x["a"][0], x["b"][0]} == {"b1", "edge"}]
-    assert len(panel) == 1 and len(panel[0]["cables"]) == 2
 
 
 def test_a_different_vlan_row_on_the_peers_fails() -> None:
@@ -194,27 +189,11 @@ def test_an_mlag_with_a_wrong_member_fails() -> None:
     assert failed == ["pod: one MLAG over the two leaves, peer_devices equal"]
 
 
-def test_a_missing_uplink_changes_the_path_count() -> None:
-    """Without the cable spine - border leaf 2 there are 3 paths via the spine and the walk fails."""
-    cables = [c for c in CABLES if (c[0], c[2]) != ("sp", "b2")]
-    failed = _failed(walks.pod_rows(_graph(cables=cables), CFG))
-    assert any(name.startswith("pod: 5 L1 paths") for name in failed)
-
-
 def test_a_leaf_without_the_port_channel_on_the_segment_fails() -> None:
     """The dual-homing row needs the segment on both port-channels."""
     d = _graph()
     d["lag"][0]["segments"] = _edges()
     assert any("dual-homed" in name for name in _failed(walks.pod_rows(d, CFG)))
-
-
-def test_paths_only_climb_the_tiers() -> None:
-    """A path never goes down again: leaf-02 > spine > leaf-01 is no path to the edge."""
-    tier = {n: walks.TIER[r] for n, r in ROLE.items()}
-    chains = [
-        walks._devices(p, LEAVES[1]) for p in walks.device_paths(walks.cable_links(_graph()), LEAVES[1], "edge", tier)
-    ]
-    assert all(LEAVES[0] not in chain for chain in chains) and len(chains) == 2
 
 
 def test_rides_on_rows_flag_a_lost_edge() -> None:
@@ -262,3 +241,60 @@ def test_a_leaf_deployed_to_the_dc_instead_of_the_pod_fails() -> None:
     cfg = {**CFG, "deployed_to": {LEAVES[0]: "POD", "b1": "DC"}}
     failed = _failed(walks.pod_rows(_placed({LEAVES[0]: "DC", "b1": "DC"}), cfg))
     assert any("deployed to the pod" in name for name in failed)
+
+
+def _node_of(kind: str, name: str) -> PathNode:
+    return PathNode(id=name, kind=kind, label=kind, display_label=name, hfid=[name])
+
+
+def _chain(*devices: str) -> list[PathNode]:
+    """A server-returned chain: a port between the devices, as the tracer shows it."""
+    nodes: list[PathNode] = []
+    for dev in devices:
+        nodes += [_node_of("DcimPhysicalDevice", dev), _node_of("DcimPhysicalInterface", dev + "/e1")]
+    return nodes
+
+
+def test_climbing_keeps_the_rising_device_sequences_once() -> None:
+    """Parallel chains over one device sequence count once; a detour through the peer link or down is no path."""
+    chains = [
+        _chain("srv", LEAVES[0], "edge"),
+        _chain("srv", LEAVES[0], "edge"),
+        _chain("srv", LEAVES[0], "sp", "b1", "edge"),
+        _chain("srv", LEAVES[1], LEAVES[0], "edge"),
+        _chain("srv", LEAVES[0], "sp", LEAVES[1], "sp", "b1", "edge"),
+    ]
+    assert walks.climbing(chains, ROLE) == [("srv", LEAVES[0], "edge"), ("srv", LEAVES[0], "sp", "b1", "edge")]
+
+
+def test_the_pod_paths_pass_on_the_expected_chains() -> None:
+    """5 L1 chains (4 via leaf, spine, border leaf) and the second leaf only through the spine in L3."""
+    l1 = [_chain("srv", LEAVES[0], "edge")] + [
+        _chain("srv", leaf, "sp", b, "edge") for leaf in LEAVES for b in ("b1", "b2")
+    ]
+    l3 = {
+        LEAVES[0]: [_chain(LEAVES[0], "edge")],
+        LEAVES[1]: [_chain(LEAVES[1], "sp", b, "edge") for b in ("b1", "b2")],
+    }
+    assert _failed(walks.pod_path_rows(CFG, ROLE, l1, l3)) == []
+
+
+def test_a_missing_uplink_changes_the_chain_count() -> None:
+    """Without the chains through border leaf 2 the L1 count and the second leaf's L3 fail."""
+    l1 = [_chain("srv", LEAVES[0], "edge")] + [_chain("srv", leaf, "sp", "b1", "edge") for leaf in LEAVES]
+    l3 = {LEAVES[0]: [_chain(LEAVES[0], "edge")], LEAVES[1]: [_chain(LEAVES[1], "sp", "b1", "edge")]}
+    assert len(_failed(walks.pod_path_rows(CFG, ROLE, l1, l3))) == 2
+
+
+def test_transport_rows_need_the_interfaces_of_the_transport() -> None:
+    """A transport holds the kinds listed: a port of its own device passes, a LAG it lacks fails."""
+    port = {"name": _v("p1"), "device": _node(name=_v("dx"))}
+    d = {"iface": [port], "lag": [], "vif": []}
+    assert walks.transport_rows(d, "t", {"dx": ["port"]})[0][1] is True
+    assert walks.transport_rows(d, "t", {"dx": ["port", "lag"]})[0][1] is False
+
+
+def test_inventory_rows_flag_an_empty_kind() -> None:
+    """A kind that came back empty is a failed row."""
+    assert walks.inventory_rows({"a": [1], "b": []}, ["a", "b"])[0][1] is False
+    assert walks.inventory_rows({"a": [1]}, ["a"])[0][1] is True

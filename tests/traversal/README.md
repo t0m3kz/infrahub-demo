@@ -19,14 +19,15 @@ na tej gałęzi (odmowy serwera są wypisane dosłownie); (4) `infrahubctl objec
 (5) dla każdej pary segmentów: odczyt grafu, przejście L1 i L3, asercje, porównanie z plikiem wzorcowym; (6) usunięcie
 gałęzi (także po błędzie) i czas całkowity. Nic nie jest zapisywane na `main`.
 
-Asercje na parę: wszystkie rodzaje obiektów modelu niepuste, żaden przeskok oznaczony jako brakujący (także obwód, którego
-koniec nie wymienia go w swoich `capabilities`), każdy odcinek zaczyna się od obwodu znalezionego z NASZEGO interfejsu przez
-`capabilities`, każdy obwód kończy się na interfejsie transportu (`far_end_kinds`: `CloudDirectConnect`,
-`CloudVPNConnection`), transport trzyma wymagane rodzaje interfejsów (`transport_kinds`: porty, pakiet, VIF), L1 i L3
-docierają do segmentu chmurowego, liczba nóg wg typu obwodu (`l1_legs`, `l3_legs` w `cases.yml`), kierunek odwrotny (peeringi
-lądujące w sieci wirtualnej segmentu chmurowego = te, do których dochodzi segment DC), zgodność z plikiem wzorcowym
-(posortowane listy przeskoków, więc kolejność odpowiedzi API nie ma znaczenia). Przy błędzie tabela PASS/FAIL podaje
-przeskok, który się urwał, albo różnicę względem wzorca.
+Ścieżki są serwera (`utils/path_trace.py`, `traverse_paths`): para w `cases.yml` podaje końce jako `rodzaj:nazwa`
+(`src`, `dst`) i, gdy cel ma być osiągalny przez konkretny transport, `through` (jedno śledzenie `--via` na transport).
+Asercje na parę: L1 i L3 docierają do celu, zbiór ścieżek równego kosztu (ECMP, minimalna głębokość) jest kompletny
+(limit `max_paths` 100 powyżej jego rozmiaru, budżet serwera nie obcięty), każdy łańcuch przechodzi przez transport
+dozwolonego rodzaju (`far_end_kinds`), typy obwodów na łańcuchach transportu (`through`: nośniki w L1, obwody sesji w L3;
+nośnik nazywa jego `circuit_id`), kierunek odwrotny daje te same łańcuchy, transport trzyma wymagane interfejsy
+(`transport_kinds`), zgodność z plikiem wzorcowym (posortowane łańcuchy `rodzaj:hfid`). Para ujemna (`expect_unreachable`):
+kompletny pusty wynik w obu warstwach z dokładnym komunikatem serwerowego wyszukiwania. Przy błędzie tabela PASS/FAIL
+podaje wynik tracera albo różnicę względem wzorca.
 
 ## Katalogi danych, pod, internet, pary
 
@@ -35,17 +36,14 @@ przeskok, który się urwał, albo różnicę względem wzorca.
 segment-sentinel jest już na gałęzi, np. odziedziczony z `main` po `test_03`) i wykonuje krok po ładowaniu (wiersz VLAN
 drugiego liścia). Te same asercje uruchamia `tests/integration/test_03_full_topology.py` na `main` stosu
 (`assert_case` z `check_model.py`, część `invoke test-integration-fast`). Klucze przypadku: `pod` (MLAG, bond
-dwunogi, wdrożenie liści i spine do pod, border leaves do DC, wiersze VLAN, liczba ścieżek L1 serwer -> krawędź, overlay z obu liści), `internet` (INTERNET: jeden obiekt pod etykietą Internet z jednym interfejsem, dwa ISP i strony publiczne SaaS i chmury przyłączone do niego; L1 z krawędzi przez każdy ISP i INTERNET do strony publicznej, plik wzorcowy `full_topology__internet.txt`; L1 do routera ISP, L3
+dwunogi, wdrożenie liści i spine do pod, border leaves do DC, wiersze VLAN z odczytu danych; liczba łańcuchów L1 serwer -> krawędź i overlay L3 z obu liści z łańcuchów serwera), `internet` (INTERNET: jeden obiekt pod etykietą Internet z jednym interfejsem, dwa ISP i strony publiczne SaaS i chmury przyłączone do niego; L1 z portu krawędzi przez każdy ISP i INTERNET do portu strony publicznej: jeden łańcuch, trzy nośniki po `circuit_id`; plik wzorcowy `full_topology__internet.txt`; L1 do routera ISP, L3
 przez przestrzeń INTERNET, brak tunelu), `transport_sub_interfaces` (port i pakiet transportu widzą swoje peeringi w
-`sub_interfaces`); asercje w `tests/traversal/walks.py` (z testami jednostkowymi). Klucze pary: `cloud_segment` albo
-`saas_region`, `via` (tylko transporty tych rodzajów), `reverse: false`, `expect_unreachable` + `expect_missing`
-(para ujemna). Nogi L3 liczy się raz na obwód sesji (każdy liść pary MLAG je widzi).
+`sub_interfaces`); odczyty danych w `tests/traversal/walks.py` (czytają `d` z `graph_read.py`, bez szukania ścieżek), ocena łańcuchów w `tests/traversal/chain_rows.py` (z testami jednostkowymi). `inventory_golden` to to, czego łańcuchy nie pokazują: interfejsy peeringu (zakres, AS peera, ogłaszane prefiksy), bramy z AS, dozwolone prefiksy załączników, interfejsy transportów. Klucze pary: `src`, `dst`, `through`,
+`far_end_kinds`, `transport_kinds`, `expect_unreachable`.
 
 ## Nowy przypadek
 
-Dopisz wpis do `cases.yml`: katalog schematu, katalogi danych (kolejno), obiekt `sentinel` (rodzaj i nazwa obiektu,
-który istnieje tylko po załadowaniu danych), moduł z funkcjami `load(client, branch)` i
-`main_walk(d, dc, cloud, quiet)` oraz pary segmentów z oczekiwaniami. Tym samym mechanizmem można testować topologię
+Dopisz wpis do `cases.yml`: katalog schematu, katalogi danych (kolejno), pary `src`/`dst` z oczekiwaniami (`through`, `far_end_kinds`). Tym samym mechanizmem można testować topologię
 główną projektu.
 
 ## Ograniczenia

@@ -1,34 +1,22 @@
-"""Walks of the traversal check that are not a segment-to-cloud pair: the pod in front of the edge, the internet scenario
-through an ISP, and the `rides_on` guard. Each takes the graph `d` read by the tracer (a dict of node lists per kind)
-and returns rows `(name, ok, detail)` for the report. Pure: no server, no print.
+"""Data assertions of the traversal check that need attribute reads: the pod's MLAG, bond and VLAN rows, the INTERNET
+object, the transports' interfaces, the `rides_on` guard and the inventory. Each takes the graph `d` read by
+`tests/traversal/graph_read.py` (a dict of node lists per kind) and returns rows `(name, ok, detail)` for the report.
+Pure: no server, no print. No path is searched here: paths are the server's, through `utils/path_trace.py`, and the
+rows that judge them are `tests/traversal/chain_rows.py`.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
 import yaml
 
+from tests.traversal.graph_read import rel, val
 from tests.unit.demo_yaml_helpers import walk_objects
 
 Row = tuple[str, bool, str]
 TRANSPORT_KIND = "CloudDirectConnect"
-PANEL_KINDS = ("DcimFrontPatchPanelPort", "DcimRearPatchPanelPort")
-# a fabric path only goes up: a server, a leaf, a spine, a border leaf, the edge (a hop may skip a tier, never go down)
-TIER = {"endpoint": 0, "leaf": 1, "spine": 2, "border-leaf": 3, "edge": 4}
-
-
-def rel(d: dict, key: str) -> list[dict]:
-    value = d.get(key) or {}
-    if "edges" in value:
-        return [e["node"] for e in value["edges"]]
-    return [value["node"]] if value.get("node") else []
-
-
-def val(d: dict, key: str) -> Any:
-    return (d.get(key) or {}).get("value")
 
 
 def _dev(node: dict) -> str | None:
@@ -81,82 +69,24 @@ def rides_on_rows(d: dict, declared: dict[str, str]) -> list[Row]:
     return [("every rides_on of the data is in the graph", not lost, note)]
 
 
-# ------------------------------------------------------------------ L1 over cables and patch panels
-
-
-def cable_links(d: dict) -> list[dict]:
-    """One link per physical chain between two interfaces, through any patch panel: ends (device, port) and ids."""
-    cable_of: dict[str, dict] = {}
-    for kind in ("iface", "front", "rear"):
-        for port in d[kind]:
-            cable = (port.get("cable") or {}).get("node")
-            if cable:
-                cable_of[port["id"]] = cable
-    rear_id = {r["port_id"]["value"]: r["id"] for r in d["rear"]}
-    rear_of_front = {
-        f["id"]: rear_id.get(((next(iter(rel(f, "rear_port")), {})).get("port_id") or {}).get("value"))
-        for f in d["front"]
-    }
-    pair = {**rear_of_front, **{r: f for f, r in rear_of_front.items() if r}}
-    iface = {p["id"]: p for p in d["iface"]}
-    links: dict[frozenset, dict] = {}
-    for start in [p for p in d["iface"] if p["id"] in cable_of]:
-        cur, used = start["id"], []
-        while cur in cable_of:
-            cable = cable_of[cur]
-            used.append(cable["name"]["value"])
-            far = next((e for e in rel(cable, "endpoints") if e["id"] != cur), None)
-            if far is None:
-                break
-            if far["__typename"] in PANEL_KINDS:
-                cur = pair.get(far["id"]) or ""
-                continue
-            if far["id"] in iface:
-                end = iface[far["id"]]
-                links[frozenset((start["id"], far["id"]))] = {
-                    "a": (_dev(start), start["name"]["value"]),
-                    "b": (_dev(end), end["name"]["value"]),
-                    "cables": used,
-                    "ids": (start["id"], far["id"]),
-                }
-            break
-    return list(links.values())
-
-
-def device_paths(links: list[dict], src: str, dst: str, tier: dict[str, int]) -> Iterator[list[dict]]:
-    """Every device path src -> dst that climbs `tier` strictly at each hop; a parallel link is a path of its own."""
-
-    def walk(here: str, seen: tuple[str, ...], taken: tuple[int, ...]) -> Iterator[list[dict]]:
-        if here == dst:
-            yield [links[i] for i in taken]
-            return
-        for i, link in enumerate(links):
-            for near, far in ((link["a"][0], link["b"][0]), (link["b"][0], link["a"][0])):
-                if near == here and far not in seen and tier.get(far, -1) > tier.get(near, 99):
-                    yield from walk(far, (*seen, far), (*taken, i))
-
-    yield from walk(src, (src,), ())
-
-
-def _devices(path: list[dict], src: str) -> list[str]:
-    devices = [src]
-    for link in path:
-        devices.append(link["b"][0] if link["a"][0] == devices[-1] else link["a"][0])
-    return devices
-
-
 # ------------------------------------------------------------------ the pod
 
 
-def _bond_homing(d: dict, cfg: dict, links: list[dict], seg: dict | None) -> tuple[list[str], set, list[str]]:
+def _far_port(port: dict, iface: dict[str, dict]) -> dict:
+    """The interface at the other end of a port's cable (an attribute read of the cable's endpoints)."""
+    cable = (port.get("cable") or {}).get("node") or {}
+    other = next((e for e in rel(cable, "endpoints") if e["id"] != port["id"]), {})
+    return iface.get(other.get("id", ""), {})
+
+
+def _bond_homing(d: dict, cfg: dict, seg: dict | None) -> tuple[list[str], set, list[str]]:
     """(leaves whose port-channel carries the segment, their lag ids, one line per bond member)."""
     bond = next((x for x in d["lag"] if _dev(x) == cfg["server"] and val(x, "name") == cfg["bond"]), None)
     iface = {p["id"]: p for p in d["iface"]}
     lags = {x["id"]: x for x in d["lag"]}
     homed, lag_ids, lines = [], set(), []
     for member in rel(bond or {}, "member_interfaces"):
-        link = next((x for x in links if member["id"] in x["ids"]), None)
-        far = iface[next(i for i in link["ids"] if i != member["id"])] if link else {}
+        far = _far_port(iface.get(member["id"], {}), iface)
         pc = lags.get(next(iter(rel(far, "lag")), {}).get("id", ""))
         lines.append(
             f"{member['name']['value']} -> {_dev(far)}:{(far.get('name') or {}).get('value')} in {pc and val(pc, 'name')}"
@@ -168,9 +98,8 @@ def _bond_homing(d: dict, cfg: dict, links: list[dict], seg: dict | None) -> tup
 
 
 def pod_rows(d: dict, cfg: dict) -> list[Row]:
-    """MLAG pair, dual-homed bond, equal VLAN rows, the L1 paths server -> edge and the overlay L3 of both leaves."""
-    leaves, server, edge = cfg["leaves"], cfg["server"], cfg["edge"]
-    role = {val(x, "name"): val(x, "role") for x in d["dev"]}
+    """MLAG pair, dual-homed bond, equal VLAN rows and where the devices are deployed (attribute reads)."""
+    leaves = cfg["leaves"]
     seg = next((s for s in d["seg"] if val(s, "name") == cfg["segment"]), None)
     rows: list[Row] = []
     mlags = [m for m in d["mlag"] if val(m, "name") == cfg["mlag"]]
@@ -178,8 +107,7 @@ def pod_rows(d: dict, cfg: dict) -> list[Row]:
     peers = val(mlags[0], "peer_devices") if mlags else None
     ok = len(mlags) == 1 and members == sorted(leaves) and peers == ",".join(sorted(leaves))
     rows.append(("pod: one MLAG over the two leaves, peer_devices equal", ok, f"{members} {peers}"))
-    links = cable_links(d)
-    homed, lag_ids, lines = _bond_homing(d, cfg, links, seg)
+    homed, lag_ids, lines = _bond_homing(d, cfg, seg)
     ok = sorted(homed) == sorted(leaves) and len(lag_ids) == 1
     rows.append(
         ("pod: bond0 dual-homed: one lag_id port-channel per leaf, both carrying the segment", ok, "; ".join(lines))
@@ -201,27 +129,55 @@ def pod_rows(d: dict, cfg: dict) -> list[Row]:
         rows.append(
             ("pod: leaves and spine are deployed to the pod, border leaves and edge to the DC", not wrong, f"{wrong}")
         )
-    # the peer link joins two leaves of one tier: it is no hop up
-    tier = {name: TIER.get(r, -1) for name, r in role.items()}
-    chains = [_devices(p, server) for p in device_paths(links, server, edge, tier)]
+    return rows
+
+
+# a fabric path only goes up: a server, a leaf, a spine, a border leaf, the edge (a hop may skip a tier, never go down;
+# the peer link joins two leaves of one tier and is no hop up)
+TIER = {"endpoint": 0, "leaf": 1, "spine": 2, "border-leaf": 3, "edge": 4}
+
+
+def role_of(d: dict) -> dict[str, str]:
+    """{device name: role} of the physical devices."""
+    return {val(x, "name"): val(x, "role") for x in d["dev"]}
+
+
+def device_names(path: list[Any]) -> tuple[str, ...]:
+    """The devices a server-returned chain (PathNode list) crosses, in order, by name."""
+    return tuple("/".join(n.hfid) or n.display_label for n in path if n.kind == "DcimPhysicalDevice")
+
+
+def climbing(paths: list[list[Any]], role: dict[str, str]) -> list[tuple[str, ...]]:
+    """The distinct device sequences of the chains whose tier rises at every device (a classification of what the
+    server returned, not a search): the paths of the fabric, not the detours through a peer link."""
+    seen: dict[tuple[str, ...], None] = {}
+    for path in paths:
+        names = device_names(path)
+        tiers = [TIER.get(role.get(n, ""), -1) for n in names]
+        if all(a < b for a, b in zip(tiers, tiers[1:], strict=False)) and tiers and tiers[0] >= 0:
+            seen[names] = None
+    return list(seen)
+
+
+def pod_path_rows(
+    cfg: dict, role: dict[str, str], l1_paths: list[list[Any]], l3_paths: dict[str, list[list[Any]]]
+) -> list[Row]:
+    """The server's L1 chains server -> edge (5: one direct uplink, 4 through leaf, spine, border leaf) and the overlay
+    L3 chains of both leaves to the edge (the second leaf only through spine and border leaf)."""
+    leaves = cfg["leaves"]
+    chains = climbing(l1_paths, role)
     via_spine = [c for c in chains if any(role.get(x) == "spine" for x in c)]
     tiers = all([role.get(x) for x in c[1:-1]] == ["leaf", "spine", "border-leaf"] for c in via_spine)
     want, want_spine = cfg["l1_paths_to_edge"], cfg["l1_paths_via_spine"]
     ok = len(chains) == want and len(via_spine) == want_spine and tiers
     detail = f"{len(chains)} paths, {len(via_spine)} via the spine: {[' > '.join(c) for c in chains]}"
-    rows.append((f"pod: {want} L1 paths server -> edge, {want_spine} via leaf, spine, border leaf", ok, detail))
-    proc_dev = {p["id"]: next(iter(rel(p, "capabilities")), {}).get("display_label") for p in d["bgp"]}
-    sessions = []
-    for pe in d["peering"]:
-        ends = [proc_dev.get(x["id"]) for x in rel(pe, "bgp_processes")]
-        if val(pe, "peering_role") == "overlay" and len(ends) == 2 and None not in ends:
-            sessions.append({"a": (ends[0],), "b": (ends[1],)})
-    reach = {leaf: [_devices(p, leaf) for p in device_paths(sessions, leaf, edge, tier)] for leaf in leaves}
-    # the leaf that has no direct session reaches the edge only through the spine and a border leaf
+    rows: list[Row] = [(f"pod: {want} L1 paths server -> edge, {want_spine} via leaf, spine, border leaf", ok, detail)]
+    reach = {leaf: climbing(l3_paths.get(leaf, []), role) for leaf in leaves}
+    second = reach[leaves[1]]
     ok = (
         bool(reach[leaves[0]])
-        and len(reach[leaves[1]]) == 2
-        and all([role.get(x) for x in c[1:-1]] == ["spine", "border-leaf"] for c in reach[leaves[1]])
+        and len(second) == 2
+        and all([role.get(x) for x in c[1:-1]] == ["spine", "border-leaf"] for c in second)
     )
     rows.append(
         ("pod: overlay L3 from both leaves to the edge, the second through spine and border leaf", ok, str(reach))
@@ -232,54 +188,10 @@ def pod_rows(d: dict, cfg: dict) -> list[Row]:
 # ------------------------------------------------------------------ internet through an ISP
 
 
-def _end_label(node: dict) -> str:
-    return f"{_dev(node)}:{val(node, 'name')}"
-
-
-def l1_path(d: dict, start: str, goal: str, isp_devices: set[str]) -> list[str] | None:
-    """Shortest L1 path (breadth first) between two ports `device:port`, as the hops in order: ports and the carrier
-    circuits between them, `(device D)` where it passes through an ISP router from one port to another. A carrier joins
-    its two ends, so every carrier that ends on THE INTERNET's one interface joins all the attachments."""
-    ends: dict[str, list[tuple[str, str]]] = {}
-    for carrier in d["carrier"]:
-        ports = [_end_label(e) for e in rel(carrier, "capabilities")]
-        for here in ports:
-            ends.setdefault(here, []).extend((there, val(carrier, "name")) for there in ports if there != here)
-    by_device: dict[str, list[str]] = {}
-    for label in ends:
-        by_device.setdefault(label.split(":", 1)[0], []).append(label)
-    queue: list[tuple[str, list[str]]] = [(start, [start])]
-    seen = {start}
-    while queue:
-        here, path = queue.pop(0)
-        if here == goal:
-            return path
-        steps = [(there, [carrier, there]) for there, carrier in ends.get(here, [])]
-        device = here.split(":", 1)[0]
-        if device in isp_devices:
-            steps += [(other, [f"(device {device})", other]) for other in by_device[device] if other != here]
-        for there, hops in steps:
-            if there not in seen:
-                seen.add(there)
-                queue.append((there, [*path, *hops]))
-    return None
-
-
-def internet_paths(d: dict, cfg: dict) -> list[str]:
-    """The L1 path from our edge to the public side of every service through every ISP, one line each (the golden)."""
-    isp_devices = {isp["isp_device"] for isp in cfg["isps"]}
-    lines = []
-    for isp in cfg["isps"]:
-        for side in cfg["public_sides"]:
-            path = l1_path(d, f"{cfg['edge']}:{isp['access_port']}", f"{side['transport']}:{side['port']}", isp_devices)
-            lines.append(f"{isp['isp_device']} -> {side['endpoint']}: " + (" | ".join(path) if path else "(no path)"))
-    return sorted(lines)
-
-
 def internet_rows(d: dict, cfg: dict) -> list[Row]:
-    """THE INTERNET: one object, one shared interface, an attachment per carrier; from our edge through each of two ISPs
-    to the public side of a SaaS and of a cloud service (L1); the eBGP session to the first ISP and the public ranges (L3)."""
-    edge, ns = cfg["edge"], cfg["namespace"]
+    """THE INTERNET: one object, one shared interface, an attachment per carrier; the public sides and ranges of a SaaS
+    and of a cloud service and the eBGP session to the first ISP (L3). The L1 chains through the ISPs are the server's."""
+    ns = cfg["namespace"]
     rows: list[Row] = []
     objects = [x for x in d["inet"] if val(x, "name") == cfg["object"]]
     obj = objects[0] if objects else {}
@@ -307,8 +219,8 @@ def internet_rows(d: dict, cfg: dict) -> list[Row]:
     )
     expected = sorted([*(i["uplink_carrier"] for i in cfg["isps"]), *(s["carrier"] for s in cfg["public_sides"])])
     bus = next((x for x in d["inetif"] if val(x, "name") == cfg["bus"]), {})
-    on_bus = sorted(val(c, "name") for c in d["carrier"] if bus.get("id") in _ids(rel(c, "capabilities")))
-    listed = sorted(val(c, "name") for c in rel(bus, "capabilities") if c["__typename"] == "TopologyCarrierCircuit")
+    on_bus = sorted(val(c, "circuit_id") for c in d["carrier"] if bus.get("id") in _ids(rel(c, "capabilities")))
+    listed = sorted(val(c, "circuit_id") for c in d["carrier"] if c["id"] in _ids(rel(bus, "capabilities")))
     rows.append(
         (
             f"internet: {len(expected)} attachments end on {cfg['bus']}, each on a carrier of its own",
@@ -317,29 +229,14 @@ def internet_rows(d: dict, cfg: dict) -> list[Row]:
         )
     )
     located = sorted(
-        val(c, "name") for c in d["carrier"] if cfg["object"] in [x["display_label"] for x in rel(c, "locations")]
+        val(c, "circuit_id") for c in d["carrier"] if cfg["object"] in [x["display_label"] for x in rel(c, "locations")]
     )
     rows.append(("internet: the same carriers list INTERNET as a location", located == expected, str(located)))
-    reverse = sorted(val(c, "name") for c in rel(obj, "circuits"))
+    by_id = {c["id"]: val(c, "circuit_id") for c in d["carrier"]}
+    reverse = sorted(by_id.get(c["id"], "?") for c in rel(obj, "circuits"))
     rows.append(
         ("internet: INTERNET.circuits (the reverse edge) answers who is attached", reverse == expected, str(reverse))
     )
-    # L1 through each ISP to each public side, by carrier
-    isp_devices = {isp["isp_device"] for isp in cfg["isps"]}
-    for isp in cfg["isps"]:
-        for side in cfg["public_sides"]:
-            start, goal = f"{edge}:{isp['access_port']}", f"{side['transport']}:{side['port']}"
-            path = l1_path(d, start, goal, isp_devices)
-            circuits = [h for h in (path or []) if ":" not in h and not h.startswith("(device")]
-            want = [isp["access_carrier"], isp["uplink_carrier"], side["carrier"]]
-            via = [h for h in (path or []) if h.startswith(cfg["object"] + ":")]
-            rows.append(
-                (
-                    f"internet L1: {edge} -> {isp['isp_device']} -> {cfg['object']} -> {side['endpoint']} ({side['kind']} public side)",
-                    circuits == want and via == [f"{cfg['object']}:{cfg['bus']}"],
-                    str(path),
-                )
-            )
     # the public side's transport sits where the service is
     seps = {val(e, "name"): e for e in d["sep"]}
     transports = {val(t, "name"): t for t in d["dx"]}
@@ -441,3 +338,54 @@ def sub_interface_rows(d: dict) -> list[Row]:
         ("a transport port or LAG lists its peerings in sub_interfaces", bool(riding) and not unlisted, f"{unlisted}"),
         ("note: peerings on a parent", True, f"note: {len(riding)}"),
     ]
+
+
+# ------------------------------------------------------------------ transports and inventory
+
+
+def transport_rows(d: dict, tag: str, wanted: dict[str, list[str]]) -> list[Row]:
+    """A transport holds its ports, its LAG and its virtual interfaces as interfaces of its own (`port`, `lag`, `vif`)."""
+    keys = {"port": "iface", "lag": "lag", "vif": "vif"}
+    rows: list[Row] = []
+    for name, kinds in wanted.items():
+        held = {k: [val(x, "name") for x in d[keys[k]] if _dev(x) == name] for k in kinds}
+        lacking = [k for k, names in held.items() if not names]
+        rows.append((f"[{tag}] transport {name} holds {', '.join(kinds)}", not lacking, f"empty: {lacking} in {held}"))
+    return rows
+
+
+def inventory_lines(d: dict) -> list[str]:
+    """What the chains do not show: the peering interfaces (scope, peer AS, advertised prefixes, parent), the gateway
+    AS numbers, the attachments' allowed prefixes and the interfaces every transport holds; sorted, for a golden."""
+    gateways = {g["id"]: val(g, "name") for g in d["gw"]}
+    peerings = []
+    for p in d["peer"]:
+        parent = next(iter(rel(p, "parent_interface")), {})
+        asn = val(next(iter(rel(p, "peer_asn")), {}), "asn")
+        adv = sorted(val(x, "prefix") for x in rel(p, "advertised_prefixes"))
+        gateway = gateways.get(next(iter(rel(p, "gateway")), {}).get("id", ""))
+        peerings.append(
+            f"{_dev(p)}:{val(p, 'name')} [{val(p, 'scope')}] on {val(parent, 'name')} gateway {gateway}"
+            f" peer AS {asn} advertises {adv}"
+        )
+    held = {"port": "iface", "lag": "lag", "vif": "vif"}
+    sections = {
+        "peering interfaces": peerings,
+        "gateways": [f"{val(g, 'name')} [{val(g, 'gateway_type')}] AS {val(g, 'asn')}" for g in d["gw"]],
+        "attachments": [
+            f"{val(a, 'name')}: allowed {sorted(val(x, 'prefix') for x in rel(a, 'allowed_prefixes'))}"
+            for a in d["att"]
+        ],
+        "transports": [
+            f"{val(t, 'name')}: "
+            + str({k: sorted(val(x, "name") for x in d[key] if _dev(x) == val(t, "name")) for k, key in held.items()})
+            for t in [*d["dx"], *d["vpn"]]
+        ],
+    }
+    return [line for title, rows in sections.items() for line in (f"# {title}", *(f"  {r}" for r in sorted(rows)))]
+
+
+def inventory_rows(d: dict, kinds: list[str]) -> list[Row]:
+    """Every object kind of the model the case lists is non-empty (a read that came back empty proves nothing)."""
+    empty = [k for k in kinds if not d.get(k)]
+    return [("every object kind of the model non-empty", not empty, f"empty: {empty}")]

@@ -4,22 +4,20 @@
   uv run invoke check-model [--case full_topology] [--update-golden] [--keep-branch] [--rebuild]
 
 No pytest. Steps: stack on :8100 -> branch tv-<timestamp> -> schema load -> data load (ordered, sequential) ->
-for each pair of the case: trace (bulk GraphQL reads, walk in memory), assert, compare with the golden file ->
+for each pair of the case: the server chains (utils/path_trace.py), assert, compare with the golden file ->
 delete the branch (also on failure). Cases live in tests/traversal/cases.yml.
 """
 
 import argparse
 import asyncio
-import importlib.util
+import difflib
 import os
 import subprocess
 import sys
 import time
 import urllib.request
-from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
-from types import ModuleType
 from typing import Any
 
 import yaml
@@ -29,12 +27,17 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from tests.traversal import (  # noqa: E402 - needs ROOT on the path (the script runs from its own directory)
+    chain_rows,
+    graph_read,
     load_topology,
     walks,
 )
+from utils import path_trace  # noqa: E402
+from utils.path_trace import Leg  # noqa: E402
 
 GOLDEN_DIR = Path(__file__).resolve().parent / "golden"
 CASES_FILE = Path(__file__).resolve().parent / "cases.yml"
+PAIR_MAX_PATHS = 100  # the server accepts 1..100; an equal-cost set is complete only below the cap
 DEFAULT_TOKEN = "06438eb2-8019-4776-878c-0941b1f1d1ec"  # noqa: S105 - the local test stack's demo token
 
 
@@ -105,38 +108,10 @@ def tail(text: str, lines: int = 8) -> str:
     return "\n".join(text.strip().splitlines()[-lines:])
 
 
-# ------------------------------------------------------------------ tracer, kinds, golden
-
-
-def load_tracer(path: Path) -> ModuleType:
-    spec = importlib.util.spec_from_file_location(f"module_{path.parent.name}_{path.stem}", path)
-    assert spec and spec.loader
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-def render_golden(result: dict[str, Any]) -> str:
-    """A deterministic text of the structured trace (sorted, so the API's row order does not matter)."""
-    lines = ["# L1 legs"]
-    lines += sorted("  " + " | ".join(leg["hops"]) for leg in result["l1"])
-    lines.append("# L3 legs")
-    lines += sorted("  " + " | ".join(leg["hops"]) for leg in result["l3"])
-    lines.append("# peering interfaces")
-    lines += sorted(f"  {p['name']} [{p['scope']}] on {p['transport']} -> {p['lands']}" for p in result["peerings"])
-    lines.append("# transports")
-    lines += sorted(
-        f"  {name} [{t['kind']}] port {t['port']} lag {t['lag']} vif {t['vif']}"
-        for name, t in result["transports"].items()
-    )
-    lines.append("# missing")
-    lines += sorted("  " + m for m in result["missing"]) or ["  (none)"]
-    return "\n".join(lines) + "\n"
+# ------------------------------------------------------------------ chains, golden
 
 
 def diff_text(expected: str, actual: str) -> str:
-    import difflib
-
     return "\n".join(
         list(difflib.unified_diff(expected.splitlines(), actual.splitlines(), "golden", "actual", lineterm="", n=0))[
             :20
@@ -144,111 +119,98 @@ def diff_text(expected: str, actual: str) -> str:
     )
 
 
-def first_broken_hop(leg_hops: list[str]) -> str:
-    return leg_hops[-1] if leg_hops else "(no hop)"
-
-
-def count_legs(legs: list[dict], layer: str) -> Counter[str]:
-    """Legs per type. An L3 leg is counted once per session circuit: every leaf of the pod reaches it."""
-    counted: Counter[str] = Counter()
-    if layer == "l1":
-        for leg in legs:
-            counted[leg["carrier_type"]] += 1
-        return counted
-    circuits = {tuple(leg["session_circuits"]): leg["session_types"] for leg in legs}
-    for types in circuits.values():
-        counted.update(types)
-    return counted
-
-
-def check_unreachable(rep: Report, tag: str, pair: dict, result: dict[str, Any]) -> None:
-    """The negative pair: nothing reaches the segment, and the walk says so with the expected messages."""
-    want = sorted(pair["expect_missing"])
-    rep.add(f"[{tag}] unreachable: no L1 and no L3 leg", not result["l1"] and not result["l3"], "a leg reached it")
-    rep.add(
-        f"[{tag}] unreachable: the walk reports exactly {want}",
-        sorted(result["missing"]) == want,
-        str(result["missing"]),
-    )
-
-
-def check_pair(rep: Report, case: dict, pair: dict, tracer: ModuleType, d: dict, update_golden: bool) -> None:
-    dc, cloud, saas = pair["dc_segment"], pair.get("cloud_segment"), pair.get("saas_region")
-    tag = f"{dc} -> {cloud or 'SaaS ' + str(saas)}" + (f" via {','.join(pair['via'])}" if pair.get("via") else "")
-    empty = [k for k in pair.get("non_empty", []) if not d.get(k)]
-    rep.add(f"[{tag}] every object kind of the model non-empty", not empty, f"empty: {empty}")
-    via = tuple(pair["via"]) if pair.get("via") else None
-    result = tracer.main_walk(d, dc, cloud, quiet=True, via=via, saas=saas)
-    if pair.get("expect_unreachable"):
-        check_unreachable(rep, tag, pair, result)
-        return
-    missing = result["missing"]
-    rep.add(f"[{tag}] no hop marked missing", not missing, "\n".join(missing))
-    for layer, expected_key, field in (("l1", "l1_legs", "carrier_type"), ("l3", "l3_legs", "session_types")):
-        legs = result[layer]
-        rep.add(f"[{tag}] {layer.upper()} reaches the cloud segment", bool(legs), "no leg reaches it")
-        counted = count_legs(legs, layer)
-        want = pair.get(expected_key)
-        if want is not None:
-            rep.add(
-                f"[{tag}] {layer.upper()} legs per {'carrier' if layer == 'l1' else 'session circuit'} type",
-                dict(counted) == want,
-                f"expected {want}, got {dict(counted)}",
-            )
-    # every leg starts at a circuit found from an interface of ours through its `capabilities`
-    unstarted = [leg["hops"][-1] for leg in result["l1"] + result["l3"] if not leg.get("start_interface")]
-    rep.add(f"[{tag}] every leg starts at an interface of ours that lists its circuit", not unstarted, str(unstarted))
-    # a circuit ends on an interface of a transport: the device at the far end is a Direct Connect or a VPN connection
-    kinds = set(pair.get("far_end_kinds") or [])
-    stray = [
-        f"{leg['carrier']} -> {leg['carrier_far_kind']}"
-        for leg in result["l1"]
-        if leg["carrier_type"] != "internet" and leg["carrier_far_kind"] not in kinds
-    ] + [f"{leg['session_circuits']} -> {leg['far_kind']}" for leg in result["l3"] if leg["far_kind"] not in kinds]
-    rep.add(
-        f"[{tag}] every circuit ends on an interface of a transport ({', '.join(sorted(kinds))})", not stray, str(stray)
-    )
-    # a transport holds its ports, its LAG and its virtual interfaces as interfaces of its own
-    for name, wanted in (pair.get("transport_kinds") or {}).items():
-        held = result["transports"].get(name) or {}
-        lacking = [k for k in wanted if not held.get(k)]
-        rep.add(f"[{tag}] transport {name} holds {', '.join(wanted)}", not lacking, f"empty: {lacking} in {held}")
-    # reverse: from the cloud segment's virtual network, every peering that lands in it is reached from the DC segment
-    # (only for a pair with all its transports: a pair restricted to some transports reaches fewer on purpose)
-    if cloud and not via and pair.get("reverse", True):
-        csg = next((s for s in d["csg"] if s["name"]["value"] == cloud), None)
-        vname = ((csg or {}).get("virtual_network") or {}).get("node", {}).get("name", {}).get("value")
-        reverse = {p["name"] for p in result["peerings"] if vname and f"virtual network {vname}" in (p["lands"] or "")}
-        forward = {leg["peering"] for leg in result["l1"]} | {leg["peering"] for leg in result["l3"]}
-        rep.add(
-            f"[{cloud} -> {dc}] reverse: peerings landing in {vname} are the ones the DC reaches",
-            bool(reverse) and reverse == forward,
-            f"only from the cloud side: {sorted(reverse - forward)}; only from the DC side: {sorted(forward - reverse)}",
-        )
-    golden = GOLDEN_DIR / pair["golden"]
-    text = render_golden(result)
+def check_golden(rep: Report, tag: str, name: str, text: str, update_golden: bool) -> None:
+    """Compare a text with its golden file (or write it with --update-golden)."""
+    golden = GOLDEN_DIR / name
     if update_golden:
         golden.write_text(text)
         rep.add(f"[{tag}] golden written", True, f"note: {golden.relative_to(ROOT)}")
     elif not golden.exists():
         rep.add(f"[{tag}] golden", False, f"{golden.relative_to(ROOT)} missing: run with --update-golden")
     else:
-        rep.add(f"[{tag}] golden {pair['golden']}", golden.read_text() == text, diff_text(golden.read_text(), text))
+        rep.add(f"[{tag}] golden {name}", golden.read_text() == text, diff_text(golden.read_text(), text))
 
 
-def check_internet_golden(rep: Report, cfg: dict, paths: list[str], update_golden: bool) -> None:
-    """The L1 path from the edge through each ISP and THE INTERNET to each public side, as a golden text."""
-    golden = GOLDEN_DIR / cfg["golden"]
-    text = "# L1 paths: our edge through an ISP and THE INTERNET to the public side of a service\n" + "".join(
-        f"  {line}\n" for line in paths
-    )
-    if update_golden:
-        golden.write_text(text)
-        rep.add("[internet] golden written", True, f"note: {golden.relative_to(ROOT)}")
-    elif not golden.exists():
-        rep.add("[internet] golden", False, f"{golden.relative_to(ROOT)} missing: run with --update-golden")
-    else:
-        rep.add(f"[internet] golden {cfg['golden']}", golden.read_text() == text, diff_text(golden.read_text(), text))
+async def traced(
+    rep: Report, tag: str, client: InfrahubClient, branch: str, src: str, dst: str, **kwargs: Any
+) -> list[Leg] | None:
+    """The server's chains between two nodes; an end that does not resolve is a failed row, not a crash."""
+    try:
+        return await path_trace.trace(client, src, dst, branch=branch, max_paths=PAIR_MAX_PATHS, **kwargs)
+    except path_trace.ResolveError as exc:
+        rep.add(f"[{tag}] ends resolve", False, str(exc))
+        return None
+
+
+async def check_pair(
+    rep: Report, case: dict, pair: dict, client: InfrahubClient, branch: str, d: dict, update_golden: bool
+) -> None:
+    """One pair through the server's tracer: the plain trace, one trace per transport it must be reached through, the
+    reverse direction, the circuit types per transport, then the golden (the sorted equal-cost chains)."""
+    src, dst = pair["src"], pair["dst"]
+    tag = f"{src} -> {dst}"
+    plain = await traced(rep, tag, client, branch, src, dst)
+    if plain is None:
+        return
+    if pair.get("expect_unreachable"):
+        for row in chain_rows.unreachable_rows(tag, plain):
+            rep.add(*row)
+        return
+    kinds = pair["far_end_kinds"]
+    for row in [*chain_rows.reach_rows(tag, plain), *chain_rows.transport_rows(tag, plain, kinds)]:
+        rep.add(*row)
+    kind_of = chain_rows.circuit_types(d)
+    sections = [("plain", plain)]
+    for transport, want in (pair.get("through") or {}).items():
+        legs = await traced(rep, f"{tag} via {transport}", client, branch, src, dst, via=transport)
+        if legs is None:
+            continue
+        sections.append((f"via {transport}", legs))
+        vtag = f"{tag} via {transport}"
+        rows = [
+            *chain_rows.reach_rows(vtag, legs),
+            *chain_rows.transport_rows(vtag, legs, kinds, transport),
+            *chain_rows.type_rows(vtag, legs, want, kind_of),
+        ]
+        for row in rows:
+            rep.add(*row)
+    backward = await traced(rep, f"{dst} -> {src}", client, branch, dst, src)
+    if backward is not None:
+        for row in chain_rows.reverse_rows(f"{dst} -> {src}", plain, backward):
+            rep.add(*row)
+    for row in walks.transport_rows(d, tag, pair.get("transport_kinds") or {}):
+        rep.add(*row)
+    check_golden(rep, tag, pair["golden"], chain_rows.golden_text(src, dst, sections), update_golden)
+
+
+async def check_pod(rep: Report, cfg: dict, client: InfrahubClient, branch: str, d: dict) -> None:
+    """The pod's paths as the server returns them: server -> edge in L1, both leaves -> edge in L3."""
+    role = walks.role_of(d)
+    kind = "DcimPhysicalDevice:"
+    l1 = await traced(rep, "pod", client, branch, cfg["server"], cfg["edge"], layers=("l1",))
+    l3: dict[str, list] = {}
+    for leaf in cfg["leaves"]:
+        legs = await traced(rep, "pod", client, branch, kind + leaf, kind + cfg["edge"], layers=("l3",))
+        l3[leaf] = [p for g in legs or [] for p in g.paths]
+    if l1 is not None:
+        for row in walks.pod_path_rows(cfg, role, [p for g in l1 for p in g.paths], l3):
+            rep.add(*row)
+
+
+async def check_internet(rep: Report, cfg: dict, client: InfrahubClient, branch: str, update_golden: bool) -> None:
+    """L1 from the edge port of each ISP to the public side's port of each service, through THE INTERNET."""
+    legs: dict[tuple[str, str], Leg] = {}
+    for isp in cfg["isps"]:
+        for side in cfg["public_sides"]:
+            start = f"DcimPhysicalInterface:{cfg['edge']}/{isp['access_port']}"
+            goal = f"DcimPhysicalInterface:{side['transport']}/{side['port']}"
+            got = await traced(rep, "internet", client, branch, start, goal, layers=("l1",))
+            if got:
+                legs[(isp["isp_device"], side["endpoint"])] = got[0]
+    if len(legs) == len(cfg["isps"]) * len(cfg["public_sides"]):
+        for row in chain_rows.internet_rows(cfg, legs):
+            rep.add(*row)
+        check_golden(rep, "internet", cfg["golden"], chain_rows.internet_golden(cfg, legs), update_golden)
 
 
 # ------------------------------------------------------------------ main flow
@@ -262,22 +224,28 @@ async def assert_case(
     update_golden: bool = False,
     lap: Callable[[str], None] = lambda _label: None,
 ) -> None:
-    """Read the graph of the branch and run every assertion of the case into the report (the data is already loaded)."""
-    tracer = load_tracer(ROOT / case["tracer"])
-    d = await tracer.load(client, branch)
+    """Read the data of the branch, ask the server for the chains and run every assertion into the report."""
+    d = await graph_read.load(client, branch)
     lap("graph read")
+    for row in walks.inventory_rows(d, case["non_empty"]):
+        rep.add(*row)
     for pair in case["pairs"]:
-        check_pair(rep, case, pair, tracer, d, update_golden)
+        await check_pair(rep, case, pair, client, branch, d, update_golden)
+        lap(f"pair {pair['src']} -> {pair['dst']}")
     if case.get("pod"):
         for row in walks.pod_rows(d, case["pod"]):
             rep.add(*row)
+        await check_pod(rep, case["pod"], client, branch, d)
+        lap("pod")
     if case.get("transport_sub_interfaces"):
         for row in walks.sub_interface_rows(d):
             rep.add(*row)
     if case.get("internet"):
         for row in walks.internet_rows(d, case["internet"]):
             rep.add(*row)
-        check_internet_golden(rep, case["internet"], walks.internet_paths(d, case["internet"]), update_golden)
+        await check_internet(rep, case["internet"], client, branch, update_golden)
+        lap("internet")
+    check_golden(rep, "inventory", case["inventory_golden"], "\n".join(walks.inventory_lines(d)) + "\n", update_golden)
     declared = walks.declared_rides_on([s for p in case["data"] for s in walks.yaml_documents(ROOT / p)])
     for row in walks.rides_on_rows(d, declared):
         rep.add(*row)
