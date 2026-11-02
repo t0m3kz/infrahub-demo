@@ -45,61 +45,6 @@ spec:
       kind: TopologyDeployment
 
     # ──────────────────────────────────────────────────────────────────────────
-    # CLOUD & SAAS CONNECTIONS — the request, what realizes it, the circuits
-    # ──────────────────────────────────────────────────────────────────────────
-    - namespace: Topology
-      name: CloudSaasMenu
-      label: Cloud & SaaS connections
-      icon: "mdi:cloud-sync-outline"
-      children:
-        data:
-          - namespace: Cloud
-            name: CsDirectConnectItem
-            label: Cloud Transports (port / circuit)
-            kind: CloudDirectConnect
-            icon: "mdi:lan-connect"
-          - namespace: Cloud
-            name: CsPeeringInterfaceItem
-            label: Cloud Peering Interfaces
-            kind: CloudPeeringInterface
-            icon: "mdi:ethernet"
-          - namespace: Cloud
-            name: CsGatewayItem
-            label: Cloud Gateways
-            kind: CloudGateway
-            icon: "mdi:router-network"
-          - namespace: Cloud
-            name: CsGatewayAttachmentItem
-            label: Cloud Gateway Attachments
-            kind: CloudGatewayAttachment
-            icon: "mdi:transit-connection-variant"
-          - namespace: Cloud
-            name: CsGatewayRouteTableItem
-            label: Cloud Gateway Route Tables
-            kind: CloudGatewayRouteTable
-            icon: "mdi:routes"
-          - namespace: Cloud
-            name: CsServiceEndpointItem
-            label: Cloud Service Endpoints
-            kind: CloudServiceEndpoint
-            icon: "mdi:cloud-lock-outline"
-          - namespace: Cloud
-            name: CsVPNConnectionItem
-            label: Cloud VPN Connections
-            kind: CloudVPNConnection
-            icon: "mdi:vpn"
-          - namespace: Security
-            name: CsIPsecProfileItem
-            label: IPsec Profiles
-            kind: SecurityIPsecProfile
-            icon: "mdi:shield-key-outline"
-          - namespace: Topology
-            name: CsInternetItem
-            label: The Internet
-            kind: TopologyInternet
-            icon: "mdi:earth"
-
-    # ──────────────────────────────────────────────────────────────────────────
     # CUSTOMER DEPLOYMENTS — customer footprints inside DC/Colo/Cloud topology
     # ──────────────────────────────────────────────────────────────────────────
     - namespace: Topology
@@ -185,7 +130,7 @@ spec:
                 - namespace: Dcim
                   name: Device
                   label: Devices
-                  kind: DcimDevice
+                  kind: DcimDeviceManaged
                   icon: "mdi:server"
                   description: "All physical and virtual devices"
 
@@ -270,6 +215,41 @@ spec:
                   kind: TopologySessionCircuit
                   icon: "mdi:cloud-sync"
                   description: "DCI, handoff and tunnel circuits: the connections routing is generated on"
+
+          # ── Cloud & SaaS: what the provider sells and where it ends ────────
+          - namespace: Cloud
+            name: CloudTransportMenu
+            label: Cloud & SaaS Transports
+            icon: "mdi:cloud-sync-outline"
+            children:
+              data:
+                - namespace: Cloud
+                  name: CsDirectConnectItem
+                  label: Cloud Transports (port / circuit)
+                  kind: CloudDirectConnect
+                  icon: "mdi:lan-connect"
+                  description: "Direct Connect, ExpressRoute, Interconnect, SaaS cross-connects"
+
+                - namespace: Cloud
+                  name: CsVPNConnectionItem
+                  label: Cloud VPN Connections
+                  kind: CloudVPNConnection
+                  icon: "mdi:vpn"
+                  description: "The encrypted way to a cloud or SaaS: the tunnels"
+
+                - namespace: Cloud
+                  name: CsPeeringInterfaceItem
+                  label: Cloud Peering Interfaces
+                  kind: CloudPeeringInterface
+                  icon: "mdi:ethernet"
+                  description: "The L3/BGP termination of one leg: VLAN or tunnel, provider address and AS"
+
+                - namespace: Topology
+                  name: CsInternetItem
+                  label: The Internet
+                  kind: TopologyInternet
+                  icon: "mdi:earth"
+                  description: "The meeting point of every ISP and public side"
 
           # --------- Cloud Inventory ---------
           - namespace: Cloud
@@ -410,6 +390,45 @@ spec:
                   icon: "mdi:link-variant"
                   kind: ManagedMLAG
                   description: "Multi-chassis link aggregation groups"
+
+          # ── Cloud & SaaS connectivity: gateways, attachments, routing, endpoints ──
+          - namespace: Cloud
+            name: CloudConnectivityMenu
+            label: Cloud & SaaS Connectivity
+            icon: "mdi:router-network"
+            children:
+              data:
+                - namespace: Cloud
+                  name: CsGatewayItem
+                  label: Cloud Gateways
+                  kind: CloudGateway
+                  icon: "mdi:router-network"
+                  description: "Hub, edge and customer gateways of a provider"
+
+                - namespace: Cloud
+                  name: CsGatewayAttachmentItem
+                  label: Cloud Gateway Attachments
+                  kind: CloudGatewayAttachment
+                  icon: "mdi:transit-connection-variant"
+                  description: "A gateway attached to a network or another gateway, with its allowed prefixes"
+
+                - namespace: Cloud
+                  name: CsGatewayRouteTableItem
+                  label: Cloud Gateway Route Tables
+                  kind: CloudGatewayRouteTable
+                  icon: "mdi:routes"
+
+                - namespace: Cloud
+                  name: CsServiceEndpointItem
+                  label: Cloud Service Endpoints
+                  kind: CloudServiceEndpoint
+                  icon: "mdi:cloud-lock-outline"
+
+                - namespace: Security
+                  name: CsIPsecProfileItem
+                  label: IPsec Profiles
+                  kind: SecurityIPsecProfile
+                  icon: "mdi:shield-key-outline"
 
     # ──────────────────────────────────────────────────────────────────────────
     # SECURITY — zones, profiles, policies

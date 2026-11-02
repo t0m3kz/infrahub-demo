@@ -25,6 +25,7 @@ generics:
     description: Generic Device object.
     label: Device
     icon: mdi:server
+    include_in_menu: false
     human_friendly_id:
       - name__value
     order_by:
@@ -53,6 +54,7 @@ generics:
     description: Fields of a managed device (role, status, type, platform, address, owner, software image).
     label: Managed Device
     icon: mdi:server
+    include_in_menu: false
     human_friendly_id:
       - name__value
     order_by:
