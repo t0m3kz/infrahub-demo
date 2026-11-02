@@ -22,11 +22,10 @@
 # Without the second shape the traversal reaches the cage and stops, which is
 # the DC-boundary blind spot this whole leg exists to close.
 #
-# `locations` lists the cage and, for a cloud transport, its region. The on-ramp edges deploy to their zone (a
-# facility), so add_circuit (generators/topology/circuit.py) derives the ends from the end devices' deployments: the
-# edge's zone, the border leaf's DC (a transport has `region`, not `deployment`, so its region is listed here and is
-# the transport's own region). The cage listed here must be that same zone: add_circuit refuses an authored zone that
-# contradicts the edge's deployment.
+# `locations` lists the cage only. The on-ramp edges deploy to their zone (a facility), so add_circuit
+# (generators/topology/circuit.py) derives the other ends from the end devices: the border leaf's DC and, for a cloud
+# transport (it has a `region`, not a `deployment`), its region. The cage listed here must be the edge's zone:
+# add_circuit refuses an authored zone that contradicts the edge's deployment.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -142,7 +141,6 @@ spec:
       description: "Equinix FR2 cage to AWS eu-central-1, Direct Connect 10G, on the Direct Connect port"
       locations:
         - "FR2"
-        - "eu-central-1"
       capabilities:
         - ["eg-fr201", "Ethernet1/13"]
         - ["dx-30all-euc1-fr2", "dxcon-fr2"]
@@ -162,7 +160,6 @@ spec:
       description: "Equinix PA4 cage to Azure westeurope, ExpressRoute primary leg, 10G"
       locations:
         - "PA4"
-        - "westeurope"
       capabilities:
         - ["eg-pa401", "Ethernet1/13"]
         - ["er-30all-weu", "msee-pri"]
@@ -178,7 +175,6 @@ spec:
       description: "Equinix PA4 cage to Azure westeurope, ExpressRoute secondary leg, 10G"
       locations:
         - "PA4"
-        - "westeurope"
       capabilities:
         - ["eg-pa402", "Ethernet1/13"]
         - ["er-30all-weu", "msee-sec"]
@@ -231,7 +227,6 @@ spec:
       description: "Equinix Fabric virtual connection, Network Edge router eg-am-ne02 to AWS eu-central-1 (hosted Direct Connect), 1G"  # yamllint disable-line rule:line-length
       locations:
         - "AM-NE"
-        - "eu-central-1"
       capabilities:
         - ["eg-am-ne02", "Ethernet1/1"]
         - ["dx-30all-euc1-amne", "dxcon-amne"]

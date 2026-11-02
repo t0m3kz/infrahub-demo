@@ -272,7 +272,7 @@ query SegmentPorts($segment_id: ID!) {
         id
         name { value }
         role { value }
-        device { node { name { value } role { value } } }
+        device { node { name { value } ... on DcimDeviceManaged { role { value } } } }
         segments(ids: [$segment_id]) { edges { properties { source { id } } node { id } } }
       }
     }
@@ -284,7 +284,7 @@ query SegmentPorts($segment_id: ID!) {
         id
         name { value }
         role { value }
-        device { node { name { value } role { value } } }
+        device { node { name { value } ... on DcimDeviceManaged { role { value } } } }
         segments(ids: [$segment_id]) { edges { properties { source { id } } node { id } } }
       }
     }

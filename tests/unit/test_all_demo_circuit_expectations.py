@@ -56,23 +56,17 @@ def test_facility_kinds_come_from_the_schema() -> None:
     }
 
 
-def test_carrier_circuits_declare_one_place_and_a_cloud_transports_region() -> None:
+def test_carrier_circuits_declare_one_place() -> None:
     """Each declared carrier circuit lists one place: a cage (or a virtual colocation), or for the partner's access its
-    ISP (add_circuit derives the rest). A carrier that ends on a cloud transport also lists the transport's region (the
-    transport has `region`, not `deployment`), which must be the region of that very transport."""
+    ISP. add_circuit derives the rest from the end devices, a cloud transport's region included (the transport has
+    `region`, not `deployment`), so the data never lists it."""
     circuits = declared("TopologyCarrierCircuit", ROOT / ALL_DEMO_DATA)
     assert circuits
     assert set(ALL_DEMO_DECLARED_PHYSICAL_LOCATIONS) == {str(circuit.value("circuit_id")) for circuit in circuits}
     for circuit_id, locations in ALL_DEMO_DECLARED_PHYSICAL_LOCATIONS.items():
-        regions = {
-            _TRANSPORT_REGIONS[device]
-            for device, _ in ALL_DEMO_DECLARED_PHYSICAL_PORTS[circuit_id]
-            if device in _TRANSPORT_REGIONS
-        }
-        assert len(locations) == 1 + len(regions), circuit_id
+        assert len(locations) == 1, circuit_id
         expected = _ISPS if circuit_id in ALL_DEMO_PARTNER_ACCESS_CIRCUITS else _ZONES
         assert locations[0] in expected, circuit_id
-        assert set(locations[1:]) == regions, circuit_id
 
 
 def test_carrier_circuit_type_counts_are_the_shipped_ones() -> None:
