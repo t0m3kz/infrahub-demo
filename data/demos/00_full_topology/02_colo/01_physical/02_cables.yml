@@ -1,0 +1,41 @@
+---
+# The cross-connect inside the cage, through the patch panel (the layout of 30_all's PP-EQX-FR2-01):
+#
+#   par-colo1-edge-01 Ethernet1/1 --- front 1 | rear 1 of PP-PAR-COLO1-01 --- EXT-FABRIC-PAR et-0/0/0
+#
+# Cables in data are never generated. A hop inside one facility is a cable, not a carrier circuit (a carrier needs two
+# distinct facilities). A panel port end repeats the connector of its template. The Fabric virtual connections that
+# start on et-0/0/0 (03_cloud/04_circuits/00_carrier_circuits.yml) are carriers; the sub-interfaces on Ethernet1/1 are
+# carried because the
+# port is cabled (checks/circuit_placement.py: a cable on the port counts).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+    - name: "CBL-PAR1-EDGE-PP01-F1"
+      type: smf
+      deployment: "PAR-COLO1"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "par-colo1-edge-01"
+            name: "Ethernet1/1"
+        - kind: DcimFrontPatchPanelPort
+          data:
+            panel: ["par-colo1-rack-01", "PP-PAR-COLO1-01"]
+            name: "1"
+            connector: "lc-upc"
+    - name: "CBL-PAR1-PP01-R1-FABRIC"
+      type: smf
+      deployment: "PAR-COLO1"
+      endpoints:
+        - kind: DcimRearPatchPanelPort
+          data:
+            panel: ["par-colo1-rack-01", "PP-PAR-COLO1-01"]
+            name: "1"
+            connector: "lc-upc"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "EXT-FABRIC-PAR"
+            name: "et-0/0/0"

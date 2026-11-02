@@ -1,0 +1,52 @@
+---
+# The VPCs and VNets with their address blocks. A block that only this network names is nested under it; the block of
+# vpc-c900-prod is also named by a gateway attachment, so it is a flat prefix in 00_common/03_prefixes.yml.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudVirtualNetwork
+  data:
+    - name: vpc-c900-prod
+      account: c900-aws-prod
+      region: eu-central-1
+      cidr_blocks:
+        - ["10.200.0.0/16", "PROD"]
+    - name: vnet-c900-weu
+      account: c900-azure-prod
+      region: westeurope
+      cidr_blocks:
+        data:
+          - prefix: "10.201.0.0/16"
+            ip_namespace: PROD
+            status: active
+            description: Azure VNet block
+    - name: vpc-c900-gcp
+      account: c900-gcp-prod
+      region: europe-west3
+      cidr_blocks:
+        data:
+          - prefix: "10.202.0.0/16"
+            ip_namespace: PROD
+            status: active
+            description: GCP VPC block
+    # A spoke peered with the hub VNet (VNet peering): the symmetric `peers` edge.
+    - name: vnet-c900-weu-spoke
+      account: c900-azure-prod
+      region: westeurope
+      cidr_blocks:
+        data:
+          - prefix: "10.203.0.0/16"
+            ip_namespace: PROD
+            status: active
+            description: Azure spoke VNet block
+      peers: ["vnet-c900-weu"]
+    # A VPC with no attachment at all: nothing reaches it, and the traversal check must say so.
+    - name: vpc-c900-isolated
+      account: c900-aws-prod
+      region: eu-central-1
+      cidr_blocks:
+        data:
+          - prefix: "10.204.0.0/16"
+            ip_namespace: PROD
+            status: active
+            description: AWS isolated VPC block (no attachment)

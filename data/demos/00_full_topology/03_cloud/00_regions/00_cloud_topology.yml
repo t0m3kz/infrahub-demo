@@ -1,0 +1,32 @@
+---
+# The cloud side: AWS eu-central-1, Azure westeurope and GCP europe-west3 (regions host nothing).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCloud
+  data:
+    - name: AWS
+      parent: "Cloud"
+      children:
+        kind: TopologyCloudRegion
+        data:
+          - name: eu-central-1
+            status: active
+            children:
+              kind: TopologyCloudZone
+              data:
+                - name: eu-central-1a
+    - name: AZURE
+      parent: "Cloud"
+      children:
+        kind: TopologyCloudRegion
+        data:
+          - name: westeurope
+            status: active
+    - name: GCP
+      parent: "Cloud"
+      children:
+        kind: TopologyCloudRegion
+        data:
+          - name: europe-west3
+            status: active

@@ -1,0 +1,8 @@
+# DcimPhysicalDevice:par-colo1-edge-01 -> CloudDirectConnect:er-c900-weu
+## plain
+L1 DcimPhysicalDevice:par-colo1-edge-01 -> CloudDirectConnect:er-c900-weu: 2 equal-cost path(s), depth 9
+  DcimPhysicalDevice:par-colo1-edge-01 -> DcimPhysicalInterface:par-colo1-edge-01/Ethernet1/1 -> DcimCable:CBL-PAR1-EDGE-PP01-F1 -> DcimFrontPatchPanelPort:par-colo1-rack-01:PP-PAR-COLO1-01:F1 -> DcimRearPatchPanelPort:par-colo1-rack-01:PP-PAR-COLO1-01:1 -> DcimCable:CBL-PAR1-PP01-R1-FABRIC -> DcimPhysicalInterface:EXT-FABRIC-PAR/et-0/0/0 -> TopologyCarrierCircuit:VC-PAR1-AZ-ER-PRI -> DcimPhysicalInterface:er-c900-weu/msee-pri -> CloudDirectConnect:er-c900-weu
+  DcimPhysicalDevice:par-colo1-edge-01 -> DcimPhysicalInterface:par-colo1-edge-01/Ethernet1/1 -> DcimCable:CBL-PAR1-EDGE-PP01-F1 -> DcimFrontPatchPanelPort:par-colo1-rack-01:PP-PAR-COLO1-01:F1 -> DcimRearPatchPanelPort:par-colo1-rack-01:PP-PAR-COLO1-01:1 -> DcimCable:CBL-PAR1-PP01-R1-FABRIC -> DcimPhysicalInterface:EXT-FABRIC-PAR/et-0/0/0 -> TopologyCarrierCircuit:VC-PAR1-AZ-ER-SEC -> DcimPhysicalInterface:er-c900-weu/msee-sec -> CloudDirectConnect:er-c900-weu
+L3 DcimPhysicalDevice:par-colo1-edge-01 -> CloudDirectConnect:er-c900-weu: 2 equal-cost path(s), depth 4
+  DcimPhysicalDevice:par-colo1-edge-01 -> DcimVirtualInterface:par-colo1-edge-01/Ethernet1/1.200 -> TopologySessionCircuit:SC-C900-AZ-ER-PRI -> CloudPeeringInterface:er-c900-weu/er-c900-weu-pri -> CloudDirectConnect:er-c900-weu
+  DcimPhysicalDevice:par-colo1-edge-01 -> DcimVirtualInterface:par-colo1-edge-01/Ethernet1/1.201 -> TopologySessionCircuit:SC-C900-AZ-ER-SEC -> CloudPeeringInterface:er-c900-weu/er-c900-weu-sec -> CloudDirectConnect:er-c900-weu

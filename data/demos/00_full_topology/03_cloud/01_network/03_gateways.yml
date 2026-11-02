@@ -1,0 +1,50 @@
+---
+# The gateways, one kind in three types (the operator word is in the name):
+#   hub       tgw (AWS transit gateway): attachments and route tables hang off it
+#   edge      dxgw (AWS Direct Connect gateway, global: no region), vgw (AWS virtual private gateway), ergw (Azure
+#             ExpressRoute gateway), cr (GCP Cloud Router): where a peering lands before the network
+#   customer  cgw (OUR side of the VPN: public address and AS)
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudGateway
+  data:
+    - name: "tgw-c900-euc1"
+      description: "AWS transit gateway of the C900 account"
+      status: active
+      gateway_type: hub
+      asn: 64512
+      account: "c900-aws-prod"
+      region: "eu-central-1"
+    - name: "dxgw-c900"
+      description: "AWS Direct Connect gateway (global), associated with the transit gateway"
+      status: active
+      gateway_type: edge
+      account: "c900-aws-prod"
+    - name: "vgw-c900-euc1"
+      description: "AWS virtual private gateway, attached to the VPC"
+      status: active
+      gateway_type: edge
+      account: "c900-aws-prod"
+      region: "eu-central-1"
+    - name: "cgw-c900-ktw1"
+      description: "AWS customer gateway: the public address and AS of ktw1-edge-01"
+      status: active
+      gateway_type: customer
+      ip_address: "198.51.100.10/32"
+      asn: 4200090001
+      account: "c900-aws-prod"
+      region: "eu-central-1"
+    - name: "ergw-c900-weu"
+      description: "Azure ExpressRoute gateway in the VNet"
+      status: active
+      gateway_type: edge
+      account: "c900-azure-prod"
+      region: "westeurope"
+    - name: "cr-c900-euw3"
+      description: "GCP Cloud Router in the VPC"
+      status: active
+      gateway_type: edge
+      asn: 16550
+      account: "c900-gcp-prod"
+      region: "europe-west3"

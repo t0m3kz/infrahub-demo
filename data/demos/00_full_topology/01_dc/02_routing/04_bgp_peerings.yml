@@ -1,0 +1,34 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGPPeering
+  data:
+    - name: "BGP-KTW1-LEAF01-EDGE01"
+      description: "EVPN overlay between the leaf (owner of the segment SVI) and the edge"
+      session_type: EBGP
+      peering_role: overlay
+      address_families:
+        - ["l2vpn", "evpn"]
+      bgp_processes:
+        - "ktw1-leaf-01-bgp"
+        - "ktw1-edge-01-bgp"
+---
+# The EVPN overlay sessions leaf-01/02 - spine - border leaves - edge. The direct leaf-01 - edge session stays.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGPPeering
+  data:
+    # yamllint disable-line rule:line-length
+    - {name: "BGP-KTW1-LEAF01-SPINE01", description: "EVPN overlay", session_type: EBGP, peering_role: overlay, address_families: [["l2vpn", "evpn"]], bgp_processes: ["ktw1-leaf-01-bgp", "ktw1-spine-01-bgp"]}  # yamllint disable-line rule:line-length
+    # yamllint disable-line rule:line-length
+    - {name: "BGP-KTW1-LEAF02-SPINE01", description: "EVPN overlay", session_type: EBGP, peering_role: overlay, address_families: [["l2vpn", "evpn"]], bgp_processes: ["ktw1-leaf-02-bgp", "ktw1-spine-01-bgp"]}  # yamllint disable-line rule:line-length
+    # yamllint disable-line rule:line-length
+    - {name: "BGP-KTW1-SPINE01-BL01", description: "EVPN overlay", session_type: EBGP, peering_role: overlay, address_families: [["l2vpn", "evpn"]], bgp_processes: ["ktw1-spine-01-bgp", "ktw1-bl-01-bgp"]}  # yamllint disable-line rule:line-length
+    # yamllint disable-line rule:line-length
+    - {name: "BGP-KTW1-SPINE01-BL02", description: "EVPN overlay", session_type: EBGP, peering_role: overlay, address_families: [["l2vpn", "evpn"]], bgp_processes: ["ktw1-spine-01-bgp", "ktw1-bl-02-bgp"]}  # yamllint disable-line rule:line-length
+    # yamllint disable-line rule:line-length
+    - {name: "BGP-KTW1-BL01-EDGE01", description: "EVPN overlay", session_type: EBGP, peering_role: overlay, address_families: [["l2vpn", "evpn"]], bgp_processes: ["ktw1-bl-01-bgp", "ktw1-edge-01-bgp"]}  # yamllint disable-line rule:line-length
+    # yamllint disable-line rule:line-length
+    - {name: "BGP-KTW1-BL02-EDGE01", description: "EVPN overlay", session_type: EBGP, peering_role: overlay, address_families: [["l2vpn", "evpn"]], bgp_processes: ["ktw1-bl-02-bgp", "ktw1-edge-01-bgp"]}  # yamllint disable-line rule:line-length

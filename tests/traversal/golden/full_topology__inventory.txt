@@ -10,7 +10,7 @@
   webex-c900-fra-xc:webex-c900-fra [saas] on wbx-port-1 gateway None peer AS 13445 advertises []
   zscaler-c900-muc:Tunnel1 [saas] on None gateway None peer AS None advertises []
 # gateways
-  cgw-c900-dc90 [customer] AS 4200090001
+  cgw-c900-ktw1 [customer] AS 4200090001
   cr-c900-euw3 [edge] AS 16550
   dxgw-c900 [edge] AS None
   ergw-c900-weu [edge] AS None

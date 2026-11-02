@@ -97,3 +97,24 @@ def test_internet_rows_need_the_three_carriers_in_order() -> None:
     ]
     assert chain_rows.internet_rows(cfg, {("pe", "s3"): _leg("l1", path)})[0][1] is True
     assert chain_rows.internet_rows(cfg, {("pe", "s3"): _leg("l1", path[:2] + path[3:])})[0][1] is False
+
+
+def test_site_internet_rows_need_the_site_access_the_uplink_and_the_object() -> None:
+    """Per site: the carriers are its access then the uplink, an ISP router, THE INTERNET at the end."""
+    cfg = {
+        "internet": "TopologyInternet:INTERNET",
+        "isp_routers": ["pe"],
+        "sites": [{"site": "office", "carriers": [["ACC", "UPL"]]}],
+    }
+    path = [
+        _n("DcimPhysicalDevice", "edge"),
+        _n("TopologyCarrierCircuit", "ACC"),
+        _n("DcimPhysicalDevice", "pe"),
+        _n("TopologyCarrierCircuit", "UPL"),
+        _n("TopologyInternet", "INTERNET"),
+    ]
+    assert chain_rows.site_internet_rows(cfg, {"office": _leg("l1", path)})[0][1] is True
+    other = path[:1] + [_n("TopologyCarrierCircuit", "OTHER")] + path[2:]
+    assert chain_rows.site_internet_rows(cfg, {"office": _leg("l1", other)})[0][1] is False
+    assert chain_rows.site_internet_rows(cfg, {"office": _leg("l1", path[:4])})[0][1] is False  # stops at the uplink
+    assert chain_rows.site_internet_rows(cfg, {})[0][1] is False

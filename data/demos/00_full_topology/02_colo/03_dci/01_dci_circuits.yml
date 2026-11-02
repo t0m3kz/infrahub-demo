@@ -1,0 +1,33 @@
+---
+# The DCI that rides each dark fibre (30_all's ICX-DC10-EQXFR2): an Interconnect (`dci`) session circuit whose
+# capabilities are exactly the fibre's two ports, so it is pure fibre (checks/circuit_placement.py), unowned, with the
+# fibre's two facilities as locations. Each end device has exactly one `overlay` BGP process (ktw1-bl-01-bgp,
+# ktw1-bl-02-bgp, par-colo1-edge-01-bgp). The generator add_virtual_circuit would build the sessions of
+# 02_dci_peerings.yml; it does not run here (no `virtual_circuits` membership), so they are authored by hand.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologySessionCircuit
+  data:
+    - name: ICX-KTW1-PAR1
+      circuit_type: dci
+      status: active
+      provider: P016
+      description: DCI DC-KTW1 <-> PAR-COLO1 over DF-KTW1-PAR1-A
+      locations:
+        - DC-KTW1
+        - PAR-COLO1
+      capabilities:
+        - ["ktw1-bl-01", "Ethernet1/35"]
+        - ["par-colo1-edge-01", "Ethernet1/10"]
+    - name: ICX-KTW1-PAR1-B
+      circuit_type: dci
+      status: active
+      provider: P016
+      description: DCI DC-KTW1 <-> PAR-COLO1 over DF-KTW1-PAR1-B
+      locations:
+        - DC-KTW1
+        - PAR-COLO1
+      capabilities:
+        - ["ktw1-bl-02", "Ethernet1/35"]
+        - ["par-colo1-edge-01", "Ethernet1/11"]

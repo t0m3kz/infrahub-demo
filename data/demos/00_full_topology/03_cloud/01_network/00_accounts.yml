@@ -1,0 +1,27 @@
+---
+# One account per cloud, and the partner's account of the Google Partner Interconnect.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudAccount
+  data:
+    - name: "c900-aws-prod"
+      account_id: "900000000001"
+      environment: "p"
+      provider: "P004"
+      owner: "C900"
+    - name: "c900-azure-prod"
+      account_id: "90000000-0000-0000-0000-000000000002"
+      environment: "p"
+      provider: "P005"
+      owner: "C900"
+    - name: "c900-gcp-prod"
+      account_id: "c900-prod-project"
+      environment: "p"
+      provider: "P006"
+      owner: "C900"
+    # The partner's account: a hosted connection lives there while its peerings are in the customer's account.
+    - name: "partner-fabric-gcp"
+      account_id: "partner-fabric-project"
+      environment: "p"
+      provider: "P016"

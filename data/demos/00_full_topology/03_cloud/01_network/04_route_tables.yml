@@ -1,0 +1,12 @@
+---
+# The routing domain of the hub.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudGatewayRouteTable
+  data:
+    - name: "rt-c900-prod"
+      description: "Default routing domain of the transit gateway"
+      status: active
+      is_default: true
+      gateway: "tgw-c900-euc1"

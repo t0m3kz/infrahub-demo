@@ -1,0 +1,25 @@
+---
+# The Zscaler tunnel transport: a SaaS region and an owner, no account and no customer gateway. The tunnel is a
+# peering (scope saas) of the transport: a GRE tunnel with static routing and no BGP.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudVPNConnection
+  data:
+    - name: zscaler-c900-muc
+      description: "Zscaler tunnel to the Munich node, tenant of C900 (SaaS: no account, no customer gateway)"
+      status: active
+      saas_region: ZSCALER-MUNICH I
+      owner: C900
+      interfaces:
+        - kind: CloudPeeringInterface
+          data:
+            name: Tunnel1
+            description: "Zscaler tunnel, tenant of C900 (static, no BGP)"
+            status: active
+            scope: saas
+            routing: static
+            tunnel_index: 1
+            endpoint_ip: "203.0.113.80/32"
+            tunnel_mode: gre
+            service_id: zscaler-org-c900

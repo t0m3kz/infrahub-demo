@@ -1,0 +1,34 @@
+---
+# The EVPN session of each DCI, authored by hand: the multihop eBGP session of role `dci` between the overlay
+# processes of the two ends (30_all's `<circuit>-evpn`, which the generator keys on the VTEP loopbacks; this sample has
+# no loopback interfaces, so the peering has only the two processes). The names are not the generator's, which a
+# generated session of 30_all would never share with a hand-written one. The connected eBGP underlay on a /31 of the
+# DCI pool is NOT authored: it would be a second path to the same neighbour for every tenant trace (a trace from a
+# segment crosses both border leaves, the two sessions and two kinds of hop at the cage edge, which is more
+# equal-cost paths than the server returns at most, 100), and the overlay session alone says "the DC and the cage
+# edge peer".
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGPPeering
+  data:
+    - name: "BGP-PAR1-EDGE01-BL01-DCI-EVPN"
+      description: "DCI EVPN multihop par-colo1-edge-01 <-> ktw1-bl-01 over ICX-KTW1-PAR1"
+      session_type: EBGP_MULTIHOP
+      peering_role: dci
+      ttl: 2
+      address_families:
+        - ["l2vpn", "evpn"]
+      bgp_processes:
+        - "par-colo1-edge-01-bgp"
+        - "ktw1-bl-01-bgp"
+    - name: "BGP-PAR1-EDGE01-BL02-DCI-EVPN"
+      description: "DCI EVPN multihop par-colo1-edge-01 <-> ktw1-bl-02 over ICX-KTW1-PAR1-B"
+      session_type: EBGP_MULTIHOP
+      peering_role: dci
+      ttl: 2
+      address_families:
+        - ["l2vpn", "evpn"]
+      bgp_processes:
+        - "par-colo1-edge-01-bgp"
+        - "ktw1-bl-02-bgp"

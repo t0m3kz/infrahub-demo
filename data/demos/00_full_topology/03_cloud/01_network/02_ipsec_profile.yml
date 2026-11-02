@@ -1,0 +1,18 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityIPsecProfile
+  data:
+    - name: "IPSEC-AES256-SHA256-DH14"
+      description: "IKEv2 AES-256 SHA-256 DH14, ESP AES-256 SHA-256 with PFS 14 (the AWS VPN tunnel options)"
+      status: active
+      ike_version: ikev2
+      ike_encryption: aes256
+      ike_integrity: sha256
+      ike_dh_group: 14
+      ike_lifetime: 28800
+      esp_encryption: aes256
+      esp_integrity: sha256
+      pfs_group: 14
+      esp_lifetime: 3600

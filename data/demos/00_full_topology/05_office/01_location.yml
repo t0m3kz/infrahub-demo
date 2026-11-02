@@ -1,0 +1,10 @@
+---
+# The building of the customer office C900 in the Barcelona metro (05_office/00_metro.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationFacility
+  data:
+    - name: "Barcelona Office"
+      shortname: "bcn-office"
+      parent: "bcn"
