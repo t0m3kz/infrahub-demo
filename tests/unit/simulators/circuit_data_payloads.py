@@ -41,6 +41,9 @@ APPLIANCE = "CloudNetworkAppliance"
 # A cloud transport has no deployment: its facility is its region.
 TRANSPORT = "CloudDirectConnect"
 PEERING = "CloudPeeringInterface"
+# THE INTERNET (bootstrap data): a device that is a facility itself, with one interface of its own kind.
+INTERNET = "TopologyInternet"
+INTERNET_BUS = "TopologyInternetInterface"
 # Where the place kinds a circuit ends on are declared.
 _PLACE_KINDS = (
     "TopologyDataCenter",
@@ -110,6 +113,8 @@ class _Model:
                     owner = str(place.item["owner"])
                     node["owner"] = {"node": {"id": f"id-{owner}", "org_id": {"value": owner}}}
                 places[name(place)] = node
+        for place in distinct(declared(INTERNET, BOOTSTRAP)):
+            places[name(place)] = {"id": f"id-{name(place)}", "__typename": INTERNET, "name": {"value": name(place)}}
         return places
 
     def _add_declared_devices(self) -> None:
@@ -117,6 +122,8 @@ class _Model:
         for process in _all("ManagedBGP"):
             for device in process.item.get("capabilities") or []:
                 roles.setdefault(str(device), []).append(str(process.value("process_role")))
+        for net in distinct(declared(INTERNET, BOOTSTRAP)):
+            self.devices[name(net)] = {"kind": INTERNET, "deployment": None, "region": None, "bgp": []}
         for kind in (PHYSICAL_DEVICE, APPLIANCE, TRANSPORT):
             for device in _all(kind):
                 self.devices[name(device)] = {
@@ -153,12 +160,18 @@ class _Model:
     def facility(self, device: str) -> str | None:
         """Where a device sits: its ``deployment``, else (a cloud transport) its region."""
         info = self.devices[device]
+        if info["kind"] == INTERNET:
+            return device  # it is a facility itself
         return info["deployment"] or info.get("region")
 
     def port_id(self, device: str, port: str) -> str:
         if device not in self.devices:
             raise KeyError(f"device {device} is neither declared nor generated")
         return f"{device}:{port}"
+
+    def port_kind(self, device: str) -> str:
+        """The kind of a port of this device: THE INTERNET's only port has a kind of its own, the rest are physical."""
+        return INTERNET_BUS if self.devices[device]["kind"] == INTERNET else "DcimPhysicalInterface"
 
     # -- carrier circuits ---------------------------------------------------------------------------------------
 
@@ -169,6 +182,7 @@ class _Model:
             rows.append(
                 {
                     "name": f"INET-{name(office)}",
+                    "circuit_type": "internet",
                     "status": "active",
                     "owner": str(office.item["owner"]),
                     "locations": [name(office), ISP_ACCESS_LOCATION],
@@ -182,6 +196,7 @@ class _Model:
             rows.append(
                 {
                     "name": str(circuit.value("circuit_id")),
+                    "circuit_type": str(circuit.value("circuit_type")),
                     "status": str(circuit.value("status")),
                     "owner": circuit.item.get("owner"),
                     "locations": [str(location) for location in circuit.item["locations"]],
@@ -240,6 +255,7 @@ class _Model:
             "capabilities": _edges(
                 {
                     "id": self.port_id(device, port),
+                    "__typename": self.port_kind(device),
                     "name": {"value": port},
                     "device": {"node": {"name": {"value": device}}},
                 }
@@ -291,15 +307,19 @@ class _Model:
         return {
             "id": f"id-{row['name']}",
             "name": {"value": row["name"]},
+            "status": {"value": row["status"]},
+            "circuit_type": {"value": row["circuit_type"]},
             "owner": {"node": {"id": f"id-{owner}", "org_id": {"value": owner}} if owner else None},
             "locations": _edges(self.places[place] for place in row["locations"]),
             "capabilities": _edges(
                 {
                     "id": self.port_id(device, port),
+                    "__typename": self.port_kind(device),
                     "name": {"value": port},
                     "device": {
                         "node": {
                             "id": f"id-{device}",
+                            "__typename": self.devices[device]["kind"],
                             "name": {"value": device},
                             **self.placement(device),
                         }
@@ -400,4 +420,20 @@ def build_payloads(without_cables: bool = False, without_circuits: Iterable[str]
         for circuit_type, circuits in ((TUNNEL, tunnels), (INTERCONNECT, interconnects), (HANDOFF, handoffs))
         for circuit in circuits
     ]
-    return {CARRIER: _edges(model.carrier_payload(row) for row in model.carriers), SESSION: _edges(sessions)}
+    internet = [
+        {
+            "id": f"id-{name(net)}",
+            "__typename": INTERNET,
+            "name": {"value": name(net)},
+            "interfaces": _edges(
+                {"id": f"id-{name(net)}:{name(port)}", "__typename": INTERNET_BUS, "name": {"value": name(port)}}
+                for port in distinct(declared(INTERNET_BUS, BOOTSTRAP))
+            ),
+        }
+        for net in distinct(declared(INTERNET, BOOTSTRAP))
+    ]
+    return {
+        CARRIER: _edges(model.carrier_payload(row) for row in model.carriers),
+        SESSION: _edges(sessions),
+        INTERNET: _edges(internet),
+    }

@@ -241,7 +241,7 @@ def test_generated_fabric_peering_names_do_not_collide_with_data() -> None:
 
 def test_every_carrier_circuit_row_has_two_distinct_ends_and_no_port_is_in_two_rows() -> None:
     """A carrier circuit terminates on exactly two ports (the schema's min/max count), each port on one circuit
-    (a virtual_connection is exempt: a provider port hosts one connection per S-tag).
+    (a virtual_connection is exempt: a provider port hosts one connection per S-tag; so is INTERNET:bus).
 
     The INET-<office> circuits are not data rows: add_sdwan_edge creates them with both ends in one write.
     """
@@ -254,6 +254,8 @@ def test_every_carrier_circuit_row_has_two_distinct_ends_and_no_port_is_in_two_r
         if row["circuit_type"] == "virtual_connection":
             continue
         for end in ends:
+            if end == ("INTERNET", "bus"):
+                continue  # THE INTERNET's interface is shared by kind: one carrier per attachment
             assert end not in seen, f"{end} is an end of {seen[end]} and {_circuit_name(row)}"
             seen[end] = _circuit_name(row)
 

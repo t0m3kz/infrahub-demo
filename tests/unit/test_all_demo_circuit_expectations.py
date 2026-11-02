@@ -12,6 +12,7 @@ from tests.integration.all_demo_circuit_constants import (
     ALL_DEMO_DECLARED_VIRTUAL_LOCATIONS,
     ALL_DEMO_DECLARED_VIRTUAL_PORTS,
     ALL_DEMO_FACILITY_KINDS,
+    ALL_DEMO_ISP_UPLINK_CIRCUITS,
     ALL_DEMO_PARTNER_ACCESS_CIRCUITS,
     ALL_DEMO_SDWAN_UNDERLAY_CIRCUITS,
     ALL_DEMO_VIRTUAL_CIRCUITS,
@@ -65,7 +66,8 @@ def test_carrier_circuits_declare_one_place() -> None:
     assert set(ALL_DEMO_DECLARED_PHYSICAL_LOCATIONS) == {str(circuit.value("circuit_id")) for circuit in circuits}
     for circuit_id, locations in ALL_DEMO_DECLARED_PHYSICAL_LOCATIONS.items():
         assert len(locations) == 1, circuit_id
-        expected = _ISPS if circuit_id in ALL_DEMO_PARTNER_ACCESS_CIRCUITS else _ZONES
+        isp_only = set(ALL_DEMO_PARTNER_ACCESS_CIRCUITS) | set(ALL_DEMO_ISP_UPLINK_CIRCUITS)
+        expected = _ISPS if circuit_id in isp_only else _ZONES
         assert locations[0] in expected, circuit_id
 
 
@@ -73,7 +75,7 @@ def test_carrier_circuit_type_counts_are_the_shipped_ones() -> None:
     """Six dark fibres (two per DC), one cross-connect (Megaport), five virtual connections (the AWS Direct Connect
     and the two Azure ExpressRoute legs on the ports of the region's cloud transports, the two Equinix Fabric connections
     cage -> Network Edge and Network Edge -> AWS), the declared internet circuits (four transit, the gateway's access, the
-    partner's) plus one generated underlay per SD-WAN office."""
+    partner's, the five ISP uplinks to THE INTERNET) plus one generated underlay per SD-WAN office."""
     offices = [
         office
         for office in distinct(declared("TopologyCustomerOffice", ROOT / ALL_DEMO_DATA))
@@ -83,7 +85,7 @@ def test_carrier_circuit_type_counts_are_the_shipped_ones() -> None:
         "dark_fiber": 6,
         "cross_connect": 1,
         "virtual_connection": 5,
-        "internet": 4 + 1 + 1 + len(offices),
+        "internet": 4 + 1 + 1 + len(ALL_DEMO_ISP_UPLINK_CIRCUITS) + len(offices),
     }
 
 

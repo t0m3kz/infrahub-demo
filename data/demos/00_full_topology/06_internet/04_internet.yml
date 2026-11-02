@@ -1,9 +1,10 @@
 ---
-# THE INTERNET as one passive object with one shared interface, and the L1 that meets on it. Our edge port -> internet
-# carrier -> ISP router; the ISP router's uplink -> internet carrier -> the interface of INTERNET; the public side of a
-# SaaS region and of a cloud region -> internet carrier -> the same interface. So from dc90-edge-01 the public side of
-# Webex and of the object store is reachable at L1 through either ISP. INTERNET has no routing: the addresses and
-# prefixes of this scenario live in the INTERNET namespace (06_internet/00_ipam_asn.yml).
+# THE INTERNET (one passive object with one shared interface, bootstrap data: data/bootstrap/03b_internet.yml) and the
+# L1 that meets on it. Our edge port -> internet carrier -> ISP router; the ISP router's uplink -> internet carrier ->
+# the interface of INTERNET; the public side of a SaaS region and of a cloud region -> internet carrier -> the same
+# interface. So from dc90-edge-01 the public side of Webex and of the object store is reachable at L1 through either
+# ISP. INTERNET has no routing: the addresses and prefixes of this scenario live in the INTERNET namespace
+# (06_internet/00_ipam_asn.yml).
 #
 #   dc90-edge-01 Ethernet1/2 -- INET-DC90-ISP-DEMO   -- EXT-ISP-DEMO-PE1   et-0/0/0   (base sample, ISP-DEMO)
 #                               EXT-ISP-DEMO-PE1    xe-0/1/0 -- UPL-ISP-DEMO   -+
@@ -16,14 +17,6 @@
 # circuit of its own that ends on it: the kind is what lets many carriers share it (checks/carrier_circuit_ports.py).
 # The carriers are `internet` circuits; the five ends that are not the bus are the ports of ISP routers and of the
 # transports that stand for the public sides.
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: TopologyInternet
-  data:
-    - name: "INTERNET"
-      parent: "Internet"
-      description: "The one passive meeting point of every ISP, SaaS public side and cloud public side"
 ---
 # The second ISP: a router of its own at its own external-provider facility.
 apiVersion: infrahub.app/v1
@@ -69,17 +62,7 @@ spec:
       account: "c900-aws-prod"
       region: "eu-central-1"
 ---
-# The ports the carriers end on. INTERNET has one interface, of its own kind, shared by every attachment.
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: TopologyInternetInterface
-  data:
-    - device: "INTERNET"
-      name: "bus"
-      description: "The shared interface: every ISP uplink and every public side ends here, each on its own carrier"
-      status: active
----
+# The ports the carriers end on (INTERNET:bus is bootstrap data, data/bootstrap/03b_internet.yml).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

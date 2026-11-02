@@ -54,6 +54,7 @@ from .all_demo_circuit_constants import (
     ALL_DEMO_FACILITY_KINDS,
     ALL_DEMO_GATEWAY_ACCESS_CIRCUITS,
     ALL_DEMO_GATEWAY_ACCESS_LOCATIONS,
+    ALL_DEMO_INTERNET_BUS,
     ALL_DEMO_ISP_ACCESS_DEVICE,
     ALL_DEMO_ISP_ACCESS_LOCATION,
     ALL_DEMO_ISP_ACCESS_PORTS,
@@ -169,6 +170,8 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             if len(circuit["end_ids"]) != 2 or len(set(circuit["end_ids"])) != 2:
                 errors.append(f"{circuit_id}: ends {circuit['ends']}, expected exactly 2 distinct ports")
             for end in circuit["ends"]:
+                if end == ALL_DEMO_INTERNET_BUS:
+                    continue
                 if end in circuit_of_port:
                     errors.append(f"{end} is an end of both {circuit_of_port[end]} and {circuit_id}")
                 circuit_of_port[end] = circuit_id

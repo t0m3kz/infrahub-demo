@@ -14,7 +14,9 @@ I2  an attachment (a carrier with an end of the internet interface kind) is an `
     SaaS transport (``region`` or ``saas_region``): never a DC or a cage (an edge reaches the internet through an ISP
     access circuit of its own), never the internet interface again
 I3  once the INTERNET is modelled, an ISP router that serves an internet access carrier has an attachment, else the
-    access reaches no public side (a router with no INTERNET object in the data is not judged)
+    access reaches no public side. An access between two routers of ISP kind (a partner's border router buying access
+    from an ISP) is judged as one: it is fine when either end is attached. With no INTERNET object in the data nothing
+    is judged
 """
 
 from __future__ import annotations
@@ -118,8 +120,11 @@ def internet_findings(carriers: list[dict[str, Any]], internet_objects: list[dic
         for carrier in live:
             if is_attachment(carrier) or carrier.get("circuit_type") != ATTACHMENT_CARRIER_TYPE:
                 continue
-            for device in (_device(port) for port in _ports(carrier)):
-                if _facility_kind(device) == ISP_KIND and str(device.get("id")) not in seen:
+            isp_routers = [d for d in (_device(port) for port in _ports(carrier)) if _facility_kind(d) == ISP_KIND]
+            if any(str(device.get("id")) in attached for device in isp_routers):
+                continue
+            for device in isp_routers:
+                if str(device.get("id")) not in seen:
                     seen.add(str(device.get("id")))
                     findings.append(
                         (

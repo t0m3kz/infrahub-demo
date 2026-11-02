@@ -155,7 +155,7 @@ Once stage 4 has settled, the branch should contain at least:
 | `ManagedVxlanSegment` | 5 |
 | `AppApplication` | 9 |
 | `TopologyExternalProviders` | 4 |
-| `TopologyCarrierCircuit` (`internet`) | 11 |
+| `TopologyCarrierCircuit` (`internet`) | 16 |
 | `TopologySessionCircuit` (`dci`, `handoff` and `tunnel` types) | 18 |
 
 ### Circuits: Carrier and Connection
@@ -256,6 +256,12 @@ data row. `08_interconnects/06_internet` connects the cages to the transit ISPs,
 transit circuit on `Ethernet1/14` and an eBGP session in VRF `INTERNET`. The ISPs send a default route only. A
 DC reaches the internet through these edges, so a flow trace towards the internet ends on an ISP device. All
 four edges are Multi-Site border gateways (two per metro), so the default from either ISP reaches the DCs.
+
+THE INTERNET itself (`INTERNET` and its one interface `bus`) is bootstrap data (`data/bootstrap/03b_internet.yml`), so
+rule I3 (`checks/circuit_placement.py`) applies here: every ISP router that serves internet access has an uplink carrier
+to `INTERNET:bus`. `08_interconnects/06_internet_uplinks` declares them for the four provider edges (`xe-0/1/0`) and
+Orange's access PE (`et-0/0/0`), unowned, with only the ISP listed (`add_circuit` derives INTERNET). The partner's
+router `EXT-ACME-EDGE1` needs none: it buys access from Cogent, whose router is attached.
 
 The shared SD-WAN gateway `EQX-FR2-SDWAN-GW1` (template `VCG-VA_GATEWAY`) has two physical ports: `eth0`, role
 `uplink`, cabled to the cage router (`Ethernet1/12`) and carrying the PROD handoff sub-interface `eth0.1900`, and

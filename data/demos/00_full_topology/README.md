@@ -351,7 +351,8 @@ niż koperta `S_MIDDLE`, a `checks/suite_capacity.py` ocenia tylko racki, które
 Asercje: `walks.pod_rows`.
 
 **Internet przez ISP** (`06_internet`): INTERNET jest jednym wspólnym obiektem, przez który przechodzi każde
-połączenie internetowe, "rodzajem kabla albo przełącznika dla wszystkich". `TopologyInternet` (singleton `INTERNET`) leży w
+połączenie internetowe, "rodzajem kabla albo przełącznika dla wszystkich". `TopologyInternet` (singleton `INTERNET`, razem z interfejsem `bus` w danych
+startowych: `data/bootstrap/03b_internet.yml`, bo się nie zmienia) leży w
 drzewie topologii pod etykietą "Internet", obok ISP (`TopologyExternalProviders`; etykieta jest miejscem grupowania, a
 INTERNET punktem spotkania pod nią). Jest szczupłym `DcimDevice` (tylko `name` i `interfaces`) i `TopologyFacility`, więc
 jest lokalizacją obwodu nośnika, ale nie ma roli, platformy, adresu, VRF ani artefaktu i niczego nie routuje: adresy i

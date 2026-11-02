@@ -239,8 +239,27 @@ class TestAttachments:
         second = _carrier("INET-B2", [DC90, ISP_B], [_end(EDGE, "Ethernet1/5"), _end(PE_B, "et-0/0/1")])
         assert len(_findings([ACCESS_B, second])) == 1
 
+    def test_a_partner_access_to_an_attached_isp_needs_no_attachment_of_its_own(self) -> None:
+        """A partner router (ISP kind) buys access from PE-A, which is attached: its access reaches the public sides."""
+        partner = _device("PARTNER-EDGE", _place("PARTNER", "TopologyExternalProviders"))
+        access = _carrier(
+            "INET-P",
+            [ISP_A, _place("PARTNER", "TopologyExternalProviders")],
+            [_end(partner, "et-0/0/0"), _end(PE_A, "et-0/0/1")],
+        )
+        assert _run([ACCESS_A, UPLINK_A, access]) == []
+
+    def test_a_partner_access_to_an_unattached_isp_is_one_finding_per_router(self) -> None:
+        partner = _device("PARTNER-EDGE", _place("PARTNER", "TopologyExternalProviders"))
+        access = _carrier(
+            "INET-P",
+            [ISP_B, _place("PARTNER", "TopologyExternalProviders")],
+            [_end(partner, "et-0/0/0"), _end(PE_B, "et-0/0/1")],
+        )
+        assert len(_findings([access])) == 2
+
     def test_without_an_internet_object_the_attachment_rule_is_silent(self) -> None:
-        """30_all has ISPs and no INTERNET object: an access carrier alone is not judged."""
+        """A dataset without the INTERNET object (the bootstrap always has it): an access carrier alone is not judged."""
         assert _run([ACCESS_A, ACCESS_B], internet=[]) == []
 
     def test_a_decommissioned_access_needs_no_attachment(self) -> None:

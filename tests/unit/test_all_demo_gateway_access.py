@@ -16,6 +16,7 @@ from tests.integration.all_demo_circuit_constants import (
     ALL_DEMO_CARRIER_CIRCUIT_TYPES,
     ALL_DEMO_GATEWAY_ACCESS_CIRCUITS,
     ALL_DEMO_INTERNET_TRANSIT_CIRCUITS,
+    ALL_DEMO_ISP_UPLINK_CIRCUITS,
     ALL_DEMO_SDWAN_UNDERLAY_CIRCUITS,
 )
 from tests.integration.demo_data import ROOT, declared, name, object_documents, object_templates
@@ -143,7 +144,7 @@ def test_gateway_access_is_not_in_the_transit_folder_nor_counted_as_transit() ->
     assert not [c for c in _entries("TopologyCarrierCircuit", _INTERNET_DIR) if c["circuit_id"] == _CIRCUIT]
 
 
-def test_internet_circuit_count_is_transit_plus_two_accesses_plus_one_per_office() -> None:
+def test_internet_circuit_count_is_transit_plus_two_accesses_plus_uplinks_plus_one_per_office() -> None:
     """The expected internet count follows the data: the 06_internet transit, the gateway's and the partner's access,
     an INET-<office> each."""
     transit = {c["circuit_id"] for c in _entries("TopologyCarrierCircuit", _INTERNET_DIR)}
@@ -151,4 +152,6 @@ def test_internet_circuit_count_is_transit_plus_two_accesses_plus_one_per_office
     assert transit == ALL_DEMO_INTERNET_TRANSIT_CIRCUITS
     assert set(ALL_DEMO_SDWAN_UNDERLAY_CIRCUITS) == {f"INET-{office}" for office in offices}
     assert offices
-    assert ALL_DEMO_CARRIER_CIRCUIT_TYPES["internet"] == len(transit) + 1 + 1 + len(offices)
+    assert ALL_DEMO_CARRIER_CIRCUIT_TYPES["internet"] == len(transit) + 1 + 1 + len(ALL_DEMO_ISP_UPLINK_CIRCUITS) + len(
+        offices
+    )

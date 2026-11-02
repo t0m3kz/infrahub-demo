@@ -269,6 +269,7 @@ fragment CircuitOwner on OrganizationEntity {
 
 fragment CircuitEndDevice on DcimDevice {
   id
+  __typename
   name {
     value
   }

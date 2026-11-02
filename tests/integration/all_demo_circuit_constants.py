@@ -94,9 +94,25 @@ ALL_DEMO_PARTNER_ACCESS_CIRCUITS: dict[str, frozenset[tuple[str, str]]] = {
 ALL_DEMO_PARTNER_ACCESS_LOCATIONS: tuple[str, ...] = ("ISP-COGENT", "PARTNER-ACME")
 
 
+# The uplink of every ISP router to THE INTERNET (data/bootstrap/03b_internet.yml, rule I3): the four transit provider edges
+# (08_interconnects/06_internet/04_circuits.yml) and Orange's access PE (04_internet/02_access_edge.yml), each from its
+# uplink port to INTERNET:bus. Unowned shared underlay; the data lists the ISP only, add_circuit derives INTERNET.
+ALL_DEMO_ISP_UPLINK_CIRCUITS: dict[str, tuple[str, str]] = {
+    "UPL-EXT-LUMEN-FRA1": ("EXT-LUMEN-FRA1", "xe-0/1/0"),
+    "UPL-EXT-LUMEN-PAR1": ("EXT-LUMEN-PAR1", "xe-0/1/0"),
+    "UPL-EXT-COGENT-FRA1": ("EXT-COGENT-FRA1", "xe-0/1/0"),
+    "UPL-EXT-COGENT-PAR1": ("EXT-COGENT-PAR1", "xe-0/1/0"),
+    "UPL-EXT-ORANGE": ("EXT-ORANGE", "et-0/0/0"),
+}
+
+#: The one end every uplink shares: THE INTERNET's interface (exempt from "a port is an end of one carrier" by its kind).
+ALL_DEMO_INTERNET_BUS: tuple[str, str] = ("INTERNET", "bus")
+
+
 # The unowned internet circuits: only a customer's own underlay (INET-<office>) names an owner.
 ALL_DEMO_SHARED_INTERNET_CIRCUITS: frozenset[str] = (
     ALL_DEMO_INTERNET_TRANSIT_CIRCUITS
+    | frozenset(ALL_DEMO_ISP_UPLINK_CIRCUITS)
     | frozenset(ALL_DEMO_GATEWAY_ACCESS_CIRCUITS)
     | frozenset(ALL_DEMO_PARTNER_ACCESS_CIRCUITS)
 )
