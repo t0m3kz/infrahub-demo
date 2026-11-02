@@ -133,7 +133,7 @@ nodes:
     description: "Carrier circuit (dark fiber, cross connect, internet access, virtual connection, metro ethernet)"
     label: "Carrier Circuit"
     icon: "mdi:transit-connection-variant"
-    include_in_menu: true
+    include_in_menu: false
     inherit_from:
       - TopologyCircuit
       - ManagedGeneric
@@ -254,7 +254,7 @@ nodes:
     description: "Circuit that rides carriers: a DCI, a handoff or a vpn with generated routing, or a tunnel kept as inventory"  # yamllint disable-line rule:line-length
     label: "Session Circuit"
     icon: "mdi:swap-horizontal-bold"
-    include_in_menu: true
+    include_in_menu: false
     inherit_from:
       - TopologyCircuit
       - ManagedGeneric

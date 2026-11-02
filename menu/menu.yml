@@ -94,16 +94,6 @@ spec:
             kind: SecurityIPsecProfile
             icon: "mdi:shield-key-outline"
           - namespace: Topology
-            name: CsCarrierCircuitItem
-            label: Carrier Circuits
-            kind: TopologyCarrierCircuit
-            icon: "mdi:transit-connection-variant"
-          - namespace: Topology
-            name: CsSessionCircuitItem
-            label: Session Circuits
-            kind: TopologySessionCircuit
-            icon: "mdi:swap-horizontal-bold"
-          - namespace: Topology
             name: CsInternetItem
             label: The Internet
             kind: TopologyInternet
@@ -261,6 +251,26 @@ spec:
                   kind: DcimGroupPolicyProfile
                   icon: "mdi:shield-half-full"
                   description: "Reference fabric profile per platform: device types, release, memory, group-tag pool"
+          # ── Circuits ───────────────────────────────────────────────────────
+          - namespace: Topology
+            name: CircuitsMenu
+            label: Circuits
+            icon: "mdi:transit-connection-variant"
+            children:
+              data:
+                - namespace: Topology
+                  name: CarrierCircuitItem
+                  label: Carrier Circuits
+                  kind: TopologyCarrierCircuit
+                  icon: "mdi:cable-data"
+
+                - namespace: Topology
+                  name: SessionCircuitItem
+                  label: Session Circuits
+                  kind: TopologySessionCircuit
+                  icon: "mdi:cloud-sync"
+                  description: "DCI, handoff and tunnel circuits: the connections routing is generated on"
+
           # --------- Cloud Inventory ---------
           - namespace: Cloud
             name: Resource
