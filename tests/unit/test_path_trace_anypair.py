@@ -66,6 +66,7 @@ def inventory() -> tuple[dict[str, list[dict[str, Any]]], dict[str, list[dict[st
     net = _dev("d-net", "INTERNET", "TopologyInternet")
     dx = _dev("d-dx", "dx-fra", "CloudDirectConnect")
     pub = _dev("d-pub", "webex-pub", "CloudDirectConnect")
+    s3 = _dev("d-s3", "s3-pub", "CloudDirectConnect")
 
     srv_eth = _port("p-srv-eth0", srv, "eth0")
     leaf_down = _port("p-leaf-1", leaf, "Ethernet1/1", segments=_many([{"id": "seg-web"}]))
@@ -90,6 +91,7 @@ def inventory() -> tuple[dict[str, list[dict[str, Any]]], dict[str, list[dict[st
     pe_in, pe_out = _port("p-pe-0", pe, "et-0/0/0"), _port("p-pe-1", pe, "xe-0/1/0")
     bus = _port("p-bus", net, "bus", "TopologyInternetInterface")
     pub_1 = _port("p-pub-1", pub, "pub-1")
+    s3_1 = _port("p-s3-1", s3, "pub-1")
     front = {"id": "pp-f1", "port_id": _v("R1:PP-01:F1"), "rear_port": _one({"port_id": _v("R1:PP-01:1")})}
     rear = {"id": "pp-r1", "port_id": _v("R1:PP-01:1")}
     # a front / rear port are ends of cables
@@ -100,7 +102,7 @@ def inventory() -> tuple[dict[str, list[dict[str, Any]]], dict[str, list[dict[st
 
     d = {
         "dev": [isp_dev, srv_dev, {**leaf, "role": _v("leaf")}, {**edge, "role": _v("edge")}],
-        "iface": [srv_eth, leaf_down, leaf_up, edge_down, edge_dx, edge_isp, dx_port, pe_in, pe_out, pub_1],
+        "iface": [srv_eth, leaf_down, leaf_up, edge_down, edge_dx, edge_isp, dx_port, pe_in, pe_out, pub_1, s3_1],
         "lag": [dx_lag],
         "vif": [handoff],
         "peer": [dx_vif],
@@ -108,13 +110,14 @@ def inventory() -> tuple[dict[str, list[dict[str, Any]]], dict[str, list[dict[st
         "inet": [{**net, "interfaces": _many([])}],
         "front": [front],
         "rear": [rear],
-        "dx": [dx, pub],
+        "dx": [dx, pub, s3],
         "vpn": [],
         "carrier": [
             _circuit("XC-DX", "cross_connect", edge_dx, dx_port),
             _circuit("INET-ISP", "internet", edge_isp, pe_in),
             _circuit("UPL-ISP", "internet", pe_out, bus),
             _circuit("PUB-WEBEX", "internet", bus, pub_1),
+            _circuit("PUB-S3", "internet", bus, s3_1),
         ],
         "session": [_circuit("SC-DX", "handoff", handoff, dx_vif)],
         "gw": [
@@ -204,7 +207,7 @@ def inventory() -> tuple[dict[str, list[dict[str, Any]]], dict[str, list[dict[st
             },
         ],
     }
-    extra = {"alldev": [srv, leaf, edge, pe, net, dx, pub]}
+    extra = {"alldev": [srv, leaf, edge, pe, net, dx, pub, s3]}
     return d, extra
 
 
@@ -341,6 +344,13 @@ def test_internet_bus_joins_the_isp_and_the_public_side(model) -> None:  # type:
     ]
     to_net = search(model, resolve(model, "device:edge-01"), resolve(model, "THE INTERNET"), "l3")
     assert _names(model, to_net.paths[0][0])[-1] == "INTERNET:bus"
+
+
+def test_cloud_public_side_reaches_the_saas_public_side_through_the_internet_bus(model) -> None:  # type: ignore[no-untyped-def]
+    """Two public sides meet on the one INTERNET interface: cloud -> bus -> SaaS, no ISP and no tunnel in between."""
+    result = search(model, resolve(model, "transport:s3-pub"), resolve(model, "transport:webex-pub"), "l1")
+    nodes, _ = result.paths[0]
+    assert _names(model, nodes) == ["s3-pub:pub-1", "INTERNET:bus", "webex-pub:pub-1"]
 
 
 def test_segment_to_cloud_segment_in_both_layers(model) -> None:  # type: ignore[no-untyped-def]
