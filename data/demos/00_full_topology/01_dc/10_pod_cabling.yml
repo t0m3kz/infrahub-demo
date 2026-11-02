@@ -1,14 +1,15 @@
 ---
-# Cabling of the pod. The server is dual-homed (eno1 to leaf-01, eno2 to leaf-02), the leaves are joined by their
-# mlag-peer ports, both leaves reach the one spine, the spine both border leaves. Border leaf 1 reaches the edge
-# through jack 2 of the patch panel (front 2 | rear 2), border leaf 2 on a direct cable. Cables in data are never
-# generated.
+# Cabling of the pod. The server is dual-homed (eno1 to leaf-01, eno2 to leaf-02), each link through the panel of the
+# compute rack and the panel of the leaf's rack (port - cable - front | rear - cable - front | rear - cable - port),
+# the leaves are joined by their mlag-peer ports, both leaves reach the one spine, the spine both border leaves.
+# Border leaf 1 reaches the edge through jack 2 of the patch panel in the border rack (front 2 | rear 2), border leaf 2
+# on a direct cable. Cables in data are never generated.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: DcimCable
   data:
-    - name: "CBL-DC90-SRV01-ENO1-LEAF01"
+    - name: "CBL-DC90-SRV01-ENO1-PP02-F1"
       type: smf
       deployment: "DC90"
       endpoints:
@@ -16,11 +17,39 @@ spec:
           data:
             device: "dc90-srv-01"
             name: "eno1"
+        - kind: DcimFrontPatchPanelPort
+          data:
+            panel: ["dmo-1-s-1-r-1-2", "PP-DC90-02"]
+            name: "1"
+            connector: "lc-upc"
+    - name: "CBL-DC90-PP02-R1-PP03-F1"
+      type: smf
+      deployment: "DC90"
+      endpoints:
+        - kind: DcimRearPatchPanelPort
+          data:
+            panel: ["dmo-1-s-1-r-1-2", "PP-DC90-02"]
+            name: "1"
+            connector: "lc-upc"
+        - kind: DcimFrontPatchPanelPort
+          data:
+            panel: ["dmo-1-s-1-r-1-3", "PP-DC90-03"]
+            name: "1"
+            connector: "lc-upc"
+    - name: "CBL-DC90-PP03-R1-LEAF01"
+      type: smf
+      deployment: "DC90"
+      endpoints:
+        - kind: DcimRearPatchPanelPort
+          data:
+            panel: ["dmo-1-s-1-r-1-3", "PP-DC90-03"]
+            name: "1"
+            connector: "lc-upc"
         - kind: DcimPhysicalInterface
           data:
             device: "dc90-leaf-01"
             name: "Ethernet1/2"
-    - name: "CBL-DC90-SRV01-ENO2-LEAF02"
+    - name: "CBL-DC90-SRV01-ENO2-PP02-F2"
       type: smf
       deployment: "DC90"
       endpoints:
@@ -28,6 +57,34 @@ spec:
           data:
             device: "dc90-srv-01"
             name: "eno2"
+        - kind: DcimFrontPatchPanelPort
+          data:
+            panel: ["dmo-1-s-1-r-1-2", "PP-DC90-02"]
+            name: "2"
+            connector: "lc-upc"
+    - name: "CBL-DC90-PP02-R2-PP04-F1"
+      type: smf
+      deployment: "DC90"
+      endpoints:
+        - kind: DcimRearPatchPanelPort
+          data:
+            panel: ["dmo-1-s-1-r-1-2", "PP-DC90-02"]
+            name: "2"
+            connector: "lc-upc"
+        - kind: DcimFrontPatchPanelPort
+          data:
+            panel: ["dmo-1-s-1-r-1-4", "PP-DC90-04"]
+            name: "1"
+            connector: "lc-upc"
+    - name: "CBL-DC90-PP04-R1-LEAF02"
+      type: smf
+      deployment: "DC90"
+      endpoints:
+        - kind: DcimRearPatchPanelPort
+          data:
+            panel: ["dmo-1-s-1-r-1-4", "PP-DC90-04"]
+            name: "1"
+            connector: "lc-upc"
         - kind: DcimPhysicalInterface
           data:
             device: "dc90-leaf-02"

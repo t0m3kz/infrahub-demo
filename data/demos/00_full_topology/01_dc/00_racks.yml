@@ -1,0 +1,39 @@
+---
+# The racks of the pod DC90-9-POD-1 in the suite DMO-1-Suite-1 (00_locations.yml), row 1: a compute rack with the
+# server, one rack for each leaf of the vPC pair, a network rack with the spine. The border and edge rack is the first
+# slot (00_locations.yml, it belongs to the DC, not to the pod). Racks are data: no group membership, so the rack
+# generator does not run and builds nothing.
+apiVersion: infrahub.app/v1
+version: "1.0"
+kind: Object
+spec:
+  kind: LocationRack
+  data:
+    - name: DMO-1-S1-R1-2
+      shortname: dmo-1-s-1-r-1-2
+      parent: dmo-1-s-1
+      index: 2
+      row_index: 1
+      rack_type: compute
+      deployment: DC90-9-POD-1
+    - name: DMO-1-S1-R1-3
+      shortname: dmo-1-s-1-r-1-3
+      parent: dmo-1-s-1
+      index: 3
+      row_index: 1
+      rack_type: network
+      deployment: DC90-9-POD-1
+    - name: DMO-1-S1-R1-4
+      shortname: dmo-1-s-1-r-1-4
+      parent: dmo-1-s-1
+      index: 4
+      row_index: 1
+      rack_type: network
+      deployment: DC90-9-POD-1
+    - name: DMO-1-S1-R1-5
+      shortname: dmo-1-s-1-r-1-5
+      parent: dmo-1-s-1
+      index: 5
+      row_index: 1
+      rack_type: network
+      deployment: DC90-9-POD-1

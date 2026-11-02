@@ -1,7 +1,10 @@
 ---
-# A passive panel in the rack (not a device) between the leaf and the edge. PP-24-LC creates 24 rear and 24 front
-# ports. The template cannot pair a front port with its rear port (the future generator add_patch_panel does), so the
-# pairing of jack 1 is authored here: front "1" -> rear "1".
+# The panels of the data hall (passive, not devices). PP-DC90-01 is in the border and edge rack, between the leaf and
+# the edge (jack 1) and between border leaf 1 and the edge (jack 2, 09_pod_patch_panel.yml). PP-DC90-02 is the panel of
+# the compute rack (jack 1 eno1, jack 2 eno2 of the server); PP-DC90-03 and PP-DC90-04 are the panels of the two leaf
+# racks (jack 1 each, the horizontal run of the server's link to its leaf). Every panel is PP-24-LC, which creates 24
+# rear and 24 front ports. The template cannot pair a front port with its rear port (the future generator
+# add_patch_panel does), so the pairing of every used jack is authored below: front "n" -> rear "n".
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -11,6 +14,18 @@ spec:
       object_template: PP-24-LC
       description: "DC90 patch panel, jack 1 joins the leaf to the edge"
       rack: dmo-1-s-1-r-1-1
+    - name: "PP-DC90-02"
+      object_template: PP-24-LC
+      description: "Compute rack panel: jack 1 is eno1 and jack 2 is eno2 of dc90-srv-01"
+      rack: dmo-1-s-1-r-1-2
+    - name: "PP-DC90-03"
+      object_template: PP-24-LC
+      description: "Leaf rack panel of dc90-leaf-01: jack 1 is the run to the compute rack"
+      rack: dmo-1-s-1-r-1-3
+    - name: "PP-DC90-04"
+      object_template: PP-24-LC
+      description: "Leaf rack panel of dc90-leaf-02: jack 1 is the run to the compute rack"
+      rack: dmo-1-s-1-r-1-4
 ---
 apiVersion: infrahub.app/v1
 kind: Object
@@ -21,3 +36,19 @@ spec:
       name: "1"
       connector: "lc-upc"
       rear_port: "dmo-1-s-1-r-1-1:PP-DC90-01:1"
+    - panel: ["dmo-1-s-1-r-1-2", "PP-DC90-02"]
+      name: "1"
+      connector: "lc-upc"
+      rear_port: "dmo-1-s-1-r-1-2:PP-DC90-02:1"
+    - panel: ["dmo-1-s-1-r-1-2", "PP-DC90-02"]
+      name: "2"
+      connector: "lc-upc"
+      rear_port: "dmo-1-s-1-r-1-2:PP-DC90-02:2"
+    - panel: ["dmo-1-s-1-r-1-3", "PP-DC90-03"]
+      name: "1"
+      connector: "lc-upc"
+      rear_port: "dmo-1-s-1-r-1-3:PP-DC90-03:1"
+    - panel: ["dmo-1-s-1-r-1-4", "PP-DC90-04"]
+      name: "1"
+      connector: "lc-upc"
+      rear_port: "dmo-1-s-1-r-1-4:PP-DC90-04:1"

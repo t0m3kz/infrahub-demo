@@ -1,5 +1,7 @@
 ---
-# One data center with one suite, one rack (the patch panel's), and the topology objects the devices hang on.
+# One data center with one suite (2 rows x 9 slots: the S_MIDDLE envelope of the pod) and the topology objects the
+# devices hang on. The suite is the data hall; its racks are here (the border and edge rack) and in 00_racks.yml (the
+# racks of the pod, which need the pod below).
 apiVersion: infrahub.app/v1
 version: "1.0"
 kind: Object
@@ -21,8 +23,8 @@ spec:
                   index: 1
                   shortname: "dmo-1-s-1"
                   parent: dmo-1
-                  rows: 1
-                  racks_per_row: 2
+                  rows: 2
+                  racks_per_row: 9
                   children:
                     kind: LocationRack
                     data:
@@ -30,6 +32,7 @@ spec:
                         shortname: dmo-1-s-1-r-1-1
                         index: 1
                         row_index: 1
+                        rack_type: network
 ---
 apiVersion: infrahub.app/v1
 kind: Object
@@ -42,10 +45,10 @@ spec:
       design: S
 ---
 # The pod of the data center: its name is computed, {DC}-{DC index}-POD-{index} (DC90-9-POD-1). The design is the
-# envelope only (S_MIDDLE is one of the pod templates of the DC design S); the spine and the two leaves are deployed
-# to it (01_devices.yml, 08_pod_devices.yml), the border leaves and the edge stay at the DC. No racks are linked to
-# the pod: the suite of this sample is smaller than the S_MIDDLE envelope, and checks/suite_capacity.py judges only
-# racks that name their pod. Nothing is generated (no group membership).
+# envelope only (S_MIDDLE is one of the pod templates of the DC design S); the spine, the two leaves and the server are
+# deployed to it (01_devices.yml, 08_pod_devices.yml), the border leaves and the edge stay at the
+# DC. The racks of the pod name it (00_racks.yml), so checks/suite_capacity.py holds the suite to the S_MIDDLE envelope
+# (2 rows, 8 + 1 slots per row). Nothing is generated (no group membership).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

@@ -1,8 +1,8 @@
 ---
 # The pod: a second leaf (the MLAG/vPC peer of dc90-leaf-01), one spine, two border leaves and one server. Devices come
-# from bootstrap templates (their interfaces with them). The leaves and the spine are deployed to the pod
-# DC90-9-POD-1 (00_locations.yml); the border leaves, the edge and the server stay at DC90 (a border role belongs to
-# the DC). Nothing generated.
+# from bootstrap templates (their interfaces with them). The leaves, the spine and the server are deployed to the pod
+# DC90-9-POD-1 (00_locations.yml, its racks 00_racks.yml); the border leaves and the edge stay at DC90 (a border role
+# belongs to the DC). Every device sits in a rack with its unit. Nothing generated.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -12,19 +12,34 @@ spec:
       object_template: N9K-C9364C-GX_LEAF_MR
       description: "Leaf, vPC peer of dc90-leaf-01"
       deployment: "DC90-9-POD-1"
+      rack: dmo-1-s-1-r-1-4
+      position: 41
+      rack_face: front
     - name: "dc90-spine-01"
       object_template: N9K-C9336C-FX2_SPINE
       description: "Spine: leaf-01/02 on Ethernet1/1-2, border leaves on Ethernet1/3-4"
       deployment: "DC90-9-POD-1"
+      rack: dmo-1-s-1-r-1-5
+      position: 41
+      rack_face: front
     - name: "dc90-bl-01"
       object_template: N9K-C9336C-FX2_BORDER_LEAF
       description: "Border leaf 1: spine on Ethernet1/33, edge through the patch panel (jack 2)"
       deployment: "DC90"
+      rack: dmo-1-s-1-r-1-1
+      position: 38
+      rack_face: front
     - name: "dc90-bl-02"
       object_template: N9K-C9336C-FX2_BORDER_LEAF
       description: "Border leaf 2: spine on Ethernet1/33, edge on a direct cable"
       deployment: "DC90"
+      rack: dmo-1-s-1-r-1-1
+      position: 36
+      rack_face: front
     - name: "dc90-srv-01"
       object_template: PowerEdge-R640_SERVER
       description: "Server of the tenant, bond0 over eno1 and eno2, dual-homed to the vPC pair"
-      deployment: "DC90"
+      deployment: "DC90-9-POD-1"
+      rack: dmo-1-s-1-r-1-2
+      position: 20
+      rack_face: front

@@ -72,11 +72,33 @@ def rides_on_rows(d: dict, declared: dict[str, str]) -> list[Row]:
 # ------------------------------------------------------------------ the pod
 
 
-def _far_port(port: dict, iface: dict[str, dict]) -> dict:
-    """The interface at the other end of a port's cable (an attribute read of the cable's endpoints)."""
+def _other_end(port: dict, own_id: str) -> str | None:
+    """The id at the other end of the cable of a port (an attribute read of the cable's endpoints)."""
     cable = (port.get("cable") or {}).get("node") or {}
-    other = next((e for e in rel(cable, "endpoints") if e["id"] != port["id"]), {})
-    return iface.get(other.get("id", ""), {})
+    return next((e["id"] for e in rel(cable, "endpoints") if e["id"] != own_id), None)
+
+
+def _far_port(port: dict, iface: dict[str, dict], d: dict | None = None) -> dict:
+    """The interface at the other end of a port's cable, following the cable through patch panels: a cable that ends
+    on a front port continues from the paired rear port (and the reverse). A panel is passive, so the far end is the
+    first interface reached."""
+    fronts = {x["id"]: x for x in (d or {}).get("front", [])}
+    rears = {val(x, "port_id"): x for x in (d or {}).get("rear", [])}
+    pair = {  # panel port id -> the port at the other side of the same jack
+        **{f["id"]: rears.get(val(next(iter(rel(f, "rear_port")), {}), "port_id"), {}) for f in fronts.values()},
+        **{
+            r["id"]: f for f in fronts.values() if (r := rears.get(val(next(iter(rel(f, "rear_port")), {}), "port_id")))
+        },
+    }
+    here = port
+    for _ in range(len(pair) + 1):
+        other = _other_end(here, here.get("id", ""))
+        if other in iface or other is None:
+            return iface.get(other or "", {})
+        here = pair.get(other, {})
+        if not here:
+            return {}
+    return {}
 
 
 def _bond_homing(d: dict, cfg: dict, seg: dict | None) -> tuple[list[str], set, list[str]]:
@@ -86,7 +108,7 @@ def _bond_homing(d: dict, cfg: dict, seg: dict | None) -> tuple[list[str], set, 
     lags = {x["id"]: x for x in d["lag"]}
     homed, lag_ids, lines = [], set(), []
     for member in rel(bond or {}, "member_interfaces"):
-        far = _far_port(iface.get(member["id"], {}), iface)
+        far = _far_port(iface.get(member["id"], {}), iface, d)
         pc = lags.get(next(iter(rel(far, "lag")), {}).get("id", ""))
         lines.append(
             f"{member['name']['value']} -> {_dev(far)}:{(far.get('name') or {}).get('value')} in {pc and val(pc, 'name')}"
@@ -128,7 +150,11 @@ def pod_rows(d: dict, cfg: dict) -> list[Row]:
         }
         wrong = {name: placed.get(name) for name, want in cfg["deployed_to"].items() if placed.get(name) != want}
         rows.append(
-            ("pod: leaves and spine are deployed to the pod, border leaves and edge to the DC", not wrong, f"{wrong}")
+            (
+                "pod: leaves, spine and server are deployed to the pod, border leaves and edge to the DC",
+                not wrong,
+                f"{wrong}",
+            )
         )
     return rows
 
