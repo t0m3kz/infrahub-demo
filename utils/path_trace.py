@@ -5,7 +5,12 @@ Reads the graph in a few bulk GraphQL reads (one per kind), then walks it in mem
 
   INFRAHUB_ADDRESS=http://localhost:8100 INFRAHUB_API_TOKEN=... \
     uv run python .dev/trace.py c900-demo-web-p c900-demo-subnet-p [--branch main]   # thin wrapper, untracked
-    uv run python -m utils.path_trace c900-demo-web-p c900-demo-subnet-p [--branch main]
+    uv run python -m utils.path_trace c900-demo-web-p c900-demo-subnet-p [--branch main] [--full]
+
+Any pair, not only segments (`utils/path_trace_nodes.py` resolves the ends, `kind:name` or a bare name):
+    uv run python utils/path_trace.py segment:c900-demo-web-p vnet:vpc-c900-prod --layer l1
+    uv run python utils/path_trace.py iface:dc90-edge-01:Ethernet1/2 transport:webex-c900-fra-pub
+    uv run python utils/path_trace.py dc90-srv-01 internet
 
 L1  segment -> leaf port (segments edge) -> cable -> patch panel (front, paired rear) -> cable -> edge port
     -> [device] -> carrier circuit (found from OUR port through its `capabilities`; its far end is an interface of a
@@ -24,6 +29,7 @@ import asyncio
 import os
 import sys
 from collections.abc import Iterator
+from pathlib import Path
 from typing import Any
 
 from infrahub_sdk import Config, InfrahubClient
@@ -115,7 +121,9 @@ QUERIES = {
 }
 
 
-async def load(client: InfrahubClient, branch: str) -> dict[str, list[dict]]:
+async def fetch_kinds(client: InfrahubClient, branch: str, queries: dict[str, str]) -> dict[str, list[dict]]:
+    """One paged read per query (`Kind { edges { node { ... } } }`), all concurrently: {key: nodes}."""
+
     async def one(k: str, q: str) -> tuple[str, list[dict]]:
         nodes: list[dict] = []
         kind = q.split(" ", 1)[0]
@@ -129,7 +137,11 @@ async def load(client: InfrahubClient, branch: str) -> dict[str, list[dict]]:
                 return k, nodes
             offset += 200
 
-    return dict(await asyncio.gather(*(one(k, q) for k, q in QUERIES.items())))
+    return dict(await asyncio.gather(*(one(k, q) for k, q in queries.items())))
+
+
+async def load(client: InfrahubClient, branch: str) -> dict[str, list[dict]]:
+    return await fetch_kinds(client, branch, QUERIES)
 
 
 def epname(n: dict) -> str:
@@ -609,10 +621,24 @@ def main_walk(
 
 
 async def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("dc_segment")
-    ap.add_argument("cloud_segment")
+    from utils.path_trace_nodes import EXTRA_QUERIES, LAYERS, ResolveError, build_model, trace_pair
+
+    ap = argparse.ArgumentParser(
+        description="Shortest paths between ANY two nodes of the model. A node is `kind:name` or a bare name: "
+        "device, iface (device:port), transport, gateway, attachment, vnet, segment (VXLAN or cloud), instance, "
+        "endpoint, saas, circuit, panel (port id), internet (THE INTERNET), isp."
+    )
+    ap.add_argument("src", help="e.g. segment:c900-demo-web-p, iface:dc90-edge-01:Ethernet1/2, dc90-srv-01")
+    ap.add_argument(
+        "dst", help="e.g. segment:c900-demo-subnet-p, transport:webex-c900-fra-pub, vnet:vpc-c900-prod, internet"
+    )
+    ap.add_argument("--via", help="a node the path must cross, e.g. transport:dx-c900-fra-lag or gateway:dxgw-c900")
+    ap.add_argument("--layer", choices=("l1", "l3", "both"), default="both")
     ap.add_argument("--branch", default="main")
+    ap.add_argument("--max-paths", type=int, default=5, help="shortest paths shown per layer")
+    ap.add_argument(
+        "--full", action="store_true", help="also print the segment-to-cloud report (VXLAN -> cloud segment)"
+    )
     a = ap.parse_args()
     client = InfrahubClient(
         config=Config(
@@ -620,11 +646,23 @@ async def main() -> None:
             api_token=os.environ["INFRAHUB_API_TOKEN"],
         )
     )
-    d = await load(client, a.branch)
-    result = main_walk(d, a.dc_segment, a.cloud_segment)
-    if result["missing"] and result["missing"][0].startswith("segment not found"):
-        sys.exit(result["missing"][0])
+    d, extra = await asyncio.gather(load(client, a.branch), fetch_kinds(client, a.branch, EXTRA_QUERIES))
+    model = build_model(d, extra)
+    emit(f"model: {model.summary()}")
+    try:
+        lines, counts = trace_pair(
+            model, a.src, a.dst, LAYERS if a.layer == "both" else (a.layer,), a.max_paths, via_spec=a.via
+        )
+    except ResolveError as e:
+        sys.exit(f"error: {e}")
+    for line in lines:
+        emit(line)
+    if a.full:
+        main_walk(d, a.src.split(":", 1)[-1], a.dst.split(":", 1)[-1])
+    sys.exit(0 if any(counts.values()) else 1)
 
 
 if __name__ == "__main__":
+    # run as a script, `utils` is not importable: put the repository root first
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     asyncio.run(main())

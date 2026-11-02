@@ -210,8 +210,13 @@ odwrotny i plik wzorcowy.
 
 ```bash
 INFRAHUB_ADDRESS=http://localhost:8100 INFRAHUB_API_TOKEN=06438eb2-8019-4776-878c-0941b1f1d1ec \
-  uv run python -m utils.path_trace c900-demo-web-p c900-demo-subnet-p
+  uv run python utils/path_trace.py segment:c900-demo-web-p segment:c900-demo-subnet-p --full
 ```
+
+Ścieżka między dowolną parą węzłów: `uv run python utils/path_trace.py <src> <dst> [--layer l1|l3|both] [--via <węzeł>]`.
+Węzeł to `kind:nazwa` (`segment:`, `iface:dev:port`, `transport:`, `vnet:`, `gateway:`, `attachment:`, `endpoint:`,
+`saas:`, `instance:`, `circuit:`, `panel:`, `server:`, `isp:`, `internet`) albo sama nazwa; `--full` dodaje raport
+segment DC -> segment w chmurze.
 
 `utils/path_trace.py` czyta graf hurtowo (po jednym zapytaniu GraphQL na rodzaj) i idzie po nim w pamięci, od końców obwodów do
 peeringu, bramy, załączników (i `allowed_prefixes`), huba, sieci wirtualnej (z `peers`) i segmentu chmurowego, z punktem
