@@ -1,66 +1,79 @@
-# Szybki test modelu (traversal)
+# Fast model test (traversal)
 
-Zamiast godziny testów integracyjnych: schemat + mały model na jednorazowej gałęzi, potem asercje na przejściu po
-grafie (L1: kable, porty, patch panele, obwody nośników, transport z portami i pakietem; L3: SVI/VRF, peeringi BGP, obwody sesji,
-interfejs peeringu chmury, brama, hub, sieć wirtualna, segment chmurowy) w obu kierunkach. Cel: kilka minut.
+Instead of an hour of integration tests: the schema plus a small model on a throwaway branch, then assertions on a walk
+over the graph (L1: cables, ports, patch panels, carrier circuits, a transport with its ports and bundle; L3: SVI/VRF,
+BGP peerings, session circuits, the cloud peering interface, gateway, hub, virtual network, cloud segment) in both
+directions. Goal: a few minutes.
 
 ```bash
-uv run invoke check-model                      # wszystkie przypadki z cases.yml
+uv run invoke check-model                      # every case of cases.yml
 uv run invoke check-model --case full_topology
-uv run invoke check-model --update-golden      # zapis plików wzorcowych tests/traversal/golden/*.txt
-uv run invoke check-model --keep-branch        # zostaw gałąź tv-* do oględzin
-uv run invoke check-model --rebuild            # wyczyść kontenery testowe i zbuduj stos od zera
-uv run invoke check-model --force-load         # ładuj dane mimo że już są na main (zwykle się nie uda)
+uv run invoke check-model --update-golden      # write the golden files tests/traversal/golden/*.txt
+uv run invoke check-model --keep-branch        # keep the tv-* branch for inspection
+uv run invoke check-model --rebuild            # clean the test containers and build the stack from scratch
+uv run invoke check-model --force-load         # load the data even though it is already on main (usually fails)
 ```
 
-Kroki: (1) stos na `:8100` (jeśli nie odpowiada na `/api/info`, runner startuje go jak test integracyjny `test_01`;
-jednorazowo ok. 5 minut, kontenery zostają); (2) gałąź `tv-<czas>`; (3) `infrahubctl schema load` z drzewa roboczego
-na tej gałęzi (odmowy serwera są wypisane dosłownie); (4) `infrahubctl object load` katalogów danych, po kolei;
-(5) dla każdej pary segmentów: odczyt grafu, przejście L1 i L3, asercje, porównanie z plikiem wzorcowym; (6) usunięcie
-gałęzi (także po błędzie) i czas całkowity. Nic nie jest zapisywane na `main`.
+Steps: (1) the stack on `:8100` (if it does not answer on `/api/info`, the runner starts it like the integration test
+`test_01`; about 5 minutes once, the containers stay); (2) a branch `tv-<time>`; (3) `infrahubctl schema load` from the
+working tree onto that branch (server refusals are printed verbatim); (4) `infrahubctl object load` of the data
+directories, in order; (5) for every segment pair: read the graph, walk L1 and L3, assert, compare with the golden file;
+(6) delete the branch (also after a failure) and print the total time. Nothing is written to `main`.
 
-Ścieżki są serwera (`utils/path_trace.py`, `traverse_paths`): para w `cases.yml` podaje końce jako `rodzaj:nazwa`
-(`src`, `dst`) i, gdy cel ma być osiągalny przez konkretny transport, `through` (jedno śledzenie `--via` na transport).
-Asercje na parę: L1 i L3 docierają do celu, zbiór ścieżek równego kosztu (ECMP, minimalna głębokość) jest kompletny
-(limit `max_paths` 100 powyżej jego rozmiaru, budżet serwera nie obcięty), każdy łańcuch przechodzi przez transport
-dozwolonego rodzaju (`far_end_kinds`), typy obwodów na łańcuchach transportu (`through`: nośniki w L1, obwody sesji w L3;
-nośnik nazywa jego `circuit_id`), kierunek odwrotny daje te same łańcuchy, transport trzyma wymagane interfejsy
-(`transport_kinds`), zgodność z plikiem wzorcowym (posortowane łańcuchy `rodzaj:hfid`). Para ujemna (`expect_unreachable`):
-kompletny pusty wynik w obu warstwach z dokładnym komunikatem serwerowego wyszukiwania. Przy błędzie tabela PASS/FAIL
-podaje wynik tracera albo różnicę względem wzorca.
+The paths are the server's (`utils/path_trace.py`, `traverse_paths`): a pair in `cases.yml` gives its ends as
+`kind:name` (`src`, `dst`) and, when the target must be reachable through a specific transport, `through` (one `--via`
+trace per transport). Assertions per pair: L1 and L3 reach the target, the equal-cost set of paths (ECMP, minimal depth)
+is complete (`max_paths` limit 100 above its size, the server budget not truncated), every chain crosses a transport of
+an allowed kind (`far_end_kinds`), the circuit types on the transport chains (`through`: carriers in L1, session
+circuits in L3; a carrier is named by its `circuit_id`), the reverse direction gives the same chains, the transport
+holds the required interfaces (`transport_kinds`), agreement with the golden file (sorted `kind:hfid` chains). A
+negative pair (`expect_unreachable`): a complete empty result in both layers with the exact message of the server
+search. On failure the PASS/FAIL table shows the tracer result or the difference from the golden file.
 
-## Katalogi danych, pod, internet, pary
+## Data directories, pod, internet, pairs
 
-`data:` to katalog próbki (`data/demos/00_full_topology`: numerowane foldery to kolejność ładowania, jedno
-`infrahubctl object load`); ładuje go `tests/traversal/load_topology.py` (`async apply(client, branch, force)`; polecenie: `uv run python tests/traversal/load_topology.py --branch main`): ładuje obiekty (pomija, gdy
-segment-sentinel jest już na gałęzi, np. odziedziczony z `main` po `test_03`) i wykonuje krok po ładowaniu (wiersz VLAN
-drugiego liścia). Te same asercje uruchamia `tests/integration/test_03_full_topology.py` na `main` stosu
-(`assert_case` z `check_model.py`, część `invoke test-integration-fast`). Klucze przypadku: `pod` (MLAG, bond
-dwunogi, wdrożenie liści i spine do pod, border leaves do DC, wiersze VLAN z odczytu danych; liczba łańcuchów L1 serwer -> krawędź i overlay L3 z obu liści z łańcuchów serwera), `internet` (INTERNET: jeden obiekt pod etykietą Internet z jednym interfejsem, dwa ISP i strony publiczne SaaS i chmury przyłączone do niego; L1 z portu krawędzi przez każdy ISP i INTERNET do portu strony publicznej: jeden łańcuch, trzy nośniki po `circuit_id`; plik wzorcowy `full_topology__internet.txt`; L1 do routera ISP, L3
-przez przestrzeń INTERNET, brak tunelu), `transport_sub_interfaces` (port i pakiet transportu widzą swoje peeringi w
-`sub_interfaces`); odczyty danych w `tests/traversal/walks.py` (czytają `d` z `graph_read.py`, bez szukania ścieżek), ocena łańcuchów w `tests/traversal/chain_rows.py` (z testami jednostkowymi). `inventory_golden` to to, czego łańcuchy nie pokazują: interfejsy peeringu (zakres, AS peera, ogłaszane prefiksy), bramy z AS, dozwolone prefiksy załączników, interfejsy transportów. Klucze pary: `src`, `dst`, `through`,
-`far_end_kinds`, `transport_kinds`, `expect_unreachable`, `layers`, `golden`, `max_paths` (limit ścieżek jednego wywołania, domyślnie 30,
-serwer przyjmuje do 100; para od segmentu dzierżawcy przechodzi przez cały pod, więc prosi o 100) i `circuit_types` (typy obwodów na
-najkrótszych łańcuchach pary bez waypointa: nośniki w L1, obwody sesji w L3; lista pusta = żaden).
+`data:` is the directory of the sample (`data/demos/00_full_topology`: the numbered folders are the load order, one
+`infrahubctl object load`); `tests/traversal/load_topology.py` loads it (`async apply(client, branch, force)`; command:
+`uv run python tests/traversal/load_topology.py --branch main`): it loads the objects (and skips when the sentinel
+segment is already on the branch, for example inherited from `main` after `test_03`) and runs the after-load step (the
+VLAN row of the second leaf). `tests/integration/test_03_full_topology.py` runs the same assertions on the `main` of the
+stack (`assert_case` from `check_model.py`, part of `invoke test-integration-fast`). Case keys: `pod` (the MLAG, the
+dual-homed bond, the deployment of the leaves, spine and server to the pod and of the border leaves to the DC, VLAN
+rows from a data read; the number of L1 chains server -> edge and the L3 overlay from both leaves, from the server's
+chains; the bond is followed through the patch panels of the racks), `internet` (INTERNET: one object under the label
+Internet with one interface, two ISPs and the public sides of a SaaS and of a cloud attached to it; L1 from the edge
+port through each ISP and INTERNET to the port of the public side: one chain, three carriers by `circuit_id`; golden
+file `full_topology__internet.txt`; L1 to the ISP router, L3 through the INTERNET space, no tunnel),
+`transport_sub_interfaces` (a transport port and bundle see their peerings in `sub_interfaces`); the data reads are in
+`tests/traversal/walks.py` (they read `d` from `graph_read.py`, no path search), the judging of chains in
+`tests/traversal/chain_rows.py` (with unit tests). `inventory_golden` is what the chains do not show: the peering
+interfaces (scope, peer AS, announced prefixes), the gateways with their AS, the allowed prefixes of the attachments,
+the interfaces of the transports. Pair keys: `src`, `dst`, `through`, `far_end_kinds`, `transport_kinds`,
+`expect_unreachable`, `layers`, `golden`, `max_paths` (the path limit of one call, 30 by default, the server accepts up
+to 100; a pair from a tenant segment crosses the whole pod, so it asks for 100) and `circuit_types` (the circuit types
+on the shortest chains of a pair without a waypoint: carriers in L1, session circuits in L3; an empty list means none).
 
-Trzy miejsca próbki (DC, kolokacja, biuro): pary między nimi i do INTERNET są w `pairs` (końce to segment `c900-demo-web-p`,
-krawędź klatki `eg-dmc101`, krawędź biura `C900-OFFICE-EDGE1`, `TopologyInternet:INTERNET`; do INTERNET tylko `layers: [l1]`,
-bo INTERNET nie routuje). Dwa dalsze klucze przypadku: `sites` (każde miejsce sięga INTERNET w L1 przez własny nośnik dostępowy
-i uplink routera ISP: `chain_rows.site_internet_rows`) i `layout` (odczyt danych: nośniki chmury i SaaS zaczynają się w klatce,
-światłowody ciemne łączą DC i klatkę, tunele kończą się na krawędzi biura, krawędź klatki sięga portu Fabric przez gniazdo panelu:
-`walks.layout_rows`). Zbiór ścieżek równego kosztu serwer zwraca do 100: para, której zbiór jest większy, nie ma kompletnego
-wyniku, dlatego dane trzymają zbiór mały (np. sesja DCI to tylko peering EVPN między procesami overlay).
+The three sites of the sample (DC, colocation, office): the pairs between them and to INTERNET are in `pairs` (the ends
+are the segment `c900-demo-web-p`, the cage edge `eg-dmc101`, the office edge `C900-OFFICE-EDGE1`,
+`TopologyInternet:INTERNET`; to INTERNET only `layers: [l1]`, because INTERNET does not route). Two more case keys:
+`sites` (every site reaches INTERNET in L1 through its own access carrier and the uplink of an ISP router:
+`chain_rows.site_internet_rows`) and `layout` (a data read: the cloud and SaaS carriers start in the cage, the dark
+fibres join the DC and the cage, the tunnels end on the office edge, the cage edge reaches the Fabric port through a
+panel jack: `walks.layout_rows`). The server returns the equal-cost path set up to 100: a pair whose set is larger has
+no complete result, so the data keeps the set small (for example a DCI session is only an EVPN peering between the
+overlay processes).
 
-## Nowy przypadek
+## A new case
 
-Dopisz wpis do `cases.yml`: katalog schematu, katalogi danych (kolejno), pary `src`/`dst` z oczekiwaniami (`through`, `far_end_kinds`). Tym samym mechanizmem można testować topologię
-główną projektu.
+Add an entry to `cases.yml`: the schema directory, the data directories (in order), the `src`/`dst` pairs with their
+expectations (`through`, `far_end_kinds`). The same mechanism can test the main topology of the project.
 
-## Ograniczenia
+## Limits
 
-- Dane przykładowe już obecne na `main` (np. załadowane ręcznie) gałąź dziedziczy: ładowanie jest pomijane (ponowne
-  zdublowałoby zagnieżdżone `segment_deployments`), a test mówi to wprost. Pełny test ładowania plików danych wymaga
-  stosu bez tych danych: `--rebuild`.
-- Odmowa schematu spowodowana instancjami w innych gałęziach (usunięty rodzaj) wymaga przebudowy stosu: `--rebuild`.
-- Nie uruchamia generatorów, transformów ani checków: sprawdza model i dane pisane ręcznie.
-- Schemat ładowany jest na gałąź, więc `main` instancji może mieć starszy schemat; asercje dotyczą gałęzi.
+- Sample data already present on `main` (for example loaded by hand) is inherited by the branch: the load is skipped
+  (a second load would duplicate the nested `segment_deployments`), and the test says so plainly. A full test of loading
+  the data files needs a stack without that data: `--rebuild`.
+- A schema refusal caused by instances in other branches (a removed kind) needs a rebuilt stack: `--rebuild`.
+- It does not run generators, transforms or checks: it verifies the model and the hand-written data.
+- The schema is loaded onto the branch, so the `main` of the instance may hold an older schema; the assertions concern
+  the branch.
