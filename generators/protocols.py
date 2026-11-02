@@ -616,6 +616,14 @@ class TopologyExternalProviders(
     provider: RelationshipAttribute[OrganizationProvider]
 
 
+class TopologyInternet(DcimDevice, TopologyDeployment, TopologyConnectableLocation, TopologyFacility):
+    description: StringOptional
+
+
+class TopologyInternetInterface(DcimInterface):
+    pass
+
+
 class LocationFacility(LocationGeneric):
     pass
 
@@ -1132,6 +1140,7 @@ class CloudServiceEndpoint(CloudResource):
     access: Dropdown
     service_name: StringOptional
     provider: RelationshipAttribute[OrganizationProvider]
+    prefix: RelationshipAttribute[IpamPrefix]
     saas_region: RelationshipAttribute[TopologySaasRegion]
     segments: RelationshipManager[CloudNetworkSegment]
     virtual_network: RelationshipAttribute[CloudVirtualNetwork]

@@ -19,6 +19,8 @@ Carrier circuits
        same metro is not the end: add_circuit (``plan_locations``) refuses an authored location that differs from
        the end device's deployment. The metro is no facility and no device is deployed to it,
     3. its offices (an office's access circuit, add_sdwan_edge's INET-<office>) are of one owner.
+    4. THE INTERNET (``TopologyInternet``, a device that is a facility itself, so its own end's location) and the
+       carriers that end on its interface: ``utils/internet_object.py`` (I1 to I4).
 
 Tunnel circuit (``circuit_type`` tunnel: office edge to SD-WAN gateway; inventory only, the orchestrator owns the
 overlay routing)
@@ -111,6 +113,7 @@ from utils.circuit_underlay import (
     DCI_TYPE,
     DECOMMISSIONED,
     HANDOFF_TYPE,
+    INTERNET_KIND,
     OVERLAY_ROLE,
     SESSION_CIRCUIT,
     SESSION_CIRCUIT_TYPES,
@@ -124,6 +127,7 @@ from utils.circuit_underlay import (
 )
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import PROD_TYPE, TENANT_NAMESPACE_TYPES
+from utils.internet_object import internet_findings
 from utils.limits import CIRCUIT_ENDS
 from utils.ownership import CircuitOwnerError, circuit_owner
 
@@ -194,8 +198,11 @@ def _locations(circuit: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _facility(device: dict[str, Any] | None) -> dict[str, Any] | None:
-    """Where a device sits: its ``deployment``, else (a cloud transport has none) its region or SaaS region."""
+    """Where a device sits: its ``deployment``, else (a cloud transport has none) its region or SaaS region. THE
+    INTERNET is a facility itself."""
     device = device or {}
+    if device.get("typename") == INTERNET_KIND:
+        return device
     place = device.get("deployment") or device.get("region") or device.get("saas_region")
     return place if isinstance(place, dict) else None
 
@@ -306,6 +313,11 @@ class CheckCircuitPlacement(InfrahubCheck):
         cleaned = clean_data(data)
         for circuit in cleaned.get(CARRIER) or []:
             self._validate_carrier(circuit)
+        for node, message in internet_findings(cleaned.get(CARRIER) or [], cleaned.get(INTERNET_KIND) or []):
+            if node.get("typename") == INTERNET_KIND:
+                self.log_error(message=message, object_id=node.get("id"), object_type=INTERNET_KIND)
+            else:
+                self._error(node, CARRIER, message)
         by_type: dict[str, list[dict[str, Any]]] = {circuit_type: [] for circuit_type in CIRCUIT_TYPES}
         for circuit in cleaned.get(SESSION_CIRCUIT) or []:
             circuit_type = circuit.get("circuit_type")

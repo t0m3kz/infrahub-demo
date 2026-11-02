@@ -30,7 +30,9 @@
   er-c900-weu [DirectConnect] port 2 lag 0 vif 2
   ic-c900-fra-1 [DirectConnect] port 1 lag 0 vif 1
   ic-ded-c900-fra [DirectConnect] port 1 lag 0 vif 1
+  s3-c900-euc1-pub [DirectConnect] port 1 lag 0 vif 0
   vpn-c900-aws-euc1 [VPNConnection] port 0 lag 0 vif 2
+  webex-c900-fra-pub [DirectConnect] port 1 lag 0 vif 0
   webex-c900-fra-xc [DirectConnect] port 1 lag 0 vif 1
   zscaler-c900-muc [VPNConnection] port 0 lag 0 vif 1
 # missing

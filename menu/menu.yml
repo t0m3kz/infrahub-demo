@@ -103,6 +103,11 @@ spec:
             label: Session Circuits
             kind: TopologySessionCircuit
             icon: "mdi:swap-horizontal-bold"
+          - namespace: Topology
+            name: CsInternetItem
+            label: The Internet
+            kind: TopologyInternet
+            icon: "mdi:earth"
 
     # ──────────────────────────────────────────────────────────────────────────
     # CUSTOMER DEPLOYMENTS — customer footprints inside DC/Colo/Cloud topology

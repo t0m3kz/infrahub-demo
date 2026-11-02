@@ -64,13 +64,18 @@ QUERIES = {
     "iface": f"""DcimPhysicalInterface {{ edges {{ node {{ {IF_TOP} {CAPS} lag {{ node {{ id name {{ value }} }} }} segments {{ edges {{ node {{ id }} }} }} sub_interfaces {{ edges {{ node {{ id }} }} }} ip_address {{ node {{ address {{ value }} ip_namespace {{ node {{ name {{ value }} }} }} }} }} cable {{ node {{ name {{ value }} endpoints {{ edges {{ node {{ {EPC} }} }} }} }} }} }} }} }}""",
     "front": f"""DcimFrontPatchPanelPort {{ edges {{ node {{ {PP_TOP} rear_port {{ node {{ port_id {{ value }} }} }} cable {{ node {{ name {{ value }} endpoints {{ edges {{ node {{ {EPC} }} }} }} }} }} }} }} }}""",
     "rear": f"""DcimRearPatchPanelPort {{ edges {{ node {{ {PP_TOP} cable {{ node {{ name {{ value }} endpoints {{ edges {{ node {{ {EPC} }} }} }} }} }} }} }} }}""",
-    "carrier": f"""TopologyCarrierCircuit {{ edges {{ node {{ id name {{ value }} circuit_type {{ value }} capabilities {{ edges {{ node {{ {EP} }} }} }} }} }} }}""",
+    "carrier": f"""TopologyCarrierCircuit {{ edges {{ node {{ id name {{ value }} circuit_type {{ value }} locations {{ edges {{ node {{ display_label }} }} }} capabilities {{ edges {{ node {{ {EP} }} }} }} }} }} }}""",
     "session": f"""TopologySessionCircuit {{ edges {{ node {{ id name {{ value }} circuit_type {{ value }} capabilities {{ edges {{ node {{ {EP} }} }} }} }} }} }}""",
     "vif": f"""DcimVirtualInterface {{ edges {{ node {{ {IF_TOP} {CAPS} parent_interface {{ node {{ id }} }} }} }} }}""",
     "lag": f"""DcimLAGInterface {{ edges {{ node {{ {IF_TOP} {CAPS} lag_id {{ value }} segments {{ edges {{ node {{ id }} }} }} sub_interfaces {{ edges {{ node {{ id }} }} }}
       member_interfaces {{ edges {{ node {{ id name {{ value }} }} }} }} }} }} }}""",
     "dev": """DcimPhysicalDevice { edges { node { id name { value } role { value } deployment { node { __typename name { value }
-      ... on TopologyExternalProviders { provider { node { org_id { value } } } } } } } } }""",
+      ... on TopologyExternalProviders { provider { node { org_id { value } } } parent { node { name { value } } } } } } } } }""",
+    # THE INTERNET: a device that is a facility, one interface of its own kind; the carriers on it are who is attached
+    "inet": """TopologyInternet { edges { node { id name { value } parent { node { __typename name { value } } } interfaces { edges { node { __typename id name { value } } } }
+      circuits { edges { node { id name { value } } } } } } }""",
+    "inetif": f"""TopologyInternetInterface {{ edges {{ node {{ {IF_TOP}
+      capabilities {{ edges {{ node {{ __typename id ... on TopologyCarrierCircuit {{ name {{ value }} }} }} }} }} }} }} }}""",
     "mlag": """ManagedMLAG { edges { node { id name { value } peer_devices { value } domain_id { value }
       capabilities { edges { node { display_label } } } } } }""",
     "vrf": """ManagedVRF { edges { node { id name { value } namespace { node { name { value } } } deployment { node { name { value } } }
@@ -79,7 +84,7 @@ QUERIES = {
     "addr": """IpamIPAddress { edges { node { id address { value } ip_namespace { node { name { value } } } } } }""",
     "dx": """CloudDirectConnect { edges { node { id name { value } connection_type { value } service_key { value } bandwidth { value }
       account { node { name { value } } } partner_account { node { name { value } } } rides_on { node { id name { value } } }
-      region { node { name { value } } } saas_region { node { display_label } } owner { node { name { value } } } } } }""",
+      region { node { name { value } display_label } } saas_region { node { display_label } } owner { node { name { value } } } } } }""",
     "peer": f"""CloudPeeringInterface {{ edges {{ node {{ {IF_TOP} {CAPS} scope {{ value }} routing {{ value }} vlan_id {{ value }}
       tunnel_index {{ value }} mtu {{ value }} bfd {{ value }} service_id {{ value }} endpoint_ip {{ value }} tunnel_mode {{ value }}
       crypto_profile {{ node {{ name {{ value }} }} }} tunnel_key {{ node {{ name {{ value }} }} }}
@@ -97,8 +102,8 @@ QUERIES = {
       associated_route_table { node { name { value } } } propagates_to_route_tables { edges { node { name { value } } } } } } }""",
     "sep": """CloudServiceEndpoint { edges { node { id name { value } service_name { value } access { value } status { value }
       provider { node { org_id { value } } } saas_region { node { display_label } }
-      segments { edges { node { id } } } virtual_network { node { id } } } } }""",
-    "vnet": """CloudVirtualNetwork { edges { node { id name { value } account { node { name { value } } }
+      segments { edges { node { id } } } virtual_network { node { id } } prefix { node { prefix { value } } } } } }""",
+    "vnet": """CloudVirtualNetwork { edges { node { id name { value } account { node { name { value } } } region { node { display_label } }
       peers { edges { node { id name { value } } } }
       cidr_blocks { edges { node { prefix { value } } } } network_segments { edges { node { id name { value } cidr_block { value } } } } } } }""",
     "csg": """CloudNetworkSegment { edges { node { id name { value } cidr_block { value } virtual_network { node { id name { value } } } } } }""",

@@ -33,7 +33,7 @@ przeskok, który się urwał, albo różnicę względem wzorca.
 `data:` w przypadku to lista katalogów ładowanych po kolei; wpis `{path, sentinel}` ma własny sentinel i jest pomijany, gdy
 gałąź dziedziczy go z `main` (dodatki ładują się na stos, który ma już bazę). `after_load:` to moduły z
 `async apply(client, branch)` (idempotentne), np. wiersz VLAN drugiego liścia. Klucze przypadku: `pod` (MLAG, bond
-dwunogi, wiersze VLAN, liczba ścieżek L1 serwer -> krawędź, overlay z obu liści), `internet` (L1 do routera ISP, L3
+dwunogi, wiersze VLAN, liczba ścieżek L1 serwer -> krawędź, overlay z obu liści), `internet` (INTERNET: jeden obiekt pod etykietą Internet z jednym interfejsem, dwa ISP i strony publiczne SaaS i chmury przyłączone do niego; L1 z krawędzi przez każdy ISP i INTERNET do strony publicznej, plik wzorcowy `cloud_saas_model__internet.txt`; L1 do routera ISP, L3
 przez przestrzeń INTERNET, brak tunelu), `transport_sub_interfaces` (port i pakiet transportu widzą swoje peeringi w
 `sub_interfaces`); asercje w `tests/traversal/walks.py` (z testami jednostkowymi). Klucze pary: `cloud_segment` albo
 `saas_region`, `via` (tylko transporty tych rodzajów), `reverse: false`, `expect_unreachable` + `expect_missing`

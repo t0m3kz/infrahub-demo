@@ -18,6 +18,8 @@ _MANAGED_KINDS = {
     "ManagedControllerVirtual",
 }
 _TRANSPORTS = {"CloudDirectConnect", "CloudVPNConnection"}
+# THE INTERNET: a passive meeting point, a slim device that is also a facility (a carrier circuit's location).
+_PASSIVE = {"TopologyInternet"}
 
 
 def _documents() -> list[dict[str, Any]]:
@@ -83,11 +85,27 @@ def test_a_cloud_transport_inherits_only_the_slim_device() -> None:
         assert not inherited & {"DcimDeviceManaged", "DcimCapabilities", "CoreArtifactTarget", "AppInstance"}, kind
 
 
+def test_the_internet_is_a_passive_device_and_a_facility_with_one_interface_kind() -> None:
+    """Ports through the slim device, a location through the facility; no role, platform, owner, artifact, capability.
+    Its interface is a kind of its own, the only one a carrier check exempts from one carrier per port."""
+    nodes = _kinds("nodes")
+
+    assert set(nodes["TopologyInternet"]["inherit_from"]) == {
+        "DcimDevice",
+        "TopologyDeployment",
+        "TopologyConnectableLocation",
+        "TopologyFacility",
+    }
+    assert nodes["TopologyInternet"]["parent"] == "TopologyLabel"
+    assert nodes["TopologyInternetInterface"]["inherit_from"] == ["DcimInterface"]
+
+
 def test_only_the_known_kinds_inherit_the_slim_device() -> None:
-    """A new holder of interfaces is a decision: managed kinds take both generics, transports only the slim one."""
+    """A new holder of interfaces is a decision: managed kinds take both generics, transports and THE INTERNET only the
+    slim one."""
     inheritors = {kind for kind, node in _kinds("nodes").items() if "DcimDevice" in (node.get("inherit_from") or [])}
 
-    assert inheritors == _MANAGED_KINDS | _TRANSPORTS
+    assert inheritors == _MANAGED_KINDS | _TRANSPORTS | _PASSIVE
 
 
 def test_the_peers_that_need_a_managed_device_are_retyped() -> None:

@@ -1,0 +1,169 @@
+---
+# THE INTERNET as one passive object with one shared interface, and the L1 that meets on it. Our edge port -> internet
+# carrier -> ISP router; the ISP router's uplink -> internet carrier -> the interface of INTERNET; the public side of a
+# SaaS region and of a cloud region -> internet carrier -> the same interface. So from dc90-edge-01 the public side of
+# Webex and of the object store is reachable at L1 through either ISP. INTERNET has no routing: the addresses and
+# prefixes of this scenario live in the INTERNET namespace (00_ipam_asn.yml).
+#
+#   dc90-edge-01 Ethernet1/2 -- INET-DC90-ISP-DEMO   -- EXT-ISP-DEMO-PE1   et-0/0/0   (base sample, ISP-DEMO)
+#                               EXT-ISP-DEMO-PE1    xe-0/1/0 -- UPL-ISP-DEMO   -+
+#   dc90-edge-01 Ethernet1/1 -- INET-DC90-ISP-DEMO-B -- EXT-ISP-DEMO-B-PE1 et-0/0/0   (a second ISP)    |
+#                               EXT-ISP-DEMO-B-PE1  xe-0/1/0 -- UPL-ISP-DEMO-B -+                      |
+#   webex-c900-fra-pub pub-1 -- PUB-WEBEX-FRA (Webex Frankfurt, public side) ----+--> INTERNET:bus
+#   s3-c900-euc1-pub   pub-1 -- PUB-S3-EUC1 (object store eu-central-1, public side) -+
+#
+# INTERNET has ONE interface, `bus`, of its own kind (TopologyInternetInterface), and every attachment keeps a carrier
+# circuit of its own that ends on it: the kind is what lets many carriers share it (checks/carrier_circuit_ports.py).
+# The carriers are `internet` circuits; the five ends that are not the bus are the ports of ISP routers and of the
+# transports that stand for the public sides.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyInternet
+  data:
+    - name: "INTERNET"
+      parent: "Internet"
+      description: "The one passive meeting point of every ISP, SaaS public side and cloud public side"
+---
+# The second ISP: a router of its own at its own external-provider facility.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyExternalProviders
+  data:
+    - name: ISP-DEMO-B
+      parent: "Internet"
+      status: active
+      provider: "P023"
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: "EXT-ISP-DEMO-B-PE1"
+      object_template: MX204_ISP_PE
+      owner: "P023"
+      description: "Second ISP router: far end of the internet carrier on Ethernet1/1, uplink to INTERNET"
+      deployment: "ISP-DEMO-B"
+---
+# The public side of the two services: a transport per region, holding the port the internet carrier ends on. They are
+# the same CloudDirectConnect as the private ones; nothing marks them public but the carrier that reaches INTERNET.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudDirectConnect
+  data:
+    - name: "webex-c900-fra-pub"
+      description: "Public side of Webex Frankfurt: where the service is reached over the internet"
+      status: active
+      connection_type: physical
+      bandwidth: 10000
+      saas_region: "WEBEX-FRANKFURT"
+      owner: "C900"
+    - name: "s3-c900-euc1-pub"
+      description: "Public side of the object store API of eu-central-1, reached over the internet"
+      status: active
+      connection_type: physical
+      bandwidth: 10000
+      account: "c900-aws-prod"
+      region: "eu-central-1"
+---
+# The ports the carriers end on. INTERNET has one interface, of its own kind, shared by every attachment.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyInternetInterface
+  data:
+    - device: "INTERNET"
+      name: "bus"
+      description: "The shared interface: every ISP uplink and every public side ends here, each on its own carrier"
+      status: active
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - device: "webex-c900-fra-pub"
+      name: "pub-1"
+      description: "Public service port of Webex Frankfurt"
+      status: active
+    - device: "s3-c900-euc1-pub"
+      name: "pub-1"
+      description: "Public service port of the object store API"
+      status: active
+---
+# The carriers. Locations are authored (no generator runs in this sample): a carrier has exactly two, one per end, and
+# INTERNET is the location of its own end. INET-DC90-ISP-DEMO-B is an access carrier like the base sample's; the four
+# others are attachments: their second end is the bus.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCarrierCircuit
+  data:
+    - name: INET-DC90-ISP-DEMO-B
+      circuit_id: INET-DC90-ISP-DEMO-B
+      description: Second internet access of dc90-edge-01
+      provider: P023
+      circuit_type: internet
+      status: active
+      bandwidth: 1000
+      locations:
+        - DC90
+        - ISP-DEMO-B
+      capabilities:
+        - ["dc90-edge-01", "Ethernet1/1"]
+        - ["EXT-ISP-DEMO-B-PE1", "et-0/0/0"]
+    - name: UPL-ISP-DEMO
+      circuit_id: UPL-ISP-DEMO
+      description: Uplink of the ISP-DEMO router to the internet
+      provider: P014
+      circuit_type: internet
+      status: active
+      bandwidth: 100000
+      locations:
+        - ISP-DEMO
+        - INTERNET
+      capabilities:
+        - ["EXT-ISP-DEMO-PE1", "xe-0/1/0"]
+        - ["INTERNET", "bus"]
+    - name: UPL-ISP-DEMO-B
+      circuit_id: UPL-ISP-DEMO-B
+      description: Uplink of the ISP-DEMO-B router to the internet
+      provider: P023
+      circuit_type: internet
+      status: active
+      bandwidth: 100000
+      locations:
+        - ISP-DEMO-B
+        - INTERNET
+      capabilities:
+        - ["EXT-ISP-DEMO-B-PE1", "xe-0/1/0"]
+        - ["INTERNET", "bus"]
+    - name: PUB-WEBEX-FRA
+      circuit_id: PUB-WEBEX-FRA
+      description: Public side of Webex Frankfurt to the internet
+      provider: P901
+      circuit_type: internet
+      status: active
+      bandwidth: 10000
+      locations:
+        - WEBEX-FRANKFURT
+        - INTERNET
+      capabilities:
+        - ["webex-c900-fra-pub", "pub-1"]
+        - ["INTERNET", "bus"]
+    - name: PUB-S3-EUC1
+      circuit_id: PUB-S3-EUC1
+      description: Public side of the object store API of eu-central-1 to the internet
+      provider: P004
+      circuit_type: internet
+      status: active
+      bandwidth: 10000
+      locations:
+        - eu-central-1
+        - INTERNET
+      capabilities:
+        - ["s3-c900-euc1-pub", "pub-1"]
+        - ["INTERNET", "bus"]

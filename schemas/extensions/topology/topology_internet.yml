@@ -1,0 +1,46 @@
+---
+version: "1.0"
+
+nodes:
+  # THE INTERNET: one passive object every internet attachment meets at, "a kind of cable or switch for all". It is a
+  # DcimDevice (the slim one: name and interfaces, nothing of DcimDeviceManaged) and a TopologyFacility, so a carrier
+  # circuit can name it as a location (add_circuit derives the location of its end from the device itself, it has no
+  # `deployment`). It is a TopologyDeployment like every place, so it lives in the topology tree: the singleton
+  # `INTERNET` sits under the label "Internet" next to the ISPs (TopologyExternalProviders). It has no role, platform,
+  # address, VRF, routing or artifact: the addresses and prefixes live in the INTERNET namespace. It has ONE
+  # interface, a TopologyInternetInterface (utils/internet_object.py, held by checks/circuit_placement.py).
+  - name: Internet
+    namespace: Topology
+    label: Internet
+    description: "The one passive meeting point of every ISP, SaaS public side and cloud public side"
+    icon: "mdi:earth"
+    include_in_menu: false
+    parent: TopologyLabel
+    children: ""
+    inherit_from:
+      - DcimDevice
+      - TopologyDeployment
+      - TopologyConnectableLocation
+      - TopologyFacility
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value }}"
+    order_by:
+      - name__value
+    attributes:
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 950
+
+  # The one interface of THE INTERNET: the end every internet attachment shares. Its kind is what lets many carrier
+  # circuits end on it (checks/carrier_circuit_ports.py exempts it by kind from "a port is an end of at most one
+  # carrier"), so each attachment keeps a carrier circuit of its own and the graph says who is attached.
+  - name: InternetInterface
+    namespace: Topology
+    label: Internet Interface
+    description: "The shared interface of THE INTERNET: many carrier circuits end on it"
+    icon: "mdi:earth"
+    include_in_menu: false
+    inherit_from:
+      - DcimInterface

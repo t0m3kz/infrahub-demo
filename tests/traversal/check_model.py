@@ -232,6 +232,21 @@ def check_pair(rep: Report, case: dict, pair: dict, tracer: ModuleType, d: dict,
         rep.add(f"[{tag}] golden {pair['golden']}", golden.read_text() == text, diff_text(golden.read_text(), text))
 
 
+def check_internet_golden(rep: Report, cfg: dict, paths: list[str], update_golden: bool) -> None:
+    """The L1 path from the edge through each ISP and THE INTERNET to each public side, as a golden text."""
+    golden = GOLDEN_DIR / cfg["golden"]
+    text = "# L1 paths: our edge through an ISP and THE INTERNET to the public side of a service\n" + "".join(
+        f"  {line}\n" for line in paths
+    )
+    if update_golden:
+        golden.write_text(text)
+        rep.add("[internet] golden written", True, f"note: {golden.relative_to(ROOT)}")
+    elif not golden.exists():
+        rep.add("[internet] golden", False, f"{golden.relative_to(ROOT)} missing: run with --update-golden")
+    else:
+        rep.add(f"[internet] golden {cfg['golden']}", golden.read_text() == text, diff_text(golden.read_text(), text))
+
+
 # ------------------------------------------------------------------ main flow
 
 
@@ -297,6 +312,7 @@ async def run_case(
         if case.get("internet"):
             for row in walks.internet_rows(d, case["internet"]):
                 rep.add(*row)
+            check_internet_golden(rep, case["internet"], walks.internet_paths(d, case["internet"]), args.update_golden)
         declared = walks.declared_rides_on(
             [s for p in case["data"] for s in walks.yaml_documents(ROOT / (p if isinstance(p, str) else p["path"]))]
         )

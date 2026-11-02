@@ -241,7 +241,7 @@ class MyCheck(InfrahubCheck):
 | --------- | ----- |
 | Managed | On-prem services and the shared generics `ManagedGeneric` (name, description, status), `ManagedGenericDevice` (the individual device edge, `capabilities`, cascades), `ManagedGenericSharedDevice` (the shared device edge, `shared_capabilities`, never cascades), `ManagedGenericInterfaces` (the interface-side `capabilities` edge; its identifier stays `interface_capabilities`), `ManagedNetworkSegment` and `ManagedLoadBalancer`, and `ManagedVRF` (a namespace realized in one topology, a shared kind) |
 | Cloud | Provider-hosted resources (public cloud and provider-hosted network services); every resource inherits `CloudResource`, except `CloudNetworkAppliance`, a provider-hosted network function (Equinix Network Edge) that inherits the device generics (`DcimDevice`, `DcimDeviceManaged`, `DcimCapabilities`) so its interfaces (virtual NICs: no hardware), BGP and HA stay device-shaped, and the two transports `CloudDirectConnect` and `CloudVPNConnection`, which inherit `CloudResource`, `CloudTransport` and only the slim `DcimDevice` (see **Device generics**); a cloud region hosts nothing but its transports' ports. The cloud and SaaS side of a connection is one provider-neutral model (see **Cloud and SaaS connections**): the transport devices (`CloudDirectConnect`, `CloudVPNConnection`, generic `CloudTransport` with `account`, `region` or `saas_region`, `owner`), the peering interface `CloudPeeringInterface` (a `DcimInterface` of its transport), the gateway `CloudGateway` (`hub`, `edge` or `customer`) with `CloudGatewayAttachment` and `CloudGatewayRouteTable`, `CloudVirtualNetwork` and `CloudServiceEndpoint` |
-| Topology | Deployments (`TopologyDataCenter`, `TopologyPod`, `TopologyColocationMetro`, ...), design elements, circuits (`TopologyCarrierCircuit` and `TopologySessionCircuit`, whose role is its `circuit_type`: `dci`, `handoff`, `tunnel`, `vpn`; neither has an `owner`, see **Circuit placement**) and the tenant footprints `TopologyCustomer*` |
+| Topology | Deployments (`TopologyDataCenter`, `TopologyPod`, `TopologyColocationMetro`, ...), design elements, circuits (`TopologyCarrierCircuit` and `TopologySessionCircuit`, whose role is its `circuit_type`: `dci`, `handoff`, `tunnel`, `vpn`; neither has an `owner`, see **Circuit placement**) the one meeting point of every internet connection `TopologyInternet` (see **Circuit placement**) and the tenant footprints `TopologyCustomer*` |
 | Dcim, Ipam, Location, Organization | Devices/interfaces/cables, prefixes/addresses/namespaces, geography, providers/customers |
 | Routing | Shared routing objects (`RoutingAutonomousSystem`, `RoutingOSPFArea`, `RoutingPassword`) |
 | Security, Loadbalancer, Proxy, App, Virt | Functional domains |
@@ -273,7 +273,7 @@ class MyCheck(InfrahubCheck):
   `[device, interface]` is never ambiguous) and `interfaces`: all an interface needs of its device. `DcimDeviceManaged`
   holds the rest of a device (`description`, `role`, `status`, `device_type`, `platform`, `primary_address`, `tags`, and
   the extensions `owner` and `software_image`). `DcimPhysicalDevice`, `DcimVirtualDevice`, `CloudNetworkAppliance` and the
-  controllers inherit BOTH; a holder of interfaces that is not a managed device (a cloud transport) inherits only
+  controllers inherit BOTH; a holder of interfaces that is not a managed device (a cloud transport, THE INTERNET) inherits only
   `DcimDevice`, so it has no role, platform, owner, artifact or capability edge and no query of a managed device sees
   it. A query that reads a moved field through an interface's `device` (typed `DcimDevice`) spreads
   `... on DcimDeviceManaged { ... }`; a list of devices that reads them roots at `DcimDeviceManaged`
@@ -292,7 +292,7 @@ class MyCheck(InfrahubCheck):
   `TopologyFacility`: the DC (never a pod, rack or footprint), the colocation
   cage `TopologyColocationZone` or the provider-hosted `TopologyVirtualColocation` (never the metro), the
   `TopologyCloudRegion` (never a zone or `TopologyCloud`), the ISP `TopologyExternalProviders`, the
-  `TopologySaasRegion` or the `TopologyCustomerOffice`. Data lists only the cage; `add_circuit` adds every end
+  `TopologySaasRegion`, the `TopologyCustomerOffice` or THE INTERNET `TopologyInternet` (below). Data lists only the cage; `add_circuit` adds every end
   whose endpoint device's `deployment` is a facility (border leaf -> DC, ISP PE -> ISP),
   when the circuit is created or its ends change: nothing re-runs it on a later `deployment` edit (the check reports
   it). A circuit has no `owner` field: its owner is DERIVED, never stored (`utils/ownership.py` `circuit_owner`): the owner of
@@ -308,6 +308,27 @@ class MyCheck(InfrahubCheck):
     the same port still hold both. A carrier whose far end is such a NIC is a provider-delivered
     `virtual_connection`; a physical `cross_connect` joins physical ports only (our cage edge and a Fabric port or a
     provider's own router).
+  - **THE INTERNET** (`TopologyInternet`, one instance `INTERNET`): the meeting point of every internet connection, "a
+    kind of cable or switch for all". It is a passive `TopologyDeployment` in the topology tree under the label
+    "Internet", next to the ISPs (`TopologyExternalProviders`, the label is the grouping place and `INTERNET` the meeting
+    point under it), a slim `DcimDevice` and a `TopologyFacility`: no role, platform, address, VRF, routing or artifact
+    (`carries_vrfs` and the readers of managed devices never see it), the addresses and prefixes of the internet stay in
+    the `INTERNET` namespace. It owns ONE interface of a kind of its own, `TopologyInternetInterface` (`bus`), and that
+    KIND is what lets many carrier circuits end on one interface: `checks/carrier_circuit_ports.py` exempts the kind (not a
+    name or a device) from "a port is an end of at most one carrier" and accepts it as an end. An attachment is an
+    `internet` carrier circuit of its own with two ends, the uplink port of an ISP router (or the port of the
+    `CloudDirectConnect` that stands for the public side of a cloud or SaaS region) and the bus, so the carriers that end
+    on the bus are who is attached and L1 from any ISP reaches any public side through it (edge port -> access carrier ->
+    ISP router -> its uplink -> uplink carrier -> bus -> public side carrier -> the public side's port). The INTERNET is a
+    device that IS a facility, so `add_circuit` places the end on the bus by the device itself (no `deployment`) and the
+    location rule "exactly two distinct locations, one per end" holds unchanged. `utils/internet_object.py` (called by
+    `checks/circuit_placement.py`) holds I1 (one `INTERNET`, one interface, of the bus kind), I2 (an attachment is an
+    `internet` circuit whose bus is on the INTERNET device and whose other end is an ISP router or a cloud or SaaS
+    transport, never a DC or a cage, since an edge reaches the internet through its own ISP access circuit) and I3
+    (once an INTERNET exists, an ISP router that serves an internet access carrier has an attachment). A public SaaS or
+    cloud service is a `CloudServiceEndpoint` with `access: public` and its range as `prefix` in the `INTERNET`
+    namespace; `virtual_network` is an optional plain edge (a Parent cannot be optional on 1.11.9) so a SaaS endpoint
+    names its `saas_region` only.
   - **Carrier provider data** (optional, inventory only, nothing reads it): `circuit_id` also holds the Equinix Fabric
     connection `uuid` or the Megaport VXC `product_uid`; `bandwidth` mirrors the Fabric `bandwidth` and the Megaport
     `rate_limit`; `term_length` (months) has the name and meaning of `CloudNetworkAppliance.term_length` and mirrors the
@@ -418,7 +439,8 @@ class MyCheck(InfrahubCheck):
   footprint of its source segment: `checks/internet_egress.py` requires a complete firewall pair, an INTERNET leg with
   an address per member, the exchange to INTERNET, the tagged border service ports and a `snat_address` per serving
   context (a colocation metro: each zone with firewalls, or a complete provider-hosted pair of its virtual colocation).
-  Cloud and office egress is an accepted gap, not checked.
+  Cloud and office egress is an accepted gap, not checked. Towards a public SaaS or cloud service the path is the
+  L1 of THE INTERNET (see **Circuit placement**) and L3 in the `INTERNET` namespace; no rule of this check judges it.
 - **DC service tier**: `TopologyCustomerTemplateDC` (referenced by the footprint's `design`, for example `M_DC`)
   holds `dedicated_firewall`, `dedicated_loadbalancer`, `max_segments`, `ports_25g` and `ports_100g` (0 = no
   host-facing ports of that speed). `checks/customer_quota.py` enforces the segment and port numbers; a footprint

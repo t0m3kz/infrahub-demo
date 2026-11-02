@@ -223,30 +223,166 @@ def pod_rows(d: dict, cfg: dict) -> list[Row]:
 # ------------------------------------------------------------------ internet through an ISP
 
 
+def _end_label(node: dict) -> str:
+    return f"{_dev(node)}:{val(node, 'name')}"
+
+
+def l1_path(d: dict, start: str, goal: str, isp_devices: set[str]) -> list[str] | None:
+    """Shortest L1 path (breadth first) between two ports `device:port`, as the hops in order: ports and the carrier
+    circuits between them, `(device D)` where it passes through an ISP router from one port to another. A carrier joins
+    its two ends, so every carrier that ends on THE INTERNET's one interface joins all the attachments."""
+    ends: dict[str, list[tuple[str, str]]] = {}
+    for carrier in d["carrier"]:
+        ports = [_end_label(e) for e in rel(carrier, "capabilities")]
+        for here in ports:
+            ends.setdefault(here, []).extend((there, val(carrier, "name")) for there in ports if there != here)
+    by_device: dict[str, list[str]] = {}
+    for label in ends:
+        by_device.setdefault(label.split(":", 1)[0], []).append(label)
+    queue: list[tuple[str, list[str]]] = [(start, [start])]
+    seen = {start}
+    while queue:
+        here, path = queue.pop(0)
+        if here == goal:
+            return path
+        steps = [(there, [carrier, there]) for there, carrier in ends.get(here, [])]
+        device = here.split(":", 1)[0]
+        if device in isp_devices:
+            steps += [(other, [f"(device {device})", other]) for other in by_device[device] if other != here]
+        for there, hops in steps:
+            if there not in seen:
+                seen.add(there)
+                queue.append((there, [*path, *hops]))
+    return None
+
+
+def internet_paths(d: dict, cfg: dict) -> list[str]:
+    """The L1 path from our edge to the public side of every service through every ISP, one line each (the golden)."""
+    isp_devices = {isp["isp_device"] for isp in cfg["isps"]}
+    lines = []
+    for isp in cfg["isps"]:
+        for side in cfg["public_sides"]:
+            path = l1_path(d, f"{cfg['edge']}:{isp['access_port']}", f"{side['transport']}:{side['port']}", isp_devices)
+            lines.append(f"{isp['isp_device']} -> {side['endpoint']}: " + (" | ".join(path) if path else "(no path)"))
+    return sorted(lines)
+
+
 def internet_rows(d: dict, cfg: dict) -> list[Row]:
-    """Our edge port -> internet carrier -> ISP router -> eBGP in INTERNET -> the public ranges of two services."""
-    edge, isp, ns = cfg["edge"], cfg["isp_device"], cfg["namespace"]
+    """THE INTERNET: one object, one shared interface, an attachment per carrier; from our edge through each of two ISPs
+    to the public side of a SaaS and of a cloud service (L1); the eBGP session to the first ISP and the public ranges (L3)."""
+    edge, ns = cfg["edge"], cfg["namespace"]
+    rows: list[Row] = []
+    objects = [x for x in d["inet"] if val(x, "name") == cfg["object"]]
+    obj = objects[0] if objects else {}
+    parent = next(iter(rel(obj, "parent")), {})
+    siblings = {
+        ((x.get("deployment") or {}).get("node") or {}).get("parent", {}).get("node", {}).get("name", {}).get("value")
+        for x in d["dev"]
+        if val(x, "name") in {i["isp_device"] for i in cfg["isps"]}
+    }
+    rows.append(
+        (
+            f"internet: one {cfg['object']} under the label {cfg['label']}, next to the ISPs",
+            len(d["inet"]) == 1 and parent.get("name", {}).get("value") == cfg["label"] and siblings == {cfg["label"]},
+            f"{len(d['inet'])} object(s), parent {parent.get('name', {}).get('value')}, ISP parents {siblings}",
+        )
+    )
+    ifaces = rel(obj, "interfaces")
+    ok = (
+        len(ifaces) == 1
+        and ifaces[0]["__typename"] == "TopologyInternetInterface"
+        and val(ifaces[0], "name") == cfg["bus"]
+    )
+    rows.append(
+        (f"internet: {cfg['object']} has exactly one interface, {cfg['bus']}, of the shared kind", ok, str(ifaces))
+    )
+    expected = sorted([*(i["uplink_carrier"] for i in cfg["isps"]), *(s["carrier"] for s in cfg["public_sides"])])
+    bus = next((x for x in d["inetif"] if val(x, "name") == cfg["bus"]), {})
+    on_bus = sorted(val(c, "name") for c in d["carrier"] if bus.get("id") in _ids(rel(c, "capabilities")))
+    listed = sorted(val(c, "name") for c in rel(bus, "capabilities") if c["__typename"] == "TopologyCarrierCircuit")
+    rows.append(
+        (
+            f"internet: {len(expected)} attachments end on {cfg['bus']}, each on a carrier of its own",
+            on_bus == expected == listed,
+            f"{on_bus} / {listed}",
+        )
+    )
+    located = sorted(
+        val(c, "name") for c in d["carrier"] if cfg["object"] in [x["display_label"] for x in rel(c, "locations")]
+    )
+    rows.append(("internet: the same carriers list INTERNET as a location", located == expected, str(located)))
+    reverse = sorted(val(c, "name") for c in rel(obj, "circuits"))
+    rows.append(
+        ("internet: INTERNET.circuits (the reverse edge) answers who is attached", reverse == expected, str(reverse))
+    )
+    # L1 through each ISP to each public side, by carrier
+    isp_devices = {isp["isp_device"] for isp in cfg["isps"]}
+    for isp in cfg["isps"]:
+        for side in cfg["public_sides"]:
+            start, goal = f"{edge}:{isp['access_port']}", f"{side['transport']}:{side['port']}"
+            path = l1_path(d, start, goal, isp_devices)
+            circuits = [h for h in (path or []) if ":" not in h and not h.startswith("(device")]
+            want = [isp["access_carrier"], isp["uplink_carrier"], side["carrier"]]
+            via = [h for h in (path or []) if h.startswith(cfg["object"] + ":")]
+            rows.append(
+                (
+                    f"internet L1: {edge} -> {isp['isp_device']} -> {cfg['object']} -> {side['endpoint']} ({side['kind']} public side)",
+                    circuits == want and via == [f"{cfg['object']}:{cfg['bus']}"],
+                    str(path),
+                )
+            )
+    # the public side's transport sits where the service is
+    seps = {val(e, "name"): e for e in d["sep"]}
+    transports = {val(t, "name"): t for t in d["dx"]}
+    vnets = {v["id"]: v for v in d["vnet"]}
+    for side in cfg["public_sides"]:
+        sep, transport = seps.get(side["endpoint"], {}), transports.get(side["transport"], {})
+        where = next(iter(rel(transport, "saas_region") or rel(transport, "region")), {}).get("display_label")
+        service = next(iter(rel(sep, "saas_region")), None) or (
+            vnets.get(next(iter(rel(sep, "virtual_network")), {}).get("id"), {}).get("region") or {}
+        ).get("node")
+        rows.append(
+            (
+                f"internet: the public side {side['transport']} sits in the region of {side['endpoint']}",
+                bool(where) and where == (service or {}).get("display_label"),
+                f"{where} / {service}",
+            )
+        )
+    prefixes = {
+        val(p, "prefix"): ((p.get("ip_namespace") or {}).get("node") or {}).get("name", {}).get("value")
+        for p in d["prefix"]
+    }
+    for side in cfg["public_sides"]:
+        sep = seps.get(side["endpoint"], {})
+        own = next(iter(rel(sep, "prefix")), {})
+        ok = (
+            val(sep, "access") == "public"
+            and val(own, "prefix") == side["prefix"]
+            and prefixes.get(side["prefix"]) == ns
+        )
+        label = f"internet target {side['endpoint']} ({side['kind']}): access=public, prefix {side['prefix']} in {ns}"
+        rows.append((label, ok, f"access {val(sep, 'access')}, prefix {val(own, 'prefix')}"))
+    rows += _internet_l3_rows(d, cfg)
+    return rows
+
+
+def _internet_l3_rows(d: dict, cfg: dict) -> list[Row]:
+    """L3 of the first ISP: both ends of the access carrier addressed in the INTERNET namespace, the edge a member of the
+    INTERNET VRF instance, one eBGP session on the two physical ports (no tunnel)."""
+    edge, ns, l3 = cfg["edge"], cfg["namespace"], cfg["l3"]
+    isp = l3["isp_device"]
     ports = {(_dev(p), p["name"]["value"]): p for p in d["iface"]}
-    mine, theirs = ports.get((edge, cfg["edge_port"])), ports.get((isp, cfg["isp_port"]))
+    mine, theirs = ports.get((edge, l3["edge_port"])), ports.get((isp, l3["isp_port"]))
     mine_id = (mine or {}).get("id")
     rows: list[Row] = []
-    carriers = [c for c in d["carrier"] if mine_id in _ids(rel(c, "capabilities"))]
-    far = [e["id"] for c in carriers for e in rel(c, "capabilities") if e["id"] != mine_id]
-    where = next(iter(rel(next((x for x in d["dev"] if val(x, "name") == isp), {}), "deployment")), {})
-    provider = ((where.get("provider") or {}).get("node") or {}).get("org_id", {}).get("value")
-    ok = (
-        any(val(c, "circuit_type") == "internet" for c in carriers)
-        and far == _ids([theirs or {}])
-        and where.get("__typename") == "TopologyExternalProviders"
-        and provider == cfg["isp_provider"]
-    )
-    name = f"internet L1: {edge}:{cfg['edge_port']} -> internet carrier -> {isp} of ISP {cfg['isp_provider']}"
-    rows.append((name, ok, f"{[val(c, 'name') for c in carriers]} {far} {where.get('__typename')} {provider}"))
     addr = [((p.get("ip_address") or {}).get("node") or {}) for p in (mine, theirs) if p]
     spaces = {((a.get("ip_namespace") or {}).get("node") or {}).get("name", {}).get("value") for a in addr}
-    ok = len(addr) == 2 and all(addr) and spaces == {ns}
     rows.append(
-        (f"internet L3: both ends of the carrier addressed in {ns}", ok, str([val(a, "address") for a in addr]))
+        (
+            f"internet L3: both ends of the access carrier addressed in {ns}",
+            len(addr) == 2 and all(addr) and spaces == {ns},
+            str([val(a, "address") for a in addr]),
+        )
     )
     vrf = [v for v in d["vrf"] if ((v.get("namespace") or {}).get("node") or {}).get("name", {}).get("value") == ns]
     member = any(edge in [x["display_label"] for x in rel(v, "shared_devices")] for v in vrf)
@@ -264,23 +400,18 @@ def internet_rows(d: dict, cfg: dict) -> list[Row]:
         val(next(iter(rel(procs[x["id"]], "local_as")), {}), "asn") for pe in sessions for x in rel(pe, "bgp_processes")
     }
     physical = bool(mine and theirs) and ends == sorted(_ids([mine or {}, theirs or {}]))
-    ok = len(sessions) == 1 and physical and len(asns) == 2
     detail = f"{[val(s, 'name') for s in sessions]} AS {sorted(asns, key=str)}"
-    rows.append(("internet L3: one eBGP session edge <-> ISP on the two physical ports, two AS", ok, detail))
+    rows.append(
+        (
+            "internet L3: one eBGP session edge <-> ISP on the two physical ports, two AS",
+            len(sessions) == 1 and physical and len(asns) == 2,
+            detail,
+        )
+    )
     on_port = [val(c, "name") for c in d["session"] if mine_id in _ids(rel(c, "capabilities"))]
     rows.append(
         ("internet L3: no session circuit ends on the internet port itself (no tunnel)", not on_port, str(on_port))
     )
-    prefixes = {
-        val(p, "prefix")
-        for p in d["prefix"]
-        if ((p.get("ip_namespace") or {}).get("node") or {}).get("name", {}).get("value") == ns
-    }
-    for target in cfg["targets"]:
-        endpoint = next((e for e in d["sep"] if val(e, "name") == target["endpoint"]), None)
-        ok = bool(endpoint) and val(endpoint or {}, "access") == "address" and target["prefix"] in prefixes
-        label = f"internet target {target['endpoint']} ({target['kind']}): access=address, {target['prefix']} in {ns}"
-        rows.append((label, ok, f"endpoint {bool(endpoint)}, prefix {target['prefix'] in prefixes}"))
     return rows
 
 

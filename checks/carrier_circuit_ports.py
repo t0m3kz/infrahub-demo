@@ -15,6 +15,10 @@ rules the schema cannot hold are held here, on the circuits as a whole:
    appliance, which has no cable),
 3. a circuit has exactly two ends.
 
+THE INTERNET's one interface (``TopologyInternetInterface``) is exempt from rule 1 and allowed by rule 2 BY ITS KIND:
+every internet attachment (an ISP router's uplink, the public side of a cloud or SaaS region) is a carrier circuit of
+its own that ends on it. Which carriers may is ``utils/internet_object.py``'s.
+
 Session circuits are out of scope (a tunnel port carries several; the one-session-per-port rule of the
 dci and handoff circuits is checks/circuit_placement.py's).
 """
@@ -25,6 +29,7 @@ from typing import Any
 
 from infrahub_sdk.checks import InfrahubCheck
 
+from utils.circuit_underlay import INTERNET_INTERFACE_KIND
 from utils.data_cleaning import clean_data
 from utils.limits import CIRCUIT_ENDS
 
@@ -66,14 +71,14 @@ class CheckCarrierCircuitPorts(InfrahubCheck):
                 )
 
             for end in ends:
-                if end.get("typename") not in allowed:
+                if end.get("typename") not in (*allowed, INTERNET_INTERFACE_KIND):
                     self._error(
                         circuit,
                         f"Carrier circuit '{name}' has an end that is not a {' or '.join(allowed)}: "
                         f"'{_port_label(end)}' is a {end.get('typename')}.",
                     )
                     continue
-                if shared_ports:
+                if shared_ports or end.get("typename") == INTERNET_INTERFACE_KIND:
                     continue
                 port_circuits = circuits_by_port.setdefault(str(end.get("id")), (_port_label(end), []))[1]
                 if name not in port_circuits:

@@ -6,7 +6,8 @@
 # carries its device's deployment: the deployment's kind places that end (a DC,
 # ISP, cloud region, colocation zone or virtual colocation deployment is the
 # circuit's location there), checked against the circuit's current locations. A cloud
-# transport (the device of a cloud port) is placed by its region or SaaS region instead.
+# transport (the device of a cloud port) is placed by its region or SaaS region instead. THE INTERNET object is a
+# device and a facility at once: the device itself is the location of its end (hence __typename and display_label).
 query circuit_data($name: String!) {
   TopologyCarrierCircuit(name__value: $name) {
     edges {
@@ -41,6 +42,8 @@ fragment CircuitEndpoint on DcimInterface {
   device {
     node {
       id
+      __typename
+      display_label
       name { value }
       ... on DcimPhysicalDevice {
         deployment { node { ...CircuitDeployment } }

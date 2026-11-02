@@ -44,6 +44,13 @@ NETWORK_APPLIANCE_KIND = "CloudNetworkAppliance"
 # CloudPeeringInterface that rides on them); the provider's side is authored, never generated.
 CLOUD_PEERING_KIND = "CloudPeeringInterface"
 CLOUD_TRANSPORT_KINDS = ("CloudDirectConnect", "CloudVPNConnection")
+# THE INTERNET: one passive device that is also a facility. An internet carrier ends on its one interface, and the
+# object itself is the location of that end (it has no ``deployment``).
+INTERNET_KIND = "TopologyInternet"
+# The shared interface of THE INTERNET: the one kind that may be an end of many carriers.
+INTERNET_INTERFACE_KIND = "TopologyInternetInterface"
+# The facility of an ISP router: the other kind of place an internet carrier terminates on.
+ISP_KIND = "TopologyExternalProviders"
 # A handoff end is a VLAN sub-interface, <parent>.<vlan>: the VLAN lives in the name.
 _VLAN_SUBINTERFACE = re.compile(r".+\.(\d+)")
 

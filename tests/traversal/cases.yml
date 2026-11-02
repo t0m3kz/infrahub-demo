@@ -11,7 +11,7 @@ cases:
       - path: data/demos/cloud_saas_model_pod
         sentinel: {kind: DcimPhysicalDevice, name: dc90-leaf-02}
       - path: data/demos/cloud_saas_model_internet
-        sentinel: {kind: ManagedBGPPeering, name: BGP-DC90-EDGE01-ISP-DEMO}
+        sentinel: {kind: TopologyInternet, name: INTERNET}
       - path: data/demos/cloud_saas_model_pairs
         sentinel: {kind: CloudVirtualNetwork, name: vpc-c900-isolated}
     # present on the branch only when the data was loaded (or already sits on main): used to skip a duplicate load
@@ -36,17 +36,23 @@ cases:
       # 4 = 2 leaves x 1 spine x 2 border leaves; +1 = the direct uplink leaf-01 -> panel -> edge of the base sample
       l1_paths_to_edge: 5
       l1_paths_via_spine: 4
-    # the INTERNET scenario: edge -> internet carrier -> ISP router -> internet -> a SaaS and a cloud public service
+    # THE INTERNET: one object under the label "Internet" with one shared interface; two ISPs and the public side of a
+    # SaaS and of a cloud service attach to it, so from the edge L1 reaches each public side through either ISP
     internet:
       edge: dc90-edge-01
-      edge_port: Ethernet1/2
-      isp_device: EXT-ISP-DEMO-PE1
-      isp_port: et-0/0/0
-      isp_provider: P014
+      object: INTERNET
+      label: Internet
+      bus: bus
       namespace: INTERNET
-      targets:
-        - {endpoint: s3-public, prefix: 192.0.2.0/24, kind: cloud}
-        - {endpoint: webex-public, prefix: 203.0.113.0/24, kind: saas}
+      golden: cloud_saas_model__internet.txt
+      isps:
+        - {isp_device: EXT-ISP-DEMO-PE1, access_port: Ethernet1/2, access_carrier: INET-DC90-ISP-DEMO, uplink_carrier: UPL-ISP-DEMO}  # yamllint disable-line rule:line-length
+        - {isp_device: EXT-ISP-DEMO-B-PE1, access_port: Ethernet1/1, access_carrier: INET-DC90-ISP-DEMO-B, uplink_carrier: UPL-ISP-DEMO-B}  # yamllint disable-line rule:line-length
+      public_sides:
+        - {endpoint: s3-public, prefix: 192.0.2.0/24, kind: cloud, transport: s3-c900-euc1-pub, port: pub-1, carrier: PUB-S3-EUC1}  # yamllint disable-line rule:line-length
+        - {endpoint: webex-public, prefix: 203.0.113.0/24, kind: saas, transport: webex-c900-fra-pub, port: pub-1, carrier: PUB-WEBEX-FRA}  # yamllint disable-line rule:line-length
+      # L3 of the first ISP: the eBGP session on the two physical ports of the access carrier
+      l3: {isp_device: EXT-ISP-DEMO-PE1, edge_port: Ethernet1/2, isp_port: et-0/0/0}
     pairs:
       - dc_segment: c900-demo-web-p
         cloud_segment: c900-demo-subnet-p

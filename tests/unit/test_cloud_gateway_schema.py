@@ -142,15 +142,24 @@ def test_virtual_network_peers_are_symmetric_on_one_identifier() -> None:
     assert peers["identifier"] and "direction" not in peers
 
 
-def test_the_service_endpoint_is_a_component_of_the_virtual_network() -> None:
-    """A parent edge, a (parent, name) HFID and the reverse Component on the network."""
+def test_the_service_endpoint_names_its_network_and_a_public_range() -> None:
+    """A plain optional edge to the network (a Parent cannot be optional and a public SaaS service has no network), a
+    name-only HFID, the reverse that cascades, and a public access with its prefix."""
     endpoint = _nodes()["CloudServiceEndpoint"]
+    network = _field(endpoint, "relationships", "virtual_network")
     reverse = _field(_extension("CloudVirtualNetwork"), "relationships", "service_endpoints")
 
-    assert _field(endpoint, "relationships", "virtual_network")["kind"] == "Parent"
-    assert endpoint["human_friendly_id"] == ["virtual_network__name__value", "name__value"]
-    assert reverse["kind"] == "Component" and reverse["peer"] == "CloudServiceEndpoint"
-    assert {choice["name"] for choice in _field(endpoint, "attributes", "access")["choices"]} == {"address", "route"}
+    assert network["kind"] == "Attribute" and network["optional"] is True
+    assert reverse["kind"] == "Generic" and reverse["peer"] == "CloudServiceEndpoint"
+    assert reverse["identifier"] == network["identifier"] and reverse["on_delete"] == "cascade"
+    assert endpoint["human_friendly_id"] == ["name__value"] and endpoint["uniqueness_constraints"] == [["name__value"]]
+    assert {choice["name"] for choice in _field(endpoint, "attributes", "access")["choices"]} == {
+        "address",
+        "route",
+        "public",
+    }
+    prefix = _field(endpoint, "relationships", "prefix")
+    assert prefix["peer"] == "IpamPrefix" and prefix["cardinality"] == "one" and prefix["optional"] is True
 
 
 @pytest.mark.parametrize(

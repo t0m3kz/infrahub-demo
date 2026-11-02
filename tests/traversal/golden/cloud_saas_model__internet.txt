@@ -1,0 +1,5 @@
+# L1 paths: our edge through an ISP and THE INTERNET to the public side of a service
+  EXT-ISP-DEMO-B-PE1 -> s3-public: dc90-edge-01:Ethernet1/1 | INET-DC90-ISP-DEMO-B | EXT-ISP-DEMO-B-PE1:et-0/0/0 | (device EXT-ISP-DEMO-B-PE1) | EXT-ISP-DEMO-B-PE1:xe-0/1/0 | UPL-ISP-DEMO-B | INTERNET:bus | PUB-S3-EUC1 | s3-c900-euc1-pub:pub-1
+  EXT-ISP-DEMO-B-PE1 -> webex-public: dc90-edge-01:Ethernet1/1 | INET-DC90-ISP-DEMO-B | EXT-ISP-DEMO-B-PE1:et-0/0/0 | (device EXT-ISP-DEMO-B-PE1) | EXT-ISP-DEMO-B-PE1:xe-0/1/0 | UPL-ISP-DEMO-B | INTERNET:bus | PUB-WEBEX-FRA | webex-c900-fra-pub:pub-1
+  EXT-ISP-DEMO-PE1 -> s3-public: dc90-edge-01:Ethernet1/2 | INET-DC90-ISP-DEMO | EXT-ISP-DEMO-PE1:et-0/0/0 | (device EXT-ISP-DEMO-PE1) | EXT-ISP-DEMO-PE1:xe-0/1/0 | UPL-ISP-DEMO | INTERNET:bus | PUB-S3-EUC1 | s3-c900-euc1-pub:pub-1
+  EXT-ISP-DEMO-PE1 -> webex-public: dc90-edge-01:Ethernet1/2 | INET-DC90-ISP-DEMO | EXT-ISP-DEMO-PE1:et-0/0/0 | (device EXT-ISP-DEMO-PE1) | EXT-ISP-DEMO-PE1:xe-0/1/0 | UPL-ISP-DEMO | INTERNET:bus | PUB-WEBEX-FRA | webex-c900-fra-pub:pub-1

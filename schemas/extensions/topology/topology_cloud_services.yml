@@ -13,13 +13,12 @@ nodes:
     inherit_from:
       - CloudResource
     human_friendly_id:
-      - virtual_network__name__value
       - name__value
     display_label: "{{ name__value }}"
     order_by:
       - name__value
     uniqueness_constraints:
-      - [virtual_network, name__value]
+      - [name__value]
     attributes:
       - name: service_name
         kind: Text
@@ -41,14 +40,20 @@ nodes:
             label: Route
             description: "The service is reached by a route from the network's subnets"
             color: "#2ECC71"
+          - name: public
+            label: Public
+            description: "The service is a public range reached over the internet through an ISP, no private path"
+            color: "#E67E22"
     relationships:
       - name: virtual_network
         label: "Virtual Network"
         peer: CloudVirtualNetwork
         cardinality: one
-        kind: Parent
-        optional: false
+        kind: Attribute
+        optional: true
+        identifier: "cloud_virtual_network__service_endpoints"
         order_weight: 600
+        description: "The network that reaches the service (gives account and region); empty for a SaaS (saas_region)"
       - name: segments
         label: "Segments"
         peer: CloudNetworkSegment
@@ -74,6 +79,15 @@ nodes:
         optional: true
         identifier: "cloud_service_endpoint__saas_region"
         order_weight: 750
+      - name: prefix
+        label: "Public Prefix"
+        peer: IpamPrefix
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "cloud_service_endpoint__prefix"
+        order_weight: 800
+        description: "The range of a public service (access public), in the INTERNET namespace: the target of the path"
 
 extensions:
   nodes:
@@ -82,7 +96,9 @@ extensions:
         - name: service_endpoints
           peer: CloudServiceEndpoint
           cardinality: many
-          kind: Component
+          kind: Generic
           optional: true
+          on_delete: cascade
+          identifier: "cloud_virtual_network__service_endpoints"
           order_weight: 2200
           description: Service endpoints of this virtual network

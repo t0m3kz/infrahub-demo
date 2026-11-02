@@ -7,7 +7,8 @@ TopologyVirtualColocation) places that end, so the circuit's locations are the a
 ones, exactly two distinct. An on-ramp edge deploys to its zone or virtual colocation, which is the facility the
 circuit ends on. A derived facility that contradicts an authored one of the same kind, or anything but two
 locations, fails the run before any write; the missing derived ones are added with one RelationshipAdd, so an
-already complete circuit writes nothing.
+already complete circuit writes nothing. THE INTERNET is a device and a facility at once (it has no ``deployment``):
+an end on its interface is placed by the device itself.
 
 Derived from the devices as they are when the circuit is created or its ends change: no trigger watches an end
 device's ``deployment`` (a rule on a device kind can only dispatch a generator targeting devices, and none targets
@@ -44,7 +45,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from utils.circuit_underlay import session_circuits_on
+from utils.circuit_underlay import INTERNET_KIND, session_circuits_on
 from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator
@@ -68,6 +69,7 @@ _DERIVABLE_FACILITY_KINDS = frozenset(
         "TopologySaasRegion",
         "TopologyColocationZone",
         "TopologyVirtualColocation",
+        INTERNET_KIND,
     }
 )
 
@@ -105,8 +107,8 @@ class CircuitEndpoint:
     interface_id: str
     interface_name: str
     device_name: str
-    # The device's deployment, whatever its kind; for a cloud transport (it has none) its region or SaaS region.
-    # None when it has none.
+    # The device's deployment, whatever its kind; for a cloud transport (it has none) its region or SaaS region; for
+    # THE INTERNET (it has none either) the device itself, which is a facility. None when it has none.
     deployment: CircuitLocation | None
     device_id: str = ""
 
@@ -125,7 +127,9 @@ class CircuitEndpoint:
             interface_name=interface.get("name") or "?",
             device_name=device.get("name") or "?",
             deployment=CircuitLocation.parse(
-                device.get("deployment") or device.get("region") or device.get("saas_region")
+                device
+                if device.get("typename") == INTERNET_KIND
+                else device.get("deployment") or device.get("region") or device.get("saas_region")
             ),
             device_id=device.get("id") or "",
         )

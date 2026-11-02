@@ -43,7 +43,7 @@ def _declared_virtual() -> dict[str, str]:
 
 
 def test_facility_kinds_come_from_the_schema() -> None:
-    """A circuit ends on the seven TopologyFacility kinds."""
+    """A circuit ends on the eight TopologyFacility kinds (THE INTERNET is the one that is also a device)."""
     assert ALL_DEMO_FACILITY_KINDS == {
         "TopologyDataCenter",
         "TopologyColocationZone",
@@ -52,6 +52,7 @@ def test_facility_kinds_come_from_the_schema() -> None:
         "TopologyExternalProviders",
         "TopologySaasRegion",
         "TopologyCustomerOffice",
+        "TopologyInternet",
     }
 
 

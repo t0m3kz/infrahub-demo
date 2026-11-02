@@ -329,15 +329,36 @@ border leaf 1 do krawędzi przez przepust 2 panelu, border leaf 2 kablem bezpoś
 spine i border leaf (2 liście x 1 spine x 2 BL) i 1 stare bezpośrednie połączenie leaf-01 -> panel -> krawędź z próbki
 bazowej (zostawione, żeby dane dołożyły się do działającego stosu bez usuwania kabli). Asercje: `walks.pod_rows`.
 
-**Internet przez ISP** (`cloud_saas_model_internet`): port krawędzi `Ethernet1/2` -> nośnik internetowy
-`INET-DC90-ISP-DEMO` -> router ISP `EXT-ISP-DEMO-PE1` (`TopologyExternalProviders` `ISP-DEMO`, dostawca P014; ten sam
-router i ten sam nośnik co nogi VPN, a ISP z `30_all` wymagają generatorów i kolokacji, więc tu się ich nie używa).
-Oba końce mają /31 w przestrzeni `INTERNET`, krawędź jest członkiem `dc90-vrf-internet`, jedna sesja eBGP
-(`BGP-DC90-EDGE01-ISP-DEMO`, dwa AS) na dwóch portach fizycznych: bez tunelu i bez obwodu sesji. Cele: `s3-public`
-(publiczny punkt usługi chmury, `192.0.2.0/24`) i `webex-public` (publiczna usługa SaaS, `203.0.113.0/24`), oba
-`CloudServiceEndpoint` z `access: address`. Luki: `CloudServiceEndpoint` nie ma adresu i musi leżeć w sieci wirtualnej,
-więc para punkt usługi - zakres publiczny to tylko nazwa i opis; wymiana PROD -> INTERNET przez firewall nie jest
-w próbce (wyjście do internetu z chmury i biura to znana luka `checks/internet_egress.py`).
+**Internet przez ISP** (`cloud_saas_model_internet`): INTERNET jest jednym wspólnym obiektem, przez który przechodzi każde
+połączenie internetowe, "rodzajem kabla albo przełącznika dla wszystkich". `TopologyInternet` (singleton `INTERNET`) leży w
+drzewie topologii pod etykietą "Internet", obok ISP (`TopologyExternalProviders`; etykieta jest miejscem grupowania, a
+INTERNET punktem spotkania pod nią). Jest szczupłym `DcimDevice` (tylko `name` i `interfaces`) i `TopologyFacility`, więc
+jest lokalizacją obwodu nośnika, ale nie ma roli, platformy, adresu, VRF ani artefaktu i niczego nie routuje: adresy i
+prefiksy zostają w przestrzeni `INTERNET`. Ma JEDEN interfejs `bus` własnego rodzaju `TopologyInternetInterface` i to
+rodzaj pozwala wielu obwodom nośnika kończyć się na tym samym interfejsie (`checks/carrier_circuit_ports.py` zwalnia go z
+"port jest końcem co najwyżej jednego nośnika" po rodzaju, nie po nazwie). Każde przyłączenie ma własny obwód nośnika
+(graf mówi, kto jest przyłączony): uplink routera ISP (`UPL-ISP-DEMO`, `UPL-ISP-DEMO-B`) i strona publiczna usługi
+(`PUB-WEBEX-FRA`, `PUB-S3-EUC1`), a stroną publiczną jest port zwykłego `CloudDirectConnect`
+(`webex-c900-fra-pub`, `s3-c900-euc1-pub`, bez nowego rodzaju). Dwa ISP: `ISP-DEMO` (router `EXT-ISP-DEMO-PE1`, port
+krawędzi `Ethernet1/2`, nośnik `INET-DC90-ISP-DEMO` z próbki bazowej) i `ISP-DEMO-B` (`EXT-ISP-DEMO-B-PE1`,
+`Ethernet1/1`, `INET-DC90-ISP-DEMO-B`):
+
+```text
+dc90-edge-01:Ethernet1/2 | INET-DC90-ISP-DEMO | EXT-ISP-DEMO-PE1:et-0/0/0 | (device) | EXT-ISP-DEMO-PE1:xe-0/1/0
+  | UPL-ISP-DEMO | INTERNET:bus | PUB-WEBEX-FRA | webex-c900-fra-pub:pub-1
+```
+
+Ta sama ścieżka przez `EXT-ISP-DEMO-B-PE1` i `INET-DC90-ISP-DEMO-B` kończy się w tym samym miejscu: dwa ISP, jeden
+INTERNET. L3 (tylko pierwszy ISP, drugi to sam L1): oba końce nośnika dostępowego mają /31 w przestrzeni `INTERNET`,
+krawędź jest członkiem `dc90-vrf-internet`, jedna sesja eBGP (`BGP-DC90-EDGE01-ISP-DEMO`, dwa AS) na dwóch portach
+fizycznych: bez tunelu i bez obwodu sesji. Cele: `s3-public` (`192.0.2.0/24`) i `webex-public` (`203.0.113.0/24`), oba
+`CloudServiceEndpoint` z `access: public` i zakresem w polu `prefix` (przestrzeń `INTERNET`). `virtual_network` jest teraz
+zwykłą opcjonalną krawędzią (Parent nie może być opcjonalny), więc punkt usługi SaaS ma tylko `saas_region`, a `s3-public`
+zostaje w sieci `vpc-c900-prod`. Reguły (`utils/internet_object.py`, wywoływane z `checks/circuit_placement.py`): I1 jeden
+INTERNET z jednym interfejsem tego rodzaju, I2 przyłączenie to obwód `internet`, którego `bus` jest na urządzeniu INTERNET,
+a drugi koniec to router ISP albo port transportu chmurowego lub SaaS (nigdy DC ani klatka), I3 router ISP z dostępem
+internetowym ma przyłączenie. Luki: wymiana PROD -> INTERNET przez firewall nie jest w próbce (wyjście do internetu z
+chmury i biura to znana luka `checks/internet_egress.py`); drugi ISP nie ma L3.
 
 **Dodatkowe pary** (`cases.yml`): tylko tunele VPN (`via: [CloudVPNConnection]`: 2 nogi L1 przez nośnik internetowy, 2 L3
 typu `vpn`, żadnego handoffu), SaaS Webex (cross-connect + handoff) i Zscaler (tunel na nośniku internetowym, obwód
