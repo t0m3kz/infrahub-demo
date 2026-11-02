@@ -1,0 +1,18 @@
+---
+# The one overlay process of the cage edge: the DCI sessions of 02_colo/03_dci/02_dci_peerings.yml and the handoffs of
+# 03_cloud/04_circuits/02_bgp_sessions.yml and 04_saas/05_bgp_sessions.yml are built on it. Its loopback is nested.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGP
+  data:
+    - name: eg-dmc101-bgp
+      status: active
+      process_role: overlay
+      local_as: AS4200091001
+      router_id:
+        data:
+          address: "10.91.255.1/32"
+          ip_namespace: PROD
+          description: eg-dmc101 loopback
+      capabilities: ["eg-dmc101"]

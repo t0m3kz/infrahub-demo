@@ -6,22 +6,34 @@ branch `main`. The data is hand-written: no generator, transform or check runs. 
 
 ## Folder map
 
+One kind per file: the top-level `spec.kind` of a file is the object a reader looks for (a device, a circuit, a
+segment, a BGP process). What exists only for that object is nested under it: the interfaces, LAG and peerings of a
+device or transport (`interfaces:`), the front ports of a patch panel (`front_ports:`), the gateway address and prefix of
+a segment, the loopback that is a BGP process's router id, the provider's `peer_ip` of a peering. What cannot be nested
+stays in a flat file of its own kind, because it names something created later (a sub-interface names the VRF, which
+lists the device as a member; a port-channel names the segment, which needs the leaf's SVI first) or because two parents
+use it (a link prefix, an AS number). Folders and files are numbered so that the sorted path order is the dependency
+order (`infrahubctl object load` of the directory runs them one after the other).
+
 | Folder | What it holds | Depends on |
 | ------ | ------------- | ---------- |
-| `00_common/` | customers, providers and AS (`00_orgs`), addressing (`01_ipam`), BGP keys (`02_bgp_keys`) | bootstrap |
-| `01_dc/` | DC90, pod `DC90-9-POD-1` (design `S_MIDDLE`), racks (`00_racks`), devices (the edge `dc90-edge-01` has the internet access, the AWS VPN tunnels and the end of the office tunnel; it has NO cloud legs), patch panels, cables, routing, the segment `c900-demo-web-p` and its port (`00`-`06`), then the pod: leaves (vPC/MLAG), spine, border leaves, server (`07`-`13`); `vlan_row.py` | `00_common` |
-| `02_colo/` | colocation `COLO-DEMO` / metro `DMC` / ONE zone (cage) `DMC1`: building and rack (`00`-`01`), the cage edge `eg-dmc101` and the provider's Fabric port `EXT-EQX-FABRIC-DMC1` (`02`), patch panel `PP-DMC1-01` with one paired jack (`03`), cables edge - panel - Fabric (`04`), edge routing: VRF, sub-interfaces of the cloud legs, overlay process (`05`), two dark fibres DC - cage, DCI circuits and EVPN sessions (`06`-`08`) | `01_dc` |
-| `03_cloud/` | accounts, gateways, VPC/VNet, transports (Direct Connect, ExpressRoute, Interconnect, VPN), peerings, circuits (the carriers end in the cage `DMC1`), BGP sessions of the cage edge, the S3 service endpoint, two segments for the extra pairs | `02_colo` |
-| `04_saas/` | Webex (cross-connect in the cage + BGP) and Zscaler (tunnel): SaaS regions, transports, ports, peerings, circuits, sessions, service endpoint | `02_colo`, `03_cloud` |
-| `05_office/` | the customer office C900 (`C900-OFFICE`), its SD-WAN edge `C900-OFFICE-EDGE1` (`01`) and two `tunnel` circuits: to the DC edge and to Zscaler (`02`) | `04_saas` |
-| `06_internet/` | INTERNET as one shared object, two ISPs, the public sides of SaaS and cloud, the eBGP session to the ISP, the internet access of the cage and of the office (`05`) | `01_dc`, `02_colo`, `03_cloud`, `04_saas`, `05_office` |
+| `00_common/` | providers, the customer C900, AS numbers, the shared prefixes (links, VPC block, loopback ranges), BGP keys (`00`-`04`) | bootstrap |
+| `01_dc/00_site/` | metro, building, suite and the first rack, DC90, pod `DC90-9-POD-1` (design `S_MIDDLE`), the racks of the pod, the ISP facility `ISP-DEMO` | `00_common` |
+| `01_dc/01_physical/` | patch panels with their front ports, devices (the edge `dc90-edge-01` has the internet access, the AWS VPN tunnels and the end of the office tunnel as nested interfaces; it has NO cloud legs; the server nests its bond), cables | `00_site` |
+| `01_dc/02_routing/` | AS numbers of the pod, the VRF, the SVIs, the BGP processes (loopbacks nested), the EVPN overlay sessions | `01_physical` |
+| `01_dc/03_tenant/` | the footprint of C900, the segment `c900-demo-web-p` (gateway and prefix nested), the vPC port-channels, the segment port, the MLAG | `02_routing` |
+| `02_colo/` | `00_site` colocation `COLO-DEMO` / metro `DMC` / ONE zone (cage) `DMC1`, building and rack; `01_physical` patch panel `PP-DMC1-01`, the cage edge `eg-dmc101` and the provider's Fabric port `EXT-EQX-FABRIC-DMC1`, cables; `02_routing` VRF, sub-interfaces of the cloud legs, overlay process; `03_dci` two dark fibres DC - cage, DCI circuits and EVPN sessions | `01_dc` |
+| `03_cloud/` | `00_regions`, `01_network` (accounts, VPC/VNet, IPsec profile, gateways, route tables, attachments), `02_tenant` (footprints, segments, instance, S3 endpoint), `03_transport` (Direct Connect, ExpressRoute, Interconnect, VPN with ports, bundle and peerings nested), `04_circuits` (the carriers end in the cage `DMC1`, session circuits, BGP sessions of the cage edge) | `02_colo` |
+| `04_saas/` | Webex (cross-connect in the cage + BGP) and Zscaler (tunnel): SaaS regions, transports with ports and peerings nested, circuits, sessions, service endpoint | `02_colo`, `03_cloud` |
+| `05_office/` | the customer office C900 (`C900-OFFICE`), its SD-WAN edge `C900-OFFICE-EDGE1` (tunnel interfaces nested) and two `tunnel` circuits: to the DC edge and to Zscaler | `04_saas` |
+| `06_internet/` | `00_addressing` (AS, transit prefixes), `01_providers` (the second ISP and its router, the public sides of SaaS and cloud, the public service endpoints), `02_circuits` (ports with their transit addresses, the internet carriers of the DC, the cage and the office), `03_routing` (the eBGP session to the ISP) | `01_dc`, `02_colo`, `03_cloud`, `04_saas`, `05_office` |
 
 The sixth folder `06_internet` and the shared `00_common` were not on the owner's list (DC, Colo, Cloud, SaaS, Office):
 the internet (ISP, INTERNET, public sides) is none of the five kinds of objects, and the customers, AS and addressing
 are shared by several of them. The office comes after SaaS because its `tunnel` circuit ends on the Zscaler transport;
-the internet comes after the office because the office's access to its ISP is in `06_internet/05_site_access.yml`. The
-pod `DC90-9-POD-1` holds the spine, the two leaves and the server; the border leaves and the edge stay at DC level (a
-border role belongs to the DC).
+the internet comes after the office because the office's access to its ISP is in
+`06_internet/02_circuits/01_carrier_circuits.yml`. The pod `DC90-9-POD-1` holds the spine, the two leaves and the
+server; the border leaves and the edge stay at DC level (a border role belongs to the DC).
 
 ## The topology: three sites, the internet and the cloud
 
@@ -268,11 +280,12 @@ A circuit ends on interfaces through ONE edge, `capabilities` (the shared edge `
 peer `DcimInterface`, min 1, max 2 on every circuit). An interface has only `capabilities` as a circuit edge; there is
 no `endpoints` field, no `TopologyCircuitEnd` generic and no `far_end`. An end in an object file is the HFID of the
 interface `[device, interface]`: `["eg-dmc101", "Ethernet1/3"]`, `["dx-c900-fra-lag", "dxcon-1a"]`. So the objects must
-exist earlier, and the files load alphabetically and in order: `03_cloud/00_cloud.yml` (accounts, gateways) -> `01`
-transports -> `02` ports -> `03` bundle -> `04` peerings -> `05` circuits -> `06` hand-written BGP sessions (then the
-same in `04_saas`). Dependent objects are in a later file because the HFID index of objects from the same run can lag.
+exist earlier, and the files load alphabetically and in order: `03_cloud/01_network` (accounts, gateways) ->
+`03_transport` (the transports, each with its ports, bundle and peerings nested, in that order) -> `04_circuits`
+(carriers, session circuits, hand-written BGP sessions), then the same in `04_saas`. Dependent objects are in a later
+file because the HFID index of objects from the same run can lag.
 
-The BGP sessions of the cloud legs are hand-written (`03_cloud/06_bgp_sessions.yml`, `04_saas/05_bgp_sessions.yml`: our
+The BGP sessions of the cloud legs are hand-written (`03_cloud/04_circuits/02_bgp_sessions.yml`, `04_saas/05_bgp_sessions.yml`: our
 sub-interface or routed port in `capabilities`, our process); no generator builds them, and `add_virtual_circuit` is not
 to build sessions for a circuit whose end is a cloud peering.
 
@@ -293,9 +306,9 @@ peering is an interface of the transport, and `scope: saas` lies on a transport 
 There are no pool fields. The convention: our address is a /31 (a /30 for a tunnel pair) from `Handoff-<namespace>-IPv4`
 (the `ip_namespace` of the session circuit), our private AS from `PRIVATE-ASN32`; a provider that assigns the range
 itself (Azure /30, GCP /29, AWS VPN 169.254/30) gives it as the circuit's `link_prefix`. An object file cannot draw from
-a pool, so the allocated values are hard-coded: our address in the sub-interface (`01_dc/04_routing.yml`), our AS in the
+a pool, so the allocated values are hard-coded: our address in the sub-interface (`02_colo/02_routing/01_virtual_interfaces.yml`), our AS in the
 BGP process's `local_as`, the provider's address and AS in the peering's `peer_ip` and `peer_asn`
-(`03_cloud/04_peerings.yml`).
+(nested in the transport, `03_cloud/03_transport/00_direct_connects.yml`).
 
 ## Scenario coverage
 
@@ -401,7 +414,7 @@ SaaS tunnels (Zscaler, office - DC) exist only in L3 (a session circuit); their 
 
 ## Pod, internet through the ISP and extra pairs
 
-**Pod** (`01_dc/07`-`13`, pod `DC90-9-POD-1`): the server `dc90-srv-01` (`bond0` on `eno1`/`eno2`) is dual-homed to the
+**Pod** (`01_dc`, pod `DC90-9-POD-1`): the server `dc90-srv-01` (`bond0` on `eno1`/`eno2`) is dual-homed to the
 leaf pair `dc90-leaf-01`/`-02` through a vPC (one `Port-Channel10` per leaf, the same `lag_id`, both with the segment
 `c900-demo-web-p` in the `segments` edge, one authored `ManagedMLAG`), the leaves to the spine, the spine to the two
 border leaves, border leaf 1 to the edge through jack 2 of the panel, border leaf 2 on a direct cable. The VLAN row of
@@ -476,7 +489,7 @@ transport (never a DC or a cage), I3 an ISP router with internet access has an a
 exchange through a firewall is not in the sample (the internet egress from the cloud and the office is a known gap of
 `checks/internet_egress.py`); the second ISP has no L3.
 
-**Cage and office access** (`06_internet/05_site_access.yml`): the cage and the office have their own ISP access next to
+**Cage and office access** (`06_internet/02_circuits`): the cage and the office have their own ISP access next to
 the DC's, following the pattern `INET-LUMEN-EQXFR2` of 30_all and `INET-<office>` of `add_sdwan_edge`:
 `eg-dmc101:Ethernet1/14` - `INET-DMC1-ISP-DEMO-B` - `EXT-ISP-DEMO-B-PE1:et-0/0/1` and `C900-OFFICE-EDGE1:GE1` -
 `INET-C900-OFFICE` - `EXT-ISP-DEMO-PE1:et-0/0/1`. Both ISP routers already have an uplink to `INTERNET:bus` (rule I3), so

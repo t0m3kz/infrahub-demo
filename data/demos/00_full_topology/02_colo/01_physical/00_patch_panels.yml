@@ -1,0 +1,19 @@
+---
+# The patch panel of the cage (PP-EQX-FR2-01 of 30_all): a passive panel in the rack, not a device. PP-24-LC creates
+# 24 rear and 24 front ports; the template cannot pair a front port with its rear port (the generator add_patch_panel
+# does), so the pairing of the one used jack is authored as a nested front port: front "1" -> rear "1".
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPatchPanel
+  data:
+    - name: PP-DMC1-01
+      object_template: PP-24-LC
+      description: "DMC1 cage patch panel: jack 1 joins eg-dmc101 to the Equinix Fabric port"
+      rack: dmc1-s-1-r-1-1
+      front_ports:
+        - kind: DcimFrontPatchPanelPort
+          data:
+            name: "1"
+            connector: lc-upc
+            rear_port: "dmc1-s-1-r-1-1:PP-DMC1-01:1"

@@ -1,0 +1,33 @@
+---
+# L3 of the DC side, authored by hand (no generator): the VRF of the topology (PROD) with the first two routing
+# devices. The cloud and SaaS legs are NOT here: a Direct Connect, an ExpressRoute or a Webex cross-connect lands in a
+# colocation cage, so their sub-interfaces and sessions belong to the cage edge
+# (02_colo/02_routing/01_virtual_interfaces.yml, 03_cloud/04_circuits/02_bgp_sessions.yml,
+# 04_saas/05_bgp_sessions.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVRF
+  data:
+    - name: "dc90-vrf-prod"
+      namespace: "PROD"
+      deployment: "DC90"
+      shared_devices:
+        - "dc90-leaf-01"
+        - "dc90-edge-01"
+---
+# The pod: the VRF of DC90 gets the new routing devices (the whole list, an upsert replaces it).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVRF
+  data:
+    - name: "dc90-vrf-prod"
+      namespace: "PROD"
+      deployment: "DC90"
+      shared_devices:
+        - "dc90-leaf-01"
+        - "dc90-leaf-02"
+        - "dc90-bl-01"
+        - "dc90-bl-02"
+        - "dc90-edge-01"

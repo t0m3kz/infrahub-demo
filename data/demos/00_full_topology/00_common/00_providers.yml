@@ -1,0 +1,11 @@
+---
+# The providers the sample adds to the bootstrap data (the clouds, Equinix and the ISPs are bootstrap): the SaaS
+# Webex. Self-contained: this sample loads on top of data/bootstrap only (no generator, no 30_all). The folders and
+# files load in name order (one `infrahubctl object load` of the whole directory), see README.md.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: OrganizationProvider
+  data:
+    - name: "Cisco Webex"
+      org_id: "P901"

@@ -1,0 +1,21 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologySessionCircuit
+  data:
+    - name: SC-C900-WEBEX-PROD
+      description: 'Handoff: edge sub-interface to the Webex peering'
+      provider: P901
+      circuit_type: handoff
+      status: active
+      ip_namespace: PROD
+      link_prefix:
+        - 10.255.128.6/31
+        - PROD
+      locations:
+        - DMC1
+        - WEBEX-FRANKFURT
+      capabilities:
+        - ["eg-dmc101", "Ethernet1/6.300"]
+        - ["webex-c900-fra-xc", "webex-c900-fra"]

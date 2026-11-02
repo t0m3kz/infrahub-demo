@@ -1,0 +1,59 @@
+---
+# The two ends of the internet carrier get the transit /31: the edge port Ethernet1/2 (the public address the AWS
+# customer gateway already names, 198.51.100.10) and the ISP router port et-0/0/0. Flat: the devices are created in
+# 01_dc, before the INTERNET prefixes of this folder.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - device: dc90-edge-01
+      name: Ethernet1/2
+      description: "Internet access (INET-DC90-ISP-DEMO): transit to the ISP, tunnels ride on it"
+      status: active
+      ip_address:
+        data:
+          address: "198.51.100.10/31"
+          ip_namespace: INTERNET
+    - device: EXT-ISP-DEMO-PE1
+      name: et-0/0/0
+      description: "Transit customer: dc90-edge-01"
+      status: active
+      ip_address:
+        data:
+          address: "198.51.100.11/31"
+          ip_namespace: INTERNET
+---
+# The internet access of the colocation cage and of the office, next to the DC's: the site's port gets the transit /31
+# of its carrier (a pool would hand it out). The port of the second ISP's router is nested under the router
+# (06_internet/01_providers/01_isp_router.yml). No BGP session is built for these two accesses (the first ISP's L3 is
+# 06_internet/03_routing/02_bgp_peerings.yml), the carriers are the L1 fact.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - device: eg-dmc101
+      name: Ethernet1/14
+      status: active
+      description: "Internet access (INET-DMC1-ISP-DEMO-B): transit to the second ISP"
+      ip_address:
+        data:
+          address: "198.51.100.14/31"
+          ip_namespace: INTERNET
+    - device: C900-OFFICE-EDGE1
+      name: GE1
+      status: active
+      description: "Internet access (INET-C900-OFFICE): transit to the ISP, the tunnels ride on it"
+      ip_address:
+        data:
+          address: "198.51.100.12/31"
+          ip_namespace: INTERNET
+    - device: EXT-ISP-DEMO-PE1
+      name: et-0/0/1
+      status: active
+      description: "Transit customer: C900-OFFICE-EDGE1"
+      ip_address:
+        data:
+          address: "198.51.100.13/31"
+          ip_namespace: INTERNET

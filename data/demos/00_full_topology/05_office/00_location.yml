@@ -1,0 +1,10 @@
+---
+# The building of the customer office C900 in the Demo Metro (01_dc/00_site/00_location.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationFacility
+  data:
+    - name: "Demo Office"
+      shortname: "dmo-office"
+      parent: "dmo"

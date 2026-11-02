@@ -1,0 +1,209 @@
+---
+# The transports: one device-shaped object per way to the cloud edge. A transport holds interfaces (its ports, its
+# LAG, the peering interfaces that ride on them) and has no role, platform or artifact: they are nested under it
+# because they exist only for it. The ports are the far end of a carrier circuit
+# (03_cloud/04_circuits/00_carrier_circuits.yml), the ports of a LAG belong to ONE transport (the server refuses a
+# member of another device), a peering is the interface of the cloud and ends a session circuit
+# (03_cloud/04_circuits/01_session_circuits.yml). A VLAN peering rides on a port or the LAG of its transport
+# (`parent_interface`, same transport: checks/cloud_connection.py R8). The provider side of each leg is `peer_ip`
+# (nested) and `peer_asn`; OUR side is the sub-interface address of 02_colo/02_routing/01_virtual_interfaces.yml and
+# the local_as of eg-dmc101-bgp. Exactly one of `region` (a cloud region, with the `account`) and `saas_region` (a
+# SaaS, with the `owner` and no account) places a transport (checks/cloud_connection.py R9). The SaaS ones are in
+# 04_saas.
+#
+#   dx-c900-fra-lag       AWS Direct Connect, physical: two dedicated 10G ports bundled in lag1, two virtual interfaces
+#   er-c900-weu           Azure ExpressRoute, logical: owns the MSEE port pair of the circuit, one peering per link
+#   ic-c900-fra-1         GCP Partner Interconnect, logical, lives in the partner's account
+#   ic-ded-c900-fra       GCP Dedicated Interconnect, physical: one port, a routed port (no VLAN)
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudDirectConnect
+  data:
+    - name: dx-c900-fra-lag
+      description: "AWS Direct Connect: two dedicated 10G ports in one LAG"
+      status: active
+      connection_type: physical
+      bandwidth: 20000
+      account: c900-aws-prod
+      region: eu-central-1
+      interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            name: dxcon-1a
+            description: "AWS Direct Connect dedicated 10G port dxcon-fh1a2b3c, member of lag1"
+            status: active
+            interface_type: "10gbase-x-sfpp"
+        - kind: DcimPhysicalInterface
+          data:
+            name: dxcon-1b
+            description: "AWS Direct Connect dedicated 10G port dxcon-fh4d5e6f, member of lag1"
+            status: active
+            interface_type: "10gbase-x-sfpp"
+        - kind: DcimLAGInterface
+          data:
+            name: lag1
+            description: "AWS Direct Connect LAG: dxcon-1a and dxcon-1b"
+            status: active
+            lag_id: 1
+            lacp_mode: active
+            minimum_links: 1
+            member_interfaces:
+              - ["dx-c900-fra-lag", "dxcon-1a"]
+              - ["dx-c900-fra-lag", "dxcon-1b"]
+        - kind: CloudPeeringInterface
+          data:
+            name: lag1.1000
+            description: "AWS transit virtual interface (private scope, lands on the DX Gateway of the TGW)"
+            status: active
+            scope: private
+            routing: bgp
+            vlan_id: 1000
+            mtu: 8500
+            bfd: true
+            parent_interface: ["dx-c900-fra-lag", "lag1"]
+            gateway: dxgw-c900
+            auth: c900-aws-dx-bgp-key
+            peer_ip:
+              data:
+                address: "10.255.128.1/31"
+                ip_namespace: PROD
+                description: AWS side of the Direct Connect VIF
+            peer_asn: AS64512
+        - kind: CloudPeeringInterface
+          data:
+            name: lag1.1100
+            description: AWS private virtual interface (lands on the virtual private gateway)
+            status: active
+            scope: private
+            routing: bgp
+            vlan_id: 1100
+            mtu: 9001
+            bfd: true
+            parent_interface: ["dx-c900-fra-lag", "lag1"]
+            gateway: vgw-c900-euc1
+            auth: c900-aws-dx-bgp-key
+            peer_ip:
+              data:
+                address: "10.255.128.3/31"
+                ip_namespace: PROD
+                description: AWS side of the private VIF
+            peer_asn: AS64512
+    - name: er-c900-weu
+      description: "Azure ExpressRoute circuit, two links (primary and secondary), one service key"
+      status: active
+      connection_type: logical
+      bandwidth: 1000
+      service_key: "11111111-2222-3333-4444-555555555555"
+      account: c900-azure-prod
+      region: westeurope
+      interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            name: msee-pri
+            description: "Microsoft Enterprise Edge, primary link"
+            status: active
+        - kind: DcimPhysicalInterface
+          data:
+            name: msee-sec
+            description: "Microsoft Enterprise Edge, secondary link"
+            status: active
+        - kind: CloudPeeringInterface
+          data:
+            name: er-c900-weu-pri
+            description: "ExpressRoute private peering, primary link"
+            status: active
+            scope: private
+            routing: bgp
+            vlan_id: 200
+            mtu: 1500
+            bfd: true
+            parent_interface: ["er-c900-weu", "msee-pri"]
+            gateway: ergw-c900-weu
+            peer_ip:
+              data:
+                address: "10.255.128.10/30"
+                ip_namespace: PROD
+                description: "Microsoft side, ExpressRoute primary"
+            peer_asn: AS12076
+        - kind: CloudPeeringInterface
+          data:
+            name: er-c900-weu-sec
+            description: "ExpressRoute private peering, secondary link"
+            status: active
+            scope: private
+            routing: bgp
+            vlan_id: 201
+            mtu: 1500
+            bfd: true
+            parent_interface: ["er-c900-weu", "msee-sec"]
+            gateway: ergw-c900-weu
+            peer_ip:
+              data:
+                address: "10.255.128.14/30"
+                ip_namespace: PROD
+                description: "Microsoft side, ExpressRoute secondary"
+            peer_asn: AS12076
+    - name: ic-c900-fra-1
+      description: "GCP Partner Interconnect attachment, a logical connection on the partner's port"
+      status: active
+      connection_type: logical
+      bandwidth: 1000
+      account: c900-gcp-prod
+      partner_account: partner-fabric-gcp
+      region: europe-west3
+      interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            name: ic-port-1
+            description: Partner port of the Interconnect attachment
+            status: active
+        - kind: CloudPeeringInterface
+          data:
+            name: gcp-c900-vlan-att-1
+            description: GCP VLAN attachment of the Partner Interconnect
+            status: active
+            scope: private
+            routing: bgp
+            vlan_id: 400
+            mtu: 1460
+            bfd: true
+            parent_interface: ["ic-c900-fra-1", "ic-port-1"]
+            gateway: cr-c900-euw3
+            peer_ip:
+              data:
+                address: "169.254.20.1/29"
+                ip_namespace: PROD
+                description: Google side (Cloud Router) of the VLAN attachment
+            peer_asn: AS16550
+    - name: ic-ded-c900-fra
+      description: "GCP Dedicated Interconnect: one 10G port of ours at the Google location, routed (no VLAN)"
+      status: active
+      connection_type: physical
+      bandwidth: 10000
+      account: c900-gcp-prod
+      region: europe-west3
+      interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            name: ic-dedicated-port
+            description: Google Dedicated Interconnect 10G port
+            status: active
+            interface_type: "10gbase-x-sfpp"
+        - kind: CloudPeeringInterface
+          data:
+            name: gcp-c900-ded-1
+            description: "GCP Cloud Router peering on the dedicated port, no VLAN"
+            status: active
+            scope: private
+            routing: bgp
+            mtu: 1500
+            bfd: true
+            parent_interface: ["ic-ded-c900-fra", "ic-dedicated-port"]
+            gateway: cr-c900-euw3
+            peer_ip:
+              data:
+                address: "169.254.30.1/29"
+                ip_namespace: PROD
+                description: Google side (Cloud Router) of the dedicated routed port
+            peer_asn: AS16550

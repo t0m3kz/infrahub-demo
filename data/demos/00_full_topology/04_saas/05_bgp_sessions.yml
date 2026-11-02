@@ -1,5 +1,6 @@
 ---
-# The handoff session of Webex, hand-written like the cloud ones (03_cloud/06_bgp_sessions.yml): one process of ours,
+# The handoff session of Webex, hand-written like the cloud ones (03_cloud/04_circuits/02_bgp_sessions.yml): one
+# process of ours,
 # our sub-interface as capability, the peer address and AS are on the peering interface at the other end.
 apiVersion: infrahub.app/v1
 kind: Object

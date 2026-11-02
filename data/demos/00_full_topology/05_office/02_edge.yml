@@ -1,0 +1,39 @@
+---
+# The office's SD-WAN branch edge (VCE-610, the template add_sdwan_edge uses) with its interfaces from the template:
+# GE1 is the uplink (role uplink), the end of the office's internet access INET-C900-OFFICE
+# (06_internet/02_circuits/01_carrier_circuits.yml). The device is owned by the office's tenant, as the generator
+# would write it. The tunnel interfaces ride on the internet port GE1 (parent_interface) and are nested under the
+# device; the hub end is on the DC edge (01_dc/01_physical/01_devices.yml). Tunnel2 is the one to Zscaler.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: C900-OFFICE-EDGE1
+      object_template: VCE-610_EDGE
+      owner: C900
+      description: "C900 office SD-WAN edge: GE1 internet access, tunnels to the DC edge and to Zscaler"
+      deployment: C900-OFFICE
+      interfaces:
+        - kind: DcimVirtualInterface
+          data:
+            name: Tunnel1
+            role: cloud
+            status: active
+            description: SD-WAN tunnel to the DC edge (rides on the internet port GE1)
+            parent_interface: ["C900-OFFICE-EDGE1", "GE1"]
+            ip_address:
+              data:
+                address: "169.254.10.13/30"
+                ip_namespace: PROD
+        - kind: DcimVirtualInterface
+          data:
+            name: Tunnel2
+            role: saas
+            status: active
+            description: Zscaler tunnel (rides on the internet port GE1)
+            parent_interface: ["C900-OFFICE-EDGE1", "GE1"]
+            ip_address:
+              data:
+                address: "169.254.10.10/30"
+                ip_namespace: PROD

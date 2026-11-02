@@ -1,0 +1,11 @@
+---
+# The data center DC90 (design S) under the label "Data Center".
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyDataCenter
+  data:
+    - name: DC90
+      parent: "Data Center"
+      index: 9
+      design: S

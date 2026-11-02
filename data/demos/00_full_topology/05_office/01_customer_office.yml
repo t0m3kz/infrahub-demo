@@ -1,0 +1,14 @@
+---
+# The office footprint of C900. The office owns its tunnels (05_office/03_tunnels.yml): the circuit-placement rule for
+# a tunnel wants an office among its locations, and the tunnel's owner is derived from it. The office name is
+# computed: {OWNER}-OFFICE (C900-OFFICE). The office has ONE device, its SD-WAN branch edge (05_office/02_edge.yml,
+# `C900-OFFICE-EDGE1` as add_sdwan_edge would name it); nothing is generated for it (no `member_of_groups`, no
+# `sdwan_gateway`).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCustomerOffice
+  data:
+    - owner: "C900"
+      parent: "Campus and Office"
+      locations: ["dmo-office"]

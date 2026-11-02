@@ -1,0 +1,21 @@
+---
+# The circuits of the SaaS legs: the Webex cross-connect (carrier) and its BGP handoff (session). Same rules as
+# 03_cloud/04_circuits/00_carrier_circuits.yml. The Zscaler tunnel circuit is the office's: 05_office/03_tunnels.yml.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCarrierCircuit
+  data:
+    - name: XC-DMC1-WEBEX-1
+      circuit_id: XC-DMC1-WEBEX-1
+      description: Cross-connect to the Webex peering point
+      provider: P901
+      circuit_type: cross_connect
+      status: active
+      bandwidth: 1000
+      locations:
+        - DMC1
+        - WEBEX-FRANKFURT
+      capabilities:
+        - ["eg-dmc101", "Ethernet1/6"]
+        - ["webex-c900-fra-xc", "wbx-port-1"]

@@ -1,0 +1,30 @@
+---
+# The vPC: one port-channel per leaf (same lag_id), each with its own Ethernet1/2 as the member, the segment on both
+# (the typed port-side edge `segments`, so the segment reaches the server through the LAGs). A flat file because the
+# port-channels name the segment, which is created after the devices (the segment needs the leaf's SVI). The server's
+# bond0 is nested under the server (01_dc/01_physical/01_devices.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimLAGInterface
+  data:
+    - device: dc90-leaf-01
+      name: Port-Channel10
+      description: vPC to dc90-srv-01 (bond0)
+      status: active
+      lag_id: 10
+      lacp_mode: active
+      minimum_links: 1
+      member_interfaces:
+        - ["dc90-leaf-01", "Ethernet1/2"]
+      segments: ["c900-demo-web-p"]
+    - device: dc90-leaf-02
+      name: Port-Channel10
+      description: vPC to dc90-srv-01 (bond0)
+      status: active
+      lag_id: 10
+      lacp_mode: active
+      minimum_links: 1
+      member_interfaces:
+        - ["dc90-leaf-02", "Ethernet1/2"]
+      segments: ["c900-demo-web-p"]

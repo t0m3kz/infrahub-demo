@@ -1,0 +1,13 @@
+---
+# L3 of the cage edge, by hand (no generator): the VRF of the topology (PROD, hosted by the metro) with the edge as
+# its member. The sub-interfaces that face the cloud and SaaS legs, and the overlay BGP process, follow.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVRF
+  data:
+    - name: "dmc-vrf-prod"
+      namespace: "PROD"
+      deployment: "DMC"
+      shared_devices:
+        - "eg-dmc101"

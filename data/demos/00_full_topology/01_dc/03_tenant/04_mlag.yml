@@ -1,0 +1,15 @@
+---
+# One authored ManagedMLAG over the two leaves (the vPC domain).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedMLAG
+  data:
+    - name: "dc90-mlag-01"
+      description: "vPC domain of the leaf pair"
+      status: active
+      peer_devices: "dc90-leaf-01,dc90-leaf-02"
+      domain_id: 1
+      capabilities:
+        - "dc90-leaf-01"
+        - "dc90-leaf-02"

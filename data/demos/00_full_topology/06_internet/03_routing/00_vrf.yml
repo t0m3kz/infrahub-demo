@@ -1,0 +1,14 @@
+---
+# The INTERNET VRF instance of DC90 with the edge as its member; the edge's internet process and the ISP's, and the
+# eBGP transit session between them on Ethernet1/2 / et-0/0/0 (a physical port at both ends: no tunnel, no VIF)
+# follow. The ISP sends a default route, which is how everything behind it (the two public ranges) is reached.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVRF
+  data:
+    - name: "dc90-vrf-internet"
+      namespace: "INTERNET"
+      deployment: "DC90"
+      shared_devices:
+        - "dc90-edge-01"
