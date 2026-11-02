@@ -241,7 +241,7 @@ class MyCheck(InfrahubCheck):
 | --------- | ----- |
 | Managed | On-prem services and the shared generics `ManagedGeneric` (name, description, status), `ManagedGenericDevice` (the individual device edge, `capabilities`, cascades), `ManagedGenericSharedDevice` (the shared device edge, `shared_capabilities`, never cascades), `ManagedGenericInterfaces` (the interface-side `capabilities` edge; its identifier stays `interface_capabilities`), `ManagedNetworkSegment` and `ManagedLoadBalancer`, and `ManagedVRF` (a namespace realized in one topology, a shared kind) |
 | Cloud | Provider-hosted resources (public cloud and provider-hosted network services); every resource inherits `CloudResource`, except `CloudNetworkAppliance`, a provider-hosted network function (Equinix Network Edge) that inherits the device generics (`DcimDevice`, `DcimDeviceManaged`, `DcimCapabilities`) so its interfaces (virtual NICs: no hardware), BGP and HA stay device-shaped, and the two transports `CloudDirectConnect` and `CloudVPNConnection`, which inherit `CloudResource`, `CloudTransport` and only the slim `DcimDevice` (see **Device generics**); a cloud region hosts nothing but its transports' ports. The cloud and SaaS side of a connection is one provider-neutral model (see **Cloud and SaaS connections**): the transport devices (`CloudDirectConnect`, `CloudVPNConnection`, generic `CloudTransport` with `account`, `region` or `saas_region`, `owner`), the peering interface `CloudPeeringInterface` (a `DcimInterface` of its transport), the gateway `CloudGateway` (`hub`, `edge` or `customer`) with `CloudGatewayAttachment` and `CloudGatewayRouteTable`, `CloudVirtualNetwork` and `CloudServiceEndpoint` |
-| Topology | Deployments (`TopologyDataCenter`, `TopologyPod`, `TopologyColocationMetro`, ...), design elements, circuits (`TopologyCarrierCircuit` and `TopologySessionCircuit`, whose role is its `circuit_type`: `dci`, `handoff`, `tunnel`, `vpn`; neither has an `owner`, see **Circuit placement**) the one meeting point of every internet connection `TopologyInternet` (see **Circuit placement**) and the tenant footprints `TopologyCustomer*` |
+| Topology | Deployments (`TopologyDataCenter`, `TopologyPod`, `TopologyColocationMetro`, ...), design elements, circuits (`TopologyCarrierCircuit` and `TopologySessionCircuit`, whose role is its `circuit_type`: `dci`, `handoff`, `tunnel`, `vpn`; neither has an `owner`, see **Circuit placement**), the one meeting point of every internet connection `TopologyInternet` (bootstrap data, see **Circuit placement**) and the tenant footprints `TopologyCustomer*` |
 | Dcim, Ipam, Location, Organization | Devices/interfaces/cables, prefixes/addresses/namespaces, geography, providers/customers |
 | Routing | Shared routing objects (`RoutingAutonomousSystem`, `RoutingOSPFArea`, `RoutingPassword`) |
 | Security, Loadbalancer, Proxy, App, Virt | Functional domains |
@@ -308,27 +308,23 @@ class MyCheck(InfrahubCheck):
     the same port still hold both. A carrier whose far end is such a NIC is a provider-delivered
     `virtual_connection`; a physical `cross_connect` joins physical ports only (our cage edge and a Fabric port or a
     provider's own router).
-  - **THE INTERNET** (`TopologyInternet`, one instance `INTERNET`): the meeting point of every internet connection, "a
-    kind of cable or switch for all". It is a passive `TopologyDeployment` in the topology tree under the label
-    "Internet", next to the ISPs (`TopologyExternalProviders`, the label is the grouping place and `INTERNET` the meeting
-    point under it), a slim `DcimDevice` and a `TopologyFacility`: no role, platform, address, VRF, routing or artifact
-    (`carries_vrfs` and the readers of managed devices never see it), the addresses and prefixes of the internet stay in
-    the `INTERNET` namespace. It owns ONE interface of a kind of its own, `TopologyInternetInterface` (`bus`), and that
-    KIND is what lets many carrier circuits end on one interface: `checks/carrier_circuit_ports.py` exempts the kind (not a
-    name or a device) from "a port is an end of at most one carrier" and accepts it as an end. An attachment is an
-    `internet` carrier circuit of its own with two ends, the uplink port of an ISP router (or the port of the
-    `CloudDirectConnect` that stands for the public side of a cloud or SaaS region) and the bus, so the carriers that end
-    on the bus are who is attached and L1 from any ISP reaches any public side through it (edge port -> access carrier ->
-    ISP router -> its uplink -> uplink carrier -> bus -> public side carrier -> the public side's port). The INTERNET is a
-    device that IS a facility, so `add_circuit` places the end on the bus by the device itself (no `deployment`) and the
-    location rule "exactly two distinct locations, one per end" holds unchanged. `utils/internet_object.py` (called by
-    `checks/circuit_placement.py`) holds I1 (one `INTERNET`, one interface, of the bus kind), I2 (an attachment is an
-    `internet` circuit whose bus is on the INTERNET device and whose other end is an ISP router or a cloud or SaaS
-    transport, never a DC or a cage, since an edge reaches the internet through its own ISP access circuit) and I3
-    (once an INTERNET exists, an ISP router that serves an internet access carrier has an attachment). A public SaaS or
-    cloud service is a `CloudServiceEndpoint` with `access: public` and its range as `prefix` in the `INTERNET`
-    namespace; `virtual_network` is an optional plain edge (a Parent cannot be optional on 1.11.9) so a SaaS endpoint
-    names its `saas_region` only.
+  - **THE INTERNET** (`TopologyInternet`, the singleton `INTERNET`): the meeting point of every internet connection, "a
+    kind of cable or switch for all". It does not change between datasets, so it and its one interface `bus` are
+    BOOTSTRAP data (`data/bootstrap/03b_internet.yml`, after the label "Internet" it sits under, next to the ISPs
+    `TopologyExternalProviders`); the ISPs, their uplinks and the public sides are dataset data. It is a passive
+    `TopologyDeployment`, a slim `DcimDevice` and a `TopologyFacility`: no role, platform, address, VRF, routing or
+    artifact (`carries_vrfs` and the readers of managed devices never see it); addresses and prefixes stay in the
+    `INTERNET` namespace. Its ONE interface is a `TopologyInternetInterface`, and that KIND lets many carriers end on it
+    (`checks/carrier_circuit_ports.py` exempts the kind, not a name). An attachment is an `internet` carrier of its own
+    from the uplink port of an ISP router (or the port of the `CloudDirectConnect` that is a region's public side) to the
+    bus, so L1 from any ISP reaches any public side through it. The device is a facility itself, so `add_circuit` places
+    the bus end by the device (no `deployment`) and a data file lists only the ISP. `utils/internet_object.py`
+    (called by `checks/circuit_placement.py`) holds I1 (one `INTERNET`, one interface, of the bus kind), I2 (an
+    attachment is an `internet` circuit whose other end is an ISP router or a cloud or SaaS transport, never a DC or a
+    cage) and I3 (an ISP router that serves an internet access carrier has an attachment: it applies to EVERY dataset
+    since `INTERNET` is bootstrap; an access between two ISP-kind routers, a partner buying from an attached ISP, is
+    judged as one). A public cloud or SaaS service is a `CloudServiceEndpoint` with `access: public` and its range as
+    `prefix` in the `INTERNET` namespace; its `virtual_network` is an optional plain edge.
   - **Carrier provider data** (optional, inventory only, nothing reads it): `circuit_id` also holds the Equinix Fabric
     connection `uuid` or the Megaport VXC `product_uid`; `bandwidth` mirrors the Fabric `bandwidth` and the Megaport
     `rate_limit`; `term_length` (months) has the name and meaning of `CloudNetworkAppliance.term_length` and mirrors the
@@ -384,6 +380,11 @@ class MyCheck(InfrahubCheck):
   vocabulary and is inventory only. The sample is `data/demos/00_full_topology` (one topology in numbered folders by facility type, `tests/traversal/load_topology.py` loads it;
   its README holds the per-operator table, `invoke check-model` and `test_03_full_topology.py` walk it); `checks/cloud_connection.py` (R1 to R9) holds what the schema cannot (the edge derives the cloud side's
   prefixes, see **Border policy**).
+- **Path tracer**: `utils/path_trace.py` asks the SERVER for paths between ANY two nodes (`InfrahubPathTraversal`, one
+  `traverse_paths` call per layer, `kind_filter` = the layer's row of `LAYERS`: `l1` cabled or carried, `l3` routed).
+  A node is `kind:hfid` (HFID parts joined with `/`) or a bare name; nothing is computed locally. ECMP is the set of
+  paths at the MINIMUM depth, the longer ones follow. Server limits: `max_depth` 30, `max_paths` 1..100. A chain is a
+  row of nodes, which is what `tests/traversal/` (`invoke check-model`, goldens in `tests/traversal/golden/`) asserts.
 - **Session circuits** (virtual circuits): `TopologySessionCircuit` is the connection between topologies on which routing
   is generated or recorded; its role is its `circuit_type` (`dci`, `handoff`, `tunnel`, `vpn`), required, never a kind. It has no `owner` field (derived, see **Circuit placement**). The
   carrier kind keeps its own `circuit_type` (the carrier's nature) beside it. `tunnel` (SD-WAN office edge <->
@@ -700,6 +701,10 @@ class MyCheck(InfrahubCheck):
   `String`, and a query that selects that field across kinds is then refused at repository sync ("Fields ... conflict");
   narrow to a generic instead (`TopologyApplianceHosting` for an appliance's deployment). The repository sync of
   `test-integration-fast` catches that conflict.
+  A **Parent** relationship must be mandatory (no optional Parent, so no uniqueness over an optional relationship: use a
+  plain edge when the peer is optional). `infrahubctl schema load` is ADDITIVE: it refuses a change of `inherit_from`,
+  `hierarchy` or `parent` on a kind that has instances, so such a change needs a rebuilt stack
+  (`uv run invoke clean-testcontainers`, or `check-model --rebuild`).
 - **MLAG peer pair uniqueness is an attribute, the rest are checks**: a uniqueness constraint cannot use a many
   relationship, so the pair is mirrored into the unique Text attribute `ManagedMLAG.peer_devices` (the sorted member
   names joined with a comma, `mlag_peer_devices` in `utils/vlan_domain.py`), written by `generators/domain_pairing.py`.
@@ -993,23 +998,28 @@ uv run pytest --cov=.
 ### Which integration run a change needs
 
 Integration runs go through `uv run invoke test-integration` (see the `infrahub-running-integration-tests` skill), one
-stack at a time. The full 30_all subset is `test_01, 02, 59, 60, 61, 62, 64, 65, 66` (`62` is `test_62`, `62b`, `62c`;
-`64` is `test_64`, `64b`, `64c`); `test_65` (idempotency) is the last ~20 of its ~55 minutes, `test_66` (circuit lifecycle, mutates the branch) runs last. Match the run to the change:
+stack at a time. Two loops:
+
+- **Fast (minutes)**: `uv run invoke check-model` (schema plus `data/demos/00_full_topology` on a throwaway `tv-*` branch of
+  the :8100 stack, then the tracer asserts of `tests/traversal/`; `--rebuild` for a clean stack) and
+  `uv run invoke test-integration-fast` (`test_01` setup, `test_02` repository sync, `test_03` the same topology and
+  traversal). Run it BEFORE the full subset for any schema, query or generator change: `test_02` registers every query
+  against the live schema, so a field the schema rejects (`Cannot query field`, `Unknown type`, a "Fields ... conflict")
+  fails there, where the full subset costs tens of minutes (the task worker log names the field).
+- **Full 30_all subset**: `test_01, 02, 59, 60, 61, 62, 64, 65, 66` (`62` is `test_62`, `62b`, `62c`; `64` is `test_64`,
+  `64b`, `64c`). `test_65` (idempotency) is the last ~20 of its ~55 minutes, `test_66` (circuit lifecycle, mutates the
+  branch) runs last. The fast loop loads its topology onto the stack's `main`: `uv run invoke clean-testcontainers` first.
 
 | Change touches | Run |
 | --- | --- |
-| Generators (including their helpers), schema, `data/`, or queries used by generators | Full subset **including `test_65` and `test_66`** (a generator's cleanup is only proven by `test_66`) |
-| Templates, transforms, checks and their validation queries | Subset `01, 02, 59–64` (no `test_65` or `test_66`) plus the smoke golden diff |
+| Schema, queries, checks of the model, `data/demos/00_full_topology` | Fast: `check-model` and `test-integration-fast` (`01, 02, 03`) |
+| Generators (including their helpers), `data/bootstrap`, `data/demos/30_all`, queries used by generators | Fast, then the full subset **including `test_65` and `test_66`** (a generator's cleanup is only proven by `test_66`) |
+| Templates, transforms, checks and their validation queries | Fast, then subset `01, 02, 59–64` (no `test_65` or `test_66`) plus the smoke golden diff |
 | Docs, tests only | Unit + smoke |
 
 Queries are validated by the smoke tests: every query under `queries/` has a `syntax_check` entry in
 `tests/smoke/test_graphql.yml` (guarded by `tests/unit/test_smoke_query_coverage.py`), run by `uv run invoke validate`.
-For ANY schema, query or generator change, run the fast loop BEFORE the full 30_all subset: `uv run invoke
-test-integration-fast` (it also loads `data/demos/00_full_topology` onto the stack's main and runs the traversal checks, `test_03`;
-that stack must not then be used for the 30_all subset: `uv run invoke clean-testcontainers` first). Its repository sync (`test_02`) registers every query against the live schema, so a field the
-schema rejects (`Cannot query field`, `Unknown type`, a "Fields ... conflict") fails there in minutes, where the full
-subset costs tens of minutes; the task worker log names the field. The test stack serves on port 8100 (`--server-port`
-moves it).
+The test stack serves on port 8100 (`--server-port` moves it).
 
 Always, after any run that registers a new check or transform query: run that query against the settled stack
 (`KEEP_STACK`) and simulate the check or transform on the real data. Unit tests with canned responses do not catch
@@ -1557,6 +1567,8 @@ Next paragraph.
 - **Ignoring `order_weight`**: Forgetting to set `order_weight` in schemas can lead to an inconsistent UI.
 - **Attribute conflicts in generics**: a node must not redefine an attribute one of its generics provides (no `allow_override`)
 - **Missing relationship identifiers**: When multiple relationships point to the same peer, always specify unique `identifier` values
+- **Code under `data/`**: no `.py` file under `data/demos` (nor `data/bootstrap`); data is YAML, anything that computes
+  belongs in `generators/`, `utils/` or `tests/`.
 - **Object file HFID errors**: Ensure all values in HFID arrays are strings, even for Number attributes (e.g., `["value1", "3", "443"]`)
 - **Generic HFID lookup failures**: Generics used as relationship peers must have `human_friendly_id` defined if data files reference them via HFID strings
 
