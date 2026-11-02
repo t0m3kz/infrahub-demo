@@ -378,7 +378,7 @@ class MyCheck(InfrahubCheck):
   virtual colocation hosts `appliances` (`TopologyApplianceHosting`). A provider's own router that a cable reaches is a
   physical device of its `TopologyExternalProviders`. `OrganizationProvider.connection_profile` names the operator's
   vocabulary and is inventory only. The sample is `data/demos/00_full_topology` (one topology in numbered folders by facility type, `tests/traversal/load_topology.py` loads it;
-  its README holds the per-operator table, `invoke check-model` and `test_03_full_topology.py` walk it); `checks/cloud_connection.py` (R1 to R9) holds what the schema cannot (the edge derives the cloud side's
+  its README holds the per-operator table, `invoke check-model` and `test_03_full_topology.py` walk it; three sites reach each other and the INTERNET: the DC, one colocation cage `DMC1` where every cloud and SaaS leg lands (never on the DC edge) and the C900 office with an SD-WAN edge of its own); `checks/cloud_connection.py` (R1 to R9) holds what the schema cannot (the edge derives the cloud side's
   prefixes, see **Border policy**).
 - **Path tracer**: `utils/path_trace.py` asks the SERVER for paths between ANY two nodes (`InfrahubPathTraversal`, one
   `traverse_paths` call per layer, `kind_filter` = the layer's row of `LAYERS`: `l1` cabled or carried, `l3` routed).
