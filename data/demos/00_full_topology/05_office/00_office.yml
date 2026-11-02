@@ -1,8 +1,9 @@
 ---
-# The customer office of C900, minimal: a building in the Demo Metro and the office footprint on it. The office is the
-# owner of the Zscaler tunnel (01_zscaler_tunnel.yml): the circuit-placement rule for a tunnel wants an office among
-# its locations, and the tunnel's owner is derived from it. The office name is computed: {OWNER}-OFFICE
-# (C900-OFFICE). No SD-WAN gateway, no fabric: nothing is generated for it (no `member_of_groups`).
+# The customer office of C900: a building in the Demo Metro and the office footprint on it. The office owns its tunnels
+# (02_tunnels.yml): the circuit-placement rule for a tunnel wants an office among its locations, and the tunnel's owner
+# is derived from it. The office name is computed: {OWNER}-OFFICE (C900-OFFICE). The office has ONE device, its SD-WAN
+# branch edge (01_edge.yml, `C900-OFFICE-EDGE1` as add_sdwan_edge would name it); nothing is generated for it (no
+# `member_of_groups`, no `sdwan_gateway`).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

@@ -23,7 +23,9 @@ spec:
     - {prefix: "169.254.10.0/30", ip_namespace: "PROD", status: active, description: "Link: AWS VPN tunnel 1 (by AWS)"}
     - {prefix: "169.254.10.4/30", ip_namespace: "PROD", status: active, description: "Link: AWS VPN tunnel 2 (by AWS)"}
     - {prefix: "169.254.30.0/29", ip_namespace: "PROD", status: active, description: "Link: GCP dedicated routed port"}
-    - {prefix: "169.254.10.8/30", ip_namespace: "PROD", status: active, description: "Link: Zscaler tunnel"}
+    - {prefix: "169.254.10.8/30", ip_namespace: "PROD", status: active, description: "Link: Zscaler tunnel (office edge)"}  # yamllint disable-line rule:line-length
+    - {prefix: "169.254.10.12/30", ip_namespace: "PROD", status: active, description: "Link: office tunnel to the DC edge (SD-WAN hub)"}  # yamllint disable-line rule:line-length
+    - {prefix: "10.91.255.0/24", ip_namespace: "PROD", status: active, description: "DMC1 loopbacks"}
 ---
 apiVersion: infrahub.app/v1
 kind: Object
@@ -33,6 +35,7 @@ spec:
     - {address: "10.90.1.1/24", ip_namespace: "PROD", description: "Gateway of c900-demo-web-p"}
     - {address: "10.90.255.1/32", ip_namespace: "PROD", description: "dc90-edge-01 loopback"}
     - {address: "10.90.255.2/32", ip_namespace: "PROD", description: "dc90-leaf-01 loopback"}
+    - {address: "10.91.255.1/32", ip_namespace: "PROD", description: "eg-dmc101 loopback"}
     # Provider side of each leg (the connector's peer_ip). Our side is the sub-interface address, 01_dc/04_routing.yml.
     - {address: "10.255.128.1/31", ip_namespace: "PROD", description: "AWS side of the Direct Connect VIF"}
     - {address: "10.255.128.3/31", ip_namespace: "PROD", description: "AWS side of the private VIF"}

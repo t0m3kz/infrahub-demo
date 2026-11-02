@@ -1,0 +1,97 @@
+---
+# L3 of the cage edge, by hand (no generator): the VRF of the topology (PROD, hosted by the metro), the edge's overlay
+# BGP process (one, which the DCI sessions of 02_colo/08_dci_peerings.yml and the handoffs of
+# 03_cloud/06_bgp_sessions.yml and 04_saas/05_bgp_sessions.yml use), and the sub-interfaces that face the cloud and
+# SaaS legs. Our address of each /31 or /30 is typed here; a pool would hand it out (the cloud side is the peering
+# interface, 03_cloud/04_peerings.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVRF
+  data:
+    - name: "dmc-vrf-prod"
+      namespace: "PROD"
+      deployment: "DMC"
+      shared_devices:
+        - "eg-dmc101"
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: "Ethernet1/3.1000"
+      device: "eg-dmc101"
+      role: cloud
+      status: active
+      description: "AWS Direct Connect transit VIF, VLAN 1000"
+      parent_interface: ["eg-dmc101", "Ethernet1/3"]
+      vrf: ["DMC", "PROD"]
+      ip_address: {data: {address: "10.255.128.0/31", ip_namespace: "PROD"}}
+    - name: "Ethernet1/3.1100"
+      device: "eg-dmc101"
+      role: cloud
+      status: active
+      description: "AWS Direct Connect private VIF, VLAN 1100"
+      parent_interface: ["eg-dmc101", "Ethernet1/3"]
+      vrf: ["DMC", "PROD"]
+      ip_address: {data: {address: "10.255.128.2/31", ip_namespace: "PROD"}}
+    # The three Fabric legs share the port Ethernet1/1 (one cable to the Fabric port): one VLAN each.
+    - name: "Ethernet1/1.200"
+      device: "eg-dmc101"
+      role: cloud
+      status: active
+      description: "ExpressRoute primary, private peering VLAN 200 (Fabric virtual connection)"
+      parent_interface: ["eg-dmc101", "Ethernet1/1"]
+      vrf: ["DMC", "PROD"]
+      ip_address: {data: {address: "10.255.128.9/30", ip_namespace: "PROD"}}
+    - name: "Ethernet1/1.201"
+      device: "eg-dmc101"
+      role: cloud
+      status: active
+      description: "ExpressRoute secondary, private peering VLAN 201 (Fabric virtual connection)"
+      parent_interface: ["eg-dmc101", "Ethernet1/1"]
+      vrf: ["DMC", "PROD"]
+      ip_address: {data: {address: "10.255.128.13/30", ip_namespace: "PROD"}}
+    - name: "Ethernet1/1.400"
+      device: "eg-dmc101"
+      role: cloud
+      status: active
+      description: "GCP Partner Interconnect, VLAN attachment VLAN 400 (Fabric virtual connection)"
+      parent_interface: ["eg-dmc101", "Ethernet1/1"]
+      vrf: ["DMC", "PROD"]
+      ip_address: {data: {address: "169.254.20.2/29", ip_namespace: "PROD"}}
+    - name: "Ethernet1/6.300"
+      device: "eg-dmc101"
+      role: saas
+      status: active
+      description: "Webex private peering, VLAN 300"
+      parent_interface: ["eg-dmc101", "Ethernet1/6"]
+      vrf: ["DMC", "PROD"]
+      ip_address: {data: {address: "10.255.128.6/31", ip_namespace: "PROD"}}
+---
+# A routed port: Ethernet1/5 carries the address of the link itself (no VLAN, no sub-interface).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - device: "eg-dmc101"
+      name: "Ethernet1/5"
+      role: cloud
+      status: active
+      description: "GCP Dedicated Interconnect, routed port (no VLAN)"
+      ip_address: {data: {address: "169.254.30.2/29", ip_namespace: "PROD"}}
+---
+# The one overlay process of the cage edge: the DCI sessions are built between the overlay processes of the two ends.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGP
+  data:
+    - name: "eg-dmc101-bgp"
+      status: active
+      process_role: overlay
+      local_as: "AS4200091001"
+      router_id: ["10.91.255.1/32", "PROD"]
+      capabilities: ["eg-dmc101"]

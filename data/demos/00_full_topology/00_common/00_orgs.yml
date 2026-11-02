@@ -48,3 +48,6 @@ spec:
     - asn: 4200090002
       owner: "P028"
       description: "dc90-leaf-01 (would come from PRIVATE-ASN32)"
+    - asn: 4200091001
+      owner: "P028"
+      description: "eg-dmc101, the cage edge of the colocation DMC1 (would come from PRIVATE-ASN32)"

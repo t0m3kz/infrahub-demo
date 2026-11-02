@@ -6,18 +6,18 @@ kind: Object
 spec:
   kind: TopologyCarrierCircuit
   data:
-    - name: XC-DC90-WEBEX-1
-      circuit_id: XC-DC90-WEBEX-1
+    - name: XC-DMC1-WEBEX-1
+      circuit_id: XC-DMC1-WEBEX-1
       description: Cross-connect to the Webex peering point
       provider: P901
       circuit_type: cross_connect
       status: active
       bandwidth: 1000
       locations:
-        - DC90
+        - DMC1
         - WEBEX-FRANKFURT
       capabilities:
-        - ["dc90-edge-01", "Ethernet1/6"]
+        - ["eg-dmc101", "Ethernet1/6"]
         - ["webex-c900-fra-xc", "wbx-port-1"]
 ---
 apiVersion: infrahub.app/v1
@@ -35,8 +35,8 @@ spec:
         - 10.255.128.6/31
         - PROD
       locations:
-        - DC90
+        - DMC1
         - WEBEX-FRANKFURT
       capabilities:
-        - ["dc90-edge-01", "Ethernet1/6.300"]
+        - ["eg-dmc101", "Ethernet1/6.300"]
         - ["webex-c900-fra-xc", "webex-c900-fra"]

@@ -1,0 +1,53 @@
+---
+# The internet access of the colocation cage and of the office, next to the DC's (INET-DC90-ISP-DEMO,
+# 03_cloud/05_circuits.yml, and INET-DC90-ISP-DEMO-B, 04_internet.yml): an `internet` carrier from the site's port
+# to a free `customer` port of an ISP router of the sample, the pattern of 30_all's INET-LUMEN-EQXFR2 and of
+# add_sdwan_edge's INET-<office>. Both ISP routers are attached to INTERNET (UPL-ISP-DEMO, UPL-ISP-DEMO-B: rule I3),
+# so every site reaches every other site and the public sides of the services at L1 through the internet:
+#
+#   eg-dmc101 Ethernet1/14 -- INET-DMC1-ISP-DEMO-B -- EXT-ISP-DEMO-B-PE1 et-0/0/1   (cage, second ISP)
+#   C900-OFFICE-EDGE1 GE1  -- INET-C900-OFFICE     -- EXT-ISP-DEMO-PE1   et-0/0/1   (office, first ISP)
+#
+# The transit /31 of each access is typed here (a pool would hand it out); no BGP session is built for these two (the
+# first ISP's L3 is 02_routing.yml), the carriers are the L1 fact.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - {device: "eg-dmc101", name: "Ethernet1/14", status: active, description: "Internet access (INET-DMC1-ISP-DEMO-B): transit to the second ISP", ip_address: {data: {address: "198.51.100.14/31", ip_namespace: "INTERNET"}}}  # yamllint disable-line rule:line-length
+    - {device: "EXT-ISP-DEMO-B-PE1", name: "et-0/0/1", status: active, description: "Transit customer: eg-dmc101", ip_address: {data: {address: "198.51.100.15/31", ip_namespace: "INTERNET"}}}  # yamllint disable-line rule:line-length
+    - {device: "C900-OFFICE-EDGE1", name: "GE1", status: active, description: "Internet access (INET-C900-OFFICE): transit to the ISP, the tunnels ride on it", ip_address: {data: {address: "198.51.100.12/31", ip_namespace: "INTERNET"}}}  # yamllint disable-line rule:line-length
+    - {device: "EXT-ISP-DEMO-PE1", name: "et-0/0/1", status: active, description: "Transit customer: C900-OFFICE-EDGE1", ip_address: {data: {address: "198.51.100.13/31", ip_namespace: "INTERNET"}}}  # yamllint disable-line rule:line-length
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCarrierCircuit
+  data:
+    - name: INET-DMC1-ISP-DEMO-B
+      circuit_id: INET-DMC1-ISP-DEMO-B
+      description: Internet access of the DMC1 cage edge
+      provider: P023
+      circuit_type: internet
+      status: active
+      bandwidth: 10000
+      locations:
+        - DMC1
+        - ISP-DEMO-B
+      capabilities:
+        - ["eg-dmc101", "Ethernet1/14"]
+        - ["EXT-ISP-DEMO-B-PE1", "et-0/0/1"]
+    - name: INET-C900-OFFICE
+      circuit_id: INET-C900-OFFICE
+      description: Internet access of the C900 office SD-WAN edge (underlay of its tunnels)
+      provider: P014
+      circuit_type: internet
+      status: active
+      bandwidth: 1000
+      locations:
+        - C900-OFFICE
+        - ISP-DEMO
+      capabilities:
+        - ["C900-OFFICE-EDGE1", "GE1"]
+        - ["EXT-ISP-DEMO-PE1", "et-0/0/1"]

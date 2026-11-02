@@ -8,7 +8,7 @@ kind: Object
 spec:
   kind: ManagedBGPPeering
   data:
-    - name: BGP-DC90-EDGE01-AWS-DX
+    - name: BGP-DMC1-EDGE01-AWS-DX
       description: eBGP to the AWS transit virtual interface
       session_type: EBGP
       peering_role: regular
@@ -17,13 +17,13 @@ spec:
         - - ipv4
           - unicast
       bgp_processes:
-        - dc90-edge-01-bgp
+        - eg-dmc101-bgp
       capabilities:
         - kind: DcimVirtualInterface
           data:
-            device: dc90-edge-01
+            device: eg-dmc101
             name: Ethernet1/3.1000
-    - name: BGP-DC90-EDGE01-AWS-DX-PRIV
+    - name: BGP-DMC1-EDGE01-AWS-DX-PRIV
       description: eBGP to the AWS private virtual interface
       session_type: EBGP
       peering_role: regular
@@ -32,13 +32,13 @@ spec:
         - - ipv4
           - unicast
       bgp_processes:
-        - dc90-edge-01-bgp
+        - eg-dmc101-bgp
       capabilities:
         - kind: DcimVirtualInterface
           data:
-            device: dc90-edge-01
+            device: eg-dmc101
             name: Ethernet1/3.1100
-    - name: BGP-DC90-EDGE01-AZ-ER-PRI
+    - name: BGP-DMC1-EDGE01-AZ-ER-PRI
       description: eBGP to the ExpressRoute primary peering
       session_type: EBGP
       peering_role: regular
@@ -47,13 +47,13 @@ spec:
         - - ipv4
           - unicast
       bgp_processes:
-        - dc90-edge-01-bgp
+        - eg-dmc101-bgp
       capabilities:
         - kind: DcimVirtualInterface
           data:
-            device: dc90-edge-01
-            name: Ethernet1/4.200
-    - name: BGP-DC90-EDGE01-AZ-ER-SEC
+            device: eg-dmc101
+            name: Ethernet1/1.200
+    - name: BGP-DMC1-EDGE01-AZ-ER-SEC
       description: eBGP to the ExpressRoute secondary peering
       session_type: EBGP
       peering_role: regular
@@ -62,13 +62,13 @@ spec:
         - - ipv4
           - unicast
       bgp_processes:
-        - dc90-edge-01-bgp
+        - eg-dmc101-bgp
       capabilities:
         - kind: DcimVirtualInterface
           data:
-            device: dc90-edge-01
-            name: Ethernet1/5.200
-    - name: BGP-DC90-EDGE01-GCP-IC
+            device: eg-dmc101
+            name: Ethernet1/1.201
+    - name: BGP-DMC1-EDGE01-GCP-IC
       description: eBGP to the GCP Cloud Router over the VLAN attachment
       session_type: EBGP
       peering_role: regular
@@ -77,14 +77,14 @@ spec:
         - - ipv4
           - unicast
       bgp_processes:
-        - dc90-edge-01-bgp
+        - eg-dmc101-bgp
       capabilities:
         - kind: DcimVirtualInterface
           data:
-            device: dc90-edge-01
-            name: Ethernet1/7.400
-    # A routed port: the session sits on the physical Ethernet1/9 (address, no VLAN), not on a sub-interface.
-    - name: BGP-DC90-EDGE01-GCP-DED
+            device: eg-dmc101
+            name: Ethernet1/1.400
+    # A routed port: the session sits on the physical Ethernet1/5 (address, no VLAN), not on a sub-interface.
+    - name: BGP-DMC1-EDGE01-GCP-DED
       description: eBGP to the GCP Cloud Router over the dedicated routed port
       session_type: EBGP
       peering_role: regular
@@ -93,12 +93,12 @@ spec:
         - - ipv4
           - unicast
       bgp_processes:
-        - dc90-edge-01-bgp
+        - eg-dmc101-bgp
       capabilities:
         - kind: DcimPhysicalInterface
           data:
-            device: dc90-edge-01
-            name: Ethernet1/9
+            device: eg-dmc101
+            name: Ethernet1/5
     - name: BGP-DC90-EDGE01-AWS-VPN-1
       description: eBGP through tunnel 1 to the AWS VPN
       session_type: EBGP

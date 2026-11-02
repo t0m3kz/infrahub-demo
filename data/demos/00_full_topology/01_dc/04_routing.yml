@@ -1,9 +1,10 @@
 ---
 # L3 of the DC side, authored by hand (no generator): the VRF of the topology (PROD), the leaf SVI in it, the BGP
-# processes of leaf and edge, the overlay peering between them, and the edge sub-interfaces that face the cloud and
-# SaaS legs (our address of each /31 is typed here; a pool would hand it out). The handoff peerings are in
-# 03_cloud/06_bgp_sessions.yml and 04_saas/05_bgp_sessions.yml, after the circuits that create the connectors they end
-# on.
+# processes of leaf and edge, the overlay peering between them, and the tunnel interfaces of the DC edge (the AWS VPN
+# rides the internet access port Ethernet1/2; the hub end of the office tunnel is 05_office/01_edge.yml). The cloud and
+# SaaS legs are NOT here: a Direct Connect, an ExpressRoute or a Webex cross-connect lands in a colocation cage, so
+# their sub-interfaces and sessions belong to the cage edge (02_colo/05_routing.yml, 03_cloud/06_bgp_sessions.yml,
+# 04_saas/05_bgp_sessions.yml).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -26,54 +27,6 @@ spec:
       role: svi
       status: active
       vrf: ["DC90", "PROD"]
-    - name: "Ethernet1/3.1000"
-      device: "dc90-edge-01"
-      role: cloud
-      status: active
-      description: "AWS Direct Connect transit VIF, VLAN 1000"
-      parent_interface: ["dc90-edge-01", "Ethernet1/3"]
-      vrf: ["DC90", "PROD"]
-      ip_address: {data: {address: "10.255.128.0/31", ip_namespace: "PROD"}}
-    - name: "Ethernet1/3.1100"
-      device: "dc90-edge-01"
-      role: cloud
-      status: active
-      description: "AWS Direct Connect private VIF, VLAN 1100"
-      parent_interface: ["dc90-edge-01", "Ethernet1/3"]
-      vrf: ["DC90", "PROD"]
-      ip_address: {data: {address: "10.255.128.2/31", ip_namespace: "PROD"}}
-    - name: "Ethernet1/4.200"
-      device: "dc90-edge-01"
-      role: cloud
-      status: active
-      description: "ExpressRoute primary, private peering VLAN 200"
-      parent_interface: ["dc90-edge-01", "Ethernet1/4"]
-      vrf: ["DC90", "PROD"]
-      ip_address: {data: {address: "10.255.128.9/30", ip_namespace: "PROD"}}
-    - name: "Ethernet1/5.200"
-      device: "dc90-edge-01"
-      role: cloud
-      status: active
-      description: "ExpressRoute secondary, private peering VLAN 200"
-      parent_interface: ["dc90-edge-01", "Ethernet1/5"]
-      vrf: ["DC90", "PROD"]
-      ip_address: {data: {address: "10.255.128.13/30", ip_namespace: "PROD"}}
-    - name: "Ethernet1/6.300"
-      device: "dc90-edge-01"
-      role: saas
-      status: active
-      description: "Webex private peering, VLAN 300"
-      parent_interface: ["dc90-edge-01", "Ethernet1/6"]
-      vrf: ["DC90", "PROD"]
-      ip_address: {data: {address: "10.255.128.6/31", ip_namespace: "PROD"}}
-    - name: "Ethernet1/7.400"
-      device: "dc90-edge-01"
-      role: cloud
-      status: active
-      description: "GCP Partner Interconnect, VLAN attachment VLAN 400"
-      parent_interface: ["dc90-edge-01", "Ethernet1/7"]
-      vrf: ["DC90", "PROD"]
-      ip_address: {data: {address: "169.254.20.2/29", ip_namespace: "PROD"}}
     - name: "Tunnel1"
       device: "dc90-edge-01"
       role: cloud
@@ -88,26 +41,6 @@ spec:
       description: "AWS site-to-site VPN tunnel 2 (rides on the internet port Ethernet1/2)"
       parent_interface: ["dc90-edge-01", "Ethernet1/2"]
       ip_address: {data: {address: "169.254.10.6/30", ip_namespace: "PROD"}}
-    - name: "Tunnel3"
-      device: "dc90-edge-01"
-      role: saas
-      status: active
-      description: "Zscaler tunnel"
-      parent_interface: ["dc90-edge-01", "Ethernet1/2"]
-      ip_address: {data: {address: "169.254.10.10/30", ip_namespace: "PROD"}}
----
-# A routed port: Ethernet1/9 carries the address of the link itself (no VLAN, no sub-interface).
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: DcimPhysicalInterface
-  data:
-    - device: "dc90-edge-01"
-      name: "Ethernet1/9"
-      role: cloud
-      status: active
-      description: "GCP Dedicated Interconnect, routed port (no VLAN)"
-      ip_address: {data: {address: "169.254.30.2/29", ip_namespace: "PROD"}}
 ---
 apiVersion: infrahub.app/v1
 kind: Object

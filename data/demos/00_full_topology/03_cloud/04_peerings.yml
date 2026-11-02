@@ -57,7 +57,7 @@ spec:
       status: active
       scope: private
       routing: bgp
-      vlan_id: 200
+      vlan_id: 201
       mtu: 1500
       bfd: true
       parent_interface: ["er-c900-weu", "msee-sec"]

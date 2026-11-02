@@ -1,0 +1,25 @@
+---
+# The cage edge (the on-ramp router, eg-fr201 of 30_all) and the Fabric port of the cage, from bootstrap templates
+# (their interfaces come with them). Nothing generated.
+#
+#   eg-dmc101            our edge, deployed to the zone DMC1. Ethernet1/1 (partner) is patched to the Fabric port,
+#                        Ethernet1/3-4 the AWS Direct Connect cross-connects, Ethernet1/5 the Google Dedicated
+#                        Interconnect, Ethernet1/6 the Webex cross-connect, Ethernet1/10-11 the dark fibres from the DC
+#                        border leaves, Ethernet1/14 the internet access.
+#   EXT-EQX-FABRIC-DMC1  the provider's Fabric port in the same cage (a physical stub of the provider, like the ISP
+#                        routers): the start of the Equinix Fabric virtual connections to ExpressRoute and the Google
+#                        Partner Interconnect. It is reached by a cable through the patch panel, not by a circuit.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: "eg-dmc101"
+      object_template: N9K-C9316D-GX_EDGE
+      description: "Cage edge of DMC1: cloud and SaaS cross-connects, Fabric, dark fibres to the DC, internet access"
+      deployment: "DMC1"
+    - name: "EXT-EQX-FABRIC-DMC1"
+      object_template: MX204_ISP_PE
+      owner: "P016"
+      description: "Equinix Fabric port in the DMC1 cage (patched to eg-dmc101 Ethernet1/1)"
+      deployment: "DMC1"

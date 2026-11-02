@@ -5,96 +5,99 @@
 # interface of it (04_peerings.yml), so the transports and their interfaces exist by now (earlier files) and nothing
 # is created here. `locations` are authored here (no generator derives them on the throwaway branch).
 #
-# Carrier circuits are the physical wire: our edge port to the provider's port. Session circuits are the routing on
-# top: handoff (BGP) for the private legs, vpn for the two AWS tunnels, tunnel for Zscaler. peer_ip and peer_asn are
-# the PROVIDER side of the leg (on the peering interface); our side is the sub-interface address of
-# 01_dc/04_routing.yml.
+# Carrier circuits are the physical wire. Every cloud leg lands in the colocation cage DMC1 (02_colo), where the cage
+# edge eg-dmc101 is: the Direct Connect and the Google Dedicated Interconnect are cross-connects from an edge port to
+# the provider's port; ExpressRoute and the Google Partner Interconnect are Equinix Fabric virtual connections that
+# start on the Fabric port of the cage (EXT-EQX-FABRIC-DMC1), which the edge reaches through the patch panel
+# (02_colo/04_cabling.yml). Session circuits are the routing on top: handoff (BGP) for the private legs, vpn for the
+# two AWS tunnels (those still ride the internet access of the DC edge). peer_ip and peer_asn are the PROVIDER side of
+# the leg (on the peering interface); our side is the sub-interface address of 02_colo/05_routing.yml.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: TopologyCarrierCircuit
   data:
-    - name: XC-DC90-AWS-DX1
-      circuit_id: XC-DC90-AWS-DX1
-      description: Cross-connect from dc90-edge-01 to the first AWS Direct Connect port of the LAG
+    - name: XC-DMC1-AWS-DX1
+      circuit_id: XC-DMC1-AWS-DX1
+      description: Cross-connect from the cage edge eg-dmc101 to the first AWS Direct Connect port of the LAG
       provider: P004
       circuit_type: cross_connect
       status: active
       bandwidth: 10000
       locations:
-        - DC90
+        - DMC1
         - eu-central-1
       capabilities:
-        - ["dc90-edge-01", "Ethernet1/3"]
+        - ["eg-dmc101", "Ethernet1/3"]
         - ["dx-c900-fra-lag", "dxcon-1a"]
-    - name: XC-DC90-AWS-DX2
-      circuit_id: XC-DC90-AWS-DX2
-      description: Cross-connect from dc90-edge-01 to the second AWS Direct Connect port of the LAG
+    - name: XC-DMC1-AWS-DX2
+      circuit_id: XC-DMC1-AWS-DX2
+      description: Cross-connect from the cage edge eg-dmc101 to the second AWS Direct Connect port of the LAG
       provider: P004
       circuit_type: cross_connect
       status: active
       bandwidth: 10000
       locations:
-        - DC90
+        - DMC1
         - eu-central-1
       capabilities:
-        - ["dc90-edge-01", "Ethernet1/8"]
+        - ["eg-dmc101", "Ethernet1/4"]
         - ["dx-c900-fra-lag", "dxcon-1b"]
-    - name: VC-DC90-AZ-ER-PRI
-      circuit_id: VC-DC90-AZ-ER-PRI
-      description: Virtual connection to the ExpressRoute circuit, primary link
+    - name: VC-DMC1-AZ-ER-PRI
+      circuit_id: VC-DMC1-AZ-ER-PRI
+      description: Fabric virtual connection from the cage Fabric port to the ExpressRoute circuit, primary link
       provider: P016
       circuit_type: virtual_connection
       status: active
       bandwidth: 1000
       locations:
-        - DC90
+        - DMC1
         - westeurope
       capabilities:
-        - ["dc90-edge-01", "Ethernet1/4"]
+        - ["EXT-EQX-FABRIC-DMC1", "et-0/0/0"]
         - ["er-c900-weu", "msee-pri"]
-    - name: VC-DC90-AZ-ER-SEC
-      circuit_id: VC-DC90-AZ-ER-SEC
-      description: Virtual connection to the ExpressRoute circuit, secondary link
+    - name: VC-DMC1-AZ-ER-SEC
+      circuit_id: VC-DMC1-AZ-ER-SEC
+      description: Fabric virtual connection from the cage Fabric port to the ExpressRoute circuit, secondary link
       provider: P016
       circuit_type: virtual_connection
       status: active
       bandwidth: 1000
       locations:
-        - DC90
+        - DMC1
         - westeurope
       capabilities:
-        - ["dc90-edge-01", "Ethernet1/5"]
+        - ["EXT-EQX-FABRIC-DMC1", "et-0/0/0"]
         - ["er-c900-weu", "msee-sec"]
-    - name: VC-DC90-GCP-IC1
-      circuit_id: VC-DC90-GCP-IC1
-      description: Virtual connection to the Google Partner Interconnect
+    - name: VC-DMC1-GCP-IC1
+      circuit_id: VC-DMC1-GCP-IC1
+      description: Equinix Fabric virtual connection from the cage Fabric port to the Google Partner Interconnect
       provider: P016
       circuit_type: virtual_connection
       status: active
       bandwidth: 1000
       locations:
-        - DC90
+        - DMC1
         - europe-west3
       capabilities:
-        - ["dc90-edge-01", "Ethernet1/7"]
+        - ["EXT-EQX-FABRIC-DMC1", "et-0/0/0"]
         - ["ic-c900-fra-1", "ic-port-1"]
-    - name: XC-DC90-GCP-DED1
-      circuit_id: XC-DC90-GCP-DED1
+    - name: XC-DMC1-GCP-DED1
+      circuit_id: XC-DMC1-GCP-DED1
       description: Cross-connect to the Google Dedicated Interconnect port (routed port on both ends, no VLAN)
       provider: P006
       circuit_type: cross_connect
       status: active
       bandwidth: 10000
       locations:
-        - DC90
+        - DMC1
         - europe-west3
       capabilities:
-        - ["dc90-edge-01", "Ethernet1/9"]
+        - ["eg-dmc101", "Ethernet1/5"]
         - ["ic-ded-c900-fra", "ic-dedicated-port"]
     - name: INET-DC90-ISP-DEMO
       circuit_id: INET-DC90-ISP-DEMO
-      description: Internet access of dc90-edge-01 (carries the VPN tunnels and the Zscaler tunnel)
+      description: Internet access of dc90-edge-01 (carries the AWS VPN tunnels and the office tunnel to the DC)
       provider: P014
       circuit_type: internet
       status: active
@@ -122,10 +125,10 @@ spec:
         - 10.255.128.0/31
         - PROD
       locations:
-        - DC90
+        - DMC1
         - eu-central-1
       capabilities:
-        - ["dc90-edge-01", "Ethernet1/3.1000"]
+        - ["eg-dmc101", "Ethernet1/3.1000"]
         - ["dx-c900-fra-lag", "lag1.1000"]
     # AWS Direct Connect, private: virtual interface (scope private) -> virtual private gateway -> VPC.
     - name: SC-C900-AWS-DX-PRIV
@@ -138,10 +141,10 @@ spec:
         - 10.255.128.2/31
         - PROD
       locations:
-        - DC90
+        - DMC1
         - eu-central-1
       capabilities:
-        - ["dc90-edge-01", "Ethernet1/3.1100"]
+        - ["eg-dmc101", "Ethernet1/3.1100"]
         - ["dx-c900-fra-lag", "lag1.1100"]
     # Azure ExpressRoute: ONE transport (the circuit), two peerings, a /30 each, both on the ExpressRoute Gateway.
     - name: SC-C900-AZ-ER-PRI
@@ -154,10 +157,10 @@ spec:
         - 10.255.128.8/30
         - PROD
       locations:
-        - DC90
+        - DMC1
         - westeurope
       capabilities:
-        - ["dc90-edge-01", "Ethernet1/4.200"]
+        - ["eg-dmc101", "Ethernet1/1.200"]
         - ["er-c900-weu", "er-c900-weu-pri"]
     - name: SC-C900-AZ-ER-SEC
       description: 'Handoff: edge sub-interface to the secondary private peering'
@@ -169,10 +172,10 @@ spec:
         - 10.255.128.12/30
         - PROD
       locations:
-        - DC90
+        - DMC1
         - westeurope
       capabilities:
-        - ["dc90-edge-01", "Ethernet1/5.200"]
+        - ["eg-dmc101", "Ethernet1/1.201"]
         - ["er-c900-weu", "er-c900-weu-sec"]
     # GCP Partner Interconnect: VLAN attachment (scope private) -> Cloud Router -> VPC.
     - name: SC-C900-GCP-IC
@@ -185,15 +188,15 @@ spec:
         - 169.254.20.0/29
         - PROD
       locations:
-        - DC90
+        - DMC1
         - europe-west3
       capabilities:
-        - ["dc90-edge-01", "Ethernet1/7.400"]
+        - ["eg-dmc101", "Ethernet1/1.400"]
         - ["ic-c900-fra-1", "gcp-c900-vlan-att-1"]
     # GCP Dedicated Interconnect: a ROUTED PORT leg. Both ends are physical interfaces with an address and no VLAN
-    # (Ethernet1/9 carries 169.254.30.2/29 itself, no sub-interface).
+    # (Ethernet1/5 of the cage edge carries 169.254.30.2/29 itself, no sub-interface).
     - name: SC-C900-GCP-DED
-      description: 'Handoff on a routed port: edge Ethernet1/9 to the Cloud Router peering, no VLAN'
+      description: 'Handoff on a routed port: cage edge Ethernet1/5 to the Cloud Router peering, no VLAN'
       provider: P006
       circuit_type: handoff
       status: active
@@ -202,10 +205,10 @@ spec:
         - 169.254.30.0/29
         - PROD
       locations:
-        - DC90
+        - DMC1
         - europe-west3
       capabilities:
-        - ["dc90-edge-01", "Ethernet1/9"]
+        - ["eg-dmc101", "Ethernet1/5"]
         - ["ic-ded-c900-fra", "gcp-c900-ded-1"]
     # AWS site-to-site VPN: ONE transport (the VPN connection), two tunnels, each a peering and the end of its own
     # session circuit, BGP inside a /30 each. The provider side (transit gateway) is on the transport.

@@ -1,4 +1,4 @@
-# Pełna topologia: dane przykładowe (DC, chmura, SaaS, biuro, internet)
+# Pełna topologia: dane przykładowe (DC, kolokacja, chmura, SaaS, biuro, internet)
 
 Gałąź `model/cloud-saas`, instancja `http://localhost:8100` (token `06438eb2-8019-4776-878c-0941b1f1d1ec`), gałąź Infrahub `main`.
 Dane są napisane ręcznie: żaden generator, transform ani check nie działa. Ładują się na samych danych bootstrap
@@ -9,17 +9,71 @@ Dane są napisane ręcznie: żaden generator, transform ani check nie działa. �
 | Folder | Co zawiera | Zależy od |
 | ------ | ---------- | --------- |
 | `00_common/` | klienci, dostawcy i AS (`00_orgs`), adresacja (`01_ipam`), klucze BGP (`02_bgp_keys`) | bootstrap |
-| `01_dc/` | DC90, pod `DC90-9-POD-1` (design `S_MIDDLE`), urządzenia, patch panel, kable, routing, segment `c900-demo-web-p` i jego port (`00`-`06`), potem pod: liście (vPC/MLAG), spine, border leaves, serwer (`07`-`13`); `vlan_row.py` | `00_common` |
-| `02_colo/` | ZAREZERWOWANY numer: próbka nie ma kolokacji (żadnego obiektu), folderu nie ma | |
-| `03_cloud/` | konta, bramy, VPC/VNet, transporty (Direct Connect, ExpressRoute, Interconnect, VPN), peeringi, obwody, sesje BGP, punkt usługi S3, dwa segmenty na dodatkowe pary | `01_dc` |
-| `04_saas/` | Webex (cross-connect + BGP) i Zscaler (tunel): regiony SaaS, transporty, porty, peeringi, obwody, sesje, punkt usługi | `01_dc`, `03_cloud` |
-| `05_office/` | minimalne biuro klienta C900 (`C900-OFFICE`) i jego obwód `tunnel` do Zscalera | `04_saas` |
-| `06_internet/` | INTERNET jako jeden wspólny obiekt, dwóch ISP, strony publiczne SaaS i chmury, sesja eBGP do ISP | `01_dc`, `03_cloud`, `04_saas` |
+| `01_dc/` | DC90, pod `DC90-9-POD-1` (design `S_MIDDLE`), urządzenia (krawędź `dc90-edge-01` ma dostęp do internetu, tunele AWS VPN i koniec tunelu biura; NIE ma nóg chmurowych), patch panel, kable, routing, segment `c900-demo-web-p` i jego port (`00`-`06`), potem pod: liście (vPC/MLAG), spine, border leaves, serwer (`07`-`13`); `vlan_row.py` | `00_common` |
+| `02_colo/` | kolokacja `COLO-DEMO` / metro `DMC` / JEDNA strefa (klatka) `DMC1`: budynek i rack (`00`-`01`), krawędź klatki `eg-dmc101` i port Fabric dostawcy `EXT-EQX-FABRIC-DMC1` (`02`), patch panel `PP-DMC1-01` z jedną sparowaną parą (`03`), kable krawędź - panel - Fabric (`04`), routing krawędzi: VRF, podinterfejsy nóg chmurowych, proces overlay (`05`), dwa światłowody ciemne DC - klatka, obwody DCI i sesje EVPN (`06`-`08`) | `01_dc` |
+| `03_cloud/` | konta, bramy, VPC/VNet, transporty (Direct Connect, ExpressRoute, Interconnect, VPN), peeringi, obwody (nośniki kończą się w klatce `DMC1`), sesje BGP krawędzi klatki, punkt usługi S3, dwa segmenty na dodatkowe pary | `02_colo` |
+| `04_saas/` | Webex (cross-connect w klatce + BGP) i Zscaler (tunel): regiony SaaS, transporty, porty, peeringi, obwody, sesje, punkt usługi | `02_colo`, `03_cloud` |
+| `05_office/` | biuro klienta C900 (`C900-OFFICE`), jego krawędź SD-WAN `C900-OFFICE-EDGE1` (`01`) i dwa obwody `tunnel`: do krawędzi DC i do Zscalera (`02`) | `04_saas` |
+| `06_internet/` | INTERNET jako jeden wspólny obiekt, dwóch ISP, strony publiczne SaaS i chmury, sesja eBGP do ISP, dostęp do internetu klatki i biura (`05`) | `01_dc`, `02_colo`, `03_cloud`, `04_saas`, `05_office` |
 
 Szósty folder `06_internet` i wspólny `00_common` nie były na liście właściciela (DC, Colo, Cloud, SaaS, Office): internet
 (ISP, INTERNET, strony publiczne) nie jest żadnym z pięciu rodzajów obiektów, a klienci, AS i adresacja są wspólne dla
-kilku z nich. Biuro leży za SaaS, bo jego obwód `tunnel` kończy się na transporcie Zscalera. Pod `DC90-9-POD-1` trzyma
-spine i dwa liście; border leaves, krawędź i serwer zostają na poziomie DC (rola graniczna należy do DC).
+kilku z nich. Biuro leży za SaaS, bo jego obwód `tunnel` kończy się na transporcie Zscalera; internet leży za biurem,
+bo dostęp biura do ISP jest w `06_internet/05_site_access.yml`. Pod `DC90-9-POD-1` trzyma spine i dwa liście;
+border leaves, krawędź i serwer zostają na poziomie DC (rola graniczna należy do DC).
+
+## Obraz topologii: trzy miejsca, internet i chmura
+
+Próbka ma trzy miejsca, z których da się prześledzić ścieżkę do każdego innego, do INTERNET i do chmury albo SaaS: biuro
+(`C900-OFFICE-EDGE1`), klatkę kolokacji (`eg-dmc101`) i DC (segment `c900-demo-web-p` w podzie, krawędź `dc90-edge-01`).
+Chmura i SaaS NIE wiszą na krawędzi DC: Direct Connect, ExpressRoute i Webex kończą się w klatce, jak w rzeczywistości.
+
+Połączenia między miejscami, chmurą i SaaS (kolumny to miejsca, `==` to nośnik, `--` kabel albo sesja):
+
+```text
+ BIURO C900-OFFICE      DC90                                        KOLOKACJA DMC1 (klatka)         CHMURA / SaaS
+ C900-OFFICE-EDGE1      segment c900-demo-web-p                     eg-dmc101
+   |                      |
+   |                    liść - spine - BL01 / BL02
+   |                      |         bl-01 Eth1/35 == DF-DC90-DMC1 ==== Eth1/10 --+
+   |                      |         bl-02 Eth1/35 == DF-DC90-DMC1-B == Eth1/11 --+  (DCI: ICX-DC90-DMC1,
+   |                    dc90-edge-01                                              |   sesja EVPN overlay)
+   +-- Tunnel1 == SC-C900-OFFICE-DC90 == Tunnel4 (hub SD-WAN)                     |
+   +-- Tunnel2 == SC-C900-ZSCALER-TUN1 ======================================> Zscaler (SaaS, tunel)
+                        dc90-edge-01 Tunnel1/2 == SC-C900-AWS-VPN-1/2 =========> AWS VPN (brama tranzytowa)
+                                                                  Eth1/3, 1/4 == XC-DMC1-AWS-DX1/2 ==> AWS Direct Connect (LAG)
+                                                                  Eth1/5 ==== XC-DMC1-GCP-DED1 =====> GCP Dedicated Interconnect
+                                                                  Eth1/6 ==== XC-DMC1-WEBEX-1 =======> Webex (SaaS)
+                                                                  Eth1/1 -- PP-DMC1-01 (przód 1 | tył 1) -- EXT-EQX-FABRIC-DMC1 et-0/0/0
+                                                                                   == VC-DMC1-AZ-ER-PRI / -SEC => ExpressRoute
+                                                                                   == VC-DMC1-GCP-IC1 ==========> GCP Partner Interconnect
+```
+
+Dostęp do internetu każdego miejsca (każdy router ISP ma uplink do `INTERNET:bus`, reguła I3):
+
+```text
+                         THE INTERNET (INTERNET:bus)
+                  UPL-ISP-DEMO                        UPL-ISP-DEMO-B
+                       |                                    |
+             EXT-ISP-DEMO-PE1                       EXT-ISP-DEMO-B-PE1
+            et-0/0/0     et-0/0/1                  et-0/0/0     et-0/0/1
+               |            |                         |            |
+   INET-DC90-ISP-DEMO  INET-C900-OFFICE   INET-DC90-ISP-DEMO-B  INET-DMC1-ISP-DEMO-B
+               |            |                         |            |
+    dc90-edge-01 Eth1/2   C900-OFFICE-EDGE1 GE1   dc90-edge-01 Eth1/1   eg-dmc101 Eth1/14
+```
+
+Najkrótsze ścieżki między miejscami (L1 = kable i nośniki, L3 = BGP, obwody sesji, tunele; szczegóły w plikach wzorcowych
+`tests/traversal/golden/`):
+
+| Para | L1 | L3 |
+| ---- | -- | -- |
+| biuro - DC | `GE1` - `INET-C900-OFFICE` - `EXT-ISP-DEMO-PE1` - `INET-DC90-ISP-DEMO` - `dc90-edge-01` - panel DC - liść - segment | tunel `SC-C900-OFFICE-DC90` do `dc90-edge-01`, proces overlay, liść, segment |
+| biuro - kolokacja | `INET-C900-OFFICE` - ISP-DEMO - `UPL-ISP-DEMO` - `INTERNET:bus` - `UPL-ISP-DEMO-B` - ISP-DEMO-B - `INET-DMC1-ISP-DEMO-B` - `eg-dmc101` | tunel do krawędzi DC, border leaf, sesja EVPN DCI do `eg-dmc101` |
+| kolokacja - DC | `eg-dmc101` - `DF-DC90-DMC1` (lub `-B`) - border leaf - spine - liść - segment | sesja EVPN DCI do border leafa, krawędź / spine, liść, segment |
+| DC, kolokacja, biuro - INTERNET | własny nośnik dostępowy (`internet`), router ISP, nośnik `UPL-*`, `INTERNET:bus` | nie dotyczy (INTERNET nie routuje) |
+| biuro - AWS | L1: dostęp biura - internet - dostęp klatki - `XC-DMC1-AWS-DX1/2` - Direct Connect | tunel do krawędzi DC i AWS VPN do bramy tranzytowej |
+| kolokacja - chmura | `eg-dmc101` - nośnik - port transportu (AWS: bezpośrednio; Azure i GCP Partner: panel i port Fabric) | podinterfejs, obwód handoff, peering chmury |
 
 ## Słownik wspólny dla wszystkich chmur
 
@@ -87,7 +141,7 @@ wspólny element, w nawiasie słowo operatora.
 
 | Rodzaj | Rola | Przykład |
 | ------ | ---- | -------- |
-| `TopologyCarrierCircuit` | fizyka: przewód, cross-connect, wirtualne połączenie, internet; końce to `capabilities` (port nasz i port transportu) | `XC-DC90-AWS-DX1`, `INET-DC90-ISP-DEMO` |
+| `TopologyCarrierCircuit` | fizyka: przewód, cross-connect, wirtualne połączenie, internet; końce to `capabilities` (port nasz i port transportu) | `XC-DMC1-AWS-DX1`, `DF-DC90-DMC1`, `INET-DC90-ISP-DEMO` |
 | `TopologySessionCircuit` | wirtualne: handoff / vpn / tunnel; końce to `capabilities` (nasz podinterfejs lub port routowany i peering transportu) | `SC-C900-AWS-DX-PROD`, `SC-C900-GCP-DED` |
 | `CloudDirectConnect` | transport-urządzenie: porty, pakiet (LAG) i peeringi; logiczne: `service_key`, `partner_account`, `rides_on` | `dx-c900-fra-lag`, `er-c900-weu`, `ic-c900-fra-1`, `ic-ded-c900-fra`, `webex-c900-fra-xc` |
 | `DcimPhysicalInterface`, `DcimLAGInterface` | porty i pakiet transportu (`device` = transport) | `dxcon-1a`, `dxcon-1b`, `lag1`, `msee-pri`, `ic-dedicated-port` |
@@ -106,7 +160,7 @@ ją obwody i ich `capabilities`) oraz `CloudTransitGateway` (jest `CloudGateway`
 Obwód kończy się na interfejsach przez JEDNĄ krawędź, `capabilities` (wspólna krawędź `ManagedGenericInterfaces.capabilities`,
 partner `DcimInterface`, min 1, max 2 na każdym obwodzie). Interfejs ma tylko `capabilities` jako krawędź obwodu; nie ma
 pola `endpoints`, generyka `TopologyCircuitEnd` ani `far_end`. Koniec w pliku obiektów to HFID interfejsu
-`[urządzenie, interfejs]`: `["dc90-edge-01", "Ethernet1/3"]`, `["dx-c900-fra-lag", "dxcon-1a"]`. Dlatego obiekty muszą
+`[urządzenie, interfejs]`: `["eg-dmc101", "Ethernet1/3"]`, `["dx-c900-fra-lag", "dxcon-1a"]`. Dlatego obiekty muszą
 istnieć wcześniej, a pliki ładują się alfabetycznie i po kolei: `03_cloud/00_cloud.yml` (konta, bramy) -> `01` transporty ->
 `02` porty -> `03` pakiet -> `04` peeringi -> `05` obwody -> `06` ręczne sesje BGP (potem to samo w `04_saas`). Zależne obiekty są w
 późniejszym pliku, bo indeks HFID obiektów z tego samego przebiegu bywa opóźniony.
@@ -142,8 +196,8 @@ Pełne = jest w modelu i w danych; częściowe = jest pole, ale uproszczone; bra
 | ---------- | -------- | ----- |
 | AWS DX dedykowane, transit VIF -> DX Gateway -> TGW -> VPC | pełne | `dx-c900-fra-lag`, `lag1.1000` (scope `private`), `dxgw-c900` (edge) -> `tgwa-c900-dxgw` (`allowed_prefixes 10.200.0.0/16`) -> `tgw-c900-euc1` (hub) -> `tgwa-c900-vpc` |
 | AWS DX, private VIF -> VGW -> VPC | pełne | `lag1.1100`, `vgw-c900-euc1` |
-| AWS DX hostowane (konto partnera), LAG | pełne | `partner_account` (GCP Partner Interconnect); LAG: jeden transport `dx-c900-fra-lag` z portami `dxcon-1a/1b` i pakietem `lag1`, dwa nośniki `XC-DC90-AWS-DX1/2` |
-| GCP Dedicated Interconnect: port routowany bez VLAN | pełne | `ic-ded-c900-fra`, port `ic-dedicated-port`, peering `gcp-c900-ded-1` bez `vlan_id`; nasz koniec to fizyczny `Ethernet1/9` z adresem, obwód `SC-C900-GCP-DED` |
+| AWS DX hostowane (konto partnera), LAG | pełne | `partner_account` (GCP Partner Interconnect); LAG: jeden transport `dx-c900-fra-lag` z portami `dxcon-1a/1b` i pakietem `lag1`, dwa nośniki `XC-DMC1-AWS-DX1/2` |
+| GCP Dedicated Interconnect: port routowany bez VLAN | pełne | `ic-ded-c900-fra`, port `ic-dedicated-port`, peering `gcp-c900-ded-1` bez `vlan_id`; nasz koniec to fizyczny `Ethernet1/5` krawędzi klatki z adresem, obwód `SC-C900-GCP-DED` |
 | AWS public VIF | częściowe | `scope: public` i `advertised_prefixes` (MY -> chmura) są w modelu, bez przykładu |
 | Azure ExpressRoute: obwód, dwa łącza, dwa peeringi /30, ExpressRoute Gateway w VNet | pełne | jeden `er-c900-weu` z portami `msee-pri/-sec` (końce nośników), `er-c900-weu-pri/-sec`, `ergw-c900-weu` + `ergwa-c900-weu`; spoke przez `peers` |
 | Azure Microsoft peering | częściowe | `scope: public` + `advertised_prefixes`, bez przykładu; route filters nie modelowane |
@@ -191,7 +245,9 @@ celu, zbiór ścieżek równego kosztu jest kompletny, każdy łańcuch przechod
 `CloudVPNConnection`), typy obwodów na łańcuchach każdego transportu (nośniki w L1, obwody sesji w L3), transport
 `dx-c900-fra-lag` trzyma port, pakiet i VIF, kierunek odwrotny i plik wzorcowy (posortowane łańcuchy). Para ujemna daje
 kompletny pusty wynik. Wszystkie rodzaje obiektów niepuste (także `lag`) i inwentarz (zakres peeringów, AS, dozwolone
-prefiksy) w osobnym pliku wzorcowym.
+prefiksy) w osobnym pliku wzorcowym. Dla trzech miejsc (DC, kolokacja, biuro): każde sięga INTERNET w L1 przez własny
+nośnik dostępowy (`sites`), a dane układają się tak, jak opisuje rysunek (`layout`: nośniki chmury w klatce, światłowody
+DC - klatka, tunele na krawędzi biura, gniazdo panelu do portu Fabric).
 
 ## Przejście po grafie
 
@@ -220,11 +276,14 @@ rodzajów, które ścieżka może przekroczyć (tabela na górze pliku); wypisuj
 alternatywy. Limity serwera: głębokość 30, `max_paths` 1..100, budżet na wywołanie (gdy wyszukiwanie w przód wyczerpie
 budżet, powtarza się od celu). Kod wyjścia 1, gdy któraś noga nie ma ścieżki.
 
-Wynik (równy koszt, `kind:hfid`) jest w plikach wzorcowych `tests/traversal/golden/full_topology__*.txt`, np. L1 do DX:
-segment -> `dc90-leaf-01/Ethernet1/1` -> kabel -> panel (front, tylna) -> kabel -> `dc90-edge-01/Ethernet1/13` -> urządzenie ->
-port z nośnikiem `XC-DC90-AWS-DX1` -> `dx-c900-fra-lag/dxcon-1a` -> pakiet `lag1` -> `lag1.1100` -> brama -> załącznik ->
-sieć wirtualna -> segment chmurowy. Tunele VPN i SaaS-owy tunel Zscaler istnieją tylko w L3 (obwód sesji), ich nośnik
-internetowy sprawdza przypadek `internet` i wiersz o interfejsach tuneli.
+Wynik (równy koszt, `kind:hfid`) jest w plikach wzorcowych `tests/traversal/golden/full_topology__*.txt`, np. L1 od klatki
+do DX (`full_topology__colo__aws.txt`): `eg-dmc101` -> port `Ethernet1/3` -> nośnik `XC-DMC1-AWS-DX1` ->
+`dx-c900-fra-lag/dxcon-1a` -> transport -> VIF -> brama -> załącznik -> sieć wirtualna -> segment chmurowy; a od segmentu
+w DC (`full_topology__c900-demo-web-p__c900-demo-subnet-p.txt`): segment -> port lub pakiet liścia -> liść -> spine ->
+border leaf -> nośnik `DF-DC90-DMC1` (światłowód ciemny) -> `eg-dmc101` -> nośnik `XC-DMC1-AWS-DX1` -> `dxcon-1a` -> pakiet
+`lag1` -> `lag1.1100`. Ścieżka do ExpressRoute idzie portem `Ethernet1/1` krawędzi klatki przez panel (przód, tył) do portu
+Fabric i nośnika `VC-DMC1-AZ-ER-PRI`. Tunele VPN i SaaS-owe tunele (Zscaler, biuro - DC) istnieją tylko w L3 (obwód sesji),
+ich nośnik internetowy sprawdza przypadek `internet` i wiersz o interfejsach tuneli.
 
 ## Pod, internet przez ISP i dodatkowe pary
 
@@ -270,6 +329,27 @@ a drugi koniec to router ISP albo port transportu chmurowego lub SaaS (nigdy DC 
 internetowym ma przyłączenie. Luki: wymiana PROD -> INTERNET przez firewall nie jest w próbce (wyjście do internetu z
 chmury i biura to znana luka `checks/internet_egress.py`); drugi ISP nie ma L3.
 
+**Dostęp klatki i biura** (`06_internet/05_site_access.yml`): klatka i biuro mają własny dostęp do ISP obok dostępu DC,
+wzorzec `INET-LUMEN-EQXFR2` z 30_all i `INET-<biuro>` z `add_sdwan_edge`: `eg-dmc101:Ethernet1/14` -
+`INET-DMC1-ISP-DEMO-B` - `EXT-ISP-DEMO-B-PE1:et-0/0/1` oraz `C900-OFFICE-EDGE1:GE1` - `INET-C900-OFFICE` -
+`EXT-ISP-DEMO-PE1:et-0/0/1`. Oba routery ISP mają już uplink do `INTERNET:bus` (reguła I3), więc każde z trzech miejsc
+sięga INTERNET w L1 (asercja `sites` w `cases.yml`: nośniki każdego łańcucha to dokładnie dostęp miejsca i uplink
+routera). Wiele nośników na jednym `bus` jest dozwolone po rodzaju interfejsu; dostępy klatki i biura NIE są
+przyłączeniami INTERNET (przyłączenie to uplink ISP albo strona publiczna usługi), więc `internet:` w `cases.yml` ma nadal
+cztery przyłączenia. Dla tych dwóch dostępów są adresy /31 w przestrzeni `INTERNET`, ale żadnej sesji eBGP (L3 ma tylko
+pierwszy ISP z DC).
+
+**Pary między miejscami i do chmury** (`cases.yml`, pliki `full_topology__office__*`, `__colo__*`, `__dc__internet`):
+biuro - DC, biuro - kolokacja, kolokacja - DC, każde miejsce - INTERNET (tylko L1), biuro - AWS (L1 przez internet i
+klatkę do Direct Connect, L3 przez tunel i AWS VPN), kolokacja - AWS (bezpośrednio, jeden nośnik `cross_connect`) i
+kolokacja - ExpressRoute (panel patch panelu i port Fabric, nośniki `virtual_connection`). Asercja `layout` czyta dane:
+każdy nośnik chmurowy i SaaS zaczyna się na urządzeniu klatki, nigdy w DC; światłowody ciemne łączą DC i klatkę; każdy
+tunel kończy się na krawędzi biura; krawędź klatki sięga portu Fabric jednym gniazdem panelu. Dla par od segmentu
+dzierżawcy zbiór ścieżek równego kosztu jest duży (trzy porty startowe, dwa border leafy, dwa warianty skoku BGP): para
+prosi o `max_paths: 100` (limit serwera), a sesje bez portów (tylko procesy overlay) trzymają zbiór poniżej limitu.
+Obwód `dci` (`ICX-DC90-DMC1`) nie leży na najkrótszym łańcuchu L3 (łańcuch idzie procesami BGP i peeringiem EVPN), więc typy
+obwodów L3 na łańcuchach DC - chmura to `handoff`, nie `dci`.
+
 **Dodatkowe pary** (`cases.yml`): tylko tunele VPN (`via: [CloudVPNConnection]`: 2 nogi L1 przez nośnik internetowy, 2 L3
 typu `vpn`, żadnego handoffu), SaaS Webex (cross-connect + handoff) i Zscaler (tunel na nośniku internetowym, obwód
 `tunnel` bez sesji), cloud <-> cloud (segment w sieci `vnet-c900-weu-spoke` osiągany przez `peers` huba ExpressRoute) i
@@ -278,17 +358,29 @@ jedna para ujemna (segment w VPC bez załącznika: oczekiwane dokładnie `L1: no
 profilu). Azure ExpressRoute: obwód `logical` bez `partner_account` jest poprawny (dostawca jest `provider` nośnika), więc
 żadnej nowej reguły.
 
-**Biuro i tunel Zscalera** (`05_office`): `SC-C900-ZSCALER-TUN1` ma lokalizacje `C900-OFFICE` i `ZSCALER-MUNICH I`; biuro jest
-właścicielem tunelu (właściciel jest wyprowadzany, `utils/ownership.py`), co zamyka regułę `checks/circuit_placement.py`
-dla tunelu (biuro wśród lokalizacji). Szczerze: port końcowy to nadal `Tunnel3` krawędzi `dc90-edge-01` (nośnik internetowy
-`INET-DC90-ISP-DEMO`), bo biuro nie ma tu własnej krawędzi SD-WAN; to uproszczenie próbki, nie projekt.
+**Biuro, jego krawędź i tunele** (`05_office`): biuro ma własną krawędź SD-WAN `C900-OFFICE-EDGE1` (szablon `VCE-610_EDGE`
+jak w `add_sdwan_edge`, `GE1` to uplink do ISP: `INET-C900-OFFICE`). Dwa obwody `tunnel` kończą się na jej interfejsach
+`Tunnel1` i `Tunnel2` (rodzic `GE1`): `SC-C900-OFFICE-DC90` do `Tunnel4` krawędzi `dc90-edge-01` (hub SD-WAN, ten sam
+dostęp do internetu co AWS VPN) i `SC-C900-ZSCALER-TUN1` do Zscalera. Oba mają biuro wśród lokalizacji (właściciel jest
+wyprowadzany, `utils/ownership.py`), a każdy koniec leży na portach nośnika internetowego (reguła tunelu w
+`checks/circuit_placement.py`). Tunel jest tylko w L3 (obwód sesji); jego nośnik internetowy sprawdza wiersz o
+interfejsach tuneli. Z DC do Zscalera L3 idzie więc tunelem DC - biuro, a potem tunelem biuro - Zscaler.
 
 ## Czego model nie wyraża (szczerze)
 
-- L1: między portem `Ethernet1/13` krawędzi (koniec panelu) a portem nośnika (`Ethernet1/3`, `Ethernet1/2`) nie ma kabla:
-  to przejście wewnątrz urządzenia, skrypt je tak oznacza.
+- L1 w DC: między portem `Ethernet1/13` krawędzi (koniec panelu) a portem nośnika (`Ethernet1/2`) nie ma kabla: to
+  przejście wewnątrz urządzenia, skrypt je tak oznacza.
 - Kabel idzie od portu segmentu liścia do panelu krosowego, a nośnik zaczyna się na innym porcie krawędzi. Fizycznie
   spójna ścieżka wymagałaby dodatkowych urządzeń. Nie ma serwera w DC: pierwszy hop to port liścia z krawędzią `segments`.
+- Klatka ma JEDNĄ parę panelu (`PP-DMC1-01`, gniazdo 1): przechodzą przez nią tylko nośniki `virtual_connection` z portu
+  Fabric (ExpressRoute i Partner Interconnect, trzy VLAN-y na `Ethernet1/1`: 200, 201, 400). Cross-connecty (AWS,
+  Dedicated Interconnect, Webex) kończą się na portach krawędzi bezpośrednio, bez panelu. Ścieżka L1 klatka - chmura
+  przez panel jest spójna fizycznie: krawędź - kabel - panel - kabel - port Fabric - nośnik - port transportu.
+- Biuro to jedna krawędź SD-WAN: bez przełączników, LAN-u i serwera (żaden generator nie działa). Pierwszy hop L1 biura to
+  krawędź.
+- DCI to dwa światłowody ciemne, dwa obwody `dci` i dwie sesje EVPN między procesami overlay; nie ma podsieci underlay
+  (/31 z puli DCI) ani sesji eBGP underlay (zbiór ścieżek L3 od segmentu przekroczyłby 100, limit serwera), ani interfejsów
+  loopback VTEP.
 - Strona dostawcy peeringu nie ma procesu BGP: peering BGP ma jeden proces (nasz), druga strona to `peer_ip` i `peer_asn`
   peeringu chmury, znajdowanego przez obwód sesji, który ma ten sam interfejs (podinterfejs albo port routowany) w
   `capabilities`.

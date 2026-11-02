@@ -6,7 +6,7 @@ kind: Object
 spec:
   kind: ManagedBGPPeering
   data:
-    - name: BGP-DC90-EDGE01-WEBEX
+    - name: BGP-DMC1-EDGE01-WEBEX
       description: eBGP to Webex
       session_type: EBGP
       peering_role: regular
@@ -15,9 +15,9 @@ spec:
         - - ipv4
           - unicast
       bgp_processes:
-        - dc90-edge-01-bgp
+        - eg-dmc101-bgp
       capabilities:
         - kind: DcimVirtualInterface
           data:
-            device: dc90-edge-01
+            device: eg-dmc101
             name: Ethernet1/6.300
