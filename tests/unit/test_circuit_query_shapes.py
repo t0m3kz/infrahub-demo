@@ -112,6 +112,8 @@ _GENERATOR_READS = [
     "capabilities.__typename",
     "capabilities.device.id",
     "capabilities.device.name",
+    # a cloud transport device is a session end the generator leaves authored
+    "capabilities.device.__typename",
     "capabilities.device.deployment.__typename",
     "capabilities.device.deployment.name",
     "capabilities.device.deployment.underlay_protocol",
@@ -142,7 +144,6 @@ _GENERATOR_READS = [
     "capabilities.parent_interface.cable.id",
     # a handoff
     "ip_namespace.name",
-    "maximum_routes",
     "password.id",
 ]
 

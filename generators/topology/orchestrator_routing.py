@@ -5,11 +5,7 @@ from typing import Any
 from infrahub_sdk.exceptions import NodeNotFoundError
 
 from utils.data_cleaning import clean_data
-from utils.limits import (
-    APPLICATION_ORCHESTRATOR_GROUPS,
-    TOPOLOGY_ORCHESTRATOR_GROUPS,
-    VIRTUAL_COLOCATION_ORCHESTRATOR_GROUPS,
-)
+from utils.limits import APPLICATION_ORCHESTRATOR_GROUPS, TOPOLOGY_ORCHESTRATOR_GROUPS
 
 from ..common import CommonGenerator
 
@@ -26,10 +22,6 @@ class BaseOrchestratorRoutingGenerator(CommonGenerator):
     query_roots: tuple[str, ...] = ()
     orchestrator_field = ""
     routing_groups: dict[str, str] = {}
-    # An orchestrator value with no routing group: an error that leaves the node untouched
-    # (the default), or a warning for a kind where only some values have an artifact, after
-    # which the node is moved out of every routing group like `manual`.
-    unrouted_is_error = True
 
     def _extract_node(self, cleaned: dict[str, Any]) -> dict[str, Any] | None:
         for root in self.query_roots:
@@ -74,11 +66,8 @@ class BaseOrchestratorRoutingGenerator(CommonGenerator):
                 f"{node_kind} '{node_name}' uses unsupported orchestrator '{orchestrator}' for field "
                 f"'{self.orchestrator_field}'"
             )
-            if self.unrouted_is_error:
-                self.logger.error(message)
-                return
-            # FailOnErrorLogger turns error() into a task failure: a value without an artifact is not one.
-            self.logger.warning(f"{message}: no routing group, no artifact")
+            self.logger.error(message)
+            return
 
         current_groups = node.get("member_of_groups") or []
         routing_group_names = set(self.routing_groups.values())
@@ -139,16 +128,3 @@ class TopologyOrchestratorRoutingGenerator(BaseOrchestratorRoutingGenerator):
     )
     orchestrator_field = "infrastructure_orchestrator"
     routing_groups = TOPOLOGY_ORCHESTRATOR_GROUPS
-
-
-class VirtualColocationOrchestratorRoutingGenerator(BaseOrchestratorRoutingGenerator):
-    """Route a provider-hosted colocation presence into its artifact group.
-
-    Only Terraform has an artifact for a virtual colocation (Equinix Network Edge
-    devices); any other value leaves it in no routing group, with a warning.
-    """
-
-    query_roots = ("TopologyVirtualColocation",)
-    orchestrator_field = "infrastructure_orchestrator"
-    routing_groups = VIRTUAL_COLOCATION_ORCHESTRATOR_GROUPS
-    unrouted_is_error = False

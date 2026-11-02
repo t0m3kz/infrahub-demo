@@ -3,7 +3,7 @@
 Covers:
 - merge_policies()             — dedupe across shared + customer-owned lists
 - get_proxy_policies()         — ProxyPolicy/ProxyPolicyRule -> render-ready shape,
-                                  category expansion, disabled/enabled filtering
+                                  disabled/enabled filtering
 - flatten_proxy_rules()        — global ordering + unique acl_name assignment
 - proxy_rules()                — per-renderer verdicts; refusal of what a renderer cannot express
 - _render_ports()              — protocol/port specs -> render-ready port dicts
@@ -44,19 +44,6 @@ def _fqdn_rule(
         "log": False,
         "description": "",
         "disabled": disabled,
-    }
-
-
-def _category_rule(name: str, priority: int, categories: list[dict], action: str = "block") -> dict:
-    return {
-        "name": name,
-        "priority": priority,
-        "action": action,
-        "destination_type": "category",
-        "categories": categories,
-        "log": False,
-        "description": "",
-        "disabled": False,
     }
 
 
@@ -118,18 +105,10 @@ class TestGetProxyPolicies:
         result = get_proxy_policies(policies)
         assert result[0]["rules"][0]["destinations"] == ["api.stripe.com"]
 
-    def test_category_rule_expands_entries_into_destinations(self) -> None:
-        categories = [{"name": "saas-allowed", "entries": "good.example.com\nother.example.com\n"}]
-        policies = [
-            {
-                "name": "p1",
-                "enabled": True,
-                "default_action": "block",
-                "rules": [_category_rule("r1", 10, categories, action="allow")],
-            }
-        ]
-        result = get_proxy_policies(policies)
-        assert result[0]["rules"][0]["destinations"] == ["good.example.com", "other.example.com"]
+    def test_rule_without_a_destination_type_is_an_fqdn_rule(self) -> None:
+        rule = {**_fqdn_rule("r1", 10, "api.stripe.com"), "destination_type": None}
+        policies = [{"name": "p1", "enabled": True, "default_action": "block", "rules": [rule]}]
+        assert get_proxy_policies(policies)[0]["rules"][0]["destination_type"] == "fqdn"
 
     def test_rule_with_no_resolvable_destination_is_dropped(self) -> None:
         policies = [
@@ -251,54 +230,34 @@ class TestProxyRulesVerdict:
     """Every rule carries the access verdict its renderer prints; what it cannot express is refused."""
 
     @pytest.mark.parametrize(("action", "verdict"), [("allow", "allow"), ("bypass", "allow"), ("block", "block")])
-    @pytest.mark.parametrize("renderer", ["squid_cache", "haproxy_technologies", "zscaler_zia"])
+    @pytest.mark.parametrize("renderer", ["generic", "netskope", "zscaler_zia"])
     def test_allow_bypass_and_block_render_everywhere(self, renderer: str, action: str, verdict: str) -> None:
         """allow and bypass are allows, block is a block, on every renderer."""
         rules = proxy_rules(_shared(_fqdn_rule("r1", 10, "api.stripe.com", action=action)), None, renderer)
         assert rules[0]["verdict"] == verdict
 
-    def test_inspect_is_an_allow_where_every_allowed_flow_is_inspected(self) -> None:
-        """Squid bumps all TLS (ssl_bump bump all): an inspect rule is an allow, not the block it used to be."""
-        rules = proxy_rules(_shared(_fqdn_rule("r1", 10, "api.stripe.com", action="inspect")), None, "squid_cache")
-        assert rules[0]["verdict"] == "allow"
-
-    @pytest.mark.parametrize(
-        "renderer", ["haproxy_technologies", "bluecoat_sgos", "cisco_wsa", "zscaler_zia", "generic"]
-    )
+    @pytest.mark.parametrize("renderer", ["zscaler_zia", "generic", "netskope"])
     def test_inspect_is_refused_where_the_config_inspects_nothing(self, renderer: str) -> None:
         """An allow without the inspection asked for would be weaker than the rule; the old block was wrong too."""
         with pytest.raises(ValueError, match="action 'inspect'"):
             proxy_rules(_shared(_fqdn_rule("r1", 10, "api.stripe.com", action="inspect")), None, renderer)
 
-    @pytest.mark.parametrize("renderer", ["squid_cache", "haproxy_technologies", "netskope"])
+    @pytest.mark.parametrize("renderer", ["generic", "zscaler_zia", "netskope"])
     def test_redirect_is_refused_everywhere(self, renderer: str) -> None:
         """The schema models no redirect target, so redirect never silently becomes a block."""
         with pytest.raises(ValueError, match=r"r1.*action 'redirect'"):
             proxy_rules(_shared(_fqdn_rule("r1", 10, "api.stripe.com", action="redirect")), None, renderer)
 
-    def test_squid_matches_regex_and_cidr_destinations(self) -> None:
-        """Squid has ACL types for both, so neither is refused there."""
-        rules = proxy_rules(
-            _shared(_typed_rule("regex", r"^https://.*\.example\.com/"), _typed_rule("cidr", "203.0.113.0/24")),
-            None,
-            "squid_cache",
-        )
-        assert [rule["destination_type"] for rule in rules] == ["regex", "cidr"]
-
-    @pytest.mark.parametrize(
-        "renderer",
-        ["haproxy_technologies", "bluecoat_sgos", "cisco_wsa", "zscaler_zia", "netskope", "generic"],
-    )
+    @pytest.mark.parametrize("renderer", ["zscaler_zia", "netskope", "generic"])
     def test_regex_destination_is_refused_where_it_would_match_literally(self, renderer: str) -> None:
         """These renderers print the destination as a hostname or a plain list entry, never as a pattern."""
         with pytest.raises(ValueError, match="destination_type 'regex'"):
             proxy_rules(_shared(_typed_rule("regex", r".*\.example\.com")), None, renderer)
 
-    @pytest.mark.parametrize("renderer", ["haproxy_technologies", "bluecoat_sgos", "cloudflare_gateway"])
-    def test_cidr_destination_is_refused_where_it_would_match_as_a_hostname(self, renderer: str) -> None:
-        """A host-header or domain match never matches an address range."""
+    def test_cidr_destination_is_refused_where_it_would_match_as_a_hostname(self) -> None:
+        """A domain match never matches an address range."""
         with pytest.raises(ValueError, match="destination_type 'cidr'"):
-            proxy_rules(_shared(_typed_rule("cidr", "203.0.113.0/24")), None, renderer)
+            proxy_rules(_shared(_typed_rule("cidr", "203.0.113.0/24")), None, "cloudflare_gateway")
 
     @pytest.mark.parametrize("renderer", ["zscaler_zia", "generic"])
     def test_cidr_destination_passes_where_destinations_are_untyped(self, renderer: str) -> None:

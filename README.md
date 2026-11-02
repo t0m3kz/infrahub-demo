@@ -27,7 +27,7 @@ Exhausted by being herded into their GUI labyrinths—click here, click there, c
 
 These so-called "solutions" arrived festooned with monitoring dashboards and deployment wizards that turned your controller into a wheezing, resource-gobbling behemoth requiring constant massage and sweet-talking just to stay upright.
 
-And don't even get me started on YAML files or Terraform configurations so deeply nested and interdependent that changing one variable requires a PhD in archaeology to trace what will explode three modules away.
+And don't even get me started on YAML files so deeply nested and interdependent that changing one variable requires a PhD in archaeology to trace what will explode three modules away.
 
 Infrastructure as Code was supposed to mean freedom—not just shuffling YAML incantations into some vendor's inscrutable black box and praying to the Cloud Gods for mercy.
 
@@ -272,7 +272,7 @@ infrastructure projects over many years.
 
 They are meant to be funny. They are absolutely not meant to insult anyone —
 vendors, cities, ISPs, hypervisor platforms, cloud providers, users, managers,
-consultants, or the three people who still believe the Terraform monorepo was a good idea.
+consultants, or the three people who still believe the monolithic controller was a good idea.
 
 If you recognise your organisation, your network, your Friday-afternoon architecture decision,
 or your specific brand of procurement committee in any of this: welcome.

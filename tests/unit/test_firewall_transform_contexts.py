@@ -186,12 +186,12 @@ class TestParentInterfaceOnlyForSubInterfaces:
 
     def test_a_nic_with_an_address_and_a_host_port_parent_has_no_parent(self) -> None:
         """A NIC named eth0 riding on the host port Ethernet5 keeps parent_interface None."""
-        (nic,) = _build_fw_interfaces(self._interfaces("eth0", "Ethernet5"), [], None)
+        (nic,) = _build_fw_interfaces(self._interfaces("eth0", "Ethernet5"), [])
 
         assert nic["parent_interface"] is None
 
     def test_a_vlan_sub_interface_keeps_its_parent(self) -> None:
         """ethernet1/1.210 on ethernet1/1 is the sub-interface the templates tag with its VLAN."""
-        (sub,) = _build_fw_interfaces(self._interfaces("ethernet1/1.210", "ethernet1/1"), [], None)
+        (sub,) = _build_fw_interfaces(self._interfaces("ethernet1/1.210", "ethernet1/1"), [])
 
         assert sub["parent_interface"] == {"name": "ethernet1/1"}

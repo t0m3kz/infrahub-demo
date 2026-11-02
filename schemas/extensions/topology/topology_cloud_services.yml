@@ -1,0 +1,104 @@
+---
+version: "1.0"
+
+# A provider service reached from a virtual network by a private path: an interface endpoint, a private endpoint, a
+# service connection (address) or a gateway endpoint, a service gateway (route). The operator word is in the name.
+nodes:
+  - name: ServiceEndpoint
+    namespace: Cloud
+    label: Service Endpoint
+    icon: mdi:cloud-lock-outline
+    description: "A provider or SaaS service a virtual network reaches privately"
+    include_in_menu: false
+    inherit_from:
+      - CloudResource
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value }}"
+    order_by:
+      - name__value
+    uniqueness_constraints:
+      - [name__value]
+    attributes:
+      - name: service_name
+        kind: Text
+        label: "Service"
+        optional: true
+        order_weight: 250
+        description: "The provider's name of the service"
+      - name: access
+        kind: Dropdown
+        label: "Access"
+        optional: false
+        order_weight: 300
+        choices:
+          - name: address
+            label: Address
+            description: "The service has an address inside the network's subnets"
+            color: "#3498DB"
+          - name: route
+            label: Route
+            description: "The service is reached by a route from the network's subnets"
+            color: "#2ECC71"
+          - name: public
+            label: Public
+            description: "The service is a public range reached over the internet through an ISP, no private path"
+            color: "#E67E22"
+    relationships:
+      - name: virtual_network
+        label: "Virtual Network"
+        peer: CloudVirtualNetwork
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "cloud_virtual_network__service_endpoints"
+        order_weight: 600
+        description: "The network that reaches the service (gives account and region); empty for a SaaS (saas_region)"
+      - name: segments
+        label: "Segments"
+        peer: CloudNetworkSegment
+        cardinality: many
+        kind: Attribute
+        optional: true
+        identifier: "cloud_service_endpoint__segments"
+        order_weight: 650
+        description: "The subnets that reach the service"
+      - name: provider
+        peer: OrganizationProvider
+        cardinality: one
+        kind: Attribute
+        optional: false
+        identifier: "cloud_service_endpoint__provider"
+        order_weight: 700
+        description: "Who offers the service"
+      - name: saas_region
+        label: SaaS Region
+        peer: TopologySaasRegion
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "cloud_service_endpoint__saas_region"
+        order_weight: 750
+      - name: prefix
+        label: "Public Prefix"
+        peer: IpamPrefix
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "cloud_service_endpoint__prefix"
+        order_weight: 800
+        description: "The range of a public service (access public), in the INTERNET namespace: the target of the path"
+
+extensions:
+  nodes:
+    - kind: CloudVirtualNetwork
+      relationships:
+        - name: service_endpoints
+          peer: CloudServiceEndpoint
+          cardinality: many
+          kind: Generic
+          optional: true
+          on_delete: cascade
+          identifier: "cloud_virtual_network__service_endpoints"
+          order_weight: 2200
+          description: Service endpoints of this virtual network

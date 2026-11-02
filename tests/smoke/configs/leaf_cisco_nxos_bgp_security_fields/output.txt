@@ -89,7 +89,6 @@ router bgp 65000
     inherit peer-session UNDERLAY-PEERS-SESSION
     address-family ipv4 unicast
       inherit peer-policy UNDERLAY-PEERS-POLICY 1
-      maximum-prefix 1000
       route-map peer-dc1-leaf-01-spine-01-ebgp-LOCAL-PREF-IN in
       route-map peer-dc1-leaf-01-spine-01-ebgp-MED-OUT out
     !

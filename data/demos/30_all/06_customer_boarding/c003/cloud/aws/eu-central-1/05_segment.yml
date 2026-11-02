@@ -10,7 +10,7 @@ spec:
     - owner: "C003"
       customer_name: "vaultex-subnet-prod"
       environment: "p"
-      segment_type: "aws_vpc_subnet"
+      segment_type: "cloud_subnet"
       virtual_network: "vaultex-vpc-prod"
       availability_zone: ["eu-central-1", "eu-central-1a"]
       cidr_block: "10.30.1.0/24"

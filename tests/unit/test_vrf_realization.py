@@ -4,7 +4,7 @@ Covers:
   - the refusal           — VrfRealizationError for a session, an address, a routed VLAN with no SVI object, an SVI in
                             the wrong VRF and a transit leg in a VRF the device has no instance of; one raise lists all
   - the hosted appliance  — a CloudNetworkAppliance on cisco_xe renders a comment banner and logs a WARNING instead
-  - what is not demanded  — a device that never carries VRFs, ``default``, an inline-terminated segment
+  - what is not demanded  — a device that never carries VRFs, ``default``, a gateway-less segment
   - the realization rule  — an instance is an L3 instance only with a routed activation (or an exit)
   - the readers           — device_vrfs, svi_vrfs, l3_vrf_names
 The inputs are the committed smoke inputs (which already carry the instances and SVIs the fixture hook adds) with a
@@ -222,15 +222,6 @@ class TestRequirements:
         requirements = vrf_requirements(device)
         assert requirements.namespaces == frozenset()
         assert requirements.svis == {100: None, 200: None}
-
-    def test_an_inline_terminated_segment_needs_neither_vrf_nor_svi(self) -> None:
-        device = self._device(_LEAF)
-        for activation in device["segment_deployments"]:
-            activation["segment"]["terminate_inline"] = True
-        device["interfaces"] = [iface for iface in device["interfaces"] if iface.get("role") != "svi"]
-        requirements = vrf_requirements(device)
-        assert requirements.svis == {}
-        assert requirements.namespaces == frozenset()
 
 
 class TestReaders:

@@ -254,3 +254,68 @@ async def fetch_vlan_domain_segments(
         )
 
     return {"record_count": record_count, "records": records}
+
+
+# ======================================================================
+# Switch ports carrying a segment
+# ======================================================================
+
+# The edge between a port and a segment is the PORT's `segments` (one-sided: the segment has no list of its ports).
+# `properties { source { id } }` is who wrote it: the segment reconcile writes its own edges with its account as the
+# source, a person sets an edge from the port with none.
+SEGMENT_PORTS_QUERY = """
+query SegmentPorts($segment_id: ID!) {
+  DcimPhysicalInterface(segments__ids: [$segment_id]) {
+    edges {
+      node {
+        __typename
+        id
+        name { value }
+        role { value }
+        device { node { name { value } ... on DcimDeviceManaged { role { value } } } }
+        segments(ids: [$segment_id]) { edges { properties { source { id } } node { id } } }
+      }
+    }
+  }
+  DcimLAGInterface(segments__ids: [$segment_id]) {
+    edges {
+      node {
+        __typename
+        id
+        name { value }
+        role { value }
+        device { node { name { value } ... on DcimDeviceManaged { role { value } } } }
+        segments(ids: [$segment_id]) { edges { properties { source { id } } node { id } } }
+      }
+    }
+  }
+}
+"""
+
+
+async def fetch_segment_ports(client: InfrahubClient, branch: str, segment_id: str) -> list[dict[str, Any]]:
+    """The switch ports (physical ports and port-channels) carrying the segment, with who wrote each edge.
+
+    Returns ``[{"id", "name", "role", "device", "device_role", "source_id"}]`` sorted by device and port;
+    ``source_id`` is the account that wrote the port's edge to the segment, None for an edge a person set.
+    """
+    result = await client.execute_graphql(
+        query=SEGMENT_PORTS_QUERY, variables={"segment_id": segment_id}, branch_name=branch
+    )
+    ports: list[dict[str, Any]] = []
+    for kind in ("DcimPhysicalInterface", "DcimLAGInterface"):
+        for port_edge in (result.get(kind) or {}).get("edges") or []:
+            node = port_edge["node"]
+            edge = next(e for e in node["segments"]["edges"] if e["node"]["id"] == segment_id)
+            device = (node.get("device") or {}).get("node") or {}
+            ports.append(
+                {
+                    "id": node["id"],
+                    "name": node["name"]["value"],
+                    "role": (node.get("role") or {}).get("value"),
+                    "device": (device.get("name") or {}).get("value"),
+                    "device_role": (device.get("role") or {}).get("value"),
+                    "source_id": ((edge.get("properties") or {}).get("source") or {}).get("id"),
+                }
+            )
+    return sorted(ports, key=lambda port: (str(port["device"]), port["name"]))

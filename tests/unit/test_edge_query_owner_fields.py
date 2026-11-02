@@ -43,10 +43,14 @@ def _descendants(field: FieldNode) -> Iterator[FieldNode]:
 
 
 def _root(root: str) -> FieldNode:
-    """The top-level ``root`` field of the edge_config operation."""
+    """The top-level ``root`` field (by response key: its alias, else its name) of the edge_config operation."""
     document = parse(_EDGE.read_text())
     operation = next(d for d in document.definitions if isinstance(d, OperationDefinitionNode))
-    return next(s for s in operation.selection_set.selections if isinstance(s, FieldNode) and s.name.value == root)
+    return next(
+        s
+        for s in operation.selection_set.selections
+        if isinstance(s, FieldNode) and (s.alias.value if s.alias else s.name.value) == root
+    )
 
 
 def _node(field: FieldNode) -> FieldNode:
@@ -101,9 +105,9 @@ class TestChangedFilesParse:
         """graphql-core parses the file (fragment spreads are validated by the repository sync of test-integration-fast)."""
         assert parse(path.read_text()).definitions
 
-    def test_the_edge_operation_keeps_its_four_extra_roots(self) -> None:
+    def test_the_edge_operation_keeps_its_three_extra_roots(self) -> None:
         """The roots the owner filter reads are all still selected."""
-        for root in ("IpamPrefix", "ManagedNetworkSegment", "CloudVirtualInterface", "TopologyCustomerOffice"):
+        for root in ("IpamPrefix", "ManagedNetworkSegment", "TopologyCustomerOffice"):
             assert _root(root) is not None
 
 
@@ -132,69 +136,26 @@ class TestSegmentRoot:
         assert segment["owner"] == _cleaned_owner()
 
 
-class TestCloudVirtualInterfaceRoot:
-    """Both virtual_network selections of the VIF root carry the account owner."""
+class TestTunnelRoot:
+    """A tunnel stores no owner: the owner of the office among its locations is selected."""
 
-    def _virtual_networks(self) -> list[FieldNode]:
-        """Every virtual_network selection below the CloudVirtualInterface root."""
-        return [d for d in _descendants(_root("CloudVirtualInterface")) if d.name.value == "virtual_network"]
+    def test_the_locations_select_the_office_owner(self) -> None:
+        """locations { ... on TopologyCustomerOffice { owner } } and no owner on the circuit itself."""
+        tunnel = _node(_root("TopologySessionCircuit"))
+        names = {c.name.value for c in _children(tunnel)}
 
-    def test_the_vif_and_every_attachment_select_the_account_owner(self) -> None:
-        """Two virtual_network selections (the VIF's own, the transit gateway attachments'), both with account.owner."""
-        networks = self._virtual_networks()
+        assert {"locations", "registered_prefixes", "capabilities"} <= names
+        assert "owner" not in names
+        text = _EDGE.read_text()
+        assert (
+            "locations { edges { node { ... on TopologyCustomerOffice { owner { node { __typename org_id { value } display_label } } } } } }"
+            in text
+        )
 
-        assert len(networks) == 2
-        for network in networks:
-            account = _child(_node(network), "account")
-            owner = _select_owner(_node(account))
-            assert _owner_selection_names(owner) == list(_OWNER_FIELDS)
-            assert "cidr_blocks" in [c.name.value for c in _children(_node(network))]
-
-    def test_the_fields_exist_on_the_schema(self) -> None:
-        """CloudVirtualNetwork.account is a CloudAccount, whose owner is an OrganizationEntity with org_id."""
-        assert _peer("CloudVirtualNetwork", "account") == "CloudAccount"
-        assert _peer("CloudAccount", "owner") == "OrganizationEntity"
-        assert "org_id" in demo_data.attribute_names("OrganizationEntity")
-
-    def test_a_raw_response_cleans_to_the_transform_shape(self) -> None:
-        """vif and attachments[j] both expose virtual_network.account.owner as the cleaned dict."""
-        network = {"node": {"cidr_blocks": {"edges": []}, "account": {"node": {"owner": _raw_owner()}}}}
-        raw = {
-            "CloudVirtualInterface": {
-                "edges": [
-                    {
-                        "node": {
-                            "name": {"value": "vif-1"},
-                            "virtual_network": network,
-                            "transit_gateway_attachment": {
-                                "node": {
-                                    "transit_gateway": {
-                                        "node": {
-                                            "attachments": {
-                                                "edges": [
-                                                    {
-                                                        "node": {
-                                                            "attachment_type": {"value": "vpc"},
-                                                            "virtual_network": network,
-                                                        }
-                                                    }
-                                                ]
-                                            }
-                                        }
-                                    }
-                                }
-                            },
-                        }
-                    }
-                ]
-            }
-        }
-
-        vif = clean_data(raw)["CloudVirtualInterface"][0]
-        attachment = vif["transit_gateway_attachment"]["transit_gateway"]["attachments"][0]
-
-        assert vif["virtual_network"]["account"]["owner"] == _cleaned_owner()
-        assert attachment["virtual_network"]["account"]["owner"] == _cleaned_owner()
+    def test_the_schema_has_no_owner_on_the_circuit(self) -> None:
+        """TopologyCircuit.owner is gone; the locations carry the office."""
+        assert "owner" not in demo_data.relationship_names("TopologySessionCircuit")
+        assert "locations" in demo_data.relationship_names("TopologySessionCircuit")
 
 
 class TestOfficeRoot:
@@ -327,6 +288,6 @@ class TestOrganizationEntityOwner:
     def test_the_entity_generic_has_no_name_so_the_query_does_not_select_it(self) -> None:
         """name lives on OrganizationGeneric, not on OrganizationEntity: display_label is selected instead."""
         assert "name" not in demo_data.attribute_names("OrganizationEntity")
-        for root in ("ManagedNetworkSegment", "CloudVirtualInterface", "TopologyCustomerOffice"):
+        for root in ("ManagedNetworkSegment", "TopologyCustomerOffice"):
             for owner in (d for d in _descendants(_root(root)) if d.name.value == "owner"):
                 assert "name" not in _owner_selection_names(owner)

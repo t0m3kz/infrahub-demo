@@ -100,26 +100,11 @@ artifact_definitions:
     transformation: loadbalancer
     parameters:
       device: name__value
-  - name: proxy_config
-    artifact_name: proxy
-    content_type: text/plain
-    targets: onprem_proxies
-    transformation: proxy
-    parameters:
-      device: name__value
   - name: proxy_cloud_config
     artifact_name: proxy-cloud-policy
     content_type: application/json
     targets: saas_proxies
     transformation: proxy-cloud
-    parameters:
-      instance: name__value
-  # Cloud Load Balancer Terraform HCL
-  - name: cloud_lb_terraform
-    artifact_name: terraform-vars
-    content_type: text/plain
-    targets: cloud_loadbalancers
-    transformation: loadbalancer-cloud
     parameters:
       instance: name__value
   # Containerlab
@@ -174,35 +159,11 @@ artifact_definitions:
   #   transformation: rack_elevation
   #   parameters:
   #     name: name__value
-  - name: cloud_vpc_terraform
-    artifact_name: vpc-terraform
-    content_type: text/plain
-    targets: cloud_accounts
-    transformation: cloud-vpc-terraform
-    parameters:
-      account: name__value
-  # One Equinix Network Edge Terraform file per virtual colocation routed to
-  # terraform (infrastructure_orchestrator): the virtual_colocation_terraform
-  # group. Not topology_terraform (a customer footprint's tfvars).
-  - name: virtual_colocation_terraform
-    artifact_name: terraform
-    content_type: text/plain
-    targets: virtual_colocation_terraform
-    transformation: virtual-colocation-terraform
-    parameters:
-      instance: name__value
   - name: topology_orchestrator_ansible_inventory
     artifact_name: ansible-inventory
     content_type: text/plain
     targets: topology_ansible
     transformation: topology-orchestrator-ansible
-    parameters:
-      name: name__value
-  - name: topology_orchestrator_terraform_vars
-    artifact_name: terraform-vars
-    content_type: text/plain
-    targets: topology_terraform
-    transformation: topology-orchestrator-terraform
     parameters:
       name: name__value
   - name: topology_orchestrator_argocd_manifest
@@ -264,12 +225,6 @@ check_definitions:
     class_name: CheckLoadBalancer
     file_path: checks/loadbalancer.py
     targets: loadbalancers
-    parameters:
-      device: name__value
-  - name: validate_proxy
-    class_name: CheckProxy
-    file_path: checks/proxy.py
-    targets: onprem_proxies
     parameters:
       device: name__value
   - name: validate_tor
@@ -343,6 +298,11 @@ check_definitions:
   - name: validate_routing_tags
     class_name: CheckRoutingTags
     file_path: checks/routing_tags.py
+  # Targetless: a session has two devices and the filters derive from fleet-wide facts (loopback pools, VRF instances,
+  # environment prefixes). Turn routing_filter_enforce on only where it reports no error.
+  - name: validate_bgp_expectations
+    class_name: CheckBgpExpectations
+    file_path: checks/bgp_expectations.py
   # Targetless: a device is in one domain across the whole instance.
   - name: validate_mlag_domains
     class_name: CheckMlagDomains
@@ -379,6 +339,20 @@ check_definitions:
   - name: validate_circuit_placement
     class_name: CheckCircuitPlacement
     file_path: checks/circuit_placement.py
+  # Targetless: a cloud footprint is judged against its account (owner) and the networks its segments use.
+  - name: validate_customer_cloud_account
+    class_name: CheckCustomerCloudAccount
+    file_path: checks/customer_cloud_account.py
+  # Targetless: the cloud side of a connection (gateway attachments and route tables, transports that ride on one
+  # another, tunnels, service endpoints) is judged as a whole: rules R1 to R6 hold what the schema cannot.
+  - name: validate_cloud_connection
+    class_name: CheckCloudConnection
+    file_path: checks/cloud_connection.py
+  # Targetless: the pairing is written by add_patch_panel from the ports, and a person can edit it; the check
+  # compares every panel with what the generator would write.
+  - name: validate_patch_panel_pairing
+    class_name: CheckPatchPanelPairing
+    file_path: checks/patch_panel_pairing.py
   # Targetless: a pod's design is judged against every suite hosting a rack of
   # it, so one query reads every rack with its suite and its pod's design.
   - name: validate_suite_capacity
@@ -407,10 +381,6 @@ check_definitions:
   - name: validate_interface_parents
     class_name: CheckInterfaceParents
     file_path: checks/interface_parents.py
-  # Targetless: a cross-connect runs through the pairs of several panels, so one query reads every panel.
-  - name: validate_patch_panel
-    class_name: CheckPatchPanel
-    file_path: checks/patch_panel.py
   # Targetless: a port is a switchport or a routed port (the layer is its content), per interface of every device.
   - name: validate_interface_layers
     class_name: CheckInterfaceLayers
@@ -524,14 +494,6 @@ python_transforms:
         - transforms/
         - templates/
         - utils/
-  - name: proxy
-    class_name: Proxy
-    file_path: transforms/config/proxy.py
-    watch:
-      files:
-        - transforms/
-        - templates/
-        - utils/
   - name: proxy-cloud
     class_name: ProxyCloud
     file_path: transforms/config/proxy_cloud.py
@@ -556,14 +518,6 @@ python_transforms:
         - transforms/
         - templates/
         - utils/
-  - name: loadbalancer-cloud
-    class_name: LoadBalancerCloud
-    file_path: transforms/config/loadbalancer_cloud.py
-    watch:
-      files:
-        - transforms/
-        - templates/
-        - utils/
   - name: firewall
     class_name: Firewall
     file_path: transforms/config/firewall.py
@@ -582,14 +536,6 @@ python_transforms:
         - utils/
   - name: topology-orchestrator-ansible
     class_name: TopologyOrchestratorAnsible
-    file_path: transforms/topology/orchestrator_routing.py
-    watch:
-      files:
-        - transforms/
-        - templates/
-        - utils/
-  - name: topology-orchestrator-terraform
-    class_name: TopologyOrchestratorTerraform
     file_path: transforms/topology/orchestrator_routing.py
     watch:
       files:
@@ -644,24 +590,6 @@ python_transforms:
         - transforms/
         - templates/
         - utils/
-  - name: virtual-colocation-terraform
-    class_name: VirtualColocationTerraform
-    file_path: transforms/colocation/virtual_colocation.py
-    watch:
-      files:
-        - transforms/colocation/virtual_terraform.py
-        - transforms/cloud/terraform_common.py
-        - transforms/helpers/templates.py
-        - templates/configs/equinix/virtual_colocation.tf.j2
-        - utils/data_cleaning.py
-  - name: cloud-vpc-terraform
-    class_name: CloudVpcTerraform
-    file_path: transforms/cloud/vpc_terraform.py
-    watch:
-      files:
-        - transforms/
-        - templates/
-        - utils/
 
 graphql_fragments:
   - name: all_fragments
@@ -703,12 +631,8 @@ queries:
     file_path: queries/config/edge.gql
   - name: loadbalancer_config
     file_path: queries/config/loadbalancer.gql
-  - name: proxy_config
-    file_path: queries/config/proxy.gql
   - name: proxy_cloud_config
     file_path: queries/config/proxy_cloud.gql
-  - name: loadbalancer_cloud
-    file_path: queries/config/loadbalancer_cloud.gql
   - name: firewall_config
     file_path: queries/config/firewall.gql
   - name: controller_payload
@@ -749,6 +673,8 @@ queries:
     file_path: queries/topology/add/circuit.gql
   - name: virtual_circuit_data
     file_path: queries/topology/add/virtual_circuit.gql
+  - name: patch_panel_data
+    file_path: queries/topology/add/patch_panel.gql
   - name: segment_placement
     file_path: queries/validation/segment_placement.gql
   - name: segment_security
@@ -763,6 +689,8 @@ queries:
     file_path: queries/validation/reference_fabric.gql
   - name: routing_tags
     file_path: queries/validation/routing_tags.gql
+  - name: bgp_expectations
+    file_path: queries/validation/bgp_expectations.gql
   - name: mlag_domains
     file_path: queries/validation/mlag_domains.gql
   - name: vrf_instances
@@ -777,6 +705,12 @@ queries:
     file_path: queries/validation/carrier_circuit_ports.gql
   - name: circuit_placement
     file_path: queries/validation/circuit_placement.gql
+  - name: customer_cloud_account
+    file_path: queries/validation/customer_cloud_account.gql
+  - name: cloud_connection
+    file_path: queries/validation/cloud_connection.gql
+  - name: patch_panel_pairing
+    file_path: queries/validation/patch_panel_pairing.gql
   - name: suite_capacity
     file_path: queries/validation/suite_capacity.gql
   - name: colocation_placement
@@ -791,23 +725,15 @@ queries:
     file_path: queries/validation/virtual_device_placement.gql
   - name: interface_parents
     file_path: queries/validation/interface_parents.gql
-  - name: patch_panel
-    file_path: queries/validation/patch_panel.gql
   - name: interface_layers
     file_path: queries/validation/interface_layers.gql
   - name: pool_utilization
     file_path: queries/validation/pool_utilization.gql
   - name: loadbalancer_validation
     file_path: queries/validation/lb.gql
-  - name: proxy_validation
-    file_path: queries/validation/proxy.gql
 
   - name: rack_elevation_query
     file_path: queries/topology/rack.gql
-  - name: cloud_vpc_config
-    file_path: queries/config/cloud_vpc.gql
-  - name: virtual_colocation_config
-    file_path: queries/config/virtual_colocation.gql
   - name: proposed_change_artifacts
     file_path: queries/topology/add/proposed_change_artifacts.gql
   - name: mlag_domain_data
@@ -822,8 +748,6 @@ queries:
     file_path: queries/topology/add/application_orchestrator_routing.gql
   - name: customer_deployment_orchestrator_routing
     file_path: queries/topology/add/customer_deployment_orchestrator_routing.gql
-  - name: virtual_colocation_orchestrator_routing
-    file_path: queries/topology/add/virtual_colocation_orchestrator_routing.gql
   - name: topology_orchestrator_routing_data
     file_path: queries/topology/add/topology_orchestrator_routing_data.gql
   - name: application_orchestrator_routing_data
@@ -969,6 +893,19 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
+    watch:
+      files:
+        - generators/
+        - utils/
+  - name: add_patch_panel
+    file_path: generators/topology/patch_panel.py
+    targets: patch_panels
+    query: patch_panel_data
+    class_name: PatchPanelGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      panel_id: panel_id__value
     watch:
       files:
         - generators/
@@ -1206,21 +1143,6 @@ generator_definitions:
     targets: customer_deployments_office
     query: customer_deployment_orchestrator_routing
     class_name: TopologyOrchestratorRoutingGenerator
-    execute_in_proposed_change: false
-    execute_after_merge: false
-    parameters:
-      name: name__value
-    watch:
-      files:
-        - generators/
-        - utils/
-  # A provider-hosted colocation presence: only `terraform` has an artifact
-  # (group virtual_colocation_terraform); every VC is already in virtual_colocations.
-  - name: add_virtual_colocation_orchestrator_routing
-    file_path: generators/topology/orchestrator_routing.py
-    targets: virtual_colocations
-    query: virtual_colocation_orchestrator_routing
-    class_name: VirtualColocationOrchestratorRoutingGenerator
     execute_in_proposed_change: false
     execute_after_merge: false
     parameters:

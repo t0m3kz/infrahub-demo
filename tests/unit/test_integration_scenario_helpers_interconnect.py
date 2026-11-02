@@ -48,7 +48,14 @@ async def test_fetch_interconnect_inventory_parses_location_and_end_placement() 
 
     metro = {"node": {"id": "id-FR", "__typename": "TopologyColocationMetro", "name": value("FR")}}
     dc = {"node": {"id": "id-DC10", "__typename": "TopologyDataCenter", "name": value("DC10")}}
-    owner = {"node": {"id": "org-C005", "name": value("Drentec BV")}}
+    customer = {
+        "node": {
+            "id": "org-C005",
+            "__typename": "OrganizationCustomer",
+            "org_id": value("C005"),
+            "name": value("Drentec BV"),
+        }
+    }
     physical = {
         "id": "pc1",
         "circuit_id": value("DF-DC10-EQXFR2"),
@@ -91,18 +98,8 @@ async def test_fetch_interconnect_inventory_parses_location_and_end_placement() 
         "__typename": "TopologySessionCircuit",
         "circuit_type": value("handoff"),
         "name": value("HANDOFF-C005-DC10-AWS-EUC1"),
-        "owner": owner,
         "ip_namespace": {"node": {"id": "ns-prod", "name": value("PROD")}},
-        "maximum_routes": value(100),
         "password": {"node": {"name": value("eqx-fr2-aws-vif-key")}},
-        "cloud_endpoint": {
-            "node": {
-                "id": "vif1",
-                "__typename": "CloudVirtualInterface",
-                "name": value("vif-1"),
-                "vlan_id": value(1000),
-            }
-        },
         "locations": {
             "edges": [
                 {
@@ -111,7 +108,7 @@ async def test_fetch_interconnect_inventory_parses_location_and_end_placement() 
                         "__typename": "TopologyCustomerDC",
                         "name": value("C005-P-DC10"),
                         "parent": dc,
-                        "owner": {"node": {"id": "org-C005", "__typename": "OrganizationCustomer"}},
+                        "owner": customer,
                     }
                 },
             ]
@@ -177,6 +174,7 @@ async def test_fetch_interconnect_inventory_parses_location_and_end_placement() 
             "parent_kind": None,
             "parent_name": None,
             "owner_id": None,
+            "owner_org": None,
         },
         {
             "id": "id-FR2",
@@ -186,6 +184,7 @@ async def test_fetch_interconnect_inventory_parses_location_and_end_placement() 
             "parent_kind": "TopologyColocationMetro",
             "parent_name": "FR",
             "owner_id": None,
+            "owner_org": None,
         },
     ]
     assert circuit["end_devices"] == [
@@ -210,8 +209,8 @@ async def test_fetch_interconnect_inventory_parses_location_and_end_placement() 
     assert (handoff["id"], handoff["circuit_type"], handoff["owner"], handoff["owner_id"]) == (
         "vc1",
         "handoff",
-        "Drentec BV",
-        "org-C005",
+        None,
+        None,
     )
     (footprint,) = handoff["location_nodes"]
     assert (footprint["kind"], footprint["parent_id"], footprint["parent_name"], footprint["owner_id"]) == (
@@ -238,12 +237,12 @@ async def test_fetch_interconnect_inventory_parses_location_and_end_placement() 
     assert (virtual_end["kind"], virtual_end["address"], virtual_end["cabled"]) == ("DcimVirtualInterface", None, False)
     assert (virtual_end["parent_id"], virtual_end["parent_name"]) == ("if-parent", "Ethernet1/13")
     assert [c["circuit_id"] for c in virtual_end["carriers"]] == ["XC-EQXFR2-AWS-EUC1"]
-    assert (handoff["ip_namespace"], handoff["maximum_routes"], handoff["password"]) == (
+    assert (handoff["ip_namespace"], handoff["password"]) == (
         "PROD",
-        100,
         "eqx-fr2-aws-vif-key",
     )
-    assert (handoff["cloud_endpoint"], handoff["cloud_endpoint_vlan"]) == ("vif-1", 1000)
+    # a circuit has no owner of its own: only an office among its locations gives one
+    assert handoff["owner_org"] is None
 
 
 async def test_fetch_interconnect_inventory_leaves_the_handoff_fields_empty_on_the_other_kinds() -> None:
@@ -267,5 +266,4 @@ async def test_fetch_interconnect_inventory_leaves_the_handoff_fields_empty_on_t
     (circuit,) = inventory["virtual"]
     assert circuit["circuit_type"] == "tunnel"
     assert (circuit["owner"], circuit["ends"], circuit["carrier"], circuit["end_nodes"]) == (None, [], [], [])
-    assert (circuit["ip_namespace"], circuit["maximum_routes"], circuit["password"]) == (None, None, None)
-    assert (circuit["cloud_endpoint"], circuit["cloud_endpoint_vlan"]) == (None, None)
+    assert (circuit["ip_namespace"], circuit["password"]) == (None, None)

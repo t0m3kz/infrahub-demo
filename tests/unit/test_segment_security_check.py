@@ -710,8 +710,10 @@ def test_all_demo_gateways_sit_in_their_environment_namespace() -> None:
     check = _check()
     checked = 0
     for obj in declared_in(ROOT / "data" / "demos" / "30_all"):
+        if obj.kind != "ManagedVxlanSegment":
+            continue
         gateway = (obj.item.get("gateway") or {}).get("data") or {}
-        if obj.kind != "ManagedVxlanSegment" or not gateway:
+        if not gateway:
             continue
         prefix = (gateway.get("ip_prefix") or {}).get("data") or {}
         checked += 1

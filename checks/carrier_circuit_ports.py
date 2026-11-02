@@ -2,16 +2,22 @@
 
 A carrier circuit is a cable-like link: two ends, each a physical port, and a port carries at most one of them. A
 ``virtual_connection`` (an Equinix Fabric connection or a Megaport VXC) is the exception to both of those rules.
-The schema caps the ends (``capabilities``: min_count 2, max_count 2) only when the circuit side is
+The schema caps the ends (``capabilities``: min_count 1, max_count 2) only when the circuit side is
 written. A write from the interface side (``DcimInterface.capabilities`` is declared by the generic
 without counts) is never checked against the cap, and deleting a device leaves its circuits with one end, so the
 rules the schema cannot hold are held here, on the circuits as a whole:
 
 1. a port is an end of at most one carrier circuit; a ``virtual_connection`` is exempt (a provider port hosts one
    connection per S-tag), the other types on that same port still hold the rule among themselves,
-2. both ends are a DcimPhysicalInterface (not a virtual interface or another capability); a ``virtual_connection``
-   may also end on a DcimVirtualInterface (the NIC of a provider-hosted appliance, which has no cable),
+2. both ends are a DcimPhysicalInterface (not a virtual interface, a cloud peering interface or another capability);
+   a port of a cloud transport is one (the transport is a device with no role and no deployment, nothing about it is
+   judged here); a ``virtual_connection`` may also end on a DcimVirtualInterface (the NIC of a provider-hosted
+   appliance, which has no cable),
 3. a circuit has exactly two ends.
+
+THE INTERNET's one interface (``TopologyInternetInterface``) is exempt from rule 1 and allowed by rule 2 BY ITS KIND:
+every internet attachment (an ISP router's uplink, the public side of a cloud or SaaS region) is a carrier circuit of
+its own that ends on it. Which carriers may is ``utils/internet_object.py``'s.
 
 Session circuits are out of scope (a tunnel port carries several; the one-session-per-port rule of the
 dci and handoff circuits is checks/circuit_placement.py's).
@@ -23,6 +29,7 @@ from typing import Any
 
 from infrahub_sdk.checks import InfrahubCheck
 
+from utils.circuit_underlay import INTERNET_INTERFACE_KIND
 from utils.data_cleaning import clean_data
 from utils.limits import CIRCUIT_ENDS
 
@@ -64,14 +71,14 @@ class CheckCarrierCircuitPorts(InfrahubCheck):
                 )
 
             for end in ends:
-                if end.get("typename") not in allowed:
+                if end.get("typename") not in (*allowed, INTERNET_INTERFACE_KIND):
                     self._error(
                         circuit,
                         f"Carrier circuit '{name}' has an end that is not a {' or '.join(allowed)}: "
                         f"'{_port_label(end)}' is a {end.get('typename')}.",
                     )
                     continue
-                if shared_ports:
+                if shared_ports or end.get("typename") == INTERNET_INTERFACE_KIND:
                     continue
                 port_circuits = circuits_by_port.setdefault(str(end.get("id")), (_port_label(end), []))[1]
                 if name not in port_circuits:

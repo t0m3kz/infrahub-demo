@@ -6,18 +6,32 @@ version: "1.0"
 #
 # DcimPatchPanel is NOT a DcimDevice. It inherits no generic at all, so it has no role, platform, address, interface
 # list, artifact (CoreArtifactTarget) and none of the capability edges (DcimCapabilities: `capabilities` and
-# `shared_capabilities`), no VRF demand and no VLAN row. DcimPatchPanelPort inherits DcimEndpoint only: the `cable`
-# edge is all it takes for a DcimCable to join a panel port to an interface (DcimCable.endpoints peers DcimEndpoint).
+# `shared_capabilities`), no VRF demand and no VLAN row. Its two port kinds inherit DcimEndpoint only: the `cable` edge
+# is all it takes for a DcimCable to join a panel port to an interface (DcimCable.endpoints peers DcimEndpoint).
 # tests/unit/test_patch_panel_schema.py guards both.
 #
-# A jack has two faces and a DcimEndpoint carries one cable, so a jack is two port nodes: a `front` and a `rear` one.
-# The pairing rule of v1 is the only one: the front port and the rear port of the SAME `name` in one panel are a pair
-# (a cable on one continues through the pair to the cable on the other; utils/cable_path.py). There are no rear-port
-# positions, no mapping tables and no trunk templates.
+# A jack has two faces and a DcimEndpoint carries one cable, so a jack is two port nodes: a rear port
+# (DcimRearPatchPanelPort) and a front port (DcimFrontPatchPanelPort), both components of the panel, so the panel lists
+# both. The front port names its rear port (`rear_port`, an attribute relationship with `common_parent: panel`: the
+# server refuses a rear port of another panel). A jack is one front port on one rear port, a cassette several front
+# ports on one rear port (MPO-12). A cable that lands on one port continues on the cable of the port it is paired with.
+#
+# An object template carries the ports but not the pairing: it copies an attribute relationship as it is and cannot
+# point a front port at its sibling (the server: "Unable to find the node ... / DcimRearPatchPanelPort"). So
+# `rear_port` is optional, the panel is created from its template with unpaired front ports, and the generator
+# add_patch_panel pairs them from the ports (jack or cassette, generators/helpers/patch_panel.py);
+# checks/patch_panel_pairing.py guards the result.
+#
+# A panel is unique by its rack and its name (`PP-01` may exist in every rack), so the rack is mandatory: the server
+# refuses a uniqueness constraint on an optional relationship. The panel's HFID is [rack shortname, name]. The HFID
+# of a port cannot go through two relationships (the server: "panel is not a valid attribute of ..."), so each kind
+# carries a computed id that is its HFID: the panel's `panel_id` is `<rack>:<name>`, a rear port's `port_id` is
+# `<panel_id>:<rear>` and a front port's `<panel_id>:F<front>`.
 #
 # A panel always sits between two devices: a circuit end stays an interface (the `capabilities` peers are untouched).
 # The rack-unit `position` returns together with a rack drawing that draws panels.
-# Its location is its `rack` (LocationRack.deployment gives the facility); it has no `deployment` and no device type.
+# Its location is its mandatory `rack` (LocationRack.deployment gives the facility); it has no `deployment` and no
+# device type.
 # ============================================================================
 
 nodes:
@@ -29,18 +43,30 @@ nodes:
     include_in_menu: false
     generate_template: true
     human_friendly_id:
+      - rack__shortname__value
       - name__value
-    display_label: "{{ name__value }}"
+    display_label: "{{ name__value }} ({{ rack__shortname__value }})"
     order_by:
+      - rack__shortname__value
       - name__value
     uniqueness_constraints:
-      - ["name__value"]
+      - ["rack", "name__value"]
     attributes:
       - name: name
         kind: Text
-        unique: true
         optional: false
+        description: "The panel name, unique within its rack"
         order_weight: 900
+      - name: panel_id
+        kind: Text
+        read_only: true
+        optional: false
+        unique: true
+        description: "<rack>:<name>: the id the port ids are built from (an HFID cannot go through two relationships)"
+        computed_attribute:
+          kind: Jinja2
+          jinja2_template: "{{ rack__shortname__value }}:{{ name__value }}"
+        order_weight: 925
       - name: description
         kind: Text
         optional: true
@@ -48,55 +74,57 @@ nodes:
     relationships:
       - name: rack
         peer: LocationRack
-        optional: true
+        optional: false
         cardinality: one
         kind: Attribute
         identifier: "rack__patch_panels"
         order_weight: 1700
-      - name: ports
-        peer: DcimPatchPanelPort
+      - name: rear_ports
+        peer: DcimRearPatchPanelPort
         optional: true
         cardinality: many
         kind: Component
-        identifier: "panel__ports"
+        identifier: "panel__rear_ports"
         order_weight: 2500
+      - name: front_ports
+        peer: DcimFrontPatchPanelPort
+        optional: true
+        cardinality: many
+        kind: Component
+        identifier: "panel__front_ports"
+        order_weight: 2600
 
-  - name: PatchPanelPort
+  - name: RearPatchPanelPort
     namespace: Dcim
-    description: "One face of a jack: front N pairs with rear N of the same panel."
-    label: Patch Panel Port
+    description: "Rear port of a panel: the permanent side of a jack, paired with the front port(s) that name it."
+    label: Patch Panel Rear Port
     icon: mdi:ethernet
     include_in_menu: false
     inherit_from:
       - DcimEndpoint
     human_friendly_id:
-      - panel__name__value
-      - face__value
-      - name__value
-    display_label: "{{ panel__name__value }}-{{ face__value }}-{{ name__value }}"
+      - port_id__value
+    display_label: "{{ port_id__value }}"
     order_by:
-      - panel__name__value
-      - face__value
-      - name__value
+      - port_id__value
     uniqueness_constraints:
-      - ["panel", "face__value", "name__value"]
+      - ["panel", "name__value"]
     attributes:
       - name: name
         kind: Text
         optional: false
-        description: "The jack number; the front and the rear port of one name are a pair"
+        description: "The rear port number within the panel"
         order_weight: 900
-      - name: face
-        kind: Dropdown
+      - name: port_id
+        kind: Text
+        read_only: true
         optional: false
+        unique: true
+        description: "<panel_id>:<rear>: the human friendly id (it cannot go through the panel relationship twice)"
+        computed_attribute:
+          kind: Jinja2
+          jinja2_template: "{{ panel__panel_id__value }}:{{ name__value }}"
         order_weight: 950
-        choices:
-          - name: front
-            label: Front
-            color: "#A9CCE3"
-          - name: rear
-            label: Rear
-            color: "#A9DFBF"
       - name: connector
         kind: Dropdown
         optional: false
@@ -128,8 +156,92 @@ nodes:
         optional: false
         cardinality: one
         kind: Parent
-        identifier: "panel__ports"
-        order_weight: 1200
+        identifier: "panel__rear_ports"
+        order_weight: 800
+      - name: front_ports
+        label: Front Ports
+        peer: DcimFrontPatchPanelPort
+        optional: true
+        cardinality: many
+        kind: Generic
+        identifier: "rear__front_ports"
+        order_weight: 2500
+
+  - name: FrontPatchPanelPort
+    namespace: Dcim
+    description: "Front port of a panel: where equipment is patched in; it names the rear port it is paired with."
+    label: Patch Panel Front Port
+    icon: mdi:ethernet
+    include_in_menu: false
+    inherit_from:
+      - DcimEndpoint
+    human_friendly_id:
+      - port_id__value
+    display_label: "{{ port_id__value }}"
+    order_by:
+      - port_id__value
+    uniqueness_constraints:
+      - ["panel", "name__value"]
+    attributes:
+      - name: name
+        kind: Text
+        optional: false
+        description: "The front port number within the panel"
+        order_weight: 900
+      - name: port_id
+        kind: Text
+        read_only: true
+        optional: false
+        unique: true
+        description: "<panel_id>:F<front>: the human friendly id"
+        computed_attribute:
+          kind: Jinja2
+          jinja2_template: "{{ panel__panel_id__value }}:F{{ name__value }}"
+        order_weight: 950
+      - name: connector
+        kind: Dropdown
+        optional: false
+        order_weight: 1000
+        choices:
+          - name: lc-upc
+            label: LC/UPC
+          - name: lc-apc
+            label: LC/APC
+          - name: sc-upc
+            label: SC/UPC
+          - name: sc-apc
+            label: SC/APC
+          - name: mpo-12
+            label: MPO-12
+          - name: rj45
+            label: RJ45
+      - name: label
+        kind: Text
+        optional: true
+        order_weight: 1100
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 1150
+    relationships:
+      - name: panel
+        peer: DcimPatchPanel
+        optional: false
+        cardinality: one
+        kind: Parent
+        identifier: "panel__front_ports"
+        order_weight: 800
+      # Optional: an object template creates the front ports without it (it cannot point at a sibling); add_patch_panel
+      # pairs them. common_parent: the rear port must be a component of the same panel.
+      - name: rear_port
+        label: Rear Port
+        peer: DcimRearPatchPanelPort
+        optional: true
+        cardinality: one
+        kind: Attribute
+        common_parent: panel
+        identifier: "rear__front_ports"
+        order_weight: 810
 
 extensions:
   nodes:

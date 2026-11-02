@@ -6,13 +6,12 @@ Quick sample to model Zscaler POPs, underlay tunnels, web policies, and their pl
 
 - Cloud security locations (Zscaler) pinned to real metros/buildings
 - Optional IPSec underlay objects you can attach to edge devices
-- Cloud policy/rules using URL categories already in the seed data
+- Cloud policy/rules with explicit destinations
 
 ## Files
 
-- `00_url_categories.yml` — minimal URL categories so the demo loads standalone (used by the rules)
 - `01_cloud_locations.yml` — defines Zscaler POPs as `SecurityCloudSecurityLocation` objects
-- `02_cloud_policy.yml` — creates a cloud security policy and a few rules referencing URL categories
+- `02_cloud_policy.yml` — creates a cloud security policy and a few rules with explicit destinations
 - `03_topology_saas.yml` — maps Zscaler as `TopologySaas` with regions tied to metros
   *(removed)* `04_external_connections.yml` — connectivity mapping dropped; topology-only mapping stays
 

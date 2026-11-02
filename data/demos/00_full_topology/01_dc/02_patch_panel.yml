@@ -1,0 +1,23 @@
+---
+# A passive panel in the rack (not a device) between the leaf and the edge. PP-24-LC creates 24 rear and 24 front
+# ports. The template cannot pair a front port with its rear port (the future generator add_patch_panel does), so the
+# pairing of jack 1 is authored here: front "1" -> rear "1".
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPatchPanel
+  data:
+    - name: "PP-DC90-01"
+      object_template: PP-24-LC
+      description: "DC90 patch panel, jack 1 joins the leaf to the edge"
+      rack: dmo-1-s-1-r-1-1
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimFrontPatchPanelPort
+  data:
+    - panel: ["dmo-1-s-1-r-1-1", "PP-DC90-01"]
+      name: "1"
+      connector: "lc-upc"
+      rear_port: "dmo-1-s-1-r-1-1:PP-DC90-01:1"

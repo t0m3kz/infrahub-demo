@@ -5,6 +5,7 @@ from ipaddress import ip_address
 from typing import Any, cast
 
 from transforms.helpers.addressing import host_ip
+from transforms.helpers.bgp_policy import compose_policy
 from utils.circuit_underlay import NETWORK_APPLIANCE_KIND, OVERLAY_ROLE
 from utils.exchange_transit import EXCHANGE_PEERS, INTERNET_TYPE
 from utils.fabric_roles import RR_ROLES
@@ -169,13 +170,14 @@ def _build_session_from_peering(
         "bfd_enabled": peering_node.get("bfd_enabled"),
         "send_community": peering_node.get("send_community"),
         "send_extended_community": peering_node.get("send_extended_community"),
-        "maximum_routes": peering_node.get("maximum_routes"),
         "local_pref": peering_node.get("local_pref"),
         "med": peering_node.get("med"),
         "remove_private_as": peering_node.get("remove_private_as"),
         "password": password_rel.get("password"),
         "ttl": peering_node.get("ttl"),
         "peering_role": peering_node.get("peering_role"),
+        # The far end's role: a relaying far end (a spine) passes on routes (utils/bgp_expectation.py).
+        "remote_role": (remote_iface.get("device") or {}).get("role"),
         "route_reflector_client": peering_node.get("route_reflector_client", False),
         "enabled": True,
     }
@@ -701,6 +703,8 @@ def add_template_fields(bgp_config: dict[str, Any]) -> None:
     - ``router_ip``: the router-id without its prefix length.
     - ``session.neighbor``: the interface of an unnumbered session, else the
       remote address without its prefix length.
+    - ``session.policy``: the composed routing policy (transforms/helpers/bgp_policy.py); peer groups
+      are assigned by now, which the policy reads.
     - ``has_ipv6`` / ``has_evpn``: whether a peer group or global (non-VRF)
       session carries that address family.
     - ``vrf_sessions``: VRF name -> its sessions; ``vrf_af_sessions``: VRF
@@ -714,6 +718,7 @@ def add_template_fields(bgp_config: dict[str, Any]) -> None:
         session["neighbor"] = (
             session["interface_name"] if unnumbered else host_ip((session.get("remote_ip") or {}).get("address"))
         )
+        session["policy"] = compose_policy(session)
     global_families = {
         af
         for item in [*(bgp_config.get("peer_groups") or []), *(s for s in sessions if not s.get("vrf"))]

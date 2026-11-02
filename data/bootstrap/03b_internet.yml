@@ -1,0 +1,26 @@
+---
+# THE INTERNET: the one passive object every internet attachment meets at (an ISP router's uplink, the public side of
+# a cloud or SaaS region), "a kind of cable or switch for all". It does not change from one dataset to the next, so it
+# is bootstrap data: the singleton `INTERNET` under the label "Internet" (03_topology.yml, hence this file loads after
+# it) and its ONE interface `bus`, of its own kind (TopologyInternetInterface), which many carrier circuits may end on
+# (checks/carrier_circuit_ports.py). The ISPs, their uplink carriers (one per ISP router, `internet` circuits from
+# the router's uplink port to INTERNET:bus) and the public sides are dataset data. Rules: utils/internet_object.py,
+# held by checks/circuit_placement.py (I1 to I3).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyInternet
+  data:
+    - name: "INTERNET"
+      parent: "Internet"
+      description: "The one passive meeting point of every ISP, SaaS public side and cloud public side"
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyInternetInterface
+  data:
+    - device: "INTERNET"
+      name: "bus"
+      description: "The shared interface: every ISP uplink and every public side ends here, each on its own carrier"
+      status: active

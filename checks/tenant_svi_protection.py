@@ -19,7 +19,6 @@ class CheckTenantSviProtection(InfrahubCheck):
     protected when it has:
 
     - an enabled security policy with rules or a default action (the leaf ACL);
-    - or an inline firewall;
     - or a firewall context that PBR redirects it to: one serving one of its
       customer deployments, or a shared (tenant-less) one.
     """
@@ -33,14 +32,14 @@ class CheckTenantSviProtection(InfrahubCheck):
         tenants = {ctx["tenant"]["id"] for ctx in contexts if ctx.get("tenant")}
         has_shared_context = any(not ctx.get("tenant") for ctx in contexts)
         for segment in cleaned.get("ManagedNetworkSegment") or []:
-            if not is_routed_tenant_segment(segment) or self._has_acl(segment) or segment.get("inline_service"):
+            if not is_routed_tenant_segment(segment) or self._has_acl(segment):
                 continue
             if has_shared_context or (self._deployment_ids(segment) & (served | tenants)):
                 continue
             self.log_error(
                 message=(
                     f"{segment.get('typename')} '{segment.get('name')}' is a routed tenant SVI in a shared "
-                    "VRF with neither an ACL-bearing security policy, an inline firewall nor a PBR firewall "
+                    "VRF with neither an ACL-bearing security policy nor a PBR firewall "
                     "context: it is any-to-any inside the VRF"
                 )
             )

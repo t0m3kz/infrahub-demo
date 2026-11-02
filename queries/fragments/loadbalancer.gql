@@ -1,12 +1,7 @@
 # One load balancer (queries/config/loadbalancer.gql), physical or virtual.
 fragment LoadbalancerDeviceFields on DcimDevice {
   name { value }
-  role { value }
-  platform {
-    node {
-      name { value }
-    }
-  }
+  ... on DcimDeviceManaged { role { value } platform { node { name { value } } } }
   ... on DcimCapabilities {
     capabilities {
       edges {
@@ -29,7 +24,7 @@ fragment LoadbalancerDeviceFields on DcimDevice {
               edges {
                 node {
                   name { value }
-                  ... on DcimDevice { primary_address { node { address { value } } } }
+                  ... on DcimDeviceManaged { primary_address { node { address { value } } } }
                 }
               }
             }
@@ -55,7 +50,6 @@ fragment LoadbalancerDeviceFields on DcimDevice {
         ... on DcimVirtualInterface {
           ip_address { node { address { value } ip_namespace { node { name { value } } } } }
           parent_interface { node { name { value } } }
-          inline_segment { node { __typename ...InlineTerminationFields } }
         }
       }
     }
@@ -85,7 +79,7 @@ fragment LoadbalancerContextConfigFields on ManagedLoadbalancerContext {
       node {
         __typename
         name { value }
-        device { node { name { value } role { value } } }
+        device { node { name { value } ... on DcimDeviceManaged { role { value } } } }
         ... on DcimVirtualInterface {
           parent_interface { node { name { value } } }
           ip_address {

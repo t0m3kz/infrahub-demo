@@ -12,6 +12,7 @@ spec:
         data:
           - name: FRA
             location: ["fra"]
+            routing_filter_enforce: true
             member_of_groups:
               - colocation_metros
             children:

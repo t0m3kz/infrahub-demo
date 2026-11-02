@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from tests.smoke.fixture_builders.common import (
     _af_edges,
     _deployment_record,
@@ -10,12 +12,15 @@ from tests.smoke.fixture_builders.common import (
     _make_interface,
     _make_policy_rule,
     _make_security_policy,
+    _make_segment_node,
     _node,
     _v,
     _write_data_fixture,
 )
-from tests.smoke.fixture_builders.fabric import _INLINE_SEGMENT_KWARGS, _make_inline_segment_node, build_device_data
+from tests.smoke.fixture_builders.fabric import build_device_data
+from tests.smoke.fixture_builders.route_protection_roots import TENANT_NAMESPACE, add_environment_roots
 from tests.smoke.fixture_builders.transit import build_exchange_transit_bl_data
+from tests.smoke.fixture_builders.vrf import _vrf_node
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.edge import Edge
 
@@ -117,7 +122,6 @@ def build_edge_internet_bgw_data(*, device_name: str, platform: str) -> dict:
         ttl=1,
         local_iface_name="Ethernet1/14",
         remote_iface_name="Ethernet1/1",
-        maximum_routes=100,
         password="isp-s3cr3t",
     )
     for iface_edge in peering["capabilities"]["edges"]:
@@ -211,7 +215,6 @@ def _regular_handoff(
         remote_iface_name=remote_iface,
         send_community=False,
         send_extended_community=False,
-        maximum_routes=100,
         password=f"{name.lower()}-key",
     )
     peering["name"] = _v(name)
@@ -248,7 +251,6 @@ def build_edge_unfiltered_appliance_data(*, device_name: str) -> dict:
             port["__typename"] = "DcimVirtualInterface"
             for physical_only in ("cable", "interface_type", "mtu", "segments"):
                 port.pop(physical_only, None)
-            port["inline_segment"] = _node(None)
     prod = _node({"name": _v("PROD"), "l3_vni": _v(60000), "namespace_type": _v("prod")})
     peerings = []
     for iface, local_ip, remote_ip, remote, remote_iface, remote_asn, name, far_role in (
@@ -297,16 +299,12 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
 
     ebgp_ebgp edge (no VTEP) plus five peering_role regular sessions, as add_virtual_circuit writes a
     handoff (send_community and send_extended_community both False), on sub-interfaces:
-      - Ethernet1/13.1000 PROD: the AWS transit VIF (vlan 1000). Its hybrid attachment sits on
-        rt-shared, so only the VPCs propagating there are accepted: 10.30.0.0/16 (account owner C003)
-        and 10.32.0.0/16 (C015). 10.150.0.0/16 propagates to rt-isolated only, and 10.33.0.0/16 sits
-        in a provider-owned account: neither is accepted. Owners C003 and C015.
-      - Ethernet1/13.1001 NON-PROD: a private VIF whose VPC (owner C003) lists a NON-PROD and a PROD
-        block; only the NON-PROD one is accepted.
+      - Ethernet1/13.1000 PROD and Ethernet1/13.1001 NON-PROD: the AWS VIFs. The far end registers no
+        prefix (a cloud gateway registers nothing on the edge), so the session has no owner: deny-all
+        both ways, with a comment.
       - Ethernet1/13.1900 PROD: the SD-WAN gateway handoff. It accepts what the offices behind
         EQX-FR2-SDWAN-GW1 register: C002's PROD lan_prefixes (10.210.2.0/24), C003's (10.210.3.0/24)
-        and C005's hosted office-lan segment (10.176.5.0/24). C003 therefore has a VPC block on the hub VIF AND an office LAN behind GW1. A
-        NON-PROD LAN, an office owned by a provider, an office registering nothing, an office behind another
+        and C005's hosted office-lan segment (10.176.5.0/24). A NON-PROD LAN, an office owned by a provider, an office registering nothing, an office behind another
         gateway and an office without a gateway are not accepted.
       - Ethernet1/13.1300 PROD: EXT-MEGAPORT-MCR1, no far end registers a prefix, so the session has
         no owner: deny-all both ways, with a comment.
@@ -314,10 +312,9 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
         BGP process in the peering has process_role overlay. An appliance is never ours, so the hop is
         external; nothing is registered behind it: deny-all both ways, with a comment.
     Out (the same-owner exchange, utils/ownership.py): per session, for each of its owners, that owner's
-    on-prem segments in the namespace plus what it registered behind another session of the namespace
-    (C003's office LAN goes to the hub VIF, C003's VPC block to GW1), minus the session's own IN (C005's
-    office-hosted segment is registered behind GW1, so it is never announced back to it). Never another
-    owner's prefix: C015 sits on the hub VIF only, so GW1 never learns of it. Segments of C003, C015,
+    on-prem segments in the namespace plus what it registered behind another session of the namespace,
+    minus the session's own IN (C005's office-hosted segment is registered behind GW1, so it is never
+    announced back to it). Never another owner's prefix. Segments of C003, C015,
     C002 and C005 in PROD and NON-PROD; C001's segment is behind no session and never announced, a
     segment without a customer owner, a PROD container, a MANAGEMENT segment and
     a segment without a gateway are never announced. A VIF on another device with the same VLAN is
@@ -422,72 +419,6 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
             {"owner": _customer("C003"), "gateway": _node(None)},
         ]
     )
-    on_this_edge = _node({"physical_devices": _edges([{"name": _v(device_name)}])})
-
-    def vpc(owner: dict | None, *blocks: tuple[str, str]) -> dict:
-        """A cloud virtual network: its cidr_blocks and the owner of its account."""
-        return _node(
-            {
-                "cidr_blocks": _cidr_blocks(*blocks),
-                "account": _node({"owner": owner if owner is not None else _node(None)}),
-            }
-        )
-
-    def vpc_attachment(table: str, virtual_network: dict) -> dict:
-        return {
-            "attachment_type": _v("vpc"),
-            "propagates_to_route_tables": _edges([{"id": table}]),
-            "virtual_network": virtual_network,
-        }
-
-    data["CloudVirtualInterface"] = _edges(
-        [
-            {
-                "name": _v("vif-transit-hub-euc1"),
-                "vlan_id": _v(1000),
-                "direct_connect": on_this_edge,
-                "virtual_network": _node(None),
-                "transit_gateway_attachment": _node(
-                    {
-                        "associated_route_table": _node({"id": "rt-shared"}),
-                        "transit_gateway": _node(
-                            {
-                                "attachments": _edges(
-                                    [
-                                        {
-                                            "attachment_type": _v("hybrid"),
-                                            "propagates_to_route_tables": _edges([{"id": "rt-shared"}]),
-                                            "virtual_network": _node(None),
-                                        },
-                                        vpc_attachment("rt-shared", vpc(_customer("C003"), ("10.30.0.0/16", "PROD"))),
-                                        vpc_attachment("rt-shared", vpc(_customer("C015"), ("10.32.0.0/16", "PROD"))),
-                                        vpc_attachment("rt-shared", vpc(_PROVIDER, ("10.33.0.0/16", "PROD"))),
-                                        vpc_attachment(
-                                            "rt-isolated", vpc(_customer("C003"), ("10.150.0.0/16", "PROD"))
-                                        ),
-                                    ]
-                                )
-                            }
-                        ),
-                    }
-                ),
-            },
-            {
-                "name": _v("vif-private-dev-euc1"),
-                "vlan_id": _v(1001),
-                "direct_connect": on_this_edge,
-                "virtual_network": vpc(_customer("C003"), ("10.60.0.0/16", "NON-PROD"), ("10.31.0.0/16", "PROD")),
-                "transit_gateway_attachment": _node(None),
-            },
-            {
-                "name": _v("vif-elsewhere"),
-                "vlan_id": _v(1000),
-                "direct_connect": _node({"physical_devices": _edges([{"name": _v("dc1-edge-02")}])}),
-                "virtual_network": vpc(_customer("C003"), ("10.99.0.0/16", "PROD")),
-                "transit_gateway_attachment": _node(None),
-            },
-        ]
-    )
 
     def office(
         gateway: str | None,
@@ -542,9 +473,10 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
     )
 
     def tunnel(owner: dict, prefixes: tuple[tuple[str, str], ...], *ends: str) -> dict:
-        """A tunnel circuit: its owner, the (prefix, namespace) pairs it registers and the device of each end port."""
+        """A tunnel circuit: the office (of ``owner``) in its locations, the (prefix, namespace) pairs it registers
+        and the device of each end port. The tunnel stores no owner: it is the office's."""
         return {
-            "owner": owner,
+            "locations": _edges([{"owner": owner}]),
             "registered_prefixes": _cidr_blocks(*prefixes),
             "capabilities": _edges([{"device": _node({"name": _v(end)})} for end in ends]),
         }
@@ -563,7 +495,11 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
     return data
 
 
-def build_edge_bgw_pair_data(*, device_name: str, platform: str) -> dict:
+# A VNI segment without a gateway: pure L2 on the fabric (VLAN + L2 VNI, no SVI / VRF / L3 VNI).
+_BGW_SEGMENT_KWARGS: dict[str, Any] = {"vlan_id": 150, "vni": 10150, "seg_name": "seg-l2-150"}
+
+
+def build_edge_bgw_pair_data(*, device_name: str, platform: str, enforce: bool = True) -> dict:
     """A colocation metro edge that is one of two BGWs sharing a site VIP.
 
     BGW edge (Loopback1 IPv6 VTEP, Loopback100 multisite-vip) with two DCI dark
@@ -607,7 +543,7 @@ def build_edge_bgw_pair_data(*, device_name: str, platform: str) -> dict:
     )
     # One segment on a firewall-role port gives the BGW its VXLAN block (an edge
     # without a stretched segment or an INTERNET session renders none).
-    seg = _make_inline_segment_node(row_device_id=device_node["id"])
+    seg = _make_segment_node(**_BGW_SEGMENT_KWARGS, row_device_id=device_node["id"])
     interfaces.append(
         {
             "node": _make_interface(
@@ -620,7 +556,7 @@ def build_edge_bgw_pair_data(*, device_name: str, platform: str) -> dict:
         }
     )
     device_node["deployment"]["node"]["segment_deployments"] = _edges(
-        [_deployment_record(seg, _INLINE_SEGMENT_KWARGS["vni"])]
+        [_deployment_record(seg, _BGW_SEGMENT_KWARGS["vni"])]
     )
     sibling = "dc1-edge-02"
     interfaces.append(
@@ -672,7 +608,6 @@ def build_edge_bgw_pair_data(*, device_name: str, platform: str) -> dict:
             ttl=1,
             local_iface_name=port,
             remote_iface_name="Ethernet1/35",
-            maximum_routes=16,
             password=key,
         )
         underlay["peering_role"] = _v("dci-underlay")
@@ -726,7 +661,55 @@ def build_edge_bgw_pair_data(*, device_name: str, platform: str) -> dict:
             }
         }
     )
+    _add_route_protection(data, device_name=device_name, sibling=sibling, enforce=enforce)
     return data
+
+
+def _vip_interface(device: str, role: str, vip: str, loopback: str) -> dict:
+    """One ``DcimVirtualInterface(role: multisite-vip)`` root node with its device's loopback (bgp_facts reads it)."""
+    return {
+        "ip_address": _node({"address": _v(vip)}),
+        "device": _node(
+            {
+                "name": _v(device),
+                "role": _v(role),
+                "interfaces": _edges([{"role": _v("loopback-vtep"), "ip_address": _node({"address": _v(loopback)})}]),
+            }
+        ),
+    }
+
+
+def _add_route_protection(data: dict, *, device_name: str, sibling: str, enforce: bool) -> None:
+    """Give the BGW pair fixture the route protection facts: the metro stages or enforces and names its loopback supernet.
+
+    The remote border gateways (one per DC) and the sibling edge carry their VIPs on the ``DcimVirtualInterface``
+    root, which is what a DCI or fabric session derives its far-end addresses from (transforms/helpers/bgp_facts.py).
+    """
+    deployment = data["DcimDevice"]["edges"][0]["node"]["deployment"]["node"]
+    deployment["routing_filter_enforce"] = _v(enforce)
+    deployment["loopback_pool"] = _node({"resources": _edges([{"prefix": _v("2001:db8:100::/120")}])})
+    # The edge is a border gateway in the INTERNET instance (its default exit) and a member of the tenant one.
+    add_environment_roots(data, tenant_members=[device_name], internet_members=[device_name])
+    node = data["DcimDevice"]["edges"][0]["node"]
+    memberships = [
+        {"namespace": {"name": TENANT_NAMESPACE, "l3_vni": 50001, "namespace_type": "prod"}},
+        {"namespace": {"name": "INTERNET", "l3_vni": 60002, "namespace_type": "internet"}},
+    ]
+    existing = {
+        edge["node"]["namespace"]["node"]["name"]["value"]
+        for edge in (node.get("shared_capabilities") or {}).get("edges") or []
+    }
+    node.setdefault("shared_capabilities", {"edges": []})["edges"].extend(
+        {"node": _vrf_node(m["namespace"])} for m in memberships if m["namespace"]["name"] not in existing
+    )
+    data["DcimVirtualInterface"] = _edges(
+        [
+            _vip_interface(device_name, "edge", "2001:db8:100::f1/128", "2001:db8:100::1/128"),
+            _vip_interface(sibling, "edge", "2001:db8:100::f1/128", "2001:db8:100::2/128"),
+            _vip_interface("dc10-border-leaf-01", "border-leaf", "2001:db8:dc10::f10/128", "2001:db8:dc10::1/128"),
+            _vip_interface("dc11-border-leaf-01", "border-leaf", "2001:db8:dc11::f11/128", "2001:db8:dc11::1/128"),
+        ]
+    )
 
 
 def write_fixtures() -> tuple[int, int]:
@@ -767,6 +750,13 @@ def write_fixtures() -> tuple[int, int]:
             "edge_cisco_nxos_bgw_pair",
             # Metro edge pair: fabric-tracking on the interlink, FABRIC-PEERS iBGP session.
             build_edge_bgw_pair_data(device_name="dc1-edge-01", platform="cisco_nxos"),
+        ),
+        (
+            "metro edge pair BGW, route protection staged",
+            Edge,
+            "edge_cisco_nxos_bgw_pair_staged",
+            # The same pair with routing_filter_enforce false: the objects exist, RM-FABRIC-OUT and RM-DCI-IN stay attached.
+            build_edge_bgw_pair_data(device_name="dc1-edge-01", platform="cisco_nxos", enforce=False),
         ),
     )
     generated = errors = 0

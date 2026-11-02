@@ -1,0 +1,22 @@
+---
+# The customer office of C900, minimal: a building in the Demo Metro and the office footprint on it. The office is the
+# owner of the Zscaler tunnel (01_zscaler_tunnel.yml): the circuit-placement rule for a tunnel wants an office among
+# its locations, and the tunnel's owner is derived from it. The office name is computed: {OWNER}-OFFICE
+# (C900-OFFICE). No SD-WAN gateway, no fabric: nothing is generated for it (no `member_of_groups`).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationFacility
+  data:
+    - name: "Demo Office"
+      shortname: "dmo-office"
+      parent: "dmo"
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCustomerOffice
+  data:
+    - owner: "C900"
+      parent: "Campus and Office"
+      locations: ["dmo-office"]

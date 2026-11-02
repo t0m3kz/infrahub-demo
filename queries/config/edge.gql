@@ -5,27 +5,12 @@ query edge_config($device: String!) {
         __typename
         id
         name { value }
-        role { value }
-        device_type {
-          node {
-            name { value }
-          }
-        }
-        platform {
-          node {
-            name { value }
-          }
-        }
-        primary_address {
-          node {
-            address { value }
-            ip_namespace { node { name { value } } }
-          }
-        }
-        tags {
-          edges {
-            node { name { value } }
-          }
+        ... on DcimDeviceManaged {
+          role { value }
+          device_type { node { name { value } } }
+          platform { node { name { value } } }
+          primary_address { node { address { value } ip_namespace { node { name { value } } } } }
+          tags { edges { node { name { value } } } }
         }
 
         # Device Services (BGP, OSPF) with nested peerings
@@ -145,8 +130,8 @@ query edge_config($device: String!) {
     }
   }
 
-  # On-prem routed space per tenant VRF: what an external tenant-VRF peer (a
-  # cloud VIF, the SD-WAN gateway) may be announced. Grouped by namespace in
+  # On-prem routed space per tenant VRF: what an external tenant-VRF peer (the
+  # SD-WAN gateway) may be announced. Grouped by namespace in
   # transforms/helpers/bgp_external.py (get_onprem_prefixes).
   # owner: who owns the announced prefix (only an OrganizationCustomer owner counts, so a
   # session is announced only the prefixes of its own owner).
@@ -162,51 +147,6 @@ query edge_config($device: String!) {
                 prefix { value }
                 member_type { value }
                 ip_namespace { node { name { value } namespace_type { value } } }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-
-  # Cloud virtual interfaces and the VPC aggregates each can reach: what the
-  # session on the edge's <port>.<vlan_id> sub-interface may accept. Matched to
-  # this device through the Direct Connect's physical_devices in
-  # transforms/helpers/bgp_external.py (get_external_peer_prefixes).
-  # virtual_network.account.owner: the owner of the registered VPC aggregate (only an
-  # OrganizationCustomer owner counts), so the session accepts only its own owner's VPCs.
-  CloudVirtualInterface {
-    edges {
-      node {
-        name { value }
-        vlan_id { value }
-        direct_connect { node { physical_devices { edges { node { name { value } } } } } }
-        virtual_network {
-          node {
-            cidr_blocks { edges { node { prefix { value } ip_namespace { node { name { value } } } } } }
-            account { node { owner { node { __typename org_id { value } display_label } } } }
-          }
-        }
-        transit_gateway_attachment {
-          node {
-            associated_route_table { node { id } }
-            transit_gateway {
-              node {
-                attachments {
-                  edges {
-                    node {
-                      attachment_type { value }
-                      propagates_to_route_tables { edges { node { id } } }
-                      virtual_network {
-                        node {
-                          cidr_blocks { edges { node { prefix { value } ip_namespace { node { name { value } } } } } }
-                          account { node { owner { node { __typename org_id { value } display_label } } } }
-                        }
-                      }
-                    }
-                  }
-                }
               }
             }
           }
@@ -246,14 +186,72 @@ query edge_config($device: String!) {
 
   # Prefixes registered on a tunnel: reachable behind the SD-WAN gateway at one of its ends, accepted by the
   # session facing that gateway like an office's lan_prefixes (registered_by_gateway in
-  # transforms/helpers/bgp_external.py). owner: who owns them (only an OrganizationCustomer counts).
+  # transforms/helpers/bgp_external.py). The tunnel's owner is derived, never stored: the owner of the
+  # TopologyCustomerOffice among its locations (session_circuit_owner; only an OrganizationCustomer counts).
   # capabilities: the tunnel's end ports; the device name of each is matched to a gateway.
   TopologySessionCircuit(circuit_type__value: "tunnel") {
     edges {
       node {
-        owner { node { __typename org_id { value } display_label } }
+        locations { edges { node { ... on TopologyCustomerOffice { owner { node { __typename org_id { value } display_label } } } } } }
         registered_prefixes { edges { node { prefix { value } ip_namespace { node { name { value } } } } } }
         capabilities { edges { node { device { node { name { value } } } } } }
+      }
+    }
+  }
+
+  # The cloud side of an external session (transforms/helpers/bgp_cloud.py cloud_legs, shared with the checks): our
+  # sub-interface (or routed port) and the CloudPeeringInterface end the same handoff or vpn session circuit
+  # (capabilities of the peering -> circuit -> its other ends). The peering gives the neighbor (peer_ip, peer_asn), the
+  # BGP key (auth) and what we announce to the cloud (advertised_prefixes); its transport (device) gives the owner (the
+  # account's, else its own for a SaaS) and, for a VPN tunnel, the gateway. One root rather than a field per kind.
+  CloudPeeringInterface {
+    edges {
+      node {
+        name { value }
+        scope { value }
+        routing { value }
+        peer_ip { node { address { value } } }
+        peer_asn { node { asn { value } } }
+        auth { node { password { value } } }
+        gateway { node { id name { value } } }
+        advertised_prefixes { edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } } }
+        device {
+          node {
+            __typename
+            name { value }
+            ... on CloudTransport { account { node { owner { node { __typename org_id { value } display_label } } } } owner { node { __typename org_id { value } display_label } } }
+            ... on CloudVPNConnection { gateway { node { id name { value } } } }
+          }
+        }
+        capabilities {
+          edges {
+            node {
+              __typename
+              ... on TopologySessionCircuit {
+                name { value }
+                circuit_type { value }
+                capabilities { edges { node { name { value } device { node { name { value } } } } } }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  # What a cloud gateway lets through, cloud to us (bgp_cloud.py reachable_prefixes): an attachment joins its gateway
+  # to a virtual network (its allowed_prefixes, else its CIDR blocks) or to a peer gateway (a hop to a hub, with the
+  # route table the hub receives it in).
+  CloudGatewayAttachment {
+    edges {
+      node {
+        name { value }
+        gateway { node { id name { value } } }
+        peer_gateway { node { id name { value } } }
+        virtual_network { node { id name { value } cidr_blocks { edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } } } } }
+        allowed_prefixes { edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } } }
+        associated_route_table { node { id name { value } } }
+        propagates_to_route_tables { edges { node { id name { value } } } }
       }
     }
   }
@@ -270,5 +268,61 @@ query edge_config($device: String!) {
         routing_tag { value }
       }
     }
+  }
+
+  # The EVPN Multi-Site VIPs of the model and the loopbacks of the border gateways that carry them: the far end
+  # of a fabric or DCI session and the VIPs every underlay session may carry
+  # (transforms/helpers/bgp_facts.py). A handful of interfaces, however large the fleet.
+  DcimVirtualInterface(role__value: "multisite-vip") {
+    edges {
+      node {
+        ip_address { node { address { value } } }
+        device {
+          node {
+            name { value }
+            ... on DcimDeviceManaged { role { value } }
+            interfaces(role__values: ["loopback", "loopback-vtep"]) {
+              edges {
+                node {
+                  role { value }
+                  ... on DcimVirtualInterface { ip_address { node { address { value } } } }
+                  ... on DcimPhysicalInterface { ip_address { node { address { value } } } }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  # Route protection (utils/bgp_expectation.py, transforms/helpers/bgp_facts.py): the EVPN type-5 routes of a VRF are
+  # prefixes of its namespace, so a device's EVPN filter is the prefixes of the namespaces it is a member of (a
+  # spine: all of them), the default route only from a default exit, and the L2 VNIs bound the route count.
+  # One aliased root per environment namespace type (the namespaces are data/bootstrap/22_namespaces.yml).
+  environment_prefixes_prod: IpamPrefix(ip_namespace__namespace_type__value: "prod") {
+    edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } }
+  }
+  environment_prefixes_non_prod: IpamPrefix(ip_namespace__namespace_type__value: "non_prod") {
+    edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } }
+  }
+  environment_prefixes_internet: IpamPrefix(ip_namespace__namespace_type__value: "internet") {
+    edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } }
+  }
+  environment_prefixes_management: IpamPrefix(ip_namespace__namespace_type__value: "management") {
+    edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } }
+  }
+  # The devices in each namespace's VRF instance: a border gateway in an internet one is the default exit, and a border
+  # in a tenant one originates the shared firewall context's default route (get_exchange_routes).
+  ManagedVRF {
+    edges {
+      node {
+        namespace { node { name { value } namespace_type { value } } }
+        shared_devices { edges { node { name { value } ... on DcimDeviceManaged { role { value } } } } }
+      }
+    }
+  }
+  ManagedVxlanSegment {
+    edges { node { id } }
   }
 }

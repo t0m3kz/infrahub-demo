@@ -21,7 +21,6 @@ from utils.limits import DEFAULT_NAMESPACE
 from utils.vrf_demand import device_vrf_facts
 
 CONFIGS = Path(__file__).resolve().parents[1] / "smoke" / "configs"
-INPUTS = sorted(CONFIGS.glob("*/input.json"))
 
 
 def _prepared(path: Path) -> dict[str, Any] | None:
@@ -46,12 +45,16 @@ def _as_vrf_instances_node(device: dict[str, Any]) -> dict[str, Any]:
     return node
 
 
+# Only the device config inputs: the cloud load-balancer and proxy inputs of the same directory
+# carry no device and no VRF, so they are not parametrized here (a skip per case would only add noise).
+INPUTS = [path for path in sorted(CONFIGS.glob("*/input.json")) if _prepared(path) is not None]
+
+
 @pytest.mark.parametrize("path", INPUTS, ids=[path.parent.name for path in INPUTS])
 def test_the_transform_and_the_generator_demand_the_same_vrfs(path: Path) -> None:
     """``vrf_requirements`` (config shape) equals ``device_vrf_facts(...).demand`` (vrf_instances.gql shape)."""
     device = _prepared(path)
-    if device is None:
-        pytest.skip("not a device config fixture")
+    assert device is not None
     assert vrf_requirements(device).namespaces == device_vrf_facts(_as_vrf_instances_node(device)).demand
 
 
@@ -60,8 +63,7 @@ def test_the_goldens_include_devices_with_each_kind_of_demand() -> None:
     seen: dict[str, int] = {"rows": 0, "legs": 0, "addresses": 0}
     for path in INPUTS:
         device = _prepared(path)
-        if device is None:
-            continue
+        assert device is not None
         inputs = device_vrf_facts(_as_vrf_instances_node(device)).inputs
         seen["rows"] += bool(inputs.row_namespaces - {DEFAULT_NAMESPACE})
         seen["legs"] += bool(inputs.leg_namespaces)

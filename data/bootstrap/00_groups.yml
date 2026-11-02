@@ -32,8 +32,6 @@ spec:
       description: All firewalls
     - name: loadbalancers
       description: All load balancers
-    - name: cloud_loadbalancers
-      description: All cloud load balancers (AWS/Azure/GCP)
     - name: oobs
       description: All OOB devices
     - name: consoles
@@ -54,12 +52,8 @@ spec:
       description: Equinix POPs
     - name: vxlan_segments
       description: VXLAN Segments (EVPN overlay)
-    - name: cloud_accounts
-      description: Cloud accounts (AWS/Azure/GCP) — one Terraform/Pulumi artifact per account
     - name: saas_proxies
       description: SaaS forwarding proxies (Zscaler, Prisma, Netskope, etc.)
-    - name: onprem_proxies
-      description: On-premises forwarding proxies (Squid, BlueCoat, Cisco WSA, etc.)
     - name: sdwan_gateways
       description: Arista SD-WAN hub gateways (VCG) deployed at colocation or cloud sites
     - name: provider_stubs
@@ -82,12 +76,8 @@ spec:
       description: Customer deployment footprints routed to Ansible-based infrastructure orchestration
     - name: topology_github_actions
       description: Customer deployment footprints routed to GitHub Actions-based infrastructure orchestration
-    - name: topology_terraform
-      description: Customer deployment footprints routed to Terraform/OpenTofu-based infrastructure orchestration
     - name: topology_argocd
       description: Customer deployment footprints routed to Argo CD-based platform orchestration
-    - name: virtual_colocation_terraform
-      description: Virtual colocations (Equinix Network Edge) routed to Terraform/OpenTofu orchestration
     - name: application_ansible
       description: Applications routed to Ansible Automation Platform delivery workflows
     - name: application_github_actions
@@ -119,5 +109,7 @@ spec:
       description: "TopologyVirtualColocation provider-hosted presences (Equinix Network Edge, Megaport MCR) — generator target for VirtualColocationGenerator (add_virtual_colocation), which builds the presence's pools and virtual edge devices from its fabric_templates. Every one joins, even one without fabric_templates, because the created-trigger fires per kind and would raise on a non-member"  # yamllint disable-line rule:line-length
     - name: carrier_circuits
       description: "TopologyCarrierCircuit, a pure carrier — generator target for CarrierCircuitGenerator (add_circuit), which derives its facility locations and builds no session"  # yamllint disable-line rule:line-length
+    - name: patch_panels
+      description: "DcimPatchPanel, a passive panel — generator target for PatchPanelGenerator (add_patch_panel), which pairs the front ports a panel template creates with their rear ports. Every panel joins (the panel templates carry the group) because the created-trigger fires per kind and would raise on a non-member"  # yamllint disable-line rule:line-length
     - name: virtual_circuits
-      description: "TopologySessionCircuit of every circuit_type (dci, handoff, tunnel) — target of the virtual-circuit session generator, which builds the BGP sessions of a dci and a handoff and none for a tunnel (the SD-WAN orchestrator owns its overlay routing). Every session circuit joins because the created-trigger fires per kind and would raise on a non-member"  # yamllint disable-line rule:line-length
+      description: "TopologySessionCircuit of every circuit_type (dci, handoff, vpn, tunnel) — target of the virtual-circuit session generator, which builds the BGP sessions of a dci, a handoff and a vpn and none for a tunnel (the SD-WAN orchestrator owns its overlay routing). Every session circuit joins because the created-trigger fires per kind and would raise on a non-member"  # yamllint disable-line rule:line-length

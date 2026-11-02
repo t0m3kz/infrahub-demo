@@ -20,6 +20,7 @@ Steps:
 3.  Verify endpoint growth in DC6 and that every loaded server is cabled
 3b. Load the AppComponent; 3c. run add_app_component_segment over it
 3d. Verify the segment's ManagedVlanDomainSegment and switch-port tagging
+3e. A port a person tags by hand survives a rerun of the segment reconcile
 4.  Create proposed change
 5.  Wait for validations, verify diff and artifacts
 6.  Merge to main
@@ -38,7 +39,7 @@ from .branch_helpers import fetch_artifacts, fetch_proposed_change_diff
 from .conftest import TestInfrahubDockerWithClient
 from .dc_topology_helpers import snapshot_dc_device_counts_by_role
 from .endpoint_app_helpers import fetch_endpoint_cabling
-from .segment_helpers import fetch_vlan_domain_segments
+from .segment_helpers import fetch_segment_ports, fetch_vlan_domain_segments
 from .suite_constants import (
     DEMO_SERVERS_DATA,
     SCENARIO_DC_NAME,
@@ -60,21 +61,24 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 SCENARIO_NAME = "Scenario 7: Add Endpoints"
 BRANCH_NAME = "dc6-add-endpoints"
 
-# The switch interfaces a segment is assigned to, with their device.
-SEGMENT_INTERFACES_QUERY = """
+# The segment by name: its ports are read from the ports (segment_helpers.fetch_segment_ports).
+SEGMENT_ID_QUERY = """
 query ($name: String!) {
   ManagedVxlanSegment(name__value: $name) {
-    edges {
-      node {
-        id
-        capabilities {
-          edges { node { id name { value } device { node { name { value } } } } }
-        }
-      }
-    }
+    edges { node { id } }
   }
 }
 """
+
+
+def _port_name(port: Any) -> str:
+    """The name of an SDK interface node (its attributes are dynamic)."""
+    return str(getattr(port, "name").value)
+
+
+def _peers(node: Any, relationship: str) -> list[Any]:
+    """The peers of an SDK node's relationship, loaded with ``include=[relationship]``."""
+    return list(getattr(node, relationship).peers)
 
 
 def _load_server_names(root_dir: Path) -> list[str]:
@@ -333,7 +337,7 @@ class TestDC6AddEndpoints(TestInfrahubDockerWithClient):
         logging.info("=== %s - Step 3d: Verify VLAN Domain Segments ===", SCENARIO_NAME)
 
         result = await async_client_main.execute_graphql(
-            query=SEGMENT_INTERFACES_QUERY, variables={"name": SCENARIO_ENDPOINT_SEGMENT}, branch_name=scenario_branch
+            query=SEGMENT_ID_QUERY, variables={"name": SCENARIO_ENDPOINT_SEGMENT}, branch_name=scenario_branch
         )
         segments = result["ManagedVxlanSegment"]["edges"]
         assert segments, f"Segment '{SCENARIO_ENDPOINT_SEGMENT}' not found on '{scenario_branch}'"
@@ -353,8 +357,8 @@ class TestDC6AddEndpoints(TestInfrahubDockerWithClient):
         hosts = {host["name"]: host for host in await fetch_endpoint_cabling(async_client_main, scenario_branch)}
         cabled_switches = {link["peer_device"] for link in hosts[SCENARIO_ENDPOINT_SERVER]["links"]}
         tagged = [
-            (edge["node"]["device"]["node"]["name"]["value"], edge["node"]["name"]["value"])
-            for edge in segment["capabilities"]["edges"]
+            (port["device"], port["name"])
+            for port in await fetch_segment_ports(async_client_main, scenario_branch, segment["id"])
         ]
         tagged_switches = {device for device, _ in tagged}
         assert tagged, f"No switch interface carries '{SCENARIO_ENDPOINT_SEGMENT}'"
@@ -367,6 +371,85 @@ class TestDC6AddEndpoints(TestInfrahubDockerWithClient):
             SCENARIO_ENDPOINT_SEGMENT,
             len(records),
             sorted(tagged),
+        )
+
+    @pytest.mark.order(253)
+    @pytest.mark.dependency(scope="session", name="dc6_add_ep_person_edge", depends=["dc6_add_ep_verify_vlan_domain"])
+    @pytest.mark.asyncio
+    async def test_03e_a_port_set_by_a_person_survives_the_segment_reconcile(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """An edge a person sets from a port is never removed by the segment reconcile.
+
+        The reconcile writes the ports its components derive with its own account as the edge source and removes
+        only those. Here an uncabled customer port of a switch the server is cabled to gets the segment with no
+        source (the SDK writes none), add_vxlan_segment runs again, and the edge is still there, still sourceless,
+        next to the generated ones. The edge is then removed by hand and the generator rerun, which must not put it
+        back (no instance lands on that port) - the branch ends as it began, before the proposed change merges it.
+        """
+        logging.info("=== %s - Step 3e: A person's port edge survives the reconcile ===", SCENARIO_NAME)
+
+        client = async_client_main
+        client.default_branch = scenario_branch
+        result = await client.execute_graphql(
+            query=SEGMENT_ID_QUERY, variables={"name": SCENARIO_ENDPOINT_SEGMENT}, branch_name=scenario_branch
+        )
+        segment_id = result["ManagedVxlanSegment"]["edges"][0]["node"]["id"]
+
+        generated = await fetch_segment_ports(client, scenario_branch, segment_id)
+        assert generated, f"'{SCENARIO_ENDPOINT_SEGMENT}' has no generated port to compare with"
+        assert all(port["source_id"] for port in generated), f"a generated edge has no source: {generated}"
+
+        hosts = {host["name"]: host for host in await fetch_endpoint_cabling(client, scenario_branch)}
+        switch = sorted({link["peer_device"] for link in hosts[SCENARIO_ENDPOINT_SERVER]["links"]})[0]
+        candidates = await client.filters(
+            kind="DcimPhysicalInterface",
+            device__name__value=switch,
+            role__value="customer",
+            include=["cable", "segments"],
+            branch=scenario_branch,
+        )
+        free = sorted(
+            (port for port in candidates if not getattr(port.cable, "id", None) and not _peers(port, "segments")),
+            key=_port_name,
+        )
+        assert free, f"{switch} has no uncabled customer port left to tag by hand"
+        port = free[0]
+
+        # A person's edge: added from the port, no source.
+        await port.add_relationships(relation_to_update="segments", related_nodes=[segment_id])
+        by_hand = await fetch_segment_ports(client, scenario_branch, segment_id)
+        assert [p["id"] for p in by_hand if p["source_id"] is None] == [port.id], (
+            f"the hand-set edge on {switch}:{_port_name(port)} should be the only sourceless one: {by_hand}"
+        )
+
+        outcome = await run_generator(
+            client=client, generator_name="add_vxlan_segment", node_ids=[segment_id], branch=scenario_branch
+        )
+        assert outcome["success"], f"add_vxlan_segment failed: {outcome}"
+        await wait_for_tasks_completion(client, scenario_branch)
+        await verify_no_failed_tasks(client=client, branch=scenario_branch)
+
+        after = await fetch_segment_ports(client, scenario_branch, segment_id)
+        assert [p["id"] for p in after if p["source_id"] is None] == [port.id], (
+            f"the reconcile removed or re-stamped the edge a person set on {switch}:{_port_name(port)}: {after}"
+        )
+        assert {p["id"] for p in after if p["source_id"]} == {p["id"] for p in generated}, (
+            f"the generated ports changed with the hand-set one: before {generated}, after {after}"
+        )
+
+        # Back to the generated set: a person removes it, and the generator does not bring it back.
+        await port.remove_relationships(relation_to_update="segments", related_nodes=[segment_id])
+        outcome = await run_generator(
+            client=client, generator_name="add_vxlan_segment", node_ids=[segment_id], branch=scenario_branch
+        )
+        assert outcome["success"], f"add_vxlan_segment failed: {outcome}"
+        await wait_for_tasks_completion(client, scenario_branch)
+        final = await fetch_segment_ports(client, scenario_branch, segment_id)
+        assert {p["id"] for p in final} == {p["id"] for p in generated}, (
+            f"the reconcile tagged a port no instance lands on: {final}"
         )
 
     # ------------------------------------------------------------------

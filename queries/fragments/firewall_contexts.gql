@@ -13,7 +13,7 @@ fragment FirewallContextLegFields on ManagedFirewallContext {
     edges {
       node {
         name { value }
-        device { node { role { value } } }
+        device { node { ... on DcimDeviceManaged { role { value } } } }
         ... on DcimVirtualInterface {
           ip_address {
             node {
@@ -87,6 +87,27 @@ fragment FirewallContextConfigFields on ManagedFirewallContext {
       id
       ... on TopologyCustomerDC { name { value } }
       ... on TopologyCustomerColocation { name { value } }
+    }
+  }
+  # The segments this context terminates (ManagedVxlanSegment.terminated_on): their gateway is the pair's floating
+  # VIP and the fabric only bridges them. The firewall transform derives each one's `<uplink trunk>.<vlan>`
+  # sub-interface from the VLAN row of the border leaf at the far end of the trunk
+  # (transforms/helpers/firewall_terminated.py).
+  terminated_segments {
+    edges {
+      node {
+        id
+        name { value }
+        security_zone { node { name { value } } }
+        gateway { node { address { value } } }
+        segment_deployments {
+          edges {
+            node {
+              vlan_domain_segments { edges { node { vlan_id { value } device { node { id } } } } }
+            }
+          }
+        }
+      }
     }
   }
   # The segments terminating on this context: every

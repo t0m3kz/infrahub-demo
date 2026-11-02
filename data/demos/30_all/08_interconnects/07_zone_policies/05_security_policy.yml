@@ -1,7 +1,7 @@
 ---
 # Firewall-level enforcement for colo-hosted cloud/partner/SaaS interconnects.
 # Every destination is reachable: the AWS rule names the VPC block C001 registers behind the
-# AWS transit VIF session (nordix-vpc-prod, 06_customer_boarding/c001/cloud), the Acme rule
+# AWS transit connection session (nordix-vpc-prod, 06_customer_boarding/c001/cloud), the Acme rule
 # the prefix C001 registers behind the partner tunnel (01_partner_tunnel.yml), and the Zscaler rule
 # the internet zone (a SaaS PoP is public space: nothing registers it). Both prefix objects
 # live in PROD, declared where they are registered; no prefix is declared for the policy alone.
@@ -42,7 +42,7 @@ spec:
             destination_prefixes:
               - ["10.10.0.0/16", "PROD"]
             log: false
-            description: "Nordix web/app tier to its AWS VPC over HANDOFF-FR2-AWS-EUC1-PROD"
+            description: "Nordix web/app tier to its AWS VPC over Direct Connect"
 
           - index: 20
             name: nordix-prod-to-partner-acme

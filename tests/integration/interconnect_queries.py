@@ -59,7 +59,6 @@ query ($names: [String]) {
         ttl { value }
         bfd_enabled { value }
         send_extended_community { value }
-        maximum_routes { value }
         password { node { name { value } } }
         address_families { edges { node { afi { value } safi { value } } } }
         bgp_processes {
@@ -289,7 +288,6 @@ query ($names: [String]) {
         scheme { value }
         virtual_network { node { name { value } } }
         network_segments { edges { node { name { value } } } }
-        member_of_groups { edges { node { name { value } } } }
         vips { edges { node { id } } }
       }
     }

@@ -1,7 +1,7 @@
 """Unit tests for transforms/topology/orchestrator_routing.py.
 
 Covers:
-  - Topology transforms (ansible/terraform/argocd/github_actions) — render
+  - Topology transforms (ansible/argocd/github_actions) — render
     only when infrastructure_orchestrator matches the transform's own
     orchestrator, else empty string.
   - Application transforms (ansible/argocd/github_actions) — same gating on
@@ -25,7 +25,6 @@ from transforms.topology.orchestrator_routing import (
     TopologyOrchestratorAnsible,
     TopologyOrchestratorArgoCD,
     TopologyOrchestratorGitHubActions,
-    TopologyOrchestratorTerraform,
 )
 
 _T = TypeVar("_T", bound=InfrahubTransform)
@@ -110,15 +109,6 @@ class TestTopologyOrchestratorAnsible:
         assert result == ""
 
 
-class TestTopologyOrchestratorTerraform:
-    def test_renders_tfvars_for_matching_orchestrator(self) -> None:
-        data = _raw_deployment("TopologyCustomerColocation", "C001-P-FR", "terraform", org_id="C001")
-        result = asyncio.run(_make(TopologyOrchestratorTerraform).transform(data))
-
-        assert 'owner_org_id      = "C001"' in result
-        assert 'parent            = "FR"' in result
-
-
 class TestTopologyOrchestratorArgoCD:
     def test_renders_application_manifest(self) -> None:
         data = _raw_deployment("TopologyCustomerColocation", "C002-P-PA", "argocd", org_id="C002")
@@ -139,7 +129,6 @@ class TestTopologyOrchestratorGitHubActions:
 
 _BUILDERS = (
     (TopologyOrchestratorAnsible, "ansible_automation_platform"),
-    (TopologyOrchestratorTerraform, "terraform"),
     (TopologyOrchestratorArgoCD, "argocd"),
     (TopologyOrchestratorGitHubActions, "github_actions"),
 )
@@ -154,9 +143,6 @@ def _environment_of(builder: type[InfrahubTransform], rendered: str) -> str | No
     if builder is TopologyOrchestratorAnsible:
         lines = [line.strip() for line in rendered.splitlines() if line.strip().startswith("environment:")]
         return lines[0].split(": ", 1)[1] if lines else None
-    if builder is TopologyOrchestratorTerraform:
-        lines = [line for line in rendered.splitlines() if line.startswith("environment")]
-        return lines[0].split('"')[1] if lines else None
     payload = json.loads(rendered)
     if builder is TopologyOrchestratorArgoCD:
         return payload["metadata"]["labels"].get("environment")
@@ -167,7 +153,7 @@ class TestOfficeAndCloudCarryNoEnvironmentAttribute:
     """An office is always production and a cloud footprint is not environment-scoped (its accounts and
     segments carry the environment): neither node has an `environment` field to read."""
 
-    def test_an_office_is_rendered_as_environment_p_by_all_four_builders(self) -> None:
+    def test_an_office_is_rendered_as_environment_p_by_all_three_builders(self) -> None:
         """The transform supplies `p` for the office (_OFFICE_ENVIRONMENT); the node has no environment."""
         for builder, orchestrator in _BUILDERS:
             data = _raw_deployment(
@@ -183,15 +169,15 @@ class TestOfficeAndCloudCarryNoEnvironmentAttribute:
         data = _raw_deployment(
             "TopologyCustomerOffice",
             "C005-OFFICE",
-            "terraform",
+            "ansible_automation_platform",
             org_id="C005",
             environment=None,
             parent_name=None,
         )
 
-        assert 'parent            = ""' in _render(TopologyOrchestratorTerraform, data)
+        assert "    parent: \n" in _render(TopologyOrchestratorAnsible, data)
 
-    def test_a_cloud_footprint_omits_the_environment_in_all_four_builders(self) -> None:
+    def test_a_cloud_footprint_omits_the_environment_in_all_three_builders(self) -> None:
         """No `environment:` line, `environment = ` assignment, label or input at all (not an empty one)."""
         for builder, orchestrator in _BUILDERS:
             data = _raw_deployment(

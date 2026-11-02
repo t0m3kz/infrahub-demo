@@ -3,7 +3,7 @@
 Two query shapes, four topology kinds (TopologyCustomerDC/Colocation/Office/Cloud)
 sharing one query (topology_orchestrator_routing_data.gql) and one AppApplication
 query (application_orchestrator_routing_data.gql). Each artifact_definition targets
-one group (topology_ansible, topology_terraform, ..., application_argocd) whose
+one group (topology_ansible, topology_github_actions, ..., application_argocd) whose
 membership is maintained by generators/topology/orchestrator_routing.py — the
 transform itself only picks the builder for its own orchestrator, ignoring members
 whose infrastructure_orchestrator/application_orchestrator field has since changed
@@ -73,17 +73,6 @@ def _topology_ansible(deployment: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _topology_terraform(deployment: dict[str, Any]) -> str:
-    lines = [
-        f'infrahub_id       = "{deployment.get("id", "")}"',
-        f'infrahub_kind     = "{deployment.get("kind", "")}"',
-        f'owner_org_id      = "{_deployment_org_id(deployment)}"',
-        *([f'environment       = "{deployment["environment"]}"'] if deployment.get("environment") else []),
-        f'parent            = "{_deployment_parent_name(deployment)}"',
-    ]
-    return "\n".join(lines) + "\n"
-
-
 def _topology_argocd(deployment: dict[str, Any]) -> str:
     name = deployment.get("name", "unnamed").lower().replace("_", "-")
     manifest = {
@@ -130,14 +119,13 @@ def _topology_github_actions(deployment: dict[str, Any]) -> str:
 
 _TOPOLOGY_BUILDERS = {
     "ansible_automation_platform": _topology_ansible,
-    "terraform": _topology_terraform,
     "argocd": _topology_argocd,
     "github_actions": _topology_github_actions,
 }
 
 
 class _TopologyOrchestratorTransform(InfrahubTransform):
-    """Base for the four topology_orchestrator_* transforms — subclasses set orchestrator."""
+    """Base for the three topology_orchestrator_* transforms — subclasses set orchestrator."""
 
     query = "topology_orchestrator_routing_data"
     orchestrator = ""
@@ -154,10 +142,6 @@ class _TopologyOrchestratorTransform(InfrahubTransform):
 
 class TopologyOrchestratorAnsible(_TopologyOrchestratorTransform):
     orchestrator = "ansible_automation_platform"
-
-
-class TopologyOrchestratorTerraform(_TopologyOrchestratorTransform):
-    orchestrator = "terraform"
 
 
 class TopologyOrchestratorArgoCD(_TopologyOrchestratorTransform):

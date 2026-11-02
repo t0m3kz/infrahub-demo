@@ -12,14 +12,14 @@ from typing import Any
 
 from infrahub_sdk.checks import InfrahubCheck
 
-from generators.vlan_domain import SERVICE_PORT_ROLES
 from utils.data_cleaning import clean_data
-from utils.exchange_transit import is_exchange_zone
+from utils.exchange_transit import SERVICE_CONTEXT_ROLES, is_exchange_zone
 from utils.interface_speed import InterfaceSpeedMatcher
 
 from .common import deployment_scope_ids
 
 FOOTPRINT_KIND = "TopologyCustomerDC"
+SWITCHED_KINDS = ("DcimPhysicalInterface", "DcimLAGInterface")
 
 
 class CheckCustomerQuota(InfrahubCheck):
@@ -29,13 +29,13 @@ class CheckCustomerQuota(InfrahubCheck):
 
     - segments: the ManagedVxlanSegments (customer_deployments) that name the footprint, against ``max_segments``. A segment stretched over two DCs counts for each
       footprint it names.
-    - host-facing ports: the switch ports tagged with those segments (their `switched_interfaces`: add_app_component_segment
+    - host-facing ports: the switch ports tagged with those segments (their `segments` edge, read from the port: add_app_component_segment
       tags the far end of the uplink NICs of every AppComponent instance's physical host, a role=lag NIC's far end
       through its port-channel), grouped by speed, against ``ports_<speed>g``. A port counts once per footprint
       however many of its segments tag it, and once for each footprint that has a segment on it (a host serving
       two customers). A port-channel counts its member ports (one per NIC, the speed of the member's
-      interface_type). Not counted: the border-leaf firewall/load-balancer ports (the inline termination's
-      service ports, not host-facing), interfaces that are neither physical ports nor port-channels, and a
+      interface_type). Not counted: the border-leaf firewall/load-balancer ports (the service ports a terminated
+      segment is tagged on, not host-facing), interfaces that are neither physical ports nor port-channels, and a
       port in another DC than the footprint's (a stretched segment is tagged in every DC it spans).
     - exchange-zone segments (INTERNET/MANAGEMENT, the DC-local infra services) are the operator's, not the
       customer's: they count for neither.
@@ -53,8 +53,14 @@ class CheckCustomerQuota(InfrahubCheck):
         segments: dict[str, set[str]] = defaultdict(set)  # footprint id -> segment ids
         ports: dict[str, dict[str, int]] = defaultdict(dict)  # footprint id -> port id -> speed (Gbps)
 
+        ports_by_segment: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for kind in SWITCHED_KINDS:
+            for port in cleaned.get(kind) or []:
+                for tagged in port.get("segments") or []:
+                    ports_by_segment[tagged["id"]].append(port)
+
         for segment in cleaned.get("ManagedVxlanSegment") or []:
-            self._collect(segment, footprints, segments, ports)
+            self._collect(segment, ports_by_segment[segment["id"]], footprints, segments, ports)
 
         for footprint_id, footprint in footprints.items():
             self._validate_footprint(footprint, len(segments[footprint_id]), ports[footprint_id])
@@ -62,6 +68,7 @@ class CheckCustomerQuota(InfrahubCheck):
     @staticmethod
     def _collect(
         segment: dict[str, Any],
+        tagged_ports: list[dict[str, Any]],
         footprints: dict[str, dict[str, Any]],
         segments: dict[str, set[str]],
         ports: dict[str, dict[str, int]],
@@ -69,9 +76,7 @@ class CheckCustomerQuota(InfrahubCheck):
         """Add the segment and its host-facing ports to every metered footprint it names."""
         if is_exchange_zone((segment.get("security_zone") or {}).get("name")):
             return
-        host_ports = [
-            port for interface in segment.get("switched_interfaces") or [] for port in _host_facing_ports(interface)
-        ]
+        host_ports = [port for interface in tagged_ports for port in _host_facing_ports(interface)]
         for deployment in segment.get("customer_deployments") or []:
             footprint = footprints.get(deployment.get("id", ""))
             if footprint is None:
@@ -119,7 +124,7 @@ def _host_facing_ports(interface: dict[str, Any]) -> list[tuple[str, int, set[st
     A physical port is itself; a port-channel is its member ports. Anything that is not a host-facing port,
     or whose speed its interface_type does not state or is below 1G (no ``ports_<speed>g`` meters it), yields nothing.
     """
-    if interface.get("role") in SERVICE_PORT_ROLES:
+    if interface.get("role") in SERVICE_CONTEXT_ROLES.values():
         return []
     scope = deployment_scope_ids((interface.get("device") or {}).get("deployment"))
     physical = [interface] if interface["typename"] == "DcimPhysicalInterface" else interface.get("member_interfaces")

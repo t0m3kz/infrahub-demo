@@ -8,7 +8,7 @@ spec:
     - owner: "C015"
       customer_name: "novantis-subnet-prod"
       environment: "p"
-      segment_type: "aws_vpc_subnet"
+      segment_type: "cloud_subnet"
       virtual_network: "novantis-vpc-prod"
       availability_zone: ["eu-central-1", "eu-central-1b"]
       cidr_block: "10.150.1.0/24"

@@ -751,7 +751,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                     )
 
         # Cloud (ALL_DEMO_CLOUD_LOAD_BALANCED_COMPONENTS): one CloudLoadBalancer per component in its instances'
-        # VPC and subnets, in the cloud_loadbalancers artifact group; one VIP per port on it, without an address
+        # VPC and subnets; one VIP per port on it, without an address
         # (the cloud assigns it), the instances themselves as pool members. No context, leg or rule.
         cloud = ALL_DEMO_CLOUD_LOAD_BALANCED_COMPONENTS
         result = await async_client_main.execute_graphql(
@@ -777,8 +777,6 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             wanted = (component["lb_type"], component["scheme"], component["virtual_network"], component["segments"])
             if found != wanted:
                 errors.append(f"cloud load balancer {name}: (lb_type, scheme, VPC, subnets) {found}, expected {wanted}")
-            if "cloud_loadbalancers" not in {group.get("name") for group in lb.get("member_of_groups") or []}:
-                errors.append(f"cloud load balancer {name} is not in the cloud_loadbalancers group")
             vips = [vip for vip in cloud_vips if (vip.get("load_balancer") or {}).get("name") == name]
             ports = sorted((str(vip["protocol"]), int(vip["port"])) for vip in vips)
             if ports != sorted(component["ports"]):

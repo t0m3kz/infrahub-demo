@@ -122,12 +122,11 @@ def validate_transit_vlans(device: dict[str, Any], transform_cls: type[BaseDevic
     ]
 
 
-def validate_appliance(device: dict[str, Any], ha_kind: str, label: str) -> list[str]:
-    """Validate a service appliance (load balancer, proxy) is ready for config generation.
+def validate_appliance(device: dict[str, Any]) -> list[str]:
+    """Validate a load balancer is ready for config generation.
 
     Checks platform, active status, at least one active uplink, and membership
-    in an HA domain of ``ha_kind`` with at least 2 members. ``label`` names the
-    appliance in the standalone-HA message.
+    in a ManagedLoadbalancerHA domain with at least 2 members.
     """
     errors: list[str] = []
     device_name = device.get("name", "Unknown")
@@ -148,9 +147,9 @@ def validate_appliance(device: dict[str, Any], ha_kind: str, label: str) -> list
         errors.append(f"Device '{device_name}' has {len(uplinks)} uplink(s) but none are active")
 
     capabilities = device.get("capabilities") or []
-    ha_domains = [c for c in capabilities if c.get("typename") == ha_kind]
+    ha_domains = [c for c in capabilities if c.get("typename") == "ManagedLoadbalancerHA"]
     if not ha_domains:
-        errors.append(f"Device '{device_name}' has no HA domain — standalone {label} has no redundancy")
+        errors.append(f"Device '{device_name}' has no HA domain — standalone LB has no redundancy")
     else:
         ha = ha_domains[0]
         if len(ha.get("capabilities") or []) < 2:

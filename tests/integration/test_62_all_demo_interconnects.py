@@ -2,26 +2,20 @@
 
 Everything here is the part of the model that leaves a single site: the dark
 fibre and cross-connects into the colocation on-ramps, the virtual circuits
-riding them (the DCI between the border gateways, the handoffs into AWS, the
-Network Edge chain, Megaport and the SD-WAN gateway), the SD-WAN branches'
-tunnels and internet underlay, and the cloud-side terminations that close the
-on-prem-to-cloud path.
+riding them (the DCI between the border gateways, the SD-WAN gateway handoff and
+the SD-WAN branches' tunnels and internet
+underlay.
 
-A carrier circuit is a pure carrier. The role of a virtual circuit is its KIND:
-a Tunnel (inventory only, no session), an Interconnect (a DCI: an underlay and
-an EVPN session) or a Handoff (one eBGP session in one environment namespace).
-Their carrier is never declared: it is derived from the circuit's own ports.
+A carrier circuit is a pure carrier. The role of a session circuit is its
+`circuit_type`: a Tunnel (inventory only, no session), an Interconnect (a DCI: an
+underlay and an EVPN session), a Handoff (one eBGP session in one environment
+namespace) or a VPN (model only, none in 30_all). Their carrier is never declared: it is derived
+from the circuit's own ports. A circuit has no owner of its own: it is derived
+from its office (utils.ownership.circuit_owner).
 
-Two edges get special attention because the schema deliberately has exactly one
-way to express each of them, and a regression would silently split the graph
-into islands:
-
-  * ``capabilities`` — how a circuit surfaces on the port it
-    terminates on. It is the single uniform "what is this port doing" edge, and
-    replaced the bespoke ``interfaces`` relationship the node used to declare.
-  * ``cloud_endpoint`` — how a Handoff reaches its cloud side, which is a
-    CloudVirtualInterface, not a device port. Without it the traversal walks
-    from a border leaf out to the cage and then stops at an island boundary.
+The edge that matters here is ``capabilities`` — how a circuit surfaces on the
+port it terminates on. It is the single uniform "what is this port doing" edge,
+and a regression would silently split the graph into islands.
 
 Circuit placement is checked from both sides: a carrier circuit ends on two
 facilities where its end devices sit (the end the data leaves out is the one
@@ -60,6 +54,7 @@ from .all_demo_circuit_constants import (
     ALL_DEMO_FACILITY_KINDS,
     ALL_DEMO_GATEWAY_ACCESS_CIRCUITS,
     ALL_DEMO_GATEWAY_ACCESS_LOCATIONS,
+    ALL_DEMO_INTERNET_BUS,
     ALL_DEMO_ISP_ACCESS_DEVICE,
     ALL_DEMO_ISP_ACCESS_LOCATION,
     ALL_DEMO_ISP_ACCESS_PORTS,
@@ -85,6 +80,7 @@ from .interconnect_rules import (
     _session_port_errors,
     _tunnel_errors,
 )
+from .wait_helpers import wait_for_condition
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -174,6 +170,8 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             if len(circuit["end_ids"]) != 2 or len(set(circuit["end_ids"])) != 2:
                 errors.append(f"{circuit_id}: ends {circuit['ends']}, expected exactly 2 distinct ports")
             for end in circuit["ends"]:
+                if end == ALL_DEMO_INTERNET_BUS:
+                    continue
                 if end in circuit_of_port:
                     errors.append(f"{end} is an end of both {circuit_of_port[end]} and {circuit_id}")
                 circuit_of_port[end] = circuit_id
@@ -337,7 +335,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
     ) -> None:
         """Verify each virtual circuit's kind, owner, locations, ends, derived carrier and placement.
 
-        The role of a virtual circuit is its kind (Tunnel, Interconnect, Handoff). The carrier is derived, never
+        The role of a virtual circuit is its kind (Tunnel, Interconnect, Handoff, VPN). The carrier is derived, never
         declared: the carrier circuits on the circuit's own ports (or on the parent of a sub-interface), compared
         with ALL_DEMO_VIRTUAL_CIRCUITS. The per-kind rules (_virtual_placement_errors) hold on the live data.
         """
@@ -395,7 +393,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             elif circuit["circuit_type"] == HANDOFF_TYPE:
                 errors.extend(_handoff_errors(circuit))
             else:
-                errors.append(f"{name}: kind '{circuit['kind']}' is none of the three virtual circuit kinds")
+                errors.append(f"{name}: kind '{circuit['circuit_type']}' is none of the four session circuit kinds")
         errors.extend(_session_port_errors(virtual))
         errors.extend(_environment_errors(virtual))
         return errors
@@ -488,3 +486,34 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             f"  - {e}" for e in errors
         )
         logging.info("Location circuits verified: %d location(s) with circuits", len(forward))
+
+    @pytest.mark.order(395)
+    @pytest.mark.dependency(scope="session", depends=["all_demo_inventory"])
+    @pytest.mark.asyncio
+    async def test_02c_verify_patch_panel_pairing(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """PP-EQX-FR2-01 (template PP-24-LC) has all 24 front ports paired, front N on rear N, by add_patch_panel.
+
+        The template creates the ports unpaired and the generator runs on the panel's creation and on its port
+        edges, so the pairing is waited for like the other generator output.
+        """
+        query = """
+        query {
+          DcimPatchPanel(panel_id__value: "fr2-s1-r-1:PP-EQX-FR2-01") {
+            edges { node { front_ports { edges { node { name { value } rear_port { node { name { value } } } } } } } }
+          }
+        }
+        """
+
+        async def paired() -> tuple[bool, dict[str, str | None]]:
+            result = clean_data(await async_client_main.execute_graphql(query=query, branch_name=scenario_branch))
+            panels = result.get("DcimPatchPanel") or []
+            fronts = (panels[0].get("front_ports") or []) if panels else []
+            pairs = {str(front["name"]): (front.get("rear_port") or {}).get("name") for front in fronts}
+            return len(pairs) == 24 and all(pairs.values()), pairs
+
+        pairs = await wait_for_condition(paired, max_attempts=30, poll_interval=10, description="patch panel pairing")
+        assert pairs == {str(n): str(n) for n in range(1, 25)}

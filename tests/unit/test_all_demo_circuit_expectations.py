@@ -12,6 +12,7 @@ from tests.integration.all_demo_circuit_constants import (
     ALL_DEMO_DECLARED_VIRTUAL_LOCATIONS,
     ALL_DEMO_DECLARED_VIRTUAL_PORTS,
     ALL_DEMO_FACILITY_KINDS,
+    ALL_DEMO_ISP_UPLINK_CIRCUITS,
     ALL_DEMO_PARTNER_ACCESS_CIRCUITS,
     ALL_DEMO_SDWAN_UNDERLAY_CIRCUITS,
     ALL_DEMO_VIRTUAL_CIRCUITS,
@@ -21,8 +22,17 @@ from tests.integration.all_demo_circuit_constants import (
 )
 from tests.integration.demo_data import ROOT, declared, distinct, name
 
-_ZONES = {name(zone) for zone in distinct(declared("TopologyColocationZone", ROOT / ALL_DEMO_DATA))}
+_ZONES = {
+    name(zone)
+    for kind in ("TopologyColocationZone", "TopologyVirtualColocation")
+    for zone in distinct(declared(kind, ROOT / ALL_DEMO_DATA))
+}
 _ISPS = {name(isp) for isp in distinct(declared("TopologyExternalProviders", ROOT / ALL_DEMO_DATA))}
+# A cloud transport (CloudDirectConnect) sits in a region, not in a deployment.
+_TRANSPORT_REGIONS = {
+    name(transport): str(transport.item["region"])
+    for transport in distinct(declared("CloudDirectConnect", ROOT / ALL_DEMO_DATA))
+}
 
 
 def _declared_virtual() -> dict[str, str]:
@@ -34,7 +44,7 @@ def _declared_virtual() -> dict[str, str]:
 
 
 def test_facility_kinds_come_from_the_schema() -> None:
-    """A circuit ends on the seven TopologyFacility kinds."""
+    """A circuit ends on the eight TopologyFacility kinds (THE INTERNET is the one that is also a device)."""
     assert ALL_DEMO_FACILITY_KINDS == {
         "TopologyDataCenter",
         "TopologyColocationZone",
@@ -43,23 +53,29 @@ def test_facility_kinds_come_from_the_schema() -> None:
         "TopologyExternalProviders",
         "TopologySaasRegion",
         "TopologyCustomerOffice",
+        "TopologyInternet",
     }
 
 
-def test_carrier_circuits_declare_only_one_place() -> None:
-    """Each declared carrier circuit lists one place: a cage, or for the partner's access its ISP (add_circuit derives the rest)."""
+def test_carrier_circuits_declare_one_place() -> None:
+    """Each declared carrier circuit lists one place: a cage (or a virtual colocation), or for the partner's access its
+    ISP. add_circuit derives the rest from the end devices, a cloud transport's region included (the transport has
+    `region`, not `deployment`), so the data never lists it."""
     circuits = declared("TopologyCarrierCircuit", ROOT / ALL_DEMO_DATA)
     assert circuits
     assert set(ALL_DEMO_DECLARED_PHYSICAL_LOCATIONS) == {str(circuit.value("circuit_id")) for circuit in circuits}
     for circuit_id, locations in ALL_DEMO_DECLARED_PHYSICAL_LOCATIONS.items():
         assert len(locations) == 1, circuit_id
-        expected = _ISPS if circuit_id in ALL_DEMO_PARTNER_ACCESS_CIRCUITS else _ZONES
+        isp_only = set(ALL_DEMO_PARTNER_ACCESS_CIRCUITS) | set(ALL_DEMO_ISP_UPLINK_CIRCUITS)
+        expected = _ISPS if circuit_id in isp_only else _ZONES
         assert locations[0] in expected, circuit_id
 
 
 def test_carrier_circuit_type_counts_are_the_shipped_ones() -> None:
-    """Six dark fibres (two per DC), three cross-connects (AWS, Azure, Megaport), the declared internet circuits (four
-    transit, the gateway's access, the partner's) plus one generated underlay per SD-WAN office."""
+    """Six dark fibres (two per DC), one cross-connect (Megaport), five virtual connections (the AWS Direct Connect
+    and the two Azure ExpressRoute legs on the ports of the region's cloud transports, the two Equinix Fabric connections
+    cage -> Network Edge and Network Edge -> AWS), the declared internet circuits (four transit, the gateway's access, the
+    partner's, the five ISP uplinks to THE INTERNET) plus one generated underlay per SD-WAN office."""
     offices = [
         office
         for office in distinct(declared("TopologyCustomerOffice", ROOT / ALL_DEMO_DATA))
@@ -67,16 +83,21 @@ def test_carrier_circuit_type_counts_are_the_shipped_ones() -> None:
     ]
     assert ALL_DEMO_CARRIER_CIRCUIT_TYPES == {
         "dark_fiber": 6,
-        "cross_connect": 3,
-        "internet": 4 + 1 + 1 + len(offices),
+        "cross_connect": 1,
+        "virtual_connection": 5,
+        "internet": 4 + 1 + 1 + len(ALL_DEMO_ISP_UPLINK_CIRCUITS) + len(offices),
     }
 
 
 def test_the_declared_virtual_circuits_are_the_dci_the_handoffs_and_the_partner_tunnel() -> None:
-    """Six Interconnects, five Handoffs and the partner Tunnel are declared; the five office tunnels are generated."""
+    """Six Interconnects, the gateway and the AWS Handoff and the partner Tunnel are declared; the office tunnels are
+    generated."""
     kinds = _declared_virtual()
     assert sorted(n for n, kind in kinds.items() if kind == INTERCONNECT_TYPE) == sorted(ALL_DEMO_DCI_CIRCUITS)
-    assert len([n for n, kind in kinds.items() if kind == HANDOFF_TYPE]) == 5
+    assert sorted(n for n, kind in kinds.items() if kind == HANDOFF_TYPE) == [
+        "HANDOFF-FR2-AWS-EUC1-PROD",
+        "HANDOFF-FR2-SDWAN-GW1-PROD",
+    ]
     assert [n for n, kind in kinds.items() if kind == TUNNEL_TYPE] == ["C001-PARTNER-ACME-FR2"]
     assert set(kinds) <= set(ALL_DEMO_VIRTUAL_CIRCUITS)
     assert set(ALL_DEMO_VIRTUAL_CIRCUITS) - set(kinds) == {
@@ -103,26 +124,16 @@ def test_a_virtual_circuit_declares_both_ends_and_up_to_two_places() -> None:
         assert len(ALL_DEMO_DECLARED_VIRTUAL_PORTS[circuit_name]) == 2, circuit_name
 
 
-def test_expected_kinds_owners_and_environments_follow_the_role_of_each_kind() -> None:
-    """Tunnels are owned by their office's customer, Interconnects and Handoffs are unowned shared platform, every
-    Handoff is PROD, only a Handoff has a namespace or a cloud endpoint."""
+def test_expected_kinds_and_environments_follow_the_role_of_each_kind() -> None:
+    """Every Handoff is PROD and only a Handoff has a namespace; no circuit names an owner (it is derived)."""
     for circuit_name, expected in ALL_DEMO_VIRTUAL_CIRCUITS.items():
-        if expected["circuit_type"] == TUNNEL_TYPE:
-            assert expected["owner"], circuit_name
-        else:
-            assert expected["owner"] is None, circuit_name
+        assert "owner" not in expected and "cloud_endpoint" not in expected, circuit_name
         assert (expected["ip_namespace"] == "PROD") == (expected["circuit_type"] == HANDOFF_TYPE), circuit_name
-        if expected["circuit_type"] != HANDOFF_TYPE:
-            assert expected["cloud_endpoint"] is None, circuit_name
         assert len(set(expected["carrier"])) == len(expected["carrier"]), circuit_name
-    assert {c for c, e in ALL_DEMO_VIRTUAL_CIRCUITS.items() if e["cloud_endpoint"]} == {
-        "HANDOFF-FR2-AWS-EUC1-PROD",
-        "HANDOFF-AMNE-AWS-EUC1-PROD",
-    }
 
 
 def test_carriers_are_the_pure_fibre_the_tunnel_accesses_and_the_cross_connects() -> None:
-    """An Interconnect rides exactly its fibre; a Tunnel its two internet accesses; the two cable-carried Handoffs none."""
+    """An Interconnect rides exactly its fibre; a Tunnel its two internet accesses; the cable-carried Handoff none."""
     for circuit_name, expected in ALL_DEMO_VIRTUAL_CIRCUITS.items():
         if expected["circuit_type"] == INTERCONNECT_TYPE:
             assert len(expected["carrier"]) == 1
@@ -130,7 +141,7 @@ def test_carriers_are_the_pure_fibre_the_tunnel_accesses_and_the_cross_connects(
         elif expected["circuit_type"] == TUNNEL_TYPE:
             assert len(expected["carrier"]) == 2 and expected["carrier"][1].startswith("INET-"), circuit_name
     cabled = {c for c, e in ALL_DEMO_VIRTUAL_CIRCUITS.items() if e["circuit_type"] == HANDOFF_TYPE and not e["carrier"]}
-    assert cabled == {"HANDOFF-FR2-SDWAN-GW1-PROD", "HANDOFF-FR2-AMNE-PROD"}
+    assert cabled == {"HANDOFF-FR2-SDWAN-GW1-PROD"}
 
 
 def test_generated_underlay_circuits_are_the_sdwan_offices_and_collide_with_no_declared_one() -> None:

@@ -1,5 +1,6 @@
 """In-process renders and graph snapshots (shared by test_64, test_65, test_71)."""
 
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
@@ -42,7 +43,7 @@ async def render_device_config(
 # outputs are mostly data-loaded or owned by another generator: an id lost
 # there is a foreign deletion, i.e. a generator cleaned up a node it does not
 # own. A switch port's segment tags are its typed `segments` (the tag reconcile's output); capabilities carries the
-# circuits, contexts and sessions on it, and a sub-interface's inline termination is `inline_segment`.
+# circuits, contexts and sessions on it.
 TOPOLOGY_SNAPSHOT_KINDS = {
     "DcimDevice": "name { value }",
     # ip_address is declared on each concrete interface kind, not on the generic: a rerun that re-pointed a port
@@ -52,7 +53,7 @@ TOPOLOGY_SNAPSHOT_KINDS = {
         "name { value } capabilities { edges { node { id } } } "
         "... on DcimPhysicalInterface { ip_address { node { id address { value } } } segments { edges { node { id } } } } "
         "... on DcimVirtualInterface { ip_address { node { id address { value } } } "
-        "role { value } vrf { node { id } } vlan_domain_segment { node { id } } inline_segment { node { id } } } "
+        "role { value } vrf { node { id } } vlan_domain_segment { node { id } } } "
         "... on DcimLAGInterface { ip_address { node { id address { value } } } segments { edges { node { id } } } }"
     ),
     # cable_id, color and length_cm are derived by the cabling, HA and MLAG sites from the endpoints, the type and
@@ -70,7 +71,7 @@ TOPOLOGY_SNAPSHOT_KINDS = {
     # knobs is a diff here.
     "ManagedBGPPeering": (
         "name { value } peering_role { value } session_type { value } ttl { value } bfd_enabled { value } "
-        "send_extended_community { value } maximum_routes { value } password { node { id } } "
+        "send_extended_community { value } password { node { id } } "
         "bgp_processes { edges { node { id } } } address_families { edges { node { id } } } "
         "capabilities { edges { node { id } } }"
     ),
@@ -86,16 +87,16 @@ TOPOLOGY_SNAPSHOT_KINDS = {
     "LocationRack": "name { value }",
     "TopologyPod": "name { value }",
     "TopologyDataCenter": "name { value }",
-    # add_circuit/add_sdwan_edge output (the carrier circuit and the tunnel); an Interconnect and a Handoff are
-    # data-loaded and only gain sessions, so their own selection must not move either.
+    # add_circuit/add_sdwan_edge output (the carrier circuit and the tunnel); an Interconnect is data-loaded and only
+    # gains sessions, so their selection must not move.
     "TopologyCarrierCircuit": (
         "name { value } locations { edges { node { id } } } capabilities { edges { node { id } } }"
     ),
     "TopologySessionCircuit": (
         "name { value } circuit_type { value } locations { edges { node { id } } } "
         "capabilities { edges { node { id capabilities { edges { node { id } } } } } } "
-        "ip_namespace { node { id } } password { node { id } } maximum_routes { value } cloud_endpoint { node { id } } "
-        "registered_prefixes { edges { node { id } } }"
+        "ip_namespace { node { id } } password { node { id } } "
+        "link_prefix { node { id } } registered_prefixes { edges { node { id } } }"
     ),
     "ManagedController": "name { value } managed_devices { edges { node { id } } }",
     "ManagedFirewallHA": "name { value }",
@@ -150,12 +151,15 @@ def snapshot_query(kind: str, selection: str, offset: int) -> str:
     )
 
 
-async def snapshot_topology(client: InfrahubClient, branch: str) -> tuple[dict[str, dict[str, Any]], dict[str, str]]:
-    """Kind -> {id: comparable state} for TOPOLOGY_SNAPSHOT_KINDS, paged, plus
+async def snapshot_topology(
+    client: InfrahubClient, branch: str, kinds: Iterable[str] | None = None
+) -> tuple[dict[str, dict[str, Any]], dict[str, str]]:
+    """Kind -> {id: comparable state} for TOPOLOGY_SNAPSHOT_KINDS (or only ``kinds`` of it), paged, plus
     id -> "<concrete kind> <display_label>" so a diff can name what moved."""
     snapshot: dict[str, dict[str, Any]] = {}
     labels: dict[str, str] = {}
-    for kind, selection in TOPOLOGY_SNAPSHOT_KINDS.items():
+    wanted = TOPOLOGY_SNAPSHOT_KINDS if kinds is None else {kind: TOPOLOGY_SNAPSHOT_KINDS[kind] for kind in kinds}
+    for kind, selection in wanted.items():
         objects: dict[str, Any] = {}
         offset = 0
         while True:

@@ -27,43 +27,11 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
-    resource_name: proxy_config
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/config/proxy.gql
-          kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
     resource_name: proxy_cloud_config
     tests:
       - name: syntax_check
         spec:
           path: queries/config/proxy_cloud.gql
-          kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
-    resource_name: loadbalancer_cloud
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/config/loadbalancer_cloud.gql
-          kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
-    resource_name: cloud_vpc_config
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/config/cloud_vpc.gql
-          kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
-    resource_name: virtual_colocation_config
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/config/virtual_colocation.gql
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
@@ -405,14 +373,6 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
-    resource_name: virtual_colocation_orchestrator_routing
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/topology/add/virtual_colocation_orchestrator_routing.gql
-          kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
     resource_name: rack_elevation_query
     tests:
       - name: syntax_check
@@ -454,14 +414,6 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
-    resource_name: patch_panel
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/validation/patch_panel.gql
-          kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
     resource_name: interface_layers
     tests:
       - name: syntax_check
@@ -475,14 +427,6 @@ infrahub_tests:
       - name: syntax_check
         spec:
           path: queries/validation/lb.gql
-          kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
-    resource_name: proxy_validation
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/validation/proxy.gql
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
@@ -534,6 +478,14 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
+    resource_name: customer_cloud_account
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/customer_cloud_account.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
     resource_name: suite_capacity
     tests:
       - name: syntax_check
@@ -571,6 +523,30 @@ infrahub_tests:
       - name: syntax_check
         spec:
           path: queries/validation/vrf_instances.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: patch_panel_data
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/patch_panel.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: cloud_connection
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/cloud_connection.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: patch_panel_pairing
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/patch_panel_pairing.gql
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
@@ -635,4 +611,12 @@ infrahub_tests:
       - name: syntax_check
         spec:
           path: queries/validation/tenant_svi_protection.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: bgp_expectations
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/bgp_expectations.gql
           kind: graphql-query-smoke

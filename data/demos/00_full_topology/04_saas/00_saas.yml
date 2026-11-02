@@ -1,0 +1,26 @@
+---
+# Two SaaS clouds with one region each: Webex (reached over a private peering) and Zscaler (over the internet).
+# A SaaS region name is computed: <SAAS>-<REGION>.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologySaas
+  data:
+    - name: Webex
+      provider: "P901"
+      service_type: other
+      description: Cisco Webex, private peering
+      parent: "SaaS"
+      children:
+        kind: TopologySaasRegion
+        data:
+          - region_name: Frankfurt
+    - name: Zscaler
+      provider: "P030"
+      service_type: sase
+      description: Zscaler SASE cloud, tunnels over the internet
+      parent: "SaaS"
+      children:
+        kind: TopologySaasRegion
+        data:
+          - region_name: Munich I

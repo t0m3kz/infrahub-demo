@@ -18,6 +18,7 @@ from generators.topology.virtual_circuit import SessionEnd, VirtualCircuitSessio
 from tests.unit.simulators.circuit_fakes import (
     VC_ID,
     FakeClient,
+    cloud_peering_port,
     colo_edge_port,
     dc_border_port,
     handoff_edge_port,
@@ -49,6 +50,20 @@ class TestNothingToBuild:
         assert client.writes == [] and client.filter_calls == [] and client.get_calls == []
         gen.wait_for_parent_generator_and_refetch.assert_not_awaited()
         assert "no session is generated" in gen.logger.info.call_args_list[-1].args[0]
+
+    @pytest.mark.parametrize("status", ["active", "decommissioned"])
+    @pytest.mark.asyncio
+    async def test_a_cloud_far_end_leaves_the_session_authored(self, status: str) -> None:
+        """A cloud peering interface end has no BGP process of ours: the run logs it and touches nothing, so the
+        cleanup of its tracking group cannot delete the peering written in data."""
+        client = FakeClient()
+
+        gen = await _run(client, handoff_payload(ends=[handoff_edge_port(), cloud_peering_port()], status=status))
+
+        assert client.writes == [] and client.filter_calls == [] and client.get_calls == []
+        gen.wait_for_parent_generator_and_refetch.assert_not_awaited()
+        assert gen.logger.info.call_args_list[-1].args[0] == "session of VC-C001-EQXFR-AWS is authored (cloud far end)"
+        assert VC_ID not in client.group_context.related_node_ids
 
     @pytest.mark.parametrize("payload_for", [handoff_payload, interconnect_payload])
     @pytest.mark.asyncio
@@ -530,7 +545,7 @@ class TestOnePortOneSession:
         assert asked == [
             (
                 SESSION_CIRCUIT,
-                {"capabilities__ids": ["if-hs", "if-aws"], "circuit_type__values": ["dci", "handoff"]},
+                {"capabilities__ids": ["if-hs", "if-aws"], "circuit_type__values": ["dci", "handoff", "vpn"]},
             )
         ]
 

@@ -40,17 +40,13 @@ spec:
     - name: haproxy_technologies
       containerlab_os: linux
 
-    - name: squid_cache
-      containerlab_os: linux
-
-    - name: bluecoat_sgos
-      containerlab_os: linux
-
-    - name: cisco_wsa
-      containerlab_os: linux
-
     - name: f5_tmos
       containerlab_os: linux
 
     - name: paloalto_panos
+      containerlab_os: linux
+
+    # Zscaler Enforcement Node: a SaaS region's hosted function (a CloudNetworkAppliance stub, role provider,
+    # nothing is rendered for it), so it has no config template.
+    - name: zscaler_zen
       containerlab_os: linux

@@ -2,6 +2,7 @@
 # TopologySessionCircuit kind, dispatched on the root node's `circuit_type`:
 #   dci      DCI: underlay eBGP on a /31 plus a loopback-to-loopback EVPN session
 #   handoff  edge <-> party device in one namespace: an eBGP session over the sub-interfaces
+#   vpn      tunnel interface pair: an eBGP session over a link prefix, no IPsec configuration
 #   tunnel   inventory only, no session; the generator reads its circuit_type and stops
 # The ends are `capabilities` (the circuit's interfaces, a DcimInterface generic). The underlay is never declared:
 # it is the TopologyCarrierCircuit entries in each end's own `capabilities` (the carrier terminating on the
@@ -24,7 +25,7 @@
 #                                                                  (loopback and loopback-vtep only: the DCI EVPN
 #                                                                   session sources its loopbacks from them; the
 #                                                                   address only on a DcimVirtualInterface)
-# A handoff adds ip_namespace.name; maximum_routes; password.id (null when unkeyed).
+# A handoff or vpn adds ip_namespace.name and password.id (null when unkeyed).
 # The ends' own addresses are not selected: the generator allocates them and reads the interface nodes it writes.
 query virtual_circuit_data($name: String!) {
   TopologySessionCircuit(name__value: $name) {
@@ -36,7 +37,6 @@ query virtual_circuit_data($name: String!) {
         status { value }
         circuit_type { value }
         ip_namespace { node { name { value } } }
-        maximum_routes { value }
         password { node { id } }
         capabilities {
           edges {
@@ -73,6 +73,7 @@ query virtual_circuit_data($name: String!) {
               device {
                 node {
                   id
+                  __typename
                   name { value }
                   ... on DcimPhysicalDevice {
                     deployment { node { ...VirtualCircuitDeployment } }

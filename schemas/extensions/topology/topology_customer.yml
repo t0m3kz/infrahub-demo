@@ -25,9 +25,10 @@ version: "1.0"
 generics:
   # The automation system that provisions the infrastructure of a deployment:
   # one definition for everything that is routed by it. The customer footprints
-  # (TopologyCustomerDC / Colocation / Cloud / Office) and TopologyVirtualColocation
-  # inherit it, and generators/topology/orchestrator_routing.py puts each into the
-  # routing group of its value (artifact definitions target those groups). A
+  # (TopologyCustomerDC / Colocation / Cloud / Office) inherit it, and
+  # generators/topology/orchestrator_routing.py puts each into the routing group of
+  # its value (artifact definitions target those groups). TopologyVirtualColocation
+  # inherits it too but is not routed (checks/colocation_placement.py reads it). A
   # generic cannot inherit another generic, so every node lists it.
   - name: OrchestratorScoped
     namespace: Topology
@@ -48,9 +49,6 @@ generics:
           - name: github_actions
             label: "GitHub Actions"
             color: "#24292F"
-          - name: terraform
-            label: "Terraform / OpenTofu"
-            color: "#7B42BC"
           - name: argocd
             label: "Argo CD"
             color: "#EF7B4D"
@@ -361,7 +359,7 @@ nodes:
         identifier: "customer_office__lan_prefixes"
         order_weight: 1150
       - name: sdwan_gateway
-        peer: DcimDevice
+        peer: DcimDeviceManaged
         label: "SD-WAN Gateway"
         description: "Gateway device to attach to — presence opts this office into automated SD-WAN edge provisioning"  # yamllint disable-line rule:line-length
         cardinality: one
@@ -410,7 +408,6 @@ nodes:
       - TopologyOrchestratorScoped
       - TopologyDeployment
       - TopologyCloudHosting
-      - TopologyProviderHosting
       - TopologyConnectableLocation
     parent: TopologyCloudRegion
     children: ""
@@ -422,8 +419,10 @@ nodes:
     display_label: "{{ name__value }}"
     # No environment: a cloud footprint's environment is its CloudAccount's
     # (CloudAccount.environment), which its segments and resources reference.
+    # One footprint per account: the account is mandatory, so it can carry the constraint.
     uniqueness_constraints:
       - ["name__value", "parent"]
+      - ["account"]
     attributes:
       - name: name
         kind: Text
@@ -437,6 +436,17 @@ nodes:
         kind: Text
         optional: false
         order_weight: 110
+    relationships:
+      # checks pin owner == account.owner and the footprint's segments to virtual networks of this account
+      - name: account
+        label: Cloud Account
+        peer: CloudAccount
+        cardinality: one
+        kind: Attribute
+        optional: false
+        identifier: customer_cloud__account
+        order_weight: 1300
+        description: "The one cloud account of this footprint (same owner, same region); one footprint per account"
 
   # The DC customer's service tier, referenced by a CustomerDC's `design`.
   # Naming convention {SIZE}_DC: S and M share the firewall/load balancer

@@ -68,15 +68,9 @@ def test_trunk_host_port_is_a_tagged_member_of_each_vlan(role: str, platform: st
 
 
 @pytest.mark.parametrize("platform", ["sonic", "dell_sonic"])
-def test_access_host_port_is_an_untagged_member(platform: str) -> None:
-    """A single-VLAN host port keeps its access rendering: untagged."""
-    configdb = _render(Leaf, _load(f"leaf_{platform}_inline_segment"))
-    assert configdb["VLAN_MEMBER"] == {"Vlan150|Ethernet10": _UNTAGGED}
-
-
-def test_single_vlan_access_and_trunk_ports_are_distinguished() -> None:
+def test_single_vlan_access_and_trunk_ports_are_distinguished(platform: str) -> None:
     """Dropping the second VLAN of the trunk turns it into an untagged access member."""
-    data = _load("leaf_sonic_ebgp_ibgp")
+    data = _load(f"leaf_{platform}_ebgp_ibgp")
     port = _port(data, "Ethernet10")
     port["segments"]["edges"] = port["segments"]["edges"][:1]
     configdb = _render(Leaf, data)

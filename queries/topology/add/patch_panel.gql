@@ -1,0 +1,33 @@
+# add_patch_panel (generators/topology/patch_panel.py): one panel with its rear and front ports and the rear port each
+# front port names today. Targeted by the panel's computed `panel_id` (<rack>:<name>): a panel name is unique only
+# within its rack.
+query patch_panel_data($panel_id: String!) {
+  DcimPatchPanel(panel_id__value: $panel_id) {
+    edges {
+      node {
+        id
+        name { value }
+        panel_id { value }
+        rear_ports {
+          edges {
+            node {
+              id
+              name { value }
+              connector { value }
+            }
+          }
+        }
+        front_ports {
+          edges {
+            node {
+              id
+              name { value }
+              connector { value }
+              rear_port { node { id } }
+            }
+          }
+        }
+      }
+    }
+  }
+}

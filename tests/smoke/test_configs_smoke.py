@@ -16,8 +16,6 @@ from pathlib import Path
 import pytest
 
 from tests.smoke.fixture_builders.common import run_transform
-from transforms.cloud.vpc_terraform import CloudVpcTerraform
-from transforms.colocation.virtual_colocation import VirtualColocationTerraform
 from transforms.config.access_leaf import AccessLeaf
 from transforms.config.access_switch import AccessSwitch
 from transforms.config.border_leaf import BorderLeaf
@@ -28,8 +26,6 @@ from transforms.config.firewall import Firewall
 from transforms.config.l2_leaf import L2Leaf
 from transforms.config.leaf import Leaf
 from transforms.config.loadbalancer import LoadBalancer
-from transforms.config.loadbalancer_cloud import LoadBalancerCloud
-from transforms.config.proxy import Proxy
 from transforms.config.spine import Spine
 from transforms.config.super_spine import SuperSpine
 from transforms.config.tor import ToR
@@ -45,12 +41,8 @@ _PREFIX_TO_CLASS: list[tuple[str, type]] = sorted(
         ("border_leaf", BorderLeaf),
         ("border_spine", BorderSpine),
         ("loadbalancer", LoadBalancer),
-        ("loadbalancer_cloud", LoadBalancerCloud),
-        ("cloud_terraform", CloudVpcTerraform),
-        ("virtual_colocation_terraform", VirtualColocationTerraform),
         ("firewall", Firewall),
         ("spine", Spine),
-        ("proxy", Proxy),
         ("l2_leaf", L2Leaf),
         ("access_leaf", AccessLeaf),
         ("access_switch", AccessSwitch),

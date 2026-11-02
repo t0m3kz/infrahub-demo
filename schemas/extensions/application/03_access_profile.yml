@@ -64,17 +64,6 @@ extensions:
           order_weight: 2110
           label: "Private Access Service"
 
-    - kind: ManagedProxyHA
-      relationships:
-        - name: customers
-          peer: OrganizationCustomer
-          cardinality: many
-          kind: Attribute
-          optional: true
-          direction: inbound
-          identifier: "customer__egress_service"
-          order_weight: 2310
-
     - kind: ManagedCloudProxy
       relationships:
         - name: egress_customers

@@ -112,6 +112,14 @@ XE_REMARK_MAX = 100
 # transforms/helpers/group_policy/eos.py).
 EOS_MSSG_MAX_SEGMENTS = 60
 
+# BGP maximum-prefix (utils/bgp_expectation.py). Every limit is derived from the model (a pool's capacity, the size of
+# an allowed set); the slack is the spares added to a SET-sized limit (a partner, a transit, a border-gateway pair) so a
+# prefix added to the model before the next generator run does not drop the session. A pool-sized limit already has
+# the headroom generators/fabric_sizing.py gave the pool. The ceiling is the 32-bit counter a limit has to fit (U: no
+# vendor guide was read for a smaller cap); a derived limit above it is not rendered.
+BGP_PREFIX_SLACK = 2
+BGP_MAX_PREFIX_CEILING = 2**32 - 1
+
 # --- 3. Setup data: pool and group names -----------------------------------------------------------------------
 
 # The pools and groups below are loaded by data/bootstrap and found by name; ``tests/unit/test_limits_consistency.py``
@@ -161,10 +169,11 @@ GROUP_APP_COMPONENTS = "app_components"
 GROUP_CARRIER_CIRCUITS = "carrier_circuits"
 # Every session circuit (dci, handoff and tunnel): the target group of add_virtual_circuit, whose created-trigger needs it.
 GROUP_VIRTUAL_CIRCUITS = "virtual_circuits"
-GROUP_CLOUD_LOADBALANCERS = "cloud_loadbalancers"
 # Devices that are never a border gateway of a VLAN domain: the SD-WAN hubs and the provider stub routers.
 GROUP_SDWAN_GATEWAYS = "sdwan_gateways"
 GROUP_PROVIDER_STUBS = "provider_stubs"
+# Every DcimPatchPanel: the target group of add_patch_panel, whose created-trigger needs it (the panel templates join it).
+GROUP_PATCH_PANELS = "patch_panels"
 
 # device_role -> the group its devices join, for roles whose group does not follow the f"{device_role}s" convention.
 # One map for every create_devices() caller: a group created on a branch because a caller missed it collides with
@@ -176,12 +185,10 @@ ROLE_GROUP_NAMES: dict[str, str] = {
 }
 
 # infrastructure_orchestrator / application_orchestrator -> the group the artifact definitions of that orchestrator
-# target (generators/topology/orchestrator_routing.py). A customer footprint, an application and a provider-hosted
-# colocation each have their own set.
+# target (generators/topology/orchestrator_routing.py). A customer footprint and an application each have their own set.
 TOPOLOGY_ORCHESTRATOR_GROUPS: dict[str, str] = {
     "ansible_automation_platform": "topology_ansible",
     "github_actions": "topology_github_actions",
-    "terraform": "topology_terraform",
     "argocd": "topology_argocd",
 }
 APPLICATION_ORCHESTRATOR_GROUPS: dict[str, str] = {
@@ -189,7 +196,6 @@ APPLICATION_ORCHESTRATOR_GROUPS: dict[str, str] = {
     "github_actions": "application_github_actions",
     "argocd": "application_argocd",
 }
-VIRTUAL_COLOCATION_ORCHESTRATOR_GROUPS: dict[str, str] = {"terraform": "virtual_colocation_terraform"}
 
 # --- 4. Retry and polling policy -------------------------------------------------------------------------------
 

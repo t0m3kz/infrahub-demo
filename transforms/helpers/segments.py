@@ -4,26 +4,24 @@ from collections.abc import Mapping
 from typing import Any
 
 from utils.limits import DEFAULT_NAMESPACE
-from utils.segment_addressing import is_inline_terminated, routed_segment_namespace
+from utils.segment_addressing import is_terminated, routed_segment_namespace
 
 
 def interface_segments(iface: dict[str, Any]) -> list[dict[str, Any]]:
     """The VXLAN segments an interface carries.
 
-    A switch port or LAG carries them on ``segments`` (DcimSwitchedInterface); the inline L3 termination of a segment
-    on a DcimVirtualInterface sub-interface is its single ``inline_segment``. Nothing is read from ``capabilities``.
+    A switch port or LAG carries them on ``segments`` (DcimSwitchedInterface). Nothing is read from ``capabilities``.
     """
-    inline = iface.get("inline_segment")
-    return [*(iface.get("segments") or []), *([inline] if inline else [])]
+    return iface.get("segments") or []
 
 
 def routed_activations(activations: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
-    """The activations whose segment the fabric routes (not inline-terminated).
+    """The activations whose segment the fabric routes (not terminated on a firewall context).
 
     Input for everything that hangs off the segment's SVI: leaf/border-leaf
     PBR and the zero-trust SVI ACLs.
     """
-    return [act for act in activations or [] if not is_inline_terminated(act.get("segment") or {})]
+    return [act for act in activations or [] if not is_terminated(act.get("segment") or {})]
 
 
 def _get_segment_gateways(seg: dict) -> tuple[str | None, str | None, str | None, Any]:
@@ -33,12 +31,12 @@ def _get_segment_gateways(seg: dict) -> tuple[str | None, str | None, str | None
     reached via gateway.ip_prefix. A segment has at most one gateway address
     (either IPv4 or IPv6), so at most one subnet/VRF is derivable this way.
     Segments with no gateway (L2-only) have no resolvable subnet/VRF, and a
-    terminate_inline segment's gateway belongs to its HA pair, so the fabric
-    sees none either (is_inline_terminated).
+    terminated segment's gateway belongs to its firewall pair (the VIP), so the
+    fabric sees none either (is_terminated).
 
     Returns: (gateway_ip, gateway_ipv6, vrf, l3_vni)
     """
-    if is_inline_terminated(seg):
+    if is_terminated(seg):
         return None, None, None, None
     gateway_ip: str | None = None
     gateway_ipv6: str | None = None
@@ -111,7 +109,7 @@ def _vlans_from_activations(
                 "isolation_mode": seg.get("isolation_mode") or "normal",
                 # Pure L2 on the fabric: no SVI of any kind (SONiC's
                 # VLAN_INTERFACE is emitted even for gateway-less VLANs).
-                "terminate_inline": is_inline_terminated(seg),
+                "terminated": is_terminated(seg),
             }
         )
         seen.add(vlan_id)

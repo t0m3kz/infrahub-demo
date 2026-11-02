@@ -1,13 +1,14 @@
 ---
-# /31 pools for handoff session circuits (generators/topology/virtual_circuit.py), one per environment namespace
+# Link pools for handoff and vpn session circuits (generators/topology/virtual_circuit.py), one per environment
+# namespace
 # and named after it (`Handoff-<NAMESPACE>-IPv4`, virtual_circuit.handoff_pool_name): the generator picks the pool
 # from the circuit's `ip_namespace`. Each pool allocates inside its namespace, so the resource prefix itself lives
 # in that namespace; this file sorts after 22_namespaces.yml on purpose (the loader processes files in name order
 # and the namespaces must exist first).
 #
-# Both ends of a handoff, ours and the party's (cloud on-ramp, SD-WAN gateway handoff, Equinix or Megaport service),
-# are addressed from OUR pool only. For AWS Direct Connect the customer specifies the peer IPs and the provider
-# assigns none; there is no provider-assigned (169.254) mode and no authored-address mode.
+# These pools serve a session circuit whose link range comes from OUR pool: a handoff (cloud on-ramp, Equinix or
+# Megaport service, SD-WAN gateway handoff) and a vpn. A /31 is allocated per circuit (HANDOFF_PREFIX_LENGTH), both
+# ends are addressed from it.
 #
 # 10.255.128.0/18 split in /20s (2048 /31 links each): PROD .128, NON-PROD .144, INTERNET .160, MANAGEMENT .176.
 # Clear of the authored 10.255.5.x handoffs of data/demos/30_all/08_interconnects/.

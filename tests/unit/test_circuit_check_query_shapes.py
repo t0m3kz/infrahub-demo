@@ -11,19 +11,15 @@ from __future__ import annotations
 
 import pytest
 
-from tests.unit.circuit_placement_check_helpers import DCI, DF10, HANDOFF, INET_OFFICE, TUNNEL, _edges
+from tests.unit.circuit_placement_check_helpers import DCI, DF10, HANDOFF, INET_OFFICE, TUNNEL, VPN_CIRCUIT, _edges
 from tests.unit.test_circuit_query_shapes import _QUERIES, _payload_paths, _selected_paths
-from tests.unit.test_routing_invariants_check import _vif
 
 PLACEMENT = _QUERIES / "validation" / "circuit_placement.gql"
-INVARIANTS = _QUERIES / "validation" / "routing_invariants.gql"
 
 # checks/circuit_placement.py: what it reads from a carrier circuit.
 _PHYSICAL_READS = [
     "id",
     "name",
-    "owner.id",
-    "owner.org_id",
     "locations.id",
     "locations.__typename",
     "locations.name",
@@ -36,6 +32,13 @@ _PHYSICAL_READS = [
     "capabilities.device.deployment.id",
     "capabilities.device.deployment.__typename",
     "capabilities.device.deployment.name",
+    # a cloud transport has no deployment: its region or SaaS region places it
+    "capabilities.device.region.id",
+    "capabilities.device.region.__typename",
+    "capabilities.device.region.name",
+    "capabilities.device.saas_region.id",
+    "capabilities.device.saas_region.__typename",
+    "capabilities.device.saas_region.name",
 ]
 
 # What it reads from the end ports of a virtual circuit (the shared VirtualPort fragment): the port, the physical
@@ -51,8 +54,19 @@ _PORT_READS = [
     "capabilities.device.deployment.id",
     "capabilities.device.deployment.__typename",
     "capabilities.device.deployment.name",
+    # a cloud transport has no deployment: its region or SaaS region places it
+    "capabilities.device.region.id",
+    "capabilities.device.region.__typename",
+    "capabilities.device.region.name",
+    "capabilities.device.saas_region.id",
+    "capabilities.device.saas_region.__typename",
+    "capabilities.device.saas_region.name",
     "capabilities.device.capabilities.__typename",
     "capabilities.device.capabilities.process_role",
+    # the shape of a handoff end: a cloud peering interface (its vlan_id) or a routed physical port (its address)
+    "capabilities.__typename",
+    "capabilities.vlan_id",
+    "capabilities.ip_address.id",
     # a hop inside one facility is a cable: on the physical port, or on the parent of a sub-interface
     "capabilities.cable.id",
     "capabilities.parent_interface.cable.id",
@@ -74,15 +88,13 @@ _PORT_READS = [
     ),
 ]
 
-# What it reads from a session circuit, for every circuit_type: a tunnel's owner and office locations, a dci's and
-# a handoff's status, a handoff's namespace and cloud endpoint, and the fields it refuses on the other types.
+# What it reads from a session circuit, for every circuit_type: the office locations (with their owner), a dci's and
+# a handoff's status, the namespace of a handoff or vpn, and the fields it refuses on the other types.
 _SESSION_READS = [
     "id",
     "name",
     "status",
     "circuit_type",
-    "owner.id",
-    "owner.org_id",
     "locations.id",
     "locations.__typename",
     "locations.name",
@@ -91,23 +103,9 @@ _SESSION_READS = [
     "ip_namespace.name",
     "ip_namespace.namespace_type",
     "password.id",
-    "maximum_routes",
     "registered_prefixes.id",
-    "cloud_endpoint.id",
-    "cloud_endpoint.name",
-    "cloud_endpoint.vlan_id",
 ]
 _ROOTS = ["TopologyCarrierCircuit", "TopologySessionCircuit"]
-
-# checks/routing_invariants.py: what it reads from a cloud virtual interface and its handoff circuit.
-_VIF_READS = [
-    "id",
-    "name",
-    "virtual_network.account.environment",
-    "virtual_circuit.name",
-    "virtual_circuit.ip_namespace.name",
-    "virtual_circuit.ip_namespace.namespace_type",
-]
 
 
 @pytest.fixture(scope="module")
@@ -144,6 +142,7 @@ def test_the_placement_query_selects_nothing_the_check_never_reads(placement_pat
         ("TopologySessionCircuit", TUNNEL),
         ("TopologySessionCircuit", DCI),
         ("TopologySessionCircuit", HANDOFF),
+        ("TopologySessionCircuit", VPN_CIRCUIT),
     ],
 )
 def test_the_check_fixtures_carry_only_selected_fields(
@@ -154,22 +153,3 @@ def test_the_check_fixtures_carry_only_selected_fields(
     assert _edges([fixture])  # the fixtures are raw query nodes
     unselected = fake_paths - placement_paths[root]
     assert not unselected, f"fixture fields the query does not select under {root}: {sorted(unselected)}"
-
-
-def test_the_invariants_query_selects_what_the_check_reads() -> None:
-    selected = _selected_paths(INVARIANTS, "CloudVirtualInterface")
-    missing = [path for path in _VIF_READS if path not in selected]
-    assert not missing, f"read but not selected: {missing}"
-
-
-def test_the_invariants_query_selects_nothing_more_of_the_handoff() -> None:
-    selected = {
-        path for path in _selected_paths(INVARIANTS, "CloudVirtualInterface") if path.startswith("virtual_circuit")
-    }
-    prefixes = {".".join(path.split(".")[:i]) for path in _VIF_READS for i in range(1, len(path.split(".")))}
-    assert selected - set(_VIF_READS) - prefixes == set()
-
-
-def test_the_invariants_fixture_carries_only_selected_fields() -> None:
-    selected = _selected_paths(INVARIANTS, "CloudVirtualInterface")
-    assert _payload_paths(_vif("vif-1", "prod", env="p")) <= selected

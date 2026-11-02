@@ -9,9 +9,6 @@ fragment SegmentSecurityZoneFields on ManagedNetworkSegment {
 
 fragment SegmentSecurityPolicyFields on ManagedNetworkSegment {
   ... on ManagedVxlanSegment {
-    inline_service {
-      node { id name { value } }
-    }
     customer_deployments {
       edges {
         node { id }
@@ -52,7 +49,9 @@ fragment NetworkSegmentFields on ManagedNetworkSegment {
     environment { value }
     arp_suppression { value }
     stretch_scope { value }
-    terminate_inline { value }
+    # terminated_on: a segment a firewall context terminates is pure L2 on the fabric: no SVI, VRF, ACL or PBR, and its
+    # gateway is the pair's VIP (utils/segment_addressing.py is_terminated).
+    terminated_on { node { id } }
     # deployment.evpn_rt_as: a stretched segment's route-target must be the
     # same at every site it spans, so its admin field is anchored on the
     # lowest evpn_rt_as across all of them (transforms/helpers/vxlan.py).
@@ -141,9 +140,8 @@ fragment SegmentDeploymentsOnDeploymentFields on TopologySegmentHosting {
               customer_name { value }
               environment { value }
               arp_suppression { value }
-              # terminate_inline: no border-leaf PBR, and a BGW stays pure L2
-              # for it (no SVI / VRF; transforms/helpers/segments.py).
-              terminate_inline { value }
+              # terminated_on: a BGW stays pure L2 for it (no SVI / VRF; transforms/helpers/segments.py).
+              terminated_on { node { id } }
               # EVPN Multi-Site border gateways carry every stretched segment
               # of their site without a customer-facing port, so they need the
               # cross-site RT anchor here (their local VLAN is on the row above).

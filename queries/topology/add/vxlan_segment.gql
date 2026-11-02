@@ -10,31 +10,13 @@ query vxlan_segment_data($name: String!) {
         # Whether it is a routed tenant segment, and its group tag: present
         # means nothing is written (generators/helpers/security_tag.py).
         gateway { node { ip_prefix { node { ip_namespace { node { name { value } namespace_type { value } } } } } } }
+        # terminated_on: a segment a firewall context terminates has no SVI, so no group or routing tag.
+        terminated_on { node { id } }
         security_tag { node { id } }
         # Its routing tag, likewise (generators/helpers/routing_tag.py).
         routing_tag { value }
         stretch_scope { value }
         arp_suppression { value }
-        terminate_inline { value }
-        # terminate_inline: the HA pair members' ports cabled to border-leaf
-        # service ports are where the segment terminates (generators/topology/segment.py).
-        inline_service {
-          node {
-            id
-            name { value }
-            ... on ManagedGenericDevice {
-              capabilities {
-                edges {
-                  node {
-                    id
-                    __typename
-                    name { value }
-                  }
-                }
-              }
-            }
-          }
-        }
         customer_deployments {
           edges {
             node {

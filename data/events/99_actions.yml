@@ -223,15 +223,11 @@ spec:
           - relationship_name: customer_deployments
             modification_type: updated
 
-    # Re-run generator when a port is assigned to, or removed from, the segment
-    # (its `switched_interfaces`): the segment owns its port tags and its VLAN rows
-    # (generators/topology/segment_ports.py), so a port added by hand gets its
-    # VLAN row and is removed again unless an AppComponent instance lands on it.
-    # The reconcile's own tag writes raise this event once more; that run finds
-    # nothing to change and writes no `switched_interfaces`, so it ends there.
-    # Unchanged by `inline_segment`: the generator writes that one-sided link on an inline
-    # sub-interface itself and it has no reverse field on the segment, so no event is raised here.
-    - name: trigger-vxlan-segment-switched-interfaces-updated
+    # Re-run generator when the segment is terminated on, or moved to, another firewall context: the reconcile
+    # tags the border service ports of the context facing its HA pair (generators/topology/segment_ports.py) and
+    # removes the ones of the context it left. The reconcile writes the ports' edges, not this relationship, so the
+    # run raises no event of this rule.
+    - name: trigger-vxlan-segment-terminated-on-updated
       branch_scope: "other_branches"
       node_kind: ManagedVxlanSegment
       mutation_action: "updated"
@@ -239,7 +235,7 @@ spec:
       matches:
         kind: CoreNodeTriggerRelationshipMatch
         data:
-          - relationship_name: switched_interfaces
+          - relationship_name: terminated_on
             modification_type: updated
 
     # Re-run generator when stretch_scope changes (e.g. local -> dc_pair) —
@@ -540,25 +536,6 @@ spec:
           - attribute_name: infrastructure_orchestrator
             value_match: any
 
-    # Virtual colocation: every one joins `virtual_colocations` (the colocation
-    # created-trigger requires it), the target of this definition too.
-    - name: trigger-virtual-colocation-orchestrator-routing-on-created
-      branch_scope: "other_branches"
-      node_kind: TopologyVirtualColocation
-      mutation_action: "created"
-      action: run-virtual-colocation-orchestrator-routing-generator
-
-    - name: trigger-virtual-colocation-orchestrator-routing-on-orchestrator-updated
-      branch_scope: "other_branches"
-      node_kind: TopologyVirtualColocation
-      mutation_action: "updated"
-      action: run-virtual-colocation-orchestrator-routing-generator
-      matches:
-        kind: CoreNodeTriggerAttributeMatch
-        data:
-          - attribute_name: infrastructure_orchestrator
-            value_match: any
-
     # ── Customer Deployment (FirewallContext/dedicated LB) ────────────────────
     # Same generator/query shape for both deployment kinds that still have
     # on-site fabric to provision a FirewallContext on (see
@@ -752,10 +729,9 @@ spec:
     # One set of rules for the one kind, none on a generic: a rule on a generic node_kind is unprobed here, a
     # per-kind rule is the shape every rule in this file uses.
     # Each `updated` rule watches what the generator reads and nothing it writes: `capabilities` (the ends, hence
-    # the carrier), `status`, and for a handoff its `ip_namespace` (the pool), `password` and `maximum_routes`
-    # (those three fire for a dci or a tunnel too, which never sets them: harmless).
-    # `cloud_endpoint` is deliberately absent: the generator does not read it. A carrier's change reaches the
-    # circuits through add_circuit, which fans out here (generators/topology/circuit.py).
+    # the carrier), `status`, and for a handoff its `ip_namespace` (the pool) and `password`
+    # (those two fire for a dci or a tunnel too, which never sets them: harmless).
+    # A carrier's change reaches the circuits through add_circuit, which fans out here (generators/topology/circuit.py).
 
     - name: trigger-session-circuit-on-created
       branch_scope: "other_branches"
@@ -807,13 +783,38 @@ spec:
           - relationship_name: password
             modification_type: updated
 
-    - name: trigger-session-circuit-on-maximum-routes-updated
+    # ── Patch panels ──────────────────────────────────────────────────────────
+    # add_patch_panel targets patch_panels and pairs the front ports a panel template creates with their rear
+    # ports (an object template cannot pair them), so every panel must be a member of the group (the panel
+    # templates carry it), or its created-trigger raises (see the endpoint note above). The template's children are
+    # created after the panel, so the created run may see no ports (the generator logs and stops); the
+    # `updated` rules on the panel's two component edges re-run it once the ports exist. The generator writes the
+    # front port's `rear_port`, never the panel's edges, so no rule loops.
+
+    - name: trigger-patch-panel-on-created
       branch_scope: "other_branches"
-      node_kind: TopologySessionCircuit
+      node_kind: DcimPatchPanel
+      mutation_action: "created"
+      action: run-patch-panel-generator
+
+    - name: trigger-patch-panel-on-rear-ports-updated
+      branch_scope: "other_branches"
+      node_kind: DcimPatchPanel
       mutation_action: "updated"
-      action: run-virtual-circuit-generator
+      action: run-patch-panel-generator
       matches:
-        kind: CoreNodeTriggerAttributeMatch
+        kind: CoreNodeTriggerRelationshipMatch
         data:
-          - attribute_name: maximum_routes
-            value_match: any
+          - relationship_name: rear_ports
+            modification_type: updated
+
+    - name: trigger-patch-panel-on-front-ports-updated
+      branch_scope: "other_branches"
+      node_kind: DcimPatchPanel
+      mutation_action: "updated"
+      action: run-patch-panel-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: front_ports
+            modification_type: updated

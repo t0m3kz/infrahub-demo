@@ -1,9 +1,10 @@
 """The circuit model in schemas/extensions/topology/topology_connectivity.yml.
 
 Two kinds: TopologyCarrierCircuit (the carrier) and TopologySessionCircuit (dci, handoff, tunnel by ``circuit_type``).
-The locations are declared once on the TopologyCircuit generic. The two ends (``capabilities``) are re-declared on
-each node: hoisting them onto the generic is refused by the server (a node that inherits two generics declaring
-``capabilities`` with a different min_count, measured on 1.11.9).
+The locations are declared once on the TopologyCircuit generic. The ends (``capabilities``, the shared edge of
+ManagedGenericInterfaces, min 1 and max 2) are re-declared on each node: hoisting them onto the generic is refused by
+the server (a node that inherits two generics declaring ``capabilities`` with a different min_count, measured on
+1.11.9). The far end may be an interface of a cloud transport.
 """
 
 from __future__ import annotations
@@ -15,7 +16,6 @@ import yaml
 
 _ROOT = Path(__file__).parents[2]
 _SCHEMA = _ROOT / "schemas" / "extensions" / "topology" / "topology_connectivity.yml"
-_CLOUD = _ROOT / "schemas" / "extensions" / "topology" / "topology_cloud_network.yml"
 # Spelled in two halves so the repo-wide guard on the old edge name (test_capability_edge_names.py) does not match.
 _ENDS_IDENTIFIER = "interface_" + "capabilities"
 
@@ -43,7 +43,7 @@ def test_the_connectivity_file_declares_exactly_the_carrier_and_the_session_kind
 
 
 def test_the_locations_are_declared_once_on_the_circuit_generic() -> None:
-    """locations (two facilities at most) sits on TopologyCircuit; the ends are not hoisted onto it."""
+    """locations (two facilities at most) sits on TopologyCircuit, with the ends."""
     relationships = _generic("Circuit")["relationships"]
 
     locations = _field(relationships, "locations")
@@ -52,8 +52,8 @@ def test_the_locations_are_declared_once_on_the_circuit_generic() -> None:
     assert "capabilities" not in {relationship["name"] for relationship in relationships}
 
 
-def test_each_node_declares_the_two_ends_with_a_count_and_inherits_the_circuit_generic_first() -> None:
-    """The ends are re-declared per node (min 2, max 2) because the server refuses the hoisted declaration."""
+def test_each_node_declares_the_ends_with_a_count_and_inherits_the_circuit_generic_first() -> None:
+    """The ends are re-declared per node (min 1, max 2) on the shared capabilities edge."""
     for node in _document()["nodes"]:
         assert node["inherit_from"] == ["TopologyCircuit", "ManagedGeneric", "ManagedGenericInterfaces"], node["name"]
         relationships = node.get("relationships") or []
@@ -61,7 +61,7 @@ def test_each_node_declares_the_two_ends_with_a_count_and_inherits_the_circuit_g
         assert (ends["peer"], ends["identifier"], ends["min_count"], ends["max_count"]) == (
             "DcimInterface",
             _ENDS_IDENTIFIER,
-            2,
+            1,
             2,
         ), node["name"]
         assert "locations" not in {relationship["name"] for relationship in relationships}, node["name"]
@@ -89,30 +89,24 @@ def test_the_carrier_order_weights_are_unique_after_inheritance() -> None:
     assert len(weights) == len(set(weights))
 
 
-def test_the_session_circuit_type_is_required_with_three_choices() -> None:
-    """circuit_type is a Dropdown with no default and no optional flag: dci, handoff, tunnel."""
+def test_the_session_circuit_type_is_required_with_four_choices() -> None:
+    """circuit_type is a Dropdown with no default and no optional flag: dci, handoff, tunnel, vpn."""
     circuit_type = _field(_node("SessionCircuit")["attributes"], "circuit_type")
 
     assert circuit_type["kind"] == "Dropdown"
     assert not circuit_type.get("optional") and "default_value" not in circuit_type
-    assert [choice["name"] for choice in circuit_type["choices"]] == ["dci", "handoff", "tunnel"]
+    assert [choice["name"] for choice in circuit_type["choices"]] == ["dci", "handoff", "tunnel", "vpn"]
 
 
 def test_the_session_fields_of_one_type_are_optional_in_the_schema() -> None:
     """The rules per type live in checks/circuit_placement.py, so the schema requires none of them."""
     session = _node("SessionCircuit")
-    for name in ("ip_namespace", "password", "cloud_endpoint", "registered_prefixes"):
+    for name in ("ip_namespace", "password", "registered_prefixes", "link_prefix"):
         assert _field(session["relationships"], name)["optional"] is True, name
-    assert _field(session["attributes"], "maximum_routes")["optional"] is True
 
 
-def test_the_cloud_attachment_peers_the_session_kind() -> None:
-    """CloudHybridAttachment.virtual_circuit points at TopologySessionCircuit on the shared cloud_endpoint identifier."""
-    extensions = yaml.safe_load(_CLOUD.read_text())["extensions"]["nodes"]
-    attachment = next(item for item in extensions if item["kind"] == "CloudHybridAttachment")
-    relationship = _field(attachment["relationships"], "virtual_circuit")
-
-    assert relationship["peer"] == "TopologySessionCircuit"
-    assert (
-        relationship["identifier"] == _field(_node("SessionCircuit")["relationships"], "cloud_endpoint")["identifier"]
-    )
+def test_no_cloud_endpoint_and_no_owner_on_a_circuit() -> None:
+    """The cloud end is an endpoint of the circuit; the owner is derived (utils/ownership.py circuit_owner)."""
+    for name in ("SessionCircuit", "CarrierCircuit"):
+        assert "cloud_endpoint" not in [r["name"] for r in _node(name).get("relationships") or []]
+    assert "owner" not in [r["name"] for r in _generic("Circuit").get("relationships") or []]

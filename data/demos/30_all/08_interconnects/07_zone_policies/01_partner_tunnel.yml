@@ -22,8 +22,8 @@
 #                    The circuit lists only ISP-COGENT: add_circuit derives PARTNER-ACME from the
 #                    router's deployment.
 #
-# The tunnel: owner C001 (the owner of its office location C001-OFFICE, as a tunnel's owner must be)
-# and the gateway's zone FR2, the same pair of locations as the office's own SD-WAN tunnel
+# The tunnel: its owner is derived (the owner C001 of its office location C001-OFFICE; a tunnel needs an
+# office among its locations) and the gateway's zone FR2, the same pair of locations as the office's own SD-WAN tunnel
 # C001-OFFICE-SDWAN-FR2 (generators/topology/sdwan_edge.py): an owned tunnel has a location of the owner's
 # office, and the other is where the gateway sits. The partner end is not a location of the tunnel, it
 # is the tunnel's second port, whose device is deployed in PARTNER-ACME. Ends: the gateway's public
@@ -100,7 +100,6 @@ spec:
       member_of_groups: [virtual_circuits]
       status: active
       provider: "P035"
-      owner: "C001"
       description: "Nordix to B2B extranet partner Acme Logistics, IPsec over the internet, via the SD-WAN gateway"
       locations:
         - "C001-OFFICE"

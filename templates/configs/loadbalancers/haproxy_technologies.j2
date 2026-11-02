@@ -67,8 +67,8 @@ peers haproxy_cluster
 {%- for peer_name in ha.devices %}
     peer {{ peer_name }} {{ peer_name }}:1024
 {%- endfor %}
-{#- The context legs' floating .4 is a VRRP address like an inline segment's gateway. #}
-{{- keepalived.vrrp_instances(lb_interfaces + contexts | map(attribute='leg') | list, ha) }}
+{#- The context legs' floating .4 is a VRRP address. #}
+{{- keepalived.vrrp_instances(contexts | map(attribute='leg') | list, ha) }}
 {%- endif %}
 {#- HAProxy has no partitions: a context is a Linux VRF (table = the VRF's
     l3_vni) holding its leg and VIPs; every frontend binds its VIP in it and

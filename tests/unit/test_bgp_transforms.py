@@ -233,8 +233,30 @@ class TestBuildSessionFromPeering:
         assert session is not None
         assert session["address_families"] == ["ipv4", "evpn"]
 
+    def test_the_far_end_role_is_carried_for_the_route_protection(self):
+        """remote_role is the role the peering names for the far device (a spine relays routes), None when it names none."""
+        peering = _make_peering(
+            session_type="EBGP",
+            ttl=1,
+            local_device="leaf-01",
+            remote_device="spine-01",
+            local_asn=65001,
+            remote_asn=65000,
+        )
+        for end in peering["capabilities"]:
+            if end["device"]["name"] == "spine-01":
+                end["device"]["role"] = "spine"
+        session = _build_session_from_peering(peering, device_name="leaf-01", local_as={"asn": 65001}, interfaces=None)
+        assert session is not None
+        assert session["remote_role"] == "spine"
+        for end in peering["capabilities"]:
+            end["device"].pop("role", None)
+        session = _build_session_from_peering(peering, device_name="leaf-01", local_as={"asn": 65001}, interfaces=None)
+        assert session is not None
+        assert session["remote_role"] is None
+
     def test_security_fields_pass_through(self):
-        """maximum_routes/local_pref/med/send_extended_community/remove_private_as/password
+        """local_pref/med/send_extended_community/remove_private_as/password
         are threaded from the peering node into the session dict verbatim."""
         peering = _make_peering(
             session_type="EBGP",
@@ -243,7 +265,6 @@ class TestBuildSessionFromPeering:
             remote_device="spine-01",
             local_asn=65001,
             remote_asn=65000,
-            maximum_routes=100,
             local_pref=200,
             med=50,
             send_extended_community=True,
@@ -257,7 +278,6 @@ class TestBuildSessionFromPeering:
             interfaces=None,
         )
         assert session is not None
-        assert session["maximum_routes"] == 100
         assert session["local_pref"] == 200
         assert session["med"] == 50
         assert session["send_extended_community"] is True
@@ -280,7 +300,6 @@ class TestBuildSessionFromPeering:
             interfaces=None,
         )
         assert session is not None
-        assert session["maximum_routes"] is None
         assert session["local_pref"] is None
         assert session["med"] is None
         assert session["send_extended_community"] is False

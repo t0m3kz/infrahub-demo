@@ -19,7 +19,6 @@ def _segment(
     namespace_type: str | None = "prod",
     zone: str = "PROD-ZONE",
     policy: dict[str, Any] | None = None,
-    inline: bool = False,
     deployments: list[str] | None = None,
 ) -> dict[str, Any]:
     """One ManagedNetworkSegment edge in the raw query shape."""
@@ -33,7 +32,6 @@ def _segment(
         "name": _v(seg_id),
         "security_zone": {"node": {"name": _v(zone)}},
         "gateway": gateway,
-        "inline_service": {"node": {"id": "fw"} if inline else None},
         "security_policy": {"node": policy},
     }
     node["customer_deployments"] = {"edges": [{"node": {"id": d}} for d in deployments or []]}
@@ -84,10 +82,6 @@ class TestProtected:
     def test_segment_with_rules_and_no_default_action_passes(self) -> None:
         """Rules alone also make the policy ACL-bearing."""
         assert _run([_segment(policy=_policy(rules=2, default_action=None))]) == []
-
-    def test_segment_with_an_inline_firewall_passes(self) -> None:
-        """The inline firewall protects it."""
-        assert _run([_segment(inline=True)]) == []
 
     def test_segment_covered_by_a_shared_context_passes(self) -> None:
         """PBR default-redirects to the shared (tenant-less) context."""

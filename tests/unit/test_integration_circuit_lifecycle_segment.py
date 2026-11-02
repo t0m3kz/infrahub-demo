@@ -1,4 +1,4 @@
-"""The segment half of test_66 (test_04, and the sole-demand premise of test_03), run on raw GraphQL payloads.
+"""The segment half of test_66 (test_04, and the empty bystander instance), run on raw GraphQL payloads.
 
 The readers consume the results of ``_HOST_CABLES_QUERY`` and ``_SWITCH_VRF_QUERY``; the judges say why the switches are
 not in the expected state. A wrong path in a payload, a predicate that passes on an empty state or a comparison that
@@ -8,7 +8,6 @@ cannot fail would only show in a 55-minute run, so they are pinned here.
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from graphql import parse
@@ -22,7 +21,6 @@ from tests.integration.circuit_lifecycle_helpers import (
     back_errors,
     parse_switch_vrf_state,
     precondition_errors,
-    sole_demand_instance_errors,
     svis_gone_errors,
     switches_of_host,
     vrf_gone_errors,
@@ -271,7 +269,7 @@ def test_back_requires_the_membership_and_the_svis_again() -> None:
 
 
 # ---------------------------------------------------------------------------
-# The sole-demand premise and the empty bystander instance
+# The empty bystander instance
 # ---------------------------------------------------------------------------
 
 
@@ -282,51 +280,6 @@ def _vrfs(instances: dict[str, tuple[str, list[str]]]) -> dict[str, Any]:
         "memberships": {m: name for name, (_, members) in instances.items() for m in members},
         "other_demand": [],
     }
-
-
-def test_the_sole_demand_premise_holds_with_both_routers_in_one_instance() -> None:
-    """eg-am-ne02 and eg-am-ne01 are members of the AM PROD instance: the instance can survive the leave."""
-    vrfs = _vrfs({"am-prod": ("v1", ["eg-am-ne01", "eg-am-ne02"])})
-    assert sole_demand_instance_errors(vrfs, "eg-am-ne02", "eg-am-ne01") == []
-
-
-def test_the_sole_demand_premise_fails_loudly_with_only_the_device() -> None:
-    """Alone in its instance the device would take the instance along: the test would prove the wrong branch."""
-    errors = sole_demand_instance_errors(_vrfs({"am-prod": ("v1", ["eg-am-ne02"])}), "eg-am-ne02", "eg-am-ne01")
-    assert len(errors) == 1
-    assert "needs at least eg-am-ne02 and eg-am-ne01" in errors[0]
-
-
-def test_the_sole_demand_premise_fails_when_the_peer_is_in_another_instance() -> None:
-    """Two members, but not the router that is meant to keep the instance."""
-    vrfs = _vrfs({"am-prod": ("v1", ["eg-am-ne02", "other"])})
-    assert sole_demand_instance_errors(vrfs, "eg-am-ne02", "eg-am-ne01")
-
-
-def test_the_sole_demand_premise_fails_when_the_device_is_a_member_of_nothing() -> None:
-    """No membership of the circuit's namespace at all."""
-    errors = sole_demand_instance_errors(_vrfs({}), "eg-am-ne02", "eg-am-ne01")
-    assert errors == ["eg-am-ne02 is a member of no instance of the circuit's namespace"]
-
-
-async def test_the_lifecycle_refuses_a_sole_demand_instance_without_the_peer(monkeypatch: pytest.MonkeyPatch) -> None:
-    """decommission_and_restore asserts the premise before touching the branch: nothing is saved when it fails."""
-    from tests.unit.test_integration_circuit_lifecycle import AMNE, _state, _vrf_result
-
-    state = _state(AMNE)
-    result = _vrf_result(AMNE, instances={"am-prod": ("v1", ["eg-am-ne02"])})
-    state["vrfs"] = lifecycle.parse_vrfs(result, AMNE)
-    node = MagicMock()
-    node.save = AsyncMock()
-    client = MagicMock()
-    client.get = AsyncMock(return_value=node)
-    monkeypatch.setattr(lifecycle, "fetch_state", AsyncMock(return_value=state))
-    monkeypatch.setattr(lifecycle, "wait_for_tasks_completion", AsyncMock())
-    with pytest.raises(AssertionError, match="premise of the sole-demand handoff"):
-        await lifecycle.decommission_and_restore(
-            client, "b", AMNE, "TopologySessionCircuit", sole_demand="eg-am-ne02", name__value="H"
-        )
-    node.save.assert_not_awaited()
 
 
 def _fleet(before_devices: list[str], now: list[str] | None) -> tuple[dict[str, Any], dict[str, Any]]:

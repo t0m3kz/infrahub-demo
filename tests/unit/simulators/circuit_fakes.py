@@ -13,6 +13,8 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+from infrahub_sdk.exceptions import GraphQLError
+
 from generators.logger import GeneratorError
 from generators.topology.circuit import CarrierCircuitGenerator
 from generators.topology.virtual_circuit import VirtualCircuitSessionGenerator
@@ -41,6 +43,7 @@ VIRTUAL_COLOCATION = place("TopologyVirtualColocation", "AM-NE")
 METRO = place("TopologyColocationMetro", "FR", "dep-metro")
 ISP = place("TopologyExternalProviders", "ORANGE-FR")
 REGION = place("TopologyCloudRegion", "eu-central-1")
+SAAS_REGION = place("TopologySaasRegion", "webex-eu")
 
 
 def interface(
@@ -51,12 +54,27 @@ def interface(
     dc: str | None = None,
     deployment: dict[str, Any] | None = None,
     no_deployment: bool = False,
+    transport_region: dict[str, Any] | None = None,
+    transport_saas_region: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """One endpoint interface, as the circuit query selects it (raw GraphQL).
 
     The device is deployed in DC ``dc`` when given, else in ``deployment`` (default: the colocation zone FR2,
-    where the on-ramp edges are deployed); ``no_deployment`` leaves it unset.
+    where the on-ramp edges are deployed); ``no_deployment`` leaves it unset. A cloud transport has no deployment:
+    ``transport_region`` / ``transport_saas_region`` make the device one, sitting in that region.
     """
+    if transport_region or transport_saas_region:
+        return {
+            "id": iface_id,
+            "name": {"value": name},
+            "device": {
+                "node": {
+                    "name": {"value": device},
+                    "region": {"node": transport_region},
+                    "saas_region": {"node": transport_saas_region},
+                }
+            },
+        }
     if dc:
         deployment = dc_place(dc)
     elif deployment is None:
@@ -185,8 +203,11 @@ def session_port(
     parent_circuits: list[dict[str, Any]] | None = None,
     cabled: bool = False,
     parent_cabled: bool = False,
+    device_kind: str = "DcimPhysicalDevice",
 ) -> dict[str, Any]:
     """One end of a session circuit, as virtual_circuit.gql selects it (raw GraphQL).
+
+    ``device_kind`` is the device's ``__typename`` (a cloud transport is a CloudDirectConnect).
 
     ``circuits`` terminate on the port itself, ``parent_circuits`` on its parent interface, which a sub-interface
     (``kind="DcimVirtualInterface"``) reads its carrier from. A DcimCable sits on a physical port (``cabled``) or on
@@ -220,6 +241,7 @@ def session_port(
             "interfaces": {"edges": [{"node": lo} for lo in loopbacks or []]},
         }
     }
+    port["device"]["node"]["__typename"] = device_kind
     return port
 
 
@@ -260,6 +282,14 @@ def handoff_party_port(**kwargs: Any) -> dict[str, Any]:
     return session_port("if-aws", "Ethernet1.1900", "EXT-AWS-DX-FR2", kind="DcimVirtualInterface", **kwargs)
 
 
+def cloud_peering_port(**kwargs: Any) -> dict[str, Any]:
+    """The cloud end of a handoff: a CloudPeeringInterface of a Direct Connect transport (no deployment, no BGP of ours)."""
+    kwargs.setdefault("roles", ())
+    return session_port(
+        "if-vif", "vif-1900", "dx-c900-fra", kind="CloudPeeringInterface", device_kind="CloudDirectConnect", **kwargs
+    )
+
+
 def session_payload(
     circuit_type: str,
     ends: list[dict[str, Any]],
@@ -267,12 +297,11 @@ def session_payload(
     name: str | None = None,
     status: str = "active",
     namespace: str | None = "PROD",
-    maximum_routes: int | None = 100,
     password: str | None = None,
     circuit_id: str = VC_ID,
 ) -> dict[str, Any]:
     """A TopologySessionCircuit payload of ``circuit_type`` (dci, handoff, tunnel); a handoff also carries its
-    namespace, maximum_routes and password.
+    namespace and password.
 
     ``circuit_id`` is for a second circuit on the same client (see ``FakeClient.circuit_ids``)."""
     node: dict[str, Any] = {
@@ -282,9 +311,8 @@ def session_payload(
         "status": {"value": status},
         "circuit_type": {"value": circuit_type},
     }
-    if circuit_type == "handoff":
+    if circuit_type in ("handoff", "vpn"):
         node["ip_namespace"] = {"node": {"name": {"value": namespace}} if namespace else None}
-        node["maximum_routes"] = {"value": maximum_routes}
         node["password"] = {"node": {"id": password} if password else None}
     node["capabilities"] = {"edges": [{"node": port} for port in ends]}
     return {"TopologySessionCircuit": {"edges": [{"node": node}]}}
@@ -300,6 +328,26 @@ def handoff_payload(**kwargs: Any) -> dict[str, Any]:
     """A handoff between the cage edge sub-interface and the provider router's (override with ``ends=``)."""
     ends = kwargs.pop("ends", None) or [handoff_edge_port(), handoff_party_port()]
     return session_payload("handoff", ends, **kwargs)
+
+
+def vpn_payload(**kwargs: Any) -> dict[str, Any]:
+    """A VPN between a cage edge tunnel interface and the provider stub's (override with ``ends=``)."""
+    ends = kwargs.pop("ends", None) or [tunnel_edge_port(), tunnel_party_port()]
+    kwargs.setdefault("name", "VC-C001-ZS-VPN")
+    return session_payload("vpn", ends, **kwargs)
+
+
+def tunnel_edge_port(**kwargs: Any) -> dict[str, Any]:
+    """Our end of a VPN: a tunnel interface of the cage edge (no carrier of its own)."""
+    kwargs.setdefault("where", deployment("TopologyColocationZone", "FR2"))
+    return session_port("if-tun-hs", "Tunnel1", "eg-fr201", kind="DcimVirtualInterface", **kwargs)
+
+
+def tunnel_party_port(**kwargs: Any) -> dict[str, Any]:
+    """The provider stub's end of a VPN: a tunnel interface of the provider device with one ManagedBGP."""
+    kwargs.setdefault("where", deployment("TopologyCloudRegion", "eu-central-1"))
+    kwargs.setdefault("roles", ("regular",))
+    return session_port("if-tun-aws", "Tunnel1", "EXT-ZS-FR2", kind="DcimVirtualInterface", **kwargs)
 
 
 def tunnel_payload() -> dict[str, Any]:
@@ -484,9 +532,20 @@ class FakeClient:
         self.allocations.append(kwargs)
         identifier = kwargs["identifier"]
         prefix = self.prefixes.get(identifier)
+        length = kwargs.get("prefix_length")
+        same_pool = prefix is not None and prefix.pool_name == kwargs["resource_pool"].pool_name
+        if same_pool and length is not None and not prefix.prefix.value.endswith(f"/{length}"):
+            # The server refuses another length for an identifier it already allocated (measured on 1.11.x).
+            raise GraphQLError(
+                [{"message": f"already allocated as {prefix.prefix.value}; its prefix length cannot be changed"}]
+            )
         if prefix is None:
             prefix = MagicMock(id=f"prefix-{identifier}")
-            prefix.prefix = MagicMock(value=POOL_NETWORKS[kwargs["resource_pool"].pool_name])
+            prefix.pool_name = kwargs["resource_pool"].pool_name
+            network = POOL_NETWORKS[kwargs["resource_pool"].pool_name]
+            if length is not None and not network.startswith("fd00"):
+                network = f"{network.split('/')[0]}/{length}"
+            prefix.prefix = MagicMock(value=network)
             prefix.ip_namespace = MagicMock(id="ns-pool")
             self.prefixes[identifier] = prefix
         self.writes.append(("allocate", prefix.id, kwargs))

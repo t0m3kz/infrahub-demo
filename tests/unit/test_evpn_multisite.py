@@ -25,6 +25,7 @@ import pytest
 
 from transforms.common import BaseDeviceTransform
 from transforms.helpers.bgp import _build_peer_groups, _build_session_from_peering, add_template_fields
+from transforms.helpers.bgp_policy import compose_policy
 from transforms.helpers.vxlan import (
     _get_multisite_config,
     _is_multisite_segment,
@@ -728,7 +729,6 @@ def _dci_bgp(*, with_underlay: bool = True, with_evpn: bool = True) -> list[dict
                 "remote_as": {"asn": 65010},
                 "remote_device": "dc10-bl01",
                 "password": "key-1",
-                "maximum_routes": 16,
             }
         )
     if with_evpn:
@@ -763,7 +763,8 @@ class TestNxosDciRendering:
         assert "update-source" not in underlay
         assert "address-family ipv6 unicast" in underlay
         assert "l2vpn evpn" not in underlay
-        assert "maximum-prefix 16" in underlay
+        # No pool and no far-end facts in this hand-built context: no limit is derived, none is invented.
+        assert "maximum-prefix" not in underlay
         assert "route-map RM-FABRIC-OUT out\n      route-map RM-DCI-IN in" in underlay
 
     def test_dci_evpn_neighbour_is_multihop_from_its_loopback(self, nxos_env: jinja2.Environment) -> None:
@@ -805,6 +806,7 @@ class TestNxosDciRendering:
     def test_fabric_session_alone_defines_only_the_fabric_route_map(self, nxos_env: jinja2.Environment) -> None:
         bgp = _dci_bgp(with_underlay=False, with_evpn=False)
         bgp[0]["sessions"][0]["export_local_only"] = True
+        bgp[0]["sessions"][0]["policy"] = compose_policy(bgp[0]["sessions"][0])
         rendered = nxos_env.get_template("common/cisco_nxos_dci_route_maps.j2").render(
             bgp=bgp, loopback_name="loopback0", vxlan=_vxlan_ctx()
         )

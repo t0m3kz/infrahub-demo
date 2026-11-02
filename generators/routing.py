@@ -489,7 +489,6 @@ class RoutingMixin(SharedRoutingObjectsMixin):
         bfd_enabled: bool = True,
         send_community: bool = True,
         send_extended_community: bool = True,
-        maximum_routes: int | None = None,
     ) -> None:
         """Upsert one ManagedBGPPeering, by default directly connected (ttl 1, BFD, standard and extended communities).
 
@@ -498,9 +497,9 @@ class RoutingMixin(SharedRoutingObjectsMixin):
         the ManagedGeneric name space with circuits: callers suffix or prefix the name (<vc>-evpn, FABRIC-<a>-<b>).
         Processes are passed by id, never looked up by name here (search-index lag on same-run objects).
 
-        ``ttl``, ``bfd_enabled``, ``send_community``, ``send_extended_community`` and ``maximum_routes`` default to
-        the directly connected shape (both community flags on; a handoff session turns them off); ``maximum_routes`` is written only when given. ``password_id`` keys the session; a
-        session without a fabric key (an SD-WAN edge to its gateway) writes no password at all.
+        ``ttl``, ``bfd_enabled``, ``send_community`` and ``send_extended_community`` default to the directly
+        connected shape (both community flags on; a handoff session turns them off). ``password_id`` keys the
+        session; a session without a fabric key (an SD-WAN edge to its gateway) writes no password at all.
         """
         peering = await self.client.create(
             kind=ManagedBGPPeering,
@@ -514,7 +513,6 @@ class RoutingMixin(SharedRoutingObjectsMixin):
                 "bfd_enabled": bfd_enabled,
                 "send_community": send_community,
                 "send_extended_community": send_extended_community,
-                **({"maximum_routes": maximum_routes} if maximum_routes is not None else {}),
                 "address_families": [{"id": af_id} for af_id in address_family_ids],
                 "bgp_processes": [{"id": process_id} for process_id in process_ids],
                 **({"password": {"id": password_id}} if password_id else {}),

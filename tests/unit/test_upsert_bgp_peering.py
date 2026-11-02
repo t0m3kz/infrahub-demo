@@ -74,7 +74,7 @@ class TestUpsertBgpPeering:
 
 
 class TestUpsertBgpPeeringShape:
-    """ttl, bfd_enabled, send_extended_community and maximum_routes: the defaults are the directly connected shape."""
+    """ttl, bfd_enabled and send_extended_community: the defaults are the directly connected shape."""
 
     @pytest.mark.asyncio
     async def test_defaults_keep_the_directly_connected_shape(self) -> None:
@@ -108,26 +108,12 @@ class TestUpsertBgpPeeringShape:
             ttl=2,
             bfd_enabled=False,
             send_extended_community=False,
-            maximum_routes=16,
         )
 
         data = m.client.create.call_args.kwargs["data"]
         assert data["session_type"] == "EBGP_MULTIHOP"
-        assert (data["ttl"], data["bfd_enabled"], data["send_extended_community"], data["maximum_routes"]) == (
-            2,
-            False,
-            False,
-            16,
-        )
+        assert (data["ttl"], data["bfd_enabled"], data["send_extended_community"]) == (2, False, False)
         assert data["send_community"] is True
-
-    @pytest.mark.asyncio
-    async def test_maximum_routes_is_written_only_when_given(self) -> None:
-        m = _mixin()
-
-        await m.upsert_bgp_peering(**_COMMON, maximum_routes=None)
-
-        assert "maximum_routes" not in m.client.create.call_args.kwargs["data"]
 
 
 class TestUpsertBgpPeeringSendCommunity:

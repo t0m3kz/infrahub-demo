@@ -10,8 +10,10 @@ query segment_placement {
         environment { value }
         owner { node { id org_id { value } } }
         stretch_scope { value }
-        terminate_inline { value }
-        inline_service { node { id __typename name { value } } }
+        # terminated_on: the firewall context whose pair owns the gateway (a floating VIP inside the segment prefix)
+        # and the deployments it serves: a terminated segment's DC footprints must all be served by it.
+        gateway { node { address { value } ip_prefix { node { prefix { value } } } } }
+        terminated_on { node { id name { value } served_deployments { edges { node { id } } } } }
         customer_deployments {
           edges {
             node {

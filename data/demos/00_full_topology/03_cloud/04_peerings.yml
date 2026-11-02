@@ -1,0 +1,123 @@
+---
+# The peering interfaces: the interface of the cloud, an interface of its transport. A VLAN peering rides on a port or
+# the LAG of its transport (`parent_interface`, same transport: checks/cloud_connection.py R8), a tunnel rides on
+# nothing. The provider side of each leg is `peer_ip` and `peer_asn`; OUR side is the sub-interface address of
+# 01_dc/04_routing.yml and the local_as of dc90-edge-01-bgp. A circuit's session ends on a peering (05_circuits.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudPeeringInterface
+  data:
+    # AWS Direct Connect: two virtual interfaces on the LAG. Transit: lands on the Direct Connect gateway of the TGW.
+    - device: "dx-c900-fra-lag"
+      name: "lag1.1000"
+      description: AWS transit virtual interface (private scope, lands on the DX Gateway of the TGW)
+      status: active
+      scope: private
+      routing: bgp
+      vlan_id: 1000
+      mtu: 8500
+      bfd: true
+      parent_interface: ["dx-c900-fra-lag", "lag1"]
+      gateway: dxgw-c900
+      auth: c900-aws-dx-bgp-key
+      peer_ip: ["10.255.128.1/31", "PROD"]
+      peer_asn: AS64512
+    - device: "dx-c900-fra-lag"
+      name: "lag1.1100"
+      description: AWS private virtual interface (lands on the virtual private gateway)
+      status: active
+      scope: private
+      routing: bgp
+      vlan_id: 1100
+      mtu: 9001
+      bfd: true
+      parent_interface: ["dx-c900-fra-lag", "lag1"]
+      gateway: vgw-c900-euc1
+      auth: c900-aws-dx-bgp-key
+      peer_ip: ["10.255.128.3/31", "PROD"]
+      peer_asn: AS64512
+    # Azure ExpressRoute: one peering per link, a /30 each, both on the ExpressRoute gateway.
+    - device: "er-c900-weu"
+      name: "er-c900-weu-pri"
+      description: ExpressRoute private peering, primary link
+      status: active
+      scope: private
+      routing: bgp
+      vlan_id: 200
+      mtu: 1500
+      bfd: true
+      parent_interface: ["er-c900-weu", "msee-pri"]
+      gateway: ergw-c900-weu
+      peer_ip: ["10.255.128.10/30", "PROD"]
+      peer_asn: AS12076
+    - device: "er-c900-weu"
+      name: "er-c900-weu-sec"
+      description: ExpressRoute private peering, secondary link
+      status: active
+      scope: private
+      routing: bgp
+      vlan_id: 200
+      mtu: 1500
+      bfd: true
+      parent_interface: ["er-c900-weu", "msee-sec"]
+      gateway: ergw-c900-weu
+      peer_ip: ["10.255.128.14/30", "PROD"]
+      peer_asn: AS12076
+    # GCP Partner Interconnect: the VLAN attachment on the port of the attachment.
+    - device: "ic-c900-fra-1"
+      name: "gcp-c900-vlan-att-1"
+      description: GCP VLAN attachment of the Partner Interconnect
+      status: active
+      scope: private
+      routing: bgp
+      vlan_id: 400
+      mtu: 1460
+      bfd: true
+      parent_interface: ["ic-c900-fra-1", "ic-port-1"]
+      gateway: cr-c900-euw3
+      peer_ip: ["169.254.20.1/29", "PROD"]
+      peer_asn: AS16550
+    # GCP Dedicated Interconnect, a routed port: no VLAN, the peering rides on the port itself.
+    - device: "ic-ded-c900-fra"
+      name: "gcp-c900-ded-1"
+      description: GCP Cloud Router peering on the dedicated port, no VLAN
+      status: active
+      scope: private
+      routing: bgp
+      mtu: 1500
+      bfd: true
+      parent_interface: ["ic-ded-c900-fra", "ic-dedicated-port"]
+      gateway: cr-c900-euw3
+      peer_ip: ["169.254.30.1/29", "PROD"]
+      peer_asn: AS16550
+    # AWS site-to-site VPN: two tunnels, each a peering with no parent (a tunnel rides on our internet port, not on a
+    # port of the transport). The provider side (transit gateway) is the transport's.
+    - device: "vpn-c900-aws-euc1"
+      name: "Tunnel1"
+      description: AWS VPN tunnel 1
+      status: active
+      scope: private
+      routing: bgp
+      tunnel_index: 1
+      endpoint_ip: "203.0.113.50/32"
+      tunnel_mode: ipsec
+      crypto_profile: IPSEC-AES256-SHA256-DH14
+      tunnel_key: c900-aws-vpn-t1-key
+      mtu: 1436
+      peer_ip: ["169.254.10.1/30", "PROD"]
+      peer_asn: AS64512
+    - device: "vpn-c900-aws-euc1"
+      name: "Tunnel2"
+      description: AWS VPN tunnel 2
+      status: active
+      scope: private
+      routing: bgp
+      tunnel_index: 2
+      endpoint_ip: "203.0.113.51/32"
+      tunnel_mode: ipsec
+      crypto_profile: IPSEC-AES256-SHA256-DH14
+      tunnel_key: c900-aws-vpn-t2-key
+      mtu: 1436
+      peer_ip: ["169.254.10.5/30", "PROD"]
+      peer_asn: AS64512

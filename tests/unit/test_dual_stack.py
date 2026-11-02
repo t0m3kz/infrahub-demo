@@ -19,7 +19,6 @@ parent pool.
 
 import pytest
 
-from generators.fabric_sizing import host_bits_to_prefix_length
 from generators.helpers.routing import loopback_prefix_length, p2p_prefix_length, underlay_pool_is_ipv6
 
 # ===========================================================================
@@ -50,14 +49,3 @@ class TestUnderlayPoolFamily:
         IPv6 pool) while the loopback pool stays IPv4 (/32)."""
         assert p2p_prefix_length(protocol) == p2p
         assert loopback_prefix_length(protocol) == loopback
-
-
-class TestHostBitsToPrefixLength:
-    def test_ipv4_prefix_length(self) -> None:
-        assert host_bits_to_prefix_length(8, ipv6=False) == 24
-
-    def test_ipv6_prefix_length(self) -> None:
-        """Same host-bit width yields a much longer prefix for IPv6 (/128
-        space) than IPv4 (/32 space) — the exact case that broke when pool
-        sizes were stored as an absolute (IPv4-shaped) prefix length."""
-        assert host_bits_to_prefix_length(8, ipv6=True) == 120

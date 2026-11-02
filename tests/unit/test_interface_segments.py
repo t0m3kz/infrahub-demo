@@ -1,7 +1,7 @@
 """Unit tests for the readers of an interface's VXLAN segments and a device's VRF memberships.
 
-A switch port or LAG carries its segments on ``segments`` (DcimSwitchedInterface); a sub-interface carries the inline L3
-termination of one segment on ``inline_segment``; nothing is read from ``capabilities``; a device's VRF set is ``vrfs`` (its memberships), never ``capabilities``.
+A switch port or LAG carries its segments on ``segments`` (DcimSwitchedInterface); nothing is read from
+``capabilities``; a device's VRF set is ``vrfs`` (its memberships), never ``capabilities``.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from transforms.helpers.segments import interface_segments
 from transforms.helpers.vrf import device_vrfs
 
 _SEG = {"id": "seg-1", "name": "web", "typename": "ManagedVxlanSegment"}
-_SEG_INLINE = {"id": "seg-2", "name": "app", "typename": "ManagedVxlanSegment"}
+_SEG_OLD = {"id": "seg-2", "name": "app", "typename": "ManagedVxlanSegment"}
 _OTHER = {"id": "ospf-1", "name": "ospf-eth1", "typename": "RoutingOSPFInterface"}
 
 
@@ -24,25 +24,16 @@ def test_a_switch_port_reads_its_segments_edge() -> None:
     assert interface_segments({"name": "Ethernet10", "segments": [_SEG], "capabilities": [_OTHER]}) == [_SEG]
 
 
-def test_a_sub_interface_reads_its_inline_segment() -> None:
-    """The inline termination is the single ``inline_segment`` node (a dict)."""
-    assert interface_segments({"name": "eth1.210", "inline_segment": _SEG_INLINE, "capabilities": [_OTHER]}) == [
-        _SEG_INLINE
-    ]
-
-
 def test_a_segment_among_the_capabilities_is_ignored() -> None:
     """An old-style segment entry on ``capabilities`` is not read, on a sub-interface or on a port."""
-    assert interface_segments({"name": "eth1.210", "capabilities": [_OTHER, _SEG_INLINE]}) == []
-    assert interface_segments({"name": "Ethernet10", "segments": [_SEG], "capabilities": [_SEG_INLINE]}) == [_SEG]
+    assert interface_segments({"name": "eth1.210", "capabilities": [_OTHER, _SEG_OLD]}) == []
+    assert interface_segments({"name": "Ethernet10", "segments": [_SEG], "capabilities": [_SEG_OLD]}) == [_SEG]
 
 
-def test_an_interface_without_either_edge_has_no_segment() -> None:
-    """Missing or empty edges are an empty list, never an error."""
+def test_an_interface_without_the_edge_has_no_segment() -> None:
+    """A missing or empty edge is an empty list, never an error."""
     assert interface_segments({"name": "Loopback0"}) == []
-    assert (
-        interface_segments({"name": "Ethernet1", "segments": None, "inline_segment": None, "capabilities": None}) == []
-    )
+    assert interface_segments({"name": "Ethernet1", "segments": None, "capabilities": None}) == []
 
 
 def test_device_vrfs_are_the_membership_namespaces() -> None:
@@ -70,7 +61,7 @@ def test_sub_interface_parent_only_for_a_name_under_the_parent() -> None:
 
 
 def test_a_segment_in_the_capabilities_does_not_become_an_activation() -> None:
-    """The activation collector reads ``segments`` and ``inline_segment`` only."""
+    """The activation collector reads ``segments`` only."""
     seg = {
         **_SEG,
         "segment_deployments": [{"vni": 10100, "vlan_domain_segments": [{"device": {"id": "d"}, "vlan_id": 100}]}],

@@ -1,0 +1,12 @@
+---
+# C004 cloud footprint in westeurope (data/demos/11_cloud/), named C004-PEAKORA-AZURE-WESTEUROPE.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCustomerCloud
+  data:
+    - owner: "C004"
+      account: "peakora-azure-prod"
+      customer_name: "peakora-azure"
+      parent: "westeurope"
+      member_of_groups: [customer_deployments_cloud]

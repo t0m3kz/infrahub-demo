@@ -1,8 +1,7 @@
 """No config query selects a segment on an interface's ``capabilities`` edge.
 
-A segment on an interface is read from ``DcimSwitchedInterface.segments`` (switch port, LAG) or from
-``DcimVirtualInterface.inline_segment`` (the inline termination on a sub-interface), never from ``capabilities``
-(transforms/helpers/segments.py interface_segments). The segment fragments below must not be spread at the node level
+A segment on an interface is read from ``DcimSwitchedInterface.segments`` (switch port, LAG), never from
+``capabilities`` (transforms/helpers/segments.py interface_segments). The segment fragments below must not be spread at the node level
 of any ``capabilities`` selection of a query or fragment.
 """
 
@@ -86,11 +85,10 @@ def test_no_query_selects_a_segment_under_a_capabilities_edge() -> None:
     assert offenders == []
 
 
-def test_the_interface_segments_fragment_reads_both_segment_edges() -> None:
-    """``InterfaceSegmentsFields`` selects ``segments`` on a switched interface and ``inline_segment`` on a virtual one."""
+def test_the_interface_segments_fragment_reads_the_segments_edge() -> None:
+    """``InterfaceSegmentsFields`` selects ``segments`` on a switched interface."""
     text = (QUERIES / "fragments" / "interface_capability_fields.gql").read_text()
     fragment = text[
         text.index("fragment InterfaceSegmentsFields") : text.index("fragment InterfaceCapabilitiesWithSegmentFields")
     ]
     assert "... on DcimSwitchedInterface" in fragment and "segments {" in fragment
-    assert "... on DcimVirtualInterface" in fragment and "inline_segment {" in fragment

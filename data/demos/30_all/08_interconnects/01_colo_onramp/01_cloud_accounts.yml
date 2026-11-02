@@ -1,0 +1,24 @@
+---
+# The network accounts that hold the provider side of the cloud on-ramp: the Direct Connect connections of
+# eu-central-1 and the ExpressRoute circuit of westeurope (02_cloud_provider_edges.yml) belong to them, and the hub of
+# ../02_cloud_hub lives in the AWS one. They sort here, before the transports that name them as `account`.
+#
+# They are deliberately *not* customer accounts: `owner` is Internal (P028). Everything else in the graph is owned by an
+# OrganizationCustomer, so these are the accounts whose failure is shared-fate across tenants.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudAccount
+  data:
+    - name: "net-hub-aws-prod"
+      account_id: "990011223344"
+      description: "Shared AWS network account: the 30_all Transit Gateway hub and its Direct Connect"
+      environment: "p"
+      provider: "P004"
+      owner: "P028"
+    - name: "net-hub-azure-prod"
+      account_id: "99001122-3344-5566-7788-99aabbccddee"
+      description: "Shared Azure network account holding the 30_all ExpressRoute circuit"
+      environment: "p"
+      provider: "P005"
+      owner: "P028"

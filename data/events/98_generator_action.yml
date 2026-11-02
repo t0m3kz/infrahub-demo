@@ -58,15 +58,15 @@ spec:
     - name: run-customer-office-orchestrator-routing-generator
       description: Sync an office customer deployment into the routing group of its infrastructure_orchestrator
       generator: add_customer_office_orchestrator_routing
-    - name: run-virtual-colocation-orchestrator-routing-generator
-      description: Sync a virtual colocation into the routing group of its infrastructure_orchestrator
-      generator: add_virtual_colocation_orchestrator_routing
     - name: run-circuit-generator
       description: Derive a carrier circuit's facility locations
       generator: add_circuit
     - name: run-virtual-circuit-generator
       description: Build the BGP session(s) of an interconnect or handoff circuit
       generator: add_virtual_circuit
+    - name: run-patch-panel-generator
+      description: Pair the front ports of a patch panel with its rear ports
+      generator: add_patch_panel
     - name: run-endpoint-generator
       description: Run Endpoint Connectivity Generator
       generator: add_endpoint

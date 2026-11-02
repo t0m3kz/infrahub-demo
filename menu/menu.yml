@@ -29,29 +29,13 @@ spec:
             label: Customers
             kind: OrganizationCustomer
             icon: "mdi:account-group"
+
     # ===================== LOCATION =====================
     - namespace: Location
       name: Generic
       label: Location
       kind: LocationGeneric
       icon: "mdi:map-marker"
-    # ──────────────────────────────────────────────────────────────────────────
-    # TOPOLOGY — deployments and network designs
-    # ──────────────────────────────────────────────────────────────────────────
-    - namespace: Topology
-      name: TopologyMenu
-      label: Topology
-      icon: "mdi:graph"
-      kind: TopologyDeployment
-
-    # ──────────────────────────────────────────────────────────────────────────
-    # CUSTOMER DEPLOYMENTS — customer footprints inside DC/Colo/Cloud topology
-    # ──────────────────────────────────────────────────────────────────────────
-    - namespace: Topology
-      name: CustomerMenu
-      label: Customer Deployments
-      icon: "mdi:account-cog-outline"
-      kind: TopologyCustomer
 
     # ──────────────────────────────────────────────────────────────────────────
     # DESIGN — fabric and pod layout blueprints
@@ -111,118 +95,128 @@ spec:
                   icon: "mdi:server-network"
 
     # ──────────────────────────────────────────────────────────────────────────
-    # INVENTORY — physical devices and hardware
+    # TOPOLOGY — deployments and network designs
     # ──────────────────────────────────────────────────────────────────────────
-    - namespace: Inventory
-      name: MainMenu
-      label: Inventory
-      icon: "mdi:warehouse"
+    - namespace: Topology
+      name: TopologyMenu
+      label: Topology
+      icon: "mdi:graph"
+      kind: TopologyDeployment
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # CUSTOMER DEPLOYMENTS — customer footprints inside DC/Colo/Cloud topology
+    # ──────────────────────────────────────────────────────────────────────────
+    - namespace: Topology
+      name: CustomerMenu
+      label: Customer Deployments
+      icon: "mdi:account-cog-outline"
+      kind: TopologyCustomer
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # APPLICATIONS — business applications and virtual clouds
+    # ──────────────────────────────────────────────────────────────────────────
+    - namespace: App
+      name: ApplicationsMenu
+      label: Applications
+      kind: AppApplication
+      icon: "mdi:application"
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # SERVICES — network services organised by function
+    # ──────────────────────────────────────────────────────────────────────────
+    - namespace: Managed
+      name: NetworkServicesMenu
+      label: Network Services
+      icon: "mdi:cog-transfer"
       children:
         data:
-          # --------- Device Inventory ---------
-          - namespace: Dcim
-            name: InventoryMenu
-            label: Device Inventory
-            icon: "mdi:server-plus"
-            description: "Hardware devices, interfaces, and modules"
+          # ── Overlay: the tenant segments ────────────────────────────────────
+          - namespace: Managed
+            name: SegmentsItem
+            label: Network Segments
+            kind: ManagedNetworkSegment
+            icon: "mdi:layers-triple"
+
+          # ── Firewalls: a context per tenant namespace on a firewall pair ───
+          - namespace: Managed
+            name: FirewallContextItem
+            label: Firewall Contexts
+            kind: ManagedFirewallContext
+            icon: "mdi:wall-fire"
+
+          # ── Load balancing ─────────────────────────────────────────────────
+          - namespace: Managed
+            name: LoadBalancingMenu
+            label: Load Balancing
+            icon: "mdi:scale-balance"
             children:
               data:
-                - namespace: Dcim
-                  name: Device
-                  label: Devices
-                  kind: DcimDevice
-                  icon: "mdi:server"
-                  description: "All physical and virtual devices"
+                - namespace: Managed
+                  name: LoadBalancerItem
+                  label: Load Balancers
+                  kind: ManagedLoadBalancer
+                  icon: "mdi:scale-balance"
 
-                - name: Interface
-                  namespace: Dcim
-                  label: Interfaces
-                  icon: "mdi:ethernet"
-                  kind: DcimInterface
-                  description: "Network and management interfaces"
+                - namespace: Loadbalancer
+                  name: VipItem
+                  label: Virtual IPs
+                  kind: LoadbalancerVIP
+                  icon: "mdi:ip-network"
 
-                - name: Cables
-                  namespace: Dcim
-                  label: Cabling & Connections
-                  icon: "mdi:cable-data"
-                  kind: DcimCable
-                  description: "Cabling between devices"
+                - namespace: Loadbalancer
+                  name: HealthCheckItem
+                  label: Health Checks
+                  kind: LoadbalancerHealthCheck
+                  icon: "mdi:stethoscope"
 
-                - name: PatchPanel
-                  namespace: Dcim
-                  label: Patch Panels
-                  icon: "mdi:ethernet"
-                  kind: DcimPatchPanel
-                  description: "Passive patch panels and their front and rear ports"
-
-                - name: Controller
-                  namespace: Managed
-                  label: Controllers
-                  icon: "mdi:remote-desktop"
-                  kind: ManagedController
-                  description: "Management/orchestration controllers (WLC, ACI APIC, DNA Center, security/LB managers, etc.)"  # yamllint disable-line rule:line-length
-          # --------- Device Catalog ---------
-          - namespace: Dcim
-            name: CatalogMenu
-            label: Device Catalog
-            icon: "mdi:package-variant-closed"
-            description: "Device types and platform definitions"
+          # ── High availability: pairs and multi-chassis bonds ───────────────
+          - namespace: Managed
+            name: HighAvailabilityMenu
+            label: High Availability
+            icon: "mdi:heart-pulse"
             children:
               data:
-                - namespace: Dcim
-                  name: DeviceType
-                  label: Device Types
-                  kind: DcimDeviceType
-                  icon: "mdi:package-variant"
-                  description: "Device model definitions and specifications"
+                - namespace: Managed
+                  name: HA
+                  label: HA Domains
+                  icon: "mdi:heart-pulse"
+                  kind: ManagedHA
+                  description: "High availability domains (firewall, load balancer, cloud)"
 
-                - namespace: Dcim
-                  name: Platform
-                  label: Platforms
-                  kind: DcimPlatform
-                  icon: "mdi:chip"
-                  description: "Operating system and firmware platforms"
+                - namespace: Managed
+                  name: Mlag
+                  label: MLAG Domains
+                  icon: "mdi:link-variant"
+                  kind: ManagedMLAG
+                  description: "Multi-chassis link aggregation groups"
 
-                - namespace: Dcim
-                  name: SoftwareImage
-                  label: Software Images
-                  kind: DcimSoftwareImage
-                  icon: "mdi:package-variant"
-                  description: "Versioned OS and firmware images"
-
-                - namespace: Dcim
-                  name: GroupPolicyProfile
-                  label: Group Policy Profiles
-                  kind: DcimGroupPolicyProfile
-                  icon: "mdi:shield-half-full"
-                  description: "Reference fabric profile per platform: device types, release, memory, group-tag pool"
-          # ── Circuits ───────────────────────────────────────────────────────
-          - namespace: Topology
-            name: CircuitsMenu
-            label: Circuits
-            icon: "mdi:transit-connection-variant"
-            children:
-              data:
-                - namespace: Topology
-                  name: CarrierCircuitItem
-                  label: Carrier Circuits
-                  kind: TopologyCarrierCircuit
-                  icon: "mdi:cable-data"
-
-                - namespace: Topology
-                  name: SessionCircuitItem
-                  label: Session Circuits
-                  kind: TopologySessionCircuit
-                  icon: "mdi:cloud-sync"
-                  description: "DCI, handoff and tunnel circuits: the connections routing is generated on"
-
-          # --------- Cloud Inventory ---------
+          # ── Cloud & SaaS connectivity: what the provider sells and where it ends ──
           - namespace: Cloud
-            name: Resource
-            label: Public Cloud Resources
-            kind: CloudResource
-            icon: "mdi:cloud"
-            description: "All public cloud resources"
+            name: CloudConnectivityMenu
+            label: Cloud & SaaS Connectivity
+            icon: "mdi:cloud-sync-outline"
+            children:
+              data:
+                - namespace: Cloud
+                  name: CsDirectConnectItem
+                  label: Cloud Transports (port / circuit)
+                  kind: CloudDirectConnect
+                  icon: "mdi:lan-connect"
+                  description: "Direct Connect, ExpressRoute, Interconnect, SaaS cross-connects"
+
+                - namespace: Cloud
+                  name: CsVPNConnectionItem
+                  label: Cloud VPN Connections
+                  kind: CloudVPNConnection
+                  icon: "mdi:vpn"
+                  description: "The encrypted way to a cloud or SaaS: the tunnels"
+
+                - namespace: Cloud
+                  name: CsPeeringInterfaceItem
+                  label: Cloud Peering Interfaces
+                  kind: CloudPeeringInterface
+                  icon: "mdi:ethernet"
+                  description: "The L3/BGP termination of one leg: VLAN or tunnel, provider address and AS"
 
     # ──────────────────────────────────────────────────────────────────────────
     # ROUTING — peerings, protocol configs, static routes
@@ -288,75 +282,6 @@ spec:
                   icon: "mdi:hexagon-outline"
 
     # ──────────────────────────────────────────────────────────────────────────
-    # SERVICES — network services organised by function
-    # ──────────────────────────────────────────────────────────────────────────
-    - namespace: Managed
-      name: NetworkServicesMenu
-      label: Network Services
-      icon: "mdi:cog-transfer"
-      children:
-        data:
-          # ── Overlay: the tenant segments ────────────────────────────────────
-          - namespace: Managed
-            name: SegmentsItem
-            label: Network Segments
-            kind: ManagedNetworkSegment
-            icon: "mdi:layers-triple"
-
-          # ── Firewalls: a context per tenant namespace on a firewall pair ───
-          - namespace: Managed
-            name: FirewallContextItem
-            label: Firewall Contexts
-            kind: ManagedFirewallContext
-            icon: "mdi:wall-fire"
-
-          # ── Load balancing ─────────────────────────────────────────────────
-          - namespace: Managed
-            name: LoadBalancingMenu
-            label: Load Balancing
-            icon: "mdi:scale-balance"
-            children:
-              data:
-                - namespace: Managed
-                  name: LoadBalancerItem
-                  label: Load Balancers
-                  kind: ManagedLoadBalancer
-                  icon: "mdi:scale-balance"
-
-                - namespace: Loadbalancer
-                  name: VipItem
-                  label: Virtual IPs
-                  kind: LoadbalancerVIP
-                  icon: "mdi:ip-network"
-
-                - namespace: Loadbalancer
-                  name: HealthCheckItem
-                  label: Health Checks
-                  kind: LoadbalancerHealthCheck
-                  icon: "mdi:stethoscope"
-
-          # ── High availability: pairs and multi-chassis bonds ───────────────
-          - namespace: Managed
-            name: HighAvailabilityMenu
-            label: High Availability
-            icon: "mdi:heart-pulse"
-            children:
-              data:
-                - namespace: Managed
-                  name: HA
-                  label: HA Domains
-                  icon: "mdi:heart-pulse"
-                  kind: ManagedHA
-                  description: "High availability domains (firewall, proxy, load balancer, cloud)"
-
-                - namespace: Managed
-                  name: Mlag
-                  label: MLAG Domains
-                  icon: "mdi:link-variant"
-                  kind: ManagedMLAG
-                  description: "Multi-chassis link aggregation groups"
-
-    # ──────────────────────────────────────────────────────────────────────────
     # SECURITY — zones, profiles, policies
     # ──────────────────────────────────────────────────────────────────────────
     - namespace: Security
@@ -396,23 +321,162 @@ spec:
             icon: "mdi:tag-outline"
 
           - namespace: Proxy
-            name: ProxyURLCategoryItem
-            label: URL Categories
-            kind: ProxyURLCategory
-            icon: "mdi:web"
-
-          - namespace: Proxy
             name: ProxyPolicyItem
             label: Proxy Policies
             kind: ProxyPolicy
             icon: "mdi:shield-key-outline"
 
+    # ──────────────────────────────────────────────────────────────────────────
+    # INVENTORY — physical devices and hardware
+    # ──────────────────────────────────────────────────────────────────────────
+    - namespace: Inventory
+      name: MainMenu
+      label: Inventory
+      icon: "mdi:warehouse"
+      children:
+        data:
+          # --------- Device Inventory ---------
+          - namespace: Dcim
+            name: InventoryMenu
+            label: Device Inventory
+            icon: "mdi:server-plus"
+            description: "Hardware devices, interfaces, and modules"
+            children:
+              data:
+                - namespace: Dcim
+                  name: Device
+                  label: Devices
+                  kind: DcimDeviceManaged
+                  icon: "mdi:server"
+                  description: "All physical and virtual devices"
 
-    # ──────────────────────────────────────────────────────────────────────────
-    # APPLICATIONS — business applications and virtual clouds
-    # ──────────────────────────────────────────────────────────────────────────
-    - namespace: App
-      name: ApplicationsMenu
-      label: Applications
-      kind: AppApplication
-      icon: "mdi:application"
+                - name: Interface
+                  namespace: Dcim
+                  label: Interfaces
+                  icon: "mdi:ethernet"
+                  kind: DcimInterface
+                  description: "Network and management interfaces"
+
+                - name: Cables
+                  namespace: Dcim
+                  label: Cabling & Connections
+                  icon: "mdi:cable-data"
+                  kind: DcimCable
+                  description: "Cabling between devices"
+
+                - name: PatchPanel
+                  namespace: Dcim
+                  label: Patch Panels
+                  icon: "mdi:ethernet"
+                  kind: DcimPatchPanel
+                  description: "Passive patch panels and their front and rear ports"
+
+                - name: Controller
+                  namespace: Managed
+                  label: Controllers
+                  icon: "mdi:remote-desktop"
+                  kind: ManagedController
+                  description: "Management/orchestration controllers (WLC, ACI APIC, DNA Center, security/LB managers, etc.)"  # yamllint disable-line rule:line-length
+
+          # ── Circuits ───────────────────────────────────────────────────────
+          - namespace: Topology
+            name: CircuitsMenu
+            label: Circuits
+            icon: "mdi:transit-connection-variant"
+            children:
+              data:
+                - namespace: Topology
+                  name: CarrierCircuitItem
+                  label: Carrier Circuits
+                  kind: TopologyCarrierCircuit
+                  icon: "mdi:cable-data"
+
+                - namespace: Topology
+                  name: SessionCircuitItem
+                  label: Session Circuits
+                  kind: TopologySessionCircuit
+                  icon: "mdi:cloud-sync"
+                  description: "DCI, handoff and tunnel circuits: the connections routing is generated on"
+
+          # ── Cloud & SaaS inventory: gateways, attachments, route tables, endpoints, IPsec ──
+          - namespace: Cloud
+            name: CloudInventoryMenu
+            label: Cloud & SaaS Inventory
+            icon: "mdi:router-network"
+            children:
+              data:
+                - namespace: Cloud
+                  name: CsGatewayItem
+                  label: Cloud Gateways
+                  kind: CloudGateway
+                  icon: "mdi:router-network"
+                  description: "Hub, edge and customer gateways of a provider"
+
+                - namespace: Cloud
+                  name: CsGatewayAttachmentItem
+                  label: Cloud Gateway Attachments
+                  kind: CloudGatewayAttachment
+                  icon: "mdi:transit-connection-variant"
+                  description: "A gateway attached to a network or another gateway, with its allowed prefixes"
+
+                - namespace: Cloud
+                  name: CsGatewayRouteTableItem
+                  label: Cloud Gateway Route Tables
+                  kind: CloudGatewayRouteTable
+                  icon: "mdi:routes"
+
+                - namespace: Cloud
+                  name: CsServiceEndpointItem
+                  label: Cloud Service Endpoints
+                  kind: CloudServiceEndpoint
+                  icon: "mdi:cloud-lock-outline"
+
+                - namespace: Security
+                  name: CsIPsecProfileItem
+                  label: IPsec Profiles
+                  kind: SecurityIPsecProfile
+                  icon: "mdi:shield-key-outline"
+
+          # --------- Cloud Inventory ---------
+          - namespace: Cloud
+            name: Resource
+            label: Public Cloud Resources
+            kind: CloudResource
+            icon: "mdi:cloud"
+            description: "All public cloud resources"
+
+          # --------- Device Catalog ---------
+          - namespace: Dcim
+            name: CatalogMenu
+            label: Device Catalog
+            icon: "mdi:package-variant-closed"
+            description: "Device types and platform definitions"
+            children:
+              data:
+                - namespace: Dcim
+                  name: DeviceType
+                  label: Device Types
+                  kind: DcimDeviceType
+                  icon: "mdi:package-variant"
+                  description: "Device model definitions and specifications"
+
+                - namespace: Dcim
+                  name: Platform
+                  label: Platforms
+                  kind: DcimPlatform
+                  icon: "mdi:chip"
+                  description: "Operating system and firmware platforms"
+
+                - namespace: Dcim
+                  name: SoftwareImage
+                  label: Software Images
+                  kind: DcimSoftwareImage
+                  icon: "mdi:package-variant"
+                  description: "Versioned OS and firmware images"
+
+                - namespace: Dcim
+                  name: GroupPolicyProfile
+                  label: Group Policy Profiles
+                  kind: DcimGroupPolicyProfile
+                  icon: "mdi:shield-half-full"
+                  description: "Reference fabric profile per platform: device types, release, memory, group-tag pool"

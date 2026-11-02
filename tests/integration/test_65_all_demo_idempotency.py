@@ -34,6 +34,7 @@ from infrahub_sdk import InfrahubClient
 from tasks import ALL_DEMO_BRANCH
 
 from .all_demo_circuit_constants import (
+    ALL_DEMO_CLOUD_HANDOFF_PEERINGS,
     ALL_DEMO_FABRIC_PEERINGS,
     ALL_DEMO_VIRTUAL_CIRCUITS,
     ALL_DEMO_ZONE_SITE_VIPS,
@@ -68,7 +69,6 @@ RERUN_GENERATORS = {
     "add_customer_colocation_orchestrator_routing": "customer_deployments_colocation",
     "add_customer_cloud_orchestrator_routing": "customer_deployments_cloud",
     "add_customer_office_orchestrator_routing": "customer_deployments_office",
-    "add_virtual_colocation_orchestrator_routing": "virtual_colocations",
 }
 # These must have targets in 30_all; the others are skipped when their group is empty.
 REQUIRED_RERUN_GENERATORS = {
@@ -483,7 +483,8 @@ class TestAllDemoIdempotency(TestInfrahubDockerWithClient):
                 peerings = [f"{circuit}-underlay", f"{circuit}-evpn"]
                 keys = [f"{circuit}-dci-key"]
             elif expected["circuit_type"] == HANDOFF_TYPE:
-                peerings, keys = [f"{circuit}-bgp"], []
+                # A cloud handoff's session is authored (named in the data), not `<circuit>-bgp`.
+                peerings, keys = [ALL_DEMO_CLOUD_HANDOFF_PEERINGS.get(circuit, f"{circuit}-bgp")], []
             else:
                 peerings, keys = [], []
             for peering in peerings:

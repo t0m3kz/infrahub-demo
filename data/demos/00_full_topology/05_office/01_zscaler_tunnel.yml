@@ -1,0 +1,20 @@
+---
+# The tunnel of the C900 office to the Zscaler enforcement node (inventory only, no BGP). The office is the first
+# location (its owner is the tunnel's, derived); the port is still the internet-facing edge port Tunnel3 of dc90-edge-01
+# riding the internet carrier INET-DC90-ISP-DEMO (03_cloud/05_circuits.yml): the office has no edge of its own here.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologySessionCircuit
+  data:
+    - name: SC-C900-ZSCALER-TUN1
+      description: Tunnel to the Zscaler enforcement node, no BGP
+      provider: P030
+      circuit_type: tunnel
+      status: active
+      locations:
+        - C900-OFFICE
+        - ZSCALER-MUNICH I
+      capabilities:
+        - ["dc90-edge-01", "Tunnel3"]
+        - ["zscaler-c900-muc", "Tunnel1"]

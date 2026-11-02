@@ -1,0 +1,39 @@
+# The rows of checks/customer_cloud_account.py (rules CA1 and CA2), one global query:
+#
+# - TopologyCustomerCloud: its owner and its account (one footprint per account) with the account's owner.
+# - CloudNetworkSegment: its customer footprint and the account of the virtual network it uses.
+query customer_cloud_account {
+  TopologyCustomerCloud {
+    edges {
+      node {
+        id
+        name { value }
+        owner { node { id org_id { value } } }
+        account {
+          node {
+            id
+            name { value }
+            owner { node { id org_id { value } } }
+          }
+        }
+      }
+    }
+  }
+
+  CloudNetworkSegment {
+    edges {
+      node {
+        id
+        name { value }
+        customer_deployment { node { id name { value } } }
+        virtual_network {
+          node {
+            id
+            name { value }
+            account { node { id name { value } } }
+          }
+        }
+      }
+    }
+  }
+}

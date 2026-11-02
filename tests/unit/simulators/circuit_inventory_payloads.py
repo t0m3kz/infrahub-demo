@@ -1,8 +1,9 @@
 """The raw response of ``tests/integration/queries/get_interconnect_inventory.gql`` over the 30_all data.
 
 Built on the simulator of the placement check (``circuit_data_payloads``, shaped like ``circuit_placement.gql``) and
-completed with what the inventory query selects on top: the carrier circuits' ``circuit_id`` and status, owner names,
-each end device's deployment, the interface kind, the parent of a sub-interface, a handoff's key and route limit. No
+completed with what the inventory query selects on top: the carrier circuits' ``circuit_id`` and status, the owners (a
+circuit has none: the office locations carry them, as customers),
+each end device's deployment, the interface kind, the parent of a sub-interface and a handoff's key. No
 address is set (nothing generated it offline): ``addresses`` puts them on named ports.
 """
 
@@ -48,10 +49,29 @@ def inventory_payload(
     }
     status = {row["name"]: row["status"] for row in model.carriers}
 
-    def named_owner(circuit: dict[str, Any]) -> None:
-        owner = circuit["owner"]["node"]
-        if owner:
-            owner["name"] = {"value": organisations[owner["org_id"]["value"]]}
+    def customer(org_id: str | None) -> dict[str, Any]:
+        """An owner as CircuitOwner selects it: only an OrganizationCustomer carries a name (the operator's own
+        account belongs to a provider, which is no customer)."""
+        if org_id is None:
+            return {"node": None}
+        if org_id in organisations:
+            return {
+                "node": {
+                    "id": f"id-{org_id}",
+                    "__typename": "OrganizationCustomer",
+                    "org_id": {"value": org_id},
+                    "name": {"value": organisations[org_id]},
+                }
+            }
+        return {"node": {"id": f"id-{org_id}", "__typename": "OrganizationProvider", "org_id": {"value": org_id}}}
+
+    def named_owners(circuit: dict[str, Any]) -> None:
+        """A circuit has no owner of its own: drop the leftover key and name the owners of its office locations."""
+        circuit.pop("owner", None)
+        for location in circuit["locations"]["edges"]:
+            owner = location["node"].get("owner")
+            if owner and owner["node"]:
+                location["node"]["owner"] = customer(owner["node"]["org_id"]["value"])
 
     physical = []
     for edge in payloads[CARRIER]["edges"]:
@@ -60,10 +80,9 @@ def inventory_payload(
         circuit["circuit_type"] = {"value": "dark_fiber"}
         circuit["status"] = {"value": status[circuit["name"]["value"]]}
         circuit["provider"] = {"node": {"name": {"value": "P016"}}}
-        named_owner(circuit)
+        named_owners(circuit)
         physical.append(circuit)
 
-    maximum_routes = {name(h): h.item["maximum_routes"] for h in session_circuits(HANDOFF)}
     passwords = {name(h): h.item["password"] for h in session_circuits(HANDOFF)}
     virtual = []
     for circuit_type in (TUNNEL, INTERCONNECT, HANDOFF):
@@ -72,16 +91,20 @@ def inventory_payload(
             if circuit["circuit_type"]["value"] != circuit_type:
                 continue
             circuit["__typename"] = SESSION
-            if "owner" in circuit:
-                named_owner(circuit)
+            named_owners(circuit)
             if circuit_type == HANDOFF:
-                circuit["maximum_routes"] = {"value": maximum_routes[circuit["name"]["value"]]}
-                circuit["password"] = {"node": {"name": {"value": passwords[circuit["name"]["value"]]}}}
+                # An authored handoff names its key.
+                key = passwords.get(circuit["name"]["value"])
+                if key:
+                    circuit["password"] = {"node": {"name": {"value": key}}}
             for port_edge in circuit["capabilities"]["edges"]:
                 port = port_edge["node"]
                 device = port["device"]["node"]["name"]["value"]
-                port["device"]["node"]["deployment"] = model.deployment(device)
-                port["__typename"] = "DcimVirtualInterface" if "parent_interface" in port else "DcimPhysicalInterface"
+                port["device"]["node"].update(model.placement(device))
+                if port.get("__typename") != "CloudPeeringInterface":
+                    port["__typename"] = (
+                        "DcimVirtualInterface" if "parent_interface" in port else "DcimPhysicalInterface"
+                    )
                 address = (addresses or {}).get((device, port["name"]["value"]))
                 port["ip_address"] = {"node": {"address": {"value": address}} if address else None}
                 _with_circuit_id([e["node"] for e in port["capabilities"]["edges"]])

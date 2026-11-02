@@ -371,7 +371,7 @@ class TestFabricDevices:
 
     @pytest.mark.asyncio
     async def test_load_balancer_pair_keeps_its_usual_ha_domain(self) -> None:
-        """Only the roles Terraform renders get the provider-hosted domain; a load balancer pair is a LoadbalancerHA."""
+        """Only the roles a provider order covers get the provider-hosted domain; a load balancer pair is a LoadbalancerHA."""
         templates = [{"role": "load-balancer", "quantity": 2, "template": _VIRTUAL_EDGE_TEMPLATE}]
         gen = _made_virtual(fabric_templates=templates)
         gen.create_devices = AsyncMock(return_value=["lb-am-ne01", "lb-am-ne02"])

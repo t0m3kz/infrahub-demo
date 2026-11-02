@@ -1,0 +1,40 @@
+---
+# Two more cloud segments for the extra pairs of the traversal check. The spoke segment sits in the Azure spoke VNet,
+# which only peers with the hub VNet the ExpressRoute gateway is attached to: the DC reaches it across `peers`. The
+# isolated segment sits in a VPC with no attachment at all: nothing reaches it, and the check must say so.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamPrefix
+  data:
+    - {prefix: "10.204.0.0/16", ip_namespace: "PROD", status: active, description: "AWS isolated VPC block (no attachment)"}  # yamllint disable-line rule:line-length
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudVirtualNetwork
+  data:
+    - name: "vpc-c900-isolated"
+      account: "c900-aws-prod"
+      region: "eu-central-1"
+      cidr_blocks:
+        - ["10.204.0.0/16", "PROD"]
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCustomerCloud
+  data:
+    - owner: "C900"
+      account: "c900-azure-prod"
+      customer_name: "demo-azure"
+      parent: "westeurope"
+---
+# The Azure region has no zone in the main sample; a segment needs one.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCloudZone
+  data:
+    - name: "westeurope-1"
+      parent: "westeurope"

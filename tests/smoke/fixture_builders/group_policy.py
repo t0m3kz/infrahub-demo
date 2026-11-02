@@ -71,7 +71,6 @@ def _gp_segment(
     rules: list[dict] | None = None,
     tag: tuple[str, int] | None = None,
     sites: tuple[str, ...] = ("dc10",),
-    inline: str | None = None,
 ) -> dict:
     """One SegmentGroupPolicyFields VXLAN segment, active in ``sites``."""
     segment: dict[str, Any] = {
@@ -104,7 +103,6 @@ def _gp_segment(
         ),
     }
     segment["stretch_scope"] = _v("local" if len(sites) == 1 else "dc_pair")
-    segment["inline_service"] = _node({"id": f"svc-{inline}", "name": _v(inline)} if inline else None)
     segment["segment_deployments"] = _edges(
         [
             {"vni": _v(10000 + n), "deployment": _node({"id": site, "name": _v(site.upper())})}

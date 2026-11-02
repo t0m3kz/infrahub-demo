@@ -1,5 +1,5 @@
 {#- Palo Alto PAN-OS — zone-based firewall configuration -#}
-{#- An HA pair terminating a segment inline owns its gateway (virtual_ip): config
+{#- An HA pair owns the virtual address of an interface or leg (virtual_ip): config
     sync gives both members that one interface address. -#}
 {%- macro security_policies(policies, scope='', title='Security Policies') %}
 #

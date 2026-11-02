@@ -117,27 +117,38 @@ def _segment(
         "id": seg_id,
         "name": _v(seg_id),
         "security_zone": {"node": {"name": _v(zone)}} if zone else {"node": None},
-        "switched_interfaces": {"edges": list(ports)},
     }
-    return {"node": {**node, "_footprints": footprints}}
+    return {"node": {**node, "_footprints": footprints, "_ports": list(ports)}}
 
 
 def _vxlan(segment: dict[str, Any]) -> dict[str, Any]:
     """The segment as a ManagedVxlanSegment row naming its footprints."""
-    node = {k: v for k, v in segment["node"].items() if k != "_footprints"}
+    node = {k: v for k, v in segment["node"].items() if k not in ("_footprints", "_ports")}
     named = [{"node": {"id": f"fp-{name}", "name": _v(name)}} for name in segment["node"]["_footprints"]]
     return {"node": {**node, "customer_deployments": {"edges": named}}}
+
+
+def _payload(footprints: list[dict[str, Any]], vxlan: list[dict[str, Any]]) -> dict[str, Any]:
+    """The query response: the segments, and the tagged ports read from the port side (each with its segments)."""
+    ports: dict[str, dict[str, Any]] = {}
+    for segment in vxlan:
+        for port in segment["node"]["_ports"]:
+            row = ports.setdefault(port["node"]["id"], {"node": {**port["node"], "segments": {"edges": []}}})
+            row["node"]["segments"]["edges"].append({"node": {"id": segment["node"]["id"]}})
+    return {
+        "TopologyCustomerDC": {"edges": footprints},
+        "ManagedVxlanSegment": {"edges": [_vxlan(s) for s in vxlan]},
+        **{
+            kind: {"edges": [p for p in ports.values() if p["node"]["__typename"] == kind]}
+            for kind in ("DcimPhysicalInterface", "DcimLAGInterface")
+        },
+    }
 
 
 def _run(footprints: list[dict[str, Any]], vxlan: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     """Validate and return the logged findings."""
     check = _check()
-    check.validate(
-        {
-            "TopologyCustomerDC": {"edges": footprints},
-            "ManagedVxlanSegment": {"edges": [_vxlan(s) for s in vxlan or []]},
-        }
-    )
+    check.validate(_payload(footprints, vxlan or []))
     return check._captured
 
 
@@ -256,16 +267,10 @@ class TestPortQuota:
         assert len(_run([_footprint(ports_25g=1)], segments)) == 1
 
     def test_service_ports_are_not_host_facing(self) -> None:
-        """The border-leaf ports facing a firewall or load balancer (inline termination) are not counted."""
+        """The border-leaf ports facing a firewall or load balancer (where a terminated segment is tagged) are not
+        counted."""
         ports = [_port("fw", role="firewall"), _port("lb", role="load-balancer"), _port("host")]
         assert _run([_footprint(ports_25g=1)], [_segment("s1", ["C005-P-DC10"], *ports)]) == []
-
-    def test_other_interface_kinds_are_not_ports(self) -> None:
-        """An inline sub-interface (DcimVirtualInterface) tagged with the segment is no switch port."""
-        virtual = {
-            "node": {"id": "v", "__typename": "DcimVirtualInterface", "role": _v("firewall"), "device": _device("DC10")}
-        }
-        assert _run([_footprint(ports_25g=0)], [_segment("s1", ["C005-P-DC10"], virtual)]) == []
 
     def test_unknown_speed_is_not_metered(self) -> None:
         """No ports_10g attribute, a sub-1G port and a speed that cannot be read all count against nothing."""
@@ -343,6 +348,13 @@ def test_check_and_query_are_registered() -> None:
     assert "resource_name: customer_quota" in (_ROOT / "tests/smoke/test_graphql.yml").read_text()
 
 
+def test_query_reads_the_ports_from_the_port_side() -> None:
+    """The ports come from the physical and LAG roots (an edge present), joined to the segments by id."""
+    compact = " ".join((_ROOT / "queries" / "validation" / "customer_quota.gql").read_text().split())
+    assert "DcimPhysicalInterface(segments__isnull: false)" in compact
+    assert "DcimLAGInterface(segments__isnull: false)" in compact
+
+
 @pytest.mark.parametrize("field", ["max_segments", "ports_25g", "ports_100g"])
 def test_query_selects_each_number_the_design_carries(field: str) -> None:
     """The query reads every quota attribute of the design."""
@@ -411,10 +423,7 @@ def _all_demo_payload() -> dict[str, Any]:
         vxlan.append(
             _segment(seg_name, [str(d) for d in segment.item.get("customer_deployments") or []], *ports, zone=zone)
         )
-    return {
-        "TopologyCustomerDC": {"edges": footprint_rows},
-        "ManagedVxlanSegment": {"edges": [_vxlan(s) for s in vxlan]},
-    }
+    return _payload(footprint_rows, vxlan)
 
 
 def test_all_demo_footprints_are_metered() -> None:
@@ -422,7 +431,7 @@ def test_all_demo_footprints_are_metered() -> None:
     payload = _all_demo_payload()
     assert len(payload["TopologyCustomerDC"]["edges"]) == 10
     assert len(payload["ManagedVxlanSegment"]["edges"]) >= 10
-    ports = [p for s in payload["ManagedVxlanSegment"]["edges"] for p in s["node"]["switched_interfaces"]["edges"]]
+    ports = payload["DcimPhysicalInterface"]["edges"]
     assert ports and all(p["node"]["interface_type"]["value"].startswith("25gbase") for p in ports)
 
 

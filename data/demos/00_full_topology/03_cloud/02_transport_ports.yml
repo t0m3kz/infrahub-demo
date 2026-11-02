@@ -1,0 +1,38 @@
+---
+# The ports of the transports: the far end of a carrier circuit (05_circuits.yml). The ports of a LAG belong to ONE
+# transport (the server refuses a member of another device). The AWS ids of the member connections go to the
+# description.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - device: "dx-c900-fra-lag"
+      name: "dxcon-1a"
+      description: "AWS Direct Connect dedicated 10G port dxcon-fh1a2b3c, member of lag1"
+      status: active
+      interface_type: 10gbase-x-sfpp
+    - device: "dx-c900-fra-lag"
+      name: "dxcon-1b"
+      description: "AWS Direct Connect dedicated 10G port dxcon-fh4d5e6f, member of lag1"
+      status: active
+      interface_type: 10gbase-x-sfpp
+    # ExpressRoute: the MSEE port pair of the circuit, one link each.
+    - device: "er-c900-weu"
+      name: "msee-pri"
+      description: "Microsoft Enterprise Edge, primary link"
+      status: active
+    - device: "er-c900-weu"
+      name: "msee-sec"
+      description: "Microsoft Enterprise Edge, secondary link"
+      status: active
+    - device: "ic-c900-fra-1"
+      name: "ic-port-1"
+      description: "Partner port of the Interconnect attachment"
+      status: active
+    # A routed port: the peering rides on it directly, with no VLAN.
+    - device: "ic-ded-c900-fra"
+      name: "ic-dedicated-port"
+      description: "Google Dedicated Interconnect 10G port"
+      status: active
+      interface_type: 10gbase-x-sfpp

@@ -1,53 +1,18 @@
 ---
 # Proxy Policy — URL filtering and egress access control
 #
-# Three-node model:
-#   ProxyURLCategory  — reusable named group of FQDNs/CIDRs/patterns
+# Two-node model:
 #   ProxyPolicy       — ordered policy (shared base or customer-specific)
 #   ProxyPolicyRule   — single action entry inside a policy
 #
 # Attachment:
-#   ManagedProxyHA / ManagedCloudProxy → shared_policies (base, all tenants)
-#   OrganizationCustomer                 → proxy_policies  (tenant overrides)
+#   ManagedCloudProxy    → shared_policies (base, all tenants)
+#   OrganizationCustomer → proxy_policies  (tenant overrides)
 #
 # Evaluation order: shared policies first (by priority asc), then customer policies.
 version: "1.0"
 
 nodes:
-
-  # ── URL Category ────────────────────────────────────────────────────────────
-  - name: URLCategory
-    namespace: Proxy
-    description: "Named URL category — FQDNs, CIDRs, or regex patterns for proxy policy matching"
-    label: URL Category
-    icon: "mdi:web"
-    include_in_menu: false
-    menu_placement: SecurityZone
-    human_friendly_id:
-      - name__value
-    display_label: "{{ name__value }}"
-    order_by:
-      - name__value
-    uniqueness_constraints:
-      - [name__value]
-    attributes:
-      - name: name
-        kind: Text
-        label: Name
-        optional: false
-        unique: true
-        order_weight: 100
-      - name: description
-        kind: Text
-        label: Description
-        optional: true
-        order_weight: 200
-      - name: entries
-        kind: Text
-        label: Entries
-        description: "Newline-separated FQDNs, CIDRs, or regex patterns"
-        optional: true
-        order_weight: 400
 
   # ── Proxy Policy ────────────────────────────────────────────────────────────
   - name: Policy
@@ -134,7 +99,7 @@ nodes:
   # ── Proxy Policy Rule ───────────────────────────────────────────────────────
   - name: PolicyRule
     namespace: Proxy
-    description: "Single proxy ACL entry — action applied to matching URL categories or explicit destinations"
+    description: "Single proxy ACL entry — action applied to an explicit destination"
     label: Proxy Policy Rule
     icon: "mdi:filter-outline"
     include_in_menu: false
@@ -189,13 +154,9 @@ nodes:
         kind: Dropdown
         label: "Destination Type"
         optional: true
-        default_value: category
+        default_value: fqdn
         order_weight: 400
         choices:
-          - name: category
-            label: "URL Category"
-            description: "Match against one or more ProxyURLCategory entries"
-            color: "#3498DB"
           - name: fqdn
             label: "FQDN"
             description: "Exact or wildcard hostname match"
@@ -211,7 +172,7 @@ nodes:
       - name: destination
         kind: Text
         label: Destination
-        description: "FQDN, CIDR, or regex value — leave empty when destination_type is 'category'"
+        description: "FQDN, CIDR, or regex value, as destination_type says"
         optional: true
         order_weight: 500
       - name: ports
@@ -246,30 +207,9 @@ nodes:
         optional: false
         order_weight: 2000
         identifier: proxypolicyrule__policy
-      - name: categories
-        peer: ProxyURLCategory
-        label: "URL Categories"
-        cardinality: many
-        kind: Attribute
-        optional: true
-        order_weight: 2100
-        identifier: proxypolicyrule__categories
-        description: "URL categories this rule matches against (used when destination_type is 'category')"
 
 extensions:
   nodes:
-    - kind: ManagedProxyHA
-      relationships:
-        - name: shared_policies
-          peer: ProxyPolicy
-          label: "Shared Policies"
-          cardinality: many
-          kind: Generic
-          optional: true
-          order_weight: 1500
-          identifier: proxyha__shared_policies
-          description: "Base proxy policies applied to all tenants on this proxy"
-
     - kind: ManagedCloudProxy
       relationships:
         - name: shared_policies

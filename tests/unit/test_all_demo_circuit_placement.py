@@ -95,16 +95,10 @@ def test_session_circuits_share_no_port() -> None:
 
 
 def test_without_the_cables_the_cable_carried_handoffs_are_reported() -> None:
-    """The gateway handoff and the Fabric hop to AM-NE have only a cable under them: without it the check says so."""
+    """The gateway handoff has only a cable under it."""
     messages = [finding["message"] for finding in _findings(build_payloads(without_cables=True))]
     reported = {circuit for circuit in ALL_DEMO_VIRTUAL_CIRCUITS if any(f"'{circuit}'" in m for m in messages)}
-    assert reported == {"HANDOFF-FR2-SDWAN-GW1-PROD", "HANDOFF-FR2-AMNE-PROD"}
-
-
-def test_without_the_megaport_cross_connect_its_handoff_is_reported() -> None:
-    """HANDOFF-PA4-MEGAPORT-PROD is carried by XC-EQXPA4-MEGAPORT on the parent ports only."""
-    messages = [finding["message"] for finding in _findings(build_payloads(without_circuits=["XC-EQXPA4-MEGAPORT"]))]
-    assert len(messages) == 1 and "HANDOFF-PA4-MEGAPORT-PROD" in messages[0]
+    assert reported == {"HANDOFF-FR2-SDWAN-GW1-PROD"}
 
 
 def test_without_the_partner_internet_access_the_partner_tunnel_is_reported() -> None:
@@ -112,6 +106,20 @@ def test_without_the_partner_internet_access_the_partner_tunnel_is_reported() ->
     messages = [finding["message"] for finding in _findings(build_payloads(without_circuits=["INET-ACME-COGENT"]))]
     assert len(messages) == 1
     assert "C001-PARTNER-ACME-FR2" in messages[0] and "EXT-ACME-EDGE1:et-0/0/0" in messages[0]
+
+
+@pytest.mark.parametrize("router", ["EXT-LUMEN-FRA1", "EXT-COGENT-PAR1", "EXT-ORANGE"])
+def test_an_isp_router_without_its_uplink_to_the_internet_is_reported(router: str) -> None:
+    """Rule I3: THE INTERNET is in the bootstrap, so every ISP router serving internet access needs its uplink."""
+    messages = [f["message"] for f in _findings(build_payloads(without_circuits=[f"UPL-{router}"]))]
+    assert len(messages) == 1
+    assert f"ISP router '{router}'" in messages[0] and "no attachment to THE INTERNET" in messages[0]
+
+
+def test_the_partner_router_needs_no_uplink_of_its_own() -> None:
+    """EXT-ACME-EDGE1 buys access from Cogent, whose router is attached: its access reaches the INTERNET."""
+    messages = [f["message"] for f in _findings(build_payloads())]
+    assert not [m for m in messages if "EXT-ACME-EDGE1" in m]
 
 
 def test_without_the_gateway_access_every_tunnel_is_reported() -> None:

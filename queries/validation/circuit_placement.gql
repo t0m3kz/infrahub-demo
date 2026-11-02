@@ -1,14 +1,13 @@
 # The rows of checks/circuit_placement.py, one root per circuit kind (the role of a session circuit is its
-# `circuit_type`: dci, handoff or tunnel):
+# `circuit_type`: dci, handoff, tunnel or vpn). A circuit has no owner of its own: it is derived from the offices
+# among its locations (each office carries its owner).
 #
-# - TopologyCarrierCircuit: the places it terminates on (locations), the owner (with an office location's owner:
-#   an office's access circuit is owned by it) and the device each end port sits on with where that device is
-#   deployed.
-# - TopologySessionCircuit: circuit_type, status (a decommissioned dci or handoff is exempt: nothing is built for it),
-#   owner and locations (an office location carries its owner), end ports; each port's device carries its BGP
+# - TopologyCarrierCircuit: the places it terminates on (locations, an office location with its owner) and the
+#   device each end port sits on with where that device is deployed.
+# - TopologySessionCircuit: circuit_type, status (a decommissioned dci, handoff or vpn is exempt: nothing is built for
+#   it), locations (an office location carries its owner), end ports; each port's device carries its BGP
 #   processes (a dci needs exactly one overlay process on it). What only one type may carry is selected for all:
-#   ip_namespace (with its namespace_type) and the cloud-side endpoint (a VIF states its VLAN, which mirrors the
-#   sub-interface name) for a handoff, password, maximum_routes and registered_prefixes (their ids only).
+#   ip_namespace (with its namespace_type) for a handoff or a vpn, password and registered_prefixes (their ids only).
 #   A handoff's locations are exactly where its two end devices are deployed, so every end port's device carries
 #   its deployment.
 #
@@ -22,16 +21,25 @@
 # Every circuit_type shares the one port fragment, so a type that does not read a path of it (a tunnel and the
 # BGP processes) still selects it. One global query.
 #
+# A cloud transport (the device of a cloud port or peering interface) has no deployment: its facility is its `region`
+# or `saas_region`. A handoff end is a `<port>.<vlan>` sub-interface, a routed physical port (it has an address) or a
+# cloud peering interface (its `vlan_id` is optional).
+#
 # Concrete inline fragments only for the deployment of a physical end, so the query is valid whether the deployment
 # peer is a generic or a concrete kind. Both kinds' `locations` peer TopologyFacility (an office is one, which is
 # why only the office carries an owner here).
 query circuit_placement {
+  # THE INTERNET: one passive device that is also a facility, with one interface; the carriers that end on that
+  # interface are judged in utils/internet_object.py.
+  TopologyInternet { edges { node { id name { value } interfaces { edges { node { id __typename name { value } } } } } } }
+
   TopologyCarrierCircuit {
     edges {
       node {
         id
         name { value }
-        owner { node { id org_id { value } } }
+        status { value }
+        circuit_type { value }
         locations {
           edges {
             node {
@@ -46,10 +54,12 @@ query circuit_placement {
           edges {
             node {
               id
+              __typename
               name { value }
               device {
                 node {
                   id
+                  __typename
                   name { value }
                   ... on DcimPhysicalDevice {
                     deployment { node { id __typename name { value } } }
@@ -59,6 +69,10 @@ query circuit_placement {
                   }
                   ... on CloudNetworkAppliance {
                     deployment { node { id __typename name { value } } }
+                  }
+                  ... on CloudTransport {
+                    region { node { id __typename name { value } } }
+                    saas_region { node { id __typename name { value } } }
                   }
                 }
               }
@@ -76,7 +90,6 @@ query circuit_placement {
         name { value }
         status { value }
         circuit_type { value }
-        owner { node { id org_id { value } } }
         locations {
           edges {
             node {
@@ -89,17 +102,7 @@ query circuit_placement {
         }
         ip_namespace { node { name { value } namespace_type { value } } }
         password { node { id } }
-        maximum_routes { value }
         registered_prefixes { edges { node { id } } }
-        cloud_endpoint {
-          node {
-            id
-            ... on CloudVirtualInterface {
-              name { value }
-              vlan_id { value }
-            }
-          }
-        }
         capabilities { edges { node { ...VirtualPort } } }
       }
     }
@@ -108,6 +111,7 @@ query circuit_placement {
 
 fragment VirtualPort on DcimInterface {
   id
+  __typename
   name { value }
   capabilities {
     edges {
@@ -119,6 +123,10 @@ fragment VirtualPort on DcimInterface {
   }
   ... on DcimPhysicalInterface {
     cable { node { id } }
+    ip_address { node { id } }
+  }
+  ... on CloudPeeringInterface {
+    vlan_id { value }
   }
   ... on DcimVirtualInterface {
     parent_interface {
@@ -150,6 +158,10 @@ fragment VirtualPort on DcimInterface {
       }
       ... on CloudNetworkAppliance {
         deployment { node { id __typename name { value } } }
+      }
+      ... on CloudTransport {
+        region { node { id __typename name { value } } }
+        saas_region { node { id __typename name { value } } }
       }
       ... on DcimCapabilities {
         capabilities {

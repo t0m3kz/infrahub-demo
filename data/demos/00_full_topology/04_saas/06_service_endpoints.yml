@@ -1,0 +1,15 @@
+---
+# The Webex endpoint (address, in the SaaS region).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudServiceEndpoint
+  data:
+    - name: "vpce-c900-webex"
+      description: "Interface endpoint to the Webex service"
+      status: active
+      service_name: "webex"
+      access: address
+      virtual_network: "vpc-c900-prod"
+      provider: "P901"
+      saas_region: "WEBEX-FRANKFURT"

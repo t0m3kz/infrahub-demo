@@ -5,6 +5,7 @@ from __future__ import annotations
 import ipaddress
 from typing import Any
 
+from transforms.helpers.bgp_cloud import CloudLeg, cloud_legs
 from transforms.helpers.bgp_external import registered_by_attachment
 from transforms.helpers.group_policy import get_vrf_contracts, rule_groups, segment_groups
 from transforms.helpers.policy import rule_enabled, segment_flows
@@ -19,12 +20,14 @@ from utils.exchange_transit import (
     zone_name_for_namespace_type,
 )
 from utils.group_policy import MICROSEGMENTED, RESERVED_GROUPS, tag_pool
+from utils.ownership import customer_owner
 from utils.segment_addressing import segment_prefix
 
 from .base import WarningCheck
 
 _Network = ipaddress.IPv4Network | ipaddress.IPv6Network
-_Space = list[tuple[_Network, str | None]]
+# (network, namespace type, owner key): the owner is None for on-prem space, the customer that registered it otherwise.
+_Space = list[tuple[_Network, str | None, str | None]]
 
 
 class CheckSegmentSecurity(WarningCheck):
@@ -55,11 +58,13 @@ class CheckSegmentSecurity(WarningCheck):
       microsegmented: inside it, or on a component dependency into or out of
       it;
     - every ``destination_prefixes`` entry of an enabled rule is reachable: inside an on-prem segment prefix, or
-      inside a prefix a customer registered behind an external session (a VPC block of a virtual interface with a
-      handoff circuit, an office ``lan_prefixes`` or hosted segment and a tunnel's ``registered_prefixes``, behind
-      an SD-WAN gateway; transforms/helpers/bgp_external.py registered_by_attachment), in a namespace of the
+      inside a prefix a customer registered behind an external session (an office ``lan_prefixes`` or hosted segment
+      and a tunnel's ``registered_prefixes`` behind an SD-WAN gateway, the allowed prefixes or network blocks behind a
+      cloud peering's gateway; transforms/helpers/bgp_external.py registered_by_attachment), in a namespace of the
       source segment's environment (or an exchange peer of it); otherwise no session accepts it and the rule
-      aims at nothing (a ``destination_segment`` or ``destination_zone`` rule is not checked here: the internet
+      aims at nothing. A registered destination must be the SOURCE segment's owner's: the edge announces an
+      owner's prefixes only to that owner's sessions, so the far end of another owner's session has no route back
+      to the source (on-prem space and a source with no customer owner are not compared) (a ``destination_segment`` or ``destination_zone`` rule is not checked here: the internet
       needs no registered prefix);
     - every permit rule between two groups is a contract row of the group
       contract builder (transforms/helpers/group_policy.py): a rule the
@@ -212,27 +217,42 @@ class CheckSegmentSecurity(WarningCheck):
             segments,
             cleaned.get("TopologyCustomerOffice"),
             cleaned.get(SESSION_CIRCUIT),
-            cleaned.get("CloudVirtualInterface"),
+            cloud_legs(cleaned.get("CloudPeeringInterface"), cleaned.get("CloudGatewayAttachment")),
         )
         environments = {segment["id"]: segment.get("environment") for segment in segments if segment.get("id")}
+        owners = {segment["id"]: customer_owner(segment.get("owner")) for segment in segments if segment.get("id")}
         for rule in rules:
             if not rule_enabled(rule):
                 continue
-            environment = environments.get((rule.get("source_segment") or {}).get("id"))
-            types = _reachable_types(environment)
+            source_id = (rule.get("source_segment") or {}).get("id")
+            types = _reachable_types(environments.get(source_id))
+            source_owner = owners.get(source_id)
             for destination in rule.get("destination_prefixes") or []:
                 cidr = destination.get("prefix")
                 network = _network(cidr)
-                if network is not None and not any(
-                    network.prefixlen >= pool.prefixlen
+                if network is None:
+                    continue
+                inside = [
+                    (kind, owner)
+                    for pool, kind, owner in space
+                    if network.prefixlen >= pool.prefixlen
                     and network.network_address in pool
                     and (types is None or kind in types)
-                    for pool, kind in space
-                ):
+                ]
+                if not inside:
                     self.log_error(
                         message=(
                             f"destination {cidr} of rule {rule.get('name', rule.get('id'))} is not reachable: "
                             "no session accepts it (not on-prem space, not registered behind an external session)"
+                        )
+                    )
+                elif source_owner and all(owner and owner != source_owner for _, owner in inside):
+                    self.log_error(
+                        message=(
+                            f"destination {cidr} of rule {rule.get('name', rule.get('id'))} is registered by "
+                            f"{', '.join(sorted({str(owner) for _, owner in inside}))}, not by the owner of its source "
+                            f"segment ({source_owner}): the edge never announces {source_owner}'s prefixes to that "
+                            "session, so the destination has no route back"
                         )
                     )
 
@@ -395,23 +415,22 @@ def _reachable_space(
     segments: list[dict[str, Any]],
     offices: list[dict[str, Any]] | None,
     tunnels: list[dict[str, Any]] | None,
-    vifs: list[dict[str, Any]] | None,
+    legs: list[CloudLeg],
 ) -> _Space:
-    """Every (network, namespace_type) a destination prefix may sit in: on-prem and registered behind a session.
+    """Every (network, namespace_type, owner) a destination prefix may sit in: on-prem and registered behind a session.
 
-    On-prem: the gateway prefix of every segment. Registered: the prefixes a customer owner
-    registered behind an attachment point (registered_by_attachment, the edge's own reading); a prefix with no
-    customer owner is never accepted, so it is no destination either (routing_invariants.py rule 7 reports it).
+    On-prem: the gateway prefix of every segment (no owner compared). Registered: the prefixes a customer owner
+    registered behind an attachment point (registered_by_attachment, the edge's own reading), with that owner; a
+    prefix with no customer owner is never accepted, so it is no destination either (routing_invariants.py rule 7
+    reports it).
     """
-    prefixes = [(segment.get("gateway") or {}).get("ip_prefix") or {} for segment in segments]
-    prefixes += [
-        prefix
-        for registered in registered_by_attachment(offices, tunnels, vifs).values()
-        for owner, prefix in registered
-        if owner
-    ]
-    return [
-        (network, (prefix.get("ip_namespace") or {}).get("namespace_type"))
-        for prefix in prefixes
-        if (network := _network(prefix.get("prefix")))
-    ]
+    space: _Space = []
+    for segment in segments:
+        prefix = (segment.get("gateway") or {}).get("ip_prefix") or {}
+        if network := _network(prefix.get("prefix")):
+            space.append((network, (prefix.get("ip_namespace") or {}).get("namespace_type"), None))
+    for registered in registered_by_attachment(offices, tunnels, legs).values():
+        for owner, prefix in registered:
+            if owner and (network := _network(prefix.get("prefix"))):
+                space.append((network, (prefix.get("ip_namespace") or {}).get("namespace_type"), owner))
+    return space

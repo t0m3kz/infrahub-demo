@@ -28,7 +28,7 @@ fragment InternetEgressContext on ManagedFirewallContext {
             id
             __typename
             name { value }
-            ... on DcimDevice { role { value } }
+            ... on DcimDeviceManaged { role { value } }
           }
         }
       }
@@ -41,7 +41,7 @@ fragment InternetEgressContext on ManagedFirewallContext {
         __typename
         name { value }
         role { value }
-        device { node { id name { value } role { value } } }
+        device { node { id name { value } ... on DcimDeviceManaged { role { value } } } }
         ... on DcimVirtualInterface {
           ip_address {
             node {
@@ -150,7 +150,7 @@ query internet_egress {
                             id
                             __typename
                             name { value }
-                            ... on DcimDevice { role { value } status { value } }
+                            ... on DcimDeviceManaged { role { value } status { value } }
                           }
                         }
                       }

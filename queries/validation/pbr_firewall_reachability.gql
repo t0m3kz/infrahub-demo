@@ -15,7 +15,7 @@ query pbr_firewall_reachability {
         capabilities {
           edges {
             node {
-              device { node { role { value } } }
+              device { node { ... on DcimDeviceManaged { role { value } } } }
               ... on DcimVirtualInterface {
                 ip_address { node { ip_namespace { node { name { value } namespace_type { value } } } } }
               }
@@ -30,7 +30,7 @@ query pbr_firewall_reachability {
     edges {
       node {
         id
-        device { node { name { value } role { value } } }
+        device { node { name { value } ... on DcimDeviceManaged { role { value } } } }
         capabilities {
           edges {
             node {
@@ -47,7 +47,7 @@ query pbr_firewall_reachability {
     edges {
       node {
         id
-        device { node { name { value } role { value } } }
+        device { node { name { value } ... on DcimDeviceManaged { role { value } } } }
         capabilities {
           edges {
             node {

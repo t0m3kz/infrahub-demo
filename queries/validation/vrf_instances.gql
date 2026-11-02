@@ -43,7 +43,8 @@ query vrf_instances($device_ids: [ID], $with_instances: Boolean = true) {
       }
     }
   }
-  DcimDevice(ids: $device_ids) {
+  # Managed devices only; the alias keeps the result key.
+  DcimDevice: DcimDeviceManaged(ids: $device_ids) {
     edges {
       node {
         __typename
@@ -62,36 +63,38 @@ query vrf_instances($device_ids: [ID], $with_instances: Boolean = true) {
         ... on DcimCapabilities {
           shared_capabilities { edges { node { __typename ...VrfDemandInstanceFields } } }
         }
-        interfaces {
-          edges {
-            node {
-              __typename
-              id
-              name { value }
-              role { value }
-              ... on DcimPhysicalInterface {
-                ip_address { node { address { value } ip_namespace { node { name { value } } } } }
-              }
-              ... on DcimLAGInterface {
-                ip_address { node { address { value } ip_namespace { node { name { value } } } } }
-              }
-              ... on DcimVirtualInterface {
-                ip_address { node { address { value } ip_namespace { node { name { value } } } } }
-                vrf { node { id deployment { node { id } } namespace { node { name { value } } } } }
-                vlan_domain_segment { node { id } }
-              }
-              capabilities {
-                edges {
-                  node {
-                    __typename
-                    id
-                    ... on ManagedFirewallContext {
-                      vlan_id { value }
-                      capabilities { edges { node { ...VrfDemandLegFields } } }
-                    }
-                    ... on ManagedLoadbalancerContext {
-                      vlan_id { value }
-                      capabilities { edges { node { ...VrfDemandLegFields } } }
+        ... on DcimDevice {
+          interfaces {
+            edges {
+              node {
+                __typename
+                id
+                name { value }
+                role { value }
+                ... on DcimPhysicalInterface {
+                  ip_address { node { address { value } ip_namespace { node { name { value } } } } }
+                }
+                ... on DcimLAGInterface {
+                  ip_address { node { address { value } ip_namespace { node { name { value } } } } }
+                }
+                ... on DcimVirtualInterface {
+                  ip_address { node { address { value } ip_namespace { node { name { value } } } } }
+                  vrf { node { id deployment { node { id } } namespace { node { name { value } } } } }
+                  vlan_domain_segment { node { id } }
+                }
+                capabilities {
+                  edges {
+                    node {
+                      __typename
+                      id
+                      ... on ManagedFirewallContext {
+                        vlan_id { value }
+                        capabilities { edges { node { ...VrfDemandLegFields } } }
+                      }
+                      ... on ManagedLoadbalancerContext {
+                        vlan_id { value }
+                        capabilities { edges { node { ...VrfDemandLegFields } } }
+                      }
                     }
                   }
                 }
@@ -134,7 +137,8 @@ fragment VrfDemandRowFields on ManagedVlanDomainSegment {
           id
           ... on ManagedVxlanSegment {
             name { value }
-            terminate_inline { value }
+            # A terminated segment is pure L2 on the fabric: its row is no routed row (utils/vrf_demand.py).
+            terminated_on { node { id } }
           }
           gateway { node { address { value } ip_prefix { node { ip_namespace { node { name { value } } } } } } }
         }
@@ -145,7 +149,7 @@ fragment VrfDemandRowFields on ManagedVlanDomainSegment {
 
 # A leg of a firewall or load-balancer context: a member's sub-interface and its address namespace.
 fragment VrfDemandLegFields on DcimInterface {
-  device { node { role { value } } }
+  device { node { ... on DcimDeviceManaged { role { value } } } }
   ... on DcimVirtualInterface {
     ip_address { node { address { value } ip_namespace { node { name { value } namespace_type { value } } } } }
   }

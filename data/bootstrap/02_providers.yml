@@ -12,14 +12,18 @@ spec:
       org_id: "P003"
     - name: "AWS"
       org_id: "P004"
+      connection_profile: aws
     - name: "Azure"
       org_id: "P005"
+      connection_profile: azure
     - name: "Google Cloud"
       org_id: "P006"
+      connection_profile: gcp
     - name: "IBM"
       org_id: "P007"
     - name: "Oracle"
       org_id: "P008"
+      connection_profile: oci
     - name: "Arelion"
       org_id: "P009"
     - name: "Colt Technology Services"
@@ -36,6 +40,7 @@ spec:
       org_id: "P015"
     - name: "Equinix"
       org_id: "P016"
+      connection_profile: equinix
     - name: "Interxion"
       org_id: "P017"
     - name: "PCCW Global"
@@ -68,6 +73,7 @@ spec:
       org_id: "P029"
     - name: "Zscaler"
       org_id: "P030"
+      connection_profile: zscaler
     - name: "ACME"
       org_id: "P031"
     - name: "GLOBEX"
@@ -77,6 +83,7 @@ spec:
     # party a cross-connect or a fabric circuit is bought from.
     - name: "Megaport"
       org_id: "P033"
+      connection_profile: megaport
     - name: "CoreSite"
       org_id: "P034"
     # SD-WAN overlay operator. Deliberately its own provider rather than reusing
