@@ -1,0 +1,58 @@
+---
+# The sub-interfaces that face the cloud and SaaS legs. Our address of each /31 or /30 is typed here; a pool would
+# hand it out (the cloud side is the peering interface, nested under its transport in 03_cloud/03_transport). They
+# name the VRF of the cage, which lists the edge as a member, so they come after the device and the VRF and stay flat.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: "Ethernet1/3.1000"
+      device: "par-colo1-edge-01"
+      role: cloud
+      status: active
+      description: "AWS Direct Connect transit VIF, VLAN 1000"
+      parent_interface: ["par-colo1-edge-01", "Ethernet1/3"]
+      vrf: ["PAR", "PROD"]
+      ip_address: {data: {address: "10.255.128.0/31", ip_namespace: "PROD"}}
+    - name: "Ethernet1/3.1100"
+      device: "par-colo1-edge-01"
+      role: cloud
+      status: active
+      description: "AWS Direct Connect private VIF, VLAN 1100"
+      parent_interface: ["par-colo1-edge-01", "Ethernet1/3"]
+      vrf: ["PAR", "PROD"]
+      ip_address: {data: {address: "10.255.128.2/31", ip_namespace: "PROD"}}
+    # The three Fabric legs share the port Ethernet1/1 (one cable to the Fabric port): one VLAN each.
+    - name: "Ethernet1/1.200"
+      device: "par-colo1-edge-01"
+      role: cloud
+      status: active
+      description: "ExpressRoute primary, private peering VLAN 200 (Fabric virtual connection)"
+      parent_interface: ["par-colo1-edge-01", "Ethernet1/1"]
+      vrf: ["PAR", "PROD"]
+      ip_address: {data: {address: "10.255.128.9/30", ip_namespace: "PROD"}}
+    - name: "Ethernet1/1.201"
+      device: "par-colo1-edge-01"
+      role: cloud
+      status: active
+      description: "ExpressRoute secondary, private peering VLAN 201 (Fabric virtual connection)"
+      parent_interface: ["par-colo1-edge-01", "Ethernet1/1"]
+      vrf: ["PAR", "PROD"]
+      ip_address: {data: {address: "10.255.128.13/30", ip_namespace: "PROD"}}
+    - name: "Ethernet1/1.400"
+      device: "par-colo1-edge-01"
+      role: cloud
+      status: active
+      description: "GCP Partner Interconnect, VLAN attachment VLAN 400 (Fabric virtual connection)"
+      parent_interface: ["par-colo1-edge-01", "Ethernet1/1"]
+      vrf: ["PAR", "PROD"]
+      ip_address: {data: {address: "169.254.20.2/29", ip_namespace: "PROD"}}
+    - name: "Ethernet1/6.300"
+      device: "par-colo1-edge-01"
+      role: saas
+      status: active
+      description: "Webex private peering, VLAN 300"
+      parent_interface: ["par-colo1-edge-01", "Ethernet1/6"]
+      vrf: ["PAR", "PROD"]
+      ip_address: {data: {address: "10.255.128.6/31", ip_namespace: "PROD"}}

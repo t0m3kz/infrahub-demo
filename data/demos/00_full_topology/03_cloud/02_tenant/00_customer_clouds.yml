@@ -1,0 +1,23 @@
+---
+# The footprint of C900 in the AWS account.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCustomerCloud
+  data:
+    - owner: "C900"
+      account: "c900-aws-prod"
+      customer_name: "demo-aws"
+      parent: "eu-central-1"
+---
+# The footprint of C900 in the Azure account (the spoke and isolated segments for the extra pairs of the traversal
+# check).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCustomerCloud
+  data:
+    - owner: "C900"
+      account: "c900-azure-prod"
+      customer_name: "demo-azure"
+      parent: "westeurope"

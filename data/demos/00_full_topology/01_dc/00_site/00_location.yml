@@ -1,0 +1,35 @@
+---
+# One data center with one suite (2 rows x 9 slots: the S_MIDDLE envelope of the pod) and the topology objects the
+# devices hang on. The suite is the data hall; its racks are here (the border and edge rack) and in 03_racks.yml (the
+# racks of the pod, which need the pod below).
+apiVersion: infrahub.app/v1
+version: "1.0"
+kind: Object
+spec:
+  kind: LocationMetro
+  data:
+    - name: "Katowice"
+      shortname: "ktw"
+      parent: pl
+      children:
+        kind: LocationFacility
+        data:
+          - name: "KTW1"
+            shortname: "ktw1"
+            children:
+              kind: LocationSuite
+              data:
+                - name: KTW1-SUITE-1
+                  index: 1
+                  shortname: "ktw1-suite-1"
+                  parent: ktw1
+                  rows: 2
+                  racks_per_row: 9
+                  children:
+                    kind: LocationRack
+                    data:
+                      - name: KTW1-RACK-01
+                        shortname: ktw1-rack-01
+                        index: 1
+                        row_index: 1
+                        rack_type: network

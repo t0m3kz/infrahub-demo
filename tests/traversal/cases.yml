@@ -5,7 +5,7 @@ cases:
   - name: full_topology
     schema: schemas
     # the whole sample is ONE directory (numbered folders = load order, see its README); load_topology.py (next to
-    # this file) loads it in one `infrahubctl object load` run and then adds the VLAN-domain row of dc90-leaf-02
+    # this file) loads it in one `infrahubctl object load` run and then adds the VLAN-domain row of ktw1-leaf-02
     data:
       - data/demos/00_full_topology
     # every object kind of the bulk read (tests/traversal/graph_read.py QUERIES keys) that must not be empty
@@ -16,23 +16,24 @@ cases:
     inventory_golden: full_topology__inventory.txt
     # a transport port or LAG lists its peerings in `sub_interfaces` (DcimSubInterface, the marker shared with VIFs)
     transport_sub_interfaces: true
-    # the pod DC90-9-POD-1 (leaves, spine) in front of the edge: server (bond0) -> vPC leaf pair -> spine -> border
-    # leaves (deployed to the DC, as a border role belongs to it) -> edge
+    # the pod DC-KTW1-9-POD-1 (leaves, spine, server) in front of the edge: server (bond0) -> vPC leaf pair -> spine ->
+    # border leaves (deployed to the DC, as a border role belongs to it) -> edge
     pod:
-      server: dc90-srv-01
+      server: ktw1-srv-01
       bond: bond0
-      leaves: [dc90-leaf-01, dc90-leaf-02]
-      border_leaves: [dc90-bl-01, dc90-bl-02]
-      edge: dc90-edge-01
-      segment: c900-demo-web-p
-      mlag: dc90-mlag-01
+      leaves: [ktw1-leaf-01, ktw1-leaf-02]
+      border_leaves: [ktw1-bl-01, ktw1-bl-02]
+      edge: ktw1-edge-01
+      segment: c900-web-p
+      mlag: ktw1-mlag-01
       deployed_to:
-        dc90-leaf-01: DC90-9-POD-1
-        dc90-leaf-02: DC90-9-POD-1
-        dc90-spine-01: DC90-9-POD-1
-        dc90-bl-01: DC90
-        dc90-bl-02: DC90
-        dc90-edge-01: DC90
+        ktw1-leaf-01: DC-KTW1-9-POD-1
+        ktw1-leaf-02: DC-KTW1-9-POD-1
+        ktw1-spine-01: DC-KTW1-9-POD-1
+        ktw1-srv-01: DC-KTW1-9-POD-1
+        ktw1-bl-01: DC-KTW1
+        ktw1-bl-02: DC-KTW1
+        ktw1-edge-01: DC-KTW1
       # 4 = 2 leaves x 1 spine x 2 border leaves (one `--via` trace each);
       # +1 = the direct uplink leaf-01 -> panel -> edge, the shortest set of the plain trace
       l1_paths_to_edge: 5
@@ -40,30 +41,53 @@ cases:
     # THE INTERNET: one object under the label "Internet" with one shared interface; two ISPs and the public side of a
     # SaaS and of a cloud service attach to it, so from the edge L1 reaches each public side through either ISP
     internet:
-      edge: dc90-edge-01
+      edge: ktw1-edge-01
       object: INTERNET
       label: Internet
       bus: bus
       namespace: INTERNET
       golden: full_topology__internet.txt  # the L1 chains edge port -> public side port, through each ISP
       isps:
-        - {isp_device: EXT-ISP-DEMO-PE1, access_port: Ethernet1/2, access_carrier: INET-DC90-ISP-DEMO, uplink_carrier: UPL-ISP-DEMO}  # yamllint disable-line rule:line-length
-        - {isp_device: EXT-ISP-DEMO-B-PE1, access_port: Ethernet1/1, access_carrier: INET-DC90-ISP-DEMO-B, uplink_carrier: UPL-ISP-DEMO-B}  # yamllint disable-line rule:line-length
+        - {isp_device: EXT-ISP-A-PE1, access_port: Ethernet1/2, access_carrier: INET-KTW1-ISP-A, uplink_carrier: UPL-ISP-A}  # yamllint disable-line rule:line-length
+        - {isp_device: EXT-ISP-B-PE1, access_port: Ethernet1/1, access_carrier: INET-KTW1-ISP-B, uplink_carrier: UPL-ISP-B}  # yamllint disable-line rule:line-length
       public_sides:
         - {endpoint: s3-public, prefix: 192.0.2.0/24, kind: cloud, transport: s3-c900-euc1-pub, port: pub-1, carrier: PUB-S3-EUC1}  # yamllint disable-line rule:line-length
         - {endpoint: webex-public, prefix: 203.0.113.0/24, kind: saas, transport: webex-c900-fra-pub, port: pub-1, carrier: PUB-WEBEX-FRA}  # yamllint disable-line rule:line-length
       # L3 of the first ISP: the eBGP session on the two physical ports of the access carrier
-      l3: {isp_device: EXT-ISP-DEMO-PE1, edge_port: Ethernet1/2, isp_port: et-0/0/0}
+      l3: {isp_device: EXT-ISP-A-PE1, edge_port: Ethernet1/2, isp_port: et-0/0/0}
+    # THE THREE SITES reach THE INTERNET in L1, each through its own access carrier (and then the uplink of the ISP
+    # router it is connected to): the DC through its tenant segment and the edge's two ISPs, the colocation cage through
+    # its access to the second ISP, the office through its SD-WAN edge's access to the first ISP
+    sites:
+      internet: TopologyInternet:INTERNET
+      isp_routers: [EXT-ISP-A-PE1, EXT-ISP-B-PE1]
+      sites:
+        - {site: DC, node: "ManagedVxlanSegment:c900-web-p", carriers: [[INET-KTW1-ISP-A, UPL-ISP-A], [INET-KTW1-ISP-B, UPL-ISP-B]]}  # yamllint disable-line rule:line-length
+        - {site: colocation, node: "DcimPhysicalDevice:par-colo1-edge-01", carriers: [[INET-PAR1-ISP-B, UPL-ISP-B]]}
+        - {site: office, node: "DcimPhysicalDevice:bcn-office-edge-01", carriers: [[INET-BCN-OFFICE-ISP-A, UPL-ISP-A]]}
+    # where the sites and their legs are (attribute reads): the cloud and SaaS legs end in the cage and not at the DC,
+    # the dark fibres join the DC and the cage, the office tunnels end on the office's own edge
+    layout:
+      zone: PAR-COLO1
+      colo_edge: par-colo1-edge-01
+      fabric_port_device: EXT-FABRIC-PAR
+      dc: DC-KTW1
+      office: C900-OFFICE
+      office_edge: bcn-office-edge-01
+      dark_fibres: [DF-KTW1-PAR1-A, DF-KTW1-PAR1-B]
     # A pair names its ends as `kind:name` (or `kind:hfid`, parts joined by `/`) and is traced by the server
     # (utils/path_trace.py): the plain trace must reach the target in L1 and L3 with a COMPLETE equal-cost set, the
     # reverse direction gives the same chains, and `through` lists each transport the target must also be reached
     # through (a `--via` trace each) with the circuit types on its chains: carriers in l1, session circuits in l3.
     pairs:
-      - src: ManagedVxlanSegment:c900-demo-web-p
-        dst: CloudNetworkSegment:c900-demo-subnet-p
-        golden: full_topology__c900-demo-web-p__c900-demo-subnet-p.txt
+      - src: ManagedVxlanSegment:c900-web-p
+        dst: CloudNetworkSegment:c900-subnet-p
+        golden: full_topology__c900-web-p__c900-subnet-p.txt
+        max_paths: 100  # the tenant segment starts on three ports of the pod and crosses both border leaves
         through:
-          CloudDirectConnect:dx-c900-fra-lag: {l1: [cross_connect], l3: [handoff]}
+          # the Direct Connect is delivered to the colocation cage: from the DC the path crosses a dark fibre (L1) and
+          # the EVPN peering of the DCI (L3: BGP processes and peerings, so no session circuit of type dci on the chain)
+          CloudDirectConnect:dx-c900-fra-lag: {l1: [cross_connect, dark_fiber], l3: [handoff]}
           CloudVPNConnection:vpn-c900-aws-euc1: {l3: [vpn]}
         # the kinds of the transport a chain crosses
         far_end_kinds: [CloudDirectConnect, CloudVPNConnection]
@@ -72,19 +96,22 @@ cases:
           dx-c900-fra-lag: [port, lag, vif]
           vpn-c900-aws-euc1: [vif]
       # DC -> SaaS over a private cross-connect and a BGP handoff (Webex)
-      - src: ManagedVxlanSegment:c900-demo-web-p
+      - src: ManagedVxlanSegment:c900-web-p
         dst: TopologySaasRegion:WEBEX-FRANKFURT
         golden: full_topology__web__saas-webex.txt
+        max_paths: 100
         through:
-          CloudDirectConnect:webex-c900-fra-xc: {l1: [cross_connect], l3: [handoff]}
+          CloudDirectConnect:webex-c900-fra-xc: {l1: [cross_connect, dark_fiber], l3: [handoff]}
         far_end_kinds: [CloudDirectConnect]
         transport_kinds:
           webex-c900-fra-xc: [port, vif]
-      # DC -> SaaS over a tunnel on the internet carrier, no session (Zscaler)
-      - src: ManagedVxlanSegment:c900-demo-web-p
+      # DC -> SaaS over a tunnel on the internet carrier, no session (Zscaler): the DC edge is the SD-WAN hub, the
+      # office edge holds the tunnel to Zscaler
+      - src: ManagedVxlanSegment:c900-web-p
         dst: TopologySaasRegion:ZSCALER-MUNICH I
         # a tunnel is a session circuit: it exists in L3 only (its internet carrier is asserted by `internet` and the
-        # tunnel_underlay row), so the physical layer does not reach the SaaS region
+        # tunnel_underlay row), so the physical layer does not reach the SaaS region. In L3 the DC reaches Zscaler
+        # through the office edge: tunnel DC edge <-> office edge, then the tunnel office edge <-> Zscaler.
         layers: [l3]
         golden: full_topology__web__saas-zscaler.txt
         through:
@@ -93,13 +120,82 @@ cases:
         transport_kinds:
           zscaler-c900-muc: [vif]
       # cloud <-> cloud: the spoke VNet has no gateway of its own, the DC reaches it across `peers` of the hub VNet
-      - src: ManagedVxlanSegment:c900-demo-web-p
-        dst: CloudNetworkSegment:c900-demo-spoke-p
+      - src: ManagedVxlanSegment:c900-web-p
+        dst: CloudNetworkSegment:c900-spoke-p
         golden: full_topology__web__spoke.txt
+        max_paths: 100
         through:
-          CloudDirectConnect:er-c900-weu: {l1: [virtual_connection], l3: [handoff]}
+          # the Fabric virtual connections start on the Fabric port of the cage, which the edge reaches through the
+          # patch panel
+          CloudDirectConnect:er-c900-weu: {l1: [dark_fiber, virtual_connection], l3: [handoff]}
         far_end_kinds: [CloudDirectConnect]
       # negative: a segment in a VPC with no attachment is reached by nothing: a complete empty result in both layers
-      - src: ManagedVxlanSegment:c900-demo-web-p
-        dst: CloudNetworkSegment:c900-demo-isolated-p
+      - src: ManagedVxlanSegment:c900-web-p
+        dst: CloudNetworkSegment:c900-isolated-p
         expect_unreachable: true
+      # ---- the three sites of the sample: the office (its SD-WAN edge), the colocation cage (its edge) and the DC
+      # (its tenant segment), and their way to the INTERNET and to the cloud. L1 is cabled and carried, L3 is routed.
+      # office <-> DC: L1 through the internet access of both (one ISP router), L3 over the SD-WAN tunnel to the DC edge
+      - src: DcimPhysicalDevice:bcn-office-edge-01
+        dst: ManagedVxlanSegment:c900-web-p
+        golden: full_topology__office__dc.txt
+        max_paths: 100
+        circuit_types: {l1: [internet], l3: [tunnel]}
+      # office <-> colocation: L1 through two ISPs and THE INTERNET, L3 over the tunnel, the DC and the DCI
+      - src: DcimPhysicalDevice:bcn-office-edge-01
+        dst: DcimPhysicalDevice:par-colo1-edge-01
+        golden: full_topology__office__colo.txt
+        max_paths: 100
+        circuit_types: {l1: [internet], l3: [tunnel]}
+      # colocation <-> DC: dark fibre from the cage edge to a border leaf of the DC; in L3 the EVPN peering of the DCI
+      - src: DcimPhysicalDevice:par-colo1-edge-01
+        dst: ManagedVxlanSegment:c900-web-p
+        golden: full_topology__colo__dc.txt
+        max_paths: 100
+        circuit_types: {l1: [dark_fiber], l3: []}
+      # each site to THE INTERNET (L1: the carrier circuits are the physical fact, THE INTERNET has no routing)
+      - src: ManagedVxlanSegment:c900-web-p
+        dst: TopologyInternet:INTERNET
+        layers: [l1]
+        golden: full_topology__dc__internet.txt
+        max_paths: 100
+        circuit_types: {l1: [internet]}
+      - src: DcimPhysicalDevice:par-colo1-edge-01
+        dst: TopologyInternet:INTERNET
+        layers: [l1]
+        golden: full_topology__colo__internet.txt
+        circuit_types: {l1: [internet]}
+      - src: DcimPhysicalDevice:bcn-office-edge-01
+        dst: TopologyInternet:INTERNET
+        layers: [l1]
+        golden: full_topology__office__internet.txt
+        circuit_types: {l1: [internet]}
+      # office -> AWS: the shortest L3 chain is the office tunnel to the DC edge and the AWS VPN from there (through the
+      # Direct Connect the server finds the cloud's own way, VPN -> transit gateway -> DX gateway, so L3 is traced only
+      # through the VPN). L1 reaches the VPC only through the cage: the office access, the internet, the cage access and
+      # the cross-connect (the VPN and the tunnels are L3).
+      - src: DcimPhysicalDevice:bcn-office-edge-01
+        dst: CloudNetworkSegment:c900-subnet-p
+        golden: full_topology__office__aws.txt
+        max_paths: 100
+        through:
+          CloudVPNConnection:vpn-c900-aws-euc1: {l3: [tunnel, vpn]}
+          CloudDirectConnect:dx-c900-fra-lag: {l1: [cross_connect, internet]}
+        far_end_kinds: [CloudDirectConnect, CloudVPNConnection]
+      # colocation -> AWS: the cross-connect from the cage edge, one hop to the Direct Connect port
+      - src: DcimPhysicalDevice:par-colo1-edge-01
+        dst: CloudNetworkSegment:c900-subnet-p
+        golden: full_topology__colo__aws.txt
+        max_paths: 100
+        through:
+          CloudDirectConnect:dx-c900-fra-lag: {l1: [cross_connect], l3: [handoff]}
+        far_end_kinds: [CloudDirectConnect]
+        transport_kinds:
+          dx-c900-fra-lag: [port, lag, vif]
+      # colocation -> the ExpressRoute transport: edge Ethernet1/1 -> patch panel -> Fabric port -> virtual connections
+      - src: DcimPhysicalDevice:par-colo1-edge-01
+        dst: CloudDirectConnect:er-c900-weu
+        golden: full_topology__colo__er.txt
+        circuit_types: {l1: [virtual_connection], l3: [handoff]}
+        transport_kinds:
+          er-c900-weu: [port, vif]

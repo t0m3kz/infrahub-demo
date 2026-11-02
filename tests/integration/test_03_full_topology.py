@@ -10,10 +10,11 @@ its branch from main.
 import logging
 
 import pytest
-from infrahub_sdk import InfrahubClient
+from infrahub_sdk import Config, InfrahubClient
 
 from tests.traversal import load_topology
 from tests.traversal.check_model import Report, assert_case, load_cases
+from utils import path_trace
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -38,7 +39,12 @@ class TestFullTopology:
         """Every traversal assertion of the case passes on the loaded graph."""
         case = load_cases("full_topology")[0]
         report = Report()
-        await assert_case(case, async_client_main, BRANCH, report)
+        # a dense L3 search takes the server over a minute: the tracer's own timeout, not the fixture's 60 s
+        config = async_client_main.config
+        client = InfrahubClient(
+            config=Config(address=config.address, api_token=config.api_token, timeout=path_trace.REQUEST_TIMEOUT)
+        )
+        await assert_case(case, client, BRANCH, report)
         with capsys.disabled():
             report.print()
         failed = [f"{name}: {detail}" for name, ok, detail in report.rows if not ok]

@@ -1,0 +1,16 @@
+---
+# Private path to a service: the S3 gateway endpoint (route). The Webex endpoint is in 04_saas/06_service_endpoints.yml.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudServiceEndpoint
+  data:
+    - name: "vpce-c900-s3"
+      description: "Gateway endpoint to the object store of the provider"
+      status: active
+      service_name: "s3"
+      access: route
+      virtual_network: "vpc-c900-prod"
+      provider: "P004"
+      segments:
+        - "c900-subnet-p"

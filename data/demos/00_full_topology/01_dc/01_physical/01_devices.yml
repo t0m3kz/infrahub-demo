@@ -1,0 +1,123 @@
+---
+# Three devices from bootstrap templates (their interfaces come with the template): a leaf (in the pod), the edge that
+# carries the DC's internet access and the office tunnel, and the ISP router at the far end of the internet carrier.
+# Nothing generated. The edge nests the tunnel interfaces that exist only for it: the two AWS VPN tunnels (they ride
+# the internet access port Ethernet1/2) and the hub end of the C900 office tunnel (05_office/04_tunnels.yml); the
+# cloud and SaaS legs are NOT on this edge, they land in the colocation cage (02_colo).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: ktw1-leaf-01
+      object_template: N9K-C9364C-GX_LEAF_MR
+      description: Leaf with the tenant segment on Ethernet1/1
+      deployment: DC-KTW1-9-POD-1
+      rack: ktw1-rack-03
+      position: 41
+      rack_face: front
+    - name: ktw1-edge-01
+      object_template: N9K-C9316D-GX_EDGE
+      description: "Edge: 1/1 1/2 internet (two ISPs), 1/13 leaf, 1/10 1/14 border leaves (cloud legs: colo cage)"
+      deployment: DC-KTW1
+      rack: ktw1-rack-01
+      position: 40
+      rack_face: front
+      interfaces:
+        - kind: DcimVirtualInterface
+          data:
+            name: Tunnel1
+            role: cloud
+            status: active
+            description: AWS site-to-site VPN tunnel 1 (rides on the internet port Ethernet1/2)
+            parent_interface: ["ktw1-edge-01", "Ethernet1/2"]
+            ip_address:
+              data:
+                address: "169.254.10.2/30"
+                ip_namespace: PROD
+        - kind: DcimVirtualInterface
+          data:
+            name: Tunnel2
+            role: cloud
+            status: active
+            description: AWS site-to-site VPN tunnel 2 (rides on the internet port Ethernet1/2)
+            parent_interface: ["ktw1-edge-01", "Ethernet1/2"]
+            ip_address:
+              data:
+                address: "169.254.10.6/30"
+                ip_namespace: PROD
+        - kind: DcimVirtualInterface
+          data:
+            name: Tunnel4
+            role: cloud
+            status: active
+            description: SD-WAN hub end of the C900 office tunnel (rides on the internet port Ethernet1/2)
+            parent_interface: ["ktw1-edge-01", "Ethernet1/2"]
+            ip_address:
+              data:
+                address: "169.254.10.14/30"
+                ip_namespace: PROD
+    - name: EXT-ISP-A-PE1
+      object_template: MX204_ISP_PE
+      owner: P014
+      description: "ISP router: far end of the internet carrier (VPN and Zscaler legs)"
+      deployment: ISP-A
+---
+# The pod: a second leaf (the MLAG/vPC peer of ktw1-leaf-01), one spine, two border leaves and one server. Devices
+# come from bootstrap templates (their interfaces with them). The leaves, the spine and the server are deployed to the
+# pod DC-KTW1-9-POD-1 (01_dc/00_site/02_pod.yml, its racks 01_dc/00_site/03_racks.yml); the border leaves and the edge
+# stay at DC-KTW1 (a border role belongs to the DC). Every device sits in a rack with its unit. Nothing generated. The
+# server nests its LACP bond over eno1 and eno2, one to each leaf (the leaves' port-channels are in
+# 01_dc/03_tenant/02_lag_interfaces.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: ktw1-leaf-02
+      object_template: N9K-C9364C-GX_LEAF_MR
+      description: "Leaf, vPC peer of ktw1-leaf-01"
+      deployment: DC-KTW1-9-POD-1
+      rack: ktw1-rack-04
+      position: 41
+      rack_face: front
+    - name: ktw1-spine-01
+      object_template: N9K-C9336C-FX2_SPINE
+      description: "Spine: leaf-01/02 on Ethernet1/1-2, border leaves on Ethernet1/3-4"
+      deployment: DC-KTW1-9-POD-1
+      rack: ktw1-rack-05
+      position: 41
+      rack_face: front
+    - name: ktw1-bl-01
+      object_template: N9K-C9336C-FX2_BORDER_LEAF
+      description: "Border leaf 1: spine on Ethernet1/33, edge through the patch panel (jack 2)"
+      deployment: DC-KTW1
+      rack: ktw1-rack-01
+      position: 38
+      rack_face: front
+    - name: ktw1-bl-02
+      object_template: N9K-C9336C-FX2_BORDER_LEAF
+      description: "Border leaf 2: spine on Ethernet1/33, edge on a direct cable"
+      deployment: DC-KTW1
+      rack: ktw1-rack-01
+      position: 36
+      rack_face: front
+    - name: ktw1-srv-01
+      object_template: PowerEdge-R640_SERVER
+      description: "Server of the tenant, bond0 over eno1 and eno2, dual-homed to the vPC pair"
+      deployment: DC-KTW1-9-POD-1
+      rack: ktw1-rack-02
+      position: 20
+      rack_face: front
+      interfaces:
+        - kind: DcimLAGInterface
+          data:
+            name: bond0
+            description: LACP bond over eno1 and eno2
+            status: active
+            lag_id: 1
+            lacp_mode: active
+            minimum_links: 1
+            member_interfaces:
+              - ["ktw1-srv-01", "eno1"]
+              - ["ktw1-srv-01", "eno2"]

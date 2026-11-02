@@ -1,0 +1,59 @@
+---
+# The two ends of the internet carrier get the transit /31: the edge port Ethernet1/2 (the public address the AWS
+# customer gateway already names, 198.51.100.10) and the ISP router port et-0/0/0. Flat: the devices are created in
+# 01_dc, before the INTERNET prefixes of this folder.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - device: ktw1-edge-01
+      name: Ethernet1/2
+      description: "Internet access (INET-KTW1-ISP-A): transit to the ISP, tunnels ride on it"
+      status: active
+      ip_address:
+        data:
+          address: "198.51.100.10/31"
+          ip_namespace: INTERNET
+    - device: EXT-ISP-A-PE1
+      name: et-0/0/0
+      description: "Transit customer: ktw1-edge-01"
+      status: active
+      ip_address:
+        data:
+          address: "198.51.100.11/31"
+          ip_namespace: INTERNET
+---
+# The internet access of the colocation cage and of the office, next to the DC's: the site's port gets the transit /31
+# of its carrier (a pool would hand it out). The port of the second ISP's router is nested under the router
+# (06_internet/01_providers/01_isp_router.yml). No BGP session is built for these two accesses (the first ISP's L3 is
+# 06_internet/03_routing/02_bgp_peerings.yml), the carriers are the L1 fact.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - device: par-colo1-edge-01
+      name: Ethernet1/14
+      status: active
+      description: "Internet access (INET-PAR1-ISP-B): transit to the second ISP"
+      ip_address:
+        data:
+          address: "198.51.100.14/31"
+          ip_namespace: INTERNET
+    - device: bcn-office-edge-01
+      name: GE1
+      status: active
+      description: "Internet access (INET-BCN-OFFICE-ISP-A): transit to the ISP, the tunnels ride on it"
+      ip_address:
+        data:
+          address: "198.51.100.12/31"
+          ip_namespace: INTERNET
+    - device: EXT-ISP-A-PE1
+      name: et-0/0/1
+      status: active
+      description: "Transit customer: bcn-office-edge-01"
+      ip_address:
+        data:
+          address: "198.51.100.13/31"
+          ip_namespace: INTERNET

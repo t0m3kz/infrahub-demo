@@ -1,0 +1,10 @@
+---
+# The metro of the customer office C900 (Barcelona); the country Spain is bootstrap data.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationMetro
+  data:
+    - name: Barcelona
+      shortname: bcn
+      parent: es

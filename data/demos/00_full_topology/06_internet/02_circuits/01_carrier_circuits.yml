@@ -1,0 +1,133 @@
+---
+# THE INTERNET (one passive object with one shared interface, bootstrap data: data/bootstrap/03b_internet.yml) and the
+# L1 that meets on it. Our edge port -> internet carrier -> ISP router; the ISP router's uplink -> internet carrier ->
+# the interface of INTERNET; the public side of a SaaS region and of a cloud region -> internet carrier -> the same
+# interface. So from ktw1-edge-01 the public side of Webex and of the object store is reachable at L1 through either
+# ISP. INTERNET has no routing: the addresses and prefixes of this scenario live in the INTERNET namespace
+# (06_internet/00_addressing/01_prefixes.yml).
+#
+#   ktw1-edge-01 Ethernet1/2 -- INET-KTW1-ISP-A   -- EXT-ISP-A-PE1   et-0/0/0   (base sample, ISP-A)
+#                               EXT-ISP-A-PE1    xe-0/1/0 -- UPL-ISP-A   -+
+#   ktw1-edge-01 Ethernet1/1 -- INET-KTW1-ISP-B -- EXT-ISP-B-PE1 et-0/0/0   (a second ISP)    |
+#                               EXT-ISP-B-PE1  xe-0/1/0 -- UPL-ISP-B -+                      |
+#   webex-c900-fra-pub pub-1 -- PUB-WEBEX-FRA (Webex Frankfurt, public side) ----+--> INTERNET:bus
+#   s3-c900-euc1-pub   pub-1 -- PUB-S3-EUC1 (object store eu-central-1, public side) -+
+#
+# INTERNET has ONE interface, `bus`, of its own kind (TopologyInternetInterface), and every attachment keeps a carrier
+# circuit of its own that ends on it: the kind is what lets many carriers share it (checks/carrier_circuit_ports.py).
+# The carriers are `internet` circuits; the five ends that are not the bus are the ports of ISP routers and of the
+# transports that stand for the public sides.
+#
+# The carriers. Locations are authored (no generator runs in this sample): a carrier has exactly two, one per end, and
+# INTERNET is the location of its own end. INET-KTW1-ISP-B is an access carrier like the base sample's; the four
+# others are attachments: their second end is the bus.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCarrierCircuit
+  data:
+    - name: INET-KTW1-ISP-B
+      circuit_id: INET-KTW1-ISP-B
+      description: Second internet access of ktw1-edge-01
+      provider: P023
+      circuit_type: internet
+      status: active
+      bandwidth: 1000
+      locations:
+        - DC-KTW1
+        - ISP-B
+      capabilities:
+        - ["ktw1-edge-01", "Ethernet1/1"]
+        - ["EXT-ISP-B-PE1", "et-0/0/0"]
+    - name: UPL-ISP-A
+      circuit_id: UPL-ISP-A
+      description: Uplink of the ISP-A router to the internet
+      provider: P014
+      circuit_type: internet
+      status: active
+      bandwidth: 100000
+      locations:
+        - ISP-A
+        - INTERNET
+      capabilities:
+        - ["EXT-ISP-A-PE1", "xe-0/1/0"]
+        - ["INTERNET", "bus"]
+    - name: UPL-ISP-B
+      circuit_id: UPL-ISP-B
+      description: Uplink of the ISP-B router to the internet
+      provider: P023
+      circuit_type: internet
+      status: active
+      bandwidth: 100000
+      locations:
+        - ISP-B
+        - INTERNET
+      capabilities:
+        - ["EXT-ISP-B-PE1", "xe-0/1/0"]
+        - ["INTERNET", "bus"]
+    - name: PUB-WEBEX-FRA
+      circuit_id: PUB-WEBEX-FRA
+      description: Public side of Webex Frankfurt to the internet
+      provider: P901
+      circuit_type: internet
+      status: active
+      bandwidth: 10000
+      locations:
+        - WEBEX-FRANKFURT
+        - INTERNET
+      capabilities:
+        - ["webex-c900-fra-pub", "pub-1"]
+        - ["INTERNET", "bus"]
+    - name: PUB-S3-EUC1
+      circuit_id: PUB-S3-EUC1
+      description: Public side of the object store API of eu-central-1 to the internet
+      provider: P004
+      circuit_type: internet
+      status: active
+      bandwidth: 10000
+      locations:
+        - eu-central-1
+        - INTERNET
+      capabilities:
+        - ["s3-c900-euc1-pub", "pub-1"]
+        - ["INTERNET", "bus"]
+---
+# The internet access of the colocation cage and of the office, next to the DC's (INET-KTW1-ISP-A,
+# 03_cloud/04_circuits/00_carrier_circuits.yml, and INET-KTW1-ISP-B above): an `internet` carrier from the site's
+# port to a free `customer` port of an ISP router of the sample, the pattern of 30_all's INET-LUMEN-EQXFR2 and of
+# add_sdwan_edge's INET-<office>. Both ISP routers are attached to INTERNET (UPL-ISP-A, UPL-ISP-B: rule I3),
+# so every site reaches every other site and the public sides of the services at L1 through the internet:
+#
+#   par-colo1-edge-01 Ethernet1/14 -- INET-PAR1-ISP-B -- EXT-ISP-B-PE1 et-0/0/1   (cage, second ISP)
+#   bcn-office-edge-01 GE1  -- INET-BCN-OFFICE-ISP-A     -- EXT-ISP-A-PE1   et-0/0/1   (office, first ISP)
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCarrierCircuit
+  data:
+    - name: INET-PAR1-ISP-B
+      circuit_id: INET-PAR1-ISP-B
+      description: Internet access of the PAR-COLO1 cage edge
+      provider: P023
+      circuit_type: internet
+      status: active
+      bandwidth: 10000
+      locations:
+        - PAR-COLO1
+        - ISP-B
+      capabilities:
+        - ["par-colo1-edge-01", "Ethernet1/14"]
+        - ["EXT-ISP-B-PE1", "et-0/0/1"]
+    - name: INET-BCN-OFFICE-ISP-A
+      circuit_id: INET-BCN-OFFICE-ISP-A
+      description: Internet access of the C900 office SD-WAN edge (underlay of its tunnels)
+      provider: P014
+      circuit_type: internet
+      status: active
+      bandwidth: 1000
+      locations:
+        - C900-OFFICE
+        - ISP-A
+      capabilities:
+        - ["bcn-office-edge-01", "GE1"]
+        - ["EXT-ISP-A-PE1", "et-0/0/1"]

@@ -1,0 +1,9 @@
+---
+# The Azure region has no zone in the main sample; the spoke segment needs one.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCloudZone
+  data:
+    - name: "westeurope-1"
+      parent: "westeurope"

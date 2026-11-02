@@ -140,3 +140,23 @@ def internet_golden(cfg: dict, legs: dict[tuple[str, str], Leg]) -> str:
     return "# L1 chains: our edge through an ISP and THE INTERNET to the public side of a service\n" + "".join(
         f"  {x}\n" for x in lines
     )
+
+
+def site_internet_rows(cfg: dict, legs: dict[str, Leg]) -> list[Row]:
+    """Every site reaches THE INTERNET in L1: the equal-cost chains end on the INTERNET object (the uplink carrier lists it
+    as a location, so the shortest chain does not go through its `bus` interface), cross an ISP router, and their
+    carriers are exactly the site's own access then that router's uplink (by circuit_id, one pair per ISP the site is
+    connected to)."""
+    rows: list[Row] = []
+    isp_routers = set(cfg["isp_routers"])
+    for site in cfg["sites"]:
+        leg = legs.get(site["site"])
+        best = leg.equal_cost if leg else []
+        carriers = sorted([n.hfid[0] for n in p if n.kind == CARRIER and n.hfid] for p in best)
+        want = sorted(site["carriers"])
+        ends = [bool(p) and label(p[-1]) == cfg["internet"] for p in best]
+        isp = [any(n.kind == "DcimPhysicalDevice" and "/".join(n.hfid) in isp_routers for n in p) for p in best]
+        ok = bool(leg and leg.complete and best) and carriers == want and all(ends) and all(isp)
+        title = f"internet: the {site['site']} reaches {cfg['internet'].split(':', 1)[1]} in L1 through its own access"
+        rows.append((title, ok, "\n".join(render(leg)) if leg else "no trace"))
+    return rows

@@ -1,0 +1,39 @@
+---
+# The racks of the pod DC-KTW1-9-POD-1 in the suite KTW1-SUITE-1 (00_location.yml), row 1: a compute rack with the
+# server, one rack for each leaf of the vPC pair, a network rack with the spine. The border and edge rack is the first
+# slot (00_location.yml, it belongs to the DC, not to the pod). Racks are data: no group membership, so the rack
+# generator does not run and builds nothing.
+apiVersion: infrahub.app/v1
+version: "1.0"
+kind: Object
+spec:
+  kind: LocationRack
+  data:
+    - name: KTW1-RACK-02
+      shortname: ktw1-rack-02
+      parent: ktw1-suite-1
+      index: 2
+      row_index: 1
+      rack_type: compute
+      deployment: DC-KTW1-9-POD-1
+    - name: KTW1-RACK-03
+      shortname: ktw1-rack-03
+      parent: ktw1-suite-1
+      index: 3
+      row_index: 1
+      rack_type: network
+      deployment: DC-KTW1-9-POD-1
+    - name: KTW1-RACK-04
+      shortname: ktw1-rack-04
+      parent: ktw1-suite-1
+      index: 4
+      row_index: 1
+      rack_type: network
+      deployment: DC-KTW1-9-POD-1
+    - name: KTW1-RACK-05
+      shortname: ktw1-rack-05
+      parent: ktw1-suite-1
+      index: 5
+      row_index: 1
+      rack_type: network
+      deployment: DC-KTW1-9-POD-1
