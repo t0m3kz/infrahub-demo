@@ -37,7 +37,7 @@ from utils.path_trace import Leg  # noqa: E402
 
 GOLDEN_DIR = Path(__file__).resolve().parent / "golden"
 CASES_FILE = Path(__file__).resolve().parent / "cases.yml"
-PAIR_MAX_PATHS = 30  # the server's cost grows with the cap (L3: 20 -> 19 s, 64 -> 77 s); the largest set here is 8
+PAIR_MAX_PATHS = 30  # the server's cost grows with the cap (L3: 20 -> 19 s, 64 -> 77 s); a pair may ask for up to 100
 DEFAULT_TOKEN = "06438eb2-8019-4776-878c-0941b1f1d1ec"  # noqa: S105 - the local test stack's demo token
 
 
@@ -132,11 +132,18 @@ def check_golden(rep: Report, tag: str, name: str, text: str, update_golden: boo
 
 
 async def traced(
-    rep: Report, tag: str, client: InfrahubClient, branch: str, src: str, dst: str, **kwargs: Any
+    rep: Report,
+    tag: str,
+    client: InfrahubClient,
+    branch: str,
+    src: str,
+    dst: str,
+    max_paths: int = PAIR_MAX_PATHS,
+    **kwargs: Any,
 ) -> list[Leg] | None:
     """The server's chains between two nodes; an end that does not resolve is a failed row, not a crash."""
     try:
-        return await path_trace.trace(client, src, dst, branch=branch, max_paths=PAIR_MAX_PATHS, **kwargs)
+        return await path_trace.trace(client, src, dst, branch=branch, max_paths=max_paths, **kwargs)
     except path_trace.ResolveError as exc:
         rep.add(f"[{tag}] ends resolve", False, str(exc))
         return None
@@ -150,20 +157,26 @@ async def check_pair(
     src, dst = pair["src"], pair["dst"]
     tag = f"{src} -> {dst}"
     layers = tuple(pair.get("layers") or ("l1", "l3"))
-    plain = await traced(rep, tag, client, branch, src, dst, layers=layers)
+    cap = pair.get("max_paths", PAIR_MAX_PATHS)  # a pair from a tenant segment crosses the whole pod: its set is larger
+    plain = await traced(rep, tag, client, branch, src, dst, cap, layers=layers)
     if plain is None:
         return
     if pair.get("expect_unreachable"):
         for row in chain_rows.unreachable_rows(tag, plain):
             rep.add(*row)
         return
-    kinds = pair["far_end_kinds"]
+    kinds = pair.get("far_end_kinds", [])
     for row in chain_rows.reach_rows(tag, plain):
         rep.add(*row)
     kind_of = chain_rows.circuit_types(d)
     sections = [("plain", plain)]
+    if pair.get("circuit_types"):  # the hops of the shortest chains between two sites: carriers in l1, sessions in l3
+        for row in chain_rows.type_rows(f"{tag} plain", plain, pair["circuit_types"], kind_of):
+            rep.add(*row)
     for transport, want in (pair.get("through") or {}).items():
-        legs = await traced(rep, f"{tag} via {transport}", client, branch, src, dst, via=transport, layers=tuple(want))
+        legs = await traced(
+            rep, f"{tag} via {transport}", client, branch, src, dst, cap, via=transport, layers=tuple(want)
+        )
         if legs is None:
             continue
         sections.append((f"via {transport}", legs))
@@ -175,7 +188,7 @@ async def check_pair(
         ]
         for row in rows:
             rep.add(*row)
-    backward = await traced(rep, f"{dst} -> {src}", client, branch, dst, src, layers=layers)
+    backward = await traced(rep, f"{dst} -> {src}", client, branch, dst, src, cap, layers=layers)
     if backward is not None:
         for row in chain_rows.reverse_rows(f"{dst} -> {src}", plain, backward):
             rep.add(*row)
@@ -222,6 +235,17 @@ async def check_internet(rep: Report, cfg: dict, client: InfrahubClient, branch:
         check_golden(rep, "internet", cfg["golden"], chain_rows.internet_golden(cfg, legs), update_golden)
 
 
+async def check_sites(rep: Report, cfg: dict, client: InfrahubClient, branch: str) -> None:
+    """L1 from each site (DC, colocation, office) to THE INTERNET: each reaches it through its own access carrier."""
+    legs: dict[str, Leg] = {}
+    for site in cfg["sites"]:
+        got = await traced(rep, f"site {site['site']}", client, branch, site["node"], cfg["internet"], layers=("l1",))
+        if got:
+            legs[site["site"]] = got[0]
+    for row in chain_rows.site_internet_rows(cfg, legs):
+        rep.add(*row)
+
+
 # ------------------------------------------------------------------ main flow
 
 
@@ -254,6 +278,12 @@ async def assert_case(
             rep.add(*row)
         await check_internet(rep, case["internet"], client, branch, update_golden)
         lap("internet")
+    if case.get("layout"):
+        for row in walks.layout_rows(d, case["layout"]):
+            rep.add(*row)
+    if case.get("sites"):
+        await check_sites(rep, case["sites"], client, branch)
+        lap("sites")
     check_golden(rep, "inventory", case["inventory_golden"], "\n".join(walks.inventory_lines(d)) + "\n", update_golden)
     declared = walks.declared_rides_on([s for p in case["data"] for s in walks.yaml_documents(ROOT / p)])
     for row in walks.rides_on_rows(d, declared):

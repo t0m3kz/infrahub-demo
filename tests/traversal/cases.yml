@@ -54,6 +54,26 @@ cases:
         - {endpoint: webex-public, prefix: 203.0.113.0/24, kind: saas, transport: webex-c900-fra-pub, port: pub-1, carrier: PUB-WEBEX-FRA}  # yamllint disable-line rule:line-length
       # L3 of the first ISP: the eBGP session on the two physical ports of the access carrier
       l3: {isp_device: EXT-ISP-DEMO-PE1, edge_port: Ethernet1/2, isp_port: et-0/0/0}
+    # THE THREE SITES reach THE INTERNET in L1, each through its own access carrier (and then the uplink of the ISP
+    # router it is connected to): the DC through its tenant segment and the edge's two ISPs, the colocation cage through
+    # its access to the second ISP, the office through its SD-WAN edge's access to the first ISP
+    sites:
+      internet: TopologyInternet:INTERNET
+      isp_routers: [EXT-ISP-DEMO-PE1, EXT-ISP-DEMO-B-PE1]
+      sites:
+        - {site: DC, node: "ManagedVxlanSegment:c900-demo-web-p", carriers: [[INET-DC90-ISP-DEMO, UPL-ISP-DEMO], [INET-DC90-ISP-DEMO-B, UPL-ISP-DEMO-B]]}  # yamllint disable-line rule:line-length
+        - {site: colocation, node: "DcimPhysicalDevice:eg-dmc101", carriers: [[INET-DMC1-ISP-DEMO-B, UPL-ISP-DEMO-B]]}
+        - {site: office, node: "DcimPhysicalDevice:C900-OFFICE-EDGE1", carriers: [[INET-C900-OFFICE, UPL-ISP-DEMO]]}
+    # where the sites and their legs are (attribute reads): the cloud and SaaS legs end in the cage and not at the DC,
+    # the dark fibres join the DC and the cage, the office tunnels end on the office's own edge
+    layout:
+      zone: DMC1
+      colo_edge: eg-dmc101
+      fabric_port_device: EXT-EQX-FABRIC-DMC1
+      dc: DC90
+      office: C900-OFFICE
+      office_edge: C900-OFFICE-EDGE1
+      dark_fibres: [DF-DC90-DMC1, DF-DC90-DMC1-B]
     # A pair names its ends as `kind:name` (or `kind:hfid`, parts joined by `/`) and is traced by the server
     # (utils/path_trace.py): the plain trace must reach the target in L1 and L3 with a COMPLETE equal-cost set, the
     # reverse direction gives the same chains, and `through` lists each transport the target must also be reached
@@ -62,8 +82,11 @@ cases:
       - src: ManagedVxlanSegment:c900-demo-web-p
         dst: CloudNetworkSegment:c900-demo-subnet-p
         golden: full_topology__c900-demo-web-p__c900-demo-subnet-p.txt
+        max_paths: 100  # the tenant segment starts on three ports of the pod and crosses both border leaves
         through:
-          CloudDirectConnect:dx-c900-fra-lag: {l1: [cross_connect], l3: [handoff]}
+          # the Direct Connect is delivered to the colocation cage: from the DC the path crosses a dark fibre (L1) and
+          # the EVPN peering of the DCI (L3: BGP processes and peerings, so no session circuit of type dci on the chain)
+          CloudDirectConnect:dx-c900-fra-lag: {l1: [cross_connect, dark_fiber], l3: [handoff]}
           CloudVPNConnection:vpn-c900-aws-euc1: {l3: [vpn]}
         # the kinds of the transport a chain crosses
         far_end_kinds: [CloudDirectConnect, CloudVPNConnection]
@@ -75,16 +98,19 @@ cases:
       - src: ManagedVxlanSegment:c900-demo-web-p
         dst: TopologySaasRegion:WEBEX-FRANKFURT
         golden: full_topology__web__saas-webex.txt
+        max_paths: 100
         through:
-          CloudDirectConnect:webex-c900-fra-xc: {l1: [cross_connect], l3: [handoff]}
+          CloudDirectConnect:webex-c900-fra-xc: {l1: [cross_connect, dark_fiber], l3: [handoff]}
         far_end_kinds: [CloudDirectConnect]
         transport_kinds:
           webex-c900-fra-xc: [port, vif]
-      # DC -> SaaS over a tunnel on the internet carrier, no session (Zscaler)
+      # DC -> SaaS over a tunnel on the internet carrier, no session (Zscaler): the DC edge is the SD-WAN hub, the
+      # office edge holds the tunnel to Zscaler
       - src: ManagedVxlanSegment:c900-demo-web-p
         dst: TopologySaasRegion:ZSCALER-MUNICH I
         # a tunnel is a session circuit: it exists in L3 only (its internet carrier is asserted by `internet` and the
-        # tunnel_underlay row), so the physical layer does not reach the SaaS region
+        # tunnel_underlay row), so the physical layer does not reach the SaaS region. In L3 the DC reaches Zscaler
+        # through the office edge: tunnel DC edge <-> office edge, then the tunnel office edge <-> Zscaler.
         layers: [l3]
         golden: full_topology__web__saas-zscaler.txt
         through:
@@ -96,10 +122,79 @@ cases:
       - src: ManagedVxlanSegment:c900-demo-web-p
         dst: CloudNetworkSegment:c900-demo-spoke-p
         golden: full_topology__web__spoke.txt
+        max_paths: 100
         through:
-          CloudDirectConnect:er-c900-weu: {l1: [virtual_connection], l3: [handoff]}
+          # the Fabric virtual connections start on the Fabric port of the cage, which the edge reaches through the
+          # patch panel
+          CloudDirectConnect:er-c900-weu: {l1: [dark_fiber, virtual_connection], l3: [handoff]}
         far_end_kinds: [CloudDirectConnect]
       # negative: a segment in a VPC with no attachment is reached by nothing: a complete empty result in both layers
       - src: ManagedVxlanSegment:c900-demo-web-p
         dst: CloudNetworkSegment:c900-demo-isolated-p
         expect_unreachable: true
+      # ---- the three sites of the sample: the office (its SD-WAN edge), the colocation cage (its edge) and the DC
+      # (its tenant segment), and their way to the INTERNET and to the cloud. L1 is cabled and carried, L3 is routed.
+      # office <-> DC: L1 through the internet access of both (one ISP router), L3 over the SD-WAN tunnel to the DC edge
+      - src: DcimPhysicalDevice:C900-OFFICE-EDGE1
+        dst: ManagedVxlanSegment:c900-demo-web-p
+        golden: full_topology__office__dc.txt
+        max_paths: 100
+        circuit_types: {l1: [internet], l3: [tunnel]}
+      # office <-> colocation: L1 through two ISPs and THE INTERNET, L3 over the tunnel, the DC and the DCI
+      - src: DcimPhysicalDevice:C900-OFFICE-EDGE1
+        dst: DcimPhysicalDevice:eg-dmc101
+        golden: full_topology__office__colo.txt
+        max_paths: 100
+        circuit_types: {l1: [internet], l3: [tunnel]}
+      # colocation <-> DC: dark fibre from the cage edge to a border leaf of the DC; in L3 the EVPN peering of the DCI
+      - src: DcimPhysicalDevice:eg-dmc101
+        dst: ManagedVxlanSegment:c900-demo-web-p
+        golden: full_topology__colo__dc.txt
+        max_paths: 100
+        circuit_types: {l1: [dark_fiber], l3: []}
+      # each site to THE INTERNET (L1: the carrier circuits are the physical fact, THE INTERNET has no routing)
+      - src: ManagedVxlanSegment:c900-demo-web-p
+        dst: TopologyInternet:INTERNET
+        layers: [l1]
+        golden: full_topology__dc__internet.txt
+        max_paths: 100
+        circuit_types: {l1: [internet]}
+      - src: DcimPhysicalDevice:eg-dmc101
+        dst: TopologyInternet:INTERNET
+        layers: [l1]
+        golden: full_topology__colo__internet.txt
+        circuit_types: {l1: [internet]}
+      - src: DcimPhysicalDevice:C900-OFFICE-EDGE1
+        dst: TopologyInternet:INTERNET
+        layers: [l1]
+        golden: full_topology__office__internet.txt
+        circuit_types: {l1: [internet]}
+      # office -> AWS: the shortest L3 chain is the office tunnel to the DC edge and the AWS VPN from there (through the
+      # Direct Connect the server finds the cloud's own way, VPN -> transit gateway -> DX gateway, so L3 is traced only
+      # through the VPN). L1 reaches the VPC only through the cage: the office access, the internet, the cage access and
+      # the cross-connect (the VPN and the tunnels are L3).
+      - src: DcimPhysicalDevice:C900-OFFICE-EDGE1
+        dst: CloudNetworkSegment:c900-demo-subnet-p
+        golden: full_topology__office__aws.txt
+        max_paths: 100
+        through:
+          CloudVPNConnection:vpn-c900-aws-euc1: {l3: [tunnel, vpn]}
+          CloudDirectConnect:dx-c900-fra-lag: {l1: [cross_connect, internet]}
+        far_end_kinds: [CloudDirectConnect, CloudVPNConnection]
+      # colocation -> AWS: the cross-connect from the cage edge, one hop to the Direct Connect port
+      - src: DcimPhysicalDevice:eg-dmc101
+        dst: CloudNetworkSegment:c900-demo-subnet-p
+        golden: full_topology__colo__aws.txt
+        max_paths: 100
+        through:
+          CloudDirectConnect:dx-c900-fra-lag: {l1: [cross_connect], l3: [handoff]}
+        far_end_kinds: [CloudDirectConnect]
+        transport_kinds:
+          dx-c900-fra-lag: [port, lag, vif]
+      # colocation -> the ExpressRoute transport: edge Ethernet1/1 -> patch panel -> Fabric port -> virtual connections
+      - src: DcimPhysicalDevice:eg-dmc101
+        dst: CloudDirectConnect:er-c900-weu
+        golden: full_topology__colo__er.txt
+        circuit_types: {l1: [virtual_connection], l3: [handoff]}
+        transport_kinds:
+          er-c900-weu: [port, vif]

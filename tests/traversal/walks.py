@@ -227,6 +227,91 @@ def tunnel_underlay_rows(d: dict) -> list[Row]:
     ]
 
 
+# ------------------------------------------------------------------ where the sites and their legs are
+
+
+def _placement(d: dict) -> dict[str, tuple[str | None, str | None]]:
+    """{device name: (kind, name) of the deployment it sits in}."""
+    return {
+        val(x, "name"): (
+            ((x.get("deployment") or {}).get("node") or {}).get("__typename"),
+            ((x.get("deployment") or {}).get("node") or {}).get("name", {}).get("value"),
+        )
+        for x in d["dev"]
+    }
+
+
+def _ends(circuit: dict) -> list[str | None]:
+    """The device names at the two ends of a circuit (a transport for a cloud end)."""
+    return [_dev(end) for end in rel(circuit, "capabilities")]
+
+
+def _cabled_devices(ports: list[dict]) -> set[str]:
+    """The devices at the other end of the cables of these panel ports."""
+    return {
+        str(_dev(end))
+        for port in ports
+        for end in rel((port.get("cable") or {}).get("node") or {}, "endpoints")
+        if _dev(end)
+    }
+
+
+def layout_rows(d: dict, cfg: dict) -> list[Row]:
+    """The three sites (attribute reads): every cloud and SaaS carrier starts on a device of the colocation cage and none
+    at the DC, the dark fibres join the DC and the cage, the office has an edge of its own and its tunnels end on it, and
+    the cage edge reaches the Fabric port through a patch panel (a cable to a front port, a cable from its rear port)."""
+    place = _placement(d)
+    zone, dc = ("TopologyColocationZone", cfg["zone"]), ("TopologyDataCenter", cfg["dc"])
+    transports = {val(t, "name") for t in [*d["dx"], *d["vpn"]]}
+    legs = [c for c in d["carrier"] if val(c, "circuit_type") in ("cross_connect", "virtual_connection")]
+    cloud = [c for c in legs if transports & set(_ends(c))]
+    stray = sorted(
+        val(c, "circuit_id")
+        for c in cloud
+        if not any(place.get(name) == zone for name in _ends(c) if name not in transports)
+    )
+    rows: list[Row] = [
+        (
+            "layout: every cloud and SaaS carrier starts on a device of the colocation cage, none at the DC",
+            bool(cloud) and not stray,
+            f"{len(cloud)} carriers, not in the cage: {stray}",
+        )
+    ]
+    fibres = {val(c, "circuit_id"): sorted(map(str, (place.get(n) for n in _ends(c)))) for c in d["carrier"]}
+    fibres = {k: v for k, v in fibres.items() if k in cfg["dark_fibres"]}
+    kinds = {val(c, "circuit_id") for c in d["carrier"] if val(c, "circuit_type") == "dark_fiber"}
+    want = sorted(map(str, (dc, zone)))
+    rows.append(
+        (
+            "layout: the dark fibres join the DC and the cage, and there are no others",
+            kinds == set(cfg["dark_fibres"]) == set(fibres) and all(v == want for v in fibres.values()),
+            f"{sorted(kinds)} {fibres}",
+        )
+    )
+    office = ("TopologyCustomerOffice", cfg["office"])
+    tunnels = [c for c in d["session"] if val(c, "circuit_type") == "tunnel"]
+    loose = sorted(val(c, "name") for c in tunnels if cfg["office_edge"] not in _ends(c))
+    rows.append(
+        (
+            "layout: the office edge sits in the office and every tunnel ends on it",
+            place.get(cfg["office_edge"]) == office and bool(tunnels) and not loose,
+            f"edge in {place.get(cfg['office_edge'])}, tunnels not on it: {loose}",
+        )
+    )
+    fronts = [p for p in d["front"] if cfg["colo_edge"] in _cabled_devices([p])]
+    rears = [p for p in d["rear"] if cfg["fabric_port_device"] in _cabled_devices([p])]
+    jacks = {val(next(iter(rel(p, "rear_port")), {}), "port_id") for p in fronts}
+    rows.append(
+        (
+            "layout: the cage edge reaches the Fabric port through one jack of a patch panel (front port, its rear port)",
+            bool(fronts) and bool(rears) and {val(p, "port_id") for p in rears} == jacks,
+            f"front ports {[val(p, 'port_id') for p in fronts]} on rear ports {sorted(map(str, jacks))}, "
+            f"rear ports {[val(p, 'port_id') for p in rears]}",
+        )
+    )
+    return rows
+
+
 # ------------------------------------------------------------------ internet through an ISP
 
 

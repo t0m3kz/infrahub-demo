@@ -1,0 +1,20 @@
+# DcimPhysicalDevice:eg-dmc101 -> CloudNetworkSegment:c900-demo-subnet-p
+## plain
+L1 DcimPhysicalDevice:eg-dmc101 -> CloudNetworkSegment:c900-demo-subnet-p: 4 equal-cost path(s), depth 9
+  DcimPhysicalDevice:eg-dmc101 -> DcimPhysicalInterface:eg-dmc101/Ethernet1/3 -> TopologyCarrierCircuit:XC-DMC1-AWS-DX1 -> DcimPhysicalInterface:dx-c900-fra-lag/dxcon-1a -> CloudDirectConnect:dx-c900-fra-lag -> CloudPeeringInterface:dx-c900-fra-lag/lag1.1100 -> CloudGateway:vgw-c900-euc1 -> CloudGatewayAttachment:vgwa-c900-vpc -> CloudVirtualNetwork:vpc-c900-prod -> CloudNetworkSegment:c900-demo-subnet-p
+  DcimPhysicalDevice:eg-dmc101 -> DcimPhysicalInterface:eg-dmc101/Ethernet1/3 -> TopologyCarrierCircuit:XC-DMC1-AWS-DX1 -> DcimPhysicalInterface:dx-c900-fra-lag/dxcon-1a -> DcimLAGInterface:dx-c900-fra-lag/lag1 -> CloudPeeringInterface:dx-c900-fra-lag/lag1.1100 -> CloudGateway:vgw-c900-euc1 -> CloudGatewayAttachment:vgwa-c900-vpc -> CloudVirtualNetwork:vpc-c900-prod -> CloudNetworkSegment:c900-demo-subnet-p
+  DcimPhysicalDevice:eg-dmc101 -> DcimPhysicalInterface:eg-dmc101/Ethernet1/4 -> TopologyCarrierCircuit:XC-DMC1-AWS-DX2 -> DcimPhysicalInterface:dx-c900-fra-lag/dxcon-1b -> CloudDirectConnect:dx-c900-fra-lag -> CloudPeeringInterface:dx-c900-fra-lag/lag1.1100 -> CloudGateway:vgw-c900-euc1 -> CloudGatewayAttachment:vgwa-c900-vpc -> CloudVirtualNetwork:vpc-c900-prod -> CloudNetworkSegment:c900-demo-subnet-p
+  DcimPhysicalDevice:eg-dmc101 -> DcimPhysicalInterface:eg-dmc101/Ethernet1/4 -> TopologyCarrierCircuit:XC-DMC1-AWS-DX2 -> DcimPhysicalInterface:dx-c900-fra-lag/dxcon-1b -> DcimLAGInterface:dx-c900-fra-lag/lag1 -> CloudPeeringInterface:dx-c900-fra-lag/lag1.1100 -> CloudGateway:vgw-c900-euc1 -> CloudGatewayAttachment:vgwa-c900-vpc -> CloudVirtualNetwork:vpc-c900-prod -> CloudNetworkSegment:c900-demo-subnet-p
+L3 DcimPhysicalDevice:eg-dmc101 -> CloudNetworkSegment:c900-demo-subnet-p: 1 equal-cost path(s), depth 7
+  DcimPhysicalDevice:eg-dmc101 -> DcimVirtualInterface:eg-dmc101/Ethernet1/3.1100 -> TopologySessionCircuit:SC-C900-AWS-DX-PRIV -> CloudPeeringInterface:dx-c900-fra-lag/lag1.1100 -> CloudGateway:vgw-c900-euc1 -> CloudGatewayAttachment:vgwa-c900-vpc -> CloudVirtualNetwork:vpc-c900-prod -> CloudNetworkSegment:c900-demo-subnet-p
+## via CloudDirectConnect:dx-c900-fra-lag
+L1 DcimPhysicalDevice:eg-dmc101 -> CloudDirectConnect:dx-c900-fra-lag: 2 equal-cost path(s), depth 4
+  DcimPhysicalDevice:eg-dmc101 -> DcimPhysicalInterface:eg-dmc101/Ethernet1/3 -> TopologyCarrierCircuit:XC-DMC1-AWS-DX1 -> DcimPhysicalInterface:dx-c900-fra-lag/dxcon-1a -> CloudDirectConnect:dx-c900-fra-lag
+  DcimPhysicalDevice:eg-dmc101 -> DcimPhysicalInterface:eg-dmc101/Ethernet1/4 -> TopologyCarrierCircuit:XC-DMC1-AWS-DX2 -> DcimPhysicalInterface:dx-c900-fra-lag/dxcon-1b -> CloudDirectConnect:dx-c900-fra-lag
+L1 CloudDirectConnect:dx-c900-fra-lag -> CloudNetworkSegment:c900-demo-subnet-p: 1 equal-cost path(s), depth 5
+  CloudDirectConnect:dx-c900-fra-lag -> CloudPeeringInterface:dx-c900-fra-lag/lag1.1100 -> CloudGateway:vgw-c900-euc1 -> CloudGatewayAttachment:vgwa-c900-vpc -> CloudVirtualNetwork:vpc-c900-prod -> CloudNetworkSegment:c900-demo-subnet-p
+L3 DcimPhysicalDevice:eg-dmc101 -> CloudDirectConnect:dx-c900-fra-lag: 2 equal-cost path(s), depth 4
+  DcimPhysicalDevice:eg-dmc101 -> DcimVirtualInterface:eg-dmc101/Ethernet1/3.1000 -> TopologySessionCircuit:SC-C900-AWS-DX-PROD -> CloudPeeringInterface:dx-c900-fra-lag/lag1.1000 -> CloudDirectConnect:dx-c900-fra-lag
+  DcimPhysicalDevice:eg-dmc101 -> DcimVirtualInterface:eg-dmc101/Ethernet1/3.1100 -> TopologySessionCircuit:SC-C900-AWS-DX-PRIV -> CloudPeeringInterface:dx-c900-fra-lag/lag1.1100 -> CloudDirectConnect:dx-c900-fra-lag
+L3 CloudDirectConnect:dx-c900-fra-lag -> CloudNetworkSegment:c900-demo-subnet-p: 1 equal-cost path(s), depth 5
+  CloudDirectConnect:dx-c900-fra-lag -> CloudPeeringInterface:dx-c900-fra-lag/lag1.1100 -> CloudGateway:vgw-c900-euc1 -> CloudGatewayAttachment:vgwa-c900-vpc -> CloudVirtualNetwork:vpc-c900-prod -> CloudNetworkSegment:c900-demo-subnet-p

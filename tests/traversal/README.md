@@ -39,7 +39,17 @@ drugiego liścia). Te same asercje uruchamia `tests/integration/test_03_full_top
 dwunogi, wdrożenie liści i spine do pod, border leaves do DC, wiersze VLAN z odczytu danych; liczba łańcuchów L1 serwer -> krawędź i overlay L3 z obu liści z łańcuchów serwera), `internet` (INTERNET: jeden obiekt pod etykietą Internet z jednym interfejsem, dwa ISP i strony publiczne SaaS i chmury przyłączone do niego; L1 z portu krawędzi przez każdy ISP i INTERNET do portu strony publicznej: jeden łańcuch, trzy nośniki po `circuit_id`; plik wzorcowy `full_topology__internet.txt`; L1 do routera ISP, L3
 przez przestrzeń INTERNET, brak tunelu), `transport_sub_interfaces` (port i pakiet transportu widzą swoje peeringi w
 `sub_interfaces`); odczyty danych w `tests/traversal/walks.py` (czytają `d` z `graph_read.py`, bez szukania ścieżek), ocena łańcuchów w `tests/traversal/chain_rows.py` (z testami jednostkowymi). `inventory_golden` to to, czego łańcuchy nie pokazują: interfejsy peeringu (zakres, AS peera, ogłaszane prefiksy), bramy z AS, dozwolone prefiksy załączników, interfejsy transportów. Klucze pary: `src`, `dst`, `through`,
-`far_end_kinds`, `transport_kinds`, `expect_unreachable`.
+`far_end_kinds`, `transport_kinds`, `expect_unreachable`, `layers`, `golden`, `max_paths` (limit ścieżek jednego wywołania, domyślnie 30,
+serwer przyjmuje do 100; para od segmentu dzierżawcy przechodzi przez cały pod, więc prosi o 100) i `circuit_types` (typy obwodów na
+najkrótszych łańcuchach pary bez waypointa: nośniki w L1, obwody sesji w L3; lista pusta = żaden).
+
+Trzy miejsca próbki (DC, kolokacja, biuro): pary między nimi i do INTERNET są w `pairs` (końce to segment `c900-demo-web-p`,
+krawędź klatki `eg-dmc101`, krawędź biura `C900-OFFICE-EDGE1`, `TopologyInternet:INTERNET`; do INTERNET tylko `layers: [l1]`,
+bo INTERNET nie routuje). Dwa dalsze klucze przypadku: `sites` (każde miejsce sięga INTERNET w L1 przez własny nośnik dostępowy
+i uplink routera ISP: `chain_rows.site_internet_rows`) i `layout` (odczyt danych: nośniki chmury i SaaS zaczynają się w klatce,
+światłowody ciemne łączą DC i klatkę, tunele kończą się na krawędzi biura, krawędź klatki sięga portu Fabric przez gniazdo panelu:
+`walks.layout_rows`). Zbiór ścieżek równego kosztu serwer zwraca do 100: para, której zbiór jest większy, nie ma kompletnego
+wyniku, dlatego dane trzymają zbiór mały (np. sesja DCI to tylko peering EVPN między procesami overlay).
 
 ## Nowy przypadek
 

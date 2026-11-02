@@ -1,0 +1,4 @@
+# DcimPhysicalDevice:eg-dmc101 -> TopologyInternet:INTERNET
+## plain
+L1 DcimPhysicalDevice:eg-dmc101 -> TopologyInternet:INTERNET: 1 equal-cost path(s), depth 7
+  DcimPhysicalDevice:eg-dmc101 -> DcimPhysicalInterface:eg-dmc101/Ethernet1/14 -> TopologyCarrierCircuit:INET-DMC1-ISP-DEMO-B -> DcimPhysicalInterface:EXT-ISP-DEMO-B-PE1/et-0/0/1 -> DcimPhysicalDevice:EXT-ISP-DEMO-B-PE1 -> DcimPhysicalInterface:EXT-ISP-DEMO-B-PE1/xe-0/1/0 -> TopologyCarrierCircuit:UPL-ISP-DEMO-B -> TopologyInternet:INTERNET
