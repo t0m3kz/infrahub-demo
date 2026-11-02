@@ -395,6 +395,7 @@ class ManagedCloudProxy(ManagedGeneric, ManagedProxyService):
 class TopologyCloudRegion(TopologyDeployment, TopologyConnectableLocation, TopologyFacility):
     status: Dropdown
     location: RelationshipAttribute[LocationMetro]
+    transports: RelationshipManager[CloudTransport]
 
 
 class TopologyCloudZone(TopologyDeployment):
@@ -960,6 +961,7 @@ class TopologySaasRegion(
     region_name: String
     status: Dropdown
     location: RelationshipAttribute[LocationMetro]
+    transports: RelationshipManager[CloudTransport]
 
 
 class SecuritySecurityProfile(CoreNode):

@@ -195,3 +195,20 @@ def test_no_description_exceeds_128_characters() -> None:
             too_long.append(kind)
 
     assert too_long == []
+
+
+def test_regions_list_the_transports_that_land_in_them() -> None:
+    """A cloud region and a SaaS region list their transports: the reverse of the transport's own `region` and
+    `saas_region` edges, on the same identifier, so a walk from a region reaches what ends in it."""
+    schema = yaml.safe_load((_TOPOLOGY / "topology_cloud_network.yml").read_text())
+    generic = next(g for g in schema["generics"] if g["name"] == "Transport")
+    own = {r["name"]: r["identifier"] for r in generic["relationships"] if r["name"] in ("region", "saas_region")}
+    reverse = {n["kind"]: n["relationships"][0] for n in schema["extensions"]["nodes"] if "Region" in n["kind"]}
+    assert reverse["TopologyCloudRegion"]["identifier"] == own["region"]
+    assert reverse["TopologySaasRegion"]["identifier"] == own["saas_region"]
+    for relationship in reverse.values():
+        assert (relationship["name"], relationship["peer"], relationship["cardinality"]) == (
+            "transports",
+            "CloudTransport",
+            "many",
+        )

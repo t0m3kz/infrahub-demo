@@ -597,3 +597,29 @@ extensions:
           identifier: "gateway__attachments"
           order_weight: 2000
           description: "The attachments that land on this gateway: a virtual network or another gateway"
+
+    # The transports that land in a region (the ones that name it as `region` or `saas_region`), so the graph can be
+    # walked from a region to the Direct Connects, ExpressRoutes and VPN connections that end in it.
+    - kind: TopologyCloudRegion
+      relationships:
+        - name: transports
+          label: "Transports"
+          peer: CloudTransport
+          cardinality: many
+          kind: Generic
+          optional: true
+          identifier: "cloud_transport__region"
+          order_weight: 2250
+          description: "The cloud transports that land in this region (Direct Connect, ExpressRoute, Interconnect, VPN)"
+
+    - kind: TopologySaasRegion
+      relationships:
+        - name: transports
+          label: "Transports"
+          peer: CloudTransport
+          cardinality: many
+          kind: Generic
+          optional: true
+          identifier: "cloud_transport__saas_region"
+          order_weight: 2250
+          description: "The cloud transports that land in this SaaS region (cross-connect, tunnel)"
