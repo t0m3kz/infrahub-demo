@@ -10,8 +10,9 @@ import pytest
 from utils.ownership import (
     MULTIPLE_SESSIONS,
     SHARED_PREFIX,
+    CircuitOwnerError,
     OwnershipConflict,
-    customer_owner,
+    circuit_owner,
     exchange_policies,
     ownership_conflicts,
 )
@@ -207,19 +208,25 @@ class TestOwnershipConflicts:
         assert ownership_conflicts({}, {}) == []
 
 
-class TestCustomerOwner:
-    """customer_owner keys only an OrganizationCustomer."""
+class TestCircuitOwner:
+    """circuit_owner derives the owner of a circuit from its office locations and its connection."""
 
-    @pytest.mark.parametrize(
-        ("owner", "expected"),
-        [
-            ({"typename": "OrganizationCustomer", "org_id": "C003", "display_label": "Vaultex"}, "C003"),
-            ({"typename": "OrganizationCustomer", "org_id": None, "display_label": "Vaultex"}, "Vaultex"),
-            ({"typename": "OrganizationProvider", "org_id": "P028"}, None),
-            (None, None),
-            ("C003", None),
-        ],
-    )
-    def test_only_a_customer_counts(self, owner: object, expected: str | None) -> None:
-        """Customer: org_id, else display_label; anything else: None."""
-        assert customer_owner(owner) == expected
+    def test_one_office_owner(self) -> None:
+        """The owner of the single office (an office pair of one owner counts once)."""
+        assert circuit_owner(["C001"]) == "C001"
+        assert circuit_owner(["C001", "C001"]) == "C001"
+
+    def test_none_entries_are_ignored(self) -> None:
+        """A location that is no office, or an office of a non-customer, contributes nothing."""
+        assert circuit_owner([None, "C001", None]) == "C001"
+        assert circuit_owner([None, None]) is None
+
+    def test_offices_of_two_owners_raise(self) -> None:
+        """No single owner: the error names both."""
+        with pytest.raises(CircuitOwnerError, match="C001, C002"):
+            circuit_owner(["C002", "C001"])
+
+    def test_without_an_office_there_is_no_owner(self) -> None:
+        """A handoff or carrier circuit: no office, no owner."""
+        assert circuit_owner([]) is None
+        assert circuit_owner([None]) is None

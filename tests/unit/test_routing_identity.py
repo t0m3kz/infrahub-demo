@@ -118,7 +118,6 @@ def _raw_segment(
     namespace: str = "VRF_A",
     segment_tag: int | None = 12,
     owner_tag: int | None = 5,
-    inline: bool = False,
 ) -> dict[str, Any]:
     """A ManagedNetworkSegment node as the leaf query returns it (raw GraphQL, before clean_data)."""
     node: dict[str, Any] = {
@@ -127,7 +126,6 @@ def _raw_segment(
         "name": {"value": name},
         "routing_tag": {"value": segment_tag},
         "owner": {"node": {"id": "cust", "org_id": {"value": "C005"}, "routing_tag": {"value": owner_tag}}},
-        "terminate_inline": {"value": inline},
         "gateway": {"node": None},
     }
     if prefix:
@@ -196,7 +194,6 @@ class TestOrigination:
     @pytest.mark.parametrize(
         "segment",
         [
-            _raw_segment("seg-inline", inline=True),
             _raw_segment("seg-nogw", prefix=None),
             _raw_segment("seg-v6", prefix="2001:db8::/64", address="2001:db8::1/64"),
             _raw_segment("seg-default", namespace="default"),
@@ -205,7 +202,7 @@ class TestOrigination:
         ids=lambda segment: segment["name"]["value"],
     )
     def test_a_segment_the_fabric_does_not_route_into_evpn_is_skipped(self, segment: dict[str, Any]) -> None:
-        """Inline-terminated, gateway-less, IPv6, default-namespace and not-in-the-VRFs segments have no SVI export."""
+        """Gateway-less, IPv6, default-namespace and not-in-the-VRFs segments have no SVI export."""
         assert get_origination(_activations(segment), ["VRF_A"]) == []
 
     def test_the_vrfs_are_the_ones_that_redistribute_into_evpn(self) -> None:

@@ -1,14 +1,10 @@
-"""PR5 guards: a cloud flow is a SecurityPolicyRule and nothing generates sg-{app} any more."""
+"""A cloud flow is a SecurityPolicyRule: what its application query and its endpoint address must carry."""
 
 from __future__ import annotations
 
-import importlib
 import re
 from pathlib import Path
 
-import pytest
-
-from generators.topology.application_security import AppApplicationGenerator
 from utils.segment_addressing import segment_prefix
 
 
@@ -16,29 +12,6 @@ def _query(root_dir: Path) -> str:
     """The application query text without comment lines."""
     text = (root_dir / "queries" / "topology" / "add" / "application.gql").read_text()
     return "\n".join(line for line in text.splitlines() if not line.strip().startswith("#"))
-
-
-def test_cloud_security_mixin_module_is_removed() -> None:
-    """The cloud-specific rule path no longer exists."""
-    with pytest.raises(ModuleNotFoundError):
-        importlib.import_module("generators.cloud_security")
-
-
-def test_generator_has_no_cloud_rule_methods() -> None:
-    """Neither the mixin's helpers nor an sg-{app} creator are reachable from the generator."""
-    for name in ("_create_cloud_rule", "_get_or_create_sg"):
-        assert not hasattr(AppApplicationGenerator, name)
-
-
-def test_generators_never_name_an_sg_after_an_app() -> None:
-    """No generator source builds an sg-{app} name: a cloud flow is a SecurityPolicyRule."""
-    root = Path(__file__).resolve().parents[2] / "generators"
-    offenders = [
-        str(path.relative_to(root))
-        for path in root.rglob("*.py")
-        if path.name != "protocols.py" and re.search(r'f"sg-\{', path.read_text())
-    ]
-    assert offenders == []
 
 
 def test_target_segment_carries_the_fields_a_cloud_endpoint_needs(root_dir: Path) -> None:

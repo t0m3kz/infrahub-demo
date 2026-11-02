@@ -11,6 +11,8 @@ from typing import Any
 
 from jinja2 import Environment, FileSystemLoader
 
+from transforms.helpers.bgp_policy import compose_policy
+
 TEMPLATES = Path(__file__).resolve().parents[2] / "templates" / "configs"
 ADDRESS = [{"address": "10.0.0.1/31"}]
 
@@ -81,7 +83,8 @@ def test_device_without_evpn_gets_no_overlay_lines() -> None:
 
 def test_session_route_maps_are_global_and_precede_the_connected_map() -> None:
     """Per-session local-preference and MED maps are column-0 route-maps, rendered with RM-CONN-2-BGP."""
-    bgp = [{"sessions": [{"name": "peer-a", "local_pref": 200, "med": 50}, {"name": "peer-b"}]}]
+    sessions = [{"name": "peer-a", "local_pref": 200, "med": 50}, {"name": "peer-b"}]
+    bgp = [{"sessions": [{**s, "policy": compose_policy(s)} for s in sessions]}]
     rendered = _env().get_template("common/cisco_nxos_route_maps.j2").render(bgp=bgp, loopback_name="loopback0")
     assert "\nroute-map peer-a-LOCAL-PREF-IN permit 10\n  set local-preference 200\n" in rendered
     assert "\nroute-map peer-a-MED-OUT permit 10\n  set metric 50\n" in rendered
@@ -92,7 +95,7 @@ def test_session_route_maps_are_global_and_precede_the_connected_map() -> None:
 
 def test_spine_without_bgp_policy_still_defines_the_connected_map() -> None:
     """RM-CONN-2-BGP is defined for a spine, which has no vxlan, no vrf routes and no transit prefixes."""
-    bgp = [{"sessions": [{"name": "peer-a"}]}]
+    bgp = [{"sessions": [{"name": "peer-a", "policy": compose_policy({"name": "peer-a"})}]}]
     rendered = _env().get_template("common/cisco_nxos_route_maps.j2").render(bgp=bgp, loopback_name="loopback0")
     assert "route-map RM-CONN-2-BGP permit 10\n  match interface loopback0" in rendered
     assert "RM-VRF-DIRECT-2-EVPN" not in rendered

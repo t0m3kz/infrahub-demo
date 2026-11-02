@@ -15,7 +15,6 @@ from tests.unit.circuit_placement_check_helpers import (
     AWS_VLAN,
     AWS_VLAN_NO_CARRIER,
     BL10,
-    C001_OFFICE,
     DC10,
     DCI,
     DF10,
@@ -39,7 +38,7 @@ from tests.unit.circuit_placement_check_helpers import (
 
 
 class TestSessionPorts:
-    """A port is an end of at most one Interconnect or Handoff circuit; a tunnel is exempt."""
+    """A port is an end of at most one Interconnect, Handoff or Vpn circuit; a tunnel is exempt."""
 
     def test_two_handoffs_on_the_same_pair_of_ports_are_one_finding(self) -> None:
         """Two handoffs on the same two ports give one finding naming both circuits, not one per port."""
@@ -47,7 +46,7 @@ class TestSessionPorts:
         messages = _run(handoffs=[HANDOFF, other])
         assert messages == [
             "Circuits 'HO-B', 'HO-C005-P-AWS-EUC1' all terminate on 'EXT-AWS-DX-FR2:et-0/0/0.3101', "
-            "'eg-fr201:Ethernet1/13.3101': a port is an end of at most one Interconnect or Handoff circuit, one "
+            "'eg-fr201:Ethernet1/13.3101': a port is an end of at most one Interconnect, Handoff or Vpn circuit, one "
             "session per address."
         ]
 
@@ -194,7 +193,7 @@ class TestDecommissionedSessionCircuits:
 
     def test_decommissioned_interconnect_with_other_defects_is_not_reported(self) -> None:
         """Owned, one end port and no overlay process: nothing is reported for a circuit nothing builds."""
-        circuit = _interconnect("DCI", [DC10], [_vport("bl-dc101101", "Ethernet1/35", (DF10,), bgp=())], owner="C001")
+        circuit = _interconnect("DCI", [DC10], [_vport("bl-dc101101", "Ethernet1/35", (DF10,), bgp=())])
         assert _run(interconnects=[{**circuit, "status": {"value": "decommissioned"}}]) == []
 
     def test_active_interconnect_with_the_same_defects_is_reported(self) -> None:
@@ -264,13 +263,10 @@ class TestDecommissionedSessionCircuits:
 
     def test_decommissioned_tunnel_is_still_validated(self) -> None:
         """A tunnel is an inventory record no generator reads the status of: not exempt."""
-        tunnel = {
-            **_tunnel("T", [C001_OFFICE, FR2], [OFFICE_EDGE, GW_PUBLIC], owner=None),
-            "status": {"value": "decommissioned"},
-        }
+        tunnel = {**_tunnel("T", [FR2, EUC1], [OFFICE_EDGE, GW_PUBLIC]), "status": {"value": "decommissioned"}}
         messages = _run(tunnels=[tunnel])
         assert len(messages) == 1
-        assert "is unowned" in messages[0]
+        assert "has no office among its locations" in messages[0]
 
 
 def test_all_circuits_together_pass() -> None:

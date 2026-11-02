@@ -9,10 +9,12 @@
 
 fragment DeviceGroupPolicyFields on DcimDevice {
   name { value }
-  role { value }
-  platform { node { name { value } } }
-  device_type { node { name { value } memory_gb { value } } }
-  software_image { node { version { value } } }
+  ... on DcimDeviceManaged {
+    role { value }
+    platform { node { name { value } } }
+    device_type { node { name { value } memory_gb { value } } }
+    software_image { node { version { value } } }
+  }
 }
 
 fragment GroupPolicyProfileFields on DcimGroupPolicyProfile {
@@ -198,7 +200,8 @@ fragment SegmentGroupPolicyFields on ManagedNetworkSegment {
   }
   ... on ManagedVxlanSegment {
     stretch_scope { value }
-    inline_service { node { id name { value } } }
+    # A terminated segment has no SVI: it is no routed tenant segment (utils/exchange_transit.is_routed_tenant_segment).
+    terminated_on { node { id } }
     segment_deployments {
       edges {
         node {

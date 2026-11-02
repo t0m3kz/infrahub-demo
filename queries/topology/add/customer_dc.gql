@@ -53,7 +53,7 @@ query customer_dc($name: String!) {
                   node {
                     id
                     controller_type { value }
-                    ... on DcimDevice {
+                    ... on DcimDeviceManaged {
                       platform {
                         node {
                           id
@@ -68,7 +68,7 @@ query customer_dc($name: String!) {
                   node {
                     id
                     controller_type { value }
-                    ... on DcimDevice {
+                    ... on DcimDeviceManaged {
                       platform {
                         node {
                           id

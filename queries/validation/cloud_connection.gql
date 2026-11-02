@@ -1,0 +1,83 @@
+# validate_cloud_connection (checks/cloud_connection.py): the rules the schema cannot hold on the cloud side of a
+# connection. R1-R2 gateways, attachments and route tables, R3 transports (rides_on), R4 service endpoints and tunnel
+# keys, R5-R6 tunnels, R8 VLAN peerings, R9 placement and owner of a transport.
+query cloud_connection {
+  CloudGatewayAttachment {
+    edges {
+      node {
+        id
+        name { value }
+        gateway { node { id name { value } gateway_type { value } } }
+        virtual_network { node { id name { value } } }
+        peer_gateway { node { id name { value } } }
+        associated_route_table { node { id name { value } gateway { node { id } } } }
+        propagates_to_route_tables { edges { node { id name { value } gateway { node { id } } } } }
+      }
+    }
+  }
+  CloudGatewayRouteTable {
+    edges {
+      node {
+        id
+        name { value }
+        gateway { node { id name { value } gateway_type { value } } }
+      }
+    }
+  }
+  CloudDirectConnect {
+    edges {
+      node {
+        __typename
+        id
+        name { value }
+        connection_type { value }
+        partner_account { node { id name { value } } }
+        rides_on { node { id name { value } connection_type { value } } }
+        account { node { id } }
+        owner { node { id } }
+        region { node { id } }
+        saas_region { node { id } }
+      }
+    }
+  }
+  CloudVPNConnection {
+    edges {
+      node {
+        __typename
+        id
+        name { value }
+        account { node { id } }
+        owner { node { id } }
+        region { node { id } }
+        saas_region { node { id } }
+      }
+    }
+  }
+  CloudPeeringInterface {
+    edges {
+      node {
+        id
+        name { value }
+        scope { value }
+        vlan_id { value }
+        tunnel_index { value }
+        endpoint_ip { value }
+        tunnel_mode { value }
+        crypto_profile { node { id } }
+        tunnel_key { node { id } }
+        device { node { __typename id name { value } } }
+        parent_interface { node { __typename id name { value } device { node { id } } } }
+      }
+    }
+  }
+  CloudServiceEndpoint {
+    edges {
+      node {
+        id
+        name { value }
+        virtual_network { node { id name { value } } }
+        segments { edges { node { id name { value } virtual_network { node { id } } } } }
+      }
+    }
+  }
+}

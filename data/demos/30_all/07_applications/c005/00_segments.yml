@@ -89,6 +89,23 @@ spec:
             member_of_groups:
               - vxlan_segments
 
+        # Terminated on DC10's shared PROD firewall context: its gateway (the .1 add_vxlan_segment takes from
+        # Tenant-PROD-IPv4, like every DC segment) is the floating VIP of the Check Point pair, with no address on a
+        # member. The fabric only bridges the segment (a VLAN row and the L2 VNI on the border leaves, no SVI, VRF or
+        # ACL) and the firewall renders the `<uplink trunk>.<vlan>` sub-interface with the VLAN of the border leaf
+        # it is cabled to; add_vxlan_segment tags the border service ports facing the pair with the segment. The
+        # context is generated when C005-P-DC10 is boarded (06_customer_boarding), so it exists by this stage:
+        # `shared-{cluster}-{class}` on the HA `{first}-{second}` of the DC10 firewalls.
+        - kind: ManagedVxlanSegment
+          data:
+            customer_name: "firewalled-dc10"
+            environment: "p"
+            terminated_on: "shared-fw-dc10101-fw-dc10102-prod"
+            customer_deployments:
+              - "C005-P-DC10"
+            member_of_groups:
+              - vxlan_segments
+
         # Hosted by the C005-OFFICE footprint itself, not by a DC: the office is a LISP site (SD-Access
         # style, add_office_fabric), so this is an L2 instance-id (VNI from the office's own pool) and an L3
         # EID in VRF PROD on its access and distribution switches. Local, like web-frontend-local-dc10: it

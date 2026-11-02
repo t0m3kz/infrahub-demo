@@ -1,8 +1,8 @@
 # The circuit layer of a branch. A location carries its kind, its parent (a cage's or virtual colocation's metro, a
 # footprint's facility) and a footprint's owner, an end its device's deployment (an on-ramp edge: its zone or virtual
 # colocation, with that one's metro): what test_62 checks circuit placement against.
-# A session circuit is one of three `circuit_type`s (tunnel, dci, handoff); a handoff adds its namespace,
-# its accepted-prefix limit, its key and its cloud endpoint (with the VLAN the VIF states). Its carrier is derived: the
+# A session circuit is one of four `circuit_type`s (tunnel, dci, handoff, vpn); a handoff or a vpn adds its namespace
+# and its key. A circuit has no owner of its own, it is derived from the offices among its locations. Its carrier is derived: the
 # carrier circuits in the `capabilities` of each end port, or of the port's `parent_interface` for a sub-interface,
 # else the cable on the port or on that parent (a hop inside one facility is a cable, not a circuit).
 query GetInterconnectInventory {
@@ -21,14 +21,6 @@ query GetInterconnectInventory {
         }
         provider {
           node {
-            name {
-              value
-            }
-          }
-        }
-        owner {
-          node {
-            id
             name {
               value
             }
@@ -70,14 +62,6 @@ query GetInterconnectInventory {
         circuit_type {
           value
         }
-        owner {
-          node {
-            id
-            name {
-              value
-            }
-          }
-        }
         locations {
           edges {
             node {
@@ -93,29 +77,10 @@ query GetInterconnectInventory {
             }
           }
         }
-        maximum_routes {
-          value
-        }
         password {
           node {
             name {
               value
-            }
-          }
-        }
-        cloud_endpoint {
-          node {
-            id
-            __typename
-            ... on CloudResource {
-              name {
-                value
-              }
-            }
-            ... on CloudVirtualInterface {
-              vlan_id {
-                value
-              }
             }
           }
         }
@@ -139,6 +104,11 @@ query GetInterconnectInventory {
                       value
                     }
                   }
+                }
+              }
+              ... on CloudPeeringInterface {
+                vlan_id {
+                  value
                 }
               }
               ... on DcimVirtualInterface {
@@ -270,23 +240,36 @@ fragment CircuitLocation on TopologyConnectableLocation {
   ... on TopologyCustomer {
     owner {
       node {
-        id
-        __typename
+        ...CircuitOwner
       }
     }
   }
   ... on TopologyCustomerOffice {
     owner {
       node {
-        id
-        __typename
+        ...CircuitOwner
       }
+    }
+  }
+}
+
+# An owner is only a customer when it is an OrganizationCustomer (utils.ownership.customer_owner); its org_id is the key.
+fragment CircuitOwner on OrganizationEntity {
+  id
+  __typename
+  org_id {
+    value
+  }
+  ... on OrganizationCustomer {
+    name {
+      value
     }
   }
 }
 
 fragment CircuitEndDevice on DcimDevice {
   id
+  __typename
   name {
     value
   }
@@ -359,6 +342,27 @@ fragment CircuitEndDevice on DcimDevice {
               }
             }
           }
+        }
+      }
+    }
+  }
+  # A cloud transport has no deployment: it sits in a cloud region (or a SaaS region).
+  ... on CloudTransport {
+    region {
+      node {
+        id
+        __typename
+        name {
+          value
+        }
+      }
+    }
+    saas_region {
+      node {
+        id
+        __typename
+        name {
+          value
         }
       }
     }

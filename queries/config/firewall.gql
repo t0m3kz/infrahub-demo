@@ -8,12 +8,9 @@ query firewall_config(
   DcimDevice(name__value: $device) {
     edges {
       node {
+        id
         name { value }
-        platform {
-          node {
-            name { value }
-          }
-        }
+        ... on DcimDeviceManaged { platform { node { name { value } } } }
         ... on DcimCapabilities {
         capabilities {
           edges {
@@ -49,24 +46,14 @@ query firewall_config(
               role { value }
               ... on DcimPhysicalInterface {
                 ip_address { node { address { value } ip_namespace { node { name { value } namespace_type { value } } } } }
+                # The far end of the uplink trunk: the border leaf whose VLAN row a terminated segment's
+                # sub-interface takes (transforms/helpers/firewall_terminated.py). A patch panel port comes back
+                # as an empty node.
+                cable { node { endpoints { edges { node { ... on DcimPhysicalInterface { device { node { id } } } } } } } }
               }
               ... on DcimVirtualInterface {
                 ip_address { node { address { value } ip_namespace { node { name { value } namespace_type { value } } } } }
                 parent_interface { node { name { value } } }
-                # The segment a sub-interface terminates inline. A context-less firewall also enforces the rules of
-                # every segment in a zone bound on one of its interfaces: it routes that zone's CIDRs through the
-                # leg (transforms/helpers/firewall_contexts.py place_policies_in_contexts).
-                inline_segment {
-                  node {
-                    __typename
-                    ...NetworkSegmentFields
-                    security_zone {
-                      node {
-                        network_segments { edges { node { id ...SegmentRulesFields } } }
-                      }
-                    }
-                  }
-                }
               }
               ... on DcimLAGInterface {
                 ip_address { node { address { value } ip_namespace { node { name { value } namespace_type { value } } } } }

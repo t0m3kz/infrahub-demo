@@ -8,7 +8,7 @@ spec:
     - owner: "C016"
       customer_name: "prolexar-subnet-prod"
       environment: "p"
-      segment_type: "azure_vnet_subnet"
+      segment_type: "cloud_subnet"
       virtual_network: "prolexar-vnet-prod"
       availability_zone: ["westeurope", "westeurope-2"]
       cidr_block: "10.160.1.0/24"

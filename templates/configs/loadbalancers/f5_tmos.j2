@@ -71,22 +71,6 @@ cm device-group {{ ha.name or name }}_dg {
         {%- endif %}
     }
 }
-{#- Floating self IP per VLAN whose segment the pair terminates inline: the
-    segment gateway, owned by the active unit (traffic-group-1). -#}
-{%- set floating = lb_interfaces | selectattr('virtual_ip') | list %}
-{%- if floating %}
-cm traffic-group traffic-group-1 {
-    ha-order { {{ ha.members | join(' ') }} }
-}
-{%- for iface in floating %}
-net self {{ iface.name }}_float {
-    address {{ iface.virtual_ip }}
-    allow-service default
-    traffic-group traffic-group-1
-    vlan {{ iface.name }}
-}
-{%- endfor %}
-{%- endif %}
 #
 {%- endif %}
 {#- Per load-balancer context: the leg VLAN tagged on the uplink and the

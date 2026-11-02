@@ -24,11 +24,12 @@ def _merge(into: Tree, other: Tree) -> None:
 
 
 def _selection_tree(selection_set: SelectionSetNode | None, fragments: dict[str, FragmentDefinitionNode]) -> Tree:
-    """The field names selected under a selection set (inline fragments and spreads resolved and merged)."""
+    """The response keys (alias, else field name) selected under a selection set (inline fragments and spreads resolved and merged)."""
     tree: Tree = {}
     for selection in selection_set.selections if selection_set else ():
         if isinstance(selection, FieldNode):
-            _merge(tree.setdefault(selection.name.value, {}), _selection_tree(selection.selection_set, fragments))
+            key = selection.alias.value if selection.alias else selection.name.value
+            _merge(tree.setdefault(key, {}), _selection_tree(selection.selection_set, fragments))
         elif isinstance(selection, InlineFragmentNode):
             _merge(tree, _selection_tree(selection.selection_set, fragments))
         elif isinstance(selection, FragmentSpreadNode):

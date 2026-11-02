@@ -17,7 +17,7 @@ from tests.smoke.fixture_builders.common import (
 )
 from tests.smoke.fixture_builders.fabric import FIREWALL_PLATFORMS, build_device_data
 from tests.smoke.fixture_builders.firewall import build_firewall_ha_data
-from tests.smoke.fixture_builders.proxy_lb import _LB_CONTEXT_NAMESPACES
+from tests.smoke.fixture_builders.loadbalancer import _LB_CONTEXT_NAMESPACES
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.edge import Edge
 from transforms.config.firewall import Firewall
@@ -381,6 +381,86 @@ def build_firewall_exchange_data(*, device_name: str, platform: str) -> dict:
     return data
 
 
+# A segment terminated on the shared context: the border leaf the trunk is cabled to tags it 101, another leaf
+# (not at the far end of the trunk) has a row of its own with another tag, which must not be taken.
+_TERMINATED_VLAN = 101
+_FACING_LEAF = "dev-dc1-border-leaf-01"
+
+
+def build_firewall_terminated_data(*, device_name: str, platform: str) -> dict:
+    """The exchange-transit firewall (an HA member with the shared context's legs) with a segment terminated on it.
+
+    seg-term (10.9.0.0/24, PROD-ZONE, gateway 10.9.0.1 = the pair's floating VIP) is in the live query shape: the
+    context's ``terminated_segments`` carry its gateway, zone and the VLAN rows of its deployments; the uplink trunk
+    ethernet1/1 carries the cable whose far end is the border leaf with the row to take. It is also a segment the
+    shared deployment serves (so it is a zone member and one of the context's policies' segments), which must not
+    make a static route to the border leaves.
+    """
+    data = build_firewall_exchange_data(device_name=device_name, platform=platform)
+    device = data["DcimPhysicalDevice"]["edges"][0]["node"]
+    shared_id = _XCHG_CONTEXTS["shared"]["id"]
+    term_served = {
+        "id": "seg-term",
+        "__typename": "ManagedVxlanSegment",
+        "name": _v("seg-term"),
+        "gateway": _node({"ip_prefix": _node({"prefix": _v("10.9.0.0/24")})}),
+    }
+    term = {
+        "id": "seg-term",
+        "name": _v("seg-term"),
+        "security_zone": _node({"name": _v("PROD-ZONE")}),
+        "gateway": _node({"address": _v("10.9.0.1/24")}),
+        "segment_deployments": _edges(
+            [
+                {
+                    "vlan_domain_segments": _edges(
+                        [
+                            {"vlan_id": _v(_TERMINATED_VLAN), "device": _node({"id": _FACING_LEAF})},
+                            {"vlan_id": _v(205), "device": _node({"id": "dev-dc1-leaf-01"})},
+                        ]
+                    )
+                }
+            ]
+        ),
+    }
+    # The legs of a context all hold the same context node: edit it once.
+    shared = next(
+        cap_edge["node"]
+        for edge in device["interfaces"]["edges"]
+        for cap_edge in edge["node"]["capabilities"]["edges"]
+        if cap_edge["node"].get("id") == shared_id
+    )
+    shared["terminated_segments"] = _edges([term])
+    shared["served_deployments"]["edges"][0]["node"]["network_segments"]["edges"].append({"node": term_served})
+    device["interfaces"]["edges"].append(
+        {
+            "node": {
+                "__typename": "DcimPhysicalInterface",
+                "name": _v("ethernet1/1"),
+                "description": _v("uplink trunk to the border leaf"),
+                "status": _v("active"),
+                "role": _v("uplink"),
+                "ip_address": _node(None),
+                "cable": _node(
+                    {
+                        "endpoints": _edges(
+                            [
+                                {"__typename": "DcimPhysicalInterface", "device": _node({"id": device["id"]})},
+                                {"__typename": "DcimPhysicalInterface", "device": _node({"id": _FACING_LEAF})},
+                            ]
+                        )
+                    }
+                ),
+                "capabilities": _edges([]),
+            }
+        }
+    )
+    for zone in data["SecurityZone"]["edges"]:
+        if zone["node"]["name"]["value"] == "PROD-ZONE":
+            zone["node"]["network_segments"]["edges"].append({"node": term_served})
+    return data
+
+
 _VIRTUAL_FW_MEMBERS = ("fw-dc10101-C007-p-dedicated", "fw-dc10102-C007-p-dedicated")
 
 
@@ -484,6 +564,20 @@ def write_fixtures() -> tuple[int, int]:
             Firewall,
             f"firewall_{platform}_exchange_transit",
             build_firewall_exchange_data(device_name="dc1-fw-01", platform=platform),
+        )
+        for platform in [*FIREWALL_PLATFORMS, "juniper_junos"]
+    )
+    generated += g
+    errors += e
+
+    # A segment terminated on the shared context: the sub-interface is derived from the facing border leaf's VLAN row,
+    # the segment's gateway is the pair's VIP on it, and no route is made to a connected prefix.
+    print("\nGenerating terminated segment fixtures (firewall):")
+    g, e = write_data_fixtures(
+        (
+            Firewall,
+            f"firewall_{platform}_terminated_segment",
+            build_firewall_terminated_data(device_name="dc1-fw-01", platform=platform),
         )
         for platform in [*FIREWALL_PLATFORMS, "juniper_junos"]
     )

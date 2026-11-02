@@ -90,9 +90,6 @@
                           "send_extended_community": {
                             "value": false
                           },
-                          "maximum_routes": {
-                            "value": null
-                          },
                           "local_pref": {
                             "value": null
                           },
@@ -242,9 +239,6 @@
                           },
                           "send_extended_community": {
                             "value": false
-                          },
-                          "maximum_routes": {
-                            "value": null
                           },
                           "local_pref": {
                             "value": null
@@ -434,9 +428,6 @@
                           "send_extended_community": {
                             "value": true
                           },
-                          "maximum_routes": {
-                            "value": null
-                          },
                           "local_pref": {
                             "value": null
                           },
@@ -586,9 +577,6 @@
                           },
                           "send_extended_community": {
                             "value": true
-                          },
-                          "maximum_routes": {
-                            "value": null
                           },
                           "local_pref": {
                             "value": null
@@ -777,9 +765,6 @@
                           },
                           "send_extended_community": {
                             "value": false
-                          },
-                          "maximum_routes": {
-                            "value": 100
                           },
                           "local_pref": {
                             "value": null
@@ -981,9 +966,6 @@
                           "send_extended_community": {
                             "value": false
                           },
-                          "maximum_routes": {
-                            "value": 100
-                          },
                           "local_pref": {
                             "value": null
                           },
@@ -1184,9 +1166,6 @@
                           "send_extended_community": {
                             "value": false
                           },
-                          "maximum_routes": {
-                            "value": 100
-                          },
                           "local_pref": {
                             "value": null
                           },
@@ -1384,9 +1363,6 @@
                           "send_extended_community": {
                             "value": false
                           },
-                          "maximum_routes": {
-                            "value": 100
-                          },
                           "local_pref": {
                             "value": null
                           },
@@ -1583,9 +1559,6 @@
                           },
                           "send_extended_community": {
                             "value": false
-                          },
-                          "maximum_routes": {
-                            "value": 100
                           },
                           "local_pref": {
                             "value": null
@@ -1806,9 +1779,6 @@
                         }
                       }
                     }
-                  },
-                  "inline_segment": {
-                    "node": null
                   },
                   "capabilities": {
                     "edges": []
@@ -2042,9 +2012,6 @@
                       }
                     }
                   },
-                  "inline_segment": {
-                    "node": null
-                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -2084,9 +2051,6 @@
                         }
                       }
                     }
-                  },
-                  "inline_segment": {
-                    "node": null
                   },
                   "capabilities": {
                     "edges": []
@@ -2128,9 +2092,6 @@
                       }
                     }
                   },
-                  "inline_segment": {
-                    "node": null
-                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -2171,9 +2132,6 @@
                       }
                     }
                   },
-                  "inline_segment": {
-                    "node": null
-                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -2213,9 +2171,6 @@
                         }
                       }
                     }
-                  },
-                  "inline_segment": {
-                    "node": null
                   },
                   "capabilities": {
                     "edges": []
@@ -2784,418 +2739,6 @@
       }
     ]
   },
-  "CloudVirtualInterface": {
-    "edges": [
-      {
-        "node": {
-          "name": {
-            "value": "vif-transit-hub-euc1"
-          },
-          "vlan_id": {
-            "value": 1000
-          },
-          "direct_connect": {
-            "node": {
-              "physical_devices": {
-                "edges": [
-                  {
-                    "node": {
-                      "name": {
-                        "value": "dc1-edge-01"
-                      }
-                    }
-                  }
-                ]
-              }
-            }
-          },
-          "virtual_network": {
-            "node": null
-          },
-          "transit_gateway_attachment": {
-            "node": {
-              "associated_route_table": {
-                "node": {
-                  "id": "rt-shared"
-                }
-              },
-              "transit_gateway": {
-                "node": {
-                  "attachments": {
-                    "edges": [
-                      {
-                        "node": {
-                          "attachment_type": {
-                            "value": "hybrid"
-                          },
-                          "propagates_to_route_tables": {
-                            "edges": [
-                              {
-                                "node": {
-                                  "id": "rt-shared"
-                                }
-                              }
-                            ]
-                          },
-                          "virtual_network": {
-                            "node": null
-                          }
-                        }
-                      },
-                      {
-                        "node": {
-                          "attachment_type": {
-                            "value": "vpc"
-                          },
-                          "propagates_to_route_tables": {
-                            "edges": [
-                              {
-                                "node": {
-                                  "id": "rt-shared"
-                                }
-                              }
-                            ]
-                          },
-                          "virtual_network": {
-                            "node": {
-                              "cidr_blocks": {
-                                "edges": [
-                                  {
-                                    "node": {
-                                      "prefix": {
-                                        "value": "10.30.0.0/16"
-                                      },
-                                      "ip_namespace": {
-                                        "node": {
-                                          "name": {
-                                            "value": "PROD"
-                                          }
-                                        }
-                                      }
-                                    }
-                                  }
-                                ]
-                              },
-                              "account": {
-                                "node": {
-                                  "owner": {
-                                    "node": {
-                                      "__typename": "OrganizationCustomer",
-                                      "org_id": {
-                                        "value": "C003"
-                                      },
-                                      "display_label": "C003 Customer"
-                                    }
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
-                      },
-                      {
-                        "node": {
-                          "attachment_type": {
-                            "value": "vpc"
-                          },
-                          "propagates_to_route_tables": {
-                            "edges": [
-                              {
-                                "node": {
-                                  "id": "rt-shared"
-                                }
-                              }
-                            ]
-                          },
-                          "virtual_network": {
-                            "node": {
-                              "cidr_blocks": {
-                                "edges": [
-                                  {
-                                    "node": {
-                                      "prefix": {
-                                        "value": "10.32.0.0/16"
-                                      },
-                                      "ip_namespace": {
-                                        "node": {
-                                          "name": {
-                                            "value": "PROD"
-                                          }
-                                        }
-                                      }
-                                    }
-                                  }
-                                ]
-                              },
-                              "account": {
-                                "node": {
-                                  "owner": {
-                                    "node": {
-                                      "__typename": "OrganizationCustomer",
-                                      "org_id": {
-                                        "value": "C015"
-                                      },
-                                      "display_label": "C015 Customer"
-                                    }
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
-                      },
-                      {
-                        "node": {
-                          "attachment_type": {
-                            "value": "vpc"
-                          },
-                          "propagates_to_route_tables": {
-                            "edges": [
-                              {
-                                "node": {
-                                  "id": "rt-shared"
-                                }
-                              }
-                            ]
-                          },
-                          "virtual_network": {
-                            "node": {
-                              "cidr_blocks": {
-                                "edges": [
-                                  {
-                                    "node": {
-                                      "prefix": {
-                                        "value": "10.33.0.0/16"
-                                      },
-                                      "ip_namespace": {
-                                        "node": {
-                                          "name": {
-                                            "value": "PROD"
-                                          }
-                                        }
-                                      }
-                                    }
-                                  }
-                                ]
-                              },
-                              "account": {
-                                "node": {
-                                  "owner": {
-                                    "node": {
-                                      "__typename": "OrganizationProvider",
-                                      "org_id": {
-                                        "value": "P027"
-                                      },
-                                      "display_label": "P027 Provider"
-                                    }
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
-                      },
-                      {
-                        "node": {
-                          "attachment_type": {
-                            "value": "vpc"
-                          },
-                          "propagates_to_route_tables": {
-                            "edges": [
-                              {
-                                "node": {
-                                  "id": "rt-isolated"
-                                }
-                              }
-                            ]
-                          },
-                          "virtual_network": {
-                            "node": {
-                              "cidr_blocks": {
-                                "edges": [
-                                  {
-                                    "node": {
-                                      "prefix": {
-                                        "value": "10.150.0.0/16"
-                                      },
-                                      "ip_namespace": {
-                                        "node": {
-                                          "name": {
-                                            "value": "PROD"
-                                          }
-                                        }
-                                      }
-                                    }
-                                  }
-                                ]
-                              },
-                              "account": {
-                                "node": {
-                                  "owner": {
-                                    "node": {
-                                      "__typename": "OrganizationCustomer",
-                                      "org_id": {
-                                        "value": "C003"
-                                      },
-                                      "display_label": "C003 Customer"
-                                    }
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    ]
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      {
-        "node": {
-          "name": {
-            "value": "vif-private-dev-euc1"
-          },
-          "vlan_id": {
-            "value": 1001
-          },
-          "direct_connect": {
-            "node": {
-              "physical_devices": {
-                "edges": [
-                  {
-                    "node": {
-                      "name": {
-                        "value": "dc1-edge-01"
-                      }
-                    }
-                  }
-                ]
-              }
-            }
-          },
-          "virtual_network": {
-            "node": {
-              "cidr_blocks": {
-                "edges": [
-                  {
-                    "node": {
-                      "prefix": {
-                        "value": "10.60.0.0/16"
-                      },
-                      "ip_namespace": {
-                        "node": {
-                          "name": {
-                            "value": "NON-PROD"
-                          }
-                        }
-                      }
-                    }
-                  },
-                  {
-                    "node": {
-                      "prefix": {
-                        "value": "10.31.0.0/16"
-                      },
-                      "ip_namespace": {
-                        "node": {
-                          "name": {
-                            "value": "PROD"
-                          }
-                        }
-                      }
-                    }
-                  }
-                ]
-              },
-              "account": {
-                "node": {
-                  "owner": {
-                    "node": {
-                      "__typename": "OrganizationCustomer",
-                      "org_id": {
-                        "value": "C003"
-                      },
-                      "display_label": "C003 Customer"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "transit_gateway_attachment": {
-            "node": null
-          }
-        }
-      },
-      {
-        "node": {
-          "name": {
-            "value": "vif-elsewhere"
-          },
-          "vlan_id": {
-            "value": 1000
-          },
-          "direct_connect": {
-            "node": {
-              "physical_devices": {
-                "edges": [
-                  {
-                    "node": {
-                      "name": {
-                        "value": "dc1-edge-02"
-                      }
-                    }
-                  }
-                ]
-              }
-            }
-          },
-          "virtual_network": {
-            "node": {
-              "cidr_blocks": {
-                "edges": [
-                  {
-                    "node": {
-                      "prefix": {
-                        "value": "10.99.0.0/16"
-                      },
-                      "ip_namespace": {
-                        "node": {
-                          "name": {
-                            "value": "PROD"
-                          }
-                        }
-                      }
-                    }
-                  }
-                ]
-              },
-              "account": {
-                "node": {
-                  "owner": {
-                    "node": {
-                      "__typename": "OrganizationCustomer",
-                      "org_id": {
-                        "value": "C003"
-                      },
-                      "display_label": "C003 Customer"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "transit_gateway_attachment": {
-            "node": null
-          }
-        }
-      }
-    ]
-  },
   "TopologyCustomerOffice": {
     "edges": [
       {
@@ -3507,14 +3050,22 @@
     "edges": [
       {
         "node": {
-          "owner": {
-            "node": {
-              "__typename": "OrganizationCustomer",
-              "org_id": {
-                "value": "C001"
-              },
-              "display_label": "C001 Customer"
-            }
+          "locations": {
+            "edges": [
+              {
+                "node": {
+                  "owner": {
+                    "node": {
+                      "__typename": "OrganizationCustomer",
+                      "org_id": {
+                        "value": "C001"
+                      },
+                      "display_label": "C001 Customer"
+                    }
+                  }
+                }
+              }
+            ]
           },
           "registered_prefixes": {
             "edges": [
@@ -3564,14 +3115,22 @@
       },
       {
         "node": {
-          "owner": {
-            "node": {
-              "__typename": "OrganizationProvider",
-              "org_id": {
-                "value": "P027"
-              },
-              "display_label": "P027 Provider"
-            }
+          "locations": {
+            "edges": [
+              {
+                "node": {
+                  "owner": {
+                    "node": {
+                      "__typename": "OrganizationProvider",
+                      "org_id": {
+                        "value": "P027"
+                      },
+                      "display_label": "P027 Provider"
+                    }
+                  }
+                }
+              }
+            ]
           },
           "registered_prefixes": {
             "edges": [
@@ -3621,14 +3180,22 @@
       },
       {
         "node": {
-          "owner": {
-            "node": {
-              "__typename": "OrganizationCustomer",
-              "org_id": {
-                "value": "C001"
-              },
-              "display_label": "C001 Customer"
-            }
+          "locations": {
+            "edges": [
+              {
+                "node": {
+                  "owner": {
+                    "node": {
+                      "__typename": "OrganizationCustomer",
+                      "org_id": {
+                        "value": "C001"
+                      },
+                      "display_label": "C001 Customer"
+                    }
+                  }
+                }
+              }
+            ]
           },
           "registered_prefixes": {
             "edges": [
@@ -3678,14 +3245,22 @@
       },
       {
         "node": {
-          "owner": {
-            "node": {
-              "__typename": "OrganizationCustomer",
-              "org_id": {
-                "value": "C002"
-              },
-              "display_label": "C002 Customer"
-            }
+          "locations": {
+            "edges": [
+              {
+                "node": {
+                  "owner": {
+                    "node": {
+                      "__typename": "OrganizationCustomer",
+                      "org_id": {
+                        "value": "C002"
+                      },
+                      "display_label": "C002 Customer"
+                    }
+                  }
+                }
+              }
+            ]
           },
           "registered_prefixes": {
             "edges": []

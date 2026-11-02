@@ -1,0 +1,12 @@
+---
+# Jack 2 of PP-DC90-01 (jack 1 is the leaf-01 to edge path of the main sample): the template cannot pair a front port
+# with its rear port, so the pairing is authored.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimFrontPatchPanelPort
+  data:
+    - panel: ["dmo-1-s-1-r-1-1", "PP-DC90-01"]
+      name: "2"
+      connector: "lc-upc"
+      rear_port: "dmo-1-s-1-r-1-1:PP-DC90-01:2"

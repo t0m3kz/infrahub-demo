@@ -1,0 +1,39 @@
+{#- SONiC config-DB form of the BGP route protection (session.policy.filters, transforms/helpers/bgp_policy.py).
+    Populates pre-initialized dicts from the parent scope via in-place .update(): prefix_set, prefix_table, route_map,
+    bgp_neighbor_af. Runs after sonic_common.j2 (the neighbours).
+
+    EVIDENCE U, EVERY LINE: no SONiC document or device was available when this was written. The table and field names
+    follow the frrcfgd ("unified" mode) config-DB schema as the existing PREFIX_SET / PREFIX / ROUTE_MAP entries of
+    sonic_tenant_l3.j2 do (also unverified), plus three guesses of this file: `masklen_range` as `<len>..<len>` for a
+    `le` entry, `set_local_pref` / `set_med` as the route-map set fields, and `BGP_NEIGHBOR_AF|default|<peer>|<af>` with
+    `route_map_in` / `route_map_out` as lists. Nothing is rendered while the hosting deployment stages
+    (routing_filter_enforce false): a JSON config-DB takes no comment and an unknown key may be refused whole.
+    No EVPN filter is rendered at all (no keyword known). Dell SONiC delegates to this same file. -#}
+{%- if bgp and (capabilities is not defined or capabilities.bgp_enabled is not defined or capabilities.bgp_enabled) -%}
+{%- for bgp_config in bgp -%}
+{%- for session in bgp_config.sessions if not session.get('vrf') -%}
+{%- for flt in session.policy.filters if flt.attached and flt.family != 'evpn' -%}
+{%- set _v6 = flt.family == 'ipv6' -%}
+{%- set _list = flt.list6 if _v6 else flt.list -%}
+{%- set _ = prefix_set.update({_list: {'mode': 'IPv6' if _v6 else 'IPv4'}}) -%}
+{%- for e in flt.entries -%}
+{%- set _range = (e.prefix.split('/')[1] ~ '..' ~ e.le) if e.le is not none else 'exact' -%}
+{%- set _ = prefix_table.update({_list ~ '|' ~ (loop.index * 10) ~ '|' ~ e.prefix ~ '|' ~ _range: {'action': 'permit'}}) -%}
+{%- endfor -%}
+{%- if flt.entries -%}
+{%- set _entry = {'route_operation': 'permit', 'match_prefix_set': _list} -%}
+{%- if flt.sets.get('local_pref') -%}{%- set _ = _entry.update({'set_local_pref': flt.sets.local_pref | string}) -%}{%- endif -%}
+{%- if flt.sets.get('med') -%}{%- set _ = _entry.update({'set_med': flt.sets.med | string}) -%}{%- endif -%}
+{%- if flt.sets.get('no_export') -%}{%- set _ = _entry.update({'set_community_inline': ['no-export', 'additive']}) -%}{%- endif -%}
+{%- set _ = route_map.update({flt.map ~ '|10': _entry}) -%}
+{%- else -%}
+{%- set _ = route_map.update({flt.map ~ '|10': {'route_operation': 'deny'}}) -%}
+{%- endif -%}
+{%- set _af_key = 'default|' ~ session.neighbor ~ '|' ~ flt.family ~ '_unicast' -%}
+{%- set _af = dict(bgp_neighbor_af.get(_af_key) or {'admin_status': 'true'}) -%}
+{%- set _ = _af.update({'route_map_' ~ flt.direction: [flt.map]}) -%}
+{%- set _ = bgp_neighbor_af.update({_af_key: _af}) -%}
+{%- endfor -%}
+{%- endfor -%}
+{%- endfor -%}
+{%- endif -%}

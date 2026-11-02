@@ -61,7 +61,7 @@ from tests.unit.circuit_placement_check_helpers import (
     _end,
     _handoff,
     _interconnect,
-    _owner,
+    _place,
     _run,
     _tunnel,
     _vport,
@@ -161,40 +161,37 @@ class TestCarrierCircuitPlacement:
 
 
 class TestCarrierCircuitOwnership:
-    """Owned exactly when it is an office's access circuit (add_sdwan_edge's INET-<office>), then by the office's
-    owner; the rest is shared underlay."""
+    """The owner of a circuit is derived from the offices among its locations: they are of one owner."""
 
-    def test_office_access_circuit_owned_by_the_office_owner_passes(self) -> None:
-        """INET-C001-OFFICE ends on C001's office and is owned by C001: no finding."""
+    def test_office_access_circuit_passes(self) -> None:
+        """INET-C001-OFFICE ends on C001's office: the owner derives, no finding."""
         assert _run(carrier=[INET_OFFICE]) == []
 
-    @pytest.mark.parametrize(
-        ("owner", "ownership"), [(None, "unowned"), ("C005", "owned by 'C005'")], ids=["unowned", "other-customer"]
-    )
-    def test_office_access_circuit_not_owned_by_the_office_owner_fails(self, owner: str | None, ownership: str) -> None:
-        """An office's access circuit that is unowned or owned by another customer is reported with its ownership."""
+    def test_two_offices_of_one_owner_pass(self) -> None:
+        """Two offices of the same owner derive one owner."""
+        same = _place("C001-OFFICE-2", "TopologyCustomerOffice", owner="C001")
+        circuit = _carrier_circuit("OFFICE-LINK", [C001_OFFICE, same], [OFFICE_EDGE_END, _end("o2", "GE1", same)])
+        assert _run(carrier=[circuit]) == []
+
+    def test_two_offices_of_different_owners_fail(self) -> None:
+        """The owner cannot be derived from offices of C001 and C002."""
         circuit = _carrier_circuit(
-            "INET-C001-OFFICE", [C001_OFFICE, ORANGE], [OFFICE_EDGE_END, ORANGE_PE_END], owner=owner
+            "OFFICE-LINK", [C001_OFFICE, C002_OFFICE], [OFFICE_EDGE_END, _end("C002-OFFICE-EDGE1", "GE1", C002_OFFICE)]
         )
         messages = _run(carrier=[circuit])
-        assert messages == [
-            f"Carrier circuit 'INET-C001-OFFICE' ends on TopologyCustomerOffice 'C001-OFFICE' of 'C001' but is "
-            f"{ownership}: an office's access circuit is owned by the office's owner."
-        ]
-
-    def test_owned_shared_underlay_fails(self) -> None:
-        """A dark fibre carries every tenant: owned, it would pin the shared underlay on one customer."""
-        messages = _run(carrier=[_carrier_circuit("DF-DC10-EQXFR2", [DC10, FR2], [BL10_END, EG_FR_END], owner="C005")])
         assert len(messages) == 1
-        assert "Carrier circuit 'DF-DC10-EQXFR2' is owned by 'C005' but ends on no office" in messages[0]
+        assert "Carrier circuit 'OFFICE-LINK' has an owner that cannot be derived" in messages[0]
+        assert "offices of different owners (C001, C002)" in messages[0]
+
+    def test_a_circuit_with_no_office_has_no_owner_to_derive(self) -> None:
+        """A dark fibre has no office: shared underlay, no finding."""
+        assert _run(carrier=[DF10]) == []
 
     def test_ownership_is_checked_with_a_location_missing(self) -> None:
-        """The owner rule does not wait for the derived end: one location is enough to see the office."""
-        circuit = _carrier_circuit("INET-C001-OFFICE", [C001_OFFICE], [OFFICE_EDGE_END, ORANGE_PE_END])
+        """The owner rule does not wait for the derived end: both offices are visible with the shape broken."""
+        circuit = _carrier_circuit("X", [C001_OFFICE, C002_OFFICE], [OFFICE_EDGE_END, ORANGE_PE_END])
         messages = _run(carrier=[circuit])
-        assert len(messages) == 2
-        assert "an office's access circuit is owned by the office's owner" in messages[0]
-        assert "terminates on 1 location(s)" in messages[1]
+        assert "cannot be derived" in messages[0]
 
 
 class TestTunnelCircuit:
@@ -214,7 +211,7 @@ class TestTunnelCircuit:
         other_edge = _vport(
             "C002-OFFICE-EDGE1", "GE1", (_carrier_circuit("INET-C002-OFFICE", [C002_OFFICE, ORANGE], []),)
         )
-        other = _tunnel("C002-OFFICE-SDWAN-FR2", [C002_OFFICE, FR2], [other_edge, GW_PUBLIC], owner="C002")
+        other = _tunnel("C002-OFFICE-SDWAN-FR2", [C002_OFFICE, FR2], [other_edge, GW_PUBLIC])
         assert _run(tunnels=[TUNNEL, other]) == []
 
     def test_not_two_locations_fails(self) -> None:
@@ -229,17 +226,17 @@ class TestTunnelCircuit:
         messages = _run(tunnels=[_tunnel("T", [C001_OFFICE, FR2], [OFFICE_EDGE])])
         assert messages == ["Tunnel circuit 'T' has 1 end port(s): it terminates on exactly 2 ports, one per end."]
 
-    @pytest.mark.parametrize(
-        ("owner", "locations"),
-        [(None, [C001_OFFICE, FR2]), ("C002", [C001_OFFICE, FR2]), ("C001", [FR2, EUC1])],
-        ids=["unowned", "other-customers-office", "no-office"],
-    )
-    def test_not_owned_by_the_offices_owner_fails(self, owner: str | None, locations: list[dict[str, Any]]) -> None:
-        """Unowned, owned by another customer or with no office among its locations: all break the ownership rule."""
-        messages = _run(tunnels=[_tunnel("T", locations, [OFFICE_EDGE, GW_PUBLIC], owner=owner)])
+    def test_no_office_fails(self) -> None:
+        """A tunnel with no office among its locations has no owner to derive."""
+        messages = _run(tunnels=[_tunnel("T", [FR2, EUC1], [OFFICE_EDGE, GW_PUBLIC])])
         assert len(messages) == 1
-        assert "Tunnel circuit 'T' is " in messages[0]
+        assert "Tunnel circuit 'T' has no office among its locations" in messages[0]
         assert "a tunnel is owned by its office's owner" in messages[0]
+
+    def test_offices_of_different_owners_fail(self) -> None:
+        """Two offices of different owners on one tunnel: the owner cannot be derived."""
+        messages = _run(tunnels=[_tunnel("T", [C001_OFFICE, C002_OFFICE], [OFFICE_EDGE, GW_PUBLIC])])
+        assert len(messages) == 1 and "cannot be derived" in messages[0]
 
     def test_end_on_no_carrier_circuit_fails(self) -> None:
         """A tunnel end whose port rides no carrier circuit is reported as riding no live internet circuit."""
@@ -294,13 +291,12 @@ class TestInterconnectCircuit:
         for ends in ([BL10, BL11], [BL11, BL10]):
             assert _run(interconnects=[_interconnect("DCI-DC10-DC11", [DC10, DC11], ends)]) == []
 
-    def test_owned_fails(self) -> None:
-        """A DCI is shared platform: an owner on it is reported."""
-        messages = _run(interconnects=[_interconnect("DCI-DC10-FR2", [DC10, FR2], [BL10, EG_FR_DF10], owner="C005")])
-        assert messages == [
-            "Interconnect circuit 'DCI-DC10-FR2' is owned by 'C005': a DCI between two border gateways is shared "
-            "platform, unowned."
-        ]
+    def test_an_office_in_the_locations_fails(self) -> None:
+        """A DCI is shared platform: an office with an owner among its locations is reported."""
+        messages = _run(interconnects=[_interconnect("DCI-DC10-FR2", [DC10, C001_OFFICE], [BL10, EG_FR_DF10])])
+        assert any(
+            "Interconnect circuit 'DCI-DC10-FR2' terminates on" in m and "names no office" in m for m in messages
+        )
 
     def test_not_two_locations_fails(self) -> None:
         """A DCI with one location is reported."""
@@ -477,12 +473,11 @@ class TestHandoffCircuit:
         messages = _run(handoffs=[_handoff("HO", None, [EG_FR_VLAN])])
         assert messages == ["Handoff circuit 'HO' has 1 end port(s): it terminates on exactly 2 ports, one per end."]
 
-    def test_an_owned_handoff_fails(self) -> None:
-        """A handoff is shared platform: only a tunnel has an owner (the owner of a prefix registers it)."""
-        owned = {**HANDOFF, "owner": _owner("C005")}
+    def test_a_handoff_naming_an_office_fails(self) -> None:
+        """A handoff is shared platform: an office with an owner among its locations is reported."""
         assert _run(handoffs=[HANDOFF]) == []
-        messages = _run(handoffs=[owned])
-        assert len(messages) == 1 and "owned by 'C005'" in messages[0] and "unowned" in messages[0]
+        messages = _run(handoffs=[_handoff("HO", [FR2, C001_OFFICE], [EG_FR_VLAN, AWS_VLAN])])
+        assert any("Handoff circuit 'HO' terminates on" in m and "names no office" in m for m in messages)
 
     def test_a_handoff_without_a_namespace_fails(self) -> None:
         """The schema leaves ip_namespace optional (a dci and a tunnel have none); a handoff needs it."""
@@ -574,12 +569,13 @@ class TestHandoffCircuit:
         assert "has no live carrier circuit and no cable" in messages[0]
 
     def test_end_that_is_not_a_vlan_sub_interface_fails(self) -> None:
-        """A handoff end must be named <port>.<vlan>; a bare physical port is reported."""
+        """A handoff end must be named <port>.<vlan> (or be a routed port); a bare port of no kind is reported."""
         ends = [EG_FR_VLAN, _vport("EXT-AWS-DX-FR2", "et-0/0/0", (XC,))]
         messages = _run(handoffs=[_handoff("HO", None, ends)])
         assert messages == [
-            "Handoff circuit 'HO' end 'EXT-AWS-DX-FR2:et-0/0/0' is not a VLAN sub-interface: a handoff end is named "
-            "<port>.<vlan>."
+            "Handoff circuit 'HO' end 'EXT-AWS-DX-FR2:et-0/0/0' is neither a VLAN sub-interface (named <port>.<vlan>) "
+            "nor a routed physical port (an IP address, no VLAN) nor a cloud peering interface: a physical port with "
+            "no IP address and no VLAN cannot carry a handoff."
         ]
 
     def test_different_vlans_fail(self) -> None:
@@ -591,19 +587,3 @@ class TestHandoffCircuit:
             "ends carry different VLANs (eg-fr201:Ethernet1/13.3101 = 3101, EXT-AWS-DX-FR2:et-0/0/0.3102 = 3102)"
             in (messages[0])
         )
-
-    def test_cloud_endpoint_vlan_must_mirror_the_sub_interface(self) -> None:
-        """The cloud virtual interface states VLAN 3102 while the sub-interfaces use 3101: reported."""
-        messages = _run(handoffs=[_handoff("HO", None, [EG_FR_VLAN, AWS_VLAN], vif=("VIF-C005-P", 3102))])
-        assert messages == [
-            "Handoff circuit 'HO' ends are on VLAN 3101 but its cloud endpoint 'VIF-C005-P' states vlan_id 3102: "
-            "the virtual interface mirrors the sub-interface VLAN."
-        ]
-
-    def test_cloud_endpoint_without_a_vlan_passes(self) -> None:
-        """A VPN gateway endpoint has no VLAN to mirror."""
-        assert _run(handoffs=[_handoff("HO", None, [EG_FR_VLAN, AWS_VLAN], vif=("VGW-C005-P", None))]) == []
-
-    def test_no_cloud_endpoint_passes(self) -> None:
-        """A handoff with no cloud endpoint has no VLAN to mirror."""
-        assert _run(handoffs=[_handoff("HO", None, [EG_FR_VLAN, AWS_VLAN], vif=None)]) == []

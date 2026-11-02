@@ -32,13 +32,25 @@ SESSION_CIRCUIT = "TopologySessionCircuit"
 DCI_TYPE = "dci"
 HANDOFF_TYPE = "handoff"
 TUNNEL_TYPE = "tunnel"
+VPN_TYPE = "vpn"
 # The circuit types that have a session generated (a tunnel has none): a port is an end of at most one.
-SESSION_CIRCUIT_TYPES = (DCI_TYPE, HANDOFF_TYPE)
+SESSION_CIRCUIT_TYPES = (DCI_TYPE, HANDOFF_TYPE, VPN_TYPE)
 
 BGP_PROCESS = "ManagedBGP"
 OVERLAY_ROLE = "overlay"
 # A provider-hosted network function (Equinix Network Edge): a device kind we do not administer.
 NETWORK_APPLIANCE_KIND = "CloudNetworkAppliance"
+# The cloud side of a circuit: a transport is a device without role or deployment (a port, a LAG, and the
+# CloudPeeringInterface that rides on them); the provider's side is authored, never generated.
+CLOUD_PEERING_KIND = "CloudPeeringInterface"
+CLOUD_TRANSPORT_KINDS = ("CloudDirectConnect", "CloudVPNConnection")
+# THE INTERNET: one passive device that is also a facility. An internet carrier ends on its one interface, and the
+# object itself is the location of that end (it has no ``deployment``).
+INTERNET_KIND = "TopologyInternet"
+# The shared interface of THE INTERNET: the one kind that may be an end of many carriers.
+INTERNET_INTERFACE_KIND = "TopologyInternetInterface"
+# The facility of an ISP router: the other kind of place an internet carrier terminates on.
+ISP_KIND = "TopologyExternalProviders"
 # A handoff end is a VLAN sub-interface, <parent>.<vlan>: the VLAN lives in the name.
 _VLAN_SUBINTERFACE = re.compile(r".+\.(\d+)")
 
@@ -58,6 +70,13 @@ def subinterface_vlan(name: str) -> int | None:
     """The VLAN of a sub-interface named ``<port>.<vlan>``, None for any other name."""
     match = _VLAN_SUBINTERFACE.fullmatch(name)
     return int(match.group(1)) if match else None
+
+
+def is_cloud_end(port: dict[str, Any]) -> bool:
+    """The cleaned end is a cloud peering interface, or a port of a cloud transport (a device with no deployment)."""
+    return port.get("typename") == CLOUD_PEERING_KIND or (port.get("device") or {}).get("typename") in (
+        CLOUD_TRANSPORT_KINDS
+    )
 
 
 def _port_and_parent(port: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -100,8 +119,8 @@ def derived_underlay(circuit: dict[str, Any]) -> list[dict[str, Any]]:
     virtual circuit exists, reruns nothing, so the virtual circuits that sat on it keep (or lack) their session until
     their next run.
 
-    What reaches a session: it reruns on its own created / capabilities / status (a handoff also ip_namespace,
-    password and maximum_routes) and, through add_circuit's fan-out (generators/topology/circuit.py), when a physical
+    What reaches a session: it reruns on its own created / capabilities / status (a handoff also ip_namespace and
+    password) and, through add_circuit's fan-out (generators/topology/circuit.py), when a physical
     circuit on its ports (or on a port's parent) is created, has its ends changed or its status changed. It does NOT
     rerun when a cable is added later, when a port is removed from a circuit, or when a circuit's type changes.
     """
@@ -113,7 +132,7 @@ def derived_underlay(circuit: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 async def session_circuits_on(client: Any, port_ids: list[str]) -> list[Any]:
-    """Every session circuit (dci or handoff) with one of ``port_ids`` among its ends.
+    """Every session circuit (dci, handoff or vpn) with one of ``port_ids`` among its ends.
 
     A tunnel shares its ports by design (one gateway port serves many tunnels), so it stays out: the filter is on
     ``circuit_type``, not on the kind.

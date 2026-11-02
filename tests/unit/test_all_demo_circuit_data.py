@@ -9,6 +9,7 @@ too: the created-trigger raises for a non-member.
 
 from __future__ import annotations
 
+import ipaddress
 import re
 from pathlib import Path
 from typing import Any
@@ -74,7 +75,7 @@ def _circuit_name(entry: dict[str, Any]) -> str:
 @pytest.mark.parametrize("kind", sorted(_TARGET_GROUPS))
 def test_every_circuit_is_in_its_generator_target_group(kind: str) -> None:
     """Without membership the generator never runs for the circuit."""
-    circuits = declared(kind, _DEMOS)
+    circuits = declared(kind, _ALL)
     assert circuits
     outside = [
         f"{circuit.path.relative_to(_DEMOS)}: {_circuit_name(circuit.item)}"
@@ -87,10 +88,10 @@ def test_every_circuit_is_in_its_generator_target_group(kind: str) -> None:
 def test_a_tunnel_circuit_is_in_the_virtual_circuits_group_and_has_no_session_field() -> None:
     """The SD-WAN orchestrator owns a tunnel's routing, so no session is generated, but the created-trigger of the
     group's generator raises for a non-member: the tunnel joins virtual_circuits and carries no handoff field."""
-    rows = _session_rows("tunnel", _DEMOS)
+    rows = _session_rows("tunnel", _ALL)
     assert [_circuit_name(entry) for entry in rows] == ["C001-PARTNER-ACME-FR2"]
     assert all("virtual_circuits" in entry["member_of_groups"] for entry in rows)
-    assert not [e["name"] for e in rows if {"ip_namespace", "password", "maximum_routes", "cloud_endpoint"} & set(e)]
+    assert not [e["name"] for e in rows if {"ip_namespace", "password", "owner"} & set(e)]
 
 
 def test_no_circuit_is_declared_as_a_removed_kind() -> None:
@@ -106,8 +107,8 @@ def test_no_circuit_is_declared_as_a_removed_kind() -> None:
 
 
 def test_every_session_circuit_declares_a_circuit_type_of_the_schema() -> None:
-    """circuit_type is required and one of dci, handoff, tunnel."""
-    rows = _rows("TopologySessionCircuit", _DEMOS)
+    """circuit_type is required and one of dci, handoff, tunnel (30_all authors no vpn)."""
+    rows = _rows("TopologySessionCircuit", _ALL)
     assert rows and {entry["circuit_type"] for entry in rows} == {"dci", "handoff", "tunnel"}
 
 
@@ -124,7 +125,9 @@ _REMOVED_CIRCUIT_KEYS = ("peering_role", "link_type", "transport_mode", "tunnel_
 def test_a_session_circuit_row_uses_no_removed_attribute(circuit_type: str) -> None:
     """The role is circuit_type: no `peering_role`, `link_type`, `transport_mode`, `tunnel_id`, and no carrier key."""
     for entry in _session_rows(circuit_type, _DEMOS):
-        assert not [key for key in (*_REMOVED_CIRCUIT_KEYS, "carrier_circuits") if key in entry], _circuit_name(entry)
+        assert not [
+            key for key in (*_REMOVED_CIRCUIT_KEYS, "carrier_circuits", "owner", "cloud_endpoint") if key in entry
+        ], _circuit_name(entry)
 
 
 def test_no_carrier_circuit_names_a_peering_role() -> None:
@@ -166,8 +169,12 @@ def test_dci_circuit_has_a_border_leaf_and_a_cage_edge_end(circuit_id: str) -> N
 def test_no_hand_written_dci_session_or_addressing_is_left() -> None:
     """The generator owns the DCI sessions, their /127s and the interface addressing."""
     assert not [e["name"] for e in _rows("ManagedBGPPeering", _DEMOS / "30_all") if e.get("peering_role") == "dci"]
-    # Top-level rows only: the interfaces nested under a DcimCable are its endpoint lookups, not declarations.
-    assert not [obj for obj in declared("DcimPhysicalInterface", _ONRAMP) if obj.enclosing is None]
+    # Top-level rows only: the interfaces nested under a DcimCable are its endpoint lookups, not declarations. The ports
+    # declared in the on-ramp are the cloud transports' (02_cloud_provider_edges.yml), nothing on a device of ours.
+    transports = {name(transport) for transport in declared("CloudDirectConnect", _ONRAMP)}
+    ports = [obj for obj in declared("DcimPhysicalInterface", _ONRAMP) if obj.enclosing is None]
+    assert ports
+    assert {obj.item["device"] for obj in ports} == transports
     assert not [e["prefix"] for e in _rows("IpamPrefix", _ONRAMP) if e["prefix"].endswith("/127")]
 
 
@@ -180,15 +187,35 @@ def test_generated_peering_and_key_names_do_not_collide_with_data() -> None:
     generated: set[str] = set()
     for e in _session_rows("dci", _DEMOS):
         generated |= {f"{e['name']}-underlay", f"{e['name']}-evpn", f"{e['name']}-dci-key"}
-    generated |= {f"{e['name']}-bgp" for e in _session_rows("handoff", _DEMOS)}
+    generated |= {f"{e['name']}-bgp" for e in _generated_handoffs(_DEMOS)}
 
     assert generated
     assert not generated & names
 
 
+def _peering_ends() -> set[tuple[str, str]]:
+    """The (transport, interface) of every CloudPeeringInterface the 30_all data declares."""
+    return {(obj.item["device"], name(obj)) for obj in declared("CloudPeeringInterface", _ALL)}
+
+
+def _is_cloud_handoff(handoff: dict[str, Any]) -> bool:
+    """A handoff whose far end is a cloud peering interface: add_virtual_circuit builds no session for it."""
+    return any((device, port) in _peering_ends() for device, port in handoff["capabilities"])
+
+
+def _generated_handoffs(root: Path) -> list[dict[str, Any]]:
+    """The handoffs under root whose session add_virtual_circuit builds (both ends a device interface)."""
+    return [entry for entry in _session_rows("handoff", root) if not _is_cloud_handoff(entry)]
+
+
 def test_every_dci_fibre_lands_on_its_own_free_port() -> None:
     """No two fibres share a port: each DC border leaf uses Ethernet1/35 and 1/36, each cage edge its dci ports."""
-    ends = [tuple(i) for e in _rows("TopologyCarrierCircuit", _ONRAMP) for i in e["capabilities"]]
+    ends = [
+        tuple(i)
+        for e in _rows("TopologyCarrierCircuit", _ONRAMP)
+        if e["circuit_type"] != "virtual_connection"
+        for i in e["capabilities"]
+    ]
     assert len(ends) == len(set(ends))
     border_leaf_ports = {port for device, port in ends if device.startswith("bl-dc")}
     assert border_leaf_ports == {"Ethernet1/35", "Ethernet1/36"}
@@ -213,7 +240,8 @@ def test_generated_fabric_peering_names_do_not_collide_with_data() -> None:
 
 
 def test_every_carrier_circuit_row_has_two_distinct_ends_and_no_port_is_in_two_rows() -> None:
-    """A carrier circuit terminates on exactly two ports (the schema's min/max count), each port on one circuit.
+    """A carrier circuit terminates on exactly two ports (the schema's min/max count), each port on one circuit
+    (a virtual_connection is exempt: a provider port hosts one connection per S-tag; so is INTERNET:bus).
 
     The INET-<office> circuits are not data rows: add_sdwan_edge creates them with both ends in one write.
     """
@@ -223,20 +251,22 @@ def test_every_carrier_circuit_row_has_two_distinct_ends_and_no_port_is_in_two_r
     for row in rows:
         ends = [tuple(end) for end in row["capabilities"]]
         assert len(ends) == 2 and len(set(ends)) == 2, f"{_circuit_name(row)}: {ends}"
+        if row["circuit_type"] == "virtual_connection":
+            continue
         for end in ends:
+            if end == ("INTERNET", "bus"):
+                continue  # THE INTERNET's interface is shared by kind: one carrier per attachment
             assert end not in seen, f"{end} is an end of {seen[end]} and {_circuit_name(row)}"
             seen[end] = _circuit_name(row)
 
 
-def test_every_cross_connect_far_end_is_a_declared_cloud_provider_edge() -> None:
-    """A cross-connect's second port sits on a stub device the 01_colo_onramp provider edges declare."""
+def test_every_cross_connect_far_end_is_a_declared_physical_provider_edge() -> None:
+    """A cross-connect joins two physical ports: the only one left is the Megaport MCR's, whose second port sits on a
+    stub device the 01_colo_onramp provider edges declare. A cloud region has no port of ours: the ports of its
+    cloud transports are the far ends of virtual connections."""
     stubs = {e["name"] for e in _rows("DcimPhysicalDevice", _ONRAMP / "02_cloud_provider_edges.yml")}
     cross_connects = [e for e in _rows("TopologyCarrierCircuit", _ONRAMP) if e["circuit_type"] == "cross_connect"]
-    assert sorted(_circuit_name(e) for e in cross_connects) == [
-        "XC-EQXFR2-AWS-EUC1",
-        "XC-EQXPA4-AZURE-WEU",
-        "XC-EQXPA4-MEGAPORT",
-    ]
+    assert sorted(_circuit_name(e) for e in cross_connects) == ["XC-EQXPA4-MEGAPORT"]
     for circuit in cross_connects:
         cage_end, cloud_end = circuit["capabilities"]
         assert cage_end[0].startswith("eg-")
@@ -297,7 +327,11 @@ _STUB_LOOPBACKS = "10.255.64."
 
 
 def _handoffs() -> list[dict[str, Any]]:
-    return _session_rows("handoff", _ALL)
+    return _generated_handoffs(_ALL)
+
+
+def _cloud_handoffs() -> list[dict[str, Any]]:
+    return [entry for entry in _session_rows("handoff", _ALL) if _is_cloud_handoff(entry)]
 
 
 def _sub_interfaces() -> dict[tuple[str, str], dict[str, Any]]:
@@ -336,17 +370,58 @@ def test_every_handoff_end_is_a_declared_sub_interface_of_one_vlan_and_carries_n
         assert len(vlans) == 1, handoff["name"]
 
 
+def test_a_cloud_handoff_is_authored_end_to_end() -> None:
+    """add_virtual_circuit builds nothing for a handoff to a cloud peering interface, so the data holds it all: the near
+    end is an addressed `<parent>.<vlan>` sub-interface in the circuit's namespace, the far end a declared
+    CloudPeeringInterface of one VLAN riding on a port of its transport, whose peer address is declared and, with ours,
+    in the circuit's link prefix; one hand-written eBGP peering with our process on the near sub-interface."""
+    cloud_handoffs = _cloud_handoffs()
+    assert [h["name"] for h in cloud_handoffs] == ["HANDOFF-FR2-AWS-EUC1-PROD"]
+    sub_interfaces = _sub_interfaces()
+    peerings = {(e["device"], e["name"]): e for e in _rows("CloudPeeringInterface", _ALL)}
+    addresses = {(e["address"], e.get("ip_namespace")) for e in _rows("IpamIPAddress", _ALL)}
+    prefixes = {(e["prefix"], e.get("ip_namespace")) for e in _rows("IpamPrefix", _ALL)}
+    ports = {(e["device"], e["name"]) for e in _rows("DcimPhysicalInterface", _ALL)}
+    sessions = _rows("ManagedBGPPeering", _ALL)
+    for handoff in cloud_handoffs:
+        near = [(device, port) for device, port in handoff["capabilities"] if (device, port) not in peerings]
+        far = [(device, port) for device, port in handoff["capabilities"] if (device, port) in peerings]
+        assert len(near) == len(far) == 1, handoff["name"]
+        match = _SUBINTERFACE.match(near[0][1])
+        assert match and sub_interfaces[near[0]]["parent_interface"] == [near[0][0], match["parent"]], handoff["name"]
+        address = sub_interfaces[near[0]]["ip_address"]["data"]
+        assert address["ip_namespace"] == handoff["ip_namespace"], handoff["name"]
+        vif = peerings[far[0]]
+        assert vif["vlan_id"] == int(match["vlan"]) and far[0][1].endswith(f".{match['vlan']}"), handoff["name"]
+        assert tuple(vif["parent_interface"]) in ports and vif["parent_interface"][0] == far[0][0], handoff["name"]
+        assert tuple(vif["peer_ip"]) in addresses, handoff["name"]
+        link = ipaddress.ip_network(handoff["link_prefix"][0])
+        assert tuple(handoff["link_prefix"]) in prefixes, handoff["name"]
+        assert ipaddress.ip_interface(address["address"]).ip in link, handoff["name"]
+        assert ipaddress.ip_interface(vif["peer_ip"][0]).ip in link, handoff["name"]
+        ours = [s for s in sessions if s["capabilities"] == [list(near[0])]]
+        assert len(ours) == 1 and ours[0]["session_type"] == "EBGP", handoff["name"]
+        assert ours[0]["bgp_processes"] == [f"{near[0][0]}-bgp-overlay"], handoff["name"]
+
+
 def test_every_authored_handoff_password_is_a_declared_key() -> None:
     """A handoff's optional key refers to a RoutingPassword the data declares."""
     keys = {e["name"] for e in _rows("RoutingPassword", _ALL)}
-    for handoff in _handoffs():
+    for handoff in _session_rows("handoff", _ALL):
         assert handoff.get("password") in keys, handoff["name"]
 
 
-def test_every_party_device_of_a_handoff_has_exactly_one_bgp_process_with_a_declared_asn_and_router_id() -> None:
+def test_the_authored_handoff_party_has_exactly_one_bgp_process_with_a_declared_asn_and_router_id() -> None:
     """The session generator takes the party's ONLY ManagedBGP process (a stub has no overlay one); its local_as is the
-    party ASN and its router_id a loopback of the device. Our edge and the NE routers are generated, not declared."""
+    party ASN and its router_id a loopback of the device. Our edge is generated, not declared."""
     declared_devices = _declared_devices()
+    parties = {device for handoff in _handoffs() for device, _ in handoff["capabilities"] if device in declared_devices}
+    assert parties == {"EQX-FR2-SDWAN-GW1"}
+    _assert_party_processes(parties)
+
+
+def _assert_party_processes(parties: set[str]) -> None:
+    """Each party device has one ManagedBGP process whose AS is declared and whose router-id is its own loopback."""
     processes = _rows("ManagedBGP", _ALL)
     asns = {f"AS{e['asn']}" for e in _rows("RoutingAutonomousSystem", _ALL)}
     loopbacks = {
@@ -354,8 +429,6 @@ def test_every_party_device_of_a_handoff_has_exactly_one_bgp_process_with_a_decl
         for e in _rows("DcimVirtualInterface", _ALL)
         if e.get("role") == "loopback"
     }
-    parties = {device for handoff in _handoffs() for device, _ in handoff["capabilities"] if device in declared_devices}
-    assert parties == {"EXT-AWS-DX-FR2", "EQX-FR2-SDWAN-GW1", "EXT-MEGAPORT-MCR1"}
     for device in parties:
         own = [entry for entry in processes if device in entry["capabilities"]]
         assert len(own) == 1, f"{device}: {[e['name'] for e in own]}"
@@ -363,31 +436,6 @@ def test_every_party_device_of_a_handoff_has_exactly_one_bgp_process_with_a_decl
         address, namespace = own[0]["router_id"]
         assert (device, address, namespace) in loopbacks, device
         assert address.startswith(_STUB_LOOPBACKS) and address.endswith("/32"), device
-
-
-def test_the_stub_loopbacks_are_distinct_and_in_the_reserved_range() -> None:
-    """10.255.64.0/24 holds the router-ids of the party stubs, clear of the handoff pools and every authored range."""
-    addresses = [
-        e["ip_address"]["data"]["address"]
-        for e in _rows("DcimVirtualInterface", _ALL)
-        if e["device"].startswith(("EXT-", "EQX-FR2-SDWAN-GW")) and e.get("role") == "loopback"
-    ]
-    assert sorted(addresses) == ["10.255.64.1/32", "10.255.64.2/32", "10.255.64.3/32"]
-
-
-def test_a_cloud_endpoint_is_set_from_its_vif_and_mirrors_the_sub_interface_vlan() -> None:
-    """A VIF names its one handoff (`virtual_circuit`); the handoff cannot name the VIF back. The VIF's vlan_id is the
-    sub-interface VLAN, and a handoff has at most one VIF."""
-    handoffs = {h["name"]: h for h in _handoffs()}
-    vifs = _rows("CloudVirtualInterface", _ALL)
-    assert vifs
-    circuits = [vif["virtual_circuit"] for vif in vifs]
-    assert len(circuits) == len(set(circuits))
-    for vif in vifs:
-        handoff = handoffs[vif["virtual_circuit"]]
-        assert "cloud_endpoint" not in handoff
-        for _, port in handoff["capabilities"]:
-            assert port.rpartition(".")[2] == str(vif["vlan_id"]), vif["name"]
 
 
 def test_provider_stubs_deployed_to_a_zone_are_in_the_provider_stubs_group() -> None:

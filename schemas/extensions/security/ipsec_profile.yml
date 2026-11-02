@@ -1,0 +1,83 @@
+---
+version: "1.0"
+
+# The IKE and ESP parameters of an IPsec tunnel, shared by the cloud VPN tunnels (CloudPeeringInterface.crypto_profile).
+# One profile, many tunnels. Values are the operator-neutral names; a connection_profile generator maps them.
+nodes:
+  - name: IPsecProfile
+    namespace: Security
+    description: "IKE and ESP parameters of an IPsec tunnel, reusable by many tunnels"
+    label: IPsec Profile
+    icon: "mdi:shield-key-outline"
+    include_in_menu: false
+    inherit_from:
+      - ManagedGeneric
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value }}"
+    order_by:
+      - name__value
+    uniqueness_constraints:
+      - [name__value]
+    attributes:
+      - name: ike_version
+        kind: Dropdown
+        label: IKE Version
+        optional: false
+        default_value: ikev2
+        order_weight: 300
+        choices:
+          - name: ikev1
+            label: IKEv1
+            color: "#95A5A6"
+          - name: ikev2
+            label: IKEv2
+            color: "#3498DB"
+      - name: ike_encryption
+        kind: Text
+        label: IKE Encryption
+        optional: false
+        order_weight: 350
+        description: "Phase 1 cipher, for example aes256"
+      - name: ike_integrity
+        kind: Text
+        label: IKE Integrity
+        optional: false
+        order_weight: 400
+        description: "Phase 1 hash, for example sha256"
+      - name: ike_dh_group
+        kind: Number
+        label: IKE DH Group
+        optional: false
+        order_weight: 450
+        description: "Phase 1 Diffie-Hellman group, for example 14"
+      - name: ike_lifetime
+        kind: Number
+        label: IKE Lifetime (s)
+        optional: true
+        order_weight: 500
+        description: "Phase 1 lifetime in seconds"
+      - name: esp_encryption
+        kind: Text
+        label: ESP Encryption
+        optional: false
+        order_weight: 550
+        description: "Phase 2 cipher, for example aes256"
+      - name: esp_integrity
+        kind: Text
+        label: ESP Integrity
+        optional: false
+        order_weight: 600
+        description: "Phase 2 hash, for example sha256"
+      - name: pfs_group
+        kind: Number
+        label: PFS Group
+        optional: true
+        order_weight: 650
+        description: "Perfect forward secrecy DH group; empty = no PFS"
+      - name: esp_lifetime
+        kind: Number
+        label: ESP Lifetime (s)
+        optional: true
+        order_weight: 700
+        description: "Phase 2 lifetime in seconds"

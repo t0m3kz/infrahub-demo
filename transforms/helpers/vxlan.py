@@ -271,12 +271,9 @@ def get_interfaces(
             # from the query and differs between leaves, which would churn the
             # rendered `trunk allowed vlan` list between otherwise equal ports.
             "vlans": sorted(vlans) if len(vlans) > 1 else vlans,
-            # A border-leaf service port facing an HA pair member carries the
-            # VLANs of the terminate_inline segments that pair gateways, tagged
-            # (one <member-port>.<vlan> sub-interface per segment on the HA
-            # side). Any other port carrying more than one VLAN (e.g. a host
-            # port in two segments) is a trunk of exactly those VLANs; a
-            # single-VLAN port keeps its access rendering (None).
+            # A port carrying more than one VLAN (e.g. a host port in two
+            # segments) or a border-leaf service port is a trunk of exactly
+            # those VLANs; a single-VLAN port keeps its access rendering (None).
             "mode": "trunk" if plain_trunk or native_vlan is not None else None,
             # Isolation mode of the port's access (first) VLAN.
             "access_isolation_mode": vlan_isolation.get(vlans[0], "normal") if vlans else None,

@@ -229,6 +229,23 @@ class TestGetCustomerPbrRules:
         assert result[0]["fw_nexthop"] == "10.65.0.4"  # the VIP of the leg's /29
         assert result[0]["bypass_prefixes"] == []
 
+    def test_permit_to_a_terminated_segment_is_no_bypass(self) -> None:
+        """A segment a firewall context terminates has no SVI and no route on the fabric: a bypass would drop the flow,
+        so the leaf keeps redirecting it to the firewall, like a permit to a peer that is not terminated is bypassed."""
+        terminated = _make_pbr_rule(dst_prefix="10.9.0.0/24")
+        terminated["destination_segment"]["terminated_on"] = {"id": "ctx-1"}
+        policies = [{"enabled": True, "rules": [terminated, _make_pbr_rule(dst_prefix="10.0.2.0/24")]}]
+        activations = [_make_pbr_activation(security_policies=policies)]
+        result = get_customer_pbr_rules(activations, [_make_context_leg()])
+        assert result[0]["bypass_prefixes"] == ["10.0.2.0/24"]
+
+    def test_reply_to_a_terminated_source_is_no_bypass(self) -> None:
+        """The same on the way back: a permit INTO this segment from a terminated one is not bypassed on its leaf."""
+        inbound = self._inbound(src_prefix="10.9.0.0/24")
+        inbound["source_segment"]["terminated_on"] = {"id": "ctx-1"}
+        result = get_customer_pbr_rules(self._with_inbound(inbound, self._inbound()), [_make_context_leg()])
+        assert result[0]["bypass_prefixes"] == ["10.0.1.0/24"]
+
     def test_cross_owner_permit_still_bypasses(self) -> None:
         """A permit rule bypasses PBR regardless of whether source/destination
         share an owner — intra- and inter-customer traffic use one model."""

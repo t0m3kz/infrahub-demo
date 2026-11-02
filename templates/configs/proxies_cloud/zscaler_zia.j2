@@ -12,8 +12,8 @@
       "order": {{ loop.index }},
       "state": "ENABLED",
       "action": {{ rule.verdict | upper | tojson }},
-      "url_categories": {{ (rule.destinations if rule.destination_type == 'category' else []) | tojson }},
-      "destinations": {{ (rule.destinations if rule.destination_type != 'category' else []) | tojson }},
+      "url_categories": [],
+      "destinations": {{ rule.destinations | tojson }},
       "description": {{ (rule.description or '') | tojson }}
     }{{ "," if not loop.last }}
 {%- endfor %}

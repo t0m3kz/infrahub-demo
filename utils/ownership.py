@@ -21,6 +21,29 @@ def customer_owner(owner: Any) -> str | None:
     return owner.get("org_id") or owner.get("display_label") or None
 
 
+class CircuitOwnerError(ValueError):
+    """A circuit whose locations name two offices of different owners."""
+
+
+def circuit_owner(office_owners: Iterable[str | None]) -> str | None:
+    """The owner of a circuit, derived and never stored (the ``owner`` relationship of the circuit is gone).
+
+    ``office_owners`` is the owner key (``customer_owner``) of each ``TopologyCustomerOffice`` among the circuit's
+    ``locations`` (a location that is no office contributes nothing; pass only offices, or None entries which are
+    ignored).
+
+    - one distinct office owner: that owner;
+    - no office: None (a carrier or a handoff is shared, unowned);
+    - two offices of different owners: ``CircuitOwnerError`` (an office pair of one owner is fine).
+    """
+    distinct = sorted({owner for owner in office_owners if owner})
+    if len(distinct) > 1:
+        raise CircuitOwnerError(f"locations are offices of different owners ({', '.join(distinct)})")
+    if distinct:
+        return distinct[0]
+    return None
+
+
 class OwnershipConflict(NamedTuple):
     """A registration that would leak one owner's prefix to another owner, or that is reachable twice."""
 
@@ -46,7 +69,10 @@ class OwnershipConflict(NamedTuple):
 
 
 def exchange_policies(
-    segments: Mapping[str, Iterable[str]], learned: Mapping[str, Mapping[str, Iterable[str]]]
+    segments: Mapping[str, Iterable[str]],
+    learned: Mapping[str, Mapping[str, Iterable[str]]],
+    *,
+    announced: Mapping[str, Iterable[str]] | None = None,
 ) -> dict[str, dict[str, frozenset[str]]]:
     """What each external session of ONE namespace accepts and is announced, per the same-owner exchange rule.
 
@@ -59,7 +85,10 @@ def exchange_policies(
     - local space of an owner: its segment prefixes learned on no session (a segment hosted by an office is
       registered behind the office's gateway session, so it is not local);
     - ``out``: for each of the session's owners, its local space and what it registered on every OTHER
-      session, minus ``in`` (a prefix is never announced back to the session it was learned on).
+      session, minus ``in`` (a prefix is never announced back to the session it was learned on);
+    - ``announced`` maps a session to prefixes announced to that session alone, whoever the owners are (what a
+      public or static cloud peering lists as ``advertised_prefixes``): they join ``out`` of that session only,
+      still minus ``in``.
 
     A session with no owner has empty ``owners``, ``in`` and ``out``. Nothing an owner has not registered is
     announced, and nothing of another owner. Callers group sessions by namespace.
@@ -79,34 +108,42 @@ def exchange_policies(
     policies: dict[str, dict[str, frozenset[str]]] = {}
     for session, by_owner in registered.items():
         accepted = frozenset(prefix for prefixes in by_owner.values() for prefix in prefixes)
-        announced = {
+        outgoing = {
             prefix
             for owner in by_owner
             for prefix in (
                 *local.get(owner, ()),
                 *(p for other, theirs in registered.items() if other != session for p in theirs.get(owner, ())),
             )
-        }
+        } | set((announced or {}).get(session, ()))
         policies[session] = {
             "owners": frozenset(by_owner),
             "in": accepted,
-            "out": frozenset(announced) - accepted,
+            "out": frozenset(outgoing) - accepted,
         }
     return policies
 
 
 def ownership_conflicts(
-    segments: Mapping[str, Iterable[str]], learned: Mapping[str, Mapping[str, Iterable[str]]]
+    segments: Mapping[str, Iterable[str]],
+    learned: Mapping[str, Mapping[str, Iterable[str]]],
+    *,
+    session_groups: Mapping[str, str] | None = None,
 ) -> list[OwnershipConflict]:
     """The registrations of ONE namespace that break the exchange rule (same arguments as exchange_policies).
 
     - a prefix registered by more than one owner (segments and sessions together): it would be announced to
       another owner's session;
-    - a prefix of one owner registered behind more than one session: an owner's registered prefix is local or
-      reachable through exactly one session.
+    - a prefix of one owner registered behind more than one attachment point: an owner's registered prefix is
+      local or reachable through exactly one session.
+
+    ``session_groups`` maps a session to its attachment point (the cloud gateway its peering lands on): the sessions
+    of one point (the primary and secondary peering of a dual connection) are ONE attachment point, so a prefix
+    behind both is not "behind more than one session". A session absent from the map is its own group.
 
     Exact prefix strings; overlapping but different prefixes are the business of the overlap rules.
     """
+    groups = session_groups or {}
     owners_of: dict[str, set[str]] = {}
     sessions_of: dict[tuple[str, str], set[str]] = {}
     for owner, prefixes in segments.items():
@@ -131,6 +168,6 @@ def ownership_conflicts(
     conflicts += [
         OwnershipConflict(MULTIPLE_SESSIONS, prefix, (owner,), tuple(sorted(sessions)))
         for (prefix, owner), sessions in sorted(sessions_of.items())
-        if len(sessions) > 1
+        if len({groups.get(session, session) for session in sessions}) > 1
     ]
     return conflicts

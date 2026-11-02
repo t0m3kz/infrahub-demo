@@ -2,14 +2,12 @@ from typing import Any
 
 from transforms.common import BaseDeviceTransform
 from transforms.helpers.addressing import management_ip, sub_interface_parent
-from transforms.helpers.ha import get_ha, inline_addresses
+from transforms.helpers.ha import get_ha
 from transforms.helpers.loadbalancer import get_loadbalancer_contexts
-from transforms.helpers.segments import interface_segments
 
 
-def _build_lb_interfaces(interfaces: list[dict[str, Any]], ha: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-    """Addressed interfaces, with the HA pair's virtual_ip on a
-    segment it terminates inline (transforms.helpers.ha.inline_addresses)."""
+def _build_lb_interfaces(interfaces: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The addressed interfaces."""
     lb_ifaces = []
     for iface in interfaces:
         ip_obj = iface.get("ip_address") or {}
@@ -23,7 +21,6 @@ def _build_lb_interfaces(interfaces: list[dict[str, Any]], ha: dict[str, Any] | 
                 "role": iface.get("role"),
                 "ip_address": ip_obj,
                 "parent_interface": sub_interface_parent(iface),
-                **inline_addresses(interface_segments(iface), ha),
             }
         )
     return lb_ifaces
@@ -50,7 +47,7 @@ class LoadBalancer(BaseDeviceTransform):
         contexts = get_loadbalancer_contexts(capabilities, device.get("name") or "", ha, platform_name)
         # A context leg renders inside its context, not as a root interface.
         leg_interfaces = {context["leg"]["name"] for context in contexts}
-        lb_interfaces = _build_lb_interfaces([i for i in interfaces if i.get("name") not in leg_interfaces], ha)
+        lb_interfaces = _build_lb_interfaces([i for i in interfaces if i.get("name") not in leg_interfaces])
         cluster = next((cap for cap in capabilities if cap.get("typename") == "ManagedLoadbalancerHA"), {})
         config = self._build_config(device, platform_name)
         config.update(

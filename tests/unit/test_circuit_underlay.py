@@ -13,6 +13,7 @@ from utils.circuit_underlay import (
     SESSION_CIRCUIT,
     SESSION_CIRCUIT_TYPES,
     TUNNEL_TYPE,
+    VPN_TYPE,
     has_carrier,
     overlay_processes,
     port_cabled,
@@ -98,11 +99,11 @@ def test_subinterface_vlan_parses_port_dot_vlan(name: str, vlan: int | None) -> 
     assert subinterface_vlan(name) == vlan
 
 
-def test_the_session_types_are_the_dci_and_the_handoff_never_the_tunnel() -> None:
+def test_the_session_types_are_the_dci_the_handoff_and_the_vpn_never_the_tunnel() -> None:
     """One source of truth for the circuit_type names: a tunnel has no session."""
-    assert SESSION_CIRCUIT_TYPES == (DCI_TYPE, HANDOFF_TYPE)
+    assert SESSION_CIRCUIT_TYPES == (DCI_TYPE, HANDOFF_TYPE, VPN_TYPE)
     assert TUNNEL_TYPE not in SESSION_CIRCUIT_TYPES
-    assert (DCI_TYPE, HANDOFF_TYPE, TUNNEL_TYPE) == ("dci", "handoff", "tunnel")
+    assert (DCI_TYPE, HANDOFF_TYPE, TUNNEL_TYPE, VPN_TYPE) == ("dci", "handoff", "tunnel", "vpn")
 
 
 def test_the_kind_and_the_types_are_those_of_the_schema() -> None:
@@ -123,7 +124,7 @@ async def test_session_circuits_on_is_one_query_on_the_session_types_and_never_t
 
     assert found == [interconnect, handoff]
     client.filters.assert_awaited_once_with(
-        kind=SESSION_CIRCUIT, capabilities__ids=["port-1", "port-2"], circuit_type__values=["dci", "handoff"]
+        kind=SESSION_CIRCUIT, capabilities__ids=["port-1", "port-2"], circuit_type__values=["dci", "handoff", "vpn"]
     )
 
 

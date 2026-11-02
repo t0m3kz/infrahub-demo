@@ -2,24 +2,32 @@
 
 The schema holds the kinds (``locations`` peers TopologyFacility on both); what it cannot hold is held here. A
 carrier circuit is a pure carrier (fibre, cross-connect, internet, a provider virtual connection). A session circuit
-is one kind whose role is its ``circuit_type`` (dci, handoff, tunnel), so each type has its own rules, including the
-fields only it may carry (the schema leaves them all optional).
+is one kind whose role is its ``circuit_type`` (dci, handoff, tunnel, vpn), so each type has its own rules, including
+the fields only it may carry (the schema leaves them all optional).
+
+A circuit has no owner of its own: it is derived (``utils.ownership.circuit_owner``) from the offices among its
+``locations`` (each office carries its owner). Two offices of different
+owners among the locations of any circuit is an error; a tunnel needs an office; a dci, a handoff and a vpn name no
+office with an owner.
 
 Carrier circuits
     1. exactly two distinct locations (the authored cage plus the ends add_circuit derives),
     2. each location is the ``deployment`` of one end's device, one end per location: a DC, ISP or cloud region,
-       or for colocation kit the zone (or virtual colocation) the device is deployed to. A sibling zone of the
+       or for colocation kit the zone (or virtual colocation) the device is deployed to. A cloud transport (the
+       device of a cloud port, it has no ``deployment``) is placed by its ``region`` (TopologyCloudRegion) or its
+       ``saas_region`` (TopologySaasRegion). A sibling zone of the
        same metro is not the end: add_circuit (``plan_locations``) refuses an authored location that differs from
        the end device's deployment. The metro is no facility and no device is deployed to it,
-    3. owned exactly when it is an office's access circuit: one ending on a TopologyCustomerOffice is owned by
-       that office's owner (add_sdwan_edge's INET-<office>); every other one is shared underlay, unowned.
+    3. its offices (an office's access circuit, add_sdwan_edge's INET-<office>) are of one owner.
+    4. THE INTERNET (``TopologyInternet``, a device that is a facility itself, so its own end's location) and the
+       carriers that end on its interface: ``utils/internet_object.py`` (I1 to I4).
 
 Tunnel circuit (``circuit_type`` tunnel: office edge to SD-WAN gateway; inventory only, the orchestrator owns the
 overlay routing)
     1. exactly two distinct locations and two end ports,
-    2. owned by the office's owner: one location is a TopologyCustomerOffice of that owner; the only type with an
-       owner and with ``registered_prefixes`` (the others are unowned and have none),
-    3. none of the handoff-only fields (``ip_namespace``, ``password``, ``maximum_routes``, ``cloud_endpoint``),
+    2. one location is a TopologyCustomerOffice (its owner is the tunnel's); the only type with
+       ``registered_prefixes`` (the others have none),
+    3. none of the handoff-only fields (``ip_namespace``, ``password``),
     4. every end port rides a live internet carrier circuit of its own (one with an end on a
        TopologyExternalProviders): the office edge uplink its INET-<office>, the gateway's public port its own
        internet access. The ends share no path, so there is no contiguity rule.
@@ -27,7 +35,7 @@ overlay routing)
 Interconnect circuit (``circuit_type`` dci: between two EVPN Multi-Site border gateways; an underlay and an EVPN
 session are built)
     0. none of the handoff-only fields (see the tunnel) and no ``registered_prefixes``,
-    1. unowned, exactly two distinct locations and two end ports,
+    1. no office owner, exactly two distinct locations and two end ports,
     2. every end port is on a live carrier circuit,
     3. contiguity over the port-derived carrier: the carriers found at the two ports (each once) form one path
        between the two locations, in some order each shares a facility with the next (relationship peers carry no
@@ -37,25 +45,30 @@ session are built)
     5. each end device carries exactly one ManagedBGP process of role ``overlay`` (keeps a Network Edge router out
        of a DCI: the EVPN session runs between those processes).
 
-Handoff circuit (``circuit_type`` handoff: our edge sub-interface to a party device sub-interface, in one
-environment namespace)
-    0. unowned, with an ``ip_namespace`` (the schema leaves it optional) and no ``registered_prefixes``; the
-       ``cloud_endpoint`` is held by this type only (the schema peer is the session kind),
+Handoff circuit (``circuit_type`` handoff: our edge port to a party device port, in one environment namespace)
+    0. no office owner, with an ``ip_namespace`` (the schema leaves it optional) and no ``registered_prefixes``,
     1. one or two distinct locations (both ends may sit in one cage) and two end ports; the locations are exactly the
        facilities the two end devices are deployed in (nothing derives them, so a location no end device is deployed
        in, or an end device deployed elsewhere, is drift),
     2. at least one end on a physical device is carried at its port or its parent interface: by a live carrier
        circuit, or by a DcimCable (a hop inside one facility, such as the gateway and the cage edge in one cage, is a
-       cable, not a circuit; a cable has no status). An end on a Network Edge appliance or other virtual device has
-       none and is not required to,
-    3. both end ports are sub-interfaces named ``<port>.<vlan>`` with the same VLAN, and when the circuit has a
-       cloud endpoint (a VIF) its ``vlan_id`` is that VLAN.
+       cable, not a circuit; a cable has no status). A routed physical port is carried at the port itself. An end on a
+       Network Edge appliance, a cloud transport or other virtual device has none and is not required to,
+    3. each end is a sub-interface named ``<port>.<vlan>`` (a VLAN), a routed physical port (a DcimPhysicalInterface
+       with an IP address and no VLAN) or, on the cloud side, a CloudPeeringInterface (its ``vlan_id`` is optional).
+       The two ends are of one shape, a cloud peering interface excepted, and the VLANs that are set are equal. A
+       physical port with no IP address and no VLAN is neither and is refused.
 
-All session circuits (dci and handoff)
+Vpn circuit (``circuit_type`` vpn: an IPsec or GRE tunnel over the internet, one session on the tunnel interface pair;
+model only)
+    0. no office owner, no ``registered_prefixes``, an ``ip_namespace`` (its environment class), one or two locations,
+    1. two end ports.
+
+All session circuits (dci, handoff and vpn)
     A port is an end of at most one of them, so two circuits never share the same pair of ports: one session per
     address. A Tunnel is exempt: one gateway port serves many tunnels.
 
-    A decommissioned session circuit is exempt from all of it (its own rules, the one-session-per-port rule and the
+    A decommissioned session circuit (dci, handoff or vpn) is exempt from all of it (its own rules, the one-session-per-port rule and the
     environment rule): add_virtual_circuit builds nothing for it, only cleans what an earlier run built, so it holds
     no port against a live circuit, meets no device and is not reported. A Tunnel is not exempt: add_sdwan_edge
     always writes it ``active`` and no generator reads its status, so it stays an inventory record that is validated
@@ -63,7 +76,7 @@ All session circuits (dci and handoff)
 
 Environment class
     Prod and non-prod never connect: circuits meeting at a device share a class, one finding per device. A
-    Handoff's class is that of its ``ip_namespace`` (``namespace_type`` prod or non_prod; INTERNET, MANAGEMENT or
+    Handoff's class is that of its ``ip_namespace`` (``namespace_type`` prod or non_prod, a vpn the same; INTERNET, MANAGEMENT or
     none state no class and are skipped). A Tunnel is PROD: its office is always production. An Interconnect runs
     in the underlay and has none. Several handoffs of one class sharing an on-ramp edge pass.
 
@@ -96,13 +109,16 @@ from infrahub_sdk.checks import InfrahubCheck
 
 from utils.circuit_underlay import (
     BGP_PROCESS,
+    CLOUD_PEERING_KIND,
     DCI_TYPE,
     DECOMMISSIONED,
     HANDOFF_TYPE,
+    INTERNET_KIND,
     OVERLAY_ROLE,
     SESSION_CIRCUIT,
     SESSION_CIRCUIT_TYPES,
     TUNNEL_TYPE,
+    VPN_TYPE,
     derived_underlay,
     overlay_processes,
     port_cabled,
@@ -111,21 +127,29 @@ from utils.circuit_underlay import (
 )
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import PROD_TYPE, TENANT_NAMESPACE_TYPES
+from utils.internet_object import internet_findings
 from utils.limits import CIRCUIT_ENDS
+from utils.ownership import CircuitOwnerError, circuit_owner
 
 CARRIER = "TopologyCarrierCircuit"
 # The session circuit types, keyed by their ``circuit_type`` value.
 TUNNEL = TUNNEL_TYPE
 INTERCONNECT = DCI_TYPE
 HANDOFF = HANDOFF_TYPE
-CIRCUIT_TYPES = (TUNNEL, INTERCONNECT, HANDOFF)
-NOUNS = {TUNNEL: "Tunnel", INTERCONNECT: "Interconnect", HANDOFF: "Handoff"}
-# The fields of a handoff alone; the schema leaves them optional on the one session kind.
-HANDOFF_ONLY_FIELDS = ("ip_namespace", "password", "maximum_routes", "cloud_endpoint")
+VPN = VPN_TYPE
+CIRCUIT_TYPES = (TUNNEL, INTERCONNECT, HANDOFF, VPN)
+NOUNS = {TUNNEL: "Tunnel", INTERCONNECT: "Interconnect", HANDOFF: "Handoff", VPN: "Vpn"}
+# The fields a handoff (and a vpn, for the namespace) carries; the schema leaves them optional on the one session kind.
+HANDOFF_ONLY_FIELDS = ("ip_namespace", "password")
 
 INTERNET = "TopologyExternalProviders"
 OFFICE = "TopologyCustomerOffice"
 PHYSICAL_DEVICE = "DcimPhysicalDevice"
+PHYSICAL_PORT = "DcimPhysicalInterface"
+# The shape of a handoff end: a <port>.<vlan> sub-interface, a routed physical port, a cloud peering interface.
+SUB_INTERFACE = "sub-interface"
+ROUTED_PORT = "routed port"
+CLOUD_PEERING = "cloud peering interface"
 
 
 def _label(place: dict[str, Any] | None) -> str:
@@ -147,6 +171,16 @@ def _owner_org(owner: dict[str, Any] | None) -> str:
     return str(owner.get("org_id") or owner.get("id") or "<no owner>")
 
 
+def _offices(locations: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The TopologyCustomerOffice among the locations."""
+    return [location for location in locations if location.get("typename") == OFFICE]
+
+
+def _office_owners(locations: list[dict[str, Any]]) -> list[str]:
+    """The owner key of each office among the locations that has one."""
+    return [_owner_org(office["owner"]) for office in _offices(locations) if isinstance(office.get("owner"), dict)]
+
+
 def _end_at(location: dict[str, Any], deployment: dict[str, Any] | None) -> bool:
     """The location is the end device's deployment itself. Colocation kit is deployed per zone or virtual
     colocation, and add_circuit (plan_locations) refuses an authored location that differs from it: no sibling
@@ -163,6 +197,16 @@ def _locations(circuit: dict[str, Any]) -> list[dict[str, Any]]:
     return list(seen.values())
 
 
+def _facility(device: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Where a device sits: its ``deployment``, else (a cloud transport has none) its region or SaaS region. THE
+    INTERNET is a facility itself."""
+    device = device or {}
+    if device.get("typename") == INTERNET_KIND:
+        return device
+    place = device.get("deployment") or device.get("region") or device.get("saas_region")
+    return place if isinstance(place, dict) else None
+
+
 def _ports(circuit: dict[str, Any]) -> list[dict[str, Any]]:
     """The circuit's own ports (``capabilities``)."""
     return [port for port in circuit.get("capabilities") or [] if isinstance(port, dict)]
@@ -174,12 +218,8 @@ def _port_label(port: dict[str, Any]) -> str:
 
 
 def _ends(circuit: dict[str, Any]) -> list[tuple[str, dict[str, Any] | None]]:
-    """(``device:port``, the device's deployment) per end port of a carrier circuit."""
-    ends = []
-    for port in _ports(circuit):
-        deployment = (port.get("device") or {}).get("deployment")
-        ends.append((_port_label(port), deployment if isinstance(deployment, dict) else None))
-    return ends
+    """(``device:port``, the device's facility) per end port of a circuit."""
+    return [(_port_label(port), _facility(port.get("device"))) for port in _ports(circuit)]
 
 
 def _ends_label(ends: list[tuple[str, dict[str, Any] | None]]) -> str:
@@ -202,9 +242,20 @@ def _carriers_label(carriers: list[dict[str, Any]]) -> str:
     )
 
 
-def _vlan(port: dict[str, Any]) -> int | None:
-    """The VLAN of an end port named ``<port>.<vlan>``, None for any other name."""
-    return subinterface_vlan(str(port.get("name") or ""))
+def _end_shape(port: dict[str, Any]) -> tuple[str | None, int | None]:
+    """(shape, VLAN) of a handoff end; the shape is None when the end is none of the three.
+
+    A cloud peering interface carries its VLAN as ``vlan_id`` (optional). Any other port named ``<port>.<vlan>`` is a
+    sub-interface; a physical port with an IP address and no VLAN is a routed port.
+    """
+    if port.get("typename") == CLOUD_PEERING_KIND:
+        return CLOUD_PEERING, port.get("vlan_id")
+    vlan = subinterface_vlan(str(port.get("name") or ""))
+    if vlan is not None:
+        return SUB_INTERFACE, vlan
+    if port.get("typename") == PHYSICAL_PORT and port.get("ip_address"):
+        return ROUTED_PORT, None
+    return None, None
 
 
 def _devices(circuit: dict[str, Any]) -> dict[str, str]:
@@ -240,12 +291,12 @@ def _chain_reaches(
 def _environment_class(circuit_type: str, circuit: dict[str, Any]) -> tuple[str, str] | None:
     """(class, where it comes from) of a circuit, None when it states none.
 
-    A handoff takes the ``namespace_type`` of its ``ip_namespace`` when that is a tenant VRF (PROD, NON-PROD); a
+    A handoff or a vpn takes the ``namespace_type`` of its ``ip_namespace`` when that is a tenant VRF (PROD, NON-PROD); a
     tunnel is PROD because its office is always production."""
     if circuit_type == TUNNEL:
         office = next((location for location in _locations(circuit) if location.get("typename") == OFFICE), None)
         return (PROD_TYPE, f"office '{office.get('name')}'") if office else None
-    if circuit_type == HANDOFF:
+    if circuit_type in (HANDOFF, VPN):
         namespace = circuit.get("ip_namespace") or {}
         if namespace.get("namespace_type") in TENANT_NAMESPACE_TYPES:
             return namespace["namespace_type"], f"namespace '{namespace.get('name')}'"
@@ -262,6 +313,11 @@ class CheckCircuitPlacement(InfrahubCheck):
         cleaned = clean_data(data)
         for circuit in cleaned.get(CARRIER) or []:
             self._validate_carrier(circuit)
+        for node, message in internet_findings(cleaned.get(CARRIER) or [], cleaned.get(INTERNET_KIND) or []):
+            if node.get("typename") == INTERNET_KIND:
+                self.log_error(message=message, object_id=node.get("id"), object_type=INTERNET_KIND)
+            else:
+                self._error(node, CARRIER, message)
         by_type: dict[str, list[dict[str, Any]]] = {circuit_type: [] for circuit_type in CIRCUIT_TYPES}
         for circuit in cleaned.get(SESSION_CIRCUIT) or []:
             circuit_type = circuit.get("circuit_type")
@@ -288,6 +344,8 @@ class CheckCircuitPlacement(InfrahubCheck):
             self._validate_interconnect(circuit)
         for circuit in live[HANDOFF]:
             self._validate_handoff(circuit)
+        for circuit in live[VPN]:
+            self._validate_vpn(circuit)
         self._validate_session_ports(
             [(circuit_type, circuit) for circuit_type in SESSION_CIRCUIT_TYPES for circuit in live[circuit_type]]
         )
@@ -302,7 +360,7 @@ class CheckCircuitPlacement(InfrahubCheck):
     def _validate_carrier(self, circuit: dict[str, Any]) -> None:
         name = _name(circuit)
         locations = _locations(circuit)
-        self._validate_carrier_owner(circuit, name, locations)
+        self._validate_owner(circuit, CARRIER, locations)
         if len(locations) != CIRCUIT_ENDS:
             self._error(
                 circuit,
@@ -339,28 +397,35 @@ class CheckCircuitPlacement(InfrahubCheck):
             "zone or virtual colocation the device is deployed to; not a sibling zone of its metro).",
         )
 
-    def _validate_carrier_owner(self, circuit: dict[str, Any], name: str, locations: list[dict[str, Any]]) -> None:
-        """An office's access circuit is owned by the office's owner; any other carrier circuit is unowned."""
-        owner = circuit.get("owner") if isinstance(circuit.get("owner"), dict) else None
-        owner_id = (owner or {}).get("id")
-        org = _owner_org(owner)
-        ownership = f"owned by '{org}'" if owner_id else "unowned"
-        offices = [location for location in locations if location.get("typename") == OFFICE]
-        for office in offices:
-            office_owner = office.get("owner") or {}
-            if office_owner.get("id") != owner_id:
-                self._error(
-                    circuit,
-                    CARRIER,
-                    f"Carrier circuit '{name}' ends on {_label(office)} of '{_owner_org(office_owner)}' but is "
-                    f"{ownership}: an office's access circuit is owned by the office's owner.",
-                )
-        if owner_id and not offices:
+    def _validate_owner(self, circuit: dict[str, Any], kind: str, locations: list[dict[str, Any]]) -> None:
+        """The owner is derived from the offices among the locations (``circuit_owner``): they are of one owner. A
+        tunnel needs an office; every other session circuit names no office with an owner (a dci, a handoff and a vpn
+        are shared platform)."""
+        noun = "Carrier" if kind == CARRIER else NOUNS[kind]
+        name = _name(circuit)
+        try:
+            circuit_owner(_office_owners(locations))
+        except CircuitOwnerError as exc:
             self._error(
                 circuit,
-                CARRIER,
-                f"Carrier circuit '{name}' is owned by '{org}' but ends on no office ({_labels(locations)}): a "
-                "carrier circuit is shared underlay, unowned, unless it is an office's access circuit.",
+                kind,
+                f"{noun} circuit '{name}' has an owner that cannot be derived: {exc} ({_labels(_offices(locations))}).",
+            )
+            return
+        offices = _offices(locations)
+        if kind == TUNNEL and not offices:
+            self._error(
+                circuit,
+                kind,
+                f"Tunnel circuit '{name}' has no office among its locations ({_labels(locations)}): a tunnel is owned "
+                f"by its office's owner, none of its locations is a {OFFICE}.",
+            )
+        elif kind in (INTERCONNECT, HANDOFF, VPN) and _office_owners(locations):
+            self._error(
+                circuit,
+                kind,
+                f"{noun} circuit '{name}' terminates on {_labels(offices)}: an office owns a tunnel and its access "
+                f"circuit; a {kind} circuit names no office.",
             )
 
     # ------------------------------------------------------------------
@@ -374,21 +439,7 @@ class CheckCircuitPlacement(InfrahubCheck):
         self._validate_shape(circuit, TUNNEL, locations, ports, CIRCUIT_ENDS)
         self._validate_fields(circuit, TUNNEL, HANDOFF_ONLY_FIELDS)
 
-        owner = circuit.get("owner") if isinstance(circuit.get("owner"), dict) else None
-        offices = [location for location in locations if location.get("typename") == OFFICE]
-        owner_id = (owner or {}).get("id")
-        if not owner_id or not any((office.get("owner") or {}).get("id") == owner_id for office in offices):
-            owned = f"owned by '{_owner_org(owner)}'" if owner_id else "unowned"
-            found = (
-                "its office is " + ", ".join(f"{_label(o)} of '{_owner_org(o.get('owner'))}'" for o in offices)
-                if offices
-                else f"none of its locations ({_labels(locations)}) is an {OFFICE}"
-            )
-            self._error(
-                circuit,
-                TUNNEL,
-                f"Tunnel circuit '{name}' is {owned} but {found}: a tunnel is owned by its office's owner.",
-            )
+        self._validate_owner(circuit, TUNNEL, locations)
 
         for port in ports:
             live = _live_carriers(port)
@@ -410,13 +461,7 @@ class CheckCircuitPlacement(InfrahubCheck):
         name = _name(circuit)
         locations = _locations(circuit)
         ports = _ports(circuit)
-        if isinstance(circuit.get("owner"), dict):
-            self._error(
-                circuit,
-                INTERCONNECT,
-                f"Interconnect circuit '{name}' is owned by '{_owner_org(circuit['owner'])}': a DCI between two "
-                "border gateways is shared platform, unowned.",
-            )
+        self._validate_owner(circuit, INTERCONNECT, locations)
         self._validate_fields(circuit, INTERCONNECT, (*HANDOFF_ONLY_FIELDS, "registered_prefixes"))
         self._validate_shape(circuit, INTERCONNECT, locations, ports, CIRCUIT_ENDS)
         self._validate_overlay_processes(circuit, name, ports)
@@ -489,13 +534,7 @@ class CheckCircuitPlacement(InfrahubCheck):
         locations = _locations(circuit)
         self._validate_shape(circuit, HANDOFF, locations, ports, 1)
         self._validate_fields(circuit, HANDOFF, ("registered_prefixes",))
-        if isinstance(circuit.get("owner"), dict):
-            self._error(
-                circuit,
-                HANDOFF,
-                f"Handoff circuit '{name}' is owned by '{_owner_org(circuit['owner'])}': a handoff is shared "
-                "platform, unowned (the owner of a prefix is the object that registers it).",
-            )
+        self._validate_owner(circuit, HANDOFF, locations)
         if not (circuit.get("ip_namespace") or {}).get("name"):
             self._error(
                 circuit,
@@ -516,34 +555,43 @@ class CheckCircuitPlacement(InfrahubCheck):
                 "both ends are in one facility).",
             )
 
-        vlans = {_vlan(port) for port in ports}
-        if None in vlans:
-            for port in ports:
-                if _vlan(port) is None:
-                    self._error(
-                        circuit,
-                        HANDOFF,
-                        f"Handoff circuit '{name}' end '{_port_label(port)}' is not a VLAN sub-interface: a handoff "
-                        "end is named <port>.<vlan>.",
-                    )
-            return
-        if len(vlans) > 1:
+        self._validate_handoff_ends(circuit, name, ports)
+
+    def _validate_handoff_ends(self, circuit: dict[str, Any], name: str, ports: list[dict[str, Any]]) -> None:
+        """Each end is a sub-interface, a routed port or a cloud peering interface; the two are of one shape (a cloud
+        peering interface fits any) and the VLANs that are set are equal."""
+        shapes = [(port, *_end_shape(port)) for port in ports]
+        unshaped = [port for port, shape, _ in shapes if shape is None]
+        for port in unshaped:
             self._error(
                 circuit,
                 HANDOFF,
-                f"Handoff circuit '{name}' ends carry different VLANs "
-                f"({', '.join(f'{_port_label(port)} = {_vlan(port)}' for port in ports)}): one VLAN joins the two "
-                "sub-interfaces.",
+                f"Handoff circuit '{name}' end '{_port_label(port)}' is neither a VLAN sub-interface (named "
+                "<port>.<vlan>) nor a routed physical port (an IP address, no VLAN) nor a cloud peering interface: a "
+                "physical port with no IP address and no VLAN cannot carry a handoff.",
+            )
+        if unshaped:
+            return
+        own = {shape for _, shape, _ in shapes if shape != CLOUD_PEERING}
+        if len(own) > 1:
+            self._error(
+                circuit,
+                HANDOFF,
+                f"Handoff circuit '{name}' mixes a {SUB_INTERFACE} and a {ROUTED_PORT} "
+                f"({', '.join(f'{_port_label(port)} is a {shape}' for port, shape, _ in shapes)}): both ends are "
+                "sub-interfaces of one VLAN, or both are routed ports.",
             )
             return
-        endpoint = circuit.get("cloud_endpoint") or {}
-        if vlans and endpoint.get("vlan_id") is not None and endpoint["vlan_id"] not in vlans:
+        vlans = {vlan for _, _, vlan in shapes if vlan is not None}
+        if len(vlans) > 1 or (vlans and ROUTED_PORT in own):
+            listing = ", ".join(
+                f"{_port_label(port)} = {'no VLAN' if vlan is None else vlan}" for port, _, vlan in shapes
+            )
             self._error(
                 circuit,
                 HANDOFF,
-                f"Handoff circuit '{name}' ends are on VLAN {next(iter(vlans))} but its cloud endpoint "
-                f"'{endpoint.get('name')}' states vlan_id {endpoint['vlan_id']}: the virtual interface mirrors the "
-                "sub-interface VLAN.",
+                f"Handoff circuit '{name}' ends carry different VLANs ({listing}): one VLAN joins the two ends, a "
+                "routed port has none.",
             )
 
     def _validate_handoff_placement(self, circuit: dict[str, Any], name: str, locations: list[dict[str, Any]]) -> None:
@@ -565,6 +613,24 @@ class CheckCircuitPlacement(InfrahubCheck):
             f"Handoff circuit '{name}' terminates on {_labels(locations)} but its ends are {_ends_label(ends)}: a "
             "handoff's locations are exactly the facilities its two end devices are deployed in.",
         )
+
+    # ------------------------------------------------------------------
+    # Vpn circuits
+    # ------------------------------------------------------------------
+
+    def _validate_vpn(self, circuit: dict[str, Any]) -> None:
+        name = _name(circuit)
+        ports = _ports(circuit)
+        locations = _locations(circuit)
+        self._validate_shape(circuit, VPN, locations, ports, 1)
+        self._validate_fields(circuit, VPN, ("registered_prefixes",))
+        self._validate_owner(circuit, VPN, locations)
+        if not (circuit.get("ip_namespace") or {}).get("name"):
+            self._error(
+                circuit,
+                VPN,
+                f"Vpn circuit '{name}' has no ip_namespace: its session runs in an environment namespace.",
+            )
 
     # ------------------------------------------------------------------
     # Rules across circuits
@@ -609,7 +675,7 @@ class CheckCircuitPlacement(InfrahubCheck):
             )
 
     def _validate_session_ports(self, circuits: list[tuple[str, dict[str, Any]]]) -> None:
-        """A port is an end of at most one session circuit (Interconnect, Handoff). Circuits sharing ports are one
+        """A port is an end of at most one session circuit (Interconnect, Handoff, Vpn). Circuits sharing ports are one
         finding per set of circuits, naming every shared port, so two circuits on the same pair of ports are one."""
         by_port: dict[str, tuple[str, list[tuple[str, dict[str, Any]]]]] = {}
         for kind, circuit in circuits:
@@ -630,8 +696,8 @@ class CheckCircuitPlacement(InfrahubCheck):
             self._error(
                 first,
                 kind,
-                f"Circuits {names} all terminate on {shared_ports}: a port is an end of at most one Interconnect "
-                "or Handoff circuit, one session per address.",
+                f"Circuits {names} all terminate on {shared_ports}: a port is an end of at most one Interconnect, "
+                "Handoff or Vpn circuit, one session per address.",
             )
 
     def _validate_environments(self, circuits: list[tuple[str, dict[str, Any]]]) -> None:

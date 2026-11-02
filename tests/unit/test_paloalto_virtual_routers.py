@@ -2,7 +2,7 @@
 
 An inter-zone policy needs both zones' interfaces in the same routing table, so the non-context path keeps a single
 ``default`` virtual router; its members come from the firewall interfaces (not from the route list), so an
-inline-terminated interface (no static route) is a member too. The context path (a vsys with its own virtual router)
+interface without a static route is a member too. The context path (a vsys with its own virtual router)
 is covered by tests/unit/test_firewall_transform_contexts.py.
 """
 
@@ -14,11 +14,11 @@ from tests.unit.firewall_transform_helpers import _render_template
 from transforms.config.firewall import _default_vr_interfaces
 
 
-def _iface(name: str, namespace: str | None, virtual_ip: str | None = None) -> dict[str, Any]:
+def _iface(name: str, namespace: str | None) -> dict[str, Any]:
     ip_obj: dict[str, Any] = {"address": "10.0.0.1/30"}
     if namespace:
         ip_obj["ip_namespace"] = {"name": namespace}
-    return {"name": name, "ip_address": ip_obj, "virtual_ip": virtual_ip}
+    return {"name": name, "ip_address": ip_obj}
 
 
 def _render(interfaces: list[str], routes: list[dict[str, str]]) -> list[str]:
@@ -34,10 +34,8 @@ def _render(interfaces: list[str], routes: list[dict[str, str]]) -> list[str]:
 
 
 class TestDefaultVirtualRouterMembership:
-    def test_inline_terminated_interface_is_a_member(self) -> None:
-        names = _default_vr_interfaces(
-            [_iface("ethernet1/2", "VRF-A", virtual_ip="10.0.0.9"), _iface("ethernet1/1", "VRF-B")]
-        )
+    def test_every_interface_with_a_namespace_is_a_member(self) -> None:
+        names = _default_vr_interfaces([_iface("ethernet1/2", "VRF-A"), _iface("ethernet1/1", "VRF-B")])
 
         assert names == ["ethernet1/1", "ethernet1/2"]
 

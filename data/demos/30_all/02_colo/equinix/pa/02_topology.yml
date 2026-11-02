@@ -17,6 +17,7 @@ spec:
           - name: PA
             design: "S"
             location: ["par"]
+            routing_filter_enforce: true
             member_of_groups:
               - colocation_metros
             children:

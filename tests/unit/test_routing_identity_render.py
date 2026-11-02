@@ -212,7 +212,6 @@ class TestEdgeExternalSessions:
     """RM-<session>-IN sets the owner's community per prefix, RM-<session>-OUT strips ours."""
 
     _SDWAN = "VRF-PROD-EQXFR2-SDWAN"
-    _AWS = "VRF-PROD-EQXFR2-AWS-EUC1"
 
     @pytest.fixture(scope="class")
     @staticmethod
@@ -254,13 +253,12 @@ class TestEdgeExternalSessions:
 
     def test_the_outbound_map_strips_our_communities_after_the_prefix_match(self, tagged: str) -> None:
         """Internal tags never leave: the OUT permit deletes the list, the prefix-list match is unchanged."""
-        for session in (self._SDWAN, self._AWS):
-            assert (
-                f"route-map RM-{session}-OUT permit 10\n"
-                f"  match ip address prefix-list PL-{session}-OUT\n"
-                "  set comm-list CL-ROUTING-IDENTITY delete\n"
-                f"route-map RM-{session}-OUT deny 20\n"
-            ) in tagged
+        assert (
+            f"route-map RM-{self._SDWAN}-OUT permit 10\n"
+            f"  match ip address prefix-list PL-{self._SDWAN}-OUT\n"
+            "  set comm-list CL-ROUTING-IDENTITY delete\n"
+            f"route-map RM-{self._SDWAN}-OUT deny 20\n"
+        ) in tagged
 
     def test_the_community_list_selects_exactly_our_two_ranges_and_precedes_its_references(self, tagged: str) -> None:
         """One expanded entry per ASN half, defined before any route-map that deletes through it."""

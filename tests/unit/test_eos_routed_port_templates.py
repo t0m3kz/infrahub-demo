@@ -12,6 +12,8 @@ from typing import Any
 import pytest
 from jinja2 import Environment, FileSystemLoader
 
+from transforms.helpers.bgp_policy import compose_policy
+
 TEMPLATES = Path(__file__).resolve().parents[2] / "templates" / "configs"
 ADDRESS = [{"address": "10.0.0.1/31"}]
 LOOPBACK_ADDRESS = [{"address": "10.0.0.9/32"}]
@@ -115,6 +117,7 @@ def test_bgp_route_maps_render_at_column_zero_before_router_bgp() -> None:
         "local_pref": 200,
         "med": 50,
     }
+    session["policy"] = compose_policy(session)
     bgp = [{"local_as": {"asn": 65000}, "router_ip": "10.0.0.1", "sessions": [session], "vrf_sessions": {}}]
     template = _env().from_string(
         "{% from 'common/arista_eos_bgp.j2' import render_bgp %}{{ render_bgp(bgp, 'Loopback0') }}"

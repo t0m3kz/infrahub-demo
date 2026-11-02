@@ -6,8 +6,11 @@
 {%- set _local = namespace(out=false, dci_in=false) %}
 {%- for bgp_config in bgp %}
 {%- for session in bgp_config.sessions %}
-{%- if session.get('export_local_only') %}{% set _local.out = true %}{% endif %}
-{%- if session.get('dci_inbound') %}{% set _local.dci_in = true %}{% endif %}
+{#- Defined only while a neighbour names them: an attached route-protection filter replaces both (session.policy.attach). #}
+{%- for attached in session.policy.attach if not attached.own %}
+{%- if attached.map == 'RM-FABRIC-OUT' %}{% set _local.out = true %}{% endif %}
+{%- if attached.map == 'RM-DCI-IN' %}{% set _local.dci_in = true %}{% endif %}
+{%- endfor %}
 {%- endfor %}
 {%- endfor %}
 {%- if _local.out %}

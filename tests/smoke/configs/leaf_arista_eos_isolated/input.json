@@ -90,9 +90,6 @@
                           "send_extended_community": {
                             "value": false
                           },
-                          "maximum_routes": {
-                            "value": null
-                          },
                           "local_pref": {
                             "value": null
                           },
@@ -242,9 +239,6 @@
                           },
                           "send_extended_community": {
                             "value": false
-                          },
-                          "maximum_routes": {
-                            "value": null
                           },
                           "local_pref": {
                             "value": null
@@ -434,9 +428,6 @@
                           "send_extended_community": {
                             "value": false
                           },
-                          "maximum_routes": {
-                            "value": null
-                          },
                           "local_pref": {
                             "value": null
                           },
@@ -586,9 +577,6 @@
                           },
                           "send_extended_community": {
                             "value": false
-                          },
-                          "maximum_routes": {
-                            "value": null
                           },
                           "local_pref": {
                             "value": null
@@ -758,9 +746,6 @@
                         }
                       }
                     }
-                  },
-                  "inline_segment": {
-                    "node": null
                   },
                   "capabilities": {
                     "edges": []
@@ -994,9 +979,6 @@
                           "isolation_mode": {
                             "value": "isolated"
                           },
-                          "inline_service": {
-                            "node": null
-                          },
                           "__typename": "ManagedVxlanSegment",
                           "name": {
                             "value": "seg-100"
@@ -1162,9 +1144,6 @@
                           "id": "seg-seg-200",
                           "isolation_mode": {
                             "value": "isolated"
-                          },
-                          "inline_service": {
-                            "node": null
                           },
                           "__typename": "ManagedVxlanSegment",
                           "name": {
@@ -1409,9 +1388,6 @@
                           "isolation_mode": {
                             "value": "isolated"
                           },
-                          "inline_service": {
-                            "node": null
-                          },
                           "__typename": "ManagedVxlanSegment",
                           "name": {
                             "value": "seg-100"
@@ -1606,9 +1582,6 @@
                           "id": "seg-seg-200",
                           "isolation_mode": {
                             "value": "isolated"
-                          },
-                          "inline_service": {
-                            "node": null
                           },
                           "__typename": "ManagedVxlanSegment",
                           "name": {

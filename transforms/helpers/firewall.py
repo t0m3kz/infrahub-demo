@@ -104,11 +104,10 @@ def get_firewall_static_routes(
 
         if not (zone_name and ns_name and ip_addr and iface_name):
             continue
-        # A segment the firewall terminates inline is directly connected:
+        # A segment the pair terminates (its virtual_ip) is directly connected:
         # there is no leaf behind this interface to route the zone through.
         if iface.get("virtual_ip"):
             continue
-
         # Derive the leaf nexthop: leaf is .2 in the /30, FW is .1.
         # More precisely: the OTHER host in the /30 (the leaf SVI).
         try:
@@ -264,7 +263,6 @@ def get_exchange_transits(
                             },
                         },
                         "arp_suppression": True,
-                        "terminate_inline": False,
                         "stretch_scope": "local",
                     },
                 },

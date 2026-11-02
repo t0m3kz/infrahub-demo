@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, Callable
 from infrahub_sdk.protocols import CoreIPAddressPool
 
 from utils.data_cleaning import clean_data
-from utils.limits import GROUP_CLOUD_LOADBALANCERS, LB_VIP_REREAD
+from utils.limits import LB_VIP_REREAD
 from utils.ports import PortProfileHelper, PortSpec
 
 from .helpers.lb_vip import (
@@ -45,10 +45,6 @@ from .protocols import (
     SecurityPolicy,
     TopologyCustomerDC,
 )
-
-# The artifact group of cloud load balancers (data/bootstrap/00_groups.yml,
-# target of the cloud_lb_terraform artifact definition).
-CLOUD_LB_GROUP = {"hfid": [GROUP_CLOUD_LOADBALANCERS], "kind": "CoreStandardGroup"}
 
 # What another generator of the same load can still be writing when this run
 # reads it is re-read at most LB_VIP_REREAD.attempts times, LB_VIP_REREAD.delay seconds apart
@@ -477,7 +473,6 @@ class LoadbalancerVipMixin:
                         "scheme": cloud_lb_scheme(security_profile),
                         "virtual_network": {"id": network["id"]},
                         "network_segments": [segment["id"] for segment in segments],
-                        "member_of_groups": [CLOUD_LB_GROUP],
                     },
                 )
                 await load_balancer.save(allow_upsert=True)

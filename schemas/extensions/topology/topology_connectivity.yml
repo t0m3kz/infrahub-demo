@@ -40,6 +40,34 @@ generics:
         kind: Text
         order_weight: 100
 
+  # The provider side of a routed leg, on the connector. OUR side is not here: our address is the sub-interface of the
+  # session circuit (allocated from Handoff-<ip_namespace>-IPv4) and our AS is the local_as of our ManagedBGP (a private
+  # AS from PRIVATE-ASN32 when the provider needs one).
+  - name: ConnectorRouting
+    namespace: Topology
+    description: "Provider-side address and AS of a routed leg"
+    label: "Connector Routing"
+    include_in_menu: false
+    relationships:
+      - name: peer_ip
+        label: "Provider Address"
+        peer: IpamIPAddress
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: connector_routing__peer_ip
+        order_weight: 2100
+        description: "The provider's address on the link range of the leg (the other end of our sub-interface)"
+      - name: peer_asn
+        label: "Provider AS"
+        peer: RoutingAutonomousSystem
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: connector_routing__peer_asn
+        order_weight: 2150
+        description: "The AS the provider speaks with on this leg"
+
   - name: Circuit
     namespace: Topology
     description: "Point-to-point connectivity between two topology locations"
@@ -85,8 +113,8 @@ generics:
         description: "Service provider for this connectivity"
 
       # Data authors only the end that cannot be derived (the colocation cage); add_circuit adds each
-      # endpoint device's deployment that is a facility (DC, ISP, cloud region). So one location is valid
-      # on load: no min_count (it is enforced on update only; the checks hold the count).
+      # endpoint device's deployment that is a facility (DC, ISP, or the region of an appliance end). So one location
+      # is valid on load: no min_count (it is enforced on update only; the checks hold the count).
       - name: locations
         label: "Endpoint Locations"
         peer: TopologyFacility
@@ -96,16 +124,6 @@ generics:
         identifier: "circuit__location"
         order_weight: 3000
         description: "Facilities where this circuit terminates (both ends may sit in one facility, e.g. the cage)"
-
-      - name: owner
-        label: "Customer"
-        peer: OrganizationCustomer
-        cardinality: one
-        kind: Attribute
-        optional: true
-        identifier: "circuit__owner"
-        order_weight: 3100
-        description: "Customer this circuit belongs to; unset for shared/backbone circuits"
 
 nodes:
   # The carrier: fibre, cross-connect, internet access, or a provider-delivered virtual connection. It
@@ -197,6 +215,25 @@ nodes:
         description: >-
           Connections sharing a value are a primary/secondary pair (mirrors Fabric redundancy.group); the name
           tells which
+    relationships:
+      # The two ends. ManagedGenericInterfaces carries the interface-side edge (a circuit in a port's `capabilities`);
+      # this re-declares the circuit side with a count. It cannot be hoisted onto TopologyCircuit: a node that
+      # inherits two generics declaring `capabilities` with a different min_count is refused (measured on 1.11.9).
+      # The cap holds when the circuit side is written; checks/carrier_circuit_ports.py and
+      # checks/circuit_placement.py hold the rest. A cloud transport is a device of its own (CloudDirectConnect,
+      # CloudVPNConnection) whose ports, LAGs and virtual interfaces are DcimInterface, so the far end of a cloud
+      # circuit is an interface on this same edge.
+      - name: capabilities
+        peer: DcimInterface
+        label: "Interface Ends"
+        kind: Generic
+        cardinality: many
+        optional: false
+        min_count: 1
+        max_count: 2
+        identifier: interface_capabilities
+        order_weight: 1100
+        description: "The interface ends of this circuit: two ports (ours and the far device's, a cloud transport's included)"  # yamllint disable-line rule:line-length
 
   # One kind for every circuit that rides a carrier, told apart by `circuit_type` (the role is an attribute,
   # not a kind). The session generator builds the ManagedBGPPeerings of dci and handoff; a tunnel is an
@@ -212,27 +249,9 @@ nodes:
   #            remote ASN lives in the party device's ManagedBGP.local_as; the VLAN in the sub-interface name.
   #   tunnel   Office edge <-> SD-WAN gateway (eth1), and the partner tunnel. No session is generated (the
   #            VeloCloud orchestrator owns the overlay routing). Owner = the office's owner.
-    relationships:
-      # The two ends. ManagedGenericInterfaces carries the interface-side edge (a circuit in a port's `capabilities`);
-      # this re-declares the circuit side with a count. It cannot be hoisted onto TopologyCircuit: a node that
-      # inherits two generics declaring `capabilities` with a different min_count is refused (measured on 1.11.9).
-      # The cap holds when the circuit side is written; checks/carrier_circuit_ports.py and
-      # checks/circuit_placement.py hold the rest.
-      - name: capabilities
-        peer: DcimInterface
-        label: "Ends"
-        kind: Generic
-        cardinality: many
-        optional: false
-        min_count: 2
-        max_count: 2
-        identifier: interface_capabilities
-        order_weight: 1100
-        description: "The two ports this circuit terminates on, one at each end"
-
   - name: SessionCircuit
     namespace: Topology
-    description: "Circuit that rides carriers: a DCI or a handoff with generated routing, or a tunnel kept as inventory"
+    description: "Circuit that rides carriers: a DCI, a handoff or a vpn with generated routing, or a tunnel kept as inventory"  # yamllint disable-line rule:line-length
     label: "Session Circuit"
     icon: "mdi:swap-horizontal-bold"
     include_in_menu: false
@@ -249,7 +268,7 @@ nodes:
         kind: Dropdown
         label: "Circuit Type"
         order_weight: 300
-        description: "The role of the circuit: dci, handoff or tunnel"
+        description: "The role of the circuit: dci, handoff, tunnel or vpn"
         choices:
           - name: dci
             label: "DCI"
@@ -268,32 +287,31 @@ nodes:
             description: >-
               Office edge to SD-WAN gateway tunnel, owned by the office; inventory only, no session generated
             color: "#8e44ad"
-
-      - name: maximum_routes
-        kind: Number
-        label: "Maximum Routes"
-        optional: true
-        order_weight: 600
-        description: "Accepted-prefix limit of the session (handoff only)"
+          - name: vpn
+            label: "VPN"
+            description: >-
+              Routing session over a tunnel interface pair to a provider VPN gateway, riding an internet carrier
+            color: "#d35400"
 
     relationships:
       # The two ends. ManagedGenericInterfaces carries the interface-side edge (a circuit in a port's `capabilities`);
       # this re-declares the circuit side with a count. It cannot be hoisted onto TopologyCircuit: a node that
       # inherits two generics declaring `capabilities` with a different min_count is refused (measured on 1.11.9).
       # The cap holds when the circuit side is written; checks/carrier_circuit_ports.py and
-      # checks/circuit_placement.py hold the rest.
+      # checks/circuit_placement.py hold the rest. A cloud transport is a device of its own (CloudDirectConnect,
+      # CloudVPNConnection) whose ports, LAGs and virtual interfaces are DcimInterface, so the far end of a cloud
+      # circuit is an interface on this same edge.
       - name: capabilities
         peer: DcimInterface
-        label: "Ends"
+        label: "Interface Ends"
         kind: Generic
         cardinality: many
         optional: false
-        min_count: 2
+        min_count: 1
         max_count: 2
         identifier: interface_capabilities
         order_weight: 1100
-        description: "The two ports this circuit terminates on, one at each end"
-
+        description: "The interface ends of this circuit: two ports (ours and the far device's, a cloud transport's included)"  # yamllint disable-line rule:line-length
 
       # The same concept as TopologyCustomerOffice.lan_prefixes (a PROD prefix a customer registers behind the
       # SD-WAN gateway, so the gateway's border session accepts it), for space the tunnel reaches that no office
@@ -316,7 +334,7 @@ nodes:
         optional: true
         identifier: "handoff_circuit__ip_namespace"
         order_weight: 1200
-        description: "Environment namespace in which the /31 is allocated and the session runs (required for a handoff)"
+        description: "Namespace of the session; our link /31 is from pool Handoff-<namespace>-IPv4, our private AS from PRIVATE-ASN32"  # yamllint disable-line rule:line-length
 
       - name: password
         label: "Password"
@@ -328,13 +346,14 @@ nodes:
         order_weight: 1300
         description: "Shared authentication key of the session (handoff only, optional)"
 
-      # The reverse side, CloudHybridAttachment.virtual_circuit, is declared in topology_cloud_network.yml.
-      - name: cloud_endpoint
-        label: "Cloud Endpoint"
-        peer: CloudHybridAttachment
+      # The provider-handed link range (a /30 the provider assigns, never allocated from our pools) the session
+      # runs on. Schema stage: the generator that writes it and the check that reads it follow.
+      - name: link_prefix
+        label: "Link Prefix"
+        peer: IpamPrefix
         cardinality: one
         kind: Attribute
         optional: true
-        identifier: "handoff_circuit__cloud_endpoint"
-        order_weight: 1400
-        description: "Cloud-side termination of this handoff (a VIF); one endpoint has one handoff (handoff only)"
+        identifier: "session_circuit__link_prefix"
+        order_weight: 1450
+        description: "The link range the provider handed this session (vpn, or a provider-assigned handoff)"

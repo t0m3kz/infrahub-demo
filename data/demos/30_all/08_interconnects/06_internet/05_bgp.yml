@@ -60,8 +60,9 @@ spec:
 # TopologyCarrierCircuit both inherit ManagedGeneric, whose name HFID is shared,
 # so INET-* here would upsert onto the circuit.
 #
-# maximum_routes 100: the ISPs send a default route only. A full table (~1M
-# IPv4 routes) would not fit an N9K-C9316D-GX, which holds 512k.
+# The maximum-prefix of an ISP session is derived (utils/bgp_expectation.py): the ISPs send a default route only,
+# so the limit is that one route plus the slack. A full table (~1M IPv4 routes) would not fit an N9K-C9316D-GX,
+# which holds 512k.
 #
 # Both edges of each metro (eg-fr201/02, eg-pa401/02) reach a DC over their own
 # dark fibre and are Multi-Site BGWs: each carries VRF INTERNET as an L3VNI and
@@ -80,7 +81,6 @@ spec:
       bfd_enabled: true
       send_community: true
       send_extended_community: false
-      maximum_routes: 100
       address_families:
         - ["ipv4", "unicast"]
       bgp_processes:
@@ -98,7 +98,6 @@ spec:
       bfd_enabled: true
       send_community: true
       send_extended_community: false
-      maximum_routes: 100
       address_families:
         - ["ipv4", "unicast"]
       bgp_processes:
@@ -116,7 +115,6 @@ spec:
       bfd_enabled: true
       send_community: true
       send_extended_community: false
-      maximum_routes: 100
       address_families:
         - ["ipv4", "unicast"]
       bgp_processes:
@@ -134,7 +132,6 @@ spec:
       bfd_enabled: true
       send_community: true
       send_extended_community: false
-      maximum_routes: 100
       address_families:
         - ["ipv4", "unicast"]
       bgp_processes:

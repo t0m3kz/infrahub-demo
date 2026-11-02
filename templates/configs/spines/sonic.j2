@@ -21,7 +21,12 @@
 {%- set ospf_router = {} -%}
 {%- include 'common/sonic_common.j2' %}
 
-{{ {
+{%- set route_map = {} -%}
+{%- set prefix_set = {} -%}
+{%- set prefix_table = {} -%}
+{%- set bgp_neighbor_af = {} -%}
+{%- include 'common/sonic_bgp_policy.j2' %}
+{%- set configdb = {
   'DEVICE_METADATA': device_metadata,
   'VLAN': vlan_config,
   'LOOPBACK_INTERFACE': loopback_interfaces,
@@ -35,4 +40,10 @@
   'OSPF_ROUTER': ospf_router,
   'NTP_SERVER': {},
   'SYSLOG_SERVER': {}
-} | tojson(indent=2) }}
+} -%}
+{#- Only a device with a filter to install carries these tables (U, common/sonic_bgp_policy.j2). -#}
+{%- for table, entries in {'ROUTE_MAP': route_map, 'PREFIX_SET': prefix_set, 'PREFIX': prefix_table, 'BGP_NEIGHBOR_AF': bgp_neighbor_af}.items() if entries -%}
+{%- set _ = configdb.update({table: entries}) -%}
+{%- endfor %}
+
+{{ configdb | tojson(indent=2) }}

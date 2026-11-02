@@ -27,13 +27,13 @@ from transforms.helpers.group_policy.dispatch import GPO_RENDERERS
 from transforms.helpers.loadbalancer import _VENDORS
 from transforms.helpers.ospf import OSPF_AUTH_MODES
 from transforms.helpers.overlay import OVERLAY_RENDERERS
-from transforms.helpers.proxy import _DESTINATION_TYPES, _TLS_INSPECTING_RENDERERS
+from transforms.helpers.proxy import _DESTINATION_TYPES
 from transforms.helpers.vxlan import _PLATFORM_VXLAN_KEYS
 
 # The roles of the transforms that set no ``device_role`` (it is the VXLAN knob of the fabric transforms).
-_SERVICE_ROLE_BY_SUBDIR = {"firewalls": "firewall", "proxies": "proxy", "loadbalancers": "load-balancer"}
+_SERVICE_ROLE_BY_SUBDIR = {"firewalls": "firewall", "loadbalancers": "load-balancer"}
 # Template directories under templates/configs/ that are not a role subdirectory keyed by platform.
-_NOT_ROLE_SUBDIRS = {"common", "equinix", "loadbalancers_cloud", "proxies_cloud"}
+_NOT_ROLE_SUBDIRS = {"common", "equinix", "proxies_cloud"}
 
 
 def _device_transforms() -> list[type[BaseDeviceTransform]]:
@@ -162,7 +162,7 @@ _ROOT = Path(__file__).parent.parent.parent
 
 def _code_table_platforms() -> dict[str, set[str]]:
     """Each code table that is matched against ``platform.name`` -> the platform names it holds."""
-    # The proxy tables also key the cloud renderers (a template of proxies_cloud/), which are no platform.
+    # The proxy table also keys the cloud renderers (a template of proxies_cloud/), which are no platform.
     cloud_proxy_renderers = {path.stem for path in (_ROOT / "templates/configs/proxies_cloud").glob("*.j2")}
     external_policy = set().union(*(cls.external_policy_platforms for cls in _device_transforms()))
     return {
@@ -171,7 +171,6 @@ def _code_table_platforms() -> dict[str, set[str]]:
         },
         "controller._BUILDERS": {platform for _, platform in _BUILDERS if platform},
         "helpers.loadbalancer._VENDORS": set(_VENDORS),
-        "helpers.proxy._TLS_INSPECTING_RENDERERS": set(_TLS_INSPECTING_RENDERERS) - cloud_proxy_renderers,
         "helpers.proxy._DESTINATION_TYPES": set(_DESTINATION_TYPES) - cloud_proxy_renderers,
         "mlag._IPV4_CONTROL_PLATFORMS": set(_IPV4_CONTROL_PLATFORMS),
         "mlag._NO_CONTROL_PLATFORMS": set(_NO_CONTROL_PLATFORMS),

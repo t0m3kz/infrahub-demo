@@ -397,7 +397,7 @@ class TestGenerateHappyPath:
 
     @pytest.mark.asyncio
     async def test_tunnel_is_an_inventory_record_of_the_office(self) -> None:
-        """A TopologySessionCircuit of type tunnel owned by the office's owner, active, from the SD-WAN operator, in the
+        """A TopologySessionCircuit of type tunnel active, from the SD-WAN operator, in the
         virtual_circuits group, with no tunnel id, link type, encryption, handoff or session attribute."""
         gen = self._wire_full_success()
 
@@ -410,7 +410,6 @@ class TestGenerateHappyPath:
             "circuit_type": "tunnel",
             "status": "active",
             "provider": {"id": "provider-overlay"},
-            "owner": {"id": "org-c002"},
             "description": "C002-OFFICE SD-WAN tunnel to FR2 gateway",
             "locations": [{"id": "office-1"}, {"id": "zone-1"}],
             "capabilities": [{"id": "public-1"}, {"id": "edge-uplink-1"}],

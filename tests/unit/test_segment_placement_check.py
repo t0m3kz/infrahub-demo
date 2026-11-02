@@ -188,11 +188,20 @@ class TestOfficeSegments:
         assert any("not TopologySegmentHosting" in msg for msg in check._captured_errors)
 
 
-class TestInlineTermination:
-    """terminate_inline needs an on-prem HA pair: the fabric drops the segment's gateway."""
+class TestTermination:
+    """A segment terminated on a firewall context: the gateway is the pair's VIP inside the segment prefix, the
+    footprints are DC ones, and the context serves each of them."""
 
     @staticmethod
-    def _segment(inline_service: dict[str, Any] | None, terminate_inline: bool = True) -> dict[str, Any]:
+    def _segment(
+        *,
+        gateway: str | None = "10.9.0.1/24",
+        prefix: str | None = "10.9.0.0/24",
+        served: tuple[str, ...] = ("dep-1",),
+        deployments: tuple[tuple[str, str, str], ...] = (("TopologyCustomerDC", "C001-P-DC10", "dep-1"),),
+        terminated: bool = True,
+    ) -> dict[str, Any]:
+        """The segment_placement query payload: ``deployments`` are (kind, name, id)."""
         return {
             "ManagedVxlanSegment": [
                 {
@@ -200,44 +209,89 @@ class TestInlineTermination:
                     "stretch_scope": "local",
                     "customer_deployments": [
                         {
-                            "typename": "TopologyCustomerDC",
-                            "name": "C001-P-DC11",
-                            "parent": {"typename": "TopologyDataCenter", "name": "DC11"},
+                            "typename": kind,
+                            "name": name,
+                            "id": identifier,
+                            "parent": {"typename": "TopologyDataCenter", "name": "DC10"},
                         }
+                        for kind, name, identifier in deployments
                     ],
                     "segment_deployments": [],
-                    "terminate_inline": terminate_inline,
-                    "inline_service": inline_service,
+                    "gateway": {"address": gateway, "ip_prefix": {"prefix": prefix}} if gateway else None,
+                    "terminated_on": (
+                        {
+                            "id": "ctx-1",
+                            "name": "shared-fw-prod",
+                            "served_deployments": [{"id": identifier} for identifier in served],
+                        }
+                        if terminated
+                        else None
+                    ),
                 }
             ]
         }
 
-    def test_inline_without_service_is_an_error(self) -> None:
-        """No inline_service means no gateway anywhere."""
+    def test_a_well_formed_termination_passes(self) -> None:
+        """VIP in the prefix, one DC footprint, served by the context; a segment not terminated is not examined."""
         check = _check()
 
-        check.validate(self._segment(None))
-
-        assert len(check._captured_errors) == 1
-        assert "no inline_service" in check._captured_errors[0]
-
-    def test_inline_service_must_be_an_ha_pair(self) -> None:
-        """A firewall context (or anything but an FW/LB/proxy HA pair) cannot be the gateway."""
-        check = _check()
-
-        check.validate(self._segment({"typename": "ManagedFirewallContext", "name": "ctx-1"}))
-
-        assert len(check._captured_errors) == 1
-        assert "cannot be its gateway" in check._captured_errors[0]
-
-    def test_firewall_ha_pair_is_accepted(self) -> None:
-        """A ManagedFirewallHA terminating the segment passes; so does a segment not terminated inline."""
-        check = _check()
-
-        check.validate(self._segment({"typename": "ManagedFirewallHA", "name": "fw-ha"}))
-        check.validate(self._segment(None, terminate_inline=False))
+        check.validate(self._segment())
+        check.validate(self._segment(terminated=False, gateway=None))
 
         assert check._captured_errors == []
+
+    def test_no_gateway_is_an_error(self) -> None:
+        """Terminated with no gateway: the pair has no VIP."""
+        check = _check()
+
+        check.validate(self._segment(gateway=None))
+
+        assert len(check._captured_errors) == 1
+        assert "has no gateway" in check._captured_errors[0]
+
+    def test_a_gateway_outside_the_prefix_is_an_error(self) -> None:
+        """The VIP must be an address of the segment's own prefix."""
+        check = _check()
+
+        check.validate(self._segment(gateway="10.8.0.1/24"))
+
+        assert len(check._captured_errors) == 1
+        assert "outside the segment prefix 10.9.0.0/24" in check._captured_errors[0]
+
+    def test_a_colocation_footprint_is_an_error(self) -> None:
+        """Only a DC footprint has a trunk of ours to the border leaf."""
+        check = _check()
+
+        check.validate(self._segment(deployments=(("TopologyCustomerColocation", "C001-P-FR", "dep-9"),)))
+
+        assert any("only a TopologyCustomerDC can be terminated" in msg for msg in check._captured_errors)
+
+    def test_a_footprint_the_context_does_not_serve_is_an_error(self) -> None:
+        """The context holds none of that footprint's rules: refused."""
+        check = _check()
+
+        check.validate(self._segment(served=("dep-other",)))
+
+        assert len(check._captured_errors) == 1
+        assert "is not served by it" in check._captured_errors[0]
+
+    def test_every_footprint_must_be_served(self) -> None:
+        """A stretched segment names several DC footprints: each one must be served, one error per miss."""
+        check = _check()
+        payload = self._segment(
+            deployments=(
+                ("TopologyCustomerDC", "C001-P-DC10", "dep-1"),
+                ("TopologyCustomerDC", "C001-P-DC11", "dep-2"),
+            ),
+        )
+        payload["ManagedVxlanSegment"][0]["stretch_scope"] = "dc_pair"
+
+        check.validate(payload)
+
+        assert [msg for msg in check._captured_errors if "not served" in msg] == [
+            "Segment 'seg-web' is terminated on context 'shared-fw-prod' but TopologyCustomerDC 'C001-P-DC11' "
+            "is not served by it"
+        ]
 
 
 class TestCloudSegmentDeployment:
@@ -435,3 +489,9 @@ class TestQueryShape:
         """Only TopologyEnvironmentScoped carries environment; the removed TopologyCustomer.environment is not read."""
         assert "... on TopologyEnvironmentScoped { environment { value } }" in self._QUERY
         assert "... on TopologyCustomer { environment" not in self._QUERY
+
+    def test_the_termination_rules_read_their_fields(self) -> None:
+        """The gateway address and prefix, and the context with the footprints it serves, are selected."""
+        block = self._QUERY[self._QUERY.index("ManagedVxlanSegment") : self._QUERY.index("CloudNetworkSegment")]
+        assert "gateway { node { address { value } ip_prefix { node { prefix { value } } } } }" in block
+        assert "terminated_on { node { id name { value } served_deployments { edges { node { id } } } } }" in block

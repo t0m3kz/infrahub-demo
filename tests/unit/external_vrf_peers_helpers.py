@@ -30,7 +30,6 @@ def _peering(namespace: dict[str, Any] | None, *, peering_role: str | None = "re
         "session_type": "EBGP",
         "peering_role": peering_role,
         "ttl": 1,
-        "maximum_routes": 100,
         "capabilities": [
             {
                 "name": "Ethernet1/13.1000",

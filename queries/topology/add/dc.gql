@@ -109,7 +109,7 @@ query topology_dc($name: String!) {
               node {
                 id
                 controller_type { value }
-                ... on DcimDevice {
+                ... on DcimDeviceManaged {
                   platform {
                     node {
                       id
@@ -124,7 +124,7 @@ query topology_dc($name: String!) {
               node {
                 id
                 controller_type { value }
-                ... on DcimDevice {
+                ... on DcimDeviceManaged {
                   platform {
                     node {
                       id

@@ -1,7 +1,8 @@
 """The parent/child relationships of interfaces in schemas/base/dcim.yml.
 
-DcimVirtualInterface.parent_interface (outbound, one) is the child side of a sub-interface; DcimHasSubInterface.
-sub_interfaces (inbound, many) is the other end, declared once on a marker generic that every kind able to carry
+DcimSubInterface.parent_interface (outbound, one) is the child side of "rides on", declared once on a marker generic
+that DcimVirtualInterface and CloudPeeringInterface inherit; DcimHasSubInterface.sub_interfaces (inbound, many) is the
+other end, declared once on a marker generic that every kind able to carry
 sub-interfaces inherits (a NIC is the parent of several sub-interfaces, which the server accepts only with the many
 side declared: ``has 2 peers for sub__interface, maximum of 1 allowed`` otherwise). Only the LAG pair carries
 ``common_parent: device`` (a port and its LAG are on one device). The NIC of a virtual machine rides a port of ANOTHER
@@ -30,14 +31,14 @@ def _item(section: list[dict[str, Any]], name: str) -> dict[str, Any]:
 def test_the_two_ends_share_one_identifier_with_opposite_directions() -> None:
     """The shared identifier is what pairs the two relationships; the directions must differ."""
     schema = _schema()
-    child = _item(_item(schema["nodes"], "VirtualInterface")["relationships"], "parent_interface")
+    child = _item(_item(schema["generics"], "SubInterface")["relationships"], "parent_interface")
     parent = _item(_item(schema["generics"], "HasSubInterface")["relationships"], "sub_interfaces")
 
     assert child["identifier"] == parent["identifier"] == "sub__interface"
     assert (child["direction"], parent["direction"]) == ("outbound", "inbound")
     assert (child["cardinality"], parent["cardinality"]) == ("one", "many")
     assert child["peer"] == "DcimInterface"
-    assert parent["peer"] == "DcimVirtualInterface"
+    assert parent["peer"] == "DcimSubInterface"
 
 
 def test_kinds_that_carry_sub_interfaces_inherit_the_marker() -> None:
@@ -57,7 +58,7 @@ def test_the_marker_declares_the_relationship_only_once() -> None:
 def test_common_parent_stays_only_on_the_lag_pair() -> None:
     """Only a port and its LAG are tied to one device by the server; sub-interface links are held by a check."""
     schema = _schema()
-    child = _item(_item(schema["nodes"], "VirtualInterface")["relationships"], "parent_interface")
+    child = _item(_item(schema["generics"], "SubInterface")["relationships"], "parent_interface")
     parent = _item(_item(schema["generics"], "HasSubInterface")["relationships"], "sub_interfaces")
     lag = _item(_item(schema["nodes"], "PhysicalInterface")["relationships"], "lag")
     members = _item(_item(schema["nodes"], "LAGInterface")["relationships"], "member_interfaces")
@@ -67,13 +68,18 @@ def test_common_parent_stays_only_on_the_lag_pair() -> None:
     assert "common_parent" not in parent
 
 
-def test_host_interface_is_gone_the_nic_rides_its_host_port_through_parent_interface() -> None:
-    """A VM NIC's parent_interface is its host port (another device); there is no relationship of its own."""
-    nodes = _schema()["nodes"]
-    names = [rel["name"] for rel in _item(nodes, "VirtualInterface").get("relationships") or []]
+def test_the_child_marker_holds_only_parent_interface_and_the_virtual_interface_inherits_it() -> None:
+    """A VM NIC's parent_interface is its host port (another device); there is no relationship of its own, and the
+    kind repeats nothing the marker declares."""
+    schema = _schema()
+    marker = _item(schema["generics"], "SubInterface")
+    virtual = _item(schema["nodes"], "VirtualInterface")
 
-    assert "host_interface" not in names
-    assert "parent_interface" in names
+    assert [rel["name"] for rel in marker["relationships"]] == ["parent_interface"]
+    assert not marker.get("attributes")
+    assert "DcimSubInterface" in virtual["inherit_from"]
+    assert "parent_interface" not in [rel["name"] for rel in virtual.get("relationships") or []]
+    assert "host_interface" not in [rel["name"] for rel in virtual.get("relationships") or []]
 
 
 def test_ip_address_is_declared_once_on_the_marker_generic() -> None:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from ipaddress import ip_interface, ip_network
 from typing import Any
 
 from utils.data_cleaning import clean_data
@@ -47,21 +48,13 @@ class CheckSegmentPlacement(WarningCheck):
         "TopologyColocationMetro",
     }
 
-    # HA pairs that can be a segment's gateway (terminate_inline): the fabric
-    # renders such a segment pure L2, so nothing else would route it.
-    _INLINE_SERVICE_KINDS = {
-        "ManagedFirewallHA",
-        "ManagedLoadbalancerHA",
-        "ManagedProxyHA",
-    }
-
     def validate(self, data: Any) -> None:
         cleaned = clean_data(data)
         self._validate_vxlan_segments(cleaned.get("ManagedVxlanSegment") or [])
         self._validate_cloud_segments(cleaned.get("CloudNetworkSegment") or [])
         for segment in cleaned.get("ManagedVxlanSegment") or []:
             self._validate_deployment_agreement(segment, segment.get("customer_deployments") or [])
-            self._validate_inline_termination(segment)
+            self._validate_termination(segment)
 
     def _validate_deployment_agreement(self, segment: dict[str, Any], deployments: list[dict[str, Any]]) -> None:
         """The segment's environment and owner against each footprint it names."""
@@ -98,30 +91,56 @@ class CheckSegmentPlacement(WarningCheck):
                     )
                 )
 
-    def _validate_inline_termination(self, segment: dict[str, Any]) -> None:
-        """terminate_inline needs an on-prem HA pair as inline_service: leaves
-        and border leaves drop the segment's gateway, so without one the
-        segment has no gateway anywhere."""
-        if not segment.get("terminate_inline"):
+    def _validate_termination(self, segment: dict[str, Any]) -> None:
+        """A segment terminated on a firewall context (``terminated_on``) is a floating VIP the pair owns.
+
+        - its ``gateway`` is set and inside the segment's prefix (the VIP the firewall transform renders);
+        - every footprint it names is a DC footprint (a colocation firewall has no trunk of its own to the leaf, an
+          office or a cloud has no firewall pair of ours);
+        - the context serves every one of those footprints (``served_deployments``), otherwise the segment would be
+          bridged to a pair that holds none of its rules.
+
+        The context is a firewall context by schema (``terminated_on`` peers ``ManagedFirewallContext`` only).
+        """
+        context = segment.get("terminated_on")
+        if not context:
             return
         seg_name = segment.get("name", "<unnamed-segment>")
-        inline_service = segment.get("inline_service")
-        if not isinstance(inline_service, dict):
+        context_name = context.get("name", "<unknown>")
+        gateway = (segment.get("gateway") or {}).get("address")
+        prefix = ((segment.get("gateway") or {}).get("ip_prefix") or {}).get("prefix")
+        if not gateway or not prefix:
             self.log_error(
                 message=(
-                    f"Segment '{seg_name}' has terminate_inline=true but no inline_service — "
-                    "the fabric renders it pure L2, so it has no gateway at all"
+                    f"Segment '{seg_name}' is terminated on context '{context_name}' but has no gateway: "
+                    "the gateway is the VIP of the firewall pair"
                 )
             )
-            return
-        kind = inline_service.get("typename")
-        if kind not in self._INLINE_SERVICE_KINDS:
+        elif ip_interface(gateway).ip not in ip_network(prefix, strict=False):
             self.log_error(
                 message=(
-                    f"Segment '{seg_name}' inline_service '{inline_service.get('name', '<unknown>')}' is a "
-                    f"'{kind}', which cannot be its gateway. Allowed: {sorted(self._INLINE_SERVICE_KINDS)}"
+                    f"Segment '{seg_name}' gateway {gateway} (the VIP of context '{context_name}') is outside "
+                    f"the segment prefix {prefix}"
                 )
             )
+        served = {deployment.get("id") for deployment in context.get("served_deployments") or []}
+        for deployment in segment.get("customer_deployments") or []:
+            dep_kind = deployment.get("typename")
+            dep_name = deployment.get("name", "<unknown>")
+            if dep_kind != "TopologyCustomerDC":
+                self.log_error(
+                    message=(
+                        f"Segment '{seg_name}' is terminated on context '{context_name}' but names {dep_kind} "
+                        f"'{dep_name}': only a TopologyCustomerDC can be terminated on a firewall context"
+                    )
+                )
+            elif deployment.get("id") not in served:
+                self.log_error(
+                    message=(
+                        f"Segment '{seg_name}' is terminated on context '{context_name}' but TopologyCustomerDC "
+                        f"'{dep_name}' is not served by it"
+                    )
+                )
 
     def _validate_vxlan_segments(self, segments: list[dict[str, Any]]) -> None:
         for segment in segments:

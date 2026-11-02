@@ -1,9 +1,7 @@
 fragment DecommissionDeviceFields on DcimDevice {
   id
   name { value }
-  role { value }
-  status { value }
-  primary_address { node { id } }
+  ... on DcimDeviceManaged { role { value } status { value } primary_address { node { id } } }
   interfaces {
     edges {
       node {
@@ -37,7 +35,7 @@ fragment DecommissionDeviceFields on DcimDevice {
                         }
                       }
 
-                      device { node { role { value } } }
+                      device { node { ... on DcimDeviceManaged { role { value } } } }
                     }
                   }
                 }

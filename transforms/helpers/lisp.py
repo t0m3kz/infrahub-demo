@@ -28,9 +28,7 @@ from transforms.helpers.segments import _get_segment_gateways
 from transforms.helpers.vrf import device_vrfs
 from utils.fabric_roles import LISP_BORDER_ROLES
 from utils.limits import DEFAULT_NAMESPACE
-from utils.segment_addressing import is_inline_terminated
-from utils.segment_addressing import routed_segment_namespace as segment_namespace
-from utils.segment_addressing import segment_prefix
+from utils.segment_addressing import segment_namespace, segment_prefix
 
 
 @dataclass(frozen=True)
@@ -92,8 +90,7 @@ def _map_server_addresses(servers: Iterable[dict[str, Any]]) -> tuple[str, ...]:
 def _border_records(segment_deployments: Iterable[dict[str, Any]]) -> tuple[tuple[EidRecord, ...], tuple[int, ...]]:
     """The L3 EID records and L2 instance-ids of the site's active VNI segments (what a border registers).
 
-    A segment without a VNI is a traditional VLAN and has no instance. An inline-terminated segment is
-    pure L2 (an instance-id, no prefix). A segment prefix of the IPv6 family is refused.
+    A segment without a VNI is a traditional VLAN and has no instance. A segment prefix of the IPv6 family is refused.
     """
     l3_records: set[EidRecord] = set()
     l2_ids: set[int] = set()
@@ -103,8 +100,6 @@ def _border_records(segment_deployments: Iterable[dict[str, Any]]) -> tuple[tupl
         if not vni:
             continue
         l2_ids.add(vni)
-        if is_inline_terminated(segment):
-            continue
         if segment_prefix(segment, "ipv6"):
             raise ValueError(
                 f"LISP segment {segment.get('customer_name') or segment.get('name')} has an IPv6 prefix "

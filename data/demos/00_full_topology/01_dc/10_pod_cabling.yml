@@ -1,0 +1,132 @@
+---
+# Cabling of the pod. The server is dual-homed (eno1 to leaf-01, eno2 to leaf-02), the leaves are joined by their
+# mlag-peer ports, both leaves reach the one spine, the spine both border leaves. Border leaf 1 reaches the edge
+# through jack 2 of the patch panel (front 2 | rear 2), border leaf 2 on a direct cable. Cables in data are never
+# generated.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+    - name: "CBL-DC90-SRV01-ENO1-LEAF01"
+      type: smf
+      deployment: "DC90"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "dc90-srv-01"
+            name: "eno1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "dc90-leaf-01"
+            name: "Ethernet1/2"
+    - name: "CBL-DC90-SRV01-ENO2-LEAF02"
+      type: smf
+      deployment: "DC90"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "dc90-srv-01"
+            name: "eno2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "dc90-leaf-02"
+            name: "Ethernet1/2"
+    - name: "CBL-DC90-LEAF01-LEAF02-PEER"
+      type: smf
+      deployment: "DC90"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "dc90-leaf-01"
+            name: "Ethernet1/33"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "dc90-leaf-02"
+            name: "Ethernet1/33"
+    - name: "CBL-DC90-LEAF01-SPINE01"
+      type: smf
+      deployment: "DC90"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "dc90-leaf-01"
+            name: "Ethernet1/31"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "dc90-spine-01"
+            name: "Ethernet1/1"
+    - name: "CBL-DC90-LEAF02-SPINE01"
+      type: smf
+      deployment: "DC90"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "dc90-leaf-02"
+            name: "Ethernet1/31"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "dc90-spine-01"
+            name: "Ethernet1/2"
+    - name: "CBL-DC90-SPINE01-BL01"
+      type: smf
+      deployment: "DC90"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "dc90-spine-01"
+            name: "Ethernet1/3"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "dc90-bl-01"
+            name: "Ethernet1/33"
+    - name: "CBL-DC90-SPINE01-BL02"
+      type: smf
+      deployment: "DC90"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "dc90-spine-01"
+            name: "Ethernet1/4"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "dc90-bl-02"
+            name: "Ethernet1/33"
+    - name: "CBL-DC90-BL02-EDGE01"
+      type: smf
+      deployment: "DC90"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "dc90-bl-02"
+            name: "Ethernet1/1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "dc90-edge-01"
+            name: "Ethernet1/10"
+    - name: "CBL-DC90-BL01-PP01-F2"
+      type: smf
+      deployment: "DC90"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "dc90-bl-01"
+            name: "Ethernet1/1"
+        - kind: DcimFrontPatchPanelPort
+          data:
+            panel: ["dmo-1-s-1-r-1-1", "PP-DC90-01"]
+            name: "2"
+            connector: "lc-upc"
+    - name: "CBL-DC90-PP01-R2-EDGE01"
+      type: smf
+      deployment: "DC90"
+      endpoints:
+        - kind: DcimRearPatchPanelPort
+          data:
+            panel: ["dmo-1-s-1-r-1-1", "PP-DC90-01"]
+            name: "2"
+            connector: "lc-upc"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "dc90-edge-01"
+            name: "Ethernet1/14"

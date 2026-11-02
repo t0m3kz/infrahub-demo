@@ -34,10 +34,7 @@ spec:
               data:
                 - name: AM-NE
                   design: "EDGE"
-                  # Routed to the virtual_colocation_terraform group: one Equinix Network Edge
-                  # Terraform artifact: one equinix_network_device per router (eg-am-ne01, eg-am-ne02).
-                  infrastructure_orchestrator: terraform
-                  # The provider order's contract data, printed into that file: the account's account_id is the
+                  # The provider order's contract data: the account's account_id is the
                   # Equinix billing account (a demo value), its owner's notification_emails the people the
                   # provider notifies (02_account.yml).
                   account: "equinix-network-edge"

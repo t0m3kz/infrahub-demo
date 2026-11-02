@@ -33,11 +33,6 @@ generics:
             description: Resource is being provisioned.
             color: "#7f7fff"
 
-  - name: HybridAttachment
-    namespace: Cloud
-    description: "Cloud-side endpoint of a hybrid (on-prem/VRF) routing attachment — DX private VIF."
-    include_in_menu: false
-
 nodes:
 
   - name: Cloud
@@ -54,20 +49,25 @@ nodes:
       - name__value
     display_label: "{{ name__value|upper }}"
 
-  # A Direct Connect or an ExpressRoute lands in a region, so the region is the
-  # cloud-side endpoint of a shared circuit. Not the zone (an AZ is finer than
-  # any provider commits to) and not TopologyCloud (which groups the provider's
-  # regions and identifies no location at all).
+  # A cloud connection (Direct Connect, ExpressRoute) lands in a region, so the region is the
+  # cloud-side location of a connection and of the circuits it carries. Not the zone (an AZ is finer than
+  # any provider commits to) and not TopologyCloud (which groups the provider's regions and identifies no
+  # location at all).
+  #
+  # A region is a provider place and hosts NOTHING: no devices, no appliances. The cloud resources of a region
+  # (accounts, networks, gateways, Direct Connect, peering interfaces, VPN connections) are the CloudResource nodes
+  # that point at it. The provider-side device of a handoff, where a BGP session needs one, is a physical stub in the
+  # colocation zone where the legs meet, or in the provider's TopologyExternalProviders, never in the region.
   - name: CloudRegion
     namespace: Topology
     icon: mdi:earth
     inherit_from:
       - TopologyDeployment
-      - TopologyDeviceHosting
       - TopologyConnectableLocation
       - TopologyFacility
     parent: TopologyCloud
-    children: TopologyCloudZone
+    # Empty: any node that names the region as its parent (a zone, a customer footprint), as the data center does.
+    children: ""
     human_friendly_id:
       - name__value
     order_by:
@@ -238,6 +238,16 @@ nodes:
         optional: true
         description: Subnets within this virtual network
         order_weight: 2000
+      # Symmetric: one write is seen from both networks (measured on 1.11.9, one identifier, no direction).
+      - name: peers
+        label: Peers
+        peer: CloudVirtualNetwork
+        cardinality: many
+        kind: Attribute
+        optional: true
+        identifier: "cloud_network_peering"
+        description: "Networks peered directly with this one (VPC peering, VNet peering)"
+        order_weight: 2100
     uniqueness_constraints:
       - [account, name__value]
 
@@ -266,20 +276,12 @@ nodes:
         kind: Dropdown
         optional: false
         order_weight: 250
-        description: "Segmentation technology (cloud provider or on-prem)"
+        description: "Segmentation technology (VXLAN on-prem, subnet in the cloud)"
         choices:
-          - name: aws_vpc_subnet
-            label: AWS VPC Subnet
-            description: "AWS VPC subnet"
+          - name: cloud_subnet
+            label: Cloud Subnet
+            description: "Subnet of a cloud virtual network (the provider is the network's account provider)"
             color: "#FF9900"
-          - name: gcp_vpc_subnet
-            label: GCP VPC Subnet
-            description: "Google Cloud VPC subnet"
-            color: "#4285F4"
-          - name: azure_vnet_subnet
-            label: Azure VNet Subnet
-            description: "Azure Virtual Network subnet"
-            color: "#0078D4"
       - name: cidr_block
         label: CIDR Block
         kind: Text
@@ -415,3 +417,17 @@ nodes:
         optional: true
         description: Network segment where this instance is deployed
         order_weight: 1100
+
+extensions:
+  nodes:
+    - kind: OrganizationCustomer
+      relationships:
+        - name: cloud_accounts
+          label: Cloud Accounts
+          peer: CloudAccount
+          kind: Generic
+          cardinality: many
+          optional: true
+          identifier: "cloudaccount__organizationentity"
+          description: "The cloud accounts (AWS, Azure, GCP) this customer owns"
+          order_weight: 2100

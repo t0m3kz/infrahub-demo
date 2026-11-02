@@ -597,13 +597,12 @@ def _make_isolation_activation(
     vlan_id: int,
     seg_id: str,
     policies: list | None = None,
-    firewall_id: str | None = None,
     isolation_mode: str = "normal",
 ) -> dict:
-    """Return a single activation dict for isolation_mode / firewall-skip tests.
+    """Return a single activation dict for isolation_mode tests.
 
-    The segment always has ``security_policy`` present so that the skip vs.
-    render decision is exercised rather than the "field not queried" early-exit.
+    The segment always has ``security_policy`` present so that the render
+    decision is exercised rather than the "field not queried" early-exit.
     """
     seg: dict = {
         "id": seg_id,
@@ -614,46 +613,14 @@ def _make_isolation_activation(
         "security_policy": policies[0] if policies else None,
         "isolation_mode": isolation_mode,
     }
-    if firewall_id is not None:
-        seg["inline_service"] = {"id": firewall_id}
     return {"vlan_id": vlan_id, "vni": 10000 + vlan_id, "status": "active", "segment": seg}
 
 
 class TestGetAclsIsolationMode:
-    """Firewall-skip logic gated by isolation_mode on the segment."""
+    """isolation_mode on the segment."""
 
-    def test_normal_segment_with_firewall_skips_acl(self) -> None:
-        """A segment with a firewall and isolation_mode='normal' produces no ACL."""
-        act = _make_isolation_activation(
-            vlan_id=100, seg_id="seg-fw-normal", firewall_id="fw-1", isolation_mode="normal"
-        )
-        result = get_acls(activations=[act])
-        assert result == []
-
-    def test_isolated_segment_with_firewall_skips_acl(self) -> None:
-        """'isolated' is not 'microsegmented' — firewall skip still applies."""
-        act = _make_isolation_activation(
-            vlan_id=101, seg_id="seg-fw-isolated", firewall_id="fw-1", isolation_mode="isolated"
-        )
-        result = get_acls(activations=[act])
-        assert result == []
-
-    def test_microsegmented_segment_with_firewall_renders_acl(self) -> None:
-        """isolation_mode='microsegmented' bypasses the firewall skip — ACL must be generated."""
-        policies = [_policy(rules=[_rule(index=10)])]
-        act = _make_isolation_activation(
-            vlan_id=102,
-            seg_id="seg-fw-micro",
-            firewall_id="fw-1",
-            isolation_mode="microsegmented",
-            policies=policies,
-        )
-        result = get_acls(activations=[act])
-        assert len(result) == 1
-        assert result[0]["isolation_mode"] == "microsegmented"
-
-    def test_microsegmented_without_firewall_renders_acl(self) -> None:
-        """Microsegmented segment with no firewall still renders its ACL normally."""
+    def test_microsegmented_segment_renders_acl(self) -> None:
+        """A microsegmented segment renders its ACL."""
         policies = [_policy(rules=[_rule(index=10)])]
         act = _make_isolation_activation(
             vlan_id=103, seg_id="seg-micro-nofw", isolation_mode="microsegmented", policies=policies
@@ -661,8 +628,8 @@ class TestGetAclsIsolationMode:
         result = get_acls(activations=[act])
         assert len(result) == 1
 
-    def test_normal_without_firewall_renders_acl(self) -> None:
-        """Baseline: no firewall, isolation_mode='normal' → ACL rendered as always."""
+    def test_normal_segment_renders_acl(self) -> None:
+        """Baseline: isolation_mode='normal' → ACL rendered as always."""
         policies = [_policy(rules=[_rule(index=10)])]
         act = _make_isolation_activation(
             vlan_id=104, seg_id="seg-normal-nofw", isolation_mode="normal", policies=policies
@@ -690,22 +657,6 @@ class TestGetAclsIsolationMode:
         result = get_acls(activations=[act])
         assert len(result) == 1
         assert result[0]["isolation_mode"] == "normal"
-
-    def test_apply_on_switch_rule_renders_despite_the_firewall(self) -> None:
-        """An apply_on_switch rule holds on the leaf even when the segment has an
-        inline_service: its whole ACL renders (an SVI ACL denies what it does not permit)."""
-        forced = {**_rule(index=10), "apply_on_switch": True}
-        policies = [_policy(rules=[forced, _rule(index=20, port_start=22)])]
-        act = _make_isolation_activation(vlan_id=107, seg_id="seg-fw-forced", firewall_id="fw-1", policies=policies)
-        result = get_acls(activations=[act])
-        assert [rule["name"] for rule in result[0]["rules"]] == ["rule-10", "rule-20", "implicit-deny-all"]
-
-    def test_disabled_apply_on_switch_rule_does_not_force_the_acl(self) -> None:
-        forced = {**_rule(index=10, disabled=True), "apply_on_switch": True}
-        act = _make_isolation_activation(
-            vlan_id=108, seg_id="seg-fw-off", firewall_id="fw-1", policies=[_policy(rules=[forced])]
-        )
-        assert get_acls(activations=[act]) == []
 
     def test_apply_on_switch_field_present_in_rule(self) -> None:
         """_build_acl_rule must not crash when 'apply_on_switch' appears in the rule dict."""

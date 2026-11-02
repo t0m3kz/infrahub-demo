@@ -121,7 +121,7 @@ fragment DataCenterFields on TopologyDataCenter {
       node {
         id
         controller_type { value }
-        ... on DcimDevice {
+        ... on DcimDeviceManaged {
           platform {
             node {
               id
@@ -136,7 +136,7 @@ fragment DataCenterFields on TopologyDataCenter {
       node {
         id
         controller_type { value }
-        ... on DcimDevice {
+        ... on DcimDeviceManaged {
           platform {
             node {
               id

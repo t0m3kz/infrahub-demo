@@ -14,3 +14,19 @@ spec:
       dns_hostnames: true
       cidr_blocks:
         - ["10.10.0.0/16", "PROD"]
+---
+# The second VPC of C001 in eu-central-1, attached to nothing but a Site-to-Site VPN (the first one rides the Transit
+# Gateway hub): the VPN connection's `attached_network`.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudVirtualNetwork
+  data:
+    - name: "nordix-vpc-vpn"
+      account: "nordix-aws-prod"
+      region: "eu-central-1"
+      is_default: false
+      dns_support: true
+      dns_hostnames: true
+      cidr_blocks:
+        - ["10.20.0.0/16", "PROD"]

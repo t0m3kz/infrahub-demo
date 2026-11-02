@@ -6,7 +6,7 @@
   TopologyCustomerColocation. A virtual device deployed to a colocation zone, a virtual colocation or any other
   deployment is the old modelling of a provider-hosted function.
 A CloudNetworkAppliance (a network function a provider hosts: Equinix Network Edge, Megaport MVE) is deployed to a
-TopologyProviderHosting only (a TopologyVirtualColocation or a TopologyCustomerCloud); the schema says so, so nothing
+TopologyApplianceHosting only (a TopologyVirtualColocation or a TopologyCustomerCloud); the schema says so, so nothing
 is checked here.
 
 An unset ``deployment`` is not reported: the field is optional.

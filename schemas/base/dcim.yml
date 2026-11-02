@@ -15,11 +15,46 @@ generics:
         optional: true
         order_weight: 1000
 
+  # The slim device: a name and the interfaces it holds. It is all an interface needs of its device (the interface
+  # `device` Parent, the HFID `[device name, name]`), so a holder of interfaces that is not a managed device (a cloud
+  # transport: Direct Connect, VPN connection) inherits ONLY this. The unique name holds across every kind that
+  # inherits it, so an interface HFID is never ambiguous. Everything a managed device has beyond that (role, status,
+  # type, platform, address, owner, software image) is DcimDeviceManaged.
   - name: Device
     namespace: Dcim
     description: Generic Device object.
     label: Device
     icon: mdi:server
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    order_by:
+      - name__value
+    display_label: "{{name__value}}"
+    attributes:
+      - name: name
+        kind: Text
+        unique: true
+        order_weight: 900
+    relationships:
+      - name: interfaces
+        peer: DcimInterface
+        optional: true
+        cardinality: many
+        identifier: device__interface
+        kind: Component
+        order_weight: 2500
+
+  # What a managed device has beyond DcimDevice: description, role, status, type, platform, management address, tags;
+  # the owner and the software image are extensions of this generic. Every device kind inherits DcimDevice AND this
+  # one. A query that reads these fields through an interface's `device` (a DcimDevice) spreads
+  # `... on DcimDeviceManaged { ... }`; a transport has none of them.
+  - name: DeviceManaged
+    namespace: Dcim
+    description: Fields of a managed device (role, status, type, platform, address, owner, software image).
+    label: Managed Device
+    icon: mdi:server
+    include_in_menu: false
     human_friendly_id:
       - name__value
     order_by:
@@ -124,10 +159,6 @@ generics:
             label: Provider Device
             description: "Virtual/physical device representing a carrier or provider handoff point."
             color: "#c8a2c8"
-          - name: proxy
-            label: Proxy
-            description: "Forward, transparent, or reverse proxy appliance."
-            color: "#5ba85b"
           - name: access-switch
             label: Access Switch
             description: "Campus wiring-closet switch — SD-Access edge node."
@@ -169,13 +200,6 @@ generics:
         cardinality: one
         kind: Attribute
         order_weight: 1200
-      - name: interfaces
-        peer: DcimInterface
-        optional: true
-        cardinality: many
-        identifier: device__interface
-        kind: Component
-        order_weight: 2500
       - name: tags
         peer: BuiltinTag
         optional: true
@@ -197,8 +221,8 @@ generics:
         kind: Attribute
         order_weight: 1250
 
-  # Interfaces that can be the parent of virtual interfaces: a physical port, a LAG and a virtual interface. It holds
-  # only the inverse of DcimVirtualInterface.parent_interface (same identifier, opposite direction): with a
+  # Interfaces that can be the parent of sub-interfaces: a physical port, a LAG and a virtual interface. It holds
+  # only the inverse of DcimSubInterface.parent_interface (same identifier, opposite direction): with a
   # cardinality-one parent_interface on the kind, the server would cap a parent at one child (a NIC has several
   # sub-interfaces, a host port several VM NICs). checks/interface_layers.py reads it as an L3 signal (a port with
   # sub-interfaces is routed); the generators filter on parent_interface__ids.
@@ -208,18 +232,39 @@ generics:
   - name: HasSubInterface
     namespace: Dcim
     label: Has Sub-Interface
-    description: "Interface that can be the parent of sub-interfaces or virtual machine NICs"
+    description: "Interface that can be the parent of sub-interfaces, virtual machine NICs or cloud peering interfaces"
     include_in_menu: false
     relationships:
       - name: sub_interfaces
-        peer: DcimVirtualInterface
+        peer: DcimSubInterface
         optional: true
         cardinality: many
         kind: Generic
         identifier: "sub__interface"
         direction: inbound
-        description: "Virtual interfaces riding on this one: sub-interfaces of its device, or the NICs of its VMs"
+        description: "Interfaces riding on this one: sub-interfaces of its device, the NICs of its VMs, the peerings of a transport"  # yamllint disable-line rule:line-length
         order_weight: 1475
+
+  # The child side of "rides on": a virtual interface (sub-interface, VM NIC) and a cloud peering interface. A marker
+  # generic that holds only parent_interface (a generic cannot inherit a generic, so each kind lists it). One link for
+  # all meanings, no common_parent: a sub-interface's parent is a port, LAG or NIC of its own device, a VM NIC's is the
+  # port of its hosting device it is pinned to (generators/virtual_nics.py), a peering's is a port or LAG of its
+  # transport. The cross-device rule is checks/interface_parents.py.
+  - name: SubInterface
+    namespace: Dcim
+    label: Sub-Interface
+    description: "Interface that rides on another one (sub-interface, VM NIC, cloud peering)"
+    include_in_menu: false
+    relationships:
+      - name: parent_interface
+        peer: DcimInterface
+        optional: true
+        cardinality: one
+        kind: Attribute
+        identifier: "sub__interface"
+        direction: outbound
+        description: "Interface this one rides on: the host port for a VM NIC, else a port/LAG/NIC of the same device (checks/interface_parents.py)"  # yamllint disable-line rule:line-length
+        order_weight: 1400
 
   # Interfaces that can hold an address: a physical port, a LAG and a virtual interface (not a console port). One
   # declaration so all three share one lifecycle: an Attribute with no cascade (a multisite VIP is one address on two
@@ -239,9 +284,8 @@ generics:
         order_weight: 1900
 
   # Ports that can be switchport members of VXLAN segments: a physical port and a LAG. Its one relationship,
-  # `segments` (the typed L2 membership, reverse `switched_interfaces` on ManagedVxlanSegment), is declared in
-  # schemas/extensions/service/segment.yml next to the segment. The inline L3 termination of a segment on a virtual
-  # sub-interface stays on the `capabilities` edge.
+  # `segments` (the typed L2 membership, one-sided: the segment has no list of its ports), is declared in
+  # schemas/extensions/service/segment.yml next to the segment.
   - name: SwitchedInterface
     namespace: Dcim
     label: Switched Interface
@@ -333,6 +377,19 @@ generics:
             label: Customer/Access
             description: "Customer-facing, endpoint access, or external"
             color: "#F472B6"
+          # Provider-facing edge ports: the role says the kind of the far facility (cloud region, SaaS region, partner)
+          - name: cloud
+            label: Cloud Connect
+            description: "Edge port for a connection to a cloud region (cross-connect or virtual connection)"
+            color: "#38BDF8"
+          - name: saas
+            label: SaaS Connect
+            description: "Edge port for a connection to a SaaS region"
+            color: "#2DD4BF"
+          - name: partner
+            label: Partner Connect
+            description: "Edge port for a connection to a partner or another operator (never an ISP)"
+            color: "#FB923C"
 
           # Special interface types
           - name: management
@@ -393,7 +450,7 @@ generics:
             color: "#A7F3D0"
           - name: service
             label: Service
-            description: "VLAN-tagged sub-interface terminating a tenant-facing service (e.g. FirewallContext, inline FW/LB)"  # yamllint disable-line rule:line-length
+            description: "VLAN-tagged sub-interface terminating a tenant-facing service (e.g. FirewallContext)"  # yamllint disable-line rule:line-length
             color: "#F97316"
         order_weight: 1250
       - name: index
@@ -524,7 +581,7 @@ nodes:
         order_weight: 1900
     relationships:
       - name: devices
-        peer: DcimDevice
+        peer: DcimDeviceManaged
         optional: true
         cardinality: many
         order_weight: 1350
@@ -539,6 +596,7 @@ nodes:
     inherit_from:
       - CoreArtifactTarget
       - DcimDevice
+      - DcimDeviceManaged
       - DcimCapabilities
       - AppInstance
     attributes:
@@ -579,6 +637,7 @@ nodes:
     inherit_from:
       - CoreArtifactTarget
       - DcimDevice
+      - DcimDeviceManaged
       - DcimCapabilities
       - AppInstance
     attributes:
@@ -703,20 +762,8 @@ nodes:
       - DcimInterface
       - DcimHasSubInterface
       - DcimHasIPAddress
+      - DcimSubInterface
     include_in_menu: false
-    relationships:
-      # One link for both meanings, no common_parent: a sub-interface's parent is a port, LAG or NIC of its own device,
-      # a VM NIC's is the port of its hosting device it is pinned to (generators/virtual_nics.py). The cross-device
-      # rule is checks/interface_parents.py.
-      - name: parent_interface
-        peer: DcimInterface
-        optional: true
-        cardinality: one
-        kind: Attribute
-        identifier: "sub__interface"
-        direction: outbound
-        description: "Interface this one rides on: the host port for a VM NIC, else a port/LAG/NIC of the same device (checks/interface_parents.py)"  # yamllint disable-line rule:line-length
-        order_weight: 1400
 
   - name: LAGInterface
     namespace: Dcim

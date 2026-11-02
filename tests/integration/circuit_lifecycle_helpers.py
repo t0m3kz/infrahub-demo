@@ -163,16 +163,3 @@ def vrf_gone_errors(state: dict[str, dict[str, Any]]) -> list[str]:
 def back_errors(state: dict[str, dict[str, Any]]) -> list[str]:
     """Why the switches are not members again, with the segment's SVIs in the instance."""
     return precondition_errors(state)
-
-
-def sole_demand_instance_errors(vrfs: dict[str, Any], device: str, peer: str) -> list[str]:
-    """Why ``device``'s instance cannot show that a member leaves while the instance stays: ``device`` and ``peer`` must
-    both be members of the one instance (``parse_vrfs`` result) of the circuit's namespace."""
-    name = vrfs["memberships"].get(device)
-    if name is None:
-        return [f"{device} is a member of no instance of the circuit's namespace"]
-    members = vrfs["all"][name]["devices"]
-    missing = sorted({device, peer} - members)
-    if len(members) < 2 or missing:
-        return [f"instance {name} has members {sorted(members)}: it needs at least {device} and {peer}"]
-    return []

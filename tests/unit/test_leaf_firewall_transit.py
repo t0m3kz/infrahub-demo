@@ -76,7 +76,6 @@ def _activation(vlan: int = 100, *, dep: str = "dep-a", namespace: dict | None =
                 "ip_prefix": {"prefix": f"10.{vlan}.0.0/24", "ip_namespace": namespace},
             },
             "arp_suppression": True,
-            "terminate_inline": False,
         },
     }
 

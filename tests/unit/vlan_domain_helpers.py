@@ -58,11 +58,41 @@ def raw_state(
     deployments: Sequence[tuple[str, str]] | None = None,
     stretch_scope: str = "local",
     customer_deployments: list[dict[str, Any]] | None = None,
+    sources: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    """A raw segment_vlan_domains.gql response: interfaces are (id, typename, device id); deployments are
+    """A raw segment_vlan_domains.gql response: interfaces are (id, typename, device id) and ``sources`` maps a port id
+    to the account that wrote its edge to the segment (none: a person's edge); deployments are
     (segment deployment id, hosting deployment id), by default one in ``dc-1``; rows are (row id, device id,
     vlan id, segment deployment id)."""
+
+    def ports(typename: str) -> dict[str, Any]:
+        """The ``segments__ids`` root of one port kind, each port with its edge to the segment."""
+        return {
+            "edges": [
+                {
+                    "node": {
+                        "id": i,
+                        "device": {"node": {"id": d}},
+                        "segments": {
+                            "edges": [
+                                {
+                                    "properties": {
+                                        "source": {"id": (sources or {})[i]} if i in (sources or {}) else None
+                                    },
+                                    "node": {"id": segment_id},
+                                }
+                            ]
+                        },
+                    }
+                }
+                for i, t, d in interfaces
+                if t == typename
+            ]
+        }
+
     return {
+        "DcimPhysicalInterface": ports("DcimPhysicalInterface"),
+        "DcimLAGInterface": ports("DcimLAGInterface"),
         "ManagedVxlanSegment": {
             "edges": [
                 {
@@ -70,12 +100,6 @@ def raw_state(
                         "id": segment_id,
                         "stretch_scope": {"value": stretch_scope},
                         "customer_deployments": {"edges": customer_deployments or []},
-                        "switched_interfaces": {
-                            "edges": [
-                                {"node": {"id": i, "__typename": t, "device": {"node": {"id": d}}}}
-                                for i, t, d in interfaces
-                            ]
-                        },
                     }
                 }
             ]

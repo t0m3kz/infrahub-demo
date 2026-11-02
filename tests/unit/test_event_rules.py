@@ -191,27 +191,6 @@ def test_colocation_generators_are_fired_by_exactly_the_expected_rules() -> None
     }
 
 
-def test_virtual_colocation_orchestrator_routing_rules() -> None:
-    """A virtual colocation is routed on creation and whenever its infrastructure_orchestrator changes, by a
-    definition targeting the group every virtual colocation already joins."""
-    action = "run-virtual-colocation-orchestrator-routing-generator"
-    definition = "add_virtual_colocation_orchestrator_routing"
-    assert action_generators()[action] == definition
-    assert definition_targets()[definition] == _COLOCATION_KIND_WIRING["TopologyVirtualColocation"][2]
-    rules = {name: rule for name, rule in _rules_for("TopologyVirtualColocation").items() if rule["action"] == action}
-    assert sorted(rules) == [
-        "trigger-virtual-colocation-orchestrator-routing-on-created",
-        "trigger-virtual-colocation-orchestrator-routing-on-orchestrator-updated",
-    ]
-    created = rules["trigger-virtual-colocation-orchestrator-routing-on-created"]
-    assert created["mutation_action"] == "created"
-    assert not created.get("matches")
-    updated = rules["trigger-virtual-colocation-orchestrator-routing-on-orchestrator-updated"]
-    assert updated["mutation_action"] == "updated"
-    assert updated["matches"]["kind"] == "CoreNodeTriggerAttributeMatch"
-    assert [match["attribute_name"] for match in updated["matches"]["data"]] == ["infrastructure_orchestrator"]
-
-
 def test_colocation_generators_are_registered_in_infrahub_yml() -> None:
     """Each definition names its query, class and file, and the query file exists."""
     config = yaml.safe_load((ROOT / ".infrahub.yml").read_text())
@@ -286,7 +265,6 @@ _SESSION_COMMON_RULES = {
 _HANDOFF_ONLY_RULES = {
     "namespace-updated": ("CoreNodeTriggerRelationshipMatch", "ip_namespace"),
     "password-updated": ("CoreNodeTriggerRelationshipMatch", "password"),
-    "maximum-routes-updated": ("CoreNodeTriggerAttributeMatch", "maximum_routes"),
 }
 
 
@@ -296,12 +274,12 @@ def test_the_virtual_circuit_action_runs_the_session_generator_on_the_virtual_ci
     assert definition_targets()["add_virtual_circuit"] == "virtual_circuits"
 
 
-def test_the_session_kind_has_its_own_six_rules() -> None:
+def test_the_session_kind_has_its_own_five_rules() -> None:
     """One set of rules on the one kind (a rule on a generic is unprobed): created, the ends, the status, and what a
-    handoff reads. `cloud_endpoint` is not read, so it has no rule."""
+    handoff reads."""
     rules = _rules_for("TopologySessionCircuit")
     expected = {**_SESSION_COMMON_RULES, **_HANDOFF_ONLY_RULES}
-    assert len(rules) == 6
+    assert len(rules) == 5
     assert sorted(rules) == sorted(f"trigger-session-circuit-on-{suffix}" for suffix in expected)
     for suffix, match in expected.items():
         rule = rules[f"trigger-session-circuit-on-{suffix}"]
@@ -348,14 +326,9 @@ def test_the_session_generator_is_registered_in_infrahub_yml() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_a_change_of_the_segment_ports_runs_the_segment_generator() -> None:
-    """A port assigned to (or taken from) a VXLAN segment re-runs add_vxlan_segment, which reconciles the
-    segment's tags and VLAN rows (generators/topology/segment_ports.py)."""
-    rules = [rule for rule in trigger_rules() if rule["name"] == "trigger-vxlan-segment-switched-interfaces-updated"]
-
-    assert len(rules) == 1
-    rule = rules[0]
-    assert rule["node_kind"] == "ManagedVxlanSegment"
-    assert rule["mutation_action"] == "updated"
-    assert action_generators()[rule["action"]] == "add_vxlan_segment"
-    assert _match_fields(rule) == [("CoreNodeTriggerRelationshipMatch", "switched_interfaces")]
+def test_a_change_of_the_segment_ports_runs_nothing() -> None:
+    """The port-to-segment edge is one-sided (`segments` on the port): nothing re-runs on it, so the reconcile's own
+    writes raise no echo run (the next run of the segment's generators picks up an edge a person added)."""
+    for rule in trigger_rules():
+        assert "switched" not in str(rule), rule["name"]
+        assert "segments" not in [field for _kind, field in _match_fields(rule)], rule["name"]

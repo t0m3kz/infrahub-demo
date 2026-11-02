@@ -66,18 +66,19 @@ generics:
         order_weight: 100
     relationships:
       - name: devices
-        peer: DcimDevice
+        peer: DcimDeviceManaged
         kind: Generic
         cardinality: many
         identifier: "topology__devices"
         order_weight: 1200
         on_delete: cascade
 
-  # Where a provider-hosted network function (a CloudNetworkAppliance) can be deployed: the virtual colocation it is
-  # rented in, or the cloud footprint of a customer. A relationship peer, so it carries a name and an hfid as
-  # DeviceHosting does. Not DeviceHosting: a deployment of this kind has no physical or virtual device of ours, only
-  # what the provider hosts for us, so its link is typed to the appliance and not to any DcimDevice.
-  - name: ProviderHosting
+  # Where a provider-hosted network function (a CloudNetworkAppliance) can be deployed: the virtual colocation or the
+  # SaaS region it is rented in (a cloud region hosts nothing). A relationship
+  # peer, so it carries a name and an hfid as DeviceHosting does. Not DeviceHosting: a deployment of this kind has no
+  # physical or virtual device of ours, only what the provider hosts for us, so its link is typed to the appliance and
+  # not to any DcimDevice.
+  - name: ApplianceHosting
     namespace: Topology
     description: "Deployment in which a provider-hosted network function is rented"
     human_friendly_id:
@@ -99,9 +100,11 @@ generics:
   # The provider account a provider-hosted presence's appliances are ordered under: its account_id is the billing
   # account number, its provider the operator, and its owner's notification_emails receive the provider's order
   # notices. One declaration for every provider-hosted presence (a virtual colocation, a SaaS region). Not on
-  # ProviderHosting: a customer cloud is hosted too, but its accounts are the CloudAccounts it is built from.
-  # Optional because only a presence routed to terraform needs it (checks/colocation_placement.py).
-  - name: ProviderAccount
+  # ApplianceHosting: a customer cloud is not a provider-hosted function: it hosts instances, and its accounts are the
+  # CloudAccounts it is built from.
+  # Optional because only a presence whose provider order needs it (a billing account) has one
+  # (checks/colocation_placement.py).
+  - name: BilledAccount
     namespace: Topology
     description: "Deployment whose provider-hosted appliances are ordered under one provider account"
     include_in_menu: false
@@ -114,7 +117,7 @@ generics:
         kind: Attribute
         optional: true
         order_weight: 1050
-        identifier: "topology__provider_account"
+        identifier: "topology__billed_account"
 
   # Where a customer's cloud compute runs: the cloud footprint (TopologyCustomerCloud). The instances (EC2, GCE, ...)
   # belong to a CloudAccount and a zone; this is the footprint they serve, so a deployment reads its instances
@@ -191,6 +194,20 @@ generics:
         order_weight: 7650
         regex: "^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$"
         description: "Shared anycast-gateway MAC for every VTEP in this fabric (colon-separated). Must be identical fabric-wide."  # yamllint disable-line rule:line-length
+
+      # Staged rollout of the BGP route protection (utils/bgp_expectation.py). A wrong filter takes a working fabric
+      # down, so what is not lab-verified is rendered only when this is true; false renders the policy objects and
+      # leaves the neighbours unattached, with the maximum-prefix as warning-only. The precedent is
+      # TopologyDataCenter.group_policy_enforce. Read by the device transforms (transforms/helpers/bgp_facts.py)
+      # from the device's own hosting deployment.
+      - name: routing_filter_enforce
+        label: "Enforce Routing Filters"
+        kind: Boolean
+        optional: true
+        default_value: false
+        order_weight: 7660
+        description: >-
+          True attaches the derived BGP filters and enforces the maximum-prefix; false renders them unattached.
     relationships:
       - name: vni_pool
         peer: CoreNumberPool
@@ -258,7 +275,7 @@ extensions:
     - kind: CloudNetworkAppliance
       relationships:
         - name: deployment
-          peer: TopologyProviderHosting
+          peer: TopologyApplianceHosting
           cardinality: one
           kind: Attribute
           optional: true

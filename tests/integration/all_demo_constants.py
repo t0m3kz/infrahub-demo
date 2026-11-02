@@ -63,7 +63,6 @@ ALL_DEMO_EXPECTED_GENERATORS: dict[str, int] = {
         "add_customer_colocation_orchestrator_routing",
         "add_customer_cloud_orchestrator_routing",
         "add_customer_office_orchestrator_routing",
-        "add_virtual_colocation_orchestrator_routing",
     )
 }
 

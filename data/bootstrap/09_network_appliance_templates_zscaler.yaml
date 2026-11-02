@@ -1,0 +1,16 @@
+---
+# The Zscaler Enforcement Node (ZEN) a tunnel of a cloud peering lands on: a function the SaaS provider hosts in
+# one of its regions (TopologySaasRegion hosts CloudNetworkAppliance like a virtual colocation does). It is the far
+# end of a connection and is never configured here: role `provider` has no config transform, the platform has no
+# template, and its tunnel interfaces and Loopback0 belong to the peering that needs them.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TemplateCloudNetworkAppliance
+  data:
+    - template_name: ZSCALER_ZEN
+      owner: "P030"
+      device_type: ZEN
+      role: provider
+      platform: zscaler_zen
+      status: active

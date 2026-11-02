@@ -12,6 +12,9 @@ The integration tests follow an **incremental scenario-based approach** that mir
 
 - `test_01_setup.py` - Schema loading, menu, and bootstrap data
 - `test_02_repository.py` - Git repository integration and sync
+- `test_03_full_topology.py` - loads `data/demos/00_full_topology` onto main (`tests/traversal/load_topology.py`) and runs the traversal cases of
+  `tests/traversal` over it (the same assertions as `uv run invoke check-model`); part of the fast profile, NOT of the
+  30_all subset (the sample lands on main and 30_all branches from main)
 
 #### Phase 2: Incremental Scenarios (Order 10+)
 
@@ -36,7 +39,7 @@ Each scenario creates infrastructure incrementally and merges to main:
 - `test_18_dc6_add_spine.py` - **Scenario 5:** Add a spine to DC6-1-POD-1 by swapping its spine element
 - `test_19_dc6_segments.py` - **Scenario 6:** Board C001 into DC6 and deploy two VXLAN segments (`data/20_segments`)
 - `test_20_dc6_add_endpoints.py` - **Scenario 7:** Endpoint servers across DC6's pods (`data/demos/06_servers`)
-- `test_59` - `test_66` - **Scenario 8:** The `30_all` demo, end to end (see [The 30_all Suite](#the-30_all-suite)). This one deviates from the pattern above: it loads in stages, shares one branch across ten modules, and does not merge to main.
+- `test_59` - `test_66` - **Scenario 8:** The `30_all` demo, end to end (see [The 30_all Suite](#the-30_all-suite)). This one deviates from the pattern above: it loads in stages, shares one branch across eleven modules, and does not merge to main.
 - `test_71` - **Scenario 9:** The Arista EOS MSS-G demo fabric (`data/demos/32_arista_mssg`), on its own branch (see [The Arista MSS-G Suite](#the-arista-mss-g-suite)).
 
 Scenarios 2-7 form one chain on DC6: `test_12` depends on `dc6_verify_after_merge` from `test_10`, and each
@@ -155,11 +158,11 @@ uv run invoke test-integration-routing
 uv run invoke test-integration
 ```
 
-The fast profile intentionally stops after setup and repository synchronization. The routing profile adds one focused acceptance workflow. The full profile runs the complete scenario chain and is the right choice for release-level validation.
+The fast profile intentionally stops after setup, repository synchronization and the full-topology traversal checks (`test_03`). The routing profile adds one focused acceptance workflow. The full profile runs the complete scenario chain and is the right choice for release-level validation.
 
 ### The 30_all Suite
 
-`test_59` through `test_66` are one scenario split across ten modules. They share a single branch (`ALL_DEMO_BRANCH`) and run in dependency order:
+`test_59` through `test_66` are one scenario split across eleven modules. They share a single branch (`ALL_DEMO_BRANCH`) and run in dependency order:
 
 | Module | Covers |
 | --- | --- |
@@ -171,8 +174,9 @@ The fast profile intentionally stops after setup and repository synchronization.
 | `test_62c_all_demo_circuit_sessions.py` | Which metro's firewalls serve each colocation deployment, the DCI, handoff and tunnel sessions, the internet upstream, zone edge pairs and office WAN exits |
 | `test_64_all_demo_firewall_config.py` | Colo cloud/partner/SaaS zone policies: served by the FR metro's firewall pair, `CheckFirewall` passes, every pair member renders them and a firewall outside the pair does not; the transit legs, SNAT and internet egress renders |
 | `test_64b_all_demo_management_lb_config.py` | The management exchange and services rules, the leaf without PBR to them, the load-balancer renders (F5 contexts, border-leaf legs, client-leaf bypass). Office LISP fabrics: `CheckLispFabric` passes and every access-switch and distribution-switch renders its LISP site in-process (`router lisp`, the map-server `site` and EID records, `proxy-etr` / `use-petr` where the office has an SD-WAN edge; every IOS-XE line is unverified-no-lab) |
+| `test_64c_all_demo_terminated_segment.py` | The segment C005 terminates on DC10's shared firewall context: the border service ports facing the pair carry it as generated edges, each border leaf has its VLAN row and renders the VLAN and L2 VNI with no SVI, and each firewall member renders the derived `<trunk>.<vlan>` sub-interface with the gateway as the pair's VIP |
 | `test_65_all_demo_idempotency.py` | Two more runs of the security generators, then of the topology generators, leave rules, contexts, devices, cables, addresses, pools and allocated numbers unchanged |
-| `test_66_all_demo_circuit_lifecycle.py` | Runs after `test_65` because it mutates the branch. Decommissioning an Interconnect's carrier, and a Handoff itself, removes its BGP sessions, its `/31` (`/127`) and the port addresses (ports, key and other circuits' sessions untouched); setting it active again rebuilds them on the same key. Each test restores the status it changed |
+| `test_66_all_demo_circuit_lifecycle.py` | Runs after `test_65` because it mutates the branch. Decommissioning an Interconnect's carrier, and the SD-WAN gateway's Handoff, removes its BGP sessions, its `/31` (`/127`) and the port addresses (ports, key and other circuits' sessions untouched); setting it active again rebuilds them on the same key. Each test restores the status it changed |
 
 Only `test_59` loads data, and the load is deliberately staged — later stages reference objects that only exist once an earlier stage's generators have finished. `ALL_DEMO_LOAD_STAGES` in `tasks.py` (shared with `invoke load-all-demo`, imported from `tasks` by the tests) documents which stage needs what. Running `test_60`-`test_66` on their own will skip: their session-scoped dependencies are unmet without `test_59`.
 
@@ -217,7 +221,7 @@ fast loop before the full `30_all` subset:
 uv run invoke test-integration-fast
 ```
 
-Its repository sync (`test_02`) registers every query of `.infrahub.yml` against the live schema, so a field the schema
+Its `test_03` loads the full-topology sample on main and walks it (L1/L3 traversal asserts); its repository sync (`test_02`) registers every query of `.infrahub.yml` against the live schema, so a field the schema
 rejects (`Cannot query field`, `Unknown type`, a "Fields ... conflict") fails there in minutes; the task worker log
 (`docker logs <project>-task-worker-1`) names the field. A query under `tests/` is not registered: the test that runs
 it is its check.

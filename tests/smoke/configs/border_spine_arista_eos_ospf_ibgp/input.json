@@ -90,9 +90,6 @@
                           "send_extended_community": {
                             "value": false
                           },
-                          "maximum_routes": {
-                            "value": null
-                          },
                           "local_pref": {
                             "value": null
                           },
@@ -242,9 +239,6 @@
                           },
                           "send_extended_community": {
                             "value": false
-                          },
-                          "maximum_routes": {
-                            "value": null
                           },
                           "local_pref": {
                             "value": null
@@ -444,9 +438,6 @@
                         }
                       }
                     }
-                  },
-                  "inline_segment": {
-                    "node": null
                   },
                   "capabilities": {
                     "edges": []
@@ -817,9 +808,6 @@
                       {
                         "node": {
                           "id": "seg-seg-100",
-                          "inline_service": {
-                            "node": null
-                          },
                           "__typename": "ManagedVxlanSegment",
                           "name": {
                             "value": "seg-100"
@@ -898,9 +886,6 @@
                       {
                         "node": {
                           "id": "seg-seg-200",
-                          "inline_service": {
-                            "node": null
-                          },
                           "__typename": "ManagedVxlanSegment",
                           "name": {
                             "value": "seg-200"
@@ -1090,9 +1075,6 @@
                       "segment": {
                         "node": {
                           "id": "seg-seg-100",
-                          "inline_service": {
-                            "node": null
-                          },
                           "__typename": "ManagedVxlanSegment",
                           "name": {
                             "value": "seg-100"
@@ -1200,9 +1182,6 @@
                       "segment": {
                         "node": {
                           "id": "seg-seg-200",
-                          "inline_service": {
-                            "node": null
-                          },
                           "__typename": "ManagedVxlanSegment",
                           "name": {
                             "value": "seg-200"

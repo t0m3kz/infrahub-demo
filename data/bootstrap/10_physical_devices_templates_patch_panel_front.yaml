@@ -1,0 +1,58 @@
+---
+# Passive patch panel templates, part 2 of 2: the FRONT ports. The same templates as part 1
+# (10_physical_devices_templates_patch_panel_rear.yaml), found by `template_name` and given their front ports. The front
+# ports are created unpaired: the generator add_patch_panel pairs each with its rear port (see part 1).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TemplateDcimPatchPanel
+  data:
+    - template_name: PP-24-LC
+      front_ports:
+        kind: TemplateDcimFrontPatchPanelPort
+        parameters:
+          expand_range: true
+        data:
+          - template_name: "PP-24-LC_front_[1-24]"
+            name: "[1-24]"
+            connector: lc-upc
+
+    - template_name: PP-48-LC
+      front_ports:
+        kind: TemplateDcimFrontPatchPanelPort
+        parameters:
+          expand_range: true
+        data:
+          - template_name: "PP-48-LC_front_[1-48]"
+            name: "[1-48]"
+            connector: lc-upc
+
+    - template_name: PP-12-SC
+      front_ports:
+        kind: TemplateDcimFrontPatchPanelPort
+        parameters:
+          expand_range: true
+        data:
+          - template_name: "PP-12-SC_front_[1-12]"
+            name: "[1-12]"
+            connector: sc-upc
+
+    - template_name: PP-24-RJ45
+      front_ports:
+        kind: TemplateDcimFrontPatchPanelPort
+        parameters:
+          expand_range: true
+        data:
+          - template_name: "PP-24-RJ45_front_[1-24]"
+            name: "[1-24]"
+            connector: rj45
+
+    - template_name: PP-CASSETTE-MPO12
+      front_ports:
+        kind: TemplateDcimFrontPatchPanelPort
+        parameters:
+          expand_range: true
+        data:
+          - template_name: "PP-CASSETTE-MPO12_front_[1-48]"
+            name: "[1-48]"
+            connector: lc-upc

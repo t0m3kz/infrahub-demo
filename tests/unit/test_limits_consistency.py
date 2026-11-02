@@ -237,7 +237,6 @@ class TestSetupDataNames:
             "ROLE_GROUP_NAMES",
             "TOPOLOGY_ORCHESTRATOR_GROUPS",
             "APPLICATION_ORCHESTRATOR_GROUPS",
-            "VIRTUAL_COLOCATION_ORCHESTRATOR_GROUPS",
         ],
     )
     def test_every_mapped_group_is_declared_in_the_bootstrap_groups(self, mapping: str, group_names: set[str]) -> None:

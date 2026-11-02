@@ -1,18 +1,25 @@
 """Reconciles the switch ports a VXLAN segment is tagged on, then its VLAN rows.
 
-The ports are derived from the instances of every AppComponent on the segment
+The ports are derived from two places: the instances of every AppComponent on the segment
 (queries/topology/add/segment_components.gql): the interfaces each instance's
-physical host is cabled to (the port-channel for a bonded one). The segment owns
+physical host is cabled to (the port-channel for a bonded one); and, for a segment a firewall context terminates
+(``terminated_on``), the border service ports tagged with that context, the ones facing its HA pair. The segment owns
 them, so the same reconcile runs from both directions that change the answer:
 
   - add_app_component_segment, when a component's instances or segment change;
-  - add_vxlan_segment, when the segment itself is written — creation, its
-    footprints, and an edit of its ``switched_interfaces`` (a port assigned to the
-    segment by hand is removed by this reconcile, unless the segment has no
-    component at all: then there is nothing to compare with and the ports stay).
+  - add_vxlan_segment, when the segment itself is written — creation and its footprints.
 
-Writes RelationshipAdd/RelationshipRemove on the segment's ``switched_interfaces``
-only, untracked: a tagged port belongs to the device's generator, not to a run.
+The edge between a port and a segment is ``segments`` on the PORT (one-sided: the segment has no list of its ports,
+and a change of it re-runs nothing). Provenance is the edge's ``source`` property (generators/helpers/edge_source.py):
+this reconcile writes the ports its components derive with its own account as the source, and removes an edge ONLY
+when its source is that account and the port is no longer derived (an instance moved, a component left, the segment
+has no component any more). An edge with no source was set by a person from the port: no generator removes or changes
+it, whatever the components say. A person's edge on a port that is also derived stays as it is (source unset: it is
+not re-stamped, so it survives a later component leaving); a port a person adds gets its VLAN row at the next run
+of the segment's generators.
+
+Writes RelationshipAdd/RelationshipRemove on the port, untracked: a tagged port belongs to the device's generator, not
+to a run.
 
 The rows (one per device, the MLAG peers of a tagged device included even with no port of the segment, so a dual-homed
 port-channel is tagged on both; generators/vlan_domain.py) decide which switches route the segment, so the same reconcile
@@ -35,12 +42,17 @@ from typing import Any
 
 from utils.app_instances import physical_host
 from utils.data_cleaning import clean_data
+from utils.exchange_transit import FIREWALL_CONTEXT_KIND, SERVICE_CONTEXT_ROLES
 
 from ..far_end import far_end_interfaces
+from ..helpers.edge_source import add_edges_with_source, current_account_id, remove_edges
 from ..helpers.vrf import VrfMixin
-from ..protocols import DcimPhysicalInterface, ManagedVxlanSegment
+from ..protocols import DcimPhysicalInterface
 from ..vlan_domain import VlanDomainMixin, segment_lock_key
 from .endpoint import ENDPOINT_NIC_ROLES
+
+_SWITCHED_PORT_KINDS = frozenset({"DcimPhysicalInterface", "DcimLAGInterface"})
+"""The kinds of DcimSwitchedInterface: the ports that can carry a segment."""
 
 _SEGMENT_COMPONENTS_QUERY_PATH = Path(__file__).resolve().parents[2] / "queries/topology/add/segment_components.gql"
 
@@ -50,6 +62,8 @@ class SegmentPortTagMixin(VrfMixin, VlanDomainMixin):
 
     Expects the host class to provide what VlanDomainMixin does.
     """
+
+    _account_id_cache: str | None = None
 
     async def reconcile_vxlan_segment(self, segment_id: str, segment_name: str) -> tuple[int, int] | None:
         """Tag the segment's ports from its components, reconcile its VLAN rows, then the VRFs and SVIs of the
@@ -64,7 +78,8 @@ class SegmentPortTagMixin(VrfMixin, VlanDomainMixin):
             added, removed = await self._reconcile_segment_interface_tags(
                 segment_id=segment_id,
                 segment_name=segment_name,
-                current_ids=self.tagged_interface_ids(state["segment"]),
+                ports=state["segment"].get("ports") or [],
+                terminated_port_ids=self._terminated_service_port_ids(state["segment"]),
             )
             if added or removed:
                 state = await self._fetch_segment_vlan_state(segment_id)
@@ -73,6 +88,23 @@ class SegmentPortTagMixin(VrfMixin, VlanDomainMixin):
                 state = await self._fetch_segment_vlan_state(segment_id)
             await self.reconcile_vrfs(before | self._row_device_ids(state))
         return added, removed
+
+    @staticmethod
+    def _terminated_service_port_ids(segment: dict[str, Any]) -> set[str]:
+        """The border service ports of the firewall context the segment is terminated on (empty when it is not).
+
+        The ports of the context's ``capabilities`` that are a switch port or a LAG with the firewall service role:
+        the border leaf ports facing the HA pair (the members' own sub-interfaces are virtual interfaces).
+        ``segment`` is the cleaned state segment (queries/topology/add/segment_vlan_domains.gql).
+        """
+        context = segment.get("terminated_on") or {}
+        return {
+            cap["id"]
+            for cap in context.get("capabilities") or []
+            if cap.get("id")
+            and cap.get("typename") in _SWITCHED_PORT_KINDS
+            and cap.get("role") == SERVICE_CONTEXT_ROLES[FIREWALL_CONTEXT_KIND]
+        }
 
     @staticmethod
     def _row_device_ids(state: dict[str, Any] | None) -> set[str]:
@@ -86,32 +118,42 @@ class SegmentPortTagMixin(VrfMixin, VlanDomainMixin):
         )
         return clean_data(result).get("AppComponent") or []
 
+    async def _generator_account_id(self) -> str:
+        """The account of this run's client token, asked once per run (the id every edge this reconcile writes
+        carries as its source)."""
+        if self._account_id_cache is None:
+            self._account_id_cache = await current_account_id(self.client)
+        return self._account_id_cache
+
     async def _reconcile_segment_interface_tags(
         self,
         *,
         segment_id: str,
         segment_name: str,
-        current_ids: set[str],
+        ports: list[dict[str, Any]],
+        terminated_port_ids: set[str],
     ) -> tuple[int, int]:
-        """Make the segment's switch-port tags exactly the customer-facing
-        targets of the instances of EVERY component on the segment: tag the
-        missing ones, untag ports no instance lands on any more (an instance
-        that moved, or a component that left). ``current_ids`` are the
-        physical/port-channel interfaces tagged today. Written with
-        RelationshipAdd/RelationshipRemove on the segment's
-        switched_interfaces — touches only this segment's edge on each
-        port and never enters this run's tracking group.
+        """Make the ports this reconcile owns exactly the customer-facing
+        targets of the instances of EVERY component on the segment plus
+        ``terminated_port_ids`` (the border service ports of the firewall
+        context terminating it): add the
+        missing ones with this run's account as the edge source, remove an edge
+        whose source is that account and that no instance lands on any more (an
+        instance that moved, a component that left, a segment no longer terminated). ``ports`` are the ports
+        on the segment today, ``{"id", "source_id", ...}``
+        (VlanDomainMixin._segment_ports). An edge with another source or none is
+        never removed (a person's port stays, even with no component on the
+        segment), and a port already on the segment is not written again, so a
+        person's edge on a derived port keeps its (empty) source. Written with
+        RelationshipAdd/RelationshipRemove on the port's ``segments`` — touches
+        only this segment's edge on each port and never enters this run's
+        tracking group.
 
-        The segment node is fetched only when there is a tag to add or remove.
+        The account is resolved only when there is something to compare or write.
 
         Returns (interfaces tagged, interfaces untagged).
         """
         components = await self._segment_components(segment_id)
-        if not components:
-            # Nothing names where the segment is wanted, so there is no desired set to compare the tags with:
-            # they are authored (or a component is yet to be added) and stay as they are.
-            self.logger.info(f"Segment {segment_name}: no AppComponent on it — its ports are left as they are")
-            return 0, 0
         # Several components/virtual instances can resolve to the same host.
         device_ids = list(
             dict.fromkeys(
@@ -121,21 +163,24 @@ class SegmentPortTagMixin(VrfMixin, VlanDomainMixin):
                 if (device_id := self._resolve_physical_device_id(instance))
             )
         )
-        desired_ids = await self._customer_facing_target_ids(device_ids)
+        desired_ids = await self._customer_facing_target_ids(device_ids) | terminated_port_ids
 
+        current_ids = {port["id"] for port in ports}
         to_add = sorted(desired_ids - current_ids)
-        to_remove = sorted(current_ids - desired_ids)
-        if to_add or to_remove:
-            segment_obj = await self.client.get(kind=ManagedVxlanSegment, id=segment_id)
-            if to_add:
-                await segment_obj.add_relationships(relation_to_update="switched_interfaces", related_nodes=to_add)
-            if to_remove:
-                await segment_obj.remove_relationships(
-                    relation_to_update="switched_interfaces", related_nodes=to_remove
-                )
+        owned = [port["id"] for port in ports if port.get("source_id") and port["id"] not in desired_ids]
+        to_remove: list[str] = []
+        if to_add or owned:
+            account_id = await self._generator_account_id()
+            to_remove = sorted(
+                port["id"] for port in ports if port.get("source_id") == account_id and port["id"] not in desired_ids
+            )
+            await add_edges_with_source(
+                self.client, node_ids=to_add, relation="segments", peer_id=segment_id, source_id=account_id
+            )
+            await remove_edges(self.client, node_ids=to_remove, relation="segments", peer_id=segment_id)
         self.logger.info(
-            f"Segment {segment_name}: {len(desired_ids)} customer-facing port(s) from {len(components)} "
-            f"component(s) — tagged {len(to_add)}, untagged {len(to_remove)}"
+            f"Segment {segment_name}: {len(desired_ids)} port(s) from {len(components)} "
+            f"component(s) and {len(terminated_port_ids)} firewall service port(s) — tagged {len(to_add)}, untagged {len(to_remove)}"
         )
         return len(to_add), len(to_remove)
 

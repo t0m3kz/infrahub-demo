@@ -5,27 +5,27 @@
 # shared facilities carrying every tenant. A carrier circuit is a pure carrier:
 # it has no role and builds no session. What rides it is a virtual circuit of a
 # kind, listed in ../03_virtual_circuits/ (the DCI sessions of the dark fibres,
-# one Interconnect circuit per fibre) or in ../05_cloud_endpoints/ (the handoff
-# onto the cross-connect). Tenant impact is a traversal, not a circuit: from a
+# one Interconnect circuit per fibre) or the handoffs of ../04_sdwan/.
+# Tenant impact is a traversal,
+# not a circuit: from a
 # fibre or a cage port, circuit -> its ports -> the segments, peerings and
 # circuits on them.
 #
-# Two circuit shapes, and the two connectable kinds the earlier schema commit
-# added exist precisely so both can be expressed:
+# Three circuit shapes, by the physicality of the ends:
 #
-#   dark_fiber    DC <-> colocation cage   (TopologyDataCenter <-> ColocationZone)
-#   cross_connect cage <-> a provider's facility: a cloud region (AWS, Azure) or
-#                 the zone of a cloud-neutral provider (Megaport MCR)
+#   dark_fiber         DC <-> colocation cage   (TopologyDataCenter <-> ColocationZone)
+#   cross_connect      cage <-> the physical router of a provider in its own zone (the Megaport MCR)
+#   virtual_connection cage <-> a port of a cloud transport (AWS Direct Connect, Azure ExpressRoute,
+#                      02_cloud_provider_edges.yml) or the NIC of an Equinix Network Edge router. A cloud region
+#                      has no hardware, so nothing is cabled there; the leg is a virtual service
 #
 # Without the second shape the traversal reaches the cage and stops, which is
 # the DC-boundary blind spot this whole leg exists to close.
 #
-# `locations` lists the cage. The on-ramp edges deploy to their zone (a facility),
-# so add_circuit (generators/topology/circuit.py) derives both ends from the end
-# devices' deployments: the edge's zone, the border leaf's DC, the provider
-# router's cloud region (02_cloud_provider_edges.yml). The cage listed here must
-# be that same zone: add_circuit refuses an authored zone that contradicts the
-# edge's deployment.
+# `locations` lists the cage only. The on-ramp edges deploy to their zone (a facility), so add_circuit
+# (generators/topology/circuit.py) derives the other ends from the end devices: the border leaf's DC and, for a cloud
+# transport (it has a `region`, not a `deployment`), its region. The cage listed here must be the edge's zone:
+# add_circuit refuses an authored zone that contradicts the edge's deployment.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -124,43 +124,64 @@ spec:
         - ["bl-dc1212101", "Ethernet1/36"]
         - ["eg-pa402", "Ethernet1/10"]
 
-    # --- cage <-> cloud region cross-connects --------------------------------
+    # --- cage <-> cloud region transports ---------------------------------
     # The cloud end is the region, not a zone: an AZ is finer than any provider
-    # commits to for a Direct Connect or ExpressRoute hand-off.
+    # commits to for a Direct Connect or ExpressRoute hand-off. The region has no
+    # hardware, so the far end is a port of the provider's transport
+    # (a CloudDirectConnect, 02_cloud_provider_edges.yml) and the carrier is a
+    # provider-delivered virtual_connection. The XC- ids keep the name of the
+    # cross-connect they were before the region lost its fake router.
     - circuit_id: "XC-EQXFR2-AWS-EUC1"
       member_of_groups: [carrier_circuits]
       name: "XC-EQXFR2-AWS-EUC1"
-      circuit_type: cross_connect
+      circuit_type: virtual_connection
       status: active
       bandwidth: 10000
       provider: "P016"
-      description: "Equinix FR2 cage to AWS eu-central-1, shared 10G fabric port"
+      description: "Equinix FR2 cage to AWS eu-central-1, Direct Connect 10G, on the Direct Connect port"
       locations:
         - "FR2"
       capabilities:
         - ["eg-fr201", "Ethernet1/13"]
-        - ["EXT-AWS-DX-FR2", "et-0/0/0"]
+        - ["dx-30all-euc1-fr2", "dxcon-fr2"]
 
-    # No handoff rides this one: no Azure attachment or VIF is modelled for westeurope, so the carrier
-    # (and the stub EXT-AZURE-ER-PA4 it ends on) stays idle, kept as the shape of an unused on-ramp.
-    - circuit_id: "XC-EQXPA4-AZURE-WEU"
+    # The Azure ExpressRoute on-ramp: one virtual connection per ExpressRoute leg, each its own carrier.
+    # The legs land on two different cage edges (eg-pa401, eg-pa402) and on the two ports of the one ExpressRoute
+    # transport (msee-pri, msee-sec), the way Microsoft asks for them; the two carriers share
+    # `redundancy_group`, which is what relates the two connections (one connection per leg).
+    - circuit_id: "XC-EQXPA4-AZURE-WEU-PRI"
       member_of_groups: [carrier_circuits]
-      name: "XC-EQXPA4-AZURE-WEU"
-      circuit_type: cross_connect
+      name: "XC-EQXPA4-AZURE-WEU-PRI"
+      circuit_type: virtual_connection
       status: active
       bandwidth: 10000
+      redundancy_group: "AZURE-WEU-PA4"
       provider: "P016"
-      description: "Equinix PA4 cage to Azure westeurope, shared 10G fabric port"
+      description: "Equinix PA4 cage to Azure westeurope, ExpressRoute primary leg, 10G"
       locations:
         - "PA4"
       capabilities:
         - ["eg-pa401", "Ethernet1/13"]
-        - ["EXT-AZURE-ER-PA4", "et-0/0/0"]
+        - ["er-30all-weu", "msee-pri"]
+
+    - circuit_id: "XC-EQXPA4-AZURE-WEU-SEC"
+      member_of_groups: [carrier_circuits]
+      name: "XC-EQXPA4-AZURE-WEU-SEC"
+      circuit_type: virtual_connection
+      status: active
+      bandwidth: 10000
+      redundancy_group: "AZURE-WEU-PA4"
+      provider: "P016"
+      description: "Equinix PA4 cage to Azure westeurope, ExpressRoute secondary leg, 10G"
+      locations:
+        - "PA4"
+      capabilities:
+        - ["eg-pa402", "Ethernet1/13"]
+        - ["er-30all-weu", "msee-sec"]
 
     # Megaport: the Cloud Router (MCR) of Megaport's Paris facility, reached from the PA4 cage over one
     # cross-connect. The stub EXT-MEGAPORT-MCR1 is deployed to the zone MCR-PAR1 (../../02_colo/megaport/par),
-    # which add_circuit derives as the far end. The handoff HANDOFF-PA4-MEGAPORT-PROD rides this port
-    # (../05_cloud_endpoints/03_megaport_handoff.yml). Equinix sells the cross-connect, Megaport the service.
+    # which add_circuit derives as the far end. Equinix sells the cross-connect, Megaport the service.
     - circuit_id: "XC-EQXPA4-MEGAPORT"
       member_of_groups: [carrier_circuits]
       name: "XC-EQXPA4-MEGAPORT"
@@ -174,3 +195,38 @@ spec:
       capabilities:
         - ["eg-pa401", "Ethernet1/1"]
         - ["EXT-MEGAPORT-MCR1", "et-0/0/0"]
+
+    # --- Equinix Fabric virtual connections ----------------------------------
+    # A provider-delivered virtual connection is a carrier like a cross-connect: Equinix runs it inside its own
+    # platform, so an end may be the virtual NIC of a provider-hosted Network Edge router (no cable) and a port hosts
+    # several of them (checks/carrier_circuit_ports.py). The first one leaves
+    # eg-fr201 on the port that is also cabled to Equinix's own Fabric port (05_cage_cabling.yml); the second lands on
+    # the port (dxcon-amne) of the hosted AWS Direct Connect transport, next to the dedicated one (dxcon-fr2) of
+    # XC-EQXFR2-AWS-EUC1.
+    - circuit_id: "FABRIC-FR2-AMNE01"
+      member_of_groups: [carrier_circuits]
+      name: "FABRIC-FR2-AMNE01"
+      circuit_type: virtual_connection
+      status: active
+      bandwidth: 1000
+      provider: "P016"
+      description: "Equinix Fabric virtual connection, FR2 cage to the Network Edge router eg-am-ne01 in AM-NE, 1G"
+      locations:
+        - "FR2"
+      capabilities:
+        - ["eg-fr201", "Ethernet1/1"]
+        - ["eg-am-ne01", "Ethernet1/1"]
+
+    - circuit_id: "FABRIC-AMNE02-AWS-EUC1"
+      member_of_groups: [carrier_circuits]
+      name: "FABRIC-AMNE02-AWS-EUC1"
+      circuit_type: virtual_connection
+      status: active
+      bandwidth: 1000
+      provider: "P016"
+      description: "Equinix Fabric virtual connection, Network Edge router eg-am-ne02 to AWS eu-central-1 (hosted Direct Connect), 1G"  # yamllint disable-line rule:line-length
+      locations:
+        - "AM-NE"
+      capabilities:
+        - ["eg-am-ne02", "Ethernet1/1"]
+        - ["dx-30all-euc1-amne", "dxcon-amne"]

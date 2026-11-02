@@ -22,15 +22,10 @@ VxlanSegmentGenerator handles:
      app_instance_segment.py, written untracked). The tags are driven by
      AppComponent.instances, one physical device at a time (see
      generators/topology/app_instance_segment.py); a segment
-     with no AppComponent referencing it gets no customer-port assignment at
-     all. Independent devices may reuse the same numeric VLAN ID, since
+     with no AppComponent referencing it gets no generated customer-port
+     assignment (a port a person put on it from the port stays). Independent devices may reuse the same numeric VLAN ID, since
      IEEE 802.1Q VLAN ID has only local significance (unlike VNI, which is
      the real DC-wide/fabric-wide segment identifier).
-  5. Terminate the segment inline when terminate_inline is set: tag the
-     border-leaf ports facing the inline_service HA pair, then give each
-     member a <port>.<vlan> sub-interface with its own address (the gateway
-     is the pair's virtual IP). The segment is the sub-interface's one-sided
-     ``inline_segment``, not an entry of its capabilities.
 
 VNIs are allocated via from_pool. A local segment draws from its parent's
 own vni_pool, independently in every parent. A stretched segment draws ONE VNI
@@ -45,7 +40,6 @@ deployments, avoiding double allocation.
 
 from __future__ import annotations
 
-from ipaddress import ip_network
 from typing import Any
 
 from infrahub_sdk.protocols import CoreIPPrefixPool, CoreNumberPool, IpamNamespace
@@ -56,19 +50,14 @@ from utils.limits import OFFSET_ANYCAST, STRETCHED_VNI_POOL, TENANT_POOL_TEMPLAT
 
 from ..common import CommonGenerator
 from ..connections import CablingMixin
-from ..far_end import far_end_interfaces
 from ..helpers.routing_tag import ensure_segment_routing_tag
 from ..helpers.security_tag import ensure_segment_tag
 from ..helpers.security_zone import ensure_security_zone
 from ..pools import PoolMixin
 from ..protocols import (
-    DcimPhysicalDevice,
-    DcimPhysicalInterface,
     IpamPrefix,
     ManagedSegmentDeployment,
-    ManagedVxlanSegment,
 )
-from ..vlan_domain import SERVICE_PORT_ROLES, segment_lock_key
 from .segment_ports import SegmentPortTagMixin
 
 
@@ -81,8 +70,7 @@ def tenant_pool_name(namespace_name: str) -> str:
 class VxlanSegmentGenerator(PoolMixin, CablingMixin, SegmentPortTagMixin, CommonGenerator):
     """VXLAN segment generator — allocates a VNI from the DC's pool,
     reconciles the segment's LOCAL VLAN ID activations (border gateways of a
-    stretched segment included), and creates inline sub-interfaces when
-    terminate_inline is set. Customer-facing interface assignment is not done here — see
+    stretched segment included). Customer-facing interface assignment is not done here — see
     generators/topology/app_instance_segment.py.
     """
 
@@ -261,12 +249,7 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, SegmentPortTagMixin, Common
         # (both this generator and add_app_component_segment reach it),
         # reconciled from scratch and written untracked — see
         # SegmentPortTagMixin.reconcile_vxlan_segment.
-        # Inline termination tags the border-leaf ports facing the HA pair
-        # first, so the reconciliation gives the segment a VLAN on
-        # them; the HA members' sub-interfaces then take that VLAN.
-        inline_legs = await self._reconcile_inline_service_ports(segment)
         await self.reconcile_vxlan_segment(segment_id, segment_name)
-        await self._create_inline_sub_interfaces(segment, inline_legs)
 
     async def ensure_segment_addressing(self, segment: dict[str, Any]) -> None:
         """Give a gateway-less segment its prefix and anycast gateway, once; never touch an authored gateway.
@@ -476,155 +459,3 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, SegmentPortTagMixin, Common
         except Exception as exc:
             self.logger.error(f"  [{deployment_name}] Failed to create SegmentDeployment for {segment_name}: {exc}")
             return False
-
-    async def _inline_legs(self, segment: dict[str, Any]) -> list[dict[str, Any]]:
-        """Every (HA member port, border-leaf service port) cable of the
-        segment's inline_service pair — where the segment terminates.
-
-        A member port counts when its cable lands on a border-leaf port whose
-        role is a service role (firewall/load-balancer, BORDER_ROLE_FOR_SERVICES):
-        in pbr mode that is the firewall's "uplink", in inline mode the chain
-        end toward the border leaf.
-        """
-        segment_name: str = segment.get("name", "")
-        inline_service = segment.get("inline_service") or {}
-        if not inline_service.get("id"):
-            self.logger.warning(f"Segment '{segment_name}' has terminate_inline=true but no inline_service")
-            return []
-        member_names = {
-            cap["id"]: cap.get("name") or cap["id"] for cap in inline_service.get("capabilities") or [] if cap.get("id")
-        }
-        member_ids = list(member_names)
-        if not member_ids:
-            self.logger.warning(f"Segment '{segment_name}' inline_service has no member devices")
-            return []
-
-        member_ports = await self.client.filters(kind=DcimPhysicalInterface, device__ids=member_ids, include=["cable"])
-        cabled = [port for port in member_ports if getattr(getattr(port, "cable", None), "id", None)]
-        # A cable has exactly two endpoints (min_count = max_count = 2): the far end of a member port is one port.
-        far_end_by_port = await far_end_interfaces(self.client, cabled, include=[])
-        border_ports = {
-            far_end.id: far_end for far_end in far_end_by_port.values() if far_end.role.value in SERVICE_PORT_ROLES
-        }
-        if not border_ports:
-            self.logger.error(
-                f"Segment '{segment_name}': no inline_service member port is cabled to a border-leaf service port"
-            )
-            return []
-
-        border_device_ids = sorted({port.device.id for port in border_ports.values()})
-        border_devices = {
-            device.id: device
-            for device in await self.client.filters(
-                kind=DcimPhysicalDevice, ids=border_device_ids, include=["capabilities"]
-            )
-        }
-
-        legs: list[dict[str, Any]] = []
-        for port in sorted(cabled, key=lambda p: (p.device.id, p.name.value)):
-            border_port = far_end_by_port.get(port.id)
-            if border_port is None or border_port.id not in border_ports:
-                continue
-            legs.append(
-                {
-                    "member_port": port,
-                    "member_device_id": port.device.id,
-                    "member_device_name": member_names.get(port.device.id, port.device.id),
-                    "border_port_id": border_port.id,
-                    "border_device": border_devices[border_port.device.id],
-                }
-            )
-        return legs
-
-    async def _reconcile_inline_service_ports(self, segment: dict[str, Any]) -> list[dict[str, Any]]:
-        """Make the segment's border-leaf service-port tags exactly the ports
-        facing its inline_service members — none unless terminate_inline —
-        and return those legs. The tags put the border leaves
-        in scope (reconcile_vxlan_segment then allocates the VLAN the
-        HA members' sub-interfaces take) and make the border leaf render the
-        port as a trunk carrying it. Written with RelationshipAdd/Remove,
-        untracked, under the segment lock; customer-facing tags are
-        app_instance_segment.py's and are left alone.
-        """
-        segment_id: str = segment.get("id", "")
-        segment_name: str = segment.get("name", "")
-        legs = await self._inline_legs(segment) if segment.get("terminate_inline") else []
-        desired = {leg["border_port_id"] for leg in legs}
-
-        async with self.resource_lock(segment_lock_key(segment_id)):
-            state = await self._fetch_segment_vlan_state(segment_id)
-            current = self.tagged_interface_ids(state["segment"], service_ports=True) if state else set()
-            to_add = sorted(desired - current)
-            to_remove = sorted(current - desired)
-            if to_add or to_remove:
-                segment_obj = await self.client.get(kind=ManagedVxlanSegment, id=segment_id)
-                if to_add:
-                    await segment_obj.add_relationships(relation_to_update="switched_interfaces", related_nodes=to_add)
-                if to_remove:
-                    await segment_obj.remove_relationships(
-                        relation_to_update="switched_interfaces", related_nodes=to_remove
-                    )
-        if to_add or to_remove:
-            self.logger.info(
-                f"Segment {segment_name}: border service ports — tagged {len(to_add)}, untagged {len(to_remove)}"
-            )
-        return legs
-
-    async def _create_inline_sub_interfaces(self, segment: dict[str, Any], legs: list[dict[str, Any]]) -> None:
-        """One <member port>.<vlan> DcimVirtualInterface per inline leg,
-        pointing at the segment through ``inline_segment``, owned by this run (dropped legs are cleaned up
-        with it).
-
-        - VLAN: the segment's VLAN ID on the facing border leaf,
-          so both ends of the cable tag it the same.
-        - Address: the member's OWN address, reserved from the segment's
-          prefix (per-port identifier, so a re-run keeps it). The segment
-          gateway is the HA pair's virtual IP and is never put on a member —
-          the device transforms render it per vendor (floating/standby/VRRP).
-        """
-        if not legs:
-            return
-        segment_id: str = segment.get("id", "")
-        segment_name: str = segment.get("name", "")
-
-        prefix = ((segment.get("gateway") or {}).get("ip_prefix")) or {}
-        pool = None
-        prefix_length = 0
-        if prefix.get("id") and prefix.get("prefix"):
-            prefix_length = ip_network(prefix["prefix"], strict=False).prefixlen
-            pool = await self.ensure_prefix_address_pool(
-                pool_name=f"inline-{segment_id}-pool",
-                prefix_id=prefix["id"],
-                prefix_length=prefix_length,
-                namespace_id=(prefix.get("ip_namespace") or {}).get("id"),
-            )
-        else:
-            self.logger.warning(f"Segment '{segment_name}' has no gateway prefix — sub-interfaces get no address")
-
-        vlan_by_device = await self.segment_vlan_by_device(segment_id)
-        for leg in legs:
-            port = leg["member_port"]
-            device_id: str = leg["member_device_id"]
-            vlan_id = vlan_by_device.get(leg["border_device"].id)
-            if vlan_id is None:
-                self.logger.error(
-                    f"Segment '{segment_name}': no VLAN on border leaf {leg['border_device'].name.value} "
-                    f"— cannot terminate it on {port.name.value}"
-                )
-                continue
-            ip_id = None
-            if pool is not None:
-                ip_id = await self.allocate_prefix_address(
-                    pool=pool,
-                    identifier=f"{segment_id}-{port.id}-inline",
-                    prefix_length=prefix_length,
-                    description=f"Inline {segment_name} — {port.name.value}",
-                )
-            await self.ensure_vlan_subinterface(
-                device_id=device_id,
-                device_name=leg["member_device_name"],
-                trunk_iface=port,
-                vlan_id_value=vlan_id,
-                inline_segment_id=segment_id,
-                ip_address_id=ip_id,
-            )

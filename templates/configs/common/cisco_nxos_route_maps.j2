@@ -11,18 +11,22 @@
 {%- if capabilities is not defined or capabilities.bgp_enabled is not defined or capabilities.bgp_enabled %}
 {%- for bgp_config in bgp or [] %}
 {%- for session in bgp_config.sessions %}
-{%- if session.get('local_pref') %}
-route-map {{ session.name }}-LOCAL-PREF-IN permit 10
-  set local-preference {{ session.local_pref }}
+{%- if session.policy.inbound.own %}
+route-map {{ session.policy.inbound.own.name }} permit 10
+  set local-preference {{ session.policy.inbound.own.local_pref }}
 !
 {%- endif %}
-{%- if session.get('med') %}
-route-map {{ session.name }}-MED-OUT permit 10
-  set metric {{ session.med }}
+{%- if session.policy.outbound.own %}
+route-map {{ session.policy.outbound.own.name }} permit 10
+  set metric {{ session.policy.outbound.own.med }}
 !
 {%- endif %}
 {%- endfor %}
 {%- endfor %}
+{#- The route protection's prefix-lists and route-maps (session.policy.filters): common/bgp_filter_objects.j2, which
+    carries the evidence of every line. The EVPN ones (U) only when attached. #}
+{%- from 'common/bgp_filter_objects.j2' import bgp_filter_objects %}
+{{- bgp_filter_objects(bgp, '  ', true) }}
 {%- endif %}
 route-map RM-CONN-2-BGP permit 10
   match interface {{ ([loopback_name] + (vxlan.multisite.advertise_interfaces if vxlan and vxlan.multisite else [])) | unique | join(' ') }}

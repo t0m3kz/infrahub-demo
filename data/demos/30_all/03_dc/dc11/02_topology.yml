@@ -23,6 +23,7 @@ spec:
       controllers:
         - "DC11-PANORAMA1"
         - "DC11-NSADM1"
+      routing_filter_enforce: true
       member_of_groups:
         - topologies_dc
       children:

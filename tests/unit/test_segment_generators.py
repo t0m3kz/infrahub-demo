@@ -11,8 +11,7 @@ for each resolved parent (VNI-and-status only), followed by border-gateway
 realization for a stretched segment (_realize_border_gateways —
 customer-facing interface assignment is driven by AppComponent.instances
 instead, see generators/topology/app_instance_segment.py and
-tests/unit/test_app_instance_segment_generator.py) and inline sub-interface
-creation.
+tests/unit/test_app_instance_segment_generator.py).
 
 For a local segment vni_pool is read straight from the vxlan_segment query's
 TopologySegmentHosting parent fragment (queries/topology/add/vxlan_segment.gql)
@@ -56,7 +55,6 @@ class TestVxlanSegmentGeneratorGenerate:
 
     def test_empty_response_logs_error(self):
         gen = _make_gen()
-        gen._create_inline_sub_interfaces = AsyncMock()
         data = {"ManagedVxlanSegment": {"edges": []}}
         asyncio.run(gen.generate(data))
         gen.logger.error.assert_called_once()
@@ -64,7 +62,6 @@ class TestVxlanSegmentGeneratorGenerate:
 
     def test_missing_segment_id_logs_error(self):
         gen = _make_gen()
-        gen._create_inline_sub_interfaces = AsyncMock()
         # id="" triggers the "missing id or name" guard
         data = _seg_response(seg_id="", seg_name="vxlan-1000", deployments=[_DEP_1])
         asyncio.run(gen.generate(data))
@@ -73,7 +70,6 @@ class TestVxlanSegmentGeneratorGenerate:
 
     def test_no_deployments_logs_error(self):
         gen = _make_gen()
-        gen._create_inline_sub_interfaces = AsyncMock()
         data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[])
         asyncio.run(gen.generate(data))
         gen.logger.warning.assert_called_once()
@@ -88,7 +84,6 @@ class TestVxlanSegmentGeneratorGenerate:
         """Two deployments produce two _activate_segment_in_deployment calls."""
         gen = _make_gen()
         gen._activate_segment_in_deployment = AsyncMock()
-        gen._create_inline_sub_interfaces = AsyncMock()
 
         data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1, _DEP_2])
         asyncio.run(gen.generate(data))
@@ -104,7 +99,6 @@ class TestVxlanSegmentGeneratorGenerate:
         """vni_pool from the query's parent fragment is forwarded as-is."""
         gen = _make_gen()
         gen._activate_segment_in_deployment = AsyncMock()
-        gen._create_inline_sub_interfaces = AsyncMock()
 
         data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1])
         asyncio.run(gen.generate(data))
@@ -119,7 +113,6 @@ class TestVxlanSegmentGeneratorGenerate:
         gen.client.get = AsyncMock(return_value=MagicMock(id="pool-global"))
         gen.client.filters = AsyncMock(return_value=[])
         gen._activate_segment_in_deployment = AsyncMock()
-        gen._create_inline_sub_interfaces = AsyncMock()
 
         data = _seg_response(
             seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1, _DEP_2], stretch_scope="global"
@@ -135,7 +128,6 @@ class TestVxlanSegmentGeneratorGenerate:
         gen = _make_gen()
         gen.client.get = AsyncMock(return_value=None)
         gen._activate_segment_in_deployment = AsyncMock()
-        gen._create_inline_sub_interfaces = AsyncMock()
 
         data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1], stretch_scope="global")
         asyncio.run(gen.generate(data))
@@ -152,7 +144,6 @@ class TestVxlanSegmentGeneratorGenerate:
         existing_dep.deployment = None
         gen.client.filters = AsyncMock(return_value=[existing_dep])
         gen._activate_segment_in_deployment = AsyncMock()
-        gen._create_inline_sub_interfaces = AsyncMock()
 
         data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1, _DEP_2])
         asyncio.run(gen.generate(data))
@@ -165,7 +156,6 @@ class TestVxlanSegmentGeneratorGenerate:
         """A customer deployment entry with id='' is skipped; only the valid one triggers activation."""
         gen = _make_gen()
         gen._activate_segment_in_deployment = AsyncMock()
-        gen._create_inline_sub_interfaces = AsyncMock()
 
         data = {
             "ManagedVxlanSegment": {
@@ -196,20 +186,17 @@ class TestVxlanSegmentGeneratorGenerate:
         assert gen._activate_segment_in_deployment.call_count == 1
         assert gen._activate_segment_in_deployment.call_args.kwargs["deployment_id"] == "dc-1"
 
-    def test_generate_reconciles_vlan_domains_and_creates_inline_interfaces(self):
-        """generate() activates each deployment, reconciles the segment's VLAN
-        domain activations (local or stretched alike), and creates inline
-        sub-interfaces."""
+    def test_generate_reconciles_vlan_domains(self):
+        """generate() activates each deployment and reconciles the segment's VLAN
+        domain activations (local or stretched alike)."""
         gen = _make_gen()
         gen._activate_segment_in_deployment = AsyncMock()
-        gen._create_inline_sub_interfaces = AsyncMock()
 
         data = _seg_response(seg_id="seg-3", seg_name="vxlan-2000", deployments=[_DEP_1])
         asyncio.run(gen.generate(data))
 
         gen._activate_segment_in_deployment.assert_awaited_once()
         gen.reconcile_vxlan_segment.assert_awaited_once_with("seg-3", "vxlan-2000")
-        gen._create_inline_sub_interfaces.assert_awaited_once()
 
     def test_missing_vni_pool_waits_on_parent_dc_generators(self):
         """A target deployment with no vni_pool (its own add_dc/dc_pod_cascade,
@@ -217,7 +204,6 @@ class TestVxlanSegmentGeneratorGenerate:
         every parent generator before _resolve_target_deployments is retried."""
         gen = _make_gen()
         gen._activate_segment_in_deployment = AsyncMock()
-        gen._create_inline_sub_interfaces = AsyncMock()
 
         dep_no_pool = {"id": "cust-1", "name": "C001-P-DC1", "parent": {"id": "dc-1", "name": "DC-1"}}
         data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[dep_no_pool])
@@ -232,7 +218,6 @@ class TestVxlanSegmentGeneratorGenerate:
         creates its vni_pool) — not on its parent, which hosts nothing."""
         gen = _make_gen()
         gen._activate_segment_in_deployment = AsyncMock()
-        gen._create_inline_sub_interfaces = AsyncMock()
 
         office_no_pool = {"id": "office-1", "name": "C005-OFFICE", "vni_pool": None}
         data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[office_no_pool])
@@ -246,7 +231,6 @@ class TestVxlanSegmentGeneratorGenerate:
         """The SegmentDeployment goes on the office footprint and draws the VNI from its vni_pool."""
         gen = _make_gen()
         gen._activate_segment_in_deployment = AsyncMock(return_value=True)
-        gen._create_inline_sub_interfaces = AsyncMock()
 
         office = {
             "id": "office-1",
@@ -268,7 +252,6 @@ class TestVxlanSegmentGeneratorGenerate:
         before target deployments are re-resolved."""
         gen = _make_gen()
         gen._activate_segment_in_deployment = AsyncMock()
-        gen._create_inline_sub_interfaces = AsyncMock()
 
         refreshed_payload = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1])
         gen.wait_for_parent_generator_and_refetch = AsyncMock(side_effect=[refreshed_payload])
@@ -287,7 +270,6 @@ class TestVxlanSegmentGeneratorGenerate:
         """The kind is the segment's real typename and the environment is its own."""
         gen = _make_gen()
         gen._activate_segment_in_deployment = AsyncMock()
-        gen._create_inline_sub_interfaces = AsyncMock()
 
         data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1])
         node = data["ManagedVxlanSegment"]["edges"][0]["node"]
@@ -330,7 +312,6 @@ class TestVxlanSegmentGeneratorGenerate:
         monkeypatch.setattr("generators.topology.segment.ensure_segment_tag", ensure_tag)
         gen = _make_gen()
         gen._activate_segment_in_deployment = AsyncMock(side_effect=lambda **kw: order.append("activate"))
-        gen._create_inline_sub_interfaces = AsyncMock()
 
         asyncio.run(gen.generate(_seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1])))
 
@@ -365,7 +346,6 @@ class TestVxlanSegmentGeneratorGenerate:
         monkeypatch.setattr("generators.topology.segment.ensure_segment_routing_tag", ensure_routing)
         gen = _make_gen()
         gen._activate_segment_in_deployment = AsyncMock(side_effect=lambda **kw: order.append("activate"))
-        gen._create_inline_sub_interfaces = AsyncMock()
         data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1])
         data["ManagedVxlanSegment"]["edges"][0]["node"]["routing_tag"] = {"value": 12}
 

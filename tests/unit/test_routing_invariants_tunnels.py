@@ -5,8 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from tests.integration.demo_data import relationship, relationship_names
-from tests.unit.test_circuit_query_shapes import _QUERIES, _selected_paths
-from tests.unit.test_routing_invariants_check import (
+from tests.unit.routing_invariants_helpers import (
     _CUSTOMER,
     _PROVIDER,
     _block,
@@ -17,6 +16,7 @@ from tests.unit.test_routing_invariants_check import (
     _run,
     _v,
 )
+from tests.unit.test_circuit_query_shapes import _QUERIES, _selected_paths
 
 _OTHER_CUSTOMER = ("OrganizationCustomer", "C001", "Nordix (C001)")
 _ACME = "198.18.0.0/24"
@@ -30,11 +30,12 @@ def _tunnel(
     *prefixes: dict[str, Any],
     ends: tuple[str, ...] = (_GW1, "EXT-ACME-EDGE1"),
 ) -> dict[str, Any]:
-    """A TopologySessionCircuit in the routing_invariants shape: owner, end-port devices, registered prefixes."""
+    """A TopologySessionCircuit in the routing_invariants shape: the office of ``owner`` in its locations (the tunnel
+    stores no owner; a second location is no office), end-port devices, registered prefixes."""
     return {
         "id": f"tunnel-{name}",
         "name": _v(name),
-        "owner": _owner(owner),
+        "locations": {"edges": [{"node": {"owner": _owner(owner)}}, {"node": {}}]},
         "capabilities": {"edges": [{"node": {"device": {"node": {"name": _v(device)}}}} for device in ends]},
         "registered_prefixes": {"edges": [{"node": prefix} for prefix in prefixes]},
     }
@@ -115,6 +116,21 @@ class TestTunnelOwner:
         check = _run(TopologySessionCircuit=[_tunnel("T", None, _block(_ACME))])
         assert len(_errors_with(check, "tunnel 'T' registers prefixes")) == 1
 
+    def test_a_tunnel_between_offices_of_two_owners_is_an_error(self) -> None:
+        """Two customers' offices on one tunnel: no single owner can be derived."""
+        tunnel = _tunnel("T", _CUSTOMER, _block(_ACME))
+        tunnel["locations"]["edges"].append({"node": {"owner": _owner(_OTHER_CUSTOMER)}})
+        errors = _errors_with(_run(TopologySessionCircuit=[tunnel]), "tunnel 'T' registers prefixes")
+        assert len(errors) == 1
+        assert "no single owner" in errors[0]
+        assert "different owners" in errors[0]
+
+    def test_an_office_pair_of_one_owner_is_fine(self) -> None:
+        """Both locations are offices of the same customer: that customer owns the tunnel."""
+        tunnel = _tunnel("T", _CUSTOMER, _block(_ACME))
+        tunnel["locations"]["edges"].append({"node": {"owner": _owner(_CUSTOMER)}})
+        assert _errors_with(_run(TopologySessionCircuit=[tunnel]), "tunnel 'T' registers prefixes") == []
+
     def test_a_tunnel_without_prefixes_needs_no_owner(self) -> None:
         """An inventory tunnel (the office's own SD-WAN tunnel) that registers nothing is not held to the rule."""
         check = _run(TopologySessionCircuit=[_tunnel("T", None)])
@@ -142,7 +158,7 @@ class TestTunnelOwnershipConflicts:
         assert len(errors) == 1
         assert _ACME in errors[0]
         assert "more than one owner" in errors[0]
-        assert "SD-WAN gateway" in errors[0]
+        assert f"behind {_GW1}" in errors[0]
 
     def test_a_prefix_behind_two_gateways_is_a_conflict(self) -> None:
         """One owner's range registered by tunnels at two gateways is reachable through two sessions."""
@@ -208,18 +224,19 @@ class TestOfficesRegisterSomething:
 
 
 def test_the_query_selects_what_the_tunnel_rules_read() -> None:
-    """Owner, end-port devices and registered prefixes with their namespace, on real schema fields."""
+    """The office owner in locations, end-port devices and registered prefixes with their namespace, on real fields."""
     selected = _selected_paths(_QUERIES / "validation" / "routing_invariants.gql", "TopologySessionCircuit")
     reads = [
         "name",
-        "owner.org_id",
+        "locations.owner.org_id",
         "capabilities.device.name",
         "registered_prefixes.prefix",
         "registered_prefixes.ip_namespace.name",
         "registered_prefixes.ip_namespace.namespace_type",
     ]
     assert not [item for item in reads if item not in selected]
-    assert {"owner", "registered_prefixes", "capabilities"} <= relationship_names("TopologySessionCircuit")
+    assert {"locations", "registered_prefixes", "capabilities"} <= relationship_names("TopologySessionCircuit")
+    assert "owner" not in relationship_names("TopologySessionCircuit")
     definition = relationship("TopologySessionCircuit", "registered_prefixes")
     assert definition is not None
     assert definition["peer"] == "IpamPrefix"

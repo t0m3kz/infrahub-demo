@@ -21,8 +21,8 @@
 {%- endif -%}
 
 {#- Gateway SVIs: VRF binding, anycast flag and the gateway address(es). A
-    terminate_inline VLAN has no SVI (its HA pair is the L3 hop, see sonic_common.j2). -#}
-{%- for vlan in vlans | default([]) if not vlan.terminate_inline and (vlan.gateway_ip or vlan.gateway_ipv6) -%}
+    terminated VLAN has no SVI (its firewall pair is the L3 hop, see sonic_common.j2). -#}
+{%- for vlan in vlans | default([]) if not vlan.terminated and (vlan.gateway_ip or vlan.gateway_ipv6) -%}
 {%- set svi = 'Vlan' ~ vlan.vlan_id -%}
 {%- set entry = dict(vlan_interfaces.get(svi) or {}) -%}
 {%- if vlan.vrf -%}

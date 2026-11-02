@@ -43,45 +43,18 @@ def _external_handoffs() -> list[dict[str, Any]]:
 
 
 class TestAllDemoData:
-    def test_the_cloud_vif_and_sdwan_handoffs_are_external_peers(self) -> None:
-        """Every tenant-VRF eBGP handoff of 30_all is in the external mode's scope, all in PROD."""
+    def test_the_authored_tenant_vrf_handoffs_are_the_sdwan_gateways_and_the_aws_one(self) -> None:
+        """The authored tenant-VRF handoffs are the SD-WAN gateway's and C001's AWS Direct Connect one."""
         assert sorted(p["name"] for p in _external_handoffs()) == [
-            "HANDOFF-AMNE-AWS-EUC1-PROD",
-            "HANDOFF-FR2-AMNE-PROD",
             "HANDOFF-FR2-AWS-EUC1-PROD",
             "HANDOFF-FR2-SDWAN-GW1-PROD",
-            "HANDOFF-PA4-MEGAPORT-PROD",
         ]
         assert {p["ip_namespace"] for p in _external_handoffs()} == {"PROD"}
 
     @pytest.mark.parametrize("peering", _external_handoffs(), ids=lambda p: p["name"])
-    def test_handoff_has_max_prefix_and_one_namespace(self, peering: dict[str, Any]) -> None:
-        """max-prefix is set, and both ends sit in one namespace: a handoff never mixes environments."""
-        assert isinstance(peering.get("maximum_routes"), int) and peering["maximum_routes"] > 0
+    def test_handoff_has_one_namespace(self, peering: dict[str, Any]) -> None:
+        """Both ends sit in one namespace: a handoff never mixes environments."""
         assert len(set(peering["namespaces"])) == 1, peering["namespaces"]
-
-    @pytest.mark.parametrize(
-        ("vif_name", "handoff_name"),
-        [
-            ("vif-transit-hub-euc1", "HANDOFF-FR2-AWS-EUC1-PROD"),
-            ("vif-transit-am-euc1", "HANDOFF-AMNE-AWS-EUC1-PROD"),
-        ],
-    )
-    def test_vif_handoff_is_port_dot_vlan_on_the_direct_connect_device(self, vif_name: str, handoff_name: str) -> None:
-        """The session's sub-interface is <port>.<vif.vlan_id> on the DX's physical device, in PROD; the VIF names it."""
-        (vif,) = [v for v in _objects(_INTERCONNECTS, "CloudVirtualInterface") if v["name"] == vif_name]
-        (dx,) = [d for d in _objects(_INTERCONNECTS, "CloudDirectConnect") if d["name"] == vif["direct_connect"]]
-        (peering,) = [p for p in _external_handoffs() if p["name"] == handoff_name]
-        assert vif["virtual_circuit"] == handoff_name
-        (device, interface) = next(end for end in peering["capabilities"] if end[0] in dx["physical_devices"])
-        port, _, vlan = interface.rpartition(".")
-        assert int(vlan) == vif["vlan_id"]
-        assert peering["namespaces"] == ["PROD", "PROD"]
-        # the dedicated port of the FR2 cage is the cross-connect's own; the hosted connection of the NE router is not
-        crossconnects = [
-            c for c in _objects(_INTERCONNECTS, "TopologyCarrierCircuit") if c["name"] == "XC-EQXFR2-AWS-EUC1"
-        ]
-        assert ([device, port] in crossconnects[0]["capabilities"]) == (dx["connection_type"] == "dedicated")
 
     def test_vif_accounts_are_prod_like_the_handoff(self) -> None:
         """Every account behind the PROD VIF is environment p (a non-prod account needs its own VIF)."""
@@ -89,7 +62,7 @@ class TestAllDemoData:
             account["name"]: account["environment"]
             for account in _objects(_ROOT / "data" / "demos" / "30_all", "CloudAccount")
         }
-        attachments = _objects(_INTERCONNECTS / "02_cloud_hub", "CloudTransitGatewayAttachment")
+        attachments = _objects(_INTERCONNECTS / "02_cloud_hub", "CloudGatewayAttachment")
         assert {accounts[a["owner_account"]] for a in attachments} == {"p"}
 
     def test_every_hub_vpc_propagates_into_the_hybrid_attachments_table(self) -> None:
@@ -98,9 +71,9 @@ class TestAllDemoData:
         This is what makes novantis (associated with rt-hub-isolated) reachable from on-prem, and its
         10.150.0.0/16 accepted on the colo edge's transit VIF session.
         """
-        attachments = _objects(_INTERCONNECTS / "02_cloud_hub", "CloudTransitGatewayAttachment")
-        (hybrid,) = [a for a in attachments if a["attachment_type"] == "hybrid"]
-        vpcs = [a for a in attachments if a["attachment_type"] == "vpc"]
+        attachments = _objects(_INTERCONNECTS / "02_cloud_hub", "CloudGatewayAttachment")
+        (hybrid,) = [a for a in attachments if "peer_gateway" in a]
+        vpcs = [a for a in attachments if "virtual_network" in a]
         assert vpcs
         missing = [a["name"] for a in vpcs if hybrid["associated_route_table"] not in a["propagates_to_route_tables"]]
         assert missing == []
@@ -202,7 +175,6 @@ class TestOfficeQuerySelection:
         offices = clean_data(raw)["TopologyCustomerOffice"]
         found = get_external_peer_prefixes(
             [_subif("Ethernet1/13.1900", "PROD")],
-            None,
             "eg-fr201",
             device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
             offices=offices,

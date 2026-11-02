@@ -1,0 +1,34 @@
+# peering interfaces
+  dx-c900-fra-lag:lag1.1000 [private] on lag1 gateway dxgw-c900 peer AS 64512 advertises []
+  dx-c900-fra-lag:lag1.1100 [private] on lag1 gateway vgw-c900-euc1 peer AS 64512 advertises []
+  er-c900-weu:er-c900-weu-pri [private] on msee-pri gateway ergw-c900-weu peer AS 12076 advertises []
+  er-c900-weu:er-c900-weu-sec [private] on msee-sec gateway ergw-c900-weu peer AS 12076 advertises []
+  ic-c900-fra-1:gcp-c900-vlan-att-1 [private] on ic-port-1 gateway cr-c900-euw3 peer AS 16550 advertises []
+  ic-ded-c900-fra:gcp-c900-ded-1 [private] on ic-dedicated-port gateway cr-c900-euw3 peer AS 16550 advertises []
+  vpn-c900-aws-euc1:Tunnel1 [private] on None gateway None peer AS 64512 advertises []
+  vpn-c900-aws-euc1:Tunnel2 [private] on None gateway None peer AS 64512 advertises []
+  webex-c900-fra-xc:webex-c900-fra [saas] on wbx-port-1 gateway None peer AS 13445 advertises []
+  zscaler-c900-muc:Tunnel1 [saas] on None gateway None peer AS None advertises []
+# gateways
+  cgw-c900-dc90 [customer] AS 4200090001
+  cr-c900-euw3 [edge] AS 16550
+  dxgw-c900 [edge] AS None
+  ergw-c900-weu [edge] AS None
+  tgw-c900-euc1 [hub] AS 64512
+  vgw-c900-euc1 [edge] AS None
+# attachments
+  cra-c900-euw3: allowed []
+  ergwa-c900-weu: allowed []
+  tgwa-c900-dxgw: allowed ['10.200.0.0/16']
+  tgwa-c900-vpc: allowed []
+  vgwa-c900-vpc: allowed []
+# transports
+  dx-c900-fra-lag: {'port': ['dxcon-1a', 'dxcon-1b'], 'lag': ['lag1'], 'vif': ['lag1.1000', 'lag1.1100']}
+  er-c900-weu: {'port': ['msee-pri', 'msee-sec'], 'lag': [], 'vif': ['er-c900-weu-pri', 'er-c900-weu-sec']}
+  ic-c900-fra-1: {'port': ['ic-port-1'], 'lag': [], 'vif': ['gcp-c900-vlan-att-1']}
+  ic-ded-c900-fra: {'port': ['ic-dedicated-port'], 'lag': [], 'vif': ['gcp-c900-ded-1']}
+  s3-c900-euc1-pub: {'port': ['pub-1'], 'lag': [], 'vif': []}
+  vpn-c900-aws-euc1: {'port': [], 'lag': [], 'vif': ['Tunnel1', 'Tunnel2']}
+  webex-c900-fra-pub: {'port': ['pub-1'], 'lag': [], 'vif': []}
+  webex-c900-fra-xc: {'port': ['wbx-port-1'], 'lag': [], 'vif': ['webex-c900-fra']}
+  zscaler-c900-muc: {'port': [], 'lag': [], 'vif': ['Tunnel1']}

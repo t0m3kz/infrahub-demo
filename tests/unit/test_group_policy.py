@@ -412,6 +412,15 @@ class TestQueries:
         "ManagedNetworkSegment",
         "SecurityTag",
     )
+    BGP_ROOTS = (
+        "DcimVirtualInterface",
+        "environment_prefixes_prod",
+        "environment_prefixes_non_prod",
+        "environment_prefixes_internet",
+        "environment_prefixes_management",
+        "ManagedVRF",
+        "ManagedVxlanSegment",
+    )
     PLACEMENT_SPREAD = "      ...SecurityTagPlacementFields\n"
 
     @pytest.mark.parametrize("query", DEVICE_QUERIES)
@@ -424,7 +433,10 @@ class TestQueries:
         reference = self._roots((root_dir / self.DEVICE_QUERIES[0]).read_text())
         device = self._roots((root_dir / query).read_text())
         assert list(device)[0] == "DcimDevice"
-        assert list(device)[1:] == list(self.FLEET_ROOTS)
+        fleet = len(self.FLEET_ROOTS)
+        assert list(device)[1 : 1 + fleet] == list(self.FLEET_ROOTS)
+        # What follows the fleet roots is the BGP route protection's (queries/config/*.gql): VIPs, prefixes, VRFs.
+        assert set(list(device)[1 + fleet :]) <= set(self.BGP_ROOTS)
         assert {key: device[key] for key in self.FLEET_ROOTS} == {key: reference[key] for key in self.FLEET_ROOTS}
         assert self.PLACEMENT_SPREAD in device["SecurityTag"]
 

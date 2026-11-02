@@ -9,7 +9,7 @@ from typing import Any
 from transforms.helpers.firewall import _context_leg_ip
 from transforms.helpers.policy import rule_selector, segment_flows
 from utils.exchange_transit import MANAGEMENT_TYPE, exchange_peer_zones
-from utils.segment_addressing import routed_segment_namespace, segment_prefix
+from utils.segment_addressing import is_terminated, segment_namespace, segment_prefix
 
 
 def _segment_deployment_ids(segment: dict[str, Any]) -> list[str]:
@@ -114,10 +114,12 @@ def get_customer_pbr_rules(
     selector in the segment's own VRF bypasses that CIDR too; one in another
     VRF (or with no namespace) is redirected, and so is its reply.
 
-    The one exception is an inspected flow: a permit with a security
+    The exceptions are an inspected flow: a permit with a security
     profile between two segments served by the SAME context is not
     bypassed on either side, so both directions cross that context
-    (_needs_firewall). Between contexts every permit stays on the fabric. Not
+    (_needs_firewall); and a flow to or from a segment a firewall context
+    terminates (``terminated_on``): the fabric has no route to its prefix
+    (no SVI), so a bypass would drop it. Between contexts every permit stays on the fabric. Not
     filtered by owner: a cross-owner permit bypasses PBR the same as a
     same-owner one, since intra- and inter-customer traffic use
     one unified default-redirect model.
@@ -183,12 +185,12 @@ def get_customer_pbr_rules(
 
         # A segment living in the MANAGEMENT VRF is a service network: tenants reach
         # it through their context, it is never itself redirected to one.
-        if routed_segment_namespace(seg).get("namespace_type") == MANAGEMENT_TYPE:
+        if segment_namespace(seg).get("namespace_type") == MANAGEMENT_TYPE:
             continue
 
         deployment_ids = _segment_deployment_ids(seg)
 
-        context_nexthop_by_deployment, shared_nexthop, serving = _nexthops(routed_segment_namespace(seg).get("name"))
+        context_nexthop_by_deployment, shared_nexthop, serving = _nexthops(segment_namespace(seg).get("name"))
         fw_nexthop = _redirect_nexthop(deployment_ids, context_nexthop_by_deployment, shared_nexthop)
         if fw_nexthop is None:
             continue
@@ -201,7 +203,7 @@ def get_customer_pbr_rules(
         bypass: set[str] = set()
         via_firewall: set[str] = set()
 
-        own_namespace = routed_segment_namespace(seg).get("name")
+        own_namespace = segment_namespace(seg).get("name")
 
         def _classify(rule: dict[str, Any], side: str) -> None:
             peer = rule.get(f"{side}_segment")
@@ -214,7 +216,7 @@ def get_customer_pbr_rules(
                 if not selector or selector[1] != own_namespace:
                     return
                 prefix = selector[0]
-            if inspected and _needs_firewall(rule, fw_nexthop, peer, serving):
+            if (peer and is_terminated(peer)) or (inspected and _needs_firewall(rule, fw_nexthop, peer, serving)):
                 via_firewall.add(prefix)
             elif ((peer or {}).get("security_zone") or {}).get("name") not in peer_zones:
                 # An exchange peer's zone (INTERNET, MANAGEMENT) is never bypassed:

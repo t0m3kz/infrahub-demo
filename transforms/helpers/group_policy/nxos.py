@@ -36,7 +36,6 @@ from transforms.helpers.group_policy.model import (
 from utils.app_instances import HOSTED_INSTANCE_TYPENAMES, physical_host
 from utils.exchange_transit import is_routed_tenant_segment
 from utils.group_policy import reserved_groups
-from utils.segment_addressing import is_inline_terminated
 
 
 def vxlan_gpo_view(
@@ -378,7 +377,7 @@ def _selectors(
     """The selectors of one device (``_Selectors``).
 
     A routed tenant segment activated on the device is classified by ``match vlan`` only when it has a
-    group and a VLAN here and is not inline-terminated (pure L2 on a fabric switch). A component group is
+    group and a VLAN here. A component group is
     classified by ``match vlan <its segment's VLAN here> interface <port>`` on each port the coverage
     claims on THIS device, provided the device has that interface, tagged with the segment, and the
     segment a VLAN here; otherwise the claim is a problem of this device (inconsistent or not yet
@@ -391,7 +390,7 @@ def _selectors(
     for activation in activations:
         segment = activation.get("segment") or {}
         groups = contracts.by_segment.get(str(segment.get("id")))
-        if groups and activation.get("vlan_id") and not is_inline_terminated(segment):
+        if groups and activation.get("vlan_id"):
             vlans[groups[0].name] = int(activation["vlan_id"])
             vlan_of_segment[str(segment.get("id"))] = int(activation["vlan_id"])
         elif (found := segments.get(str(segment.get("id")))) is not None and is_routed_tenant_segment(found):

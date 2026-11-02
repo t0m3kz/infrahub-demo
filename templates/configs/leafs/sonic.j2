@@ -36,6 +36,9 @@
 {%- set prefix_table = {} -%}
 {%- include 'common/sonic_tenant_l3.j2' %}
 
+{%- set bgp_neighbor_af = {} -%}
+{%- include 'common/sonic_bgp_policy.j2' %}
+
 {%- set acl_table = {} -%}
 {%- set acl_rule = {} -%}
 {%- if not sonic_border %}
@@ -73,7 +76,7 @@
 {%- endif %}
 {#- Same for the tenant L3 tables of sonic_tenant_l3.j2: only a device with an
     anycast gateway or a route map to install carries them. -#}
-{%- for table, entries in {'SAG': sag, 'ROUTE_MAP': route_map, 'PREFIX_SET': prefix_set, 'PREFIX': prefix_table}.items() if entries -%}
+{%- for table, entries in {'SAG': sag, 'ROUTE_MAP': route_map, 'PREFIX_SET': prefix_set, 'PREFIX': prefix_table, 'BGP_NEIGHBOR_AF': bgp_neighbor_af}.items() if entries -%}
 {%- set _ = configdb.update({table: entries}) -%}
 {%- endfor %}
 {#- Per-table merge: MC-LAG contributes VLAN/VLAN_MEMBER/VLAN_INTERFACE
