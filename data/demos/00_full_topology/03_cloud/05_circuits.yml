@@ -1,13 +1,14 @@
 ---
 # The circuits of the legs. A circuit ends on interfaces through ONE edge, `capabilities` (the shared interface edge,
 # min 1, max 2): an interface of ours and an interface of the other side, given by its HFID `[device, interface]`. The
-# far end of a carrier is a port of a transport (10c), the far end of a session is a peering interface of it (10e), so
-# the transports and their interfaces exist by now (earlier files) and nothing is created here. `locations` are
-# authored here (no generator derives them on the throwaway branch).
+# far end of a carrier is a port of a transport (02_transport_ports.yml), the far end of a session is a peering
+# interface of it (04_peerings.yml), so the transports and their interfaces exist by now (earlier files) and nothing
+# is created here. `locations` are authored here (no generator derives them on the throwaway branch).
 #
 # Carrier circuits are the physical wire: our edge port to the provider's port. Session circuits are the routing on
 # top: handoff (BGP) for the private legs, vpn for the two AWS tunnels, tunnel for Zscaler. peer_ip and peer_asn are
-# the PROVIDER side of the leg (on the peering interface); our side is the sub-interface address of 06_dc_routing.yml.
+# the PROVIDER side of the leg (on the peering interface); our side is the sub-interface address of
+# 01_dc/04_routing.yml.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -91,19 +92,6 @@ spec:
       capabilities:
         - ["dc90-edge-01", "Ethernet1/9"]
         - ["ic-ded-c900-fra", "ic-dedicated-port"]
-    - name: XC-DC90-WEBEX-1
-      circuit_id: XC-DC90-WEBEX-1
-      description: Cross-connect to the Webex peering point
-      provider: P901
-      circuit_type: cross_connect
-      status: active
-      bandwidth: 1000
-      locations:
-        - DC90
-        - WEBEX-FRANKFURT
-      capabilities:
-        - ["dc90-edge-01", "Ethernet1/6"]
-        - ["webex-c900-fra-xc", "wbx-port-1"]
     - name: INET-DC90-ISP-DEMO
       circuit_id: INET-DC90-ISP-DEMO
       description: Internet access of dc90-edge-01 (carries the VPN tunnels and the Zscaler tunnel)
@@ -219,21 +207,6 @@ spec:
       capabilities:
         - ["dc90-edge-01", "Ethernet1/9"]
         - ["ic-ded-c900-fra", "gcp-c900-ded-1"]
-    - name: SC-C900-WEBEX-PROD
-      description: 'Handoff: edge sub-interface to the Webex peering'
-      provider: P901
-      circuit_type: handoff
-      status: active
-      ip_namespace: PROD
-      link_prefix:
-        - 10.255.128.6/31
-        - PROD
-      locations:
-        - DC90
-        - WEBEX-FRANKFURT
-      capabilities:
-        - ["dc90-edge-01", "Ethernet1/6.300"]
-        - ["webex-c900-fra-xc", "webex-c900-fra"]
     # AWS site-to-site VPN: ONE transport (the VPN connection), two tunnels, each a peering and the end of its own
     # session circuit, BGP inside a /30 each. The provider side (transit gateway) is on the transport.
     - name: SC-C900-AWS-VPN-1
@@ -266,14 +239,3 @@ spec:
       capabilities:
         - ["dc90-edge-01", "Tunnel2"]
         - ["vpn-c900-aws-euc1", "Tunnel2"]
-    - name: SC-C900-ZSCALER-TUN1
-      description: Tunnel to the Zscaler enforcement node, no BGP
-      provider: P030
-      circuit_type: tunnel
-      status: active
-      locations:
-        - DC90
-        - ZSCALER-MUNICH I
-      capabilities:
-        - ["dc90-edge-01", "Tunnel3"]
-        - ["zscaler-c900-muc", "Tunnel1"]

@@ -1,6 +1,6 @@
 ---
-# The bundle of the Direct Connect ports (10c): both members are ports of the same transport. The virtual interfaces
-# ride on the bundle, not on a member.
+# The bundle of the Direct Connect ports (02_transport_ports.yml): both members are ports of the same transport. The
+# virtual interfaces ride on the bundle, not on a member.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

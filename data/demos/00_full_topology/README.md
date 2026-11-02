@@ -1,8 +1,25 @@
-# Model połączeń z chmurą i SaaS: dane przykładowe
+# Pełna topologia: dane przykładowe (DC, chmura, SaaS, biuro, internet)
 
 Gałąź `model/cloud-saas`, instancja `http://localhost:8100` (token `06438eb2-8019-4776-878c-0941b1f1d1ec`), gałąź Infrahub `main`.
 Dane są napisane ręcznie: żaden generator, transform ani check nie działa. Ładują się na samych danych bootstrap
-(nie zależą od `30_all`).
+(nie zależą od `30_all`). To JEDNA topologia w jednym katalogu; foldery ponumerowane to kolejność ładowania.
+
+## Mapa folderów
+
+| Folder | Co zawiera | Zależy od |
+| ------ | ---------- | --------- |
+| `00_common/` | klienci, dostawcy i AS (`00_orgs`), adresacja (`01_ipam`), klucze BGP (`02_bgp_keys`) | bootstrap |
+| `01_dc/` | DC90, pod `DC90-9-POD-1` (design `S_MIDDLE`), urządzenia, patch panel, kable, routing, segment `c900-demo-web-p` i jego port (`00`-`06`), potem pod: liście (vPC/MLAG), spine, border leaves, serwer (`07`-`13`); `vlan_row.py` | `00_common` |
+| `02_colo/` | ZAREZERWOWANY numer: próbka nie ma kolokacji (żadnego obiektu), folderu nie ma | |
+| `03_cloud/` | konta, bramy, VPC/VNet, transporty (Direct Connect, ExpressRoute, Interconnect, VPN), peeringi, obwody, sesje BGP, punkt usługi S3, dwa segmenty na dodatkowe pary | `01_dc` |
+| `04_saas/` | Webex (cross-connect + BGP) i Zscaler (tunel): regiony SaaS, transporty, porty, peeringi, obwody, sesje, punkt usługi | `01_dc`, `03_cloud` |
+| `05_office/` | minimalne biuro klienta C900 (`C900-OFFICE`) i jego obwód `tunnel` do Zscalera | `04_saas` |
+| `06_internet/` | INTERNET jako jeden wspólny obiekt, dwóch ISP, strony publiczne SaaS i chmury, sesja eBGP do ISP | `01_dc`, `03_cloud`, `04_saas` |
+
+Szósty folder `06_internet` i wspólny `00_common` nie były na liście właściciela (DC, Colo, Cloud, SaaS, Office): internet
+(ISP, INTERNET, strony publiczne) nie jest żadnym z pięciu rodzajów obiektów, a klienci, AS i adresacja są wspólne dla
+kilku z nich. Biuro leży za SaaS, bo jego obwód `tunnel` kończy się na transporcie Zscalera. Pod `DC90-9-POD-1` trzyma
+spine i dwa liście; border leaves, krawędź i serwer zostają na poziomie DC (rola graniczna należy do DC).
 
 ## Słownik wspólny dla wszystkich chmur
 
@@ -90,11 +107,11 @@ Obwód kończy się na interfejsach przez JEDNĄ krawędź, `capabilities` (wsp�
 partner `DcimInterface`, min 1, max 2 na każdym obwodzie). Interfejs ma tylko `capabilities` jako krawędź obwodu; nie ma
 pola `endpoints`, generyka `TopologyCircuitEnd` ani `far_end`. Koniec w pliku obiektów to HFID interfejsu
 `[urządzenie, interfejs]`: `["dc90-edge-01", "Ethernet1/3"]`, `["dx-c900-fra-lag", "dxcon-1a"]`. Dlatego obiekty muszą
-istnieć wcześniej, a pliki ładują się alfabetycznie i po kolei: `08_cloud.yml` (konta, bramy) -> `09_saas.yml` -> `10b`
-transporty -> `10c` porty -> `10d` pakiet -> `10e` peeringi -> `11` obwody -> `12` ręczne sesje BGP. Zależne obiekty są w
+istnieć wcześniej, a pliki ładują się alfabetycznie i po kolei: `03_cloud/00_cloud.yml` (konta, bramy) -> `01` transporty ->
+`02` porty -> `03` pakiet -> `04` peeringi -> `05` obwody -> `06` ręczne sesje BGP (potem to samo w `04_saas`). Zależne obiekty są w
 późniejszym pliku, bo indeks HFID obiektów z tego samego przebiegu bywa opóźniony.
 
-Sesje BGP nóg chmurowych są pisane ręcznie (`12_peerings.yml`: nasz podinterfejs albo port routowany w `capabilities`, nasz
+Sesje BGP nóg chmurowych są pisane ręcznie (`03_cloud/06_bgp_sessions.yml`, `04_saas/05_bgp_sessions.yml`: nasz podinterfejs albo port routowany w `capabilities`, nasz
 proces); żaden generator ich nie buduje, a `add_virtual_circuit` nie ma budować sesji dla obwodu, którego koniec to peering
 chmury.
 
@@ -114,8 +131,8 @@ interfejsem transportu, a `scope: saas` leży na transporcie z `saas_region`.
 Pól puli nie ma. Konwencja: nasz adres to /31 (para tunelowa /30) z `Handoff-<namespace>-IPv4` (opis `ip_namespace`
 obwodu sesji), nasz prywatny AS z `PRIVATE-ASN32`; dostawca przydzielający zakres sam (Azure /30, GCP /29, AWS VPN
 169.254/30) daje go jako `link_prefix` obwodu. Plik obiektów nie umie pobierać z puli, więc przydzielone wartości są
-wpisane na sztywno: nasz adres w podinterfejsie (`06_dc_routing.yml`), nasz AS w `local_as` procesu BGP, adres i AS
-dostawcy w `peer_ip` i `peer_asn` peeringu (`11_circuits.yml`).
+wpisane na sztywno: nasz adres w podinterfejsie (`01_dc/04_routing.yml`), nasz AS w `local_as` procesu BGP, adres i AS
+dostawcy w `peer_ip` i `peer_asn` peeringu (`03_cloud/04_peerings.yml`).
 
 ## Pokrycie scenariuszy
 
@@ -149,21 +166,24 @@ załadowaniu). Schemat usuwa rodzaje, czego serwer nie robi w miejscu, więc sto
 uv run invoke clean-testcontainers
 INFRAHUB_TESTING_ENABLE_INTEGRATION=1 INFRAHUB_TESTING_KEEP_STACK=1 uv run invoke test-integration --tests tests/integration/test_01_setup.py
 export INFRAHUB_ADDRESS=http://localhost:8100 INFRAHUB_API_TOKEN=06438eb2-8019-4776-878c-0941b1f1d1ec
-uv run infrahubctl object load data/demos/cloud_saas_model/
-uv run infrahubctl object load data/demos/cloud_saas_model_pod/
-uv run python data/demos/cloud_saas_model_pod/vlan_row.py main
-uv run infrahubctl object load data/demos/cloud_saas_model_internet/
-uv run infrahubctl object load data/demos/cloud_saas_model_pairs/
+uv run python tests/traversal/load_topology.py --branch main
 ```
 
-Trzy katalogi obok ładują się po głównym (w tej kolejności): `cloud_saas_model_pod` (mały pod przed krawędzią),
-`cloud_saas_model_internet` (internet przez ISP) i `cloud_saas_model_pairs` (dwa segmenty chmurowe na dodatkowe pary).
-Wiersz VLAN `dc90-leaf-02` dodaje `vlan_row.py`: plik obiektów nie może wskazać wdrożenia segmentu
-(`ManagedSegmentDeployment` nie ma HFID), a zagnieżdżenie go drugi raz łamie unikalność wdrożenia.
+SDK ładuje katalog rekurencyjnie, pliki posortowane po nazwie, po kolei, więc cały katalog to JEDNO
+`infrahubctl object load data/demos/00_full_topology/`. Jeden krok zostaje po ładowaniu, którego plik obiektów nie wyrazi:
+wiersz VLAN `dc90-leaf-02` (funkcja `add_vlan_row`; `ManagedSegmentDeployment` nie ma HFID, a zagnieżdżenie go drugi raz łamie
+unikalność wdrożenia). Dlatego jest mały skrypt `tests/traversal/load_topology.py` (w katalogu danych nie ma kodu): jedno ładowanie katalogu i ten krok. Jest idempotentny: gdy segment
+`c900-demo-web-p` już jest na gałęzi, ładowanie obiektów jest pomijane (zagnieżdżony `segment_deployments` nie znosi
+drugiego ładowania), a wiersz sprawdzany ponownie. Ten sam skrypt używają `invoke check-model` i test
+`tests/integration/test_03_full_topology.py`.
 
 ## Szybki test modelu
 
-`uv run invoke check-model` ładuje schemat i te dane na jednorazową gałąź, uruchamia `trace.py` jako bibliotekę
+Dwa wejścia, te same asercje (`tests/traversal/check_model.py`, przypadek `full_topology`): `uv run invoke check-model`
+(jednorazowa gałąź `tv-*`, nic na `main`) i `uv run invoke test-integration-fast` (test_01 + test_02 + `test_03_full_topology.py`:
+ładuje próbkę na `main` stosu i uruchamia te asercje; po nim stos z próbką zostaje, gdy `INFRAHUB_TESTING_KEEP_STACK=1`).
+
+`uv run invoke check-model` ładuje schemat i te dane (`tests/traversal/load_topology.py`) na jednorazową gałąź, uruchamia `utils/path_trace.py` jako bibliotekę
 (`main_walk(..., quiet=True)` zwraca listy przeskoków L1 i L3) i sprawdza asercje oraz pliki wzorcowe, w kilka minut.
 Opis: `tests/traversal/README.md`.
 
@@ -190,10 +210,10 @@ odwrotny i plik wzorcowy.
 
 ```bash
 INFRAHUB_ADDRESS=http://localhost:8100 INFRAHUB_API_TOKEN=06438eb2-8019-4776-878c-0941b1f1d1ec \
-  uv run python data/demos/cloud_saas_model/trace.py c900-demo-web-p c900-demo-subnet-p
+  uv run python -m utils.path_trace c900-demo-web-p c900-demo-subnet-p
 ```
 
-`trace.py` czyta graf hurtowo (po jednym zapytaniu GraphQL na rodzaj) i idzie po nim w pamięci, od końców obwodów do
+`utils/path_trace.py` czyta graf hurtowo (po jednym zapytaniu GraphQL na rodzaj) i idzie po nim w pamięci, od końców obwodów do
 peeringu, bramy, załączników (i `allowed_prefixes`), huba, sieci wirtualnej (z `peers`) i segmentu chmurowego, z punktem
 usługi segmentu. Trzy sekcje: L1 (fizyka), L3 (routing) i
 lista wszystkich peeringów z miejscem lądowania (także Azure, GCP, SaaS, które nie dochodzą do segmentu AWS).
@@ -321,15 +341,17 @@ Wynik z instancji 8100:
 
 ## Pod, internet przez ISP i dodatkowe pary
 
-**Pod** (`cloud_saas_model_pod`): serwer `dc90-srv-01` (`bond0` na `eno1`/`eno2`) jest dwunogi do pary liści
+**Pod** (`01_dc/07`-`13`, pod `DC90-9-POD-1`): serwer `dc90-srv-01` (`bond0` na `eno1`/`eno2`) jest dwunogi do pary liści
 `dc90-leaf-01`/`-02` przez vPC (po jednym `Port-Channel10` na liść, ten sam `lag_id`, oba z segmentem
 `c900-demo-web-p` w krawędzi `segments`, jedna autorska `ManagedMLAG`), liście do spine, spine do dwóch border leaves,
 border leaf 1 do krawędzi przez przepust 2 panelu, border leaf 2 kablem bezpośrednim. Wiersz VLAN leaf-02 ma to samo
 `vlan_id` 100 co leaf-01. Overlay EVPN: leaf-01/02 - spine - BL - krawędź. Ścieżek L1 serwer -> krawędź jest 5: 4 przez
 spine i border leaf (2 liście x 1 spine x 2 BL) i 1 stare bezpośrednie połączenie leaf-01 -> panel -> krawędź z próbki
-bazowej (zostawione, żeby dane dołożyły się do działającego stosu bez usuwania kabli). Asercje: `walks.pod_rows`.
+bazowej. Liście i spine są wdrożone do pod `DC90-9-POD-1` (`TopologyPod`, design `S_MIDDLE`, bez racków: apartament próbki jest mniejszy
+niż koperta `S_MIDDLE`, a `checks/suite_capacity.py` ocenia tylko racki, które wskazują swój pod), border leaves i krawędź do DC90.
+Asercje: `walks.pod_rows`.
 
-**Internet przez ISP** (`cloud_saas_model_internet`): INTERNET jest jednym wspólnym obiektem, przez który przechodzi każde
+**Internet przez ISP** (`06_internet`): INTERNET jest jednym wspólnym obiektem, przez który przechodzi każde
 połączenie internetowe, "rodzajem kabla albo przełącznika dla wszystkich". `TopologyInternet` (singleton `INTERNET`) leży w
 drzewie topologii pod etykietą "Internet", obok ISP (`TopologyExternalProviders`; etykieta jest miejscem grupowania, a
 INTERNET punktem spotkania pod nią). Jest szczupłym `DcimDevice` (tylko `name` i `interfaces`) i `TopologyFacility`, więc
@@ -367,6 +389,11 @@ jedna para ujemna (segment w VPC bez załącznika: oczekiwane dokładnie `L1: no
 `L3: no routed path found`). R5 jest dwustronna: profil krypto tylko przy IPsec i zawsze przy IPsec (tunel GRE nie ma
 profilu). Azure ExpressRoute: obwód `logical` bez `partner_account` jest poprawny (dostawca jest `provider` nośnika), więc
 żadnej nowej reguły.
+
+**Biuro i tunel Zscalera** (`05_office`): `SC-C900-ZSCALER-TUN1` ma lokalizacje `C900-OFFICE` i `ZSCALER-MUNICH I`; biuro jest
+właścicielem tunelu (właściciel jest wyprowadzany, `utils/ownership.py`), co zamyka regułę `checks/circuit_placement.py`
+dla tunelu (biuro wśród lokalizacji). Szczerze: port końcowy to nadal `Tunnel3` krawędzi `dc90-edge-01` (nośnik internetowy
+`INET-DC90-ISP-DEMO`), bo biuro nie ma tu własnej krawędzi SD-WAN; to uproszczenie próbki, nie projekt.
 
 ## Czego model nie wyraża (szczerze)
 

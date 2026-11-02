@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fast model check: schema + a small topology on a throwaway branch, then L1/L3 traversal assertions.
 
-  uv run invoke check-model [--case cloud_saas_model] [--update-golden] [--keep-branch] [--rebuild]
+  uv run invoke check-model [--case full_topology] [--update-golden] [--keep-branch] [--rebuild]
 
 No pytest. Steps: stack on :8100 -> branch tv-<timestamp> -> schema load -> data load (ordered, sequential) ->
 for each pair of the case: trace (bulk GraphQL reads, walk in memory), assert, compare with the golden file ->
@@ -17,6 +17,7 @@ import sys
 import time
 import urllib.request
 from collections import Counter
+from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -27,7 +28,10 @@ from infrahub_sdk import Config, InfrahubClient
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from tests.traversal import walks  # noqa: E402 - needs ROOT on the path (the script runs from its own directory)
+from tests.traversal import (  # noqa: E402 - needs ROOT on the path (the script runs from its own directory)
+    load_topology,
+    walks,
+)
 
 GOLDEN_DIR = Path(__file__).resolve().parent / "golden"
 CASES_FILE = Path(__file__).resolve().parent / "cases.yml"
@@ -105,7 +109,7 @@ def tail(text: str, lines: int = 8) -> str:
 
 
 def load_tracer(path: Path) -> ModuleType:
-    spec = importlib.util.spec_from_file_location(f"tracer_{path.parent.name}", path)
+    spec = importlib.util.spec_from_file_location(f"module_{path.parent.name}_{path.stem}", path)
     assert spec and spec.loader
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -250,10 +254,44 @@ def check_internet_golden(rep: Report, cfg: dict, paths: list[str], update_golde
 # ------------------------------------------------------------------ main flow
 
 
-async def sentinel_present(client: InfrahubClient, branch: str, sentinel: dict) -> bool:
-    kind, name = sentinel["kind"], sentinel["name"]
-    r = await client.execute_graphql(query=f'{{ {kind}(name__value: "{name}") {{ count }} }}', branch_name=branch)
-    return r[kind]["count"] > 0
+async def assert_case(
+    case: dict,
+    client: InfrahubClient,
+    branch: str,
+    rep: Report,
+    update_golden: bool = False,
+    lap: Callable[[str], None] = lambda _label: None,
+) -> None:
+    """Read the graph of the branch and run every assertion of the case into the report (the data is already loaded)."""
+    tracer = load_tracer(ROOT / case["tracer"])
+    d = await tracer.load(client, branch)
+    lap("graph read")
+    for pair in case["pairs"]:
+        check_pair(rep, case, pair, tracer, d, update_golden)
+    if case.get("pod"):
+        for row in walks.pod_rows(d, case["pod"]):
+            rep.add(*row)
+    if case.get("transport_sub_interfaces"):
+        for row in walks.sub_interface_rows(d):
+            rep.add(*row)
+    if case.get("internet"):
+        for row in walks.internet_rows(d, case["internet"]):
+            rep.add(*row)
+        check_internet_golden(rep, case["internet"], walks.internet_paths(d, case["internet"]), update_golden)
+    declared = walks.declared_rides_on([s for p in case["data"] for s in walks.yaml_documents(ROOT / p)])
+    for row in walks.rides_on_rows(d, declared):
+        rep.add(*row)
+    lap("asserted")
+
+
+def load_cases(name: str = "") -> list[dict]:
+    """The cases of cases.yml (one by name when given; exits when there is no such case)."""
+    cases = yaml.safe_load(CASES_FILE.read_text())["cases"]
+    if name:
+        cases = [c for c in cases if c["name"] == name]
+        if not cases:
+            sys.exit(f"no such case: {name}")
+    return cases
 
 
 async def run_case(
@@ -279,46 +317,14 @@ async def run_case(
         lap(f"schema loaded (exit {schema.returncode})")
         if not ok:
             return
-        for entry in case["data"]:
-            data_dir, sentinel = (
-                (entry, case["sentinel"]) if isinstance(entry, str) else (entry["path"], entry["sentinel"])
-            )
-            if await sentinel_present(client, branch, sentinel) and not args.force_load:
-                say(
-                    f"  data {data_dir} is already on main (the branch inherits it): load skipped, its sentinel is there"
-                )
-                rep.add(f"[{case['name']}] data load {data_dir}", True, "note: skipped, inherited from main")
-                continue
-            load = run(["uv", "run", "infrahubctl", "object", "load", data_dir, "--branch", branch], env)
-            rep.add(f"[{case['name']}] data load {data_dir}", load.returncode == 0, tail(load.stdout + load.stderr))
-            lap(f"data loaded {data_dir} (exit {load.returncode})")
-            if load.returncode != 0:
-                return
-        for hook in case.get("after_load", []):
-            done = await load_tracer(ROOT / hook).apply(client, branch)
-            rep.add(f"[{case['name']}] after_load {hook}", True, f"note: {done}")
-            lap(f"after_load {hook}: {done}")
-        tracer = load_tracer(ROOT / case["tracer"])
-        d = await tracer.load(client, branch)
-        lap("graph read")
-        for pair in case["pairs"]:
-            check_pair(rep, case, pair, tracer, d, args.update_golden)
-        if case.get("pod"):
-            for row in walks.pod_rows(d, case["pod"]):
-                rep.add(*row)
-        if case.get("transport_sub_interfaces"):
-            for row in walks.sub_interface_rows(d):
-                rep.add(*row)
-        if case.get("internet"):
-            for row in walks.internet_rows(d, case["internet"]):
-                rep.add(*row)
-            check_internet_golden(rep, case["internet"], walks.internet_paths(d, case["internet"]), args.update_golden)
-        declared = walks.declared_rides_on(
-            [s for p in case["data"] for s in walks.yaml_documents(ROOT / (p if isinstance(p, str) else p["path"]))]
-        )
-        for row in walks.rides_on_rows(d, declared):
-            rep.add(*row)
-        lap("asserted")
+        try:
+            done = await load_topology.apply(client, branch, force=args.force_load)
+        except RuntimeError as exc:
+            rep.add(f"[{case['name']}] data load {case['data']}", False, str(exc))
+            return
+        rep.add(f"[{case['name']}] data load {case['data']}", True, f"note: {done}")
+        lap(f"data loaded: {done}")
+        await assert_case(case, client, branch, rep, args.update_golden, lap)
     finally:
         if args.keep_branch:
             say(f"  branch {branch} kept (--keep-branch); delete: infrahubctl branch delete {branch}")
@@ -341,11 +347,7 @@ async def amain(args: argparse.Namespace) -> int:
     address = f"http://localhost:{port}"
     token = os.environ.get("INFRAHUB_API_TOKEN", DEFAULT_TOKEN)
     env = {"INFRAHUB_ADDRESS": address, "INFRAHUB_API_TOKEN": token}
-    cases = yaml.safe_load(CASES_FILE.read_text())["cases"]
-    if args.case:
-        cases = [c for c in cases if c["name"] == args.case]
-        if not cases:
-            sys.exit(f"no such case: {args.case}")
+    cases = load_cases(args.case)
     if args.rebuild or not stack_up(address):
         start_stack(port, args.rebuild)
         if not stack_up(address):

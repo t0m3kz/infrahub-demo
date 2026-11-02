@@ -381,8 +381,8 @@ class MyCheck(InfrahubCheck):
   are the peering's `advertised_prefixes` (public or static only). A cloud region hosts nothing, a SaaS region or a
   virtual colocation hosts `appliances` (`TopologyApplianceHosting`). A provider's own router that a cable reaches is a
   physical device of its `TopologyExternalProviders`. `OrganizationProvider.connection_profile` names the operator's
-  vocabulary and is inventory only. The sample is `data/demos/cloud_saas_model` (its README holds the per-operator
-  table); `checks/cloud_connection.py` (R1 to R9) holds what the schema cannot (the edge derives the cloud side's
+  vocabulary and is inventory only. The sample is `data/demos/00_full_topology` (one topology in numbered folders by facility type, `tests/traversal/load_topology.py` loads it;
+  its README holds the per-operator table, `invoke check-model` and `test_03_full_topology.py` walk it); `checks/cloud_connection.py` (R1 to R9) holds what the schema cannot (the edge derives the cloud side's
   prefixes, see **Border policy**).
 - **Session circuits** (virtual circuits): `TopologySessionCircuit` is the connection between topologies on which routing
   is generated or recorded; its role is its `circuit_type` (`dci`, `handoff`, `tunnel`, `vpn`), required, never a kind. It has no `owner` field (derived, see **Circuit placement**). The
@@ -1005,7 +1005,8 @@ stack at a time. The full 30_all subset is `test_01, 02, 59, 60, 61, 62, 64, 65,
 Queries are validated by the smoke tests: every query under `queries/` has a `syntax_check` entry in
 `tests/smoke/test_graphql.yml` (guarded by `tests/unit/test_smoke_query_coverage.py`), run by `uv run invoke validate`.
 For ANY schema, query or generator change, run the fast loop BEFORE the full 30_all subset: `uv run invoke
-test-integration-fast`. Its repository sync (`test_02`) registers every query against the live schema, so a field the
+test-integration-fast` (it also loads `data/demos/00_full_topology` onto the stack's main and runs the traversal checks, `test_03`;
+that stack must not then be used for the 30_all subset: `uv run invoke clean-testcontainers` first). Its repository sync (`test_02`) registers every query against the live schema, so a field the
 schema rejects (`Cannot query field`, `Unknown type`, a "Fields ... conflict") fails there in minutes, where the full
 subset costs tens of minutes; the task worker log names the field. The test stack serves on port 8100 (`--server-port`
 moves it).

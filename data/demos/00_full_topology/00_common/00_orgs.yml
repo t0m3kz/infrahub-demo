@@ -1,6 +1,6 @@
 ---
 # Cloud & SaaS connection model, sample data. Self-contained: loads on top of data/bootstrap only (no generator, no
-# 30_all). Files load in name order. See README.md.
+# 30_all). Folders and files load in name order (one `infrahubctl object load` of the whole directory). See README.md.
 #
 # One tenant (C900), one provider added for the SaaS case, and the AS numbers the legs speak.
 apiVersion: infrahub.app/v1

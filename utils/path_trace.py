@@ -4,7 +4,8 @@
 Reads the graph in a few bulk GraphQL reads (one per kind), then walks it in memory. No write, no query per hop.
 
   INFRAHUB_ADDRESS=http://localhost:8100 INFRAHUB_API_TOKEN=... \
-    uv run python data/demos/cloud_saas_model/trace.py c900-demo-web-p c900-demo-subnet-p [--branch main]
+    uv run python .dev/trace.py c900-demo-web-p c900-demo-subnet-p [--branch main]   # thin wrapper, untracked
+    uv run python -m utils.path_trace c900-demo-web-p c900-demo-subnet-p [--branch main]
 
 L1  segment -> leaf port (segments edge) -> cable -> patch panel (front, paired rear) -> cable -> edge port
     -> [device] -> carrier circuit (found from OUR port through its `capabilities`; its far end is an interface of a

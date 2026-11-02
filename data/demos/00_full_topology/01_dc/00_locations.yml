@@ -41,6 +41,21 @@ spec:
       index: 9
       design: S
 ---
+# The pod of the data center: its name is computed, {DC}-{DC index}-POD-{index} (DC90-9-POD-1). The design is the
+# envelope only (S_MIDDLE is one of the pod templates of the DC design S); the spine and the two leaves are deployed
+# to it (01_devices.yml, 08_pod_devices.yml), the border leaves and the edge stay at the DC. No racks are linked to
+# the pod: the suite of this sample is smaller than the S_MIDDLE envelope, and checks/suite_capacity.py judges only
+# racks that name their pod. Nothing is generated (no group membership).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyPod
+  data:
+    - parent: "DC90"
+      index: 1
+      design: S_MIDDLE
+      status: active
+---
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

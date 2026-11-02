@@ -252,10 +252,11 @@ def test_integration(
 def test_integration_fast(
     context: Context, basetemp: str = "~/.pytest-tmp/infrahub-demo", server_port: int = 8100
 ) -> None:
-    """Run setup and repository prerequisites only."""
+    """Run setup, repository prerequisites and the full-topology traversal checks (the sample is loaded on main)."""
     _run_integration_suite(
         context,
-        tests="tests/integration/test_01_setup.py tests/integration/test_02_repository.py",
+        tests="tests/integration/test_01_setup.py tests/integration/test_02_repository.py "
+        "tests/integration/test_03_full_topology.py",
         basetemp=basetemp,
         server_port=server_port,
     )

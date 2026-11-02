@@ -220,7 +220,7 @@ appliance, so it needs no port of ours. The cable from `eg-fr201` `Ethernet1/1` 
 ### Cloud and SaaS Connections
 
 The cloud and SaaS side of a connection is the cloud model (`CloudDirectConnect` / `CloudVPNConnection` transports,
-`CloudPeeringInterface`, `CloudGateway` with attachments and route tables), shown on its own in `data/demos/cloud_saas_model`.
+`CloudPeeringInterface`, `CloudGateway` with attachments and route tables), shown on its own in `data/demos/00_full_topology`.
 There is no provider-connection object and no generator that builds the session circuits from one: a `handoff` or `vpn`
 session circuit ends on a cloud peering interface, and its session is written by hand.
 

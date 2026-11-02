@@ -2,30 +2,18 @@
 # Cases of the traversal check (`uv run invoke check-model`). A case = a schema dir, the data dirs that build a
 # small topology on a throwaway branch, and the segment pairs whose L1/L3 path must be visible.
 cases:
-  - name: cloud_saas_model
+  - name: full_topology
     schema: schemas
-    # loaded in this order. A directory with its own sentinel (a kind and a name that exist only after it was loaded)
-    # is skipped when the branch already inherits it from main: the additions load on top of a stack holding the base.
+    # the whole sample is ONE directory (numbered folders = load order, see its README); load_topology.py (next to
+    # this file) loads it in one `infrahubctl object load` run and then adds the VLAN-domain row of dc90-leaf-02
     data:
-      - data/demos/cloud_saas_model
-      - path: data/demos/cloud_saas_model_pod
-        sentinel: {kind: DcimPhysicalDevice, name: dc90-leaf-02}
-      - path: data/demos/cloud_saas_model_internet
-        sentinel: {kind: TopologyInternet, name: INTERNET}
-      - path: data/demos/cloud_saas_model_pairs
-        sentinel: {kind: CloudVirtualNetwork, name: vpc-c900-isolated}
-    # present on the branch only when the data was loaded (or already sits on main): used to skip a duplicate load
-    sentinel:
-      kind: ManagedVxlanSegment
-      name: c900-demo-web-p
-    # steps after the object files: modules with `async apply(client, branch) -> str` (idempotent)
-    after_load:
-      - data/demos/cloud_saas_model_pod/vlan_row.py
+      - data/demos/00_full_topology
     # python module with `load(client, branch) -> dict` and `main_walk(d, dc, cloud, quiet) -> dict`
-    tracer: data/demos/cloud_saas_model/trace.py
+    tracer: utils/path_trace.py
     # a transport port or LAG lists its peerings in `sub_interfaces` (DcimSubInterface, the marker shared with VIFs)
     transport_sub_interfaces: true
-    # the small pod in front of the edge: server (bond0) -> vPC leaf pair -> spine -> border leaves -> edge
+    # the pod DC90-9-POD-1 (leaves, spine) in front of the edge: server (bond0) -> vPC leaf pair -> spine -> border
+    # leaves (deployed to the DC, as a border role belongs to it) -> edge
     pod:
       server: dc90-srv-01
       bond: bond0
@@ -33,6 +21,13 @@ cases:
       edge: dc90-edge-01
       segment: c900-demo-web-p
       mlag: dc90-mlag-01
+      deployed_to:
+        dc90-leaf-01: DC90-9-POD-1
+        dc90-leaf-02: DC90-9-POD-1
+        dc90-spine-01: DC90-9-POD-1
+        dc90-bl-01: DC90
+        dc90-bl-02: DC90
+        dc90-edge-01: DC90
       # 4 = 2 leaves x 1 spine x 2 border leaves; +1 = the direct uplink leaf-01 -> panel -> edge of the base sample
       l1_paths_to_edge: 5
       l1_paths_via_spine: 4
@@ -44,7 +39,7 @@ cases:
       label: Internet
       bus: bus
       namespace: INTERNET
-      golden: cloud_saas_model__internet.txt
+      golden: full_topology__internet.txt
       isps:
         - {isp_device: EXT-ISP-DEMO-PE1, access_port: Ethernet1/2, access_carrier: INET-DC90-ISP-DEMO, uplink_carrier: UPL-ISP-DEMO}  # yamllint disable-line rule:line-length
         - {isp_device: EXT-ISP-DEMO-B-PE1, access_port: Ethernet1/1, access_carrier: INET-DC90-ISP-DEMO-B, uplink_carrier: UPL-ISP-DEMO-B}  # yamllint disable-line rule:line-length
@@ -56,7 +51,7 @@ cases:
     pairs:
       - dc_segment: c900-demo-web-p
         cloud_segment: c900-demo-subnet-p
-        golden: cloud_saas_model__c900-demo-web-p__c900-demo-subnet-p.txt
+        golden: full_topology__c900-demo-web-p__c900-demo-subnet-p.txt
         # legs per carrier type (L1) and per session circuit type (L3, a session circuit counted once)
         l1_legs:
           internet: 2
@@ -78,7 +73,7 @@ cases:
       - dc_segment: c900-demo-web-p
         cloud_segment: c900-demo-subnet-p
         via: [CloudVPNConnection]
-        golden: cloud_saas_model__web__subnet__vpn-only.txt
+        golden: full_topology__web__subnet__vpn-only.txt
         l1_legs: {internet: 2}
         l3_legs: {vpn: 2}
         far_end_kinds: [CloudVPNConnection]
@@ -87,7 +82,7 @@ cases:
       # DC -> SaaS over a private cross-connect and a BGP handoff (Webex)
       - dc_segment: c900-demo-web-p
         saas_region: WEBEX-FRANKFURT
-        golden: cloud_saas_model__web__saas-webex.txt
+        golden: full_topology__web__saas-webex.txt
         l1_legs: {cross_connect: 1}
         l3_legs: {handoff: 1}
         far_end_kinds: [CloudDirectConnect]
@@ -96,7 +91,7 @@ cases:
       # DC -> SaaS over a tunnel on the internet carrier, no session (Zscaler)
       - dc_segment: c900-demo-web-p
         saas_region: ZSCALER-MUNICH I
-        golden: cloud_saas_model__web__saas-zscaler.txt
+        golden: full_topology__web__saas-zscaler.txt
         l1_legs: {internet: 1}
         l3_legs: {tunnel: 1}
         far_end_kinds: [CloudVPNConnection]
@@ -105,7 +100,7 @@ cases:
       # cloud <-> cloud: the spoke VNet has no gateway of its own, the DC reaches it across `peers` of the hub VNet
       - dc_segment: c900-demo-web-p
         cloud_segment: c900-demo-spoke-p
-        golden: cloud_saas_model__web__spoke.txt
+        golden: full_topology__web__spoke.txt
         reverse: false
         l1_legs: {virtual_connection: 2}
         l3_legs: {handoff: 2}

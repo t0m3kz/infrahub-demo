@@ -12,6 +12,9 @@ The integration tests follow an **incremental scenario-based approach** that mir
 
 - `test_01_setup.py` - Schema loading, menu, and bootstrap data
 - `test_02_repository.py` - Git repository integration and sync
+- `test_03_full_topology.py` - loads `data/demos/00_full_topology` onto main (`tests/traversal/load_topology.py`) and runs the traversal cases of
+  `tests/traversal` over it (the same assertions as `uv run invoke check-model`); part of the fast profile, NOT of the
+  30_all subset (the sample lands on main and 30_all branches from main)
 
 #### Phase 2: Incremental Scenarios (Order 10+)
 
@@ -155,7 +158,7 @@ uv run invoke test-integration-routing
 uv run invoke test-integration
 ```
 
-The fast profile intentionally stops after setup and repository synchronization. The routing profile adds one focused acceptance workflow. The full profile runs the complete scenario chain and is the right choice for release-level validation.
+The fast profile intentionally stops after setup, repository synchronization and the full-topology traversal checks (`test_03`). The routing profile adds one focused acceptance workflow. The full profile runs the complete scenario chain and is the right choice for release-level validation.
 
 ### The 30_all Suite
 
@@ -218,7 +221,7 @@ fast loop before the full `30_all` subset:
 uv run invoke test-integration-fast
 ```
 
-Its repository sync (`test_02`) registers every query of `.infrahub.yml` against the live schema, so a field the schema
+Its `test_03` loads the full-topology sample on main and walks it (L1/L3 traversal asserts); its repository sync (`test_02`) registers every query of `.infrahub.yml` against the live schema, so a field the schema
 rejects (`Cannot query field`, `Unknown type`, a "Fields ... conflict") fails there in minutes; the task worker log
 (`docker logs <project>-task-worker-1`) names the field. A query under `tests/` is not registered: the test that runs
 it is its check.

@@ -99,21 +99,6 @@ spec:
           data:
             device: dc90-edge-01
             name: Ethernet1/9
-    - name: BGP-DC90-EDGE01-WEBEX
-      description: eBGP to Webex
-      session_type: EBGP
-      peering_role: regular
-      ttl: 1
-      address_families:
-        - - ipv4
-          - unicast
-      bgp_processes:
-        - dc90-edge-01-bgp
-      capabilities:
-        - kind: DcimVirtualInterface
-          data:
-            device: dc90-edge-01
-            name: Ethernet1/6.300
     - name: BGP-DC90-EDGE01-AWS-VPN-1
       description: eBGP through tunnel 1 to the AWS VPN
       session_type: EBGP

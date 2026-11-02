@@ -33,7 +33,7 @@ spec:
     - {address: "10.90.1.1/24", ip_namespace: "PROD", description: "Gateway of c900-demo-web-p"}
     - {address: "10.90.255.1/32", ip_namespace: "PROD", description: "dc90-edge-01 loopback"}
     - {address: "10.90.255.2/32", ip_namespace: "PROD", description: "dc90-leaf-01 loopback"}
-    # Provider side of each leg (the connector's peer_ip). Our side is the sub-interface address, 03_edge.yml.
+    # Provider side of each leg (the connector's peer_ip). Our side is the sub-interface address, 01_dc/04_routing.yml.
     - {address: "10.255.128.1/31", ip_namespace: "PROD", description: "AWS side of the Direct Connect VIF"}
     - {address: "10.255.128.3/31", ip_namespace: "PROD", description: "AWS side of the private VIF"}
     - {address: "10.255.128.10/30", ip_namespace: "PROD", description: "Microsoft side, ExpressRoute primary"}

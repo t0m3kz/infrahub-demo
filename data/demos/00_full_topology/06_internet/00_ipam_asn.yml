@@ -1,6 +1,6 @@
 ---
 # The INTERNET scenario: no private circuit and no tunnel. Our edge port Ethernet1/2 already rides the internet carrier
-# INET-DC90-ISP-DEMO to the ISP router EXT-ISP-DEMO-PE1 (data/demos/cloud_saas_model). Here the edge and the ISP router
+# INET-DC90-ISP-DEMO to the ISP router EXT-ISP-DEMO-PE1 (03_cloud/05_circuits.yml). Here the edge and the ISP router
 # get an address and an eBGP session in the INTERNET namespace, and two public ranges stand for the services behind
 # the ISP. Documentation ranges only (RFC 5737 / RFC 5398).
 apiVersion: infrahub.app/v1

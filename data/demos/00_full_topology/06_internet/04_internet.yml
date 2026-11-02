@@ -3,7 +3,7 @@
 # carrier -> ISP router; the ISP router's uplink -> internet carrier -> the interface of INTERNET; the public side of a
 # SaaS region and of a cloud region -> internet carrier -> the same interface. So from dc90-edge-01 the public side of
 # Webex and of the object store is reachable at L1 through either ISP. INTERNET has no routing: the addresses and
-# prefixes of this scenario live in the INTERNET namespace (00_ipam_asn.yml).
+# prefixes of this scenario live in the INTERNET namespace (06_internet/00_ipam_asn.yml).
 #
 #   dc90-edge-01 Ethernet1/2 -- INET-DC90-ISP-DEMO   -- EXT-ISP-DEMO-PE1   et-0/0/0   (base sample, ISP-DEMO)
 #                               EXT-ISP-DEMO-PE1    xe-0/1/0 -- UPL-ISP-DEMO   -+

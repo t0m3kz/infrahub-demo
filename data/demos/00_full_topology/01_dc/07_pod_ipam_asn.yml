@@ -1,5 +1,5 @@
 ---
-# A small pod in front of the edge of data/demos/cloud_saas_model (load that directory first): the AS numbers and
+# A small pod in front of the edge of the DC edge (01_dc/00..06 load first): the AS numbers and
 # loopbacks of the new devices. Hand-typed like the rest of the sample (a pool would hand them out).
 apiVersion: infrahub.app/v1
 kind: Object

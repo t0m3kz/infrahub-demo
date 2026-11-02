@@ -1,8 +1,8 @@
 ---
 # The two targets behind the ISP, as public service endpoints (access `public`) with their range in the INTERNET
-# namespace (00_ipam_asn.yml) as `prefix`: a cloud public endpoint (the object store API of the AWS account, reached
-# from vpc-c900-prod) and a SaaS public service (Webex, named by its SaaS region, no virtual network). Their public
-# sides end on INTERNET (04_internet.yml).
+# namespace (06_internet/00_ipam_asn.yml) as `prefix`: a cloud public endpoint (the object store API of the AWS
+# account, reached from vpc-c900-prod) and a SaaS public service (Webex, named by its SaaS region, no virtual
+# network). Their public sides end on INTERNET (06_internet/04_internet.yml).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

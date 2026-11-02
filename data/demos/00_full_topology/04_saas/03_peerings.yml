@@ -1,0 +1,33 @@
+---
+# The peering interfaces of the SaaS transports (scope saas): Webex is a VLAN peering with BGP on the cross-connect
+# port, Zscaler a GRE tunnel with static routing and no BGP. The SaaS region and the owner are the transport's.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudPeeringInterface
+  data:
+    # Webex (SaaS): a VLAN peering on the cross-connect port; the SaaS region and the owner are the transport's.
+    - device: "webex-c900-fra-xc"
+      name: "webex-c900-fra"
+      description: Webex private peering, tenant of C900
+      status: active
+      scope: saas
+      routing: bgp
+      vlan_id: 300
+      bfd: false
+      service_id: webex-org-c900
+      parent_interface: ["webex-c900-fra-xc", "wbx-port-1"]
+      auth: c900-webex-bgp-key
+      peer_ip: ["10.255.128.7/31", "PROD"]
+      peer_asn: AS13445
+    # Zscaler (SaaS): a GRE tunnel with static routing, no BGP.
+    - device: "zscaler-c900-muc"
+      name: "Tunnel1"
+      description: Zscaler tunnel, tenant of C900 (static, no BGP)
+      status: active
+      scope: saas
+      routing: static
+      tunnel_index: 1
+      endpoint_ip: "203.0.113.80/32"
+      tunnel_mode: gre
+      service_id: zscaler-org-c900

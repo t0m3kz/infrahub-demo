@@ -239,3 +239,26 @@ def test_a_lag_that_does_not_list_its_peering_fails() -> None:
     """The parent side must show the child: it is the point of the shared marker."""
     row = walks.sub_interface_rows(_sub_graph(False))[0]
     assert row[1] is False and "lag1.1000" in row[2]
+
+
+def _placed(deployments: dict[str, str]) -> dict[str, list]:
+    """The full graph whose devices carry the given deployment names."""
+    d = _graph()
+    for dev in d["dev"]:
+        name = dev["name"]["value"]
+        if name in deployments:
+            dev["deployment"] = {"node": {"name": _v(deployments[name])}}
+    return d
+
+
+def test_devices_deployed_where_the_case_says_pass() -> None:
+    """Leaves in the pod, the border leaf at the DC: the placement row passes."""
+    cfg = {**CFG, "deployed_to": {LEAVES[0]: "POD", "b1": "DC"}}
+    assert _failed(walks.pod_rows(_placed({LEAVES[0]: "POD", "b1": "DC"}), cfg)) == []
+
+
+def test_a_leaf_deployed_to_the_dc_instead_of_the_pod_fails() -> None:
+    """A device that sits at the DC although the case wants it in the pod is reported."""
+    cfg = {**CFG, "deployed_to": {LEAVES[0]: "POD", "b1": "DC"}}
+    failed = _failed(walks.pod_rows(_placed({LEAVES[0]: "DC", "b1": "DC"}), cfg))
+    assert any("deployed to the pod" in name for name in failed)

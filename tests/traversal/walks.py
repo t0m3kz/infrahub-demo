@@ -192,6 +192,15 @@ def pod_rows(d: dict, cfg: dict) -> list[Row]:
     }
     ok = sorted(vlans) == sorted(leaves) and len(set(vlans.values())) == 1
     rows.append(("pod: VLAN row of the segment on both MLAG peers, same vlan_id", ok, str(vlans)))
+    if cfg.get("deployed_to"):
+        placed = {
+            val(x, "name"): ((x.get("deployment") or {}).get("node") or {}).get("name", {}).get("value")
+            for x in d["dev"]
+        }
+        wrong = {name: placed.get(name) for name, want in cfg["deployed_to"].items() if placed.get(name) != want}
+        rows.append(
+            ("pod: leaves and spine are deployed to the pod, border leaves and edge to the DC", not wrong, f"{wrong}")
+        )
     # the peer link joins two leaves of one tier: it is no hop up
     tier = {name: TIER.get(r, -1) for name, r in role.items()}
     chains = [_devices(p, server) for p in device_paths(links, server, edge, tier)]

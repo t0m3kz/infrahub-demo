@@ -6,7 +6,7 @@ interfejs peeringu chmury, brama, hub, sieć wirtualna, segment chmurowy) w obu 
 
 ```bash
 uv run invoke check-model                      # wszystkie przypadki z cases.yml
-uv run invoke check-model --case cloud_saas_model
+uv run invoke check-model --case full_topology
 uv run invoke check-model --update-golden      # zapis plików wzorcowych tests/traversal/golden/*.txt
 uv run invoke check-model --keep-branch        # zostaw gałąź tv-* do oględzin
 uv run invoke check-model --rebuild            # wyczyść kontenery testowe i zbuduj stos od zera
@@ -30,10 +30,12 @@ przeskok, który się urwał, albo różnicę względem wzorca.
 
 ## Katalogi danych, pod, internet, pary
 
-`data:` w przypadku to lista katalogów ładowanych po kolei; wpis `{path, sentinel}` ma własny sentinel i jest pomijany, gdy
-gałąź dziedziczy go z `main` (dodatki ładują się na stos, który ma już bazę). `after_load:` to moduły z
-`async apply(client, branch)` (idempotentne), np. wiersz VLAN drugiego liścia. Klucze przypadku: `pod` (MLAG, bond
-dwunogi, wiersze VLAN, liczba ścieżek L1 serwer -> krawędź, overlay z obu liści), `internet` (INTERNET: jeden obiekt pod etykietą Internet z jednym interfejsem, dwa ISP i strony publiczne SaaS i chmury przyłączone do niego; L1 z krawędzi przez każdy ISP i INTERNET do strony publicznej, plik wzorcowy `cloud_saas_model__internet.txt`; L1 do routera ISP, L3
+`data:` to katalog próbki (`data/demos/00_full_topology`: numerowane foldery to kolejność ładowania, jedno
+`infrahubctl object load`); ładuje go `tests/traversal/load_topology.py` (`async apply(client, branch, force)`; polecenie: `uv run python tests/traversal/load_topology.py --branch main`): ładuje obiekty (pomija, gdy
+segment-sentinel jest już na gałęzi, np. odziedziczony z `main` po `test_03`) i wykonuje krok po ładowaniu (wiersz VLAN
+drugiego liścia). Te same asercje uruchamia `tests/integration/test_03_full_topology.py` na `main` stosu
+(`assert_case` z `check_model.py`, część `invoke test-integration-fast`). Klucze przypadku: `pod` (MLAG, bond
+dwunogi, wdrożenie liści i spine do pod, border leaves do DC, wiersze VLAN, liczba ścieżek L1 serwer -> krawędź, overlay z obu liści), `internet` (INTERNET: jeden obiekt pod etykietą Internet z jednym interfejsem, dwa ISP i strony publiczne SaaS i chmury przyłączone do niego; L1 z krawędzi przez każdy ISP i INTERNET do strony publicznej, plik wzorcowy `full_topology__internet.txt`; L1 do routera ISP, L3
 przez przestrzeń INTERNET, brak tunelu), `transport_sub_interfaces` (port i pakiet transportu widzą swoje peeringi w
 `sub_interfaces`); asercje w `tests/traversal/walks.py` (z testami jednostkowymi). Klucze pary: `cloud_segment` albo
 `saas_region`, `via` (tylko transporty tych rodzajów), `reverse: false`, `expect_unreachable` + `expect_missing`
