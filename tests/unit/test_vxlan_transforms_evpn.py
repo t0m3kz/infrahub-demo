@@ -6,9 +6,8 @@ import pytest
 
 from tests.unit.vxlan_transforms_helpers import _make_activation
 from transforms.common import _fabric_anycast_mac, _fabric_rt_asn
-from transforms.helpers.overlay import _l3_instances
+from transforms.helpers.overlay import _DEFAULT_ANYCAST_GATEWAY_MAC, _l3_instances
 from transforms.helpers.vxlan import (
-    _DEFAULT_ANYCAST_GATEWAY_MAC,
     _overlay_is_ebgp,
     _select_evpn_bgp_process,
     _warn_unencodable_vnis,

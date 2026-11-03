@@ -23,6 +23,7 @@ import pytest
 from transforms.helpers import lisp, overlay
 from transforms.helpers import vxlan as vxlan_module
 from transforms.helpers.overlay import (
+    _DEFAULT_ANYCAST_GATEWAY_MAC,
     OVERLAY_CONFIG_KEYS,
     OVERLAY_RENDERERS,
     AnycastGateway,
@@ -35,7 +36,6 @@ from transforms.helpers.overlay import (
 )
 from transforms.helpers.vrf import device_vrfs
 from transforms.helpers.vxlan import (
-    _DEFAULT_ANYCAST_GATEWAY_MAC,
     EvpnInputs,
     _is_bgw,
     build_evpn_inputs,

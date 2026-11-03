@@ -158,8 +158,6 @@ class BaseDeviceTransform(InfrahubTransform):
     # Whether the shared firewall context's tenant-VRF 0/0 -> VIP static is
     # redistributed into EVPN (see get_exchange_routes); Edge turns it off.
     export_tenant_default_to_evpn: bool = True
-    # Comment character of the "no platform" stub config.
-    comment_char: str = "!"
     # Resolve a VxlanSegment's local VLAN from this device's own row of the segment deployment.
     resolve_vlan_row: bool = True
     # The platforms whose template defines the RM-<session>-IN/-OUT maps of an external BGP session
@@ -387,7 +385,7 @@ class BaseDeviceTransform(InfrahubTransform):
 
     def _no_platform_config(self, device: dict) -> str:
         """Placeholder config for a device without a platform."""
-        c = self.comment_char
+        c = "!"
         device_name = device.get("name", "Unknown Device")
         return f"{c} Device {device_name} has no platform defined.\n{c} No configuration generated.\n"
 

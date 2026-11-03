@@ -422,24 +422,6 @@ class CablingMixin:
             for offset, address in addresses.items()
         }
 
-    async def upsert_ip_address(
-        self, *, address: str, ip_namespace: Any, description: str | None = None, track: bool = True
-    ) -> Any:
-        """Upsert one IpamIPAddress in ``ip_namespace`` (a peer node, or ``{"id": ...}``); returns the node.
-
-        Queried before created, saved even when found, description and track
-        as in upsert_prefix_addresses().
-        """
-        namespace_id = ip_namespace["id"] if isinstance(ip_namespace, dict) else ip_namespace.id
-        found = await self._find_addresses([address], namespace_id)
-        return await self._save_address(
-            address=address,
-            ip_namespace=ip_namespace,
-            existing=found.get(_address_key(address)),
-            description=description,
-            track=track,
-        )
-
     async def _find_addresses(self, addresses: Sequence[str], namespace_id: str) -> dict[str, Any]:
         """The IpamIPAddress nodes that already exist among ``addresses`` in the namespace, by canonical address.
 
@@ -558,15 +540,13 @@ class CablingMixin:
         vlan_id_value: int,
         capability_obj: Any | None = None,
         extra_capability_objs: Sequence[Any] = (),
-        capability_ids: Sequence[str] = (),
         ip_address_id: str | None = None,
         track: bool = True,
         role: str = "service",
     ) -> Any | None:
         """Upsert a VLAN-tagged DcimVirtualInterface (<trunk>.<vlan_id>) on
         trunk_iface, linked to capability_obj (and any extra_capability_objs,
-        e.g. the exchanges a firewall-context leg belongs to, and any
-        capability_ids a caller holds without the node) via capabilities.
+        e.g. the exchanges a firewall-context leg belongs to) via capabilities.
         Capabilities are only ever added, never removed, and carry CONTEXTS only
         (customer_dc.py/customer_colocation.py's FirewallContext sub-interfaces).
         Trunk-interface resolution stays with the caller since the fallback
@@ -597,7 +577,6 @@ class CablingMixin:
             sub_iface = await self.client.create(kind=DcimVirtualInterface, data=sub_iface_data)
             await sub_iface.save(**tracked_save_kwargs(track))
             wanted = [cap.id for cap in (capability_obj, *extra_capability_objs) if cap is not None]
-            wanted.extend(capability_ids)
             if wanted:
                 # A node built from create(data) does not know the capabilities the server already holds, and
                 # a RelationshipManager must be loaded before it is added to: one get with the relationship
