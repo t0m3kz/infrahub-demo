@@ -1,0 +1,87 @@
+---
+# The DCI mesh between the DCs: two dark fibres per pair of DCs, border leaf 1 to border leaf 1 and border
+# leaf 2 to border leaf 2, on the downlinks 1/2-3 the border leaves give role dci (01_dc/*/01_physical). Pure
+# carriers, unowned shared underlay; the DCI session circuit that rides each one is 01_dci_circuits.yml.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCarrierCircuit
+  data:
+    - name: DF-KTW1-WAW1-A
+      circuit_id: DF-KTW1-WAW1-A
+      description: ktw1-bl-01 to waw1-bl-01, 100G dark fibre
+      provider: P016
+      circuit_type: dark_fiber
+      status: active
+      bandwidth: 100000
+      locations:
+        - DC-KTW1
+        - DC-WAW1
+      capabilities:
+        - ["ktw1-bl-01", "Ethernet1/2"]
+        - ["waw1-bl-01", "Ethernet1/2"]
+    - name: DF-KTW1-WAW1-B
+      circuit_id: DF-KTW1-WAW1-B
+      description: ktw1-bl-02 to waw1-bl-02, 100G dark fibre
+      provider: P016
+      circuit_type: dark_fiber
+      status: active
+      bandwidth: 100000
+      locations:
+        - DC-KTW1
+        - DC-WAW1
+      capabilities:
+        - ["ktw1-bl-02", "Ethernet1/2"]
+        - ["waw1-bl-02", "Ethernet1/2"]
+    - name: DF-KTW1-GDN1-A
+      circuit_id: DF-KTW1-GDN1-A
+      description: ktw1-bl-01 to gdn1-bl-01, 100G dark fibre
+      provider: P016
+      circuit_type: dark_fiber
+      status: active
+      bandwidth: 100000
+      locations:
+        - DC-KTW1
+        - DC-GDN1
+      capabilities:
+        - ["ktw1-bl-01", "Ethernet1/3"]
+        - ["gdn1-bl-01", "Ethernet1/2"]
+    - name: DF-KTW1-GDN1-B
+      circuit_id: DF-KTW1-GDN1-B
+      description: ktw1-bl-02 to gdn1-bl-02, 100G dark fibre
+      provider: P016
+      circuit_type: dark_fiber
+      status: active
+      bandwidth: 100000
+      locations:
+        - DC-KTW1
+        - DC-GDN1
+      capabilities:
+        - ["ktw1-bl-02", "Ethernet1/3"]
+        - ["gdn1-bl-02", "Ethernet1/2"]
+    - name: DF-WAW1-GDN1-A
+      circuit_id: DF-WAW1-GDN1-A
+      description: waw1-bl-01 to gdn1-bl-01, 100G dark fibre
+      provider: P016
+      circuit_type: dark_fiber
+      status: active
+      bandwidth: 100000
+      locations:
+        - DC-WAW1
+        - DC-GDN1
+      capabilities:
+        - ["waw1-bl-01", "Ethernet1/3"]
+        - ["gdn1-bl-01", "Ethernet1/3"]
+    - name: DF-WAW1-GDN1-B
+      circuit_id: DF-WAW1-GDN1-B
+      description: waw1-bl-02 to gdn1-bl-02, 100G dark fibre
+      provider: P016
+      circuit_type: dark_fiber
+      status: active
+      bandwidth: 100000
+      locations:
+        - DC-WAW1
+        - DC-GDN1
+      capabilities:
+        - ["waw1-bl-02", "Ethernet1/3"]
+        - ["gdn1-bl-02", "Ethernet1/3"]

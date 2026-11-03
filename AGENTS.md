@@ -534,9 +534,9 @@ class MyCheck(InfrahubCheck):
   that needs a guard): an underivable layout, an unpaired or mispaired front port. A cable that stops at a panel is data
   to read, not a defect to report. A panel
   always sits between two devices: a circuit end stays an interface (the circuit `capabilities` are untouched) and the
-  panel's location is its mandatory `rack` (`LocationRack.deployment` gives the facility); a panel has no
-  `deployment`, no device type and no `position` (the rack-unit position returns together with a rack drawing that
-  draws panels). The `patch-panel` device role is gone. A generated cable
+  panel's location is its mandatory `rack` (`LocationRack.deployment` gives the facility) and its place in it is
+  `position` (lowest unit) and `rack_face`, declared on the panel with a physical device's meaning (it inherits no
+  generic); a panel has no `deployment` and no device type. The `patch-panel` device role is gone. A generated cable
   never ends on a panel port (a panel cable is data). A reader of a cable end meets a panel port as an empty node `{}`
   where it spreads `... on DcimPhysicalInterface` (`queries/topology/cabling.gql`), and must skip it; `far_end_interfaces`
   logs a warning and drops a non-interface far end (following a cable through a panel is not built).

@@ -203,8 +203,11 @@ def pod_path_rows(
         for pair, found in spine_ok.items()
         if [[role.get(x) for x in c] for c in found] == [["leaf", "spine", "border-leaf"]]
     ]
+    # the distinct device paths server -> edge: the shortest set (a direct uplink, or the spine paths themselves in a
+    # pod without one) and the spine path of every (leaf, border leaf) pair, each counted once
+    paths = set(uplinks) | {(cfg["server"], *spine_ok[pair][0], cfg["edge"]) for pair in right}
     want, want_spine = cfg["l1_paths_to_edge"], cfg["l1_paths_via_spine"]
-    ok = len(uplinks) + len(right) == want and len(right) == want_spine
+    ok = len(paths) == want and len(right) == want_spine
     detail = f"direct {[' > '.join(c) for c in uplinks]}; via the spine {sorted(right)}; found {spine_ok}"
     rows: list[Row] = [(f"pod: {want} L1 paths server -> edge, {want_spine} via leaf, spine, border leaf", ok, detail)]
     missing = [leaf for leaf in cfg["leaves"] if not climbing(l3.get(leaf, []), role)]
@@ -213,7 +216,8 @@ def pod_path_rows(
 
 
 def overlay_rows(d: dict, cfg: dict) -> list[Row]:
-    """The overlay sessions (attribute read): the first leaf has one to the edge, the second only to the spine."""
+    """The overlay sessions (attribute read): the leaves of `leaves_to_edge` have one to the edge, every other leaf
+    only upwards (DC-KTW1 keeps the direct session of its first leaf, a newer pod has none)."""
     proc_dev = {p["id"]: next(iter(rel(p, "capabilities")), {}).get("display_label") for p in d["bgp"]}
     neighbours: dict[str, set[str]] = {leaf: set() for leaf in cfg["leaves"]}
     for pe in d["peering"]:
@@ -222,11 +226,11 @@ def overlay_rows(d: dict, cfg: dict) -> list[Row]:
             for here, there in (ends, ends[::-1]):
                 if here in neighbours:
                     neighbours[here].add(str(there))
-    first, second = cfg["leaves"]
-    ok = cfg["edge"] in neighbours[first] and cfg["edge"] not in neighbours[second] and neighbours[second]
+    to_edge = set(cfg.get("leaves_to_edge") or [])
+    ok = all((cfg["edge"] in neighbours[leaf]) == (leaf in to_edge) and neighbours[leaf] for leaf in cfg["leaves"])
     return [
         (
-            "pod: overlay sessions: the first leaf peers with the edge, the second only upwards",
+            f"pod: overlay sessions: {sorted(to_edge) or 'no leaf'} to the edge, the other leaves only upwards",
             bool(ok),
             str(neighbours),
         )
@@ -283,11 +287,11 @@ def _cabled_devices(ports: list[dict]) -> set[str]:
 
 
 def layout_rows(d: dict, cfg: dict) -> list[Row]:
-    """The three sites (attribute reads): every cloud and SaaS carrier starts on a device of the colocation cage and none
-    at the DC, the dark fibres join the DC and the cage, the office has an edge of its own and its tunnels end on it, and
+    """The sites (attribute reads): every cloud and SaaS carrier starts on a device of the colocation cage and none at a
+    DC, each dark fibre joins the facilities listed for it, the office has an edge of its own and its tunnels end on it, and
     the cage edge reaches the Fabric port through a patch panel (a cable to a front port, a cable from its rear port)."""
     place = _placement(d)
-    zone, dc = ("TopologyColocationZone", cfg["zone"]), ("TopologyDataCenter", cfg["dc"])
+    zone = ("TopologyColocationZone", cfg["zone"])
     transports = {val(t, "name") for t in [*d["dx"], *d["vpn"]]}
     legs = [c for c in d["carrier"] if val(c, "circuit_type") in ("cross_connect", "virtual_connection")]
     cloud = [c for c in legs if transports & set(_ends(c))]
@@ -303,15 +307,19 @@ def layout_rows(d: dict, cfg: dict) -> list[Row]:
             f"{len(cloud)} carriers, not in the cage: {stray}",
         )
     ]
-    fibres = {val(c, "circuit_id"): sorted(map(str, (place.get(n) for n in _ends(c)))) for c in d["carrier"]}
-    fibres = {k: v for k, v in fibres.items() if k in cfg["dark_fibres"]}
-    kinds = {val(c, "circuit_id") for c in d["carrier"] if val(c, "circuit_type") == "dark_fiber"}
-    want = sorted(map(str, (dc, zone)))
+    # each dark fibre joins the two facilities `dark_fibres` names for it (a DC or a cage), and there are no others
+    fibres = {
+        val(c, "circuit_id"): sorted(str((place.get(n) or (None, None))[1]) for n in _ends(c))
+        for c in d["carrier"]
+        if val(c, "circuit_type") == "dark_fiber"
+    }
+    want = {name: sorted(ends) for name, ends in cfg["dark_fibres"].items()}
+    wrong = {name: ends for name, ends in fibres.items() if want.get(name) != ends}
     rows.append(
         (
-            "layout: the dark fibres join the DC and the cage, and there are no others",
-            kinds == set(cfg["dark_fibres"]) == set(fibres) and all(v == want for v in fibres.values()),
-            f"{sorted(kinds)} {fibres}",
+            f"layout: the {len(want)} dark fibres join the facilities listed for them, and there are no others",
+            set(fibres) == set(want) and not wrong,
+            f"missing {sorted(set(want) - set(fibres))}, not as listed {wrong}",
         )
     )
     office = ("TopologyCustomerOffice", cfg["office"])

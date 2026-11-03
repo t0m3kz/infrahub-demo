@@ -1,0 +1,11 @@
+---
+# The tenant footprint of C900 in the DC (C900-P-DC-GDN1).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCustomerDC
+  data:
+    - owner: "C900"
+      environment: "p"
+      infrastructure_orchestrator: ansible_automation_platform
+      parent: "DC-GDN1"

@@ -1,0 +1,36 @@
+---
+# The racks of the pod DC-WAW1-7-POD-1 in WAW1-SUITE-1, row 1: the compute rack with the server, one rack per leaf, the
+# spine rack. Racks are data: no group membership, nothing generated.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationRack
+  data:
+    - name: WAW1-RACK-02
+      shortname: waw1-rack-02
+      parent: waw1-suite-1
+      index: 2
+      row_index: 1
+      rack_type: compute
+      deployment: DC-WAW1-7-POD-1
+    - name: WAW1-RACK-03
+      shortname: waw1-rack-03
+      parent: waw1-suite-1
+      index: 3
+      row_index: 1
+      rack_type: network
+      deployment: DC-WAW1-7-POD-1
+    - name: WAW1-RACK-04
+      shortname: waw1-rack-04
+      parent: waw1-suite-1
+      index: 4
+      row_index: 1
+      rack_type: network
+      deployment: DC-WAW1-7-POD-1
+    - name: WAW1-RACK-05
+      shortname: waw1-rack-05
+      parent: waw1-suite-1
+      index: 5
+      row_index: 1
+      rack_type: network
+      deployment: DC-WAW1-7-POD-1

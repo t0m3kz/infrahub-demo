@@ -3,7 +3,7 @@
 # GE1 is the uplink (role uplink), the end of the office's internet access INET-BCN-OFFICE-ISP-A
 # (06_internet/02_circuits/01_carrier_circuits.yml). The device is owned by the office's tenant, as the generator
 # would write it. The tunnel interfaces ride on the internet port GE1 (parent_interface) and are nested under the
-# device; the hub end is on the DC edge (01_dc/01_physical/01_devices.yml). Tunnel2 is the one to Zscaler.
+# device; the hub end is on the DC edge (01_dc/00_ktw1/01_physical/01_devices.yml). Tunnel2 is the one to Zscaler.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -14,6 +14,9 @@ spec:
       owner: C900
       description: "C900 office SD-WAN edge: GE1 internet access, tunnels to the DC edge and to Zscaler"
       deployment: C900-OFFICE
+      rack: bcn-office-rack-01
+      position: 40
+      rack_face: front
       interfaces:
         - kind: DcimVirtualInterface
           data:

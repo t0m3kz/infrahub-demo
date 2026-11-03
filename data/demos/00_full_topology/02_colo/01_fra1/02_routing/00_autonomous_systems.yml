@@ -1,0 +1,8 @@
+---
+# The AS number of the cage edge fra-colo1-edge-01 (would come from PRIVATE-ASN32).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingAutonomousSystem
+  data:
+    - {asn: 4200094001, owner: "P028", description: "fra-colo1-edge-01 (would come from PRIVATE-ASN32)"}

@@ -1,0 +1,16 @@
+---
+# The VRF of DC-GDN1 (PROD) with its routing devices: the leaves, the border leaves and the edge.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVRF
+  data:
+    - name: "dc-gdn1-vrf-prod"
+      namespace: "PROD"
+      deployment: "DC-GDN1"
+      shared_devices:
+        - "gdn1-leaf-01"
+        - "gdn1-leaf-02"
+        - "gdn1-bl-01"
+        - "gdn1-bl-02"
+        - "gdn1-edge-01"

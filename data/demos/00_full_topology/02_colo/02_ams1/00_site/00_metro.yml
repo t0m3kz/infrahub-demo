@@ -1,0 +1,10 @@
+---
+# The metro of the cage AMS-COLO1 (Amsterdam); the country is bootstrap data, the metro is not.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationMetro
+  data:
+    - name: Amsterdam
+      shortname: ams
+      parent: nl

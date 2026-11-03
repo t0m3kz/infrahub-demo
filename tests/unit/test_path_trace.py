@@ -143,6 +143,14 @@ def test_layer_kinds_add_the_end_kinds_only_where_measured() -> None:
     assert "CloudNetworkSegment" in layer_kinds("l1", "CloudInstance", DEV)
 
 
+def test_a_vm_end_routes_through_its_component_and_segment_in_l3_only() -> None:
+    """A VM end adds its component and its segment's chain to L3; its L1 is its NIC and the host port (no addition)."""
+    l3 = layer_kinds("l3", "DcimVirtualDevice", "CloudNetworkSegment")
+    assert l3[-4:] == ["AppComponent", "ManagedVxlanSegment", "ManagedSegmentDeployment", "ManagedVlanDomainSegment"]
+    assert layer_kinds("l1", "DcimVirtualDevice", DEV) == [*LAYERS["l1"], *CLOUD]
+    assert "AppComponent" not in layer_kinds("l3", "ManagedVxlanSegment", DEV)
+
+
 # ------------------------------------------------------------------ one leg
 
 

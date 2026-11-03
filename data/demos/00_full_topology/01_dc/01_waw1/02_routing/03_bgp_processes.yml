@@ -1,0 +1,67 @@
+---
+# One overlay process per routing device of the pod and the DC; the loopback (router id) is nested.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGP
+  data:
+    - name: waw1-edge-01-bgp
+      status: active
+      process_role: overlay
+      local_as: AS4200092001
+      router_id:
+        data:
+          address: "10.92.255.1/32"
+          ip_namespace: PROD
+          description: waw1-edge-01 loopback
+      capabilities: ["waw1-edge-01"]
+    - name: waw1-leaf-01-bgp
+      status: active
+      process_role: overlay
+      local_as: AS4200092002
+      router_id:
+        data:
+          address: "10.92.255.2/32"
+          ip_namespace: PROD
+          description: waw1-leaf-01 loopback
+      capabilities: ["waw1-leaf-01"]
+    - name: waw1-leaf-02-bgp
+      status: active
+      process_role: overlay
+      local_as: AS4200092003
+      router_id:
+        data:
+          address: "10.92.255.3/32"
+          ip_namespace: PROD
+          description: waw1-leaf-02 loopback
+      capabilities: ["waw1-leaf-02"]
+    - name: waw1-spine-01-bgp
+      status: active
+      process_role: overlay
+      local_as: AS4200092004
+      router_id:
+        data:
+          address: "10.92.255.4/32"
+          ip_namespace: PROD
+          description: waw1-spine-01 loopback
+      capabilities: ["waw1-spine-01"]
+    - name: waw1-bl-01-bgp
+      status: active
+      process_role: overlay
+      local_as: AS4200092005
+      router_id:
+        data:
+          address: "10.92.255.5/32"
+          ip_namespace: PROD
+          description: waw1-bl-01 loopback
+      capabilities: ["waw1-bl-01"]
+    - name: waw1-bl-02-bgp
+      status: active
+      process_role: overlay
+      local_as: AS4200092006
+      router_id:
+        data:
+          address: "10.92.255.6/32"
+          ip_namespace: PROD
+          description: waw1-bl-02 loopback
+      capabilities: ["waw1-bl-02"]
