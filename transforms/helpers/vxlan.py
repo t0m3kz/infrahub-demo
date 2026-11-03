@@ -9,8 +9,6 @@ from netutils.interface import sort_interface_list
 
 from transforms.helpers.addressing import host_ip, sub_interface_parent
 from transforms.helpers.mlag import CHANNEL_GROUP_MODE
-
-# The neutral overlay model owns these (transforms/helpers/overlay.py); they stay importable from here.
 from transforms.helpers.overlay import (
     _DEFAULT_ANYCAST_GATEWAY_MAC,
     _INTERNET_NAMESPACE_TYPE,
@@ -19,9 +17,10 @@ from transforms.helpers.overlay import (
     OverlayNode,
     _interface_address,
     _is_multisite_segment,
+    build_overlay_node,
+    l2_instance,
+    vni_activations,
 )
-from transforms.helpers.overlay import _select_vtep_interface as _select_vtep_interface
-from transforms.helpers.overlay import build_overlay_node, l2_instance, vni_activations
 from transforms.helpers.segments import interface_segments, segment_vlan_ids
 from transforms.helpers.vrf import device_vrfs
 from utils.exchange_transit import FIREWALL_CONTEXT_KIND, SERVICE_CONTEXT_ROLES

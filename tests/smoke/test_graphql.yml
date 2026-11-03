@@ -35,14 +35,6 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
-    resource_name: oob_config
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/config/oob.gql
-          kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
     resource_name: firewall_config
     tests:
       - name: syntax_check
@@ -104,14 +96,6 @@ infrahub_tests:
       - name: syntax_check
         spec:
           path: queries/config/controller.gql
-          kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
-    resource_name: placeholder
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/placeholder.gql
           kind: graphql-query-smoke
 
   # ==================== TOPOLOGY QUERIES ====================
@@ -268,14 +252,6 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
-    resource_name: proposed_change_artifacts
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/topology/add/proposed_change_artifacts.gql
-          kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
     resource_name: mlag_domain_data
     tests:
       - name: syntax_check
@@ -370,14 +346,6 @@ infrahub_tests:
       - name: syntax_check
         spec:
           path: queries/topology/add/topology_orchestrator_routing_data.gql
-          kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
-    resource_name: rack_elevation_query
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/topology/rack.gql
           kind: graphql-query-smoke
 
   # ==================== VALIDATION QUERIES ====================

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from transforms.helpers.vxlan import _is_multisite_segment
+from transforms.helpers.overlay import _is_multisite_segment
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import is_routed_tenant_segment
 from utils.group_policy import (

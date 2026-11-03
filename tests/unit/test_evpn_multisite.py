@@ -26,11 +26,10 @@ import pytest
 from transforms.common import BaseDeviceTransform
 from transforms.helpers.bgp import _build_peer_groups, _build_session_from_peering, add_template_fields
 from transforms.helpers.bgp_policy import compose_policy
+from transforms.helpers.overlay import _is_multisite_segment, _select_vtep_interface
 from transforms.helpers.vxlan import (
     _get_multisite_config,
-    _is_multisite_segment,
     _l2_from_activations,
-    _select_vtep_interface,
     _stretch_rt_anchor,
     get_vxlan_config,
 )

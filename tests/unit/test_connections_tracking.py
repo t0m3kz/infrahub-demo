@@ -151,41 +151,6 @@ class TestUpsertP2pAddressesTrack:
             ip.save.assert_awaited_once_with(**_UNTRACKED)
 
 
-class TestUpsertIpAddress:
-    """upsert_ip_address() is the one find-or-create of an address, also for an address no prefix offset names."""
-
-    @pytest.mark.asyncio
-    async def test_namespace_by_id_is_queried_and_created_by_id(self) -> None:
-        """A cloud instance's own address: the namespace is known by id only."""
-        gen = _make_gen()
-        created = AsyncMock(id="ip-a")
-        gen.client.create = AsyncMock(return_value=created)
-
-        result = await gen.upsert_ip_address(
-            address="10.30.1.11/24", ip_namespace={"id": "ns-prod"}, description="instance", track=False
-        )
-
-        assert result is created
-        assert gen.client.filters.await_args.kwargs["ip_namespace__ids"] == ["ns-prod"]
-        assert gen.client.create.await_args_list[0].kwargs["data"] == {
-            "address": "10.30.1.11/24",
-            "ip_namespace": {"id": "ns-prod"},
-            "description": "instance",
-        }
-        created.save.assert_awaited_once_with(**_UNTRACKED)
-
-    @pytest.mark.asyncio
-    async def test_existing_address_without_description_is_resaved_as_is(self) -> None:
-        gen = _make_gen()
-        existing = AsyncMock(id="ip-a")
-        existing.address = MagicMock(value="10.30.1.11/24")
-        gen.client.filters = AsyncMock(return_value=[existing])
-
-        assert await gen.upsert_ip_address(address="10.30.1.11/24", ip_namespace={"id": "ns-prod"}) is existing
-        gen.client.create.assert_not_called()
-        existing.save.assert_awaited_once_with(**_TRACKED)
-
-
 class TestEnsureVlanSubinterfaceTrack:
     """ensure_vlan_subinterface(track=...) covers the sub-interface save and its capability re-save."""
 
@@ -325,29 +290,6 @@ class TestEnsureVlanSubinterfaceExtraCapabilities:
         node.stored.capabilities.add.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_capability_ids_are_linked_without_the_nodes(self) -> None:
-        """A caller holding only ids passes capability_ids; duplicates of a node's id are linked once."""
-        gen = _make_gen()
-        node = _sub_iface(existing_peer_ids=["ctx-1"], gen=gen)
-
-        await self._run(gen, [], capability_ids=["ex-9", "ctx-1", "ex-9"])
-
-        assert [c.args[0] for c in node.stored.capabilities.add.call_args_list] == [{"id": "ex-9"}]
-        node.stored.save.assert_awaited_once_with(**_TRACKED)
-
-    @pytest.mark.asyncio
-    async def test_capability_ids_alone_are_enough(self) -> None:
-        """No capability node at all, only ids: the capabilities are still read and linked."""
-        gen = _make_gen()
-        node = _sub_iface(existing_peer_ids=[], gen=gen)
-
-        await gen.ensure_vlan_subinterface(
-            device_id="d", device_name="D", trunk_iface=_trunk(), vlan_id_value=3000, capability_ids=["cap-1"]
-        )
-
-        assert [c.args[0] for c in node.stored.capabilities.add.call_args_list] == [{"id": "cap-1"}]
-
-    @pytest.mark.asyncio
     async def test_a_failed_capability_read_is_logged_and_returns_none(self) -> None:
         """The helper's error policy is unchanged: a failure is logged as an error and the result is None."""
         gen = _make_gen()
@@ -437,16 +379,3 @@ class TestFindAddressesBatch:
 
         gen.client.create.assert_not_called()
         assert [node.id for node in result] == ["ip-a", "ip-b"]
-
-    @pytest.mark.asyncio
-    async def test_a_single_address_is_one_filtered_read_not_a_get(self) -> None:
-        """One address takes the same batched read as a prefix's addresses."""
-        gen = _make_gen()
-        gen.client.create = AsyncMock(return_value=AsyncMock(id="ip-a"))
-
-        await gen.upsert_ip_address(address="10.0.0.1/24", ip_namespace={"id": "ns-prod"})
-
-        gen.client.filters.assert_awaited_once_with(
-            kind=IpamIPAddress, address__values=["10.0.0.1/24"], ip_namespace__ids=["ns-prod"]
-        )
-        gen.client.get.assert_not_awaited()

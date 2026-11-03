@@ -13,19 +13,12 @@ def load_template(
     filters: dict[str, Callable[..., Any]] | None = None,
     autoescape: Any = False,
     keep_trailing_newline: bool = True,
-    trim_blocks: bool = False,
 ) -> Template:
-    """Load template `name` from `search_path` with the given environment settings.
-
-    `trim_blocks` also strips the whitespace before a block tag (lstrip_blocks), so a block tag on its own line
-    leaves no line behind.
-    """
+    """Load template `name` from `search_path` with the given environment settings."""
     env = Environment(
         loader=FileSystemLoader(search_path),
         autoescape=autoescape,
         keep_trailing_newline=keep_trailing_newline,
-        trim_blocks=trim_blocks,
-        lstrip_blocks=trim_blocks,
     )
     if filters:
         env.filters.update(filters)

@@ -1,12 +1,9 @@
 ---
 jinja2_transforms:
-  # Containerlab
   - name: topology_clab
     description: Template to generate a containerlab topology
     query: topology_simulator
     template_path: templates/clab_topology.j2
-    watch:
-      files: []
 
 artifact_definitions:
   - name: edge_config
@@ -107,7 +104,6 @@ artifact_definitions:
     transformation: proxy-cloud
     parameters:
       instance: name__value
-  # Containerlab
   - name: Containerlab Topology
     artifact_name: containerlab-topology
     content_type: text/plain
@@ -124,7 +120,6 @@ artifact_definitions:
     parameters:
       id: id
 
-  # Equinix POP
   - name: equinix_pop_config
     artifact_name: equinix_pop
     content_type: text/plain
@@ -139,10 +134,6 @@ artifact_definitions:
     transformation: firewall
     parameters:
       device: name__value
-  # Controller payload — one artifact_definition for every ManagedController
-  # in managed_controllers; controller_type/vendor are passed alongside the
-  # object's own name so the transform can dispatch to the right vendor
-  # builder without any per-controller querying/matching in Python.
   - name: controller_payload
     artifact_name: controller-payload
     content_type: application/json
@@ -152,13 +143,6 @@ artifact_definitions:
       controller: name__value
       controller_type: controller_type__value
       vendor: platform__name__value
-  # - name: rack_elevation
-  #   artifact_name: rack_elevation
-  #   content_type: image/svg+xml
-  #   targets: topologies_rack
-  #   transformation: rack_elevation
-  #   parameters:
-  #     name: name__value
   - name: topology_orchestrator_ansible_inventory
     artifact_name: ansible-inventory
     content_type: text/plain
@@ -275,124 +259,78 @@ check_definitions:
   - name: validate_segment_security
     class_name: CheckSegmentSecurity
     file_path: checks/segment_security.py
-  # Targetless: a footprint's usage spans every segment naming it and every
-  # port those segments tag, not one device.
   - name: validate_customer_quota
     class_name: CheckCustomerQuota
     file_path: checks/customer_quota.py
-  # Targetless: reads every segment and the firewall contexts PBR redirects to.
   - name: validate_tenant_svi_protection
     class_name: CheckTenantSviProtection
     file_path: checks/tenant_svi_protection.py
-  # Targetless: a context's carrier is a border or edge port, not the leaf.
   - name: validate_pbr_firewall_reachability
     class_name: CheckPbrFirewallReachability
     file_path: checks/pbr_firewall_reachability.py
-  # Targetless: a segment's sites and a site's VTEPs span the fleet; a data
-  # center is a reference fabric only when every one of its VTEPs is.
   - name: validate_reference_fabric
     class_name: CheckReferenceFabric
     file_path: checks/reference_fabric.py
-  # Targetless: a tag is unique across all customers or all segments, and a
-  # customer owns segments of many topologies.
   - name: validate_routing_tags
     class_name: CheckRoutingTags
     file_path: checks/routing_tags.py
-  # Targetless: a session has two devices and the filters derive from fleet-wide facts (loopback pools, VRF instances,
-  # environment prefixes). Turn routing_filter_enforce on only where it reports no error.
   - name: validate_bgp_expectations
     class_name: CheckBgpExpectations
     file_path: checks/bgp_expectations.py
-  # Targetless: a device is in one domain across the whole instance.
   - name: validate_mlag_domains
     class_name: CheckMlagDomains
     file_path: checks/mlag_domains.py
-  # Targetless: a device's VRF instances and SVIs are derived from its VLAN domain,
-  # interfaces and service contexts; the check reads every device with no variables.
   - name: validate_vrf_instances
     class_name: CheckVrfInstances
     file_path: checks/vrf_instances.py
-  # Targetless: the invariants span topologies (namespaces, the INTERNET VRF,
-  # cloud Transit Gateways and virtual interfaces), not one device.
   - name: validate_routing_invariants
     class_name: CheckRoutingInvariants
     file_path: checks/routing_invariants.py
-  # Targetless like the two above: the invariants are properties of a whole
-  # fabric (route-target agreement, VNI uniqueness), so there is no single
-  # device to target — every device in the fabric looks correct in isolation.
   - name: validate_evpn_fabric
     class_name: CheckEvpnFabric
     file_path: checks/evpn_fabric.py
-  # Targetless: the LISP profile of an office (platform, map-server, site key,
-  # segment VRFs, WAN exit) is a property of a whole site, not of one device.
   - name: validate_lisp_fabric
     class_name: CheckLispFabric
     file_path: checks/lisp_fabric.py
-  # Targetless: a port is shared between circuits, so the rule spans every
-  # carrier circuit, not one device or one circuit.
   - name: validate_carrier_circuit_ports
     class_name: CheckCarrierCircuitPorts
     file_path: checks/carrier_circuit_ports.py
-  # Targetless: the rules span the carriers found on a session circuit's
-  # ports, so one query reads every carrier circuit and every session circuit
-  # (dci, handoff and tunnel).
   - name: validate_circuit_placement
     class_name: CheckCircuitPlacement
     file_path: checks/circuit_placement.py
-  # Targetless: a cloud footprint is judged against its account (owner) and the networks its segments use.
   - name: validate_customer_cloud_account
     class_name: CheckCustomerCloudAccount
     file_path: checks/customer_cloud_account.py
-  # Targetless: the cloud side of a connection (gateway attachments and route tables, transports that ride on one
-  # another, tunnels, service endpoints) is judged as a whole: rules R1 to R6 hold what the schema cannot.
   - name: validate_cloud_connection
     class_name: CheckCloudConnection
     file_path: checks/cloud_connection.py
-  # Targetless: the pairing is written by add_patch_panel from the ports, and a person can edit it; the check
-  # compares every panel with what the generator would write.
   - name: validate_patch_panel_pairing
     class_name: CheckPatchPanelPairing
     file_path: checks/patch_panel_pairing.py
-  # Targetless: a pod's design is judged against every suite hosting a rack of
-  # it, so one query reads every rack with its suite and its pod's design.
   - name: validate_suite_capacity
     class_name: CheckSuiteCapacity
     file_path: checks/suite_capacity.py
-  # Targetless: a name must be unique across metros, zones and virtual
-  # colocations, and a footprint's serving zone is judged against its metro.
   - name: validate_colocation_placement
     class_name: CheckColocationPlacement
     file_path: checks/colocation_placement.py
-  # Targetless: a dependency spans two applications, and an external target
-  # is no object at all.
   - name: validate_app_dependency
     class_name: CheckAppDependency
     file_path: checks/app_dependency.py
-  # Targetless: the rule is per hypervisor, and a host's VMs belong to many
-  # customers' footprints.
   - name: validate_hypervisor_environment
     class_name: CheckHypervisorEnvironment
     file_path: checks/hypervisor_environment.py
-  # Targetless: the rule is per virtual device and per network appliance, wherever it is deployed.
   - name: validate_virtual_device_placement
     class_name: CheckVirtualDevicePlacement
     file_path: checks/virtual_device_placement.py
-  # Targetless: the rule is per virtual interface (a NIC on its host, a sub-interface on its own device).
   - name: validate_interface_parents
     class_name: CheckInterfaceParents
     file_path: checks/interface_parents.py
-  # Targetless: a port is a switchport or a routed port (the layer is its content), per interface of every device.
   - name: validate_interface_layers
     class_name: CheckInterfaceLayers
     file_path: checks/interface_layers.py
-  # Targetless: a rule's source segment spans footprints, and the hardware that
-  # enforces it (firewall pair, legs, exchange, ports, SNAT) belongs to the
-  # contexts serving them.
   - name: validate_internet_egress
     class_name: CheckInternetEgress
     file_path: checks/internet_egress.py
-  # Targetless: a DC pool holds its pods' pools, so one query reads every
-  # data center and pod with the slices of their pools.
   - name: validate_pool_utilization
     class_name: CheckPoolUtilization
     file_path: checks/pool_utilization.py
@@ -582,22 +520,11 @@ python_transforms:
         - transforms/
         - templates/
         - utils/
-  - name: rack_elevation
-    class_name: RackElevation
-    file_path: transforms/topology/rack.py
-    watch:
-      files:
-        - transforms/
-        - templates/
-        - utils/
-
 graphql_fragments:
   - name: all_fragments
     file_path: queries/fragments/
 
 queries:
-  - name: placeholder
-    file_path: queries/placeholder.gql
   - name: endpoint_connectivity
     file_path: queries/topology/add/endpoint.gql
   - name: topology_dc
@@ -637,8 +564,6 @@ queries:
     file_path: queries/config/firewall.gql
   - name: controller_payload
     file_path: queries/config/controller.gql
-  - name: oob_config
-    file_path: queries/config/oob.gql
   - name: pod_decommission
     file_path: queries/topology/decomission/pod.gql
   - name: application
@@ -732,10 +657,6 @@ queries:
   - name: loadbalancer_validation
     file_path: queries/validation/lb.gql
 
-  - name: rack_elevation_query
-    file_path: queries/topology/rack.gql
-  - name: proposed_change_artifacts
-    file_path: queries/topology/add/proposed_change_artifacts.gql
   - name: mlag_domain_data
     file_path: queries/topology/add/mlag_domain.gql
   - name: customer_dc
@@ -763,10 +684,6 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
-    watch:
-      files:
-        - generators/
-        - utils/
   - name: add_pod
     file_path: generators/topology/pod.py
     targets: topologies_pod
@@ -776,10 +693,6 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
-    watch:
-      files:
-        - generators/
-        - utils/
   - name: dc_pod_cascade
     file_path: generators/topology/dc_pod_cascade.py
     targets: topologies_dc
@@ -789,10 +702,6 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
-    watch:
-      files:
-        - generators/
-        - utils/
   - name: pod_rack_cascade
     file_path: generators/topology/pod_rack_cascade.py
     targets: topologies_pod
@@ -802,10 +711,6 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
-    watch:
-      files:
-        - generators/
-        - utils/
   - name: decommission_pod
     file_path: generators/decommission/pod.py
     targets: topologies_pod
@@ -815,10 +720,6 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
-    watch:
-      files:
-        - generators/
-        - utils/
   - name: add_rack
     file_path: generators/topology/rack.py
     targets: topologies_rack
@@ -828,10 +729,6 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
-    watch:
-      files:
-        - generators/
-        - utils/
   - name: add_endpoint
     file_path: generators/topology/endpoint.py
     targets: endpoints
@@ -841,10 +738,6 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       device_name: name__value
-    watch:
-      files:
-        - generators/
-        - utils/
   - name: add_vxlan_segment
     file_path: generators/topology/segment.py
     targets: vxlan_segments
@@ -854,10 +747,6 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
-    watch:
-      files:
-        - generators/
-        - utils/
   - name: add_customer_routing_tag
     file_path: generators/topology/customer_routing_tag.py
     targets: customers
@@ -867,10 +756,6 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
-    watch:
-      files:
-        - generators/
-        - utils/
   - name: add_circuit
     file_path: generators/topology/circuit.py
     targets: carrier_circuits
@@ -880,10 +765,6 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
-    watch:
-      files:
-        - generators/
-        - utils/
   - name: add_virtual_circuit
     file_path: generators/topology/virtual_circuit.py
     targets: virtual_circuits
@@ -893,10 +774,6 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
-    watch:
-      files:
-        - generators/
-        - utils/
   - name: add_patch_panel
     file_path: generators/topology/patch_panel.py
     targets: patch_panels
@@ -906,10 +783,6 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       panel_id: panel_id__value
-    watch:
-      files:
-        - generators/
-        - utils/
   - name: add_mlag
     file_path: generators/topology/mlag.py
     targets: mlag_domains
@@ -919,10 +792,6 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
-    watch:
-      files:
-        - generators/
-        - utils/
   - name: add_app_application
     file_path: generators/topology/application_security.py
     targets: app_applications
@@ -932,17 +801,6 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
-    watch:
-      files:
-        - generators/
-        - utils/
-        # Read at run time by the VIP producer (generators/lb_vip.py).
-        - queries/topology/add/lb_segment_gateways.gql
-        - queries/topology/add/lb_serving_contexts.gql
-  # Same generator, entered from a dependency: the application trigger fires
-  # before the dependencies of a freshly loaded application exist, and a
-  # dependency added later changes no AppApplication at all. It only fans out
-  # add_app_application to the affected application and writes nothing.
   - name: add_app_dependency
     file_path: generators/topology/application_security.py
     targets: app_dependencies
@@ -952,15 +810,6 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
-    watch:
-      files:
-        - generators/
-        - utils/
-  # Same generator, entered from a component that moved to another segment,
-  # changed its ports or instances, or turned load_balanced (or back): it
-  # fans out add_app_application to its own application and every
-  # application calling the component, and writes nothing itself (only
-  # add_app_application owns an application's rules).
   - name: add_app_component
     file_path: generators/topology/application_security.py
     targets: app_components
@@ -970,13 +819,6 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       fqdn: fqdn__value
-    watch:
-      files:
-        - generators/
-        - utils/
-  # Same target group as add_app_component, different concern: tags the
-  # switch interface(s) this component's instances are cabled to with its
-  # network_segment — see generators/topology/app_instance_segment.py.
   - name: add_app_component_segment
     file_path: generators/topology/app_instance_segment.py
     targets: app_components
@@ -986,10 +828,6 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       fqdn: fqdn__value
-    watch:
-      files:
-        - generators/
-        - utils/
   - name: add_customer_deployment_dc
     file_path: generators/topology/customer_dc.py
     targets: customer_deployments_dc
@@ -999,10 +837,6 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
-    watch:
-      files:
-        - generators/
-        - utils/
   - name: add_customer_deployment_colocation
     file_path: generators/topology/customer_colocation.py
     targets: customer_deployments_colocation
@@ -1012,10 +846,6 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
-    watch:
-      files:
-        - generators/
-        - utils/
   - name: add_colocation_metro
     file_path: generators/topology/colocation.py
     targets: colocation_metros
@@ -1025,10 +855,6 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
-    watch:
-      files:
-        - generators/
-        - utils/
   - name: add_colocation_zone
     file_path: generators/topology/colocation_fabric.py
     targets: colocation_zones
@@ -1038,10 +864,6 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
-    watch:
-      files:
-        - generators/
-        - utils/
   - name: add_virtual_colocation
     file_path: generators/topology/colocation_fabric.py
     targets: virtual_colocations
@@ -1051,10 +873,6 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
-    watch:
-      files:
-        - generators/
-        - utils/
   - name: add_office_fabric
     file_path: generators/topology/office_fabric.py
     targets: customer_deployments_office
@@ -1064,10 +882,6 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
-    watch:
-      files:
-        - generators/
-        - utils/
   - name: add_sdwan_edge
     file_path: generators/topology/sdwan_edge.py
     targets: customer_deployments_office
@@ -1077,10 +891,6 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
-    watch:
-      files:
-        - generators/
-        - utils/
   - name: add_application_orchestrator_routing
     file_path: generators/topology/orchestrator_routing.py
     targets: app_applications
@@ -1090,15 +900,6 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
-    watch:
-      files:
-        - generators/
-        - utils/
-  # One definition per customer deployment kind, each targeting the kind's
-  # own target group: every footprint is already a member of that group
-  # (the per-kind created-triggers require it). Same class and query; the
-  # query reads all four kinds by name and the footprint's computed name is
-  # unique across them.
   - name: add_customer_dc_orchestrator_routing
     file_path: generators/topology/orchestrator_routing.py
     targets: customer_deployments_dc
@@ -1108,10 +909,6 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
-    watch:
-      files:
-        - generators/
-        - utils/
   - name: add_customer_colocation_orchestrator_routing
     file_path: generators/topology/orchestrator_routing.py
     targets: customer_deployments_colocation
@@ -1121,10 +918,6 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
-    watch:
-      files:
-        - generators/
-        - utils/
   - name: add_customer_cloud_orchestrator_routing
     file_path: generators/topology/orchestrator_routing.py
     targets: customer_deployments_cloud
@@ -1134,10 +927,6 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
-    watch:
-      files:
-        - generators/
-        - utils/
   - name: add_customer_office_orchestrator_routing
     file_path: generators/topology/orchestrator_routing.py
     targets: customer_deployments_office
@@ -1147,12 +936,3 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
-    watch:
-      files:
-        - generators/
-        - utils/
-
-# schemas:
-#   - schemas/
-# menus:
-#   - menus/menu.yml
