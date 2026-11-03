@@ -28,6 +28,14 @@ def _group(group_id: str, name: str) -> dict[str, str]:
     return {"id": group_id, "name": name}
 
 
+def _with_groups(gen: Any, groups: list[dict[str, str]]) -> None:
+    """The node's current groups, as the generator reads them (its own query, not the definition query)."""
+    edges = [{"node": {"id": g["id"], "name": {"value": g["name"]}}} for g in groups]
+    gen.client.execute_graphql = AsyncMock(
+        return_value={"CoreNode": {"edges": [{"node": {"member_of_groups": {"edges": edges}}}]}}
+    )
+
+
 def _saved_obj() -> MagicMock:
     obj = MagicMock()
     obj.save = AsyncMock()
@@ -49,11 +57,11 @@ class TestApplicationOrchestratorRoutingGenerator:
                     "typename": "AppApplication",
                     "name": "c005-payment-core-p",
                     "application_orchestrator": "github_actions",
-                    "member_of_groups": [_group("g-base", "app_applications")],
                 }
             ]
         }
 
+        _with_groups(gen, [_group("g-base", "app_applications")])
         asyncio.run(gen.generate(payload))
 
         call = gen.client.create.call_args.kwargs
@@ -73,14 +81,17 @@ class TestApplicationOrchestratorRoutingGenerator:
                     "typename": "AppApplication",
                     "name": "c003-custody-api-p",
                     "application_orchestrator": "manual",
-                    "member_of_groups": [
-                        _group("g-base", "app_applications"),
-                        _group("g-argo", "application_argocd"),
-                    ],
                 }
             ]
         }
 
+        _with_groups(
+            gen,
+            [
+                _group("g-base", "app_applications"),
+                _group("g-argo", "application_argocd"),
+            ],
+        )
         asyncio.run(gen.generate(payload))
 
         call = gen.client.create.call_args.kwargs
@@ -103,11 +114,11 @@ class TestTopologyOrchestratorRoutingGenerator:
                     "typename": "TopologyCustomerCloud",
                     "name": "C003-VAULTEX-AWS-EU-CENTRAL-1",
                     "infrastructure_orchestrator": "github_actions",
-                    "member_of_groups": [_group("g-base", "customer_deployments_cloud")],
                 }
             ]
         }
 
+        _with_groups(gen, [_group("g-base", "customer_deployments_cloud")])
         asyncio.run(gen.generate(payload))
 
         call = gen.client.create.call_args.kwargs
@@ -127,14 +138,17 @@ class TestTopologyOrchestratorRoutingGenerator:
                     "typename": "TopologyCustomerDC",
                     "name": "C005-P-DC10",
                     "infrastructure_orchestrator": "argocd",
-                    "member_of_groups": [
-                        _group("g-base", "customer_deployments_dc"),
-                        _group("g-topo-argo", "topology_argocd"),
-                    ],
                 }
             ]
         }
 
+        _with_groups(
+            gen,
+            [
+                _group("g-base", "customer_deployments_dc"),
+                _group("g-topo-argo", "topology_argocd"),
+            ],
+        )
         asyncio.run(gen.generate(payload))
 
         gen.client.create.assert_not_called()
@@ -156,14 +170,17 @@ class TestTopologyOrchestratorRoutingGenerator:
                     "typename": "TopologyCustomerDC",
                     "name": "C005-P-DC10",
                     "infrastructure_orchestrator": "argocd",
-                    "member_of_groups": [
-                        _group("g-topo-argo", "topology_argocd"),
-                        _group("g-topo-gh", "topology_github_actions"),
-                    ],
                 }
             ]
         }
 
+        _with_groups(
+            gen,
+            [
+                _group("g-topo-argo", "topology_argocd"),
+                _group("g-topo-gh", "topology_github_actions"),
+            ],
+        )
         asyncio.run(gen.generate(payload))
 
         gen.client.get.assert_not_called()
@@ -180,11 +197,11 @@ class TestTopologyOrchestratorRoutingGenerator:
                     "typename": "TopologyCustomerDC",
                     "name": "C005-P-DC10",
                     "infrastructure_orchestrator": "pulumi",
-                    "member_of_groups": [_group("g-base", "customer_deployments_dc")],
                 }
             ]
         }
 
+        _with_groups(gen, [_group("g-base", "customer_deployments_dc")])
         asyncio.run(gen.generate(payload))
 
         gen.logger.error.assert_called_once()

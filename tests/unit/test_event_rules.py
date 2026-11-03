@@ -108,6 +108,23 @@ def test_group_rule_names_the_kinds_of_its_members(rule: dict[str, Any]) -> None
     assert kinds and all(kind in schema() for kind in kinds), kinds
 
 
+def _query_body(generator: str) -> str:
+    """The definition query of a generator, comments dropped."""
+    config = yaml.safe_load((ROOT / ".infrahub.yml").read_text())
+    query = {d["name"]: d for d in config["generator_definitions"]}[generator]["query"]
+    path = ROOT / {q["name"]: q["file_path"] for q in config["queries"]}[query]
+    return "\n".join(line.split("#", 1)[0] for line in path.read_text().splitlines())
+
+
+@pytest.mark.parametrize("generator", sorted({action_generators()[rule["action"]] for rule in group_trigger_rules()}))
+def test_a_group_started_generator_does_not_read_groups_in_its_definition_query(generator: str) -> None:
+    """The server makes every node of a definition query's result a member of the run's query group, and a group
+    that becomes one is reported as a new member of THAT group: its group trigger then starts the group's generators
+    for the query group, which fail ("Target ... is not part of the group"; measured on 1.11 with the orchestrator
+    routing queries). A generator that needs the groups reads them with a query of its own."""
+    assert "member_of_groups" not in _query_body(generator)
+
+
 @pytest.mark.parametrize("group", sorted({rule["group"] for rule in group_trigger_rules()}))
 def test_declared_objects_are_target_group_members(group: str) -> None:
     """A generator starts only for a member of its group, so every declared object of a kind the group holds joins
