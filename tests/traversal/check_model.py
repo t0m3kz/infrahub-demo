@@ -215,8 +215,8 @@ async def check_pod(rep: Report, cfg: dict, client: InfrahubClient, branch: str,
         legs = await traced(rep, "pod", client, branch, kind + leaf, kind + cfg["edge"], layers=("l3",))
         l3[leaf] = [p for g in legs or [] for p in g.paths]
     if direct is not None:
-        for row in walks.pod_path_rows(cfg, role, [p for g in direct for p in g.equal_cost], via, l3):
-            rep.add(*row)
+        for name, ok, detail in walks.pod_path_rows(cfg, role, [p for g in direct for p in g.equal_cost], via, l3):
+            rep.add(f"{name} [{cfg['edge']}]", ok, detail)
 
 
 async def check_internet(rep: Report, cfg: dict, client: InfrahubClient, branch: str, update_golden: bool) -> None:
@@ -265,11 +265,11 @@ async def assert_case(
     for pair in case["pairs"]:
         await check_pair(rep, case, pair, client, branch, d, update_golden)
         lap(f"pair {pair['src']} -> {pair['dst']}")
-    if case.get("pod"):
-        for row in walks.pod_rows(d, case["pod"]):
-            rep.add(*row)
-        await check_pod(rep, case["pod"], client, branch, d)
-        lap("pod")
+    for pod in case.get("pods") or []:
+        for name, ok, detail in walks.pod_rows(d, pod):
+            rep.add(f"{name} [{pod['edge']}]", ok, detail)
+        await check_pod(rep, pod, client, branch, d)
+        lap(f"pod {pod['server']}")
     if case.get("transport_sub_interfaces"):
         for row in [*walks.sub_interface_rows(d), *walks.tunnel_underlay_rows(d)]:
             rep.add(*row)

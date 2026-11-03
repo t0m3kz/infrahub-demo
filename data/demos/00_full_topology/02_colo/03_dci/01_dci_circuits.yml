@@ -31,3 +31,220 @@ spec:
       capabilities:
         - ["ktw1-bl-02", "Ethernet1/35"]
         - ["par-colo1-edge-01", "Ethernet1/11"]
+---
+# The mesh: every DC to every cage (two fibres, border leaf 1 and 2 to the cage edge) and every cage to every
+# other cage (one fibre between the two edges).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologySessionCircuit
+  data:
+    - name: ICX-KTW1-FRA1
+      circuit_type: dci
+      status: active
+      provider: P016
+      description: DCI DC-KTW1 <-> FRA-COLO1 over DF-KTW1-FRA1-A
+      locations:
+        - DC-KTW1
+        - FRA-COLO1
+      capabilities:
+        - ["ktw1-bl-01", "Ethernet1/36"]
+        - ["fra-colo1-edge-01", "Ethernet1/9"]
+    - name: ICX-KTW1-FRA1-B
+      circuit_type: dci
+      status: active
+      provider: P016
+      description: DCI DC-KTW1 <-> FRA-COLO1 over DF-KTW1-FRA1-B
+      locations:
+        - DC-KTW1
+        - FRA-COLO1
+      capabilities:
+        - ["ktw1-bl-02", "Ethernet1/36"]
+        - ["fra-colo1-edge-01", "Ethernet1/10"]
+    - name: ICX-KTW1-AMS1
+      circuit_type: dci
+      status: active
+      provider: P016
+      description: DCI DC-KTW1 <-> AMS-COLO1 over DF-KTW1-AMS1-A
+      locations:
+        - DC-KTW1
+        - AMS-COLO1
+      capabilities:
+        - ["ktw1-bl-01", "Ethernet1/34"]
+        - ["ams-colo1-edge-01", "Ethernet1/9"]
+    - name: ICX-KTW1-AMS1-B
+      circuit_type: dci
+      status: active
+      provider: P016
+      description: DCI DC-KTW1 <-> AMS-COLO1 over DF-KTW1-AMS1-B
+      locations:
+        - DC-KTW1
+        - AMS-COLO1
+      capabilities:
+        - ["ktw1-bl-02", "Ethernet1/34"]
+        - ["ams-colo1-edge-01", "Ethernet1/10"]
+    - name: ICX-WAW1-PAR1
+      circuit_type: dci
+      status: active
+      provider: P016
+      description: DCI DC-WAW1 <-> PAR-COLO1 over DF-WAW1-PAR1-A
+      locations:
+        - DC-WAW1
+        - PAR-COLO1
+      capabilities:
+        - ["waw1-bl-01", "Ethernet1/35"]
+        - ["par-colo1-edge-01", "Ethernet1/9"]
+    - name: ICX-WAW1-PAR1-B
+      circuit_type: dci
+      status: active
+      provider: P016
+      description: DCI DC-WAW1 <-> PAR-COLO1 over DF-WAW1-PAR1-B
+      locations:
+        - DC-WAW1
+        - PAR-COLO1
+      capabilities:
+        - ["waw1-bl-02", "Ethernet1/35"]
+        - ["par-colo1-edge-01", "Ethernet1/12"]
+    - name: ICX-WAW1-FRA1
+      circuit_type: dci
+      status: active
+      provider: P016
+      description: DCI DC-WAW1 <-> FRA-COLO1 over DF-WAW1-FRA1-A
+      locations:
+        - DC-WAW1
+        - FRA-COLO1
+      capabilities:
+        - ["waw1-bl-01", "Ethernet1/36"]
+        - ["fra-colo1-edge-01", "Ethernet1/11"]
+    - name: ICX-WAW1-FRA1-B
+      circuit_type: dci
+      status: active
+      provider: P016
+      description: DCI DC-WAW1 <-> FRA-COLO1 over DF-WAW1-FRA1-B
+      locations:
+        - DC-WAW1
+        - FRA-COLO1
+      capabilities:
+        - ["waw1-bl-02", "Ethernet1/36"]
+        - ["fra-colo1-edge-01", "Ethernet1/12"]
+    - name: ICX-WAW1-AMS1
+      circuit_type: dci
+      status: active
+      provider: P016
+      description: DCI DC-WAW1 <-> AMS-COLO1 over DF-WAW1-AMS1-A
+      locations:
+        - DC-WAW1
+        - AMS-COLO1
+      capabilities:
+        - ["waw1-bl-01", "Ethernet1/34"]
+        - ["ams-colo1-edge-01", "Ethernet1/11"]
+    - name: ICX-WAW1-AMS1-B
+      circuit_type: dci
+      status: active
+      provider: P016
+      description: DCI DC-WAW1 <-> AMS-COLO1 over DF-WAW1-AMS1-B
+      locations:
+        - DC-WAW1
+        - AMS-COLO1
+      capabilities:
+        - ["waw1-bl-02", "Ethernet1/34"]
+        - ["ams-colo1-edge-01", "Ethernet1/12"]
+    - name: ICX-GDN1-PAR1
+      circuit_type: dci
+      status: active
+      provider: P016
+      description: DCI DC-GDN1 <-> PAR-COLO1 over DF-GDN1-PAR1-A
+      locations:
+        - DC-GDN1
+        - PAR-COLO1
+      capabilities:
+        - ["gdn1-bl-01", "Ethernet1/35"]
+        - ["par-colo1-edge-01", "Ethernet1/15"]
+    - name: ICX-GDN1-PAR1-B
+      circuit_type: dci
+      status: active
+      provider: P016
+      description: DCI DC-GDN1 <-> PAR-COLO1 over DF-GDN1-PAR1-B
+      locations:
+        - DC-GDN1
+        - PAR-COLO1
+      capabilities:
+        - ["gdn1-bl-02", "Ethernet1/35"]
+        - ["par-colo1-edge-01", "Ethernet1/16"]
+    - name: ICX-GDN1-FRA1
+      circuit_type: dci
+      status: active
+      provider: P016
+      description: DCI DC-GDN1 <-> FRA-COLO1 over DF-GDN1-FRA1-A
+      locations:
+        - DC-GDN1
+        - FRA-COLO1
+      capabilities:
+        - ["gdn1-bl-01", "Ethernet1/36"]
+        - ["fra-colo1-edge-01", "Ethernet1/13"]
+    - name: ICX-GDN1-FRA1-B
+      circuit_type: dci
+      status: active
+      provider: P016
+      description: DCI DC-GDN1 <-> FRA-COLO1 over DF-GDN1-FRA1-B
+      locations:
+        - DC-GDN1
+        - FRA-COLO1
+      capabilities:
+        - ["gdn1-bl-02", "Ethernet1/36"]
+        - ["fra-colo1-edge-01", "Ethernet1/14"]
+    - name: ICX-GDN1-AMS1
+      circuit_type: dci
+      status: active
+      provider: P016
+      description: DCI DC-GDN1 <-> AMS-COLO1 over DF-GDN1-AMS1-A
+      locations:
+        - DC-GDN1
+        - AMS-COLO1
+      capabilities:
+        - ["gdn1-bl-01", "Ethernet1/34"]
+        - ["ams-colo1-edge-01", "Ethernet1/13"]
+    - name: ICX-GDN1-AMS1-B
+      circuit_type: dci
+      status: active
+      provider: P016
+      description: DCI DC-GDN1 <-> AMS-COLO1 over DF-GDN1-AMS1-B
+      locations:
+        - DC-GDN1
+        - AMS-COLO1
+      capabilities:
+        - ["gdn1-bl-02", "Ethernet1/34"]
+        - ["ams-colo1-edge-01", "Ethernet1/14"]
+    - name: ICX-PAR1-FRA1
+      circuit_type: dci
+      status: active
+      provider: P016
+      description: DCI PAR-COLO1 <-> FRA-COLO1 over DF-PAR1-FRA1
+      locations:
+        - PAR-COLO1
+        - FRA-COLO1
+      capabilities:
+        - ["par-colo1-edge-01", "Ethernet1/8"]
+        - ["fra-colo1-edge-01", "Ethernet1/15"]
+    - name: ICX-PAR1-AMS1
+      circuit_type: dci
+      status: active
+      provider: P016
+      description: DCI PAR-COLO1 <-> AMS-COLO1 over DF-PAR1-AMS1
+      locations:
+        - PAR-COLO1
+        - AMS-COLO1
+      capabilities:
+        - ["par-colo1-edge-01", "Ethernet1/7"]
+        - ["ams-colo1-edge-01", "Ethernet1/15"]
+    - name: ICX-FRA1-AMS1
+      circuit_type: dci
+      status: active
+      provider: P016
+      description: DCI FRA-COLO1 <-> AMS-COLO1 over DF-FRA1-AMS1
+      locations:
+        - FRA-COLO1
+        - AMS-COLO1
+      capabilities:
+        - ["fra-colo1-edge-01", "Ethernet1/16"]
+        - ["ams-colo1-edge-01", "Ethernet1/16"]

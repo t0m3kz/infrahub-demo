@@ -1,7 +1,7 @@
 ---
 # Session circuits are the routing on top: handoff (BGP) for the private legs, vpn for the two AWS tunnels (those
 # still ride the internet access of the DC edge). peer_ip and peer_asn are the PROVIDER side of the leg (on the
-# peering interface); our side is the sub-interface address of 02_colo/02_routing/01_virtual_interfaces.yml.
+# peering interface); our side is the sub-interface address of 02_colo/00_par1/02_routing/01_virtual_interfaces.yml.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

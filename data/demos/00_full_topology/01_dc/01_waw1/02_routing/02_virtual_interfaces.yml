@@ -1,0 +1,19 @@
+---
+# The SVIs of the segment c900-app-p on both leaves (VLAN 200, in the PROD VRF of DC-WAW1). The row of leaf-01
+# is nested under the segment (03_tenant/01_segment.yml), the row of leaf-02 is created by
+# tests/traversal/load_topology.py (an object file cannot name the segment's deployment).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: Vlan200
+      device: waw1-leaf-01
+      role: svi
+      status: active
+      vrf: ["DC-WAW1", "PROD"]
+    - name: Vlan200
+      device: waw1-leaf-02
+      role: svi
+      status: active
+      vrf: ["DC-WAW1", "PROD"]

@@ -48,7 +48,11 @@ END_KINDS: dict[tuple[str, str], tuple[str, ...]] = {
     ("l3", "ManagedVxlanSegment"): ("ManagedSegmentDeployment", "ManagedVlanDomainSegment"),
     ("l1", "CloudInstance"): ("CloudNetworkSegment",),
     ("l3", "CloudInstance"): ("CloudNetworkSegment",),
-}
+    # A VM is in the segment of its application component (AppComponent.network_segment, from which the generators
+    # derive the host port's segment and the VM's address), so it routes through that segment like a segment end.
+    ("l3", "DcimVirtualDevice"): ("AppComponent", "ManagedVxlanSegment", "ManagedSegmentDeployment",
+                                  "ManagedVlanDomainSegment"),
+}  # fmt: skip
 # Where a bare name is looked up (by `name`).
 NAME_KINDS = ("DcimPhysicalDevice", "DcimVirtualDevice", "CloudDirectConnect", "CloudVPNConnection",
               "TopologyInternet", "ManagedVxlanSegment", "CloudNetworkSegment", "CloudVirtualNetwork", "CloudGateway",

@@ -1,0 +1,29 @@
+---
+# The building of the cage in the Frankfurt metro: one suite, one rack, pinned to the zone (the edge stands
+# in it). `topologies_rack` keeps the created-rack trigger a no-op for a rack of a colocation zone.
+apiVersion: infrahub.app/v1
+version: "1.0"
+kind: Object
+spec:
+  kind: LocationFacility
+  data:
+    - name: "FRA-COLO1"
+      shortname: "fra-colo1"
+      parent: "fra"
+      children:
+        kind: LocationSuite
+        data:
+          - name: FRA-COLO1-SUITE-1
+            index: 1
+            shortname: "fra-colo1-suite-1"
+            rows: 1
+            racks_per_row: 1
+            children:
+              kind: LocationRack
+              data:
+                - name: FRA-COLO1-RACK-01
+                  shortname: fra-colo1-rack-01
+                  index: 1
+                  row_index: 1
+                  deployment: FRA-COLO1
+                  member_of_groups: [topologies_rack]

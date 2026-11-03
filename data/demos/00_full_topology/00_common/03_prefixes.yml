@@ -26,3 +26,7 @@ spec:
     # yamllint disable-line rule:line-length
     - {prefix: "169.254.10.12/30", ip_namespace: "PROD", status: active, description: "Link: office tunnel to the DC edge (SD-WAN hub)"}  # yamllint disable-line rule:line-length
     - {prefix: "10.91.255.0/24", ip_namespace: "PROD", status: active, description: "PAR-COLO1 loopbacks"}
+    - {prefix: "10.92.255.0/24", ip_namespace: "PROD", status: active, description: "DC-WAW1 loopbacks"}
+    - {prefix: "10.93.255.0/24", ip_namespace: "PROD", status: active, description: "DC-GDN1 loopbacks"}
+    - {prefix: "10.94.255.0/24", ip_namespace: "PROD", status: active, description: "FRA-COLO1 loopbacks"}
+    - {prefix: "10.95.255.0/24", ip_namespace: "PROD", status: active, description: "AMS-COLO1 loopbacks"}

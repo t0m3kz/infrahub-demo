@@ -13,6 +13,7 @@ CFG = {
     "server": "srv",
     "bond": "bond0",
     "leaves": LEAVES,
+    "leaves_to_edge": [LEAVES[0]],
     "edge": "edge",
     "segment": "seg",
     "mlag": "mlag",
@@ -309,6 +310,29 @@ def test_overlay_rows_need_the_second_leaf_to_peer_only_upwards() -> None:
     assert walks.overlay_rows(d, CFG)[0][1] is False
 
 
+def test_overlay_rows_of_a_pod_without_a_leaf_to_edge_session() -> None:
+    """A pod whose leaves all peer only upwards passes with no `leaves_to_edge`; the old direct session then fails."""
+    d = _graph()
+    d["peering"] = [
+        p
+        for p in d["peering"]
+        if p["bgp_processes"]["edges"][1]["node"]["id"] != "p-edge"
+        or p["bgp_processes"]["edges"][0]["node"]["id"] != f"p-{LEAVES[0]}"
+    ]
+    cfg = {**CFG, "leaves_to_edge": []}
+    assert walks.overlay_rows(d, cfg)[0][1] is True
+    assert walks.overlay_rows(_graph(), cfg)[0][1] is False
+
+
+def test_a_pod_without_a_direct_uplink_counts_its_spine_paths_once() -> None:
+    """With no direct leaf - edge link the shortest set IS the spine paths: 4 distinct paths, not 4 + 4."""
+    _, via, l3 = _expected_chains()
+    direct = [_chain("srv", leaf, "sp", b, "edge") for leaf in LEAVES for b in ("b1", "b2")]
+    cfg = {**CFG_PATHS, "l1_paths_to_edge": 4}
+    assert _failed(walks.pod_path_rows(cfg, ROLE, direct, via, l3)) == []
+    assert len(_failed(walks.pod_path_rows(CFG_PATHS, ROLE, direct, via, l3))) == 1
+
+
 def test_tunnel_interfaces_must_ride_on_an_internet_carrier_port() -> None:
     """A tunnel whose parent port ends no internet carrier is reported."""
     carrier = {"circuit_type": _v("internet"), "capabilities": _edges({"id": "port-1"})}
@@ -334,12 +358,11 @@ def test_inventory_rows_flag_an_empty_kind() -> None:
 
 LAYOUT = {
     "zone": "Z1",
-    "dc": "DC1",
     "office": "OFF",
     "office_edge": "off-edge",
     "colo_edge": "eg",
     "fabric_port_device": "fabric",
-    "dark_fibres": ["DF-1"],
+    "dark_fibres": {"DF-1": ["DC1", "Z1"]},
 }
 
 
@@ -400,6 +423,18 @@ def test_a_tunnel_that_does_not_end_on_the_office_edge_fails() -> None:
     d = _layout_graph()
     d["session"][0] = {"name": _v("T-1"), "circuit_type": _v("tunnel"), **_circuit("T-1", "tunnel", "bl", "z")}
     assert any("office edge" in name for name in _failed(walks.layout_rows(d, LAYOUT)))
+
+
+def test_a_fibre_of_the_mesh_must_join_the_facilities_listed_for_it() -> None:
+    """A DC - DC fibre listed with its two DCs passes; one listed with other ends, or not listed, fails."""
+    d = _layout_graph()
+    d["dev"].append(_dev_in("bl2", "TopologyDataCenter", "DC2"))
+    d["carrier"].append(_circuit("DF-2", "dark_fiber", "bl", "bl2"))
+    mesh = {**LAYOUT, "dark_fibres": {"DF-1": ["Z1", "DC1"], "DF-2": ["DC1", "DC2"]}}
+    assert _failed(walks.layout_rows(d, mesh)) == []
+    wrong = {**LAYOUT, "dark_fibres": {"DF-1": ["DC1", "Z1"], "DF-2": ["DC1", "Z1"]}}
+    assert any("dark fibres" in name for name in _failed(walks.layout_rows(d, wrong)))
+    assert any("dark fibres" in name for name in _failed(walks.layout_rows(d, LAYOUT)))
 
 
 def test_a_panel_whose_jack_is_not_paired_with_the_fabric_cable_fails() -> None:

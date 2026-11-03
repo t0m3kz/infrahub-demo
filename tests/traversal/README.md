@@ -36,11 +36,12 @@ search. On failure the PASS/FAIL table shows the tracer result or the difference
 `infrahubctl object load`); `tests/traversal/load_topology.py` loads it (`async apply(client, branch, force)`; command:
 `uv run python tests/traversal/load_topology.py --branch main`): it loads the objects (and skips when the sentinel
 segment is already on the branch, for example inherited from `main` after `test_03`) and runs the after-load step (the
-VLAN row of the second leaf). `tests/integration/test_03_full_topology.py` runs the same assertions on the `main` of the
-stack (`assert_case` from `check_model.py`, part of `invoke test-integration-fast`). Case keys: `pod` (the MLAG, the
-dual-homed bond, the deployment of the leaves, spine and server to the pod and of the border leaves to the DC, VLAN
-rows from a data read; the number of L1 chains server -> edge and the L3 overlay from both leaves, from the server's
-chains; the bond is followed through the patch panels of the racks), `internet` (INTERNET: one object under the label
+VLAN row of the second leaf of each pod). `tests/integration/test_03_full_topology.py` runs the same assertions on the `main` of the
+stack (`assert_case` from `check_model.py`, part of `invoke test-integration-fast`). Case keys: `pods` (one entry per DC: the
+MLAG, the dual-homed bond, the deployment of the leaves, spine and server to the pod and of the border leaves to the DC,
+VLAN rows from a data read; the number of distinct L1 device paths server -> edge, the overlay sessions (`leaves_to_edge`:
+the leaves with a direct session to the edge) and the L3 overlay from both leaves, from the server's chains; the bond is
+followed through the patch panels of the racks), `internet` (INTERNET: one object under the label
 Internet with one interface, two ISPs and the public sides of a SaaS and of a cloud attached to it; L1 from the edge
 port through each ISP and INTERNET to the port of the public side: one chain, three carriers by `circuit_id`; golden
 file `full_topology__internet.txt`; L1 to the ISP router, L3 through the INTERNET space, no tunnel),

@@ -1,0 +1,13 @@
+---
+# The AS numbers of the DC-GDN1 devices. Hand-typed like the rest of the sample (a pool would hand them out).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingAutonomousSystem
+  data:
+    - {asn: 4200093001, owner: "P028", description: "gdn1-edge-01 (would come from PRIVATE-ASN32)"}
+    - {asn: 4200093002, owner: "P028", description: "gdn1-leaf-01 (would come from PRIVATE-ASN32)"}
+    - {asn: 4200093003, owner: "P028", description: "gdn1-leaf-02 (would come from PRIVATE-ASN32)"}
+    - {asn: 4200093004, owner: "P028", description: "gdn1-spine-01 (would come from PRIVATE-ASN32)"}
+    - {asn: 4200093005, owner: "P028", description: "gdn1-bl-01 (would come from PRIVATE-ASN32)"}
+    - {asn: 4200093006, owner: "P028", description: "gdn1-bl-02 (would come from PRIVATE-ASN32)"}
