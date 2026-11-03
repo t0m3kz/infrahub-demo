@@ -141,7 +141,7 @@ class TestDC6Segments(TestInfrahubDockerWithClient):
 
         The segment generator places ManagedSegmentDeployment on the
         footprint's parent, so a footprint under the wrong DC (or missing the
-        customer_deployments_dc group its created-trigger requires) would put
+        customer_deployments_dc group its group trigger requires) would put
         the segments somewhere this scenario never looks.
         """
         logging.info("=== %s - Step 2: Verify Customer Footprint ===", SCENARIO_NAME)

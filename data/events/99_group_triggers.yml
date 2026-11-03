@@ -1,0 +1,155 @@
+---
+# The generators start on a group trigger: when an object joins the target group of a generator definition
+# (`targets` in .infrahub.yml), the server runs the generator for that member alone (CoreGroupTriggerRule,
+# member_update added). An object created with `member_of_groups` inline joins the group in its create, and an
+# existing object added later joins it then; measured on 1.11, each is one infrahub.group.member_added, and a re-save
+# or an upsert of a member emits none, so a generator that re-saves its own objects never fires itself again. An
+# object outside the group starts nothing. (A node trigger on `created` fired for every object of its kind, and the
+# run then failed for a non-member: "Target ... is not part of the group".)
+#
+# The `updated` rules (99_actions.yml) stay node triggers, a group trigger has no field match: an edit of a non-member
+# still dispatches and fails there. trigger-endpoint-generator-on-created stays a node trigger too (it matches the
+# device role). The names are new (CoreTriggerRule names are unique across both kinds): an instance loaded with the
+# old node rules keeps them until they are deleted.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CoreGroupTriggerRule
+  data:
+    - name: trigger-dc-generator-on-added
+      branch_scope: "other_branches"
+      member_update: added
+      group: topologies_dc
+      action: run-dc-generator
+
+    - name: trigger-pod-generator-on-added
+      branch_scope: "other_branches"
+      member_update: added
+      group: topologies_pod
+      action: run-pod-generator
+
+    - name: trigger-rack-generator-on-added
+      branch_scope: "other_branches"
+      member_update: added
+      group: topologies_rack
+      action: run-rack-generator
+
+    - name: trigger-customer-routing-tag-on-added
+      branch_scope: "other_branches"
+      member_update: added
+      group: customers
+      action: run-customer-routing-tag-generator
+
+    - name: trigger-vxlan-segment-generator-on-added
+      branch_scope: "other_branches"
+      member_update: added
+      group: vxlan_segments
+      action: run-vxlan-segment-generator
+
+    - name: trigger-app-security-rules-on-application-added
+      branch_scope: "other_branches"
+      member_update: added
+      group: app_applications
+      action: run-app-application-generator
+
+    - name: trigger-app-security-rules-on-dependency-added
+      branch_scope: "other_branches"
+      member_update: added
+      group: app_dependencies
+      action: run-app-dependency-generator
+
+    - name: trigger-app-component-segment-on-added
+      branch_scope: "other_branches"
+      member_update: added
+      group: app_components
+      action: run-app-component-segment-generator
+
+    - name: trigger-application-orchestrator-routing-on-added
+      branch_scope: "other_branches"
+      member_update: added
+      group: app_applications
+      action: run-application-orchestrator-routing-generator
+
+    - name: trigger-customer-dc-orchestrator-routing-on-added
+      branch_scope: "other_branches"
+      member_update: added
+      group: customer_deployments_dc
+      action: run-customer-dc-orchestrator-routing-generator
+
+    - name: trigger-customer-colocation-orchestrator-routing-on-added
+      branch_scope: "other_branches"
+      member_update: added
+      group: customer_deployments_colocation
+      action: run-customer-colocation-orchestrator-routing-generator
+
+    - name: trigger-customer-cloud-orchestrator-routing-on-added
+      branch_scope: "other_branches"
+      member_update: added
+      group: customer_deployments_cloud
+      action: run-customer-cloud-orchestrator-routing-generator
+
+    - name: trigger-customer-office-orchestrator-routing-on-added
+      branch_scope: "other_branches"
+      member_update: added
+      group: customer_deployments_office
+      action: run-customer-office-orchestrator-routing-generator
+
+    - name: trigger-customer-deployment-dc-on-added
+      branch_scope: "other_branches"
+      member_update: added
+      group: customer_deployments_dc
+      action: run-customer-deployment-dc-generator
+
+    - name: trigger-customer-deployment-colocation-on-added
+      branch_scope: "other_branches"
+      member_update: added
+      group: customer_deployments_colocation
+      action: run-customer-deployment-colocation-generator
+
+    - name: trigger-colocation-metro-on-added
+      branch_scope: "other_branches"
+      member_update: added
+      group: colocation_metros
+      action: run-colocation-metro-generator
+
+    - name: trigger-colocation-zone-on-added
+      branch_scope: "other_branches"
+      member_update: added
+      group: colocation_zones
+      action: run-colocation-zone-generator
+
+    - name: trigger-virtual-colocation-on-added
+      branch_scope: "other_branches"
+      member_update: added
+      group: virtual_colocations
+      action: run-virtual-colocation-generator
+
+    - name: trigger-customer-office-sdwan-on-added
+      branch_scope: "other_branches"
+      member_update: added
+      group: customer_deployments_office
+      action: run-sdwan-edge-generator
+
+    - name: trigger-customer-office-fabric-on-added
+      branch_scope: "other_branches"
+      member_update: added
+      group: customer_deployments_office
+      action: run-office-fabric-generator
+
+    - name: trigger-circuit-on-added
+      branch_scope: "other_branches"
+      member_update: added
+      group: carrier_circuits
+      action: run-circuit-generator
+
+    - name: trigger-session-circuit-on-added
+      branch_scope: "other_branches"
+      member_update: added
+      group: virtual_circuits
+      action: run-virtual-circuit-generator
+
+    - name: trigger-patch-panel-on-added
+      branch_scope: "other_branches"
+      member_update: added
+      group: patch_panels
+      action: run-patch-panel-generator

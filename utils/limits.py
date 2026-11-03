@@ -167,12 +167,12 @@ GROUP_HA_DOMAINS = "ha_domains"
 GROUP_MLAG_DOMAINS = "mlag_domains"
 GROUP_APP_COMPONENTS = "app_components"
 GROUP_CARRIER_CIRCUITS = "carrier_circuits"
-# Every session circuit (dci, handoff and tunnel): the target group of add_virtual_circuit, whose created-trigger needs it.
+# Every session circuit (dci, handoff and tunnel): the target group of add_virtual_circuit, whose group trigger needs it.
 GROUP_VIRTUAL_CIRCUITS = "virtual_circuits"
 # Devices that are never a border gateway of a VLAN domain: the SD-WAN hubs and the provider stub routers.
 GROUP_SDWAN_GATEWAYS = "sdwan_gateways"
 GROUP_PROVIDER_STUBS = "provider_stubs"
-# Every DcimPatchPanel: the target group of add_patch_panel, whose created-trigger needs it (the panel templates join it).
+# Every DcimPatchPanel: the target group of add_patch_panel, whose group trigger needs it (each panel declares it: a template does not pass its groups on).
 GROUP_PATCH_PANELS = "patch_panels"
 
 # device_role -> the group its devices join, for roles whose group does not follow the f"{device_role}s" convention.

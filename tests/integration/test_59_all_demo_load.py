@@ -162,8 +162,8 @@ class TestAllDemoLoad(TestInfrahubDockerWithClient):
         """Verify every event-driven generator ran, at least once per target.
 
         Nothing in this suite invokes these: they are dispatched by the
-        CoreNodeTriggerRules in data/events/99_actions.yml when the loader
-        creates the matching node. Counting the dispatches is the only way to
+        group trigger rules in data/events/99_group_triggers.yml when the loader
+        creates a node in a generator's target group. Counting the dispatches is the only way to
         tell "the rule fired for all seven applications" from "the rule fired
         for one and the other six were never generated" — both look identical
         in a failed-task sweep, because neither produces a failed task.
@@ -183,8 +183,7 @@ class TestAllDemoLoad(TestInfrahubDockerWithClient):
 
         assert not missing, (
             "Generators that the 30_all load should have triggered never ran — "
-            "check the CoreNodeTriggerRule/CoreGeneratorAction pair in data/events:\n"
-            + "\n".join(f"  - {m}" for m in missing)
+            "check the trigger rule/CoreGeneratorAction pair in data/events:\n" + "\n".join(f"  - {m}" for m in missing)
         )
         assert not short, "Generators ran for fewer targets than the data declares:\n" + "\n".join(
             f"  - {s}" for s in short

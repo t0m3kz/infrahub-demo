@@ -1,7 +1,7 @@
 """Customer boarding generator for TopologyCustomerDC.
 
-Triggered on TopologyCustomerDC creation (see data/events/99_actions.yml's
-trigger-customer-deployment-dc-on-created rule).
+Triggered on TopologyCustomerDC creation (see data/events/99_group_triggers.yml's
+trigger-customer-deployment-dc-on-added rule: the footprint joins customer_deployments_dc).
 
 A DC customer's segments live on the fabric's own L2 domain; what this
 generator adds is the customer's place on the parent DC's firewall and

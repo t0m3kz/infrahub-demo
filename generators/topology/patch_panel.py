@@ -17,8 +17,8 @@ class PatchPanelGenerator(CommonGenerator):
     """Write ``rear_port`` on the front ports of one panel, as the ports say it belongs (jack or cassette).
 
     An object template creates a panel's ports unpaired (it cannot point a child at a sibling). The layout is
-    derived from the ports alone (generators/helpers/patch_panel.py). Runs when a panel is created and when its
-    port edges change (data/events/99_actions.yml); the template's children may not exist yet on the created run,
+    derived from the ports alone (generators/helpers/patch_panel.py). Runs when a panel joins patch_panels (data/events/99_group_triggers.yml) and when
+    its port edges change (data/events/99_actions.yml); the template's children may not exist yet on the created run,
     so a panel without ports is logged and left, and the port-edge rules run it again. Only unpaired front ports are
     written; one already on another rear port is left and warned about (checks/patch_panel_pairing.py reports it), so
     a re-run over a paired panel writes nothing. The writes are untracked: no run owns a panel, so no cleanup may

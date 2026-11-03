@@ -9,19 +9,13 @@ spec:
     # bootstrap via super().generate() before fanning out — a strict superset of
     # add_dc's own work (see generators/topology/dc_pod_cascade.py's docstring).
     # Structural DC-level changes (updated triggers below) need the fan-out: an
-    # existing pod isn't touched by the DC-level change, so its own created/
+    # existing pod isn't touched by the DC-level change, so its own group/
     # updated triggers won't fire it. A freshly created DC does NOT need it —
     # every pod nested under it in the same bulk load gets its own
-    # trigger-pod-generator-on-created, so fanning out here as well double-runs
+    # trigger-pod-generator-on-added (99_group_triggers.yml), so fanning out here as well double-runs
     # every pod (and, one level down, every rack). Plain add_dc keeps ordering
     # correct on its own: pod.py already waits for an in-flight add_dc/
     # dc_pod_cascade on its parent DC before reading DC-level data.
-
-    - name: trigger-dc-generator-on-created
-      branch_scope: "other_branches"
-      node_kind: TopologyDataCenter
-      mutation_action: "created"
-      action: run-dc-generator
 
     - name: trigger-dc-update-fabric-templates
       branch_scope: "other_branches"
@@ -67,16 +61,10 @@ spec:
     # triggers above: an existing rack isn't touched by a pod-level change, so
     # its own trigger won't fire it. A freshly created pod does NOT need it —
     # every rack nested under it in the same bulk load gets its own
-    # trigger-rack-generator-on-created, so fanning out here too double-runs
+    # trigger-rack-generator-on-added (99_group_triggers.yml), so fanning out here too double-runs
     # every rack. Plain add_pod keeps ordering correct on its own: rack.py
     # already waits for an in-flight add_pod/pod_rack_cascade on its parent pod
     # before reading pod-level data.
-
-    - name: trigger-pod-generator-on-created
-      branch_scope: "other_branches"
-      node_kind: TopologyPod
-      mutation_action: "created"
-      action: run-pod-generator
 
     - name: trigger-pod-update-index
       branch_scope: "other_branches"
@@ -112,7 +100,7 @@ spec:
             value_match: any
 
     # A rack created standalone under an already-existing, unchanged pod (e.g. a
-    # standalone switch add) needs its own created-trigger to bootstrap — a bulk
+    # standalone switch add) needs its own group trigger to bootstrap — a bulk
     # pod+rack load is also covered by this, since add_rack.generate() waits for
     # an in-flight add_pod/pod_rack_cascade on its parent pod before reading
     # pod-level data (see rack.py's generate()), so this can never race the
@@ -120,12 +108,6 @@ spec:
     # tor/compute row-dependents are, in turn, started unconditionally by that
     # network rack's own generate() (RackGenerator._fan_out_to_row_dependent_racks)
     # — this one level is not split into its own cascade generator.
-
-    - name: trigger-rack-generator-on-created
-      branch_scope: "other_branches"
-      node_kind: LocationRack
-      mutation_action: "created"
-      action: run-rack-generator
 
     - name: trigger-rack-generator-update-index
       branch_scope: "other_branches"
@@ -187,28 +169,18 @@ spec:
             value_previous: active
             # match_type: exact
 
-    # A customer gets its routing tag when it is created, and every customer
-    # object file declares the `customers` group (tests/unit/test_event_rules.py
-    # requires it: a trigger for a non-member raises). No update trigger: the
-    # tag is written once and never changes.
-    - name: trigger-customer-routing-tag-on-created
-      branch_scope: "other_branches"
-      node_kind: OrganizationCustomer
-      mutation_action: "created"
-      action: run-customer-routing-tag-generator
+    # A customer gets its routing tag when it joins the `customers` group (its
+    # group trigger, 99_group_triggers.yml), so every customer object file
+    # declares it (tests/unit/test_event_rules.py requires it of the demo data).
+    # No update trigger: the tag is written once and never changes.
 
-    # Segment triggers: `created` fires when customer_deployments is set inline
-    # during object creation (e.g. nested under OrganizationCustomer.network_
-    # segments — see data/demos/30_all/07_applications/*/00_segment*.yml), which
-    # is a `created` mutation on the segment itself, not an `updated` relationship
-    # mutation. Without this, a segment created with customer_deployments already
-    # populated never gets a SegmentDeployment realization until something later
-    # updates customer_deployments and happens to trigger the rule below.
-    - name: trigger-vxlan-segment-generator-on-created
-      branch_scope: "other_branches"
-      node_kind: ManagedVxlanSegment
-      mutation_action: "created"
-      action: run-vxlan-segment-generator
+    # Segment triggers: a segment created with customer_deployments inline
+    # (e.g. nested under OrganizationCustomer.network_segments — see
+    # data/demos/30_all/07_applications/*/00_segment*.yml) is ONE create, not an
+    # `updated` relationship mutation, so the rule below never sees it; the
+    # group trigger does (the segment joins vxlan_segments in that create).
+    # Without it, such a segment gets no SegmentDeployment realization until
+    # something later updates customer_deployments.
 
     # Re-run generator when customer deployments are added/updated after creation
     # (e.g. a stretched segment gaining its second DC leg later).
@@ -338,18 +310,6 @@ spec:
     # customer_deployments_dc, and add_customer_deployment_dc writes that link
     # on every first boarding, so it would run every boarding twice.
 
-    - name: trigger-app-security-rules-on-application-created
-      branch_scope: "other_branches"
-      node_kind: AppApplication
-      mutation_action: "created"
-      action: run-app-application-generator
-
-    - name: trigger-app-security-rules-on-dependency-created
-      branch_scope: "other_branches"
-      node_kind: AppDependency
-      mutation_action: "created"
-      action: run-app-dependency-generator
-
     - name: trigger-app-security-rules-on-dependency-updated
       branch_scope: "other_branches"
       node_kind: AppDependency
@@ -406,17 +366,12 @@ spec:
     # VLAN domain activations (generators/topology/app_instance_segment.py).
     # It shares app_components with add_app_component but is a second
     # concern, so the network_segment change dispatches both generators.
-    # `created` covers a component loaded with instances/network_segment
-    # inline (nested under its AppApplication). A component usually exists
+    # Its group trigger (99_group_triggers.yml) covers a component loaded with
+    # instances/network_segment inline (nested under its AppApplication). A component usually exists
     # before its servers are cabled; add_endpoint fans this generator out to
     # the components on an endpoint once it cables it, which closes that gap.
     # The generator writes interface tags and VLAN domain segments, never the
     # component itself, so neither rule can re-fire itself.
-    - name: trigger-app-component-segment-on-created
-      branch_scope: "other_branches"
-      node_kind: AppComponent
-      mutation_action: "created"
-      action: run-app-component-segment-generator
 
     - name: trigger-app-component-segment-on-instances-updated
       branch_scope: "other_branches"
@@ -449,13 +404,8 @@ spec:
     # Customer deployments: one generator definition per kind, each targeting
     # that kind's target group (customer_deployments_dc/colocation/
     # cloud/office). Every footprint in the demo data joins its per-kind group
-    # (the add_customer_deployment_* and add_sdwan_edge created-triggers
-    # require it).
-    - name: trigger-application-orchestrator-routing-on-created
-      branch_scope: "other_branches"
-      node_kind: AppApplication
-      mutation_action: "created"
-      action: run-application-orchestrator-routing-generator
+    # (the add_customer_deployment_* and add_sdwan_edge generators start on
+    # that group's trigger, 99_group_triggers.yml).
 
     - name: trigger-application-orchestrator-routing-on-orchestrator-updated
       branch_scope: "other_branches"
@@ -468,12 +418,6 @@ spec:
           - attribute_name: application_orchestrator
             value_match: any
 
-    - name: trigger-customer-dc-orchestrator-routing-on-created
-      branch_scope: "other_branches"
-      node_kind: TopologyCustomerDC
-      mutation_action: "created"
-      action: run-customer-dc-orchestrator-routing-generator
-
     - name: trigger-customer-dc-orchestrator-routing-on-orchestrator-updated
       branch_scope: "other_branches"
       node_kind: TopologyCustomerDC
@@ -484,12 +428,6 @@ spec:
         data:
           - attribute_name: infrastructure_orchestrator
             value_match: any
-
-    - name: trigger-customer-colocation-orchestrator-routing-on-created
-      branch_scope: "other_branches"
-      node_kind: TopologyCustomerColocation
-      mutation_action: "created"
-      action: run-customer-colocation-orchestrator-routing-generator
 
     - name: trigger-customer-colocation-orchestrator-routing-on-orchestrator-updated
       branch_scope: "other_branches"
@@ -502,12 +440,6 @@ spec:
           - attribute_name: infrastructure_orchestrator
             value_match: any
 
-    - name: trigger-customer-cloud-orchestrator-routing-on-created
-      branch_scope: "other_branches"
-      node_kind: TopologyCustomerCloud
-      mutation_action: "created"
-      action: run-customer-cloud-orchestrator-routing-generator
-
     - name: trigger-customer-cloud-orchestrator-routing-on-orchestrator-updated
       branch_scope: "other_branches"
       node_kind: TopologyCustomerCloud
@@ -518,12 +450,6 @@ spec:
         data:
           - attribute_name: infrastructure_orchestrator
             value_match: any
-
-    - name: trigger-customer-office-orchestrator-routing-on-created
-      branch_scope: "other_branches"
-      node_kind: TopologyCustomerOffice
-      mutation_action: "created"
-      action: run-customer-office-orchestrator-routing-generator
 
     - name: trigger-customer-office-orchestrator-routing-on-orchestrator-updated
       branch_scope: "other_branches"
@@ -545,56 +471,28 @@ spec:
     # per-context TopologyRoutedExchange objects the DC/colocation customer
     # generators create (docs/exchange_gateway.md), so those two
     # generators/triggers were removed rather than left as no-ops.
-    - name: trigger-customer-deployment-dc-on-created
-      branch_scope: "other_branches"
-      node_kind: TopologyCustomerDC
-      mutation_action: "created"
-      action: run-customer-deployment-dc-generator
-
-    - name: trigger-customer-deployment-colocation-on-created
-      branch_scope: "other_branches"
-      node_kind: TopologyCustomerColocation
-      mutation_action: "created"
-      action: run-customer-deployment-colocation-generator
 
     # ── Colocation Metro, Zone and Virtual Colocation Bootstrap ───────────────
-    # `created` covers a node loaded with fabric_templates already populated
-    # inline (the normal bulk-load shape, nested under the metro), which is a
-    # `created` mutation on the node itself and never an `updated`
-    # relationship mutation — the same gap documented on the segment triggers
-    # above.
+    # The group trigger (99_group_triggers.yml) covers a node loaded with
+    # fabric_templates already populated inline (the normal bulk-load shape,
+    # nested under the metro), which is a create of the node itself and never
+    # an `updated` relationship mutation — the same gap documented on the
+    # segment triggers above.
     #
     # The kit lives on the ZONE (a physical cage) or the VIRTUAL COLOCATION (a
     # provider-hosted presence), so those two get the fabric_templates rules.
     # The metro only holds the Multi-Site site (VNI and ASN pools) and has no
-    # fabric_templates of its own, so it keeps just its `created` trigger.
+    # fabric_templates of its own, so it keeps just its group trigger.
     #
-    # Each `created` rule fires for EVERY node of its kind, so every
+    # A generator starts only for a member of its group, so every
     # TopologyColocationMetro, TopologyColocationZone and
-    # TopologyVirtualColocation in data/demos declares `member_of_groups:
+    # TopologyVirtualColocation in data/demos/30_all declares `member_of_groups:
     # [colocation_metros]`, `[colocation_zones]` or `[virtual_colocations]` —
     # including the ones with no fabric_templates, which the generator no-ops
-    # on. That is not optional tidiness: a trigger firing for a node outside
-    # the generator's target group raises, as the endpoint note above records.
-    # Nodes we hold no kit in therefore cost one no-op flow each, the same
-    # trade add_rack already makes for colocation cage racks.
-    - name: trigger-colocation-metro-on-created
-      branch_scope: "other_branches"
-      node_kind: TopologyColocationMetro
-      mutation_action: "created"
-      action: run-colocation-metro-generator
-
-    - name: trigger-colocation-zone-on-created
-      branch_scope: "other_branches"
-      node_kind: TopologyColocationZone
-      mutation_action: "created"
-      action: run-colocation-zone-generator
-
-    - name: trigger-virtual-colocation-on-created
-      branch_scope: "other_branches"
-      node_kind: TopologyVirtualColocation
-      mutation_action: "created"
-      action: run-virtual-colocation-generator
+    # on (the `updated` rules below still fire for a non-member and fail, as the
+    # endpoint note above records). Nodes we hold no kit in therefore cost one
+    # no-op flow each, the same trade add_rack already makes for colocation cage
+    # racks.
 
     # Only fabric_templates is watched, deliberately. The zone and virtual
     # colocation generators write loopback_pool/management_pool/technical_pool
@@ -625,18 +523,13 @@ spec:
             modification_type: updated
 
     # ── SD-WAN Edge Provisioning ────────────────────────────────────────────────
-    # `created` covers an office loaded with sdwan_gateway already populated
-    # inline (the normal bulk-load shape) — SdwanEdgeGenerator itself no-ops
-    # when sdwan_gateway is unset, so this is safe to fire unconditionally for
-    # every office, not just ones that opted in. The `updated` rule covers an
+    # The group trigger (99_group_triggers.yml) covers an office loaded with sdwan_gateway already
+    # populated inline (the normal bulk-load shape) — SdwanEdgeGenerator itself no-ops
+    # when sdwan_gateway is unset, so it is safe to fire for every office in
+    # customer_deployments_office, not just ones that opted in. The `updated` rule covers an
     # existing office that opts in later by having sdwan_gateway set on it —
     # the generator writes back only lan_prefixes (the office LAN it allocates), which no rule
     # matches, so it can't self-trigger the way a colocation zone's fabric_templates can.
-    - name: trigger-customer-office-sdwan-on-created
-      branch_scope: "other_branches"
-      node_kind: TopologyCustomerOffice
-      mutation_action: "created"
-      action: run-sdwan-edge-generator
 
     - name: trigger-customer-office-sdwan-update-gateway
       branch_scope: "other_branches"
@@ -654,15 +547,10 @@ spec:
     # its pools, access/distribution switches, cabling and OSPF underlay. Like
     # the SD-WAN rules above it fires for EVERY office (all are members of
     # customer_deployments_office) and the generator no-ops on one without
-    # fabric_templates. `created` covers an office loaded with its fabric_templates
+    # fabric_templates. Its group trigger covers an office loaded with its fabric_templates
     # inline; the `updated` rule an existing office that opts in later. The
     # generator writes only vni_pool and lisp_site_key back onto the office, never
     # fabric_templates, so it cannot re-fire itself.
-    - name: trigger-customer-office-fabric-on-created
-      branch_scope: "other_branches"
-      node_kind: TopologyCustomerOffice
-      mutation_action: "created"
-      action: run-office-fabric-generator
 
     - name: trigger-customer-office-fabric-update-fabric-templates
       branch_scope: "other_branches"
@@ -677,8 +565,9 @@ spec:
 
     # ── Circuits ──────────────────────────────────────────────────────────────
     # add_circuit targets carrier_circuits, so every carrier circuit — loaded or
-    # generator-created (add_sdwan_edge creates INET-<office>) — must be a member, or
-    # its created-trigger raises (see the endpoint note above). A carrier circuit
+    # generator-created (add_sdwan_edge creates INET-<office>) — must be a member: the
+    # generator starts when the circuit joins the group (99_group_triggers.yml), and the
+    # `updated` rules below fail for a non-member (see the endpoint note above). A carrier circuit
     # is a pure carrier; add_circuit reads its ends and fans out to the session
     # circuits riding it, so the `updated` rules watch `capabilities` (the ends) and
     # `status` (a carrier set to decommissioned, or back to active, reaches the
@@ -693,11 +582,6 @@ spec:
     # endpoint note above). Every producer sets it when it creates the device,
     # before a circuit names it; checks/circuit_placement.py reports a later
     # edit (generators/topology/circuit.py).
-    - name: trigger-circuit-on-created
-      branch_scope: "other_branches"
-      node_kind: TopologyCarrierCircuit
-      mutation_action: "created"
-      action: run-circuit-generator
 
     - name: trigger-circuit-on-interface-capabilities-updated
       branch_scope: "other_branches"
@@ -724,7 +608,8 @@ spec:
     # ── Virtual circuits ──────────────────────────────────────────────────────
     # add_virtual_circuit targets virtual_circuits and builds the BGP session(s) of a dci or a handoff
     # session circuit, so every TopologySessionCircuit — loaded or generator-created, a tunnel too — must be a
-    # member, or its created-trigger raises (see the endpoint note above). A tunnel is a member but the generator
+    # member: it starts on the group trigger (99_group_triggers.yml), and the `updated` rules below fail for a
+    # non-member (see the endpoint note above). A tunnel is a member but the generator
     # builds no session for it: the SD-WAN orchestrator owns its overlay routing.
     # One set of rules for the one kind, none on a generic: a rule on a generic node_kind is unprobed here, a
     # per-kind rule is the shape every rule in this file uses.
@@ -732,12 +617,6 @@ spec:
     # the carrier), `status`, and for a handoff its `ip_namespace` (the pool) and `password`
     # (those two fire for a dci or a tunnel too, which never sets them: harmless).
     # A carrier's change reaches the circuits through add_circuit, which fans out here (generators/topology/circuit.py).
-
-    - name: trigger-session-circuit-on-created
-      branch_scope: "other_branches"
-      node_kind: TopologySessionCircuit
-      mutation_action: "created"
-      action: run-virtual-circuit-generator
 
     - name: trigger-session-circuit-on-capabilities-updated
       branch_scope: "other_branches"
@@ -785,17 +664,12 @@ spec:
 
     # ── Patch panels ──────────────────────────────────────────────────────────
     # add_patch_panel targets patch_panels and pairs the front ports a panel template creates with their rear
-    # ports (an object template cannot pair them), so every panel must be a member of the group (the panel
-    # templates carry it), or its created-trigger raises (see the endpoint note above). The template's children are
-    # created after the panel, so the created run may see no ports (the generator logs and stops); the
+    # ports (an object template cannot pair them), so every panel must be a member of the group. The panel
+    # declares it itself: an object template does not pass its `member_of_groups` on to the object it creates. The
+    # generator starts when the panel joins the group (99_group_triggers.yml); the template's children are
+    # created after the panel, so that first run may see no ports (the generator logs and stops); the
     # `updated` rules on the panel's two component edges re-run it once the ports exist. The generator writes the
     # front port's `rear_port`, never the panel's edges, so no rule loops.
-
-    - name: trigger-patch-panel-on-created
-      branch_scope: "other_branches"
-      node_kind: DcimPatchPanel
-      mutation_action: "created"
-      action: run-patch-panel-generator
 
     - name: trigger-patch-panel-on-rear-ports-updated
       branch_scope: "other_branches"

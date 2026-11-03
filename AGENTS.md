@@ -202,6 +202,14 @@ class MyTopologyGenerator(InfrahubGenerator):
         pass
 ```
 
+**When a generator runs**: a generator starts when an object joins its definition's target group (`targets` in
+`.infrahub.yml`): a `CoreGroupTriggerRule` (`member_update: added`, `data/events/99_group_triggers.yml`) per definition
+that bootstraps on creation, fired by an object created with `member_of_groups` inline or added to the group later;
+a re-save of a member fires nothing (measured on 1.11). An object outside the group starts nothing, so an object a
+generator must build declares the group (`tests/unit/test_event_rules.py` holds it for the demo data). The `updated`
+rules (`data/events/99_actions.yml`) are node triggers with a field match: they fire for every object of their kind,
+and the run fails for a non-member ("Target ... is not part of the group"), so they need the membership too.
+
 #### Transform Pattern
 
 ```python
@@ -389,7 +397,7 @@ class MyCheck(InfrahubCheck):
   is generated or recorded; its role is its `circuit_type` (`dci`, `handoff`, `tunnel`, `vpn`), required, never a kind. It has no `owner` field (derived, see **Circuit placement**). The
   carrier kind keeps its own `circuit_type` (the carrier's nature) beside it. `tunnel` (SD-WAN office edge <->
   gateway `eth1`, and the partner tunnel; inventory only, no session, owner = the office among its locations; a member of `virtual_circuits`
-  because the group's created-trigger raises for a non-member, the generator logs and stops), `dci` (unowned: a `/31` or
+  because the generator starts when a circuit joins that group, and the generator logs and stops), `dci` (unowned: a `/31` or
   `/127` eBGP underlay plus a loopback-to-loopback EVPN
   multihop session keyed per circuit, MTU 9214) and `handoff` (our edge sub-interface <-> a party
   device sub-interface in one environment namespace: cloud on-ramps, Equinix/Megaport, the SD-WAN gateway LAN; a `/31`
@@ -524,9 +532,10 @@ class MyCheck(InfrahubCheck):
   one file, in a third file, by id and from the rear side), so a template cannot pair a front port with its rear port.
   The panel templates (`data/bootstrap/10_physical_devices_templates_patch_panel_rear.yaml` and `_front.yaml`: `PP-24-LC`,
   `PP-48-LC`, `PP-12-SC`, `PP-24-RJ45`, `PP-CASSETTE-MPO12`) therefore create the ports unpaired, one ranged block per
-  kind (never nested: a nested range multiplies), and carry `member_of_groups: [patch_panels]`. The generator
-  `add_patch_panel` (`generators/topology/patch_panel.py`, created-trigger on the panel plus `updated` triggers on its
-  two port edges, because the template's children may appear after the panel) pairs them: the layout is derived from
+  kind (never nested: a nested range multiplies), and are in no group: a template does not pass its
+  `member_of_groups` on to the panel it creates, so a panel declares `member_of_groups: [patch_panels]` itself. The
+  generator `add_patch_panel` (`generators/topology/patch_panel.py`, the group trigger of `patch_panels` plus `updated`
+  triggers on the panel's two port edges, because the template's children may appear after the panel) pairs them: the layout is derived from
   the ports alone (`generators/helpers/patch_panel.py`): a jack when the numbered counts are equal (front N on rear N), a
   cassette when every rear port is MPO-12 and the fronts are a multiple F of the rears (rear k takes fronts
   (k-1)*F+1..k*F), else no pairing and an error. It writes only unpaired front ports (idempotent) and leaves one paired
@@ -545,7 +554,7 @@ class MyCheck(InfrahubCheck):
   (`utils/routing_identity.py` derives the strings, no community is stored, and no template re-derives them). They are
   drawn from the Number pools `Customer-Routing-Tag` and `Segment-Routing-Tag`
   (`data/bootstrap/19c_routing_tag_pools.yml`) by generators, never typed in data: `add_customer_routing_tag`
-  (created-trigger on the `customers` group, which every customer object declares) and, for a routed tenant segment,
+  (the group trigger of `customers`, which every customer object declares) and, for a routed tenant segment,
   `add_vxlan_segment` or the application generator. A
   community is a tag for reading the routing table, NOT a security control: the model-derived prefix-lists stay the
   gate and nothing filters on a community. A customer or segment without a tag renders no community.

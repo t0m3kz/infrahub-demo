@@ -5,7 +5,7 @@ Subclasses DCTopologyGenerator and reuses its entire generate() via super() —
 this is a superset of add_dc's own work, so every trigger that needs pods (and
 their racks) to reconcile against a DC-level change fires ONLY this generator,
 never add_dc alongside it (see data/events/99_actions.yml's
-trigger-dc-update-* rules — add_dc keeps its own created-trigger only, for
+trigger-dc-update-* rules — add_dc keeps its own group trigger only, for
 a standalone/bulk-loaded DC that isn't reconciling anything yet).
 
 This avoids the deadlock a naive "add_dc waits on add_pod" would cause: add_pod

@@ -229,14 +229,14 @@ class TestDefaults:
 
 
 class TestCreatedDispatches:
-    """A load dispatches one created-trigger run per distinct target-group member."""
+    """A load dispatches one run per distinct object that joins the target group."""
 
     def test_counts_members_of_the_target_group_once(self, demo: Path) -> None:
         """Two declarations of one office are one add_sdwan_edge run."""
         assert created_dispatches("add_sdwan_edge", demo) == 1
 
     def test_non_members_are_not_counted(self, demo: Path) -> None:
-        """The outsider application is not in app_applications, so its trigger would raise, not run."""
+        """The outsider application is not in app_applications, so no group trigger starts a run for it."""
         assert created_dispatches("add_app_application", demo) == 1
 
     def test_nested_objects_are_counted(self, demo: Path) -> None:
