@@ -29,9 +29,9 @@ version: "1.0"
 # `<panel_id>:<rear>` and a front port's `<panel_id>:F<front>`.
 #
 # A panel always sits between two devices: a circuit end stays an interface (the `capabilities` peers are untouched).
-# The rack-unit `position` returns together with a rack drawing that draws panels.
-# Its location is its mandatory `rack` (LocationRack.deployment gives the facility); it has no `deployment` and no
-# device type.
+# Its location is its mandatory `rack` (LocationRack.deployment gives the facility) and its place in it is `position`
+# (the lowest unit) and `rack_face`, the two attributes of a DcimPhysicalDevice with the same meaning (the panel
+# inherits no generic, so they are declared here); it has no `deployment` and no device type.
 # ============================================================================
 
 nodes:
@@ -71,6 +71,26 @@ nodes:
         kind: Text
         optional: true
         order_weight: 950
+      - name: position
+        label: Position (U)
+        description: Lowest unit.
+        kind: Number
+        optional: true
+        order_weight: 1710
+      - name: rack_face
+        label: Rack Face
+        description: On which face of the rack the panel is mounted.
+        kind: Dropdown
+        optional: true
+        default_value: front
+        order_weight: 1720
+        choices:
+          - name: front
+            label: Front
+            description: Panel mounted on the front face of the rack.
+          - name: rear
+            label: Rear
+            description: Panel mounted on the rear face of the rack.
     relationships:
       - name: rack
         peer: LocationRack

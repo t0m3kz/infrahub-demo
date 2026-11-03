@@ -1,0 +1,68 @@
+---
+# The EVPN session of each DC - DC DCI, between the overlay processes of the two border leaves (no loopback
+# interfaces, no underlay session: see 02_colo/03_dci/02_dci_peerings.yml for why).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGPPeering
+  data:
+    - name: "BGP-KTW1-BL01-WAW1-BL01-DCI-EVPN"
+      description: "DCI EVPN multihop ktw1-bl-01 <-> waw1-bl-01 over ICX-KTW1-WAW1"
+      session_type: EBGP_MULTIHOP
+      peering_role: dci
+      ttl: 2
+      address_families:
+        - ["l2vpn", "evpn"]
+      bgp_processes:
+        - "ktw1-bl-01-bgp"
+        - "waw1-bl-01-bgp"
+    - name: "BGP-KTW1-BL02-WAW1-BL02-DCI-EVPN"
+      description: "DCI EVPN multihop ktw1-bl-02 <-> waw1-bl-02 over ICX-KTW1-WAW1-B"
+      session_type: EBGP_MULTIHOP
+      peering_role: dci
+      ttl: 2
+      address_families:
+        - ["l2vpn", "evpn"]
+      bgp_processes:
+        - "ktw1-bl-02-bgp"
+        - "waw1-bl-02-bgp"
+    - name: "BGP-KTW1-BL01-GDN1-BL01-DCI-EVPN"
+      description: "DCI EVPN multihop ktw1-bl-01 <-> gdn1-bl-01 over ICX-KTW1-GDN1"
+      session_type: EBGP_MULTIHOP
+      peering_role: dci
+      ttl: 2
+      address_families:
+        - ["l2vpn", "evpn"]
+      bgp_processes:
+        - "ktw1-bl-01-bgp"
+        - "gdn1-bl-01-bgp"
+    - name: "BGP-KTW1-BL02-GDN1-BL02-DCI-EVPN"
+      description: "DCI EVPN multihop ktw1-bl-02 <-> gdn1-bl-02 over ICX-KTW1-GDN1-B"
+      session_type: EBGP_MULTIHOP
+      peering_role: dci
+      ttl: 2
+      address_families:
+        - ["l2vpn", "evpn"]
+      bgp_processes:
+        - "ktw1-bl-02-bgp"
+        - "gdn1-bl-02-bgp"
+    - name: "BGP-WAW1-BL01-GDN1-BL01-DCI-EVPN"
+      description: "DCI EVPN multihop waw1-bl-01 <-> gdn1-bl-01 over ICX-WAW1-GDN1"
+      session_type: EBGP_MULTIHOP
+      peering_role: dci
+      ttl: 2
+      address_families:
+        - ["l2vpn", "evpn"]
+      bgp_processes:
+        - "waw1-bl-01-bgp"
+        - "gdn1-bl-01-bgp"
+    - name: "BGP-WAW1-BL02-GDN1-BL02-DCI-EVPN"
+      description: "DCI EVPN multihop waw1-bl-02 <-> gdn1-bl-02 over ICX-WAW1-GDN1-B"
+      session_type: EBGP_MULTIHOP
+      peering_role: dci
+      ttl: 2
+      address_families:
+        - ["l2vpn", "evpn"]
+      bgp_processes:
+        - "waw1-bl-02-bgp"
+        - "gdn1-bl-02-bgp"

@@ -1,0 +1,62 @@
+---
+# The panels of the WAW1 data hall, as in DC-KTW1: PP-WAW1-01 in the border rack (jack 1: border leaf 1 to the
+# edge), PP-WAW1-02 in the compute rack (jack 1 eno1, jack 2 eno2 of the server), PP-WAW1-03 and PP-WAW1-04 in the leaf
+# racks (jack 1, the run to the compute rack). The used jacks are paired by hand (front n -> rear n).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPatchPanel
+  data:
+    - name: PP-WAW1-01
+      object_template: PP-24-LC
+      description: "DC-WAW1 border rack panel, jack 1 joins border leaf 1 to the edge"
+      rack: waw1-rack-01
+      position: 42
+      rack_face: front
+      front_ports:
+        - kind: DcimFrontPatchPanelPort
+          data:
+            name: "1"
+            connector: lc-upc
+            rear_port: "waw1-rack-01:PP-WAW1-01:1"
+    - name: PP-WAW1-02
+      object_template: PP-24-LC
+      description: "Compute rack panel: jack 1 is eno1 and jack 2 is eno2 of waw1-srv-01"
+      rack: waw1-rack-02
+      position: 42
+      rack_face: front
+      front_ports:
+        - kind: DcimFrontPatchPanelPort
+          data:
+            name: "1"
+            connector: lc-upc
+            rear_port: "waw1-rack-02:PP-WAW1-02:1"
+        - kind: DcimFrontPatchPanelPort
+          data:
+            name: "2"
+            connector: lc-upc
+            rear_port: "waw1-rack-02:PP-WAW1-02:2"
+    - name: PP-WAW1-03
+      object_template: PP-24-LC
+      description: "Leaf rack panel of waw1-leaf-01: jack 1 is the run to the compute rack"
+      rack: waw1-rack-03
+      position: 42
+      rack_face: front
+      front_ports:
+        - kind: DcimFrontPatchPanelPort
+          data:
+            name: "1"
+            connector: lc-upc
+            rear_port: "waw1-rack-03:PP-WAW1-03:1"
+    - name: PP-WAW1-04
+      object_template: PP-24-LC
+      description: "Leaf rack panel of waw1-leaf-02: jack 1 is the run to the compute rack"
+      rack: waw1-rack-04
+      position: 42
+      rack_face: front
+      front_ports:
+        - kind: DcimFrontPatchPanelPort
+          data:
+            name: "1"
+            connector: lc-upc
+            rear_port: "waw1-rack-04:PP-WAW1-04:1"

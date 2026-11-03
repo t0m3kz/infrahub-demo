@@ -16,28 +16,67 @@ cases:
     inventory_golden: full_topology__inventory.txt
     # a transport port or LAG lists its peerings in `sub_interfaces` (DcimSubInterface, the marker shared with VIFs)
     transport_sub_interfaces: true
-    # the pod DC-KTW1-9-POD-1 (leaves, spine, server) in front of the edge: server (bond0) -> vPC leaf pair -> spine ->
+    # the pod of each DC (leaves, spine, server) in front of the edge: server (bond0) -> vPC leaf pair -> spine ->
     # border leaves (deployed to the DC, as a border role belongs to it) -> edge
-    pod:
-      server: ktw1-srv-01
-      bond: bond0
-      leaves: [ktw1-leaf-01, ktw1-leaf-02]
-      border_leaves: [ktw1-bl-01, ktw1-bl-02]
-      edge: ktw1-edge-01
-      segment: c900-web-p
-      mlag: ktw1-mlag-01
-      deployed_to:
-        ktw1-leaf-01: DC-KTW1-9-POD-1
-        ktw1-leaf-02: DC-KTW1-9-POD-1
-        ktw1-spine-01: DC-KTW1-9-POD-1
-        ktw1-srv-01: DC-KTW1-9-POD-1
-        ktw1-bl-01: DC-KTW1
-        ktw1-bl-02: DC-KTW1
-        ktw1-edge-01: DC-KTW1
-      # 4 = 2 leaves x 1 spine x 2 border leaves (one `--via` trace each);
-      # +1 = the direct uplink leaf-01 -> panel -> edge, the shortest set of the plain trace
-      l1_paths_to_edge: 5
-      l1_paths_via_spine: 4
+    pods:
+      - server: ktw1-srv-01
+        bond: bond0
+        leaves: [ktw1-leaf-01, ktw1-leaf-02]
+        leaves_to_edge: [ktw1-leaf-01]
+        border_leaves: [ktw1-bl-01, ktw1-bl-02]
+        edge: ktw1-edge-01
+        segment: c900-web-p
+        mlag: ktw1-mlag-01
+        deployed_to:
+          ktw1-leaf-01: DC-KTW1-9-POD-1
+          ktw1-leaf-02: DC-KTW1-9-POD-1
+          ktw1-spine-01: DC-KTW1-9-POD-1
+          ktw1-srv-01: DC-KTW1-9-POD-1
+          ktw1-bl-01: DC-KTW1
+          ktw1-bl-02: DC-KTW1
+          ktw1-edge-01: DC-KTW1
+        # 4 = 2 leaves x 1 spine x 2 border leaves (one `--via` trace each); +1 = the direct uplink leaf-01 ->
+        # panel -> edge (and its session), the shortest set of the plain trace; no other pod has it
+        l1_paths_to_edge: 5
+        l1_paths_via_spine: 4
+      - server: waw1-srv-01
+        bond: bond0
+        leaves: [waw1-leaf-01, waw1-leaf-02]
+        leaves_to_edge: []
+        border_leaves: [waw1-bl-01, waw1-bl-02]
+        edge: waw1-edge-01
+        segment: c900-app-p
+        mlag: waw1-mlag-01
+        deployed_to:
+          waw1-leaf-01: DC-WAW1-7-POD-1
+          waw1-leaf-02: DC-WAW1-7-POD-1
+          waw1-spine-01: DC-WAW1-7-POD-1
+          waw1-srv-01: DC-WAW1-7-POD-1
+          waw1-bl-01: DC-WAW1
+          waw1-bl-02: DC-WAW1
+          waw1-edge-01: DC-WAW1
+        # the 4 paths through the spine are the shortest set: no direct leaf - edge link
+        l1_paths_to_edge: 4
+        l1_paths_via_spine: 4
+      - server: gdn1-srv-01
+        bond: bond0
+        leaves: [gdn1-leaf-01, gdn1-leaf-02]
+        leaves_to_edge: []
+        border_leaves: [gdn1-bl-01, gdn1-bl-02]
+        edge: gdn1-edge-01
+        segment: c900-db-p
+        mlag: gdn1-mlag-01
+        deployed_to:
+          gdn1-leaf-01: DC-GDN1-8-POD-1
+          gdn1-leaf-02: DC-GDN1-8-POD-1
+          gdn1-spine-01: DC-GDN1-8-POD-1
+          gdn1-srv-01: DC-GDN1-8-POD-1
+          gdn1-bl-01: DC-GDN1
+          gdn1-bl-02: DC-GDN1
+          gdn1-edge-01: DC-GDN1
+        # the 4 paths through the spine are the shortest set: no direct leaf - edge link
+        l1_paths_to_edge: 4
+        l1_paths_via_spine: 4
     # THE INTERNET: one object under the label "Internet" with one shared interface; two ISPs and the public side of a
     # SaaS and of a cloud service attach to it, so from the edge L1 reaches each public side through either ISP
     internet:
@@ -65,16 +104,43 @@ cases:
         - {site: DC, node: "ManagedVxlanSegment:c900-web-p", carriers: [[INET-KTW1-ISP-A, UPL-ISP-A], [INET-KTW1-ISP-B, UPL-ISP-B]]}  # yamllint disable-line rule:line-length
         - {site: colocation, node: "DcimPhysicalDevice:par-colo1-edge-01", carriers: [[INET-PAR1-ISP-B, UPL-ISP-B]]}
         - {site: office, node: "DcimPhysicalDevice:bcn-office-edge-01", carriers: [[INET-BCN-OFFICE-ISP-A, UPL-ISP-A]]}
-    # where the sites and their legs are (attribute reads): the cloud and SaaS legs end in the cage and not at the DC,
-    # the dark fibres join the DC and the cage, the office tunnels end on the office's own edge
+    # where the sites and their legs are (attribute reads): the cloud and SaaS legs end in the cage PAR-COLO1 and not at
+    # a DC, each dark fibre joins the two facilities listed for it, the office tunnels end on the office's own edge
     layout:
       zone: PAR-COLO1
       colo_edge: par-colo1-edge-01
       fabric_port_device: EXT-FABRIC-PAR
-      dc: DC-KTW1
       office: C900-OFFICE
       office_edge: bcn-office-edge-01
-      dark_fibres: [DF-KTW1-PAR1-A, DF-KTW1-PAR1-B]
+      # every dark fibre of the DCI mesh with the two facilities it joins (DC - DC, DC - cage, cage - cage)
+      dark_fibres:
+        DF-KTW1-WAW1-A: [DC-KTW1, DC-WAW1]
+        DF-KTW1-WAW1-B: [DC-KTW1, DC-WAW1]
+        DF-KTW1-GDN1-A: [DC-KTW1, DC-GDN1]
+        DF-KTW1-GDN1-B: [DC-KTW1, DC-GDN1]
+        DF-WAW1-GDN1-A: [DC-WAW1, DC-GDN1]
+        DF-WAW1-GDN1-B: [DC-WAW1, DC-GDN1]
+        DF-KTW1-PAR1-A: [DC-KTW1, PAR-COLO1]
+        DF-KTW1-PAR1-B: [DC-KTW1, PAR-COLO1]
+        DF-KTW1-FRA1-A: [DC-KTW1, FRA-COLO1]
+        DF-KTW1-FRA1-B: [DC-KTW1, FRA-COLO1]
+        DF-KTW1-AMS1-A: [DC-KTW1, AMS-COLO1]
+        DF-KTW1-AMS1-B: [DC-KTW1, AMS-COLO1]
+        DF-WAW1-PAR1-A: [DC-WAW1, PAR-COLO1]
+        DF-WAW1-PAR1-B: [DC-WAW1, PAR-COLO1]
+        DF-WAW1-FRA1-A: [DC-WAW1, FRA-COLO1]
+        DF-WAW1-FRA1-B: [DC-WAW1, FRA-COLO1]
+        DF-WAW1-AMS1-A: [DC-WAW1, AMS-COLO1]
+        DF-WAW1-AMS1-B: [DC-WAW1, AMS-COLO1]
+        DF-GDN1-PAR1-A: [DC-GDN1, PAR-COLO1]
+        DF-GDN1-PAR1-B: [DC-GDN1, PAR-COLO1]
+        DF-GDN1-FRA1-A: [DC-GDN1, FRA-COLO1]
+        DF-GDN1-FRA1-B: [DC-GDN1, FRA-COLO1]
+        DF-GDN1-AMS1-A: [DC-GDN1, AMS-COLO1]
+        DF-GDN1-AMS1-B: [DC-GDN1, AMS-COLO1]
+        DF-PAR1-FRA1: [PAR-COLO1, FRA-COLO1]
+        DF-PAR1-AMS1: [PAR-COLO1, AMS-COLO1]
+        DF-FRA1-AMS1: [FRA-COLO1, AMS-COLO1]
     # A pair names its ends as `kind:name` (or `kind:hfid`, parts joined by `/`) and is traced by the server
     # (utils/path_trace.py): the plain trace must reach the target in L1 and L3 with a COMPLETE equal-cost set, the
     # reverse direction gives the same chains, and `through` lists each transport the target must also be reached
@@ -199,3 +265,64 @@ cases:
         circuit_types: {l1: [virtual_connection], l3: [handoff]}
         transport_kinds:
           er-c900-weu: [port, vif]
+      # ---- the DCI mesh: three DCs (KTW1, WAW1, GDN1), three cages (PAR1, FRA1, AMS1), every site to every other one
+      # over dark fibre, a `dci` circuit on each and the EVPN peering of the two overlay processes (no session circuit
+      # on the L3 chain: the EVPN hop is a peering, so `l3: []`). The VMs of the application are ends too: in L3 a VM
+      # routes through its component's segment (utils/path_trace.py END_KINDS); its L1 is the host port its NIC rides
+      # on, and a plain L1 trace from a VM to another site is deeper than the server allows (30 hops: the server's link
+      # crosses two patch panels), so a VM pair asks for L1 through a waypoint (a `--via` leg on each side)
+      # VM -> AWS: L3 like the tenant segment (one hop more, the component), L1 through the Direct Connect
+      - src: DcimVirtualDevice:ktw1-vm-01
+        dst: CloudNetworkSegment:c900-subnet-p
+        layers: [l3]
+        golden: full_topology__vm__aws.txt
+        max_paths: 100
+        through:
+          CloudDirectConnect:dx-c900-fra-lag: {l1: [cross_connect, dark_fiber], l3: [handoff]}
+          CloudVPNConnection:vpn-c900-aws-euc1: {l3: [vpn]}
+        far_end_kinds: [CloudDirectConnect, CloudVPNConnection]
+      # the application across the DCs: frontend (DC-KTW1) -> backend (DC-WAW1) -> database (DC-GDN1)
+      - src: DcimVirtualDevice:ktw1-vm-01
+        dst: DcimVirtualDevice:waw1-vm-01
+        layers: [l3]
+        golden: full_topology__vm__frontend__backend.txt
+        max_paths: 100
+        circuit_types: {l3: []}
+        through:
+          TopologyCarrierCircuit:DF-KTW1-WAW1-A: {l1: [dark_fiber]}
+        far_end_kinds: [TopologyCarrierCircuit]
+      - src: DcimVirtualDevice:waw1-vm-01
+        dst: DcimVirtualDevice:gdn1-vm-01
+        layers: [l3]
+        golden: full_topology__vm__backend__database.txt
+        max_paths: 100
+        circuit_types: {l3: []}
+        through:
+          TopologyCarrierCircuit:DF-WAW1-GDN1-A: {l1: [dark_fiber]}
+        far_end_kinds: [TopologyCarrierCircuit]
+      # DC <-> DC between two tenant segments: one dark fibre in L1, the DCI EVPN peering in L3
+      - src: ManagedVxlanSegment:c900-db-p
+        dst: ManagedVxlanSegment:c900-web-p
+        golden: full_topology__gdn1__ktw1.txt
+        max_paths: 100
+        circuit_types: {l1: [dark_fiber], l3: []}
+      # a second DC reaches AWS through the cage PAR-COLO1 directly (its own fibres to the cage), not through DC-KTW1
+      - src: ManagedVxlanSegment:c900-app-p
+        dst: CloudNetworkSegment:c900-subnet-p
+        golden: full_topology__waw1__aws.txt
+        max_paths: 100
+        through:
+          CloudDirectConnect:dx-c900-fra-lag: {l1: [cross_connect, dark_fiber], l3: [handoff]}
+        far_end_kinds: [CloudDirectConnect]
+      # cage <-> cage: one fibre between the two edges; in L3 the `dci` circuit on the two fibre ports is as short as
+      # the EVPN peering between the two processes (edge - port - ICX - port - edge), so both are in the equal-cost set
+      - src: DcimPhysicalDevice:fra-colo1-edge-01
+        dst: DcimPhysicalDevice:ams-colo1-edge-01
+        golden: full_topology__fra__ams.txt
+        circuit_types: {l1: [dark_fiber], l3: [dci]}
+      # cage -> DC: from a transit cage to the tenant segment of a DC
+      - src: DcimPhysicalDevice:fra-colo1-edge-01
+        dst: ManagedVxlanSegment:c900-db-p
+        golden: full_topology__fra__gdn1.txt
+        max_paths: 100
+        circuit_types: {l1: [dark_fiber], l3: []}

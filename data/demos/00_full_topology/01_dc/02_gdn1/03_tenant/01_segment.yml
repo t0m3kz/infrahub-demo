@@ -1,0 +1,34 @@
+---
+# The VXLAN segment of C900 in DC-GDN1: segment -> deployment (VNI 10300) -> VLAN row of leaf-01 (VLAN
+# 300, its SVI in 02_routing/02_virtual_interfaces.yml). The gateway 10.93.1.1/24 and its prefix are nested.
+# The vPC port-channels carry it (02_lag_interfaces.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVxlanSegment
+  data:
+    - owner: C900
+      customer_name: db
+      environment: p
+      customer_deployments: ["C900-P-DC-GDN1"]
+      gateway:
+        data:
+          address: "10.93.1.1/24"
+          description: Gateway of c900-db-p
+          ip_namespace: PROD
+          ip_prefix:
+            kind: IpamPrefix
+            data:
+              prefix: "10.93.1.0/24"
+              ip_namespace: PROD
+              status: active
+              description: DC segment c900-db-p
+      segment_deployments:
+        data:
+          - deployment: DC-GDN1
+            vni: 10300
+            vlan_domain_segments:
+              data:
+                - device: gdn1-leaf-01
+                  vlan_id: 300
+                  svi: ["gdn1-leaf-01", "Vlan300"]

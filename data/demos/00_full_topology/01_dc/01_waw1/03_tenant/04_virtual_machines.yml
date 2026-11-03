@@ -1,0 +1,27 @@
+---
+# The VM of C900 on the server waw1-srv-01, as in 01_dc/00_ktw1/03_tenant/05_virtual_machines.yml: template LINUX-SVC,
+# eth0 rides on the host port eno1 (the first uplink), its address in c900-app-p (10.92.1.0/24). Its component is in
+# 01_dc/04_applications/00_application.yml.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualDevice
+  data:
+    - name: waw1-vm-01
+      object_template: LINUX-SVC
+      description: "C900 web-shop backend on waw1-srv-01"
+      hosting_device: waw1-srv-01
+      deployment: C900-P-DC-WAW1
+      interfaces:
+        - kind: DcimVirtualInterface
+          data:
+            name: eth0
+            role: uplink
+            status: active
+            description: Rides on the host port eno1 of waw1-srv-01
+            parent_interface: ["waw1-srv-01", "eno1"]
+            ip_address:
+              data:
+                address: "10.92.1.11/24"
+                description: waw1-vm-01 in c900-app-p
+                ip_namespace: PROD

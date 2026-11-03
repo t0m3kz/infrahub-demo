@@ -6,8 +6,9 @@
 # member of another device), a peering is the interface of the cloud and ends a session circuit
 # (03_cloud/04_circuits/01_session_circuits.yml). A VLAN peering rides on a port or the LAG of its transport
 # (`parent_interface`, same transport: checks/cloud_connection.py R8). The provider side of each leg is `peer_ip`
-# (nested) and `peer_asn`; OUR side is the sub-interface address of 02_colo/02_routing/01_virtual_interfaces.yml and
-# the local_as of par-colo1-edge-01-bgp. Exactly one of `region` (a cloud region, with the `account`) and
+# (nested) and `peer_asn`; OUR side is the sub-interface address of
+# 02_colo/00_par1/02_routing/01_virtual_interfaces.yml and the local_as of par-colo1-edge-01-bgp. Exactly one of
+# `region` (a cloud region, with the `account`) and
 # `saas_region` (a SaaS, with the `owner` and no account) places a transport (checks/cloud_connection.py R9). The SaaS
 # ones are in 04_saas.
 #

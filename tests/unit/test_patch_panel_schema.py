@@ -81,6 +81,19 @@ def test_panel_inherits_nothing() -> None:
     assert not _node("PatchPanel").get("inherit_from")
 
 
+def test_panel_rack_place_matches_the_physical_device() -> None:
+    """`position` and `rack_face` mean on a panel what they mean on a DcimPhysicalDevice (the panel inherits no generic,
+    so they are declared twice): same kind, optionality, default and choices; only the wording names a panel."""
+    dcim = yaml.safe_load((_ROOT / "schemas" / "base" / "dcim.yml").read_text())
+    device = next(node for node in dcim["nodes"] if node["name"] == "PhysicalDevice")
+    panel = _node("PatchPanel")
+    for name in ("position", "rack_face"):
+        mine, theirs = _item(panel["attributes"], name), _item(device["attributes"], name)
+        for key in ("kind", "label", "optional", "default_value"):
+            assert mine.get(key) == theirs.get(key), (name, key)
+        assert [c["name"] for c in mine.get("choices") or []] == [c["name"] for c in theirs.get("choices") or []]
+
+
 def test_panel_declares_no_capability_relationship() -> None:
     """Neither of the two device edges nor the interface edge is declared on the panel or its ports."""
     for name in ("PatchPanel", *_PORTS):
@@ -135,7 +148,6 @@ def test_panel_has_rack_and_both_port_lists_and_no_deployment_or_device_type() -
     names = {rel["name"] for rel in _node("PatchPanel")["relationships"]}
 
     assert names == {"rack", "rear_ports", "front_ports"}
-    assert "position" not in {a["name"] for a in _node("PatchPanel")["attributes"]}
     assert _item(_node("PatchPanel")["relationships"], "rack")["peer"] == "LocationRack"
 
 

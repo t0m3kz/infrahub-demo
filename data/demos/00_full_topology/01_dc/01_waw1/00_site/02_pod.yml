@@ -1,0 +1,12 @@
+---
+# The pod of DC-WAW1: its name is computed, {DC}-{DC index}-POD-{index} (DC-WAW1-7-POD-1). Design S_MIDDLE, as in
+# DC-KTW1; the leaves, the spine and the server are deployed to it, the border leaves and the edge stay at the DC.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyPod
+  data:
+    - parent: "DC-WAW1"
+      index: 1
+      design: S_MIDDLE
+      status: active

@@ -1,0 +1,62 @@
+---
+# The panels of the GDN1 data hall, as in DC-KTW1: PP-GDN1-01 in the border rack (jack 1: border leaf 1 to the
+# edge), PP-GDN1-02 in the compute rack (jack 1 eno1, jack 2 eno2 of the server), PP-GDN1-03 and PP-GDN1-04 in the leaf
+# racks (jack 1, the run to the compute rack). The used jacks are paired by hand (front n -> rear n).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPatchPanel
+  data:
+    - name: PP-GDN1-01
+      object_template: PP-24-LC
+      description: "DC-GDN1 border rack panel, jack 1 joins border leaf 1 to the edge"
+      rack: gdn1-rack-01
+      position: 42
+      rack_face: front
+      front_ports:
+        - kind: DcimFrontPatchPanelPort
+          data:
+            name: "1"
+            connector: lc-upc
+            rear_port: "gdn1-rack-01:PP-GDN1-01:1"
+    - name: PP-GDN1-02
+      object_template: PP-24-LC
+      description: "Compute rack panel: jack 1 is eno1 and jack 2 is eno2 of gdn1-srv-01"
+      rack: gdn1-rack-02
+      position: 42
+      rack_face: front
+      front_ports:
+        - kind: DcimFrontPatchPanelPort
+          data:
+            name: "1"
+            connector: lc-upc
+            rear_port: "gdn1-rack-02:PP-GDN1-02:1"
+        - kind: DcimFrontPatchPanelPort
+          data:
+            name: "2"
+            connector: lc-upc
+            rear_port: "gdn1-rack-02:PP-GDN1-02:2"
+    - name: PP-GDN1-03
+      object_template: PP-24-LC
+      description: "Leaf rack panel of gdn1-leaf-01: jack 1 is the run to the compute rack"
+      rack: gdn1-rack-03
+      position: 42
+      rack_face: front
+      front_ports:
+        - kind: DcimFrontPatchPanelPort
+          data:
+            name: "1"
+            connector: lc-upc
+            rear_port: "gdn1-rack-03:PP-GDN1-03:1"
+    - name: PP-GDN1-04
+      object_template: PP-24-LC
+      description: "Leaf rack panel of gdn1-leaf-02: jack 1 is the run to the compute rack"
+      rack: gdn1-rack-04
+      position: 42
+      rack_face: front
+      front_ports:
+        - kind: DcimFrontPatchPanelPort
+          data:
+            name: "1"
+            connector: lc-upc
+            rear_port: "gdn1-rack-04:PP-GDN1-04:1"

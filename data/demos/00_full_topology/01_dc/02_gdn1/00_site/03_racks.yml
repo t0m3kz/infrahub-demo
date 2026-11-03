@@ -1,0 +1,36 @@
+---
+# The racks of the pod DC-GDN1-8-POD-1 in GDN1-SUITE-1, row 1: the compute rack with the server, one rack per leaf, the
+# spine rack. Racks are data: no group membership, nothing generated.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationRack
+  data:
+    - name: GDN1-RACK-02
+      shortname: gdn1-rack-02
+      parent: gdn1-suite-1
+      index: 2
+      row_index: 1
+      rack_type: compute
+      deployment: DC-GDN1-8-POD-1
+    - name: GDN1-RACK-03
+      shortname: gdn1-rack-03
+      parent: gdn1-suite-1
+      index: 3
+      row_index: 1
+      rack_type: network
+      deployment: DC-GDN1-8-POD-1
+    - name: GDN1-RACK-04
+      shortname: gdn1-rack-04
+      parent: gdn1-suite-1
+      index: 4
+      row_index: 1
+      rack_type: network
+      deployment: DC-GDN1-8-POD-1
+    - name: GDN1-RACK-05
+      shortname: gdn1-rack-05
+      parent: gdn1-suite-1
+      index: 5
+      row_index: 1
+      rack_type: network
+      deployment: DC-GDN1-8-POD-1

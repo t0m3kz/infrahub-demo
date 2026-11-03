@@ -1,0 +1,10 @@
+---
+# The metro of the cage FRA-COLO1 (Frankfurt); the country is bootstrap data, the metro is not.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationMetro
+  data:
+    - name: Frankfurt
+      shortname: fra
+      parent: de

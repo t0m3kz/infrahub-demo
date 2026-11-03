@@ -1,0 +1,12 @@
+---
+# The ISP of the DC edge: the facility its router EXT-ISP-A-PE1 (01_dc/00_ktw1/01_physical/01_devices.yml) is deployed
+# to. The second ISP and the rest of the internet are in 06_internet.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyExternalProviders
+  data:
+    - name: ISP-A
+      parent: "Internet"
+      status: active
+      provider: "P014"

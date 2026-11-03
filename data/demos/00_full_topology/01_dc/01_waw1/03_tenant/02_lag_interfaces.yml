@@ -1,0 +1,27 @@
+---
+# The vPC: one port-channel per leaf (same lag_id), each with its Ethernet1/2, the segment c900-app-p on both.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimLAGInterface
+  data:
+    - device: waw1-leaf-01
+      name: Port-Channel10
+      description: vPC to waw1-srv-01 (bond0)
+      status: active
+      lag_id: 10
+      lacp_mode: active
+      minimum_links: 1
+      member_interfaces:
+        - ["waw1-leaf-01", "Ethernet1/2"]
+      segments: ["c900-app-p"]
+    - device: waw1-leaf-02
+      name: Port-Channel10
+      description: vPC to waw1-srv-01 (bond0)
+      status: active
+      lag_id: 10
+      lacp_mode: active
+      minimum_links: 1
+      member_interfaces:
+        - ["waw1-leaf-02", "Ethernet1/2"]
+      segments: ["c900-app-p"]

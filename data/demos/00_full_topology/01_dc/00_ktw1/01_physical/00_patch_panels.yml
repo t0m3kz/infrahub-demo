@@ -1,0 +1,71 @@
+---
+# The panels of the data hall (passive, not devices). PP-KTW1-01 is in the border and edge rack, between the leaf and
+# the edge (jack 1) and between border leaf 1 and the edge (jack 2). PP-KTW1-02 is the panel of the compute rack (jack
+# 1 eno1, jack 2 eno2 of the server); PP-KTW1-03 and PP-KTW1-04 are the panels of the two leaf racks (jack 1 each, the
+# horizontal run of the server's link to its leaf). Every panel is PP-24-LC, which creates 24 rear and 24 front ports.
+# The template cannot pair a front port with its rear port (the generator add_patch_panel does), so the pairing of
+# every used jack is authored as a nested front port of its panel: front "n" -> rear "n". The ports are nested under
+# the panel because they exist only for it and the panel is created before them.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPatchPanel
+  data:
+    - name: PP-KTW1-01
+      object_template: PP-24-LC
+      description: "DC-KTW1 patch panel, jack 1 joins the leaf to the edge"
+      rack: ktw1-rack-01
+      position: 42
+      rack_face: front
+      front_ports:
+        - kind: DcimFrontPatchPanelPort
+          data:
+            name: "1"
+            connector: lc-upc
+            rear_port: "ktw1-rack-01:PP-KTW1-01:1"
+        - kind: DcimFrontPatchPanelPort
+          data:
+            name: "2"
+            connector: lc-upc
+            rear_port: "ktw1-rack-01:PP-KTW1-01:2"
+    - name: PP-KTW1-02
+      object_template: PP-24-LC
+      description: "Compute rack panel: jack 1 is eno1 and jack 2 is eno2 of ktw1-srv-01"
+      rack: ktw1-rack-02
+      position: 42
+      rack_face: front
+      front_ports:
+        - kind: DcimFrontPatchPanelPort
+          data:
+            name: "1"
+            connector: lc-upc
+            rear_port: "ktw1-rack-02:PP-KTW1-02:1"
+        - kind: DcimFrontPatchPanelPort
+          data:
+            name: "2"
+            connector: lc-upc
+            rear_port: "ktw1-rack-02:PP-KTW1-02:2"
+    - name: PP-KTW1-03
+      object_template: PP-24-LC
+      description: "Leaf rack panel of ktw1-leaf-01: jack 1 is the run to the compute rack"
+      rack: ktw1-rack-03
+      position: 42
+      rack_face: front
+      front_ports:
+        - kind: DcimFrontPatchPanelPort
+          data:
+            name: "1"
+            connector: lc-upc
+            rear_port: "ktw1-rack-03:PP-KTW1-03:1"
+    - name: PP-KTW1-04
+      object_template: PP-24-LC
+      description: "Leaf rack panel of ktw1-leaf-02: jack 1 is the run to the compute rack"
+      rack: ktw1-rack-04
+      position: 42
+      rack_face: front
+      front_ports:
+        - kind: DcimFrontPatchPanelPort
+          data:
+            name: "1"
+            connector: lc-upc
+            rear_port: "ktw1-rack-04:PP-KTW1-04:1"
