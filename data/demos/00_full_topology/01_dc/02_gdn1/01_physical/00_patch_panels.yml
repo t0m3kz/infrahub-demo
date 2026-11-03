@@ -9,6 +9,7 @@ spec:
   data:
     - name: PP-GDN1-01
       object_template: PP-24-LC
+      member_of_groups: [patch_panels]
       description: "DC-GDN1 border rack panel, jack 1 joins border leaf 1 to the edge"
       rack: gdn1-rack-01
       position: 42
@@ -21,6 +22,7 @@ spec:
             rear_port: "gdn1-rack-01:PP-GDN1-01:1"
     - name: PP-GDN1-02
       object_template: PP-24-LC
+      member_of_groups: [patch_panels]
       description: "Compute rack panel: jack 1 is eno1 and jack 2 is eno2 of gdn1-srv-01"
       rack: gdn1-rack-02
       position: 42
@@ -38,6 +40,7 @@ spec:
             rear_port: "gdn1-rack-02:PP-GDN1-02:2"
     - name: PP-GDN1-03
       object_template: PP-24-LC
+      member_of_groups: [patch_panels]
       description: "Leaf rack panel of gdn1-leaf-01: jack 1 is the run to the compute rack"
       rack: gdn1-rack-03
       position: 42
@@ -50,6 +53,7 @@ spec:
             rear_port: "gdn1-rack-03:PP-GDN1-03:1"
     - name: PP-GDN1-04
       object_template: PP-24-LC
+      member_of_groups: [patch_panels]
       description: "Leaf rack panel of gdn1-leaf-02: jack 1 is the run to the compute rack"
       rack: gdn1-rack-04
       position: 42

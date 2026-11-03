@@ -407,8 +407,8 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         scenario_branch: str,
     ) -> None:
         """Verify `virtual_circuits`, add_virtual_circuit's target group, is exactly the session circuits: the DCI and
-        handoff circuits it builds sessions for, and the tunnels (a member because the created-trigger raises for a
-        non-member; the generator logs and stops, the SD-WAN orchestrator owns the overlay routing)."""
+        handoff circuits it builds sessions for, and the tunnels (a member because the generator starts only for a
+        member; the generator logs and stops, the SD-WAN orchestrator owns the overlay routing)."""
         logging.info("=== %s - Step 2a: virtual_circuits group ===", SCENARIO_NAME)
 
         inventory = await fetch_interconnect_inventory(client=async_client_main, branch=scenario_branch)

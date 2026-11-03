@@ -16,7 +16,7 @@ CUSTOMER_KIND = "OrganizationCustomer"
 class CustomerRoutingTagGenerator(CommonGenerator):
     """Draw ``OrganizationCustomer.routing_tag`` from Customer-Routing-Tag when the customer has none.
 
-    Runs when a customer is created (data/events/99_actions.yml); a customer that has its tag causes no
+    Runs when a customer joins `customers` (data/events/99_group_triggers.yml); a customer that has its tag causes no
     write, so a re-run changes nothing. The tag is the customer half of the routing identity
     (utils/routing_identity.customer_community): an operator's tag for reading the routing table, never a
     filter. The write is untracked: no run owns the customer, so no cleanup may delete it.

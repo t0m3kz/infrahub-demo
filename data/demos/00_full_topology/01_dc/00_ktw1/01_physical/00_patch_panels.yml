@@ -13,6 +13,7 @@ spec:
   data:
     - name: PP-KTW1-01
       object_template: PP-24-LC
+      member_of_groups: [patch_panels]
       description: "DC-KTW1 patch panel, jack 1 joins the leaf to the edge"
       rack: ktw1-rack-01
       position: 42
@@ -30,6 +31,7 @@ spec:
             rear_port: "ktw1-rack-01:PP-KTW1-01:2"
     - name: PP-KTW1-02
       object_template: PP-24-LC
+      member_of_groups: [patch_panels]
       description: "Compute rack panel: jack 1 is eno1 and jack 2 is eno2 of ktw1-srv-01"
       rack: ktw1-rack-02
       position: 42
@@ -47,6 +49,7 @@ spec:
             rear_port: "ktw1-rack-02:PP-KTW1-02:2"
     - name: PP-KTW1-03
       object_template: PP-24-LC
+      member_of_groups: [patch_panels]
       description: "Leaf rack panel of ktw1-leaf-01: jack 1 is the run to the compute rack"
       rack: ktw1-rack-03
       position: 42
@@ -59,6 +62,7 @@ spec:
             rear_port: "ktw1-rack-03:PP-KTW1-03:1"
     - name: PP-KTW1-04
       object_template: PP-24-LC
+      member_of_groups: [patch_panels]
       description: "Leaf rack panel of ktw1-leaf-02: jack 1 is the run to the compute rack"
       rack: ktw1-rack-04
       position: 42

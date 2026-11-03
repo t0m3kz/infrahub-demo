@@ -23,7 +23,7 @@ def _all_demo(kind: str) -> list[Declared]:
 
 # Generators the 30_all load must dispatch by itself, mapped to the minimum
 # number of runs each must have. These are the event-driven runs Infrahub
-# fires from data/events/99_actions.yml — not something the suite invokes —
+# fires from data/events (99_group_triggers.yml, 99_actions.yml) — not something the suite invokes —
 # so a zero here means a trigger rule regressed, which is silent otherwise:
 # the objects simply never get generated and no task fails. Each floor is one
 # run per declared object its created-trigger watches that is in its target
@@ -67,7 +67,7 @@ ALL_DEMO_EXPECTED_GENERATORS: dict[str, int] = {
 }
 
 
-# The customers 30_all declares, by org_id: each is created on the branch, so the created-trigger of
+# The customers 30_all declares, by org_id: each is created on the branch, so the group trigger of
 # add_customer_routing_tag fires for it and it must end up with a routing tag.
 ALL_DEMO_CUSTOMER_ORG_IDS: tuple[str, ...] = tuple(
     sorted(str(customer.item["org_id"]) for customer in _all_demo("OrganizationCustomer"))

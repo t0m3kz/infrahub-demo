@@ -1,7 +1,7 @@
 """add_virtual_circuit: the BGP sessions of a TopologySessionCircuit of type ``dci``, ``handoff`` or ``vpn``.
 
 One generator, one flow, two circuit types. A ``tunnel`` session circuit has no session (the SD-WAN orchestrator owns
-its overlay routing); it is a member of the generator's target group like the others (the created-trigger needs the
+its overlay routing); it is a member of the generator's target group like the others (its group trigger needs the
 group), and a run that reaches one logs and stops. So does a circuit with a cloud end (a CloudPeeringInterface, or a
 port of a cloud transport): its BGP peering is authored in data, and the run tracks nothing, so nothing is deleted.
 

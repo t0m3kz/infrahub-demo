@@ -5,7 +5,7 @@ Subclasses PodTopologyGenerator and reuses its entire generate() via super() —
 this is a superset of add_pod's own work, so every trigger that needs racks to
 reconcile against a pod-level change fires ONLY this generator, never add_pod
 alongside it (see data/events/99_actions.yml's trigger-pod-update-* rules —
-add_pod keeps its own created-trigger only, for a standalone/bulk-loaded pod
+add_pod keeps its own group trigger only, for a standalone/bulk-loaded pod
 that isn't reconciling anything yet, and is also fanned out to by
 dc_pod_cascade).
 

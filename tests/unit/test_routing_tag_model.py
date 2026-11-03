@@ -1,7 +1,7 @@
 """The routing tag model: schema attributes, pools, generator wiring and the customer group.
 
-These read the YAML alone, so a broken link (a pool bound to a missing attribute, a customer outside the group the
-created-trigger needs) fails here instead of as a failed or silent generator run in the integration suite.
+These read the YAML alone, so a broken link (a pool bound to a missing attribute, a customer outside the group its
+group trigger needs) fails here instead of as a failed or silent generator run in the integration suite.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ from tests.integration.demo_data import (
     declared,
     definition_targets,
     distinct,
+    group_trigger_rules,
     schema,
     trigger_rules,
 )
@@ -103,7 +104,7 @@ class TestPools:
 
 
 class TestGeneratorWiring:
-    """add_customer_routing_tag: definition, query, group and created-trigger."""
+    """add_customer_routing_tag: definition, query, group and group trigger."""
 
     def test_definition_targets_the_customers_group_with_a_registered_query(self, root_dir: Path) -> None:
         config = _infrahub_config(root_dir)
@@ -124,16 +125,17 @@ class TestGeneratorWiring:
 
         assert CUSTOMER_GROUP in groups
 
-    def test_a_created_customer_runs_the_generator_and_an_update_does_not(self) -> None:
-        rules = [rule for rule in trigger_rules() if rule["node_kind"] == "OrganizationCustomer"]
+    def test_a_new_customer_runs_the_generator_and_an_update_does_not(self) -> None:
+        """The generator starts when a customer joins `customers` (its group trigger); no node rule re-runs it."""
+        assert [rule for rule in trigger_rules() if rule["node_kind"] == "OrganizationCustomer"] == []
+        rules = [rule for rule in group_trigger_rules() if rule["group"] == CUSTOMER_GROUP]
 
-        assert [(r["mutation_action"], action_generators()[r["action"]]) for r in rules] == [("created", GENERATOR)]
-        assert not rules[0].get("matches")
+        assert [(r["member_update"], action_generators()[r["action"]]) for r in rules] == [("added", GENERATOR)]
         assert definition_targets()[GENERATOR] == CUSTOMER_GROUP
 
     def test_every_declared_customer_is_a_member_of_the_group(self) -> None:
-        """The created-trigger raises for a non-member, so each declaration of a customer, anywhere in data/ or in
-        the integration data, names the group (a re-declaration that only updates one included)."""
+        """The generator starts only for a member of the group, so each declaration of a customer, anywhere in data/
+        or in the integration data, names the group (a re-declaration that only updates one included)."""
         outside = sorted(
             {
                 str(obj.path.relative_to(ROOT))

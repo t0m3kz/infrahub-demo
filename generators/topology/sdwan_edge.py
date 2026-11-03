@@ -1,7 +1,7 @@
 """SD-WAN edge automation for TopologyCustomerOffice.
 
 Triggered on TopologyCustomerOffice creation (trigger rule
-trigger-customer-office-sdwan-on-created in data/events/99_actions.yml) and
+trigger-customer-office-sdwan-on-added in data/events/99_group_triggers.yml) and
 on a later sdwan_gateway update. Registered as add_sdwan_edge in
 .infrahub.yml, targeting the customer_deployments_office group and querying
 customer_office_sdwan.gql.
@@ -336,7 +336,7 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
 
         Ends: the gateway's public port and the edge uplink. An upsert replaces the
         cardinality-many ``capabilities``, so a rerun over unchanged data resends the
-        same two ends. A member of the ``virtual_circuits`` group like every session circuit (its created-trigger
+        same two ends. A member of the ``virtual_circuits`` group like every session circuit (its group trigger
         needs it); the orchestrator owns the overlay routing, so add_virtual_circuit builds no session for it.
         """
         tunnel_name = f"{office_name}-SDWAN-{gateway_zone_name}"

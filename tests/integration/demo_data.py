@@ -354,6 +354,37 @@ def trigger_rules() -> tuple[dict[str, Any], ...]:
 
 
 @cache
+def group_trigger_rules() -> tuple[dict[str, Any], ...]:
+    """The CoreGroupTriggerRule entries of data/events/99_group_triggers.yml (a generator starts on a new member)."""
+    return tuple(_spec_data(EVENTS / "99_group_triggers.yml"))
+
+
+# The node kinds whose objects join each group a generator starts on. A group trigger names a group, not a kind, so
+# the guard that every declared object of such a kind is a member (test_event_rules.py) and the dispatch count read
+# the kinds here; test_event_rules.py requires an entry for the group of every group trigger.
+GROUP_MEMBER_KINDS: dict[str, tuple[str, ...]] = {
+    "topologies_dc": ("TopologyDataCenter",),
+    "topologies_pod": ("TopologyPod",),
+    "topologies_rack": ("LocationRack",),
+    "customers": ("OrganizationCustomer",),
+    "vxlan_segments": ("ManagedVxlanSegment",),
+    "app_applications": ("AppApplication",),
+    "app_dependencies": ("AppDependency",),
+    "app_components": ("AppComponent",),
+    "customer_deployments_dc": ("TopologyCustomerDC",),
+    "customer_deployments_colocation": ("TopologyCustomerColocation",),
+    "customer_deployments_cloud": ("TopologyCustomerCloud",),
+    "customer_deployments_office": ("TopologyCustomerOffice",),
+    "colocation_metros": ("TopologyColocationMetro",),
+    "colocation_zones": ("TopologyColocationZone",),
+    "virtual_colocations": ("TopologyVirtualColocation",),
+    "carrier_circuits": ("TopologyCarrierCircuit",),
+    "virtual_circuits": ("TopologySessionCircuit",),
+    "patch_panels": ("DcimPatchPanel",),
+}
+
+
+@cache
 def action_generators() -> dict[str, str]:
     """CoreGeneratorAction name -> generator definition name."""
     return {action["name"]: action["generator"] for action in _spec_data(EVENTS / "98_generator_action.yml")}
@@ -369,16 +400,20 @@ def definition_targets() -> dict[str, str]:
 def created_dispatches(generator: str, *directories: Path) -> int:
     """How many runs of ``generator`` loading ``directories`` must dispatch by itself.
 
-    One per distinct declared object of a kind a ``created`` trigger rule of
-    the generator watches, counted when it is in the generator's target group
-    (a trigger for a non-member raises, and test_event_rules.py requires the
-    membership; for add_endpoint the group stands in for the role match the
-    rule makes, the role coming from the device template).
+    One per distinct declared object that joins the generator's target group as it is created: of a kind its group
+    trigger watches (GROUP_MEMBER_KINDS), or that a ``created`` node rule of the generator watches (add_endpoint, whose
+    group stands in for the role match the rule makes, the role coming from the device template). A non-member starts
+    no run (no group trigger fires; a node rule's run fails), so it is not counted.
     """
+    group = definition_targets()[generator]
     kinds = {
         rule["node_kind"]
         for rule in trigger_rules()
         if rule["mutation_action"] == "created" and action_generators().get(rule["action"]) == generator
+    } | {
+        kind
+        for rule in group_trigger_rules()
+        if action_generators().get(rule["action"]) == generator
+        for kind in GROUP_MEMBER_KINDS[rule["group"]]
     }
-    group = definition_targets()[generator]
     return len(distinct(obj for kind in sorted(kinds) for obj in declared(kind, *directories) if group in obj.groups()))

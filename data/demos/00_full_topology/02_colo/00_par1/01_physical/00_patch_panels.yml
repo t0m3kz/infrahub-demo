@@ -9,6 +9,7 @@ spec:
   data:
     - name: PP-PAR-COLO1-01
       object_template: PP-24-LC
+      member_of_groups: [patch_panels]
       description: "PAR-COLO1 cage patch panel: jack 1 joins par-colo1-edge-01 to the Equinix Fabric port"
       rack: par-colo1-rack-01
       position: 42

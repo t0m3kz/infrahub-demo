@@ -1,7 +1,7 @@
 """Customer boarding generator for TopologyCustomerColocation.
 
-Triggered on TopologyCustomerColocation creation (see data/events/99_actions.yml's
-trigger-customer-deployment-colocation-on-created rule).
+Triggered on TopologyCustomerColocation creation (see data/events/99_group_triggers.yml's
+trigger-customer-deployment-colocation-on-added rule: the footprint joins customer_deployments_colocation).
 
 Colocation shares the same PROD/NON-PROD data-plane VRFs as every other
 customer deployment kind (see data/bootstrap/22_namespaces.yml) — there is

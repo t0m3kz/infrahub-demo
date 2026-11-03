@@ -4,8 +4,8 @@ A colocation metro owns its zones (cages, our own hardware) and virtual colocati
 a zone and a virtual colocation declare their kit in ``fabric_templates``. The generators and the check
 (checks/colocation_placement.py) rely on facts about the data that the schema cannot hold:
 
-- every metro, zone and virtual colocation joins its generator group, even with no kit (a created-trigger for a
-  non-member raises);
+- every metro, zone and virtual colocation joins its generator group, even with no kit (its generator starts
+  only for a member of the group);
 - metro, zone and virtual colocation names are unique across the three kinds, case-insensitive: they share the
   device-name space (zone FR2 names ``eg-fr201``) and the pool-name space;
 - there is no ``deployment_type``: the node kind says what the kit is;
@@ -141,7 +141,7 @@ class TestColocationDataset:
         assert _objects(demo, _VIRTUAL)
 
     def test_every_node_is_a_member_of_its_generator_group(self, demo: str) -> None:
-        """Even a zone with no kit joins ``colocation_zones``: a created-trigger on a non-member raises."""
+        """Even a zone with no kit joins ``colocation_zones``: its generator starts only for a member of the group."""
         missing = [
             f"{_label(obj)}: not in {_GROUP[obj.kind]}"
             for obj in _objects(demo, *_NAMESPACED)
