@@ -5,8 +5,8 @@
 # POD-1 leafs. test_20 runs add_app_component_segment over the component and
 # asserts the segment's local VLAN ID is realized on that switch's VLAN
 # domain and the server-facing switch port-channels carry the segment.
-# Memberships: the AppApplication created-trigger dispatches
-# add_app_application, which raises for a non-member of app_applications;
+# Memberships: joining app_applications dispatches add_app_application
+# (its group trigger), a non-member starts nothing;
 # add_app_component_segment targets app_components.
 apiVersion: infrahub.app/v1
 kind: Object

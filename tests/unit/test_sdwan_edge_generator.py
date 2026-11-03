@@ -290,7 +290,7 @@ class TestGenerateHappyPath:
     @pytest.mark.asyncio
     async def test_each_circuit_joins_the_target_group_of_its_generator(self) -> None:
         """INET-<office> joins carrier_circuits so add_circuit runs for it; the tunnel joins virtual_circuits, whose
-        created-trigger raises for a non-member (add_virtual_circuit builds no session for a tunnel)."""
+        generator starts only for a member (add_virtual_circuit builds no session for a tunnel)."""
         gen = self._wire_full_success()
 
         await gen.generate(_office_payload())

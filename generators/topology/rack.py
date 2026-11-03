@@ -353,9 +353,9 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         # DC-fabric fields like design — nothing for this generator to build.
         # Checked before anything reads pod["id"]: rack.gql's PodFields fragment is on
         # TopologyPod, so a colocation zone comes back as an empty pod dict and every
-        # later access raises. Every LocationRack reaches this generator, since
-        # trigger-rack-generator-on-created (data/events/99_actions.yml) fires on the
-        # node kind and cannot filter on which topology the rack hangs off.
+        # later access raises. Every LocationRack of topologies_rack reaches this generator
+        # (trigger-rack-generator-on-added, data/events/99_group_triggers.yml), a colocation
+        # cage's rack too: the group cannot filter on which topology the rack hangs off.
         pod = self.data.get("deployment") or {}
         if "design" not in pod:
             self.logger.info(

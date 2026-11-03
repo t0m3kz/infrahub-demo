@@ -2,8 +2,8 @@
 # C001 production footprint inside DC6 — mirrors the prod entry of
 # data/demos/07_customers/c001/01_deployment.yml. Its computed name is
 # "C001-P-DC6", which is what the segments below reference. Membership of
-# customer_deployments_dc is required: the created-trigger dispatches
-# add_customer_deployment_dc and that generator raises for non-members.
+# customer_deployments_dc is required: joining it dispatches
+# add_customer_deployment_dc (its group trigger), and a non-member starts nothing.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

@@ -1,3 +1,6 @@
+# The node's groups are NOT read here: the server makes every node of a generator query's result a member of
+# its query group, and a group that joins it is reported as a new member of that group, which starts the
+# group's generators for the query group (data/events/99_group_triggers.yml). The generator reads them itself.
 query application_orchestrator_routing($name: String!) {
   AppApplication(name__value: $name) {
     edges {
@@ -6,14 +9,6 @@ query application_orchestrator_routing($name: String!) {
         __typename
         name { value }
         application_orchestrator { value }
-        member_of_groups {
-          edges {
-            node {
-              id
-              name { value }
-            }
-          }
-        }
       }
     }
   }

@@ -4,7 +4,7 @@ add_circuit (carrier circuits) and add_virtual_circuit (session circuits of type
 their target groups. The loader accepts a circuit outside its group, or a handoff the generator would refuse, so both
 only surface as a missing session or a failed task after the 30_all load - and a hand-written peering left next to a
 generated one is a duplicate session to the same neighbour. A tunnel (a TopologySessionCircuit of type tunnel) builds nothing but is a member
-too: the created-trigger raises for a non-member.
+too: the generator starts only for a member of its group.
 """
 
 from __future__ import annotations
@@ -86,8 +86,8 @@ def test_every_circuit_is_in_its_generator_target_group(kind: str) -> None:
 
 
 def test_a_tunnel_circuit_is_in_the_virtual_circuits_group_and_has_no_session_field() -> None:
-    """The SD-WAN orchestrator owns a tunnel's routing, so no session is generated, but the created-trigger of the
-    group's generator raises for a non-member: the tunnel joins virtual_circuits and carries no handoff field."""
+    """The SD-WAN orchestrator owns a tunnel's routing, so no session is generated, but the generator starts
+    only for a member of its group, and its updated rules fail for a non-member: the tunnel joins virtual_circuits and carries no handoff field."""
     rows = _session_rows("tunnel", _ALL)
     assert [_circuit_name(entry) for entry in rows] == ["C001-PARTNER-ACME-FR2"]
     assert all("virtual_circuits" in entry["member_of_groups"] for entry in rows)

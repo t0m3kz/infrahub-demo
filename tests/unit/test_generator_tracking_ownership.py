@@ -445,6 +445,10 @@ class TestOrchestratorRoutingOwnership:
         gen.client.get = AsyncMock(side_effect=NodeNotFoundError(identifier={"name": ["application_ansible"]}))
         group, target = _node("grp-1", "application_ansible"), _node("app-1")
         gen.client.create = AsyncMock(side_effect=[group, target])
+        # the node's groups come from the generator's own query, not the definition query: none yet
+        gen.client.execute_graphql = AsyncMock(
+            return_value={"CoreNode": {"edges": [{"node": {"member_of_groups": {"edges": []}}}]}}
+        )
 
         await gen.generate(
             {
@@ -455,7 +459,6 @@ class TestOrchestratorRoutingOwnership:
                                 "id": "app-1",
                                 "name": {"value": "app"},
                                 "application_orchestrator": {"value": "ansible_automation_platform"},
-                                "member_of_groups": {"edges": []},
                             }
                         }
                     ]

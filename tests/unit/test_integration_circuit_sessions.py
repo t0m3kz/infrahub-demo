@@ -340,7 +340,7 @@ class FakeStack:
             await session_generator(client).generate(devices.circuit(circuit))
         stack._read_back(client, devices)
         stack.pool_resources = {pool: [resource] for pool, (resource, _) in client.resources.items()}
-        # The group of add_virtual_circuit holds every session circuit (a tunnel too: the created-trigger needs it).
+        # The group of add_virtual_circuit holds every session circuit (a tunnel too: its group trigger needs it).
         stack.group_members = [
             {"id": node["id"], "__typename": node["__typename"], "display_label": node["name"]["value"]}
             for node in (e["node"] for e in stack.inventory["TopologySessionCircuit"]["edges"])
@@ -599,7 +599,7 @@ async def test_a_tunnel_with_a_session_of_any_name_fails(stack: FakeStack, suffi
 
 async def test_the_group_holds_exactly_the_session_circuits(stack: FakeStack) -> None:
     """The virtual-circuits group has every session circuit: the DCIs, the handoffs and the tunnels (a non-member
-    would raise in the created-trigger)."""
+    starts no run, and its updated rules fail)."""
     await interconnects.TestAllDemoInterconnects().test_02a_verify_virtual_circuits_group(_client(stack), "main")
     assert len(stack.group_members) == len(ALL_DEMO_VIRTUAL_CIRCUITS)
 

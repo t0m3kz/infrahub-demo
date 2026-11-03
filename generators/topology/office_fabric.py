@@ -1,7 +1,7 @@
 """Office fabric: the pools, switches, cabling and OSPF underlay of an office's LISP site.
 
 Triggered on TopologyCustomerOffice creation (trigger rule
-trigger-customer-office-fabric-on-created in data/events/99_actions.yml) and
+trigger-customer-office-fabric-on-added in data/events/99_group_triggers.yml) and
 on a later fabric_templates update. Registered as add_office_fabric in
 .infrahub.yml, targeting the customer_deployments_office group and querying
 office_fabric.gql.

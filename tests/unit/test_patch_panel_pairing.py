@@ -24,7 +24,14 @@ from generators.helpers.patch_panel import (
 )
 from generators.logger import GeneratorError
 from generators.topology.patch_panel import PatchPanelGenerator
-from tests.integration.demo_data import ROOT, action_generators, definition_targets, trigger_rules
+from tests.integration.demo_data import (
+    ROOT,
+    action_generators,
+    declared,
+    definition_targets,
+    group_trigger_rules,
+    trigger_rules,
+)
 from utils.limits import GROUP_PATCH_PANELS
 
 
@@ -267,17 +274,16 @@ class TestCheck:
 class TestRegistration:
     """The rules, the group, the queries and the definition agree."""
 
-    def test_the_created_rule_and_the_two_port_edge_rules_run_add_patch_panel_on_panels_only(self) -> None:
+    def test_the_group_rule_and_the_two_port_edge_rules_run_add_patch_panel_on_panels_only(self) -> None:
         rules = {r["name"]: r for r in trigger_rules() if r["action"] == "run-patch-panel-generator"}
+        joined = [r for r in group_trigger_rules() if r["action"] == "run-patch-panel-generator"]
 
         assert sorted(rules) == [
-            "trigger-patch-panel-on-created",
             "trigger-patch-panel-on-front-ports-updated",
             "trigger-patch-panel-on-rear-ports-updated",
         ]
         assert {r["node_kind"] for r in rules.values()} == {"DcimPatchPanel"}
-        assert rules["trigger-patch-panel-on-created"]["mutation_action"] == "created"
-        assert not rules["trigger-patch-panel-on-created"].get("matches")
+        assert [(r["name"], r["group"]) for r in joined] == [("trigger-patch-panel-on-added", GROUP_PATCH_PANELS)]
         edges = {m["relationship_name"] for r in rules.values() if r.get("matches") for m in r["matches"]["data"]}
         assert edges == {"rear_ports", "front_ports"}
         assert action_generators()["run-patch-panel-generator"] == "add_patch_panel"
@@ -297,10 +303,25 @@ class TestRegistration:
         assert checks["validate_patch_panel_pairing"]["class_name"] == "CheckPatchPanelPairing"
         assert CheckPatchPanelPairing.query == "patch_panel_pairing"
 
-    def test_every_panel_template_is_a_member_of_the_group(self) -> None:
+    def test_the_panel_templates_are_in_no_group(self) -> None:
+        """A template does not pass its member_of_groups on to the panel it creates (measured), so a template in the
+        group only made the template a target of the generator."""
         text = (ROOT / "data/bootstrap/10_physical_devices_templates_patch_panel_rear.yaml").read_text()
         templates = yaml.safe_load(text)["spec"]["data"]
 
         assert templates
         for template in templates:
-            assert template["member_of_groups"] == ["patch_panels"], template["template_name"]
+            assert not template.get("member_of_groups"), template["template_name"]
+
+    def test_every_declared_panel_is_a_member_of_the_group(self) -> None:
+        """The generator starts when a panel joins patch_panels, so every panel in data/ declares the group itself."""
+        outside = sorted(
+            {
+                str(obj.path.relative_to(ROOT))
+                for obj in declared("DcimPatchPanel", ROOT / "data" / "demos")
+                if GROUP_PATCH_PANELS not in obj.groups()
+            }
+        )
+
+        assert declared("DcimPatchPanel", ROOT / "data" / "demos")
+        assert not outside, f"panels not in '{GROUP_PATCH_PANELS}': {outside}"

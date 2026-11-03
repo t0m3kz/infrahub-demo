@@ -9,6 +9,14 @@ from utils.limits import APPLICATION_ORCHESTRATOR_GROUPS, TOPOLOGY_ORCHESTRATOR_
 
 from ..common import CommonGenerator
 
+# The groups of the routed node. Read here, not in the definition query: the server makes every node of that query's
+# result a member of the run's query group, and a group that becomes one is reported as a new member of that group,
+# so its group trigger (data/events/99_group_triggers.yml) would start the group's generators for the query group.
+_NODE_GROUPS_QUERY = (
+    "query OrchestratorNodeGroups($ids: [ID]) { CoreNode(ids: $ids) { edges { node {"
+    " member_of_groups { edges { node { id name { value } } } } } } } }"
+)
+
 
 class BaseOrchestratorRoutingGenerator(CommonGenerator):
     """Synchronize routing groups from an orchestrator dropdown field.
@@ -45,6 +53,12 @@ class BaseOrchestratorRoutingGenerator(CommonGenerator):
             self.logger.info(f"Created missing routing group '{group_name}'")
             return group
 
+    async def _current_groups(self, node_id: str) -> list[dict[str, Any]]:
+        """The groups the node is a member of (one query, outside the definition query: see _NODE_GROUPS_QUERY)."""
+        result = clean_data(await self.client.execute_graphql(query=_NODE_GROUPS_QUERY, variables={"ids": [node_id]}))
+        nodes = result.get("CoreNode") or []
+        return list(nodes[0].get("member_of_groups") or []) if nodes else []
+
     async def generate(self, data: dict[str, Any]) -> None:
         cleaned = clean_data(data)
         node = self._extract_node(cleaned)
@@ -69,7 +83,7 @@ class BaseOrchestratorRoutingGenerator(CommonGenerator):
             self.logger.error(message)
             return
 
-        current_groups = node.get("member_of_groups") or []
+        current_groups = await self._current_groups(node_id)
         routing_group_names = set(self.routing_groups.values())
         existing_group_ids = [group["id"] for group in current_groups if group.get("id")]
         retained_group_ids = [
@@ -78,7 +92,7 @@ class BaseOrchestratorRoutingGenerator(CommonGenerator):
 
         final_group_ids = list(retained_group_ids)
         if routing_group_name:
-            # The node's groups in the query payload already name the routing group it is in: no lookup.
+            # The node's groups (read above) already name the routing group it is in: no lookup.
             routing_group_id = next(
                 (
                     group["id"]
