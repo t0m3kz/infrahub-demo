@@ -663,32 +663,18 @@ spec:
             modification_type: updated
 
     # ── Patch panels ──────────────────────────────────────────────────────────
-    # add_patch_panel targets patch_panels and pairs the front ports a panel template creates with their rear
-    # ports (an object template cannot pair them), so every panel must be a member of the group. The panel
-    # declares it itself: an object template does not pass its `member_of_groups` on to the object it creates. The
-    # generator starts when the panel joins the group (99_group_triggers.yml); the template's children are
-    # created after the panel, so that first run may see no ports (the generator logs and stops); the
-    # `updated` rules on the panel's two component edges re-run it once the ports exist. The generator writes the
-    # front port's `rear_port`, never the panel's edges, so no rule loops.
+    # add_patch_panel targets patch_panels and builds the ports of a panel from its `panel_type`, each front port on
+    # its rear port. It starts when the panel joins the group (99_group_triggers.yml; the panel declares the group
+    # itself) and runs again when the type changes, to add the ports the new type has. The generator writes ports,
+    # never the panel's type, so no rule loops.
 
-    - name: trigger-patch-panel-on-rear-ports-updated
+    - name: trigger-patch-panel-on-type-updated
       branch_scope: "other_branches"
       node_kind: DcimPatchPanel
       mutation_action: "updated"
       action: run-patch-panel-generator
       matches:
-        kind: CoreNodeTriggerRelationshipMatch
+        kind: CoreNodeTriggerAttributeMatch
         data:
-          - relationship_name: rear_ports
-            modification_type: updated
-
-    - name: trigger-patch-panel-on-front-ports-updated
-      branch_scope: "other_branches"
-      node_kind: DcimPatchPanel
-      mutation_action: "updated"
-      action: run-patch-panel-generator
-      matches:
-        kind: CoreNodeTriggerRelationshipMatch
-        data:
-          - relationship_name: front_ports
-            modification_type: updated
+          - attribute_name: panel_type
+            value_match: any

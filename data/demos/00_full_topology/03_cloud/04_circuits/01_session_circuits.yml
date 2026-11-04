@@ -8,7 +8,7 @@ spec:
   kind: TopologySessionCircuit
   data:
     # AWS Direct Connect, transit: virtual interface (scope private) -> Direct Connect Gateway -> transit gateway.
-    - name: SC-C900-AWS-DX-PROD
+    - name: par1-dxvif-fgt1a2b3-aws-900000000001
       description: 'Handoff: edge sub-interface to the transit virtual interface'
       provider: P004
       circuit_type: handoff
@@ -24,7 +24,7 @@ spec:
         - ["par-colo1-edge-01", "Ethernet1/3.1000"]
         - ["dx-c900-fra-lag", "lag1.1000"]
     # AWS Direct Connect, private: virtual interface (scope private) -> virtual private gateway -> VPC.
-    - name: SC-C900-AWS-DX-PRIV
+    - name: par1-dxvif-fgp4c5d6-aws-900000000001
       description: 'Handoff: edge sub-interface to the private virtual interface'
       provider: P004
       circuit_type: handoff
@@ -40,7 +40,7 @@ spec:
         - ["par-colo1-edge-01", "Ethernet1/3.1100"]
         - ["dx-c900-fra-lag", "lag1.1100"]
     # Azure ExpressRoute: ONE transport (the circuit), two peerings, a /30 each, both on the ExpressRoute Gateway.
-    - name: SC-C900-AZ-ER-PRI
+    - name: par1-er-pri-azure-90000000-0000-0000-0000-000000000002
       description: 'Handoff: edge sub-interface to the primary private peering'
       provider: P005
       circuit_type: handoff
@@ -55,7 +55,7 @@ spec:
       capabilities:
         - ["par-colo1-edge-01", "Ethernet1/1.200"]
         - ["er-c900-weu", "er-c900-weu-pri"]
-    - name: SC-C900-AZ-ER-SEC
+    - name: par1-er-sec-azure-90000000-0000-0000-0000-000000000002
       description: 'Handoff: edge sub-interface to the secondary private peering'
       provider: P005
       circuit_type: handoff
@@ -71,7 +71,7 @@ spec:
         - ["par-colo1-edge-01", "Ethernet1/1.201"]
         - ["er-c900-weu", "er-c900-weu-sec"]
     # GCP Partner Interconnect: VLAN attachment (scope private) -> Cloud Router -> VPC.
-    - name: SC-C900-GCP-IC
+    - name: par1-vlanatt1-gcp-c900-prod-project
       description: 'Handoff: edge sub-interface to the VLAN attachment'
       provider: P006
       circuit_type: handoff
@@ -88,7 +88,7 @@ spec:
         - ["ic-c900-fra-1", "gcp-c900-vlan-att-1"]
     # GCP Dedicated Interconnect: a ROUTED PORT leg. Both ends are physical interfaces with an address and no VLAN
     # (Ethernet1/5 of the cage edge carries 169.254.30.2/29 itself, no sub-interface).
-    - name: SC-C900-GCP-DED
+    - name: par1-ded1-gcp-c900-prod-project
       description: 'Handoff on a routed port: cage edge Ethernet1/5 to the Cloud Router peering, no VLAN'
       provider: P006
       circuit_type: handoff
@@ -105,7 +105,7 @@ spec:
         - ["ic-ded-c900-fra", "gcp-c900-ded-1"]
     # AWS site-to-site VPN: ONE transport (the VPN connection), two tunnels, each a peering and the end of its own
     # session circuit, BGP inside a /30 each. The provider side (transit gateway) is on the transport.
-    - name: SC-C900-AWS-VPN-1
+    - name: ktw1-vpn-tun1-aws-900000000001
       description: VPN tunnel 1 from the edge to the AWS VPN connection
       provider: P004
       circuit_type: vpn
@@ -120,7 +120,7 @@ spec:
       capabilities:
         - ["ktw1-edge-01", "Tunnel1"]
         - ["vpn-c900-aws-euc1", "Tunnel1"]
-    - name: SC-C900-AWS-VPN-2
+    - name: ktw1-vpn-tun2-aws-900000000001
       description: VPN tunnel 2 from the edge to the AWS VPN connection
       provider: P004
       circuit_type: vpn

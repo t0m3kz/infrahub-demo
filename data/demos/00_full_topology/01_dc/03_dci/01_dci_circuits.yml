@@ -1,71 +1,71 @@
 ---
-# The DCI on each DC - DC fibre (as ICX-KTW1-PAR1): a `dci` session circuit whose capabilities are exactly the
+# The DCI on each DC - DC fibre (as ktw1-dci-a-par1): a `dci` session circuit whose capabilities are exactly the
 # fibre's two ports, unowned, the fibre's two DCs as locations. Each end device has one overlay BGP process.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: TopologySessionCircuit
   data:
-    - name: ICX-KTW1-WAW1
+    - name: ktw1-dci-a-waw1
       circuit_type: dci
       status: active
       provider: P016
-      description: DCI DC-KTW1 <-> DC-WAW1 over DF-KTW1-WAW1-A
+      description: DCI DC-KTW1 <-> DC-WAW1 over ktw1-df10001-waw1
       locations:
         - DC-KTW1
         - DC-WAW1
       capabilities:
         - ["ktw1-bl-01", "Ethernet1/2"]
         - ["waw1-bl-01", "Ethernet1/2"]
-    - name: ICX-KTW1-WAW1-B
+    - name: ktw1-dci-b-waw1
       circuit_type: dci
       status: active
       provider: P016
-      description: DCI DC-KTW1 <-> DC-WAW1 over DF-KTW1-WAW1-B
+      description: DCI DC-KTW1 <-> DC-WAW1 over ktw1-df10002-waw1
       locations:
         - DC-KTW1
         - DC-WAW1
       capabilities:
         - ["ktw1-bl-02", "Ethernet1/2"]
         - ["waw1-bl-02", "Ethernet1/2"]
-    - name: ICX-KTW1-GDN1
+    - name: ktw1-dci-a-gdn1
       circuit_type: dci
       status: active
       provider: P016
-      description: DCI DC-KTW1 <-> DC-GDN1 over DF-KTW1-GDN1-A
+      description: DCI DC-KTW1 <-> DC-GDN1 over ktw1-df10003-gdn1
       locations:
         - DC-KTW1
         - DC-GDN1
       capabilities:
         - ["ktw1-bl-01", "Ethernet1/3"]
         - ["gdn1-bl-01", "Ethernet1/2"]
-    - name: ICX-KTW1-GDN1-B
+    - name: ktw1-dci-b-gdn1
       circuit_type: dci
       status: active
       provider: P016
-      description: DCI DC-KTW1 <-> DC-GDN1 over DF-KTW1-GDN1-B
+      description: DCI DC-KTW1 <-> DC-GDN1 over ktw1-df10004-gdn1
       locations:
         - DC-KTW1
         - DC-GDN1
       capabilities:
         - ["ktw1-bl-02", "Ethernet1/3"]
         - ["gdn1-bl-02", "Ethernet1/2"]
-    - name: ICX-WAW1-GDN1
+    - name: waw1-dci-a-gdn1
       circuit_type: dci
       status: active
       provider: P016
-      description: DCI DC-WAW1 <-> DC-GDN1 over DF-WAW1-GDN1-A
+      description: DCI DC-WAW1 <-> DC-GDN1 over waw1-df10005-gdn1
       locations:
         - DC-WAW1
         - DC-GDN1
       capabilities:
         - ["waw1-bl-01", "Ethernet1/3"]
         - ["gdn1-bl-01", "Ethernet1/3"]
-    - name: ICX-WAW1-GDN1-B
+    - name: waw1-dci-b-gdn1
       circuit_type: dci
       status: active
       provider: P016
-      description: DCI DC-WAW1 <-> DC-GDN1 over DF-WAW1-GDN1-B
+      description: DCI DC-WAW1 <-> DC-GDN1 over waw1-df10006-gdn1
       locations:
         - DC-WAW1
         - DC-GDN1

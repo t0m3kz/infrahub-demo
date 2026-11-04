@@ -13,7 +13,7 @@ spec:
   kind: ManagedBGPPeering
   data:
     - name: "BGP-PAR1-EDGE01-BL01-DCI-EVPN"
-      description: "DCI EVPN multihop par-colo1-edge-01 <-> ktw1-bl-01 over ICX-KTW1-PAR1"
+      description: "DCI EVPN multihop par-colo1-edge-01 <-> ktw1-bl-01 over ktw1-dci-a-par1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
       ttl: 2
@@ -23,7 +23,7 @@ spec:
         - "par-colo1-edge-01-bgp"
         - "ktw1-bl-01-bgp"
     - name: "BGP-PAR1-EDGE01-BL02-DCI-EVPN"
-      description: "DCI EVPN multihop par-colo1-edge-01 <-> ktw1-bl-02 over ICX-KTW1-PAR1-B"
+      description: "DCI EVPN multihop par-colo1-edge-01 <-> ktw1-bl-02 over ktw1-dci-b-par1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
       ttl: 2
@@ -41,7 +41,7 @@ spec:
   kind: ManagedBGPPeering
   data:
     - name: "BGP-FRA1-EDGE01-KTW1-BL01-DCI-EVPN"
-      description: "DCI EVPN multihop ktw1-bl-01 <-> fra-colo1-edge-01 over ICX-KTW1-FRA1"
+      description: "DCI EVPN multihop ktw1-bl-01 <-> fra-colo1-edge-01 over ktw1-dci-a-fra1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
       ttl: 2
@@ -51,7 +51,7 @@ spec:
         - "ktw1-bl-01-bgp"
         - "fra-colo1-edge-01-bgp"
     - name: "BGP-FRA1-EDGE01-KTW1-BL02-DCI-EVPN"
-      description: "DCI EVPN multihop ktw1-bl-02 <-> fra-colo1-edge-01 over ICX-KTW1-FRA1-B"
+      description: "DCI EVPN multihop ktw1-bl-02 <-> fra-colo1-edge-01 over ktw1-dci-b-fra1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
       ttl: 2
@@ -61,7 +61,7 @@ spec:
         - "ktw1-bl-02-bgp"
         - "fra-colo1-edge-01-bgp"
     - name: "BGP-AMS1-EDGE01-KTW1-BL01-DCI-EVPN"
-      description: "DCI EVPN multihop ktw1-bl-01 <-> ams-colo1-edge-01 over ICX-KTW1-AMS1"
+      description: "DCI EVPN multihop ktw1-bl-01 <-> ams-colo1-edge-01 over ktw1-dci-a-ams1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
       ttl: 2
@@ -71,7 +71,7 @@ spec:
         - "ktw1-bl-01-bgp"
         - "ams-colo1-edge-01-bgp"
     - name: "BGP-AMS1-EDGE01-KTW1-BL02-DCI-EVPN"
-      description: "DCI EVPN multihop ktw1-bl-02 <-> ams-colo1-edge-01 over ICX-KTW1-AMS1-B"
+      description: "DCI EVPN multihop ktw1-bl-02 <-> ams-colo1-edge-01 over ktw1-dci-b-ams1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
       ttl: 2
@@ -81,7 +81,7 @@ spec:
         - "ktw1-bl-02-bgp"
         - "ams-colo1-edge-01-bgp"
     - name: "BGP-PAR1-EDGE01-WAW1-BL01-DCI-EVPN"
-      description: "DCI EVPN multihop waw1-bl-01 <-> par-colo1-edge-01 over ICX-WAW1-PAR1"
+      description: "DCI EVPN multihop waw1-bl-01 <-> par-colo1-edge-01 over waw1-dci-a-par1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
       ttl: 2
@@ -91,7 +91,7 @@ spec:
         - "waw1-bl-01-bgp"
         - "par-colo1-edge-01-bgp"
     - name: "BGP-PAR1-EDGE01-WAW1-BL02-DCI-EVPN"
-      description: "DCI EVPN multihop waw1-bl-02 <-> par-colo1-edge-01 over ICX-WAW1-PAR1-B"
+      description: "DCI EVPN multihop waw1-bl-02 <-> par-colo1-edge-01 over waw1-dci-b-par1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
       ttl: 2
@@ -101,7 +101,7 @@ spec:
         - "waw1-bl-02-bgp"
         - "par-colo1-edge-01-bgp"
     - name: "BGP-FRA1-EDGE01-WAW1-BL01-DCI-EVPN"
-      description: "DCI EVPN multihop waw1-bl-01 <-> fra-colo1-edge-01 over ICX-WAW1-FRA1"
+      description: "DCI EVPN multihop waw1-bl-01 <-> fra-colo1-edge-01 over waw1-dci-a-fra1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
       ttl: 2
@@ -111,7 +111,7 @@ spec:
         - "waw1-bl-01-bgp"
         - "fra-colo1-edge-01-bgp"
     - name: "BGP-FRA1-EDGE01-WAW1-BL02-DCI-EVPN"
-      description: "DCI EVPN multihop waw1-bl-02 <-> fra-colo1-edge-01 over ICX-WAW1-FRA1-B"
+      description: "DCI EVPN multihop waw1-bl-02 <-> fra-colo1-edge-01 over waw1-dci-b-fra1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
       ttl: 2
@@ -121,7 +121,7 @@ spec:
         - "waw1-bl-02-bgp"
         - "fra-colo1-edge-01-bgp"
     - name: "BGP-AMS1-EDGE01-WAW1-BL01-DCI-EVPN"
-      description: "DCI EVPN multihop waw1-bl-01 <-> ams-colo1-edge-01 over ICX-WAW1-AMS1"
+      description: "DCI EVPN multihop waw1-bl-01 <-> ams-colo1-edge-01 over waw1-dci-a-ams1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
       ttl: 2
@@ -131,7 +131,7 @@ spec:
         - "waw1-bl-01-bgp"
         - "ams-colo1-edge-01-bgp"
     - name: "BGP-AMS1-EDGE01-WAW1-BL02-DCI-EVPN"
-      description: "DCI EVPN multihop waw1-bl-02 <-> ams-colo1-edge-01 over ICX-WAW1-AMS1-B"
+      description: "DCI EVPN multihop waw1-bl-02 <-> ams-colo1-edge-01 over waw1-dci-b-ams1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
       ttl: 2
@@ -141,7 +141,7 @@ spec:
         - "waw1-bl-02-bgp"
         - "ams-colo1-edge-01-bgp"
     - name: "BGP-PAR1-EDGE01-GDN1-BL01-DCI-EVPN"
-      description: "DCI EVPN multihop gdn1-bl-01 <-> par-colo1-edge-01 over ICX-GDN1-PAR1"
+      description: "DCI EVPN multihop gdn1-bl-01 <-> par-colo1-edge-01 over gdn1-dci-a-par1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
       ttl: 2
@@ -151,7 +151,7 @@ spec:
         - "gdn1-bl-01-bgp"
         - "par-colo1-edge-01-bgp"
     - name: "BGP-PAR1-EDGE01-GDN1-BL02-DCI-EVPN"
-      description: "DCI EVPN multihop gdn1-bl-02 <-> par-colo1-edge-01 over ICX-GDN1-PAR1-B"
+      description: "DCI EVPN multihop gdn1-bl-02 <-> par-colo1-edge-01 over gdn1-dci-b-par1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
       ttl: 2
@@ -161,7 +161,7 @@ spec:
         - "gdn1-bl-02-bgp"
         - "par-colo1-edge-01-bgp"
     - name: "BGP-FRA1-EDGE01-GDN1-BL01-DCI-EVPN"
-      description: "DCI EVPN multihop gdn1-bl-01 <-> fra-colo1-edge-01 over ICX-GDN1-FRA1"
+      description: "DCI EVPN multihop gdn1-bl-01 <-> fra-colo1-edge-01 over gdn1-dci-a-fra1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
       ttl: 2
@@ -171,7 +171,7 @@ spec:
         - "gdn1-bl-01-bgp"
         - "fra-colo1-edge-01-bgp"
     - name: "BGP-FRA1-EDGE01-GDN1-BL02-DCI-EVPN"
-      description: "DCI EVPN multihop gdn1-bl-02 <-> fra-colo1-edge-01 over ICX-GDN1-FRA1-B"
+      description: "DCI EVPN multihop gdn1-bl-02 <-> fra-colo1-edge-01 over gdn1-dci-b-fra1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
       ttl: 2
@@ -181,7 +181,7 @@ spec:
         - "gdn1-bl-02-bgp"
         - "fra-colo1-edge-01-bgp"
     - name: "BGP-AMS1-EDGE01-GDN1-BL01-DCI-EVPN"
-      description: "DCI EVPN multihop gdn1-bl-01 <-> ams-colo1-edge-01 over ICX-GDN1-AMS1"
+      description: "DCI EVPN multihop gdn1-bl-01 <-> ams-colo1-edge-01 over gdn1-dci-a-ams1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
       ttl: 2
@@ -191,7 +191,7 @@ spec:
         - "gdn1-bl-01-bgp"
         - "ams-colo1-edge-01-bgp"
     - name: "BGP-AMS1-EDGE01-GDN1-BL02-DCI-EVPN"
-      description: "DCI EVPN multihop gdn1-bl-02 <-> ams-colo1-edge-01 over ICX-GDN1-AMS1-B"
+      description: "DCI EVPN multihop gdn1-bl-02 <-> ams-colo1-edge-01 over gdn1-dci-b-ams1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
       ttl: 2
@@ -201,7 +201,7 @@ spec:
         - "gdn1-bl-02-bgp"
         - "ams-colo1-edge-01-bgp"
     - name: "BGP-PAR1-EDGE01-FRA1-EDGE01-DCI-EVPN"
-      description: "DCI EVPN multihop par-colo1-edge-01 <-> fra-colo1-edge-01 over ICX-PAR1-FRA1"
+      description: "DCI EVPN multihop par-colo1-edge-01 <-> fra-colo1-edge-01 over par1-dci-a-fra1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
       ttl: 2
@@ -211,7 +211,7 @@ spec:
         - "par-colo1-edge-01-bgp"
         - "fra-colo1-edge-01-bgp"
     - name: "BGP-PAR1-EDGE01-AMS1-EDGE01-DCI-EVPN"
-      description: "DCI EVPN multihop par-colo1-edge-01 <-> ams-colo1-edge-01 over ICX-PAR1-AMS1"
+      description: "DCI EVPN multihop par-colo1-edge-01 <-> ams-colo1-edge-01 over par1-dci-a-ams1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
       ttl: 2
@@ -221,7 +221,7 @@ spec:
         - "par-colo1-edge-01-bgp"
         - "ams-colo1-edge-01-bgp"
     - name: "BGP-FRA1-EDGE01-AMS1-EDGE01-DCI-EVPN"
-      description: "DCI EVPN multihop fra-colo1-edge-01 <-> ams-colo1-edge-01 over ICX-FRA1-AMS1"
+      description: "DCI EVPN multihop fra-colo1-edge-01 <-> ams-colo1-edge-01 over fra1-dci-a-ams1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
       ttl: 2

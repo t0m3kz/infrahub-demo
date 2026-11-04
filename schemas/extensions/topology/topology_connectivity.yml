@@ -140,7 +140,7 @@ nodes:
       - ManagedGenericInterfaces
     human_friendly_id:
       - circuit_id__value
-    display_label: "{{ circuit_id__value }} - {{ provider__name__value }}"
+    display_label: "{{ name__value }}"
     uniqueness_constraints:
       - [circuit_id__value]
     attributes:

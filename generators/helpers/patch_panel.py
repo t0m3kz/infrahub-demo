@@ -1,16 +1,15 @@
-"""Which front port of a patch panel belongs on which rear port, derived from the ports alone (pure).
+"""What a patch panel of a type holds, and how its ports differ from it (pure).
 
-An object template creates a panel's ports but cannot point a front port at its rear port, so the pairing is
-written afterwards (generators/topology/patch_panel.py) and judged by checks/patch_panel_pairing.py. Both read the
-same plan: the layout is not a field, it is what the ports say.
+A panel names its type (`DcimPatchPanel.panel_type`, a Dropdown whose choices are the keys of PANEL_TYPES). The type
+is the whole layout: how many rear ports of which connector, and how many front ports ride on each. add_patch_panel
+(generators/topology/patch_panel.py) builds the ports the type asks for, each front port on its rear port, and
+checks/patch_panel_pairing.py reports what still differs. Both read audit().
 
-- jack: as many front ports as rear ports, same numbers: front N rides on rear N.
-- cassette: every rear port is MPO-12 and the front ports are a multiple F (more than one) of the rear ports: rear k
-  takes front ports (k-1)*F+1 .. k*F, in numeric order.
-- anything else (unequal counts, a name that is no integer, a repeated number) has no plan.
+- jack (one front port per rear port): front N rides on rear N.
+- cassette (F front ports per MPO rear port): rear k takes the front ports (k-1)*F+1 .. k*F.
 
 Ports are dicts of cleaned query data: ``id``, ``name``, ``connector`` and, on a front port, ``rear_port`` (the rear
-port it names: ``{"id": ...}`` or an id, None when unpaired).
+port it names: ``{"id": ...}`` or an id, None when unpaired). Port names are their numbers, from 1.
 """
 
 from __future__ import annotations
@@ -18,35 +17,77 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-LAYOUT_EMPTY = "empty"
 LAYOUT_JACK = "jack"
 LAYOUT_CASSETTE = "cassette"
-LAYOUT_UNKNOWN = "unknown"
-
-CASSETTE_CONNECTOR = "mpo-12"
 
 
 @dataclass(frozen=True)
-class Pairing:
-    """The plan of one panel: its layout and, for a derivable layout, front port id -> rear port id."""
+class PanelType:
+    """The ports of one panel type: ``rears`` rear ports, each carrying ``fronts_per_rear`` front ports."""
 
-    layout: str
-    wanted: dict[str, str] = field(default_factory=dict)
+    rears: int
+    rear_connector: str
+    fronts_per_rear: int
+    front_connector: str
+
+    @property
+    def fronts(self) -> int:
+        return self.rears * self.fronts_per_rear
+
+    @property
+    def layout(self) -> str:
+        return LAYOUT_JACK if self.fronts_per_rear == 1 else LAYOUT_CASSETTE
+
+    def rear_of(self, front: int) -> int:
+        """The number of the rear port front port ``front`` rides on."""
+        return (front - 1) // self.fronts_per_rear + 1
+
+
+# The choices of DcimPatchPanel.panel_type (schemas/extensions/dcim/patch_panel.yml; tests/unit/test_patch_panel_schema.py
+# holds the two equal).
+PANEL_TYPES: dict[str, PanelType] = {
+    "lc-24": PanelType(24, "lc-upc", 1, "lc-upc"),
+    "lc-48": PanelType(48, "lc-upc", 1, "lc-upc"),
+    "lc-96": PanelType(96, "lc-upc", 1, "lc-upc"),
+    "sc-12": PanelType(12, "sc-upc", 1, "sc-upc"),
+    "rj45-24": PanelType(24, "rj45", 1, "rj45"),
+    "rj45-48": PanelType(48, "rj45", 1, "rj45"),
+    "mpo12-cassette-24": PanelType(2, "mpo-12", 12, "lc-upc"),
+    "mpo12-cassette-48": PanelType(4, "mpo-12", 12, "lc-upc"),
+    "mpo12-cassette-96": PanelType(8, "mpo-12", 12, "lc-upc"),
+}
+
+
+@dataclass
+class PanelAudit:
+    """How the ports of one panel differ from its type.
+
+    ``missing_rears`` / ``missing_fronts`` hold the port numbers to create; ``to_pair`` an unpaired front port id ->
+    the number of its rear port; ``misplaced`` front port names on another rear port; ``extra`` port names the type
+    does not have ("rear 25", "front 25"); ``wrong_connector`` the same for a connector that differs. ``problem`` is
+    set when there is no type to compare with (unknown type, a port name that is no number, a repeated number).
+    """
+
+    panel_type: PanelType | None = None
     problem: str | None = None
+    missing_rears: list[int] = field(default_factory=list)
+    missing_fronts: list[int] = field(default_factory=list)
+    to_pair: dict[str, int] = field(default_factory=dict)
+    misplaced: list[str] = field(default_factory=list)
+    extra: list[str] = field(default_factory=list)
+    wrong_connector: list[str] = field(default_factory=list)
 
 
-def _numbered(ports: list[dict[str, Any]]) -> tuple[list[tuple[int, dict[str, Any]]], str | None]:
-    """The ports sorted by their integer name, or the reason they cannot be (a non-integer or a repeated number)."""
-    numbered: list[tuple[int, dict[str, Any]]] = []
+def _by_number(ports: list[dict[str, Any]], side: str) -> tuple[dict[int, dict[str, Any]], str | None]:
+    """The ports by their integer name, or the reason they cannot be keyed so."""
+    numbered: dict[int, dict[str, Any]] = {}
     for port in ports:
         name = str(port.get("name"))
         if not name.isdecimal():
-            return [], f"port name {name!r} is not a number"
-        numbered.append((int(name), port))
-    numbered.sort(key=lambda item: item[0])
-    numbers = [number for number, _ in numbered]
-    if len(set(numbers)) != len(numbers):
-        return [], "two ports share a number"
+            return {}, f"{side} port name {name!r} is not a number"
+        if int(name) in numbered:
+            return {}, f"two {side} ports share the number {name}"
+        numbered[int(name)] = port
     return numbered, None
 
 
@@ -56,47 +97,31 @@ def rear_port_id(front: dict[str, Any]) -> str | None:
     return current.get("id") if isinstance(current, dict) else current
 
 
-def plan_pairing(rears: list[dict[str, Any]], fronts: list[dict[str, Any]]) -> Pairing:
-    """The layout of a panel and the rear port each front port belongs on."""
-    if not rears and not fronts:
-        return Pairing(LAYOUT_EMPTY)
-    if not rears or not fronts:
-        return Pairing(LAYOUT_UNKNOWN, problem=f"{len(rears)} rear and {len(fronts)} front ports (one side is missing)")
-    rear_list, problem = _numbered(rears)
-    front_list, front_problem = _numbered(fronts)
+def audit(type_name: str | None, rears: list[dict[str, Any]], fronts: list[dict[str, Any]]) -> PanelAudit:
+    """Compare the ports of a panel with what its type ``type_name`` holds."""
+    panel_type = PANEL_TYPES.get(type_name or "")
+    if panel_type is None:
+        return PanelAudit(problem=f"panel_type {type_name!r} is not one of {', '.join(PANEL_TYPES)}")
+    rear_by, problem = _by_number(rears, "rear")
+    front_by, front_problem = _by_number(fronts, "front")
     if problem or front_problem:
-        return Pairing(LAYOUT_UNKNOWN, problem=problem or front_problem)
-    if len(front_list) == len(rear_list):
-        if [number for number, _ in front_list] != [number for number, _ in rear_list]:
-            return Pairing(LAYOUT_UNKNOWN, problem="front and rear port numbers differ")
-        wanted = {front["id"]: rear["id"] for (_, front), (_, rear) in zip(front_list, rear_list, strict=True)}
-        return Pairing(LAYOUT_JACK, wanted)
-    per_rear, remainder = divmod(len(front_list), len(rear_list))
-    if remainder or per_rear < 2 or any(rear.get("connector") != CASSETTE_CONNECTOR for _, rear in rear_list):
-        return Pairing(
-            LAYOUT_UNKNOWN,
-            problem=f"{len(front_list)} front ports on {len(rear_list)} rear ports is neither a jack panel nor "
-            f"a {CASSETTE_CONNECTOR} cassette panel",
-        )
-    wanted = {front["id"]: rear_list[index // per_rear][1]["id"] for index, (_, front) in enumerate(front_list)}
-    return Pairing(LAYOUT_CASSETTE, wanted)
-
-
-def pairing_changes(pairing: Pairing, fronts: list[dict[str, Any]]) -> tuple[dict[str, str], dict[str, str]]:
-    """(to write, in conflict) as front port id -> rear port id.
-
-    To write: an unpaired front port the plan pairs. In conflict: a front port already on another rear port, which
-    is left alone (a hand edit; the check reports it).
-    """
-    to_write: dict[str, str] = {}
-    conflicts: dict[str, str] = {}
-    for front in fronts:
-        wanted = pairing.wanted.get(front["id"])
-        current = rear_port_id(front)
-        if wanted is None or current == wanted:
+        return PanelAudit(panel_type, problem=problem or front_problem)
+    result = PanelAudit(panel_type)
+    result.missing_rears = [n for n in range(1, panel_type.rears + 1) if n not in rear_by]
+    result.missing_fronts = [n for n in range(1, panel_type.fronts + 1) if n not in front_by]
+    result.extra = [f"rear {n}" for n in sorted(rear_by) if n > panel_type.rears] + [
+        f"front {n}" for n in sorted(front_by) if n > panel_type.fronts
+    ]
+    result.wrong_connector = [
+        f"rear {n}" for n, port in sorted(rear_by.items()) if port.get("connector") != panel_type.rear_connector
+    ] + [f"front {n}" for n, port in sorted(front_by.items()) if port.get("connector") != panel_type.front_connector]
+    rear_ids = {port["id"]: n for n, port in rear_by.items()}
+    for n, front in sorted(front_by.items()):
+        if n > panel_type.fronts:
             continue
+        current = rear_port_id(front)
         if current is None:
-            to_write[front["id"]] = wanted
-        else:
-            conflicts[front["id"]] = wanted
-    return to_write, conflicts
+            result.to_pair[front["id"]] = panel_type.rear_of(n)
+        elif rear_ids.get(current) != panel_type.rear_of(n):
+            result.misplaced.append(str(n))
+    return result

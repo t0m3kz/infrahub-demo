@@ -65,7 +65,7 @@ spec:
       description: Build the BGP session(s) of an interconnect or handoff circuit
       generator: add_virtual_circuit
     - name: run-patch-panel-generator
-      description: Pair the front ports of a patch panel with its rear ports
+      description: Build the ports of a patch panel from its type, each front port on its rear port
       generator: add_patch_panel
     - name: run-endpoint-generator
       description: Run Endpoint Connectivity Generator

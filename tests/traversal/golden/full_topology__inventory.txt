@@ -18,8 +18,11 @@
   vgw-c900-euc1 [edge] AS None
 # attachments
   cra-c900-euw3: allowed []
-  ergwa-c900-weu: allowed []
-  tgwa-c900-dxgw: allowed ['10.200.0.0/16']
+  ergwa-c900-weu: allowed ['10.201.0.0/16', '10.203.0.0/16', '10.208.0.0/16', '10.209.0.0/16', '10.210.0.0/16']
+  tgwa-c900-analytics: allowed []
+  tgwa-c900-dxgw: allowed ['10.200.0.0/16', '10.205.0.0/16', '10.206.0.0/16', '10.207.0.0/16']
+  tgwa-c900-payments: allowed []
+  tgwa-c900-shared: allowed []
   tgwa-c900-vpc: allowed []
   vgwa-c900-vpc: allowed []
 # transports

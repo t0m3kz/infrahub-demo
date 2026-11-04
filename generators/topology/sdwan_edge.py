@@ -171,7 +171,7 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
         internet_provider_id, overlay_provider_id = await self._resolve_provider_ids(office_name)
         edge = await self._ensure_edge_device(office_name, office_id, owner_id)
         edge_uplink = await self._find_edge_uplink(edge.id, office_name)
-        isp_location_id, isp_device_id = await self._resolve_isp_access(office_name, internet_provider_id)
+        isp_location_id, isp_name, isp_device_id = await self._resolve_isp_access(office_name, internet_provider_id)
 
         await self._ensure_internet_circuit(
             office_name=office_name,
@@ -179,6 +179,7 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
             provider_id=internet_provider_id,
             edge_uplink_id=edge_uplink.id,
             isp_location_id=isp_location_id,
+            isp_name=isp_name,
             isp_device_id=isp_device_id,
         )
         await self._ensure_tunnel_circuit(
@@ -241,8 +242,8 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
             self.fail(f"{office_name}: edge device has no role=uplink interface")
         return sorted(ifaces, key=lambda i: i.name.value)[0]
 
-    async def _resolve_isp_access(self, office_name: str, internet_provider_id: str) -> tuple[str, str]:
-        """(ISP location id, access PE device id): the internet provider's one topology and its one device."""
+    async def _resolve_isp_access(self, office_name: str, internet_provider_id: str) -> tuple[str, str, str]:
+        """(ISP location id, its name, access PE device id): the internet provider's one topology and its one device."""
         isps = await self.client.filters(
             kind=TopologyExternalProviders, provider__ids=[internet_provider_id], include=["devices"]
         )
@@ -252,7 +253,7 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
         device_ids = [peer.id for peer in getattr(isp, "devices").peers]
         if len(device_ids) != 1:
             self.fail(f"{office_name}: ISP {isp.name.value} must host exactly 1 access device, found {len(device_ids)}")
-        return isp.id, device_ids[0]
+        return isp.id, isp.name.value, device_ids[0]
 
     async def _ensure_internet_circuit(
         self,
@@ -262,21 +263,26 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
         provider_id: str,
         edge_uplink_id: str,
         isp_location_id: str,
+        isp_name: str,
         isp_device_id: str,
     ) -> None:
         """Create/upsert INET-<office> from the Edge uplink to the ISP access PE's port, in one save.
+
+        ``INET-<office>`` is the circuit_id (the HFID the run upserts by: the provider's own id is not known here);
+        the name is ``<office>-inet-<isp>``, lowercase, the ends around the type like every circuit name.
 
         A carrier circuit needs both ends when it is written, so the port is
         picked and the circuit saved inside one lock: two offices running at
         once would otherwise both see the same port free.
         """
-        circuit_name = f"INET-{office_name}"
+        circuit_id = f"INET-{office_name}"
+        circuit_name = f"{office_name}-inet-{isp_name}".lower()
         async with self.resource_lock(f"isp-access-port-{isp_device_id}"):
-            isp_port_id = await self._pick_isp_port(office_name, circuit_name, isp_device_id)
+            isp_port_id = await self._pick_isp_port(office_name, circuit_id, isp_device_id)
             circuit = await self.client.create(
                 kind=TopologyCarrierCircuit,
                 data={
-                    "circuit_id": circuit_name,
+                    "circuit_id": circuit_id,
                     "name": circuit_name,
                     "circuit_type": "internet",
                     "status": "active",
@@ -292,7 +298,7 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
             await circuit.save(allow_upsert=True)
         self.logger.info(f"Ensured internet-underlay circuit '{circuit_name}'")
 
-    async def _pick_isp_port(self, office_name: str, circuit_name: str, isp_device_id: str) -> str:
+    async def _pick_isp_port(self, office_name: str, circuit_id: str, isp_device_id: str) -> str:
         """The access PE port for this circuit: the one it already ends on, else the first free ``customer`` port.
 
         Free = no carrier circuit among the port's capabilities
@@ -301,7 +307,7 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
         inside the isp-access-port lock.
         """
         circuits = await self.client.filters(
-            kind=TopologyCarrierCircuit, name__value=circuit_name, include=["capabilities"]
+            kind=TopologyCarrierCircuit, circuit_id__value=circuit_id, include=["capabilities"]
         )
         own_ends = {peer.id for circuit in circuits for peer in getattr(circuit, "capabilities").peers}
         ports = await self.client.filters(
@@ -319,7 +325,7 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
             if not any(peer.typename == TopologyCarrierCircuit.__name__ for peer in getattr(port, "capabilities").peers)
         }
         if not free:
-            self.fail(f"{office_name}: the ISP access device has no free customer port for {circuit_name}")
+            self.fail(f"{office_name}: the ISP access device has no free customer port for {circuit_id}")
         return free[sort_interface_list(list(free))[0]]
 
     async def _ensure_tunnel_circuit(

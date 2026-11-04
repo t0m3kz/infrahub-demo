@@ -10,11 +10,17 @@ services:
       - NEO4J_dbms_memory_transaction_total_max=8g
       - NEO4J_dbms_memory_heap_initial__size=2g
       - NEO4J_dbms_memory_heap_max__size=4g
-      - NEO4J_dbms_memory_pagecache_size=2g
+      - NEO4J_dbms_memory_pagecache_size=4g
 
   infrahub-server:
     ports:
       - "${INFRAHUB_PORT:-8000}:8000"
+    environment:
+      # redis-py 8 (Infrahub 1.11.10+) caps a pool at 100 connections and raises MaxConnectionsError instead of
+      # waiting, which a burst of generator runs exhausts (redis/redis-py#4458).
+      INFRAHUB_CACHE_URL: "redis://cache:6379/0?max_connections=10000"
+      # Queries wait above this many in flight per process instead of all hitting Neo4j at once (default 0: no cap).
+      INFRAHUB_DB_MAX_CONCURRENT_QUERIES: "16"
 
   task-manager:
     ports:
@@ -23,6 +29,9 @@ services:
   task-worker:
     volumes:
       - ./:/upstream
+    environment:
+      INFRAHUB_CACHE_URL: "redis://cache:6379/0?max_connections=10000"
+      INFRAHUB_DB_MAX_CONCURRENT_QUERIES: "16"
 
   webhook-receiver:
     container_name: infrahub-webhook-receiver-1

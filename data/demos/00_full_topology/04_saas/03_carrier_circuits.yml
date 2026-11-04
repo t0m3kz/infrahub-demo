@@ -6,8 +6,8 @@ kind: Object
 spec:
   kind: TopologyCarrierCircuit
   data:
-    - name: XC-PAR1-WEBEX-1
-      circuit_id: XC-PAR1-WEBEX-1
+    - name: par1-xc21450004-webex-fra
+      circuit_id: XC21450004
       description: Cross-connect to the Webex peering point
       provider: P901
       circuit_type: cross_connect
