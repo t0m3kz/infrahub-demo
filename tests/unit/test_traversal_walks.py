@@ -358,8 +358,7 @@ def test_inventory_rows_flag_an_empty_kind() -> None:
 
 LAYOUT = {
     "zone": "Z1",
-    "office": "OFF",
-    "office_edge": "off-edge",
+    "offices": [{"office": "OFF", "edges": ["off-edge"]}],
     "colo_edge": "eg",
     "fabric_port_device": "fabric",
     "dark_fibres": {"DF-1": ["DC1", "Z1"]},
@@ -423,6 +422,37 @@ def test_a_tunnel_that_does_not_end_on_the_office_edge_fails() -> None:
     d = _layout_graph()
     d["session"][0] = {"name": _v("T-1"), "circuit_type": _v("tunnel"), **_circuit("T-1", "tunnel", "bl", "z")}
     assert any("office edge" in name for name in _failed(walks.layout_rows(d, LAYOUT)))
+
+
+TWO_OFFICES = {
+    **LAYOUT,
+    "offices": [{"office": "OFF", "edges": ["off-edge"]}, {"office": "OFF2", "edges": ["off2-edge-1", "off2-edge-2"]}],
+}
+
+
+def _two_office_graph() -> dict[str, list]:
+    d = _layout_graph()
+    d["dev"] += [_dev_in(f"off2-edge-{n}", "TopologyCustomerOffice", "OFF2") for n in (1, 2)]
+    d["session"] += [
+        {"name": _v(f"T-{n}"), "circuit_type": _v("tunnel"), **_circuit(f"T-{n}", "tunnel", f"off2-edge-{n}", "z")}
+        for n in (1, 2)
+    ]
+    return d
+
+
+def test_a_second_office_with_two_edges_passes_when_each_edge_sits_in_it_and_the_tunnels_end_on_edges() -> None:
+    """Two offices, three edges, three tunnels: every edge in its own office, every tunnel on one of them."""
+    assert _failed(walks.layout_rows(_two_office_graph(), TWO_OFFICES)) == []
+
+
+def test_an_edge_in_the_wrong_office_fails() -> None:
+    """The second office's edge declared in the first office is a failed row, and so is a tunnel on no edge at all."""
+    d = _two_office_graph()
+    d["dev"][-1] = _dev_in("off2-edge-2", "TopologyCustomerOffice", "OFF")
+    assert any("office edge" in name for name in _failed(walks.layout_rows(d, TWO_OFFICES)))
+    d = _two_office_graph()
+    d["session"].append({"name": _v("T-9"), "circuit_type": _v("tunnel"), **_circuit("T-9", "tunnel", "bl", "z")})
+    assert any("office edge" in name for name in _failed(walks.layout_rows(d, TWO_OFFICES)))
 
 
 def test_a_fibre_of_the_mesh_must_join_the_facilities_listed_for_it() -> None:

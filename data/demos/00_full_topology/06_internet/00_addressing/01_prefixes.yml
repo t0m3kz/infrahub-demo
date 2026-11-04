@@ -12,6 +12,10 @@ spec:
     # yamllint disable-line rule:line-length
     - {prefix: "198.51.100.14/31", ip_namespace: "INTERNET", status: active, description: "Transit: par-colo1-edge-01 to EXT-ISP-B-PE1"}  # yamllint disable-line rule:line-length
     # yamllint disable-line rule:line-length
+    - {prefix: "198.51.100.16/31", ip_namespace: "INTERNET", status: active, description: "Transit: lis-office-edge-01 to EXT-ISP-A-PE1"}  # yamllint disable-line rule:line-length
+    # yamllint disable-line rule:line-length
+    - {prefix: "198.51.100.18/31", ip_namespace: "INTERNET", status: active, description: "Transit: lis-office-edge-02 to EXT-ISP-B-PE1"}  # yamllint disable-line rule:line-length
+    # yamllint disable-line rule:line-length
     - {prefix: "192.0.2.0/24", ip_namespace: "INTERNET", status: active, description: "Public range of the object store API in eu-central-1 (cloud public endpoint s3-public)"}  # yamllint disable-line rule:line-length
     # yamllint disable-line rule:line-length
     - {prefix: "203.0.113.0/24", ip_namespace: "INTERNET", status: active, description: "Public range of Webex Frankfurt (SaaS public service webex-public)"}  # yamllint disable-line rule:line-length

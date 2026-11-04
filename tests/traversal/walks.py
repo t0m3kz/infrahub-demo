@@ -288,7 +288,7 @@ def _cabled_devices(ports: list[dict]) -> set[str]:
 
 def layout_rows(d: dict, cfg: dict) -> list[Row]:
     """The sites (attribute reads): every cloud and SaaS carrier starts on a device of the colocation cage and none at a
-    DC, each dark fibre joins the facilities listed for it, the office has an edge of its own and its tunnels end on it, and
+    DC, each dark fibre joins the facilities listed for it, every office has an edge of its own and its tunnels end on one, and
     the cage edge reaches the Fabric port through a patch panel (a cable to a front port, a cable from its rear port)."""
     place = _placement(d)
     zone = ("TopologyColocationZone", cfg["zone"])
@@ -322,14 +322,15 @@ def layout_rows(d: dict, cfg: dict) -> list[Row]:
             f"missing {sorted(set(want) - set(fibres))}, not as listed {wrong}",
         )
     )
-    office = ("TopologyCustomerOffice", cfg["office"])
+    edges = {edge: ("TopologyCustomerOffice", o["office"]) for o in cfg["offices"] for edge in o["edges"]}
     tunnels = [c for c in d["session"] if val(c, "circuit_type") == "tunnel"]
-    loose = sorted(val(c, "name") for c in tunnels if cfg["office_edge"] not in _ends(c))
+    elsewhere = sorted(edge for edge, office in edges.items() if place.get(edge) != office)
+    loose = sorted(val(c, "name") for c in tunnels if not edges.keys() & set(_ends(c)))
     rows.append(
         (
-            "layout: the office edge sits in the office and every tunnel ends on it",
-            place.get(cfg["office_edge"]) == office and bool(tunnels) and not loose,
-            f"edge in {place.get(cfg['office_edge'])}, tunnels not on it: {loose}",
+            "layout: every office edge sits in its office and every tunnel ends on an office edge",
+            bool(edges) and bool(tunnels) and not elsewhere and not loose,
+            f"edges not in their office: {elsewhere}, tunnels not on an office edge: {loose}",
         )
     )
     fronts = [p for p in d["front"] if cfg["colo_edge"] in _cabled_devices([p])]

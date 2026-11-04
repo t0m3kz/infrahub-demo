@@ -1,0 +1,35 @@
+---
+# The tunnels of the C901 office (inventory only, no BGP): one per edge, to the DC edge. The office is the first
+# location
+# (its owner is the tunnel's, derived) and each end rides a live internet carrier circuit of its own
+# (checks/circuit_placement.py):
+# edge 1 the access lis-office-ispa-48213-isp-a, edge 2 lis-office-ispb-77303-isp-b
+# (06_internet/02_circuits/01_carrier_circuits.yml);
+# the DC edge both tunnels end on rides ktw1-ispa-48211-isp-a (03_cloud/04_circuits/00_carrier_circuits.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologySessionCircuit
+  data:
+    - name: lis-office-tunnel-a-ktw1
+      description: SD-WAN tunnel from the first C901 office edge to the DC edge over the internet, no BGP
+      provider: P035
+      circuit_type: tunnel
+      status: active
+      locations:
+        - C901-OFFICE
+        - DC-KTW1
+      capabilities:
+        - ["lis-office-edge-01", "Tunnel1"]
+        - ["ktw1-edge-01", "Tunnel5"]
+    - name: lis-office-tunnel-b-ktw1
+      description: SD-WAN tunnel from the second C901 office edge to the DC edge over the internet, no BGP
+      provider: P035
+      circuit_type: tunnel
+      status: active
+      locations:
+        - C901-OFFICE
+        - DC-KTW1
+      capabilities:
+        - ["lis-office-edge-02", "Tunnel1"]
+        - ["ktw1-edge-01", "Tunnel6"]

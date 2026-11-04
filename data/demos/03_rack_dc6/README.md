@@ -1,14 +1,14 @@
 # 03 - Single Rack Demo
 
-The minimalist's approach (or "I ran out of budget")
+The minimalist's approach (or "I ran out of budget", but with better branding)
 
 ## Overview
 
-**Purpose:** Deploy a single network rack to DC6's Pod 1. Because sometimes "minimal" is just code for "we ran out of money."
+**Purpose:** Deploy a single network rack to DC6's Pod 1. Because sometimes "minimal" is just code for "we ran out of money" (and yes, procurement will still ask why it took so long).
 
 **Philosophy:** Sometimes less is more. Sometimes it's just all you can afford. Sometimes it's a lie.
 
-**Difficulty:** Trivial (until it becomes critical infrastructure and nobody wants to touch it).
+**Difficulty:** Trivial (until it becomes critical infrastructure and nobody wants to touch it, or even look at it directly).
 
 ---
 
@@ -43,7 +43,7 @@ uv run infrahubctl branch create your_branch
 uv run infrahubctl object load data/demos/03_rack_dc6/ --branch your_branch
 ```
 
-The rack generator will trigger **automatically** when the rack object is created! ✨
+The rack generator will trigger **automatically** when the rack object is created! ✨ No wand required.
 
 The generator will:
 
@@ -51,7 +51,7 @@ The generator will:
 2. **Create the 2 L2 leafs** and cable them to the rack's own leaf pair
 3. **Allocate underlay ASNs and routing** for the new leafs (the L2 leafs carry no BGP), leaving every existing switch's ASN alone
 
-**After generator completes,** manually regenerate the cabling artifact:
+**After generator completes,** manually regenerate the cabling artifact (the one step it politely leaves to you):
 
 ```bash
 uv run infrahubctl artifact generate "Cable matrix for DC" DC6 --branch your_branch
@@ -83,7 +83,7 @@ declares (`rows: 4`, `racks_per_row: 9`, the pod's M_MIDDLE design envelope; che
 
 ## Pro Tip
 
-This rack will outlive your tenure at the company. Plan accordingly. If you label it "test," expect it to be running in production by next year.
+This rack will outlive your tenure at the company, and probably the company. Plan accordingly. If you label it "test," expect it to be running in production by next year.
 
 ---
 
@@ -91,4 +91,4 @@ This rack will outlive your tenure at the company. Plan accordingly. If you labe
 
 Minimal racks are never minimal for long.
 
-The only thing more permanent than a temporary rack is a temporary workaround.
+The only thing more permanent than a temporary rack is a temporary workaround. Both will be found in an audit, labelled "do not touch".

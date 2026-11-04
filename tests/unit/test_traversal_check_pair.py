@@ -84,3 +84,124 @@ async def test_an_unresolvable_end_is_a_failed_row(monkeypatch: pytest.MonkeyPat
     rep = check_model.Report()
     await check_model.check_pair(rep, {}, PAIR, None, "b", D, False)  # ty: ignore[invalid-argument-type]
     assert [ok for _, ok, _ in rep.rows] == [False]
+
+
+PAIRS = [
+    {"src": "ManagedVxlanSegment:a", "dst": "CloudNetworkSegment:b", "golden": "ab.txt"},
+    {"src": "DcimPhysicalDevice:bcn-office-edge-01", "dst": "ManagedVxlanSegment:a", "golden": "office.txt"},
+    {"src": "DcimPhysicalDevice:lis-office-edge-01", "dst": "ManagedVxlanSegment:a", "golden": "lis.txt"},
+]
+
+
+def test_select_pairs_keeps_all_for_an_empty_pattern_and_matches_src_dst_or_golden() -> None:
+    """A regular expression over `src dst golden`: the office pairs by device name, one pair by its golden file."""
+    assert check_model.select_pairs(PAIRS, "") == PAIRS
+    assert [p["golden"] for p in check_model.select_pairs(PAIRS, "office-edge")] == ["office.txt", "lis.txt"]
+    assert [p["golden"] for p in check_model.select_pairs(PAIRS, "^DcimPhysicalDevice:lis")] == ["lis.txt"]
+    assert [p["golden"] for p in check_model.select_pairs(PAIRS, r"ab\.txt")] == ["ab.txt"]
+    assert check_model.select_pairs(PAIRS, "nothing-like-this") == []
+
+
+async def test_pairs_run_together_but_their_rows_keep_the_order_of_cases_yml(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The first pair finishes last, and still its rows come first; at most `jobs` pairs are traced at once."""
+    import asyncio
+
+    running = 0
+    peak = 0
+
+    async def fake_check_pair(rep: Any, case: dict, pair: dict, *args: Any) -> None:
+        nonlocal running, peak
+        running += 1
+        peak = max(peak, running)
+        await asyncio.sleep(0.05 if pair is PAIRS[0] else 0.0)
+        rep.add(pair["golden"], True)
+        running -= 1
+
+    monkeypatch.setattr(check_model, "check_pair", fake_check_pair)
+    rep = check_model.Report()
+    laps: list[str] = []
+    await check_model.check_pairs(rep, {}, PAIRS, None, "b", D, False, 2, laps.append)  # ty: ignore[invalid-argument-type]
+
+    assert [name for name, _, _ in rep.rows] == ["ab.txt", "office.txt", "lis.txt"]
+    assert peak == 2
+    assert len(laps) == 3
+
+
+CFG = {
+    "l3": ["DcimVirtualDevice:vm", "DcimPhysicalDevice:edge", "CloudNetworkSegment:seg"],
+    "l1": [
+        {"src": "DcimPhysicalDevice:ap", "dst": "TopologyInternet:INTERNET"},
+        {"src": "DcimVirtualDevice:vm", "dst": "DcimPhysicalDevice:ap", "via": "TopologyInternet:INTERNET"},
+    ],
+}
+
+
+def test_the_matrix_is_the_full_mesh_of_l3_ends_and_the_listed_l1_pairs() -> None:
+    """Three L3 ends give three pairs; each L1 entry is one trace with its waypoint."""
+    jobs = check_model.reach_jobs(CFG)
+
+    assert [(layer, a.split(":")[1], b.split(":")[1]) for layer, a, b, _ in jobs if layer == "l3"] == [
+        ("l3", "vm", "edge"),
+        ("l3", "vm", "seg"),
+        ("l3", "edge", "seg"),
+    ]
+    assert [(layer, via) for layer, _, _, via in jobs if layer == "l1"] == [
+        ("l1", None),
+        ("l1", "TopologyInternet:INTERNET"),
+    ]
+    assert check_model.reach_jobs({}) == []
+
+
+async def test_reachability_asks_for_one_shortest_path_and_fails_the_pair_without_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """max_paths is 1 for every trace; a leg with no path is a failed row that names it, a reached pair passes."""
+    seen: list[tuple[Any, ...]] = []
+
+    async def trace(client: Any, src: str, dst: str, layers: Any = ("l1", "l3"), via: str | None = None, **kw: Any):
+        seen.append((src, dst, tuple(layers), via, kw.get("max_paths")))
+        broken = src.endswith("seg") or dst.endswith("seg")
+        return [Leg(layer, SEG, NET, paths=[] if broken else [[SEG, NET]]) for layer in layers]
+
+    monkeypatch.setattr(check_model.path_trace, "trace", trace)
+    rep = check_model.Report()
+    laps: list[str] = []
+    await check_model.check_reachability(rep, CFG, None, "b", 2, laps.append)  # ty: ignore[invalid-argument-type]
+
+    assert {max_paths for *_, max_paths in seen} == {1}
+    failed = sorted(name for name, ok, _ in rep.rows if not ok)
+    assert failed == ["reach L3: CloudNetworkSegment:seg -> DcimPhysicalDevice:edge"] or len(failed) == 2
+    assert all("seg" in name for name in failed)
+    passed = [name for name, ok, _ in rep.rows if ok]
+    assert "reach L3: DcimVirtualDevice:vm -> DcimPhysicalDevice:edge" in passed
+    assert "reach L1: DcimVirtualDevice:vm -> DcimPhysicalDevice:ap via TopologyInternet:INTERNET" in passed
+    assert laps == ["reachability (5 traces)"]
+
+
+async def test_a_trace_cut_short_by_the_server_budget_is_asked_again_but_a_finished_search_is_not(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No path with `truncated_at` set means the budget ran out (retried and then passes); no path with none means the
+    search ended and the pair fails after one ask."""
+    calls: dict[str, int] = {}
+
+    async def trace(client: Any, src: str, dst: str, layers: Any = ("l1", "l3"), via: str | None = None, **kw: Any):
+        calls[src] = calls.get(src, 0) + 1
+        if src.endswith("flaky"):
+            cut = calls[src] < 3
+            return [
+                Leg(layer, SEG, NET, paths=[] if cut else [[SEG, NET]], truncated_at=21 if cut else None)
+                for layer in layers
+            ]
+        return [Leg(layer, SEG, NET, paths=[]) for layer in layers]
+
+    monkeypatch.setattr(check_model.path_trace, "trace", trace)
+    rep = check_model.Report()
+    cfg = {"l1": [{"src": "X:flaky", "dst": "X:b"}, {"src": "X:dead", "dst": "X:b"}]}
+    await check_model.check_reachability(rep, cfg, None, "b", 1, lambda _label: None)  # ty: ignore[invalid-argument-type]
+
+    assert calls == {"X:flaky": 3, "X:dead": 1}
+    assert {name: ok for name, ok, _ in rep.rows} == {
+        "reach L1: X:flaky -> X:b": True,
+        "reach L1: X:dead -> X:b": False,
+    }

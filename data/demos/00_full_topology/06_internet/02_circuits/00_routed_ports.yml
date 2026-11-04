@@ -57,3 +57,27 @@ spec:
         data:
           address: "198.51.100.13/31"
           ip_namespace: INTERNET
+    - device: lis-office-edge-01
+      name: GE1
+      status: active
+      description: "Internet access (lis-office-ispa-48213-isp-a): transit to the first ISP, the tunnel rides on it"
+      ip_address:
+        data:
+          address: "198.51.100.16/31"
+          ip_namespace: INTERNET
+    - device: EXT-ISP-A-PE1
+      name: et-0/0/2
+      status: active
+      description: "Transit customer: lis-office-edge-01"
+      ip_address:
+        data:
+          address: "198.51.100.17/31"
+          ip_namespace: INTERNET
+    - device: lis-office-edge-02
+      name: GE1
+      status: active
+      description: "Internet access (lis-office-ispb-77303-isp-b): transit to the second ISP, the tunnel rides on it"
+      ip_address:
+        data:
+          address: "198.51.100.18/31"
+          ip_namespace: INTERNET

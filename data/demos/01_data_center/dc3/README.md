@@ -7,16 +7,16 @@
 **Fabric Design:** `L` + `ebgp-ebgp` routing — classic 3-tier Clos (leaf → spine → super-spine), pure eBGP
 underlay + eBGP overlay, IPv6 P2P links, DC-level border-leaf fronted by firewall/load-balancer.
 This is DC1's pattern scaled up to Large — 4 pods instead of 2, 4 super-spines instead of 2 —
-except this time Brexit-flavoured London decided one vendor wasn't dramatic enough.
+except this time Brexit-flavoured London decided one vendor wasn't dramatic enough (and that a trade deal between four vendors would be simple; it was not).
 
 **Philosophy:** "Every pod, a different vendor." Cisco, Arista, Dell, and Edgecore each get their
 own pod, all peering happily into the same Dell-flavoured super-spine/border-leaf tier. Because
 nothing says "we definitely did not standardize procurement" like four device platforms in one
-fabric.
+fabric, four CLIs, four sets of release notes and exactly one engineer who remembers all of them.
 
 ## Architecture
 
-- **Super-Spines:** 4 (Dell PowerSwitch S5232F-ON) — the one thing everyone agrees to peer with
+- **Super-Spines:** 4 (Dell PowerSwitch S5232F-ON) — the one thing everyone agrees to peer with, which is more than Parliament managed
 - **Border-Leaf:** 2 (Dell PowerSwitch S5232F-ON), own firewall + load-balancer pair
 - **Pods:** 4 | **Spines:** 8 (2 per pod) | **Racks:** 4
 
@@ -34,7 +34,7 @@ fabric.
 ```
 
 **Warning:** Spine port consumption rates may cause existential dread. Multi-vendor peace of
-mind not included.
+mind not included, and please do not ask the vendors who is responsible for the interop bug; they will all politely blame each other.
 
 ---
 
@@ -65,7 +65,7 @@ uv run infrahubctl generator add_dc name=DC3 --branch you_branch
 
 ```
 
-Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → add_dc for DC3.
+The UI works too, if you enjoy tea and clicking: trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → add_dc for DC3.
 
 ## Validation
 
@@ -73,6 +73,6 @@ Use `uv run invoke test-integration-routing` for automatic routing changes and `
 
 ## Fun Fact
 
-The author still uses the mug he bought 25 years ago in London—proof that some British imports last longer than most celebrity marriages, and definitely longer than any network outage.
+The author still uses the mug he bought 25 years ago in London—proof that some British imports last longer than most celebrity marriages, and definitely longer than any network outage (the mug, to be fair, has never needed a maintenance window).
 
-Unlike certain monarchs, this mug has never abdicated, and it's still on the throne of morning coffee—no royal drama, just reliable caffeine delivery.
+Unlike certain monarchs, this mug has never abdicated, and it's still on the throne of morning coffee—no royal drama, just reliable caffeine delivery. If only the four vendors in this fabric were as dependable.

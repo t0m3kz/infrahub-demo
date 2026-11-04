@@ -11,7 +11,9 @@ delete the branch (also on failure). Cases live in tests/traversal/cases.yml.
 import argparse
 import asyncio
 import difflib
+import itertools
 import os
+import re
 import subprocess
 import sys
 import time
@@ -197,6 +199,83 @@ async def check_pair(
     check_golden(rep, tag, pair["golden"], chain_rows.golden_text(src, dst, sections), update_golden)
 
 
+async def check_pairs(
+    rep: Report,
+    case: dict,
+    pairs: list[dict],
+    client: InfrahubClient,
+    branch: str,
+    d: dict,
+    update_golden: bool,
+    jobs: int,
+    lap: Callable[[str], None],
+) -> None:
+    """The pairs, `jobs` of them at a time. A pair writes its rows into a report of its own and the reports are merged in
+    the order of cases.yml, so the output does not depend on which trace finishes first."""
+    gate = asyncio.Semaphore(max(1, jobs))
+
+    async def one(pair: dict) -> Report:
+        part = Report()
+        async with gate:
+            await check_pair(part, case, pair, client, branch, d, update_golden)
+        lap(f"pair {pair['src']} -> {pair['dst']}")
+        return part
+
+    for part in await asyncio.gather(*(one(pair) for pair in pairs)):
+        rep.rows.extend(part.rows)
+
+
+REACH_ATTEMPTS = 3  # a far-end trace whose search ran out of budget is asked again, up to this many times
+
+
+def reach_jobs(cfg: dict) -> list[tuple[str, str, str, str | None]]:
+    """The traces of the far-end matrix: every pair of `l3` ends in L3, and each `l1` pair (with its waypoint, when the
+    tracer's depth limit needs one) in L1."""
+    jobs: list[tuple[str, str, str, str | None]] = [
+        ("l3", a, b, None) for a, b in itertools.combinations(cfg.get("l3") or [], 2)
+    ]
+    jobs += [("l1", p["src"], p["dst"], p.get("via")) for p in cfg.get("l1") or []]
+    return jobs
+
+
+async def check_reachability(
+    rep: Report, cfg: dict, client: InfrahubClient, branch: str, jobs: int, lap: Callable[[str], None]
+) -> None:
+    """The far ends reach each other: ONE shortest path per pair and layer, no ECMP set and no golden (those are the
+    pairs'). The ends are where a user, a server or a workload sits (an access point, a VM, a cloud segment, THE
+    INTERNET), so a broken hop anywhere between them fails a row, whichever box it is on."""
+    gate = asyncio.Semaphore(max(1, jobs))
+
+    async def one(layer: str, src: str, dst: str, via: str | None) -> Report:
+        part = Report()
+        title = f"reach {layer.upper()}: {src} -> {dst}" + (f" via {via}" if via else "")
+        async with gate:
+            for _attempt in range(REACH_ATTEMPTS):
+                legs = await traced(part, title, client, branch, src, dst, 1, layers=(layer,), via=via)
+                # a leg with no path is only a failure when the search ended: the server also stops when its budget runs
+                # out (a busy stack), which says nothing about the path, so that one is asked again
+                if legs is None or not any(not leg.paths and leg.truncated_at for leg in legs):
+                    break
+        if legs is not None:
+            missing = [f"{leg.src.display_label} -> {leg.dst.display_label}" for leg in legs if not leg.paths]
+            budget = [str(leg.truncated_at) for leg in legs if not leg.paths and leg.truncated_at]
+            note = f"no path for {missing}" + (f" (budget ran out at depth {budget})" if budget else "")
+            part.add(title, bool(legs) and not missing, note)
+        return part
+
+    work = reach_jobs(cfg)
+    for part in await asyncio.gather(*(one(*job) for job in work)):
+        rep.rows.extend(part.rows)
+    lap(f"reachability ({len(work)} traces)")
+
+
+def select_pairs(pairs: list[dict], pattern: str) -> list[dict]:
+    """The pairs whose `src dst golden` text matches the regular expression (all of them for an empty pattern)."""
+    if not pattern:
+        return pairs
+    return [p for p in pairs if re.search(pattern, f"{p['src']} {p['dst']} {p['golden']}")]
+
+
 async def check_pod(rep: Report, cfg: dict, client: InfrahubClient, branch: str, d: dict) -> None:
     """The pod's paths as the server returns them: the shortest server -> edge set (the direct uplink), leaf -> spine ->
     border leaf for every (leaf, border leaf) pair (first leg of a `--via` trace), both leaves -> edge in L3."""
@@ -256,34 +335,68 @@ async def assert_case(
     rep: Report,
     update_golden: bool = False,
     lap: Callable[[str], None] = lambda _label: None,
+    pair_filter: str = "",
+    jobs: int = 1,
+    reach_only: bool = False,
 ) -> None:
-    """Read the data of the branch, ask the server for the chains and run every assertion into the report."""
+    """Read the data of the branch, ask the server for the chains and run every assertion into the report.
+
+    `pair_filter` (a regular expression over `src dst golden`) runs only the pairs it matches and skips the pods, THE
+    INTERNET and the sites, which are traced too: the checks that read only the graph still run. `jobs` traces that many
+    pairs at once."""
     d = await graph_read.load(client, branch)
     lap("graph read")
     for row in walks.inventory_rows(d, case["non_empty"]):
         rep.add(*row)
-    for pair in case["pairs"]:
-        await check_pair(rep, case, pair, client, branch, d, update_golden)
-        lap(f"pair {pair['src']} -> {pair['dst']}")
-    for pod in case.get("pods") or []:
-        for name, ok, detail in walks.pod_rows(d, pod):
-            rep.add(f"{name} [{pod['edge']}]", ok, detail)
-        await check_pod(rep, pod, client, branch, d)
-        lap(f"pod {pod['server']}")
+    pairs = [] if reach_only else select_pairs(case["pairs"], pair_filter)
+    if not pairs and not reach_only:
+        rep.add(f"[{case['name']}] pairs matching '{pair_filter}'", False, "no pair of cases.yml matches")
+    # the traced parts (pairs, pods, THE INTERNET, sites) are independent: they run together, each into a report of its
+    # own, and the rows are put back in the order below
+    parts = {name: Report() for name in ("pairs", "pods", "internet", "sites", "reach")}
+    full = not pair_filter and not reach_only
+
+    async def trace_pods() -> None:
+        for pod in case.get("pods") or []:
+            for name, ok, detail in walks.pod_rows(d, pod):
+                parts["pods"].add(f"{name} [{pod['edge']}]", ok, detail)
+            await check_pod(parts["pods"], pod, client, branch, d)
+            lap(f"pod {pod['server']}")
+
+    async def trace_internet() -> None:
+        for row in walks.internet_rows(d, case["internet"]):
+            parts["internet"].add(*row)
+        await check_internet(parts["internet"], case["internet"], client, branch, update_golden)
+        lap("internet")
+
+    async def trace_sites() -> None:
+        await check_sites(parts["sites"], case["sites"], client, branch)
+        lap("sites")
+
+    work = [] if reach_only else [check_pairs(parts["pairs"], case, pairs, client, branch, d, update_golden, jobs, lap)]
+    if case.get("reachability") and not pair_filter:
+        work.append(check_reachability(parts["reach"], case["reachability"], client, branch, jobs, lap))
+    if full:
+        work.append(trace_pods())
+        if case.get("internet"):
+            work.append(trace_internet())
+        if case.get("sites"):
+            work.append(trace_sites())
+    await asyncio.gather(*work)
+    rep.rows.extend(parts["pairs"].rows)
+    rep.rows.extend(parts["pods"].rows)
     if case.get("transport_sub_interfaces"):
         for row in [*walks.sub_interface_rows(d), *walks.tunnel_underlay_rows(d)]:
             rep.add(*row)
-    if case.get("internet"):
+    rep.rows.extend(parts["internet"].rows)
+    if not full and case.get("internet"):
         for row in walks.internet_rows(d, case["internet"]):
             rep.add(*row)
-        await check_internet(rep, case["internet"], client, branch, update_golden)
-        lap("internet")
     if case.get("layout"):
         for row in walks.layout_rows(d, case["layout"]):
             rep.add(*row)
-    if case.get("sites"):
-        await check_sites(rep, case["sites"], client, branch)
-        lap("sites")
+    rep.rows.extend(parts["sites"].rows)
+    rep.rows.extend(parts["reach"].rows)
     check_golden(rep, "inventory", case["inventory_golden"], "\n".join(walks.inventory_lines(d)) + "\n", update_golden)
     declared = walks.declared_rides_on([s for p in case["data"] for s in walks.yaml_documents(ROOT / p)])
     for row in walks.rides_on_rows(d, declared):
@@ -331,7 +444,7 @@ async def run_case(
             return
         rep.add(f"[{case['name']}] data load {case['data']}", True, f"note: {done}")
         lap(f"data loaded: {done}")
-        await assert_case(case, client, branch, rep, args.update_golden, lap)
+        await assert_case(case, client, branch, rep, args.update_golden, lap, args.pair, args.jobs, args.reach)
     finally:
         if args.keep_branch:
             say(f"  branch {branch} kept (--keep-branch); delete: infrahubctl branch delete {branch}")
@@ -373,6 +486,11 @@ async def amain(args: argparse.Namespace) -> int:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--case", default="", help="name of one case from cases.yml (default: all)")
+    ap.add_argument("--pair", default="", help="regular expression: only the pairs whose 'src dst golden' matches")
+    ap.add_argument(
+        "--reach", action="store_true", help="only the far-end reachability matrix: shortest paths, a minute or two"
+    )
+    ap.add_argument("--jobs", type=int, default=2, help="pairs traced at once (default 2; 1 is the old sequential run)")
     ap.add_argument("--update-golden", action="store_true", help="write the golden files instead of comparing")
     ap.add_argument("--keep-branch", action="store_true", help="do not delete the tv-* branch (debugging)")
     ap.add_argument("--rebuild", action="store_true", help="clean the test containers and start a fresh stack")

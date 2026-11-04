@@ -2,20 +2,21 @@
 
 ## Overview
 
-**Location:** Paris 🇫🇷 (The City of Light - where your packets enjoy croissants and romantic latency)
+**Location:** Paris 🇫🇷 (the City of Light, where your packets enjoy croissants, romantic latency and the occasional strike)
 
-**Platform:** Arista EOS - So API-driven, even your croissant can trigger a config change.
+**Platform:** Arista EOS - So API-driven, even your croissant can trigger a config change (we have not tested the baguette, and we are afraid to).
 
 **Fabric Design:** `M` + `ebgp-ebgp` routing — no super-spine tier at all: every pod's spines mesh
 directly with every other pod's spines (full mesh, not a star through some aggregation
 layer above them). But unlike the old micro-fabric border-spine pattern, DC2 keeps a real,
 separate **border-leaf** tier at the DC level, fronted by its own firewall/load-balancer pair —
 nothing here is collapsed into a single device. eBGP underlay + eBGP overlay, IPv6 P2P links.
+In short: everything is flat, nothing is merged, and the org chart is more complicated than the fabric.
 
 **Use Case:** When you want the port/latency savings of skipping a super-spine tier, but
 you're not small enough (or don't want) to collapse spine+border-leaf into one device like
 the border-spine pattern does. DC2 proves those two decisions — "skip the super-spine tier"
-and "keep border-leaf separate" — are independent choices, not a package deal.
+and "keep border-leaf separate" — are independent choices, not a package deal (no, the vendor will not bundle them for a discount either).
 
 ---
 
@@ -23,11 +24,11 @@ and "keep border-leaf separate" — are independent choices, not a package deal.
 
 ### Fabric Scale
 
-- **Border-Leaf:** 2 (Arista DCS-7050CX3-32C-R), with its own firewall + load-balancer pair
+- **Border-Leaf:** 2 (Arista DCS-7050CX3-32C-R), with its own firewall + load-balancer pair (a separate tier, like a proper bouncer at the door)
 - **Pods:** 4 | **Spines:** 8 (2 per pod) | **Racks:** 4
 - **Mesh:** every pod's spines connect directly to every other pod's spines — no super-spine
   tier to route through, no DC-level orchestration required (each pod cables itself to its
-  existing lower-index siblings as soon as it comes up)
+  existing lower-index siblings as soon as it comes up; think of it as a very polite dinner party where everyone shakes hands with everyone who arrived earlier)
 
 | Pod | Spines | Design   | Deployment  | Personality          |
 | --- | ------ | -------- | ----------- | -------------------- |
@@ -50,7 +51,7 @@ Leaf → Spine ⇄ Spine (every pod, full mesh — no super-spine tier)
 # See Deployment Steps below for the current load and generator commands.
 ```
 
-**Warning:** May cause spontaneous optimization and French food cravings
+**Warning:** May cause spontaneous optimization and French food cravings. Side effects include refusing to work after 18:00 and calling it a cultural right.
 
 ## Deployment Steps
 
@@ -69,18 +70,18 @@ uv run infrahubctl generator add_dc name=DC2 --branch you_branch
 
 ```
 
-Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → add_dc for DC2.
+If you would rather point and click, trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → add_dc for DC2.
 
 ## Validation
 
-Run `uv run invoke test-integration` to validate this OSPF/iBGP, no-super-spine design with the full DC matrix. Use `uv run invoke test-integration-routing` for the faster automatic cascade check.
+Run `uv run invoke test-integration` to validate this OSPF/iBGP, no-super-spine design with the full DC matrix (go get a proper lunch, a French one, it takes a while). Use `uv run invoke test-integration-routing` for the faster automatic cascade check.
 
 ## Fun Fact
 
-As a teenager, the author visited La Défense and dreamed of working in one of those shiny Parisian towers.
+As a teenager, the author visited La Défense and dreamed of working in one of those shiny Parisian towers, as one does before learning what happens inside them.
 
 Years later, when the chance finally came, he realized it was a truly ridiculous dream—and thanked the
 universe for dodging a lifetime of overpriced coffee, endless PowerPoint meetings, rush hour traffic, and
 spontaneous synergy sessions.
 
-Moral: Sometimes your network (and your sanity) are better off far away from the business district.
+Moral: Sometimes your network (and your sanity) are better off far away from the business district. Stay flat, stay in the suburbs, stay unsynergised.

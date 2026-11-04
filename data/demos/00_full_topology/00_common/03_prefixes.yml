@@ -35,6 +35,10 @@ spec:
     - {prefix: "169.254.10.8/30", ip_namespace: "PROD", status: active, description: "Link: Zscaler tunnel (office edge)"}  # yamllint disable-line rule:line-length
     # yamllint disable-line rule:line-length
     - {prefix: "169.254.10.12/30", ip_namespace: "PROD", status: active, description: "Link: office tunnel to the DC edge (SD-WAN hub)"}  # yamllint disable-line rule:line-length
+    # yamllint disable-line rule:line-length
+    - {prefix: "169.254.10.16/30", ip_namespace: "PROD", status: active, description: "Link: Lisbon office edge 1 tunnel to the DC edge"}  # yamllint disable-line rule:line-length
+    # yamllint disable-line rule:line-length
+    - {prefix: "169.254.10.20/30", ip_namespace: "PROD", status: active, description: "Link: Lisbon office edge 2 tunnel to the DC edge"}  # yamllint disable-line rule:line-length
     - {prefix: "10.91.255.0/24", ip_namespace: "PROD", status: active, description: "PAR-COLO1 loopbacks"}
     - {prefix: "10.92.255.0/24", ip_namespace: "PROD", status: active, description: "DC-WAW1 loopbacks"}
     - {prefix: "10.93.255.0/24", ip_namespace: "PROD", status: active, description: "DC-GDN1 loopbacks"}

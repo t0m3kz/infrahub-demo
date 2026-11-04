@@ -167,6 +167,10 @@ generics:
             label: Distribution Switch
             description: "Campus aggregation switch — SD-Access intermediate/border node."
             color: "#87b8e8"
+          - name: access-point
+            label: Access Point
+            description: "Wireless access point of an office: one uplink to an access switch, no routing, no VRF."
+            color: "#d4edda"
       - name: status
         kind: Dropdown
         optional: false

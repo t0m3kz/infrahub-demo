@@ -21,3 +21,12 @@ spec:
               data:
                 address: "198.51.100.15/31"
                 ip_namespace: INTERNET
+        - kind: DcimPhysicalInterface
+          data:
+            name: et-0/0/2
+            status: active
+            description: "Transit customer: lis-office-edge-02"
+            ip_address:
+              data:
+                address: "198.51.100.19/31"
+                ip_namespace: INTERNET

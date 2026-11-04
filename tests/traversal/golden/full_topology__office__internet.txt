@@ -1,4 +1,0 @@
-# DcimPhysicalDevice:bcn-office-edge-01 -> TopologyInternet:INTERNET
-## plain
-L1 DcimPhysicalDevice:bcn-office-edge-01 -> TopologyInternet:INTERNET: 1 equal-cost path(s), depth 7
-  DcimPhysicalDevice:bcn-office-edge-01 -> DcimPhysicalInterface:bcn-office-edge-01/GE1 -> TopologyCarrierCircuit:ISPA-48212 -> DcimPhysicalInterface:EXT-ISP-A-PE1/et-0/0/1 -> DcimPhysicalDevice:EXT-ISP-A-PE1 -> DcimPhysicalInterface:EXT-ISP-A-PE1/xe-0/1/0 -> TopologyCarrierCircuit:UPL-48001 -> TopologyInternet:INTERNET

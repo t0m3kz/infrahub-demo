@@ -22,7 +22,10 @@ _CARRIER, _SESSION = "TopologyCarrierCircuit", "TopologySessionCircuit"
 
 # Display name and group of each location the circuits of the sample list.
 _GROUPS: dict[str, tuple[str, list[str]]] = {
-    "SITES": ("Our sites", ["DC-KTW1", "DC-WAW1", "DC-GDN1", "PAR-COLO1", "FRA-COLO1", "AMS-COLO1", "C900-OFFICE"]),
+    "SITES": (
+        "Our sites",
+        ["DC-KTW1", "DC-WAW1", "DC-GDN1", "PAR-COLO1", "FRA-COLO1", "AMS-COLO1", "C900-OFFICE", "C901-OFFICE"],
+    ),
     "NET": ("Internet", ["ISP-A", "ISP-B", "INTERNET"]),
     "CLOUD": ("Cloud and SaaS", ["eu-central-1", "westeurope", "europe-west3", "WEBEX-FRANKFURT", "ZSCALER-MUNICH I"]),
 }

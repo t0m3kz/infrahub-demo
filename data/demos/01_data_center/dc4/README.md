@@ -2,13 +2,13 @@
 
 ## Overview
 
-**Location:** Berlin 🇩🇪 (The hipster capital - your infrastructure is as edgy as the local techno scene)
+**Location:** Berlin 🇩🇪 (the hipster capital: your infrastructure is as edgy as the local techno scene, and it also only starts working after midnight)
 
 **Platform:** Arista EOS at the DC level — so API-driven, even the hyper-spine tier could
 probably deploy itself if you left the terminal unattended.
 
 **Fabric Design:** `XL` + `ebgp-ebgp` routing — the same eBGP-eBGP pattern as DC1/DC3, but Extra Large,
-which means the fabric grew a 4th tier: **hyper-spine**. Leaf → spine → super-spine →
+which means the fabric grew a 4th tier: **hyper-spine** (yes, really; someone looked at "super" and decided it was not enough). Leaf → spine → super-spine →
 hyper-spine, full-mesh cabled and routed between super-spine and hyper-spine (every
 super-spine talks to every hyper-spine, same fan-out logic as spine↔super-spine, just one
 tier higher — and dc.py cables this pair itself, since both tiers live at the DC level).
@@ -16,7 +16,7 @@ tier higher — and dc.py cables this pair itself, since both tiers live at the 
 **Use Case:** When 4 super-spines start feeling like a chokepoint and you need one more
 level of aggregation before things get truly hyperscale. Also: proof that "wymieszane, co
 jest dostępne" (mixed, whatever's available) is a legitimate pod strategy when your fabric
-is big enough that nobody's going to audit every pod's deployment type anyway.
+is big enough that nobody's going to audit every pod's deployment type anyway. (Translation for the non-Polish speakers: the author did not want to choose. We are not judging. Much.)
 
 ---
 
@@ -24,7 +24,7 @@ is big enough that nobody's going to audit every pod's deployment type anyway.
 
 ### Fabric Scale
 
-- **Hyper-Spines:** 2 (Arista DCS-7050CX3-32C-R) — full mesh to every super-spine, nothing above them
+- **Hyper-Spines:** 2 (Arista DCS-7050CX3-32C-R) — full mesh to every super-spine, nothing above them (finally, a tier with no one to report to)
 - **Super-Spines:** 4 (Arista DCS-7050CX3-32C-R)
 - **Border-Leaf:** 2 (Arista DCS-7050CX3-32C-R) — one each in pods 1 and 2, own firewall + load-balancer pair
 - **Pods:** 3, deliberately mixed deployment types
@@ -50,7 +50,7 @@ Leaf → Spine → Super-Spine ⇄ Hyper-Spine (full mesh, DC-level, cabled by d
 ```
 
 **Warning:** May cause identity crisis. Perfect for flexing multi-deployment AND
-multi-tier skills at the same time.
+multi-tier skills at the same time, right up until someone asks you to draw it on a whiteboard.
 
 ## Deployment Steps
 
@@ -69,15 +69,15 @@ uv run infrahubctl generator add_dc name=DC4 --branch you_branch
 
 ```
 
-Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → add_dc for DC4.
+Alternatively, summon the generator from the InfraHub UI → Actions → Generator Definitions → add_dc for DC4.
 
 ## Validation
 
-Run `uv run invoke test-integration-routing` before committing generator-ordering changes, then use `uv run invoke test-integration` for the complete mixed-topology validation.
+Run `uv run invoke test-integration-routing` before committing generator-ordering changes (ordering bugs are the kind that only show up on a Friday), then use `uv run invoke test-integration` for the complete mixed-topology validation.
 
 ## Fun Fact
 
-The author owns a piece of the Berlin Wall—so if your network ever feels divided, just remember: it can be
+The author owns a piece of the Berlin Wall (a small one, he was not that ambitious)—so if your network ever feels divided, just remember: it can be
 rebuilt, repurposed, or turned into a conversation starter at tech meetups. It's a daily reminder that even
 the toughest partitions eventually fall—sometimes with a little help from automation, sometimes with a
 sledgehammer.
@@ -85,4 +85,4 @@ sledgehammer.
 Bonus: The author proudly benefits from Germany's Unity Day, enjoying a free holiday every year thanks to
 history and a chunk of concrete.
 
-Prost to open borders, open networks, and open source!
+Prost to open borders, open networks, and open source! (Closed change windows remain non-negotiable.)

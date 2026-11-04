@@ -57,6 +57,28 @@ spec:
               data:
                 address: "169.254.10.14/30"
                 ip_namespace: PROD
+        - kind: DcimVirtualInterface
+          data:
+            name: Tunnel5
+            role: cloud
+            status: active
+            description: SD-WAN hub end of the C901 office edge 1 tunnel (rides on Ethernet1/2)
+            parent_interface: ["ktw1-edge-01", "Ethernet1/2"]
+            ip_address:
+              data:
+                address: "169.254.10.18/30"
+                ip_namespace: PROD
+        - kind: DcimVirtualInterface
+          data:
+            name: Tunnel6
+            role: cloud
+            status: active
+            description: SD-WAN hub end of the C901 office edge 2 tunnel (rides on Ethernet1/2)
+            parent_interface: ["ktw1-edge-01", "Ethernet1/2"]
+            ip_address:
+              data:
+                address: "169.254.10.22/30"
+                ip_namespace: PROD
     - name: EXT-ISP-A-PE1
       object_template: MX204_ISP_PE
       owner: P014
