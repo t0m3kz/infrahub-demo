@@ -333,6 +333,12 @@ class MyCheck(InfrahubCheck):
     since `INTERNET` is bootstrap; an access between two ISP-kind routers, a partner buying from an attached ISP, is
     judged as one). A public cloud or SaaS service is a `CloudServiceEndpoint` with `access: public` and its range as
     `prefix` in the `INTERNET` namespace; its `virtual_network` is an optional plain edge.
+  - **Circuit names**: `<end A>-<id>-<end B>`, lowercase; an end is a site (`ktw1`, `par1`), an ISP, `internet`, a SaaS
+    region or a cloud as `<provider>-<account id>`. A carrier's id is its operator `circuit_id` (`ktw1-df10001-waw1`),
+    which stays its HFID and the key every reference uses, and its display label is the name; a session circuit has
+    no `circuit_id`, so its middle part is the type and a leg or the cloud side's id (`ktw1-dci-a-waw1`,
+    `par1-dxvif-fgt1a2b3-aws-900000000001`). `add_sdwan_edge` keeps `INET-<office>` as the circuit_id and names it
+    `<office>-inet-<isp>`. `data/demos/00_full_topology` follows it; `30_all` keeps its older names.
   - **Carrier provider data** (optional, inventory only, nothing reads it): `circuit_id` also holds the Equinix Fabric
     connection `uuid` or the Megaport VXC `product_uid`; `bandwidth` mirrors the Fabric `bandwidth` and the Megaport
     `rate_limit`; `term_length` (months) has the name and meaning of `CloudNetworkAppliance.term_length` and mirrors the
@@ -527,20 +533,20 @@ class MyCheck(InfrahubCheck):
   `DcimEndpoint`, so a cable ends on a physical interface or on either port kind with no change to `DcimCable`; a
   cross-connect is port - cable - front, rear - cable - port. A panel is unique by its mandatory `rack` and its `name`
   (HFID `[rack shortname, name]`; `PP-01` may exist in every rack). The HFID of both ports is a computed id, because an
-  HFID cannot go through two relationships: `<rack>:<panel>:<rear>` and `<rack>:<panel>:F<front>`. An object template
-  copies an attribute relationship as it is and the server refuses a template port as its peer (measured on 1.11.9, in
-  one file, in a third file, by id and from the rear side), so a template cannot pair a front port with its rear port.
-  The panel templates (`data/bootstrap/10_physical_devices_templates_patch_panel_rear.yaml` and `_front.yaml`: `PP-24-LC`,
-  `PP-48-LC`, `PP-12-SC`, `PP-24-RJ45`, `PP-CASSETTE-MPO12`) therefore create the ports unpaired, one ranged block per
-  kind (never nested: a nested range multiplies), and are in no group: a template does not pass its
-  `member_of_groups` on to the panel it creates, so a panel declares `member_of_groups: [patch_panels]` itself. The
-  generator `add_patch_panel` (`generators/topology/patch_panel.py`, the group trigger of `patch_panels` plus `updated`
-  triggers on the panel's two port edges, because the template's children may appear after the panel) pairs them: the layout is derived from
-  the ports alone (`generators/helpers/patch_panel.py`): a jack when the numbered counts are equal (front N on rear N), a
-  cassette when every rear port is MPO-12 and the fronts are a multiple F of the rears (rear k takes fronts
-  (k-1)*F+1..k*F), else no pairing and an error. It writes only unpaired front ports (idempotent) and leaves one paired
-  differently with a WARNING. `checks/patch_panel_pairing.py` guards the result (a generated, editable pairing is data
-  that needs a guard): an underivable layout, an unpaired or mispaired front port. A cable that stops at a panel is data
+  HFID cannot go through two relationships: `<rack>:<panel>:<rear>` and `<rack>:<panel>:F<front>`. A panel names its
+  `panel_type` (a Dropdown: `lc-24`, `lc-48`, `lc-96`, `sc-12`, `rj45-24`, `rj45-48` jacks and the MPO-12 cassettes
+  `mpo12-cassette-24/48/96`), and the type is the whole layout (`generators/helpers/patch_panel.py` `PANEL_TYPES`, the
+  one table; `tests/unit/test_patch_panel_schema.py` holds it equal to the choices): a jack is front N on rear N, a
+  cassette gives rear k the fronts (k-1)*F+1..k*F. There is no panel template: an object template copies an attribute
+  relationship as it is and cannot point a front port at its sibling (measured on 1.11.9). The generator
+  `add_patch_panel` (`generators/topology/patch_panel.py`; the group trigger of `patch_panels`, which every panel
+  declares itself, and an `updated` trigger on `panel_type`) builds the missing rear ports, then the missing front ports
+  already on their rear port, and pairs a front port left unpaired; it never deletes or re-pairs a port (one the type
+  does not have, with another connector or on another rear port is a WARNING), under one lock per panel. Every port is
+  saved as an upsert, which the server resolves by `[panel, name]`, so a data file may upsert the same port in the same
+  load (a cable end, a used jack given as a nested front port on a nested rear port) and both land on one port.
+  `checks/patch_panel_pairing.py` guards the result against the type (`audit()`, the same function): an unknown type,
+  a missing or extra port, another connector, an unpaired or misplaced front port. A cable that stops at a panel is data
   to read, not a defect to report. A panel
   always sits between two devices: a circuit end stays an interface (the circuit `capabilities` are untouched) and the
   panel's location is its mandatory `rack` (`LocationRack.deployment` gives the facility) and its place in it is

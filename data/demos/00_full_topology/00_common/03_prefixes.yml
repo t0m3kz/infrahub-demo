@@ -8,6 +8,16 @@ spec:
   kind: IpamPrefix
   data:
     - {prefix: "10.200.0.0/16", ip_namespace: "PROD", status: active, description: "AWS VPC block"}
+    # The spoke accounts behind the transit gateway (AWS) and the hub VNet (Azure): each block is named by the
+    # attachment that announces it towards us, so it is flat here.
+    - {prefix: "10.201.0.0/16", ip_namespace: "PROD", status: active, description: "Azure VNet block"}
+    - {prefix: "10.203.0.0/16", ip_namespace: "PROD", status: active, description: "Azure spoke VNet block"}
+    - {prefix: "10.205.0.0/16", ip_namespace: "PROD", status: active, description: "AWS payments VPC block"}
+    - {prefix: "10.206.0.0/16", ip_namespace: "PROD", status: active, description: "AWS analytics VPC block"}
+    - {prefix: "10.207.0.0/16", ip_namespace: "PROD", status: active, description: "AWS shared services VPC block"}
+    - {prefix: "10.208.0.0/16", ip_namespace: "PROD", status: active, description: "Azure payments VNet block"}
+    - {prefix: "10.209.0.0/16", ip_namespace: "PROD", status: active, description: "Azure analytics VNet block"}
+    - {prefix: "10.210.0.0/16", ip_namespace: "PROD", status: active, description: "Azure identity VNet block"}
     - {prefix: "10.90.255.0/24", ip_namespace: "PROD", status: active, description: "DC-KTW1 loopbacks"}
     - {prefix: "10.255.128.0/31", ip_namespace: "PROD", status: active, description: "Link: AWS transit VIF"}
     - {prefix: "10.255.128.2/31", ip_namespace: "PROD", status: active, description: "Link: AWS private VIF"}

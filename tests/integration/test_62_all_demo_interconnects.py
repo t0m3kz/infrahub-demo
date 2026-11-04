@@ -495,10 +495,10 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """PP-EQX-FR2-01 (template PP-24-LC) has all 24 front ports paired, front N on rear N, by add_patch_panel.
+        """PP-EQX-FR2-01 (type lc-24) has all 24 front ports, each on its rear port N, built by add_patch_panel.
 
-        The template creates the ports unpaired and the generator runs on the panel's creation and on its port
-        edges, so the pairing is waited for like the other generator output.
+        The generator builds the ports of the type when the panel joins patch_panels, so the result is waited for
+        like the other generator output.
         """
         query = """
         query {

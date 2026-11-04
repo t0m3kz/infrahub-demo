@@ -1,17 +1,15 @@
 ---
 # The patch panel of the FR2 cage's cross-connect (07_patch_panel_cabling.yml). A DcimPatchPanel is not a device: it has
-# no role, no artifact and no capabilities, only 24 rear ports and 24 front ports from the PP-24-LC template
-# (data/bootstrap/10_physical_devices_templates_patch_panel_rear.yaml and _front.yaml). The template cannot pair a front
-# port with its rear port, so the generator add_patch_panel does (created-trigger, group patch_panels, which the
-# panel declares itself as well as its template). The panel loads before the cables that land on the ports (the files
-# of this folder load in name order).
+# no role, no artifact and no capabilities, only the 24 rear and 24 front ports of its type lc-24, which the generator
+# add_patch_panel builds, each front port on its rear port (group trigger of patch_panels, which the panel declares).
+# The panel loads before the cables that land on the ports (the files of this folder load in name order).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: DcimPatchPanel
   data:
     - name: "PP-EQX-FR2-01"
-      object_template: PP-24-LC
+      panel_type: lc-24
       description: "FR2 cage patch panel (cross-connect to the Equinix Fabric port)"
       rack: fr2-s1-r-1
       member_of_groups:

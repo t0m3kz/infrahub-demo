@@ -249,8 +249,7 @@ def test_a_patch_panel_kind_has_no_capability_edge(schema: SchemaModel, kind: st
     """A passive panel and its ports carry neither ``capabilities`` nor ``shared_capabilities``, by construction.
 
     Both edges reach a kind only through DcimCapabilities (device edges) or DcimInterface (interface edge); the
-    panel kinds inherit neither, so no extension on either can reach them. The generated templates
-    (TemplateDcimPatchPanel and the two port templates) are built from the node's own relationships, so the same holds.
+    panel kinds inherit neither, so no extension on either can reach them.
     """
     assert schema.is_generic.get(kind) is False
     assert schema.ancestors(kind).isdisjoint(DEVICE_ONLY_GENERICS | {"DcimInterface"}), kind

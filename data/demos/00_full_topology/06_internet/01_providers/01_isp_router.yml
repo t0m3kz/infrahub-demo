@@ -1,6 +1,6 @@
 ---
 # The router of the second ISP, at its own external-provider facility. Its port towards the cage edge carries the
-# transit /31 of the access INET-PAR1-ISP-B and is nested under it (the prefix is in 06_internet/00_addressing).
+# transit /31 of the access par1-ispb-77302-isp-b and is nested under it (the prefix is in 06_internet/00_addressing).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

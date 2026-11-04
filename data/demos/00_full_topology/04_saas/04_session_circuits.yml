@@ -4,7 +4,7 @@ kind: Object
 spec:
   kind: TopologySessionCircuit
   data:
-    - name: SC-C900-WEBEX-PROD
+    - name: par1-wbxpeer1-webex-fra
       description: 'Handoff: edge sub-interface to the Webex peering'
       provider: P901
       circuit_type: handoff

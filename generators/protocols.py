@@ -357,6 +357,7 @@ class DcimPatchPanel(CoreNode):
     description: StringOptional
     name: String
     panel_id: String
+    panel_type: Dropdown
     front_ports: RelationshipManager[DcimFrontPatchPanelPort]
     rack: RelationshipAttribute[LocationRack]
     rear_ports: RelationshipManager[DcimRearPatchPanelPort]

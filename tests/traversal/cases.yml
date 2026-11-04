@@ -87,11 +87,11 @@ cases:
       namespace: INTERNET
       golden: full_topology__internet.txt  # the L1 chains edge port -> public side port, through each ISP
       isps:
-        - {isp_device: EXT-ISP-A-PE1, access_port: Ethernet1/2, access_carrier: INET-KTW1-ISP-A, uplink_carrier: UPL-ISP-A}  # yamllint disable-line rule:line-length
-        - {isp_device: EXT-ISP-B-PE1, access_port: Ethernet1/1, access_carrier: INET-KTW1-ISP-B, uplink_carrier: UPL-ISP-B}  # yamllint disable-line rule:line-length
+        - {isp_device: EXT-ISP-A-PE1, access_port: Ethernet1/2, access_carrier: ISPA-48211, uplink_carrier: UPL-48001}  # yamllint disable-line rule:line-length
+        - {isp_device: EXT-ISP-B-PE1, access_port: Ethernet1/1, access_carrier: ISPB-77301, uplink_carrier: UPL-77001}  # yamllint disable-line rule:line-length
       public_sides:
-        - {endpoint: s3-public, prefix: 192.0.2.0/24, kind: cloud, transport: s3-c900-euc1-pub, port: pub-1, carrier: PUB-S3-EUC1}  # yamllint disable-line rule:line-length
-        - {endpoint: webex-public, prefix: 203.0.113.0/24, kind: saas, transport: webex-c900-fra-pub, port: pub-1, carrier: PUB-WEBEX-FRA}  # yamllint disable-line rule:line-length
+        - {endpoint: s3-public, prefix: 192.0.2.0/24, kind: cloud, transport: s3-c900-euc1-pub, port: pub-1, carrier: PUB-16509}  # yamllint disable-line rule:line-length
+        - {endpoint: webex-public, prefix: 203.0.113.0/24, kind: saas, transport: webex-c900-fra-pub, port: pub-1, carrier: PUB-13445}  # yamllint disable-line rule:line-length
       # L3 of the first ISP: the eBGP session on the two physical ports of the access carrier
       l3: {isp_device: EXT-ISP-A-PE1, edge_port: Ethernet1/2, isp_port: et-0/0/0}
     # THE THREE SITES reach THE INTERNET in L1, each through its own access carrier (and then the uplink of the ISP
@@ -101,9 +101,9 @@ cases:
       internet: TopologyInternet:INTERNET
       isp_routers: [EXT-ISP-A-PE1, EXT-ISP-B-PE1]
       sites:
-        - {site: DC, node: "ManagedVxlanSegment:c900-web-p", carriers: [[INET-KTW1-ISP-A, UPL-ISP-A], [INET-KTW1-ISP-B, UPL-ISP-B]]}  # yamllint disable-line rule:line-length
-        - {site: colocation, node: "DcimPhysicalDevice:par-colo1-edge-01", carriers: [[INET-PAR1-ISP-B, UPL-ISP-B]]}
-        - {site: office, node: "DcimPhysicalDevice:bcn-office-edge-01", carriers: [[INET-BCN-OFFICE-ISP-A, UPL-ISP-A]]}
+        - {site: DC, node: "ManagedVxlanSegment:c900-web-p", carriers: [[ISPA-48211, UPL-48001], [ISPB-77301, UPL-77001]]}  # yamllint disable-line rule:line-length
+        - {site: colocation, node: "DcimPhysicalDevice:par-colo1-edge-01", carriers: [[ISPB-77302, UPL-77001]]}
+        - {site: office, node: "DcimPhysicalDevice:bcn-office-edge-01", carriers: [[ISPA-48212, UPL-48001]]}
     # where the sites and their legs are (attribute reads): the cloud and SaaS legs end in the cage PAR-COLO1 and not at
     # a DC, each dark fibre joins the two facilities listed for it, the office tunnels end on the office's own edge
     layout:
@@ -114,33 +114,33 @@ cases:
       office_edge: bcn-office-edge-01
       # every dark fibre of the DCI mesh with the two facilities it joins (DC - DC, DC - cage, cage - cage)
       dark_fibres:
-        DF-KTW1-WAW1-A: [DC-KTW1, DC-WAW1]
-        DF-KTW1-WAW1-B: [DC-KTW1, DC-WAW1]
-        DF-KTW1-GDN1-A: [DC-KTW1, DC-GDN1]
-        DF-KTW1-GDN1-B: [DC-KTW1, DC-GDN1]
-        DF-WAW1-GDN1-A: [DC-WAW1, DC-GDN1]
-        DF-WAW1-GDN1-B: [DC-WAW1, DC-GDN1]
-        DF-KTW1-PAR1-A: [DC-KTW1, PAR-COLO1]
-        DF-KTW1-PAR1-B: [DC-KTW1, PAR-COLO1]
-        DF-KTW1-FRA1-A: [DC-KTW1, FRA-COLO1]
-        DF-KTW1-FRA1-B: [DC-KTW1, FRA-COLO1]
-        DF-KTW1-AMS1-A: [DC-KTW1, AMS-COLO1]
-        DF-KTW1-AMS1-B: [DC-KTW1, AMS-COLO1]
-        DF-WAW1-PAR1-A: [DC-WAW1, PAR-COLO1]
-        DF-WAW1-PAR1-B: [DC-WAW1, PAR-COLO1]
-        DF-WAW1-FRA1-A: [DC-WAW1, FRA-COLO1]
-        DF-WAW1-FRA1-B: [DC-WAW1, FRA-COLO1]
-        DF-WAW1-AMS1-A: [DC-WAW1, AMS-COLO1]
-        DF-WAW1-AMS1-B: [DC-WAW1, AMS-COLO1]
-        DF-GDN1-PAR1-A: [DC-GDN1, PAR-COLO1]
-        DF-GDN1-PAR1-B: [DC-GDN1, PAR-COLO1]
-        DF-GDN1-FRA1-A: [DC-GDN1, FRA-COLO1]
-        DF-GDN1-FRA1-B: [DC-GDN1, FRA-COLO1]
-        DF-GDN1-AMS1-A: [DC-GDN1, AMS-COLO1]
-        DF-GDN1-AMS1-B: [DC-GDN1, AMS-COLO1]
-        DF-PAR1-FRA1: [PAR-COLO1, FRA-COLO1]
-        DF-PAR1-AMS1: [PAR-COLO1, AMS-COLO1]
-        DF-FRA1-AMS1: [FRA-COLO1, AMS-COLO1]
+        DF10001: [DC-KTW1, DC-WAW1]
+        DF10002: [DC-KTW1, DC-WAW1]
+        DF10003: [DC-KTW1, DC-GDN1]
+        DF10004: [DC-KTW1, DC-GDN1]
+        DF10005: [DC-WAW1, DC-GDN1]
+        DF10006: [DC-WAW1, DC-GDN1]
+        DF10007: [DC-KTW1, PAR-COLO1]
+        DF10008: [DC-KTW1, PAR-COLO1]
+        DF10009: [DC-KTW1, FRA-COLO1]
+        DF10010: [DC-KTW1, FRA-COLO1]
+        DF10011: [DC-KTW1, AMS-COLO1]
+        DF10012: [DC-KTW1, AMS-COLO1]
+        DF10013: [DC-WAW1, PAR-COLO1]
+        DF10014: [DC-WAW1, PAR-COLO1]
+        DF10015: [DC-WAW1, FRA-COLO1]
+        DF10016: [DC-WAW1, FRA-COLO1]
+        DF10017: [DC-WAW1, AMS-COLO1]
+        DF10018: [DC-WAW1, AMS-COLO1]
+        DF10019: [DC-GDN1, PAR-COLO1]
+        DF10020: [DC-GDN1, PAR-COLO1]
+        DF10021: [DC-GDN1, FRA-COLO1]
+        DF10022: [DC-GDN1, FRA-COLO1]
+        DF10023: [DC-GDN1, AMS-COLO1]
+        DF10024: [DC-GDN1, AMS-COLO1]
+        DF10025: [PAR-COLO1, FRA-COLO1]
+        DF10026: [PAR-COLO1, AMS-COLO1]
+        DF10027: [FRA-COLO1, AMS-COLO1]
     # A pair names its ends as `kind:name` (or `kind:hfid`, parts joined by `/`) and is traced by the server
     # (utils/path_trace.py): the plain trace must reach the target in L1 and L3 with a COMPLETE equal-cost set, the
     # reverse direction gives the same chains, and `through` lists each transport the target must also be reached
@@ -193,6 +193,22 @@ cases:
         through:
           # the Fabric virtual connections start on the Fabric port of the cage, which the edge reaches through the
           # patch panel
+          CloudDirectConnect:er-c900-weu: {l1: [dark_fiber, virtual_connection], l3: [handoff]}
+        far_end_kinds: [CloudDirectConnect]
+      # cloud spoke accounts: a VPC of another AWS account on the transit gateway (cross-account attachment)
+      - src: ManagedVxlanSegment:c900-web-p
+        dst: CloudNetworkSegment:c900-payments-aws-p
+        golden: full_topology__web__aws-spoke-account.txt
+        max_paths: 100
+        through:
+          CloudDirectConnect:dx-c900-fra-lag: {l1: [cross_connect, dark_fiber], l3: [handoff]}
+        far_end_kinds: [CloudDirectConnect, CloudVPNConnection]
+      # a VNet of another Azure subscription peered with the hub VNet (gateway transit)
+      - src: ManagedVxlanSegment:c900-web-p
+        dst: CloudNetworkSegment:c900-payments-azure-p
+        golden: full_topology__web__azure-spoke-account.txt
+        max_paths: 100
+        through:
           CloudDirectConnect:er-c900-weu: {l1: [dark_fiber, virtual_connection], l3: [handoff]}
         far_end_kinds: [CloudDirectConnect]
       # negative: a segment in a VPC with no attachment is reached by nothing: a complete empty result in both layers
@@ -289,7 +305,7 @@ cases:
         max_paths: 100
         circuit_types: {l3: []}
         through:
-          TopologyCarrierCircuit:DF-KTW1-WAW1-A: {l1: [dark_fiber]}
+          TopologyCarrierCircuit:DF10001: {l1: [dark_fiber]}
         far_end_kinds: [TopologyCarrierCircuit]
       - src: DcimVirtualDevice:waw1-vm-01
         dst: DcimVirtualDevice:gdn1-vm-01
@@ -298,7 +314,7 @@ cases:
         max_paths: 100
         circuit_types: {l3: []}
         through:
-          TopologyCarrierCircuit:DF-WAW1-GDN1-A: {l1: [dark_fiber]}
+          TopologyCarrierCircuit:DF10005: {l1: [dark_fiber]}
         far_end_kinds: [TopologyCarrierCircuit]
       # DC <-> DC between two tenant segments: one dark fibre in L1, the DCI EVPN peering in L3
       - src: ManagedVxlanSegment:c900-db-p

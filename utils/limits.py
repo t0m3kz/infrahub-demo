@@ -172,7 +172,7 @@ GROUP_VIRTUAL_CIRCUITS = "virtual_circuits"
 # Devices that are never a border gateway of a VLAN domain: the SD-WAN hubs and the provider stub routers.
 GROUP_SDWAN_GATEWAYS = "sdwan_gateways"
 GROUP_PROVIDER_STUBS = "provider_stubs"
-# Every DcimPatchPanel: the target group of add_patch_panel, whose group trigger needs it (each panel declares it: a template does not pass its groups on).
+# Every DcimPatchPanel: the target group of add_patch_panel, whose group trigger builds the ports (each panel declares it).
 GROUP_PATCH_PANELS = "patch_panels"
 
 # device_role -> the group its devices join, for roles whose group does not follow the f"{device_role}s" convention.

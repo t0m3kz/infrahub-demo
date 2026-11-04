@@ -7,8 +7,8 @@ kind: Object
 spec:
   kind: TopologyCarrierCircuit
   data:
-    - name: DF-KTW1-WAW1-A
-      circuit_id: DF-KTW1-WAW1-A
+    - name: ktw1-df10001-waw1
+      circuit_id: DF10001
       description: ktw1-bl-01 to waw1-bl-01, 100G dark fibre
       provider: P016
       circuit_type: dark_fiber
@@ -20,8 +20,8 @@ spec:
       capabilities:
         - ["ktw1-bl-01", "Ethernet1/2"]
         - ["waw1-bl-01", "Ethernet1/2"]
-    - name: DF-KTW1-WAW1-B
-      circuit_id: DF-KTW1-WAW1-B
+    - name: ktw1-df10002-waw1
+      circuit_id: DF10002
       description: ktw1-bl-02 to waw1-bl-02, 100G dark fibre
       provider: P016
       circuit_type: dark_fiber
@@ -33,8 +33,8 @@ spec:
       capabilities:
         - ["ktw1-bl-02", "Ethernet1/2"]
         - ["waw1-bl-02", "Ethernet1/2"]
-    - name: DF-KTW1-GDN1-A
-      circuit_id: DF-KTW1-GDN1-A
+    - name: ktw1-df10003-gdn1
+      circuit_id: DF10003
       description: ktw1-bl-01 to gdn1-bl-01, 100G dark fibre
       provider: P016
       circuit_type: dark_fiber
@@ -46,8 +46,8 @@ spec:
       capabilities:
         - ["ktw1-bl-01", "Ethernet1/3"]
         - ["gdn1-bl-01", "Ethernet1/2"]
-    - name: DF-KTW1-GDN1-B
-      circuit_id: DF-KTW1-GDN1-B
+    - name: ktw1-df10004-gdn1
+      circuit_id: DF10004
       description: ktw1-bl-02 to gdn1-bl-02, 100G dark fibre
       provider: P016
       circuit_type: dark_fiber
@@ -59,8 +59,8 @@ spec:
       capabilities:
         - ["ktw1-bl-02", "Ethernet1/3"]
         - ["gdn1-bl-02", "Ethernet1/2"]
-    - name: DF-WAW1-GDN1-A
-      circuit_id: DF-WAW1-GDN1-A
+    - name: waw1-df10005-gdn1
+      circuit_id: DF10005
       description: waw1-bl-01 to gdn1-bl-01, 100G dark fibre
       provider: P016
       circuit_type: dark_fiber
@@ -72,8 +72,8 @@ spec:
       capabilities:
         - ["waw1-bl-01", "Ethernet1/3"]
         - ["gdn1-bl-01", "Ethernet1/3"]
-    - name: DF-WAW1-GDN1-B
-      circuit_id: DF-WAW1-GDN1-B
+    - name: waw1-df10006-gdn1
+      circuit_id: DF10006
       description: waw1-bl-02 to gdn1-bl-02, 100G dark fibre
       provider: P016
       circuit_type: dark_fiber

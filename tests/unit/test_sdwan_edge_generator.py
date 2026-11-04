@@ -154,7 +154,7 @@ def _existing_circuit(*port_ids: str) -> Any:
 
 
 def _isp_lookups(*, ports: list[Any] | None = None, circuits: list[Any] | None = None) -> list[Any]:
-    """The three lookups after the edge uplink: ISP topology, INET-<office> by name, the PE's customer ports."""
+    """The three lookups after the edge uplink: ISP topology, INET-<office> by circuit_id, the PE's customer ports."""
     return [[_isp_topology()], circuits or [], ports if ports is not None else [_port("port-1", "xe-0/1/0")]]
 
 
@@ -391,9 +391,11 @@ class TestGenerateHappyPath:
         assert payloads(first) == payloads(second)
         assert [p.get("name") for p in payloads(first)] == [
             "C002-OFFICE-EDGE1",
-            "INET-C002-OFFICE",
+            "c002-office-inet-orange",
             "C002-OFFICE-SDWAN-FR2",
         ]
+        # The internet access is upserted by its circuit_id; its name puts the ends around the type.
+        assert payloads(first)[1]["circuit_id"] == "INET-C002-OFFICE"
 
     @pytest.mark.asyncio
     async def test_tunnel_is_an_inventory_record_of_the_office(self) -> None:
@@ -511,7 +513,7 @@ class TestIspAccessPort:
 
     @pytest.mark.asyncio
     async def test_isp_and_port_lookups_are_scoped_to_the_provider_and_its_access_device(self) -> None:
-        """One topology lookup by provider (devices included), then the circuit by name and the PE's customer ports."""
+        """One topology lookup by provider (devices included), then the circuit by circuit_id and the PE's ports."""
         gen = TestGenerateHappyPath()._wire_full_success()
 
         await gen.generate(_office_payload())
@@ -519,7 +521,7 @@ class TestIspAccessPort:
         isp_call, circuit_call, port_call = (call.kwargs for call in gen.client.filters.call_args_list[4:7])
         assert isp_call["provider__ids"] == ["provider-inet"]
         assert isp_call["include"] == ["devices"]
-        assert circuit_call["name__value"] == "INET-C002-OFFICE"
+        assert circuit_call["circuit_id__value"] == "INET-C002-OFFICE"
         assert circuit_call["include"] == ["capabilities"]
         assert port_call["device__ids"] == [_ISP_DEVICE_ID]
         assert port_call["role__value"] == "customer"

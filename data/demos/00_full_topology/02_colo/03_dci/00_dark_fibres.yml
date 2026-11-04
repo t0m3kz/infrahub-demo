@@ -12,8 +12,8 @@ kind: Object
 spec:
   kind: TopologyCarrierCircuit
   data:
-    - name: DF-KTW1-PAR1-A
-      circuit_id: DF-KTW1-PAR1-A
+    - name: ktw1-df10007-par1
+      circuit_id: DF10007
       description: DC-KTW1 border leaf 1 to the PAR-COLO1 cage edge, 100G dark fibre
       provider: P016
       circuit_type: dark_fiber
@@ -25,8 +25,8 @@ spec:
       capabilities:
         - ["ktw1-bl-01", "Ethernet1/35"]
         - ["par-colo1-edge-01", "Ethernet1/10"]
-    - name: DF-KTW1-PAR1-B
-      circuit_id: DF-KTW1-PAR1-B
+    - name: ktw1-df10008-par1
+      circuit_id: DF10008
       description: DC-KTW1 border leaf 2 to the PAR-COLO1 cage edge, 100G dark fibre
       provider: P016
       circuit_type: dark_fiber
@@ -46,8 +46,8 @@ kind: Object
 spec:
   kind: TopologyCarrierCircuit
   data:
-    - name: DF-KTW1-FRA1-A
-      circuit_id: DF-KTW1-FRA1-A
+    - name: ktw1-df10009-fra1
+      circuit_id: DF10009
       description: ktw1-bl-01 to fra-colo1-edge-01, 100G dark fibre
       provider: P016
       circuit_type: dark_fiber
@@ -59,8 +59,8 @@ spec:
       capabilities:
         - ["ktw1-bl-01", "Ethernet1/36"]
         - ["fra-colo1-edge-01", "Ethernet1/9"]
-    - name: DF-KTW1-FRA1-B
-      circuit_id: DF-KTW1-FRA1-B
+    - name: ktw1-df10010-fra1
+      circuit_id: DF10010
       description: ktw1-bl-02 to fra-colo1-edge-01, 100G dark fibre
       provider: P016
       circuit_type: dark_fiber
@@ -72,8 +72,8 @@ spec:
       capabilities:
         - ["ktw1-bl-02", "Ethernet1/36"]
         - ["fra-colo1-edge-01", "Ethernet1/10"]
-    - name: DF-KTW1-AMS1-A
-      circuit_id: DF-KTW1-AMS1-A
+    - name: ktw1-df10011-ams1
+      circuit_id: DF10011
       description: ktw1-bl-01 to ams-colo1-edge-01, 100G dark fibre
       provider: P016
       circuit_type: dark_fiber
@@ -85,8 +85,8 @@ spec:
       capabilities:
         - ["ktw1-bl-01", "Ethernet1/34"]
         - ["ams-colo1-edge-01", "Ethernet1/9"]
-    - name: DF-KTW1-AMS1-B
-      circuit_id: DF-KTW1-AMS1-B
+    - name: ktw1-df10012-ams1
+      circuit_id: DF10012
       description: ktw1-bl-02 to ams-colo1-edge-01, 100G dark fibre
       provider: P016
       circuit_type: dark_fiber
@@ -98,8 +98,8 @@ spec:
       capabilities:
         - ["ktw1-bl-02", "Ethernet1/34"]
         - ["ams-colo1-edge-01", "Ethernet1/10"]
-    - name: DF-WAW1-PAR1-A
-      circuit_id: DF-WAW1-PAR1-A
+    - name: waw1-df10013-par1
+      circuit_id: DF10013
       description: waw1-bl-01 to par-colo1-edge-01, 100G dark fibre
       provider: P016
       circuit_type: dark_fiber
@@ -111,8 +111,8 @@ spec:
       capabilities:
         - ["waw1-bl-01", "Ethernet1/35"]
         - ["par-colo1-edge-01", "Ethernet1/9"]
-    - name: DF-WAW1-PAR1-B
-      circuit_id: DF-WAW1-PAR1-B
+    - name: waw1-df10014-par1
+      circuit_id: DF10014
       description: waw1-bl-02 to par-colo1-edge-01, 100G dark fibre
       provider: P016
       circuit_type: dark_fiber
@@ -124,8 +124,8 @@ spec:
       capabilities:
         - ["waw1-bl-02", "Ethernet1/35"]
         - ["par-colo1-edge-01", "Ethernet1/12"]
-    - name: DF-WAW1-FRA1-A
-      circuit_id: DF-WAW1-FRA1-A
+    - name: waw1-df10015-fra1
+      circuit_id: DF10015
       description: waw1-bl-01 to fra-colo1-edge-01, 100G dark fibre
       provider: P016
       circuit_type: dark_fiber
@@ -137,8 +137,8 @@ spec:
       capabilities:
         - ["waw1-bl-01", "Ethernet1/36"]
         - ["fra-colo1-edge-01", "Ethernet1/11"]
-    - name: DF-WAW1-FRA1-B
-      circuit_id: DF-WAW1-FRA1-B
+    - name: waw1-df10016-fra1
+      circuit_id: DF10016
       description: waw1-bl-02 to fra-colo1-edge-01, 100G dark fibre
       provider: P016
       circuit_type: dark_fiber
@@ -150,8 +150,8 @@ spec:
       capabilities:
         - ["waw1-bl-02", "Ethernet1/36"]
         - ["fra-colo1-edge-01", "Ethernet1/12"]
-    - name: DF-WAW1-AMS1-A
-      circuit_id: DF-WAW1-AMS1-A
+    - name: waw1-df10017-ams1
+      circuit_id: DF10017
       description: waw1-bl-01 to ams-colo1-edge-01, 100G dark fibre
       provider: P016
       circuit_type: dark_fiber
@@ -163,8 +163,8 @@ spec:
       capabilities:
         - ["waw1-bl-01", "Ethernet1/34"]
         - ["ams-colo1-edge-01", "Ethernet1/11"]
-    - name: DF-WAW1-AMS1-B
-      circuit_id: DF-WAW1-AMS1-B
+    - name: waw1-df10018-ams1
+      circuit_id: DF10018
       description: waw1-bl-02 to ams-colo1-edge-01, 100G dark fibre
       provider: P016
       circuit_type: dark_fiber
@@ -176,8 +176,8 @@ spec:
       capabilities:
         - ["waw1-bl-02", "Ethernet1/34"]
         - ["ams-colo1-edge-01", "Ethernet1/12"]
-    - name: DF-GDN1-PAR1-A
-      circuit_id: DF-GDN1-PAR1-A
+    - name: gdn1-df10019-par1
+      circuit_id: DF10019
       description: gdn1-bl-01 to par-colo1-edge-01, 100G dark fibre
       provider: P016
       circuit_type: dark_fiber
@@ -189,8 +189,8 @@ spec:
       capabilities:
         - ["gdn1-bl-01", "Ethernet1/35"]
         - ["par-colo1-edge-01", "Ethernet1/15"]
-    - name: DF-GDN1-PAR1-B
-      circuit_id: DF-GDN1-PAR1-B
+    - name: gdn1-df10020-par1
+      circuit_id: DF10020
       description: gdn1-bl-02 to par-colo1-edge-01, 100G dark fibre
       provider: P016
       circuit_type: dark_fiber
@@ -202,8 +202,8 @@ spec:
       capabilities:
         - ["gdn1-bl-02", "Ethernet1/35"]
         - ["par-colo1-edge-01", "Ethernet1/16"]
-    - name: DF-GDN1-FRA1-A
-      circuit_id: DF-GDN1-FRA1-A
+    - name: gdn1-df10021-fra1
+      circuit_id: DF10021
       description: gdn1-bl-01 to fra-colo1-edge-01, 100G dark fibre
       provider: P016
       circuit_type: dark_fiber
@@ -215,8 +215,8 @@ spec:
       capabilities:
         - ["gdn1-bl-01", "Ethernet1/36"]
         - ["fra-colo1-edge-01", "Ethernet1/13"]
-    - name: DF-GDN1-FRA1-B
-      circuit_id: DF-GDN1-FRA1-B
+    - name: gdn1-df10022-fra1
+      circuit_id: DF10022
       description: gdn1-bl-02 to fra-colo1-edge-01, 100G dark fibre
       provider: P016
       circuit_type: dark_fiber
@@ -228,8 +228,8 @@ spec:
       capabilities:
         - ["gdn1-bl-02", "Ethernet1/36"]
         - ["fra-colo1-edge-01", "Ethernet1/14"]
-    - name: DF-GDN1-AMS1-A
-      circuit_id: DF-GDN1-AMS1-A
+    - name: gdn1-df10023-ams1
+      circuit_id: DF10023
       description: gdn1-bl-01 to ams-colo1-edge-01, 100G dark fibre
       provider: P016
       circuit_type: dark_fiber
@@ -241,8 +241,8 @@ spec:
       capabilities:
         - ["gdn1-bl-01", "Ethernet1/34"]
         - ["ams-colo1-edge-01", "Ethernet1/13"]
-    - name: DF-GDN1-AMS1-B
-      circuit_id: DF-GDN1-AMS1-B
+    - name: gdn1-df10024-ams1
+      circuit_id: DF10024
       description: gdn1-bl-02 to ams-colo1-edge-01, 100G dark fibre
       provider: P016
       circuit_type: dark_fiber
@@ -254,8 +254,8 @@ spec:
       capabilities:
         - ["gdn1-bl-02", "Ethernet1/34"]
         - ["ams-colo1-edge-01", "Ethernet1/14"]
-    - name: DF-PAR1-FRA1
-      circuit_id: DF-PAR1-FRA1
+    - name: par1-df10025-fra1
+      circuit_id: DF10025
       description: par-colo1-edge-01 to fra-colo1-edge-01, 100G dark fibre
       provider: P016
       circuit_type: dark_fiber
@@ -267,8 +267,8 @@ spec:
       capabilities:
         - ["par-colo1-edge-01", "Ethernet1/8"]
         - ["fra-colo1-edge-01", "Ethernet1/15"]
-    - name: DF-PAR1-AMS1
-      circuit_id: DF-PAR1-AMS1
+    - name: par1-df10026-ams1
+      circuit_id: DF10026
       description: par-colo1-edge-01 to ams-colo1-edge-01, 100G dark fibre
       provider: P016
       circuit_type: dark_fiber
@@ -280,8 +280,8 @@ spec:
       capabilities:
         - ["par-colo1-edge-01", "Ethernet1/7"]
         - ["ams-colo1-edge-01", "Ethernet1/15"]
-    - name: DF-FRA1-AMS1
-      circuit_id: DF-FRA1-AMS1
+    - name: fra1-df10027-ams1
+      circuit_id: DF10027
       description: fra-colo1-edge-01 to ams-colo1-edge-01, 100G dark fibre
       provider: P016
       circuit_type: dark_fiber

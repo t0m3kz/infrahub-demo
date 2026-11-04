@@ -1,11 +1,12 @@
 # validate_patch_panel_pairing (checks/patch_panel_pairing.py): every panel with its ports and the rear port each
-# front port names; the check derives the layout from the ports (generators/helpers/patch_panel.py).
+# front port names, and the panel's type the check compares them with (generators/helpers/patch_panel.py).
 query patch_panel_pairing {
   DcimPatchPanel {
     edges {
       node {
         id
         panel_id { value }
+        panel_type { value }
         rear_ports {
           edges {
             node {

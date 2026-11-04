@@ -2,10 +2,9 @@
 
 DcimPatchPanel is a standalone node (no device, no artifact, no capabilities); its two port kinds inherit DcimEndpoint
 only, so a DcimCable joins them unchanged. The model is flat: the panel lists its rear ports and its front ports, and a
-front port names its rear port (``rear_port``). An object template cannot pair them (the server refuses a template port
-as the peer), so a generator pairs them (tests/unit/test_patch_panel_pairing.py).
-The capability-edge side of this (no ``capabilities`` / ``shared_capabilities`` on any kind or their templates) is
-guarded in tests/unit/test_capability_edge_names.py.
+front port names its rear port (``rear_port``). A panel names its ``panel_type`` and the generator builds the ports of
+the type (tests/unit/test_patch_panel_pairing.py); there is no panel template. The capability-edge side of this (no
+``capabilities`` / ``shared_capabilities`` on any kind) is guarded in tests/unit/test_capability_edge_names.py.
 """
 
 from __future__ import annotations
@@ -14,6 +13,8 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+
+from generators.helpers.patch_panel import PANEL_TYPES
 
 _ROOT = Path(__file__).parents[2]
 _SCHEMA = _ROOT / "schemas" / "extensions" / "dcim" / "patch_panel.yml"
@@ -174,40 +175,23 @@ def test_the_panel_role_is_gone_from_the_device_roles() -> None:
     assert "patch-panel" not in roles
 
 
-def _templates(part: str) -> dict[str, dict[str, Any]]:
-    path = _ROOT / "data" / "bootstrap" / f"10_physical_devices_templates_patch_panel_{part}.yaml"
-    document = yaml.safe_load(path.read_text())
-    assert document["spec"]["kind"] == "TemplateDcimPatchPanel"
-    return {template["template_name"]: template for template in document["spec"]["data"]}
+def test_the_panel_type_choices_are_the_types_the_generator_builds() -> None:
+    """``panel_type`` is a required Dropdown whose choices are the keys of PANEL_TYPES, in the same order, and no
+    template is generated for the panel (a template cannot pair a front port with its rear port)."""
+    panel = _node("PatchPanel")
+    panel_type = _item(panel["attributes"], "panel_type")
+
+    assert panel_type["kind"] == "Dropdown" and panel_type["optional"] is False
+    assert [choice["name"] for choice in panel_type["choices"]] == list(PANEL_TYPES)
+    assert not panel.get("generate_template")
 
 
-def test_the_bootstrap_templates_are_panel_templates_in_both_files() -> None:
-    """The five panel types, none of them a device template, in the rear file and again in the front file."""
-    rear, front = _templates("rear"), _templates("front")
-    expected = {"PP-24-LC", "PP-48-LC", "PP-12-SC", "PP-24-RJ45", "PP-CASSETTE-MPO12"}
+def test_the_panel_templates_are_gone_from_the_bootstrap_data() -> None:
+    """No object file creates a panel template any more."""
+    leftovers = [
+        str(path.relative_to(_ROOT))
+        for path in sorted((_ROOT / "data").rglob("*.y*ml"))
+        if "TemplateDcimPatchPanel" in path.read_text() or "object_template: PP-" in path.read_text()
+    ]
 
-    assert set(rear) == expected and set(front) == expected
-    assert all("device_type" not in template for template in (*rear.values(), *front.values()))
-
-
-def test_the_templates_give_each_panel_its_rear_and_its_front_ports() -> None:
-    """Ranges, never nested (a nested range multiplies): one ranged block per port kind. A jack panel has as many front
-    as rear ports, a cassette twelve front LC ports per MPO-12 rear port."""
-    expected = {
-        "PP-24-LC": (24, "lc-upc", 24, "lc-upc"),
-        "PP-48-LC": (48, "lc-upc", 48, "lc-upc"),
-        "PP-12-SC": (12, "sc-upc", 12, "sc-upc"),
-        "PP-24-RJ45": (24, "rj45", 24, "rj45"),
-        "PP-CASSETTE-MPO12": (4, "mpo-12", 48, "lc-upc"),
-    }
-    rear, front = _templates("rear"), _templates("front")
-
-    for name, (rears, rear_connector, fronts, front_connector) in expected.items():
-        for block, count, connector, kind, key in (
-            (rear[name]["rear_ports"], rears, rear_connector, "TemplateDcimRearPatchPanelPort", "rear"),
-            (front[name]["front_ports"], fronts, front_connector, "TemplateDcimFrontPatchPanelPort", "front"),
-        ):
-            (port,) = block["data"]
-            assert block["kind"] == kind and block["parameters"] == {"expand_range": True}, (name, key)
-            assert port["name"] == f"[1-{count}]" and port["template_name"] == f"{name}_{key}_[1-{count}]", name
-            assert port["connector"] == connector and "front_ports" not in port, name
+    assert leftovers == []
