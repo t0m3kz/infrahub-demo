@@ -1,0 +1,70 @@
+---
+# The extra servers and the Nutanix AHV (Prism) cluster of the DC-GDN1 data hall. The cluster model is hypervisor-
+# neutral (schemas/extensions/service/cluster.yml, `hypervisor`): one kind describes a vCenter, a Proxmox and a
+# Nutanix cluster, so the three DCs use three vendors on purpose. A cluster needs more than one host: a VM then
+# survives the loss of one box, and checks/cluster.py (rule CL5) asks the instances of a component to stand on
+# different hosts. gdn1-srv-02 has no bond and no tagged port in the data: the two ports go straight to the leaf pair
+# (eno1 to leaf 1, eno2 to leaf 2), without the patch panels of gdn1-srv-01, so a server is cabled inventory rather
+# than a tenant server.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: gdn1-srv-02
+      object_template: PowerEdge-R640_SERVER
+      description: "Host 2 of gdn1-nutanix-cl01, eno1 and eno2 straight to the leaf pair"
+      deployment: DC-GDN1-8-POD-1
+      rack: gdn1-rack-02
+      position: 18
+      rack_face: front
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+    - name: "CBL-GDN1-SRV02-ENO1-LEAF01"
+      type: copper
+      deployment: "DC-GDN1"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "gdn1-srv-02"
+            name: "eno1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "gdn1-leaf-01"
+            name: "Ethernet1/5"
+    - name: "CBL-GDN1-SRV02-ENO2-LEAF02"
+      type: copper
+      deployment: "DC-GDN1"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "gdn1-srv-02"
+            name: "eno2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "gdn1-leaf-02"
+            name: "Ethernet1/5"
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedHypervisorCluster
+  data:
+    - name: gdn1-nutanix-cl01
+      description: "C900 production compute of DC-GDN1: Nutanix AHV (Prism), 2 hosts"
+      status: active
+      hypervisor: nutanix
+      version: "6.8"
+      purpose: Production compute
+      manager: "https://prism.gdn1.demo.local:9440"
+      inventory_path: GDN1
+      ha_enabled: true
+      load_balancing: true
+      deployment: DC-GDN1-8-POD-1
+      hosts:
+        - gdn1-srv-01
+        - gdn1-srv-02

@@ -419,6 +419,12 @@ spec:
       manufacturer: Generic
       cpu_count: 2
       memory_gb: 4
+    - name: NSX-EDGE-LARGE
+      height: 0
+      full_depth: false
+      manufacturer: VMware
+      cpu_count: 8
+      memory_gb: 32
     - name: NetScaler-MPX-26000-100G
       height: 2
       full_depth: true

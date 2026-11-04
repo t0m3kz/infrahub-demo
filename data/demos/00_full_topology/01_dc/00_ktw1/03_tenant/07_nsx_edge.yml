@@ -1,0 +1,51 @@
+---
+# Two NSX Edge nodes of C900 (the pair that runs the Tier-0 gateway), one on each host of ktw1-vsphere-cl01, from the
+# bootstrap template NSX-EDGE-LARGE. The datapath NIC fp-eth0 rides on eno1 of the host and is in the port group nsx-
+# uplink of the distributed switch ktw1-dvs-01: VLAN 900, no fabric segment, because an NSX uplink VLAN is the transit
+# between the gateway and the fabric and no tenant owns it. What is not modelled yet: the Tier-0 and Tier-1 gateways,
+# their BGP towards the fabric and the overlay segments (Geneve) behind them. The nodes stand on different hosts, as
+# the anti-affinity rule wants of a pair.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualDevice
+  data:
+    - name: ktw1-nsx-edge-01
+      object_template: NSX-EDGE-LARGE
+      description: "NSX Edge node 1 of 2 (Tier-0 gateway) on ktw1-srv-01"
+      hosting_device: ktw1-srv-01
+      deployment: C900-P-DC-KTW1
+      interfaces:
+        - kind: DcimVirtualInterface
+          data:
+            name: fp-eth0
+            role: uplink
+            status: active
+            description: Datapath NIC, rides on the host port eno1 of ktw1-srv-01
+            parent_interface: ["ktw1-srv-01", "eno1"]
+    - name: ktw1-nsx-edge-02
+      object_template: NSX-EDGE-LARGE
+      description: "NSX Edge node 2 of 2 (Tier-0 gateway) on ktw1-srv-02"
+      hosting_device: ktw1-srv-02
+      deployment: C900-P-DC-KTW1
+      interfaces:
+        - kind: DcimVirtualInterface
+          data:
+            name: fp-eth0
+            role: uplink
+            status: active
+            description: Datapath NIC, rides on the host port eno1 of ktw1-srv-02
+            parent_interface: ["ktw1-srv-02", "eno1"]
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedPortGroup
+  data:
+    - name: nsx-uplink
+      description: "Uplink VLAN of the NSX Edge nodes towards the fabric (transit, no tenant segment)"
+      virtual_switch: ktw1-dvs-01
+      vlan_id: 900
+      nics:
+        - ["ktw1-nsx-edge-01", "fp-eth0"]
+        - ["ktw1-nsx-edge-02", "fp-eth0"]

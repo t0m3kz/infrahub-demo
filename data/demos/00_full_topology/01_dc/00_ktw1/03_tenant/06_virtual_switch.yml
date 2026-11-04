@@ -1,0 +1,80 @@
+---
+# The virtual switch of ktw1-vsphere-cl01: a vSphere distributed switch, the L2 element between the VM NICs and the
+# host ports (schemas/extensions/service/virtual_switch.yml). The cluster is hypervisor-neutral and so is this: a
+# distributed switch, a Linux bridge and an Open vSwitch are one kind with a different `switch_type`. Its uplinks are
+# the host's bond0 (ktw1-srv-01) and the single ports eno1 (ktw1-srv-02 and ktw1-srv-03); the `segments` of an uplink
+# is its allowed VLAN list, so each trunks the segment of the port group (checks/virtual_switch.py, rule VS3). The
+# port group is VLAN 100 of the switch and the fabric segment c900-web-p; the VM NIC eth0 is in it. The VLAN of the
+# leaf port is the fabric's own (a VLAN is local to a switch), the port group carries the one the host side uses.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimLAGInterface
+  data:
+    - device: ktw1-srv-01
+      name: bond0
+      status: active
+      lag_id: 1
+      lacp_mode: active
+      minimum_links: 1
+      segments:
+        - c900-web-p
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - device: ktw1-srv-02
+      name: eno1
+      segments:
+        - c900-web-p
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - device: ktw1-srv-03
+      name: eno1
+      segments:
+        - c900-web-p
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVirtualSwitch
+  data:
+    - name: ktw1-dvs-01
+      description: "A vSphere distributed switch of ktw1-vsphere-cl01"
+      status: active
+      switch_type: distributed
+      mtu: 9000
+      cluster: ktw1-vsphere-cl01
+      uplinks:
+        - kind: DcimLAGInterface
+          data:
+            device: ktw1-srv-01
+            name: bond0
+            status: active
+            lag_id: 1
+            lacp_mode: active
+            minimum_links: 1
+        - kind: DcimPhysicalInterface
+          data:
+            device: ktw1-srv-02
+            name: eno1
+        - kind: DcimPhysicalInterface
+          data:
+            device: ktw1-srv-03
+            name: eno1
+      port_groups:
+        kind: ManagedPortGroup
+        data:
+          - name: c900-web
+            description: "C900 c900-web-p on the hosts"
+            vlan_id: 100
+            segment: c900-web-p
+            nics:
+              - ["ktw1-vm-01", "eth0"]
+              - ["ktw1-vm-02", "eth0"]

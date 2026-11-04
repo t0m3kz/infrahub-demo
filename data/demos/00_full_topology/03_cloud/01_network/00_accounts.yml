@@ -54,6 +54,12 @@ spec:
       environment: "p"
       provider: "P005"
       owner: "C900"
+    # The Equinix account that runs the Managed Private Cloud (03_cloud/05_clusters): Equinix is the provider P016.
+    - name: "c900-equinix-prod"
+      account_id: "c900-equinix-par"
+      environment: "p"
+      provider: "P016"
+      owner: "C900"
     # The partner's account: a hosted connection lives there while its peerings are in the customer's account.
     - name: "partner-fabric-gcp"
       account_id: "partner-fabric-project"

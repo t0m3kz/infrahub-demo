@@ -1,0 +1,84 @@
+---
+# The clusters that are not ours to rack: a hypervisor cluster that Equinix runs for C900 (Managed Private Cloud,
+# VMware) and two managed Kubernetes clusters, EKS in the AWS account and AKS in an Azure spoke subscription. They use
+# the same cluster model as the on-prem ones (01_dc/*/01_physical/03_servers_and_clusters.yml), only the kind says
+# whose hosts they are:  CloudHypervisorCluster   the provider's hosts, so a host_count and a profile and no server of
+# ours CloudKubernetesCluster   a distribution, an account, a virtual network and the subnets its worker nodes sit in
+# The node subnets are the cloud segments of the accounts (02_tenant/01_network_segments.yml). EKS addresses pods from
+# the VPC (no pod range); AKS runs an overlay, so its pod and service ranges are ranges of their own that overlap
+# nothing (checks/cluster.py, rule CL4). The ranges and the CNI are the cluster's SDN (ManagedClusterSdn), one kind
+# for these, for the NSX of the Equinix cloud and for the clusters in the data halls.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedClusterSdn
+  data:
+    - name: par-mpc-nsx
+      description: "NSX of the Equinix Managed Private Cloud: Equinix runs the Edge nodes, so none is listed"
+      status: active
+      provider: nsx
+      encapsulation: geneve
+    - name: eks-c900-vpc-cni
+      description: "AWS VPC CNI of the EKS cluster: pods take addresses of the VPC, no overlay"
+      status: active
+      provider: aws-vpc-cni
+      encapsulation: none
+      service_cidr: "172.20.0.0/16"
+    - name: aks-c900-azure-cni
+      description: "Azure CNI overlay of the AKS cluster: pods have a range of their own"
+      status: active
+      provider: azure-cni
+      encapsulation: vxlan
+      overlay_cidr: "10.244.0.0/16"
+      service_cidr: "10.0.0.0/16"
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudHypervisorCluster
+  data:
+    - name: mpc-c900-par
+      description: "C900 Equinix Managed Private Cloud in the Paris IBX, next to the cage PAR-COLO1"
+      status: active
+      hypervisor: vsphere
+      version: "8.0U3"
+      purpose: Disaster-recovery compute
+      account: c900-equinix-prod
+      location: par
+      host_count: 4
+      host_profile: "MPC-VMware-24C-512G-NVMe"
+      sdn: par-mpc-nsx
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudKubernetesCluster
+  data:
+    - name: eks-c900-euc1
+      description: "C900 EKS cluster on the VPC of the AWS account, nodes in the segment subnet"
+      status: active
+      distribution: eks
+      version: "1.31"
+      purpose: Platform services
+      account: c900-aws-prod
+      region: eu-central-1
+      virtual_network: vpc-c900-prod
+      api_access: private
+      node_count: 6
+      sdn: eks-c900-vpc-cni
+      node_segments:
+        - c900-subnet-p
+    - name: aks-c900-weu
+      description: "C900 AKS cluster in the payments subscription, Azure CNI overlay, nodes in the payments subnet"
+      status: active
+      distribution: aks
+      version: "1.30"
+      purpose: Payments workloads
+      account: c900-azure-payments
+      region: westeurope
+      virtual_network: vnet-c900-payments-weu
+      api_access: private
+      node_count: 4
+      sdn: aks-c900-azure-cni
+      node_segments:
+        - c900-payments-azure-p

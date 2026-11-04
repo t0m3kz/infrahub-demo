@@ -700,6 +700,26 @@ reached through `peers` of the ExpressRoute hub) and one negative pair (a segmen
 IPsec and always with IPsec (a GRE tunnel has no profile). Azure ExpressRoute: a `logical` circuit without
 `partner_account` is correct (the provider is the carrier's `provider`), so there is no new rule (a rare victory for restraint).
 
+**Clusters** (`01_dc/*/01_physical/03_servers_and_clusters.yml`, `03_cloud/05_clusters`): one cluster model, three vendors on
+purpose. Each DC has extra servers (cabled straight to the leaf pair) and a cluster, `ktw1-vsphere-cl01` (vSphere, three
+hosts), `waw1-proxmox-cl01` (Proxmox VE) and `gdn1-nutanix-cl01` (Nutanix AHV): the `hypervisor` is the only thing that changes.
+A VM has no cluster field, because it is always hosted on a physical node and the node is in the cluster: the two web
+frontends of KTW1 stand on different hosts, which is the anti-affinity rule. On top of the KTW1 cluster runs `ktw1-rke2-cl01`,
+an on-prem RKE2 cluster of five VMs whose three control plane nodes stand on three hosts (the quorum rule). Outside our racks:
+`mpc-c900-par`, a vSphere cluster that Equinix runs for C900 (Managed Private Cloud, four hosts in the Paris IBX, in the new
+account `c900-equinix-prod`), `eks-c900-euc1` (EKS on `vpc-c900-prod`, nodes in `c900-subnet-p`) and `aks-c900-weu` (AKS in the
+payments subscription, nodes in `c900-payments-azure-p`). `checks/cluster.py` (rules CL1 to CL7) judges them; the inventory
+golden lists them. The Equinix cluster has no VM and no Fabric connection to the cage yet.
+
+**Virtual switches and SDNs** (`01_dc/*/03_tenant`): each cluster has a virtual switch, a distributed switch in KTW1, a
+Linux bridge in WAW1 and an Open vSwitch in GDN1, with the host bond and the single ports as uplinks, a port group per tenant
+segment (its VLAN, its fabric segment and the VM NICs in it) and, in KTW1, the `nsx-uplink` port group of the NSX Edge nodes.
+A cluster may have an SDN: `ktw1-nsx` (NSX, Geneve, the two Edge VMs as gateway nodes) on the vSphere cluster, `ktw1-cilium`
+(Cilium over VXLAN with the RKE2 default ranges) on the RKE2 cluster, `par-mpc-nsx` on the Equinix cluster (Equinix runs its
+Edge nodes, so none is listed), and the CNIs of the managed clusters, `eks-c900-vpc-cni` and `aks-c900-azure-cni` (an overlay
+with ranges of its own). It is one kind for all of them (`ManagedClusterSdn`). Not modelled: the Tier-0 and Tier-1 gateways
+of NSX and their BGP towards the fabric.
+
 **Campus below the edges** (`05_office`, `05_office/10_lis`): both offices have the same hand-written campus, because a
 branch with one box and a prayer is not "full infra". The SD-WAN edge goes (GE3, and GE4 in Barcelona) to a distribution pair
 (`C9500-32C_DISTRIBUTION`, role `distribution-switch`), the pair is joined by its interlink and cabled in a square to an access
