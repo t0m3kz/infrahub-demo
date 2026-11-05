@@ -273,7 +273,7 @@ def select_pairs(pairs: list[dict], pattern: str) -> list[dict]:
     """The pairs whose `src dst golden` text matches the regular expression (all of them for an empty pattern)."""
     if not pattern:
         return pairs
-    return [p for p in pairs if re.search(pattern, f"{p['src']} {p['dst']} {p['golden']}")]
+    return [p for p in pairs if re.search(pattern, f"{p['src']} {p['dst']} {p.get('golden', '')}")]
 
 
 async def check_pod(rep: Report, cfg: dict, client: InfrahubClient, branch: str, d: dict) -> None:
@@ -438,7 +438,7 @@ async def run_case(
         if not ok:
             return
         try:
-            done = await load_topology.apply(client, branch, force=args.force_load)
+            done = await load_topology.apply(client, branch)
         except RuntimeError as exc:
             rep.add(f"[{case['name']}] data load {case['data']}", False, str(exc))
             return
@@ -494,7 +494,6 @@ def main() -> None:
     ap.add_argument("--update-golden", action="store_true", help="write the golden files instead of comparing")
     ap.add_argument("--keep-branch", action="store_true", help="do not delete the tv-* branch (debugging)")
     ap.add_argument("--rebuild", action="store_true", help="clean the test containers and start a fresh stack")
-    ap.add_argument("--force-load", action="store_true", help="load the data even if it is already on main")
     ap.add_argument("--server-port", type=int, default=8100)
     sys.exit(asyncio.run(amain(ap.parse_args())))
 

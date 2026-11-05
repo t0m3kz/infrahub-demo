@@ -16,7 +16,9 @@ from tests.unit.circuit_placement_check_helpers import (
     EG_FR_END,
     EG_FR_VLAN,
     EUC1,
+    FR,
     FR2,
+    PA4,
     XC,
     _carrier_circuit,
     _handoff,
@@ -142,3 +144,53 @@ class TestHandoffEnds:
         """The peering states a VLAN the routed port cannot carry."""
         (message,) = _run(handoffs=[_handoff("HO-MIX", None, [_routed("eg-fr201", "Ethernet1/13", (XC,)), _peering()])])
         assert "ends carry different VLANs" in message and "eg-fr201:Ethernet1/13 = no VLAN" in message
+
+
+def _fabric_end(device: str, name: str, metro: dict[str, Any]) -> dict[str, Any]:
+    """An end port of the provider's port of a colocation metro: no deployment, its metro places it."""
+    place = {key: metro[key] for key in ("id", "__typename", "name")}
+    return {
+        "id": f"id-{device}:{name}",
+        "name": {"value": name},
+        "device": {"node": {"id": f"id-{device}", "name": {"value": device}, "metro": {"node": place}}},
+    }
+
+
+def _in_metro(zone: dict[str, Any], metro: dict[str, Any]) -> dict[str, Any]:
+    """A zone as the query selects it, with the metro it belongs to (its ``parent``)."""
+    return {**zone, "parent": {"node": {"id": metro["id"]}}}
+
+
+FABRIC_END = _fabric_end("EXT-FABRIC-FR", "et-0/0/0", FR)
+FABRIC_EDGE_END = _fabric_end("EXT-FABRIC-FR", "et-0/0/1", FR)
+
+
+class TestCarrierOnAColocationConnect:
+    """The provider's port of a metro has no deployment: a zone of its metro is the location of its end."""
+
+    def test_a_zone_of_the_metro_places_the_end(self) -> None:
+        """The cage of the metro and the cloud region: the Fabric port stands for the whole metro."""
+        circuit = _carrier_circuit("EQX-FR-1", [_in_metro(FR2, FR), EUC1], [FABRIC_END, DX_END])
+        assert _run(carrier=[circuit]) == []
+
+    def test_a_virtual_colocation_of_the_metro_places_the_end(self) -> None:
+        """A provider-hosted virtual colocation belongs to the metro too."""
+        virtual = _in_metro(_place("FR-NE", "TopologyVirtualColocation"), FR)
+        circuit = _carrier_circuit("EQX-FR-2", [virtual, EUC1], [FABRIC_EDGE_END, DX_END])
+        assert _run(carrier=[circuit]) == []
+
+    def test_a_zone_of_another_metro_fails(self) -> None:
+        """The Paris cage is not a place of the Frankfurt Fabric port."""
+        circuit = _carrier_circuit(
+            "EQX-BAD", [_in_metro(PA4, _place("PA", "TopologyColocationMetro")), EUC1], [FABRIC_END, DX_END]
+        )
+        (message,) = _run(carrier=[circuit])
+        assert "EQX-BAD" in message and "not a sibling zone" in message
+
+    def test_a_port_with_no_metro_is_reported_as_undeployed(self) -> None:
+        """A port whose metro is missing is placed nowhere: the finding names the port."""
+        nowhere = _fabric_end("EXT-FABRIC-X", "et-0/0/0", FR)
+        nowhere["device"]["node"]["metro"] = {"node": None}
+        circuit = _carrier_circuit("EQX-NOWHERE", [_in_metro(FR2, FR), EUC1], [nowhere, DX_END])
+        (message,) = _run(carrier=[circuit])
+        assert "end 'EXT-FABRIC-X:et-0/0/0' is on a device with no deployment" in message

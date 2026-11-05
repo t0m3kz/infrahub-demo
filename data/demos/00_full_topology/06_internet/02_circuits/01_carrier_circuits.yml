@@ -103,6 +103,13 @@ spec:
 #   bcn-office-edge-01 GE1  -- bcn-office-ispa-48212-isp-a     -- EXT-ISP-A-PE1   et-0/0/1   (office, first ISP)
 #   lis-office-edge-01 GE1  -- lis-office-ispa-48213-isp-a     -- EXT-ISP-A-PE1   et-0/0/2   (second office, first ISP)
 #   lis-office-edge-02 GE1  -- lis-office-ispb-77303-isp-b     -- EXT-ISP-B-PE1   et-0/0/2   (second office, second ISP)
+#
+# The FRA and AMS cages buy an Equinix Internet Access service instead of an ISP access: the cage edge is cabled to the
+# provider's Fabric port of the metro (02_colo/01_fra1, 02_ams1), the service is an `internet` carrier from the
+# connection interface of that port straight to THE INTERNET (no ISP router on the way):
+#
+#   fra-colo1-edge-01 Ethernet1/1 -cable- EXT-FABRIC-FRA et-0/0/0.1301 -- fra1-eqx-5a1f2c30-internet -- INTERNET:bus
+#   ams-colo1-edge-01 Ethernet1/1 -cable- EXT-FABRIC-AMS et-0/0/0.1401 -- ams1-eqx-8d3b6e41-internet -- INTERNET:bus
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -121,6 +128,32 @@ spec:
       capabilities:
         - ["par-colo1-edge-01", "Ethernet1/14"]
         - ["EXT-ISP-B-PE1", "et-0/0/1"]
+    - name: fra1-eqx-5a1f2c30-internet
+      circuit_id: EQX-5A1F2C30
+      description: Equinix Internet Access of the FRA-COLO1 cage, on the Fabric port of the metro FRA (10G)
+      provider: P016
+      circuit_type: internet
+      status: active
+      bandwidth: 10000
+      locations:
+        - FRA-COLO1
+        - INTERNET
+      capabilities:
+        - ["EXT-FABRIC-FRA", "et-0/0/0.1301"]
+        - ["INTERNET", "bus"]
+    - name: ams1-eqx-8d3b6e41-internet
+      circuit_id: EQX-8D3B6E41
+      description: Equinix Internet Access of the AMS-COLO1 cage, on the Fabric port of the metro AMS (10G)
+      provider: P016
+      circuit_type: internet
+      status: active
+      bandwidth: 10000
+      locations:
+        - AMS-COLO1
+        - INTERNET
+      capabilities:
+        - ["EXT-FABRIC-AMS", "et-0/0/0.1401"]
+        - ["INTERNET", "bus"]
     - name: bcn-office-ispa-48212-isp-a
       circuit_id: ISPA-48212
       description: Internet access of the C900 office SD-WAN edge (underlay of its tunnels)

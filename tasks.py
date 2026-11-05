@@ -371,7 +371,6 @@ def check_model(
     update_golden: bool = False,
     keep_branch: bool = False,
     rebuild: bool = False,
-    force_load: bool = False,
     pair: str = "",
     jobs: int = 2,
     reach: bool = False,
@@ -399,7 +398,6 @@ def check_model(
         (update_golden, "--update-golden"),
         (keep_branch, "--keep-branch"),
         (rebuild, "--rebuild"),
-        (force_load, "--force-load"),
     ):
         if on:
             flags.append(flag)

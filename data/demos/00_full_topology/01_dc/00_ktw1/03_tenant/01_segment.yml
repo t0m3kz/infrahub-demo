@@ -4,6 +4,10 @@
 # only for the segment, so they are nested under it. The port Ethernet1/1 of the leaf is a member of the segment
 # (01_dc/00_ktw1/03_tenant/03_segment_port.yml). The segment is nested under no customer: its owner is the
 # relationship.
+#
+# Its realization in the DC (the second document) is a row of its own, named by its two parents (segment,
+# deployment), so a second load updates it instead of creating it again; it carries the VNI and the VLAN row of each
+# leaf (the MLAG pair carries the segment under one id).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -25,12 +29,20 @@ spec:
               ip_namespace: PROD
               status: active
               description: DC segment c900-web-p
-      segment_deployments:
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedSegmentDeployment
+  data:
+    - segment: c900-web-p
+      deployment: DC-KTW1
+      vni: 10100
+      vlan_domain_segments:
         data:
-          - deployment: DC-KTW1
-            vni: 10100
-            vlan_domain_segments:
-              data:
-                - device: ktw1-leaf-01
-                  vlan_id: 100
-                  svi: ["ktw1-leaf-01", "Vlan100"]
+          - device: ktw1-leaf-01
+            vlan_id: 100
+            svi: ["ktw1-leaf-01", "Vlan100"]
+          - device: ktw1-leaf-02
+            vlan_id: 100
+            svi: ["ktw1-leaf-02", "Vlan100"]

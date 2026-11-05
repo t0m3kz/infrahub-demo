@@ -35,7 +35,7 @@ REQUEST_TIMEOUT = 300  # seconds: a dense L3 search can take the server over a m
 LAYERS: dict[str, tuple[str, ...]] = {
     "l1": ("DcimPhysicalDevice", "DcimPhysicalInterface", "DcimLAGInterface", "DcimVirtualInterface", "DcimCable",
            "DcimFrontPatchPanelPort", "DcimRearPatchPanelPort", "TopologyCarrierCircuit",
-           "TopologyInternetInterface"),
+           "TopologyInternetInterface", "TopologyColocationConnect", "TopologyColocationInterface"),
     "l3": ("DcimPhysicalDevice", "DcimPhysicalInterface", "DcimLAGInterface", "DcimVirtualInterface", "ManagedBGP",
            "ManagedBGPPeering", "TopologySessionCircuit"),
 }  # fmt: skip
@@ -55,7 +55,7 @@ END_KINDS: dict[tuple[str, str], tuple[str, ...]] = {
 }  # fmt: skip
 # Where a bare name is looked up (by `name`).
 NAME_KINDS = ("DcimPhysicalDevice", "DcimVirtualDevice", "CloudDirectConnect", "CloudVPNConnection",
-              "TopologyInternet", "ManagedVxlanSegment", "CloudNetworkSegment", "CloudVirtualNetwork", "CloudGateway",
+              "TopologyInternet", "TopologyColocationConnect", "ManagedVxlanSegment", "CloudNetworkSegment", "CloudVirtualNetwork", "CloudGateway",
               "CloudGatewayAttachment", "CloudInstance", "CloudServiceEndpoint", "TopologySaasRegion",
               "TopologyCarrierCircuit", "TopologySessionCircuit", "ManagedBGP", "ManagedBGPPeering")  # fmt: skip
 NODE = "edges { node { id hfid display_label __typename } }"

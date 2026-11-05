@@ -40,6 +40,16 @@ def _device(name: str, place: dict[str, Any] | None, *, region: str | None = Non
     return node
 
 
+def _fabric_device(name: str, metro: dict[str, Any]) -> dict[str, Any]:
+    """The provider's port of a colocation metro: no deployment, its metro places it."""
+    return {
+        "id": f"id-{name}",
+        "__typename": "TopologyColocationConnect",
+        "name": {"value": name},
+        "metro": {"node": metro},
+    }
+
+
 def _end(device: dict[str, Any], port: str, kind: str = "DcimPhysicalInterface") -> dict[str, Any]:
     return {"id": f"{device['id']}:{port}", "__typename": kind, "name": {"value": port}, "device": {"node": device}}
 
@@ -219,7 +229,7 @@ class TestAttachments:
         """An edge reaches the internet through an ISP access circuit of its own."""
         bad = _carrier("DC-NET", [DC90, INTERNET], [_end(EDGE, "Ethernet1/3"), BUS_END])
         (message,) = _run([bad])  # the placement is right (the DC and INTERNET, one end each): only I2 speaks
-        assert "dc90-edge-01" in message and "an ISP router or the port of a cloud or SaaS transport" in message
+        assert "dc90-edge-01" in message and "an ISP router, the port of a cloud or SaaS transport" in message
 
     def test_both_ends_on_the_interface_are_refused(self) -> None:
         loop = _carrier("LOOP", [INTERNET, INTERNET], [BUS_END, BUS_END])
@@ -291,3 +301,23 @@ class TestTheObject:
     def test_no_interface_is_refused(self) -> None:
         (message,) = _findings([], [{"id": "id-INTERNET", "name": {"value": "INTERNET"}, "interfaces": _edges([])}])
         assert "has 0 interface(s)" in message
+
+
+FRA = _place("FRA", "TopologyColocationMetro")
+FABRIC_FRA = _fabric_device("EXT-FABRIC-FRA", FRA)
+
+
+def test_the_connection_interface_of_a_colocation_port_is_an_attachment() -> None:
+    """An Internet Access service on the Fabric port of a metro ends on THE INTERNET: a far end placed by its metro."""
+    internet_access = _carrier(
+        "EQX-INET-FRA",
+        [_place("FRA-COLO1", "TopologyColocationZone"), INTERNET],
+        [_end(FABRIC_FRA, "et-0/0/0.1301", "TopologyColocationInterface"), BUS_END],
+    )
+    assert _findings([internet_access]) == []
+
+
+def test_a_far_end_placed_by_nothing_known_is_still_refused() -> None:
+    """A device with a place of another kind (a DC) is refused as before, whatever kind its port has."""
+    bad = _carrier("INET-BAD", [DC90, INTERNET], [_end(EDGE, "Ethernet1/2"), BUS_END])
+    assert _findings([bad])

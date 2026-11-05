@@ -358,6 +358,7 @@ def test_inventory_rows_flag_an_empty_kind() -> None:
 
 LAYOUT = {
     "zone": "Z1",
+    "metro": "M1",
     "offices": [{"office": "OFF", "edges": ["off-edge"]}],
     "colo_edge": "eg",
     "fabric_port_device": "fabric",
@@ -387,10 +388,10 @@ def _layout_graph() -> dict[str, list]:
     return {
         "dev": [
             _dev_in("eg", "TopologyColocationZone", "Z1"),
-            _dev_in("fabric", "TopologyColocationZone", "Z1"),
             _dev_in("bl", "TopologyDataCenter", "DC1"),
             _dev_in("off-edge", "TopologyCustomerOffice", "OFF"),
         ],
+        "cport": [{"name": _v("fabric"), "metro": _node(name=_v("M1"))}],
         "dx": [{"name": _v("dx")}],
         "vpn": [],
         "carrier": [
@@ -408,6 +409,13 @@ def _layout_graph() -> dict[str, list]:
 def test_the_layout_of_the_sites_passes_on_a_cage_with_the_legs() -> None:
     """Cloud legs in the cage, fibres DC to cage, the office edge holding the tunnels, the panel jack to the Fabric port."""
     assert _failed(walks.layout_rows(_layout_graph(), LAYOUT)) == []
+
+
+def test_a_fabric_port_of_another_metro_is_not_in_the_cage() -> None:
+    """The provider's port stands for its metro: a port of another metro starts no carrier of this cage."""
+    d = _layout_graph()
+    d["cport"] = [{"name": _v("fabric"), "metro": _node(name=_v("M2"))}]
+    assert any("cloud and SaaS carrier" in name for name in _failed(walks.layout_rows(d, LAYOUT)))
 
 
 def test_a_cloud_carrier_that_starts_at_the_dc_fails() -> None:

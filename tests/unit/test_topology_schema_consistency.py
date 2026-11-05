@@ -90,6 +90,7 @@ def test_colocation_file_declares_the_expected_kinds() -> None:
         _FABRIC,
         "TopologyColocation",
         "TopologyColocationConnect",
+        "TopologyColocationInterface",
         "TopologyColocationMetro",
         "TopologyColocationZone",
         "TopologyVirtualColocation",

@@ -22,7 +22,9 @@
 # BGP processes) still selects it. One global query.
 #
 # A cloud transport (the device of a cloud port or peering interface) has no deployment: its facility is its `region`
-# or `saas_region`. A handoff end is a `<port>.<vlan>` sub-interface, a routed physical port (it has an address) or a
+# or `saas_region`; the provider's port of a colocation metro has none either: its facility is its `metro`, and a zone
+# or virtual colocation of that metro (their `parent`) is its location.
+# A handoff end is a `<port>.<vlan>` sub-interface, a routed physical port (it has an address) or a
 # cloud peering interface (its `vlan_id` is optional).
 #
 # Concrete inline fragments only for the deployment of a physical end, so the query is valid whether the deployment
@@ -47,6 +49,8 @@ query circuit_placement {
               __typename
               name { value }
               ... on TopologyCustomerOffice { owner { node { id org_id { value } } } }
+              ... on TopologyColocationZone { parent { node { id } } }
+              ... on TopologyVirtualColocation { parent { node { id } } }
             }
           }
         }
@@ -73,6 +77,9 @@ query circuit_placement {
                   ... on CloudTransport {
                     region { node { id __typename name { value } } }
                     saas_region { node { id __typename name { value } } }
+                  }
+                  ... on TopologyColocationConnect {
+                    metro { node { id __typename name { value } } }
                   }
                 }
               }

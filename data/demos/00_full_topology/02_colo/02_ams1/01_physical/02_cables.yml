@@ -1,0 +1,21 @@
+---
+# The cross-connect inside the cage: the cage edge to the provider's Fabric port of the metro AMS. Cables in data
+# are never generated. A hop inside one facility is a cable, not a carrier circuit (a carrier needs two distinct
+# facilities).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+    - name: "CBL-AMS1-EDGE-FABRIC"
+      type: smf
+      deployment: "AMS-COLO1"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "ams-colo1-edge-01"
+            name: "Ethernet1/1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "EXT-FABRIC-AMS"
+            name: "et-0/0/0"

@@ -8,8 +8,8 @@
 #                      access. The DCI mesh (02_colo/03_dci): Ethernet1/10-11 the fibres from the DC-KTW1 border
 #                      leaves, 1/9 and 1/12 DC-WAW1, 1/15-16 DC-GDN1, 1/8 FRA-COLO1, 1/7 AMS-COLO1 (the four
 #                      outside the template's dci range 1/9-12 are nested with role dci).
-#   EXT-FABRIC-PAR     the provider's Fabric port in the same cage (a physical stub of the provider, like the
-#                      ISP routers): the start of the Equinix Fabric virtual connections to ExpressRoute and the
+#   EXT-FABRIC-PAR     the provider's Fabric port of the metro (a TopologyColocationConnect, second document
+#                      below): the start of the Equinix Fabric virtual connections to ExpressRoute and the
 #                      Google Partner Interconnect. It is reached by a cable through the patch panel, not by a
 #                      circuit.
 apiVersion: infrahub.app/v1
@@ -57,11 +57,25 @@ spec:
             name: Ethernet1/16
             role: dci
             description: "DCI: dark fibre to GDN1"
+---
+# The provider's port of the metro: ONE TopologyColocationConnect per metro, a slim device of the provider (no role,
+# platform or template) that holds the physical Fabric port. The port is patched to par-colo1-edge-01 Ethernet1/1
+# (02_cables.yml); the connections that start on it have an interface of their own (03_fabric_interfaces.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyColocationConnect
+  data:
     - name: EXT-FABRIC-PAR
-      object_template: MX204_ISP_PE
-      owner: P016
-      description: Equinix Fabric port in the PAR-COLO1 cage (patched to par-colo1-edge-01 Ethernet1/1)
-      deployment: PAR-COLO1
-      rack: par-colo1-rack-01
-      position: 38
-      rack_face: front
+      description: Equinix Fabric port of the metro PAR, in the PAR-COLO1 cage (patched to par-colo1-edge-01 Eth1/1)
+      status: active
+      provider: P016
+      metro: PAR
+      bandwidth: 10000
+      cloud_id: a3d0c0f4-5b7e-4a13-9d52-0c1f6b2e8a77
+      interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            name: et-0/0/0
+            description: Fabric port 10G, cross-connected to the cage edge through the patch panel
+            status: active

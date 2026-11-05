@@ -289,10 +289,11 @@ nodes:
     order_by:
       - name__value
     display_label: "{{ name__value }}"
-    # One office per customer. The name embeds the owner's org_id, so the
-    # constraint holds without naming the (mandatory but relationship) owner.
+    # One office per customer. The name embeds the owner's org_id but is computed once the office exists; the parent
+    # label and the owner, which an object file names, are in the constraint (as the parent and the environment are in
+    # the other footprints') so a second load finds the office instead of creating it again.
     uniqueness_constraints:
-      - ["name__value"]
+      - ["name__value", "parent", "owner"]
     attributes:
       - name: name
         kind: Text

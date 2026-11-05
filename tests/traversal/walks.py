@@ -261,14 +261,18 @@ def tunnel_underlay_rows(d: dict) -> list[Row]:
 
 
 def _placement(d: dict) -> dict[str, tuple[str | None, str | None]]:
-    """{device name: (kind, name) of the deployment it sits in}."""
-    return {
+    """{device name: (kind, name) of the deployment it sits in}; the provider's port of a metro has none, its metro
+    stands for it."""
+    placed = {
         val(x, "name"): (
             ((x.get("deployment") or {}).get("node") or {}).get("__typename"),
             ((x.get("deployment") or {}).get("node") or {}).get("name", {}).get("value"),
         )
         for x in d["dev"]
     }
+    for port in d.get("cport", []):
+        placed[val(port, "name")] = ("TopologyColocationMetro", val(_first(port, "metro"), "name"))
+    return placed
 
 
 def _ends(circuit: dict) -> list[str | None]:
@@ -292,13 +296,14 @@ def layout_rows(d: dict, cfg: dict) -> list[Row]:
     the cage edge reaches the Fabric port through a patch panel (a cable to a front port, a cable from its rear port)."""
     place = _placement(d)
     zone = ("TopologyColocationZone", cfg["zone"])
+    cage = {zone, ("TopologyColocationMetro", cfg["metro"])}  # the cage, or the provider's port of its metro
     transports = {val(t, "name") for t in [*d["dx"], *d["vpn"]]}
     legs = [c for c in d["carrier"] if val(c, "circuit_type") in ("cross_connect", "virtual_connection")]
     cloud = [c for c in legs if transports & set(_ends(c))]
     stray = sorted(
         val(c, "circuit_id")
         for c in cloud
-        if not any(place.get(name) == zone for name in _ends(c) if name not in transports)
+        if not any(place.get(name) in cage for name in _ends(c) if name not in transports)
     )
     rows: list[Row] = [
         (
@@ -379,7 +384,13 @@ def internet_rows(d: dict, cfg: dict) -> list[Row]:
     rows.append(
         (f"internet: {cfg['object']} has exactly one interface, {cfg['bus']}, of the shared kind", ok, str(ifaces))
     )
-    expected = sorted([*(i["uplink_carrier"] for i in cfg["isps"]), *(s["carrier"] for s in cfg["public_sides"])])
+    expected = sorted(
+        [
+            *(i["uplink_carrier"] for i in cfg["isps"]),
+            *(s["carrier"] for s in cfg["public_sides"]),
+            *cfg.get("fabric_accesses", []),
+        ]
+    )
     bus = next((x for x in d["inetif"] if val(x, "name") == cfg["bus"]), {})
     on_bus = sorted(val(c, "circuit_id") for c in d["carrier"] if bus.get("id") in _ids(rel(c, "capabilities")))
     listed = sorted(val(c, "circuit_id") for c in d["carrier"] if c["id"] in _ids(rel(bus, "capabilities")))

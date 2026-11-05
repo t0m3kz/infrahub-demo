@@ -8,7 +8,8 @@
 # Carrier circuits are the physical wire. Every cloud leg lands in the colocation cage PAR-COLO1 (02_colo), where the
 # cage edge par-colo1-edge-01 is: the Direct Connect and the Google Dedicated Interconnect are cross-connects from an
 # edge port to the provider's port; ExpressRoute and the Google Partner Interconnect are Equinix Fabric virtual
-# connections that start on the Fabric port of the cage (EXT-FABRIC-PAR), which the edge reaches through the patch
+# connections that start on an interface of the Fabric port of the metro (EXT-FABRIC-PAR, one interface per
+# connection: 02_colo/00_par1/01_physical/03_fabric_interfaces.yml), which the edge reaches through the patch
 # panel (02_colo/00_par1/01_physical/02_cables.yml). The last carrier, ktw1-ispa-48211-isp-a, is the internet access
 # of the DC edge.
 apiVersion: infrahub.app/v1
@@ -53,7 +54,7 @@ spec:
         - PAR-COLO1
         - westeurope
       capabilities:
-        - ["EXT-FABRIC-PAR", "et-0/0/0"]
+        - ["EXT-FABRIC-PAR", "et-0/0/0.1101"]
         - ["er-c900-weu", "msee-pri"]
     - name: par1-eqx-7c1e9a2c-azure-90000000-0000-0000-0000-000000000002
       circuit_id: EQX-7C1E9A2C
@@ -66,7 +67,7 @@ spec:
         - PAR-COLO1
         - westeurope
       capabilities:
-        - ["EXT-FABRIC-PAR", "et-0/0/0"]
+        - ["EXT-FABRIC-PAR", "et-0/0/0.1102"]
         - ["er-c900-weu", "msee-sec"]
     - name: par1-eqx-3f4d8b10-gcp-c900-prod-project
       circuit_id: EQX-3F4D8B10
@@ -79,7 +80,7 @@ spec:
         - PAR-COLO1
         - europe-west3
       capabilities:
-        - ["EXT-FABRIC-PAR", "et-0/0/0"]
+        - ["EXT-FABRIC-PAR", "et-0/0/0.1201"]
         - ["ic-c900-fra-1", "ic-port-1"]
     - name: par1-xc21450003-gcp-c900-prod-project
       circuit_id: XC21450003

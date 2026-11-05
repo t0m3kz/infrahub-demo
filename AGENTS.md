@@ -312,7 +312,10 @@ class MyCheck(InfrahubCheck):
   - **Carrier**: exactly two distinct locations, one per end device's `deployment`; its offices are of one owner.
     `checks/carrier_circuit_ports.py`: a port is an end of at most one carrier and both ends
     are physical ports, EXCEPT a `virtual_connection` (a provider port hosts one connection per S-tag, and an end may be
-    the `DcimVirtualInterface` NIC of a provider-hosted appliance); the other types on
+    the `DcimVirtualInterface` NIC of a provider-hosted appliance, or a `TopologyColocationInterface`: the end of ONE
+    Fabric connection on the provider's port of a metro, unshared, with its S-tag `vlan_id`, C-tag `inner_vlan_id` and
+    `bandwidth`, riding on that port through `parent_interface`; the port is a `TopologyColocationConnect`, one per
+    metro, placed by its `metro` so a zone of that metro is the circuit's location); the other types on
     the same port still hold both. A carrier whose far end is such a NIC is a provider-delivered
     `virtual_connection`; a physical `cross_connect` joins physical ports only (our cage edge and a Fabric port or a
     provider's own router).
