@@ -17,7 +17,8 @@ _MANAGED_KINDS = {
     "ManagedControllerPhysical",
     "ManagedControllerVirtual",
 }
-_TRANSPORTS = {"CloudDirectConnect", "CloudVPNConnection"}
+# The provider's port of a colocation metro (an Equinix Fabric port) is an interface holder of the same kind.
+_TRANSPORTS = {"CloudDirectConnect", "CloudVPNConnection", "TopologyColocationConnect"}
 # THE INTERNET: a passive meeting point, a slim device that is also a facility (a carrier circuit's location).
 _PASSIVE = {"TopologyInternet"}
 

@@ -264,6 +264,35 @@ nodes:
       - [name__value, parent]
     include_in_menu: false
 
+  # The provider's port in a metro (an Equinix Fabric port, one per region, not per availability zone): a slim
+  # DcimDevice, so it holds interfaces and nothing else (no role, platform, artifact, VRF), like a cloud transport. It
+  # shares the provider and the speed with CloudDirectConnect through DcimProviderPort, and the provider's identifier
+  # is CloudResource.cloud_id. Schema only: no generator, check or query reads it yet.
+  - name: ColocationConnect
+    namespace: Topology
+    label: Colocation Connect
+    description: "The provider's port in a colocation metro (an Equinix Fabric port), one per metro"
+    icon: mdi:ethernet
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    inherit_from:
+      - CloudResource
+      - DcimDevice
+      - DcimProviderPort
+    relationships:
+      - name: metro
+        peer: TopologyColocationMetro
+        optional: false
+        cardinality: one
+        kind: Attribute
+        identifier: topology_colocation_connect__metro
+        description: The metro (the region) the port is in; one per metro.
+        order_weight: 1400
+
   # The envelope of a metro and of a zone or virtual colocation, the colocation
   # counterparts of TopologyTemplateDC / TopologyTemplatePod (topology_dc.yml).
   # Only the maxima live here: every pool a colocation owns is sized for its

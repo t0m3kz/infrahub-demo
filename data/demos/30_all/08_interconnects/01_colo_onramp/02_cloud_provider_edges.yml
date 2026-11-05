@@ -51,6 +51,7 @@ spec:
       description: "AWS Direct Connect of eu-central-1, dedicated 10G port at the FR2 cage (XC-EQXFR2-AWS-EUC1)"
       status: active
       connection_type: physical
+      provider: "P004"
       bandwidth: 10000
       account: "net-hub-aws-prod"
       region: "eu-central-1"
@@ -58,6 +59,7 @@ spec:
       description: "AWS hosted Direct Connect of eu-central-1 through the Network Edge router eg-am-ne02 (FABRIC-AMNE02-AWS-EUC1)"  # yamllint disable-line rule:line-length
       status: active
       connection_type: logical
+      provider: "P004"
       bandwidth: 1000
       account: "net-hub-aws-prod"
       partner_account: "equinix-network-edge"
@@ -66,6 +68,7 @@ spec:
       description: "Azure ExpressRoute circuit of westeurope: primary and secondary link (XC-EQXPA4-AZURE-WEU-PRI and -SEC)"  # yamllint disable-line rule:line-length
       status: active
       connection_type: logical
+      provider: "P005"
       bandwidth: 10000
       account: "net-hub-azure-prod"
       region: "westeurope"

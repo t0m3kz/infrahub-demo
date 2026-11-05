@@ -378,6 +378,42 @@ spec:
                   kind: ManagedController
                   description: "Management/orchestration controllers (WLC, ACI APIC, DNA Center, security/LB managers, etc.)"  # yamllint disable-line rule:line-length
 
+          # ── Clusters: hypervisor and Kubernetes clusters, their SDN and virtual switches ──
+          - namespace: Managed
+            name: ClustersMenu
+            label: Clusters
+            icon: "mdi:server-network"
+            description: "Hypervisor and Kubernetes clusters, their SDN (NSX, CNI) and virtual switches"
+            children:
+              data:
+                - namespace: Managed
+                  name: ClusterItem
+                  label: Clusters
+                  kind: ManagedCluster
+                  icon: "mdi:server-network"
+                  description: "On-prem and provider hypervisor clusters, on-prem and managed Kubernetes"
+
+                - namespace: Managed
+                  name: ClusterSdnItem
+                  label: Cluster SDNs
+                  kind: ManagedClusterSdn
+                  icon: "mdi:lan-connect"
+                  description: "The software network layer of a cluster (NSX or a CNI): ranges and gateway nodes"
+
+                - namespace: Managed
+                  name: VirtualSwitchItem
+                  label: Virtual Switches
+                  kind: ManagedVirtualSwitch
+                  icon: "mdi:switch"
+                  description: "The L2 element between the VM NICs and the host ports"
+
+                - namespace: Managed
+                  name: PortGroupItem
+                  label: Port Groups
+                  kind: ManagedPortGroup
+                  icon: "mdi:lan"
+                  description: "A VLAN of a virtual switch and the fabric segment it is"
+
           # ── Circuits ───────────────────────────────────────────────────────
           - namespace: Topology
             name: CircuitsMenu

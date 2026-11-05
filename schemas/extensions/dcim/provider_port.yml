@@ -1,0 +1,29 @@
+---
+version: "1.0"
+
+# A provider's port: what a cloud transport (CloudDirectConnect) and the provider's port in a colocation metro
+# (TopologyColocationConnect, an Equinix Fabric port) share. A marker generic that carries fields only, the way
+# DcimSubInterface and DcimHasIPAddress do: a generic cannot inherit a generic, so each kind lists DcimDevice (the slim
+# one) AND this one. The provider's own identifier of the port is CloudResource.cloud_id, not a field here.
+generics:
+  - name: ProviderPort
+    namespace: Dcim
+    description: "A port of a provider: its operator and speed"
+    include_in_menu: false
+    attributes:
+      - name: bandwidth
+        kind: Number
+        label: "Bandwidth (Mbps)"
+        optional: true
+        order_weight: 320
+        description: "Port or connection speed in megabits per second"
+    relationships:
+      - name: provider
+        label: Provider
+        peer: OrganizationProvider
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "dcim_provider_port__provider"
+        order_weight: 720
+        description: "The operator of the port (the cloud, Equinix Fabric, Megaport, an exchange)"
