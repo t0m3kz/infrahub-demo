@@ -509,6 +509,35 @@ class MyCheck(InfrahubCheck):
   generic. A query reaches it through a per-kind inline fragment (`... on TopologyCustomerDC { network_segments }`),
   not through a generic one. The segment lists footprints only, never its ports: the port-to-segment edge is the port's
   `segments` (see **Interface addresses and layers**), so a reader of a segment's ports queries the ports.
+- **Clusters**: a group of hosts that run workloads is `ManagedCluster`, one generic with an implementation per technology
+  (`schemas/extensions/service/cluster.yml`). The names say what the cluster is, never whose software runs it: the hypervisor
+  is the `hypervisor` (vsphere, proxmox, kvm, openstack, ovirt, nutanix, hyperv, xcp-ng, openshift-virtualization), so one
+  model serves every vendor. `ManagedHypervisorCluster` is on-prem: its `hosts` are our `DcimPhysicalDevice` servers and its
+  `deployment` is where they stand. `CloudHypervisorCluster` is run by a provider (Equinix Managed Private Cloud is vSphere):
+  an `account`, a `location` metro, a `host_count`, no server of ours. `ManagedKubernetesCluster` is on-prem Kubernetes
+  (rke2, k3s, kubeadm, talos, openshift, tanzu): `control_plane_nodes` and `worker_nodes` are VMs (or servers) of ours and
+  `node_segments` the tenant segments they sit in. `CloudKubernetesCluster` is managed Kubernetes (eks, aks, gke, oke,
+  openshift): an `account`, a `region`, a `virtual_network` and the cloud `node_segments`. Any cluster may have an `sdn`
+  (`ManagedClusterSdn`, declared once on the generic): the software network layer that runs on it, `nsx` on a hypervisor
+  cluster or a CNI (cilium, calico, flannel, antrea, ovn-kubernetes, aws-vpc-cni, azure-cni) on a Kubernetes cluster, with its
+  `encapsulation`, its `overlay_cidr` (the pod range of a CNI, the TEP pool of NSX), its `service_cidr` and the
+  `gateway_nodes`, the VMs that carry it (the NSX Edge nodes). A VM has no cluster edge: it is always hosted on a physical node
+  (`DcimVirtualDevice.hosting_device`) and the node is in a cluster only by the cluster's `hosts`, so its cluster is its host's.
+  `checks/cluster.py` holds what the schema cannot: CL1 a server is a host of at most one cluster; CL2 the hosts stand in the
+  cluster's deployment; CL3 a managed Kubernetes cluster's node subnets belong to its virtual network and that network to its
+  account; CL4 the SDN's ranges are networks that overlap neither each other nor the network's blocks; CL5 anti-affinity, the
+  instances of one component in a cluster of two or more hosts are not all on one host; CL6 the control plane of an on-prem
+  Kubernetes cluster of three or more nodes has no host running more than half of them; CL7 the gateway nodes of a hypervisor
+  cluster's SDN stand on hosts of that cluster. Not modelled: VMs of a provider's cluster (Equinix hosts are not ours), the
+  Tier-0 and Tier-1 gateways of NSX and their routing, node pools, capacity.
+- **Virtual switches**: the L2 element between a VM NIC and the host port (`schemas/extensions/service/virtual_switch.yml`).
+  `ManagedVirtualSwitch` belongs to a cluster, has a `switch_type` (standard, distributed, ovs, linux-bridge, hyperv) and its
+  `uplinks`, the host ports or bonds (a generic peer without a HFID, so a data file names them as nested objects with an
+  explicit kind). `ManagedPortGroup` is a component of the switch: a `vlan_id` and the fabric `segment` it is, and it lists the
+  VM NICs in it (`nics`, one-sided: `DcimVirtualInterface` is not extended; a NIC still rides on its host port through
+  `parent_interface`). The `segments` edge of an uplink is its allowed VLAN list. `checks/virtual_switch.py`: VS1 the uplinks
+  are ports of the cluster's hosts and every host has one; VS2 a VLAN id is used once per switch; VS3 every uplink trunks every
+  segment of the port groups; VS4 a NIC is in one port group and its VM stands on a host of the switch's cluster.
 - **Fabric design**: `TopologyDataCenter.design` (`TopologyTemplateDC`: S, M, L, XL) and `TopologyPod.design`
   (`TopologyTemplatePod`: S_MIDDLE, S_TOR, ...) are required and hold only the envelope (`max_*`); the rows live in
   `data/bootstrap/14b_fabric_templates.yml`. Every fabric pool size is derived from them by

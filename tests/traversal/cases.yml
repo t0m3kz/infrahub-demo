@@ -11,7 +11,7 @@ cases:
     # every object kind of the bulk read (tests/traversal/graph_read.py QUERIES keys) that must not be empty
     non_empty:
       [seg, iface, front, rear, carrier, session, vif, lag, dx, peer, vpn, gw, att, sep, vnet, csg, inst, bgp,
-       peering, dev, mlag, vrf, prefix]
+       peering, dev, mlag, vrf, prefix, vcl, mpc, k8s, vsw, sdn, onk8s]
     # what the chains do not show (peering scope, AS numbers, allowed prefixes, transport interfaces), sorted
     inventory_golden: full_topology__inventory.txt
     # a transport port or LAG lists its peerings in `sub_interfaces` (DcimSubInterface, the marker shared with VIFs)

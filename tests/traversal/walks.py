@@ -516,6 +516,53 @@ def transport_rows(d: dict, tag: str, wanted: dict[str, list[str]]) -> list[Row]
     return rows
 
 
+def _first(node: dict, key: str) -> dict:
+    """The one node behind a cardinality-one relationship of a node, {} when it is empty."""
+    return next(iter(rel(node, key)), {})
+
+
+def _switch_line(switch: dict) -> str:
+    """One line for the inventory: the switch, its uplinks and its port groups with their VLAN, segment and NICs."""
+    uplinks = sorted(val(_first(u, "device"), "name") + ":" + val(u, "name") for u in rel(switch, "uplinks"))
+    groups = []
+    for group in rel(switch, "port_groups"):
+        nics = sorted(val(_first(n, "device"), "name") + ":" + val(n, "name") for n in rel(group, "nics"))
+        groups.append((val(group, "name"), val(group, "vlan_id"), val(_first(group, "segment"), "name"), nics))
+    cluster = val(_first(switch, "cluster"), "name")
+    return f"{val(switch, 'name')} [{val(switch, 'switch_type')}] cluster {cluster} uplinks {uplinks} port groups {sorted(groups, key=str)}"
+
+
+def _on_host(node: dict) -> str:
+    """``name@host`` for a VM node, the bare name for a server (it has no host)."""
+    host = val(_first(node, "hosting_device"), "name")
+    return f"{val(node, 'name')}@{host}" if host else str(val(node, "name"))
+
+
+def _sdn_line(sdn: dict) -> str:
+    """One inventory line for an SDN: provider, encapsulation, ranges and the gateway nodes with their host."""
+    nodes = sorted(_on_host(n) for n in rel(sdn, "gateway_nodes"))
+    ranges = [val(sdn, "overlay_cidr"), val(sdn, "service_cidr")]
+    return (
+        f"{val(sdn, 'name')} [{val(sdn, 'provider')}/{val(sdn, 'encapsulation')}] ranges {ranges} gateway nodes {nodes}"
+    )
+
+
+def _onprem_kubernetes_line(cluster: dict) -> str:
+    """One inventory line for an on-prem Kubernetes cluster: its SDN, its nodes with their host and its node segments."""
+    plane = sorted(
+        val(n, "name") + "@" + val(_first(n, "hosting_device"), "name") for n in rel(cluster, "control_plane_nodes")
+    )
+    workers = sorted(
+        val(n, "name") + "@" + val(_first(n, "hosting_device"), "name") for n in rel(cluster, "worker_nodes")
+    )
+    segments = sorted(val(x, "name") for x in rel(cluster, "node_segments"))
+    sdn = val(_first(cluster, "sdn"), "name")
+    return (
+        f"{val(cluster, 'name')} [{val(cluster, 'distribution')}] sdn {sdn} control plane {plane} workers {workers} "
+        f"node segments {segments}"
+    )
+
+
 def inventory_lines(d: dict) -> list[str]:
     """What the chains do not show: the peering interfaces (scope, peer AS, advertised prefixes, parent), the gateway
     AS numbers, the attachments' allowed prefixes and the interfaces every transport holds; sorted, for a golden."""
@@ -538,6 +585,25 @@ def inventory_lines(d: dict) -> list[str]:
             f"{val(a, 'name')}: allowed {sorted(val(x, 'prefix') for x in rel(a, 'allowed_prefixes'))}"
             for a in d["att"]
         ],
+        "clusters": [
+            f"{val(c, 'name')} [{val(c, 'hypervisor')}] hosts {sorted(val(h, 'name') for h in rel(c, 'hosts'))} "
+            f"sdn {val(_first(c, 'sdn'), 'name')}"
+            for c in d["vcl"]
+        ]
+        + [
+            f"{val(c, 'name')} [provider {val(c, 'hypervisor')}] {val(c, 'host_count')} hosts in "
+            f"{val(next(iter(rel(c, 'account')), {}), 'name')}"
+            for c in d["mpc"]
+        ]
+        + [
+            f"{val(c, 'name')} [{val(c, 'distribution')}] network "
+            f"{val(next(iter(rel(c, 'virtual_network')), {}), 'name')} "
+            f"node subnets {sorted(val(s, 'name') for s in rel(c, 'node_segments'))}"
+            for c in d["k8s"]
+        ],
+        "virtual switches": [_switch_line(sw) for sw in d["vsw"]],
+        "cluster SDNs": [_sdn_line(x) for x in d["sdn"]],
+        "on-prem Kubernetes clusters": [_onprem_kubernetes_line(c) for c in d["onk8s"]],
         "transports": [
             f"{val(t, 'name')}: "
             + str({k: sorted(val(x, "name") for x in d[key] if _dev(x) == val(t, "name")) for k, key in held.items()})

@@ -1,0 +1,69 @@
+# The rows of checks/virtual_switch.py (rules VS1 to VS4), one global query:
+#
+# - ManagedHypervisorCluster: its hosts (a switch's uplinks are ports of them).
+# - ManagedVirtualSwitch: its cluster, its uplinks (a host port or a bond) with their device and the segments they trunk,
+#   and its port groups with their VLAN, their segment and the VM NICs in them (with the host each VM stands on).
+query virtual_switch {
+  ManagedHypervisorCluster {
+    edges {
+      node {
+        id
+        name { value }
+        hosts { edges { node { id name { value } } } }
+      }
+    }
+  }
+
+  ManagedVirtualSwitch {
+    edges {
+      node {
+        id
+        name { value }
+        cluster { node { id name { value } } }
+        uplinks {
+          edges {
+            node {
+              id
+              display_label
+              ... on DcimPhysicalInterface {
+                name { value }
+                device { node { id name { value } } }
+                segments { edges { node { id name { value } } } }
+              }
+              ... on DcimLAGInterface {
+                name { value }
+                device { node { id name { value } } }
+                segments { edges { node { id name { value } } } }
+              }
+            }
+          }
+        }
+        port_groups {
+          edges {
+            node {
+              id
+              name { value }
+              vlan_id { value }
+              segment { node { id name { value } } }
+              nics {
+                edges {
+                  node {
+                    id
+                    name { value }
+                    device {
+                      node {
+                        id
+                        name { value }
+                        ... on DcimVirtualDevice { hosting_device { node { id name { value } } } }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

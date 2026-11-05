@@ -1,0 +1,110 @@
+# The rows of checks/cluster.py (rules CL1 to CL7), one global query:
+#
+# - ManagedHypervisorCluster: its deployment and its hosts (with their own deployment). A VM's cluster is its host's.
+# - ManagedKubernetesCluster: its SDN's ranges and its control plane nodes with the host each stands on.
+# - Every cluster kind that has an SDN reads its ranges; a hypervisor cluster also the SDN's gateway nodes with their host.
+# - CloudKubernetesCluster: its account and virtual network (with the network's address blocks and account), the node
+#   subnets with their network, and the pod and service ranges.
+# - AppComponent: its instances with the host of the VM instances (anti-affinity).
+query cluster {
+  ManagedHypervisorCluster {
+    edges {
+      node {
+        id
+        name { value }
+        deployment { node { id display_label } }
+        hosts {
+          edges {
+            node {
+              id
+              name { value }
+              deployment { node { id display_label } }
+            }
+          }
+        }
+        sdn {
+          node {
+            id
+            name { value }
+            overlay_cidr { value }
+            service_cidr { value }
+            gateway_nodes {
+              edges {
+                node {
+                  id
+                  name { value }
+                  hosting_device { node { id name { value } } }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  ManagedKubernetesCluster {
+    edges {
+      node {
+        id
+        name { value }
+        sdn { node { id name { value } overlay_cidr { value } service_cidr { value } } }
+        control_plane_nodes {
+          edges {
+            node {
+              id
+              name { value }
+              ... on DcimVirtualDevice { hosting_device { node { id name { value } } } }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  CloudKubernetesCluster {
+    edges {
+      node {
+        id
+        name { value }
+        sdn { node { id name { value } overlay_cidr { value } service_cidr { value } } }
+        account { node { id name { value } } }
+        virtual_network {
+          node {
+            id
+            name { value }
+            account { node { id name { value } } }
+            cidr_blocks { edges { node { id prefix { value } } } }
+          }
+        }
+        node_segments {
+          edges {
+            node {
+              id
+              name { value }
+              virtual_network { node { id name { value } } }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  AppComponent {
+    edges {
+      node {
+        id
+        name { value }
+        instances {
+          edges {
+            node {
+              id
+              display_label
+              ... on DcimVirtualDevice { hosting_device { node { id name { value } } } }
+            }
+          }
+        }
+      }
+    }
+  }
+}

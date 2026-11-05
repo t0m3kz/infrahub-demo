@@ -1,0 +1,141 @@
+---
+version: "1.0"
+# The virtual switch of a hypervisor cluster: the L2 element between a VM NIC and the host port. A VM NIC is a
+# DcimVirtualInterface that rides on a host port (parent_interface); this adds what that shortcut leaves out, which
+# VLAN the
+# NIC is in and which fabric segment that VLAN is.
+#   ManagedVirtualSwitch   one per cluster and kind of switch (vSphere standard or distributed switch, Proxmox/Linux
+#   bridge, Open
+#                          vSwitch, Hyper-V switch, Nutanix virtual switch): the host ports it uses are its `uplinks`
+#   ManagedPortGroup       a component of the switch: a VLAN of it (`vlan_id`) and the fabric segment that VLAN is
+#   (`segment`);
+#                          lists the VM NICs in it (`nics`, one-sided: the interface kind is not extended)
+# The `segments` edge of an uplink is its allowed VLAN list: the segments the host port trunks.
+# checks/virtual_switch.py holds
+# what the schema cannot (the uplinks are ports of the hosts of the cluster, every uplink trunks every segment of the
+# port
+# groups, a NIC is in one port group of a switch of its host's cluster).
+nodes:
+  - name: VirtualSwitch
+    namespace: Managed
+    label: Virtual Switch
+    icon: mdi:switch
+    description: "Virtual switch of a hypervisor cluster: the L2 element between the VM NICs and the host ports"
+    include_in_menu: false
+    inherit_from:
+      - ManagedGeneric
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - ["name__value"]
+    attributes:
+      - name: switch_type
+        label: Switch Type
+        kind: Dropdown
+        optional: false
+        description: "The virtual switch implementation"
+        order_weight: 1200
+        choices:
+          - name: standard
+            label: Standard switch
+            description: "A switch of one host (vSphere standard switch)"
+          - name: distributed
+            label: Distributed switch
+            # yamllint disable-line rule:line-length
+            description: "One switch across the hosts of the cluster (vSphere distributed switch, Nutanix virtual switch)"
+          - name: ovs
+            label: Open vSwitch
+            description: "Open vSwitch (KVM, Proxmox, OpenStack, XCP-ng)"
+          - name: linux-bridge
+            label: Linux bridge
+            description: "A Linux bridge (Proxmox vmbr, libvirt)"
+          - name: hyperv
+            label: Hyper-V virtual switch
+            description: "External virtual switch of Hyper-V"
+      - name: mtu
+        label: MTU
+        kind: Number
+        optional: true
+        default_value: 1500
+        description: "MTU of the switch and its uplinks"
+        order_weight: 1250
+    relationships:
+      - name: cluster
+        label: Cluster
+        peer: ManagedHypervisorCluster
+        optional: false
+        cardinality: one
+        kind: Attribute
+        identifier: "virtual_switch__cluster"
+        order_weight: 1500
+      - name: uplinks
+        label: Uplinks
+        peer: DcimSwitchedInterface
+        optional: true
+        cardinality: many
+        kind: Attribute
+        identifier: "virtual_switch__uplinks"
+        description: "The host ports (a port or a bond) that connect the switch to the fabric"
+        order_weight: 1550
+      - name: port_groups
+        label: Port Groups
+        peer: ManagedPortGroup
+        optional: true
+        cardinality: many
+        kind: Component
+        identifier: "virtual_switch__port_groups"
+        order_weight: 2500
+
+  - name: PortGroup
+    namespace: Managed
+    label: Port Group
+    icon: mdi:lan
+    description: "A VLAN of a virtual switch and the fabric segment it is"
+    include_in_menu: false
+    inherit_from:
+      - ManagedGeneric
+    human_friendly_id:
+      - virtual_switch__name__value
+      - name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - ["virtual_switch", "name__value"]
+    attributes:
+      - name: vlan_id
+        label: VLAN ID
+        kind: Number
+        optional: true
+        description: "The VLAN of the port group on the host uplinks; empty is untagged (native)"
+        order_weight: 1200
+        parameters:
+          min_value: 1
+          max_value: 4094
+    relationships:
+      - name: virtual_switch
+        label: Virtual Switch
+        peer: ManagedVirtualSwitch
+        optional: false
+        cardinality: one
+        kind: Parent
+        identifier: "virtual_switch__port_groups"
+        order_weight: 800
+      - name: segment
+        label: Segment
+        peer: ManagedVxlanSegment
+        optional: true
+        cardinality: one
+        kind: Attribute
+        identifier: "port_group__segment"
+        description: "The fabric segment this VLAN is: its hosts' uplinks trunk it and the leaves carry it"
+        order_weight: 1500
+      - name: nics
+        label: VM NICs
+        peer: DcimVirtualInterface
+        optional: true
+        cardinality: many
+        kind: Attribute
+        identifier: "port_group__nics"
+        # yamllint disable-line rule:line-length
+        description: "The VM NICs in this VLAN. One-sided, like a segment's ports: the interface kind carries no edge back"
+        order_weight: 2600

@@ -304,6 +304,12 @@ check_definitions:
   - name: validate_cloud_connection
     class_name: CheckCloudConnection
     file_path: checks/cloud_connection.py
+  - name: validate_cluster
+    class_name: CheckCluster
+    file_path: checks/cluster.py
+  - name: validate_virtual_switch
+    class_name: CheckVirtualSwitch
+    file_path: checks/virtual_switch.py
   - name: validate_patch_panel_pairing
     class_name: CheckPatchPanelPairing
     file_path: checks/patch_panel_pairing.py
@@ -634,6 +640,10 @@ queries:
     file_path: queries/validation/customer_cloud_account.gql
   - name: cloud_connection
     file_path: queries/validation/cloud_connection.gql
+  - name: cluster
+    file_path: queries/validation/cluster.gql
+  - name: virtual_switch
+    file_path: queries/validation/virtual_switch.gql
   - name: patch_panel_pairing
     file_path: queries/validation/patch_panel_pairing.gql
   - name: suite_capacity

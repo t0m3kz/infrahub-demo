@@ -1,0 +1,70 @@
+---
+# The extra servers and the Proxmox VE cluster of the DC-WAW1 data hall. The cluster model is hypervisor-neutral
+# (schemas/extensions/service/cluster.yml, `hypervisor`): one kind describes a vCenter, a Proxmox and a Nutanix
+# cluster, so the three DCs use three vendors on purpose. A cluster needs more than one host: a VM then survives the
+# loss of one box, and checks/cluster.py (rule CL5) asks the instances of a component to stand on different hosts.
+# waw1-srv-02 has no bond and no tagged port in the data: the two ports go straight to the leaf pair (eno1 to leaf 1,
+# eno2 to leaf 2), without the patch panels of waw1-srv-01, so a server is cabled inventory rather than a tenant
+# server.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: waw1-srv-02
+      object_template: PowerEdge-R640_SERVER
+      description: "Host 2 of waw1-proxmox-cl01, eno1 and eno2 straight to the leaf pair"
+      deployment: DC-WAW1-7-POD-1
+      rack: waw1-rack-02
+      position: 18
+      rack_face: front
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+    - name: "CBL-WAW1-SRV02-ENO1-LEAF01"
+      type: copper
+      deployment: "DC-WAW1"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "waw1-srv-02"
+            name: "eno1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "waw1-leaf-01"
+            name: "Ethernet1/5"
+    - name: "CBL-WAW1-SRV02-ENO2-LEAF02"
+      type: copper
+      deployment: "DC-WAW1"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "waw1-srv-02"
+            name: "eno2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "waw1-leaf-02"
+            name: "Ethernet1/5"
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedHypervisorCluster
+  data:
+    - name: waw1-proxmox-cl01
+      description: "C900 production compute of DC-WAW1: Proxmox VE, 2 hosts"
+      status: active
+      hypervisor: proxmox
+      version: "8.2"
+      purpose: Production compute
+      manager: "https://pve.waw1.demo.local:8006"
+      inventory_path: WAW1
+      ha_enabled: true
+      load_balancing: true
+      deployment: DC-WAW1-7-POD-1
+      hosts:
+        - waw1-srv-01
+        - waw1-srv-02

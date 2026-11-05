@@ -1,0 +1,29 @@
+---
+# VMware NSX Edge node (large form factor): the VM that runs the Tier-0 and Tier-1 gateways of an NSX domain. NSX
+# software is not a platform of the model, so the node is a Linux appliance with a management NIC and two datapath
+# (fast path) NICs: a datapath NIC rides on a host port of its role like any VM NIC (parent_interface) and is in a
+# port group of the cluster's virtual switch (schemas/extensions/service/virtual_switch.yml). The gateways themselves
+# (Tier-0, Tier-1, their routing) are not modelled yet.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TemplateDcimVirtualDevice
+  data:
+    - template_name: NSX-EDGE-LARGE
+      owner: "P027"
+      device_type: NSX-EDGE-LARGE
+      platform: linux
+      software_image: linux-22.04.3
+      role: edge
+      status: active
+      cpu: 8
+      memory: 32
+      interfaces:
+        kind: TemplateDcimVirtualInterface
+        data:
+          - template_name: NSX-EDGE-LARGE_mgmt
+            name: mgmt
+            role: management
+          - template_name: NSX-EDGE-LARGE_fp-eth0
+            name: fp-eth0
+            role: uplink

@@ -1,0 +1,150 @@
+---
+# The on-prem Kubernetes cluster of C900 in KTW1 (RKE2): five VMs on the hosts of ktw1-vsphere-cl01, three control
+# plane nodes and two workers. The control plane stands on three different hosts, so losing a host never costs the
+# quorum (checks/cluster.py, rule CL6). A node is an ordinary VM (template LINUX-SVC): its cluster is its host's,
+# nothing on the VM names the Kubernetes cluster. The nodes are in the segment c900-web-p, through the port group
+# c900-web of the distributed switch.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualDevice
+  data:
+    - name: ktw1-k8s-cp-01
+      object_template: LINUX-SVC
+      description: "Control plane node of ktw1-rke2-cl01 on ktw1-srv-01"
+      hosting_device: ktw1-srv-01
+      deployment: C900-P-DC-KTW1
+      interfaces:
+        - kind: DcimVirtualInterface
+          data:
+            name: eth0
+            role: uplink
+            status: active
+            description: Rides on the host port eno1 of ktw1-srv-01
+            parent_interface: ["ktw1-srv-01", "eno1"]
+    - name: ktw1-k8s-cp-02
+      object_template: LINUX-SVC
+      description: "Control plane node of ktw1-rke2-cl01 on ktw1-srv-02"
+      hosting_device: ktw1-srv-02
+      deployment: C900-P-DC-KTW1
+      interfaces:
+        - kind: DcimVirtualInterface
+          data:
+            name: eth0
+            role: uplink
+            status: active
+            description: Rides on the host port eno1 of ktw1-srv-02
+            parent_interface: ["ktw1-srv-02", "eno1"]
+    - name: ktw1-k8s-cp-03
+      object_template: LINUX-SVC
+      description: "Control plane node of ktw1-rke2-cl01 on ktw1-srv-03"
+      hosting_device: ktw1-srv-03
+      deployment: C900-P-DC-KTW1
+      interfaces:
+        - kind: DcimVirtualInterface
+          data:
+            name: eth0
+            role: uplink
+            status: active
+            description: Rides on the host port eno1 of ktw1-srv-03
+            parent_interface: ["ktw1-srv-03", "eno1"]
+    - name: ktw1-k8s-wk-01
+      object_template: LINUX-SVC
+      description: "Worker node of ktw1-rke2-cl01 on ktw1-srv-01"
+      hosting_device: ktw1-srv-01
+      deployment: C900-P-DC-KTW1
+      interfaces:
+        - kind: DcimVirtualInterface
+          data:
+            name: eth0
+            role: uplink
+            status: active
+            description: Rides on the host port eno1 of ktw1-srv-01
+            parent_interface: ["ktw1-srv-01", "eno1"]
+    - name: ktw1-k8s-wk-02
+      object_template: LINUX-SVC
+      description: "Worker node of ktw1-rke2-cl01 on ktw1-srv-02"
+      hosting_device: ktw1-srv-02
+      deployment: C900-P-DC-KTW1
+      interfaces:
+        - kind: DcimVirtualInterface
+          data:
+            name: eth0
+            role: uplink
+            status: active
+            description: Rides on the host port eno1 of ktw1-srv-02
+            parent_interface: ["ktw1-srv-02", "eno1"]
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedPortGroup
+  data:
+    - name: c900-web
+      virtual_switch: ktw1-dvs-01
+      vlan_id: 100
+      segment: c900-web-p
+      nics:
+        - ["ktw1-k8s-cp-01", "eth0"]
+        - ["ktw1-k8s-cp-02", "eth0"]
+        - ["ktw1-k8s-cp-03", "eth0"]
+        - ["ktw1-k8s-wk-01", "eth0"]
+        - ["ktw1-k8s-wk-02", "eth0"]
+---
+# The software network layers. NSX of the vSphere cluster carries its overlay between the hosts (Geneve) and its
+# gateways run on the two Edge nodes; the CNI of the RKE2 cluster is Cilium over VXLAN with the RKE2 default pod and
+# service ranges. Both are one kind, ManagedClusterSdn (schemas/extensions/service/cluster.yml), and a cluster names
+# its own.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedClusterSdn
+  data:
+    - name: ktw1-nsx
+      description: "NSX overlay of ktw1-vsphere-cl01, Tier-0 on the two Edge nodes"
+      status: active
+      provider: nsx
+      encapsulation: geneve
+      overlay_cidr: "10.90.250.0/24"
+      gateway_nodes:
+        - ktw1-nsx-edge-01
+        - ktw1-nsx-edge-02
+    - name: ktw1-cilium
+      description: "Cilium CNI of ktw1-rke2-cl01, VXLAN"
+      status: active
+      provider: cilium
+      encapsulation: vxlan
+      overlay_cidr: "10.42.0.0/16"
+      service_cidr: "10.43.0.0/16"
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedHypervisorCluster
+  data:
+    - name: ktw1-vsphere-cl01
+      hypervisor: vsphere
+      deployment: DC-KTW1-9-POD-1
+      sdn: ktw1-nsx
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedKubernetesCluster
+  data:
+    - name: ktw1-rke2-cl01
+      description: "C900 platform services of DC-KTW1: RKE2 on five VMs"
+      status: active
+      distribution: rke2
+      version: "1.30"
+      purpose: Platform services
+      sdn: ktw1-cilium
+      control_plane_nodes:
+        - ktw1-k8s-cp-01
+        - ktw1-k8s-cp-02
+        - ktw1-k8s-cp-03
+      worker_nodes:
+        - ktw1-k8s-wk-01
+        - ktw1-k8s-wk-02
+      node_segments:
+        - c900-web-p

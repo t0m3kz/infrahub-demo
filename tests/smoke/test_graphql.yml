@@ -446,6 +446,22 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
+    resource_name: virtual_switch
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/virtual_switch.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: cluster
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/cluster.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
     resource_name: customer_cloud_account
     tests:
       - name: syntax_check

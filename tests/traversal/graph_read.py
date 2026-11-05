@@ -68,6 +68,25 @@ QUERIES = {
     "vpn": """CloudVPNConnection { edges { node { id name { value } account { node { name { value } } }
       saas_region { node { display_label } } owner { node { name { value } } }
       customer_gateway { node { id } } gateway { node { id } } } } }""",
+    "sdn": """ManagedClusterSdn { edges { node { id name { value } provider { value } encapsulation { value } overlay_cidr { value }
+      service_cidr { value } gateway_nodes { edges { node { name { value } hosting_device { node { name { value } } } } } } } } }""",
+    "onk8s": """ManagedKubernetesCluster { edges { node { id name { value } distribution { value } sdn { node { name { value } } }
+      control_plane_nodes { edges { node { name { value } ... on DcimVirtualDevice { hosting_device { node { name { value } } } } } } }
+      worker_nodes { edges { node { name { value } ... on DcimVirtualDevice { hosting_device { node { name { value } } } } } } }
+      node_segments { edges { node { name { value } } } } } } }""",
+    "vcl": """ManagedHypervisorCluster { edges { node { id name { value } version { value } hypervisor { value } deployment { node { display_label } }
+      sdn { node { name { value } } }
+      hosts { edges { node { name { value } } } } } } }""",
+    "mpc": """CloudHypervisorCluster { edges { node { id name { value } hypervisor { value } host_count { value } account { node { name { value } } }
+      location { node { display_label } } } } }""",
+    "k8s": """CloudKubernetesCluster { edges { node { id name { value } distribution { value } api_access { value }
+      pod_cidr { value } service_cidr { value } account { node { name { value } } }
+      virtual_network { node { name { value } } } node_segments { edges { node { name { value } } } } } } }""",
+    "vsw": """ManagedVirtualSwitch { edges { node { id name { value } switch_type { value } cluster { node { name { value } } }
+      uplinks { edges { node { display_label ... on DcimPhysicalInterface { name { value } device { node { name { value } } } }
+      ... on DcimLAGInterface { name { value } device { node { name { value } } } } } } }
+      port_groups { edges { node { name { value } vlan_id { value } segment { node { name { value } } }
+      nics { edges { node { name { value } device { node { name { value } } } } } } } } } } } }""",
     "gw": """CloudGateway { edges { node { id name { value } gateway_type { value } ip_address { value } asn { value }
       account { node { name { value } } } } } }""",
     "att": """CloudGatewayAttachment { edges { node { id name { value } owner_account { node { name { value } } }
