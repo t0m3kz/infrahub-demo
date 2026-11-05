@@ -1,6 +1,7 @@
 ---
 # The building of the customer office C900 in the Barcelona metro (05_office/00_metro.yml): one suite with one network
-# rack, where the SD-WAN edge stands (05_office/03_edge.yml). The rack has no deployment: an office hosts no rack
+# rack, where the SD-WAN edge (05_office/03_edge.yml) and the campus switches (05_switches_and_aps.yml) stand. The
+# rack has no deployment: an office hosts no rack
 # (TopologyRackHosting is a pod or a colocation zone), as the border rack of a DC.
 apiVersion: infrahub.app/v1
 version: "1.0"

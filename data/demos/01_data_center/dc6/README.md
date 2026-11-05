@@ -2,19 +2,19 @@
 
 ## Overview
 
-**Location:** Katowice 🇵🇱 (Poland's and Silesian industrial powerhouse turned tech hub—where the only thing faster than the fiber is the coffee. Half the cost of Western Europe, double the sarcasm, and the rolada-modro-kapusta-gumiklyjzy-to-latency ratio is unbeatable!)
+**Location:** Katowice 🇵🇱 (Poland's and Silesian industrial powerhouse turned tech hub, where the only thing faster than the fiber is the coffee. Half the cost of Western Europe, double the sarcasm, and the rolada-modro-kapusta-gumiklyjzy-to-latency ratio is unbeatable, as the committee of one that measured it will confirm.)
 
-**Platform:** Multi-Vendor (Cisco, Arista, Dell SONiC, Edgecore SONiC) — because why settle for one vendor's bugs when you can have them all?
+**Platform:** Multi-Vendor (Cisco, Arista, Dell SONiC, Edgecore SONiC) — one vendor's bugs were apparently not enough variety, so here you get the full tasting menu.
 
 **Fabric Design:** `L` (small instance) + `ebgp-ibgp` routing — eBGP underlay + iBGP overlay, IPv6 P2P links. 3 pods.
-The committee compromise: eBGP underlay because multi-vendor fabrics need per-pod ASNs and nobody
+It is the committee compromise: eBGP underlay because multi-vendor fabrics need per-pod ASNs and nobody
 trusts OSPF to behave the same on Cisco and Edgecore at 3am. iBGP overlay because the super-spines
-are already there, they might as well do something useful as route reflectors. IPv6 underlay because
-Katowice didn't wait 20 years to adopt it — unlike certain Parisian data centers we could mention.
-The best of both worlds, or the worst of two support contracts. Depends who you ask.
+are already there and might as well do something useful as route reflectors (idle hardware makes finance nervous). IPv6 underlay because
+Katowice didn't wait 20 years to adopt it, unlike certain Parisian data centers we could mention.
+The best of both worlds, or the worst of two support contracts. Depends who you ask, and who is holding the pager.
 
 **Use Case:**
-Medium-sized multi-vendor data center with middle_rack deployment. It's the perfect playground for engineers who like living dangerously, managers who love vendor bingo, and auditors who enjoy existential dread. Demonstrates vendor interoperability at a scale just big enough to break things, but small enough to blame the intern. Cost-effective multi-vendor approach for medium enterprises—because why settle for one vendor's support hotline when you can have four? If you've ever wanted to see a Cisco, Arista, Dell, and Edgecore device argue about spanning tree, BGP, and whose logo is the ugliest, this is your chance.
+Medium-sized multi-vendor data center with middle_rack deployment. It is the perfect playground for engineers who like living dangerously, managers who love vendor bingo, and auditors who enjoy existential dread. It demonstrates vendor interoperability at a scale just big enough to break things, but small enough to blame the intern. A cost-effective multi-vendor approach for medium enterprises, because why settle for one vendor's support hotline when you can sit on hold with four? If you've ever wanted to see a Cisco, Arista, Dell, and Edgecore device argue about spanning tree, BGP, and whose logo is the ugliest, this is your chance.
 
 **Motto:** "Why settle for one vendor's bugs when you can have them all?"
 
@@ -22,7 +22,7 @@ Medium-sized multi-vendor data center with middle_rack deployment. It's the perf
 
 - **Super Spines:** 2 (Cisco N9K-C9336C-FX2)
 - **Pods:** 3 | **Spines:** 6 (2+2+2) | **Racks:** 12
-- **Deployment:** `middle_rack`, `tor`, `mixed` — one of each, because Silesian variety is non-negotiable
+- **Deployment:** `middle_rack`, `tor`, `mixed` — one of each, because Silesian variety is non-negotiable (and nobody dared to argue)
 
 | Pod | Spines | Design   | Deployment  | Spine Vendor | Site Layout | Personality                 |
 | --- | ------ | -------- | ----------- | ------------ | ----------- | --------------------------- |
@@ -36,9 +36,9 @@ Medium-sized multi-vendor data center with middle_rack deployment. It's the perf
 # See Deployment Steps below for the current load and generator commands.
 ```
 
-**Warning:** Vendor interop at scale. May cause spontaneous VLAN migrations and philosophical debates.
+**Warning:** Vendor interop at scale. May cause spontaneous VLAN migrations and philosophical debates, usually at the same time and usually on a Friday.
 
-**Silesian Fact:** The rolada-to-latency ratio here is unbeatable. Also, we have 3 pods with 3 different deployment strategies because Silesians don't do half-measures.
+**Silesian Fact:** The rolada-to-latency ratio here is unbeatable. Also, we have 3 pods with 3 different deployment strategies because Silesians don't do half-measures, only full plates.
 
 ---
 
@@ -59,15 +59,15 @@ uv run infrahubctl generator add_dc name=DC6 --branch you_branch
 
 ```
 
-Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → add_dc for DC6.
+Or trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → add_dc for DC6, if you prefer your point of no return with a mouse.
 
 ## Validation
 
-Run `uv run invoke test-integration` to validate the mixed-vendor topology and routing sessions. Use `uv run invoke test-integration-routing` for the focused automatic cascade regression.
+Run `uv run invoke test-integration` to validate the mixed-vendor topology and routing sessions (four vendors, so budget time for the sessions to disagree). Use `uv run invoke test-integration-routing` for the focused automatic cascade regression.
 
 ## Fun Fact
 
-The author of this repo is both Polish and Silesian—which means he can debug BGP while making rolada, modro kapusta, and gumiklyjzy, all before the kettle boils.
+The author of this repo is both Polish and Silesian, which means he can debug BGP while making rolada, modro kapusta, and gumiklyjzy, all before the kettle boils. The BGP is the easy part.
 
 If you have no idea what rolada-modro-kapusta-gumiklyjzy is, visit Upper Silesia and prepare to fall in love (and possibly into a food coma).
 

@@ -1,4 +1,0 @@
-# DcimPhysicalDevice:par-colo1-edge-01 -> TopologyInternet:INTERNET
-## plain
-L1 DcimPhysicalDevice:par-colo1-edge-01 -> TopologyInternet:INTERNET: 1 equal-cost path(s), depth 7
-  DcimPhysicalDevice:par-colo1-edge-01 -> DcimPhysicalInterface:par-colo1-edge-01/Ethernet1/14 -> TopologyCarrierCircuit:ISPB-77302 -> DcimPhysicalInterface:EXT-ISP-B-PE1/et-0/0/1 -> DcimPhysicalDevice:EXT-ISP-B-PE1 -> DcimPhysicalInterface:EXT-ISP-B-PE1/xe-0/1/0 -> TopologyCarrierCircuit:UPL-77001 -> TopologyInternet:INTERNET

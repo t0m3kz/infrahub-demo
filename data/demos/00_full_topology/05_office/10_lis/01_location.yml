@@ -1,0 +1,29 @@
+---
+# The building of the customer office C901 in the Lisbon metro: one suite with one network rack, where the two SD-WAN
+# edges
+# and the campus switches stand. As in Barcelona the rack has no deployment (an office hosts no rack).
+apiVersion: infrahub.app/v1
+version: "1.0"
+kind: Object
+spec:
+  kind: LocationFacility
+  data:
+    - name: "Lisbon Office"
+      shortname: "lis-office"
+      parent: "lis"
+      children:
+        kind: LocationSuite
+        data:
+          - name: LIS-OFFICE-SUITE-1
+            index: 1
+            shortname: "lis-office-suite-1"
+            rows: 1
+            racks_per_row: 1
+            children:
+              kind: LocationRack
+              data:
+                - name: LIS-OFFICE-RACK-01
+                  shortname: lis-office-rack-01
+                  index: 1
+                  row_index: 1
+                  rack_type: network

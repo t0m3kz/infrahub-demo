@@ -2,17 +2,17 @@
 
 ## Overview
 
-**Location:** Munich 🇩🇪 (Home to Oktoberfest and BMW - where beer gardens meet precision engineering)
+**Location:** Munich 🇩🇪 (home to Oktoberfest and BMW, where beer gardens meet precision engineering and nobody is allowed to be late)
 
-**Platform:** Cisco Nexus 9K - The networking equivalent of driving a tank to the grocery store, but at least it's a *predictable* tank.
+**Platform:** Cisco Nexus 9K - The networking equivalent of driving a tank to the grocery store, but at least it's a *predictable* tank (and the invoice is, as always, not).
 
 **Fabric Design:** `L` (small instance) + `ebgp-ebgp` routing — pure eBGP underlay + eBGP overlay (RFC 7938), IPv6 P2P links.
 This is the reference fabric: leaf → spine → super-spine, DC-level border-leaf fronted by a
 firewall/load-balancer pair. No back-to-back tricks, no collapsed roles, no mixed vendors —
-just the textbook 3-tier Clos every other DC in this fleet is a variation on.
+just the textbook 3-tier Clos every other DC in this fleet is a variation on (the rest of them are the teenagers, this one is the parent who actually reads the manual).
 
-**Use Case:** When someone asks "what does a normal DC actually look like?" — point them here.
-Small (2 pods), boring, correct. The control group of the experiment.
+**Use Case:** When someone asks "what does a normal DC actually look like?" — point them here, then step back before they ask for something exciting.
+Small (2 pods), boring, correct. The control group of the experiment, and the only one that behaves.
 
 ---
 
@@ -20,7 +20,7 @@ Small (2 pods), boring, correct. The control group of the experiment.
 
 ### Fabric Scale
 
-- **Super-Spines:** 2 (Cisco N9K-C9336C-FX2) — the top of this fabric, nothing above them
+- **Super-Spines:** 2 (Cisco N9K-C9336C-FX2) — the top of this fabric, nothing above them (it is lonely up there, but the cooling is excellent)
 - **Border-Leaf:** 2 (Cisco N9K-C9336C-FX2), with its own firewall + load-balancer pair
 - **Pods:** 2 | **Spines:** 4 (2+2) | **Racks:** 4
 
@@ -43,7 +43,7 @@ Leaf → Spine → Super-Spine
 # See Deployment Steps below for the current load and generator commands.
 ```
 
-**Warning:** May cause a feeling of "wait, that's it?" — yes, that's the point.
+**Warning:** May cause a feeling of "wait, that's it?" — yes, that's the point. Correct networks are supposed to be dull; excitement is what pagers are for.
 
 ## Deployment Steps
 
@@ -61,17 +61,17 @@ uv run infrahubctl object load data/demos/01_data_center/dc1/ --branch you_branc
 uv run infrahubctl generator add_dc name=DC1 --branch you_branch
 ```
 
-Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → add_dc for DC1.
+Prefer clicking? Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → add_dc for DC1.
 
 ## Validation
 
 Run the focused automatic DC/POD/rack routing regression with `uv run invoke test-integration-routing`.
-Use `uv run invoke test-integration` for the complete DC matrix. The harness waits for cascading tasks and names any branch that refuses to settle.
+Use `uv run invoke test-integration` for the complete DC matrix. The harness waits for cascading tasks and names any branch that refuses to settle (it will happily point a finger, so at least the blame is automated).
 
 ## Fun Fact
 
-The author lives in Munich and has spent years trying to understand the rules of Schafkopf as explained in Bavarian—proof that some network topologies are easier to decipher than local card games.
+The author lives in Munich and has spent years trying to understand the rules of Schafkopf as explained in Bavarian—proof that some network topologies are easier to decipher than local card games, and that a spanning-tree loop is, at least, documented.
 
-If you ever win a round, you're officially more Bavarian than a pretzel at Oktoberfest.
+If you ever win a round, you're officially more Bavarian than a pretzel at Oktoberfest. Do not ask anyone to confirm the rules afterwards.
 
-Munich Fact: The city's official symbol is the Münchner Kindl—a child in a monk's robe, which is still less mysterious than Bavarian pronunciation (especially after your second Maß of beer).
+Munich Fact: The city's official symbol is the Münchner Kindl—a child in a monk's robe, which is still less mysterious than Bavarian pronunciation (especially after your second Maß of beer, when it becomes completely unintelligible, and you will swear it makes sense).

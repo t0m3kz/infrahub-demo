@@ -372,6 +372,9 @@ def check_model(
     keep_branch: bool = False,
     rebuild: bool = False,
     force_load: bool = False,
+    pair: str = "",
+    jobs: int = 2,
+    reach: bool = False,
 ) -> None:
     """Fast model check (minutes): schema + small topology on a throwaway tv-* branch, then L1/L3 traversal asserts.
 
@@ -381,8 +384,15 @@ def check_model(
         uv run invoke check-model
         uv run invoke check-model --update-golden
         uv run invoke check-model --keep-branch --rebuild
+        uv run invoke check-model --pair "office|lis"      # only the pairs whose 'src dst golden' matches
+        uv run invoke check-model --jobs 1                 # trace one pair at a time (default 2)
+        uv run invoke check-model --reach                  # only the far-end matrix (one shortest path per pair)
     """
-    flags = [f"--server-port {server_port}"]
+    flags = [f"--server-port {server_port}", f"--jobs {jobs}"]
+    if pair:
+        flags.append(f"--pair '{pair}'")
+    if reach:
+        flags.append("--reach")
     if case:
         flags.append(f"--case {case}")
     for on, flag in (

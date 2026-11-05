@@ -1,0 +1,65 @@
+---
+# The campus of the C900 office, below the SD-WAN edge: a distribution pair (C9500-32C), an access pair (C9300-48UXM)
+# and
+# four wireless access points (C9130AXI-B), all from the bootstrap templates, so their ports come with them. Hand-
+# written
+# inventory like the rest of the sample: the office fabric generator (add_office_fabric) is not run here, so there is no
+# LISP site, no VRF and no address. The cabling is in 06_cabling.yml; the APs hang off the access pair (one uplink each,
+# role access-point), they are ceiling devices and sit in no rack.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: bcn-office-ds-01
+      object_template: C9500-32C_DISTRIBUTION
+      owner: C900
+      description: "Distribution switch 1 of the office fabric"
+      deployment: C900-OFFICE
+      rack: bcn-office-rack-01
+      position: 39
+      rack_face: front
+    - name: bcn-office-ds-02
+      object_template: C9500-32C_DISTRIBUTION
+      owner: C900
+      description: "Distribution switch 2 of the office fabric"
+      deployment: C900-OFFICE
+      rack: bcn-office-rack-01
+      position: 38
+      rack_face: front
+    - name: bcn-office-as-01
+      object_template: C9300-48UXM_ACCESS_SWITCH
+      owner: C900
+      description: "Access switch 1: wired ports and the uplinks of AP 1 and AP 2"
+      deployment: C900-OFFICE
+      rack: bcn-office-rack-01
+      position: 37
+      rack_face: front
+    - name: bcn-office-as-02
+      object_template: C9300-48UXM_ACCESS_SWITCH
+      owner: C900
+      description: "Access switch 2: wired ports and the uplinks of AP 3 and AP 4"
+      deployment: C900-OFFICE
+      rack: bcn-office-rack-01
+      position: 36
+      rack_face: front
+    - name: bcn-office-ap-01
+      object_template: C9130AXI-B_AP
+      owner: C900
+      description: "Access point, eth0 to as-01 Te1/0/1 (ceiling mount, no rack)"
+      deployment: C900-OFFICE
+    - name: bcn-office-ap-02
+      object_template: C9130AXI-B_AP
+      owner: C900
+      description: "Access point, eth0 to as-01 Te1/0/2 (ceiling mount, no rack)"
+      deployment: C900-OFFICE
+    - name: bcn-office-ap-03
+      object_template: C9130AXI-B_AP
+      owner: C900
+      description: "Access point, eth0 to as-02 Te1/0/1 (ceiling mount, no rack)"
+      deployment: C900-OFFICE
+    - name: bcn-office-ap-04
+      object_template: C9130AXI-B_AP
+      owner: C900
+      description: "Access point, eth0 to as-02 Te1/0/2 (ceiling mount, no rack)"
+      deployment: C900-OFFICE

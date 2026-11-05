@@ -1016,7 +1016,8 @@ Integration runs go through `uv run invoke test-integration` (see the `infrahub-
 stack at a time. Two loops:
 
 - **Fast (minutes)**: `uv run invoke check-model` (schema plus `data/demos/00_full_topology` on a throwaway `tv-*` branch of
-  the :8100 stack, then the tracer asserts of `tests/traversal/`; `--rebuild` for a clean stack) and
+  the :8100 stack, then the tracer asserts of `tests/traversal/`; `--rebuild` for a clean stack; the pairs run two at a
+  time, `--pair <regex>` picks some, `--reach` runs only the far-end matrix: one shortest path per pair, no goldens) and
   `uv run invoke test-integration-fast` (`test_01` setup, `test_02` repository sync, `test_03` the same topology and
   traversal). Run it BEFORE the full subset for any schema, query or generator change: `test_02` registers every query
   against the live schema, so a field the schema rejects (`Cannot query field`, `Unknown type`, a "Fields ... conflict")

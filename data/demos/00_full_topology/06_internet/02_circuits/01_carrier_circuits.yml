@@ -101,6 +101,8 @@ spec:
 #
 #   par-colo1-edge-01 Ethernet1/14 -- par1-ispb-77302-isp-b -- EXT-ISP-B-PE1 et-0/0/1   (cage, second ISP)
 #   bcn-office-edge-01 GE1  -- bcn-office-ispa-48212-isp-a     -- EXT-ISP-A-PE1   et-0/0/1   (office, first ISP)
+#   lis-office-edge-01 GE1  -- lis-office-ispa-48213-isp-a     -- EXT-ISP-A-PE1   et-0/0/2   (second office, first ISP)
+#   lis-office-edge-02 GE1  -- lis-office-ispb-77303-isp-b     -- EXT-ISP-B-PE1   et-0/0/2   (second office, second ISP)
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -132,3 +134,29 @@ spec:
       capabilities:
         - ["bcn-office-edge-01", "GE1"]
         - ["EXT-ISP-A-PE1", "et-0/0/1"]
+    - name: lis-office-ispa-48213-isp-a
+      circuit_id: ISPA-48213
+      description: Internet access of the first C901 office SD-WAN edge (underlay of its tunnel)
+      provider: P014
+      circuit_type: internet
+      status: active
+      bandwidth: 1000
+      locations:
+        - C901-OFFICE
+        - ISP-A
+      capabilities:
+        - ["lis-office-edge-01", "GE1"]
+        - ["EXT-ISP-A-PE1", "et-0/0/2"]
+    - name: lis-office-ispb-77303-isp-b
+      circuit_id: ISPB-77303
+      description: Internet access of the second C901 office SD-WAN edge (underlay of its tunnel)
+      provider: P023
+      circuit_type: internet
+      status: active
+      bandwidth: 1000
+      locations:
+        - C901-OFFICE
+        - ISP-B
+      capabilities:
+        - ["lis-office-edge-02", "GE1"]
+        - ["EXT-ISP-B-PE1", "et-0/0/2"]

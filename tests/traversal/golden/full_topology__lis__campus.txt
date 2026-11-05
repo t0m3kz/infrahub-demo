@@ -1,0 +1,4 @@
+# DcimPhysicalDevice:lis-office-ap-03 -> DcimPhysicalDevice:lis-office-edge-02
+## plain
+L1 DcimPhysicalDevice:lis-office-ap-03 -> DcimPhysicalDevice:lis-office-edge-02: 1 equal-cost path(s), depth 12
+  DcimPhysicalDevice:lis-office-ap-03 -> DcimPhysicalInterface:lis-office-ap-03/eth0 -> DcimCable:CBL-LIS-AS02-AP03 -> DcimPhysicalInterface:lis-office-as-02/TenGigabitEthernet1/0/1 -> DcimPhysicalDevice:lis-office-as-02 -> DcimPhysicalInterface:lis-office-as-02/HundredGigE1/1/2 -> DcimCable:CBL-LIS-DS02-AS02 -> DcimPhysicalInterface:lis-office-ds-02/HundredGigE1/0/2 -> DcimPhysicalDevice:lis-office-ds-02 -> DcimPhysicalInterface:lis-office-ds-02/GigabitEthernet1/0/26 -> DcimCable:CBL-LIS-EDGE02-DS02 -> DcimPhysicalInterface:lis-office-edge-02/GE3 -> DcimPhysicalDevice:lis-office-edge-02

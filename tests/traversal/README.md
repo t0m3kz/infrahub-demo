@@ -12,6 +12,9 @@ uv run invoke check-model --update-golden      # write the golden files tests/tr
 uv run invoke check-model --keep-branch        # keep the tv-* branch for inspection
 uv run invoke check-model --rebuild            # clean the test containers and build the stack from scratch
 uv run invoke check-model --force-load         # load the data even though it is already on main (usually fails)
+uv run invoke check-model --reach              # only the far-end matrix: ONE shortest path per pair, a minute or two
+uv run invoke check-model --pair "lis|office"  # only the pairs whose 'src dst golden' matches the regular expression
+uv run invoke check-model --jobs 1             # pairs traced one at a time (default 2, the rows keep the order of cases.yml)
 ```
 
 Steps: (1) the stack on `:8100` (if it does not answer on `/api/info`, the runner starts it like the integration test
