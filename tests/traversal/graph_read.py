@@ -80,7 +80,7 @@ QUERIES = {
     "mpc": """CloudHypervisorCluster { edges { node { id name { value } hypervisor { value } host_count { value } account { node { name { value } } }
       location { node { display_label } } } } }""",
     "k8s": """CloudKubernetesCluster { edges { node { id name { value } distribution { value } api_access { value }
-      pod_cidr { value } service_cidr { value } account { node { name { value } } }
+      account { node { name { value } } }
       virtual_network { node { name { value } } } node_segments { edges { node { name { value } } } } } } }""",
     "vsw": """ManagedVirtualSwitch { edges { node { id name { value } switch_type { value } cluster { node { name { value } } }
       uplinks { edges { node { display_label ... on DcimPhysicalInterface { name { value } device { node { name { value } } } }

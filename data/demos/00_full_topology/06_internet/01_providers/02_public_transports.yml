@@ -11,6 +11,7 @@ spec:
       description: "Public side of Webex Frankfurt: where the service is reached over the internet"
       status: active
       connection_type: physical
+      provider: "P901"
       bandwidth: 10000
       saas_region: WEBEX-FRANKFURT
       owner: C900
@@ -24,6 +25,7 @@ spec:
       description: "Public side of the object store API of eu-central-1, reached over the internet"
       status: active
       connection_type: physical
+      provider: "P004"
       bandwidth: 10000
       account: c900-aws-prod
       region: eu-central-1

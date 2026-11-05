@@ -287,7 +287,7 @@ class MyCheck(InfrahubCheck):
   `... on DcimDeviceManaged { ... }`; a list of devices that reads them roots at `DcimDeviceManaged`
   (`DcimDevice: DcimDeviceManaged`, the alias keeps the result key); `TopologyDeviceHosting.devices`, `sdwan_gateway`,
   `managed_devices`, `DcimPlatform.devices` and `DcimSoftwareImage.devices` peer `DcimDeviceManaged` (read `interfaces`
-  through `... on DcimDevice`).
+  through `... on DcimDevice`). `DcimProviderPort` is a marker generic (`provider`, `bandwidth`) that `CloudDirectConnect` and `TopologyColocationConnect` list next to the slim `DcimDevice` (a generic cannot inherit a generic): the second is the provider's port in a colocation metro, one per metro through its `metro` edge, with the provider's own id in `CloudResource.cloud_id`; no generator, check or query reads it yet.
 - **Circuit placement**: two circuit kinds, both inheriting `[TopologyCircuit, ManagedGeneric, ManagedGenericInterfaces]`:
   `TopologyCarrierCircuit` and `TopologySessionCircuit`. `locations` (peer `TopologyFacility`, max 2, no `min_count`:
   it is enforced on update only) is declared ONCE, on the `TopologyCircuit` generic. The ends are the shared interface

@@ -11,6 +11,7 @@ spec:
       description: "Webex cross-connect at the Frankfurt peering point, tenant of C900 (SaaS: no account)"
       status: active
       connection_type: physical
+      provider: "P901"
       bandwidth: 1000
       saas_region: WEBEX-FRANKFURT
       owner: C900

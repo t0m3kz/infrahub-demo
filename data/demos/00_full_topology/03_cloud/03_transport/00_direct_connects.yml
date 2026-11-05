@@ -25,6 +25,7 @@ spec:
       description: "AWS Direct Connect: two dedicated 10G ports in one LAG"
       status: active
       connection_type: physical
+      provider: "P004"
       bandwidth: 20000
       account: c900-aws-prod
       region: eu-central-1
@@ -94,6 +95,7 @@ spec:
       description: "Azure ExpressRoute circuit, two links (primary and secondary), one service key"
       status: active
       connection_type: logical
+      provider: "P005"
       bandwidth: 1000
       service_key: "11111111-2222-3333-4444-555555555555"
       account: c900-azure-prod
@@ -149,6 +151,7 @@ spec:
       description: "GCP Partner Interconnect attachment, a logical connection on the partner's port"
       status: active
       connection_type: logical
+      provider: "P006"
       bandwidth: 1000
       account: c900-gcp-prod
       partner_account: partner-fabric-gcp
@@ -181,6 +184,7 @@ spec:
       description: "GCP Dedicated Interconnect: one 10G port of ours at the Google location, routed (no VLAN)"
       status: active
       connection_type: physical
+      provider: "P006"
       bandwidth: 10000
       account: c900-gcp-prod
       region: europe-west3

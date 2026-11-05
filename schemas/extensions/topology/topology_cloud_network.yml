@@ -77,6 +77,7 @@ nodes:
       - CloudResource
       - CloudTransport
       - DcimDevice
+      - DcimProviderPort
     human_friendly_id:
       - name__value
     display_label: "{{ name__value }}"
@@ -97,12 +98,6 @@ nodes:
             label: Logical
             description: "A circuit on a partner's port or on our own physical port (hosted connection, ExpressRoute circuit, VLAN attachment)"  # yamllint disable-line rule:line-length
             color: "#2ECC71"
-      - name: bandwidth
-        kind: Number
-        label: "Bandwidth (Mbps)"
-        optional: false
-        order_weight: 300
-        description: "Port or connection speed in megabits per second"
       - name: vlan_id
         kind: Number
         label: "VLAN ID"
