@@ -72,9 +72,9 @@ def test_carrier_circuits_declare_one_place() -> None:
 
 
 def test_carrier_circuit_type_counts_are_the_shipped_ones() -> None:
-    """Six dark fibres (two per DC), one cross-connect (Megaport), five virtual connections (the AWS Direct Connect
-    and the two Azure ExpressRoute legs on the ports of the region's cloud transports, the two Equinix Fabric connections
-    cage -> Network Edge and Network Edge -> AWS), the declared internet circuits (four transit, the gateway's access, the
+    """Six dark fibres (two per DC), one cross-connect (Megaport), four virtual connections (the two Azure ExpressRoute
+    legs on the ports of the provider's device in the region, the two Equinix Fabric connections cage -> Network Edge and
+    Network Edge -> AWS; the dedicated AWS Direct Connect is a cable), the declared internet circuits (four transit, the gateway's access, the
     partner's, the five ISP uplinks to THE INTERNET) plus one generated underlay per SD-WAN office."""
     offices = [
         office
@@ -84,7 +84,7 @@ def test_carrier_circuit_type_counts_are_the_shipped_ones() -> None:
     assert ALL_DEMO_CARRIER_CIRCUIT_TYPES == {
         "dark_fiber": 6,
         "cross_connect": 1,
-        "virtual_connection": 5,
+        "virtual_connection": 4,
         "internet": 4 + 1 + 1 + len(ALL_DEMO_ISP_UPLINK_CIRCUITS) + len(offices),
     }
 
@@ -141,7 +141,7 @@ def test_carriers_are_the_pure_fibre_the_tunnel_accesses_and_the_cross_connects(
         elif expected["circuit_type"] == TUNNEL_TYPE:
             assert len(expected["carrier"]) == 2 and expected["carrier"][1].startswith("INET-"), circuit_name
     cabled = {c for c, e in ALL_DEMO_VIRTUAL_CIRCUITS.items() if e["circuit_type"] == HANDOFF_TYPE and not e["carrier"]}
-    assert cabled == {"HANDOFF-FR2-SDWAN-GW1-PROD"}
+    assert cabled == {"HANDOFF-FR2-SDWAN-GW1-PROD", "HANDOFF-FR2-AWS-EUC1-PROD"}
 
 
 def test_generated_underlay_circuits_are_the_sdwan_offices_and_collide_with_no_declared_one() -> None:

@@ -112,10 +112,10 @@ async def test_without_the_fibre_a_dci_is_on_no_carrier_circuit(monkeypatch: pyt
 
 
 async def test_without_the_cables_the_cable_carried_handoffs_have_no_carrier(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The SD-WAN gateway handoff sits in one cage: carried by a cable, not a circuit."""
+    """The SD-WAN gateway handoff and the AWS Direct Connect handoff are carried by a cable, not a circuit."""
     errors = _placement(await inventory(monkeypatch, without_cables=True))
     carrierless = {e.split(":")[0] for e in errors if "no end is on a live carrier circuit or a cable" in e}
-    assert carrierless == {"HANDOFF-FR2-SDWAN-GW1-PROD"}
+    assert carrierless == {"HANDOFF-FR2-SDWAN-GW1-PROD", "HANDOFF-FR2-AWS-EUC1-PROD"}
 
 
 async def test_a_handoff_whose_vlans_differ_or_miss_the_vlan_are_reported(monkeypatch: pytest.MonkeyPatch) -> None:

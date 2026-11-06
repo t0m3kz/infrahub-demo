@@ -8,23 +8,26 @@
 #
 # Two kinds, by what the far end is:
 #
-#   Cloud regions (AWS eu-central-1, Azure westeurope) host nothing: the provider side of a connection is a cloud
-#   TRANSPORT (CloudDirectConnect), an interface holder in the region (`region`) and in an account of the network team
-#   (01_cloud_accounts.yml). Its ports are DcimPhysicalInterface, the far ends of the `virtual_connection` carriers of
-#   03_carrier_circuits.yml; the virtual interface of a leg is a CloudPeeringInterface of the transport that rides on a
-#   port (the AWS one is authored in ../03_virtual_circuits/02_aws_prod_handoff.yml). Nothing is cabled to a transport.
+#   Cloud regions (AWS eu-central-1, Azure westeurope) host nothing of ours: the provider side of a connection is a
+#   cloud TRANSPORT (CloudDirectConnect), an interface holder in the region (`region`) and in an account of the
+#   network team (01_cloud_accounts.yml). It holds only the peerings: the virtual interface of a leg is a
+#   CloudPeeringInterface of the transport that rides on the provider's port (the AWS one is authored in
+#   ../03_virtual_circuits/02_aws_prod_handoff.yml). The PORTS are the provider's own, a TopologyProviderConnect where
+#   they physically are (the last documents of this file): in the cage for the dedicated Direct Connect (a cable from
+#   the cage edge, 05_cage_cabling.yml) and in the region for the far ends of the `virtual_connection` carriers of
+#   03_carrier_circuits.yml.
 #
-#     dx-30all-euc1-fr2   AWS Direct Connect of eu-central-1, the leg of the cage FR2 (XC-EQXFR2-AWS-EUC1): a PHYSICAL
-#                         connection, one dedicated 10G port `dxcon-fr2` (not a LAG: a single connection)
+#     dx-30all-euc1-fr2   AWS Direct Connect of eu-central-1, the leg of the cage FR2: a PHYSICAL connection on the
+#                         dedicated 10G port `dxcon-fr2` of EXT-AWS-DX-FR2 (not a LAG: a single connection)
 #     dx-30all-euc1-amne  the hosted Direct Connect from the Network Edge router eg-am-ne02 (FABRIC-AMNE02-AWS-EUC1): a
-#                         LOGICAL connection, one 1G port `dxcon-amne`, lives in the Equinix account (`partner_account`)
-#     er-30all-weu        the Azure ExpressRoute circuit of westeurope: ONE logical transport with its two links as
-#                         ports, `msee-pri` and `msee-sec` (the primary and secondary MSEE, XC-EQXPA4-AZURE-WEU-PRI and
-#                         -SEC, the carriers that share a `redundancy_group`)
+#                         LOGICAL connection on the 1G port `dxcon-amne` of EXT-AWS-DX-EUC1, lives in the Equinix
+#                         account (`partner_account`)
+#     er-30all-weu        the Azure ExpressRoute circuit of westeurope: ONE logical transport whose two links are the
+#                         ports `msee-pri` and `msee-sec` of EXT-AZURE-ER-WEU (the primary and secondary MSEE,
+#                         XC-EQXPA4-AZURE-WEU-PRI and -SEC, the carriers that share a `redundancy_group`)
 #
-#   The two AWS legs are two transports, not one with two ports: they are two Direct Connect connections of different
-#   kinds (dedicated at the cage, hosted through a partner) that share no LAG, and the members of a LAG are the only
-#   case where several connections are the ports of one transport. AWS runs the Site-to-Site VPN of the same region as a
+#   The two AWS legs are two transports: they are two Direct Connect connections of different kinds (dedicated at the
+#   cage, hosted through a partner) that share no LAG. AWS runs the Site-to-Site VPN of the same region as a
 #   CloudVPNConnection, not modelled here.
 #
 #   Physical provider kit stays a DcimPhysicalDevice (MX204_ISP_PE is the generic provider-edge stand-in template;
@@ -42,8 +45,7 @@
 #
 # Created before 03_carrier_circuits.yml and 05_cage_cabling.yml (this directory), whose carriers and cable end on
 # them. A physical stub's `deployment` is the facility: add_circuit derives the far end of a carrier from the end
-# device's deployment (the circuit data lists only the cage); a transport has `region` instead, and the carriers of
-# 03_carrier_circuits.yml list the region next to the cage.
+# device's deployment, or from a provider connect's `location` (the circuit data lists only the cage).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -75,37 +77,6 @@ spec:
       account: "net-hub-azure-prod"
       region: "westeurope"
 ---
-# The ports of the transports: the far ends of the virtual_connection carriers (03_carrier_circuits.yml) and the
-# parents of the virtual interfaces. A role of `cloud` says what the port faces.
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: DcimPhysicalInterface
-  data:
-    - name: "dxcon-fr2"
-      device: "dx-30all-euc1-fr2"
-      interface_type: 10gbase-x-sfpp
-      role: cloud
-      status: active
-      description: "Direct Connect dedicated port, leg of the FR2 cage"
-    - name: "dxcon-amne"
-      device: "dx-30all-euc1-amne"
-      interface_type: 1000base-x-sfp
-      role: cloud
-      status: active
-      description: "Hosted Direct Connect port, leg of the Network Edge router eg-am-ne02"
-    - name: "msee-pri"
-      device: "er-30all-weu"
-      interface_type: 10gbase-x-sfpp
-      role: cloud
-      status: active
-      description: "ExpressRoute primary link (primary MSEE)"
-    - name: "msee-sec"
-      device: "er-30all-weu"
-      interface_type: 10gbase-x-sfpp
-      role: cloud
-      status: active
-      description: "ExpressRoute secondary link (secondary MSEE)"
 ---
 apiVersion: infrahub.app/v1
 kind: Object
@@ -153,3 +124,61 @@ spec:
       role: cloud
       status: active
       description: "Fabric port, cabled to eg-fr202 Ethernet1/2 through PP-EQX-FR2-01"
+---
+# The provider's own ports of the Direct Connect and ExpressRoute legs: a TopologyProviderConnect each, placed by its
+# `location`, with the ports the carriers end on and the virtual interfaces of the transports ride on. EXT-AWS-DX-FR2
+# stands in the FR2 cage and is cabled to eg-fr201 Ethernet1/13 (05_cage_cabling.yml); the two others stand in their
+# region, the far ends of the Fabric virtual connections (03_carrier_circuits.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyProviderConnect
+  data:
+    - name: "EXT-AWS-DX-FR2"
+      description: "AWS Direct Connect location in the FR2 cage (the dedicated 10G port)"
+      status: active
+      provider: "P004"
+      location: "FR2"
+      bandwidth: 10000
+    - name: "EXT-AWS-DX-EUC1"
+      description: "AWS Direct Connect edge of eu-central-1 (the hosted connection port)"
+      status: active
+      provider: "P004"
+      location: "eu-central-1"
+      bandwidth: 1000
+    - name: "EXT-AZURE-ER-WEU"
+      description: "Microsoft Enterprise Edge of westeurope for ExpressRoute (primary and secondary link)"
+      status: active
+      provider: "P005"
+      location: "westeurope"
+      bandwidth: 10000
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - name: "dxcon-fr2"
+      device: "EXT-AWS-DX-FR2"
+      interface_type: 10gbase-x-sfpp
+      role: cloud
+      status: active
+      description: "Direct Connect dedicated port, cabled to eg-fr201 Ethernet1/13"
+    - name: "dxcon-amne"
+      device: "EXT-AWS-DX-EUC1"
+      interface_type: 1000base-x-sfp
+      role: cloud
+      status: active
+      description: "Hosted Direct Connect port, leg of the Network Edge router eg-am-ne02"
+    - name: "msee-pri"
+      device: "EXT-AZURE-ER-WEU"
+      interface_type: 10gbase-x-sfpp
+      role: cloud
+      status: active
+      description: "ExpressRoute primary link (primary MSEE)"
+    - name: "msee-sec"
+      device: "EXT-AZURE-ER-WEU"
+      interface_type: 10gbase-x-sfpp
+      role: cloud
+      status: active
+      description: "ExpressRoute secondary link (secondary MSEE)"

@@ -226,19 +226,20 @@ The cloud and SaaS side of a connection is the cloud model (`CloudDirectConnect`
 There is no provider-connection object (the cloud providers all invented their own vocabulary for the same wire) and no generator that builds the session circuits from one: a `handoff` or `vpn`
 session circuit ends on a cloud peering interface, and its session is written by hand.
 
-A cloud region hosts nothing; the provider side is a transport, an interface holder placed by its `region` and owned
-by an account of the network team (`08_interconnects/01_colo_onramp/01_cloud_accounts.yml`). The on-ramp declares three
-(`02_cloud_provider_edges.yml`):
+A cloud region hosts nothing of ours; the provider side is a transport, an interface holder placed by its `region` and
+owned by an account of the network team (`08_interconnects/01_colo_onramp/01_cloud_accounts.yml`), that holds only the
+peerings. The ports are the provider's own, a `TopologyProviderConnect` where they physically are. The on-ramp declares
+three transports and three provider connects (`02_cloud_provider_edges.yml`):
 
-| Transport | Kind | Ports | Far end of |
+| Transport | Kind | Port, on the provider connect | Reached by |
 | --- | --- | --- | --- |
-| `dx-30all-euc1-fr2` | AWS Direct Connect, physical, 10G | `dxcon-fr2` | `XC-EQXFR2-AWS-EUC1` (FR2 cage) |
-| `dx-30all-euc1-amne` | AWS hosted Direct Connect, logical, 1G, partner account `equinix-network-edge` | `dxcon-amne` | `FABRIC-AMNE02-AWS-EUC1` (Network Edge router `eg-am-ne02`) |
-| `er-30all-weu` | Azure ExpressRoute circuit, logical | `msee-pri`, `msee-sec` | `XC-EQXPA4-AZURE-WEU-PRI` and `-SEC` (PA4 cage, one `redundancy_group`) |
+| `dx-30all-euc1-fr2` | AWS Direct Connect, physical, 10G | `dxcon-fr2` of `EXT-AWS-DX-FR2` (FR2 cage) | the cable `XC-EQXFR2-AWS-EUC1` from `eg-fr201` `Ethernet1/13` |
+| `dx-30all-euc1-amne` | AWS hosted Direct Connect, logical, 1G, partner account `equinix-network-edge` | `dxcon-amne` of `EXT-AWS-DX-EUC1` (`eu-central-1`) | `FABRIC-AMNE02-AWS-EUC1` (Network Edge router `eg-am-ne02`) |
+| `er-30all-weu` | Azure ExpressRoute circuit, logical | `msee-pri`, `msee-sec` of `EXT-AZURE-ER-WEU` (`westeurope`) | `XC-EQXPA4-AZURE-WEU-PRI` and `-SEC` (PA4 cage, one `redundancy_group`) |
 
-The two AWS legs are two transports, not one with two ports: they are different kinds of connection that share no LAG.
-The `virtual_connection` carriers list the cage and the transport's region (`add_circuit` places a physical device by its
-`deployment`, a transport by its `region`).
+The two AWS legs are two transports: they are different kinds of connection that share no LAG. The dedicated Direct
+Connect is a cable inside the FR2 cage, the others are `virtual_connection` carriers that list the cage and place the
+region by the `location` of the provider connect (`add_circuit`).
 
 C001's PROD connection to AWS is the one leg authored end to end, so the edge policy can be derived from the cloud model:
 `HANDOFF-FR2-AWS-EUC1-PROD` joins `eg-fr201` `Ethernet1/13.1000` (address `10.255.143.254/31`, the last link of

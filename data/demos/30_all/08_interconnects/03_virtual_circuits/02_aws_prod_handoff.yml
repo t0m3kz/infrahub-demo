@@ -1,8 +1,8 @@
 ---
 # The PROD handoff of C001 (Nordix) to AWS eu-central-1, authored by hand: eg-fr201 Ethernet1/13.1000 <-> the private
 # virtual interface `dxcon-fr2.1000` of the Direct Connect transport dx-30all-euc1-fr2
-# (../01_colo_onramp/02_cloud_provider_edges.yml), carried by the virtual connection XC-EQXFR2-AWS-EUC1 on
-# Ethernet1/13 (../01_colo_onramp/03_carrier_circuits.yml).
+# (../01_colo_onramp/02_cloud_provider_edges.yml), carried by the cable XC-EQXFR2-AWS-EUC1 on
+# Ethernet1/13 (../01_colo_onramp/05_cage_cabling.yml) to the port dxcon-fr2 of EXT-AWS-DX-FR2.
 #
 # add_virtual_circuit does NOT build this session: the far end is a cloud peering interface, so there is no party BGP
 # process to peer with and nothing to allocate on the cloud side. Everything is authored: our /31 (10.255.143.254/31,
@@ -85,14 +85,14 @@ spec:
       routing: bgp
       vlan_id: 1000
       bfd: true
-      parent_interface: ["dx-30all-euc1-fr2", "dxcon-fr2"]
+      parent_interface: ["EXT-AWS-DX-FR2", "dxcon-fr2"]
       gateway: "dxgw-30all"
       auth: "eqx-fr2-aws-euc1-key"
       peer_ip: ["10.255.143.255/31", "PROD"]
       peer_asn: "AS64512"
 ---
 # The handoff circuit, in PROD. Unowned shared on-ramp (a handoff has no owner): the cage and the region are its
-# locations, the carrier is derived from the virtual connection on Ethernet1/13.
+# locations, the underlay is the cable on Ethernet1/13.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

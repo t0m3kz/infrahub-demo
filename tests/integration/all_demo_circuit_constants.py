@@ -383,12 +383,12 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
     },
     # C001's AWS handoff (08_interconnects/03_virtual_circuits/02_aws_prod_handoff.yml): the cage router's sub-interface
     # to the private virtual interface of the Direct Connect transport, authored by hand (a cloud end: no generated
-    # session), carried by the virtual connection on the sub-interface's parent port.
+    # session), carried by the cable on the sub-interface's parent port to the provider's port in the cage.
     "HANDOFF-FR2-AWS-EUC1-PROD": {
         "circuit_type": HANDOFF_TYPE,
         "locations": ("FR2", "eu-central-1"),
         "ends": (("dx-30all-euc1-fr2", "dxcon-fr2.1000"), ("eg-fr201", "Ethernet1/13.1000")),
-        "carrier": ("XC-EQXFR2-AWS-EUC1",),
+        "carrier": (),
         "ip_namespace": "PROD",
     },
 }

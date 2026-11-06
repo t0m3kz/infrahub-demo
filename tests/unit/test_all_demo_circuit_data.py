@@ -170,11 +170,9 @@ def test_no_hand_written_dci_session_or_addressing_is_left() -> None:
     """The generator owns the DCI sessions, their /127s and the interface addressing."""
     assert not [e["name"] for e in _rows("ManagedBGPPeering", _DEMOS / "30_all") if e.get("peering_role") == "dci"]
     # Top-level rows only: the interfaces nested under a DcimCable are its endpoint lookups, not declarations. The ports
-    # declared in the on-ramp are the cloud transports' and the provider's Fabric port of the metro
-    # (02_cloud_provider_edges.yml), nothing on a device of ours.
-    transports = {
-        name(holder) for kind in ("CloudDirectConnect", "TopologyProviderConnect") for holder in declared(kind, _ONRAMP)
-    }
+    # declared in the on-ramp are the provider's own, on its provider connects (02_cloud_provider_edges.yml): a
+    # transport holds only peerings, and nothing is declared on a device of ours.
+    transports = {name(holder) for holder in declared("TopologyProviderConnect", _ONRAMP)}
     ports = [obj for obj in declared("DcimPhysicalInterface", _ONRAMP) if obj.enclosing is None]
     assert ports
     assert {obj.item["device"] for obj in ports} == transports
@@ -385,6 +383,7 @@ def test_a_cloud_handoff_is_authored_end_to_end() -> None:
     addresses = {(e["address"], e.get("ip_namespace")) for e in _rows("IpamIPAddress", _ALL)}
     prefixes = {(e["prefix"], e.get("ip_namespace")) for e in _rows("IpamPrefix", _ALL)}
     ports = {(e["device"], e["name"]) for e in _rows("DcimPhysicalInterface", _ALL)}
+    provider_connects = {name(p) for p in declared("TopologyProviderConnect", _ALL)}
     sessions = _rows("ManagedBGPPeering", _ALL)
     for handoff in cloud_handoffs:
         near = [(device, port) for device, port in handoff["capabilities"] if (device, port) not in peerings]
@@ -396,7 +395,11 @@ def test_a_cloud_handoff_is_authored_end_to_end() -> None:
         assert address["ip_namespace"] == handoff["ip_namespace"], handoff["name"]
         vif = peerings[far[0]]
         assert vif["vlan_id"] == int(match["vlan"]) and far[0][1].endswith(f".{match['vlan']}"), handoff["name"]
-        assert tuple(vif["parent_interface"]) in ports and vif["parent_interface"][0] == far[0][0], handoff["name"]
+        assert tuple(vif["parent_interface"]) in ports, handoff["name"]
+        # the virtual interface rides on a port of its transport or of the provider connect that holds it
+        assert vif["parent_interface"][0] == far[0][0] or vif["parent_interface"][0] in provider_connects, handoff[
+            "name"
+        ]
         assert tuple(vif["peer_ip"]) in addresses, handoff["name"]
         link = ipaddress.ip_network(handoff["link_prefix"][0])
         assert tuple(handoff["link_prefix"]) in prefixes, handoff["name"]
@@ -459,7 +462,7 @@ def test_provider_stubs_deployed_to_a_zone_are_in_the_provider_stubs_group() -> 
 def test_the_fabric_port_is_the_providers_port_of_its_metro_with_one_interface_per_connection() -> None:
     """The Equinix Fabric port is a TopologyProviderConnect of the metro (no deployment, so no stub group), and the
     connection that starts on it ends on an interface of its own that rides on the physical port."""
-    (port,) = declared("TopologyProviderConnect", _ALL)
+    (port,) = [p for p in declared("TopologyProviderConnect", _ALL) if name(p) == "EXT-EQX-FABRIC-FR2"]
     assert name(port) == "EXT-EQX-FABRIC-FR2" and port.item["location"] == "FR2" and port.item["provider"] == "P016"
     interfaces = declared("TopologyProviderInterface", _ALL)
     assert [(i.item["device"], i.item["name"], i.item["parent_interface"]) for i in interfaces] == [
