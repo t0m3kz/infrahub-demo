@@ -27,7 +27,7 @@ order (`infrahubctl object load` of the directory runs them one after the other,
 | `01_dc/01_waw1/`, `01_dc/02_gdn1/` | two more DCs built like DC-KTW1 (`00_site`, `01_physical`, `02_routing`, `03_tenant`): Warsaw `DC-WAW1` (pod `DC-WAW1-7-POD-1`, segment `c900-app-p`, VM `waw1-vm-01`) and Gdansk `DC-GDN1` (pod `DC-GDN1-8-POD-1`, segment `c900-db-p`, VM `gdn1-vm-01`); no internet access, no direct leaf - edge link | `00_common` |
 | `01_dc/03_dci/` | the DC - DC part of the mesh: two dark fibres per pair of DCs (border leaf 1 - 1, 2 - 2), DCI circuits, EVPN sessions | every DC |
 | `01_dc/04_applications/` | the application `c900-web-shop-p`: frontend (KTW1 VMs), backend (WAW1 VM), database (GDN1 VM) | every DC |
-| `02_colo/00_par1/` | `00_site` the metro Paris, colocation `COLO-PAR` / metro `PAR` / ONE zone (cage) `PAR-COLO1`, building and rack; `01_physical` patch panel `PP-PAR-COLO1-01`, the cage edge `par-colo1-edge-01` and the provider's Fabric port `EXT-FABRIC-PAR`, cables; `02_routing` VRF, sub-interfaces of the cloud legs, overlay process | `00_common` |
+| `02_colo/00_par1/` | `00_site` the metro Paris, colocation `COLO-PAR` / metro `PAR` / ONE zone (cage) `PAR-COLO1`, building and rack; `01_physical` patch panel `PP-PAR-COLO1-01`, the cage edge `par-colo1-edge-01` and the provider's Fabric port of the metro `EXT-FABRIC-PAR` (a `TopologyColocationConnect`) with one `TopologyColocationInterface` per Fabric connection (`et-0/0/0.1101`, `.1102`, `.1201`), cables; `02_routing` VRF, sub-interfaces of the cloud legs, overlay process | `00_common` |
 | `02_colo/01_fra1/`, `02_colo/02_ams1/` | two transit cages: Frankfurt `FRA-COLO1` (`COLO-FRA` / `FRA`) and Amsterdam `AMS-COLO1` (`COLO-AMS` / `AMS`), one edge each (`fra-colo1-edge-01`, `ams-colo1-edge-01`), VRF, overlay process; no cloud or SaaS leg | `00_common` |
 | `02_colo/03_dci/` | the rest of the mesh: every DC to every cage (two fibres, one per border leaf; `ktw1-df10007-par1/B` of the first sample among them), every cage to every other cage (one fibre between the edges), DCI circuits, EVPN sessions | `01_dc`, every cage |
 | `03_cloud/` | `00_regions`, `01_network` (accounts, VPC/VNet, IPsec profile, gateways, route tables, attachments), `02_tenant` (footprints, segments, instance, S3 endpoint), `03_transport` (Direct Connect, ExpressRoute, Interconnect, VPN with ports, bundle and peerings nested), `04_circuits` (the carriers end in the cage `PAR-COLO1`, session circuits, BGP sessions of the cage edge) | `02_colo` |
@@ -127,6 +127,8 @@ flowchart LR
   PAR_COLO1 ---|"1x cross connect, 1x virtual connection, 2x handoff"| europe_west3
   PAR_COLO1 ---|"1x cross connect, 1x handoff"| WEBEX_FRANKFURT
   FRA_COLO1 ---|"1x dark fiber, 1x dci"| AMS_COLO1
+  FRA_COLO1 ---|"1x internet"| INTERNET
+  AMS_COLO1 ---|"1x internet"| INTERNET
   C900_OFFICE ---|"1x internet"| ISP_A
   C900_OFFICE -.-|"1x tunnel"| ZSCALER_MUNICH_I
   C901_OFFICE ---|"1x internet"| ISP_A
@@ -517,13 +519,11 @@ uv run python tests/traversal/load_topology.py --branch main
 ```
 
 The SDK loads a directory recursively, the files sorted by name, in order, so the whole directory is ONE
-`infrahubctl object load data/demos/00_full_topology/`. One step remains after the load that an object file cannot
-express: the VLAN row of `ktw1-leaf-02` (function `add_vlan_row`; `ManagedSegmentDeployment` has no HFID, and nesting it a
-second time breaks the uniqueness of the deployment). Hence the small script `tests/traversal/load_topology.py` (the
-data directory holds no code): one directory load and that step. It is idempotent: when the segment `c900-web-p` is
-already on the branch the object load is skipped (the nested `segment_deployments` does not survive a second load) and
-the row is checked again. `invoke check-model` and the test `tests/integration/test_03_full_topology.py` use the same
-script.
+`infrahubctl object load data/demos/00_full_topology/`. The load is idempotent: every object is upserted by its
+human-friendly id, including the realization of a segment in a DC (`ManagedSegmentDeployment`, named by its segment and
+its deployment) and the VLAN row of a switch (named by its device and its VLAN id), so a second load updates what is there.
+The small script `tests/traversal/load_topology.py` (the data directory holds no code) runs that one directory load;
+`invoke check-model` and the test `tests/integration/test_03_full_topology.py` use the same script.
 
 ## Fast model test
 
@@ -632,8 +632,8 @@ deliberately do not go through panels: an extra panel (3 nodes of depth) would l
 with the detour leaf-01 - panel - edge - BL, and the `--via` path set is to stay unambiguous (ambiguity is for novels, not for traces).
 
 Every physical device of ours stands in a rack with its unit: the DC devices as above (DC-WAW1 and DC-GDN1 the same
-layout), the cage `PAR-COLO1-RACK-01` holds the panel (U 42), `par-colo1-edge-01` (U 40) and the Fabric port
-`EXT-FABRIC-PAR` (U 38), the FRA and AMS cages their edge (U 40), the office rack `BCN-OFFICE-RACK-01` the SD-WAN edge
+layout), the cage `PAR-COLO1-RACK-01` holds the panel (U 42) and `par-colo1-edge-01` (U 40), the FRA and AMS cages
+their edge (U 40), the office rack `BCN-OFFICE-RACK-01` the SD-WAN edge
 (U 40), and the same rack holds the campus switches (U 39 to U 36). The Lisbon rack `LIS-OFFICE-RACK-01` holds two edges (U 40, U 39) and the campus (U 38 to U 35). Only the ISP routers (`EXT-ISP-*`) have no rack: they stand at the providers, whose buildings the sample does
 not model (somewhere out there, in a rack nobody documents).
 
@@ -757,7 +757,7 @@ office - Zscaler tunnel.
   A physically consistent path would need additional devices (and a budget). The first hop of the tenant segment is the leaf port with
   the `segments` edge.
 - The cage has ONE panel pair (`PP-PAR-COLO1-01`, jack 1): only the `virtual_connection` carriers from the Fabric port go
-  through it (ExpressRoute and Partner Interconnect, three VLANs on `Ethernet1/1`: 200, 201, 400). The cross-connects
+  through it (ExpressRoute and Partner Interconnect, three VLANs on `Ethernet1/1`: 200, 201, 400), each ending on its own `TopologyColocationInterface` of the Fabric port (S-tags 1101, 1102, 1201, with the bandwidth of the connection). The cross-connects
   (AWS, Dedicated Interconnect, Webex) end directly on edge ports, without a panel. The L1 path cage - cloud through the
   panel is physically consistent: edge - cable - panel - cable - Fabric port - carrier - transport port.
 - The office is one SD-WAN edge: no switches, no LAN and no server (no generator runs; the office is more of a state of mind). The first L1 hop of the office is

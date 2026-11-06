@@ -12,7 +12,9 @@ rules the schema cannot hold are held here, on the circuits as a whole:
 2. both ends are a DcimPhysicalInterface (not a virtual interface, a cloud peering interface or another capability);
    a port of a cloud transport is one (the transport is a device with no role and no deployment, nothing about it is
    judged here); a ``virtual_connection`` may also end on a DcimVirtualInterface (the NIC of a provider-hosted
-   appliance, which has no cable),
+   appliance, which has no cable) or on a TopologyColocationInterface (the end of one provider connection on a
+   colocation port: it is NOT shared, so rule 1 holds for it); an ``internet`` attachment may end on one too (an
+   Internet Access service of the provider's port, towards THE INTERNET),
 3. a circuit has exactly two ends.
 
 THE INTERNET's one interface (``TopologyInternetInterface``) is exempt from rule 1 and allowed by rule 2 BY ITS KIND:
@@ -35,8 +37,11 @@ from utils.limits import CIRCUIT_ENDS
 
 PHYSICAL_PORT_KIND = "DcimPhysicalInterface"
 VIRTUAL_PORT_KIND = "DcimVirtualInterface"
+# The end of one provider connection on a colocation port: one connection per interface, so it is no shared port.
+COLOCATION_PORT_KIND = "TopologyColocationInterface"
 # The one carrier type that is delivered over provider ports and appliance NICs, many to a port.
 VIRTUAL_CONNECTION = "virtual_connection"
+INTERNET_ACCESS = "internet"
 
 
 def _port_label(end: dict[str, Any]) -> str:
@@ -61,7 +66,12 @@ class CheckCarrierCircuitPorts(InfrahubCheck):
             name = circuit.get("circuit_id") or circuit.get("id") or "<unnamed-circuit>"
             ends = [end for end in circuit.get("capabilities") or [] if isinstance(end, dict)]
             shared_ports = circuit.get("circuit_type") == VIRTUAL_CONNECTION
-            allowed = (PHYSICAL_PORT_KIND, VIRTUAL_PORT_KIND) if shared_ports else (PHYSICAL_PORT_KIND,)
+            if shared_ports:
+                allowed = (PHYSICAL_PORT_KIND, VIRTUAL_PORT_KIND, COLOCATION_PORT_KIND)
+            elif circuit.get("circuit_type") == INTERNET_ACCESS:
+                allowed = (PHYSICAL_PORT_KIND, COLOCATION_PORT_KIND)
+            else:
+                allowed = (PHYSICAL_PORT_KIND,)
 
             if len(ends) != CIRCUIT_ENDS:
                 self._error(
@@ -78,7 +88,9 @@ class CheckCarrierCircuitPorts(InfrahubCheck):
                         f"'{_port_label(end)}' is a {end.get('typename')}.",
                     )
                     continue
-                if shared_ports or end.get("typename") == INTERNET_INTERFACE_KIND:
+                if end.get("typename") == INTERNET_INTERFACE_KIND or (
+                    shared_ports and end.get("typename") != COLOCATION_PORT_KIND
+                ):
                     continue
                 port_circuits = circuits_by_port.setdefault(str(end.get("id")), (_port_label(end), []))[1]
                 if name not in port_circuits:

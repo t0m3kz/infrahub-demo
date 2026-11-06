@@ -92,6 +92,9 @@ cases:
       public_sides:
         - {endpoint: s3-public, prefix: 192.0.2.0/24, kind: cloud, transport: s3-c900-euc1-pub, port: pub-1, carrier: PUB-16509}  # yamllint disable-line rule:line-length
         - {endpoint: webex-public, prefix: 203.0.113.0/24, kind: saas, transport: webex-c900-fra-pub, port: pub-1, carrier: PUB-13445}  # yamllint disable-line rule:line-length
+      # the cages on an Equinix Internet Access service: their carrier runs from the connection interface of the
+      # provider's Fabric port straight to the bus, no ISP router on the way
+      fabric_accesses: [EQX-5A1F2C30, EQX-8D3B6E41]
       # L3 of the first ISP: the eBGP session on the two physical ports of the access carrier
       l3: {isp_device: EXT-ISP-A-PE1, edge_port: Ethernet1/2, isp_port: et-0/0/0}
     # THE THREE SITES reach THE INTERNET in L1, each through its own access carrier (and then the uplink of the ISP
@@ -105,6 +108,8 @@ cases:
       sites:
         - {site: DC, node: "ManagedVxlanSegment:c900-web-p", carriers: [[ISPA-48211, UPL-48001], [ISPB-77301, UPL-77001]]}  # yamllint disable-line rule:line-length
         - {site: colocation, node: "DcimPhysicalDevice:par-colo1-edge-01", carriers: [[ISPB-77302, UPL-77001]]}
+        - {site: colocation-fra, node: "DcimPhysicalDevice:fra-colo1-edge-01", carriers: [[EQX-5A1F2C30]]}
+        - {site: colocation-ams, node: "DcimPhysicalDevice:ams-colo1-edge-01", carriers: [[EQX-8D3B6E41]]}
         - {site: office, node: "DcimPhysicalDevice:bcn-office-edge-01", carriers: [[ISPA-48212, UPL-48001]]}
         - {site: office-lisbon-1, node: "DcimPhysicalDevice:lis-office-edge-01", carriers: [[ISPA-48213, UPL-48001]]}
         - {site: office-lisbon-2, node: "DcimPhysicalDevice:lis-office-edge-02", carriers: [[ISPB-77303, UPL-77001]]}
@@ -157,6 +162,7 @@ cases:
         - {src: "DcimVirtualDevice:gdn1-vm-01", dst: "CloudNetworkSegment:c900-subnet-p", via: "DcimPhysicalDevice:par-colo1-edge-01"}
     layout:
       zone: PAR-COLO1
+      metro: PAR
       colo_edge: par-colo1-edge-01
       fabric_port_device: EXT-FABRIC-PAR
       offices:

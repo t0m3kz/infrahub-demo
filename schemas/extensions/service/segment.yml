@@ -97,6 +97,11 @@ nodes:
     icon: "carbon:network-overlay"
     include_in_menu: false
     display_label: "{{ segment__customer_name__value }} @ {{ deployment__name__value }}"  # yamllint disable-line rule:line-length
+    # Named by its two parents, so an object file can upsert it (and hang a VLAN row under it) without nesting it under
+    # the segment, where a second load could only create it again and break the uniqueness below.
+    human_friendly_id:
+      - segment__name__value
+      - deployment__name__value
     uniqueness_constraints:
       - [segment, deployment]
     attributes:
@@ -179,6 +184,10 @@ nodes:
     icon: "carbon:network-overlay"
     include_in_menu: false
     display_label: "vlan {{ vlan_id__value }} @ {{ device__name__value }} (VNI {{ segment_deployment__vni__value }})"  # yamllint disable-line rule:line-length
+    # A VLAN id is unique on a switch, so the pair names the row: an object file upserts it (a second load updates it).
+    human_friendly_id:
+      - device__name__value
+      - vlan_id__value
     uniqueness_constraints:
       - [segment_deployment, device]
       - [device, vlan_id__value]

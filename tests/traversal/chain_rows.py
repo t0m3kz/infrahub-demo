@@ -6,6 +6,8 @@ from __future__ import annotations
 
 from collections import defaultdict
 
+from infrahub_sdk.graph_traversal import PathNode
+
 from tests.traversal.walks import Row
 from utils.path_trace import MAX_DEPTH, Leg, chain, label, render
 
@@ -142,11 +144,20 @@ def internet_golden(cfg: dict, legs: dict[tuple[str, str], Leg]) -> str:
     )
 
 
+def _provider_hop(node: PathNode, isp_routers: set[str]) -> bool:
+    """The chain crosses the provider's side: an ISP router, or the connection interface of the provider's port of a
+    colocation metro (an Internet Access service has no router of ours or of an ISP on its way)."""
+    if node.kind == "TopologyColocationInterface":
+        return True
+    return node.kind == "DcimPhysicalDevice" and "/".join(node.hfid) in isp_routers
+
+
 def site_internet_rows(cfg: dict, legs: dict[str, Leg]) -> list[Row]:
     """Every site reaches THE INTERNET in L1: the equal-cost chains end on the INTERNET object (the uplink carrier lists it
-    as a location, so the shortest chain does not go through its `bus` interface), cross an ISP router, and their
-    carriers are exactly the site's own access then that router's uplink (by circuit_id, one pair per ISP the site is
-    connected to)."""
+    as a location, so the shortest chain does not go through its `bus` interface), cross an ISP router (or, for a cage,
+    the connection interface of the provider's port), and their carriers are exactly the site's own access then that
+    router's uplink (by circuit_id, one pair per ISP the site is connected to; a cage on an Internet Access service has
+    the one carrier)."""
     rows: list[Row] = []
     isp_routers = set(cfg["isp_routers"])
     for site in cfg["sites"]:
@@ -155,7 +166,7 @@ def site_internet_rows(cfg: dict, legs: dict[str, Leg]) -> list[Row]:
         carriers = sorted([n.hfid[0] for n in p if n.kind == CARRIER and n.hfid] for p in best)
         want = sorted(site["carriers"])
         ends = [bool(p) and label(p[-1]) == cfg["internet"] for p in best]
-        isp = [any(n.kind == "DcimPhysicalDevice" and "/".join(n.hfid) in isp_routers for n in p) for p in best]
+        isp = [any(_provider_hop(n, isp_routers) for n in p) for p in best]
         ok = bool(leg and leg.complete and best) and carriers == want and all(ends) and all(isp)
         title = f"internet: the {site['site']} reaches {cfg['internet'].split(':', 1)[1]} in L1 through its own access"
         rows.append((title, ok, "\n".join(render(leg)) if leg else "no trace"))

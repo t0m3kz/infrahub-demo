@@ -11,7 +11,6 @@ uv run invoke check-model --case full_topology
 uv run invoke check-model --update-golden      # write the golden files tests/traversal/golden/*.txt
 uv run invoke check-model --keep-branch        # keep the tv-* branch for inspection
 uv run invoke check-model --rebuild            # clean the test containers and build the stack from scratch
-uv run invoke check-model --force-load         # load the data even though it is already on main (usually fails)
 uv run invoke check-model --reach              # only the far-end matrix: ONE shortest path per pair, a minute or two
 uv run invoke check-model --pair "lis|office"  # only the pairs whose 'src dst golden' matches the regular expression
 uv run invoke check-model --jobs 1             # pairs traced one at a time (default 2, the rows keep the order of cases.yml)
@@ -36,10 +35,9 @@ search. On failure the PASS/FAIL table shows the tracer result or the difference
 ## Data directories, pod, internet, pairs
 
 `data:` is the directory of the sample (`data/demos/00_full_topology`: the numbered folders are the load order, one
-`infrahubctl object load`); `tests/traversal/load_topology.py` loads it (`async apply(client, branch, force)`; command:
-`uv run python tests/traversal/load_topology.py --branch main`): it loads the objects (and skips when the sentinel
-segment is already on the branch, for example inherited from `main` after `test_03`) and runs the after-load step (the
-VLAN row of the second leaf of each pod). `tests/integration/test_03_full_topology.py` runs the same assertions on the `main` of the
+`infrahubctl object load`); `tests/traversal/load_topology.py` loads it (`async apply(client, branch)`; command:
+`uv run python tests/traversal/load_topology.py --branch main`): the load is idempotent, so a branch that inherited the data from
+`main` after `test_03` loads again without a skip. `tests/integration/test_03_full_topology.py` runs the same assertions on the `main` of the
 stack (`assert_case` from `check_model.py`, part of `invoke test-integration-fast`). Case keys: `pods` (one entry per DC: the
 MLAG, the dual-homed bond, the deployment of the leaves, spine and server to the pod and of the border leaves to the DC,
 VLAN rows from a data read; the number of distinct L1 device paths server -> edge, the overlay sessions (`leaves_to_edge`:

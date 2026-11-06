@@ -1,0 +1,17 @@
+---
+# The end of the Internet Access service of the cage on the Fabric port of the metro FRA: one
+# TopologyColocationInterface per connection, riding on the physical port (`parent_interface`) and named
+# <port>.<S-tag>. It carries the S-tag (`vlan_id`) and the bandwidth, and the internet carrier
+# (06_internet/02_circuits/01_carrier_circuits.yml) ends on it and on THE INTERNET.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyColocationInterface
+  data:
+    - device: EXT-FABRIC-FRA
+      name: et-0/0/0.1301
+      description: Equinix Internet Access of the FRA-COLO1 cage (5a1f2c30)
+      status: active
+      parent_interface: ["EXT-FABRIC-FRA", "et-0/0/0"]
+      vlan_id: 1301
+      bandwidth: 10000

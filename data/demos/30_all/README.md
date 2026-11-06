@@ -212,10 +212,12 @@ interlink, and their ports are virtual NICs (`DcimVirtualInterface`). The provid
 file that names it. `AM` is a Multi-Site site like the other metros, so its edges also get a VTEP loopback and an
 overlay `ManagedBGP` process in the metro's site AS (`evpn_rt_as`).
 
-The Fabric virtual connection `FABRIC-FR2-AMNE01` (`01_colo_onramp/03_carrier_circuits.yml`) joins the cage to the NE router: it is a
-carrier of type `virtual_connection`, Equinix runs it inside its own platform and the NE end is the virtual NIC of a provider-hosted
-appliance, so it needs no port of ours. The cable from `eg-fr201` `Ethernet1/1` to the Fabric port stub `EXT-EQX-FABRIC-FR2`
-(`01_colo_onramp/05_cage_cabling.yml`) is the physical patch under the same port.
+The Fabric virtual connection `FABRIC-FR2-AMNE01` (`01_colo_onramp/03_carrier_circuits.yml`) joins the Fabric port of the metro FR to the NE
+router: it is a carrier of type `virtual_connection`, Equinix runs it inside its own platform and the NE end is the virtual NIC of a
+provider-hosted appliance. Its Fabric end is the `TopologyColocationInterface` `et-0/0/0.1301` of `EXT-EQX-FABRIC-FR2`
+(`01_colo_onramp/02a_fabric_interfaces.yml`), the provider's port of the metro (a `TopologyColocationConnect`, `02_cloud_provider_edges.yml`):
+one interface per connection, with its S-tag and bandwidth. The cable from `eg-fr201` `Ethernet1/1` to `et-0/0/0` of that port
+(`01_colo_onramp/05_cage_cabling.yml`) is the physical patch under it.
 
 ### Cloud and SaaS Connections
 

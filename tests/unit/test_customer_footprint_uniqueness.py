@@ -40,6 +40,8 @@ def test_cloud_footprint_is_unique_per_parent_and_per_account_without_an_environ
     assert _entries()["TopologyCustomerCloud"]["uniqueness_constraints"] == [["name__value", "parent"], ["account"]]
 
 
-def test_office_is_unique_on_its_owner_derived_name() -> None:
-    """One office per customer: the name embeds the owner's org_id, so the name alone is the constraint."""
-    assert _entries()["TopologyCustomerOffice"]["uniqueness_constraints"] == [["name__value"]]
+def test_office_is_unique_on_its_name_parent_and_owner() -> None:
+    """One office per customer: the name embeds the owner's org_id but is computed once the office exists, so the
+    parent label and the owner (which an object file names) are in the constraint, as the parent and the environment
+    are in the other footprints': a second load finds the office instead of creating it again."""
+    assert _entries()["TopologyCustomerOffice"]["uniqueness_constraints"] == [["name__value", "parent", "owner"]]

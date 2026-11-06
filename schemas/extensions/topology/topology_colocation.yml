@@ -293,6 +293,45 @@ nodes:
         description: The metro (the region) the port is in; one per metro.
         order_weight: 1400
 
+  # The end of ONE provider connection on a colocation port, the colocation counterpart of CloudPeeringInterface: it
+  # rides on a port of the same ColocationConnect (`parent_interface`), carries the Fabric S-tag, C-tag and the
+  # connection's bandwidth, and the virtual_connection carrier circuit ends on it, so the port is no longer shared
+  # between connections. L2 only: no address, no routing (the cloud peering holds those).
+  - name: ColocationInterface
+    namespace: Topology
+    label: Colocation Interface
+    icon: mdi:ethernet
+    description: "The end of one provider connection on a colocation port: S-tag, C-tag and bandwidth"
+    include_in_menu: false
+    inherit_from:
+      - DcimInterface
+      - DcimSubInterface
+    attributes:
+      - name: bandwidth
+        kind: Number
+        label: "Bandwidth (Mbps)"
+        optional: true
+        order_weight: 2000
+        description: "The bandwidth of the connection that ends here, in megabits per second"
+      - name: vlan_id
+        kind: Number
+        label: "VLAN ID (S-tag)"
+        optional: true
+        order_weight: 2010
+        description: "The outer VLAN of the connection on the port (Fabric vlan_s_tag, Megaport ordered_vlan)"
+        parameters:
+          min_value: 1
+          max_value: 4094
+      - name: inner_vlan_id
+        kind: Number
+        label: "Inner VLAN ID (C-tag)"
+        optional: true
+        order_weight: 2020
+        description: "The inner VLAN of a QinQ connection (Fabric vlan_c_tag)"
+        parameters:
+          min_value: 1
+          max_value: 4094
+
   # The envelope of a metro and of a zone or virtual colocation, the colocation
   # counterparts of TopologyTemplateDC / TopologyTemplatePod (topology_dc.yml).
   # Only the maxima live here: every pool a colocation owns is sized for its

@@ -118,3 +118,22 @@ def test_site_internet_rows_need_the_site_access_the_uplink_and_the_object() -> 
     assert chain_rows.site_internet_rows(cfg, {"office": _leg("l1", other)})[0][1] is False
     assert chain_rows.site_internet_rows(cfg, {"office": _leg("l1", path[:4])})[0][1] is False  # stops at the uplink
     assert chain_rows.site_internet_rows(cfg, {})[0][1] is False
+
+
+def test_a_cage_on_an_internet_access_service_crosses_the_connection_interface() -> None:
+    """The cage edge is cabled to the provider's port; the service ends on THE INTERNET: one carrier, no ISP router."""
+    cfg = {
+        "internet": "TopologyInternet:INTERNET",
+        "isp_routers": ["pe"],
+        "sites": [{"site": "colocation", "carriers": [["EQX-INET"]]}],
+    }
+    path = [
+        _n("DcimPhysicalDevice", "edge"),
+        _n("DcimCable", "CBL"),
+        _n("TopologyColocationInterface", "EXT-FABRIC-FRA/et-0/0/0.1301"),
+        _n("TopologyCarrierCircuit", "EQX-INET"),
+        _n("TopologyInternet", "INTERNET"),
+    ]
+    assert chain_rows.site_internet_rows(cfg, {"colocation": _leg("l1", path)})[0][1] is True
+    no_service = [n for n in path if n.kind != "TopologyColocationInterface"]
+    assert chain_rows.site_internet_rows(cfg, {"colocation": _leg("l1", no_service)})[0][1] is False

@@ -170,8 +170,13 @@ def test_no_hand_written_dci_session_or_addressing_is_left() -> None:
     """The generator owns the DCI sessions, their /127s and the interface addressing."""
     assert not [e["name"] for e in _rows("ManagedBGPPeering", _DEMOS / "30_all") if e.get("peering_role") == "dci"]
     # Top-level rows only: the interfaces nested under a DcimCable are its endpoint lookups, not declarations. The ports
-    # declared in the on-ramp are the cloud transports' (02_cloud_provider_edges.yml), nothing on a device of ours.
-    transports = {name(transport) for transport in declared("CloudDirectConnect", _ONRAMP)}
+    # declared in the on-ramp are the cloud transports' and the provider's Fabric port of the metro
+    # (02_cloud_provider_edges.yml), nothing on a device of ours.
+    transports = {
+        name(holder)
+        for kind in ("CloudDirectConnect", "TopologyColocationConnect")
+        for holder in declared(kind, _ONRAMP)
+    }
     ports = [obj for obj in declared("DcimPhysicalInterface", _ONRAMP) if obj.enclosing is None]
     assert ports
     assert {obj.item["device"] for obj in ports} == transports
@@ -449,5 +454,16 @@ def test_provider_stubs_deployed_to_a_zone_are_in_the_provider_stubs_group() -> 
         for device in declared("DcimPhysicalDevice", _ALL)
         if name(device).startswith("EXT-") and device.item.get("deployment") in zones
     ]
-    assert {name(device) for device in stubs} == {"EXT-EQX-FABRIC-FR2", "EXT-MEGAPORT-MCR1"}
+    assert {name(device) for device in stubs} == {"EXT-MEGAPORT-MCR1"}
     assert [name(device) for device in stubs if "provider_stubs" not in device.groups()] == []
+
+
+def test_the_fabric_port_is_the_providers_port_of_its_metro_with_one_interface_per_connection() -> None:
+    """The Equinix Fabric port is a TopologyColocationConnect of the metro (no deployment, so no stub group), and the
+    connection that starts on it ends on an interface of its own that rides on the physical port."""
+    (port,) = declared("TopologyColocationConnect", _ALL)
+    assert name(port) == "EXT-EQX-FABRIC-FR2" and port.item["metro"] == "FR" and port.item["provider"] == "P016"
+    interfaces = declared("TopologyColocationInterface", _ALL)
+    assert [(i.item["device"], i.item["name"], i.item["parent_interface"]) for i in interfaces] == [
+        ("EXT-EQX-FABRIC-FR2", "et-0/0/0.1301", ["EXT-EQX-FABRIC-FR2", "et-0/0/0"])
+    ]

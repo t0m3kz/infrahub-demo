@@ -1,7 +1,8 @@
 ---
 # The cage edge of FRA-COLO1 (template N9K-C9316D-GX_EDGE), deployed to the zone. Its ports are DCI only:
 # 1/9-14 two per DC (one per border leaf), 1/15-16 one per other cage; the ports outside the template's dci range
-# (1/9-12) are nested with role dci.
+# (1/9-12) are nested with role dci. Ethernet1/1 (partner) is cabled to the Fabric port of the metro FRA, the Internet
+# Access service of the cage (02_cables.yml, 03_fabric_interfaces.yml).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -35,3 +36,26 @@ spec:
             name: Ethernet1/16
             role: dci
             description: "DCI: dark fibre to AMS1"
+---
+# The provider's port of the metro: ONE TopologyColocationConnect per metro, a slim device of the provider (no role,
+# platform or template) that holds the physical Fabric port. The port is cabled to fra-colo1-edge-01 Ethernet1/1
+# (02_cables.yml); the Internet Access service that starts on it has an interface of its own
+# (03_fabric_interfaces.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyColocationConnect
+  data:
+    - name: EXT-FABRIC-FRA
+      description: Equinix Fabric port of the metro FRA, in the FRA-COLO1 cage (cabled to fra-colo1-edge-01 Ethernet1/1)
+      status: active
+      provider: P016
+      metro: FRA
+      bandwidth: 10000
+      cloud_id: 9f3c7a52-1d4e-4b8a-a6c0-3e5b7d9f1a21
+      interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            name: et-0/0/0
+            description: Fabric port 10G, cross-connected to the cage edge
+            status: active

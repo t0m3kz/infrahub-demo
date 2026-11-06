@@ -39,6 +39,11 @@ _PHYSICAL_READS = [
     "capabilities.device.saas_region.id",
     "capabilities.device.saas_region.__typename",
     "capabilities.device.saas_region.name",
+    # the provider's port of a colocation metro is placed by its metro; a zone of that metro is its location
+    "capabilities.device.metro.id",
+    "capabilities.device.metro.__typename",
+    "capabilities.device.metro.name",
+    "locations.parent.id",
 ]
 
 # What it reads from the end ports of a virtual circuit (the shared VirtualPort fragment): the port, the physical
