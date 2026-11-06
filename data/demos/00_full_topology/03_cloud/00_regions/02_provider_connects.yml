@@ -1,0 +1,43 @@
+---
+# The private ports of the providers in their own regions: a TopologyProviderConnect each, placed by its `location`
+# (the region), distinct from the public side of the same region (06_internet/01_providers), which faces THE INTERNET.
+# These are the far ends of the Equinix Fabric virtual connections from the cage Fabric port
+# (03_cloud/04_circuits/00_carrier_circuits.yml); the peerings of the transports ride on them
+# (03_cloud/03_transport/00_direct_connects.yml). The ports that are physical cross-connects of the cage (AWS Direct
+# Connect, Google Dedicated Interconnect, Webex) are the provider's devices in the cage: 02_colo/00_par1.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyProviderConnect
+  data:
+    - name: EXT-AZURE-ER-WEU
+      description: Microsoft Enterprise Edge of westeurope for ExpressRoute (primary and secondary link)
+      status: active
+      provider: P005
+      location: westeurope
+      bandwidth: 1000
+      external_id: msee-weu-1
+      interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            name: msee-pri
+            description: "Microsoft Enterprise Edge, primary link"
+            status: active
+        - kind: DcimPhysicalInterface
+          data:
+            name: msee-sec
+            description: "Microsoft Enterprise Edge, secondary link"
+            status: active
+    - name: EXT-GCP-PI-EUW3
+      description: Google Partner Interconnect edge of europe-west3 (the partner port of the attachment)
+      status: active
+      provider: P006
+      location: europe-west3
+      bandwidth: 1000
+      external_id: ic-euw3-pi-1
+      interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            name: ic-port-1
+            description: Partner port of the Interconnect attachment
+            status: active

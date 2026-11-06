@@ -79,16 +79,6 @@ spec:
       account: c900-azure-prod
       region: westeurope
       interfaces:
-        - kind: DcimPhysicalInterface
-          data:
-            name: msee-pri
-            description: "Microsoft Enterprise Edge, primary link"
-            status: active
-        - kind: DcimPhysicalInterface
-          data:
-            name: msee-sec
-            description: "Microsoft Enterprise Edge, secondary link"
-            status: active
         - kind: CloudPeeringInterface
           data:
             name: er-c900-weu-pri
@@ -99,7 +89,7 @@ spec:
             vlan_id: 200
             mtu: 1500
             bfd: true
-            parent_interface: ["er-c900-weu", "msee-pri"]
+            parent_interface: ["EXT-AZURE-ER-WEU", "msee-pri"]
             gateway: ergw-c900-weu
             peer_ip:
               data:
@@ -117,7 +107,7 @@ spec:
             vlan_id: 201
             mtu: 1500
             bfd: true
-            parent_interface: ["er-c900-weu", "msee-sec"]
+            parent_interface: ["EXT-AZURE-ER-WEU", "msee-sec"]
             gateway: ergw-c900-weu
             peer_ip:
               data:
@@ -135,11 +125,6 @@ spec:
       partner_account: partner-fabric-gcp
       region: europe-west3
       interfaces:
-        - kind: DcimPhysicalInterface
-          data:
-            name: ic-port-1
-            description: Partner port of the Interconnect attachment
-            status: active
         - kind: CloudPeeringInterface
           data:
             name: gcp-c900-vlan-att-1
@@ -150,7 +135,7 @@ spec:
             vlan_id: 400
             mtu: 1460
             bfd: true
-            parent_interface: ["ic-c900-fra-1", "ic-port-1"]
+            parent_interface: ["EXT-GCP-PI-EUW3", "ic-port-1"]
             gateway: cr-c900-euw3
             peer_ip:
               data:

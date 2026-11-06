@@ -299,11 +299,13 @@ def layout_rows(d: dict, cfg: dict) -> list[Row]:
     zone = ("TopologyColocationZone", cfg["zone"])
     transports = {val(t, "name") for t in [*d["dx"], *d["vpn"]]}
     legs = [c for c in d["carrier"] if val(c, "circuit_type") in ("cross_connect", "virtual_connection")]
-    cloud = [c for c in legs if transports & set(_ends(c))]
+    # a cloud or SaaS end is a transport or a provider connect that is not in the cage (a region, a SaaS region)
+    away = {val(x, "name") for x in d["cport"] if place.get(val(x, "name")) != zone}
+    cloud = [c for c in legs if (transports | away) & set(_ends(c))]
     stray = sorted(
         val(c, "circuit_id")
         for c in cloud
-        if not any(place.get(name) == zone for name in _ends(c) if name not in transports)
+        if not any(place.get(name) == zone for name in _ends(c) if name not in transports | away)
     )
     rows: list[Row] = [
         (

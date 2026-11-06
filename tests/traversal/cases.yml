@@ -329,7 +329,7 @@ cases:
         golden: full_topology__colo__er.txt
         circuit_types: {l1: [virtual_connection], l3: [handoff]}
         transport_kinds:
-          er-c900-weu: [port, vif]
+          er-c900-weu: [vif]
       # the application across the DCs: frontend (DC-KTW1) -> backend (DC-WAW1) -> database (DC-GDN1)
       - src: DcimVirtualDevice:ktw1-vm-01
         dst: DcimVirtualDevice:waw1-vm-01

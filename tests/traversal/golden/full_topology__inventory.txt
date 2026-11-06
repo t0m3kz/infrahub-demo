@@ -46,8 +46,8 @@
   ktw1-rke2-cl01 [rke2] sdn ktw1-cilium control plane ['ktw1-k8s-cp-01@ktw1-srv-01', 'ktw1-k8s-cp-02@ktw1-srv-02', 'ktw1-k8s-cp-03@ktw1-srv-03'] workers ['ktw1-k8s-wk-01@ktw1-srv-01', 'ktw1-k8s-wk-02@ktw1-srv-02'] node segments ['c900-web-p']
 # transports
   dx-c900-fra-lag: {'port': [], 'lag': [], 'vif': ['lag1.1000', 'lag1.1100']}
-  er-c900-weu: {'port': ['msee-pri', 'msee-sec'], 'lag': [], 'vif': ['er-c900-weu-pri', 'er-c900-weu-sec']}
-  ic-c900-fra-1: {'port': ['ic-port-1'], 'lag': [], 'vif': ['gcp-c900-vlan-att-1']}
+  er-c900-weu: {'port': [], 'lag': [], 'vif': ['er-c900-weu-pri', 'er-c900-weu-sec']}
+  ic-c900-fra-1: {'port': [], 'lag': [], 'vif': ['gcp-c900-vlan-att-1']}
   ic-ded-c900-fra: {'port': [], 'lag': [], 'vif': ['gcp-c900-ded-1']}
   vpn-c900-aws-euc1: {'port': ['pub-1'], 'lag': [], 'vif': ['Tunnel1', 'Tunnel2']}
   webex-c900-fra-xc: {'port': [], 'lag': [], 'vif': ['webex-c900-fra']}

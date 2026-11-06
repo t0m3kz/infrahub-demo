@@ -179,11 +179,13 @@ flowchart LR
     S3["EXT-AWS-EUC1"]
   end
   subgraph AZ["Azure"]
+    EAZ["EXT-AZURE-ER-WEU"]
     ER["er-c900-weu"]
     VNET["vnet-c900-weu"]
   end
   subgraph GCP["GCP"]
     GDED["ic-ded-c900-fra"]
+    EGP["EXT-GCP-PI-EUW3"]
     GIC["ic-c900-fra-1"]
   end
   subgraph SAAS["SaaS"]
@@ -214,8 +216,10 @@ flowchart LR
   CW -.-|"VLAN peering"| WX
   CE ---|"Ethernet1/1"| CP
   CP --- CF
-  CF ---|"par1-eqx-7c1e9a2b-azure-90000000-0000-0000-0000-000000000002, par1-eqx-7c1e9a2c-azure-90000000-0000-0000-0000-000000000002"| ER
-  CF ---|"par1-eqx-3f4d8b10-gcp-c900-prod-project"| GIC
+  CF ---|"par1-eqx-7c1e9a2b-azure-90000000-0000-0000-0000-000000000002, par1-eqx-7c1e9a2c-azure-90000000-0000-0000-0000-000000000002"| EAZ
+  CF ---|"par1-eqx-3f4d8b10-gcp-c900-prod-project"| EGP
+  EAZ -.-|"msee-pri/sec: peerings"| ER
+  EGP -.-|"ic-port-1: peering"| GIC
   DX -.-|"par1-dxvif-fgt1a2b3-aws-900000000001"| DXGW
   DXGW --- TGW
   TGW --- VPC
@@ -408,12 +412,15 @@ the network). `Gateway.announced_prefixes` does not exist: allowed prefixes are 
 `OrganizationProvider.connection_profile` (aws, azure, gcp, oci, ibm, alibaba, ...) says which blueprint applies. A
 cell: the shared element, with the operator's word in parentheses (a translation table from marketing to engineering).
 
+Whatever the operator, the same rule holds: a port or bundle is the provider's own and sits on a `TopologyProviderConnect` where
+it physically is (the cage for a cross-connect, the region for a Fabric connection); the transport holds only the peerings.
+
 | Operator word | Shared element |
 | ------------- | -------------- |
 | AWS dedicated connection / ExpressRoute Direct port / Dedicated Interconnect / OCI cross-connect / IBM Dedicated / Alibaba physical connection | `CloudDirectConnect` `physical`: the port is the provider's own, a `TopologyProviderConnect` in the cage, cabled to ours |
 | AWS LAG / ExpressRoute Direct pair / OCI cross-connect group / Interconnect bundle | the ports (`DcimPhysicalInterface`) and the bundle (`DcimLAGInterface`, `member_interfaces`) are the provider's, on its `TopologyProviderConnect` in the cage, cabled to ours; ONE `CloudDirectConnect` `physical` holds the peerings, which ride on the bundle |
 | AWS hosted connection / ExpressRoute circuit (provider) / Partner Interconnect attachment / OCI VC (partner) / IBM Connect / Alibaba hosted | `CloudDirectConnect` `logical` + `partner_account`, `service_key` |
-| ExpressRoute circuit on Direct, OCI VC on its own CCG, Dedicated Interconnect attachment | `CloudDirectConnect` `logical` + `rides_on` the transport that holds the port or bundle; its own pair of ports (`msee-pri`, `msee-sec`) for the carriers |
+| ExpressRoute circuit on Direct, OCI VC on its own CCG, Dedicated Interconnect attachment | `CloudDirectConnect` `logical` + `rides_on` the transport that holds the port or bundle; the ports (`msee-pri`, `msee-sec`) are the provider's own, on a `TopologyProviderConnect` of the region, the far ends of the Fabric connections |
 | Dedicated Interconnect / OCI FastConnect: a routed port without a VLAN | `CloudDirectConnect` `physical` with a port; the peering WITHOUT `vlan_id`, `parent_interface` = the port; our end is a PHYSICAL port with an address |
 | Equinix Fabric / Megaport VXC | a `virtual_connection` carrier; the end in the cloud = a `logical` transport + `partner_account`; MCR / Network Edge = `CloudNetworkAppliance` |
 | AWS VIF private / transit / public, ExpressRoute private / Microsoft peering, GCP VLAN attachment, OCI virtual circuit, IBM, Alibaba VBR | `CloudPeeringInterface` `scope` private or public (+ `vlan_id`, `peer_ip`, `peer_asn`, `auth`) |
@@ -441,8 +448,8 @@ cell: the shared element, with the operator's word in parentheses (a translation
 | ---- | ---- | ------- |
 | `TopologyCarrierCircuit` | physics: wire, cross-connect, virtual connection, internet; the ends are `capabilities` (our port and the transport's port) | `ktw1-df10007-par1`, `par1-eqx-7c1e9a2b-azure-90000000-0000-0000-0000-000000000002`, `ktw1-ispa-48211-isp-a` |
 | `TopologySessionCircuit` | virtual: handoff / vpn / tunnel; the ends are `capabilities` (our sub-interface or routed port and the transport's peering) | `par1-dxvif-fgt1a2b3-aws-900000000001`, `par1-ded1-gcp-c900-prod-project` |
-| `CloudDirectConnect` | transport-device: ports, bundle (LAG) and peerings; logical: `service_key`, `partner_account`, `rides_on` | `dx-c900-fra-lag`, `er-c900-weu`, `ic-c900-fra-1`, `ic-ded-c900-fra`, `webex-c900-fra-xc` |
-| `DcimPhysicalInterface`, `DcimLAGInterface` | ports and bundle of a provider connect (`dxcon-1a`, `dxcon-1b`, `lag1`) or of a transport (`msee-pri`, `ic-dedicated-port`) | `dxcon-1a`, `dxcon-1b`, `lag1`, `msee-pri`, `ic-dedicated-port` |
+| `CloudDirectConnect` | transport-device: the peerings (the ports and the bundle are the provider's, on a `TopologyProviderConnect`); logical: `service_key`, `partner_account`, `rides_on` | `dx-c900-fra-lag`, `er-c900-weu`, `ic-c900-fra-1`, `ic-ded-c900-fra`, `webex-c900-fra-xc` |
+| `DcimPhysicalInterface`, `DcimLAGInterface` | ports and bundle of a provider connect, never of a transport (`dxcon-1a`, `dxcon-1b`, `lag1`, `msee-pri`, `ic-dedicated-port`, `ic-port-1`) | `dxcon-1a`, `dxcon-1b`, `lag1`, `msee-pri`, `ic-dedicated-port` |
 | `SecurityIPsecProfile` | IKE/ESP parameters of a tunnel, one profile for many tunnels | `IPSEC-AES256-SHA256-DH14` |
 | `CloudVPNConnection` | a transport without ports: holds the tunnels (interfaces); SaaS: `saas_region` and `owner` | `vpn-c900-aws-euc1`, `zscaler-c900-muc` |
 | `CloudPeeringInterface` | the BGP termination in the cloud, an interface of the transport | `lag1.1000`, `er-c900-weu-pri`, `gcp-c900-vlan-att-1`, `gcp-c900-ded-1`, `Tunnel1`, `webex-c900-fra` |
@@ -500,7 +507,7 @@ Full = in the model and in the data; partial = a field exists but simplified; no
 | AWS DX hosted (partner account), LAG | full | `partner_account` (GCP Partner Interconnect); LAG: the ports `dxcon-1a/1b` and bundle `lag1` of `EXT-AWS-DX-PAR`, two cables `XC21450001/2` to the cage edge, one transport `dx-c900-fra-lag` whose VIFs ride on the bundle |
 | GCP Dedicated Interconnect: a routed port without a VLAN | full | `ic-ded-c900-fra`, port `ic-dedicated-port`, peering `gcp-c900-ded-1` without `vlan_id`; our end is the physical `Ethernet1/5` of the cage edge with an address, circuit `par1-ded1-gcp-c900-prod-project` |
 | AWS public VIF | partial | `scope: public` and `advertised_prefixes` (US -> cloud) are in the model, no example |
-| Azure ExpressRoute: a circuit, two links, two /30 peerings, ExpressRoute Gateway in the VNet | full | one `er-c900-weu` with ports `msee-pri/-sec` (carrier ends), `er-c900-weu-pri/-sec`, `ergw-c900-weu` + `ergwa-c900-weu`; the spoke through `peers` |
+| Azure ExpressRoute: a circuit, two links, two /30 peerings, ExpressRoute Gateway in the VNet | full | one `er-c900-weu` whose peerings `er-c900-weu-pri/-sec` ride on the ports `msee-pri/-sec` of `EXT-AZURE-ER-WEU` (the carrier ends), `ergw-c900-weu` + `ergwa-c900-weu`; the spoke through `peers` |
 | Azure Microsoft peering | partial | `scope: public` + `advertised_prefixes`, no example; route filters not modelled |
 | GCP Interconnect: VLAN attachment -> Cloud Router -> VPC | full | Partner Interconnect, `gcp-c900-vlan-att-1`, `cr-c900-euw3` |
 | AWS S2S VPN: customer gateway, two tunnels with BGP, the TGW side | full | `cgw-c900-ktw1` (`customer`), two tunnels; the provider side is `CloudVPNConnection.gateway` (a hub here; VGW has no example) |
