@@ -1,7 +1,8 @@
 ---
-# The Webex cross-connect, placed by a SaaS region and an owner (no account). Its port is the far end of the carrier
-# circuit par1-xc21450004-webex-fra and its peering (scope saas, a VLAN peering with BGP) ends the session circuit;
-# both are nested under the transport, which loads after the SaaS regions (04_saas/00_saas_topology.yml).
+# The Webex cross-connect, placed by a SaaS region and an owner (no account). Its port is Webex's own in the cage
+# (EXT-WEBEX-PAR, cabled to the cage edge); its peering (scope saas, a VLAN peering with BGP) rides on that port and
+# ends the session circuit; it is nested under the transport, which loads after the SaaS regions
+# (04_saas/00_saas_topology.yml).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -16,11 +17,6 @@ spec:
       saas_region: WEBEX-FRANKFURT
       owner: C900
       interfaces:
-        - kind: DcimPhysicalInterface
-          data:
-            name: wbx-port-1
-            description: Webex peering point port
-            status: active
         - kind: CloudPeeringInterface
           data:
             name: webex-c900-fra
@@ -31,7 +27,7 @@ spec:
             vlan_id: 300
             bfd: false
             service_id: webex-org-c900
-            parent_interface: ["webex-c900-fra-xc", "wbx-port-1"]
+            parent_interface: ["EXT-WEBEX-PAR", "wbx-port-1"]
             auth: c900-webex-bgp-key
             peer_ip:
               data:

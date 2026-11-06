@@ -215,13 +215,13 @@ cases:
         through:
           # the Direct Connect is delivered to the colocation cage: from the DC the path crosses a dark fibre (L1) and
           # the EVPN peering of the DCI (L3: BGP processes and peerings, so no session circuit of type dci on the chain)
-          CloudDirectConnect:dx-c900-fra-lag: {l1: [cross_connect, dark_fiber], l3: [handoff]}
+          CloudDirectConnect:dx-c900-fra-lag: {l1: [dark_fiber], l3: [handoff]}
           CloudVPNConnection:vpn-c900-aws-euc1: {l3: [vpn]}
         # the kinds of the transport a chain crosses
         far_end_kinds: [CloudDirectConnect, CloudVPNConnection]
-        # what a transport holds as its own interfaces: ports, LAG, VIFs
+        # what a transport holds as its own interfaces: the VIFs (the ports and the LAG are the provider connect's)
         transport_kinds:
-          dx-c900-fra-lag: [port, lag, vif]
+          dx-c900-fra-lag: [vif]
           vpn-c900-aws-euc1: [vif]
       # DC -> SaaS over a private cross-connect and a BGP handoff (Webex)
       - src: ManagedVxlanSegment:c900-web-p
@@ -229,10 +229,10 @@ cases:
         golden: full_topology__web__saas-webex.txt
         max_paths: 100
         through:
-          CloudDirectConnect:webex-c900-fra-xc: {l1: [cross_connect, dark_fiber], l3: [handoff]}
+          CloudDirectConnect:webex-c900-fra-xc: {l1: [dark_fiber], l3: [handoff]}
         far_end_kinds: [CloudDirectConnect]
         transport_kinds:
-          webex-c900-fra-xc: [port, vif]
+          webex-c900-fra-xc: [vif]
       # DC -> SaaS over a tunnel on the internet carrier, no session (Zscaler): the DC edge is the SD-WAN hub, the
       # office edge holds the tunnel to Zscaler
       - src: ManagedVxlanSegment:c900-web-p
@@ -311,18 +311,18 @@ cases:
         max_paths: 100
         through:
           CloudVPNConnection:vpn-c900-aws-euc1: {l3: [tunnel, vpn]}
-          CloudDirectConnect:dx-c900-fra-lag: {l1: [cross_connect, internet]}
+          CloudDirectConnect:dx-c900-fra-lag: {l1: [internet]}
         far_end_kinds: [CloudDirectConnect, CloudVPNConnection]
-      # colocation -> AWS: the cross-connect from the cage edge, one hop to the Direct Connect port
+      # colocation -> AWS: the cable from the cage edge to the port of the AWS device in the cage, then its LAG and VIFs
       - src: DcimPhysicalDevice:par-colo1-edge-01
         dst: CloudNetworkSegment:c900-subnet-p
         golden: full_topology__colo__aws.txt
         max_paths: 100
         through:
-          CloudDirectConnect:dx-c900-fra-lag: {l1: [cross_connect], l3: [handoff]}
+          CloudDirectConnect:dx-c900-fra-lag: {l1: [], l3: [handoff]}
         far_end_kinds: [CloudDirectConnect]
         transport_kinds:
-          dx-c900-fra-lag: [port, lag, vif]
+          dx-c900-fra-lag: [vif]
       # colocation -> the ExpressRoute transport: edge Ethernet1/1 -> patch panel -> Fabric port -> virtual connections
       - src: DcimPhysicalDevice:par-colo1-edge-01
         dst: CloudDirectConnect:er-c900-weu

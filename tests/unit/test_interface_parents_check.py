@@ -23,14 +23,18 @@ def _device(device_id: str, kind: str = "DcimVirtualDevice", host: str | None = 
 
 
 def _parent(
-    name: str, device_id: str, kind: str = "DcimPhysicalInterface", cabled: bool = True
+    name: str,
+    device_id: str,
+    kind: str = "DcimPhysicalInterface",
+    cabled: bool = True,
+    device_kind: str = "DcimPhysicalDevice",
 ) -> dict[str, Any] | None:
     """A raw ``parent_interface`` relationship."""
     node: dict[str, Any] = {
         "id": f"port-{name}",
         "__typename": kind,
         "name": {"value": name},
-        "device": {"node": {"id": device_id, "name": {"value": device_id}}},
+        "device": {"node": {"id": device_id, "__typename": device_kind, "name": {"value": device_id}}},
     }
     if kind == "DcimPhysicalInterface":
         node["cable"] = {"node": {"id": f"cable-{name}"} if cabled else None}
@@ -160,6 +164,7 @@ def test_the_fixtures_emit_only_fields_the_query_selects_and_the_parent_fields_a
     node = query_tree(QUERY)["DcimSubInterface"]["edges"]["node"]
     assert {"parent_interface", "role", "device"} <= set(node)
     assert "cable" in node["parent_interface"]["node"]
+    assert "__typename" in node["parent_interface"]["node"]["device"]["node"]
     fixtures = [_nic("eth1", "uplink", "fw-1")]
     assert unselected(fixtures, node) == []
 
@@ -175,6 +180,21 @@ def test_a_peering_riding_on_a_port_of_another_device_fails() -> None:
 
     assert len(findings) == 1 and "'partner'" in findings[0]["message"]
     assert findings[0]["object_type"] == "CloudPeeringInterface"
+
+
+def test_a_peering_riding_on_a_port_of_the_provider_connect_that_holds_it_passes() -> None:
+    """Rule 1: a Direct Connect virtual interface rides on the LAG of the provider's device in the cage."""
+    lag = _parent("lag1", "aws-dx-par", "DcimLAGInterface", device_kind="TopologyProviderConnect")
+
+    assert _run(_peering("lag1.1000", lag)) == []
+
+
+def test_a_virtual_interface_on_a_port_of_a_provider_connect_still_fails() -> None:
+    """Only a cloud peering is exempt: a sub-interface of a device never rides on a provider's port."""
+    port = _parent("dxcon-1a", "aws-dx-par", device_kind="TopologyProviderConnect")
+    findings = _run(_iface("Ethernet1/3.1", "svi", _device("edge", kind="DcimPhysicalDevice"), port))
+
+    assert len(findings) == 1 and "'aws-dx-par'" in findings[0]["message"]
 
 
 def test_a_peering_with_no_parent_is_not_reported() -> None:

@@ -17,32 +17,6 @@ kind: Object
 spec:
   kind: TopologyCarrierCircuit
   data:
-    - name: par1-xc21450001-aws-900000000001
-      circuit_id: XC21450001
-      description: Cross-connect from the cage edge par-colo1-edge-01 to the first AWS Direct Connect port of the LAG
-      provider: P004
-      circuit_type: cross_connect
-      status: active
-      bandwidth: 10000
-      locations:
-        - PAR-COLO1
-        - eu-central-1
-      capabilities:
-        - ["par-colo1-edge-01", "Ethernet1/3"]
-        - ["dx-c900-fra-lag", "dxcon-1a"]
-    - name: par1-xc21450002-aws-900000000001
-      circuit_id: XC21450002
-      description: Cross-connect from the cage edge par-colo1-edge-01 to the second AWS Direct Connect port of the LAG
-      provider: P004
-      circuit_type: cross_connect
-      status: active
-      bandwidth: 10000
-      locations:
-        - PAR-COLO1
-        - eu-central-1
-      capabilities:
-        - ["par-colo1-edge-01", "Ethernet1/4"]
-        - ["dx-c900-fra-lag", "dxcon-1b"]
     - name: par1-eqx-7c1e9a2b-azure-90000000-0000-0000-0000-000000000002
       circuit_id: EQX-7C1E9A2B
       description: Fabric virtual connection from the cage Fabric port to the ExpressRoute circuit, primary link
@@ -82,19 +56,6 @@ spec:
       capabilities:
         - ["EXT-FABRIC-PAR", "et-0/0/0.1201"]
         - ["ic-c900-fra-1", "ic-port-1"]
-    - name: par1-xc21450003-gcp-c900-prod-project
-      circuit_id: XC21450003
-      description: Cross-connect to the Google Dedicated Interconnect port (routed port on both ends, no VLAN)
-      provider: P006
-      circuit_type: cross_connect
-      status: active
-      bandwidth: 10000
-      locations:
-        - PAR-COLO1
-        - europe-west3
-      capabilities:
-        - ["par-colo1-edge-01", "Ethernet1/5"]
-        - ["ic-ded-c900-fra", "ic-dedicated-port"]
     - name: ktw1-ispa-48211-isp-a
       circuit_id: ISPA-48211
       description: Internet access of ktw1-edge-01 (carries the AWS VPN tunnels and the office tunnel to the DC)

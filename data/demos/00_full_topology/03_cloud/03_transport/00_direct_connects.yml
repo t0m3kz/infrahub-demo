@@ -12,17 +12,18 @@
 # `saas_region` (a SaaS, with the `owner` and no account) places a transport (checks/cloud_connection.py R9). The SaaS
 # ones are in 04_saas.
 #
-#   dx-c900-fra-lag       AWS Direct Connect, physical: two dedicated 10G ports bundled in lag1, two virtual interfaces
+#   dx-c900-fra-lag       AWS Direct Connect, physical: two virtual interfaces on the LAG lag1 of the AWS ports
+#                         (EXT-AWS-DX-PAR, in the cage)
 #   er-c900-weu           Azure ExpressRoute, logical: owns the MSEE port pair of the circuit, one peering per link
 #   ic-c900-fra-1         GCP Partner Interconnect, logical, lives in the partner's account
-#   ic-ded-c900-fra       GCP Dedicated Interconnect, physical: one port, a routed port (no VLAN)
+#   ic-ded-c900-fra       GCP Dedicated Interconnect, physical: a routed peering (no VLAN) on the port of EXT-GCP-IC-PAR
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: CloudDirectConnect
   data:
     - name: dx-c900-fra-lag
-      description: "AWS Direct Connect: two dedicated 10G ports in one LAG"
+      description: "AWS Direct Connect: the virtual interfaces of two dedicated 10G ports bundled in one LAG"
       status: active
       connection_type: physical
       provider: "P004"
@@ -30,29 +31,6 @@ spec:
       account: c900-aws-prod
       region: eu-central-1
       interfaces:
-        - kind: DcimPhysicalInterface
-          data:
-            name: dxcon-1a
-            description: "AWS Direct Connect dedicated 10G port dxcon-fh1a2b3c, member of lag1"
-            status: active
-            interface_type: "10gbase-x-sfpp"
-        - kind: DcimPhysicalInterface
-          data:
-            name: dxcon-1b
-            description: "AWS Direct Connect dedicated 10G port dxcon-fh4d5e6f, member of lag1"
-            status: active
-            interface_type: "10gbase-x-sfpp"
-        - kind: DcimLAGInterface
-          data:
-            name: lag1
-            description: "AWS Direct Connect LAG: dxcon-1a and dxcon-1b"
-            status: active
-            lag_id: 1
-            lacp_mode: active
-            minimum_links: 1
-            member_interfaces:
-              - ["dx-c900-fra-lag", "dxcon-1a"]
-              - ["dx-c900-fra-lag", "dxcon-1b"]
         - kind: CloudPeeringInterface
           data:
             name: lag1.1000
@@ -63,7 +41,7 @@ spec:
             vlan_id: 1000
             mtu: 8500
             bfd: true
-            parent_interface: ["dx-c900-fra-lag", "lag1"]
+            parent_interface: ["EXT-AWS-DX-PAR", "lag1"]
             gateway: dxgw-c900
             auth: c900-aws-dx-bgp-key
             peer_ip:
@@ -82,7 +60,7 @@ spec:
             vlan_id: 1100
             mtu: 9001
             bfd: true
-            parent_interface: ["dx-c900-fra-lag", "lag1"]
+            parent_interface: ["EXT-AWS-DX-PAR", "lag1"]
             gateway: vgw-c900-euc1
             auth: c900-aws-dx-bgp-key
             peer_ip:
@@ -181,7 +159,7 @@ spec:
                 description: Google side (Cloud Router) of the VLAN attachment
             peer_asn: AS16550
     - name: ic-ded-c900-fra
-      description: "GCP Dedicated Interconnect: one 10G port of ours at the Google location, routed (no VLAN)"
+      description: "GCP Dedicated Interconnect: a Cloud Router peering on our 10G port, routed (no VLAN)"
       status: active
       connection_type: physical
       provider: "P006"
@@ -189,12 +167,6 @@ spec:
       account: c900-gcp-prod
       region: europe-west3
       interfaces:
-        - kind: DcimPhysicalInterface
-          data:
-            name: ic-dedicated-port
-            description: Google Dedicated Interconnect 10G port
-            status: active
-            interface_type: "10gbase-x-sfpp"
         - kind: CloudPeeringInterface
           data:
             name: gcp-c900-ded-1
@@ -204,7 +176,7 @@ spec:
             routing: bgp
             mtu: 1500
             bfd: true
-            parent_interface: ["ic-ded-c900-fra", "ic-dedicated-port"]
+            parent_interface: ["EXT-GCP-IC-PAR", "ic-dedicated-port"]
             gateway: cr-c900-euw3
             peer_ip:
               data:

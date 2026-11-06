@@ -3,6 +3,10 @@
 #
 #   par-colo1-edge-01 Ethernet1/1 --- front 1 | rear 1 of PP-PAR-COLO1-01 --- EXT-FABRIC-PAR et-0/0/0
 #
+# The cross-connects to the providers' own ports in the cage are cables too, the order id of each in `cable_id`:
+# AWS Direct Connect XC21450001-2 (Ethernet1/3-4), Google Dedicated Interconnect XC21450003 (Ethernet1/5) and Webex
+# XC21450004 (Ethernet1/6).
+#
 # Cables in data are never generated. A hop inside one facility is a cable, not a carrier circuit (a carrier needs two
 # distinct facilities). A panel port end repeats the connector of its template. The Fabric virtual connections that
 # start on et-0/0/0 (03_cloud/04_circuits/00_carrier_circuits.yml) are carriers; the sub-interfaces on Ethernet1/1 are
@@ -39,3 +43,57 @@ spec:
           data:
             device: "EXT-FABRIC-PAR"
             name: "et-0/0/0"
+    - name: "CBL-PAR1-EDGE-AWS-A"
+      cable_id: XC21450001
+      type: smf
+      deployment: "PAR-COLO1"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "par-colo1-edge-01"
+            name: "Ethernet1/3"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "EXT-AWS-DX-PAR"
+            name: "dxcon-1a"
+
+    - name: "CBL-PAR1-EDGE-AWS-B"
+      cable_id: XC21450002
+      type: smf
+      deployment: "PAR-COLO1"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "par-colo1-edge-01"
+            name: "Ethernet1/4"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "EXT-AWS-DX-PAR"
+            name: "dxcon-1b"
+    - name: "CBL-PAR1-EDGE-GCP"
+      cable_id: XC21450003
+      type: smf
+      deployment: "PAR-COLO1"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "par-colo1-edge-01"
+            name: "Ethernet1/5"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "EXT-GCP-IC-PAR"
+            name: "ic-dedicated-port"
+
+    - name: "CBL-PAR1-EDGE-WEBEX"
+      cable_id: XC21450004
+      type: smf
+      deployment: "PAR-COLO1"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "par-colo1-edge-01"
+            name: "Ethernet1/6"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "EXT-WEBEX-PAR"
+            name: "wbx-port-1"

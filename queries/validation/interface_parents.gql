@@ -1,7 +1,7 @@
 # validate_interface_parents: every interface that rides on another one (DcimSubInterface: a virtual interface or a cloud
 # peering) with the interface it rides on (parent_interface) and the device of both.
 # A VM NIC's parent is a port of its hosting device (with the cable of that port); a sub-interface's parent is a NIC, a port or a
-# LAG of its own device; a peering's parent is a port or LAG of its transport. An unset parent_interface arrives as a null node.
+# LAG of its own device; a peering's parent is a port or LAG of its transport or of the provider connect that holds the cloud's port. An unset parent_interface arrives as a null node.
 # Small on purpose: it covers every interface that rides on another. The marker holds only parent_interface, so the rest is read
 # through a spread per kind (the same shape on both: the field is one response key of two exclusive types).
 query interface_parents {
@@ -31,7 +31,7 @@ query interface_parents {
             id
             __typename
             name { value }
-            device { node { id name { value } } }
+            device { node { id __typename name { value } } }
             ... on DcimPhysicalInterface { cable { node { id } } }
           }
         }
