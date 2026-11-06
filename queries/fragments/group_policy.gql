@@ -13,6 +13,9 @@ fragment DeviceGroupPolicyFields on DcimDevice {
     role { value }
     platform { node { name { value } } }
     device_type { node { name { value } memory_gb { value } } }
+  }
+  # software_image is DcimSoftwareRunner's edge, not DcimDeviceManaged's
+  ... on DcimSoftwareRunner {
     software_image { node { version { value } } }
   }
 }

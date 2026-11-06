@@ -15,9 +15,11 @@ query topology_info($name: String!) {
                     containerlab_os { value }
                   }
                 }
-                software_image {
-                  node {
-                    containerlab_image { value }
+                ... on DcimSoftwareRunner {
+                  software_image {
+                    node {
+                      containerlab_image { value }
+                    }
                   }
                 }
                 ... on DcimDevice {
