@@ -17,9 +17,9 @@ Carrier circuits
        device of a cloud port, it has no ``deployment``) is placed by its ``region`` (TopologyCloudRegion) or its
        ``saas_region`` (TopologySaasRegion). A sibling zone of the
        same metro is not the end: add_circuit (``plan_locations``) refuses an authored location that differs from
-       the end device's deployment. The metro is no facility and no device is deployed to it. The one exception is the
-       provider's port of a metro (``TopologyColocationConnect``, one per metro, no deployment): its facility is its
-       ``metro`` and a zone (or virtual colocation) OF THAT METRO is its location,
+       the end device's deployment. The metro is no facility and no device is deployed to it. The provider's port
+       (``TopologyProviderConnect``: a Fabric port of a cage, the public side of a region) has no deployment either: its
+       facility is its own ``location``, the zone, region or SaaS region it sits in,
     3. its offices (an office's access circuit, add_sdwan_edge's INET-<office>) are of one owner.
     4. THE INTERNET (``TopologyInternet``, a device that is a facility itself, so its own end's location) and the
        carriers that end on its interface: ``utils/internet_object.py`` (I1 to I4).
@@ -147,7 +147,6 @@ HANDOFF_ONLY_FIELDS = ("ip_namespace", "password")
 INTERNET = "TopologyExternalProviders"
 OFFICE = "TopologyCustomerOffice"
 PHYSICAL_DEVICE = "DcimPhysicalDevice"
-COLOCATION_METRO = "TopologyColocationMetro"
 PHYSICAL_PORT = "DcimPhysicalInterface"
 # The shape of a handoff end: a <port>.<vlan> sub-interface, a routed physical port, a cloud peering interface.
 SUB_INTERFACE = "sub-interface"
@@ -184,23 +183,11 @@ def _office_owners(locations: list[dict[str, Any]]) -> list[str]:
     return [_owner_org(office["owner"]) for office in _offices(locations) if isinstance(office.get("owner"), dict)]
 
 
-def _ref(value: Any) -> str | None:
-    """The id of a cleaned reference (``clean_data`` collapses an object with only an ``id`` to the bare id)."""
-    if isinstance(value, dict):
-        value = value.get("id")
-    return str(value) if value else None
-
-
 def _end_at(location: dict[str, Any], deployment: dict[str, Any] | None) -> bool:
     """The location is the end device's deployment itself. Colocation kit is deployed per zone or virtual
     colocation, and add_circuit (plan_locations) refuses an authored location that differs from it: no sibling
-    cage of the same metro, never the metro. The provider's port of a metro is placed by the metro: any zone or
-    virtual colocation of that metro is its location."""
-    if not deployment or not location.get("id"):
-        return False
-    if location.get("id") == deployment.get("id"):
-        return True
-    return deployment.get("typename") == COLOCATION_METRO and _ref(location.get("parent")) == _ref(deployment)
+    cage of the same metro, never the metro."""
+    return bool(deployment) and bool(location.get("id")) and location.get("id") == (deployment or {}).get("id")
 
 
 def _locations(circuit: dict[str, Any]) -> list[dict[str, Any]]:
@@ -214,11 +201,11 @@ def _locations(circuit: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _facility(device: dict[str, Any] | None) -> dict[str, Any] | None:
     """Where a device sits: its ``deployment``, else (a cloud transport has none) its region or SaaS region, else (the
-    provider's port of a colocation metro) its metro. THE INTERNET is a facility itself."""
+    provider's port) its ``location``. THE INTERNET is a facility itself."""
     device = device or {}
     if device.get("typename") == INTERNET_KIND:
         return device
-    place = device.get("deployment") or device.get("region") or device.get("saas_region") or device.get("metro")
+    place = device.get("deployment") or device.get("region") or device.get("saas_region") or device.get("location")
     return place if isinstance(place, dict) else None
 
 

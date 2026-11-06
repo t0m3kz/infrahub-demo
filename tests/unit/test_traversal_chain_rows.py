@@ -130,10 +130,10 @@ def test_a_cage_on_an_internet_access_service_crosses_the_connection_interface()
     path = [
         _n("DcimPhysicalDevice", "edge"),
         _n("DcimCable", "CBL"),
-        _n("TopologyColocationInterface", "EXT-FABRIC-FRA/et-0/0/0.1301"),
+        _n("TopologyProviderInterface", "EXT-FABRIC-FRA/et-0/0/0.1301"),
         _n("TopologyCarrierCircuit", "EQX-INET"),
         _n("TopologyInternet", "INTERNET"),
     ]
     assert chain_rows.site_internet_rows(cfg, {"colocation": _leg("l1", path)})[0][1] is True
-    no_service = [n for n in path if n.kind != "TopologyColocationInterface"]
+    no_service = [n for n in path if n.kind != "TopologyProviderInterface"]
     assert chain_rows.site_internet_rows(cfg, {"colocation": _leg("l1", no_service)})[0][1] is False

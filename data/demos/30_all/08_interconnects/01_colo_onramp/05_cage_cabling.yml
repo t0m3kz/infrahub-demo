@@ -19,7 +19,7 @@
 #
 # 2. The Equinix Fabric port of the FR2 IBX. Equinix Fabric virtual connections (to the Network Edge
 #    routers of AM-NE) enter our cage on a Fabric port of Equinix's, patched to one of our edge ports.
-#    The port is the provider's port of the metro (a TopologyColocationConnect, ../01_colo_onramp/
+#    The port is the provider's port of the metro (a TopologyProviderConnect, ../01_colo_onramp/
 #    02_cloud_provider_edges.yml, EXT-EQX-FABRIC-FR2); the cable runs from eg-fr201 Ethernet1/1 (a
 #    `partner` port: Ethernet1/[15-16] face the cage's firewall pair and are cabled by add_colocation_zone,
 #    Ethernet1/[13-14] are `uplink` ports (Ethernet1/13 the AWS Direct Connect,

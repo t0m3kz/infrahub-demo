@@ -49,8 +49,6 @@
   er-c900-weu: {'port': ['msee-pri', 'msee-sec'], 'lag': [], 'vif': ['er-c900-weu-pri', 'er-c900-weu-sec']}
   ic-c900-fra-1: {'port': ['ic-port-1'], 'lag': [], 'vif': ['gcp-c900-vlan-att-1']}
   ic-ded-c900-fra: {'port': ['ic-dedicated-port'], 'lag': [], 'vif': ['gcp-c900-ded-1']}
-  s3-c900-euc1-pub: {'port': ['pub-1'], 'lag': [], 'vif': []}
-  vpn-c900-aws-euc1: {'port': [], 'lag': [], 'vif': ['Tunnel1', 'Tunnel2']}
-  webex-c900-fra-pub: {'port': ['pub-1'], 'lag': [], 'vif': []}
+  vpn-c900-aws-euc1: {'port': ['pub-1'], 'lag': [], 'vif': ['Tunnel1', 'Tunnel2']}
   webex-c900-fra-xc: {'port': ['wbx-port-1'], 'lag': [], 'vif': ['webex-c900-fra']}
   zscaler-c900-muc: {'port': [], 'lag': [], 'vif': ['Tunnel1']}

@@ -1,5 +1,5 @@
 ---
-# The cross-connect inside the cage: the cage edge to the provider's Fabric port of the metro AMS. Cables in data
+# The cross-connect inside the cage: the cage edge to the provider's Fabric port of the cage AMS. Cables in data
 # are never generated. A hop inside one facility is a cable, not a carrier circuit (a carrier needs two distinct
 # facilities).
 apiVersion: infrahub.app/v1

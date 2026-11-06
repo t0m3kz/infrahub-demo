@@ -18,7 +18,7 @@ _MANAGED_KINDS = {
     "ManagedControllerVirtual",
 }
 # The provider's port of a colocation metro (an Equinix Fabric port) is an interface holder of the same kind.
-_TRANSPORTS = {"CloudDirectConnect", "CloudVPNConnection", "TopologyColocationConnect"}
+_TRANSPORTS = {"CloudDirectConnect", "CloudVPNConnection", "TopologyProviderConnect"}
 # THE INTERNET: a passive meeting point, a slim device that is also a facility (a carrier circuit's location).
 _PASSIVE = {"TopologyInternet"}
 
@@ -139,3 +139,13 @@ def test_an_interface_has_only_the_shared_capabilities_edge_for_circuits() -> No
     for kind in ("DcimPhysicalInterface", "DcimVirtualInterface", "DcimLAGInterface"):
         assert not [i for i in nodes[kind]["inherit_from"] if "Circuit" in i], kind
     assert "TopologyCircuitEnd" not in _kinds("generics")
+
+
+def test_the_provider_connect_is_one_slim_device_placed_by_one_facility() -> None:
+    """The provider's connect device holds interfaces and nothing else: no account, owner, region or SaaS region of a
+    transport; its place is ONE mandatory `location` (a facility), so no check is needed for 'exactly one place'."""
+    node = _kinds("nodes")["TopologyProviderConnect"]
+    assert set(node["inherit_from"]) == {"DcimDevice", "DcimProviderPort"}
+    (location,) = [r for r in node["relationships"] if r["name"] == "location"]
+    assert location["peer"] == "TopologyFacility" and location["optional"] is False and location["cardinality"] == "one"
+    assert {r["name"] for r in node["relationships"]} == {"location"}

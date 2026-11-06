@@ -199,7 +199,7 @@ spec:
     # --- Equinix Fabric virtual connections ----------------------------------
     # A provider-delivered virtual connection is a carrier like a cross-connect: Equinix runs it inside its own
     # platform, so an end may be the virtual NIC of a provider-hosted Network Edge router (no cable) and a port hosts
-    # several of them (checks/carrier_circuit_ports.py). The first one leaves the Fabric port of the metro FR on
+    # several of them (checks/carrier_circuit_ports.py). The first one leaves the Fabric port of the cage FR on
     # its own interface (02a_fabric_interfaces.yml), the port eg-fr201 Ethernet1/1 is cabled to (05_cage_cabling.yml);
     # the second lands on
     # the port (dxcon-amne) of the hosted AWS Direct Connect transport, next to the dedicated one (dxcon-fr2) of
@@ -211,7 +211,7 @@ spec:
       status: active
       bandwidth: 1000
       provider: "P016"
-      description: "Equinix Fabric virtual connection, Fabric port of the metro FR to the Network Edge router eg-am-ne01 in AM-NE, 1G"  # yamllint disable-line rule:line-length
+      description: "Equinix Fabric virtual connection, Fabric port of the cage FR to the Network Edge router eg-am-ne01 in AM-NE, 1G"  # yamllint disable-line rule:line-length
       locations:
         - "FR2"
       capabilities:

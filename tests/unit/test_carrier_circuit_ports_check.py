@@ -215,13 +215,13 @@ class TestVirtualConnection:
 
 def test_virtual_connection_may_end_on_a_colocation_interface() -> None:
     """The end of one provider connection on a colocation port is an allowed end of a virtual connection."""
-    fabric = _port("p-f1", "EXT-FABRIC-PAR", "et-0/0/0.1101", "TopologyColocationInterface")
+    fabric = _port("p-f1", "EXT-FABRIC-PAR", "et-0/0/0.1101", "TopologyProviderInterface")
     assert _run(_circuit("EQX-1", fabric, EG, circuit_type="virtual_connection")) == []
 
 
 def test_colocation_interface_is_no_shared_port() -> None:
     """Two connections on one colocation interface are refused: the interface is per connection, unlike the port."""
-    fabric = _port("p-f1", "EXT-FABRIC-PAR", "et-0/0/0.1101", "TopologyColocationInterface")
+    fabric = _port("p-f1", "EXT-FABRIC-PAR", "et-0/0/0.1101", "TopologyProviderInterface")
     findings = _run(
         _circuit("EQX-1", fabric, EG, circuit_type="virtual_connection"),
         _circuit("EQX-2", fabric, EG2, circuit_type="virtual_connection"),
@@ -231,13 +231,13 @@ def test_colocation_interface_is_no_shared_port() -> None:
 
 def test_cross_connect_cannot_end_on_a_colocation_interface() -> None:
     """A cross connect joins physical ports only."""
-    fabric = _port("p-f1", "EXT-FABRIC-PAR", "et-0/0/0.1101", "TopologyColocationInterface")
+    fabric = _port("p-f1", "EXT-FABRIC-PAR", "et-0/0/0.1101", "TopologyProviderInterface")
     findings = _run(_circuit("XC-1", fabric, EG))
-    assert len(findings) == 1 and "TopologyColocationInterface" in findings[0]["message"]
+    assert len(findings) == 1 and "TopologyProviderInterface" in findings[0]["message"]
 
 
 def test_an_internet_attachment_may_end_on_a_colocation_interface() -> None:
     """An Internet Access service of the provider's port: the connection interface and THE INTERNET's bus."""
-    fabric = _port("p-f1", "EXT-FABRIC-FRA", "et-0/0/0.1301", "TopologyColocationInterface")
+    fabric = _port("p-f1", "EXT-FABRIC-FRA", "et-0/0/0.1301", "TopologyProviderInterface")
     bus = _port("p-bus", "INTERNET", "bus", "TopologyInternetInterface")
     assert _run(_circuit("EQX-INET-FRA", fabric, bus, circuit_type="internet")) == []

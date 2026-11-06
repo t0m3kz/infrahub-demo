@@ -90,11 +90,15 @@ cases:
         - {isp_device: EXT-ISP-A-PE1, access_port: Ethernet1/2, access_carrier: ISPA-48211, uplink_carrier: UPL-48001}  # yamllint disable-line rule:line-length
         - {isp_device: EXT-ISP-B-PE1, access_port: Ethernet1/1, access_carrier: ISPB-77301, uplink_carrier: UPL-77001}  # yamllint disable-line rule:line-length
       public_sides:
-        - {endpoint: s3-public, prefix: 192.0.2.0/24, kind: cloud, transport: s3-c900-euc1-pub, port: pub-1, carrier: PUB-16509}  # yamllint disable-line rule:line-length
-        - {endpoint: webex-public, prefix: 203.0.113.0/24, kind: saas, transport: webex-c900-fra-pub, port: pub-1, carrier: PUB-13445}  # yamllint disable-line rule:line-length
+        - {endpoint: s3-public, prefix: 192.0.2.0/24, kind: cloud, transport: EXT-AWS-EUC1, port: pub-1, carrier: PUB-16509}  # yamllint disable-line rule:line-length
+        - {endpoint: webex-public, prefix: 203.0.113.0/24, kind: saas, transport: EXT-WEBEX-FRA, port: pub-1, carrier: PUB-13445}  # yamllint disable-line rule:line-length
+        - {endpoint: blob-public, prefix: 198.18.0.0/24, kind: cloud, transport: EXT-AZURE-WEU, port: pub-1, carrier: PUB-20113}  # yamllint disable-line rule:line-length
+        - {endpoint: gcs-public, prefix: 198.18.1.0/24, kind: cloud, transport: EXT-GCP-EUW3, port: pub-1, carrier: PUB-22407}  # yamllint disable-line rule:line-length
       # the cages on an Equinix Internet Access service: their carrier runs from the connection interface of the
       # provider's Fabric port straight to the bus, no ISP router on the way
       fabric_accesses: [EQX-5A1F2C30, EQX-8D3B6E41]
+      # the public tunnel endpoint of the AWS VPN: an internet carrier from the transport port to the bus
+      vpn_accesses: [PUB-26501]
       # L3 of the first ISP: the eBGP session on the two physical ports of the access carrier
       l3: {isp_device: EXT-ISP-A-PE1, edge_port: Ethernet1/2, isp_port: et-0/0/0}
     # THE THREE SITES reach THE INTERNET in L1, each through its own access carrier (and then the uplink of the ISP
@@ -151,6 +155,9 @@ cases:
         - {src: "DcimVirtualDevice:gdn1-vm-01", dst: "DcimPhysicalDevice:lis-office-ap-03", via: "TopologyInternet:INTERNET"}
         # yamllint disable-line rule:line-length
         - {src: "DcimPhysicalDevice:bcn-office-ap-01", dst: "DcimPhysicalDevice:lis-office-ap-03", via: "TopologyInternet:INTERNET"}
+        # access point to a cloud segment OVER THE INTERNET: the VPN transport's public endpoint is the way in
+        # yamllint disable-line rule:line-length
+        - {src: "DcimPhysicalDevice:bcn-office-ap-01", dst: "CloudNetworkSegment:c900-subnet-p", via: "TopologyInternet:INTERNET", with: [CloudVPNConnection], through: "CloudVPNConnection:vpn-c900-aws-euc1"}
         # access point and server to a cloud segment: through the cage, where every cloud leg lands
         # yamllint disable-line rule:line-length
         - {src: "DcimPhysicalDevice:bcn-office-ap-01", dst: "CloudNetworkSegment:c900-subnet-p", via: "DcimPhysicalDevice:par-colo1-edge-01"}
@@ -162,7 +169,6 @@ cases:
         - {src: "DcimVirtualDevice:gdn1-vm-01", dst: "CloudNetworkSegment:c900-subnet-p", via: "DcimPhysicalDevice:par-colo1-edge-01"}
     layout:
       zone: PAR-COLO1
-      metro: PAR
       colo_edge: par-colo1-edge-01
       fabric_port_device: EXT-FABRIC-PAR
       offices:

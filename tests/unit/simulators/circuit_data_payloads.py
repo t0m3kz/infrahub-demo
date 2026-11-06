@@ -24,7 +24,7 @@ from typing import Any
 
 from generators.helpers.naming import sdwan_edge_name
 from generators.topology.circuit import CircuitEndpoint, CircuitLocation, plan_locations
-from tests.integration.demo_data import ROOT, Declared, declared, distinct, name, parent_name
+from tests.integration.demo_data import ROOT, Declared, declared, distinct, name
 
 ALL_DEMO = ROOT / "data" / "demos" / "30_all"
 BOOTSTRAP = ROOT / "data" / "bootstrap"
@@ -41,16 +41,15 @@ APPLIANCE = "CloudNetworkAppliance"
 # A cloud transport has no deployment: its facility is its region.
 TRANSPORT = "CloudDirectConnect"
 PEERING = "CloudPeeringInterface"
-# The provider's port of a colocation metro has no deployment either: its facility is its metro, and each connection
+# The provider's connect device has no deployment either: its facility is its location (a zone), and each connection
 # that ends on it has an interface of its own.
-COLOCATION_CONNECT = "TopologyColocationConnect"
-COLOCATION_PORT = "TopologyColocationInterface"
+PROVIDER_CONNECT = "TopologyProviderConnect"
+PROVIDER_INTERFACE = "TopologyProviderInterface"
 # THE INTERNET (bootstrap data): a device that is a facility itself, with one interface of its own kind.
 INTERNET = "TopologyInternet"
 INTERNET_BUS = "TopologyInternetInterface"
 # Where the place kinds a circuit ends on are declared.
 _PLACE_KINDS = (
-    "TopologyColocationMetro",
     "TopologyDataCenter",
     "TopologyColocationZone",
     "TopologyVirtualColocation",
@@ -114,8 +113,6 @@ class _Model:
         for kind in _PLACE_KINDS:
             for place in _all(kind):
                 node: dict[str, Any] = {"id": f"id-{name(place)}", "__typename": kind, "name": {"value": name(place)}}
-                if kind in ("TopologyColocationZone", "TopologyVirtualColocation"):
-                    node["parent"] = {"node": {"id": f"id-{parent_name(place)}"}}
                 if kind == "TopologyCustomerOffice":
                     owner = str(place.item["owner"])
                     node["owner"] = {"node": {"id": f"id-{owner}", "org_id": {"value": owner}}}
@@ -131,16 +128,16 @@ class _Model:
                 roles.setdefault(str(device), []).append(str(process.value("process_role")))
         for net in distinct(declared(INTERNET, BOOTSTRAP)):
             self.devices[name(net)] = {"kind": INTERNET, "deployment": None, "region": None, "bgp": []}
-        for kind in (PHYSICAL_DEVICE, APPLIANCE, TRANSPORT, COLOCATION_CONNECT):
+        for kind in (PHYSICAL_DEVICE, APPLIANCE, TRANSPORT, PROVIDER_CONNECT):
             for device in _all(kind):
                 self.devices[name(device)] = {
                     "kind": kind,
                     "deployment": device.item.get("deployment"),
                     "region": device.item.get("region"),
-                    "metro": device.item.get("metro"),
+                    "location": device.item.get("location"),
                     "bgp": roles.get(name(device), []),
                 }
-        self.colocation_ports = {(str(i.item["device"]), name(i)) for i in _all(COLOCATION_PORT)}
+        self.provider_ports = {(str(i.item["device"]), name(i)) for i in _all(PROVIDER_INTERFACE)}
 
     def _add_generated_devices(self) -> None:
         """The edges add_colocation_zone / add_virtual_colocation create, the DC border leaves, the office edges."""
@@ -167,12 +164,12 @@ class _Model:
             }
 
     def facility(self, device: str) -> str | None:
-        """Where a device sits: its ``deployment``, else (a cloud transport) its region. The provider's port of a metro
-        derives nothing: add_circuit reads no deployment from it, the circuit data authors the cage."""
+        """Where a device sits: its ``deployment``, else (a cloud transport) its region, else (the provider's connect
+        device) its location: the same order as add_circuit."""
         info = self.devices[device]
         if info["kind"] == INTERNET:
             return device  # it is a facility itself
-        return info["deployment"] or info.get("region")
+        return info["deployment"] or info.get("region") or info.get("location")
 
     def port_id(self, device: str, port: str) -> str:
         if device not in self.devices:
@@ -182,8 +179,8 @@ class _Model:
     def port_kind(self, device: str, port: str = "") -> str:
         """The kind of a port: THE INTERNET's only port and the end of a provider connection have a kind of their own,
         the rest are physical."""
-        if (device, port) in self.colocation_ports:
-            return COLOCATION_PORT
+        if (device, port) in self.provider_ports:
+            return PROVIDER_INTERFACE
         return INTERNET_BUS if self.devices[device]["kind"] == INTERNET else "DcimPhysicalInterface"
 
     # -- carrier circuits ---------------------------------------------------------------------------------------
@@ -253,8 +250,8 @@ class _Model:
         info = self.devices[device]
         if info["kind"] == TRANSPORT:
             return {"region": self._place(info["region"]), "saas_region": {"node": None}}
-        if info["kind"] == COLOCATION_CONNECT:
-            return {"metro": self._place(info["metro"])}
+        if info["kind"] == PROVIDER_CONNECT:
+            return {"location": self._place(info["location"])}
         return {"deployment": self._place(info["deployment"])}
 
     def carrier(self, row: dict[str, Any]) -> dict[str, Any]:
@@ -265,12 +262,7 @@ class _Model:
             "name": {"value": row["name"]},
             "status": {"value": row["status"]},
             "locations": _edges(
-                {
-                    key: self.places[place][key]
-                    for key in ("id", "__typename", "name", "parent")
-                    if key in self.places[place]
-                }
-                for place in row["locations"]
+                {key: self.places[place][key] for key in ("id", "__typename", "name")} for place in row["locations"]
             ),
             "capabilities": _edges(
                 {

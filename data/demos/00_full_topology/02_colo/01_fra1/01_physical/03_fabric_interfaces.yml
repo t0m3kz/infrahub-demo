@@ -1,12 +1,12 @@
 ---
-# The end of the Internet Access service of the cage on the Fabric port of the metro FRA: one
-# TopologyColocationInterface per connection, riding on the physical port (`parent_interface`) and named
+# The end of the Internet Access service of the cage on the Fabric port of the cage FRA: one
+# TopologyProviderInterface per connection, riding on the physical port (`parent_interface`) and named
 # <port>.<S-tag>. It carries the S-tag (`vlan_id`) and the bandwidth, and the internet carrier
 # (06_internet/02_circuits/01_carrier_circuits.yml) ends on it and on THE INTERNET.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: TopologyColocationInterface
+  kind: TopologyProviderInterface
   data:
     - device: EXT-FABRIC-FRA
       name: et-0/0/0.1301

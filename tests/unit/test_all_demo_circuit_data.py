@@ -173,9 +173,7 @@ def test_no_hand_written_dci_session_or_addressing_is_left() -> None:
     # declared in the on-ramp are the cloud transports' and the provider's Fabric port of the metro
     # (02_cloud_provider_edges.yml), nothing on a device of ours.
     transports = {
-        name(holder)
-        for kind in ("CloudDirectConnect", "TopologyColocationConnect")
-        for holder in declared(kind, _ONRAMP)
+        name(holder) for kind in ("CloudDirectConnect", "TopologyProviderConnect") for holder in declared(kind, _ONRAMP)
     }
     ports = [obj for obj in declared("DcimPhysicalInterface", _ONRAMP) if obj.enclosing is None]
     assert ports
@@ -459,11 +457,11 @@ def test_provider_stubs_deployed_to_a_zone_are_in_the_provider_stubs_group() -> 
 
 
 def test_the_fabric_port_is_the_providers_port_of_its_metro_with_one_interface_per_connection() -> None:
-    """The Equinix Fabric port is a TopologyColocationConnect of the metro (no deployment, so no stub group), and the
+    """The Equinix Fabric port is a TopologyProviderConnect of the metro (no deployment, so no stub group), and the
     connection that starts on it ends on an interface of its own that rides on the physical port."""
-    (port,) = declared("TopologyColocationConnect", _ALL)
-    assert name(port) == "EXT-EQX-FABRIC-FR2" and port.item["metro"] == "FR" and port.item["provider"] == "P016"
-    interfaces = declared("TopologyColocationInterface", _ALL)
+    (port,) = declared("TopologyProviderConnect", _ALL)
+    assert name(port) == "EXT-EQX-FABRIC-FR2" and port.item["location"] == "FR2" and port.item["provider"] == "P016"
+    interfaces = declared("TopologyProviderInterface", _ALL)
     assert [(i.item["device"], i.item["name"], i.item["parent_interface"]) for i in interfaces] == [
         ("EXT-EQX-FABRIC-FR2", "et-0/0/0.1301", ["EXT-EQX-FABRIC-FR2", "et-0/0/0"])
     ]

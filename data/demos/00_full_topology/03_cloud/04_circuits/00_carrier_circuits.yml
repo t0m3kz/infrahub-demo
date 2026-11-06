@@ -8,7 +8,7 @@
 # Carrier circuits are the physical wire. Every cloud leg lands in the colocation cage PAR-COLO1 (02_colo), where the
 # cage edge par-colo1-edge-01 is: the Direct Connect and the Google Dedicated Interconnect are cross-connects from an
 # edge port to the provider's port; ExpressRoute and the Google Partner Interconnect are Equinix Fabric virtual
-# connections that start on an interface of the Fabric port of the metro (EXT-FABRIC-PAR, one interface per
+# connections that start on an interface of the Fabric port of the cage (EXT-FABRIC-PAR, one interface per
 # connection: 02_colo/00_par1/01_physical/03_fabric_interfaces.yml), which the edge reaches through the patch
 # panel (02_colo/00_par1/01_physical/02_cables.yml). The last carrier, ktw1-ispa-48211-isp-a, is the internet access
 # of the DC edge.

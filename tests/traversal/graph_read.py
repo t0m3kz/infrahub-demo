@@ -45,8 +45,8 @@ QUERIES = {
       member_interfaces {{ edges {{ node {{ id name {{ value }} }} }} }} }} }} }}""",
     "dev": """DcimPhysicalDevice { edges { node { id name { value } role { value } deployment { node { __typename name { value }
       ... on TopologyExternalProviders { provider { node { org_id { value } } } parent { node { name { value } } } } } } } } }""",
-    # the provider's port of a colocation metro: no deployment, its metro places it
-    "cport": """TopologyColocationConnect { edges { node { id name { value } metro { node { name { value } } } } } }""",
+    # the provider's connect device: no deployment, its location (a zone, a region, a SaaS region) places it
+    "cport": """TopologyProviderConnect { edges { node { id name { value } location { node { __typename display_label name { value } } } } } }""",
     # THE INTERNET: a device that is a facility, one interface of its own kind; the carriers on it are who is attached
     "inet": """TopologyInternet { edges { node { id name { value } parent { node { __typename name { value } } } interfaces { edges { node { __typename id name { value } } } }
       circuits { edges { node { id name { value } } } } } } }""",

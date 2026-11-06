@@ -147,7 +147,7 @@ def internet_golden(cfg: dict, legs: dict[tuple[str, str], Leg]) -> str:
 def _provider_hop(node: PathNode, isp_routers: set[str]) -> bool:
     """The chain crosses the provider's side: an ISP router, or the connection interface of the provider's port of a
     colocation metro (an Internet Access service has no router of ours or of an ISP on its way)."""
-    if node.kind == "TopologyColocationInterface":
+    if node.kind == "TopologyProviderInterface":
         return True
     return node.kind == "DcimPhysicalDevice" and "/".join(node.hfid) in isp_routers
 

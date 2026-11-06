@@ -40,13 +40,13 @@ def _device(name: str, place: dict[str, Any] | None, *, region: str | None = Non
     return node
 
 
-def _fabric_device(name: str, metro: dict[str, Any]) -> dict[str, Any]:
-    """The provider's port of a colocation metro: no deployment, its metro places it."""
+def _fabric_device(name: str, location: dict[str, Any]) -> dict[str, Any]:
+    """The provider's connect device: no deployment, its own location places it."""
     return {
         "id": f"id-{name}",
-        "__typename": "TopologyColocationConnect",
+        "__typename": "TopologyProviderConnect",
         "name": {"value": name},
-        "metro": {"node": metro},
+        "location": {"node": location},
     }
 
 
@@ -303,7 +303,7 @@ class TestTheObject:
         assert "has 0 interface(s)" in message
 
 
-FRA = _place("FRA", "TopologyColocationMetro")
+FRA = _place("FRA-COLO1", "TopologyColocationZone")
 FABRIC_FRA = _fabric_device("EXT-FABRIC-FRA", FRA)
 
 
@@ -312,7 +312,7 @@ def test_the_connection_interface_of_a_colocation_port_is_an_attachment() -> Non
     internet_access = _carrier(
         "EQX-INET-FRA",
         [_place("FRA-COLO1", "TopologyColocationZone"), INTERNET],
-        [_end(FABRIC_FRA, "et-0/0/0.1301", "TopologyColocationInterface"), BUS_END],
+        [_end(FABRIC_FRA, "et-0/0/0.1301", "TopologyProviderInterface"), BUS_END],
     )
     assert _findings([internet_access]) == []
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Paths between ANY two nodes of the model, found by the server (`InfrahubPathTraversal`, Infrahub 1.10+).
 
-  uv run python utils/path_trace.py <src> <dst> [--layer l1|l3|both] [--max-paths 64] [--via <node>] [--branch main]
+  uv run python utils/path_trace.py <src> <dst> [--layer l1|l3|both] [--max-paths 64] [--via <node>] [--with CloudVPNConnection] [--branch main]
 
 A node is `kind:hfid` (HFID parts joined with '/', only the last part may hold a '/':
 `DcimPhysicalInterface:eg-fr201/Ethernet1/13`), `kind:name`, or a bare name searched in `NAME_KINDS` (refused when
@@ -35,13 +35,17 @@ REQUEST_TIMEOUT = 300  # seconds: a dense L3 search can take the server over a m
 LAYERS: dict[str, tuple[str, ...]] = {
     "l1": ("DcimPhysicalDevice", "DcimPhysicalInterface", "DcimLAGInterface", "DcimVirtualInterface", "DcimCable",
            "DcimFrontPatchPanelPort", "DcimRearPatchPanelPort", "TopologyCarrierCircuit",
-           "TopologyInternetInterface", "TopologyColocationConnect", "TopologyColocationInterface"),
+           "TopologyInternetInterface", "TopologyProviderConnect", "TopologyProviderInterface"),
     "l3": ("DcimPhysicalDevice", "DcimPhysicalInterface", "DcimLAGInterface", "DcimVirtualInterface", "ManagedBGP",
            "ManagedBGPPeering", "TopologySessionCircuit"),
 }  # fmt: skip
 # Crossed in both layers: a transport, its peering interfaces, and the cloud chain behind them.
-CLOUD = ("CloudDirectConnect", "CloudVPNConnection", "CloudPeeringInterface", "CloudGateway",
-         "CloudGatewayAttachment", "CloudVirtualNetwork")  # fmt: skip
+CLOUD = ("CloudDirectConnect", "CloudPeeringInterface", "CloudGateway", "CloudGatewayAttachment",
+         "CloudVirtualNetwork")  # fmt: skip
+# Crossed in layer 1 only when asked for (`--with`; layer 3 always crosses it): the encrypted way into the cloud over the internet. Its gateway
+# links lead on to the private transports, so in every trace it would be a shortcut from the internet to a Direct
+# Connect port through the cloud's inside, a route nobody can use.
+OPT_IN_KINDS = ("CloudVPNConnection",)
 # An end of this kind is reached only through these kinds (crossed only when that kind is an end, so a segment's rows
 # or a cloud segment never become a shortcut between two other nodes).
 END_KINDS: dict[tuple[str, str], tuple[str, ...]] = {
@@ -55,7 +59,7 @@ END_KINDS: dict[tuple[str, str], tuple[str, ...]] = {
 }  # fmt: skip
 # Where a bare name is looked up (by `name`).
 NAME_KINDS = ("DcimPhysicalDevice", "DcimVirtualDevice", "CloudDirectConnect", "CloudVPNConnection",
-              "TopologyInternet", "TopologyColocationConnect", "ManagedVxlanSegment", "CloudNetworkSegment", "CloudVirtualNetwork", "CloudGateway",
+              "TopologyInternet", "TopologyProviderConnect", "ManagedVxlanSegment", "CloudNetworkSegment", "CloudVirtualNetwork", "CloudGateway",
               "CloudGatewayAttachment", "CloudInstance", "CloudServiceEndpoint", "TopologySaasRegion",
               "TopologyCarrierCircuit", "TopologySessionCircuit", "ManagedBGP", "ManagedBGPPeering")  # fmt: skip
 NODE = "edges { node { id hfid display_label __typename } }"
@@ -150,9 +154,11 @@ async def resolve(client: InfrahubClient, spec: str, branch: str | None = None) 
     return _pick(spec, text, found, [] if found else await _query(client, f"a: {kind} {{ {NODE} }}", branch))
 
 
-def layer_kinds(layer: str, *ends: str) -> list[Any]:
+def layer_kinds(layer: str, *ends: str, include: tuple[str, ...] = ()) -> list[Any]:
     """The kind_filter of a layer for these two end kinds."""
-    return [*LAYERS[layer], *CLOUD, *(k for end in ends for k in END_KINDS.get((layer, end), ()))]
+    # the VPN is a routed transport: layer 3 always crosses it, layer 1 only on request
+    opt_in = OPT_IN_KINDS if layer != "l1" else include
+    return [*LAYERS[layer], *CLOUD, *opt_in, *(k for end in ends for k in END_KINDS.get((layer, end), ()))]
 
 
 async def trace_leg(
@@ -162,12 +168,13 @@ async def trace_leg(
     layer: str,
     max_paths: int = MAX_PATHS,
     branch: str | None = None,
+    include: tuple[str, ...] = (),
 ) -> Leg:
     """One server traversal; when it finds nothing because the budget ran out, the same search from the other end."""
     leg = Leg(layer, src, dst)
     for a, b in ((src, dst), (dst, src)):
         result = await client.traverse_paths(
-            a.id, b.id, max_depth=MAX_DEPTH, max_paths=max_paths, kind_filter=layer_kinds(layer, src.kind, dst.kind),
+            a.id, b.id, max_depth=MAX_DEPTH, max_paths=max_paths, kind_filter=layer_kinds(layer, src.kind, dst.kind, include=include),
             shortest_paths_only=True, branch=branch,
         )  # fmt: skip
         paths = sorted(([h.node for h in p.hops] for p in result.paths), key=len)
@@ -186,12 +193,16 @@ async def trace(
     via: str | None = None,
     max_paths: int = MAX_PATHS,
     branch: str | None = None,
+    include: tuple[str, ...] = (),
 ) -> list[Leg]:
-    """Resolve the ends (and the waypoint) and trace every layer: one Leg per layer, two per layer with `via`."""
+    """Resolve the ends (and the waypoint) and trace every layer: one Leg per layer, two per layer with `via`. `include`
+    adds kinds of OPT_IN_KINDS to the kinds a path may cross."""
     ends = [await resolve(client, spec, branch) for spec in (src, *([via] if via else []), dst)]
     hops = list(zip(ends, ends[1:], strict=False))
     return list(
-        await asyncio.gather(*(trace_leg(client, a, b, layer, max_paths, branch) for layer in layers for a, b in hops))
+        await asyncio.gather(
+            *(trace_leg(client, a, b, layer, max_paths, branch, include) for layer in layers for a, b in hops)
+        )
     )
 
 
@@ -226,6 +237,10 @@ async def main() -> int:
     ap.add_argument("--layer", choices=("l1", "l3", "both"), default="both")
     ap.add_argument("--max-paths", type=int, default=MAX_PATHS, help="paths the server returns per leg (1..100)")
     ap.add_argument("--via", help="a node the path must cross: two legs, src -> via and via -> dst")
+    ap.add_argument(
+        "--with", dest="include", action="append", default=[], choices=OPT_IN_KINDS,
+        help="a kind a path may cross that is not crossed by default (the VPN: the way in over the internet)",
+    )  # fmt: skip
     ap.add_argument("--branch", default="main")
     a = ap.parse_args()
     address = os.environ.get("INFRAHUB_ADDRESS", "http://localhost:8100")
@@ -234,7 +249,7 @@ async def main() -> int:
     )
     layers = ("l1", "l3") if a.layer == "both" else (a.layer,)
     try:
-        legs = await trace(client, a.src, a.dst, layers, a.via, a.max_paths, a.branch)
+        legs = await trace(client, a.src, a.dst, layers, a.via, a.max_paths, a.branch, tuple(a.include))
     except ResolveError as exc:
         sys.stderr.write(f"error: {exc}\n")
         return 1

@@ -292,3 +292,12 @@ async def test_main_reports_a_resolve_error_on_stderr(
     monkeypatch.setattr("sys.argv", ["path_trace.py", "nope", "dx-30all-euc1-fr2"])
     assert await pt.main() == 1
     assert "error: nothing matches 'nope'." in capsys.readouterr().err and not client.calls
+
+
+def test_the_vpn_is_crossed_only_when_a_trace_asks_for_it() -> None:
+    """By default a path cannot enter the cloud over the VPN (its gateway links would make it a shortcut from the internet
+    to a private transport); `include` adds it, once, after the kinds every trace crosses."""
+    assert "CloudVPNConnection" not in layer_kinds("l1", "DcimPhysicalDevice", "CloudNetworkSegment")
+    asked = layer_kinds("l1", "DcimPhysicalDevice", "CloudNetworkSegment", include=("CloudVPNConnection",))
+    assert asked.count("CloudVPNConnection") == 1
+    assert set(layer_kinds("l1", "DcimPhysicalDevice", "CloudNetworkSegment")) <= set(asked)

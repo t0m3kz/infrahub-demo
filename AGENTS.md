@@ -287,7 +287,7 @@ class MyCheck(InfrahubCheck):
   `... on DcimDeviceManaged { ... }`; a list of devices that reads them roots at `DcimDeviceManaged`
   (`DcimDevice: DcimDeviceManaged`, the alias keeps the result key); `TopologyDeviceHosting.devices`, `sdwan_gateway`,
   `managed_devices`, `DcimPlatform.devices` and `DcimSoftwareImage.devices` peer `DcimDeviceManaged` (read `interfaces`
-  through `... on DcimDevice`). `DcimProviderPort` is a marker generic (`provider`, `bandwidth`) that `CloudDirectConnect` and `TopologyColocationConnect` list next to the slim `DcimDevice` (a generic cannot inherit a generic): the second is the provider's port in a colocation metro, one per metro through its `metro` edge, with the provider's own id in `CloudResource.cloud_id`; no generator, check or query reads it yet.
+  through `... on DcimDevice`). `DcimProviderPort` is a marker generic (`provider`, `bandwidth`) that `CloudDirectConnect` and `TopologyProviderConnect` list next to the slim `DcimDevice` (a generic cannot inherit a generic): the second is the provider's connect device at ONE place: the Fabric port of a colocation zone, the public (internet-facing) side of a cloud region or a SaaS region. It is a slim device with no account and no owner (it is one per place, not per customer), its place is its mandatory `location` (a `TopologyFacility`: a zone, a region or a SaaS region), the provider's own id of the port is its `external_id`, and its circuits are `internet` carriers (to THE INTERNET) or `virtual_connection`s. It is NOT a Direct Connect: the private connections of a cloud stay in `CloudDirectConnect` and `CloudVPNConnection`. No generator or check of its own: `add_circuit` places a circuit end by its `location`.
 - **Circuit placement**: two circuit kinds, both inheriting `[TopologyCircuit, ManagedGeneric, ManagedGenericInterfaces]`:
   `TopologyCarrierCircuit` and `TopologySessionCircuit`. `locations` (peer `TopologyFacility`, max 2, no `min_count`:
   it is enforced on update only) is declared ONCE, on the `TopologyCircuit` generic. The ends are the shared interface
@@ -312,10 +312,10 @@ class MyCheck(InfrahubCheck):
   - **Carrier**: exactly two distinct locations, one per end device's `deployment`; its offices are of one owner.
     `checks/carrier_circuit_ports.py`: a port is an end of at most one carrier and both ends
     are physical ports, EXCEPT a `virtual_connection` (a provider port hosts one connection per S-tag, and an end may be
-    the `DcimVirtualInterface` NIC of a provider-hosted appliance, or a `TopologyColocationInterface`: the end of ONE
-    Fabric connection on the provider's port of a metro, unshared, with its S-tag `vlan_id`, C-tag `inner_vlan_id` and
-    `bandwidth`, riding on that port through `parent_interface`; the port is a `TopologyColocationConnect`, one per
-    metro, placed by its `metro` so a zone of that metro is the circuit's location); the other types on
+    the `DcimVirtualInterface` NIC of a provider-hosted appliance, or a `TopologyProviderInterface`: the end of ONE
+    Fabric connection on the provider's port, unshared, with its S-tag `vlan_id`, C-tag `inner_vlan_id` and
+    `bandwidth`, riding on that port through `parent_interface`; the port is a `TopologyProviderConnect`, placed by
+    its `location`, the zone, so that zone is the circuit's location); the other types on
     the same port still hold both. A carrier whose far end is such a NIC is a provider-delivered
     `virtual_connection`; a physical `cross_connect` joins physical ports only (our cage edge and a Fabric port or a
     provider's own router).

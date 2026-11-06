@@ -205,3 +205,50 @@ async def test_a_trace_cut_short_by_the_server_budget_is_asked_again_but_a_finis
         "reach L1: X:flaky -> X:b": True,
         "reach L1: X:dead -> X:b": False,
     }
+
+
+async def test_a_pair_that_names_a_node_must_cross_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`through`: the shortest chain of the pair is asked to cross a node (the way in over the internet is the VPN, not the
+    cage); a chain that does not cross it fails an extra row, one that does passes it."""
+    vpn = PathNode(id="vpn", kind="CloudVPNConnection", label="x", display_label="vpn", hfid=["vpn"])
+    cfg = {
+        "l1": [
+            {"src": "DcimPhysicalDevice:ap", "dst": "TopologyInternet:INTERNET", "through": "CloudVPNConnection:vpn"}
+        ]
+    }
+
+    async def trace_with(path: list[PathNode], **_: Any) -> list[Leg]:
+        return [Leg("l1", SEG, NET, paths=[path])]
+
+    for path, expected in (([SEG, vpn, NET], True), ([SEG, NET], False)):
+
+        async def trace(client: Any, src: str, dst: str, layers: Any = ("l1",), via: str | None = None, **kw: Any):
+            return await trace_with(path)
+
+        monkeypatch.setattr(check_model.path_trace, "trace", trace)
+        rep = check_model.Report()
+        await check_model.check_reachability(rep, cfg, None, "b", 1, lambda _label: None)  # ty: ignore[invalid-argument-type]
+        rows = {name: ok for name, ok, _ in rep.rows}
+        assert (
+            rows["reach L1: DcimPhysicalDevice:ap -> TopologyInternet:INTERNET crosses CloudVPNConnection:vpn"]
+            is expected
+        )
+
+
+async def test_a_pair_that_asks_for_an_opt_in_kind_passes_it_to_the_trace(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`with`: the pair is traced with the opt-in kind (the VPN) and the others without it."""
+    seen: list[tuple[str, tuple[str, ...]]] = []
+    cfg = {
+        "l1": [
+            {"src": "DcimPhysicalDevice:ap", "dst": "TopologyInternet:INTERNET", "with": ["CloudVPNConnection"]},
+            {"src": "DcimVirtualDevice:vm", "dst": "TopologyInternet:INTERNET"},
+        ]
+    }
+
+    async def trace(client: Any, src: str, dst: str, layers: Any = ("l1",), via: str | None = None, **kw: Any):
+        seen.append((src, tuple(kw.get("include") or ())))
+        return [Leg("l1", SEG, NET, paths=[[SEG, NET]])]
+
+    monkeypatch.setattr(check_model.path_trace, "trace", trace)
+    await check_model.check_reachability(check_model.Report(), cfg, None, "b", 1, lambda _label: None)  # ty: ignore[invalid-argument-type]
+    assert sorted(seen) == [("DcimPhysicalDevice:ap", ("CloudVPNConnection",)), ("DcimVirtualDevice:vm", ())]
