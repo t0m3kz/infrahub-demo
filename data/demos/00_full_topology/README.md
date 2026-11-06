@@ -717,7 +717,7 @@ IPsec and always with IPsec (a GRE tunnel has no profile). Azure ExpressRoute: a
 
 **Clusters** (`01_dc/*/01_physical/03_servers_and_clusters.yml`, `03_cloud/05_clusters`): one cluster model, three vendors on
 purpose. Each DC has extra servers (cabled straight to the leaf pair) and a cluster, `ktw1-vsphere-cl01` (vSphere, three
-hosts), `waw1-proxmox-cl01` (Proxmox VE) and `gdn1-nutanix-cl01` (Nutanix AHV): the `hypervisor` is the only thing that changes.
+hosts), `waw1-proxmox-cl01` (Proxmox VE) and `gdn1-nutanix-cl01` (Nutanix AHV): the `software_image` (a release of a platform, as on a device) is the only thing that changes.
 A VM has no cluster field, because it is always hosted on a physical node and the node is in the cluster: the two web
 frontends of KTW1 stand on different hosts, which is the anti-affinity rule. On top of the KTW1 cluster runs `ktw1-rke2-cl01`,
 an on-prem RKE2 cluster of five VMs whose three control plane nodes stand on three hosts (the quorum rule). Outside our racks:

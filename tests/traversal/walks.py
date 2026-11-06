@@ -572,7 +572,7 @@ def _onprem_kubernetes_line(cluster: dict) -> str:
     segments = sorted(val(x, "name") for x in rel(cluster, "node_segments"))
     sdn = val(_first(cluster, "sdn"), "name")
     return (
-        f"{val(cluster, 'name')} [{val(cluster, 'distribution')}] sdn {sdn} control plane {plane} workers {workers} "
+        f"{val(cluster, 'name')} [{val(_first(cluster, 'software_image'), 'name')}] sdn {sdn} control plane {plane} workers {workers} "
         f"node segments {segments}"
     )
 
@@ -600,17 +600,17 @@ def inventory_lines(d: dict) -> list[str]:
             for a in d["att"]
         ],
         "clusters": [
-            f"{val(c, 'name')} [{val(c, 'hypervisor')}] hosts {sorted(val(h, 'name') for h in rel(c, 'hosts'))} "
+            f"{val(c, 'name')} [{val(_first(c, 'software_image'), 'name')}] hosts {sorted(val(h, 'name') for h in rel(c, 'hosts'))} "
             f"sdn {val(_first(c, 'sdn'), 'name')}"
             for c in d["vcl"]
         ]
         + [
-            f"{val(c, 'name')} [provider {val(c, 'hypervisor')}] {val(c, 'host_count')} hosts in "
+            f"{val(c, 'name')} [provider {val(_first(c, 'software_image'), 'name')}] {val(c, 'host_count')} hosts in "
             f"{val(next(iter(rel(c, 'account')), {}), 'name')}"
             for c in d["mpc"]
         ]
         + [
-            f"{val(c, 'name')} [{val(c, 'distribution')}] network "
+            f"{val(c, 'name')} [{val(_first(c, 'software_image'), 'name')}] network "
             f"{val(next(iter(rel(c, 'virtual_network')), {}), 'name')} "
             f"node subnets {sorted(val(s, 'name') for s in rel(c, 'node_segments'))}"
             for c in d["k8s"]

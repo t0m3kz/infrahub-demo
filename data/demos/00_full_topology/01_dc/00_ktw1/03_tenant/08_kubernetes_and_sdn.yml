@@ -123,7 +123,7 @@ spec:
   kind: ManagedHypervisorCluster
   data:
     - name: ktw1-vsphere-cl01
-      hypervisor: vsphere
+      software_image: vsphere-8.0U3
       deployment: DC-KTW1-9-POD-1
       sdn: ktw1-nsx
 ---
@@ -135,9 +135,7 @@ spec:
     - name: ktw1-rke2-cl01
       description: "C900 platform services of DC-KTW1: RKE2 on five VMs"
       status: active
-      distribution: rke2
-      version: "1.30"
-      purpose: Platform services
+      software_image: rke2-1.30
       sdn: ktw1-cilium
       control_plane_nodes:
         - ktw1-k8s-cp-01

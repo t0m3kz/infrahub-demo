@@ -519,14 +519,14 @@ class MyCheck(InfrahubCheck):
   not through a generic one. The segment lists footprints only, never its ports: the port-to-segment edge is the port's
   `segments` (see **Interface addresses and layers**), so a reader of a segment's ports queries the ports.
 - **Clusters**: a group of hosts that run workloads is `ManagedCluster`, one generic with an implementation per technology
-  (`schemas/extensions/service/cluster.yml`). The names say what the cluster is, never whose software runs it: the hypervisor
-  is the `hypervisor` (vsphere, proxmox, kvm, openstack, ovirt, nutanix, hyperv, xcp-ng, openshift-virtualization), so one
-  model serves every vendor. `ManagedHypervisorCluster` is on-prem: its `hosts` are our `DcimPhysicalDevice` servers and its
+  (`schemas/extensions/service/cluster.yml`). The names say what the cluster is, never whose software runs it: that is its `software_image` (a
+  `DcimSoftwareImage`, the release of a `DcimPlatform` such as vsphere, proxmox, nutanix, rke2, eks, aks, as on a device;
+  the platform is the image's; the edge is `DcimSoftwareRunner`'s, which a device, a cluster and a `CloudInstance` list in
+  `inherit_from`, so an image has ONE reverse edge, `runners`), so one model serves every vendor and a new one is a
+  platform and an image record. `ManagedHypervisorCluster` is on-prem: its `hosts` are our `DcimPhysicalDevice` servers and its
   `deployment` is where they stand. `CloudHypervisorCluster` is run by a provider (Equinix Managed Private Cloud is vSphere):
-  an `account`, a `location` metro, a `host_count`, no server of ours. `ManagedKubernetesCluster` is on-prem Kubernetes
-  (rke2, k3s, kubeadm, talos, openshift, tanzu): `control_plane_nodes` and `worker_nodes` are VMs (or servers) of ours and
-  `node_segments` the tenant segments they sit in. `CloudKubernetesCluster` is managed Kubernetes (eks, aks, gke, oke,
-  openshift): an `account`, a `region`, a `virtual_network` and the cloud `node_segments`. Any cluster may have an `sdn`
+  an `account`, a `location` metro, a `host_count`, no server of ours. `ManagedKubernetesCluster` is on-prem Kubernetes: `control_plane_nodes` and `worker_nodes` are VMs (or servers) of ours and
+  `node_segments` the tenant segments they sit in. `CloudKubernetesCluster` is managed Kubernetes: an `account`, a `region`, a `virtual_network` and the cloud `node_segments`. Any cluster may have an `sdn`
   (`ManagedClusterSdn`, declared once on the generic): the software network layer that runs on it, `nsx` on a hypervisor
   cluster or a CNI (cilium, calico, flannel, antrea, ovn-kubernetes, aws-vpc-cni, azure-cni) on a Kubernetes cluster, with its
   `encapsulation`, its `overlay_cidr` (the pod range of a CNI, the TEP pool of NSX), its `service_cidr` and the

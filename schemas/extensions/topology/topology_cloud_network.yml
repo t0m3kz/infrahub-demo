@@ -552,6 +552,7 @@ nodes:
       - DcimDevice
       - DcimDeviceManaged
       - DcimCapabilities
+      - DcimSoftwareRunner
     uniqueness_constraints:
       - ["name__value"]
     attributes:

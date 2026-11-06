@@ -485,6 +485,14 @@ generics:
         kind: Attribute
         order_weight: 3000
 
+  # What runs software from the catalogue (DcimSoftwareImage, schemas/extensions/dcim/software_image.yml, which adds the
+  # `software_image` edge to this generic): a device, a cluster, a cloud instance. A kind lists it in its `inherit_from`
+  # (a generic cannot inherit a generic), so an image has ONE reverse edge, `runners`. The platform is the image's.
+  - name: SoftwareRunner
+    namespace: Dcim
+    description: "Something that runs a catalogued software image"
+    include_in_menu: false
+
 nodes:
   # --------------------  Device (Types, Platforms, Device, Interfaces )  --------------------
   - name: DeviceType
@@ -603,6 +611,7 @@ nodes:
       - DcimDeviceManaged
       - DcimCapabilities
       - AppInstance
+      - DcimSoftwareRunner
     attributes:
       - name: position
         label: Position (U)
@@ -644,6 +653,7 @@ nodes:
       - DcimDeviceManaged
       - DcimCapabilities
       - AppInstance
+      - DcimSoftwareRunner
     attributes:
       - name: cpu
         label: CPU Number

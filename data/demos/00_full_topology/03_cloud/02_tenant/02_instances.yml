@@ -9,7 +9,7 @@ spec:
       cloud_id: "i-0c900app000001"
       status: active
       instance_type: "m6i.large"
-      os_type: linux
+      software_image: linux-22.04.3
       private_ip: "10.200.1.11/24"
       availability_zone: ["eu-central-1", "eu-central-1a"]
       account: "c900-aws-prod"

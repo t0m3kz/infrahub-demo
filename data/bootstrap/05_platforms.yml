@@ -50,3 +50,18 @@ spec:
     # nothing is rendered for it), so it has no config template.
     - name: zscaler_zen
       containerlab_os: linux
+
+    # The software of a cluster (ManagedCluster.software_image): hypervisors and Kubernetes distributions. Nothing is
+    # rendered for them, so they have no config template.
+    - name: vsphere
+      description: "VMware vSphere (ESXi and vCenter)"
+    - name: proxmox
+      description: "Proxmox VE"
+    - name: nutanix
+      description: "Nutanix AHV"
+    - name: rke2
+      description: "Rancher RKE2 (on-prem Kubernetes)"
+    - name: eks
+      description: "Amazon EKS (managed Kubernetes)"
+    - name: aks
+      description: "Azure AKS (managed Kubernetes)"

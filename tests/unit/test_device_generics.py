@@ -58,13 +58,35 @@ def test_the_slim_device_holds_only_a_name_and_its_interfaces() -> None:
 
 
 def test_the_managed_device_holds_the_rest_of_the_device() -> None:
-    """Role, status, type, platform, address, tags, and the owner / software image extensions."""
+    """Role, status, type, platform, address, tags, and the owner extension (the software image is DcimSoftwareRunner's)."""
     managed = _kinds("generics")["DcimDeviceManaged"]
 
     assert _MOVED_ATTRIBUTES <= _names(managed, "attributes")
     assert _MOVED_RELATIONSHIPS <= _names(managed, "relationships")
-    assert {"owner", "software_image"} <= _extension_names("DcimDeviceManaged")
+    assert "owner" in _extension_names("DcimDeviceManaged")
+    assert "software_image" not in _extension_names("DcimDeviceManaged")
     assert not _extension_names("DcimDevice")
+
+
+def test_everything_that_runs_software_inherits_the_runner_and_the_image_has_one_reverse_edge() -> None:
+    """A device, a cluster and a cloud instance share ONE software_image edge; the image lists them in `runners`."""
+    nodes = _kinds("nodes")
+    runners = {kind for kind, node in nodes.items() if "DcimSoftwareRunner" in node.get("inherit_from", [])}
+    assert runners == {
+        "DcimPhysicalDevice",
+        "DcimVirtualDevice",
+        "ManagedControllerPhysical",
+        "ManagedControllerVirtual",
+        "CloudNetworkAppliance",
+        "ManagedHypervisorCluster",
+        "CloudHypervisorCluster",
+        "ManagedKubernetesCluster",
+        "CloudKubernetesCluster",
+        "CloudInstance",
+    }
+    image = nodes["DcimSoftwareImage"]
+    assert _names(image, "relationships") >= {"platform", "runners"}
+    assert not {"devices", "clusters"} & _names(image, "relationships")
 
 
 def test_every_managed_device_kind_inherits_both_generics() -> None:
@@ -110,18 +132,16 @@ def test_only_the_known_kinds_inherit_the_slim_device() -> None:
 
 
 def test_the_peers_that_need_a_managed_device_are_retyped() -> None:
-    """A transport cannot be put into a data center, a platform, an image, a controller or an SD-WAN gateway."""
+    """A transport cannot be put into a data center, a platform, a controller or an SD-WAN gateway."""
     nodes, generics = _kinds("nodes"), _kinds("generics")
     peers = {
         "DcimPlatform": generics["DcimPlatform"] if "DcimPlatform" in generics else nodes["DcimPlatform"],
-        "DcimSoftwareImage": nodes["DcimSoftwareImage"],
         "ManagedController": generics["ManagedController"],
         "TopologyDeviceHosting": generics["TopologyDeviceHosting"],
         "TopologyCustomerOffice": nodes["TopologyCustomerOffice"],
     }
     relationship_of = {
         "DcimPlatform": "devices",
-        "DcimSoftwareImage": "devices",
         "ManagedController": "managed_devices",
         "TopologyDeviceHosting": "devices",
         "TopologyCustomerOffice": "sdwan_gateway",

@@ -26,12 +26,12 @@
   tgwa-c900-vpc: allowed []
   vgwa-c900-vpc: allowed []
 # clusters
-  aks-c900-weu [aks] network vnet-c900-payments-weu node subnets ['c900-payments-azure-p']
-  eks-c900-euc1 [eks] network vpc-c900-prod node subnets ['c900-subnet-p']
-  gdn1-nutanix-cl01 [nutanix] hosts ['gdn1-srv-01', 'gdn1-srv-02'] sdn None
-  ktw1-vsphere-cl01 [vsphere] hosts ['ktw1-srv-01', 'ktw1-srv-02', 'ktw1-srv-03'] sdn ktw1-nsx
-  mpc-c900-par [provider vsphere] 4 hosts in c900-equinix-prod
-  waw1-proxmox-cl01 [proxmox] hosts ['waw1-srv-01', 'waw1-srv-02'] sdn None
+  aks-c900-weu [aks-1.30] network vnet-c900-payments-weu node subnets ['c900-payments-azure-p']
+  eks-c900-euc1 [eks-1.31] network vpc-c900-prod node subnets ['c900-subnet-p']
+  gdn1-nutanix-cl01 [nutanix-6.8] hosts ['gdn1-srv-01', 'gdn1-srv-02'] sdn None
+  ktw1-vsphere-cl01 [vsphere-8.0U3] hosts ['ktw1-srv-01', 'ktw1-srv-02', 'ktw1-srv-03'] sdn ktw1-nsx
+  mpc-c900-par [provider vsphere-8.0U3] 4 hosts in c900-equinix-prod
+  waw1-proxmox-cl01 [proxmox-8.2] hosts ['waw1-srv-01', 'waw1-srv-02'] sdn None
 # virtual switches
   gdn1-br0 [ovs] cluster gdn1-nutanix-cl01 uplinks ['gdn1-srv-01:bond0', 'gdn1-srv-02:eno1'] port groups [('c900-db', 300, 'c900-db-p', ['gdn1-vm-01:eth0'])]
   ktw1-dvs-01 [distributed] cluster ktw1-vsphere-cl01 uplinks ['ktw1-srv-01:bond0', 'ktw1-srv-02:eno1', 'ktw1-srv-03:eno1'] port groups [('c900-web', 100, 'c900-web-p', ['ktw1-k8s-cp-01:eth0', 'ktw1-k8s-cp-02:eth0', 'ktw1-k8s-cp-03:eth0', 'ktw1-k8s-wk-01:eth0', 'ktw1-k8s-wk-02:eth0']), ('nsx-uplink', 900, None, ['ktw1-nsx-edge-01:fp-eth0', 'ktw1-nsx-edge-02:fp-eth0'])]
@@ -43,7 +43,7 @@
   ktw1-nsx [nsx/geneve] ranges ['10.90.250.0/24', None] gateway nodes ['ktw1-nsx-edge-01@ktw1-srv-01', 'ktw1-nsx-edge-02@ktw1-srv-02']
   par-mpc-nsx [nsx/geneve] ranges [None, None] gateway nodes []
 # on-prem Kubernetes clusters
-  ktw1-rke2-cl01 [rke2] sdn ktw1-cilium control plane ['ktw1-k8s-cp-01@ktw1-srv-01', 'ktw1-k8s-cp-02@ktw1-srv-02', 'ktw1-k8s-cp-03@ktw1-srv-03'] workers ['ktw1-k8s-wk-01@ktw1-srv-01', 'ktw1-k8s-wk-02@ktw1-srv-02'] node segments ['c900-web-p']
+  ktw1-rke2-cl01 [rke2-1.30] sdn ktw1-cilium control plane ['ktw1-k8s-cp-01@ktw1-srv-01', 'ktw1-k8s-cp-02@ktw1-srv-02', 'ktw1-k8s-cp-03@ktw1-srv-03'] workers ['ktw1-k8s-wk-01@ktw1-srv-01', 'ktw1-k8s-wk-02@ktw1-srv-02'] node segments ['c900-web-p']
 # transports
   dx-c900-fra-lag: {'port': [], 'lag': [], 'vif': ['lag1.1000', 'lag1.1100']}
   er-c900-weu: {'port': [], 'lag': [], 'vif': ['er-c900-weu-pri', 'er-c900-weu-sec']}
