@@ -523,7 +523,10 @@ class MyCheck(InfrahubCheck):
   `DcimSoftwareImage`, the release of a `DcimPlatform` such as vsphere, proxmox, nutanix, rke2, eks, aks, as on a device;
   the platform is the image's; the edge is `DcimSoftwareRunner`'s, which a device, a cluster and a `CloudInstance` list in
   `inherit_from`, so an image has ONE reverse edge, `runners`), so one model serves every vendor and a new one is a
-  platform and an image record. `ManagedHypervisorCluster` is on-prem: its `hosts` are our `DcimPhysicalDevice` servers and its
+  platform and an image record. An image has a `lifecycle` (`approved`, `deprecated`, `end_of_life`) and a `vulnerable` Boolean with a
+  `vulnerability_reason` pointer (independent: an image can be both); its display label shows them. `checks/software_lifecycle.py`
+  (SL1) reports every runner of a `vulnerable` or `end_of_life` image as an ERROR and of a `deprecated` one as a WARNING;
+  no vulnerability is stored, the flag and the pointer are the catalogue's. `ManagedHypervisorCluster` is on-prem: its `hosts` are our `DcimPhysicalDevice` servers and its
   `deployment` is where they stand. `CloudHypervisorCluster` is run by a provider (Equinix Managed Private Cloud is vSphere):
   an `account`, a `location` metro, a `host_count`, no server of ours. `ManagedKubernetesCluster` is on-prem Kubernetes: `control_plane_nodes` and `worker_nodes` are VMs (or servers) of ours and
   `node_segments` the tenant segments they sit in. `CloudKubernetesCluster` is managed Kubernetes: an `account`, a `region`, a `virtual_network` and the cloud `node_segments`. Any cluster may have an `sdn`

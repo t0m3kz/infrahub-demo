@@ -1,0 +1,38 @@
+# The rows of checks/software_lifecycle.py: the images that are not fully approved, with what runs them. A device, a
+# cluster and a cloud instance all inherit DcimSoftwareRunner, so one edge (`runners`) answers for the three. A filter
+# cannot say "deprecated OR vulnerable", so the two sets are two aliased roots; the check merges them by id.
+query software_lifecycle {
+  by_lifecycle: DcimSoftwareImage(lifecycle__values: ["deprecated", "end_of_life"]) {
+    edges {
+      node {
+        ...SoftwareImageRow
+      }
+    }
+  }
+  by_vulnerability: DcimSoftwareImage(vulnerable__value: true) {
+    edges {
+      node {
+        ...SoftwareImageRow
+      }
+    }
+  }
+}
+
+fragment SoftwareImageRow on DcimSoftwareImage {
+  id
+  name { value }
+  version { value }
+  lifecycle { value }
+  vulnerable { value }
+  vulnerability_reason { value }
+  platform { node { name { value } } }
+  runners {
+    edges {
+      node {
+        id
+        __typename
+        display_label
+      }
+    }
+  }
+}
