@@ -26,3 +26,21 @@ spec:
       prefix: ["203.0.113.0/24", "INTERNET"]
       provider: "P901"
       saas_region: "WEBEX-FRANKFURT"
+    - name: "blob-public"
+      # yamllint disable-line rule:line-length
+      description: "Blob storage API of westeurope over its public range 198.18.0.0/24, through the internet (no private endpoint)"  # yamllint disable-line rule:line-length
+      status: active
+      service_name: "blob"
+      access: public
+      prefix: ["198.18.0.0/24", "INTERNET"]
+      virtual_network: "vnet-c900-weu"
+      provider: "P005"
+    - name: "gcs-public"
+      # yamllint disable-line rule:line-length
+      description: "Object storage API of europe-west3 over its public range 198.18.1.0/24, through the internet (no private access)"  # yamllint disable-line rule:line-length
+      status: active
+      service_name: "gcs"
+      access: public
+      prefix: ["198.18.1.0/24", "INTERNET"]
+      virtual_network: "vpc-c900-gcp"
+      provider: "P006"

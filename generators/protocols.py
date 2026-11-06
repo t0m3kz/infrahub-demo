@@ -660,10 +660,8 @@ class IpamIPAddress(BuiltinIPAddress):
 
 class CloudInstance(CloudResource, DcimCapabilities, AppInstance):
     cpu_count: IntegerOptional
-    image: StringOptional
     instance_type: StringOptional
     memory_gb: IntegerOptional
-    os_type: DropdownOptional
     private_ip: IPHostOptional
     public_ip: IPHostOptional
     account: RelationshipAttribute[CloudAccount]

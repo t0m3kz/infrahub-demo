@@ -6,7 +6,7 @@ version: "1.0"
 #
 # Replaces the free-text os_version field on DcimDevice with a structured
 # relationship so that:
-#   - All devices on the same release share one node (queryable)
+#   - All devices, clusters and cloud instances on the same release share one node (queryable)
 #   - The platform is implicit from the image (no mismatch possible)
 #
 # HFID:    name__value  (e.g. "arista_eos-4.28.3M", "linux-22.04.3")
@@ -24,7 +24,8 @@ nodes:
     order_by:
       - platform__name__value
       - version__value
-    display_label: "{{ name__value }}"
+    # yamllint disable-line rule:line-length
+    display_label: "{{ name__value }}{{ ' (' ~ lifecycle__value | replace('_', ' ') ~ ')' if lifecycle__value != 'approved' else '' }}{{ ' (vulnerable)' if vulnerable__value else '' }}"
     uniqueness_constraints:
       - [platform, version__value]
     attributes:
@@ -40,6 +41,42 @@ nodes:
         optional: false
         order_weight: 200
         description: "Release version string (e.g. 4.28.3M, 22.04.3, R81.20)"
+
+      - name: lifecycle
+        kind: Dropdown
+        label: "Lifecycle"
+        optional: false
+        default_value: approved
+        order_weight: 210
+        description: "The vendor's support status; checks/software_lifecycle.py reports what runs a bad one"
+        choices:
+          - name: approved
+            label: Approved
+            description: "Supported and safe to deploy."
+            color: "#7fbf7f"
+          - name: deprecated
+            label: Deprecated
+            description: "Still supported, to be replaced at the next window."
+            color: "#ffd966"
+          - name: end_of_life
+            label: End of Life
+            description: "No longer supported by the vendor."
+            color: "#999999"
+
+      - name: vulnerable
+        kind: Boolean
+        label: "Vulnerable"
+        optional: false
+        default_value: false
+        order_weight: 215
+        description: "A known vulnerability affects this release (independent of its support status): upgrade"
+
+      - name: vulnerability_reason
+        kind: Text
+        label: "Vulnerability Reason"
+        optional: true
+        order_weight: 216
+        description: "Why it is flagged: the CVE ids or the advisory, and the release that fixes it (a pointer, nothing is stored)"  # yamllint disable-line rule:line-length
 
       - name: package
         kind: Text
@@ -71,19 +108,22 @@ nodes:
         identifier: "software_image__platform"
         description: "OS platform this image belongs to"
 
-      - name: devices
-        peer: DcimDeviceManaged
-        label: "Devices"
+      - name: runners
+        peer: DcimSoftwareRunner
+        label: "Running On"
         cardinality: many
         kind: Attribute
         optional: true
         order_weight: 800
-        identifier: "device__software_image"
-        description: "Devices currently running this image"
+        identifier: "software_image__runner"
+        description: "Everything currently running this image: devices, clusters, cloud instances"
 
 extensions:
   nodes:
-    - kind: DcimDeviceManaged
+    # The edge of DcimSoftwareRunner (the generic is in schemas/base/dcim.yml, which cannot name this kind; an
+    # extension of a generic is listed under `nodes`): a device, a cluster, a cloud instance run ONE image, and the
+    # image lists them in `runners`.
+    - kind: DcimSoftwareRunner
       relationships:
         - name: software_image
           peer: DcimSoftwareImage
@@ -92,5 +132,5 @@ extensions:
           kind: Attribute
           optional: true
           order_weight: 1260
-          identifier: "device__software_image"
-          description: "Versioned OS/firmware image running on this device"
+          identifier: "software_image__runner"
+          description: "Versioned OS, firmware or hypervisor release this runs; its platform is the image's"

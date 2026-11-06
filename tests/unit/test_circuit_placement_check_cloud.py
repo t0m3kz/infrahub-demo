@@ -16,7 +16,6 @@ from tests.unit.circuit_placement_check_helpers import (
     EG_FR_END,
     EG_FR_VLAN,
     EUC1,
-    FR,
     FR2,
     PA4,
     XC,
@@ -146,51 +145,36 @@ class TestHandoffEnds:
         assert "ends carry different VLANs" in message and "eg-fr201:Ethernet1/13 = no VLAN" in message
 
 
-def _fabric_end(device: str, name: str, metro: dict[str, Any]) -> dict[str, Any]:
-    """An end port of the provider's port of a colocation metro: no deployment, its metro places it."""
-    place = {key: metro[key] for key in ("id", "__typename", "name")}
+def _fabric_end(device: str, name: str, location: dict[str, Any] | None) -> dict[str, Any]:
+    """An end port of the provider's connect device: no deployment, its own location (a zone) places it."""
+    place = {key: location[key] for key in ("id", "__typename", "name")} if location else None
     return {
         "id": f"id-{device}:{name}",
         "name": {"value": name},
-        "device": {"node": {"id": f"id-{device}", "name": {"value": device}, "metro": {"node": place}}},
+        "device": {"node": {"id": f"id-{device}", "name": {"value": device}, "location": {"node": place}}},
     }
 
 
-def _in_metro(zone: dict[str, Any], metro: dict[str, Any]) -> dict[str, Any]:
-    """A zone as the query selects it, with the metro it belongs to (its ``parent``)."""
-    return {**zone, "parent": {"node": {"id": metro["id"]}}}
+FABRIC_END = _fabric_end("EXT-FABRIC-FR", "et-0/0/0", FR2)
 
 
-FABRIC_END = _fabric_end("EXT-FABRIC-FR", "et-0/0/0", FR)
-FABRIC_EDGE_END = _fabric_end("EXT-FABRIC-FR", "et-0/0/1", FR)
+class TestCarrierOnAProviderConnect:
+    """The provider's connect device has no deployment: its location is the place of its end."""
 
-
-class TestCarrierOnAColocationConnect:
-    """The provider's port of a metro has no deployment: a zone of its metro is the location of its end."""
-
-    def test_a_zone_of_the_metro_places_the_end(self) -> None:
-        """The cage of the metro and the cloud region: the Fabric port stands for the whole metro."""
-        circuit = _carrier_circuit("EQX-FR-1", [_in_metro(FR2, FR), EUC1], [FABRIC_END, DX_END])
+    def test_its_location_places_the_end(self) -> None:
+        """The cage where the Fabric port sits and the cloud region are the two ends' places."""
+        circuit = _carrier_circuit("EQX-FR-1", [FR2, EUC1], [FABRIC_END, DX_END])
         assert _run(carrier=[circuit]) == []
 
-    def test_a_virtual_colocation_of_the_metro_places_the_end(self) -> None:
-        """A provider-hosted virtual colocation belongs to the metro too."""
-        virtual = _in_metro(_place("FR-NE", "TopologyVirtualColocation"), FR)
-        circuit = _carrier_circuit("EQX-FR-2", [virtual, EUC1], [FABRIC_EDGE_END, DX_END])
-        assert _run(carrier=[circuit]) == []
-
-    def test_a_zone_of_another_metro_fails(self) -> None:
-        """The Paris cage is not a place of the Frankfurt Fabric port."""
-        circuit = _carrier_circuit(
-            "EQX-BAD", [_in_metro(PA4, _place("PA", "TopologyColocationMetro")), EUC1], [FABRIC_END, DX_END]
-        )
+    def test_a_location_that_is_not_the_ports_fails(self) -> None:
+        """The Paris cage is not the place of a Fabric port that sits in the Frankfurt cage."""
+        circuit = _carrier_circuit("EQX-BAD", [PA4, EUC1], [FABRIC_END, DX_END])
         (message,) = _run(carrier=[circuit])
         assert "EQX-BAD" in message and "not a sibling zone" in message
 
-    def test_a_port_with_no_metro_is_reported_as_undeployed(self) -> None:
-        """A port whose metro is missing is placed nowhere: the finding names the port."""
-        nowhere = _fabric_end("EXT-FABRIC-X", "et-0/0/0", FR)
-        nowhere["device"]["node"]["metro"] = {"node": None}
-        circuit = _carrier_circuit("EQX-NOWHERE", [_in_metro(FR2, FR), EUC1], [nowhere, DX_END])
+    def test_a_port_with_no_location_is_reported_as_undeployed(self) -> None:
+        """A port whose location is missing is placed nowhere: the finding names the port."""
+        nowhere = _fabric_end("EXT-FABRIC-X", "et-0/0/0", None)
+        circuit = _carrier_circuit("EQX-NOWHERE", [FR2, EUC1], [nowhere, DX_END])
         (message,) = _run(carrier=[circuit])
         assert "end 'EXT-FABRIC-X:et-0/0/0' is on a device with no deployment" in message

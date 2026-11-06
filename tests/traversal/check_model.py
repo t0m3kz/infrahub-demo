@@ -245,13 +245,19 @@ async def check_reachability(
     pairs'). The ends are where a user, a server or a workload sits (an access point, a VM, a cloud segment, THE
     INTERNET), so a broken hop anywhere between them fails a row, whichever box it is on."""
     gate = asyncio.Semaphore(max(1, jobs))
+    # a pair may name a node its shortest chain must cross (`through`: the way in over the internet is the VPN, not the cage)
+    must_cross = {(p["src"], p["dst"], p.get("via")): p["through"] for p in cfg.get("l1") or [] if p.get("through")}
+    opt_in = {(p["src"], p["dst"], p.get("via")): tuple(p["with"]) for p in cfg.get("l1") or [] if p.get("with")}
 
     async def one(layer: str, src: str, dst: str, via: str | None) -> Report:
         part = Report()
         title = f"reach {layer.upper()}: {src} -> {dst}" + (f" via {via}" if via else "")
         async with gate:
             for _attempt in range(REACH_ATTEMPTS):
-                legs = await traced(part, title, client, branch, src, dst, 1, layers=(layer,), via=via)
+                legs = await traced(
+                    part, title, client, branch, src, dst, 1, layers=(layer,), via=via,
+                    include=opt_in.get((src, dst, via), ()),
+                )  # fmt: skip
                 # a leg with no path is only a failure when the search ended: the server also stops when its budget runs
                 # out (a busy stack), which says nothing about the path, so that one is asked again
                 if legs is None or not any(not leg.paths and leg.truncated_at for leg in legs):
@@ -261,6 +267,14 @@ async def check_reachability(
             budget = [str(leg.truncated_at) for leg in legs if not leg.paths and leg.truncated_at]
             note = f"no path for {missing}" + (f" (budget ran out at depth {budget})" if budget else "")
             part.add(title, bool(legs) and not missing, note)
+            needed = must_cross.get((src, dst, via)) if layer == "l1" else None
+            if needed:
+                crossed = any(
+                    path_trace.label(n) == needed for leg in legs for n in (leg.equal_cost[0] if leg.paths else [])
+                )
+                part.add(
+                    f"{title} crosses {needed}", crossed, "" if crossed else "the shortest chain does not cross it"
+                )
         return part
 
     work = reach_jobs(cfg)

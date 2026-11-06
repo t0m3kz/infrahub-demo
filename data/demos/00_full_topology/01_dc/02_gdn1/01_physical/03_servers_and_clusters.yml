@@ -57,9 +57,7 @@ spec:
     - name: gdn1-nutanix-cl01
       description: "C900 production compute of DC-GDN1: Nutanix AHV (Prism), 2 hosts"
       status: active
-      hypervisor: nutanix
-      version: "6.8"
-      purpose: Production compute
+      software_image: nutanix-6.8
       manager: "https://prism.gdn1.demo.local:9440"
       inventory_path: GDN1
       ha_enabled: true

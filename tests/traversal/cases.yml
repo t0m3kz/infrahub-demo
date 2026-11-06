@@ -90,11 +90,15 @@ cases:
         - {isp_device: EXT-ISP-A-PE1, access_port: Ethernet1/2, access_carrier: ISPA-48211, uplink_carrier: UPL-48001}  # yamllint disable-line rule:line-length
         - {isp_device: EXT-ISP-B-PE1, access_port: Ethernet1/1, access_carrier: ISPB-77301, uplink_carrier: UPL-77001}  # yamllint disable-line rule:line-length
       public_sides:
-        - {endpoint: s3-public, prefix: 192.0.2.0/24, kind: cloud, transport: s3-c900-euc1-pub, port: pub-1, carrier: PUB-16509}  # yamllint disable-line rule:line-length
-        - {endpoint: webex-public, prefix: 203.0.113.0/24, kind: saas, transport: webex-c900-fra-pub, port: pub-1, carrier: PUB-13445}  # yamllint disable-line rule:line-length
+        - {endpoint: s3-public, prefix: 192.0.2.0/24, kind: cloud, transport: EXT-AWS-EUC1, port: pub-1, carrier: PUB-16509}  # yamllint disable-line rule:line-length
+        - {endpoint: webex-public, prefix: 203.0.113.0/24, kind: saas, transport: EXT-WEBEX-FRA, port: pub-1, carrier: PUB-13445}  # yamllint disable-line rule:line-length
+        - {endpoint: blob-public, prefix: 198.18.0.0/24, kind: cloud, transport: EXT-AZURE-WEU, port: pub-1, carrier: PUB-20113}  # yamllint disable-line rule:line-length
+        - {endpoint: gcs-public, prefix: 198.18.1.0/24, kind: cloud, transport: EXT-GCP-EUW3, port: pub-1, carrier: PUB-22407}  # yamllint disable-line rule:line-length
       # the cages on an Equinix Internet Access service: their carrier runs from the connection interface of the
       # provider's Fabric port straight to the bus, no ISP router on the way
       fabric_accesses: [EQX-5A1F2C30, EQX-8D3B6E41]
+      # the public tunnel endpoint of the AWS VPN: an internet carrier from the transport port to the bus
+      vpn_accesses: [PUB-26501]
       # L3 of the first ISP: the eBGP session on the two physical ports of the access carrier
       l3: {isp_device: EXT-ISP-A-PE1, edge_port: Ethernet1/2, isp_port: et-0/0/0}
     # THE THREE SITES reach THE INTERNET in L1, each through its own access carrier (and then the uplink of the ISP
@@ -151,6 +155,9 @@ cases:
         - {src: "DcimVirtualDevice:gdn1-vm-01", dst: "DcimPhysicalDevice:lis-office-ap-03", via: "TopologyInternet:INTERNET"}
         # yamllint disable-line rule:line-length
         - {src: "DcimPhysicalDevice:bcn-office-ap-01", dst: "DcimPhysicalDevice:lis-office-ap-03", via: "TopologyInternet:INTERNET"}
+        # access point to a cloud segment OVER THE INTERNET: the VPN transport's public endpoint is the way in
+        # yamllint disable-line rule:line-length
+        - {src: "DcimPhysicalDevice:bcn-office-ap-01", dst: "CloudNetworkSegment:c900-subnet-p", via: "TopologyInternet:INTERNET", with: [CloudVPNConnection], through: "CloudVPNConnection:vpn-c900-aws-euc1"}
         # access point and server to a cloud segment: through the cage, where every cloud leg lands
         # yamllint disable-line rule:line-length
         - {src: "DcimPhysicalDevice:bcn-office-ap-01", dst: "CloudNetworkSegment:c900-subnet-p", via: "DcimPhysicalDevice:par-colo1-edge-01"}
@@ -162,7 +169,6 @@ cases:
         - {src: "DcimVirtualDevice:gdn1-vm-01", dst: "CloudNetworkSegment:c900-subnet-p", via: "DcimPhysicalDevice:par-colo1-edge-01"}
     layout:
       zone: PAR-COLO1
-      metro: PAR
       colo_edge: par-colo1-edge-01
       fabric_port_device: EXT-FABRIC-PAR
       offices:
@@ -209,13 +215,13 @@ cases:
         through:
           # the Direct Connect is delivered to the colocation cage: from the DC the path crosses a dark fibre (L1) and
           # the EVPN peering of the DCI (L3: BGP processes and peerings, so no session circuit of type dci on the chain)
-          CloudDirectConnect:dx-c900-fra-lag: {l1: [cross_connect, dark_fiber], l3: [handoff]}
+          CloudDirectConnect:dx-c900-fra-lag: {l1: [dark_fiber], l3: [handoff]}
           CloudVPNConnection:vpn-c900-aws-euc1: {l3: [vpn]}
         # the kinds of the transport a chain crosses
         far_end_kinds: [CloudDirectConnect, CloudVPNConnection]
-        # what a transport holds as its own interfaces: ports, LAG, VIFs
+        # what a transport holds as its own interfaces: the VIFs (the ports and the LAG are the provider connect's)
         transport_kinds:
-          dx-c900-fra-lag: [port, lag, vif]
+          dx-c900-fra-lag: [vif]
           vpn-c900-aws-euc1: [vif]
       # DC -> SaaS over a private cross-connect and a BGP handoff (Webex)
       - src: ManagedVxlanSegment:c900-web-p
@@ -223,10 +229,10 @@ cases:
         golden: full_topology__web__saas-webex.txt
         max_paths: 100
         through:
-          CloudDirectConnect:webex-c900-fra-xc: {l1: [cross_connect, dark_fiber], l3: [handoff]}
+          CloudDirectConnect:webex-c900-fra-xc: {l1: [dark_fiber], l3: [handoff]}
         far_end_kinds: [CloudDirectConnect]
         transport_kinds:
-          webex-c900-fra-xc: [port, vif]
+          webex-c900-fra-xc: [vif]
       # DC -> SaaS over a tunnel on the internet carrier, no session (Zscaler): the DC edge is the SD-WAN hub, the
       # office edge holds the tunnel to Zscaler
       - src: ManagedVxlanSegment:c900-web-p
@@ -305,25 +311,25 @@ cases:
         max_paths: 100
         through:
           CloudVPNConnection:vpn-c900-aws-euc1: {l3: [tunnel, vpn]}
-          CloudDirectConnect:dx-c900-fra-lag: {l1: [cross_connect, internet]}
+          CloudDirectConnect:dx-c900-fra-lag: {l1: [internet]}
         far_end_kinds: [CloudDirectConnect, CloudVPNConnection]
-      # colocation -> AWS: the cross-connect from the cage edge, one hop to the Direct Connect port
+      # colocation -> AWS: the cable from the cage edge to the port of the AWS device in the cage, then its LAG and VIFs
       - src: DcimPhysicalDevice:par-colo1-edge-01
         dst: CloudNetworkSegment:c900-subnet-p
         golden: full_topology__colo__aws.txt
         max_paths: 100
         through:
-          CloudDirectConnect:dx-c900-fra-lag: {l1: [cross_connect], l3: [handoff]}
+          CloudDirectConnect:dx-c900-fra-lag: {l1: [], l3: [handoff]}
         far_end_kinds: [CloudDirectConnect]
         transport_kinds:
-          dx-c900-fra-lag: [port, lag, vif]
+          dx-c900-fra-lag: [vif]
       # colocation -> the ExpressRoute transport: edge Ethernet1/1 -> patch panel -> Fabric port -> virtual connections
       - src: DcimPhysicalDevice:par-colo1-edge-01
         dst: CloudDirectConnect:er-c900-weu
         golden: full_topology__colo__er.txt
         circuit_types: {l1: [virtual_connection], l3: [handoff]}
         transport_kinds:
-          er-c900-weu: [port, vif]
+          er-c900-weu: [vif]
       # the application across the DCs: frontend (DC-KTW1) -> backend (DC-WAW1) -> database (DC-GDN1)
       - src: DcimVirtualDevice:ktw1-vm-01
         dst: DcimVirtualDevice:waw1-vm-01

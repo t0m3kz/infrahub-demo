@@ -11,9 +11,10 @@ those carriers must look like; this module does, on the cleaned carrier dicts of
 I1  there is one INTERNET object, with exactly one interface and it is the internet interface
 I2  an attachment (a carrier with an end of the internet interface kind) is an ``internet`` circuit, the interface is
     on the INTERNET object, and its other end is an ISP router (``TopologyExternalProviders``), the port of a cloud or
-    SaaS transport (``region`` or ``saas_region``) or the connection interface of the provider's port of a colocation
-    metro (``metro``: an Internet Access service on the Fabric port the cage edge is cabled to): never a DC or a cage
-    (an edge reaches the internet through an access of its own), never the internet interface again
+    SaaS transport (``region`` or ``saas_region``) or a port of the provider's connect device
+    (``TopologyProviderConnect``: an Internet Access service on the Fabric port the cage edge is cabled to, the public
+    side of a region): never a DC or a cage of ours (an edge reaches the internet through an access of its own), never
+    the internet interface again
 I3  once the INTERNET is modelled, an ISP router that serves an internet access carrier has an attachment, else the
     access reaches no public side. An access between two routers of ISP kind (a partner's border router buying access
     from an ISP) is judged as one: it is fine when either end is attached. With no INTERNET object in the data nothing
@@ -27,9 +28,10 @@ from typing import Any
 from utils.circuit_underlay import DECOMMISSIONED, INTERNET_INTERFACE_KIND, INTERNET_KIND, ISP_KIND
 
 ATTACHMENT_CARRIER_TYPE = "internet"
-# The facility of the far end of an attachment: an ISP, the region a public side transport sits in, or the metro of the
-# provider's port of a colocation.
-FAR_END_FACILITY_KINDS = (ISP_KIND, "TopologyCloudRegion", "TopologySaasRegion", "TopologyColocationMetro")
+# The facility of the far end of an attachment: an ISP, or the region a public side transport sits in. The provider's
+# connect device is accepted by its kind (its location may be a cage: the cage is the provider's port, not our edge).
+FAR_END_FACILITY_KINDS = (ISP_KIND, "TopologyCloudRegion", "TopologySaasRegion")
+PROVIDER_CONNECT_KIND = "TopologyProviderConnect"
 Finding = tuple[dict[str, Any], str]
 
 
@@ -47,7 +49,7 @@ def _on_internet_interface(port: dict[str, Any]) -> bool:
 
 
 def _facility_kind(device: dict[str, Any]) -> str | None:
-    place = device.get("deployment") or device.get("region") or device.get("saas_region") or device.get("metro")
+    place = device.get("deployment") or device.get("region") or device.get("saas_region") or device.get("location")
     return place.get("typename") if isinstance(place, dict) else None
 
 
@@ -99,11 +101,16 @@ def _attachment_findings(carrier: dict[str, Any]) -> list[str]:
                 f"{INTERNET_INTERFACE_KIND} of a device that is not THE INTERNET."
             )
     far = [port for port in ports if not _on_internet_interface(port)]
-    bad = [_name(_device(port)) for port in far if _facility_kind(_device(port)) not in FAR_END_FACILITY_KINDS]
+    bad = [
+        _name(_device(port))
+        for port in far
+        if _device(port).get("typename") != PROVIDER_CONNECT_KIND
+        and _facility_kind(_device(port)) not in FAR_END_FACILITY_KINDS
+    ]
     if len(far) != 1 or bad:
         messages.append(
             f"Carrier circuit '{name}' ends on THE INTERNET and on {', '.join(bad) or 'its interface again'}: its other "
-            "end is an ISP router, the port of a cloud or SaaS transport or the provider's port of a colocation metro."
+            "end is an ISP router, the port of a cloud or SaaS transport or a provider connect."
         )
     return messages
 

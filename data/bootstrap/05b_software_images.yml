@@ -13,11 +13,13 @@ spec:
     - name: arista_eos-4.28.3M
       version: "4.28.3M"
       platform: arista_eos
+      lifecycle: deprecated
       description: "EOS 4.28 LTS — maintenance release, approved for existing deployments only"
 
     - name: arista_eos-4.30.4M
       version: "4.30.4M"
       platform: arista_eos
+      lifecycle: deprecated
       description: "EOS 4.30 LTS — approved, superseded by 4.32"
 
     - name: arista_eos-4.32.1F
@@ -29,6 +31,7 @@ spec:
     - name: linux-20.04.6
       version: "20.04.6"
       platform: linux
+      lifecycle: end_of_life
       description: "Ubuntu 20.04 LTS (Focal) — EoS reached April 2025, do not use for new builds"
 
     - name: linux-22.04.3
@@ -45,6 +48,7 @@ spec:
     - name: checkpoint_gaia-R81.10
       version: "R81.10"
       platform: checkpoint_gaia
+      lifecycle: deprecated
       description: "Gaia R81.10 — approved for existing deployments, migrate to R81.20"
 
     - name: checkpoint_gaia-R81.20
@@ -56,6 +60,7 @@ spec:
     - name: f5_tmos-16.1.4
       version: "16.1.4"
       platform: f5_tmos
+      lifecycle: deprecated
       description: "TMOS 16.1 LTS — approved, migrate to 17.1 at next maintenance window"
 
     - name: f5_tmos-17.1.1
@@ -67,6 +72,7 @@ spec:
     - name: netscaler-13.1.48.47
       version: "13.1.48.47"
       platform: netscaler
+      lifecycle: deprecated
       description: "NetScaler ADC 13.1 — approved, superseded by 14.1"
 
     - name: netscaler-14.1.17.16
@@ -78,6 +84,7 @@ spec:
     - name: panos-10.2.7
       version: "10.2.7"
       platform: paloalto_panos
+      lifecycle: deprecated
       description: "PAN-OS 10.2 — approved for existing deployments"
 
     - name: panos-11.1.3
@@ -89,6 +96,7 @@ spec:
     - name: cisco_ios-17.9.4a
       version: "17.9.4a"
       platform: cisco_ios
+      lifecycle: deprecated
       description: "IOS XE 17.9 (Amsterdam) — Extended Maintenance, approved for existing Catalyst 9200 deployments"
 
     - name: cisco_ios-17.12.4
@@ -100,6 +108,7 @@ spec:
     - name: cisco_xe-17.3.8a
       version: "17.3.8a"
       platform: cisco_xe
+      lifecycle: deprecated
       description: "IOS XE 17.3 (Amsterdam) Extended Maintenance — approved, migrate off before EoS"
 
     - name: cisco_xe-17.12.4
@@ -117,6 +126,7 @@ spec:
     - name: cisco_nxos-9.3.11
       version: "9.3(11)"
       platform: cisco_nxos
+      lifecycle: deprecated
       description: "NX-OS 9.3(11) — approved, superseded by 10.3"
 
     - name: cisco_nxos-10.3.3
@@ -135,6 +145,7 @@ spec:
     - name: dell_sonic-4.1.1
       version: "4.1.1"
       platform: dell_sonic
+      lifecycle: deprecated
       description: "Dell Enterprise SONiC Distribution 4.1 — approved, migrate to 4.4"
 
     - name: dell_sonic-4.4.1
@@ -146,6 +157,7 @@ spec:
     - name: sonic-202211
       version: "202211"
       platform: sonic
+      lifecycle: deprecated
       description: "Community SONiC 202211 branch — approved, migrate to 202405"
 
     - name: sonic-202405
@@ -158,6 +170,7 @@ spec:
     - name: juniper_junos-21.4R3
       version: "21.4R3"
       platform: juniper_junos
+      lifecycle: deprecated
       description: "Junos 21.4R3 EEOL — approved, migrate to 23.4 (existing SRX-1500 deployments included)"
 
     - name: juniper_junos-23.4R2
@@ -169,6 +182,7 @@ spec:
     - name: perle_iolan-4.8
       version: "4.8"
       platform: linux
+      lifecycle: deprecated
       description: "IOLAN firmware 4.8 — approved, migrate to 5.0"
 
     - name: perle_iolan-5.0
@@ -180,6 +194,7 @@ spec:
     - name: velocloud-5.2.0
       version: "5.2.0"
       platform: linux
+      lifecycle: deprecated
       description: "Edge OS 5.2 — approved, migrate to 6.0"
 
     - name: velocloud-6.0.0
@@ -191,9 +206,41 @@ spec:
     - name: haproxy_technologies-2.6.14
       version: "2.6.14"
       platform: haproxy_technologies
+      lifecycle: deprecated
       description: "HAProxy 2.6 LTS — approved, migrate to 2.8 LTS"
 
     - name: haproxy_technologies-2.8.9
       version: "2.8.9"
       platform: haproxy_technologies
       description: "HAProxy 2.8 LTS — current recommended release"
+
+    # ── Clusters: hypervisors and Kubernetes ──────────────────────────────────
+    - name: vsphere-8.0U3
+      version: "8.0U3"
+      platform: vsphere
+      description: "vSphere 8.0 update 3"
+
+    - name: proxmox-8.2
+      version: "8.2"
+      platform: proxmox
+      description: "Proxmox VE 8.2"
+
+    - name: nutanix-6.8
+      version: "6.8"
+      platform: nutanix
+      description: "Nutanix AHV 6.8"
+
+    - name: rke2-1.30
+      version: "1.30"
+      platform: rke2
+      description: "RKE2 on Kubernetes 1.30"
+
+    - name: eks-1.31
+      version: "1.31"
+      platform: eks
+      description: "EKS on Kubernetes 1.31"
+
+    - name: aks-1.30
+      version: "1.30"
+      platform: aks
+      description: "AKS on Kubernetes 1.30"

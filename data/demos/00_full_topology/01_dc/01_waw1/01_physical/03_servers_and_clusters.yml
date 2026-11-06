@@ -57,9 +57,7 @@ spec:
     - name: waw1-proxmox-cl01
       description: "C900 production compute of DC-WAW1: Proxmox VE, 2 hosts"
       status: active
-      hypervisor: proxmox
-      version: "8.2"
-      purpose: Production compute
+      software_image: proxmox-8.2
       manager: "https://pve.waw1.demo.local:8006"
       inventory_path: WAW1
       ha_enabled: true

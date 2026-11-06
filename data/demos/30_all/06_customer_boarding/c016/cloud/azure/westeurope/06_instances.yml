@@ -10,7 +10,7 @@ spec:
       cloud_id: "vm-c016-billing-frontend-1"
       status: active
       instance_type: "Standard_D2s_v5"
-      os_type: linux
+      software_image: linux-22.04.3
       cpu_count: 2
       memory_gb: 8
       private_ip: "10.160.1.11/24"
@@ -22,7 +22,7 @@ spec:
       cloud_id: "vm-c016-billing-frontend-2"
       status: active
       instance_type: "Standard_D2s_v5"
-      os_type: linux
+      software_image: linux-22.04.3
       cpu_count: 2
       memory_gb: 8
       private_ip: "10.160.1.12/24"
@@ -34,7 +34,7 @@ spec:
       cloud_id: "vm-c016-billing-worker-1"
       status: active
       instance_type: "Standard_D4s_v5"
-      os_type: linux
+      software_image: linux-22.04.3
       cpu_count: 4
       memory_gb: 16
       private_ip: "10.160.1.21/24"
@@ -46,7 +46,7 @@ spec:
       cloud_id: "vm-c016-billing-worker-2"
       status: active
       instance_type: "Standard_D4s_v5"
-      os_type: linux
+      software_image: linux-22.04.3
       cpu_count: 4
       memory_gb: 16
       private_ip: "10.160.1.22/24"

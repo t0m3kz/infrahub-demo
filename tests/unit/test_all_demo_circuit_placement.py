@@ -95,10 +95,10 @@ def test_session_circuits_share_no_port() -> None:
 
 
 def test_without_the_cables_the_cable_carried_handoffs_are_reported() -> None:
-    """The gateway handoff has only a cable under it."""
+    """The gateway handoff and the AWS Direct Connect handoff have only a cable under them."""
     messages = [finding["message"] for finding in _findings(build_payloads(without_cables=True))]
     reported = {circuit for circuit in ALL_DEMO_VIRTUAL_CIRCUITS if any(f"'{circuit}'" in m for m in messages)}
-    assert reported == {"HANDOFF-FR2-SDWAN-GW1-PROD"}
+    assert reported == {"HANDOFF-FR2-SDWAN-GW1-PROD", "HANDOFF-FR2-AWS-EUC1-PROD"}
 
 
 def test_without_the_partner_internet_access_the_partner_tunnel_is_reported() -> None:

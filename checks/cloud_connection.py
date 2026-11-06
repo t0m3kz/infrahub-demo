@@ -1,9 +1,9 @@
 """Validate the cloud side of a connection: gateways, transports, their interfaces and tunnels (R1 to R9).
 
-A transport (``CloudDirectConnect``, ``CloudVPNConnection``) is a device that holds interfaces: ports, a LAG, and the
-``CloudPeeringInterface`` that ride on them. The schema accepts what these rules refuse (measured on 1.11.9): an
+A transport (``CloudDirectConnect``, ``CloudVPNConnection``) is a device that holds interfaces: the
+``CloudPeeringInterface`` that ride on the ports and LAG of the provider's ``TopologyProviderConnect`` (or tunnels). The schema accepts what these rules refuse (measured on 1.11.9): an
 attachment with no target or with two, a transport riding on itself, a peering whose ``parent_interface`` (a one-sided
-edge) is a port of another device. Each rule is one method and reports ERRORs.
+edge) is a port of a device that is no provider connect. Each rule is one method and reports ERRORs.
 
 R1  an attachment has exactly one target, ``virtual_network`` or ``peer_gateway``, and its peer gateway is not its own
 R2  a route table belongs to a ``hub`` gateway, and an attachment's route tables belong to the attachment's gateway
@@ -14,7 +14,7 @@ R5  a crypto profile belongs to an IPsec tunnel, and an IPsec tunnel has one (GR
 R6  a VPN tunnel has the provider's ``endpoint_ip`` and is an interface of a VPN connection
 R7  retired: that every interface of a transport is on that transport is held twice already, by the server for the
     members of a LAG (``common_parent: device``) and by ``checks/interface_parents.py`` for the ``parent_interface`` of
-    a peering (a ``DcimSubInterface``, like a sub-interface of a managed device)
+    a peering (a ``DcimSubInterface``: the port of its own transport or of a provider connect)
 R8  a peering that has a ``vlan_id`` rides on a port or LAG (a tunnel needs no parent), the parent of a peering is a
     port or LAG, and the VLANs of the peerings of one parent are distinct
 R9  placement: a transport has exactly one of ``region`` and ``saas_region``; with an ``account`` it has no ``owner``,

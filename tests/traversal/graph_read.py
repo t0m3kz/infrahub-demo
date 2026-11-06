@@ -45,8 +45,8 @@ QUERIES = {
       member_interfaces {{ edges {{ node {{ id name {{ value }} }} }} }} }} }} }}""",
     "dev": """DcimPhysicalDevice { edges { node { id name { value } role { value } deployment { node { __typename name { value }
       ... on TopologyExternalProviders { provider { node { org_id { value } } } parent { node { name { value } } } } } } } } }""",
-    # the provider's port of a colocation metro: no deployment, its metro places it
-    "cport": """TopologyColocationConnect { edges { node { id name { value } metro { node { name { value } } } } } }""",
+    # the provider's connect device: no deployment, its location (a zone, a region, a SaaS region) places it
+    "cport": """TopologyProviderConnect { edges { node { id name { value } location { node { __typename display_label name { value } } } } } }""",
     # THE INTERNET: a device that is a facility, one interface of its own kind; the carriers on it are who is attached
     "inet": """TopologyInternet { edges { node { id name { value } parent { node { __typename name { value } } } interfaces { edges { node { __typename id name { value } } } }
       circuits { edges { node { id name { value } } } } } } }""",
@@ -72,16 +72,16 @@ QUERIES = {
       customer_gateway { node { id } } gateway { node { id } } } } }""",
     "sdn": """ManagedClusterSdn { edges { node { id name { value } provider { value } encapsulation { value } overlay_cidr { value }
       service_cidr { value } gateway_nodes { edges { node { name { value } hosting_device { node { name { value } } } } } } } } }""",
-    "onk8s": """ManagedKubernetesCluster { edges { node { id name { value } distribution { value } sdn { node { name { value } } }
+    "onk8s": """ManagedKubernetesCluster { edges { node { id name { value } software_image { node { name { value } platform { node { name { value } } } } } sdn { node { name { value } } }
       control_plane_nodes { edges { node { name { value } ... on DcimVirtualDevice { hosting_device { node { name { value } } } } } } }
       worker_nodes { edges { node { name { value } ... on DcimVirtualDevice { hosting_device { node { name { value } } } } } } }
       node_segments { edges { node { name { value } } } } } } }""",
-    "vcl": """ManagedHypervisorCluster { edges { node { id name { value } version { value } hypervisor { value } deployment { node { display_label } }
+    "vcl": """ManagedHypervisorCluster { edges { node { id name { value } software_image { node { name { value } platform { node { name { value } } } } } deployment { node { display_label } }
       sdn { node { name { value } } }
       hosts { edges { node { name { value } } } } } } }""",
-    "mpc": """CloudHypervisorCluster { edges { node { id name { value } hypervisor { value } host_count { value } account { node { name { value } } }
+    "mpc": """CloudHypervisorCluster { edges { node { id name { value } software_image { node { name { value } platform { node { name { value } } } } } host_count { value } account { node { name { value } } }
       location { node { display_label } } } } }""",
-    "k8s": """CloudKubernetesCluster { edges { node { id name { value } distribution { value } api_access { value }
+    "k8s": """CloudKubernetesCluster { edges { node { id name { value } software_image { node { name { value } platform { node { name { value } } } } } api_access { value }
       account { node { name { value } } }
       virtual_network { node { name { value } } } node_segments { edges { node { name { value } } } } } } }""",
     "vsw": """ManagedVirtualSwitch { edges { node { id name { value } switch_type { value } cluster { node { name { value } } }

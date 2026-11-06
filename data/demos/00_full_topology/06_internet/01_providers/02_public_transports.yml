@@ -1,37 +1,59 @@
 ---
-# The public side of the two services: a transport per region, holding the port the internet carrier ends on (nested;
-# INTERNET:bus is bootstrap data, data/bootstrap/03b_internet.yml). They are the same CloudDirectConnect as the
-# private ones; nothing marks them public but the carrier that reaches INTERNET.
+# The public side of the cloud and SaaS services: a TopologyProviderConnect per region (the same kind as the Fabric port
+# of a colocation cage, 02_colo), a slim device of the provider that holds the port the internet carrier ends on
+# (nested; INTERNET:bus is bootstrap data, data/bootstrap/03b_internet.yml). It is the provider's internet-facing edge
+# of the region, not a Direct Connect: nothing of ours is physical there, and the private connections
+# (03_cloud/03_transport) stay in their own kinds.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: CloudDirectConnect
+  kind: TopologyProviderConnect
   data:
-    - name: webex-c900-fra-pub
+    - name: EXT-WEBEX-FRA
       description: "Public side of Webex Frankfurt: where the service is reached over the internet"
       status: active
-      connection_type: physical
       provider: "P901"
       bandwidth: 10000
-      saas_region: WEBEX-FRANKFURT
-      owner: C900
+      location: WEBEX-FRANKFURT
       interfaces:
         - kind: DcimPhysicalInterface
           data:
             name: pub-1
             description: Public service port of Webex Frankfurt
             status: active
-    - name: s3-c900-euc1-pub
-      description: "Public side of the object store API of eu-central-1, reached over the internet"
+    - name: EXT-AWS-EUC1
+      description: "Public side of AWS eu-central-1 (the object store API), reached over the internet"
       status: active
-      connection_type: physical
       provider: "P004"
       bandwidth: 10000
-      account: c900-aws-prod
-      region: eu-central-1
+      location: eu-central-1
       interfaces:
         - kind: DcimPhysicalInterface
           data:
             name: pub-1
             description: Public service port of the object store API
+            status: active
+    - name: EXT-AZURE-WEU
+      description: "Public side of Azure westeurope (the blob storage API), reached over the internet"
+      status: active
+      provider: "P005"
+      bandwidth: 10000
+      location: westeurope
+      interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            name: pub-1
+            description: Public service port of the blob storage API
+            status: active
+    - name: EXT-GCP-EUW3
+      description: "Public side of GCP europe-west3 (the object storage API), reached over the internet"
+      status: active
+      provider: "P006"
+      bandwidth: 10000
+      location: europe-west3
+      interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            name: pub-1
+            description: Public service port of the object storage API
             status: active

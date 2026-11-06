@@ -261,7 +261,7 @@ def tunnel_underlay_rows(d: dict) -> list[Row]:
 
 
 def _placement(d: dict) -> dict[str, tuple[str | None, str | None]]:
-    """{device name: (kind, name) of the deployment it sits in}; the provider's port of a metro has none, its metro
+    """{device name: (kind, name) of the deployment it sits in}; the provider's connect device has none, its location
     stands for it."""
     placed = {
         val(x, "name"): (
@@ -271,7 +271,8 @@ def _placement(d: dict) -> dict[str, tuple[str | None, str | None]]:
         for x in d["dev"]
     }
     for port in d.get("cport", []):
-        placed[val(port, "name")] = ("TopologyColocationMetro", val(_first(port, "metro"), "name"))
+        place = _first(port, "location")
+        placed[val(port, "name")] = (place.get("__typename"), val(place, "name"))
     return placed
 
 
@@ -296,14 +297,15 @@ def layout_rows(d: dict, cfg: dict) -> list[Row]:
     the cage edge reaches the Fabric port through a patch panel (a cable to a front port, a cable from its rear port)."""
     place = _placement(d)
     zone = ("TopologyColocationZone", cfg["zone"])
-    cage = {zone, ("TopologyColocationMetro", cfg["metro"])}  # the cage, or the provider's port of its metro
     transports = {val(t, "name") for t in [*d["dx"], *d["vpn"]]}
     legs = [c for c in d["carrier"] if val(c, "circuit_type") in ("cross_connect", "virtual_connection")]
-    cloud = [c for c in legs if transports & set(_ends(c))]
+    # a cloud or SaaS end is a transport or a provider connect that is not in the cage (a region, a SaaS region)
+    away = {val(x, "name") for x in d["cport"] if place.get(val(x, "name")) != zone}
+    cloud = [c for c in legs if (transports | away) & set(_ends(c))]
     stray = sorted(
         val(c, "circuit_id")
         for c in cloud
-        if not any(place.get(name) in cage for name in _ends(c) if name not in transports)
+        if not any(place.get(name) == zone for name in _ends(c) if name not in transports | away)
     )
     rows: list[Row] = [
         (
@@ -389,6 +391,7 @@ def internet_rows(d: dict, cfg: dict) -> list[Row]:
             *(i["uplink_carrier"] for i in cfg["isps"]),
             *(s["carrier"] for s in cfg["public_sides"]),
             *cfg.get("fabric_accesses", []),
+            *cfg.get("vpn_accesses", []),
         ]
     )
     bus = next((x for x in d["inetif"] if val(x, "name") == cfg["bus"]), {})
@@ -412,11 +415,11 @@ def internet_rows(d: dict, cfg: dict) -> list[Row]:
     )
     # the public side's transport sits where the service is
     seps = {val(e, "name"): e for e in d["sep"]}
-    transports = {val(t, "name"): t for t in d["dx"]}
+    transports = {val(t, "name"): t for t in d["cport"]}
     vnets = {v["id"]: v for v in d["vnet"]}
     for side in cfg["public_sides"]:
         sep, transport = seps.get(side["endpoint"], {}), transports.get(side["transport"], {})
-        where = next(iter(rel(transport, "saas_region") or rel(transport, "region")), {}).get("display_label")
+        where = ((transport.get("location") or {}).get("node") or {}).get("display_label")
         service = next(iter(rel(sep, "saas_region")), None) or (
             vnets.get(next(iter(rel(sep, "virtual_network")), {}).get("id"), {}).get("region") or {}
         ).get("node")
@@ -569,7 +572,7 @@ def _onprem_kubernetes_line(cluster: dict) -> str:
     segments = sorted(val(x, "name") for x in rel(cluster, "node_segments"))
     sdn = val(_first(cluster, "sdn"), "name")
     return (
-        f"{val(cluster, 'name')} [{val(cluster, 'distribution')}] sdn {sdn} control plane {plane} workers {workers} "
+        f"{val(cluster, 'name')} [{val(_first(cluster, 'software_image'), 'name')}] sdn {sdn} control plane {plane} workers {workers} "
         f"node segments {segments}"
     )
 
@@ -597,17 +600,17 @@ def inventory_lines(d: dict) -> list[str]:
             for a in d["att"]
         ],
         "clusters": [
-            f"{val(c, 'name')} [{val(c, 'hypervisor')}] hosts {sorted(val(h, 'name') for h in rel(c, 'hosts'))} "
+            f"{val(c, 'name')} [{val(_first(c, 'software_image'), 'name')}] hosts {sorted(val(h, 'name') for h in rel(c, 'hosts'))} "
             f"sdn {val(_first(c, 'sdn'), 'name')}"
             for c in d["vcl"]
         ]
         + [
-            f"{val(c, 'name')} [provider {val(c, 'hypervisor')}] {val(c, 'host_count')} hosts in "
+            f"{val(c, 'name')} [provider {val(_first(c, 'software_image'), 'name')}] {val(c, 'host_count')} hosts in "
             f"{val(next(iter(rel(c, 'account')), {}), 'name')}"
             for c in d["mpc"]
         ]
         + [
-            f"{val(c, 'name')} [{val(c, 'distribution')}] network "
+            f"{val(c, 'name')} [{val(_first(c, 'software_image'), 'name')}] network "
             f"{val(next(iter(rel(c, 'virtual_network')), {}), 'name')} "
             f"node subnets {sorted(val(s, 'name') for s in rel(c, 'node_segments'))}"
             for c in d["k8s"]

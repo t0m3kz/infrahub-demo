@@ -59,6 +59,10 @@ fragment CircuitEndpoint on DcimInterface {
         region { node { ...CircuitDeployment } }
         saas_region { node { ...CircuitDeployment } }
       }
+      # The provider's connect device has none either: its facility is its location (a zone, a region, a SaaS region).
+      ... on TopologyProviderConnect {
+        location { node { id __typename display_label } }
+      }
     }
   }
 }

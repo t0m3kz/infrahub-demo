@@ -1,6 +1,6 @@
 ---
-# The end of each Equinix Fabric virtual connection on the Fabric port of the metro, the colocation counterpart of the
-# cloud's peering interface: one TopologyColocationInterface per connection, riding on the physical port
+# The end of each Equinix Fabric virtual connection on the Fabric port of the cage, the colocation counterpart of the
+# cloud's peering interface: one TopologyProviderInterface per connection, riding on the physical port
 # (`parent_interface`) and named <port>.<S-tag>. It carries the S-tag (`vlan_id`) and the bandwidth of the connection,
 # and the virtual_connection carrier circuit (03_cloud/04_circuits/00_carrier_circuits.yml) ends on it, so the port
 # itself is no longer shared between connections. L2 only: the BGP session is on the cloud side.
@@ -11,7 +11,7 @@
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: TopologyColocationInterface
+  kind: TopologyProviderInterface
   data:
     - device: EXT-FABRIC-PAR
       name: et-0/0/0.1101

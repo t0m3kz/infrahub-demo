@@ -1,13 +1,13 @@
 ---
 # The end of the Equinix Fabric virtual connection that starts on the Fabric port et-0/0/0 of the metro FR (the
-# TopologyColocationConnect EXT-EQX-FABRIC-FR2, 02_cloud_provider_edges.yml): one TopologyColocationInterface per
+# TopologyProviderConnect EXT-EQX-FABRIC-FR2, 02_cloud_provider_edges.yml): one TopologyProviderInterface per
 # connection, riding on the physical port (`parent_interface`) and named <port>.<S-tag>. It carries the S-tag
 # (`vlan_id`) and the bandwidth, and the carrier FABRIC-FR2-AMNE01 (03_carrier_circuits.yml) ends on it, so the port
 # is no longer shared between connections. Created before that file, whose carrier ends on it.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: TopologyColocationInterface
+  kind: TopologyProviderInterface
   data:
     - device: "EXT-EQX-FABRIC-FR2"
       name: "et-0/0/0.1301"

@@ -204,6 +204,13 @@ spec:
                   icon: "mdi:lan-connect"
                   description: "Direct Connect, ExpressRoute, Interconnect, SaaS cross-connects"
 
+                - namespace: Topology
+                  name: ProviderConnectItem
+                  label: Provider Connects
+                  kind: TopologyProviderConnect
+                  icon: "mdi:server-network"
+                  description: "The provider's own ports at a place: Fabric, Direct Connect, ExpressRoute, public sides"
+
                 - namespace: Cloud
                   name: CsVPNConnectionItem
                   label: Cloud VPN Connections

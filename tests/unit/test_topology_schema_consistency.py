@@ -89,8 +89,6 @@ def test_colocation_file_declares_the_expected_kinds() -> None:
     assert {entry["kind"] for entry in _entries(_COLOCATION_FILE)} == {
         _FABRIC,
         "TopologyColocation",
-        "TopologyColocationConnect",
-        "TopologyColocationInterface",
         "TopologyColocationMetro",
         "TopologyColocationZone",
         "TopologyVirtualColocation",

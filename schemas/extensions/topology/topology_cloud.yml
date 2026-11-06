@@ -331,6 +331,7 @@ nodes:
       - CloudResource
       - DcimCapabilities
       - AppInstance
+      - DcimSoftwareRunner
     human_friendly_id:
       - name__value
     order_by:
@@ -345,12 +346,6 @@ nodes:
         optional: true
         description: Instance size/type (e.g., t3.micro, n1-standard-1)
         order_weight: 1500
-      - name: image
-        label: Image
-        kind: Text
-        optional: true
-        description: Machine image or AMI used for this instance
-        order_weight: 1550
       - name: cpu_count
         label: vCPU Count
         kind: Number
@@ -363,25 +358,6 @@ nodes:
         optional: true
         description: Memory size in gigabytes
         order_weight: 1700
-      - name: os_type
-        label: Operating System
-        kind: Dropdown
-        optional: true
-        description: Operating system type
-        choices:
-          - name: linux
-            label: Linux
-            description: Linux-based operating system
-            color: "#ffc61a"
-          - name: windows
-            label: Windows
-            description: Windows operating system
-            color: "#0078D4"
-          - name: other
-            label: Other
-            description: Other operating system
-            color: "#808080"
-        order_weight: 1900
       - name: private_ip
         label: Private IP Address
         kind: IPHost

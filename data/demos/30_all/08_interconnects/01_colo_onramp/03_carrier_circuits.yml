@@ -126,28 +126,14 @@ spec:
 
     # --- cage <-> cloud region transports ---------------------------------
     # The cloud end is the region, not a zone: an AZ is finer than any provider
-    # commits to for a Direct Connect or ExpressRoute hand-off. The region has no
-    # hardware, so the far end is a port of the provider's transport
-    # (a CloudDirectConnect, 02_cloud_provider_edges.yml) and the carrier is a
-    # provider-delivered virtual_connection. The XC- ids keep the name of the
-    # cross-connect they were before the region lost its fake router.
-    - circuit_id: "XC-EQXFR2-AWS-EUC1"
-      member_of_groups: [carrier_circuits]
-      name: "XC-EQXFR2-AWS-EUC1"
-      circuit_type: virtual_connection
-      status: active
-      bandwidth: 10000
-      provider: "P016"
-      description: "Equinix FR2 cage to AWS eu-central-1, Direct Connect 10G, on the Direct Connect port"
-      locations:
-        - "FR2"
-      capabilities:
-        - ["eg-fr201", "Ethernet1/13"]
-        - ["dx-30all-euc1-fr2", "dxcon-fr2"]
-
+    # commits to for a Direct Connect or ExpressRoute hand-off. The far end is a port
+    # of the provider's own device in the region (a TopologyProviderConnect,
+    # 02_cloud_provider_edges.yml) and the carrier is a provider-delivered
+    # virtual_connection. The dedicated Direct Connect of the cage FR2 is no carrier
+    # at all: it is a cable inside the cage (05_cage_cabling.yml).
     # The Azure ExpressRoute on-ramp: one virtual connection per ExpressRoute leg, each its own carrier.
     # The legs land on two different cage edges (eg-pa401, eg-pa402) and on the two ports of the one ExpressRoute
-    # transport (msee-pri, msee-sec), the way Microsoft asks for them; the two carriers share
+    # ExpressRoute device (msee-pri, msee-sec), the way Microsoft asks for them; the two carriers share
     # `redundancy_group`, which is what relates the two connections (one connection per leg).
     - circuit_id: "XC-EQXPA4-AZURE-WEU-PRI"
       member_of_groups: [carrier_circuits]
@@ -162,7 +148,7 @@ spec:
         - "PA4"
       capabilities:
         - ["eg-pa401", "Ethernet1/13"]
-        - ["er-30all-weu", "msee-pri"]
+        - ["EXT-AZURE-ER-WEU", "msee-pri"]
 
     - circuit_id: "XC-EQXPA4-AZURE-WEU-SEC"
       member_of_groups: [carrier_circuits]
@@ -177,7 +163,7 @@ spec:
         - "PA4"
       capabilities:
         - ["eg-pa402", "Ethernet1/13"]
-        - ["er-30all-weu", "msee-sec"]
+        - ["EXT-AZURE-ER-WEU", "msee-sec"]
 
     # Megaport: the Cloud Router (MCR) of Megaport's Paris facility, reached from the PA4 cage over one
     # cross-connect. The stub EXT-MEGAPORT-MCR1 is deployed to the zone MCR-PAR1 (../../02_colo/megaport/par),
@@ -199,11 +185,10 @@ spec:
     # --- Equinix Fabric virtual connections ----------------------------------
     # A provider-delivered virtual connection is a carrier like a cross-connect: Equinix runs it inside its own
     # platform, so an end may be the virtual NIC of a provider-hosted Network Edge router (no cable) and a port hosts
-    # several of them (checks/carrier_circuit_ports.py). The first one leaves the Fabric port of the metro FR on
+    # several of them (checks/carrier_circuit_ports.py). The first one leaves the Fabric port of the cage FR on
     # its own interface (02a_fabric_interfaces.yml), the port eg-fr201 Ethernet1/1 is cabled to (05_cage_cabling.yml);
     # the second lands on
-    # the port (dxcon-amne) of the hosted AWS Direct Connect transport, next to the dedicated one (dxcon-fr2) of
-    # XC-EQXFR2-AWS-EUC1.
+    # the port (dxcon-amne) of the hosted AWS Direct Connect edge, next to the dedicated one (dxcon-fr2), a cable.
     - circuit_id: "FABRIC-FR2-AMNE01"
       member_of_groups: [carrier_circuits]
       name: "FABRIC-FR2-AMNE01"
@@ -211,7 +196,7 @@ spec:
       status: active
       bandwidth: 1000
       provider: "P016"
-      description: "Equinix Fabric virtual connection, Fabric port of the metro FR to the Network Edge router eg-am-ne01 in AM-NE, 1G"  # yamllint disable-line rule:line-length
+      description: "Equinix Fabric virtual connection, Fabric port of the cage FR to the Network Edge router eg-am-ne01 in AM-NE, 1G"  # yamllint disable-line rule:line-length
       locations:
         - "FR2"
       capabilities:
@@ -230,4 +215,4 @@ spec:
         - "AM-NE"
       capabilities:
         - ["eg-am-ne02", "Ethernet1/1"]
-        - ["dx-30all-euc1-amne", "dxcon-amne"]
+        - ["EXT-AWS-DX-EUC1", "dxcon-amne"]

@@ -107,8 +107,9 @@ class CircuitEndpoint:
     interface_id: str
     interface_name: str
     device_name: str
-    # The device's deployment, whatever its kind; for a cloud transport (it has none) its region or SaaS region; for
-    # THE INTERNET (it has none either) the device itself, which is a facility. None when it has none.
+    # The device's deployment, whatever its kind; for a cloud transport (it has none) its region or SaaS region; for the
+    # provider's connect device its location; for THE INTERNET (it has none either) the device itself, which is a
+    # facility. None when it has none.
     deployment: CircuitLocation | None
     device_id: str = ""
 
@@ -129,7 +130,10 @@ class CircuitEndpoint:
             deployment=CircuitLocation.parse(
                 device
                 if device.get("typename") == INTERNET_KIND
-                else device.get("deployment") or device.get("region") or device.get("saas_region")
+                else device.get("deployment")
+                or device.get("region")
+                or device.get("saas_region")
+                or device.get("location")
             ),
             device_id=device.get("id") or "",
         )

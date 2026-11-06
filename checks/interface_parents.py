@@ -4,7 +4,8 @@
 interface inherit it) and the schema holds no same-device rule (no ``common_parent``):
 
 * a sub-interface (a context leg, an SVI's port) rides on a NIC, port or LAG of ITS OWN device; so does the cloud
-  peering interface of a transport (a port or LAG of that transport);
+  peering interface of a transport, unless the cloud's port is the provider's own in a cage: a Direct Connect or
+  Interconnect virtual interface rides on a port or LAG of the ``TopologyProviderConnect`` that holds it;
 * a base NIC of a virtual device (a DcimVirtualInterface with the role management, uplink or ha, which
   generators/virtual_nics.py pins) rides on a port of the hosting device, and that port carries the cable, so the
   border leaf -> host port -> NIC path is a path in the graph.
@@ -12,7 +13,7 @@ interface inherit it) and the schema holds no same-device rule (no ``common_pare
 Rules:
 
 1. a parent on another device is an ERROR, except for a NIC of a virtual device whose parent is a port of its
-   ``hosting_device``;
+   ``hosting_device`` and a cloud peering interface whose parent is on a ``TopologyProviderConnect``;
 2. the parent of a NIC of a virtual device is a port of that ``hosting_device`` (a NIC on a device without one is
    rule 1 when its parent is elsewhere);
 3. the host port of an uplink NIC is cabled (otherwise nothing reaches the border leaf through it);
@@ -33,6 +34,8 @@ _SUB_INTERFACE = "DcimSubInterface"
 _VIRTUAL_DEVICE = "DcimVirtualDevice"
 _PHYSICAL_INTERFACE = "DcimPhysicalInterface"
 _UPLINK_ROLE = "uplink"
+_PEERING = "CloudPeeringInterface"
+_PROVIDER_CONNECT = "TopologyProviderConnect"
 
 
 def _label(node: dict[str, Any]) -> str:
@@ -52,7 +55,9 @@ def interface_parent_errors(iface: dict[str, Any]) -> list[str]:
     on_other_device = parent_device.get("id") != device.get("id")
     is_nic = device.get("typename") == _VIRTUAL_DEVICE and iface.get("role") in PINNED_ROLES
     if not is_nic:
-        if on_other_device:
+        if on_other_device and not (
+            iface.get("typename") == _PEERING and parent_device.get("typename") == _PROVIDER_CONNECT
+        ):
             return [
                 f"{where} rides on {_label(parent)} of '{_label(parent_device)}', another device: a parent_interface "
                 "is an interface of the same device."

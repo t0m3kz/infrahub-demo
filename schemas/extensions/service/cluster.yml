@@ -2,7 +2,8 @@
 version: "1.0"
 # Clusters: a group of hosts that run workloads. One Managed generic for the concept, one implementation per
 # technology (as ManagedNetworkSegment, ManagedVxlanSegment and CloudNetworkSegment). The names say what the cluster is,
-# not whose software runs it: `hypervisor` does (vSphere, Proxmox, KVM, Nutanix, Hyper-V), so one model serves them all.
+# not whose software runs it: the `software_image` does, a release of a platform (vSphere, Proxmox, KVM, RKE2, EKS ...),
+# as on a device, so one model serves them all.
 #   ManagedHypervisorCluster   an on-prem hypervisor cluster: its hosts are our servers (DcimPhysicalDevice)
 #   CloudHypervisorCluster     a hypervisor cluster run by a provider (Equinix Managed Private Cloud is vSphere): the
 #                              hosts are the provider's
@@ -59,18 +60,6 @@ generics:
             label: Decommissioned
             description: "Taken out of service."
             color: "#bfbfbf"
-      - name: version
-        label: Version
-        kind: Text
-        optional: true
-        description: "Hypervisor or Kubernetes version"
-        order_weight: 1050
-      - name: purpose
-        label: Purpose
-        kind: Text
-        optional: true
-        description: "What the cluster is for (production compute, a platform, a lab)"
-        order_weight: 1100
     relationships:
       - name: sdn
         label: SDN
@@ -92,49 +81,13 @@ nodes:
     inherit_from:
       - ManagedGeneric
       - ManagedCluster
+      - DcimSoftwareRunner
     human_friendly_id:
       - name__value
     display_label: "{{ name__value }}"
     uniqueness_constraints:
       - ["name__value"]
     attributes:
-      - name: hypervisor
-        label: Hypervisor
-        kind: Dropdown
-        optional: false
-        description: "The hypervisor software of the cluster"
-        order_weight: 1150
-        choices:
-          - name: vsphere
-            label: VMware vSphere
-            description: "ESXi hosts managed by vCenter"
-          - name: proxmox
-            label: Proxmox VE
-            description: "Proxmox hosts joined in one cluster"
-          - name: kvm
-            label: KVM / libvirt
-            description: "KVM hosts managed by libvirt directly"
-          - name: openstack
-            label: OpenStack
-            description: "Nova compute hosts (KVM) of an OpenStack cloud"
-          - name: ovirt
-            label: oVirt / Red Hat Virtualization / OLVM
-            description: "KVM hosts managed by the oVirt engine"
-          - name: nutanix
-            label: Nutanix AHV
-            description: "AHV hosts managed by Prism"
-          - name: hyperv
-            label: Microsoft Hyper-V
-            description: "Hyper-V hosts in a failover cluster"
-          - name: xcp-ng
-            label: XCP-ng / XenServer
-            description: "Xen hosts in a pool"
-          - name: openshift-virtualization
-            label: OpenShift Virtualization
-            description: "KubeVirt on OpenShift worker nodes"
-          - name: other
-            label: Other
-            description: "Another hypervisor"
       - name: manager
         label: Manager
         kind: Text
@@ -190,49 +143,13 @@ nodes:
     inherit_from:
       - CloudResource
       - ManagedCluster
+      - DcimSoftwareRunner
     human_friendly_id:
       - name__value
     display_label: "{{ name__value }}"
     uniqueness_constraints:
       - ["account", "name__value"]
     attributes:
-      - name: hypervisor
-        label: Hypervisor
-        kind: Dropdown
-        optional: false
-        description: "The hypervisor software of the cluster"
-        order_weight: 1150
-        choices:
-          - name: vsphere
-            label: VMware vSphere
-            description: "ESXi hosts managed by vCenter"
-          - name: proxmox
-            label: Proxmox VE
-            description: "Proxmox hosts joined in one cluster"
-          - name: kvm
-            label: KVM / libvirt
-            description: "KVM hosts managed by libvirt directly"
-          - name: openstack
-            label: OpenStack
-            description: "Nova compute hosts (KVM) of an OpenStack cloud"
-          - name: ovirt
-            label: oVirt / Red Hat Virtualization / OLVM
-            description: "KVM hosts managed by the oVirt engine"
-          - name: nutanix
-            label: Nutanix AHV
-            description: "AHV hosts managed by Prism"
-          - name: hyperv
-            label: Microsoft Hyper-V
-            description: "Hyper-V hosts in a failover cluster"
-          - name: xcp-ng
-            label: XCP-ng / XenServer
-            description: "Xen hosts in a pool"
-          - name: openshift-virtualization
-            label: OpenShift Virtualization
-            description: "KubeVirt on OpenShift worker nodes"
-          - name: other
-            label: Other
-            description: "Another hypervisor"
       - name: host_count
         label: Hosts
         kind: Number
@@ -367,40 +284,12 @@ nodes:
     inherit_from:
       - ManagedGeneric
       - ManagedCluster
+      - DcimSoftwareRunner
     human_friendly_id:
       - name__value
     display_label: "{{ name__value }}"
     uniqueness_constraints:
       - ["name__value"]
-    attributes:
-      - name: distribution
-        label: Distribution
-        kind: Dropdown
-        optional: false
-        description: "The Kubernetes distribution"
-        order_weight: 1200
-        choices:
-          - name: rke2
-            label: RKE2
-            description: "Rancher RKE2"
-          - name: k3s
-            label: K3s
-            description: "Lightweight K3s"
-          - name: kubeadm
-            label: kubeadm
-            description: "Upstream Kubernetes installed with kubeadm"
-          - name: talos
-            label: Talos
-            description: "Talos Linux"
-          - name: openshift
-            label: OpenShift
-            description: "Red Hat OpenShift (OKD)"
-          - name: tanzu
-            label: VMware Tanzu
-            description: "Tanzu Kubernetes Grid"
-          - name: other
-            label: Other
-            description: "Another distribution"
     relationships:
       - name: control_plane_nodes
         label: Control Plane Nodes
@@ -438,37 +327,13 @@ nodes:
     inherit_from:
       - CloudResource
       - ManagedCluster
+      - DcimSoftwareRunner
     human_friendly_id:
       - name__value
     display_label: "{{ name__value }}"
     uniqueness_constraints:
       - ["account", "name__value"]
     attributes:
-      - name: distribution
-        label: Distribution
-        kind: Dropdown
-        optional: false
-        description: "The provider's managed Kubernetes service"
-        order_weight: 1200
-        choices:
-          - name: eks
-            label: Amazon EKS
-            description: "Elastic Kubernetes Service"
-          - name: aks
-            label: Azure AKS
-            description: "Azure Kubernetes Service"
-          - name: gke
-            label: Google GKE
-            description: "Google Kubernetes Engine"
-          - name: oke
-            label: Oracle OKE
-            description: "Oracle Container Engine for Kubernetes"
-          - name: openshift
-            label: Managed OpenShift
-            description: "ROSA, ARO or OpenShift Dedicated"
-          - name: other
-            label: Other
-            description: "Another managed or self-run distribution"
       - name: api_access
         label: API Endpoint
         kind: Dropdown

@@ -40,9 +40,7 @@ spec:
     - name: mpc-c900-par
       description: "C900 Equinix Managed Private Cloud in the Paris IBX, next to the cage PAR-COLO1"
       status: active
-      hypervisor: vsphere
-      version: "8.0U3"
-      purpose: Disaster-recovery compute
+      software_image: vsphere-8.0U3
       account: c900-equinix-prod
       location: par
       host_count: 4
@@ -57,9 +55,7 @@ spec:
     - name: eks-c900-euc1
       description: "C900 EKS cluster on the VPC of the AWS account, nodes in the segment subnet"
       status: active
-      distribution: eks
-      version: "1.31"
-      purpose: Platform services
+      software_image: eks-1.31
       account: c900-aws-prod
       region: eu-central-1
       virtual_network: vpc-c900-prod
@@ -71,9 +67,7 @@ spec:
     - name: aks-c900-weu
       description: "C900 AKS cluster in the payments subscription, Azure CNI overlay, nodes in the payments subnet"
       status: active
-      distribution: aks
-      version: "1.30"
-      purpose: Payments workloads
+      software_image: aks-1.30
       account: c900-azure-payments
       region: westeurope
       virtual_network: vnet-c900-payments-weu

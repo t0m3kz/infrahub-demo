@@ -8,7 +8,7 @@
 # Carrier circuits are the physical wire. Every cloud leg lands in the colocation cage PAR-COLO1 (02_colo), where the
 # cage edge par-colo1-edge-01 is: the Direct Connect and the Google Dedicated Interconnect are cross-connects from an
 # edge port to the provider's port; ExpressRoute and the Google Partner Interconnect are Equinix Fabric virtual
-# connections that start on an interface of the Fabric port of the metro (EXT-FABRIC-PAR, one interface per
+# connections that start on an interface of the Fabric port of the cage (EXT-FABRIC-PAR, one interface per
 # connection: 02_colo/00_par1/01_physical/03_fabric_interfaces.yml), which the edge reaches through the patch
 # panel (02_colo/00_par1/01_physical/02_cables.yml). The last carrier, ktw1-ispa-48211-isp-a, is the internet access
 # of the DC edge.
@@ -17,32 +17,6 @@ kind: Object
 spec:
   kind: TopologyCarrierCircuit
   data:
-    - name: par1-xc21450001-aws-900000000001
-      circuit_id: XC21450001
-      description: Cross-connect from the cage edge par-colo1-edge-01 to the first AWS Direct Connect port of the LAG
-      provider: P004
-      circuit_type: cross_connect
-      status: active
-      bandwidth: 10000
-      locations:
-        - PAR-COLO1
-        - eu-central-1
-      capabilities:
-        - ["par-colo1-edge-01", "Ethernet1/3"]
-        - ["dx-c900-fra-lag", "dxcon-1a"]
-    - name: par1-xc21450002-aws-900000000001
-      circuit_id: XC21450002
-      description: Cross-connect from the cage edge par-colo1-edge-01 to the second AWS Direct Connect port of the LAG
-      provider: P004
-      circuit_type: cross_connect
-      status: active
-      bandwidth: 10000
-      locations:
-        - PAR-COLO1
-        - eu-central-1
-      capabilities:
-        - ["par-colo1-edge-01", "Ethernet1/4"]
-        - ["dx-c900-fra-lag", "dxcon-1b"]
     - name: par1-eqx-7c1e9a2b-azure-90000000-0000-0000-0000-000000000002
       circuit_id: EQX-7C1E9A2B
       description: Fabric virtual connection from the cage Fabric port to the ExpressRoute circuit, primary link
@@ -55,7 +29,7 @@ spec:
         - westeurope
       capabilities:
         - ["EXT-FABRIC-PAR", "et-0/0/0.1101"]
-        - ["er-c900-weu", "msee-pri"]
+        - ["EXT-AZURE-ER-WEU", "msee-pri"]
     - name: par1-eqx-7c1e9a2c-azure-90000000-0000-0000-0000-000000000002
       circuit_id: EQX-7C1E9A2C
       description: Fabric virtual connection from the cage Fabric port to the ExpressRoute circuit, secondary link
@@ -68,7 +42,7 @@ spec:
         - westeurope
       capabilities:
         - ["EXT-FABRIC-PAR", "et-0/0/0.1102"]
-        - ["er-c900-weu", "msee-sec"]
+        - ["EXT-AZURE-ER-WEU", "msee-sec"]
     - name: par1-eqx-3f4d8b10-gcp-c900-prod-project
       circuit_id: EQX-3F4D8B10
       description: Equinix Fabric virtual connection from the cage Fabric port to the Google Partner Interconnect
@@ -81,20 +55,7 @@ spec:
         - europe-west3
       capabilities:
         - ["EXT-FABRIC-PAR", "et-0/0/0.1201"]
-        - ["ic-c900-fra-1", "ic-port-1"]
-    - name: par1-xc21450003-gcp-c900-prod-project
-      circuit_id: XC21450003
-      description: Cross-connect to the Google Dedicated Interconnect port (routed port on both ends, no VLAN)
-      provider: P006
-      circuit_type: cross_connect
-      status: active
-      bandwidth: 10000
-      locations:
-        - PAR-COLO1
-        - europe-west3
-      capabilities:
-        - ["par-colo1-edge-01", "Ethernet1/5"]
-        - ["ic-ded-c900-fra", "ic-dedicated-port"]
+        - ["EXT-GCP-PI-EUW3", "ic-port-1"]
     - name: ktw1-ispa-48211-isp-a
       circuit_id: ISPA-48211
       description: Internet access of ktw1-edge-01 (carries the AWS VPN tunnels and the office tunnel to the DC)

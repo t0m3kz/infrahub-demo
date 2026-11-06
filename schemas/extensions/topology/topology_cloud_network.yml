@@ -6,9 +6,10 @@ version: "1.0"
 generics:
   # What a cloud transport is: the provider's way to its edge (a Direct Connect, an ExpressRoute circuit, an
   # Interconnect, a SaaS cross-connect, a VPN connection), told in the words every cloud shares. A transport is an
-  # interface holder, a DcimDevice (the slim one: name and interfaces, nothing of DcimDeviceManaged): its ports are
-  # DcimPhysicalInterface, its bundles DcimLAGInterface, its virtual interfaces, VLAN attachments and tunnels
-  # CloudPeeringInterface. It sits in a cloud region (account) or a SaaS region, never in a `deployment`.
+  # interface holder, a DcimDevice (the slim one: name and interfaces, nothing of DcimDeviceManaged): its interfaces
+  # are CloudPeeringInterface (virtual interfaces, VLAN attachments, tunnels), riding on the ports and bundles of the
+  # connection, which are the provider's own on a TopologyProviderConnect. It sits in a cloud region (account) or a SaaS
+  # region, never in a `deployment`.
   - name: Transport
     namespace: Cloud
     label: Cloud Transport
@@ -55,11 +56,12 @@ nodes:
   # SaaS; the operator's own word is in the names, the descriptions and the blueprint of the sample README, and the
   # flavour per operator is OrganizationProvider.connection_profile (aws, azure, gcp, oci, equinix, megaport, ...).
   #   transport           the physical or virtual way to the cloud edge, a device that holds interfaces:
-  #                       CloudDirectConnect (ports, a LAG, hosted connections, with a service key where the operator
+  #                       CloudDirectConnect (dedicated or hosted connections, with a service key where the operator
   #                       has one) or CloudVPNConnection (the encrypted way, which holds the tunnels)
   #   peering             CloudPeeringInterface: the L3/BGP termination on the cloud side, the "interface of the
-  #                       cloud", an interface of the transport that rides on its port or LAG. A circuit's session
-  #                       ends on it (circuit `capabilities`, the shared interface edge), our side is a sub-interface
+  #                       cloud", an interface of the transport that rides on a port or LAG of the provider connect
+  #                       that holds it. A circuit's session ends on it (circuit `capabilities`, the shared interface
+  #                       edge), our side is a sub-interface
   #   gateway             CloudGateway (hub | edge | customer): what a peering or a VPN lands on inside the provider;
   #                       CloudGatewayAttachment links it to a virtual network or to another gateway
   #   virtual network     CloudVirtualNetwork
@@ -71,7 +73,7 @@ nodes:
     namespace: Cloud
     label: Cloud Transport (port or circuit)
     icon: mdi:lan-connect
-    description: "Transport device: ports and LAG of a Direct Connect, or a logical connection; peerings ride on them"
+    description: "Transport device: a dedicated or logical connection; its peerings ride on the provider's ports"
     include_in_menu: false
     inherit_from:
       - CloudResource
@@ -123,8 +125,8 @@ nodes:
         identifier: "cloud_direct_connect__partner_account"
         order_weight: 700
         description: "A logical connection lives in the partner's account while its peerings are in `account`"
-      # A logical circuit (ExpressRoute, hosted connection) rides on the transport that holds its port. The members of a
-      # LAG are ports of ONE transport (a LAG member on another device is refused), not transports of their own.
+      # A logical circuit (ExpressRoute, hosted connection) rides on the transport it is carried by. The members of a
+      # LAG are ports of ONE device (a LAG member on another device is refused).
       - name: rides_on
         label: Rides On
         peer: CloudDirectConnect
@@ -134,7 +136,7 @@ nodes:
         identifier: "cloud_direct_connect__rides_on"
         direction: outbound
         order_weight: 750
-        description: "The transport whose port or LAG a logical circuit rides on (the partner's, or our own)"
+        description: "The transport a logical circuit is carried by (the partner's, or our own)"
       - name: riders
         label: Riders
         peer: CloudDirectConnect
@@ -550,6 +552,7 @@ nodes:
       - DcimDevice
       - DcimDeviceManaged
       - DcimCapabilities
+      - DcimSoftwareRunner
     uniqueness_constraints:
       - ["name__value"]
     attributes:

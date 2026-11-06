@@ -8,7 +8,7 @@
 #                      access. The DCI mesh (02_colo/03_dci): Ethernet1/10-11 the fibres from the DC-KTW1 border
 #                      leaves, 1/9 and 1/12 DC-WAW1, 1/15-16 DC-GDN1, 1/8 FRA-COLO1, 1/7 AMS-COLO1 (the four
 #                      outside the template's dci range 1/9-12 are nested with role dci).
-#   EXT-FABRIC-PAR     the provider's Fabric port of the metro (a TopologyColocationConnect, second document
+#   EXT-FABRIC-PAR     the provider's Fabric port of the cage (a TopologyProviderConnect, second document
 #                      below): the start of the Equinix Fabric virtual connections to ExpressRoute and the
 #                      Google Partner Interconnect. It is reached by a cable through the patch panel, not by a
 #                      circuit.
@@ -58,24 +58,101 @@ spec:
             role: dci
             description: "DCI: dark fibre to GDN1"
 ---
-# The provider's port of the metro: ONE TopologyColocationConnect per metro, a slim device of the provider (no role,
-# platform or template) that holds the physical Fabric port. The port is patched to par-colo1-edge-01 Ethernet1/1
+# The provider's port of the metro: a TopologyProviderConnect, a slim device of the provider placed by its
+# `location` (the cage), with no role, platform or template, that holds the physical Fabric port.
+# The port is patched to par-colo1-edge-01 Ethernet1/1
 # (02_cables.yml); the connections that start on it have an interface of their own (03_fabric_interfaces.yml).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: TopologyColocationConnect
+  kind: TopologyProviderConnect
   data:
     - name: EXT-FABRIC-PAR
-      description: Equinix Fabric port of the metro PAR, in the PAR-COLO1 cage (patched to par-colo1-edge-01 Eth1/1)
+      description: Equinix Fabric port of the cage PAR, in the PAR-COLO1 cage (patched to par-colo1-edge-01 Eth1/1)
       status: active
       provider: P016
-      metro: PAR
+      location: PAR-COLO1
       bandwidth: 10000
-      cloud_id: a3d0c0f4-5b7e-4a13-9d52-0c1f6b2e8a77
+      external_id: a3d0c0f4-5b7e-4a13-9d52-0c1f6b2e8a77
       interfaces:
         - kind: DcimPhysicalInterface
           data:
             name: et-0/0/0
             description: Fabric port 10G, cross-connected to the cage edge through the patch panel
+            status: active
+---
+# AWS's port of the cage (the Direct Connect location): a TopologyProviderConnect with the two dedicated 10G ports
+# and the LAG that bundles them. The ports are cabled to par-colo1-edge-01 Ethernet1/3-4 (02_cables.yml); the virtual
+# interfaces of the customer account ride on the LAG (03_cloud/03_transport/00_direct_connects.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyProviderConnect
+  data:
+    - name: EXT-AWS-DX-PAR
+      description: AWS Direct Connect location in the PAR-COLO1 cage (two dedicated 10G ports, one LAG)
+      status: active
+      provider: P004
+      location: PAR-COLO1
+      bandwidth: 20000
+      external_id: dxcon-fh1a2b3c
+      interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            name: dxcon-1a
+            description: "AWS Direct Connect dedicated 10G port dxcon-fh1a2b3c, member of lag1"
+            status: active
+            interface_type: "10gbase-x-sfpp"
+        - kind: DcimPhysicalInterface
+          data:
+            name: dxcon-1b
+            description: "AWS Direct Connect dedicated 10G port dxcon-fh4d5e6f, member of lag1"
+            status: active
+            interface_type: "10gbase-x-sfpp"
+        - kind: DcimLAGInterface
+          data:
+            name: lag1
+            description: "AWS Direct Connect LAG: dxcon-1a and dxcon-1b"
+            status: active
+            lag_id: 1
+            lacp_mode: active
+            minimum_links: 1
+            member_interfaces:
+              - ["EXT-AWS-DX-PAR", "dxcon-1a"]
+              - ["EXT-AWS-DX-PAR", "dxcon-1b"]
+---
+# Google's and Webex's own ports in the cage: a TopologyProviderConnect each, placed by its `location`, with the one
+# port the cage edge is cabled to (par-colo1-edge-01 Ethernet1/5 and Ethernet1/6, 02_cables.yml). The Cloud Router
+# peering (03_cloud/03_transport) and the Webex peering (04_saas/01_direct_connects.yml) ride on these ports.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyProviderConnect
+  data:
+    - name: EXT-GCP-IC-PAR
+      description: Google Dedicated Interconnect location in the PAR-COLO1 cage (one 10G port)
+      status: active
+      provider: P006
+      location: PAR-COLO1
+      bandwidth: 10000
+      external_id: ic-fra-pop-1
+      interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            name: ic-dedicated-port
+            description: Google Dedicated Interconnect 10G port
+            status: active
+            interface_type: "10gbase-x-sfpp"
+    - name: EXT-WEBEX-PAR
+      description: Webex peering point in the PAR-COLO1 cage (one 1G port)
+      status: active
+      provider: P901
+      location: PAR-COLO1
+      bandwidth: 1000
+      external_id: wbx-par-1
+      interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            name: wbx-port-1
+            description: Webex peering point port
             status: active
