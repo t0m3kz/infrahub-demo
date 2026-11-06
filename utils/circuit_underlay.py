@@ -40,8 +40,8 @@ BGP_PROCESS = "ManagedBGP"
 OVERLAY_ROLE = "overlay"
 # A provider-hosted network function (Equinix Network Edge): a device kind we do not administer.
 NETWORK_APPLIANCE_KIND = "CloudNetworkAppliance"
-# The cloud side of a circuit: a transport is a device without role or deployment (a port, a LAG, and the
-# CloudPeeringInterface that rides on them); the provider's side is authored, never generated.
+# The cloud side of a circuit: a peering that rides on a provider's port or LAG, or a port of a transport (a device
+# without role or deployment); the provider's side is authored, never generated.
 CLOUD_PEERING_KIND = "CloudPeeringInterface"
 CLOUD_TRANSPORT_KINDS = ("CloudDirectConnect", "CloudVPNConnection")
 # THE INTERNET: one passive device that is also a facility. An internet carrier ends on its one interface, and the

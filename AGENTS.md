@@ -248,7 +248,7 @@ class MyCheck(InfrahubCheck):
 | Namespace | Holds |
 | --------- | ----- |
 | Managed | On-prem services and the shared generics `ManagedGeneric` (name, description, status), `ManagedGenericDevice` (the individual device edge, `capabilities`, cascades), `ManagedGenericSharedDevice` (the shared device edge, `shared_capabilities`, never cascades), `ManagedGenericInterfaces` (the interface-side `capabilities` edge; its identifier stays `interface_capabilities`), `ManagedNetworkSegment` and `ManagedLoadBalancer`, and `ManagedVRF` (a namespace realized in one topology, a shared kind) |
-| Cloud | Provider-hosted resources (public cloud and provider-hosted network services); every resource inherits `CloudResource`, except `CloudNetworkAppliance`, a provider-hosted network function (Equinix Network Edge) that inherits the device generics (`DcimDevice`, `DcimDeviceManaged`, `DcimCapabilities`) so its interfaces (virtual NICs: no hardware), BGP and HA stay device-shaped, and the two transports `CloudDirectConnect` and `CloudVPNConnection`, which inherit `CloudResource`, `CloudTransport` and only the slim `DcimDevice` (see **Device generics**); a cloud region hosts nothing but its transports' ports. The cloud and SaaS side of a connection is one provider-neutral model (see **Cloud and SaaS connections**): the transport devices (`CloudDirectConnect`, `CloudVPNConnection`, generic `CloudTransport` with `account`, `region` or `saas_region`, `owner`), the peering interface `CloudPeeringInterface` (a `DcimInterface` of its transport), the gateway `CloudGateway` (`hub`, `edge` or `customer`) with `CloudGatewayAttachment` and `CloudGatewayRouteTable`, `CloudVirtualNetwork` and `CloudServiceEndpoint` |
+| Cloud | Provider-hosted resources (public cloud and provider-hosted network services); every resource inherits `CloudResource`, except `CloudNetworkAppliance`, a provider-hosted network function (Equinix Network Edge) that inherits the device generics (`DcimDevice`, `DcimDeviceManaged`, `DcimCapabilities`) so its interfaces (virtual NICs: no hardware), BGP and HA stay device-shaped, and the two transports `CloudDirectConnect` and `CloudVPNConnection`, which inherit `CloudResource`, `CloudTransport` and only the slim `DcimDevice` (see **Device generics**); a cloud region hosts nothing but the provider's connect devices (`TopologyProviderConnect`). The cloud and SaaS side of a connection is one provider-neutral model (see **Cloud and SaaS connections**): the transport devices (`CloudDirectConnect`, `CloudVPNConnection`, generic `CloudTransport` with `account`, `region` or `saas_region`, `owner`), the peering interface `CloudPeeringInterface` (a `DcimInterface` of its transport), the gateway `CloudGateway` (`hub`, `edge` or `customer`) with `CloudGatewayAttachment` and `CloudGatewayRouteTable`, `CloudVirtualNetwork` and `CloudServiceEndpoint` |
 | Topology | Deployments (`TopologyDataCenter`, `TopologyPod`, `TopologyColocationMetro`, ...), design elements, circuits (`TopologyCarrierCircuit` and `TopologySessionCircuit`, whose role is its `circuit_type`: `dci`, `handoff`, `tunnel`, `vpn`; neither has an `owner`, see **Circuit placement**), the one meeting point of every internet connection `TopologyInternet` (bootstrap data, see **Circuit placement**) and the tenant footprints `TopologyCustomer*` |
 | Dcim, Ipam, Location, Organization | Devices/interfaces/cables, prefixes/addresses/namespaces, geography, providers/customers |
 | Routing | Shared routing objects (`RoutingAutonomousSystem`, `RoutingOSPFArea`, `RoutingPassword`) |
@@ -294,7 +294,7 @@ class MyCheck(InfrahubCheck):
   edge (`capabilities`, peer `DcimInterface`, identifier `interface_capabilities`; an interface has ONLY this edge), re-declared
   on each circuit node with `min_count` 1 and `max_count` 2 (a node that inherits two generics declaring it with a
   different count is refused, measured on 1.11.9; the checks hold the count of two). An end is a physical, LAG or
-  virtual interface of ours or of a cloud transport (a transport's port, LAG or `CloudPeeringInterface`), so a circuit
+  virtual interface of ours, of a provider connect (its port or LAG) or a `CloudPeeringInterface` of a cloud transport, so a circuit
   is found from our interface through `capabilities`. A carrier circuit is a pure carrier (fibre, cross-connect, internet access, or a
   provider-delivered `virtual_connection` or `metro_ethernet` service) with no role and no session; its `locations` peer
   `TopologyFacility`: the DC (never a pod, rack or footprint), the colocation
@@ -373,19 +373,25 @@ class MyCheck(InfrahubCheck):
 - **Cloud and SaaS connections**: there is no provider-connection object and no generator that builds a connection's
   circuits or sessions: the cloud and SaaS side of a connection is data, described in the words every cloud shares, and
   a session circuit ends on it. A transport is a DEVICE that holds interfaces, the slim `DcimDevice` only (see **Device
-  generics**): `CloudDirectConnect` is the way to the cloud edge, `connection_type` `physical` (its ports are
-  `DcimPhysicalInterface`, its bundle a `DcimLAGInterface` whose members are ports of the SAME transport: the
-  connections of one LAG are ports of one transport) or `logical` (a circuit on a partner's or our own port,
-  `rides_on` the transport that holds the port, `service_key`, `partner_account`); `CloudVPNConnection` is the
+  generics**): `CloudDirectConnect` is the way to the cloud edge, `connection_type` `physical` (a dedicated port) or
+  `logical` (a circuit on a partner's or our own port, `rides_on` the transport that holds the port, `service_key`,
+  `partner_account`). A transport holds NO port in `data/demos/00_full_topology` (`30_all` keeps the older shape, ports on its transports): the port and the bundle of a connection (`DcimPhysicalInterface`, a
+  `DcimLAGInterface` whose members are ports of the SAME device) are the provider's own, on a `TopologyProviderConnect`
+  where they physically are: in the cage for a cross-connect (AWS Direct Connect, Google Dedicated Interconnect, Webex:
+  the cage edge is cabled to it by a `DcimCable` with the order id as `cable_id`, never a carrier circuit, a hop inside
+  one facility is a cable) and in the region for a Fabric `virtual_connection` (the ExpressRoute and Partner
+  Interconnect ports, the far end of the carrier). A private and a public device of one place stay two devices, so a
+  route never crosses from THE INTERNET into a private peering through a shared device; `CloudVPNConnection` is the
   encrypted transport that holds the tunnels as interfaces. A transport lands in a `region`
   (`TopologyCloudRegion`) or a `saas_region` (`TopologySaasRegion`), exactly one, never in a `deployment`; with an
   `account` it has no `owner`, without one (Webex, Zscaler) it has `saas_region` and an `owner` customer.
   `CloudPeeringInterface` is the L3/BGP termination on the cloud side, a `DcimInterface` of its transport (an AWS VIF, an
-  ExpressRoute peering, a GCP VLAN attachment, a VPN tunnel, a SaaS peering) riding on a port or LAG of it
-  (`parent_interface`, the edge of the marker `DcimSubInterface` it shares with a sub-interface: the port's and the LAG's
+  ExpressRoute peering, a GCP VLAN attachment, a VPN tunnel, a SaaS peering) riding on a port or LAG of the provider connect that
+  holds it (`parent_interface`, the edge of the marker `DcimSubInterface` it shares with a sub-interface, and with a VM NIC the
+  only parent that sits on another device, `checks/interface_parents.py`: the port's and the LAG's
   `sub_interfaces` list it, and it holds its `ip_address` like any interface): `scope` (`private`, `public`, `saas`), `routing`, `vlan_id` or
   `tunnel_index`, the provider's `peer_ip` and `peer_asn`, `auth`, and for a tunnel `endpoint_ip`, `tunnel_mode`,
-  `crypto_profile` (`SecurityIPsecProfile`) and `tunnel_key`. A circuit ends on a transport port, LAG or peering through
+  `crypto_profile` (`SecurityIPsecProfile`) and `tunnel_key`. A circuit ends on a provider connect's port or LAG, or on a peering, through
   `capabilities` like on any interface; our side is always an interface of one of our devices (a sub-interface, or a
   routed physical port with an IP and no VLAN) and our BGP process, never a cloud object, and the BGP peering of a cloud
   leg is authored (`add_virtual_circuit` builds nothing for a circuit with a cloud end). `CloudGateway` is one kind (`gateway_type` `hub`, `edge` or `customer`); a `CloudGatewayAttachment` joins a
