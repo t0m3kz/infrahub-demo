@@ -291,7 +291,7 @@ def _service_port() -> dict:
         **_context(),
         "capabilities": [
             {
-                "device": {"role": "firewall"},
+                "device": {"role": "internal-firewall"},
                 "ip_address": {
                     "address": "100.66.0.5/29",
                     "ip_namespace": {"name": "PROD", "namespace_type": "prod", "l3_vni": 50001},

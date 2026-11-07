@@ -90,7 +90,7 @@ def _template_names(obj: Declared) -> list[str]:
     return names
 
 
-_MAX_BY_ROLE = {"edge": "max_edges", "firewall": "max_firewalls", "load-balancer": "max_load_balancers"}
+_MAX_BY_ROLE = {"edge": "max_edges", "internal-firewall": "max_firewalls", "load-balancer": "max_load_balancers"}
 
 
 def _design_name(obj: Declared) -> str | None:
@@ -299,7 +299,7 @@ class TestAllDemoServingZones:
         """Metro -> its zones that declare a firewall pair."""
         zones: dict[str, list[str]] = defaultdict(list)
         for zone in _objects("30_all", _ZONE):
-            if "firewall" in [row[1] for row in zone.item.get("fabric_templates") or []]:
+            if "internal-firewall" in [row[1] for row in zone.item.get("fabric_templates") or []]:
                 zones[str(parent_name(zone))].append(name(zone))
         return dict(zones)
 

@@ -31,7 +31,7 @@ from transforms.helpers.proxy import _DESTINATION_TYPES
 from transforms.helpers.vxlan import _PLATFORM_VXLAN_KEYS
 
 # The roles of the transforms that set no ``device_role`` (it is the VXLAN knob of the fabric transforms).
-_SERVICE_ROLE_BY_SUBDIR = {"firewalls": "firewall", "loadbalancers": "load-balancer"}
+_SERVICE_ROLE_BY_SUBDIR = {"firewalls": "internal-firewall", "loadbalancers": "load-balancer"}
 # Template directories under templates/configs/ that are not a role subdirectory keyed by platform.
 _NOT_ROLE_SUBDIRS = {"common", "equinix", "proxies_cloud"}
 

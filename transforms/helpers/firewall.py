@@ -17,6 +17,7 @@ from utils.exchange_transit import (
     transit_vlan,
     transit_vni,
 )
+from utils.fabric_roles import FIREWALL_ROLES
 from utils.limits import ACL_CLOSING_SEQ, DEFAULT_NAMESPACE, VLAN_NAME_MAX
 from utils.segment_addressing import segment_prefix
 
@@ -201,7 +202,7 @@ def _context_leg_ip(ctx: dict[str, Any], namespace: str | None = None) -> str | 
     nexthop. None without a transit leg in ``namespace``.
     """
     for leg in ctx.get("capabilities") or []:
-        if (leg.get("device") or {}).get("role") != "firewall":
+        if (leg.get("device") or {}).get("role") not in FIREWALL_ROLES:
             continue
         ip_obj = leg.get("ip_address") or {}
         address = ip_obj.get("address")

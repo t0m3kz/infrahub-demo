@@ -77,21 +77,23 @@ def test_svi_vrf_counts_as_demand() -> None:
 
 def test_leg_namespace_of_context_on_service_port_is_included() -> None:
     """A firewall context tagged on a role-firewall port brings its transit leg namespace."""
-    context = raw_context("ManagedFirewallContext", 3000, ("firewall", "PROD", "prod"))
+    context = raw_context("ManagedFirewallContext", 3000, ("internal-firewall", "PROD", "prod"))
     port = raw_interface("i1", "Ethernet5", "firewall", capabilities=[context])
     assert facts_of(raw_device("d1", "bl-1", role="border-leaf", interfaces=[port])).demand == frozenset({"PROD"})
 
 
 def test_leg_namespace_from_port_of_another_role_is_ignored() -> None:
     """A context tagged on a port that is not its service port gives no demand."""
-    context = raw_context("ManagedFirewallContext", 3000, ("firewall", "PROD", "prod"))
+    context = raw_context("ManagedFirewallContext", 3000, ("internal-firewall", "PROD", "prod"))
     port = raw_interface("i1", "Ethernet5", "load-balancer", capabilities=[context])
     assert facts_of(raw_device("d1", "bl-1", role="border-leaf", interfaces=[port])).demand == frozenset()
 
 
 def test_leg_of_a_non_member_role_or_default_namespace_is_ignored() -> None:
     """Only legs held by the HA members (firewall / load-balancer role) in a slotted namespace count."""
-    context = raw_context("ManagedFirewallContext", 3000, ("leaf", "PROD", "prod"), ("firewall", "default", "prod"))
+    context = raw_context(
+        "ManagedFirewallContext", 3000, ("leaf", "PROD", "prod"), ("internal-firewall", "default", "prod")
+    )
     port = raw_interface("i1", "Ethernet5", "firewall", capabilities=[context])
     assert facts_of(raw_device("d1", "bl-1", role="border-leaf", interfaces=[port])).demand == frozenset()
 
@@ -148,7 +150,7 @@ def test_party_and_excluded_devices_get_no_demand() -> None:
     rows = [raw_row("r1", 100, "PROD")]
     cases = [
         raw_device("d1", "spine-1", role="spine", rows=rows),
-        raw_device("d2", "fw-1", role="firewall", rows=rows),
+        raw_device("d2", "fw-1", role="internal-firewall", rows=rows),
         raw_device("d3", "stub", role="edge", rows=rows, groups=("provider_stubs",)),
         raw_device("d4", "pe", role="edge", rows=rows, deployment_kind="TopologyExternalProviders"),
         raw_device("d5", "rtr", role="edge", rows=rows, deployment_kind="TopologyCloudRegion"),

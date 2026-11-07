@@ -9,6 +9,7 @@ from typing import Any
 from transforms.helpers.firewall import _context_leg_ip
 from transforms.helpers.policy import rule_selector, segment_flows
 from utils.exchange_transit import MANAGEMENT_TYPE, exchange_peer_zones
+from utils.fabric_roles import INTERNAL_FIREWALL_ROLE
 from utils.segment_addressing import is_terminated, segment_namespace, segment_prefix
 
 
@@ -28,7 +29,7 @@ def _segment_deployment_ids(segment: dict[str, Any]) -> list[str]:
 def _has_firewall_leg(ctx: dict[str, Any]) -> bool:
     """True when the context has an addressed leg on a firewall member (inline contexts have none)."""
     return any(
-        (leg.get("device") or {}).get("role") == "firewall" and (leg.get("ip_address") or {}).get("address")
+        (leg.get("device") or {}).get("role") == INTERNAL_FIREWALL_ROLE and (leg.get("ip_address") or {}).get("address")
         for leg in ctx.get("capabilities") or []
     )
 

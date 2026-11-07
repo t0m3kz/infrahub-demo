@@ -125,7 +125,7 @@ ALL_DEMO_DC_ROLE_COUNTS: dict[str, int] = {
     "spine": 4,
     "leaf": 4,
     "access-leaf": 4,
-    "firewall": 4,
+    "internal-firewall": 4,
     "load-balancer": 4,
 }
 

@@ -13,7 +13,7 @@ def _v(value: Any) -> dict[str, Any]:
     return {"value": value}
 
 
-def _leg(namespace: str = "PROD", ns_type: str | None = "prod", role: str = "firewall") -> dict[str, Any]:
+def _leg(namespace: str = "PROD", ns_type: str | None = "prod", role: str = "internal-firewall") -> dict[str, Any]:
     """One leg (a firewall member's VLAN sub-interface) in the raw query shape."""
     ip_address: dict[str, Any] = {"node": None}
     if ns_type:

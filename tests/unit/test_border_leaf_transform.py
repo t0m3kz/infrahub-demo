@@ -47,7 +47,7 @@ def _ns(name: str, ns_type: str, l3_vni: int) -> dict:
 def _leg(address: str, ns: dict, exchange: dict) -> dict:
     return {
         "name": _v("eth1.3001"),
-        "device": _node({"name": _v("dc-fw-1"), "role": _v("firewall")}),
+        "device": _node({"name": _v("dc-fw-1"), "role": _v("internal-firewall")}),
         "ip_address": _node({"address": _v(address), "ip_namespace": ns}),
         "capabilities": _edges([exchange]),
     }

@@ -14,7 +14,7 @@ spec:
       connectivity_mode: pbr
       fabric_templates:
         - ["2", "border-leaf", "DCS-7050CX3-32C-R_BORDER_LEAF"]
-        - ["2", "firewall", "PA-5260_FIREWALL"]
+        - ["2", "internal-firewall", "PA-5260_FIREWALL"]
         - ["2", "load-balancer", "NetScaler-MPX-26000-100G_LOAD_BALANCER"]
       fabric_interface_sorting_method: top_down
       member_of_groups:

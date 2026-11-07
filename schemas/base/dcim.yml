@@ -131,8 +131,8 @@ generics:
             label: Console Server
             description: Console server part of a Fabric.
             color: "#e8e7ad"
-          - name: firewall
-            label: Firewall
+          - name: internal-firewall
+            label: Internal Firewall
             description: "Internal firewall: east-west and the customers' contexts"
             color: "#6e5abd"
           - name: external-firewall

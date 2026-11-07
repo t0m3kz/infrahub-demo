@@ -608,7 +608,7 @@ class TestTransitMemberResolution:
         assert messages == [
             f"DC10-FW1: uplink Ethernet1/25 is not cabled to a firewall service port for '{_SHARED}'",
             "DC10-FW2: no role=uplink interface found — cannot create a context sub-interface",
-            f"{_SHARED}: no firewall member has an uplink cabled to a border service port",
+            f"{_SHARED}: no internal-firewall member has an uplink cabled to a border service port",
         ]
         assert world.writes == 0
 
@@ -624,7 +624,7 @@ class TestTransitMemberResolution:
         assert messages == [
             "Error resolving uplink interface on DC10-FW1: uplink lookup failed",
             "Error resolving uplink interface on DC10-FW2: uplink lookup failed",
-            f"{_SHARED}: no firewall member has an uplink cabled to a border service port",
+            f"{_SHARED}: no internal-firewall member has an uplink cabled to a border service port",
         ]
         assert "DcimCable" not in world.executed_filters
         assert world.writes == 0

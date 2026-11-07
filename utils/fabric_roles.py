@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-INTERNAL_FIREWALL_ROLE = "firewall"
-"""The role of an internal firewall: east-west and the customers' contexts. (The name predates the external pair.)"""
+INTERNAL_FIREWALL_ROLE = "internal-firewall"
+"""The role of an internal firewall: east-west and the customers' contexts."""
 
 EXTERNAL_FIREWALL_ROLE = "external-firewall"
 """The role of an Internet-facing firewall: the Internet edge context of one or more topologies

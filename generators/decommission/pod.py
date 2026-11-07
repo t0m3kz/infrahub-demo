@@ -44,7 +44,7 @@ from ..protocols import (
 
 # Device roles add_pod/add_rack create under a pod's deployment (spine, the
 # rack switch tiers, and a border-spine pod's own firewall/load-balancer).
-_POD_FABRIC_ROLES = frozenset({"spine", "leaf", "tor", "l2-leaf", "access-leaf", "firewall", "load-balancer"})
+_POD_FABRIC_ROLES = frozenset({"spine", "leaf", "tor", "l2-leaf", "access-leaf", "internal-firewall", "load-balancer"})
 # Roles at the far end of a pod device's fabric cable that are not the pod's own
 # devices: its spines' super-spines, another pod's spines (back-to-back mesh) and
 # the border-leafs cabled to its spines. Never an endpoint (left alone, see above).

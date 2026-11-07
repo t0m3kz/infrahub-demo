@@ -91,7 +91,7 @@ from .colocation_pools import (
 # reaches the outside through its border-leafs), while the DC-only fabric tiers
 # (super-spine, hyper-spine, border-leaf) are meaningless where there is no
 # fabric.
-_COLO_VALID_FABRIC_ROLES = frozenset({"edge", "firewall", "load-balancer"})
+_COLO_VALID_FABRIC_ROLES = frozenset({"edge", "internal-firewall", "load-balancer"})
 
 # Roles that are a service appliance hanging off the on-ramp rather than a
 # router in it: HA-paired two devices at a time via the shared
@@ -105,7 +105,7 @@ _COLO_VALID_FABRIC_ROLES = frozenset({"edge", "firewall", "load-balancer"})
 # logs an error (i.e. fails the generator task) when a physical member has
 # none. SRX-1500_EDGE_FIREWALL, for instance, has only fxp0 + four downlinks and
 # cannot be paired.
-_COLO_SERVICE_ROLES = frozenset({"firewall", "load-balancer"})
+_COLO_SERVICE_ROLES = frozenset({"internal-firewall", "load-balancer"})
 
 # What kind of template each class may instantiate. The template itself says
 # whether it is physical or a provider-hosted appliance (the queries select it as
@@ -116,7 +116,11 @@ _COLO_TEMPLATE_KIND_PHYSICAL = "TemplateDcimPhysicalDevice"
 _COLO_TEMPLATE_KIND_APPLIANCE = "TemplateCloudNetworkAppliance"
 
 # The design maximum each role is held to (TopologyTemplateColocationZone).
-_COLO_DESIGN_MAX_BY_ROLE = {"edge": "max_edges", "firewall": "max_firewalls", "load-balancer": "max_load_balancers"}
+_COLO_DESIGN_MAX_BY_ROLE = {
+    "edge": "max_edges",
+    "internal-firewall": "max_firewalls",
+    "load-balancer": "max_load_balancers",
+}
 
 
 class ColocationFabricGenerator(
@@ -184,7 +188,7 @@ class ColocationFabricGenerator(
             await self.wait_for_parent_generators(("add_colocation_metro",), metro["id"])
         await self._ensure_fabric_pools()
         physical_names_by_role = await self._create_fabric_devices(templates=templates)
-        if physical_names_by_role.get("firewall"):
+        if physical_names_by_role.get("internal-firewall"):
             # The zone's FirewallContext VLAN pool: customer_colocation.py gives
             # every footprint served by this zone a context on its firewall
             # pair and takes the context's transit VLAN from this pool by name
@@ -354,13 +358,14 @@ class ColocationFabricGenerator(
             is_physical_service = role in _COLO_SERVICE_ROLES and template.get("template_kind") == (
                 _COLO_TEMPLATE_KIND_PHYSICAL
             )
-            if is_physical_service and role not in physical_edge_port_roles:
+            port_role = BORDER_ROLE_FOR_SERVICES.get(str(role), str(role))
+            if is_physical_service and port_role not in physical_edge_port_roles:
                 self.logger.warning(
                     f"Colocation {self._label} {self.fabric_name}: fabric_templates entry for role={role!r} has no "
-                    f"matching {role!r}-role port on any physical edge template in this {self._label} (available "
+                    f"matching {port_role!r}-role port on any physical edge template in this {self._label} (available "
                     f"edge port roles: {sorted(physical_edge_port_roles) or 'none'}) — skipping this entry rather "
                     "than creating an appliance with nothing to cable it to. Point the edge template at a device "
-                    f"with a {role!r}-role port block, or drop this entry."
+                    f"with a {port_role!r}-role port block, or drop this entry."
                 )
                 continue
             usable.append(entry)
@@ -537,7 +542,7 @@ class ColocationFabricGenerator(
             if not service_entries:
                 continue
             results = await self.create_ha_role_devices(
-                role=cast(Literal["firewall", "load-balancer"], role),
+                role=cast(Literal["internal-firewall", "load-balancer"], role),
                 entries=service_entries,
                 deployment_id=self.data["id"],
                 naming_convention=naming_convention,
@@ -632,7 +637,7 @@ class ColocationFabricGenerator(
         technical_pool therefore still has no consumer here.
         """
         edge_names = physical_names_by_role.get("edge", [])
-        firewall_names = physical_names_by_role.get("firewall", [])
+        firewall_names = physical_names_by_role.get("internal-firewall", [])
         load_balancer_names = physical_names_by_role.get("load-balancer", [])
         if not edge_names or not (firewall_names or load_balancer_names):
             # Nothing to cable: a zone with no services, a virtual colocation

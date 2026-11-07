@@ -245,7 +245,7 @@ class TestCreateFirewallAndLoadBalancerDevices:
         the mixin only needs to set the right kind per role."""
         gen = _make_generator()
         gen.create_devices = AsyncMock(return_value=["fw-01", "fw-02"])
-        entries = [_entry("firewall", 2, _FW_TEMPLATE)]
+        entries = [_entry("internal-firewall", 2, _FW_TEMPLATE)]
 
         await self._create(gen, entries)
 
@@ -264,7 +264,11 @@ class TestCreateFirewallAndLoadBalancerDevices:
         assert create_kwargs["options"]["ha_kind"] == "ManagedLoadbalancerHA"
 
 
-_BL_ROLE_FOR = {"firewall": "firewall", "external-firewall": "firewall", "load-balancer": "load-balancer"}
+_BL_ROLE_FOR = {
+    "internal-firewall": "firewall",
+    "external-firewall": "firewall",
+    "load-balancer": "load-balancer",
+}
 
 
 class TestCableBorderServices:
@@ -368,7 +372,7 @@ class TestGenerateDcScopedFabricDevices:
         gen._cable_border_services = AsyncMock()
         gen.ensure_context_vlan_pool = AsyncMock()
         gen.data["fabric_templates"] = [
-            _entry("firewall", 1, _FW_TEMPLATE),
+            _entry("internal-firewall", 1, _FW_TEMPLATE),
             _entry("load-balancer", 1, _LB_TEMPLATE),
         ]
 
@@ -381,7 +385,11 @@ class TestGenerateDcScopedFabricDevices:
             {"name": "dc1", "spec": LOADBALANCER_CONTEXT},
         ]
         gen._cable_border_services.assert_awaited_once_with(
-            border_role_for={"firewall": "firewall", "external-firewall": "firewall", "load-balancer": "load-balancer"},
+            border_role_for={
+                "internal-firewall": "firewall",
+                "external-firewall": "firewall",
+                "load-balancer": "load-balancer",
+            },
             connectivity_mode=gen.data["connectivity_mode"],
             border_names=["bl-01"],
             firewall_names=["fw-01"],

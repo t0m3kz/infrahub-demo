@@ -268,7 +268,7 @@ class TestFirewallContextNoFirewallOrCluster:
 
         gen.client.filters.assert_not_called()
         gen.client.create.assert_not_called()
-        assert any("has no firewall devices" in call.args[0] for call in gen.logger.info.call_args_list)
+        assert any("has no internal-firewall devices" in call.args[0] for call in gen.logger.info.call_args_list)
 
     @pytest.mark.asyncio
     async def test_unpaired_firewalls_wait_for_zone_then_use_its_cluster(self) -> None:
@@ -580,7 +580,7 @@ class TestEveryFirewallZoneServesTheFootprint:
         await gen.generate(self._two_zone_payload())
 
         assert gen._ensure_transit_legs.await_count == 2
-        assert any("FR6 has no firewall devices" in call.args[0] for call in gen.logger.info.call_args_list)
+        assert any("FR6 has no internal-firewall devices" in call.args[0] for call in gen.logger.info.call_args_list)
 
     @pytest.mark.asyncio
     async def test_every_zones_generator_is_waited_for(self) -> None:

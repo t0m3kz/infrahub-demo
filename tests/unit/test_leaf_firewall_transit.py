@@ -45,7 +45,7 @@ def _context(
             iface_caps.append(
                 {
                     "name": "eth1.3000",
-                    "device": {"role": "firewall"},
+                    "device": {"role": "internal-firewall"},
                     "ip_address": {"address": f"{network}.{host}/29", "ip_namespace": namespace},
                 }
             )

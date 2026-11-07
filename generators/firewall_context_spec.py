@@ -19,7 +19,7 @@ from utils.exchange_transit import (
     lb_vip_pool_name,
     transit_pool_name,
 )
-from utils.fabric_roles import EXTERNAL_FIREWALL_ROLE
+from utils.fabric_roles import EXTERNAL_FIREWALL_ROLE, INTERNAL_FIREWALL_ROLE
 from utils.limits import FW_CONTEXT_VLAN_END, FW_CONTEXT_VLAN_START, LB_CONTEXT_VLAN_END, LB_CONTEXT_VLAN_START
 
 from .lb_vip import APP_COMPONENT_GENERATOR, load_balanced_components_in
@@ -93,7 +93,7 @@ class ContextSpec:
 
 FIREWALL_CONTEXT = ContextSpec(
     label="FirewallContext",
-    role="firewall",
+    role=INTERNAL_FIREWALL_ROLE,
     devices_key="firewall_devices",
     dedicated_flag="dedicated_firewall",
     ha_kind=ManagedFirewallHA,
@@ -206,9 +206,9 @@ class _TransitState:
 # *.yaml, where every platform/role combination provides a _CUSTOMER_<design>
 # variant per DC fabric design (e.g. "CloudGuard_EDGE_CUSTOMER_L").
 _VIRTUAL_TEMPLATE_PREFIX_BY_PLATFORM_AND_ROLE: dict[tuple[str, str], str] = {
-    ("checkpoint_gaia", "firewall"): "CloudGuard_EDGE",
-    ("paloalto_panos", "firewall"): "PA-VM_EDGE",
-    ("juniper_junos", "firewall"): "vSRX_EDGE",
+    ("checkpoint_gaia", INTERNAL_FIREWALL_ROLE): "CloudGuard_EDGE",
+    ("paloalto_panos", INTERNAL_FIREWALL_ROLE): "PA-VM_EDGE",
+    ("juniper_junos", INTERNAL_FIREWALL_ROLE): "vSRX_EDGE",
     ("f5_tmos", "load-balancer"): "BIG-IP-VE_LOAD_BALANCER",
     ("netscaler", "load-balancer"): "NetScaler-ADC-VPX_LOAD_BALANCER",
 }

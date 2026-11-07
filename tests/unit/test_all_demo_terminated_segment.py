@@ -27,7 +27,7 @@ def _context_name(dc_name: str, dc_index: int, environment: str) -> str:
     members = sorted(
         naming.format_device_name(
             DeviceNameContext.from_indexes(
-                fabric_name=dc_name, device_role="firewall", role_index=role_index, indexes=[dc_index]
+                fabric_name=dc_name, device_role="internal-firewall", role_index=role_index, indexes=[dc_index]
             )
         ).lower()
         for role_index in (1, 2)

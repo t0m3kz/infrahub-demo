@@ -111,7 +111,7 @@ AM = _metro("m-am", "AM")
 PA = _metro("m-pa", "PA")
 
 EDGE = _entry("edge", 2, PHYSICAL, "N9K-C9316D-GX_EDGE")
-FIREWALL = _entry("firewall", 2, PHYSICAL, "CP-26000_FIREWALL")
+FIREWALL = _entry("internal-firewall", 2, PHYSICAL, "CP-26000_FIREWALL")
 VEDGE = _entry("edge", 2, APPLIANCE_TEMPLATE, "C8000V_EDGE")
 
 FR2 = _hosting("z-fr2", "FR2", FR, [EDGE, FIREWALL])
@@ -198,7 +198,7 @@ class TestTemplateKind:
             FR,
             [
                 EDGE,
-                _entry("firewall", 2, APPLIANCE_TEMPLATE, "PA-VM"),
+                _entry("internal-firewall", 2, APPLIANCE_TEMPLATE, "PA-VM"),
                 _entry("load-balancer", 2, APPLIANCE_TEMPLATE, "F5-VE"),
             ],
         )
@@ -345,7 +345,7 @@ class TestKitWithinDesign:
         ("entry", "attribute", "role"),
         [
             (EDGE, "max_edges", "edge"),
-            (FIREWALL, "max_firewalls", "firewall"),
+            (FIREWALL, "max_firewalls", "internal-firewall"),
             (_entry("load-balancer", 2, PHYSICAL, "F5_LB"), "max_load_balancers", "load-balancer"),
         ],
         ids=["edge", "firewall", "load-balancer"],

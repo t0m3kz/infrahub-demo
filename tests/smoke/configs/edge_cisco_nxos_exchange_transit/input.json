@@ -1015,7 +1015,7 @@
                                         "value": "dc1-fw-01"
                                       },
                                       "role": {
-                                        "value": "firewall"
+                                        "value": "internal-firewall"
                                       }
                                     }
                                   },
@@ -1082,7 +1082,7 @@
                                         "value": "dc1-fw-02"
                                       },
                                       "role": {
-                                        "value": "firewall"
+                                        "value": "internal-firewall"
                                       }
                                     }
                                   },
@@ -1149,7 +1149,7 @@
                                         "value": "dc1-fw-01"
                                       },
                                       "role": {
-                                        "value": "firewall"
+                                        "value": "internal-firewall"
                                       }
                                     }
                                   },
@@ -1203,7 +1203,7 @@
                                         "value": "dc1-fw-02"
                                       },
                                       "role": {
-                                        "value": "firewall"
+                                        "value": "internal-firewall"
                                       }
                                     }
                                   },
@@ -1257,7 +1257,7 @@
                                         "value": "dc1-fw-01"
                                       },
                                       "role": {
-                                        "value": "firewall"
+                                        "value": "internal-firewall"
                                       }
                                     }
                                   },
@@ -1311,7 +1311,7 @@
                                         "value": "dc1-fw-02"
                                       },
                                       "role": {
-                                        "value": "firewall"
+                                        "value": "internal-firewall"
                                       }
                                     }
                                   },
@@ -1402,7 +1402,7 @@
                                         "value": "dc1-fw-01"
                                       },
                                       "role": {
-                                        "value": "firewall"
+                                        "value": "internal-firewall"
                                       }
                                     }
                                   },
@@ -1473,7 +1473,7 @@
                                         "value": "dc1-fw-02"
                                       },
                                       "role": {
-                                        "value": "firewall"
+                                        "value": "internal-firewall"
                                       }
                                     }
                                   },
@@ -1544,7 +1544,7 @@
                                         "value": "dc1-fw-01"
                                       },
                                       "role": {
-                                        "value": "firewall"
+                                        "value": "internal-firewall"
                                       }
                                     }
                                   },
@@ -1600,7 +1600,7 @@
                                         "value": "dc1-fw-02"
                                       },
                                       "role": {
-                                        "value": "firewall"
+                                        "value": "internal-firewall"
                                       }
                                     }
                                   },
@@ -1656,7 +1656,7 @@
                                         "value": "dc1-fw-01"
                                       },
                                       "role": {
-                                        "value": "firewall"
+                                        "value": "internal-firewall"
                                       }
                                     }
                                   },
@@ -1712,7 +1712,7 @@
                                         "value": "dc1-fw-02"
                                       },
                                       "role": {
-                                        "value": "firewall"
+                                        "value": "internal-firewall"
                                       }
                                     }
                                   },

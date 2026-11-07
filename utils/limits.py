@@ -192,6 +192,8 @@ GROUP_PATCH_PANELS = "patch_panels"
 # One map for every create_devices() caller: a group created on a branch because a caller missed it collides with
 # every other branch that creates it when both merge.
 ROLE_GROUP_NAMES: dict[str, str] = {
+    "internal-firewall": "firewalls",
+    "external-firewall": "firewalls",
     "load-balancer": "loadbalancers",
     "access-switch": "access-switches",
     "distribution-switch": "distribution-switches",

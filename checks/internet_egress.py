@@ -48,14 +48,16 @@ from infrahub_sdk.checks import InfrahubCheck
 from transforms.helpers.policy import rule_enabled
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import INTERNET_TYPE, INTERNET_ZONE, namespace_type_for_environment, transit_vlan
-from utils.fabric_roles import CARRIER_ROLES, EXTERNAL_FIREWALL_ROLE
+from utils.fabric_roles import CARRIER_ROLES, EXTERNAL_FIREWALL_ROLE, INTERNAL_FIREWALL_ROLE
 
 DC_KIND = "TopologyCustomerDC"
 COLOCATION_KIND = "TopologyCustomerColocation"
 FOOTPRINT_KINDS = (DC_KIND, COLOCATION_KIND)
 """The on-prem footprint kinds; every other kind (cloud, office) is outside our firewalls and is not checked."""
 
-FIREWALL_ROLE = "firewall"
+FIREWALL_ROLE = INTERNAL_FIREWALL_ROLE
+SERVICE_PORT_ROLE = "firewall"
+"""The role of a border port facing a firewall member (an INTERFACE role, not a device role)."""
 APPLIANCE_KIND = "CloudNetworkAppliance"
 PHYSICAL_DEVICE_KIND = "DcimPhysicalDevice"
 PHYSICAL_PORT_KIND = "DcimPhysicalInterface"
@@ -196,12 +198,12 @@ def context_gaps(
         for interface in context.get("capabilities") or []
         if isinstance(interface, dict)
         and interface.get("typename") == PHYSICAL_PORT_KIND
-        and interface.get("role") == FIREWALL_ROLE
+        and interface.get("role") == SERVICE_PORT_ROLE
         and (interface.get("device") or {}).get("role") in CARRIER_ROLES
     }
     if len(ports) < PAIR_SIZE:
         gaps.append(
-            f"{len(ports)} border service port(s) tagged with the context, one {FIREWALL_ROLE}-role port of a "
+            f"{len(ports)} border service port(s) tagged with the context, one {SERVICE_PORT_ROLE}-role port of a "
             f"border or edge device per member ({PAIR_SIZE}) is required"
         )
 

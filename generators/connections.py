@@ -40,7 +40,7 @@ from .types import CablingOptions, ChainHop
 # whose border tier uses a different port-naming convention should build and
 # pass its own dict instead of reusing this one.
 BORDER_ROLE_FOR_SERVICES: dict[str, str] = {
-    "firewall": "firewall",
+    "internal-firewall": "firewall",
     "external-firewall": "firewall",
     "load-balancer": "load-balancer",
 }
@@ -677,7 +677,7 @@ class CablingMixin:
         No-ops for any leg with nothing to cable (create_chain_cabling's own
         empty-devices handling).
         """
-        border_to_firewall = ChainHop(devices=border_names, down_role=border_role_for["firewall"])
+        border_to_firewall = ChainHop(devices=border_names, down_role=border_role_for["internal-firewall"])
         firewall_hop = ChainHop(devices=firewall_names, up_role="uplink")
         await self.create_chain_cabling([border_to_firewall, firewall_hop])
 

@@ -482,7 +482,7 @@ class MyCheck(InfrahubCheck):
   rules follow. A `design` change alone re-runs nothing, and a hand edit of the link is not followed up.
 - **Colocation firewall service**: a `TopologyCustomerColocation` footprint stays a child of its METRO and names no
   zone. `add_customer_deployment_colocation` builds one shared `ManagedFirewallContext` (with its transit legs and
-  exchanges) on the firewall pair of EVERY `TopologyColocationZone` of the metro that has `devices(role: firewall)`; a
+  exchanges) on the firewall pair of EVERY `TopologyColocationZone` of the metro that has `devices(role: internal-firewall)`; a
   zone without firewalls does nothing and a `TopologyVirtualColocation` (provider-hosted appliances) is never a
   serving zone, so two firewall zones mean two contexts and each zone's firewall enforces the footprint's full policy.
   The footprint links them all in `serving_firewall_contexts` (many); a DC footprint has ONE,
@@ -646,6 +646,13 @@ class MyCheck(InfrahubCheck):
   (`UngovernedTransitError`, `BaseDeviceTransform._refuse_ungoverned_transit_sessions`, on every platform). Any
   platform that renders user policies in its VRF address family renders a transit session; the golden is
   `edge_cisco_nxos_internet_bgw`.
+- **Firewall roles**: a device is an `internal-firewall` (east-west and the customers' contexts) or an `external-firewall`
+  (the Internet edge of one or more topologies, named by `TopologySegmentHosting.internet_edge_contexts`, see
+  `checks/internet_egress.py`). `utils/fabric_roles.py` holds the roles once (`INTERNAL_FIREWALL_ROLE`,
+  `EXTERNAL_FIREWALL_ROLE`, `FIREWALL_ROLES` for code that means any firewall); both are rendered by the Firewall
+  transform and join the `firewalls` group. The `firewall` role of an INTERFACE (the border port facing a pair) is a
+  different dropdown and keeps its name. A DC with an external pair keeps no INTERNET leg on its customer contexts (a
+  dedicated one keeps only its own `snat_address`): `generators/firewall_context.py` (`EDGE_CONTEXT`).
 - **Route protection**: every BGP session is protected against a neighbour announcing what it must not, internal
   sessions included (external and transit keep `utils/ownership.py exchange_policies`). ONE derivation,
   `utils/bgp_expectation.py` (pure; the transform renders it and `checks/bgp_expectations.py` compares it): a session

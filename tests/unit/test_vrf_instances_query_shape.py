@@ -31,7 +31,7 @@ def _query_tree() -> _Tree:
 def _everything() -> dict[str, Any]:
     """A response built with every builder, each with its optional parts."""
     row = raw_row("r1", 100, "PROD")
-    context = raw_context("ManagedFirewallContext", 100, ("firewall", "PROD", "prod"))
+    context = raw_context("ManagedFirewallContext", 100, ("internal-firewall", "PROD", "prod"))
     interfaces = [
         raw_interface("i1", addr=address("10.0.0.1/31", "PROD")),
         raw_interface("i2", name="Ethernet2", role="firewall", capabilities=[context]),

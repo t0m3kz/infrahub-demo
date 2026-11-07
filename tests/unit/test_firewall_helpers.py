@@ -312,7 +312,7 @@ _NONPROD = _ns("NON-PROD", "non_prod", 50002)
 def _leg(address: str, namespace: dict, exchanges: list[dict] | None = None, name: str = "eth1.3000") -> dict:
     return {
         "name": name,
-        "device": {"name": "dc-fw-1", "role": "firewall"},
+        "device": {"name": "dc-fw-1", "role": "internal-firewall"},
         "ip_address": {"address": address, "ip_namespace": namespace},
         "capabilities": exchanges or [],
     }

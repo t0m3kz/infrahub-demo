@@ -9,7 +9,7 @@
             "value": "fw-dc10101-C007-p-dedicated"
           },
           "role": {
-            "value": "firewall"
+            "value": "internal-firewall"
           },
           "platform": {
             "node": {

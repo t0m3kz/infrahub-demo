@@ -29,7 +29,7 @@ from ..routing import RoutingMixin
 from ..types import CablingOptions, DeviceOptions, RoutingOptions, naming_convention_of
 from .fabric_shared import ServiceDevicesMixin
 
-_DC_VALID_FABRIC_ROLES = frozenset({"super-spine", "hyper-spine", "border-leaf", "firewall", "load-balancer"})
+_DC_VALID_FABRIC_ROLES = frozenset({"super-spine", "hyper-spine", "border-leaf", "internal-firewall", "load-balancer"})
 
 
 # Strategies under which dc.py pre-seeds its own DC-scoped tiers' BGP.

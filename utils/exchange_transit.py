@@ -18,6 +18,7 @@ from __future__ import annotations
 import ipaddress
 from typing import Any, TypedDict
 
+from utils.fabric_roles import EXTERNAL_FIREWALL_ROLE, INTERNAL_FIREWALL_ROLE
 from utils.internet_space import NON_INTERNET_PREFIXES
 from utils.limits import (
     DEFAULT_NAMESPACE,
@@ -73,7 +74,14 @@ TENANT_NAMESPACE_TYPES = frozenset(EXCHANGE_PEERS)
 FIREWALL_CONTEXT_KIND = "ManagedFirewallContext"
 LOADBALANCER_CONTEXT_KIND = "ManagedLoadbalancerContext"
 
-SERVICE_CONTEXT_ROLES: dict[str, str] = {FIREWALL_CONTEXT_KIND: "firewall", LOADBALANCER_CONTEXT_KIND: "load-balancer"}
+SERVICE_CONTEXT_ROLES: dict[str, str] = {
+    FIREWALL_CONTEXT_KIND: "firewall",
+    LOADBALANCER_CONTEXT_KIND: "load-balancer",
+}
+"""The role of the PORT (an interface role) that faces the members of each kind of service context."""
+
+SERVICE_MEMBER_ROLES = frozenset({INTERNAL_FIREWALL_ROLE, EXTERNAL_FIREWALL_ROLE, "load-balancer"})
+"""The DEVICE roles of the HA members a service context's legs sit on (any firewall pair, or a load-balancer pair)."""
 """Context kind -> the role of the border service port it is tagged on, which is also the role of the HA
 members holding its legs (generators/connections.py BORDER_ROLE_FOR_SERVICES)."""
 
@@ -217,7 +225,7 @@ def transit_leg_namespace(context_vlan: int | None, leg: dict[str, Any]) -> dict
     transit legs (transforms/helpers/firewall.py transit_legs) and the border device's VRF demand
     (utils/vrf_demand.py); ``leg`` is a cleaned interface of the context's ``capabilities``.
     """
-    if (leg.get("device") or {}).get("role") not in SERVICE_CONTEXT_ROLES.values():
+    if (leg.get("device") or {}).get("role") not in SERVICE_MEMBER_ROLES:
         return None
     ip_address = leg.get("ip_address") or {}
     namespace = ip_address.get("ip_namespace") or {}

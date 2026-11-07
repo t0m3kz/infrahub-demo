@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 # a consumer of DC-level data (a pod, a customer boarding) waits out.
 DC_GENERATORS = ("add_dc", "dc_pod_cascade")
 
-_SERVICE_ROLES: tuple[Literal["firewall", "load-balancer"], ...] = ("firewall", "load-balancer")
+_SERVICE_ROLES: tuple[Literal["internal-firewall", "load-balancer"], ...] = ("internal-firewall", "load-balancer")
 
 
 class ServiceDevicesMixin:
@@ -49,4 +49,4 @@ class ServiceDevicesMixin:
                 indexes=indexes,
             )
             names_by_role[role] = [name for _, names in results for name in names]
-        return names_by_role["firewall"], names_by_role["load-balancer"]
+        return names_by_role["internal-firewall"], names_by_role["load-balancer"]

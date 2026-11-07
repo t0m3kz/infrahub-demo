@@ -409,7 +409,7 @@ class TestRefuseCiscoXeUnrendered:
 
         _make_transform(role)._refuse_cisco_xe_unrendered(platform, config)
 
-    @pytest.mark.parametrize("role", ["spine", "super-spine", "l2-leaf", "edge", "firewall", ""])
+    @pytest.mark.parametrize("role", ["spine", "super-spine", "l2-leaf", "edge", "internal-firewall", ""])
     def test_roles_without_a_cisco_xe_fabric_template_are_not_checked(self, role: str) -> None:
         """Spine, super-spine, l2-leaf and edge (an IOS template) keep their behaviour: the guard returns silently."""
         config = {**_clean_config(), "acls": [{"vlan_id": 100}], "mlag": {"domain_id": 1}}

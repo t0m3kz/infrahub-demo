@@ -28,7 +28,7 @@ fragment FirewallContextLegFields on ManagedFirewallContext {
 }
 
 fragment FirewallContextsOnDeviceHostingFields on TopologyDeviceHosting {
-  devices(role__value: "firewall") {
+  devices(role__value: "internal-firewall") {
     edges {
       node {
         ... on DcimPhysicalDevice {

@@ -17,7 +17,7 @@ query {
                   node {
                     ... on TopologyColocationZone {
                       name { value }
-                      devices(role__value: "firewall") { edges { node { id } } }
+                      devices(role__value: "internal-firewall") { edges { node { id } } }
                     }
                   }
                 }

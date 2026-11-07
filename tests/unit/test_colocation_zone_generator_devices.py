@@ -226,7 +226,7 @@ class TestFabricDevices:
     @pytest.mark.parametrize(
         ("role", "expected_ha_kind"),
         [
-            ("firewall", "ManagedFirewallHA"),
+            ("internal-firewall", "ManagedFirewallHA"),
             ("load-balancer", "ManagedLoadbalancerHA"),
         ],
     )
@@ -269,42 +269,45 @@ class TestFabricDevices:
     async def test_every_role_gets_its_own_create_devices_call(self) -> None:
         templates = [
             {"role": "edge", "quantity": 2, "template": _EDGE_TEMPLATE},
-            {"role": "firewall", "quantity": 2, "template": _EDGE_TEMPLATE},
+            {"role": "internal-firewall", "quantity": 2, "template": _EDGE_TEMPLATE},
         ]
         gen = _made_zone(fabric_templates=templates)
         gen.create_devices = AsyncMock(return_value=[])
 
         await gen._create_fabric_devices(templates=templates)
 
-        assert [c.kwargs["device_role"] for c in gen.create_devices.await_args_list] == ["edge", "firewall"]
+        assert [c.kwargs["device_role"] for c in gen.create_devices.await_args_list] == ["edge", "internal-firewall"]
 
     @pytest.mark.asyncio
     async def test_created_names_are_returned_keyed_by_role(self) -> None:
         """_cable_services needs to know which names are edges and which are appliances; nothing else records it."""
         templates = [
             {"role": "edge", "quantity": 2, "template": _EDGE_TEMPLATE},
-            {"role": "firewall", "quantity": 2, "template": _EDGE_TEMPLATE},
+            {"role": "internal-firewall", "quantity": 2, "template": _EDGE_TEMPLATE},
         ]
         gen = _made_zone(fabric_templates=templates)
         gen.create_devices = AsyncMock(side_effect=[["eg-fr201", "eg-fr202"], ["fw-fr201", "fw-fr202"]])
 
         physical_names_by_role = await gen._create_fabric_devices(templates=templates)
 
-        assert physical_names_by_role == {"edge": ["eg-fr201", "eg-fr202"], "firewall": ["fw-fr201", "fw-fr202"]}
+        assert physical_names_by_role == {
+            "edge": ["eg-fr201", "eg-fr202"],
+            "internal-firewall": ["fw-fr201", "fw-fr202"],
+        }
 
     @pytest.mark.asyncio
     async def test_two_entries_for_one_role_accumulate(self) -> None:
         """Two firewall entries (two models): the second must not overwrite the first."""
         templates = [
-            {"role": "firewall", "quantity": 2, "template": _EDGE_TEMPLATE},
-            {"role": "firewall", "quantity": 2, "template": _EDGE_TEMPLATE},
+            {"role": "internal-firewall", "quantity": 2, "template": _EDGE_TEMPLATE},
+            {"role": "internal-firewall", "quantity": 2, "template": _EDGE_TEMPLATE},
         ]
         gen = _made_zone(fabric_templates=templates)
         gen.create_devices = AsyncMock(side_effect=[["fw-fr201", "fw-fr202"], ["fw-fr203", "fw-fr204"]])
 
         physical_names_by_role = await gen._create_fabric_devices(templates=templates)
 
-        assert physical_names_by_role == {"firewall": ["fw-fr201", "fw-fr202", "fw-fr203", "fw-fr204"]}
+        assert physical_names_by_role == {"internal-firewall": ["fw-fr201", "fw-fr202", "fw-fr203", "fw-fr204"]}
 
     @pytest.mark.asyncio
     async def test_appliances_are_created_but_never_registered_for_cabling(self) -> None:
@@ -314,7 +317,7 @@ class TestFabricDevices:
         on the service side, so without this a virtual edge+firewall pair would reach create_chain_cabling."""
         templates = [
             {"role": "edge", "quantity": 2, "template": _VIRTUAL_EDGE_TEMPLATE},
-            {"role": "firewall", "quantity": 2, "template": _VIRTUAL_EDGE_TEMPLATE},
+            {"role": "internal-firewall", "quantity": 2, "template": _VIRTUAL_EDGE_TEMPLATE},
         ]
         gen = _made_virtual(fabric_templates=templates)
         gen.create_devices = AsyncMock(side_effect=[["eg-am-ne01", "eg-am-ne02"], ["fw-am-ne01", "fw-am-ne02"]])
@@ -322,7 +325,7 @@ class TestFabricDevices:
         physical_names_by_role = await gen._create_fabric_devices(templates=templates)
 
         # Created: withholding them from cabling must not mean skipping them.
-        assert [c.kwargs["device_role"] for c in gen.create_devices.await_args_list] == ["edge", "firewall"]
+        assert [c.kwargs["device_role"] for c in gen.create_devices.await_args_list] == ["edge", "internal-firewall"]
         assert all(c.kwargs["options"]["appliance"] for c in gen.create_devices.await_args_list)
         assert physical_names_by_role == {}
         # Still registered for EVPN: a virtual edge runs the routing like a physical one.
@@ -330,7 +333,7 @@ class TestFabricDevices:
 
     @pytest.mark.asyncio
     async def test_firewall_pair_in_a_virtual_colocation_gets_the_appliance_option(self) -> None:
-        templates = [{"role": "firewall", "quantity": 2, "template": _VIRTUAL_EDGE_TEMPLATE}]
+        templates = [{"role": "internal-firewall", "quantity": 2, "template": _VIRTUAL_EDGE_TEMPLATE}]
         gen = _made_virtual(fabric_templates=templates)
         gen.create_devices = AsyncMock(return_value=["fw-am-ne01", "fw-am-ne02"])
 
@@ -357,7 +360,7 @@ class TestFabricDevices:
 
     @pytest.mark.asyncio
     async def test_firewall_pair_of_a_virtual_colocation_is_a_firewall_ha_cluster(self) -> None:
-        templates = [{"role": "firewall", "quantity": 2, "template": _VIRTUAL_EDGE_TEMPLATE}]
+        templates = [{"role": "internal-firewall", "quantity": 2, "template": _VIRTUAL_EDGE_TEMPLATE}]
         gen = _made_virtual(fabric_templates=templates, account={"id": "acct-1"})
         gen.create_devices = AsyncMock(return_value=["fw-am-ne01", "fw-am-ne02"])
 
@@ -414,8 +417,8 @@ class TestGeneratedDeviceNames:
             ("fr2", "edge", 1, "eg-fr201"),
             ("fr2", "edge", 2, "eg-fr202"),
             ("pa4", "edge", 1, "eg-pa401"),
-            ("fr2", "firewall", 1, "fw-fr201"),
-            ("fr2", "firewall", 2, "fw-fr202"),
+            ("fr2", "internal-firewall", 1, "fw-fr201"),
+            ("fr2", "internal-firewall", 2, "fw-fr202"),
             ("fr2", "load-balancer", 1, "lb-fr201"),
             # A virtual colocation: the name carries the dash.
             ("am-ne", "edge", 1, "eg-am-ne01"),
@@ -469,7 +472,7 @@ class TestServiceCabling:
         gen._cable_border_services = AsyncMock()
 
         await gen._cable_services(
-            physical_names_by_role={"edge": ["eg-fr201", "eg-fr202"], "firewall": ["fw-fr201", "fw-fr202"]}
+            physical_names_by_role={"edge": ["eg-fr201", "eg-fr202"], "internal-firewall": ["fw-fr201", "fw-fr202"]}
         )
 
         kwargs = gen._cable_border_services.await_args_list[-1].kwargs
@@ -479,7 +482,7 @@ class TestServiceCabling:
         assert kwargs["load_balancer_names"] == []
         # Same role names dc.py uses: a `firewall`-role port faces a firewall.
         assert kwargs["border_role_for"] == {
-            "firewall": "firewall",
+            "internal-firewall": "firewall",
             "external-firewall": "firewall",
             "load-balancer": "load-balancer",
         }
@@ -491,7 +494,11 @@ class TestServiceCabling:
         gen._cable_border_services = AsyncMock()
 
         await gen._cable_services(
-            physical_names_by_role={"edge": ["eg-fr201"], "firewall": ["fw-fr201"], "load-balancer": ["lb-fr201"]}
+            physical_names_by_role={
+                "edge": ["eg-fr201"],
+                "internal-firewall": ["fw-fr201"],
+                "load-balancer": ["lb-fr201"],
+            }
         )
 
         assert gen._cable_border_services.await_args_list[-1].kwargs["connectivity_mode"] == "pbr"
@@ -502,7 +509,7 @@ class TestServiceCabling:
             # An on-ramp with no appliances at all.
             {"edge": ["eg-pa401", "eg-pa402"]},
             # Appliances declared with no edge pair to hang them off.
-            {"firewall": ["fw-pa401", "fw-pa402"]},
+            {"internal-firewall": ["fw-pa401", "fw-pa402"]},
             # Nothing declared.
             {},
         ],
@@ -523,7 +530,7 @@ class TestServiceCabling:
         """All virtual kit is withheld from the registry, so a virtual colocation's cabling step is a no-op."""
         templates = [
             {"role": "edge", "quantity": 2, "template": _VIRTUAL_EDGE_TEMPLATE},
-            {"role": "firewall", "quantity": 2, "template": _VIRTUAL_EDGE_TEMPLATE},
+            {"role": "internal-firewall", "quantity": 2, "template": _VIRTUAL_EDGE_TEMPLATE},
         ]
         gen = _made_virtual(fabric_templates=templates)
         gen.create_devices = AsyncMock(side_effect=[["eg-am-ne01", "eg-am-ne02"], ["fw-am-ne01", "fw-am-ne02"]])

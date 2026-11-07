@@ -24,7 +24,7 @@ query customer_dc($name: String!) {
             ... on TopologyDataCenter {
               connectivity_mode { value }
               design { node { name { value } } }
-              firewall_devices: devices(role__value: "firewall") {
+              firewall_devices: devices(role__value: "internal-firewall") {
                 edges {
                   node {
                     id

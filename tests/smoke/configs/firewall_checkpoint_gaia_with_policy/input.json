@@ -9,7 +9,7 @@
             "value": "dc1-fw-01"
           },
           "role": {
-            "value": "firewall"
+            "value": "internal-firewall"
           },
           "platform": {
             "node": {

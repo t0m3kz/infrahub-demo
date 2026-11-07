@@ -123,7 +123,7 @@ query internet_egress {
         id
         name { value }
         parent { node { id name { value } } }
-        devices(role__value: "firewall") {
+        devices(role__value: "internal-firewall") {
           edges { node { id __typename name { value } } }
         }
       }

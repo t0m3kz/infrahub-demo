@@ -10,7 +10,7 @@ spec:
     - template_name: CloudGuard_EDGE_CUSTOMER_S
       owner: "P027"
       device_type: CloudGuard
-      role: firewall
+      role: internal-firewall
       platform: checkpoint_gaia
       software_image: checkpoint_gaia-R81.20
       status: active
@@ -34,7 +34,7 @@ spec:
     - template_name: CloudGuard_EDGE_CUSTOMER_M
       owner: "P027"
       device_type: CloudGuard
-      role: firewall
+      role: internal-firewall
       platform: checkpoint_gaia
       software_image: checkpoint_gaia-R81.20
       status: active
@@ -58,7 +58,7 @@ spec:
     - template_name: CloudGuard_EDGE_CUSTOMER_L
       owner: "P027"
       device_type: CloudGuard
-      role: firewall
+      role: internal-firewall
       platform: checkpoint_gaia
       software_image: checkpoint_gaia-R81.20
       status: active
@@ -82,7 +82,7 @@ spec:
     - template_name: CloudGuard_EDGE_CUSTOMER_XL
       owner: "P027"
       device_type: CloudGuard
-      role: firewall
+      role: internal-firewall
       platform: checkpoint_gaia
       software_image: checkpoint_gaia-R81.20
       status: active

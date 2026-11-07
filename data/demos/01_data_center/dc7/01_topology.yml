@@ -22,7 +22,7 @@ spec:
             design: S_BORDER_SPINE_POD
             fabric_templates:
               - ["2", "border-spine", "DCS-7050CX3-32C-R_BORDER_SPINE"]
-              - ["2", "firewall", "PA-5260_FIREWALL"]
+              - ["2", "internal-firewall", "PA-5260_FIREWALL"]
               - ["2", "load-balancer", "NetScaler-MPX-26000-100G_LOAD_BALANCER"]
             member_of_groups:
               - topologies_pod
@@ -42,7 +42,7 @@ spec:
             design: S_BORDER_SPINE_POD
             fabric_templates:
               - ["2", "border-spine", "DCS-7050CX3-32C-R_BORDER_SPINE"]
-              - ["2", "firewall", "PA-5260_FIREWALL"]
+              - ["2", "internal-firewall", "PA-5260_FIREWALL"]
               - ["2", "load-balancer", "NetScaler-MPX-26000-100G_LOAD_BALANCER"]
             member_of_groups:
               - topologies_pod

@@ -57,7 +57,7 @@ def _make_raw_data(
                         "platform": {"node": platform} if platform else {"node": {}},
                         "interfaces": {"edges": raw_ifaces},
                         "capabilities": {"edges": []},
-                        "role": {"value": "firewall"},
+                        "role": {"value": "internal-firewall"},
                     }
                 }
             ]

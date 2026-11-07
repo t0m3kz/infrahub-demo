@@ -303,7 +303,7 @@ def build_firewall_data(*, device_name: str, platform: str) -> dict:
         "__typename": "DcimPhysicalDevice",
         "id": f"dev-{device_name}",
         "name": _v(device_name),
-        "role": _v("firewall"),
+        "role": _v("internal-firewall"),
         "platform": _node(
             {
                 "id": f"plat-{platform}",
@@ -412,7 +412,7 @@ def build_leaf_pbr_data(*, device_name: str, platform: str) -> dict:
     legs = [
         {
             "name": _v("ethernet1/1.3000"),
-            "device": _node({"name": _v(member), "role": _v("firewall")}),
+            "device": _node({"name": _v(member), "role": _v("internal-firewall")}),
             "ip_address": _node(
                 {
                     "address": _v(f"{net[host]}/{net.prefixlen}"),

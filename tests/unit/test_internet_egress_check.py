@@ -30,7 +30,9 @@ SEGMENT = {"id": "seg-1", "name": "c006-nordix-prod-p"}
 METRO = {"id": "metro-fr", "name": "FR"}
 
 
-def _device(device_id: str, role: str = "firewall", kind: str = "DcimPhysicalDevice", **extra: Any) -> dict[str, Any]:
+def _device(
+    device_id: str, role: str = "internal-firewall", kind: str = "DcimPhysicalDevice", **extra: Any
+) -> dict[str, Any]:
     """A cluster member / zone device as the query returns it, cleaned."""
     return {"id": device_id, "typename": kind, "name": device_id, "role": role, **extra}
 
@@ -57,7 +59,7 @@ def _leg(
         "typename": "DcimVirtualInterface",
         "name": f"{port}.{vlan}",
         "role": "firewall",
-        "device": {"id": device, "name": device, "role": "firewall"},
+        "device": {"id": device, "name": device, "role": "internal-firewall"},
         "ip_address": address,
         "capabilities": [{"typename": "TopologyRoutedExchange", "id": exchange, "name": "ex"}] if exchange else [],
     }
@@ -74,7 +76,9 @@ def _port(port_id: str, device_role: str = "border-leaf", role: str = "firewall"
     }
 
 
-def _context(prefix: str = "dc", members: tuple[str, str] = ("fw-1", "fw-2"), role: str = "firewall") -> dict[str, Any]:
+def _context(
+    prefix: str = "dc", members: tuple[str, str] = ("fw-1", "fw-2"), role: str = "internal-firewall"
+) -> dict[str, Any]:
     """A complete shared context: pair, INTERNET legs, border ports, SNAT. Ids are prefixed per facility."""
     ids = [f"{prefix}-{member}" for member in members]
     return {
@@ -227,14 +231,14 @@ class TestDataCenter:
         context = _context()
         context["cluster"]["capabilities"].pop()
         (finding,) = egress_findings(_cleaned([_dc([context])]))
-        assert "has 1 member device(s), 1 with role firewall" in finding
+        assert "has 1 member device(s), 1 with role internal-firewall" in finding
 
     def test_member_with_another_role(self) -> None:
         """Two members of which one is no firewall are not a firewall pair."""
         context = _context()
         context["cluster"]["capabilities"][1]["role"] = "load-balancer"
         findings = egress_findings(_cleaned([_dc([context])]))
-        assert any("2 member device(s), 1 with role firewall" in finding for finding in findings)
+        assert any("2 member device(s), 1 with role internal-firewall" in finding for finding in findings)
 
     def test_member_without_internet_leg(self) -> None:
         """A member with no sub-interface in INTERNET leaves half of the pair without a path."""
@@ -499,7 +503,12 @@ def _raw_payload(snat: bool) -> dict[str, Any]:
     """A raw GraphQL response (queries/validation/internet_egress.gql) of a complete DC context."""
     value = lambda v: {"value": v}  # noqa: E731
     members = [
-        {"id": f"fw-{n}", "__typename": "DcimPhysicalDevice", "name": value(f"fw-{n}"), "role": value("firewall")}
+        {
+            "id": f"fw-{n}",
+            "__typename": "DcimPhysicalDevice",
+            "name": value(f"fw-{n}"),
+            "role": value("internal-firewall"),
+        }
         for n in (1, 2)
     ]
     legs = [
@@ -508,7 +517,7 @@ def _raw_payload(snat: bool) -> dict[str, Any]:
             "__typename": "DcimVirtualInterface",
             "name": value(f"eth1.{INTERNET_VLAN}"),
             "role": value("firewall"),
-            "device": {"node": {"id": f"fw-{n}", "name": value(f"fw-{n}"), "role": value("firewall")}},
+            "device": {"node": {"id": f"fw-{n}", "name": value(f"fw-{n}"), "role": value("internal-firewall")}},
             "ip_address": {
                 "node": {
                     "id": f"ip-{n}",

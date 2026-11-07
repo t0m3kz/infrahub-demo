@@ -142,7 +142,7 @@ def build_exchange_transit_bl_data(
                 legs.append(
                     {
                         "name": _v(f"ethernet1/1.{ctx['vlan'] + _XCHG_VLAN_OFFSET[ns_type]}"),
-                        "device": _node({"name": _v(member), "role": _v("firewall")}),
+                        "device": _node({"name": _v(member), "role": _v("internal-firewall")}),
                         "ip_address": _node(
                             {
                                 "address": _v(f"{net[host]}/{net.prefixlen}"),

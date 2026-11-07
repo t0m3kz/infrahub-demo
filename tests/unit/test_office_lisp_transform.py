@@ -168,7 +168,7 @@ class TestRoleGate:
         vxlan.assert_not_called()
         assert config["lisp"]["enabled"] is True
 
-    @pytest.mark.parametrize("role", ["spine", "super-spine", "hyper-spine", "l2-leaf", "edge", "firewall"])
+    @pytest.mark.parametrize("role", ["spine", "super-spine", "hyper-spine", "l2-leaf", "edge", "internal-firewall"])
     def test_other_roles_never_run_lisp(self, role: str) -> None:
         assert role not in OFFICE_LISP_ROLES
 
@@ -193,7 +193,7 @@ class TestRoleSets:
         assert node is not None
         assert [l2.instance_id for l2 in node.l2] == [10100]
 
-    @pytest.mark.parametrize("role", ["spine", "l2-leaf", "firewall"])
+    @pytest.mark.parametrize("role", ["spine", "l2-leaf", "internal-firewall"])
     def test_the_overlay_model_still_terminates_nothing_on_other_roles(self, role: str) -> None:
         assert (
             build_overlay_node(

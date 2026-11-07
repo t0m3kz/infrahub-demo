@@ -10,7 +10,7 @@ spec:
     - template_name: vSRX_EDGE_CUSTOMER_S
       owner: "P027"
       device_type: vSRX
-      role: firewall
+      role: internal-firewall
       platform: juniper_junos
       software_image: juniper_junos-23.4R2
       status: active
@@ -34,7 +34,7 @@ spec:
     - template_name: vSRX_EDGE_CUSTOMER_M
       owner: "P027"
       device_type: vSRX
-      role: firewall
+      role: internal-firewall
       platform: juniper_junos
       software_image: juniper_junos-23.4R2
       status: active
@@ -58,7 +58,7 @@ spec:
     - template_name: vSRX_EDGE_CUSTOMER_L
       owner: "P027"
       device_type: vSRX
-      role: firewall
+      role: internal-firewall
       platform: juniper_junos
       software_image: juniper_junos-23.4R2
       status: active
@@ -82,7 +82,7 @@ spec:
     - template_name: vSRX_EDGE_CUSTOMER_XL
       owner: "P027"
       device_type: vSRX
-      role: firewall
+      role: internal-firewall
       platform: juniper_junos
       software_image: juniper_junos-23.4R2
       status: active
