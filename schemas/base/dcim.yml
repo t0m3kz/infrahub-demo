@@ -139,14 +139,6 @@ generics:
             label: External Firewall
             description: "Internet-facing firewall: the Internet edge of one or more topologies"
             color: "#a35abd"
-          - name: firewall-active
-            label: Firewall (Active)
-            description: "Active member of a redundant firewall HA pair"
-            color: "#6e5abd"
-          - name: firewall-passive
-            label: Firewall (Passive / Standby)
-            description: "Passive/standby member of a redundant firewall HA pair — carries no traffic"
-            color: "#9e8acd"
           - name: load-balancer
             label: Load Balancer
             description: Load Balancer part of a Fabric.
