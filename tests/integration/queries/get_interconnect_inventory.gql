@@ -346,6 +346,29 @@ fragment CircuitEndDevice on DcimDevice {
       }
     }
   }
+  # A provider connect (TopologyProviderConnect) has no deployment: it stands at its location, a zone, a region or a SaaS
+  # region.
+  ... on TopologyProviderConnect {
+    location {
+      node {
+        id
+        __typename
+        name {
+          value
+        }
+        ... on TopologyColocationZone {
+          parent {
+            node {
+              id
+              name {
+                value
+              }
+            }
+          }
+        }
+      }
+    }
+  }
   # A cloud transport has no deployment: it sits in a cloud region (or a SaaS region).
   ... on CloudTransport {
     region {
