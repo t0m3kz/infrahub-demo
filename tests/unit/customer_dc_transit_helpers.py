@@ -110,7 +110,7 @@ class _World:
         self.uplinks: dict[str, Any] = {device_id: self.uplink(device_id) for device_id in self.bl_ports}
         self.contexts: dict[str, Any] = {}
         self.exchanges: dict[str, Any] = {}
-        self.routes: dict[str, Any] = {}
+        self.group_adds: list[tuple[str, list[str]]] = []
         self.sub_interfaces: dict[tuple[str, str], Any] = {}
         self.addresses: dict[tuple[str, str], Any] = {}
         self.saves: list[tuple[str, str, dict[str, Any]]] = []
@@ -176,16 +176,6 @@ class _World:
                 return [ctx for ctx in self.contexts.values() if ctx.id in kwargs["ids"] and ctx.kind == name]
             context = self.contexts.get(kwargs["name__value"])
             return [context] if context and context.kind == name else []
-        if name == "ManagedVRF":  # every device is a member of an instance of each namespace (the VRF reconcile)
-            return [
-                SimpleNamespace(
-                    id=f"vrf-{device_id}-{ns.name.value}",
-                    shared_devices=SimpleNamespace(peers=[SimpleNamespace(id=device_id)]),
-                    namespace=SimpleNamespace(peer=ns),
-                )
-                for device_id in kwargs["shared_devices__ids"]
-                for ns in self.namespaces.values()
-            ]
         if name == "DcimPhysicalInterface":
             ports = [*self.bl_ports.values(), *self.uplinks.values()]
             return [port for port in ports if port.id in kwargs["ids"]]
@@ -194,25 +184,6 @@ class _World:
         if name == "DcimVirtualInterface":
             ids = set(kwargs["capabilities__ids"])
             return [sub for sub in self.sub_interfaces.values() if ids & {peer.id for peer in sub.capabilities.peers}]
-        if name == "DcimDevice":
-            return [
-                SimpleNamespace(id=i, name=SimpleNamespace(value=i), role=SimpleNamespace(value="border-leaf"))
-                for i in kwargs["ids"]
-            ]
-        if name == "ManagedStaticRoute":
-            return [
-                r
-                for r in self.routes.values()
-                if kwargs.get("name__value", r.name.value) == r.name.value
-                and r.data["capabilities"][0]["id"]
-                in kwargs.get("capabilities__ids", [r.data["capabilities"][0]["id"]])
-            ]
-        if name == "IpamPrefix":
-            return [
-                SimpleNamespace(id=p.id, prefix=SimpleNamespace(value=ipaddress.ip_network(p.prefix.value)))
-                for p in self.allocated.values()
-                if p.id in kwargs["ids"]
-            ]
         if name == "IpamIPAddress":
             if "address__values" in kwargs:  # CablingMixin._find_addresses: one read for a prefix's addresses
                 wanted = {(address, ns) for address in kwargs["address__values"] for ns in kwargs["ip_namespace__ids"]}
@@ -237,6 +208,8 @@ class _World:
             return SimpleNamespace(id=kwargs["name__value"])
         if name in _CONTEXT_KINDS:
             return next(ctx for ctx in self.contexts.values() if ctx.id == kwargs["id"])
+        if name == "CoreStandardGroup":
+            return SimpleNamespace(id="group-service-contexts")
         if name == "CoreIPAddressPool":
             if not self.snat_pool:
                 raise RuntimeError("pool not found")
@@ -300,18 +273,6 @@ class _World:
             context = self.contexts.setdefault(data["name"], self._context(name, data["name"]))
             context.tenant_id = (data.get("tenant") or {}).get("id")
             return self._node(name, data["name"], backing=context)
-        if name == "ManagedStaticRoute":
-            route = self.routes.setdefault(
-                data["name"],
-                SimpleNamespace(
-                    name=SimpleNamespace(value=data["name"]), origin=SimpleNamespace(value="generated"), data=data
-                ),
-            )
-            route.data = data
-            route.next_hop = SimpleNamespace(value=data["next_hop"])
-            route.exported = SimpleNamespace(value=data["exported"])
-            route.delete = lambda route=route: self._delete_route(route)
-            return self._node(name, data["name"], backing=route)
         if name == "TopologyRoutedExchange":
             exchange = self.exchanges.setdefault(
                 data["name"],
@@ -346,9 +307,6 @@ class _World:
             sub.ip_address = SimpleNamespace(id=(data.get("ip_address") or {}).get("id") or sub.ip_address.id)
             return self._node(name, data["name"], backing=sub)
         raise AssertionError(f"unexpected create({name})")
-
-    async def _delete_route(self, route: Any) -> None:
-        self.routes.pop(route.name.value, None)
 
     def _context(self, kind: str, name: str) -> Any:
         """A context as the SDK returns it: a firewall context has a SNAT address, a load balancer's a VIP prefix."""
@@ -386,6 +344,9 @@ class _World:
         if kind in _CONTEXT_KINDS and backing is not None:
 
             async def add_relationships(*, relation_to_update: str, related_nodes: list[str]) -> None:
+                if relation_to_update == "member_of_groups":  # the context joins service_contexts
+                    world.group_adds.append((backing.id, list(related_nodes)))
+                    return
                 assert relation_to_update == "capabilities"
                 world.tags.append((backing.id, list(related_nodes)))
                 for port in world.bl_ports.values():
@@ -456,22 +417,8 @@ def _make_gen(world: _World) -> tuple[Any, list[str]]:
     gen.client = world
     gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
     events: list[str] = []
-    route_locks: list[str] = []
-    setattr(
-        gen, "route_locks", route_locks
-    )  # the route reconcile's own lock (routes-<key>-<context>) is not the context lock
-
-    def acquire(key: str) -> str:
-        if key.startswith("routes-"):
-            route_locks.append(key)
-            return "routes-lock"
-        events.append(f"acquire:{key}")
-        return "lock-id"
-
-    gen.acquire_resource_lock = AsyncMock(side_effect=acquire)
-    gen.release_resource_lock = AsyncMock(
-        side_effect=lambda lock_id: events.append("release") if lock_id != "routes-lock" else None
-    )
+    gen.acquire_resource_lock = AsyncMock(side_effect=lambda key: events.append(f"acquire:{key}") or "lock-id")
+    gen.release_resource_lock = AsyncMock(side_effect=lambda lock_id: events.append("release"))
     gen.link_serving_context = AsyncMock()
     gen.set_controllers_from = MagicMock()
     # The border devices' VRF instances follow the legs (tests/unit/test_customer_border_vrfs.py): not these tests'.

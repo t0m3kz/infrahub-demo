@@ -113,5 +113,7 @@ spec:
       description: "TopologyCarrierCircuit, a pure carrier — generator target for CarrierCircuitGenerator (add_circuit), which derives its facility locations and builds no session"  # yamllint disable-line rule:line-length
     - name: patch_panels
       description: "DcimPatchPanel, a passive panel — generator target for PatchPanelGenerator (add_patch_panel), which builds the ports of its panel_type and pairs each front port with its rear port. Every panel declares the group: the generator starts when a panel joins it"  # yamllint disable-line rule:line-length
+    - name: service_contexts
+      description: "ManagedFirewallContext and ManagedLoadbalancerContext — generator target for ContextRoutesGenerator (add_context_routes), which writes the static routes of a context on the border devices its service ports are tagged on. The context generators add each context they build; the group trigger and a change of its capabilities start the run"  # yamllint disable-line rule:line-length
     - name: virtual_circuits
       description: "TopologySessionCircuit of every circuit_type (dci, handoff, vpn, tunnel) — target of the virtual-circuit session generator, which builds the BGP sessions of a dci, a handoff and a vpn and none for a tunnel (the SD-WAN orchestrator owns its overlay routing). Every session circuit joins because the created-trigger fires per kind and would raise on a non-member"  # yamllint disable-line rule:line-length

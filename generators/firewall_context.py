@@ -32,10 +32,9 @@ from infrahub_sdk.protocols import CoreNumberPool
 
 from utils.exchange_transit import INTERNET_TYPE, namespace_type_for_environment, transit_vlan
 from utils.fabric_roles import EXTERNAL_FIREWALL_ROLE
-from utils.limits import LB_VIP_PREFIXLEN, SNAT_PREFIX_LENGTH
+from utils.limits import GROUP_SERVICE_CONTEXTS, LB_VIP_PREFIXLEN, SNAT_PREFIX_LENGTH
 
 from .connections import tracked_save_kwargs
-from .exchange_routes import ExchangeRoutesMixin, RouteInputs
 from .firewall_context_spec import (
     _VIRTUAL_TEMPLATE_PREFIX_BY_PLATFORM_AND_ROLE,
     EDGE_CONTEXT,
@@ -84,7 +83,7 @@ def _dedicated_name_parts(customer: dict[str, Any], customer_id: str) -> tuple[s
     return org_id.lower(), namespace_type_for_environment(customer.get("environment") or "").lower()
 
 
-class FirewallContextMixin(TransitLegsMixin, ExchangeRoutesMixin):
+class FirewallContextMixin(TransitLegsMixin):
     """Shared/dedicated service context provisioning, one flow per ContextSpec.
 
     The host class sets ``_customer_kind``, ``_parent_label``,
@@ -113,6 +112,7 @@ class FirewallContextMixin(TransitLegsMixin, ExchangeRoutesMixin):
     # nothing shadows them in the MRO.
     if TYPE_CHECKING:
         _ensure_ha_pairs = DomainPairingMixin._ensure_ha_pairs
+        _standard_group = DomainPairingMixin._standard_group
         create_devices = DeviceMixin.create_devices
         ensure_vlan_subinterface = CablingMixin.ensure_vlan_subinterface
         resource_lock = PoolMixin.resource_lock
@@ -414,19 +414,6 @@ class FirewallContextMixin(TransitLegsMixin, ExchangeRoutesMixin):
 
         served_by = self.serving_context_ids(customer, spec)
 
-        # What the route reconcile needs, kept for it: it runs once the border devices are in their VRF instances
-        # (customer_facility.py), which follow the legs and so cannot exist when this step ends.
-        async def reconcile(context: Any) -> bool:
-            self.route_inputs()[context.id] = RouteInputs(
-                spec=spec,
-                context_name=context_name,
-                members=members,
-                namespaces=namespaces,
-                leg_types=leg_types,
-                shared=target.tenant_id is None,
-            )
-            return True
-
         if not track:
             state = await self._transit_state(
                 spec,
@@ -446,7 +433,7 @@ class FirewallContextMixin(TransitLegsMixin, ExchangeRoutesMixin):
                     current_ids=served_by,
                     parent_id=target.parent_id,
                 )
-                return state.context.id if await reconcile(state.context) else None
+                return state.context.id
 
         async with self.resource_lock(f"{spec.key}-{context_name}"):
             # Re-read under the lock, the ports too: concurrent runs tag the same border ports. A dedicated
@@ -472,7 +459,7 @@ class FirewallContextMixin(TransitLegsMixin, ExchangeRoutesMixin):
                         current_ids=served_by,
                         parent_id=target.parent_id,
                     )
-                    return state.context.id if await reconcile(state.context) else None
+                    return state.context.id
             pool_names = {leg_type: spec.leg_pool_name(ns.name.value) for leg_type, ns in namespaces.items()}
             if spec.vip_pool_name is not None:
                 pool_names[_VIP_POOL_KEY] = spec.vip_pool_name(tenant_namespace.name.value)
@@ -587,7 +574,7 @@ class FirewallContextMixin(TransitLegsMixin, ExchangeRoutesMixin):
                     relation_to_update="capabilities", related_nodes=state.untagged_port_ids
                 )
                 self.logger.info(f"{context_name}: tagged {len(state.untagged_port_ids)} border service port(s)")
-            return context_id if await reconcile(context_obj) else None
+            return context_id
 
     async def _resolve_parent_cluster(
         self, spec: ContextSpec, devices: list[Any], *, parent_id: str, parent_name: str
@@ -747,6 +734,10 @@ class FirewallContextMixin(TransitLegsMixin, ExchangeRoutesMixin):
                 },
             )
             await context_obj.save(**tracked_save_kwargs(track))
+            # The context joins the target group of add_context_routes (additive: a tracked context is also a member of
+            # this run's group, which a list written here would drop). Joining starts that generator.
+            group = await self._standard_group(GROUP_SERVICE_CONTEXTS)
+            await context_obj.add_relationships(relation_to_update="member_of_groups", related_nodes=[group.id])
             self.logger.info(f"Ensured {spec.label} '{context_name}'")
             return context_obj
         except Exception as exc:

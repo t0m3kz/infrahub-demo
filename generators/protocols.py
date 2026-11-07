@@ -759,9 +759,7 @@ class ManagedStaticRoute(ManagedGeneric, ManagedGenericDevice):
     next_hop: String
     distance: Integer
     exported: Boolean
-    origin: Dropdown
     vrf: RelationshipAttribute[ManagedVRF]
-    maintained_by: RelationshipAttribute[ManagedGeneric]
     next_hop_interface: RelationshipAttribute[DcimInterface]
 
 

@@ -29,9 +29,6 @@ def _lb_payload(**kwargs: Any) -> dict[str, Any]:
     return _payload(firewalls=False, lb_devices=_LB_DEVICES, **kwargs)
 
 
-_ROUTE = {"allow_upsert": True, "update_group_context": False}  # routes are shared work, never tracked
-
-
 class TestVlanPoolPerContextKind:
     @pytest.mark.asyncio
     async def test_each_kind_reads_its_own_half_of_the_context_band(self) -> None:
@@ -126,10 +123,9 @@ class TestLoadbalancerSharedContext:
             "ManagedLoadbalancerContext",
             "IpamIPAddress",
             "DcimVirtualInterface",
-            "ManagedStaticRoute",
         }
         for kind, label, kwargs in world.saves:
-            assert kwargs == (_ROUTE if kind == "ManagedStaticRoute" else _UNTRACKED), (kind, label)
+            assert kwargs == _UNTRACKED, (kind, label)
 
     @pytest.mark.asyncio
     async def test_one_shared_context_per_tenant_namespace_created_lazily(self) -> None:
@@ -224,7 +220,7 @@ class TestLoadbalancerDedicatedContext:
         assert context.tenant_id == "cust-1"
         assert context.vip_prefix.id is not None
         for kind, label, kwargs in world.saves:
-            assert kwargs == (_ROUTE if kind == "ManagedStaticRoute" else _TRACKED), (kind, label)
+            assert kwargs == _TRACKED, (kind, label)
         events.clear()
         world.saves.clear()
 
@@ -234,7 +230,7 @@ class TestLoadbalancerDedicatedContext:
         assert len(world.saved("IpamIPAddress")) == 4
         assert len(world.saved("DcimVirtualInterface")) == 2
         for kind, label, kwargs in world.saves:
-            assert kwargs == (_ROUTE if kind == "ManagedStaticRoute" else _TRACKED), (kind, label)
+            assert kwargs == _TRACKED, (kind, label)
         assert events == ["acquire:lb-context-DC10-LB-ded-prod", "release"]
 
     @pytest.mark.asyncio

@@ -51,19 +51,6 @@ nodes:
         default_value: true
         order_weight: 1575
         description: "Redistributed into EVPN; false keeps the route in the VRF of the device only"
-      - name: origin
-        kind: Dropdown
-        optional: false
-        default_value: generated
-        order_weight: 1600
-        description: "Who owns the route: a generator writes and removes its own, a person's is never touched"
-        choices:
-          - name: generated
-            label: Generated
-            color: "#3498DB"
-          - name: manual
-            label: Manual
-            color: "#7FBF7F"
     relationships:
       - name: interface
         peer: DcimInterface
@@ -84,16 +71,6 @@ nodes:
         on_delete: no-action
         identifier: static_route__vrf
         order_weight: 1700
-      - name: maintained_by
-        peer: ManagedGeneric
-        label: Maintained By
-        description: "The service context whose generator maintains the route; empty for a person's route"
-        kind: Attribute
-        cardinality: one
-        optional: true
-        on_delete: no-action
-        identifier: static_route__maintained_by
-        order_weight: 1725
       - name: next_hop_interface
         peer: DcimInterface
         label: Next Hop Interface

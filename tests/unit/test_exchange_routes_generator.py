@@ -1,4 +1,4 @@
-"""The reconciler of the exchange routes: owned by one context, manual routes kept, writes before deletes."""
+"""add_context_routes: the routes of one service context, written tracked on its border devices in their VRF instances."""
 
 from __future__ import annotations
 
@@ -6,175 +6,212 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from generators.exchange_routes import ExchangeRoutesMixin, route_name
+import pytest
 
-TENANT = {"namespace": "PROD", "l3_vni": 10, "ns_type": "prod", "vip": "10.9.0.5"}
-INTERNET = {"namespace": "INTERNET", "l3_vni": 99, "ns_type": "internet", "vip": "198.51.100.5"}
-CTX = "shared-x-prod"
-CONTEXT = MagicMock(id="ctx-1")
-CONTEXT.name.value = CTX
+from generators.exchange_routes import route_name
+from generators.topology.context_routes import ContextRoutesGenerator
 
 
-def _device(name: str, role: str) -> MagicMock:
-    device = MagicMock(id=f"id-{name}")
-    device.name.value = name
-    device.role.value = role
-    return device
+def _value(value: Any) -> dict[str, Any]:
+    return {"value": value}
 
 
-def _route(name: str, origin: str, maintained_by: str = "ctx-1") -> MagicMock:
-    route = MagicMock()
-    route.maintained_by.id = maintained_by
-    route.name.value, route.origin.value = name, origin
-    route.next_hop.value, route.exported.value = "0.0.0.0", True
-    route.delete = AsyncMock()
-    return route
+def _namespace(name: str, ns_type: str, vni: int) -> dict[str, Any]:
+    return {
+        "node": {"id": f"ns-{name}", "name": _value(name), "namespace_type": _value(ns_type), "l3_vni": _value(vni)}
+    }
 
 
-class _Writer(ExchangeRoutesMixin):
-    """The mixin over a fake client holding the routes that exist and recording the ones created."""
+def _leg(address: str, namespace: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "node": {
+            "__typename": "DcimVirtualInterface",
+            "id": f"leg-{address}",
+            "device": {"node": {"id": "fw-1", "name": _value("fw-1"), "role": _value("internal-firewall")}},
+            "ip_address": {"node": {"address": _value(address), "ip_namespace": namespace}},
+        }
+    }
 
-    def __init__(self, devices: list[Any], existing: list[Any] | None = None) -> None:
+
+def _port(device_id: str) -> dict[str, Any]:
+    return {
+        "node": {
+            "__typename": "DcimPhysicalInterface",
+            "id": f"port-{device_id}",
+            "device": {"node": {"id": device_id, "name": _value(device_id), "role": _value("border-leaf")}},
+        }
+    }
+
+
+PROD = _namespace("PROD", "prod", 50001)
+INTERNET = _namespace("INTERNET", "internet", 50003)
+
+
+def _firewall(
+    *, tenant: str | None = None, snat: str | None = "192.0.2.5/32", ports: tuple[str, ...] = ("bl-1",)
+) -> dict:
+    return {
+        "ManagedFirewallContext": {
+            "edges": [
+                {
+                    "node": {
+                        "id": "ctx-1",
+                        "name": _value("shared-fw-prod"),
+                        "tenant": {"node": {"id": tenant} if tenant else None},
+                        "snat_address": {"node": {"address": _value(snat)} if snat else None},
+                        "capabilities": {
+                            "edges": [_leg("100.66.0.5/29", PROD), _leg("100.66.32.5/29", INTERNET)]
+                            + [_port(p) for p in ports]
+                        },
+                    }
+                }
+            ]
+        },
+        "ManagedLoadbalancerContext": {"edges": []},
+    }
+
+
+def _loadbalancer(*, vip_prefix: str | None = "100.68.0.0/26") -> dict:
+    return {
+        "ManagedFirewallContext": {"edges": []},
+        "ManagedLoadbalancerContext": {
+            "edges": [
+                {
+                    "node": {
+                        "id": "lb-1",
+                        "name": _value("shared-lb-prod"),
+                        "vip_prefix": {"node": {"prefix": _value(vip_prefix)} if vip_prefix else None},
+                        "capabilities": {"edges": [_leg("100.66.64.5/29", PROD), _port("bl-1")]},
+                    }
+                }
+            ]
+        },
+    }
+
+
+class _Gen(ContextRoutesGenerator):
+    """The generator over a fake client; records the routes saved and their save kwargs."""
+
+    def __init__(self, devices: list[Any], vrf_namespaces: tuple[str, ...] = ("PROD", "INTERNET")) -> None:
         self.log = MagicMock()
         self.logger = self.log
         self.client = MagicMock()
-        self.devices, self.existing = devices, existing or []
-        self.created: list[dict[str, Any]] = []
-        self.fail = False
-        self.vrf_namespaces = ["PROD", "INTERNET"]
+        self.saved: list[tuple[dict[str, Any], dict[str, Any]]] = []
+        self.devices, self.vrf_namespaces = devices, vrf_namespaces
+        self.vrfs = AsyncMock()
+        self.reconcile_vrfs = self.vrfs
+        self.resource_lock = MagicMock()
+        self.resource_lock.return_value.__aenter__ = AsyncMock()
+        self.resource_lock.return_value.__aexit__ = AsyncMock(return_value=False)
 
-        async def filters(kind: str, **kw: Any) -> list[Any]:
-            if getattr(kind, "__name__", kind) == "DcimDevice":
+        async def filters(kind: Any, **_: Any) -> list[Any]:
+            if kind.__name__ == "DcimDevice":
                 return self.devices
-            if getattr(kind, "__name__", kind) == "ManagedVRF":  # every device is in an instance of each namespace
-                return [
-                    MagicMock(
-                        id=f"vrf-{d.id}-{ns}",
-                        shared_devices=MagicMock(peers=[MagicMock(id=d.id)]),
-                        namespace=SimpleNamespace(peer=SimpleNamespace(name=SimpleNamespace(value=ns))),
-                    )
-                    for d in self.devices
-                    for ns in self.vrf_namespaces
-                ]
-            if "name__value" in kw:
-                return [r for r in self.existing if r.name.value == kw["name__value"]]
-            if "maintained_by__ids" in kw:
-                return [r for r in self.existing if r.maintained_by.id in kw["maintained_by__ids"]]
-            return self.existing
+            return [
+                SimpleNamespace(
+                    id=f"vrf-{d.id}-{ns}",
+                    shared_devices=SimpleNamespace(peers=[SimpleNamespace(id=d.id)]),
+                    namespace=SimpleNamespace(peer=SimpleNamespace(name=SimpleNamespace(value=ns))),
+                )
+                for d in self.devices
+                for ns in self.vrf_namespaces
+            ]
 
-        async def create(kind: str, data: dict[str, Any]) -> MagicMock:
-            if self.fail:
-                raise RuntimeError("boom")
-            self.created.append(data)
+        async def create(kind: Any, data: dict[str, Any]) -> Any:
             node = MagicMock()
-            node.save = AsyncMock()
+
+            async def save(**kwargs: Any) -> None:
+                self.saved.append((data, kwargs))
+
+            node.save = save
             return node
 
         self.client.filters, self.client.create = filters, create
 
-    def specs(self, *, shared: bool = True, snat: str | None = "203.0.113.7") -> dict[bool, list[dict[str, Any]]]:
-        kw = {"tenant_leg": TENANT, "peer_legs": [INTERNET], "shared": shared, "snat": snat}
-        return {False: self.exchange_specs(edge=False, **kw), True: self.exchange_specs(edge=True, **kw)}
 
-    async def run(self, **kw: Any) -> bool:
-        return await self.reconcile_routes(
-            context=CONTEXT, device_ids=[d.id for d in self.devices], specs_for=kw.pop("specs_for")
-        )
+def _device(device_id: str, role: str = "border-leaf") -> SimpleNamespace:
+    return SimpleNamespace(id=device_id, name=SimpleNamespace(value=device_id), role=SimpleNamespace(value=role))
 
 
-async def test_a_complete_context_without_routes_gets_them() -> None:
-    """The reconcile writes the default and the SNAT return route whatever the legs look like."""
-    writer = _Writer([_device("bl1", "border-leaf")])
-    assert await writer.run(specs_for=writer.specs())
-    by_prefix = {d["prefix"]: d for d in writer.created}
-    assert by_prefix["0.0.0.0/0"]["next_hop"] == "10.9.0.5" and by_prefix["0.0.0.0/0"]["exported"] is True
-    assert by_prefix["203.0.113.7/32"]["next_hop"] == "198.51.100.5"
-    assert by_prefix["203.0.113.7/32"]["vrf"] == {"id": "vrf-id-bl1-INTERNET"}
-    assert all(d["capabilities"] == [{"id": "id-bl1"}] and d["origin"] == "generated" for d in writer.created)
+async def test_a_shared_firewall_context_routes_its_default_and_snat_return_tracked() -> None:
+    """The default route to the tenant leg's VIP and the SNAT /32 to the INTERNET leg's, each in the device's VRF."""
+    gen = _Gen([_device("bl-1")])
+    await gen.generate(_firewall())
+    by_prefix = {data["prefix"]: (data, kwargs) for data, kwargs in gen.saved}
+    default, kwargs = by_prefix["0.0.0.0/0"]
+    assert default["next_hop"] == "100.66.0.4" and default["exported"] is True
+    assert default["vrf"] == {"id": "vrf-bl-1-PROD"} and default["capabilities"] == [{"id": "bl-1"}]
+    assert by_prefix["192.0.2.5/32"][0]["next_hop"] == "100.66.32.4"
+    assert by_prefix["192.0.2.5/32"][0]["vrf"] == {"id": "vrf-bl-1-INTERNET"}
+    # tracked: the run's group owns the route, so it deletes the ones a later run no longer saves
+    assert all(k == {"allow_upsert": True} for _, k in gen.saved)
+    assert default["name"] == route_name("shared-fw-prod", "bl-1", "PROD", "0.0.0.0/0")
+    gen.vrfs.assert_awaited_once_with(["bl-1"])
 
 
-async def test_an_edge_keeps_the_tenant_default_local() -> None:
+async def test_the_edge_keeps_the_tenant_default_local() -> None:
     """On a colocation edge the default stays inside the VRF."""
-    writer = _Writer([_device("edge1", "edge")])
-    await writer.run(specs_for=writer.specs(snat=None))
-    assert [d["exported"] for d in writer.created] == [False]
+    gen = _Gen([_device("edge-1", "edge")])
+    await gen.generate(_firewall(snat=None, ports=("edge-1",)))
+    assert [(d["prefix"], d["exported"]) for d, _ in gen.saved] == [("0.0.0.0/0", False)]
 
 
-async def test_idempotent_names() -> None:
-    """Two runs write the same names, so the upsert converges instead of duplicating."""
-    writer = _Writer([_device("bl1", "border-leaf")])
-    await writer.run(specs_for=writer.specs())
-    await writer.run(specs_for=writer.specs())
-    names = [d["name"] for d in writer.created]
-    assert len(names) == 4 and len(set(names)) == 2
+async def test_a_dedicated_context_without_snat_writes_nothing() -> None:
+    """A dedicated context steers its tenant by PBR and has no public address of its own here."""
+    gen = _Gen([_device("bl-1")])
+    await gen.generate(_firewall(tenant="cust-1", snat=None))
+    assert gen.saved == []
 
 
-async def test_a_changed_next_hop_or_snat_is_rewritten_and_the_old_route_removed() -> None:
-    """A new SNAT address is a new prefix: it is written, then the old one is deleted."""
-    old = _route(route_name(CTX, "bl1", "INTERNET", "203.0.113.6/32"), "generated")
-    writer = _Writer([_device("bl1", "border-leaf")], [old])
-    await writer.run(specs_for=writer.specs(snat="203.0.113.7"))
-    assert "203.0.113.7/32" in {d["prefix"] for d in writer.created}
-    assert old.delete.await_count == 1
+async def test_every_border_device_gets_its_routes() -> None:
+    """Two border leaves facing the pair carry the same routes, each under its own name."""
+    gen = _Gen([_device("bl-1"), _device("bl-2")])
+    await gen.generate(_firewall(ports=("bl-1", "bl-2")))
+    assert len({d["name"] for d, _ in gen.saved}) == 4
+    assert {d["capabilities"][0]["id"] for d, _ in gen.saved} == {"bl-1", "bl-2"}
 
 
-async def test_a_failed_write_keeps_the_previous_routes() -> None:
-    """When a write fails nothing is deleted and the run reports it."""
-    old = _route(route_name(CTX, "bl1", "INTERNET", "203.0.113.6/32"), "generated")
-    writer = _Writer([_device("bl1", "border-leaf")], [old])
-    writer.fail = True
-    assert not await writer.run(specs_for=writer.specs())
-    assert old.delete.await_count == 0 and writer.log.error.called
+async def test_a_load_balancer_context_routes_its_vip_range() -> None:
+    """The VIP range goes to the leg's floating address, always exported."""
+    gen = _Gen([_device("bl-1")])
+    await gen.generate(_loadbalancer())
+    assert [(d["prefix"], d["next_hop"], d["exported"]) for d, _ in gen.saved] == [
+        ("100.68.0.0/26", "100.66.64.4", True)
+    ]
 
 
-async def test_manual_and_foreign_routes_are_never_touched() -> None:
-    """A manual route of the same name is kept; a generated route of another context is not ours to delete."""
-    mine = route_name(CTX, "bl1", "PROD", "0.0.0.0/0")
-    manual = _route(mine, "manual")
-    foreign = _route(route_name("other-ctx", "bl1", "PROD", "9.9.9.0/24"), "generated", maintained_by="ctx-2")
-    person = _route("my-route", "manual")
-    writer = _Writer([_device("bl1", "border-leaf")], [manual, foreign, person])
-    await writer.run(specs_for=writer.specs(snat=None))
-    assert mine not in {d["name"] for d in writer.created} and writer.log.warning.called
-    assert all(r.delete.await_count == 0 for r in (manual, foreign, person))
+async def test_a_context_without_legs_or_ports_writes_nothing() -> None:
+    """A context built in steps writes nothing until it has a leg and a tagged border port."""
+    gen = _Gen([_device("bl-1")])
+    await gen.generate(_firewall(ports=()))
+    assert gen.saved == [] and not gen.vrfs.await_count
 
 
-async def test_vip_route_goes_to_the_leg_vip() -> None:
-    """A load-balancer context routes its VIP range to the floating address, always exported."""
-    writer = _Writer([_device("bl1", "border-leaf")])
-    spec = writer.vip_spec(TENANT, "10.8.0.0/26")
-    await writer.run(specs_for={False: [spec], True: [spec]})
-    assert writer.created[0]["next_hop"] == "10.9.0.5" and writer.created[0]["exported"] is True
+async def test_a_load_balancer_context_without_a_vip_prefix_writes_nothing() -> None:
+    """The VIP prefix is allocated before the legs; until then there is nothing to route."""
+    gen = _Gen([_device("bl-1")])
+    await gen.generate(_loadbalancer(vip_prefix=None))
+    assert gen.saved == []
 
 
-async def test_a_route_left_on_the_previous_device_is_removed() -> None:
-    """The attachment moved from bl1 to bl2: bl1's route of this context goes, by ownership and not by device."""
-    left = _route(route_name(CTX, "bl1", "PROD", "0.0.0.0/0"), "generated")
-    writer = _Writer([_device("bl2", "border-leaf")], [left])
-    assert await writer.run(specs_for=writer.specs(snat=None))
-    assert left.delete.await_count == 1
-    assert [d["capabilities"] for d in writer.created] == [[{"id": "id-bl2"}]]
+async def test_a_device_in_no_vrf_instance_fails_the_run() -> None:
+    """The instance follows the legs; a route with no VRF to sit in is reported, not skipped."""
+    gen = _Gen([_device("bl-1")], vrf_namespaces=())
+    await gen.generate(_firewall())
+    assert gen.saved == [] and gen.log.error.called
 
 
-async def test_a_renamed_context_keeps_ownership_of_its_routes() -> None:
-    """Routes named after the old context name are still the context's (maintained_by is the context itself) and are replaced."""
-    old = _route(route_name("old-name", "bl1", "PROD", "0.0.0.0/0"), "generated")
-    writer = _Writer([_device("bl1", "border-leaf")], [old])
-    assert await writer.run(specs_for=writer.specs(snat=None))
-    assert old.delete.await_count == 1 and writer.created[0]["maintained_by"] == {"id": "ctx-1"}
+async def test_a_failed_save_is_reported_with_the_route_name() -> None:
+    """The error names the route and the device."""
+    gen = _Gen([_device("bl-1")])
+    gen.client.create = AsyncMock(side_effect=RuntimeError("boom"))
+    await gen.generate(_firewall())
+    assert "bl-1" in gen.log.error.call_args.args[0] and "rt:shared-fw-prod:bl-1" in gen.log.error.call_args.args[0]
 
 
-async def test_a_device_in_no_vrf_instance_fails_the_reconcile_and_deletes_nothing() -> None:
-    """The instance follows the legs; without it the route has no VRF to sit in, which is reported, not skipped."""
-    old = _route(route_name(CTX, "bl1", "INTERNET", "203.0.113.6/32"), "generated")
-    writer = _Writer([_device("bl1", "border-leaf")], [old])
-    writer.vrf_namespaces = []
-    assert not await writer.run(specs_for=writer.specs())
-    assert old.delete.await_count == 0 and writer.log.error.called
-
-
-async def test_routes_are_placed_in_the_vrf_instance_of_the_device() -> None:
-    """The route points at the ManagedVRF of its device and namespace."""
-    writer = _Writer([_device("bl1", "border-leaf")])
-    await writer.run(specs_for=writer.specs())
-    assert {d["vrf"]["id"] for d in writer.created} == {"vrf-id-bl1-PROD", "vrf-id-bl1-INTERNET"}
+async def test_a_response_without_a_context_fails() -> None:
+    """The query matched nothing."""
+    gen = _Gen([])
+    gen.fail = MagicMock(side_effect=RuntimeError("no context"))
+    with pytest.raises(RuntimeError):
+        await gen.generate({"ManagedFirewallContext": {"edges": []}, "ManagedLoadbalancerContext": {"edges": []}})

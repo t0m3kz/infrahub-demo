@@ -133,9 +133,6 @@ class CustomerFacilityMixin(FirewallContextMixin, VrfMixin):
                 else:
                     served.append(context_id)
                     await self._reconcile_border_vrfs(context_id)
-                    # The routes sit in the VRF instances that step has just given the border devices.
-                    if not await self.reconcile_routes_of(context_id):
-                        complete = False
             # A single serving link is replaced by link_serving_context; a many one is converged here. Only a run
             # that built every context it set out to may drop a link (a failed one raises under the generator
             # logger before this point).

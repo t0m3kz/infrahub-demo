@@ -67,6 +67,9 @@ spec:
     - name: run-virtual-circuit-generator
       description: Build the BGP session(s) of an interconnect or handoff circuit
       generator: add_virtual_circuit
+    - name: run-context-routes-generator
+      description: Write the static routes of a firewall or load-balancer context on its border devices
+      generator: add_context_routes
     - name: run-patch-panel-generator
       description: Build the ports of a patch panel from its type, each front port on its rear port
       generator: add_patch_panel
