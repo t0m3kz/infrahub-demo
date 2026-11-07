@@ -12,10 +12,9 @@ version: "1.0"
 # TopologyDeployment parent trick (confirmed valid via `infrahubctl schema
 # check`, but less self-documenting than naming the concrete parent per node).
 #
-# `environment` is deliberately NOT on TopologyCustomer: only the footprints
-# that pick a shared namespace/zone by environment carry it (CustomerDC and
-# CustomerColocation, through TopologyEnvironmentScoped). A cloud footprint
-# reads the environment of its CloudAccount, and an office is always PROD.
+# `environment` is on every footprint that is a TopologyCustomer (CustomerDC, CustomerColocation and CustomerCloud,
+# through TopologyEnvironmentScoped; a cloud footprint's must equal its CloudAccount's), and an office is always PROD:
+# it is no TopologyCustomer.
 #
 # TopologyCustomerTemplate is a second, unrelated generic: a reusable
 # service-tier blueprint, not part of the topology hierarchy (no parent/
@@ -406,6 +405,7 @@ nodes:
     inherit_from:
       - CoreArtifactTarget
       - TopologyCustomer
+      - TopologyEnvironmentScoped
       - TopologyOrchestratorScoped
       - TopologyDeployment
       - TopologyCloudHosting
@@ -418,8 +418,8 @@ nodes:
     order_by:
       - name__value
     display_label: "{{ name__value }}"
-    # No environment: a cloud footprint's environment is its CloudAccount's
-    # (CloudAccount.environment), which its segments and resources reference.
+    # The environment is the footprint's own (TopologyEnvironmentScoped) and must be the one of its CloudAccount
+    # (checks/customer_cloud_account.py CA3), which its segments and resources reference.
     # One footprint per account: the account is mandatory, so it can carry the constraint.
     uniqueness_constraints:
       - ["name__value", "parent"]

@@ -269,8 +269,8 @@ class MyCheck(InfrahubCheck):
   `TopologyCustomerCloud`) — not a separate `Customer.*` namespace; these inherit `TopologyConnectableLocation`
   alongside the facility nodes so a circuit endpoint is one shared relationship, not a duplicated model. The
   `TopologyCustomer` generic carries only the owner-derived `name`, `infrastructure_orchestrator` and `owner`.
-  `TopologyEnvironmentScoped` adds the required `environment` and only DC and Colocation footprints inherit it;
-  a cloud footprint has no environment (`CloudAccount.environment` and the segments carry it). A cloud footprint
+  `TopologyEnvironmentScoped` adds the required `environment`, which every footprint inherits (DC, Colocation and
+  Cloud; a cloud footprint's must be its `CloudAccount.environment`, `checks/customer_cloud_account.py` CA3). A cloud footprint
   has exactly one `account` (required, unique: one footprint per account); `checks/customer_cloud_account.py` pins
   that the footprint's owner is the account's owner (CA1) and that its cloud segments use virtual networks of that
   account (CA2).
@@ -702,11 +702,14 @@ class MyCheck(InfrahubCheck):
   rows are left alone (the next run converges once the deployment exists). The rows are untracked and their deployment
   tracked: a deployment that is not re-saved by its run is deleted with its rows; the rows of a device that is gone or
   no longer needs the segment are deleted by the next reconcile (check rule S2 reports them meanwhile). **VLAN scope**: `ManagedVxlanSegment.vlan_scope` is `local` (the default: each switch has its own id, the VNI is the identity) or
-  `shared` (one id on every switch, for L2 trunked between switches that cannot do VXLAN): the id is derived from the VNI,
-  VLAN = VNI - 10000, and lives in the shared band 2500-2999 (VNI 12500-12999), above the local band 100-2499
-  (`utils/limits.py`, `utils/segment_vlan.py` `shared_vlan_id`). The generator gives a shared segment that id on every row and
-  fails when a switch already uses it; `checks/shared_vlan.py` (SV1) reports a row that differs, a VNI outside the band or two
-  VNIs. A stretched segment (`stretch_scope` not `local`) also has a row, and so an SVI, on the border leaves of each DC.
+  `shared` (one id on every switch, for L2 trunked between switches that cannot do VXLAN). A shared segment draws the ONE
+  VNI of the `GLOBAL-L2VNI` pool like any stretched segment (even in one DC), and its id is derived from it:
+  VLAN = 2500 + (VNI - 40000), so the first 500 numbers of that pool (VNI 40000-40499) give the shared band 2500-2999,
+  above the local band 100-2499 (`utils/limits.py`, `utils/segment_vlan.py` `shared_vlan_id`; a test ties the start to
+  the pool). A third DC joins with one more realization under the same VNI and so the same id. The generator gives a
+  shared segment that id on every row and fails when a switch already uses it; `checks/shared_vlan.py` (SV1) reports a
+  row that differs, a VNI outside the band or two VNIs. A stretched segment (`stretch_scope` not `local`) also has a
+  row, and so an SVI, on the border leaves of each DC.
   A routed row (a gateway, and no `terminated_on`: a terminated segment is pure L2 on the fabric) is realized on its switch as ONE SVI: a `DcimVirtualInterface` with role
   `svi` named `Vlan<vlan_id>`, a Component of the row (`svi`, `on_delete: cascade`), with no address (the anycast
   gateway is `segment.gateway`) and with `vrf` pointing at the `ManagedVRF` of its device's topology; the SVI is not a

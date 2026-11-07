@@ -6,6 +6,7 @@ spec:
   kind: TopologyCustomerCloud
   data:
     - owner: "C900"
+      environment: "p"
       account: "c900-aws-prod"
       customer_name: "demo-aws"
       parent: "eu-central-1"
@@ -18,6 +19,7 @@ spec:
   kind: TopologyCustomerCloud
   data:
     - owner: "C900"
+      environment: "p"
       account: "c900-azure-prod"
       customer_name: "demo-azure"
       parent: "westeurope"
@@ -30,26 +32,32 @@ spec:
   kind: TopologyCustomerCloud
   data:
     - owner: "C900"
+      environment: "p"
       account: "c900-aws-payments"
       customer_name: "payments-aws"
       parent: "eu-central-1"
     - owner: "C900"
+      environment: "p"
       account: "c900-aws-analytics"
       customer_name: "analytics-aws"
       parent: "eu-central-1"
     - owner: "C900"
+      environment: "p"
       account: "c900-aws-shared"
       customer_name: "shared-aws"
       parent: "eu-central-1"
     - owner: "C900"
+      environment: "p"
       account: "c900-azure-payments"
       customer_name: "payments-azure"
       parent: "westeurope"
     - owner: "C900"
+      environment: "p"
       account: "c900-azure-analytics"
       customer_name: "analytics-azure"
       parent: "westeurope"
     - owner: "C900"
+      environment: "p"
       account: "c900-azure-identity"
       customer_name: "identity-azure"
       parent: "westeurope"

@@ -82,21 +82,21 @@ def test_a_template_status_overrides_the_schema_default() -> None:
         "TopologyEnvironmentScoped",
         "TopologyCustomerDC",
         "TopologyCustomerColocation",
+        "TopologyCustomerCloud",
         "AppApplication",
         "ManagedVxlanSegment",
     ],
 )
 def test_environment_is_required_with_no_default(kind: str) -> None:
-    """A DC/colocation footprint, a segment or an application always states its environment."""
+    """A DC, colocation or cloud footprint, a segment or an application always states its environment."""
     definition = attribute(kind, "environment") or {}
     assert definition.get("optional") is False
     assert "default_value" not in definition
 
 
-@pytest.mark.parametrize("kind", ["TopologyCustomerCloud", "TopologyCustomerOffice"])
-def test_cloud_and_office_footprints_have_no_environment(kind: str) -> None:
-    """A cloud footprint takes it from its CloudAccount, an office is always PROD: neither states one."""
-    assert attribute(kind, "environment") is None
+def test_an_office_has_no_environment() -> None:
+    """An office is always PROD and is no TopologyCustomer: it states none."""
+    assert attribute("TopologyCustomerOffice", "environment") is None
 
 
 def _generator_zoned_segments() -> set[str]:

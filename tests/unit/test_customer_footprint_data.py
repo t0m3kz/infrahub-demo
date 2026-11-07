@@ -113,11 +113,12 @@ def test_no_two_footprint_declarations_of_30_all_compute_the_same_name() -> None
     ],
 )
 def test_office_and_cloud_names_carry_no_environment(kind: str, pattern: str) -> None:
-    """C005-OFFICE, C003-VAULTEX-AWS-EU-CENTRAL-1: no `-P-`, neither kind has an environment."""
+    """C005-OFFICE, C003-VAULTEX-AWS-EU-CENTRAL-1: no `-P-` in the name, though a cloud footprint states one."""
     footprints = [obj for obj in _footprints(_ALL_DEMO) if obj.kind == kind]
     assert footprints
     for obj in footprints:
-        assert "environment" not in obj.item, _rel(obj.path)
+        if kind == "TopologyCustomerOffice":
+            assert "environment" not in obj.item, _rel(obj.path)
         owner = str(obj.item["owner"])
         expected = pattern.format(
             owner=owner, customer_name=obj.item.get("customer_name", ""), parent=obj.item["parent"]
@@ -154,9 +155,9 @@ def test_removed_footprint_kinds_appear_nowhere_in_the_data(kind: str) -> None:
 
 
 def test_no_footprint_declares_an_environment_where_the_kind_has_none() -> None:
-    """Only the environment-scoped kinds (DC, colocation) state one: an office is PROD, a cloud follows its account."""
+    """Every TopologyCustomer kind (DC, colocation, cloud) states one; an office is always PROD and states none."""
     scoped = {kind for kind in _FOOTPRINT_KINDS if attribute(kind, "environment") is not None}
-    assert scoped == {"TopologyCustomerDC", "TopologyCustomerColocation"}
+    assert scoped == {"TopologyCustomerDC", "TopologyCustomerColocation", "TopologyCustomerCloud"}
     offenders = [
         f"{_rel(obj.path)}: {obj.kind} {name(obj)}"
         for obj in _footprints(_DATA, _SEGMENT_TEST_DATA)

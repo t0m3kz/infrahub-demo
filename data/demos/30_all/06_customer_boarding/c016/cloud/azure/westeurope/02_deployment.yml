@@ -6,6 +6,7 @@ spec:
   kind: TopologyCustomerCloud
   data:
     - owner: "C016"
+      environment: "p"
       account: "prolexar-azure-prod"
       customer_name: "dathrex-azure"
       infrastructure_orchestrator: argocd

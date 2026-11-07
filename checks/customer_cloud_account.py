@@ -1,9 +1,10 @@
-"""Validate the cloud footprint of a customer: its account (rules CA1 and CA2).
+"""Validate the cloud footprint of a customer: its account (rules CA1, CA2 and CA3).
 
 A ``TopologyCustomerCloud`` is one customer's footprint in one cloud account (``account``, required and unique in
 the schema). What the schema cannot hold:
 
 CA1  the footprint's ``owner`` is the owner of its ``account`` (compared only when both have one)
+CA3  the footprint's ``environment`` is the environment of its ``account`` (a PROD footprint never holds a test account)
 CA2  every cloud segment of the footprint (``CloudNetworkSegment.customer_deployment``) uses a virtual network of the
      footprint's account
 """
@@ -38,7 +39,7 @@ def _dicts(values: Any) -> list[dict[str, Any]]:
 
 
 class CheckCustomerCloudAccount(InfrahubCheck):
-    """A cloud footprint has the owner of its account and uses networks of that account (rules CA1 and CA2)."""
+    """A cloud footprint has the owner of its account and uses networks of that account (rules CA1, CA2 and CA3)."""
 
     query = "customer_cloud_account"
 
@@ -47,6 +48,7 @@ class CheckCustomerCloudAccount(InfrahubCheck):
         footprints = {str(f["id"]): f for f in _dicts(cleaned.get(FOOTPRINT)) if f.get("id")}
         for footprint in footprints.values():
             self._validate_owner(footprint)
+            self._validate_environment(footprint)
         for segment in _dicts(cleaned.get(SEGMENT)):
             self._validate_segment(segment, footprints)
 
@@ -60,6 +62,19 @@ class CheckCustomerCloudAccount(InfrahubCheck):
                 message=f"CA1: cloud footprint '{_name(footprint)}' is owned by "
                 f"'{_org(footprint.get('owner'))}' but its account '{_name(account)}' by "
                 f"'{_org(account.get('owner'))}': a footprint has the owner of its account.",
+                object_id=footprint.get("id"),
+                object_type=FOOTPRINT,
+            )
+
+    def _validate_environment(self, footprint: dict[str, Any]) -> None:
+        """CA3."""
+        account = footprint.get("account")
+        environment = footprint.get("environment")
+        account_environment = account.get("environment") if isinstance(account, dict) else None
+        if environment and account_environment and environment != account_environment:
+            self.log_error(
+                message=f"CA3: cloud footprint '{_name(footprint)}' is '{environment}' but its account "
+                f"'{_name(account)}' is '{account_environment}': a footprint has the environment of its account.",
                 object_id=footprint.get("id"),
                 object_type=FOOTPRINT,
             )

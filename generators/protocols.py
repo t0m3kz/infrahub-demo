@@ -491,7 +491,12 @@ class OrganizationCustomer(OrganizationGeneric, OrganizationEntity):
 
 
 class TopologyCustomerCloud(
-    TopologyCustomer, TopologyDeployment, TopologyCloudHosting, TopologyApplianceHosting, TopologyConnectableLocation
+    TopologyCustomer,
+    TopologyEnvironmentScoped,
+    TopologyDeployment,
+    TopologyCloudHosting,
+    TopologyApplianceHosting,
+    TopologyConnectableLocation,
 ):
     customer_name: String
     name: StringOptional
