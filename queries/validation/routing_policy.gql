@@ -1,0 +1,54 @@
+# The rows of checks/routing_policy.py (rules RP1 to RP3): every prefix list with its entries, every community list and
+# every policy with its terms, the communities they add and the lists they name.
+query routing_policy {
+  RoutingPrefixList {
+    edges {
+      node {
+        id
+        name { value }
+        family { value }
+        entries {
+          edges {
+            node {
+              id
+              seq { value }
+              prefix { value }
+              min_length { value }
+              max_length { value }
+            }
+          }
+        }
+      }
+    }
+  }
+  RoutingCommunityList {
+    edges {
+      node {
+        id
+        name { value }
+        community_type { value }
+        members { value }
+      }
+    }
+  }
+  RoutingPolicy {
+    edges {
+      node {
+        id
+        name { value }
+        terms {
+          edges {
+            node {
+              id
+              seq { value }
+              add_communities { value }
+              match_prefix_list { node { id name { value } } }
+              match_community_list { node { id name { value } } }
+              delete_community_list { node { id name { value } } }
+            }
+          }
+        }
+      }
+    }
+  }
+}
