@@ -264,7 +264,7 @@ class TestCreateFirewallAndLoadBalancerDevices:
         assert create_kwargs["options"]["ha_kind"] == "ManagedLoadbalancerHA"
 
 
-_BL_ROLE_FOR = {"firewall": "firewall", "load-balancer": "load-balancer"}
+_BL_ROLE_FOR = {"firewall": "firewall", "external-firewall": "firewall", "load-balancer": "load-balancer"}
 
 
 class TestCableBorderServices:
@@ -381,7 +381,7 @@ class TestGenerateDcScopedFabricDevices:
             {"name": "dc1", "spec": LOADBALANCER_CONTEXT},
         ]
         gen._cable_border_services.assert_awaited_once_with(
-            border_role_for={"firewall": "firewall", "load-balancer": "load-balancer"},
+            border_role_for={"firewall": "firewall", "external-firewall": "firewall", "load-balancer": "load-balancer"},
             connectivity_mode=gen.data["connectivity_mode"],
             border_names=["bl-01"],
             firewall_names=["fw-01"],

@@ -12,7 +12,14 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
-from utils.exchange_transit import EXCHANGE_PEERS, lb_leg_pool_name, lb_vip_pool_name, transit_pool_name
+from utils.exchange_transit import (
+    EXCHANGE_PEERS,
+    INTERNET_TYPE,
+    lb_leg_pool_name,
+    lb_vip_pool_name,
+    transit_pool_name,
+)
+from utils.fabric_roles import EXTERNAL_FIREWALL_ROLE
 from utils.limits import FW_CONTEXT_VLAN_END, FW_CONTEXT_VLAN_START, LB_CONTEXT_VLAN_END, LB_CONTEXT_VLAN_START
 
 from .lb_vip import APP_COMPONENT_GENERATOR, load_balanced_components_in
@@ -22,6 +29,11 @@ from .protocols import ManagedFirewallContext, ManagedFirewallHA, ManagedLoadbal
 def _firewall_leg_types(tenant_type: str) -> tuple[str, ...]:
     """The tenant VRF and every VRF it exchanges with (EXCHANGE_PEERS), tenant first."""
     return (tenant_type, *EXCHANGE_PEERS[tenant_type])
+
+
+def _edge_leg_types(tenant_type: str) -> tuple[str, ...]:
+    """The Internet edge context has a leg in the tenant VRF and one in INTERNET, nothing else."""
+    return (tenant_type, INTERNET_TYPE)
 
 
 def _no_skip(_parent: dict[str, Any]) -> str | None:
@@ -55,7 +67,9 @@ class ContextSpec:
     host's ``_serving_many``). relink_consumers, when set, lists the nodes whose generated output sits on the context a
     deployment is served by (client, deployment id -> node ids):
     link_serving_context runs relink_generator for them when the deployment
-    moves from one context to another.
+    moves from one context to another. link_on_parent, when set, points the hosting facility (the DC) at the context
+    through ``TopologySegmentHosting.internet_edge_contexts`` and not the deployment (the Internet edge serves the
+    whole facility, never one footprint).
     """
 
     label: str
@@ -74,6 +88,7 @@ class ContextSpec:
     vip_pool_name: Callable[[str], str] | None = None
     relink_consumers: Callable[[Any, str], Awaitable[list[str]]] | None = None
     relink_generator: str = ""
+    link_on_parent: bool = False
 
 
 FIREWALL_CONTEXT = ContextSpec(
@@ -89,6 +104,24 @@ FIREWALL_CONTEXT = ContextSpec(
     leg_pool_name=transit_pool_name,
     leg_identifier="transit",
     vlan_range=(FW_CONTEXT_VLAN_START, FW_CONTEXT_VLAN_END),
+)
+
+EDGE_CONTEXT = ContextSpec(
+    label="FirewallContext",
+    role=EXTERNAL_FIREWALL_ROLE,
+    devices_key="external_firewall_devices",
+    dedicated_flag="",
+    ha_kind=ManagedFirewallHA,
+    context_kind=ManagedFirewallContext,
+    # The VLAN pool and the lock prefix are the firewall contexts': an edge context takes its transit VLAN from the
+    # same pool of the DC, so no two contexts of a DC share one.
+    key="fw-context",
+    serving_field="internet_edge_contexts",
+    leg_types=_edge_leg_types,
+    leg_pool_name=transit_pool_name,
+    leg_identifier="transit",
+    vlan_range=(FW_CONTEXT_VLAN_START, FW_CONTEXT_VLAN_END),
+    link_on_parent=True,
 )
 
 LOADBALANCER_CONTEXT = ContextSpec(
@@ -125,6 +158,10 @@ class _ContextTarget:
     track: bool
     devices: list[Any]
     parent_name: str
+    parent_id: str = ""
+    # The hosting facility has an external-firewall pair: its customer contexts keep no INTERNET leg (the Internet edge
+    # context has it), and a dedicated one only its own public address.
+    edge_hosted: bool = False
 
     def context_name(self, tenant_namespace: str) -> str:
         """The context's name: `{name_base}-{namespace}` (track), else `shared-{name_base}-{namespace}`.

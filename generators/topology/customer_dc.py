@@ -39,7 +39,7 @@ from __future__ import annotations
 from ..common import CommonGenerator
 from ..connections import CablingMixin
 from ..devices import DeviceMixin
-from ..firewall_context import FIREWALL_CONTEXT, LOADBALANCER_CONTEXT
+from ..firewall_context import EDGE_CONTEXT, FIREWALL_CONTEXT, LOADBALANCER_CONTEXT
 from ..pools import PoolMixin
 from .customer_facility import CustomerFacilityMixin
 from .fabric_shared import DC_GENERATORS
@@ -56,4 +56,4 @@ class CustomerDeploymentDCExchangeGenerator(
     _customer_kind = "TopologyCustomerDC"
     _parent_label = "Data Center"
     _parent_generators = DC_GENERATORS
-    _context_specs = (FIREWALL_CONTEXT, LOADBALANCER_CONTEXT)
+    _context_specs = (FIREWALL_CONTEXT, EDGE_CONTEXT, LOADBALANCER_CONTEXT)

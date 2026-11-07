@@ -478,7 +478,11 @@ class TestServiceCabling:
         assert kwargs["firewall_names"] == ["fw-fr201", "fw-fr202"]
         assert kwargs["load_balancer_names"] == []
         # Same role names dc.py uses: a `firewall`-role port faces a firewall.
-        assert kwargs["border_role_for"] == {"firewall": "firewall", "load-balancer": "load-balancer"}
+        assert kwargs["border_role_for"] == {
+            "firewall": "firewall",
+            "external-firewall": "firewall",
+            "load-balancer": "load-balancer",
+        }
 
     @pytest.mark.asyncio
     async def test_mode_is_always_pbr(self) -> None:

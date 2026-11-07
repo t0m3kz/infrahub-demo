@@ -201,7 +201,11 @@ class TestServingLinkComesFromTheBoardingQuery:
         await _run(gen, world, payload)
 
         gen.link_serving_context.assert_awaited_once_with(
-            FIREWALL_CONTEXT, customer_id="cust-1", context_id=world.contexts[_SHARED].id, current_ids=expected
+            FIREWALL_CONTEXT,
+            customer_id="cust-1",
+            context_id=world.contexts[_SHARED].id,
+            current_ids=expected,
+            parent_id="dc10-id",
         )
 
     @pytest.mark.asyncio

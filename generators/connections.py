@@ -39,7 +39,11 @@ from .types import CablingOptions, ChainHop
 # colocation_fabric.py (zone edge) instead of each inlining its own copy — a caller
 # whose border tier uses a different port-naming convention should build and
 # pass its own dict instead of reusing this one.
-BORDER_ROLE_FOR_SERVICES: dict[str, str] = {"firewall": "firewall", "load-balancer": "load-balancer"}
+BORDER_ROLE_FOR_SERVICES: dict[str, str] = {
+    "firewall": "firewall",
+    "external-firewall": "firewall",
+    "load-balancer": "load-balancer",
+}
 
 
 def tracked_save_kwargs(track: bool) -> dict[str, Any]:
