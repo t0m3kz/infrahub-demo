@@ -135,6 +135,10 @@ def _gpo_host_vlans(group_policy: dict[str, Any] | None) -> dict[str, int] | Non
     return host_vlans or None
 
 
+class UngovernedTransitError(ValueError):
+    """An upstream transit session has no routing policy in a direction: its route filter is not derived."""
+
+
 class BaseDeviceTransform(InfrahubTransform):
     """Base class for device configuration transforms.
 
@@ -248,6 +252,29 @@ class BaseDeviceTransform(InfrahubTransform):
             f"{name}: {platform_name} config uses VRFs the device has no instance of ({'; '.join(problems)}); "
             "refusing a config that routes in a table the device does not have"
         )
+
+    @staticmethod
+    def _refuse_ungoverned_transit_sessions(config: dict) -> None:
+        """Raise when an upstream transit session names no routing policy in a direction.
+
+        A transit session (session["transit"], an eBGP session in an internet namespace) has no derived route
+        protection of its own: the generated policies of utils/transit_policy.py (generators/topology/transit_policy.py,
+        the group `transit_peerings`) are what limits it to the default route in and the public space out. Without
+        one, a direction would be open, so refuse instead of rendering it.
+        """
+        open_ends = [
+            f"{session.get('name')} ({direction})"
+            for bgp in config.get("bgp") or []
+            for session in bgp.get("sessions") or []
+            if session.get("transit")
+            for direction in ("in", "out")
+            if direction not in ((session.get("policy") or {}).get("user_directions") or [])
+        ]
+        if open_ends:
+            raise UngovernedTransitError(
+                f"{config.get('name')}: transit session(s) with no routing policy: {', '.join(open_ends)}; add the peering "
+                "to the group transit_peerings (add_transit_policy) or attach an import and an export policy"
+            )
 
     def _refuse_unfiltered_external_sessions(self, platform_name: str, config: dict, device_kind: str | None) -> None:
         """Raise when an external BGP session would render with no owner prefix filter.
@@ -422,6 +449,7 @@ class BaseDeviceTransform(InfrahubTransform):
             "underlay_mtu": UNDERLAY_MTU,
         }
         self._refuse_unfiltered_external_sessions(platform_name, config, data.get("typename"))
+        self._refuse_ungoverned_transit_sessions(config)
         if platform_name in {"sonic", "dell_sonic"}:
             config["sonic_mlag"] = get_sonic_mlag_config(mlag)
         return config

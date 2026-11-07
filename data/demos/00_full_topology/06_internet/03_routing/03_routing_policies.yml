@@ -1,0 +1,90 @@
+---
+# A manual routing policy beside the generated transit-in / transit-out (generators/topology/transit_policy.py): the
+# object store range is announced to the ISP with two extra hops, so the other path is preferred for it. It sits before
+# the generated export policy (priority 50 < 100), permits only that range and denies the rest, so it can only narrow
+# the session: the guard derived from the model and transit-out still decide everything else.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingPrefixList
+  data:
+    - name: "PL-OBJECT-STORE-PUBLIC"
+      description: "Public range of the object store API"
+      family: ipv4
+      entries:
+        data:
+          - {seq: 10, action: permit, prefix: "192.0.2.0/24"}
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingPolicy
+  data:
+    - name: "isp-a-prepend-object-store"
+      description: "Announce the object store range to ISP A with two extra hops"
+      origin: manual
+      priority: 50
+      default_action: deny
+      export_peerings:
+        - "BGP-KTW1-EDGE01-ISP-A"
+      terms:
+        data:
+          - seq: 10
+            action: permit
+            prepend_count: 2
+            match_prefix_list: "PL-OBJECT-STORE-PUBLIC"
+---
+# The transit policies, authored as plain objects: the demo's peering is not in `transit_peerings`, so no generator
+# writes them, and tests/unit/test_transit_policy.py holds them equal to the spec of utils/transit_policy.py
+# (origin generated, as the generator writes them). No range of the INTERNET namespace has the role `public` here, so
+# the export announces nothing: its only term denies what carries the transit tag.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingPrefixList
+  data:
+    - name: "TRANSIT-DEFAULT-IN"
+      family: ipv4
+      entries:
+        data:
+          - {seq: 10, action: permit, prefix: "0.0.0.0/0"}
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingCommunityList
+  data:
+    - name: "CL-LEARNED-FROM-TRANSIT"
+      community_type: standard
+      match: any
+      members: ["64498:1"]
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingPolicy
+  data:
+    - name: "transit-in"
+      origin: generated
+      priority: 100
+      default_action: deny
+      import_peerings:
+        - "BGP-KTW1-EDGE01-ISP-A"
+      terms:
+        data:
+          - seq: 10
+            action: permit
+            set_local_pref: 80
+            add_communities: ["64498:1"]
+            match_prefix_list: "TRANSIT-DEFAULT-IN"
+    - name: "transit-out"
+      origin: generated
+      priority: 100
+      default_action: deny
+      export_peerings:
+        - "BGP-KTW1-EDGE01-ISP-A"
+      terms:
+        data:
+          - seq: 10
+            action: deny
+            match_community_list: "CL-LEARNED-FROM-TRANSIT"

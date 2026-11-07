@@ -216,9 +216,15 @@ def _circuit_end_devices(circuit: dict[str, Any]) -> list[dict[str, Any]]:
     devices = []
     for end in circuit.get("capabilities", []) or []:
         device = end.get("device") or {}
-        # A cloud transport has no deployment: its facility is its region (or SaaS region). THE INTERNET is a facility
-        # itself (a device that is one), so it is its own place.
-        deployment = device.get("deployment") or device.get("region") or device.get("saas_region") or {}
+        # A cloud transport has no deployment: its facility is its region (or SaaS region), and a provider connect's is its
+        # `location`. THE INTERNET is a facility itself (a device that is one), so it is its own place.
+        deployment = (
+            device.get("deployment")
+            or device.get("region")
+            or device.get("saas_region")
+            or device.get("location")
+            or {}
+        )
         if not deployment and device.get("typename") == "TopologyInternet":
             deployment = device
         devices.append(

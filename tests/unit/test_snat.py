@@ -11,9 +11,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from transforms.common import UngovernedTransitError
 from transforms.config.edge import Edge
 from transforms.config.firewall import Firewall, apply_context_routes
-from transforms.helpers.bgp_external import get_internet_prefixes
+from utils.internet_prefixes import get_internet_prefixes
 
 _ROOT = Path(__file__).parent.parent.parent
 _CONFIGS = _ROOT / "tests" / "smoke" / "configs"
@@ -223,13 +224,21 @@ def _edge_output(*, prefixes: bool) -> str:
 def test_edge_aggregates_and_permits_only_the_public_prefix() -> None:
     output = _edge_output(prefixes=True)
     assert "      aggregate-address 192.0.2.0/24 summary-only" in output
-    assert "ip prefix-list PL-TRANSIT-OUT-PUBLIC seq 10 permit 192.0.2.0/24" in output
-    assert "route-map RM-TRANSIT-OUT permit 10\n  match ip address prefix-list PL-TRANSIT-OUT-PUBLIC" in output
-    assert "route-map RM-TRANSIT-OUT deny 20" in output
+    assert "ip prefix-list TRANSIT-OUT-PUBLIC seq 10 permit 192.0.2.0/24" in output
 
 
-def test_edge_without_known_public_prefix_stays_deny_all_outbound() -> None:
+def test_edge_without_a_known_public_prefix_has_no_aggregate() -> None:
     output = _edge_output(prefixes=False)
     assert "aggregate-address" not in output
-    assert "route-map RM-TRANSIT-OUT deny 10" in output
-    assert "PL-TRANSIT-OUT-PUBLIC" not in output
+    assert "RM-TRANSIT" not in output
+
+
+def test_a_transit_session_without_policies_is_refused() -> None:
+    """The fixed transit maps are gone: an upstream session with no import or export policy renders nothing."""
+    data = json.loads((_CONFIGS / "edge_cisco_nxos_internet_bgw" / "input.json").read_text())
+    for edge in data["DcimDevice"]["edges"][0]["node"]["capabilities"]["edges"]:
+        for peering in ((edge["node"].get("peerings") or {}).get("edges")) or []:
+            peering["node"].pop("import_policies", None)
+            peering["node"].pop("export_policies", None)
+    with pytest.raises(UngovernedTransitError, match="transit session"):
+        _run(Edge, data)

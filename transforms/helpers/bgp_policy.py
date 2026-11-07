@@ -36,6 +36,7 @@ import hashlib
 from ipaddress import ip_network
 from typing import Any
 
+from transforms.helpers.routing_policy import IN, OUT, compose_user_maps
 from utils.bgp_expectation import (
     DCI,
     DCI_UNDERLAY,
@@ -159,6 +160,27 @@ def compose_policy(
     if session.get("dci_inbound") and "in" not in replaced:
         attach.append({"map": DCI_IN_MAP, "direction": "in", "own": False})
     limits, total = _maximums(expectation, enforce)
+    attached = session.get("routing_policies") or {}
+    user = [
+        composed
+        for direction in (IN, OUT)
+        if (composed := compose_user_maps(session, direction, attached.get(direction) or [], filters))
+    ]
+    # A direction with user maps names those (common/bgp_filter_objects.j2 bgp_user_attachments, per address family) and
+    # not its own, the filter's or a shared one: the user map holds the session's sets and the guard.
+    for composed in user:
+        if composed["maps"]:
+            attach[:] = [a for a in attach if a["direction"] != composed["direction"]]
+        # The user map of a family holds the guard (its first term), so the filter map of that direction and family is
+        # not attached: a neighbour names one map per direction and family.
+        for rmap in composed["maps"]:
+            for flt in filters:
+                if (
+                    rmap["filter"]
+                    and flt["direction"] == rmap["filter"]["direction"]
+                    and flt["family"] == rmap["filter"]["family"]
+                ):
+                    flt["replaced_by"] = rmap["name"]
     return {
         "inbound": {"own": own_in if "in" not in replaced else None},
         "outbound": {"own": own_out if "out" not in replaced else None},
@@ -167,6 +189,9 @@ def compose_policy(
         "max_total": total,
         "enforced": enforce,
         "filters": filters,
+        "user": user,
+        # The directions that name a routing policy map: a template's own map for them (RM-TRANSIT-*) is not used.
+        "user_directions": [composed["direction"] for composed in user if composed["maps"]],
     }
 
 

@@ -478,6 +478,14 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
+    resource_name: routing_policy
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/routing_policy.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
     resource_name: software_lifecycle
     tests:
       - name: syntax_check
@@ -563,6 +571,14 @@ infrahub_tests:
       - name: syntax_check
         spec:
           path: queries/topology/add/customer_routing_tag.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: transit_policy
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/transit_policy.gql
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery

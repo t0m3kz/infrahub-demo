@@ -1,5 +1,5 @@
 {%- if capabilities is not defined or capabilities.bgp_enabled is not defined or capabilities.bgp_enabled %}
-{%- from 'common/bgp_filter_objects.j2' import bgp_filter_attachments %}
+{%- from 'common/bgp_filter_objects.j2' import bgp_filter_attachments, bgp_user_attachments %}
 {%- for bgp_config in bgp %}
 router bgp {{ bgp_config.local_as.asn }}
   router-id {{ bgp_config.router_ip }}
@@ -137,6 +137,7 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- endfor %}
 {%- endif %}
 {{- bgp_filter_attachments(session, _af, '      ', true) }}
+{{- bgp_user_attachments(session, _af, '      ') }}
     !
 {%- endfor %}
 {%- endfor %}
@@ -208,12 +209,6 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- if _max %}
         maximum-prefix {{ _max.limit }}{{ ' warning-only' if _max.warning_only }}
 {%- endif %}
-{#- Upstream transit: default route in, nothing out (RM-TRANSIT-* are defined
-    by edges/cisco_nxos.j2, the only template that renders a transit session). -#}
-{%- if session.get('transit') %}
-        route-map RM-TRANSIT-IN in
-        route-map RM-TRANSIT-OUT out
-{%- endif %}
 {#- External tenant-VRF peer (cloud VIF, SD-WAN gateway): only its owners'
     registered prefixes in, only those owners' on-prem prefixes out; the maps
     are per session and defined by edges/cisco_nxos.j2 only (evidence I:
@@ -223,6 +218,7 @@ router bgp {{ bgp_config.local_as.asn }}
         route-map RM-{{ session.name }}-OUT out
 {%- endif %}
 {{- bgp_filter_attachments(session, _af, '        ', true) }}
+{{- bgp_user_attachments(session, _af, '        ') }}
 {%- endfor %}
   !
 {%- endfor %}

@@ -12,7 +12,7 @@
 {%- if bgp and (capabilities is not defined or capabilities.bgp_enabled is not defined or capabilities.bgp_enabled) -%}
 {%- for bgp_config in bgp -%}
 {%- for session in bgp_config.sessions if not session.get('vrf') -%}
-{%- for flt in session.policy.filters if flt.attached and flt.family != 'evpn' -%}
+{%- for flt in session.policy.filters if flt.attached and flt.family != 'evpn' and not flt.get('replaced_by') -%}
 {%- set _v6 = flt.family == 'ipv6' -%}
 {%- set _list = flt.list6 if _v6 else flt.list -%}
 {%- set _ = prefix_set.update({_list: {'mode': 'IPv6' if _v6 else 'IPv4'}}) -%}
@@ -33,6 +33,67 @@
 {%- set _af = dict(bgp_neighbor_af.get(_af_key) or {'admin_status': 'true'}) -%}
 {%- set _ = _af.update({'route_map_' ~ flt.direction: [flt.map]}) -%}
 {%- set _ = bgp_neighbor_af.update({_af_key: _af}) -%}
+{%- endfor -%}
+{%- endfor -%}
+{%- endfor -%}
+{#- The routing policies of a session (session.policy.user, transforms/helpers/routing_policy.py), EVIDENCE U as above.
+    Fields guessed from the frrcfgd schema: COMMUNITY_SET {set_type, match_action, community_member, action},
+    ROUTE_MAP {match_community, set_community_inline, set_comm_list_delete, set_as_path_prepend}. A LARGE community has
+    no field known: a large list is not defined, a term that matches one is left out and a large community a term adds
+    is not set. The guard is the first, deny, term on the complement prefix set `<list>-OUTSIDE`, as on the CLI platforms. -#}
+{%- for bgp_config in bgp -%}
+{%- for session in bgp_config.sessions if not session.get('vrf') -%}
+{%- for composed in session.policy.user if composed.maps -%}
+{%- for plist in composed.lists.prefix -%}
+{%- set _v6 = plist.family == 'ipv6' -%}
+{%- set _ = prefix_set.update({plist.name: {'mode': 'IPv6' if _v6 else 'IPv4'}}) -%}
+{%- for e in plist.entries -%}
+{%- set _low = e.min_length if e.min_length is not none else e.prefix.split('/')[1] -%}
+{%- set _range = (_low ~ '..' ~ (e.max_length if e.max_length is not none else (128 if _v6 else 32))) if (e.min_length is not none or e.max_length is not none) else 'exact' -%}
+{%- set _ = prefix_table.update({plist.name ~ '|' ~ e.seq ~ '|' ~ e.prefix ~ '|' ~ _range: {'action': e.action}}) -%}
+{%- endfor -%}
+{%- endfor -%}
+{%- for clist in composed.lists.community if clist.community_type != 'large' -%}
+{%- set _ = community_set.update({clist.name: {'set_type': 'STANDARD', 'match_action': 'ALL' if clist.match == 'all' else 'ANY', 'community_member': clist.members, 'action': 'permit'}}) -%}
+{%- endfor -%}
+{%- for rmap in composed.maps -%}
+{%- set _v6 = rmap.family == 'ipv6' -%}
+{%- if rmap.filter -%}
+{%- set _flt = (session.policy.filters | selectattr('direction', 'equalto', rmap.direction) | selectattr('family', 'equalto', rmap.family) | list | first) -%}
+{%- set _guard = (_flt.list6 if _v6 else _flt.list) ~ '-OUTSIDE' -%}
+{%- set _ = prefix_set.update({_guard: {'mode': 'IPv6' if _v6 else 'IPv4'}}) -%}
+{%- for e in _flt.entries if e.family == rmap.family -%}
+{%- set _range = (e.prefix.split('/')[1] ~ '..' ~ e.le) if e.le is not none else 'exact' -%}
+{%- set _ = prefix_table.update({_guard ~ '|' ~ (loop.index * 10) ~ '|' ~ e.prefix ~ '|' ~ _range: {'action': 'deny'}}) -%}
+{%- endfor -%}
+{%- set _ = prefix_table.update({_guard ~ '|65000|' ~ ('::/0' if _v6 else '0.0.0.0/0') ~ '|0..' ~ (128 if _v6 else 32): {'action': 'permit'}}) -%}
+{%- endif -%}
+{%- for term in rmap.terms + ([rmap.closing] if rmap.closing else []) -%}
+{%- set _match = term.get('match') or {} -%}
+{%- set _large = _match.get('community_list') and _match.community_list.community_type == 'large' -%}
+{%- if not _large -%}
+{%- set _entry = {'route_operation': term.action} -%}
+{%- if term.get('outside_guard') -%}{%- set _ = _entry.update({'match_prefix_set': _guard}) -%}{%- endif -%}
+{%- if _match.get('prefix_list') -%}{%- set _ = _entry.update({'match_prefix_set': _match.prefix_list.name}) -%}{%- endif -%}
+{%- if _match.get('community_list') -%}{%- set _ = _entry.update({'match_community': _match.community_list.name}) -%}{%- endif -%}
+{%- set _sets = term.get('set') or {} -%}
+{%- if _sets.get('local_pref') is not none and _sets.get('local_pref') -%}{%- set _ = _entry.update({'set_local_pref': _sets.local_pref | string}) -%}{%- endif -%}
+{%- if _sets.get('med') -%}{%- set _ = _entry.update({'set_med': _sets.med | string}) -%}{%- endif -%}
+{%- set _std = (_sets.get('add_communities') or []) + (['no-export'] if _sets.get('no_export') else []) -%}
+{%- if _std -%}{%- set _ = _entry.update({'set_community_inline': _std + ['additive']}) -%}{%- endif -%}
+{%- if _sets.get('delete_communities') and _sets.delete_communities.community_type != 'large' -%}{%- set _ = _entry.update({'set_comm_list_delete': _sets.delete_communities.name}) -%}{%- endif -%}
+{%- if _sets.get('prepend') -%}{%- set _ = _entry.update({'set_as_path_prepend': ([bgp_config.local_as.asn | string] * _sets.prepend) | join(' ')}) -%}{%- endif -%}
+{%- set _ = route_map.update({rmap.name ~ '|' ~ term.seq: _entry}) -%}
+{%- endif -%}
+{%- endfor -%}
+{%- if rmap.family is none -%}{%- set _families = ['ipv4', 'ipv6'] -%}{%- else -%}{%- set _families = [rmap.family] -%}{%- endif -%}
+{%- for _fam in _families -%}
+{%- set _af_key = 'default|' ~ session.neighbor ~ '|' ~ _fam ~ '_unicast' -%}
+{%- set _af = dict(bgp_neighbor_af.get(_af_key) or {'admin_status': 'true'}) -%}
+{%- set _ = _af.update({'route_map_' ~ rmap.direction: [rmap.name]}) -%}
+{%- set _ = bgp_neighbor_af.update({_af_key: _af}) -%}
+{%- endfor -%}
+{%- endfor -%}
 {%- endfor -%}
 {%- endfor -%}
 {%- endfor -%}

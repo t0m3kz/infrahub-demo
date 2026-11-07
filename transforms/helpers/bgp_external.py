@@ -7,12 +7,12 @@ exchange rule in ``utils/ownership.py``.
 
 import logging
 from collections.abc import Iterable, Mapping
-from ipaddress import ip_address
 from typing import Any
 
 from transforms.helpers.bgp import _peering_ends
 from transforms.helpers.bgp_cloud import CloudLeg
 from utils.exchange_transit import EXCHANGE_PEERS
+from utils.internet_prefixes import sorted_prefixes
 from utils.ownership import (
     CircuitOwnerError,
     circuit_owner,
@@ -23,27 +23,6 @@ from utils.ownership import (
 from utils.routing_identity import customer_community, list_name_part
 
 _log = logging.getLogger(__name__)
-
-
-def get_internet_prefixes(prefixes: list[dict[str, Any]] | None) -> list[str]:
-    """IPv4 public prefixes of the namespace_type internet namespace, sorted.
-
-    ``prefixes`` is the cleaned IpamPrefix(role public) query root; the edge
-    announces exactly these upstream (aggregate + RM-TRANSIT-OUT).
-    """
-    found = {
-        p["prefix"]
-        for p in prefixes or []
-        if p.get("prefix")
-        and ":" not in p["prefix"]
-        and (p.get("ip_namespace") or {}).get("namespace_type") == "internet"
-    }
-    return _sorted_prefixes(found)
-
-
-def _sorted_prefixes(prefixes: Iterable[str]) -> list[str]:
-    """Prefixes in address order, then by length."""
-    return sorted(prefixes, key=lambda p: (ip_address(p.split("/")[0]), int(p.split("/")[1])))
 
 
 def _routable_ipv4(prefix: str | None) -> bool:
@@ -77,7 +56,7 @@ def get_onprem_prefixes(segments: list[dict[str, Any]] | None) -> dict[str, dict
         ):
             by_vrf.setdefault(namespace["name"], {}).setdefault(owner, set()).add(prefix["prefix"])
     return {
-        vrf: {owner: _sorted_prefixes(found) for owner, found in sorted(owners.items())}
+        vrf: {owner: sorted_prefixes(found) for owner, found in sorted(owners.items())}
         for vrf, owners in sorted(by_vrf.items())
     }
 
@@ -236,7 +215,7 @@ def get_external_peer_prefixes(
             continue
         namespace = ((iface.get("ip_address") or {}).get("ip_namespace") or {}).get("name")
         by_owner = registered_by_namespace(registered).get(namespace or "", {})
-        found[name] = {owner: _sorted_prefixes(prefixes) for owner, prefixes in sorted(by_owner.items())}
+        found[name] = {owner: sorted_prefixes(prefixes) for owner, prefixes in sorted(by_owner.items())}
     return found
 
 
@@ -298,8 +277,8 @@ def get_external_session_policies(
         for name, policy in exchange_policies(segments, learned, announced=announced).items():
             policies[name] = {
                 "owners": sorted(policy["owners"]),
-                "in": _sorted_prefixes(policy["in"]),
-                "out": _sorted_prefixes(policy["out"]),
+                "in": sorted_prefixes(policy["in"]),
+                "out": sorted_prefixes(policy["out"]),
             }
             if routing_identity:
                 policies[name].update(identity=True, in_owners=_in_owners(learned[name], customer_tags or {}))
@@ -312,7 +291,7 @@ def _in_owners(by_owner: Mapping[str, list[str]], customer_tags: Mapping[str, in
         {
             "owner": owner,
             "name": list_name_part(owner),
-            "prefixes": _sorted_prefixes(prefixes),
+            "prefixes": sorted_prefixes(prefixes),
             "community": customer_community(customer_tags[owner]) if owner in customer_tags else None,
         }
         for owner, prefixes in sorted(by_owner.items())

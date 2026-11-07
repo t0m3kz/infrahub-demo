@@ -1,0 +1,20 @@
+# A transit peering and the public space of the INTERNET namespace (what the export policy announces):
+# generators/topology/transit_policy.py.
+query transit_policy($name: String!) {
+  ManagedBGPPeering(name__value: $name) {
+    edges {
+      node {
+        id
+        name { value }
+      }
+    }
+  }
+  IpamPrefix(role__value: "public") {
+    edges {
+      node {
+        prefix { value }
+        ip_namespace { node { namespace_type { value } } }
+      }
+    }
+  }
+}

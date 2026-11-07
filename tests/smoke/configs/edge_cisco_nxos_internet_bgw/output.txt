@@ -48,19 +48,23 @@ interface Loopback1
 !
 !
 ! Route-maps
+ip prefix-list TRANSIT-DEFAULT-IN seq 10 permit 0.0.0.0/0
+route-map RM-USER-peer-dc1-edge-01-EXT-LUMEN-FRA1-ebgp-IN permit 10
+  match ip address prefix-list TRANSIT-DEFAULT-IN
+  set local-preference 80
+  set community 64498:1 additive
+!
+ip prefix-list TRANSIT-OUT-PUBLIC seq 10 permit 192.0.2.0/24
+ip community-list standard CL-LEARNED-FROM-TRANSIT permit 64498:1
+route-map RM-USER-peer-dc1-edge-01-EXT-LUMEN-FRA1-ebgp-OUT deny 10
+  match community CL-LEARNED-FROM-TRANSIT
+route-map RM-USER-peer-dc1-edge-01-EXT-LUMEN-FRA1-ebgp-OUT permit 20
+  match ip address prefix-list TRANSIT-OUT-PUBLIC
+!
 route-map RM-CONN-2-BGP permit 10
   match interface loopback0 Loopback1
 !
 route-map RM-VRF-DIRECT-2-EVPN permit 10
-!
-ip prefix-list PL-TRANSIT-IN-DEFAULT seq 10 permit 0.0.0.0/0
-route-map RM-TRANSIT-IN permit 10
-  match ip address prefix-list PL-TRANSIT-IN-DEFAULT
-!
-ip prefix-list PL-TRANSIT-OUT-PUBLIC seq 10 permit 192.0.2.0/24
-route-map RM-TRANSIT-OUT permit 10
-  match ip address prefix-list PL-TRANSIT-OUT-PUBLIC
-route-map RM-TRANSIT-OUT deny 20
 !
 !
 ! BGP Configuration
@@ -130,8 +134,8 @@ router bgp 65001
       address-family ipv4 unicast
         send-community
         maximum-prefix 3 warning-only
-        route-map RM-TRANSIT-IN in
-        route-map RM-TRANSIT-OUT out
+        route-map RM-USER-peer-dc1-edge-01-EXT-LUMEN-FRA1-ebgp-IN in
+        route-map RM-USER-peer-dc1-edge-01-EXT-LUMEN-FRA1-ebgp-OUT out
   !
 !
 

@@ -269,6 +269,32 @@ spec:
                   icon: "mdi:numeric"
 
 
+          # ── Routing policy: what a session accepts and announces ────────────
+          - namespace: Routing
+            name: PolicyMenu
+            label: Routing Policy
+            icon: "mdi:routes"
+            children:
+              data:
+                - namespace: Routing
+                  name: PolicyItem
+                  label: Policies
+                  kind: RoutingPolicy
+                  icon: "mdi:routes"
+                  description: "Ordered terms applied to a BGP session, inside the guard derived from the model"
+
+                - namespace: Routing
+                  name: PrefixListItem
+                  label: Prefix Lists
+                  kind: RoutingPrefixList
+                  icon: "mdi:file-document-edit-outline"
+
+                - namespace: Routing
+                  name: CommunityListItem
+                  label: Community Lists
+                  kind: RoutingCommunityList
+                  icon: "mdi:tag-outline"
+
           # ── OSPF ───────────────────────────────────────────────────────────
           - namespace: Managed
             name: OspfMenu

@@ -6,6 +6,7 @@ from typing import Any, cast
 
 from transforms.helpers.addressing import host_ip
 from transforms.helpers.bgp_policy import compose_policy
+from transforms.helpers.routing_policy import IN, OUT, normalize_policies
 from utils.circuit_underlay import NETWORK_APPLIANCE_KIND, OVERLAY_ROLE
 from utils.exchange_transit import EXCHANGE_PEERS, INTERNET_TYPE
 from utils.fabric_roles import RR_ROLES
@@ -179,6 +180,11 @@ def _build_session_from_peering(
         # The far end's role: a relaying far end (a spine) passes on routes (utils/bgp_expectation.py).
         "remote_role": (remote_iface.get("device") or {}).get("role"),
         "route_reflector_client": peering_node.get("route_reflector_client", False),
+        # The routing policies attached to the peering, per direction (transforms/helpers/routing_policy.py).
+        "routing_policies": {
+            IN: normalize_policies(peering_node.get("import_policies")),
+            OUT: normalize_policies(peering_node.get("export_policies")),
+        },
         "enabled": True,
     }
 

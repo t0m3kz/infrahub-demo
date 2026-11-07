@@ -615,6 +615,37 @@ class MyCheck(InfrahubCheck):
   gate and nothing filters on a community. A customer or segment without a tag renders no community.
   `checks/routing_tags.py` requires a tag on each routed tenant segment and its owner, in range and unique. Not
   `unique: true` in the schema: an optional attribute collides on the second unset value.
+- **Routing policy**: `RoutingPolicy` (ordered `RoutingPolicyTerm`s), `RoutingPrefixList` (`RoutingPrefixListEntry`) and
+  `RoutingCommunityList` (standard, well-known and large communities) in `schemas/extensions/capabilities/routing_policy.yml`.
+  A policy is a SHARED object: many peerings name it per direction (`ManagedBGPPeering.import_policies` /
+  `export_policies`), ordered by `priority`, then name, then term `seq`. `origin` says who owns it: a generator writes and
+  removes only `generated` ones, a person's `manual` ones are never touched. A term matches a prefix list and/or a community
+  list and sets local-preference, MED, communities to add or delete (a list) and a prepend. **A policy sets and tightens, it
+  never widens**: `transforms/helpers/routing_policy.py` composes the attached policies with the guard derived from the
+  model (the filter of `session["policy"]["filters"]`) so every term matches the guard AND its own match, per address
+  family (a route-map names one family's lists); a permit term inherits the session's own sets unless it sets its own; the
+  map closes with the guard permit when every policy's `default_action` is permit, else with the implicit deny. While the
+  deployment stages the protection (`routing_filter_enforce` false) the guard is not part of the terms. A direction that
+  already names a map a template defines (`RM-FABRIC-OUT`, `RM-DCI-IN`: the internal fabric) takes no policy (`skipped`).
+  `checks/routing_policy.py` holds the community syntax and the prefix list entries (RP1-RP3), a term after a term
+  that matches every route (RP4, ERROR), a policy on no peering (RP5) and a list no term names (RP6, WARNINGs).
+  Rendered by NX-OS, EOS and IOS XE (`common/bgp_filter_objects.j2` `bgp_user_objects` and `bgp_user_attachments`): the
+  guard is the first, `deny`, term of the user map (a match on the complement list `<list>-OUTSIDE`), and the filter map
+  of that direction and family is then not attached (`replaced_by`). Large communities are evidence U.
+  SONiC and Dell SONiC render the same in config-DB form (`common/sonic_bgp_policy.j2`: `COMMUNITY_SET`, `ROUTE_MAP`,
+  `PREFIX`, `BGP_NEIGHBOR_AF`; every line evidence U) except large communities, which have no known field there: a
+  large list is not defined, a term that matches one is left out and a large community a term adds is not set.
+  **Transit**: `add_transit_policy` (`generators/topology/transit_policy.py`, the group trigger of `transit_peerings`, which
+  every upstream peering of `30_all` declares, guarded by `tests/unit/test_event_rules.py`; `00_full_topology`
+  authors the same objects as plain data, held equal to the spec by `tests/unit/test_transit_policy.py`) writes the shared `generated` policies `transit-in` (default route only, local-pref
+  below 100, the tag `TRANSIT_COMMUNITY`) and `transit-out` (deny what carries the tag, announce the public space of the
+  INTERNET namespace) from the one spec `utils/transit_policy.py` and adds them to the peering; a policy a person attached
+  stays, a list entry the public space lost is deleted. There are no fixed transit maps: a transit
+  session (an eBGP session in an `internet` namespace) has no derived route protection, so the policies are its only
+  filter, and the transform refuses a transit session that names no policy in a direction
+  (`UngovernedTransitError`, `BaseDeviceTransform._refuse_ungoverned_transit_sessions`, on every platform). Any
+  platform that renders user policies in its VRF address family renders a transit session; the golden is
+  `edge_cisco_nxos_internet_bgw`.
 - **Route protection**: every BGP session is protected against a neighbour announcing what it must not, internal
   sessions included (external and transit keep `utils/ownership.py exchange_policies`). ONE derivation,
   `utils/bgp_expectation.py` (pure; the transform renders it and `checks/bgp_expectations.py` compares it): a session

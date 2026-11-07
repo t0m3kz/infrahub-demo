@@ -5,11 +5,11 @@ from transforms.helpers.bgp_cloud import cloud_legs, graft_cloud_far_ends, legs_
 from transforms.helpers.bgp_external import (
     get_external_peer_prefixes,
     get_external_session_policies,
-    get_internet_prefixes,
     get_onprem_prefixes,
 )
 from transforms.helpers.vrf import plain_vrf_names
 from utils.circuit_underlay import SESSION_CIRCUIT
+from utils.internet_prefixes import get_internet_prefixes
 from utils.routing_identity import customer_tags, identity_in_use, routing_community_regexes
 
 
