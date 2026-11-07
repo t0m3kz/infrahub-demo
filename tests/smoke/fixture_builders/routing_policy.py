@@ -108,3 +108,72 @@ def write_fixtures() -> tuple[int, int]:
             fixtures.append((Leaf, f"leaf_{platform}_routing_policy_{'enforced' if enforce else 'staged'}", data))
     print("\nGenerating routing-policy fixtures (leaf; staged and enforced):")
     return write_data_fixtures(fixtures)
+
+
+def _spec_policy(spec: dict, lists: dict) -> dict:
+    """A policy node of utils/transit_policy.py's spec, the way the transform query returns it."""
+    terms = [
+        _term(
+            term["seq"],
+            term["action"],
+            local_pref=term.get("local_pref"),
+            add_communities=term.get("add_communities"),
+            prefix_list=lists.get(term.get("prefix_list")),
+            community_list=lists.get(term.get("community_list")),
+        )
+        for term in spec["terms"]
+    ]
+    node = _policy(spec["name"], spec["default_action"], *terms)
+    node["node"]["origin"] = _v("generated")
+    return node
+
+
+def add_transit_policies(data: dict, public_prefixes: list[str]) -> None:
+    """Attach the generated transit policies (utils/transit_policy.py) to every peering of the device."""
+    from utils.transit_policy import transit_spec  # noqa: PLC0415 - only the transit fixture needs it
+
+    spec = transit_spec(public_prefixes)
+    lists: dict = {
+        item["name"]: _prefix_list(
+            item["name"],
+            item["family"],
+            *((e["seq"], e["action"], e["prefix"], e["max_length"]) for e in item["entries"]),
+        )
+        for item in spec["prefix_lists"]
+    }
+    lists |= {
+        item["name"]: _community_list(item["name"], *item["members"], kind=item["community_type"], match=item["match"])
+        for item in spec["community_lists"]
+    }
+    imported, exported = (_spec_policy(item, lists) for item in spec["policies"])
+
+    def visit(node: object) -> None:
+        if isinstance(node, dict):
+            for peering in ((node.get("peerings") or {}).get("edges")) or []:
+                if "EXT-LUMEN-FRA1" not in peering["node"]["id"]:
+                    continue
+                peering["node"]["import_policies"] = {"edges": [imported]}
+                peering["node"]["export_policies"] = {"edges": [exported]}
+            for child in node.values():
+                visit(child)
+        elif isinstance(node, list):
+            for child in node:
+                visit(child)
+
+    visit(data)
+
+
+def write_transit_fixtures() -> tuple[int, int]:
+    """The INTERNET BGW edge with the generated transit policies, with and without public space."""
+    from tests.smoke.fixture_builders.edge import build_edge_internet_bgw_data  # noqa: PLC0415
+    from transforms.config.edge import Edge  # noqa: PLC0415
+
+    fixtures: list[tuple[type, str, dict]] = []
+    for suffix, prefixes in (("", ["192.0.2.0/24"]), ("_no_public", [])):
+        data = build_edge_internet_bgw_data(device_name="dc1-edge-01", platform="cisco_nxos")
+        if not prefixes:
+            data["IpamPrefix"] = _edges([])
+        add_transit_policies(data, prefixes)
+        fixtures.append((Edge, f"edge_cisco_nxos_internet_bgw_transit_policy{suffix}", data))
+    print("\nGenerating transit-policy fixtures (edge):")
+    return write_data_fixtures(fixtures)

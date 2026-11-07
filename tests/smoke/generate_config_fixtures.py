@@ -51,6 +51,7 @@ WRITERS: list[tuple[str | None, Callable[[], tuple[int, int]]]] = [
     (None, routing_identity.write_fixtures),
     (None, routing_protection.write_fixtures),
     (None, routing_policy.write_fixtures),
+    (None, routing_policy.write_transit_fixtures),
 ]
 
 

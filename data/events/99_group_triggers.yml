@@ -40,6 +40,12 @@ spec:
       group: customers
       action: run-customer-routing-tag-generator
 
+    - name: trigger-transit-policy-on-added
+      branch_scope: "other_branches"
+      member_update: added
+      group: transit_peerings
+      action: run-transit-policy-generator
+
     - name: trigger-vxlan-segment-generator-on-added
       branch_scope: "other_branches"
       member_update: added

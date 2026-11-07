@@ -1,0 +1,189 @@
+!
+! dc1-edge-01 Configuration
+!
+hostname dc1-edge-01
+!
+feature ospf
+feature bgp
+feature bfd
+feature interface-vlan
+feature lacp
+feature vpc
+feature lldp
+feature nv overlay
+feature vn-segment-vlan-based
+feature nve
+nv overlay evpn
+!
+!
+! Interfaces
+interface Ethernet1
+  no switchport
+  no shutdown
+  ip address 10.1.0.1/31
+
+!
+interface Ethernet1/14
+  no switchport
+  no shutdown
+  vrf member INTERNET
+  ip address 203.0.113.0/31
+
+!
+interface Ethernet2
+  no switchport
+  no shutdown
+  ip address 10.1.0.3/31
+
+!
+interface Loopback0
+  no shutdown
+  ip address 10.0.0.1/32
+
+!
+interface Loopback1
+  no shutdown
+  ip address 10.0.0.50/32
+
+!
+!
+! Route-maps
+ip prefix-list TRANSIT-DEFAULT-IN seq 10 permit 0.0.0.0/0
+route-map RM-USER-peer-dc1-edge-01-EXT-LUMEN-FRA1-ebgp-IN permit 10
+  match ip address prefix-list TRANSIT-DEFAULT-IN
+  set local-preference 80
+  set community 64498:1 additive
+!
+ip community-list standard CL-LEARNED-FROM-TRANSIT permit 64498:1
+route-map RM-USER-peer-dc1-edge-01-EXT-LUMEN-FRA1-ebgp-OUT deny 10
+  match community CL-LEARNED-FROM-TRANSIT
+!
+route-map RM-CONN-2-BGP permit 10
+  match interface loopback0 Loopback1
+!
+route-map RM-VRF-DIRECT-2-EVPN permit 10
+!
+!
+! BGP Configuration
+
+router bgp 65001
+  router-id 10.0.0.1
+  graceful-restart
+  !
+  template peer-policy EVPN-OVERLAY-POLICY
+    send-community
+    send-community extended
+  !
+  template peer-session EVPN-OVERLAY-SESSION
+    update-source loopback0
+    ebgp-multihop 255
+  !
+  !
+  template peer-policy UNDERLAY-PEERS-POLICY
+    send-community
+  !
+  template peer-session UNDERLAY-PEERS-SESSION
+    bfd
+  !
+  address-family ipv4 unicast
+    redistribute direct route-map RM-CONN-2-BGP
+    maximum-paths 8
+  !
+  address-family l2vpn evpn
+  !
+  neighbor 10.1.0.0
+    remote-as 65100
+    description spine-01
+    inherit peer-session UNDERLAY-PEERS-SESSION
+    address-family ipv4 unicast
+      inherit peer-policy UNDERLAY-PEERS-POLICY 1
+    !
+  neighbor 10.1.0.2
+    remote-as 65101
+    description spine-02
+    inherit peer-session UNDERLAY-PEERS-SESSION
+    address-family ipv4 unicast
+      inherit peer-policy UNDERLAY-PEERS-POLICY 1
+    !
+  neighbor 10.0.0.100
+    remote-as 65100
+    description spine-01
+    inherit peer-session EVPN-OVERLAY-SESSION
+    address-family l2vpn evpn
+      inherit peer-policy EVPN-OVERLAY-POLICY 1
+    !
+  neighbor 10.0.0.101
+    remote-as 65101
+    description spine-02
+    inherit peer-session EVPN-OVERLAY-SESSION
+    address-family l2vpn evpn
+      inherit peer-policy EVPN-OVERLAY-POLICY 1
+    !
+  vrf INTERNET
+    address-family ipv4 unicast
+      advertise l2vpn evpn
+    neighbor 203.0.113.1
+      remote-as 3356
+      description EXT-LUMEN-FRA1
+      password isp-s3cr3t
+      bfd
+      address-family ipv4 unicast
+        send-community
+        maximum-prefix 3 warning-only
+        route-map RM-USER-peer-dc1-edge-01-EXT-LUMEN-FRA1-ebgp-IN in
+        route-map RM-USER-peer-dc1-edge-01-EXT-LUMEN-FRA1-ebgp-OUT out
+  !
+!
+
+!
+!
+! VXLAN Configuration (netlab-style multivendor)
+!
+evpn multisite border-gateway 65000
+  delay-restore time 300
+!
+!
+! VRF Contexts (symmetric IRB — one L3 VNI per tenant)
+!
+vrf context INTERNET
+  vni 60002
+  rd 10.0.0.1:60002
+  address-family ipv4 unicast
+    route-target both 60002:60002
+    route-target both 60002:60002 evpn
+!
+interface nve1
+  source-interface Loopback0
+  host-reachability protocol bgp
+  multisite border-gateway interface Loopback1
+  member vni 60002 associate-vrf
+  no shutdown
+!
+!
+! EVPN Configuration
+!
+evpn
+!
+!
+! VLAN to VNI mapping
+!
+!
+! L3 VNI Transit SVIs (symmetric IRB — no host addressing, forwarding only)
+!
+vlan 3902
+  name L3VNI_INTERNET
+  vn-segment 60002
+!
+interface Vlan3902
+  description L3VNI transit SVI for VRF INTERNET
+  vrf member INTERNET
+  ip forward
+  mtu 9214
+  no shutdown
+!
+
+!
+! Management
+line console
+line vty
+!

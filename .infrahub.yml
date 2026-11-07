@@ -601,6 +601,8 @@ queries:
     file_path: queries/topology/add/app_dependency.gql
   - name: customer_routing_tag
     file_path: queries/topology/add/customer_routing_tag.gql
+  - name: transit_policy
+    file_path: queries/topology/add/transit_policy.gql
   - name: app_component
     file_path: queries/topology/add/app_component.gql
   - name: app_component_segment
@@ -793,6 +795,15 @@ generator_definitions:
     targets: customers
     query: customer_routing_tag
     class_name: CustomerRoutingTagGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: add_transit_policy
+    file_path: generators/topology/transit_policy.py
+    targets: transit_peerings
+    query: transit_policy
+    class_name: TransitPolicyGenerator
     execute_in_proposed_change: false
     execute_after_merge: false
     parameters:

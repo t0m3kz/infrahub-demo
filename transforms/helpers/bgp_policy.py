@@ -190,6 +190,8 @@ def compose_policy(
         "enforced": enforce,
         "filters": filters,
         "user": user,
+        # The directions that name a routing policy map: a template's own map for them (RM-TRANSIT-*) is not used.
+        "user_directions": [composed["direction"] for composed in user if composed["maps"]],
     }
 
 

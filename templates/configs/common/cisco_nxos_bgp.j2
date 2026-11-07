@@ -212,8 +212,12 @@ router bgp {{ bgp_config.local_as.asn }}
 {#- Upstream transit: default route in, nothing out (RM-TRANSIT-* are defined
     by edges/cisco_nxos.j2, the only template that renders a transit session). -#}
 {%- if session.get('transit') %}
+{%- if 'in' not in session.policy.user_directions %}
         route-map RM-TRANSIT-IN in
+{%- endif %}
+{%- if 'out' not in session.policy.user_directions %}
         route-map RM-TRANSIT-OUT out
+{%- endif %}
 {%- endif %}
 {#- External tenant-VRF peer (cloud VIF, SD-WAN gateway): only its owners'
     registered prefixes in, only those owners' on-prem prefixes out; the maps

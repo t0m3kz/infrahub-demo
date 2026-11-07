@@ -59,17 +59,22 @@ interface {{ interface.name }}
     route only; announce only the INTERNET namespace's public prefixes
     (internet_prefixes: the aggregate and the SNAT space), nothing when none is
     known. -#}
-{%- set _transit = namespace(on=false) %}
+{%- set _transit = namespace(on_in=false, on_out=false) %}
 {%- for bgp_config in bgp %}
 {%- for sessions in (bgp_config.vrf_sessions or {}).values() %}
-{%- for session in sessions if session.get('transit') %}{% set _transit.on = true %}{% endfor %}
+{%- for session in sessions if session.get('transit') %}
+{%- if 'in' not in session.policy.user_directions %}{% set _transit.on_in = true %}{% endif %}
+{%- if 'out' not in session.policy.user_directions %}{% set _transit.on_out = true %}{% endif %}
 {%- endfor %}
 {%- endfor %}
-{%- if _transit.on %}
+{%- endfor %}
+{%- if _transit.on_in %}
 ip prefix-list PL-TRANSIT-IN-DEFAULT seq 10 permit 0.0.0.0/0
 route-map RM-TRANSIT-IN permit 10
   match ip address prefix-list PL-TRANSIT-IN-DEFAULT
 !
+{%- endif %}
+{%- if _transit.on_out %}
 {%- for prefix in internet_prefixes | default([]) %}
 ip prefix-list PL-TRANSIT-OUT-PUBLIC seq {{ loop.index * 10 }} permit {{ prefix }}
 {%- endfor %}

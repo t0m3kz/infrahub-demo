@@ -77,6 +77,7 @@ spec:
       description: "Internet transit eg-fr201 <-> EXT-LUMEN-FRA1 (AS3356) over INET-LUMEN-EQXFR2"
       session_type: EBGP
       peering_role: regular
+      member_of_groups: [transit_peerings]
       ttl: 1
       bfd_enabled: true
       send_community: true
@@ -94,6 +95,7 @@ spec:
       description: "Internet transit eg-fr202 <-> EXT-COGENT-FRA1 (AS174) over INET-COGENT-EQXFR2"
       session_type: EBGP
       peering_role: regular
+      member_of_groups: [transit_peerings]
       ttl: 1
       bfd_enabled: true
       send_community: true
@@ -111,6 +113,7 @@ spec:
       description: "Internet transit eg-pa401 <-> EXT-LUMEN-PAR1 (AS3356) over INET-LUMEN-EQXPA4"
       session_type: EBGP
       peering_role: regular
+      member_of_groups: [transit_peerings]
       ttl: 1
       bfd_enabled: true
       send_community: true
@@ -128,6 +131,7 @@ spec:
       description: "Internet transit eg-pa402 <-> EXT-COGENT-PAR1 (AS174) over INET-COGENT-EQXPA4"
       session_type: EBGP
       peering_role: regular
+      member_of_groups: [transit_peerings]
       ttl: 1
       bfd_enabled: true
       send_community: true

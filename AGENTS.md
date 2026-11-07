@@ -634,6 +634,14 @@ class MyCheck(InfrahubCheck):
   SONiC and Dell SONiC render the same in config-DB form (`common/sonic_bgp_policy.j2`: `COMMUNITY_SET`, `ROUTE_MAP`,
   `PREFIX`, `BGP_NEIGHBOR_AF`; every line evidence U) except large communities, which have no known field there: a
   large list is not defined, a term that matches one is left out and a large community a term adds is not set.
+  **Transit**: `add_transit_policy` (`generators/topology/transit_policy.py`, the group trigger of `transit_peerings`, which
+  every upstream peering of the internet topology declares: `06_internet` in the demo data, guarded by
+  `tests/unit/test_event_rules.py`) writes the shared `generated` policies `transit-in` (default route only, local-pref
+  below 100, the tag `TRANSIT_COMMUNITY`) and `transit-out` (deny what carries the tag, announce the public space of the
+  INTERNET namespace) from the one spec `utils/transit_policy.py` and adds them to the peering; a policy a person attached
+  stays, a list entry the public space lost is deleted. A transit session with a policy in a direction does not take the
+  NX-OS edge's fixed `RM-TRANSIT-IN` / `RM-TRANSIT-OUT` for it (`policy.user_directions`); only the NX-OS edge renders a
+  transit session.
 - **Route protection**: every BGP session is protected against a neighbour announcing what it must not, internal
   sessions included (external and transit keep `utils/ownership.py exchange_policies`). ONE derivation,
   `utils/bgp_expectation.py` (pure; the transform renders it and `checks/bgp_expectations.py` compares it): a session

@@ -68,6 +68,8 @@ spec:
       description: Application instances — generator target for AppApplicationGenerator
     - name: customers
       description: Customers (OrganizationCustomer) — generator target for CustomerRoutingTagGenerator (add_customer_routing_tag)  # yamllint disable-line rule:line-length
+    - name: transit_peerings
+      description: Upstream transit peerings — generator target for TransitPolicyGenerator (add_transit_policy)
     - name: app_components
       description: Application component instances
     - name: app_dependencies

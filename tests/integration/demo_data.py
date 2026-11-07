@@ -367,6 +367,7 @@ GROUP_MEMBER_KINDS: dict[str, tuple[str, ...]] = {
     "topologies_pod": ("TopologyPod",),
     "topologies_rack": ("LocationRack",),
     "customers": ("OrganizationCustomer",),
+    "transit_peerings": ("ManagedBGPPeering",),
     "vxlan_segments": ("ManagedVxlanSegment",),
     "app_applications": ("AppApplication",),
     "app_dependencies": ("AppDependency",),

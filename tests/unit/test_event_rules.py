@@ -125,6 +125,16 @@ def test_a_group_started_generator_does_not_read_groups_in_its_definition_query(
     assert "member_of_groups" not in _query_body(generator)
 
 
+# A group that holds only SOME objects of its kind: the data directory whose objects must join it. The transit peerings
+# are the sessions of the internet topology (`06_internet`); a cloud handoff or a fabric peering is a peering too.
+_PARTIAL_GROUPS = {"transit_peerings": "06_internet"}
+
+
+def _is_member_candidate(group: str, path: Any) -> bool:
+    """Whether the objects of ``path`` must join ``group``: all of them, or those of the partial group's directory."""
+    return group not in _PARTIAL_GROUPS or _PARTIAL_GROUPS[group] in path.parts
+
+
 @pytest.mark.parametrize("group", sorted({rule["group"] for rule in group_trigger_rules()}))
 def test_declared_objects_are_target_group_members(group: str) -> None:
     """A generator starts only for a member of its group, so every declared object of a kind the group holds joins
@@ -134,7 +144,7 @@ def test_declared_objects_are_target_group_members(group: str) -> None:
             f"{obj.kind} {obj.path.relative_to(ROOT)}"
             for kind in GROUP_MEMBER_KINDS[group]
             for obj in declared(kind, *_TRIGGERED_DATA_DIRS)
-            if group not in obj.groups()
+            if group not in obj.groups() and _is_member_candidate(group, obj.path)
         }
     )
     assert not outside, f"objects not in '{group}': {outside}"
