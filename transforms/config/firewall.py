@@ -195,6 +195,21 @@ def _nat_entries(
     entries: list[dict[str, Any]] = []
     for egress, ns_type in candidates:
         own_address = ns_type == INTERNET_TYPE
+        if own_address and egress and tenant_legs:
+            # The customers of an Internet edge that have a public address of their own (a dedicated context): their
+            # prefixes are translated to it, ahead of the entry for everyone else.
+            entries += [
+                {
+                    "suffix": f"-{customer['name']}",
+                    "egress": egress,
+                    "address": customer["address"],
+                    "own_address": True,
+                    "tenant_legs": tenant_legs,
+                    "sources": customer["prefixes"],
+                }
+                for customer in context.get("edge_customers") or []
+                if customer.get("address") and customer.get("prefixes")
+            ]
         address = context.get("snat") if own_address else (egress or {}).get("vip")
         if egress and address and tenant_legs:
             entries.append(

@@ -1,0 +1,89 @@
+set deviceconfig system hostname dc1-xfw-01
+#
+#
+# --- Address Objects (one per zone member CIDR) ---
+set address addr-10-1-0-0-24 ip-netmask 10.1.0.0/24
+set address addr-10-1-0-0-24 description "Zone: PROD-ZONE"
+set address addr-10-2-0-0-24 ip-netmask 10.2.0.0/24
+set address addr-10-2-0-0-24 description "Zone: PROD-ZONE"
+#
+# --- Address Groups (one per zone) ---
+set address-group ag-PROD-ZONE static [ addr-10-1-0-0-24 addr-10-2-0-0-24 ]
+#
+#
+# --- Firewall Contexts (VDOM/vsys) — one per tenant, per ManagedFirewallContext ---
+#
+set vsys shared-dc1-xfw-prod
+set network interface ethernet ethernet1/1 layer3 units ethernet1/1.3002 tag 3002
+set network interface ethernet ethernet1/1 layer3 units ethernet1/1.3002 ip 100.66.0.20/29
+set vsys shared-dc1-xfw-prod import network interface ethernet1/1.3002
+set vsys shared-dc1-xfw-prod zone PROD-ZONE network layer3 ethernet1/1.3002
+set network virtual-router vr-shared-dc1-xfw-prod interface ethernet1/1.3002
+set network interface ethernet ethernet1/1 layer3 units ethernet1/1.3402 tag 3402
+set network interface ethernet ethernet1/1 layer3 units ethernet1/1.3402 ip 100.66.32.20/29
+set vsys shared-dc1-xfw-prod import network interface ethernet1/1.3402
+set vsys shared-dc1-xfw-prod zone INTERNET-ZONE network layer3 ethernet1/1.3402
+set network virtual-router vr-shared-dc1-xfw-prod interface ethernet1/1.3402
+set vsys shared-dc1-xfw-prod import network virtual-router vr-shared-dc1-xfw-prod
+set network virtual-router vr-shared-dc1-xfw-prod routing-table ip static-route rt-1 destination 10.1.0.0/24
+set network virtual-router vr-shared-dc1-xfw-prod routing-table ip static-route rt-1 nexthop ip-address 100.66.0.17
+set network virtual-router vr-shared-dc1-xfw-prod routing-table ip static-route rt-1 interface ethernet1/1.3002
+set network virtual-router vr-shared-dc1-xfw-prod routing-table ip static-route rt-2 destination 10.2.0.0/24
+set network virtual-router vr-shared-dc1-xfw-prod routing-table ip static-route rt-2 nexthop ip-address 100.66.0.17
+set network virtual-router vr-shared-dc1-xfw-prod routing-table ip static-route rt-2 interface ethernet1/1.3002
+set network virtual-router vr-shared-dc1-xfw-prod routing-table ip static-route rt-3 destination 0.0.0.0/0
+set network virtual-router vr-shared-dc1-xfw-prod routing-table ip static-route rt-3 nexthop ip-address 100.66.32.17
+set network virtual-router vr-shared-dc1-xfw-prod routing-table ip static-route rt-3 interface ethernet1/1.3402
+set network interface ethernet ethernet1/1 layer3 units ethernet1/1.3402 ip 198.51.100.9/32
+set vsys shared-dc1-xfw-prod rulebase nat rules snat-PROD-ZONE-C006-P-DC10 from PROD-ZONE
+set vsys shared-dc1-xfw-prod rulebase nat rules snat-PROD-ZONE-C006-P-DC10 to INTERNET-ZONE
+set vsys shared-dc1-xfw-prod rulebase nat rules snat-PROD-ZONE-C006-P-DC10 source [ 10.2.0.0/24 ]
+set vsys shared-dc1-xfw-prod rulebase nat rules snat-PROD-ZONE-C006-P-DC10 destination any
+set vsys shared-dc1-xfw-prod rulebase nat rules snat-PROD-ZONE-C006-P-DC10 service any
+set vsys shared-dc1-xfw-prod rulebase nat rules snat-PROD-ZONE-C006-P-DC10 source-translation dynamic-ip-and-port translated-address 198.51.100.9
+set network interface ethernet ethernet1/1 layer3 units ethernet1/1.3402 ip 198.51.100.5/32
+set vsys shared-dc1-xfw-prod rulebase nat rules snat-PROD-ZONE from PROD-ZONE
+set vsys shared-dc1-xfw-prod rulebase nat rules snat-PROD-ZONE to INTERNET-ZONE
+set vsys shared-dc1-xfw-prod rulebase nat rules snat-PROD-ZONE source any
+set vsys shared-dc1-xfw-prod rulebase nat rules snat-PROD-ZONE destination any
+set vsys shared-dc1-xfw-prod rulebase nat rules snat-PROD-ZONE service any
+set vsys shared-dc1-xfw-prod rulebase nat rules snat-PROD-ZONE source-translation dynamic-ip-and-port translated-address 198.51.100.5
+#
+# --- Security Policies in vsys shared-dc1-xfw-prod ---
+set vsys shared-dc1-xfw-prod rulebase security rules a-to-internet from PROD-ZONE
+set vsys shared-dc1-xfw-prod rulebase security rules a-to-internet to INTERNET-ZONE
+set vsys shared-dc1-xfw-prod rulebase security rules a-to-internet source 10.1.0.0/24
+set vsys shared-dc1-xfw-prod rulebase security rules a-to-internet destination any
+set vsys shared-dc1-xfw-prod rulebase security rules a-to-internet application any
+set vsys shared-dc1-xfw-prod service svc-tcp-443 protocol tcp port 443
+set vsys shared-dc1-xfw-prod rulebase security rules a-to-internet service svc-tcp-443
+set vsys shared-dc1-xfw-prod rulebase security rules a-to-internet action allow
+set vsys shared-dc1-xfw-prod rulebase security rules b-to-internet from PROD-ZONE
+set vsys shared-dc1-xfw-prod rulebase security rules b-to-internet to INTERNET-ZONE
+set vsys shared-dc1-xfw-prod rulebase security rules b-to-internet source 10.2.0.0/24
+set vsys shared-dc1-xfw-prod rulebase security rules b-to-internet destination any
+set vsys shared-dc1-xfw-prod rulebase security rules b-to-internet application any
+set vsys shared-dc1-xfw-prod service svc-tcp-80 protocol tcp port 80
+set vsys shared-dc1-xfw-prod rulebase security rules b-to-internet service svc-tcp-80
+set vsys shared-dc1-xfw-prod rulebase security rules b-to-internet action allow
+set vsys shared-dc1-xfw-prod rulebase security rules implicit-deny-all from any
+set vsys shared-dc1-xfw-prod rulebase security rules implicit-deny-all to any
+set vsys shared-dc1-xfw-prod rulebase security rules implicit-deny-all source any
+set vsys shared-dc1-xfw-prod rulebase security rules implicit-deny-all destination any
+set vsys shared-dc1-xfw-prod rulebase security rules implicit-deny-all application any
+set vsys shared-dc1-xfw-prod rulebase security rules implicit-deny-all service any
+set vsys shared-dc1-xfw-prod rulebase security rules implicit-deny-all action deny
+set vsys shared-dc1-xfw-prod rulebase security rules implicit-deny-all log-end yes
+set vsys shared-dc1-xfw-prod rulebase security rules implicit-deny-all description "Implicit deny all"
+#
+#
+#
+# --- High Availability ---
+set deviceconfig high-availability enabled yes
+set deviceconfig high-availability group 1
+set deviceconfig high-availability group mode active-passive
+set deviceconfig high-availability group election-option priority 100
+set deviceconfig high-availability group election-option preemptive no
+set deviceconfig high-availability group timers aggressive
+set deviceconfig high-availability interface ha1 port ethernet1/7
+#

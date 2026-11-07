@@ -10,19 +10,34 @@ from typing import Any
 from transforms.helpers.addressing import sub_interface_parent
 from transforms.helpers.firewall import _snat_host
 from transforms.helpers.ha import leg_virtual_ip
-from transforms.helpers.policy import segment_rule_policies
-from utils.exchange_transit import FIREWALL_CONTEXT_KIND, TRANSIT_SLOT, ZONE_BY_NS_TYPE, transit_addresses, transit_vlan
-from utils.segment_addressing import segment_hosting_candidates
+from transforms.helpers.policy import is_internet_destination, segment_rule_policies
+from utils.exchange_transit import (
+    FIREWALL_CONTEXT_KIND,
+    INTERNET_TYPE,
+    MANAGEMENT_TYPE,
+    TRANSIT_SLOT,
+    ZONE_BY_NS_TYPE,
+    namespace_type_for_environment,
+    transit_addresses,
+    transit_vlan,
+)
+from utils.segment_addressing import segment_hosting_candidates, segment_prefix
 
 
 def _new_context(cap: dict[str, Any], legs: list[dict[str, Any]]) -> dict[str, Any]:
     """The template-facing shape of one ManagedFirewallContext capability."""
     segments: dict[str, dict[str, Any]] = {}
+    edge_hosted = False
     for deployment in cap.get("served_deployments") or []:
         for segment in deployment.get("network_segments") or []:
             if segment.get("id"):
                 segments.setdefault(segment["id"], segment)
+        # A served footprint whose DC names an Internet edge: this context keeps none of its Internet rules.
+        edge_hosted = edge_hosted or bool((deployment.get("parent") or {}).get("internet_edge_contexts"))
     return {
+        "edge_hosted": edge_hosted,
+        "edge_hostings": cap.get("internet_edge_hostings") or [],
+        "edge_customers": [],
         "id": cap.get("id"),
         "name": cap.get("name"),
         "context_id": cap.get("context_id"),
@@ -107,7 +122,45 @@ def get_firewall_contexts(
             contexts[cap["id"]] = _new_context(cap, [])
     for legs in legs_by_context.values():
         legs.sort(key=lambda leg: TRANSIT_SLOT[leg["ns_type"]])
+    for context in contexts.values():
+        if context["edge_hostings"]:
+            _attach_edge_customers(context)
     return sorted(contexts.values(), key=lambda c: c.get("name") or "")
+
+
+def _attach_edge_customers(context: dict[str, Any]) -> None:
+    """The DC footprints an Internet edge context serves: their segments and, per footprint, the public address.
+
+    The context is the Internet edge of the topologies in ``edge_hostings`` (``internet_edge_hostings``) for the
+    environment of its tenant leg: the footprints of that environment, their segments (whose Internet rules it holds)
+    and, for a footprint served by a dedicated context, that context's ``snat_address``, the address the footprint's
+    prefixes are translated to here. A footprint on a shared context has no address of its own and takes the edge's.
+    """
+    tenant_type = next(
+        (leg["ns_type"] for leg in context["legs"] if leg["ns_type"] not in (INTERNET_TYPE, MANAGEMENT_TYPE)), None
+    )
+    segments: dict[str, dict[str, Any]] = {}
+    customers: list[dict[str, Any]] = []
+    for hosting in context["edge_hostings"]:
+        for footprint in sorted(hosting.get("children") or [], key=lambda f: str(f.get("name"))):
+            if "network_segments" not in footprint:
+                continue  # a pod, not a customer footprint
+            if namespace_type_for_environment(str(footprint.get("environment") or "")) != tenant_type:
+                continue
+            owned = [segment for segment in footprint["network_segments"] if segment.get("id")]
+            for segment in owned:
+                segments.setdefault(segment["id"], segment)
+            serving = footprint.get("serving_firewall_context") or {}
+            dedicated = bool((serving.get("tenant") or {}).get("id"))
+            customers.append(
+                {
+                    "name": footprint.get("name"),
+                    "prefixes": sorted({prefix for segment in owned if (prefix := segment_prefix(segment))}),
+                    "address": _snat_host(serving) if dedicated else None,
+                }
+            )
+    context["segments"] = list(segments.values())
+    context["edge_customers"] = customers
 
 
 def _zone_member_segments(segments: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -117,6 +170,24 @@ def _zone_member_segments(segments: list[dict[str, Any]]) -> list[dict[str, Any]
     return [
         member for segment in segments for member in (segment.get("security_zone") or {}).get("network_segments") or []
     ]
+
+
+def _context_policies(context: dict[str, Any]) -> list[dict[str, Any]]:
+    """The policies of one context's table: its segments' rules, split by where the Internet is enforced.
+
+    An Internet edge context holds only the rules whose destination is the internet (the east-west rules and the rules
+    into a segment stay on the internal pair); a context whose DC has an Internet edge holds none of them (it has no
+    INTERNET zone).
+    """
+    policies = segment_rule_policies(context.get("segments") or [])
+    if not context.get("edge_hostings") and not context.get("edge_hosted"):
+        return policies
+    keep_internet = bool(context.get("edge_hostings"))
+    split = [
+        {**policy, "rules": [rule for rule in policy["rules"] if is_internet_destination(rule) == keep_internet]}
+        for policy in policies
+    ]
+    return [policy for policy in split if policy["rules"]]
 
 
 def place_policies_in_contexts(
@@ -137,7 +208,7 @@ def place_policies_in_contexts(
     Returns (root policies, context id -> policies), each policy holding
     only the rules placed in that table.
     """
-    by_context = {ctx["id"]: segment_rule_policies(ctx.get("segments") or []) for ctx in contexts}
+    by_context = {ctx["id"]: _context_policies(ctx) for ctx in contexts}
     placed = {
         str(rule.get("id"))
         for policies in by_context.values()

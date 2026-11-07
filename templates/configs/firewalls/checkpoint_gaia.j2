@@ -94,8 +94,14 @@ set static-route {{ 'default' if route.destination == '0.0.0.0/0' else route.des
     exist first; both are mgmt_cli lines to run against the SmartCenter. #}
 {%- for nat in context.nat %}
 mgmt_cli add host name "SNAT-{{ context.name }}{{ nat.suffix }}" ip-address "{{ nat.address }}"
+{%- if nat.get('sources') %}
+{%- for source in nat.sources %}
+mgmt_cli add network name "SRC-{{ context.name }}{{ nat.suffix }}-{{ loop.index }}" subnet "{{ source.split('/')[0] }}" mask-length {{ source.split('/')[1] }}
+{%- endfor %}
+mgmt_cli add group name "SRC-{{ context.name }}{{ nat.suffix }}"{% for source in nat.sources %} members.{{ loop.index }} "SRC-{{ context.name }}{{ nat.suffix }}-{{ loop.index }}"{% endfor %}
+{%- endif %}
 {%- for leg in nat.tenant_legs %}
-mgmt_cli add nat-rule package "{{ context.name }}" position "top" original-source "{{ leg.zone }}" original-destination "{{ nat.egress.zone }}" translated-source "SNAT-{{ context.name }}{{ nat.suffix }}" method "hide" install-on "{{ ha.name if ha else context.name }}"
+mgmt_cli add nat-rule package "{{ context.name }}" position "top" original-source "{{ ('SRC-' ~ context.name ~ nat.suffix) if nat.get('sources') else leg.zone }}" original-destination "{{ nat.egress.zone }}" translated-source "SNAT-{{ context.name }}{{ nat.suffix }}" method "hide" install-on "{{ ha.name if ha else context.name }}"
 {%- endfor %}
 {%- endfor %}
 {%- endif %}

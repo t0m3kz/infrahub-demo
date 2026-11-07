@@ -111,8 +111,15 @@ set tenants {{ context.name }} security nat source pool SNAT-POOL{{ nat.suffix }
 {%- for leg in nat.tenant_legs %}
 set tenants {{ context.name }} security nat source rule-set SNAT-{{ leg.zone }}{{ nat.suffix }} from zone {{ leg.zone }}
 set tenants {{ context.name }} security nat source rule-set SNAT-{{ leg.zone }}{{ nat.suffix }} to zone {{ nat.egress.zone }}
+{%- if nat.get('sources') %}
+{%- for source in nat.sources %}
+set tenants {{ context.name }} security nat source rule-set SNAT-{{ leg.zone }}{{ nat.suffix }} rule snat-{{ loop.index }} match source-address {{ source }}
+set tenants {{ context.name }} security nat source rule-set SNAT-{{ leg.zone }}{{ nat.suffix }} rule snat-{{ loop.index }} then source-nat pool SNAT-POOL{{ nat.suffix }}
+{%- endfor %}
+{%- else %}
 set tenants {{ context.name }} security nat source rule-set SNAT-{{ leg.zone }}{{ nat.suffix }} rule snat match source-address 0.0.0.0/0
 set tenants {{ context.name }} security nat source rule-set SNAT-{{ leg.zone }}{{ nat.suffix }} rule snat then source-nat pool SNAT-POOL{{ nat.suffix }}
+{%- endif %}
 {%- endfor %}
 {%- endfor %}
 #

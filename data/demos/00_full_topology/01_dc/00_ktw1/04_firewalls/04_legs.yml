@@ -1,0 +1,80 @@
+---
+# The legs of the contexts: each member's VLAN sub-interface of its uplink ethernet1/1, addressed from the leg's /29 in
+# the VRF of the leg (members take .5 and .6, the pair's floating VIP is .4, the border leaves' anycast gateway .1) and
+# tagged with the context and, on the edge, with the exchange. Then the border leaves' firewall ports, tagged with the
+# context of the pair they face (the leaves read the legs through them).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: "ethernet1/1.3000"
+      device: ktw1-fw-01
+      parent_interface: ["ktw1-fw-01", "ethernet1/1"]
+      role: service
+      status: active
+      ip_address:
+        data:
+          address: "100.66.0.5/29"
+          ip_namespace: PROD
+      capabilities: ["shared-ktw1-fw-ha-prod"]
+    - name: "ethernet1/1.3000"
+      device: ktw1-fw-02
+      parent_interface: ["ktw1-fw-02", "ethernet1/1"]
+      role: service
+      status: active
+      ip_address:
+        data:
+          address: "100.66.0.6/29"
+          ip_namespace: PROD
+      capabilities: ["shared-ktw1-fw-ha-prod"]
+    - name: "ethernet1/1.3001"
+      device: ktw1-xfw-01
+      parent_interface: ["ktw1-xfw-01", "ethernet1/1"]
+      role: service
+      status: active
+      ip_address:
+        data:
+          address: "100.66.0.13/29"
+          ip_namespace: PROD
+      capabilities: ["shared-ktw1-xfw-ha-prod", "shared-ktw1-xfw-ha-prod-PROD-INTERNET"]
+    - name: "ethernet1/1.3001"
+      device: ktw1-xfw-02
+      parent_interface: ["ktw1-xfw-02", "ethernet1/1"]
+      role: service
+      status: active
+      ip_address:
+        data:
+          address: "100.66.0.14/29"
+          ip_namespace: PROD
+      capabilities: ["shared-ktw1-xfw-ha-prod", "shared-ktw1-xfw-ha-prod-PROD-INTERNET"]
+    - name: "ethernet1/1.3401"
+      device: ktw1-xfw-01
+      parent_interface: ["ktw1-xfw-01", "ethernet1/1"]
+      role: service
+      status: active
+      ip_address:
+        data:
+          address: "100.66.32.5/29"
+          ip_namespace: INTERNET
+      capabilities: ["shared-ktw1-xfw-ha-prod", "shared-ktw1-xfw-ha-prod-PROD-INTERNET"]
+    - name: "ethernet1/1.3401"
+      device: ktw1-xfw-02
+      parent_interface: ["ktw1-xfw-02", "ethernet1/1"]
+      role: service
+      status: active
+      ip_address:
+        data:
+          address: "100.66.32.6/29"
+          ip_namespace: INTERNET
+      capabilities: ["shared-ktw1-xfw-ha-prod", "shared-ktw1-xfw-ha-prod-PROD-INTERNET"]
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - {device: ktw1-bl-01, name: "Ethernet1/25", capabilities: ["shared-ktw1-fw-ha-prod"]}
+    - {device: ktw1-bl-02, name: "Ethernet1/25", capabilities: ["shared-ktw1-fw-ha-prod"]}
+    - {device: ktw1-bl-01, name: "Ethernet1/26", capabilities: ["shared-ktw1-xfw-ha-prod"]}
+    - {device: ktw1-bl-02, name: "Ethernet1/26", capabilities: ["shared-ktw1-xfw-ha-prod"]}

@@ -1,0 +1,41 @@
+---
+# Each firewall's uplink ethernet1/1 to a firewall-role port of a border leaf: the internal pair on Ethernet1/25, the
+# external pair on Ethernet1/26 (one port per pair on each border leaf, the pair's first member to border leaf 1, the
+# second to border leaf 2). Cables in data are never generated.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+    - name: "CBL-KTW1-FW01-BL01"
+      type: smf
+      deployment: "DC-KTW1"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data: {device: "ktw1-fw-01", name: "ethernet1/1"}
+        - kind: DcimPhysicalInterface
+          data: {device: "ktw1-bl-01", name: "Ethernet1/25"}
+    - name: "CBL-KTW1-FW02-BL02"
+      type: smf
+      deployment: "DC-KTW1"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data: {device: "ktw1-fw-02", name: "ethernet1/1"}
+        - kind: DcimPhysicalInterface
+          data: {device: "ktw1-bl-02", name: "Ethernet1/25"}
+    - name: "CBL-KTW1-XFW01-BL01"
+      type: smf
+      deployment: "DC-KTW1"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data: {device: "ktw1-xfw-01", name: "ethernet1/1"}
+        - kind: DcimPhysicalInterface
+          data: {device: "ktw1-bl-01", name: "Ethernet1/26"}
+    - name: "CBL-KTW1-XFW02-BL02"
+      type: smf
+      deployment: "DC-KTW1"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data: {device: "ktw1-xfw-02", name: "ethernet1/1"}
+        - kind: DcimPhysicalInterface
+          data: {device: "ktw1-bl-02", name: "Ethernet1/26"}

@@ -381,6 +381,119 @@ def build_firewall_exchange_data(*, device_name: str, platform: str) -> dict:
     return data
 
 
+def build_firewall_internet_edge_data(*, device_name: str, platform: str) -> dict:
+    """An external-firewall member carrying the Internet edge context of a DC (PROD).
+
+    The context has a PROD and an INTERNET leg and names the DC (``internet_edge_hostings``) whose footprints it serves:
+    C005 on a shared context (seg-a, 10.1.0.0/24, a rule to the internet and one to seg-b) and C006 on a dedicated one
+    with its own public address 198.51.100.9 (seg-b, 10.2.0.0/24, a rule to the internet). The edge holds the two
+    internet rules only; the east-west rule stays on the internal pair. A pod of the DC carries no segments.
+    """
+    from tests.smoke.fixture_builders.firewall import (  # noqa: PLC0415 - firewall.py imports this module's package
+        _make_policy_header,
+        _make_rule_bearing_segments,
+        _make_rule_segment,
+        _make_segment_rule,
+    )
+
+    data = build_firewall_ha_data(device_name=device_name, platform=platform)
+    device = data["DcimPhysicalDevice"]["edges"][0]["node"]
+    seg_a = _make_rule_segment(cidr="10.1.0.0/24", zone_name="PROD-ZONE")
+    seg_b = _make_rule_segment(cidr="10.2.0.0/24", zone_name="PROD-ZONE")
+    header_a = _make_policy_header(name="c005-a", segment=seg_a)
+    header_b = _make_policy_header(name="c006-b", segment=seg_b)
+    rules_a = [
+        _make_segment_rule(
+            policy="c005-a", index=10, name="a-to-internet", port_start=443, src_segment=seg_a, dst_zone="INTERNET-ZONE"
+        ),
+        _make_segment_rule(
+            policy="c005-a", index=20, name="a-to-b", port_start=8443, src_segment=seg_a, dst_segment=seg_b
+        ),
+    ]
+    rules_b = [
+        _make_segment_rule(
+            policy="c006-b", index=10, name="b-to-internet", port_start=80, src_segment=seg_b, dst_zone="INTERNET-ZONE"
+        )
+    ]
+    by_id = _make_rule_bearing_segments([seg_a, seg_b], [(header_a, rules_a), (header_b, rules_b)])
+
+    def served(segment: dict) -> dict:
+        return {**by_id[segment["id"]], "gateway": segment["gateway"], "security_zone": segment["security_zone"]}
+
+    footprints = [
+        {
+            "id": "fp-c005",
+            "__typename": "TopologyCustomerDC",
+            "name": _v("C005-P-DC10"),
+            "environment": _v("p"),
+            "network_segments": _edges([served(seg_a)]),
+            "serving_firewall_context": _node({"id": "ctx-shared", "tenant": _node(None), "snat_address": _node(None)}),
+        },
+        {
+            "id": "fp-c006",
+            "__typename": "TopologyCustomerDC",
+            "name": _v("C006-P-DC10"),
+            "environment": _v("p"),
+            "network_segments": _edges([served(seg_b)]),
+            "serving_firewall_context": _node(
+                {
+                    "id": "ctx-c006",
+                    "tenant": _node({"id": "fp-c006"}),
+                    "snat_address": _node({"address": _v("198.51.100.9/32")}),
+                }
+            ),
+        },
+        {"id": "pod-1", "__typename": "TopologyPod"},
+    ]
+    cap = {
+        "__typename": "ManagedFirewallContext",
+        "id": "ctx-edge",
+        "name": _v("shared-dc1-xfw-prod"),
+        "vlan_id": _v(3002),
+        "context_id": _v(None),
+        "tenant": _node(None),
+        "served_deployments": _edges([]),
+        "snat_address": _node({"address": _v("198.51.100.5/32")}),
+        "internet_edge_hostings": _edges([{"id": "dc-10", "children": _edges(footprints)}]),
+    }
+    interfaces = []
+    for ns_type, prefix in (("prod", "100.66.0.16/29"), ("internet", "100.66.32.16/29")):
+        ns_name = _XCHG_NAMESPACES[ns_type][0]
+        net = ipaddress.ip_network(prefix)
+        interfaces.append(
+            {
+                "__typename": "DcimVirtualInterface",
+                "name": _v(f"ethernet1/1.{3002 + _XCHG_VLAN_OFFSET[ns_type]}"),
+                "description": _v(None),
+                "status": _v("active"),
+                "role": _v(None),
+                "parent_interface": _node({"name": _v("ethernet1/1")}),
+                "ip_address": _node(
+                    {
+                        "address": _v(f"{net[5]}/{net.prefixlen}"),
+                        "ip_namespace": _node({"name": _v(ns_name), "namespace_type": _v(ns_type)}),
+                    }
+                ),
+                "ha_domain": _node(None),
+                "capabilities": _edges([cap]),
+            }
+        )
+    ha_port = [e for e in device["interfaces"]["edges"] if e["node"]["name"]["value"] == "ethernet1/7"]
+    device["interfaces"]["edges"] = [{"node": i} for i in interfaces] + ha_port
+    device["role"] = _v("external-firewall")
+    data["SecurityZone"] = _edges(
+        [
+            {
+                "name": _v("PROD-ZONE"),
+                "trust_level": _v(50),
+                "description": _v(""),
+                "network_segments": _edges([seg_a, seg_b]),
+            }
+        ]
+    )
+    return data
+
+
 # A segment terminated on the shared context: the border leaf the trunk is cabled to tags it 101, another leaf
 # (not at the far end of the trunk) has a row of its own with another tag, which must not be taken.
 _TERMINATED_VLAN = 101
@@ -546,6 +659,19 @@ def write_fixtures() -> tuple[int, int]:
             build_lb_context_bl_data(device_name="dc1-border-leaf-01", platform=platform),
         )
         for platform in ["cisco_nxos", "arista_eos", "sonic", "dell_sonic", "cisco_xe"]
+    )
+    generated += g
+    errors += e
+
+    # The Internet edge context of a DC: the internet rules of its footprints and the SNAT per footprint.
+    print("\nGenerating Internet edge fixtures (firewall):")
+    g, e = write_data_fixtures(
+        (
+            Firewall,
+            f"firewall_{platform}_internet_edge",
+            build_firewall_internet_edge_data(device_name="dc1-xfw-01", platform=platform),
+        )
+        for platform in FIREWALL_PLATFORMS
     )
     generated += g
     errors += e
