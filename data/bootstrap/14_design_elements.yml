@@ -169,6 +169,14 @@ spec:
       role: internal-firewall
       template: PA-5260_FIREWALL
 
+    # Border-leaf-attached external firewalls: the Internet edge pair of a DC (DC-level fabric_templates)
+    - quantity: 2
+      role: external-firewall
+      template: CP-26000_FIREWALL
+    - quantity: 2
+      role: external-firewall
+      template: PA-5260_FIREWALL
+
     # Border-leaf-attached load-balancers (DC-level fabric_templates)
     - quantity: 2
       role: load-balancer

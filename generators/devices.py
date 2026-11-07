@@ -27,7 +27,7 @@ from .virtual_nics import VirtualNicMixin
 
 # device_role values that pair into an HA domain via DeviceOptions.ha_kind
 # rather than MLAG — see create_devices()'s pairing dispatch below.
-_HA_PAIRED_ROLES = frozenset({"internal-firewall", "load-balancer"})
+_HA_PAIRED_ROLES = frozenset({"internal-firewall", "external-firewall", "load-balancer"})
 
 # Fabric-tier device roles route to a controller by controller_type alone —
 # ACI APIC/DCNM/NSX/UCS/DNA Center aren't a 1:1 vendor pairing with the
@@ -58,12 +58,17 @@ _CONTROLLER_ALIASES = ("fabric_controllers", "security_manager_controllers", "lb
 # platform match against the device's own template — a checkpoint_gaia
 # firewall must never route to a Panorama (paloalto_panos) controller just because
 # both happen to be controller_type=security_manager.
-_ROLE_CONTROLLER_TYPE: dict[str, str] = {"internal-firewall": "security_manager", "load-balancer": "lb_manager"}
+_ROLE_CONTROLLER_TYPE: dict[str, str] = {
+    "internal-firewall": "security_manager",
+    "external-firewall": "security_manager",
+    "load-balancer": "lb_manager",
+}
 
 # device_role -> HA node kind. Pairing itself happens inside create_devices()
 # (DeviceOptions.ha_kind) — this only picks the right kind per role.
 HA_KIND_BY_ROLE: dict[str, str] = {
     "internal-firewall": "ManagedFirewallHA",
+    "external-firewall": "ManagedFirewallHA",
     "load-balancer": "ManagedLoadbalancerHA",
 }
 
@@ -392,7 +397,7 @@ class DeviceMixin(DomainPairingMixin, VirtualNicMixin):
     async def create_ha_role_devices(
         self,
         *,
-        role: Literal["internal-firewall", "load-balancer"],
+        role: Literal["internal-firewall", "external-firewall", "load-balancer"],
         entries: list[dict[str, Any]],
         deployment_id: str,
         naming_convention: NamingConvention,

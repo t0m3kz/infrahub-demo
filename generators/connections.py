@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 
 from utils.limits import DEFAULT_NAMESPACE, WAIT_FOR_PEER_GENERATOR
 
+from .far_end import ports_free_for
 from .helpers import CableTypeDetector, CablingPlanner
 from .helpers.cable_attributes import RackPosition, cable_attributes, endpoint_label
 from .helpers.common import save_with_node_not_found_retry
@@ -509,6 +510,10 @@ class CablingMixin:
                     role__value=bottom_role,
                     include=["cable"],
                 ),
+            )
+            top_interfaces, bottom_interfaces = (
+                await ports_free_for(self.client, list(top_interfaces), {i.device.id for i in bottom_interfaces}),
+                await ports_free_for(self.client, list(bottom_interfaces), {i.device.id for i in top_interfaces}),
             )
             if not top_interfaces or not bottom_interfaces:
                 self.logger.error(

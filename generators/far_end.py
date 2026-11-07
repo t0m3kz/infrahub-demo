@@ -47,3 +47,20 @@ async def far_end_interfaces(client: Any, interfaces: list[Any], include: list[s
                 f"Far end {peer_id} of the cable on interface {iface_id} is not a physical interface: skipped"
             )
     return {iface_id: far_ends[peer_id] for iface_id, peer_id in far_end_ids.items() if peer_id in far_ends}
+
+
+async def ports_free_for(client: Any, interfaces: list[Any], peer_device_ids: set[str]) -> list[Any]:
+    """The interfaces that are uncabled or cabled to one of ``peer_device_ids``; those cabled elsewhere are left out.
+
+    A chain of devices cables the free ports of a role; a second chain on the same ports (the external pair beside
+    the internal pair on the border leaves' firewall ports) must not pick the ones the first has cabled, while a re-run
+    of the first chain still finds its own. A cabled interface whose far end is not a physical interface is left out.
+    """
+    cabled = [iface for iface in interfaces if getattr(getattr(iface, "cable", None), "id", None)]
+    if not cabled:
+        return interfaces
+    far_ends = await far_end_interfaces(client, cabled, include=["device"])
+    elsewhere = {
+        iface.id for iface in cabled if (far := far_ends.get(iface.id)) is None or far.device.id not in peer_device_ids
+    }
+    return [iface for iface in interfaces if iface.id not in elsewhere]

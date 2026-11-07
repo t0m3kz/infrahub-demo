@@ -37,6 +37,7 @@ ROLE_CODES: dict[str, str] = {
     "access-switch": "as",
     "distribution-switch": "ds",
     "internal-firewall": "fw",
+    "external-firewall": "xf",
     "load-balancer": "lb",
 }
 

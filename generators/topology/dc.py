@@ -29,7 +29,9 @@ from ..routing import RoutingMixin
 from ..types import CablingOptions, DeviceOptions, RoutingOptions, naming_convention_of
 from .fabric_shared import ServiceDevicesMixin
 
-_DC_VALID_FABRIC_ROLES = frozenset({"super-spine", "hyper-spine", "border-leaf", "internal-firewall", "load-balancer"})
+_DC_VALID_FABRIC_ROLES = frozenset(
+    {"super-spine", "hyper-spine", "border-leaf", "internal-firewall", "external-firewall", "load-balancer"}
+)
 
 
 # Strategies under which dc.py pre-seeds its own DC-scoped tiers' BGP.
@@ -623,6 +625,13 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
             indexes=[data["index"]],
         )
 
+        external_names = await self.create_external_firewall_devices(
+            fabric_templates=data.get("fabric_templates", []),
+            deployment_id=data["id"],
+            naming_convention=naming_convention_of(data),
+            indexes=[data["index"]],
+        )
+
         # This DC's own context VLAN pool per service role present. Per-DC (not
         # global) so each fabric's context sub-interfaces stay within its own
         # numbering, matching the {fabric_name}-vlan-pool/{fabric_name}-vni-pool
@@ -631,7 +640,11 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
         # generators/firewall_context.py's _ensure_context_vlan allocates from
         # it once a customer boards onto this DC. See
         # PoolMixin.ensure_context_vlan_pool for the locking rationale.
-        for spec, names in ((FIREWALL_CONTEXT, firewall_names), (LOADBALANCER_CONTEXT, load_balancer_names)):
+        # (The external pair takes its transit VLANs from the firewall contexts' pool, see EDGE_CONTEXT.)
+        for spec, names in (
+            (FIREWALL_CONTEXT, firewall_names + external_names),
+            (LOADBALANCER_CONTEXT, load_balancer_names),
+        ):
             if names:
                 await self.ensure_context_vlan_pool(name=self.fabric_name, spec=spec)
 
@@ -642,3 +655,13 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
             firewall_names=firewall_names,
             load_balancer_names=load_balancer_names,
         )
+        if external_names:
+            # The external pair is a pbr-style leg off the same border leaves, on the next free firewall-role ports; it
+            # is never part of an inline chain.
+            await self._cable_border_services(
+                border_role_for=BORDER_ROLE_FOR_SERVICES,
+                connectivity_mode="pbr",
+                border_names=border_leaf_names,
+                firewall_names=external_names,
+                load_balancer_names=[],
+            )
