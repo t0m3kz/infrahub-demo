@@ -13,6 +13,7 @@
 #
 # The footprint kinds are separate roots, so the context fragment is selected under each of them. Every node selects
 # more than its id (clean_data() collapses an id-only dict to the bare id string); `__typename` becomes `typename`.
+# A footprint's parent (the DC or the metro) may name the contexts that are the Internet egress of its segments.
 fragment InternetEgressContext on ManagedFirewallContext {
   id
   name { value }
@@ -83,6 +84,8 @@ query internet_egress {
       node {
         id
         name { value }
+        environment { value }
+        parent { node { id name { value } ... on TopologySegmentHosting { internet_egress_contexts { edges { node { ...InternetEgressContext } } } } } }
         network_segments { edges { node { id name { value } } } }
         serving_firewall_context { node { ...InternetEgressContext } }
       }
@@ -94,7 +97,8 @@ query internet_egress {
       node {
         id
         name { value }
-        parent { node { id name { value } } }
+        environment { value }
+        parent { node { id name { value } ... on TopologySegmentHosting { internet_egress_contexts { edges { node { ...InternetEgressContext } } } } } }
         network_segments { edges { node { id name { value } } } }
         serving_firewall_contexts { edges { node { ...InternetEgressContext } } }
       }

@@ -602,3 +602,75 @@ class TestCheckClass:
         """A missing element is logged as an error."""
         (error,) = self._run(_raw_payload(snat=False))
         assert "no snat_address" in error
+
+
+def _hosting(contexts: list[dict[str, Any]]) -> dict[str, Any]:
+    """A DC that names the given contexts as its Internet egress."""
+    return {"id": "dc-11", "name": "DC11", "internet_egress_contexts": contexts}
+
+
+def _dedicated(snat: bool = True) -> dict[str, Any]:
+    """A dedicated customer context with no Internet leg: only its own public address, when it has one."""
+    return {
+        "id": "ctx-ded",
+        "name": "c006-dedicated-prod",
+        "snat_address": {"id": "snat-ded", "address": "198.51.100.9/32"} if snat else None,
+    }
+
+
+def _assigned_dc(
+    egress: list[dict[str, Any]], serving: dict[str, Any] | None = None, environment: str = "p"
+) -> dict[str, Any]:
+    """A DC footprint of an environment whose DC names ``egress`` and whose serving context is ``serving``."""
+    footprint = _dc([serving if serving is not None else _dedicated()])
+    footprint.update(parent=_hosting(egress), environment=environment)
+    return footprint
+
+
+class TestEgressAssignment:
+    """A DC that names its Internet egress: the footprint is checked against that context, not its serving one."""
+
+    def test_dedicated_context_without_legs_passes_when_the_egress_is_complete(self) -> None:
+        cleaned = _cleaned([_assigned_dc([_context("eg")])], exchanges=[_exchange("eg")])
+        assert egress_findings(cleaned) == []
+
+    def test_the_egress_context_is_held_to_every_element(self) -> None:
+        egress = _context("eg")
+        egress["snat_address"] = None
+        findings = egress_findings(_cleaned([_assigned_dc([egress])], exchanges=[_exchange("eg")]))
+        assert len(findings) == 1
+        assert "egress context: no snat_address" in findings[0] and "shared-eg-prod" in findings[0]
+
+    def test_a_dedicated_context_needs_its_own_public_address(self) -> None:
+        cleaned = _cleaned([_assigned_dc([_context("eg")], _dedicated(snat=False))], exchanges=[_exchange("eg")])
+        findings = egress_findings(cleaned)
+        assert len(findings) == 1 and "c006-dedicated-prod" in findings[0] and "no snat_address" in findings[0]
+
+    def test_the_egress_serving_the_footprint_itself_needs_no_second_address(self) -> None:
+        egress = _context("eg")
+        cleaned = _cleaned([_assigned_dc([egress], egress)], exchanges=[_exchange("eg")])
+        assert egress_findings(cleaned) == []
+
+    def test_two_contexts_for_one_environment_are_an_error(self) -> None:
+        second = _context("eg2")
+        exchanges = [_exchange("eg"), _exchange("eg2")]
+        findings = egress_findings(_cleaned([_assigned_dc([_context("eg"), second])], exchanges=exchanges))
+        assert len(findings) == 1 and "2 Internet egress contexts for prod" in findings[0]
+
+    def test_a_context_for_another_environment_leaves_the_footprint_on_its_serving_context(self) -> None:
+        """The DC names only a NON-PROD egress: a PROD footprint keeps the elements on its own serving context."""
+        non_prod = _exchange("eg")
+        non_prod["namespace_a"] = {"id": "ns-np", "name": "NON-PROD", "namespace_type": "non_prod"}
+        findings = egress_findings(
+            _cleaned([_assigned_dc([_context("eg")], _context())], exchanges=[non_prod, _exchange()])
+        )
+        assert findings == []
+
+    def test_an_egress_without_an_exchange_cannot_be_matched_and_is_reported(self) -> None:
+        findings = egress_findings(_cleaned([_assigned_dc([_context("eg")])], exchanges=[]))
+        assert any("no exchange between a tenant VRF and INTERNET" in finding for finding in findings)
+
+    def test_a_footprint_whose_dc_names_none_is_unchanged(self) -> None:
+        footprint = _dc()
+        footprint.update(parent=_hosting([]), environment="p")
+        assert egress_findings(_cleaned([footprint])) == []

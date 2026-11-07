@@ -26,6 +26,13 @@ firewall device is ignored), and the footprint is served when at least one zone 
 are exactly two ``CloudNetworkAppliance`` with role ``firewall`` and status ``active`` (no legs, ports, SNAT or
 contexts apply to it, the provider runs them). A metro with neither is an ERROR.
 
+A DC or a colocation metro may name the contexts that enforce the Internet policy and translate the source for all its
+segments, one per environment (``internet_egress_contexts``). A footprint whose parent names one for its environment is
+checked against THAT context (the elements above), and its serving context needs only a ``snat_address`` (the public
+address its traffic is translated to there, for a dedicated context). A parent that names none for the environment keeps
+the elements above on the serving context. Two contexts for one environment, or one with no exchange between a tenant VRF
+and INTERNET (its environment cannot be told), are errors.
+
 Deliberate gap: only the on-prem footprints are checked. A cloud footprint (``TopologyCustomerCloud``) and an office
 (``TopologyCustomerOffice``) are skipped silently: egress from the cloud leaves through the provider's own gateways,
 which are outside our firewalls, and an office reaches the internet through its SD-WAN edge.
@@ -39,7 +46,7 @@ from infrahub_sdk.checks import InfrahubCheck
 
 from transforms.helpers.policy import rule_enabled
 from utils.data_cleaning import clean_data
-from utils.exchange_transit import INTERNET_TYPE, INTERNET_ZONE, transit_vlan
+from utils.exchange_transit import INTERNET_TYPE, INTERNET_ZONE, namespace_type_for_environment, transit_vlan
 from utils.fabric_roles import CARRIER_ROLES
 
 DC_KIND = "TopologyCustomerDC"
@@ -290,16 +297,77 @@ def colocation_gaps(footprint: dict[str, Any], cleaned: dict[str, Any]) -> list[
     return gaps
 
 
+def _tenant_type(context: dict[str, Any], exchanges: list[dict[str, Any]]) -> str | None:
+    """The tenant namespace type of a context: the side of its INTERNET exchange that is not INTERNET."""
+    exchange = _internet_exchange(context, exchanges)
+    for side in (exchange or {}).get("namespace_a"), (exchange or {}).get("namespace_z"):
+        if isinstance(side, dict) and side.get("namespace_type") not in (None, INTERNET_TYPE):
+            return str(side["namespace_type"])
+    return None
+
+
+def egress_assignment(
+    footprint: dict[str, Any], exchanges: list[dict[str, Any]]
+) -> tuple[dict[str, Any] | None, list[Gap]]:
+    """The context its parent names as Internet egress for the footprint's environment, and what is wrong with the choice.
+
+    (None, []) when the parent names none for this environment: the serving context keeps the Internet elements.
+    """
+    parent = footprint.get("parent")
+    assigned = [
+        c
+        for c in (parent.get("internet_egress_contexts") if isinstance(parent, dict) else None) or []
+        if isinstance(c, dict)
+    ]
+    environment = footprint.get("environment")
+    if not assigned or not environment:
+        return None, []
+    wanted = namespace_type_for_environment(str(environment))
+    gaps = [
+        Gap(_name(context), "it is named as Internet egress but has no exchange between a tenant VRF and INTERNET")
+        for context in sorted(assigned, key=_name)
+        if _tenant_type(context, exchanges) is None
+    ]
+    matching = [context for context in sorted(assigned, key=_name) if _tenant_type(context, exchanges) == wanted]
+    if len(matching) > 1:
+        names = ", ".join(_name(context) for context in matching)
+        gaps.append(
+            Gap(
+                None,
+                f"'{_name(parent)}' names {len(matching)} Internet egress contexts for {wanted} ({names}): one per environment",
+            )
+        )
+        return None, gaps
+    return (matching[0] if matching else None), gaps
+
+
+def _egress_gaps(
+    kind: str, footprint: dict[str, Any], egress: dict[str, Any], exchanges: list[dict[str, Any]]
+) -> list[Gap]:
+    """The elements of the egress context, and the public address a dedicated serving context translates to."""
+    gaps = [Gap(gap.context, f"egress context: {gap.missing}") for gap in context_gaps(egress, exchanges)]
+    serving = footprint.get("serving_firewall_context") if kind == DC_KIND else None
+    if isinstance(serving, dict) and _id(serving) != _id(egress) and not _id(serving.get("snat_address")):
+        gaps.append(
+            Gap(_name(serving), "no snat_address (the public address its traffic is translated to on the egress)")
+        )
+    return gaps
+
+
 def footprint_gaps(kind: str, footprint: dict[str, Any], cleaned: dict[str, Any]) -> list[Gap]:
     """What an on-prem footprint lacks to send its segments' internet traffic through our firewalls."""
+    exchanges = cleaned.get(EXCHANGE_KIND) or []
+    egress, assignment_gaps = egress_assignment(footprint, exchanges)
+    if egress is not None:
+        return assignment_gaps + _egress_gaps(kind, footprint, egress, exchanges)
+    if assignment_gaps:
+        return assignment_gaps
     if kind == COLOCATION_KIND:
         return colocation_gaps(footprint, cleaned)
     context = footprint.get("serving_firewall_context")
     if not isinstance(context, dict):
         return [Gap(None, "no serving firewall context (serving_firewall_context is unset)")]
-    contexts = [context]
-    exchanges = cleaned.get(EXCHANGE_KIND) or []
-    return [gap for context in sorted(contexts, key=_name) for gap in context_gaps(context, exchanges)]
+    return [gap for gap in context_gaps(context, exchanges)]
 
 
 def internet_rules(rules: list[dict[str, Any]]) -> list[dict[str, Any]]:
