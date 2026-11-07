@@ -55,38 +55,6 @@ interface {{ interface.name }}
 {%- if bgp and bgp|length > 0 %}
 {%- include 'common/cisco_nxos_route_maps.j2' %}
 {%- include 'common/cisco_nxos_vrf_static.j2' %}
-{#- Upstream transit sessions (session.transit, bgp.py): accept the default
-    route only; announce only the INTERNET namespace's public prefixes
-    (internet_prefixes: the aggregate and the SNAT space), nothing when none is
-    known. -#}
-{%- set _transit = namespace(on_in=false, on_out=false) %}
-{%- for bgp_config in bgp %}
-{%- for sessions in (bgp_config.vrf_sessions or {}).values() %}
-{%- for session in sessions if session.get('transit') %}
-{%- if 'in' not in session.policy.user_directions %}{% set _transit.on_in = true %}{% endif %}
-{%- if 'out' not in session.policy.user_directions %}{% set _transit.on_out = true %}{% endif %}
-{%- endfor %}
-{%- endfor %}
-{%- endfor %}
-{%- if _transit.on_in %}
-ip prefix-list PL-TRANSIT-IN-DEFAULT seq 10 permit 0.0.0.0/0
-route-map RM-TRANSIT-IN permit 10
-  match ip address prefix-list PL-TRANSIT-IN-DEFAULT
-!
-{%- endif %}
-{%- if _transit.on_out %}
-{%- for prefix in internet_prefixes | default([]) %}
-ip prefix-list PL-TRANSIT-OUT-PUBLIC seq {{ loop.index * 10 }} permit {{ prefix }}
-{%- endfor %}
-{%- if internet_prefixes | default([]) %}
-route-map RM-TRANSIT-OUT permit 10
-  match ip address prefix-list PL-TRANSIT-OUT-PUBLIC
-route-map RM-TRANSIT-OUT deny 20
-{%- else %}
-route-map RM-TRANSIT-OUT deny 10
-{%- endif %}
-!
-{%- endif %}
 {#- External peers in a tenant VRF (session.external, bgp.py): a cloud VIF or
     the SD-WAN gateway, outside our administration. Per session
     (external_policies, by handoff sub-interface): the owners are the customers

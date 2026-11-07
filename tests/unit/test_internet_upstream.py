@@ -196,19 +196,17 @@ class TestEdgeTemplate:
         assert "redistribute direct route-map RM-VRF-DIRECT-2-EVPN" not in rendered.split("vrf INTERNET")[1]
         assert "member vni 60002 associate-vrf" in rendered
 
-    def test_transit_session_is_filtered(self, env: jinja2.Environment) -> None:
+    def test_transit_session_has_no_fixed_maps(self, env: jinja2.Environment) -> None:
+        """The maps of a transit session are its routing policies (generated, utils/transit_policy.py), never a
+        template's own: the golden edge_cisco_nxos_internet_bgw renders them, the transform refuses a session without."""
         rendered = self._render(env, _INTERNET_NS, self._vxlan())
-        assert "route-map RM-TRANSIT-IN in" in rendered
-        assert "route-map RM-TRANSIT-OUT out" in rendered
-        assert "ip prefix-list PL-TRANSIT-IN-DEFAULT seq 10 permit 0.0.0.0/0\n" in rendered
-        assert "route-map RM-TRANSIT-IN permit 10\n  match ip address prefix-list PL-TRANSIT-IN-DEFAULT" in rendered
-        assert "route-map RM-TRANSIT-OUT deny 10\n" in rendered
+        assert "RM-TRANSIT-IN" not in rendered and "RM-TRANSIT-OUT" not in rendered
+        assert "PL-TRANSIT" not in rendered
 
     def test_non_bgw_edge_keeps_a_plain_vrf_context(self, env: jinja2.Environment) -> None:
         rendered = self._render(env, _INTERNET_NS, None)
         assert "vrf context INTERNET\n  address-family ipv4 unicast\n" in rendered
         assert "vni 60002" not in rendered
-        assert "route-map RM-TRANSIT-IN in" in rendered
 
     def test_vrf_session_without_transit_renders_no_transit_filters(self, env: jinja2.Environment) -> None:
         """A regular peer in PROD is an external tenant-VRF peer (tests/unit/test_external_vrf_peers.py), not transit."""

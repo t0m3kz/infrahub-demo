@@ -640,9 +640,12 @@ class MyCheck(InfrahubCheck):
   `tests/unit/test_event_rules.py`) writes the shared `generated` policies `transit-in` (default route only, local-pref
   below 100, the tag `TRANSIT_COMMUNITY`) and `transit-out` (deny what carries the tag, announce the public space of the
   INTERNET namespace) from the one spec `utils/transit_policy.py` and adds them to the peering; a policy a person attached
-  stays, a list entry the public space lost is deleted. A transit session with a policy in a direction does not take the
-  NX-OS edge's fixed `RM-TRANSIT-IN` / `RM-TRANSIT-OUT` for it (`policy.user_directions`); only the NX-OS edge renders a
-  transit session.
+  stays, a list entry the public space lost is deleted. There are no fixed transit maps: a transit
+  session (an eBGP session in an `internet` namespace) has no derived route protection, so the policies are its only
+  filter, and the transform refuses a transit session that names no policy in a direction
+  (`UngovernedTransitError`, `BaseDeviceTransform._refuse_ungoverned_transit_sessions`, on every platform). Any
+  platform that renders user policies in its VRF address family renders a transit session; the golden is
+  `edge_cisco_nxos_internet_bgw`.
 - **Route protection**: every BGP session is protected against a neighbour announcing what it must not, internal
   sessions included (external and transit keep `utils/ownership.py exchange_policies`). ONE derivation,
   `utils/bgp_expectation.py` (pure; the transform renders it and `checks/bgp_expectations.py` compares it): a session

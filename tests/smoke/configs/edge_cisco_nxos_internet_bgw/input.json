@@ -925,6 +925,224 @@
                                 }
                               }
                             ]
+                          },
+                          "import_policies": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "name": {
+                                    "value": "transit-in"
+                                  },
+                                  "origin": {
+                                    "value": "generated"
+                                  },
+                                  "priority": {
+                                    "value": 100
+                                  },
+                                  "default_action": {
+                                    "value": "deny"
+                                  },
+                                  "terms": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "seq": {
+                                            "value": 10
+                                          },
+                                          "action": {
+                                            "value": "permit"
+                                          },
+                                          "set_local_pref": {
+                                            "value": 80
+                                          },
+                                          "set_med": {
+                                            "value": null
+                                          },
+                                          "add_communities": {
+                                            "value": [
+                                              "64498:1"
+                                            ]
+                                          },
+                                          "prepend_count": {
+                                            "value": null
+                                          },
+                                          "match_prefix_list": {
+                                            "node": {
+                                              "name": {
+                                                "value": "TRANSIT-DEFAULT-IN"
+                                              },
+                                              "family": {
+                                                "value": "ipv4"
+                                              },
+                                              "entries": {
+                                                "edges": [
+                                                  {
+                                                    "node": {
+                                                      "seq": {
+                                                        "value": 10
+                                                      },
+                                                      "action": {
+                                                        "value": "permit"
+                                                      },
+                                                      "prefix": {
+                                                        "value": "0.0.0.0/0"
+                                                      },
+                                                      "min_length": {
+                                                        "value": null
+                                                      },
+                                                      "max_length": {
+                                                        "value": null
+                                                      }
+                                                    }
+                                                  }
+                                                ]
+                                              }
+                                            }
+                                          },
+                                          "match_community_list": {
+                                            "node": null
+                                          },
+                                          "delete_community_list": {
+                                            "node": null
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "export_policies": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "name": {
+                                    "value": "transit-out"
+                                  },
+                                  "origin": {
+                                    "value": "generated"
+                                  },
+                                  "priority": {
+                                    "value": 100
+                                  },
+                                  "default_action": {
+                                    "value": "deny"
+                                  },
+                                  "terms": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "seq": {
+                                            "value": 10
+                                          },
+                                          "action": {
+                                            "value": "deny"
+                                          },
+                                          "set_local_pref": {
+                                            "value": null
+                                          },
+                                          "set_med": {
+                                            "value": null
+                                          },
+                                          "add_communities": {
+                                            "value": []
+                                          },
+                                          "prepend_count": {
+                                            "value": null
+                                          },
+                                          "match_prefix_list": {
+                                            "node": null
+                                          },
+                                          "match_community_list": {
+                                            "node": {
+                                              "name": {
+                                                "value": "CL-LEARNED-FROM-TRANSIT"
+                                              },
+                                              "community_type": {
+                                                "value": "standard"
+                                              },
+                                              "members": {
+                                                "value": [
+                                                  "64498:1"
+                                                ]
+                                              },
+                                              "match": {
+                                                "value": "any"
+                                              }
+                                            }
+                                          },
+                                          "delete_community_list": {
+                                            "node": null
+                                          }
+                                        }
+                                      },
+                                      {
+                                        "node": {
+                                          "seq": {
+                                            "value": 20
+                                          },
+                                          "action": {
+                                            "value": "permit"
+                                          },
+                                          "set_local_pref": {
+                                            "value": null
+                                          },
+                                          "set_med": {
+                                            "value": null
+                                          },
+                                          "add_communities": {
+                                            "value": []
+                                          },
+                                          "prepend_count": {
+                                            "value": null
+                                          },
+                                          "match_prefix_list": {
+                                            "node": {
+                                              "name": {
+                                                "value": "TRANSIT-OUT-PUBLIC"
+                                              },
+                                              "family": {
+                                                "value": "ipv4"
+                                              },
+                                              "entries": {
+                                                "edges": [
+                                                  {
+                                                    "node": {
+                                                      "seq": {
+                                                        "value": 10
+                                                      },
+                                                      "action": {
+                                                        "value": "permit"
+                                                      },
+                                                      "prefix": {
+                                                        "value": "192.0.2.0/24"
+                                                      },
+                                                      "min_length": {
+                                                        "value": null
+                                                      },
+                                                      "max_length": {
+                                                        "value": null
+                                                      }
+                                                    }
+                                                  }
+                                                ]
+                                              }
+                                            }
+                                          },
+                                          "match_community_list": {
+                                            "node": null
+                                          },
+                                          "delete_community_list": {
+                                            "node": null
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
                           }
                         }
                       }

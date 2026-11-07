@@ -161,19 +161,3 @@ def add_transit_policies(data: dict, public_prefixes: list[str]) -> None:
                 visit(child)
 
     visit(data)
-
-
-def write_transit_fixtures() -> tuple[int, int]:
-    """The INTERNET BGW edge with the generated transit policies, with and without public space."""
-    from tests.smoke.fixture_builders.edge import build_edge_internet_bgw_data  # noqa: PLC0415
-    from transforms.config.edge import Edge  # noqa: PLC0415
-
-    fixtures: list[tuple[type, str, dict]] = []
-    for suffix, prefixes in (("", ["192.0.2.0/24"]), ("_no_public", [])):
-        data = build_edge_internet_bgw_data(device_name="dc1-edge-01", platform="cisco_nxos")
-        if not prefixes:
-            data["IpamPrefix"] = _edges([])
-        add_transit_policies(data, prefixes)
-        fixtures.append((Edge, f"edge_cisco_nxos_internet_bgw_transit_policy{suffix}", data))
-    print("\nGenerating transit-policy fixtures (edge):")
-    return write_data_fixtures(fixtures)
