@@ -1,0 +1,35 @@
+---
+# A manual routing policy beside the generated transit-in / transit-out (generators/topology/transit_policy.py): the
+# object store range is announced to the ISP with two extra hops, so the other path is preferred for it. It sits before
+# the generated export policy (priority 50 < 100), permits only that range and denies the rest, so it can only narrow
+# the session: the guard derived from the model and transit-out still decide everything else.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingPrefixList
+  data:
+    - name: "PL-OBJECT-STORE-PUBLIC"
+      description: "Public range of the object store API"
+      family: ipv4
+      entries:
+        data:
+          - {seq: 10, action: permit, prefix: "192.0.2.0/24"}
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingPolicy
+  data:
+    - name: "isp-a-prepend-object-store"
+      description: "Announce the object store range to ISP A with two extra hops"
+      origin: manual
+      priority: 50
+      default_action: deny
+      export_peerings:
+        - "BGP-KTW1-EDGE01-ISP-A"
+      terms:
+        data:
+          - seq: 10
+            action: permit
+            prepend_count: 2
+            match_prefix_list: "PL-OBJECT-STORE-PUBLIC"
