@@ -273,8 +273,8 @@ def exchange_route_specs(
     ``tenant_leg`` and ``peer_leg`` are the two legs of the exchange (``namespace``, ``l3_vni``, ``ns_type``, ``vip``).
     The tenant VRF gets ``0.0.0.0/0`` to the tenant leg's VIP when the context is the shared one; a dedicated context
     steers its tenant by leaf PBR. The INTERNET VRF gets the context's SNAT /32 to the INTERNET leg's VIP, the return
-    path of its translated flows. The single rule: the transform that derives routes
-    (transforms/helpers/firewall.py get_exchange_routes) and the generator that writes them as objects both call it.
+    path of its translated flows. The single rule of the generator that writes them as
+    ManagedStaticRoute objects (generators/exchange_routes.py); the transform renders those objects.
     """
     routes: list[dict[str, Any]] = []
     if shared:

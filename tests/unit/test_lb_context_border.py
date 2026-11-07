@@ -25,7 +25,7 @@ from tests.smoke.fixture_builders.firewall import build_leaf_lb_client_data
 from tests.smoke.fixture_builders.transit import build_lb_context_bl_data
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.leaf import Leaf
-from transforms.helpers.firewall import get_exchange_routes, get_exchange_transits
+from transforms.helpers.firewall import get_exchange_transits
 from transforms.helpers.firewall_pbr import get_customer_pbr_rules
 from transforms.helpers.group_policy import UNCLASSIFIED, get_vrf_contracts
 from transforms.helpers.vxlan import get_interfaces
@@ -161,40 +161,6 @@ class TestLoadBalancerLeg:
     def test_the_leg_is_no_policy_input(self) -> None:
         """No ACL, SGT or PBR is built from a leg activation (it carries no security_policy)."""
         assert get_customer_pbr_rules(self._transits(_lb_context()), []) == []
-
-
-class TestVipRoute:
-    """The VIP /26 is a static to the leg's floating .4 in the leg's VRF, always exported."""
-
-    def test_vip_prefix_to_the_floating_address_in_the_tenant_vrf(self) -> None:
-        routes = get_exchange_routes([_port("load-balancer", _lb_context())], export_tenant_default=False)
-        assert routes == [{"vrf": "PROD", "l3_vni": 60000, "prefix": "100.68.0.0/26", "nexthop": "100.67.0.4"}]
-
-    def test_each_context_routes_its_own_range(self) -> None:
-        nonprod = _lb_context(
-            name="dc10-lb-01-NON-PROD", vlan=3101, namespace=_NONPROD, leg="100.67.16.0/29", vip_prefix="100.68.16.0/26"
-        )
-        routes = get_exchange_routes([_port("load-balancer", _lb_context(), nonprod)])
-        assert [(r["vrf"], r["prefix"], r["nexthop"]) for r in routes] == [
-            ("NON-PROD", "100.68.16.0/26", "100.67.16.4"),
-            ("PROD", "100.68.0.0/26", "100.67.0.4"),
-        ]
-
-    def test_no_vip_prefix_no_route_and_no_default(self) -> None:
-        """The LB never leaves its VRF: no 0/0, no SNAT /32, nothing without a VIP range."""
-        assert get_exchange_routes([_port("load-balancer", _lb_context(vip_prefix=None))]) == []
-
-    def test_a_context_on_a_firewall_port_routes_nothing(self) -> None:
-        assert get_exchange_routes([_port("firewall", _lb_context())]) == []
-
-    def test_legs_in_two_vrfs_are_refused(self) -> None:
-        stray = {
-            "name": "1.1.3301",
-            "device": {"name": "dc10-lb-01a", "role": "load-balancer"},
-            "ip_address": {"address": "100.67.16.5/29", "ip_namespace": _NONPROD},
-        }
-        with pytest.raises(ValueError, match=r"legs in 2 VRFs \(NON-PROD, PROD\).*100\.68\.0\.0/26"):
-            get_exchange_routes([_port("load-balancer", _lb_context(extra_legs=[stray]))])
 
 
 class TestBorderLeafRender:

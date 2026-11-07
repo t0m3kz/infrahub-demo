@@ -12,7 +12,6 @@ from transforms.helpers.bgp import get_bgp_profile
 from transforms.helpers.bgp_facts import annotate_bgp_policy
 from transforms.helpers.cisco_xe import get_cisco_xe_acls, get_cisco_xe_vrf_routes, refuse_unfiltered_ipv6
 from transforms.helpers.firewall import (
-    get_exchange_routes,
     get_exchange_transits,
     get_leaf_firewall_transits,
 )
@@ -25,6 +24,7 @@ from transforms.helpers.origination import get_origination
 from transforms.helpers.ospf import get_ospf, refuse_unrenderable_ospf_auth
 from transforms.helpers.overlay import OVERLAY_CONFIG_KEYS, OVERLAY_RENDERERS
 from transforms.helpers.segments import get_vlans, interface_segments, routed_activations
+from transforms.helpers.static_routes import get_static_routes
 from transforms.helpers.templates import load_template
 from transforms.helpers.vrf import VrfRealizationError, l3_vrf_names, svi_vrfs, unrealized_vrfs
 from transforms.helpers.vxlan import get_interfaces, get_vxlan_config
@@ -159,9 +159,6 @@ class BaseDeviceTransform(InfrahubTransform):
 
     template_subdir: str = ""
     device_role: str = ""
-    # Whether the shared firewall context's tenant-VRF 0/0 -> VIP static is
-    # redistributed into EVPN (see get_exchange_routes); Edge turns it off.
-    export_tenant_default_to_evpn: bool = True
     # Resolve a VxlanSegment's local VLAN from this device's own row of the segment deployment.
     resolve_vlan_row: bool = True
     # The platforms whose template defines the RM-<session>-IN/-OUT maps of an external BGP session
@@ -504,11 +501,9 @@ class BaseDeviceTransform(InfrahubTransform):
         transits = (data.get("exchange_transits") or []) + leaf_transits
         vlans = get_vlans(activations=(activations or []) + transits, svi_vrfs=svi_vrfs(data.get("interfaces")))
 
-        # Inter-VRF exchange routes through the firewall context(s) tagged on
-        # this device's service ports (statics in the VRF, redistributed to EVPN).
-        vrf_routes = get_exchange_routes(
-            data.get("interfaces"), export_tenant_default=self.export_tenant_default_to_evpn
-        )
+        # The static routes of the device (ManagedStaticRoute capabilities): the inter-VRF exchange through the firewall
+        # context(s) tagged on its service ports, written by the context generator.
+        vrf_routes = get_static_routes(data.get("capabilities"))
 
         acls = get_acls(activations=routed)
         acl_names = {acl["vlan_id"]: acl["name"] for acl in acls}

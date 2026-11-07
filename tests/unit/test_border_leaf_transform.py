@@ -16,8 +16,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from tests.smoke.fixture_builders.transit import _static_route_node, spec_vni
 from tests.smoke.fixture_builders.vrf import with_vrf_objects
 from transforms.config.border_leaf import BorderLeaf
+from utils.exchange_transit import exchange_route_specs
 
 _ROOT = Path(__file__).parent.parent.parent
 _CONFIGS = _ROOT / "tests" / "smoke" / "configs"
@@ -88,6 +90,13 @@ def _transit_device_data(platform: str) -> dict:
         "capabilities": _edges([context]),
     }
     node["interfaces"]["edges"].append({"node": port})
+    # The statics the context generator writes for this exchange (the one rule, exchange_route_specs).
+    leg = {"prod": ("PROD", 50001, "100.66.0.4"), "internet": ("INTERNET", 50003, "100.66.32.4")}
+    legs_by_type = {t: {"namespace": n, "l3_vni": vni, "ns_type": t, "vip": vip} for t, (n, vni, vip) in leg.items()}
+    for spec in exchange_route_specs(
+        legs_by_type["prod"], legs_by_type["internet"], shared=True, snat="192.0.2.5", export_tenant_default=True
+    ):
+        node["capabilities"]["edges"].append({"node": _static_route_node(spec, spec_vni(spec, legs_by_type))})
     segment = {
         "id": "seg-a",
         "__typename": "ManagedVxlanSegment",

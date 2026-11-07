@@ -754,6 +754,17 @@ class ManagedOSPF(ManagedGeneric, ManagedGenericDevice):
     router_id: RelationshipAttribute[IpamIPAddress]
 
 
+class ManagedStaticRoute(ManagedGeneric, ManagedGenericDevice):
+    prefix: String
+    next_hop: String
+    distance: Integer
+    exported: Boolean
+    origin: Dropdown
+    vrf: RelationshipAttribute[ManagedVRF]
+    maintained_by: RelationshipAttribute[ManagedGeneric]
+    next_hop_interface: RelationshipAttribute[DcimInterface]
+
+
 class RoutingOSPFArea(CoreNode):
     area: Integer
     area_type: Dropdown

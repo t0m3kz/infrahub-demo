@@ -50,7 +50,9 @@ class TestTrackedContextSkipsTheCompletenessReads:
         await _run(gen, world, _payload(dedicated=True))
 
         assert world.saved("ManagedFirewallContext") == ["DC10-ded-prod"]
-        assert not set(_COMPLETENESS_KINDS) & set(world.executed_filters)
+        # the completeness check is skipped; only the route reconcile reads the sub-interfaces and addresses, once each
+        assert "TopologyRoutedExchange" not in world.executed_filters
+        assert world.executed_filters.count("DcimVirtualInterface") == 1
         assert "ManagedFirewallContext" in world.executed_filters  # the context itself is still read
 
     @pytest.mark.asyncio
@@ -66,7 +68,8 @@ class TestTrackedContextSkipsTheCompletenessReads:
         # Pre-lock: the untagged port is seen at once; under the lock the check runs in full.
         assert world.tags[-1] == (world.contexts[_SHARED].id, ["bl-port-fw-2"])
         assert events[-2:] == [f"acquire:fw-context-{_SHARED}", "release"]
-        assert world.executed_filters.count("ManagedFirewallContext") == 2
+        # pre-lock check, check under the lock, and the route reconcile's fresh read of the context
+        assert world.executed_filters.count("ManagedFirewallContext") == 3
 
 
 class TestBorderPortsAreReadOncePerCheck:
@@ -107,6 +110,8 @@ class TestBorderPortsAreReadOncePerCheck:
         world.filters = filters  # ty: ignore[invalid-assignment]
 
         async def another_run_tags_the_port(key: str) -> str:
+            if key.startswith("routes-"):  # the route reconcile's own lock
+                return "routes-lock"
             events.append(f"acquire:{key}")
             live_peers.extend(tagged)  # ... and tagged by a concurrent run while this one waits for the lock
             return "lock-id"

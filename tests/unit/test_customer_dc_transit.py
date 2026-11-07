@@ -40,6 +40,9 @@ def test_generator_is_a_common_generator() -> None:
     assert issubclass(CustomerDeploymentDCExchangeGenerator, CommonGenerator)
 
 
+_ROUTE = {"allow_upsert": True, "update_group_context": False}  # routes are shared work, never tracked
+
+
 class TestFreshSharedBoarding:
     @pytest.mark.asyncio
     async def test_prod_customer_gets_prod_internet_and_management_legs_on_both_members(self) -> None:
@@ -138,9 +141,10 @@ class TestFreshSharedBoarding:
             "IpamIPAddress",
             "TopologyRoutedExchange",
             "DcimVirtualInterface",
+            "ManagedStaticRoute",
         }
         for kind, label, kwargs in world.saves:
-            assert kwargs == _UNTRACKED, (kind, label)
+            assert kwargs == (_ROUTE if kind == "ManagedStaticRoute" else _UNTRACKED), (kind, label)
 
     @pytest.mark.asyncio
     async def test_writes_run_under_the_per_context_lock_and_link_the_deployment(self) -> None:
@@ -223,6 +227,48 @@ class TestRerunAndSecondCustomer:
         assert world.writes == before
         assert events == []
         assert gen.link_serving_context.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_a_complete_context_is_reconciled_under_the_route_lock(self) -> None:
+        """The fast path reconciles the routes too, under the routes lock and not the context lock."""
+        world = _World()
+        gen, events = _make_gen(world)
+        await _run(gen, world, _payload())
+        gen.route_locks.clear()
+        events.clear()
+
+        await _run(gen, world, _payload())
+
+        route_locks: list[str] = gen.route_locks
+        assert events == [] and len(route_locks) == 1 and route_locks[0].startswith("routes-")
+
+    @pytest.mark.asyncio
+    async def test_a_complete_context_that_lost_its_routes_gets_them_back(self) -> None:
+        """Complete legs say nothing about the routes: a deleted route is written again by the next run."""
+        world = _World()
+        gen, _ = _make_gen(world)
+        await _run(gen, world, _payload())
+        written = {name: route.data for name, route in world.routes.items()}
+        assert written, "the first run writes the routes"
+        world.routes.clear()
+
+        await _run(gen, world, _payload())
+
+        assert {name: route.data for name, route in world.routes.items()} == written
+
+    @pytest.mark.asyncio
+    async def test_a_failed_route_write_fails_the_reconcile(self) -> None:
+        """The reconcile reports failure (and the generator marks the run incomplete) when a route cannot be written."""
+        world = _World()
+        gen, _ = _make_gen(world)
+        await _run(gen, world, _payload())
+        world.routes.clear()
+        world.fail_saves_of.add("ManagedStaticRoute")
+
+        context_id = world.contexts[_SHARED].id
+
+        assert not await gen.reconcile_routes_of(context_id)
+        gen.logger.error.assert_called()
 
     @pytest.mark.asyncio
     async def test_second_customer_on_the_complete_context_writes_nothing_but_its_link(self) -> None:
@@ -314,7 +360,7 @@ class TestDedicatedContext:
         assert "DC10-ded-prod" in world.contexts
         assert world.contexts["DC10-ded-prod"].tenant_id == "cust-1"
         for kind, label, kwargs in world.saves:
-            assert kwargs == _TRACKED, (kind, label)
+            assert kwargs == (_ROUTE if kind == "ManagedStaticRoute" else _TRACKED), (kind, label)
         first_run_saves = len(world.saves)
         events.clear()
         world.saves.clear()
@@ -332,7 +378,7 @@ class TestDedicatedContext:
             "DC10-ded-prod-PROD-MANAGEMENT",
         ]
         for kind, label, kwargs in world.saves:
-            assert kwargs == _TRACKED, (kind, label)
+            assert kwargs == (_ROUTE if kind == "ManagedStaticRoute" else _TRACKED), (kind, label)
         assert events == ["acquire:fw-context-DC10-ded-prod", "release"]
 
 

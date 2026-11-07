@@ -4,7 +4,6 @@ from unittest.mock import patch
 
 from tests.unit.firewall_helpers_shared import _make_pbr_activation, _make_segment_with_prefix
 from transforms.helpers.firewall import (
-    get_exchange_routes,
     get_exchange_transits,
     get_firewall_static_routes,
     get_firewall_zones,
@@ -389,69 +388,6 @@ class TestGetExchangeTransits:
         assert len(_border_transits(ports)) == 2
 
 
-class TestGetExchangeRoutes:
-    @staticmethod
-    def _with_snat(ctx: dict, address: str | None = "192.0.2.5/32") -> dict:
-        return {**ctx, "snat_address": {"address": address} if address else None}
-
-    def test_shared_context_gets_default_route_in_tenant_vrf_to_its_vip(self) -> None:
-        routes = get_exchange_routes(_bl_port(_shared_context(served=["dep-a"])))
-        assert {"vrf": "PROD", "l3_vni": 50001, "prefix": "0.0.0.0/0", "nexthop": "100.66.0.4"} in routes
-
-    def test_dedicated_context_gets_no_default_route(self) -> None:
-        routes = get_exchange_routes(_bl_port(_shared_context(tenant="dep-a", served=["dep-a"])))
-        assert [r for r in routes if r["prefix"] == "0.0.0.0/0"] == []
-
-    def test_internet_vrf_returns_the_snat_host_route_to_internet_vip(self) -> None:
-        context = self._with_snat(_shared_context(served=["dep-a"]))
-        routes = get_exchange_routes(_bl_port(context))
-        internet = [r for r in routes if r["vrf"] == "INTERNET"]
-        assert internet == [{"vrf": "INTERNET", "l3_vni": 50003, "prefix": "192.0.2.5/32", "nexthop": "100.66.32.4"}]
-
-    def test_internet_vrf_carries_no_tenant_prefix(self) -> None:
-        context = self._with_snat(_shared_context(served=["dep-a"]))
-        internet = [r for r in get_exchange_routes(_bl_port(context)) if r["vrf"] == "INTERNET"]
-        assert all(r["prefix"].endswith("/32") for r in internet)
-
-    def test_context_without_snat_emits_nothing_in_internet(self) -> None:
-        routes = get_exchange_routes(_bl_port(_shared_context(served=["dep-a"])))
-        assert [r for r in routes if r["vrf"] == "INTERNET"] == []
-
-    def test_each_context_routes_its_own_snat_to_its_own_vip(self) -> None:
-        shared = self._with_snat(_shared_context(served=["dep-a"]), "192.0.2.5/32")
-        other = {**self._with_snat(_shared_context(tenant="dep-b", served=["dep-b"]), "192.0.2.6/32"), "id": "ctx-2"}
-        routes = get_exchange_routes(_bl_port(shared) + _bl_port(other))
-        assert {(r["prefix"], r["nexthop"]) for r in routes if r["vrf"] == "INTERNET"} == {
-            ("192.0.2.5/32", "100.66.32.4"),
-            ("192.0.2.6/32", "100.66.32.4"),
-        }
-
-    def test_no_default_route_in_internet_vrf(self) -> None:
-        routes = get_exchange_routes(_bl_port(self._with_snat(_shared_context(served=["dep-a"]))))
-        assert [r for r in routes if r["vrf"] == "INTERNET" and r["prefix"] == "0.0.0.0/0"] == []
-
-    def test_snat_route_only_for_an_internet_z_leg(self) -> None:
-        """A MANAGEMENT peer (in EXCHANGE_PEERS) is not source-NATed: no /32 in its VRF."""
-        mgmt = _ns("MANAGEMENT", "management", 50004)
-        exchange = _exchange(_PROD, mgmt)
-        legs = [_leg("100.66.0.5/29", _PROD, [exchange]), _leg("100.66.48.5/29", mgmt, [exchange], name="eth1.3600")]
-        context = self._with_snat(_context(legs))
-        with patch.dict(EXCHANGE_PEERS, {"prod": ("internet", "management")}):
-            routes = get_exchange_routes(_bl_port(context))
-        assert [r for r in routes if r["vrf"] == "MANAGEMENT"] == []
-        assert [r["prefix"] for r in routes] == ["0.0.0.0/0"]
-
-    def test_prod_is_never_paired_with_non_prod(self) -> None:
-        exchange = _exchange(_PROD, _NONPROD)
-        legs = [_leg("100.66.0.5/29", _PROD, [exchange]), _leg("100.66.16.5/29", _NONPROD, [exchange])]
-        assert get_exchange_routes(_bl_port(self._with_snat(_context(legs)))) == []
-
-    def test_routes_are_sorted_and_empty_without_interfaces(self) -> None:
-        assert get_exchange_routes(None) == []
-        routes = get_exchange_routes(_bl_port(self._with_snat(_shared_context(served=["dep-a"]))))
-        assert routes == sorted(routes, key=lambda r: (r["vrf"], r["prefix"], r["nexthop"]))
-
-
 def _three_leg_context(*, tenant: str | None = None, served: list[str] | None = None) -> dict:
     """PROD carries two exchanges (with INTERNET and with MANAGEMENT); each peer leg carries its own."""
     mgmt = _ns("MANAGEMENT", "management", 50004)
@@ -477,15 +413,6 @@ class TestManagementExchangeOnTheBorderLeaf:
             "l3_vni": 50004,
             "namespace_type": "management",
         }
-
-    def test_management_needs_no_return_route_and_the_default_route_is_not_duplicated(self) -> None:
-        context = {**_three_leg_context(served=["dep-a"]), "snat_address": {"address": "192.0.2.5/32"}}
-        routes = get_exchange_routes(_bl_port(context))
-        assert [r for r in routes if r["vrf"] == "MANAGEMENT"] == []
-        assert routes == [
-            {"vrf": "INTERNET", "l3_vni": 50003, "prefix": "192.0.2.5/32", "nexthop": "100.66.32.4"},
-            {"vrf": "PROD", "l3_vni": 50001, "prefix": "0.0.0.0/0", "nexthop": "100.66.0.4"},
-        ]
 
 
 class TestExchangePeerZones:

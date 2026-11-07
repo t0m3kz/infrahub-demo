@@ -21,6 +21,7 @@ from tests.smoke.fixture_builders.loadbalancer import _LB_CONTEXT_NAMESPACES
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.edge import Edge
 from transforms.config.firewall import Firewall
+from utils.exchange_transit import exchange_route_specs, transit_addresses
 
 # ----------------------------------------------------------------------------
 # Inter-VRF exchange through firewall contexts (transit legs)
@@ -95,6 +96,46 @@ def _xchg_segment(*, seg_name: str, vlan: int, vni: int, gateway_ip: str, deploy
     return seg
 
 
+def _static_route_node(spec: dict[str, Any], l3_vni: int) -> dict:
+    """A ManagedStaticRoute capability as DeviceCapabilitiesFields returns it (the generator writes these)."""
+    return {
+        "__typename": "ManagedStaticRoute",
+        "name": _v(f"rt-{spec['namespace']}-{spec['prefix']}"),
+        "prefix": _v(spec["prefix"]),
+        "next_hop": _v(spec["nexthop"]),
+        "distance": _v(1),
+        "exported": _v(not spec["local_only"]),
+        "vrf": _node({"namespace": _node({"name": _v(spec["namespace"]), "l3_vni": _v(l3_vni)})}),
+    }
+
+
+def _exchange_route_nodes(*, edge: bool) -> list[dict]:
+    """The statics the context generator writes for the fixture's contexts (the one rule, exchange_route_specs)."""
+    nodes = []
+    for ctx in _XCHG_CONTEXTS.values():
+        legs = {}
+        for ns_type, prefix in ctx["prefixes"].items():
+            name, l3_vni = _XCHG_NAMESPACES[ns_type]
+            legs[ns_type] = {
+                "namespace": name,
+                "l3_vni": l3_vni,
+                "ns_type": ns_type,
+                "vip": transit_addresses(prefix)["vip"],
+            }
+        snat = ctx["snat"].split("/")[0]
+        for peer in ("internet", "management"):
+            for spec in exchange_route_specs(
+                legs["prod"], legs[peer], shared=ctx["tenant"] is None, snat=snat, export_tenant_default=not edge
+            ):
+                nodes.append(_static_route_node(spec, spec_vni(spec, legs)))
+    return nodes
+
+
+def spec_vni(spec: dict[str, Any], legs: dict[str, dict[str, Any]]) -> int:
+    """The L3 VNI of the VRF a route sits in."""
+    return next(leg["l3_vni"] for leg in legs.values() if leg["namespace"] == spec["namespace"])
+
+
 def build_exchange_transit_bl_data(
     *, device_name: str, platform: str, role: str = "border-leaf", with_customer_port: bool = True
 ) -> dict:
@@ -165,6 +206,7 @@ def build_exchange_transit_bl_data(
             }
         )
 
+    device_node["capabilities"]["edges"].extend({"node": node} for node in _exchange_route_nodes(edge=role == "edge"))
     interfaces = device_node["interfaces"]["edges"]
     interfaces.append(
         {
@@ -277,6 +319,11 @@ def build_lb_context_bl_data(*, device_name: str, platform: str) -> dict:
     data = build_device_data(device_name=device_name, role="border-leaf", platform=platform, include_segments=False)
     border_port = {"name": _v("Ethernet21"), "device": _node({"name": _v(device_name), "role": _v("border-leaf")})}
     contexts = [_lb_context_cap(*ctx, border_port=border_port) for ctx in _LB_CONTEXTS]
+    for _, _, _, namespace, leg, vip in _LB_CONTEXTS:
+        spec = {"namespace": namespace, "prefix": vip, "nexthop": transit_addresses(leg)["vip"], "local_only": False}
+        data["DcimDevice"]["edges"][0]["node"]["capabilities"]["edges"].append(
+            {"node": _static_route_node(spec, _LB_CONTEXT_NAMESPACES[namespace]["l3_vni"])}
+        )
     data["DcimDevice"]["edges"][0]["node"]["interfaces"]["edges"].append(
         {
             "node": {

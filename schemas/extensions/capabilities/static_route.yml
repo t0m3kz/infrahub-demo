@@ -7,7 +7,7 @@ version: "1.0"
 nodes:
   - name: StaticRoute
     namespace: Managed
-    description: "A static route of a device: a prefix, its next hop and the interface it leaves by, in a VRF or not."
+    description: "A static route of a device: a prefix and its next hop, in a VRF instance or in the default table."
     label: Static Route
     icon: mdi:routes
     menu_placement: ManagedGeneric
@@ -74,16 +74,26 @@ nodes:
         optional: true
         identifier: static_route__interface
         order_weight: 1650
-      - name: namespace
-        peer: IpamNamespace
+      - name: vrf
+        peer: ManagedVRF
         label: VRF
-        description: "The environment namespace (VRF) of the route; empty is the default table"
+        description: "The VRF instance of the device's topology the route sits in; empty is the default table"
         kind: Attribute
         cardinality: one
         optional: true
         on_delete: no-action
-        identifier: static_route__namespace
+        identifier: static_route__vrf
         order_weight: 1700
+      - name: maintained_by
+        peer: ManagedGeneric
+        label: Maintained By
+        description: "The service context whose generator maintains the route; empty for a person's route"
+        kind: Attribute
+        cardinality: one
+        optional: true
+        on_delete: no-action
+        identifier: static_route__maintained_by
+        order_weight: 1725
       - name: next_hop_interface
         peer: DcimInterface
         label: Next Hop Interface

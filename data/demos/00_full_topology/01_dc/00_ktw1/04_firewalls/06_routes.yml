@@ -1,0 +1,58 @@
+---
+# The INTERNET VRF of DC-KTW1 on the two border leaves whose Ethernet1/26 faces the external pair: its leg
+# (04_contexts.yml) is the demand. The PROD instance is in 02_routing/01_vrf.yml.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVRF
+  data:
+    - name: "dc-ktw1-vrf-internet"
+      namespace: "INTERNET"
+      deployment: "DC-KTW1"
+      shared_devices:
+        - "ktw1-bl-01"
+        - "ktw1-bl-02"
+---
+# The static routes of the border leaves for the Internet edge context shared-ktw1-xfw-ha-prod (04_contexts.yml): the
+# PROD default route to the floating address of the edge pair's PROD leg (100.66.0.8/29, VIP .12) and the return route
+# of the public address (SNAT 192.0.2.20/32) to the pair's INTERNET leg (100.66.32.0/29, VIP .4). Both border leaves
+# whose Ethernet1/26 faces the pair carry them. On 30_all the context generator writes the same routes
+# (generators/exchange_routes.py, origin generated); here they are data, so origin is manual and no generator
+# touches them.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedStaticRoute
+  data:
+    - name: ktw1-bl-01-prod-default
+      prefix: "0.0.0.0/0"
+      next_hop: "100.66.0.12"
+      exported: true
+      origin: manual
+      status: active
+      vrf: ["DC-KTW1", "PROD"]
+      capabilities: ["ktw1-bl-01"]
+    - name: ktw1-bl-02-prod-default
+      prefix: "0.0.0.0/0"
+      next_hop: "100.66.0.12"
+      exported: true
+      origin: manual
+      status: active
+      vrf: ["DC-KTW1", "PROD"]
+      capabilities: ["ktw1-bl-02"]
+    - name: ktw1-bl-01-internet-snat
+      prefix: "192.0.2.20/32"
+      next_hop: "100.66.32.4"
+      exported: true
+      origin: manual
+      status: active
+      vrf: ["DC-KTW1", "INTERNET"]
+      capabilities: ["ktw1-bl-01"]
+    - name: ktw1-bl-02-internet-snat
+      prefix: "192.0.2.20/32"
+      next_hop: "100.66.32.4"
+      exported: true
+      origin: manual
+      status: active
+      vrf: ["DC-KTW1", "INTERNET"]
+      capabilities: ["ktw1-bl-02"]
