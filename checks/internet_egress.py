@@ -27,7 +27,7 @@ are exactly two ``CloudNetworkAppliance`` with role ``firewall`` and status ``ac
 contexts apply to it, the provider runs them). A metro with neither is an ERROR.
 
 A DC or a colocation metro may name the contexts that enforce the Internet policy and translate the source for all its
-segments, one per environment (``internet_egress_contexts``). A footprint whose parent names one for its environment is
+segments, one per environment (``internet_edge_contexts``). A footprint whose parent names one for its environment is
 checked against THAT context (the elements above), and its serving context needs only a ``snat_address`` (the public
 address its traffic is translated to there, for a dedicated context). A parent that names none for the environment keeps
 the elements above on the serving context. Two contexts for one environment, or one with no exchange between a tenant VRF
@@ -316,7 +316,7 @@ def egress_assignment(
     parent = footprint.get("parent")
     assigned = [
         c
-        for c in (parent.get("internet_egress_contexts") if isinstance(parent, dict) else None) or []
+        for c in (parent.get("internet_edge_contexts") if isinstance(parent, dict) else None) or []
         if isinstance(c, dict)
     ]
     environment = footprint.get("environment")

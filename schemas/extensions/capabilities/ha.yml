@@ -235,16 +235,16 @@ nodes:
         optional: true
         identifier: firewall_context__snat_address
         order_weight: 1100
-      # Reverse of TopologySegmentHosting.internet_egress_contexts (extensions below): the DCs and colocation metros
+      # Reverse of TopologySegmentHosting.internet_edge_contexts (extensions below): the DCs and colocation metros
       # whose Internet traffic this context enforces and translates. Written only from the hosting side.
-      - name: egress_hostings
+      - name: internet_edge_hostings
         peer: TopologySegmentHosting
-        label: "Egress For"
-        description: "Topologies whose segments reach the Internet through this context (policy and final SNAT)"
+        label: "Internet Edge For"
+        description: "Topologies whose Internet traffic this context enforces and translates (it may stand elsewhere)"
         cardinality: many
         kind: Generic
         optional: true
-        identifier: topology_hosting__internet_egress_contexts
+        identifier: topology_hosting__internet_edge_contexts
         order_weight: 1150
 
   # ── Load Balancer HA domain (on-prem, physical devices) ───────────────────
@@ -464,20 +464,22 @@ nodes:
 
 extensions:
   nodes:
-    # The firewall context that enforces the Internet policy and performs the final SNAT for a DC, colocation metro
-    # or office, one per environment (PROD, NON-PROD: checks/internet_egress.py). A hosting with none keeps the
-    # Internet leg and SNAT of each serving context. Chosen in the data; nothing picks one by discovery order.
+    # The firewall context at the Internet edge of a DC, colocation metro or office, one per environment (PROD,
+    # NON-PROD: checks/internet_egress.py): it enforces the Internet policy and performs the final SNAT. It stands on
+    # an external-firewall pair that may be in another topology (a colocation shared by several DCs) and is meant for
+    # both directions; only the outbound one is built. A hosting with none keeps the Internet leg and SNAT of each
+    # serving context. Chosen in the data; nothing picks one by discovery order.
     - kind: TopologySegmentHosting
       relationships:
-        - name: internet_egress_contexts
-          label: Internet Egress Contexts
+        - name: internet_edge_contexts
+          label: Internet Edge Contexts
           peer: ManagedFirewallContext
           cardinality: many
           kind: Generic
           optional: true
-          identifier: topology_hosting__internet_egress_contexts
+          identifier: topology_hosting__internet_edge_contexts
           order_weight: 7960
-          description: "Firewall contexts that enforce the Internet policy and translate the source for this topology, one per environment"  # yamllint disable-line rule:line-length
+          description: "Firewall contexts at the Internet edge of this topology (policy and final SNAT), one per environment"  # yamllint disable-line rule:line-length
 
     # A segment the firewall pair terminates: its `gateway` is the pair's floating VIP (no per-member address) and the
     # fabric only bridges it (VLAN row and L2 VNI, no SVI, VRF or ACL). The firewall transform derives the

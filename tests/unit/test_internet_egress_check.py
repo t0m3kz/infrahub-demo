@@ -606,7 +606,7 @@ class TestCheckClass:
 
 def _hosting(contexts: list[dict[str, Any]]) -> dict[str, Any]:
     """A DC that names the given contexts as its Internet egress."""
-    return {"id": "dc-11", "name": "DC11", "internet_egress_contexts": contexts}
+    return {"id": "dc-11", "name": "DC11", "internet_edge_contexts": contexts}
 
 
 def _dedicated(snat: bool = True) -> dict[str, Any]:

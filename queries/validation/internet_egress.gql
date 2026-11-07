@@ -85,7 +85,7 @@ query internet_egress {
         id
         name { value }
         environment { value }
-        parent { node { id name { value } ... on TopologySegmentHosting { internet_egress_contexts { edges { node { ...InternetEgressContext } } } } } }
+        parent { node { id name { value } ... on TopologySegmentHosting { internet_edge_contexts { edges { node { ...InternetEgressContext } } } } } }
         network_segments { edges { node { id name { value } } } }
         serving_firewall_context { node { ...InternetEgressContext } }
       }
@@ -98,7 +98,7 @@ query internet_egress {
         id
         name { value }
         environment { value }
-        parent { node { id name { value } ... on TopologySegmentHosting { internet_egress_contexts { edges { node { ...InternetEgressContext } } } } } }
+        parent { node { id name { value } ... on TopologySegmentHosting { internet_edge_contexts { edges { node { ...InternetEgressContext } } } } } }
         network_segments { edges { node { id name { value } } } }
         serving_firewall_contexts { edges { node { ...InternetEgressContext } } }
       }
