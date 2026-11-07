@@ -692,12 +692,13 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
                 async_client_main, scenario_branch, device, query="edge_config", transform_cls=Edge
             )
 
+            # The transit session names the generated policies (generators/topology/transit_policy.py), not a fixed map.
             for needle in (
-                "route-map RM-TRANSIT-IN in",
-                "route-map RM-TRANSIT-OUT out",
-                "route-map RM-TRANSIT-OUT deny",
+                r"route-map RM-USER-\S+-IN in\n",
+                r"route-map RM-USER-\S+-OUT out\n",
+                r"route-map RM-USER-\S+-OUT deny \d+\n\s+match community CL-LEARNED-FROM-TRANSIT\n",
             ):
-                if needle not in rendered:
+                if not re.search(needle, rendered):
                     errors.append(f"{device}: no '{needle}'")
             if not re.search(r"ip prefix-list \S+ seq \d+ permit 0\.0\.0\.0/0\n", rendered):
                 errors.append(f"{device}: no default-only prefix-list")
@@ -710,15 +711,15 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
 
             # The public block goes upstream as one summary and nothing else leaves (every edge).
             if not re.search(
-                rf"ip prefix-list PL-TRANSIT-OUT-PUBLIC seq \d+ permit {re.escape(ALL_DEMO_SNAT_POOL_PREFIX)}\n",
+                rf"ip prefix-list TRANSIT-OUT-PUBLIC seq \d+ permit {re.escape(ALL_DEMO_SNAT_POOL_PREFIX)}\n",
                 rendered,
             ):
-                errors.append(f"{device}: PL-TRANSIT-OUT-PUBLIC does not permit {ALL_DEMO_SNAT_POOL_PREFIX}")
+                errors.append(f"{device}: TRANSIT-OUT-PUBLIC does not permit {ALL_DEMO_SNAT_POOL_PREFIX}")
             if not re.search(
-                r"route-map RM-TRANSIT-OUT permit \d+\n\s+match ip address prefix-list PL-TRANSIT-OUT-PUBLIC\n",
+                r"route-map RM-USER-\S+-OUT permit \d+\n\s+match ip address prefix-list TRANSIT-OUT-PUBLIC\n",
                 rendered,
             ):
-                errors.append(f"{device}: RM-TRANSIT-OUT does not permit PL-TRANSIT-OUT-PUBLIC")
+                errors.append(f"{device}: the transit export does not permit TRANSIT-OUT-PUBLIC")
 
             vrf_context = re.search(r"^vrf context INTERNET\n((?:[ \t]+.*\n)*)", rendered + "\n", re.MULTILINE)
             bgp_vrf = re.search(r"^[ \t]+vrf INTERNET\n((?:[ \t]{4,}.*\n)*)", rendered + "\n", re.MULTILINE)
