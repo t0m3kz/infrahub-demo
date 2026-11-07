@@ -463,8 +463,16 @@ class MyCheck(InfrahubCheck):
   footprint of its source segment: `checks/internet_egress.py` requires a complete firewall pair, an INTERNET leg with
   an address per member, the exchange to INTERNET, the tagged border service ports and a `snat_address` per serving
   context (a colocation metro: each zone with firewalls, or a complete provider-hosted pair of its virtual colocation).
-  Cloud and office egress is an accepted gap, not checked. Towards a public SaaS or cloud service the path is the
+  Cloud and office egress is an accepted gap, not checked (the office has a policy artifact, below, but no check). Towards a public SaaS or cloud service the path is the
   L1 of THE INTERNET (see **Circuit placement**) and L3 in the `INTERNET` namespace; no rule of this check judges it.
+- **Office firewall policy**: an office has no firewall context (`served_deployments` is for DC and colocation footprints);
+  its SD-WAN edge (an appliance with no CLI template, `platform linux`) enforces a stateful policy that the orchestrator
+  applies. The artifact `office_firewall_policy` (target group `customer_deployments_office`, JSON, query
+  `office_firewall_policy`, `transforms/topology/office_firewall_policy.py`) is built from the segments the office hosts with
+  the SAME functions as a firewall rule table (`segment_rule_policies`, `get_zone_policies`): zones, one flat ordered rule
+  table closed by one implicit deny, and each segment's `default_action`. A guest Wi-Fi segment is a segment whose only
+  permit rule is to `INTERNET-ZONE`; a corporate one adds the segments and prefixes it may reach. A dedicated guest zone is
+  not modelled: the office is PROD, and the exchange zones are tied to the namespaces.
 - **DC service tier**: `TopologyCustomerTemplateDC` (referenced by the footprint's `design`, for example `M_DC`)
   holds `dedicated_firewall`, `dedicated_loadbalancer`, `max_segments`, `ports_25g` and `ports_100g` (0 = no
   host-facing ports of that speed). `checks/customer_quota.py` enforces the segment and port numbers; a footprint

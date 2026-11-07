@@ -77,7 +77,7 @@ kind: Object
 spec:
   kind: DcimLAGInterface
   data:
-    - {device: ktw1-leaf-01, name: Port-Channel10, segments: ["c900-web-p", "c900-sync-p"]}
-    - {device: ktw1-leaf-02, name: Port-Channel10, segments: ["c900-web-p", "c900-sync-p"]}
-    - {device: waw1-leaf-01, name: Port-Channel10, segments: ["c900-app-p", "c900-sync-p"]}
-    - {device: waw1-leaf-02, name: Port-Channel10, segments: ["c900-app-p", "c900-sync-p"]}
+    - {device: ktw1-leaf-01, name: Port-Channel10, lag_id: 10, segments: ["c900-web-p", "c900-sync-p"]}
+    - {device: ktw1-leaf-02, name: Port-Channel10, lag_id: 10, segments: ["c900-web-p", "c900-sync-p"]}
+    - {device: waw1-leaf-01, name: Port-Channel10, lag_id: 10, segments: ["c900-app-p", "c900-sync-p"]}
+    - {device: waw1-leaf-02, name: Port-Channel10, lag_id: 10, segments: ["c900-app-p", "c900-sync-p"]}

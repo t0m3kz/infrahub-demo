@@ -470,6 +470,14 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
+    resource_name: office_firewall_policy
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/config/office_firewall_policy.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
     resource_name: software_lifecycle
     tests:
       - name: syntax_check

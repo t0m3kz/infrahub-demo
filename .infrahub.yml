@@ -150,6 +150,13 @@ artifact_definitions:
     transformation: topology-orchestrator-ansible
     parameters:
       name: name__value
+  - name: office_firewall_policy
+    artifact_name: office-firewall-policy
+    content_type: application/json
+    targets: customer_deployments_office
+    transformation: office-firewall-policy
+    parameters:
+      name: name__value
   - name: topology_orchestrator_argocd_manifest
     artifact_name: argocd-application
     content_type: application/json
@@ -484,6 +491,13 @@ python_transforms:
         - transforms/
         - templates/
         - utils/
+  - name: office-firewall-policy
+    class_name: OfficeFirewallPolicy
+    file_path: transforms/topology/office_firewall_policy.py
+    watch:
+      files:
+        - transforms/
+        - utils/
   - name: topology-orchestrator-ansible
     class_name: TopologyOrchestratorAnsible
     file_path: transforms/topology/orchestrator_routing.py
@@ -652,6 +666,8 @@ queries:
     file_path: queries/validation/shared_vlan.gql
   - name: software_lifecycle
     file_path: queries/validation/software_lifecycle.gql
+  - name: office_firewall_policy
+    file_path: queries/config/office_firewall_policy.gql
   - name: virtual_switch
     file_path: queries/validation/virtual_switch.gql
   - name: patch_panel_pairing
