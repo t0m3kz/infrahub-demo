@@ -180,7 +180,7 @@ nodes:
 
   - name: Policy
     namespace: Routing
-    description: "An ordered set of terms applied to the routes of a BGP session, in one direction."
+    description: "An ordered set of terms: for the routes of a BGP session in one direction, or for the traffic of an interface (PBR)."  # yamllint disable-line rule:line-length
     label: Routing Policy
     icon: mdi:routes
     include_in_menu: false
@@ -213,6 +213,20 @@ nodes:
           - name: generated
             label: Generated
             color: "#3498DB"
+      - name: kind
+        kind: Dropdown
+        label: Kind
+        optional: false
+        default_value: bgp
+        order_weight: 220
+        description: "bgp: a session's routes; pbr: policy-based routing on interfaces, redirecting to a next hop"
+        choices:
+          - name: bgp
+            label: BGP
+            color: "#3498DB"
+          - name: pbr
+            label: PBR
+            color: "#E69138"
       - name: priority
         kind: Number
         label: Priority
@@ -246,6 +260,15 @@ nodes:
         on_delete: cascade
         identifier: policy__terms
         order_weight: 1000
+      - name: interfaces
+        peer: DcimInterface
+        label: Applied On Interfaces
+        description: "A pbr policy: the interfaces (an SVI, a DCI port) whose ingress traffic it steers"
+        kind: Generic
+        cardinality: many
+        optional: true
+        identifier: policy__interfaces
+        order_weight: 1490
       - name: import_peerings
         peer: ManagedBGPPeering
         label: Imported By
@@ -324,6 +347,18 @@ nodes:
         optional: true
         order_weight: 320
         description: "Communities added to the route (standard, well-known or large)"
+      - name: set_next_hop
+        kind: Text
+        label: Set Next Hop
+        optional: true
+        order_weight: 325
+        description: "A pbr term: the address matching traffic is redirected to, reachable in the interface's VRF"
+      - name: match_acl
+        kind: Text
+        label: Match ACL
+        optional: true
+        order_weight: 326
+        description: "A pbr term: the name of the ACL that selects the traffic (its entries are derived)"
       - name: prepend_count
         kind: Number
         label: AS Path Prepend

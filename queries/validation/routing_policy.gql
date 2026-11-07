@@ -36,6 +36,8 @@ query routing_policy {
       node {
         id
         name { value }
+        kind { value }
+        interfaces { edges { node { id } } }
         import_peerings { edges { node { id } } }
         export_peerings { edges { node { id } } }
         terms {
