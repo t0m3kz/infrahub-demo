@@ -17,13 +17,14 @@ from utils.exchange_transit import EXCHANGE_PEERS, transit_addresses
 from ..common import CommonGenerator
 from ..exchange_routes import ExchangeRoutesMixin
 from ..helpers.vrf import VrfMixin
+from ..pools import PoolMixin
 
 FIREWALL_KIND = "ManagedFirewallContext"
 LOADBALANCER_KIND = "ManagedLoadbalancerContext"
 _LEG_KIND = "DcimVirtualInterface"
 
 
-class ContextRoutesGenerator(ExchangeRoutesMixin, VrfMixin, CommonGenerator):
+class ContextRoutesGenerator(ExchangeRoutesMixin, VrfMixin, PoolMixin, CommonGenerator):
     """The routes of one firewall or load-balancer context (see the module docstring)."""
 
     async def generate(self, data: dict[str, Any]) -> None:
