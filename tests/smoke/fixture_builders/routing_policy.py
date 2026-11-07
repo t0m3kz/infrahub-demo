@@ -12,7 +12,7 @@ from tests.smoke.fixture_builders.common import _edges, _v, write_data_fixtures
 from tests.smoke.fixture_builders.routing_protection import build_protected_device_data
 from transforms.config.leaf import Leaf
 
-PLATFORMS = ("arista_eos", "cisco_nxos", "cisco_xe")
+PLATFORMS = ("arista_eos", "cisco_nxos", "cisco_xe", "sonic", "dell_sonic")
 PEERING = "dc1-leaf-01-spine-01"
 
 

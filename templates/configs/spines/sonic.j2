@@ -24,6 +24,7 @@
 {%- set route_map = {} -%}
 {%- set prefix_set = {} -%}
 {%- set prefix_table = {} -%}
+{%- set community_set = {} -%}
 {%- set bgp_neighbor_af = {} -%}
 {%- include 'common/sonic_bgp_policy.j2' %}
 {%- set configdb = {
@@ -42,7 +43,7 @@
   'SYSLOG_SERVER': {}
 } -%}
 {#- Only a device with a filter to install carries these tables (U, common/sonic_bgp_policy.j2). -#}
-{%- for table, entries in {'ROUTE_MAP': route_map, 'PREFIX_SET': prefix_set, 'PREFIX': prefix_table, 'BGP_NEIGHBOR_AF': bgp_neighbor_af}.items() if entries -%}
+{%- for table, entries in {'ROUTE_MAP': route_map, 'PREFIX_SET': prefix_set, 'PREFIX': prefix_table, 'COMMUNITY_SET': community_set, 'BGP_NEIGHBOR_AF': bgp_neighbor_af}.items() if entries -%}
 {%- set _ = configdb.update({table: entries}) -%}
 {%- endfor %}
 

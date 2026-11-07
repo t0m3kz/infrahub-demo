@@ -630,8 +630,10 @@ class MyCheck(InfrahubCheck):
   `checks/routing_policy.py` (RP1-RP3) holds the community syntax and the prefix list entries.
   Rendered by NX-OS, EOS and IOS XE (`common/bgp_filter_objects.j2` `bgp_user_objects` and `bgp_user_attachments`): the
   guard is the first, `deny`, term of the user map (a match on the complement list `<list>-OUTSIDE`), and the filter map
-  of that direction and family is then not attached (`replaced_by`). Large communities are evidence U. Not rendered yet:
-  SONiC and Dell SONiC (a session there keeps its derived filter, without the user policies).
+  of that direction and family is then not attached (`replaced_by`). Large communities are evidence U.
+  SONiC and Dell SONiC render the same in config-DB form (`common/sonic_bgp_policy.j2`: `COMMUNITY_SET`, `ROUTE_MAP`,
+  `PREFIX`, `BGP_NEIGHBOR_AF`; every line evidence U) except large communities, which have no known field there: a
+  large list is not defined, a term that matches one is left out and a large community a term adds is not set.
 - **Route protection**: every BGP session is protected against a neighbour announcing what it must not, internal
   sessions included (external and transit keep `utils/ownership.py exchange_policies`). ONE derivation,
   `utils/bgp_expectation.py` (pure; the transform renders it and `checks/bgp_expectations.py` compares it): a session
