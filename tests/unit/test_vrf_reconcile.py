@@ -71,7 +71,7 @@ def test_a_routed_row_creates_the_instance_and_its_svi() -> None:
             "device": {"id": "d1"},
             "role": "svi",
             "status": "active",
-            "vlan_domain_segment": {"id": "r1"},
+            "segment_vlan": {"id": "r1"},
             "vrf": {"id": "new-1"},
         }
     ]
@@ -197,7 +197,7 @@ def test_a_row_moved_to_another_row_updates_the_svi_in_place() -> None:
             "device": {"id": "d1"},
             "role": "svi",
             "status": "active",
-            "vlan_domain_segment": {"id": "r2"},
+            "segment_vlan": {"id": "r2"},
             "vrf": {"id": "vrf-1"},
         }
     ]

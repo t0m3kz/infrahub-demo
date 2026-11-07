@@ -593,7 +593,7 @@ class BaseDeviceTransform(InfrahubTransform):
         ignored). The row is a child of the deployment it sits in, so its VLAN ID and the
         deployment's VNI come from one record."""
         for deployment in deployments:
-            for row in deployment.get("vlan_domain_segments") or []:
+            for row in deployment.get("vlans") or []:
                 if device_id and (row.get("device") or {}).get("id") == device_id:
                     return row, deployment
         return None
@@ -609,7 +609,7 @@ class BaseDeviceTransform(InfrahubTransform):
         VxlanSegment.segment_deployments
         is cardinality:many (multi-site stretch — clean_data unwraps it to a
         list, already filtered to active/provisioning by the query) and
-        carries the vni and, under it, the vlan_domain_segments rows — the LOCAL
+        carries the vni and, under it, the vlans rows — the LOCAL
         vlan_id for a VxlanSegment is the row of THIS device (``row.device.id``;
         a paired device uses its own row, never its peer's)
         and the vni is its deployment's, one record for both. A VxlanSegment

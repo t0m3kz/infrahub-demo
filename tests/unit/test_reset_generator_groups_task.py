@@ -48,7 +48,7 @@ def groups() -> dict[str, MagicMock]:
     """A tracking group of each kind, plus target and lock groups that must survive."""
     return {
         "aware": _group(f"add_dc-{HASH}", "CoreGeneratorAwareGroup", ["DcimPhysicalDevice", "DcimCable", "DcimCable"]),
-        "generator": _group(f"add_app_component_segment-{HASH}", "CoreGeneratorGroup", ["ManagedVlanDomainSegment"]),
+        "generator": _group(f"add_app_component_segment-{HASH}", "CoreGeneratorGroup", ["ManagedSegmentVlan"]),
         # Bootstrap target group (CoreStandardGroup): no params-hash suffix.
         "target": _group("customer_deployments_dc", "CoreStandardGroup", ["TopologyCustomerDC"]),
         # Hash-suffixed, but no generator definition by that name.

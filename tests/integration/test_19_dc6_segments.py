@@ -6,7 +6,7 @@ Coverage: Verifies the end-to-end segment lifecycle on the grown DC6 fabric:
   2. Verify the footprint resolves to DC6 — the segment generator places
      ManagedSegmentDeployment records on the footprint's parent DC
   3. Run the segment generator -> creates ManagedSegmentDeployment with VNI
-     (DC-wide) and ManagedVlanDomainSegment with local VLAN ID (per VLAN
+     (DC-wide) and ManagedSegmentVlan with local VLAN ID (per VLAN
      domain — an MLAG pair or standalone device; IEEE 802.1Q VLAN ID has
      only local significance, unlike VNI which stays DC-wide/fabric-wide)
   4. Verify segment deployments exist with correct pool allocations
@@ -25,7 +25,7 @@ import pytest
 from infrahub_sdk import InfrahubClient, InfrahubClientSync
 
 from .conftest import TestInfrahubDockerWithClient
-from .segment_helpers import fetch_segment_deployments, fetch_vlan_domain_segments
+from .segment_helpers import fetch_segment_deployments, fetch_segment_vlans
 from .suite_constants import SCENARIO_DC_NAME, SCENARIO_SEGMENT_DATA, SCENARIO_SEGMENT_FOOTPRINT
 from .workflow_helpers import (
     create_and_validate_proposed_change,
@@ -251,7 +251,7 @@ class TestDC6Segments(TestInfrahubDockerWithClient):
         scenario_branch: str,
     ) -> None:
         """Verify ManagedSegmentDeployment (VNI-and-status, DC-wide) and
-        ManagedVlanDomainSegment (local VLAN ID, per VLAN domain) records."""
+        ManagedSegmentVlan (local VLAN ID, per switch) records."""
         logging.info("=== %s - Step 5: Verify Segment Deployments ===", SCENARIO_NAME)
 
         result = await fetch_segment_deployments(
@@ -281,20 +281,20 @@ class TestDC6Segments(TestInfrahubDockerWithClient):
 
         logging.info("Segment deployments verified: %d records, VNIs=%s", len(deployments), vnis)
 
-        # A local VLAN ID (ManagedVlanDomainSegment) is realized only where an
+        # A local VLAN ID (ManagedSegmentVlan) is realized only where an
         # AppComponent instance is cabled to a switch (add_app_component_segment)
         # or, for a stretched segment, on its border gateways. These two
         # segments are local and nothing is cabled to them yet, so there must be
         # none: the DC-wide sweep that used to tag every leaf is gone.
-        vlan_domain_result = await fetch_vlan_domain_segments(
+        segment_vlan_result = await fetch_segment_vlans(
             client=async_client_main,
             branch=scenario_branch,
             expected_count=0,
             max_attempts=1,
         )
-        assert vlan_domain_result["record_count"] == 0, (
-            "Local segments with no cabled AppComponent instance must not get a VLAN domain segment, "
-            f"found {vlan_domain_result['record_count']}: {vlan_domain_result['records']}"
+        assert segment_vlan_result["record_count"] == 0, (
+            "Local segments with no cabled AppComponent instance must not get a segment VLAN, "
+            f"found {segment_vlan_result['record_count']}: {segment_vlan_result['records']}"
         )
 
     # ------------------------------------------------------------------

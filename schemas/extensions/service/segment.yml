@@ -79,7 +79,7 @@ nodes:
   # Stores the locally-allocated VNI for a segment in a specific data
   # center, from the DC's vni_pool via idempotent allocation. The segment's
   # LOCAL VLAN ID is NOT stored here — VLAN ID has only local (per-switch or
-  # per-MLAG-pair) significance, so it lives on ManagedVlanDomainSegment
+  # per-MLAG-pair) significance, so it lives on ManagedSegmentVlan
   # instead, one row per (segment, VLAN domain) rather than per (segment, DC).
   # VNI remains the correct DC-wide/fabric-wide segment identifier.
   #
@@ -152,18 +152,18 @@ nodes:
         identifier: "segmentdeployment__deployment"
         description: "The DC or colocation metro where this segment is locally realized"
 
-      - name: vlan_domain_segments
-        peer: ManagedVlanDomainSegment
-        label: VLAN Domain Segments
+      - name: vlans
+        peer: ManagedSegmentVlan
+        label: Segment VLANs
         cardinality: many
         kind: Component
         optional: true
         order_weight: 2200
-        identifier: "vlandomainsegment__segment_deployment"
+        identifier: "segmentvlan__segment_deployment"
         on_delete: cascade
         description: "The switches of this DC that carry the segment, each with its local VLAN ID"
 
-  # VlanDomainSegment: the realization of a VXLAN segment's LOCAL VLAN ID on ONE switch, a child of the segment's
+  # SegmentVlan: the realization of a VXLAN segment's LOCAL VLAN ID on ONE switch, a child of the segment's
   # realization in the DC it sits in (SegmentDeployment): segment -> realization in the DC (VNI) -> realization on the
   # switch (VLAN ID). The row points straight at its device: there is no domain object. IEEE 802.1Q VLAN ID has only
   # local significance and is unique on a device (the [device, vlan_id__value] constraint): two segments never share
@@ -172,15 +172,15 @@ nodes:
   # whose rows differ. The generator reuses a segment's vlan_id across the switches it lands on. The segment's
   # DC-wide identity remains SegmentDeployment.vni (L2 VNI).
   #
-  # Created by: the segment reconcile (generators/vlan_domain.py), once per (segment deployment, device) pair and for
+  # Created by: the segment reconcile (generators/segment_vlan.py), once per (segment deployment, device) pair and for
   # the MLAG peers of every device that has a port of the segment, untracked. It is an output: a port is given a
   # SEGMENT, never a VLAN; the VLAN of a port is found by port -> device -> row of the segment. A row of a device
   # that no longer needs the segment (or is gone) is deleted by the next reconcile, not by a cascade from the device.
   # Read by: leaf-side transforms, keyed by the rendering device.
-  - name: VlanDomainSegment
+  - name: SegmentVlan
     namespace: Managed
     description: "A segment's local VLAN ID on one switch, under its deployment."
-    label: VLAN Domain Segment
+    label: Segment VLAN
     icon: "carbon:network-overlay"
     include_in_menu: false
     display_label: "vlan {{ vlan_id__value }} @ {{ device__name__value }} (VNI {{ segment_deployment__vni__value }})"  # yamllint disable-line rule:line-length
@@ -209,7 +209,7 @@ nodes:
         kind: Parent
         optional: false
         order_weight: 2000
-        identifier: "vlandomainsegment__segment_deployment"
+        identifier: "segmentvlan__segment_deployment"
         description: "The segment's realization in the DC or metro this switch belongs to"
       # An Attribute, not a second Parent: the row goes with its deployment (cascade), and the reconcile deletes the
       # rows of a device that no longer needs the segment or is gone.
@@ -220,7 +220,7 @@ nodes:
         kind: Attribute
         optional: false
         order_weight: 2100
-        identifier: "vlandomainsegment__device"
+        identifier: "segmentvlan__device"
         description: "The switch this VLAN ID realization is on"
       # A routed row is realized on its switch as ONE SVI (DcimVirtualInterface role svi, no address: the anycast
       # gateway is the segment's), written by generators/helpers/svi.py and deleted with the row.
@@ -232,21 +232,21 @@ nodes:
         optional: true
         on_delete: cascade
         order_weight: 2200
-        identifier: "vlandomainsegment__svi"
+        identifier: "segmentvlan__svi"
         description: "The routed SVI of this segment on the row's switch (role svi); deleted with the row"
 
 extensions:
   nodes:
     - kind: DcimVirtualInterface
       relationships:
-        - name: vlan_domain_segment
-          peer: ManagedVlanDomainSegment
-          label: VLAN Domain Segment
+        - name: segment_vlan
+          peer: ManagedSegmentVlan
+          label: Segment VLAN
           cardinality: one
           kind: Attribute
           optional: true
           order_weight: 1460
-          identifier: "vlandomainsegment__svi"
+          identifier: "segmentvlan__svi"
           description: "The VLAN-domain row this SVI realizes (role svi only)"
 
     - kind: ManagedVxlanSegment
@@ -289,13 +289,13 @@ extensions:
 
     - kind: DcimPhysicalDevice
       relationships:
-        - name: vlan_domain_segments
-          label: VLAN Domain Segments
-          peer: ManagedVlanDomainSegment
+        - name: vlans
+          label: Segment VLANs
+          peer: ManagedSegmentVlan
           kind: Generic
           cardinality: many
           optional: true
-          identifier: "vlandomainsegment__device"
+          identifier: "segmentvlan__device"
           order_weight: 7950
           description: "Segments locally realized on this switch, each with its VLAN ID"
 

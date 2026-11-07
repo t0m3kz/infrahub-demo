@@ -138,7 +138,7 @@ def test_layer_kinds_add_the_end_kinds_only_where_measured() -> None:
     """A segment end adds its rows to L3 only; the ends themselves are never in the filter."""
     assert layer_kinds("l1", "ManagedVxlanSegment", DX) == [*LAYERS["l1"], *CLOUD]
     l3 = layer_kinds("l3", "ManagedVxlanSegment", "CloudNetworkSegment")
-    assert l3[-2:] == ["ManagedSegmentDeployment", "ManagedVlanDomainSegment"]
+    assert l3[-2:] == ["ManagedSegmentDeployment", "ManagedSegmentVlan"]
     assert "ManagedVxlanSegment" not in l3 and "CloudNetworkSegment" not in l3
     assert "CloudNetworkSegment" in layer_kinds("l1", "CloudInstance", DEV)
 
@@ -146,7 +146,7 @@ def test_layer_kinds_add_the_end_kinds_only_where_measured() -> None:
 def test_a_vm_end_routes_through_its_component_and_segment_in_l3_only() -> None:
     """A VM end adds its component and its segment's chain to L3; its L1 is its NIC and the host port (no addition)."""
     l3 = layer_kinds("l3", "DcimVirtualDevice", "CloudNetworkSegment")
-    assert l3[-4:] == ["AppComponent", "ManagedVxlanSegment", "ManagedSegmentDeployment", "ManagedVlanDomainSegment"]
+    assert l3[-4:] == ["AppComponent", "ManagedVxlanSegment", "ManagedSegmentDeployment", "ManagedSegmentVlan"]
     assert layer_kinds("l1", "DcimVirtualDevice", DEV) == [*LAYERS["l1"], *CLOUD]
     assert "AppComponent" not in layer_kinds("l3", "ManagedVxlanSegment", DEV)
 

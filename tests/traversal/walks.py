@@ -137,7 +137,7 @@ def pod_rows(d: dict, cfg: dict) -> list[Row]:
     vlans = {
         row["device"]["node"]["name"]["value"]: val(row, "vlan_id")
         for sd in rel(seg or {}, "segment_deployments")
-        for row in rel(sd, "vlan_domain_segments")
+        for row in rel(sd, "vlans")
         if row["device"]["node"]["name"]["value"] in leaves
     }
     ok = sorted(vlans) == sorted(leaves) and len(set(vlans.values())) == 1

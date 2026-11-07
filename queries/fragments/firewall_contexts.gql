@@ -103,7 +103,7 @@ fragment FirewallContextConfigFields on ManagedFirewallContext {
         segment_deployments {
           edges {
             node {
-              vlan_domain_segments { edges { node { vlan_id { value } device { node { id } } } } }
+              vlans { edges { node { vlan_id { value } device { node { id } } } } }
             }
           }
         }

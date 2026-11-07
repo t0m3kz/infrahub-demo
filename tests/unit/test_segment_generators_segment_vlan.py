@@ -1,4 +1,4 @@
-"""Unit tests for the MLAG lookup of a device that VlanDomainMixin pairs rows by."""
+"""Unit tests for the MLAG lookup of a device that SegmentVlanMixin pairs rows by."""
 
 from __future__ import annotations
 

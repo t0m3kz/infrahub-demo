@@ -591,8 +591,8 @@ queries:
     file_path: queries/topology/add/lb_serving_contexts.gql
   - name: segment_components
     file_path: queries/topology/add/segment_components.gql
-  - name: segment_vlan_domains
-    file_path: queries/topology/add/segment_vlan_domains.gql
+  - name: segment_vlans
+    file_path: queries/topology/add/segment_vlans.gql
   - name: vxlan_segment_data
     file_path: queries/topology/add/vxlan_segment.gql
   - name: colocation_metro_data

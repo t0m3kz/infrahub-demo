@@ -131,7 +131,7 @@ async def fetch_segment_deployments(
     return {"deployment_count": deployment_count, "deployments": deployments}
 
 
-async def fetch_vlan_domain_segments(
+async def fetch_segment_vlans(
     *,
     client: InfrahubClient,
     branch: str,
@@ -140,7 +140,7 @@ async def fetch_vlan_domain_segments(
     max_attempts: int = 12,
     poll_interval: int = 5,
 ) -> dict[str, Any]:
-    """Poll for ManagedVlanDomainSegment records — per-(segment deployment, device)
+    """Poll for ManagedSegmentVlan records — per-(segment deployment, device)
     local VLAN ID realizations, read as the children of the segment's
     ManagedSegmentDeployment records (the VNI of the deployment is returned with
     each) — see schemas/extensions/service/segment.yml.
@@ -169,7 +169,7 @@ async def fetch_vlan_domain_segments(
         variables["segment_id"] = [segment_id]
 
     query = f"""
-    query GetVlanDomainSegments{var_decl} {{
+    query GetSegmentVlans{var_decl} {{
         ManagedSegmentDeployment{seg_filter} {{
             edges {{
                 node {{
@@ -183,7 +183,7 @@ async def fetch_vlan_domain_segments(
                             }}
                         }}
                     }}
-                    vlan_domain_segments {{
+                    vlans {{
                         edges {{
                             node {{
                                 id
@@ -208,7 +208,7 @@ async def fetch_vlan_domain_segments(
         return [
             {**row["node"], "segment": deployment["node"]["segment"], "vni": deployment["node"]["vni"]}
             for deployment in result.get("ManagedSegmentDeployment", {}).get("edges", [])
-            for row in deployment["node"]["vlan_domain_segments"]["edges"]
+            for row in deployment["node"]["vlans"]["edges"]
         ]
 
     async def _check() -> tuple[bool, list[dict]]:

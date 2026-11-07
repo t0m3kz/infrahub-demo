@@ -112,7 +112,7 @@ query ($name: String!) {
           segment_deployments {
             edges {
               node {
-                vlan_domain_segments {
+                vlans {
                   edges {
                     node {
                       vlan_id { value }
@@ -163,7 +163,7 @@ async def _segment_on_switches(client: InfrahubClient, branch: str, segment_name
     realizations = [
         row["node"]
         for deployment in (segment.get("segment_deployments") or {}).get("edges") or []
-        for row in deployment["node"]["vlan_domain_segments"]["edges"]
+        for row in deployment["node"]["vlans"]["edges"]
     ]
     for realization in realizations:
         device = (realization.get("device") or {}).get("node") or {}

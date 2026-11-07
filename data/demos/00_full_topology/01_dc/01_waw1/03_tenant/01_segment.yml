@@ -32,7 +32,7 @@ spec:
     - segment: c900-app-p
       deployment: DC-WAW1
       vni: 10200
-      vlan_domain_segments:
+      vlans:
         data:
           - device: waw1-leaf-01
             vlan_id: 200

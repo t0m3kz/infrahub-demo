@@ -186,7 +186,7 @@ class TestVxlanSegmentGeneratorGenerate:
         assert gen._activate_segment_in_deployment.call_count == 1
         assert gen._activate_segment_in_deployment.call_args.kwargs["deployment_id"] == "dc-1"
 
-    def test_generate_reconciles_vlan_domains(self):
+    def test_generate_reconciles_segment_vlans(self):
         """generate() activates each deployment and reconciles the segment's VLAN
         domain activations (local or stretched alike)."""
         gen = _make_gen()
@@ -458,7 +458,7 @@ class TestActivateSegmentInDeployment:
     """Tests for _activate_segment_in_deployment on VxlanSegmentGenerator.
 
     VNI-and-status only now — LOCAL VLAN ID realization moved to a separate
-    per-VLAN-domain mechanism (ManagedVlanDomainSegment), tested in
+    per-VLAN-domain mechanism (ManagedSegmentVlan), tested in
     TestAssignSegmentToDcInterfaces below. The method does no reads of its
     own: generate() hands it the deployment's existing record and the VNI to
     reuse.
@@ -631,9 +631,9 @@ class TestDeviceDeploymentIds:
         metro = {"id": "metro-1", "children": [{}, {"id": "zone-fr2"}]}
         assert VxlanSegmentGenerator._device_deployment_ids(metro) == ["metro-1", "zone-fr2"]
 
-    def test_vlan_domain_query_selects_zone_and_virtual_colocation_ids_under_the_metro(self, root_dir: Path) -> None:
-        """The zone and virtual colocation filter lives in segment_vlan_domains.gql, not in Python."""
-        query = (root_dir / "queries" / "topology" / "add" / "segment_vlan_domains.gql").read_text()
+    def test_segment_vlan_query_selects_zone_and_virtual_colocation_ids_under_the_metro(self, root_dir: Path) -> None:
+        """The zone and virtual colocation filter lives in segment_vlans.gql, not in Python."""
+        query = (root_dir / "queries" / "topology" / "add" / "segment_vlans.gql").read_text()
         compact = " ".join(query.split())
         assert "... on TopologyColocationMetro { children { edges { node {" in compact
         assert "... on TopologyColocationZone { id } ... on TopologyVirtualColocation { id }" in compact

@@ -11,10 +11,10 @@ from typing import Any
 from infrahub_sdk.checks import InfrahubCheck
 
 from utils.data_cleaning import clean_data
-from utils.vlan_domain import MLAG_KIND, mlag_peer_devices
+from utils.segment_vlan import MLAG_KIND, mlag_peer_devices
 
 MLAG_MEMBERS = 2
-ROW_KIND = "ManagedVlanDomainSegment"
+ROW_KIND = "ManagedSegmentVlan"
 LAG_KIND = "DcimLAGInterface"
 PEER_LINK_ROLE = "mlag-peer"
 

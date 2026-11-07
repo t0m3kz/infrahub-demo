@@ -37,7 +37,7 @@ def _segment(
         "gateway": {"address": gateway} if gateway else None,
         "security_zone": {"name": zone} if zone else None,
         "segment_deployments": [
-            {"vlan_domain_segments": [{"vlan_id": vlan, "device": {"id": device}} for device, vlan in rows or []]}
+            {"vlans": [{"vlan_id": vlan, "device": {"id": device}} for device, vlan in rows or []]}
         ],
     }
 

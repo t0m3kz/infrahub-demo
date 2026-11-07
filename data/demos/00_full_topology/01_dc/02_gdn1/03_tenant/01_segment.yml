@@ -32,7 +32,7 @@ spec:
     - segment: c900-db-p
       deployment: DC-GDN1
       vni: 10300
-      vlan_domain_segments:
+      vlans:
         data:
           - device: gdn1-leaf-01
             vlan_id: 300

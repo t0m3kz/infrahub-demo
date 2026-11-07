@@ -53,7 +53,7 @@ query ($devices: [String]) {
         device { node { name { value } } }
         ip_address { node { ip_namespace { node { name { value } } } } }
         vrf { node { id namespace { node { name { value } } } } }
-        vlan_domain_segment {
+        segment_vlan {
           node { segment_deployment { node { segment { node { ... on ManagedVxlanSegment { name { value } } } } } } }
         }
       }
@@ -116,7 +116,7 @@ def parse_switch_vrf_state(result: dict[str, Any], devices: list[str]) -> dict[s
         device, name = _device_name(node), str(_value(node, "name"))
         vrf = (node.get("vrf") or {}).get("node") or {}
         if _value(node, "role") == SVI_ROLE:
-            row = (node.get("vlan_domain_segment") or {}).get("node") or {}
+            row = (node.get("segment_vlan") or {}).get("node") or {}
             deployment = (row.get("segment_deployment") or {}).get("node") or {}
             segment = ((deployment.get("segment") or {}).get("node") or {}).get("name") or {}
             if segment.get("value") == SEGMENT_NAME:

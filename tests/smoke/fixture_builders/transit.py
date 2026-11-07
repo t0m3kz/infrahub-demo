@@ -413,7 +413,7 @@ def build_firewall_terminated_data(*, device_name: str, platform: str) -> dict:
         "segment_deployments": _edges(
             [
                 {
-                    "vlan_domain_segments": _edges(
+                    "vlans": _edges(
                         [
                             {"vlan_id": _v(_TERMINATED_VLAN), "device": _node({"id": _FACING_LEAF})},
                             {"vlan_id": _v(205), "device": _node({"id": "dev-dc1-leaf-01"})},

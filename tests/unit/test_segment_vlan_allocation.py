@@ -1,10 +1,10 @@
-"""Unit tests for how VlanDomainMixin chooses a segment's local VLAN ID per device (generators/vlan_domain.py).
+"""Unit tests for how SegmentVlanMixin chooses a segment's local VLAN ID per device (generators/segment_vlan.py).
 
 No pool: the id is the lowest one free on every device the segment lands on, the segment's existing id wins when it
 is free on a new device, a device that cannot take it falls back to its own lowest free id (WARNING), and a device
-with no free id fails. An MLAG pair shares one id (tests/unit/test_vlan_domain_pairs.py). Devices are locked in sorted
+with no free id fails. An MLAG pair shares one id (tests/unit/test_segment_vlan_pairs.py). Devices are locked in sorted
 order around the one batched read of the ids in use and the writes. Runs against an in-memory server
-(tests/unit/vlan_domain_helpers.py) shared by the segments of a test.
+(tests/unit/segment_vlan_helpers.py) shared by the segments of a test.
 """
 
 from __future__ import annotations
@@ -18,9 +18,9 @@ import pytest
 import yaml
 
 from generators.logger import GeneratorError
-from generators.protocols import ManagedVlanDomainSegment
-from generators.vlan_domain import segment_lock_key, vlan_device_lock_key
-from tests.unit.vlan_domain_helpers import VlanWorld, make_device, reconcile
+from generators.protocols import ManagedSegmentVlan
+from generators.segment_vlan import segment_lock_key, vlan_device_lock_key
+from tests.unit.segment_vlan_helpers import VlanWorld, make_device, reconcile
 from utils.limits import CUSTOMER_VLAN_ID_MAX, CUSTOMER_VLAN_ID_MIN
 
 _PORT = "DcimPhysicalInterface"
@@ -190,13 +190,13 @@ class TestIsolation:
 
         _run(world, "seg-1", ["b"])
 
-        assert world.events.index(f"delete:{stale}") < world.events.index("read:ManagedVlanDomainSegment")
+        assert world.events.index(f"delete:{stale}") < world.events.index("read:ManagedSegmentVlan")
         assert world.vlan_ids("seg-1") == {"sw-b": 100}
 
     def test_uniqueness_is_enforced_by_the_schema_too(self, root_dir: Path) -> None:
         """The DB-level backstop: a VLAN id is unique per device, and there is no VLAN domain generic any more."""
         segment_schema = yaml.safe_load((root_dir / "schemas/extensions/service/segment.yml").read_text())
-        node = next(n for n in segment_schema["nodes"] if n["name"] == "VlanDomainSegment")
+        node = next(n for n in segment_schema["nodes"] if n["name"] == "SegmentVlan")
         assert ["segment_deployment", "device"] in node["uniqueness_constraints"]
         assert ["device", "vlan_id__value"] in node["uniqueness_constraints"]
         dcim_schema = yaml.safe_load((root_dir / "schemas/base/dcim.yml").read_text())
@@ -208,11 +208,11 @@ class TestIdempotency:
         """Existing rows keep their id: the second run creates nothing, deletes nothing, and takes no device lock."""
         world = _standalone_world("a", "b")
         _run(world, "seg-1", ["a", "b"])
-        before = (list(world.created), list(world.deleted), len(world.reads(ManagedVlanDomainSegment)))
+        before = (list(world.created), list(world.deleted), len(world.reads(ManagedSegmentVlan)))
 
         gen = _run(world, "seg-1", ["a", "b"])
 
-        assert (world.created, world.deleted, len(world.reads(ManagedVlanDomainSegment))) == before
+        assert (world.created, world.deleted, len(world.reads(ManagedSegmentVlan))) == before
         assert gen.locked_keys == [segment_lock_key("seg-1")]
         assert world.vlan_ids("seg-1") == {"sw-a": 100, "sw-b": 100}
 
@@ -236,7 +236,7 @@ class TestReadsAndLocks:
 
         _run(world, "seg-1", ["a", "b", "m"], mlag={"m": "mlag-1", "n": "mlag-1"}, peers=["n"])
 
-        used = world.reads(ManagedVlanDomainSegment)
+        used = world.reads(ManagedSegmentVlan)
         assert len(used) == 1
         assert used[0]["device__ids"] == ["sw-a", "sw-b", "sw-m", "sw-n"]
 
@@ -247,7 +247,7 @@ class TestReadsAndLocks:
 
         _run(world, "seg-1", ["a", "b"])
 
-        used = world.reads(ManagedVlanDomainSegment)
+        used = world.reads(ManagedSegmentVlan)
         assert len(used) == 1
         assert used[0]["device__ids"] == ["sw-a", "sw-b"]
 
@@ -274,7 +274,7 @@ class TestReadsAndLocks:
             "lock:segment-vlan-domains-seg-1",
             "lock:vlan-device-ids-sw-a",
             "lock:vlan-device-ids-sw-b",
-            "read:ManagedVlanDomainSegment",
+            "read:ManagedSegmentVlan",
             "create:sw-a",
             "create:sw-b",
             "unlock:vlan-device-ids-sw-b",

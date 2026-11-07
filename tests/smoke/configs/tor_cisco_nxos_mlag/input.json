@@ -441,7 +441,7 @@
                                   "vni": {
                                     "value": 10100
                                   },
-                                  "vlan_domain_segments": {
+                                  "vlans": {
                                     "edges": [
                                       {
                                         "node": {

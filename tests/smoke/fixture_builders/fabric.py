@@ -388,7 +388,7 @@ def build_device_data(
                 ],
             )
 
-        # The vlan_domain_segments row points at this device (its id) or the
+        # The vlans row points at this device (its id) or the
         # transform skips the VxlanSegment.
         row_device_id = f"dev-{device_name}"
 

@@ -498,7 +498,7 @@ class MyCheck(InfrahubCheck):
   `terminated_on { node { id } }` (`tests/unit/test_terminated_on_queries.py`), else the segment reads as routed.
   - **Ports**: `add_vxlan_segment` and `add_app_component_segment` tag the border service ports of the context (the
     `capabilities` of the context that are a physical port or a LAG with the firewall service role, read by
-    `queries/topology/add/segment_vlan_domains.gql`) with the segment as generated `segments` edges, in the SAME
+    `queries/topology/add/segment_vlans.gql`) with the segment as generated `segments` edges, in the SAME
     reconcile as the component ports (same provenance: an account as `source`, removed only by that account). The ports
     are not host-facing: `checks/customer_quota.py` does not count them. A change of `terminated_on` re-runs
     `add_vxlan_segment` (`data/events/99_actions.yml`).
@@ -677,7 +677,7 @@ class MyCheck(InfrahubCheck):
   impossible by schema (`ManagedVxlanSegment` is not on the interface edge).
 - **VLAN rows**: a VLAN ID is local to a switch. There is no VLAN domain object and no marker generic: the row
   points straight at its device. The chain is segment -> `ManagedSegmentDeployment` (the realization in a DC, metro or
-  office, with the VNI) -> `ManagedVlanDomainSegment` (the realization on ONE switch, with the `vlan_id`): the row is a
+  office, with the VNI) -> `ManagedSegmentVlan` (the realization on ONE switch, with the `vlan_id`): the row is a
   `Parent`-mandatory child of the deployment its switch sits in (`device.deployment` is the hosting parent or one of its
   pods and zones) and goes with it (`on_delete: cascade`), so the VLAN and the VNI of a port come from one lineage; its
   `device` is an Attribute (mandatory), unique on [segment_deployment, device] and [device, vlan_id]. The row is an
@@ -763,7 +763,7 @@ class MyCheck(InfrahubCheck):
   (`uv run invoke clean-testcontainers`, or `check-model --rebuild`).
 - **MLAG peer pair uniqueness is an attribute, the rest are checks**: a uniqueness constraint cannot use a many
   relationship, so the pair is mirrored into the unique Text attribute `ManagedMLAG.peer_devices` (the sorted member
-  names joined with a comma, `mlag_peer_devices` in `utils/vlan_domain.py`), written by `generators/domain_pairing.py`.
+  names joined with a comma, `mlag_peer_devices` in `utils/segment_vlan.py`), written by `generators/domain_pairing.py`.
   `checks/mlag_domains.py` enforces M1 (a device is in at most one domain: the attribute alone does not stop a-b plus
   a-c), M2 (exactly two distinct members: `min_count` is only enforced on update), M3 (`peer_devices` equals the
   sorted member names), M4 (both members have a VLAN row with the same `vlan_id` for every segment either has one for,

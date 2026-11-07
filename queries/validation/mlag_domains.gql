@@ -1,7 +1,7 @@
 # validate_mlag_domains (checks/mlag_domains.py): every MLAG domain with its member
 # devices (the `capabilities` edge) and its `peer_devices` mirror, to check that a device
 # is in at most one domain, that a domain has exactly two distinct members and that
-# `peer_devices` names them. The rows (ManagedVlanDomainSegment, one per device and segment
+# `peer_devices` names them. The rows (ManagedSegmentVlan, one per device and segment
 # deployment) and the port-channels (DcimLAGInterface) with an `mlag_domain` are read to check
 # that the two members of a domain hold equal VLAN ids and mirrored MLAG-attached LAGs.
 query mlag_domains {
@@ -23,7 +23,7 @@ query mlag_domains {
     }
   }
 
-  ManagedVlanDomainSegment {
+  ManagedSegmentVlan {
     edges {
       node {
         id

@@ -265,7 +265,7 @@ def _make_security_policy(*, name: str, rules: list[dict]) -> dict:
 
 
 def _vlan_rows(vlan_id: int, row_device_id: str | None) -> dict:
-    """The ``vlan_domain_segments`` edges of one deployment: the row of the rendering device, if any."""
+    """The ``vlans`` edges of one deployment: the row of the rendering device, if any."""
     return _edges([{"vlan_id": _v(vlan_id), "device": _node({"id": row_device_id})}] if row_device_id else [])
 
 
@@ -294,7 +294,7 @@ def _make_segment_node(
     output for leaf/tor/access-leaf roles.
 
     The VNI comes from ``segment_deployments`` and the LOCAL
-    vlan_id from the ``vlan_domain_segments`` rows under it, matched to this
+    vlan_id from the ``vlans`` rows under it, matched to this
     device (``row.device.id``; a paired device uses its own row).
     A segment with no row for the device is skipped entirely
     by the transform, so ``row_device_id`` must match or no VXLAN is rendered.
@@ -341,9 +341,7 @@ def _make_segment_node(
             # device.id equals this device's id or it skips the segment
             # and renders no VXLAN at all; the VNI is the one of the deployment holding
             # that row.
-            "segment_deployments": _edges(
-                [{"vni": _v(vni), "vlan_domain_segments": _vlan_rows(vlan_id, row_device_id)}]
-            ),
+            "segment_deployments": _edges([{"vni": _v(vni), "vlans": _vlan_rows(vlan_id, row_device_id)}]),
         }
     )
 
@@ -364,12 +362,8 @@ def _make_segment_node(
 def _deployment_record(seg: dict, vni: int | None) -> dict:
     """A ManagedSegmentDeployment record of a device's deployment for a segment node built by _make_segment_node:
     its VNI and, under the record itself, the rows of the segment's own deployment (a border gateway's VLAN)."""
-    rows = (
-        seg["segment_deployments"]["edges"][0]["node"]["vlan_domain_segments"]
-        if seg.get("segment_deployments")
-        else _edges([])
-    )
-    return {"vni": _v(vni), "status": _v("active"), "vlan_domain_segments": rows, "segment": _node(seg)}
+    rows = seg["segment_deployments"]["edges"][0]["node"]["vlans"] if seg.get("segment_deployments") else _edges([])
+    return {"vni": _v(vni), "status": _v("active"), "vlans": rows, "segment": _node(seg)}
 
 
 def _make_segment_deployment(**kwargs: Any) -> dict:
@@ -386,7 +380,7 @@ def _make_segment_deployment(**kwargs: Any) -> dict:
         "vni": _v(kwargs.get("vni")),
         "status": _v("active"),
         # A border gateway's own row sits under the deployment record itself.
-        "vlan_domain_segments": _vlan_rows(kwargs.get("vlan_id") or 0, kwargs.get("row_device_id")),
+        "vlans": _vlan_rows(kwargs.get("vlan_id") or 0, kwargs.get("row_device_id")),
         "segment": _node(seg),
     }
 

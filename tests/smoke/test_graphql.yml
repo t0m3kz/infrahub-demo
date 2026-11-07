@@ -220,11 +220,11 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
-    resource_name: segment_vlan_domains
+    resource_name: segment_vlans
     tests:
       - name: syntax_check
         spec:
-          path: queries/topology/add/segment_vlan_domains.gql
+          path: queries/topology/add/segment_vlans.gql
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery

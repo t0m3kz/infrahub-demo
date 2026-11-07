@@ -32,7 +32,7 @@ def segment_schema(root_dir: Path) -> dict[str, Any]:
 
 class TestRowIsAChildOfTheSegmentDeployment:
     def test_the_row_has_a_mandatory_parent_deployment_and_no_segment(self, segment_schema: dict[str, Any]) -> None:
-        row = _node(segment_schema, "VlanDomainSegment")
+        row = _node(segment_schema, "SegmentVlan")
 
         parent = _relationship(row, "segment_deployment")
         assert (parent["kind"], parent["cardinality"], parent["optional"]) == ("Parent", "one", False)
@@ -41,24 +41,24 @@ class TestRowIsAChildOfTheSegmentDeployment:
 
     def test_the_row_has_no_port(self, segment_schema: dict[str, Any]) -> None:
         """A VLAN is not assigned to a port: the port is given a segment and the VLAN is an output."""
-        row = _node(segment_schema, "VlanDomainSegment")
+        row = _node(segment_schema, "SegmentVlan")
 
         assert not {r["name"] for r in row["relationships"]} & {"interfaces", "interface", "ports"}
 
     def test_the_deployment_owns_its_rows_and_they_go_with_it(self, segment_schema: dict[str, Any]) -> None:
         deployment = _node(segment_schema, "SegmentDeployment")
 
-        rows = _relationship(deployment, "vlan_domain_segments")
+        rows = _relationship(deployment, "vlans")
         assert (rows["kind"], rows["cardinality"], rows["on_delete"]) == ("Component", "many", "cascade")
         assert (
             rows["identifier"]
-            == _relationship(_node(segment_schema, "VlanDomainSegment"), "segment_deployment")["identifier"]
+            == _relationship(_node(segment_schema, "SegmentVlan"), "segment_deployment")["identifier"]
         )
 
     def test_a_vlan_id_is_unique_per_device_and_one_row_per_deployment_and_device(
         self, segment_schema: dict[str, Any]
     ) -> None:
-        row = _node(segment_schema, "VlanDomainSegment")
+        row = _node(segment_schema, "SegmentVlan")
 
         assert ["segment_deployment", "device"] in row["uniqueness_constraints"]
         assert ["device", "vlan_id__value"] in row["uniqueness_constraints"]
@@ -72,7 +72,7 @@ class TestRowIsAChildOfTheSegmentDeployment:
 
     def test_the_label_names_the_vlan_the_device_and_the_vni(self, segment_schema: dict[str, Any]) -> None:
         """A relationship path in a label is one hop: the deployment's VNI, not the segment two hops away."""
-        label = _node(segment_schema, "VlanDomainSegment")["display_label"]
+        label = _node(segment_schema, "SegmentVlan")["display_label"]
 
         assert "segment_deployment__vni__value" in label
         assert "device__name__value" in label
@@ -80,7 +80,7 @@ class TestRowIsAChildOfTheSegmentDeployment:
 
 class TestTheRowPointsAtItsDevice:
     def test_the_row_has_a_mandatory_device_and_one_svi(self, segment_schema: dict[str, Any]) -> None:
-        row = _node(segment_schema, "VlanDomainSegment")
+        row = _node(segment_schema, "SegmentVlan")
 
         device = _relationship(row, "device")
         assert (device["peer"], device["optional"]) == ("DcimPhysicalDevice", False)

@@ -64,7 +64,7 @@ fragment NetworkSegmentFields on ManagedNetworkSegment {
         node {
           vni { value }
           deployment { node { id evpn_rt_as { node { asn { value } } } } }
-          vlan_domain_segments {
+          vlans {
             edges {
               node {
                 vlan_id { value }
@@ -120,7 +120,7 @@ fragment SegmentDeploymentsOnDeploymentFields on TopologySegmentHosting {
       node {
         vni { value }
         # The rows of this deployment: a border gateway's own row is one of them.
-        vlan_domain_segments {
+        vlans {
           edges {
             node {
               vlan_id { value }

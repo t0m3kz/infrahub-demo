@@ -21,7 +21,7 @@ from dataclasses import dataclass
 
 # VLAN bands of a border leaf's VLAN table (get_vlans de-duplicates by VLAN ID, so no two bands may overlap):
 #
-#   100-2999    customer VLANs of every local VLAN domain (generators/vlan_domain.py). 3968-4094 is NX-OS's default
+#   100-2999    customer VLANs of every local VLAN domain (generators/segment_vlan.py). 3968-4094 is NX-OS's default
 #               internally reserved band (4094 the conventional vPC peer-keepalive VLAN), so the space above 2999
 #               is not customer space.
 #   3000-3099   FirewallContext VLANs (one context = one VLAN on the firewall uplink and the border-leaf service port)

@@ -1023,7 +1023,7 @@
                                   "vni": {
                                     "value": 10100
                                   },
-                                  "vlan_domain_segments": {
+                                  "vlans": {
                                     "edges": [
                                       {
                                         "node": {
@@ -1189,7 +1189,7 @@
                                   "vni": {
                                     "value": 10200
                                   },
-                                  "vlan_domain_segments": {
+                                  "vlans": {
                                     "edges": [
                                       {
                                         "node": {
@@ -1366,7 +1366,7 @@
                       "status": {
                         "value": "active"
                       },
-                      "vlan_domain_segments": {
+                      "vlans": {
                         "edges": [
                           {
                             "node": {
@@ -1432,7 +1432,7 @@
                                   "vni": {
                                     "value": 10100
                                   },
-                                  "vlan_domain_segments": {
+                                  "vlans": {
                                     "edges": [
                                       {
                                         "node": {
@@ -1561,7 +1561,7 @@
                       "status": {
                         "value": "active"
                       },
-                      "vlan_domain_segments": {
+                      "vlans": {
                         "edges": [
                           {
                             "node": {
@@ -1627,7 +1627,7 @@
                                   "vni": {
                                     "value": 10200
                                   },
-                                  "vlan_domain_segments": {
+                                  "vlans": {
                                     "edges": [
                                       {
                                         "node": {

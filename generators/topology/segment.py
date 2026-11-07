@@ -389,7 +389,7 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, SegmentPortTagMixin, Common
         reusable_vni: int | None = None,
     ) -> bool:
         """Create or upsert one SegmentDeployment record (VNI-and-status only —
-        local VLAN ID realization is per device, a ManagedVlanDomainSegment
+        local VLAN ID realization is per device, a ManagedSegmentVlan
         under this record, see SegmentPortTagMixin.reconcile_vxlan_segment).
 
         VNI is allocated from vni_pool, a {"id": ..., "name": ...} dict: for a

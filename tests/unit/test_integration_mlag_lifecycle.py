@@ -44,7 +44,7 @@ def _row(row_id: str, device: str, deployment: str, vlan: int, svi: str | None) 
 
 
 def _result(rows: list[dict[str, Any]], svis: list[dict[str, Any]] | None = None) -> dict[str, Any]:
-    return {"ManagedVlanDomainSegment": {"edges": rows}, "DcimVirtualInterface": {"edges": svis or []}}
+    return {"ManagedSegmentVlan": {"edges": rows}, "DcimVirtualInterface": {"edges": svis or []}}
 
 
 def _svi(iface_id: str, device: str, name: str) -> dict[str, Any]:
@@ -106,7 +106,7 @@ def test_a_healthy_access_leaf_pair_with_rows_passes_the_precondition() -> None:
     [
         ([_member("dev-a", "leaf-a"), _member("dev-b", "leaf-b", role="leaf")], "leaf-b is a leaf"),
         ([_member("dev-a", "leaf-a"), _member("dev-b", "leaf-b", rack=None)], "leaf-b is in no rack"),
-        ([_member("dev-a", "leaf-a"), _member("dev-c", "leaf-c")], "leaf-c has no ManagedVlanDomainSegment row"),
+        ([_member("dev-a", "leaf-a"), _member("dev-c", "leaf-c")], "leaf-c has no ManagedSegmentVlan row"),
         ([_member("dev-a", "leaf-a")], "has 1 member(s)"),
     ],
 )
@@ -257,7 +257,7 @@ def _check_result(vlan_b: int) -> dict[str, Any]:
                 }
             ]
         },
-        "ManagedVlanDomainSegment": {"edges": [row_a, row_b]},
+        "ManagedSegmentVlan": {"edges": [row_a, row_b]},
         "DcimLAGInterface": {"edges": []},
     }
 

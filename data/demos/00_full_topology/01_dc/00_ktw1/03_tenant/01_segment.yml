@@ -38,7 +38,7 @@ spec:
     - segment: c900-web-p
       deployment: DC-KTW1
       vni: 10100
-      vlan_domain_segments:
+      vlans:
         data:
           - device: ktw1-leaf-01
             vlan_id: 100

@@ -16,7 +16,7 @@
 #   - shared_capabilities: the shared objects the device is a member of (the shared device edge); the ManagedVRF
 #     ones are its instances (utils/vrf_demand.py device_memberships). Declared on DcimCapabilities, so it sits
 #     inside `... on DcimCapabilities`.
-#   - vlan_domain_segments: the rows of the device (one per segment on this switch; no domain object), with
+#   - vlans: the rows of the device (one per segment on this switch; no domain object), with
 #     the segment's gateway namespace: a routed row needs the namespace and an SVI.
 #   - interfaces: the addresses of the device's own interfaces (their namespaces are demand; a BGP session's local
 #     address is one of them), its SVIs (role svi) with their VRF and row, and the firewall / load-balancer contexts
@@ -55,7 +55,7 @@ query vrf_instances($device_ids: [ID], $with_instances: Boolean = true) {
         member_of_groups { edges { node { name { value } } } }
         ... on DcimPhysicalDevice {
           deployment { node { ...VrfDemandHostingFields } }
-          vlan_domain_segments { edges { node { ...VrfDemandRowFields } } }
+          vlans { edges { node { ...VrfDemandRowFields } } }
         }
         ... on CloudNetworkAppliance {
           deployment { node { ...VrfDemandHostingFields } }
@@ -80,7 +80,7 @@ query vrf_instances($device_ids: [ID], $with_instances: Boolean = true) {
                 ... on DcimVirtualInterface {
                   ip_address { node { address { value } ip_namespace { node { name { value } } } } }
                   vrf { node { id deployment { node { id } } namespace { node { name { value } } } } }
-                  vlan_domain_segment { node { id } }
+                  segment_vlan { node { id } }
                 }
                 capabilities {
                   edges {
@@ -126,7 +126,7 @@ fragment VrfDemandHostingFields on TopologyDeployment {
 }
 
 # A row of the device's VLAN domain with its segment's gateway namespace (a routed row needs it and an SVI).
-fragment VrfDemandRowFields on ManagedVlanDomainSegment {
+fragment VrfDemandRowFields on ManagedSegmentVlan {
   id
   vlan_id { value }
   segment_deployment {

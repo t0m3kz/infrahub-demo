@@ -1,4 +1,4 @@
-"""MLAG pairs in the per-device VLAN rows (generators/vlan_domain.py).
+"""MLAG pairs in the per-device VLAN rows (generators/segment_vlan.py).
 
 A device that needs a segment brings its MLAG peer with it (a dual-homed port-channel is tagged on both peers, so a
 peer with no port of the segment still gets a row), and a pair shares ONE vlan_id. A late pairing whose existing rows
@@ -11,8 +11,8 @@ import asyncio
 from collections.abc import Sequence
 from typing import Any
 
-from generators.protocols import DcimPhysicalDevice, ManagedMLAG, ManagedVlanDomainSegment
-from tests.unit.vlan_domain_helpers import VlanWorld, make_device, reconcile
+from generators.protocols import DcimPhysicalDevice, ManagedMLAG, ManagedSegmentVlan
+from tests.unit.segment_vlan_helpers import VlanWorld, make_device, reconcile
 
 _PORT = "DcimPhysicalInterface"
 
@@ -231,7 +231,7 @@ class TestLocksAndIdempotency:
             "vlan-device-ids-z1",
             "vlan-device-ids-z2",
         ]
-        reads = world.reads(ManagedVlanDomainSegment)
+        reads = world.reads(ManagedSegmentVlan)
         assert len(reads) == 1 and reads[0]["device__ids"] == ["m1", "m2", "z1", "z2"]
 
     def test_a_rerun_writes_and_locks_nothing_more(self) -> None:

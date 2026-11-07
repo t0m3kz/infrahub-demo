@@ -253,7 +253,7 @@ def _svi(iface: dict[str, Any]) -> SviFacts:
         vrf_id=vrf.get("id"),
         vrf_namespace=(vrf.get("namespace") or {}).get("name"),
         vrf_deployment_id=(vrf.get("deployment") or {}).get("id"),
-        row_id=(iface.get("vlan_domain_segment") or {}).get("id"),
+        row_id=(iface.get("segment_vlan") or {}).get("id"),
         has_address=bool((iface.get("ip_address") or {}).get("address")),
         has_capabilities=bool(iface.get("capabilities")),
     )
@@ -285,7 +285,7 @@ def instance_facts(vrf: dict[str, Any]) -> InstanceFacts:
 def device_vrf_facts(device: dict[str, Any]) -> DeviceVrfFacts:
     """The facts of one cleaned ``DcimDevice`` node of queries/validation/vrf_instances.gql."""
     interfaces = device.get("interfaces") or []
-    rows = device.get("vlan_domain_segments") or []
+    rows = device.get("vlans") or []
     row_facts = [(row, _routed_row(row)) for row in rows]
     routed = [routed_row for _, routed_row in row_facts if routed_row]
     svis = tuple(_svi(iface) for iface in interfaces if iface.get("role") == SVI_ROLE)

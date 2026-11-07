@@ -22,12 +22,12 @@ Writes RelationshipAdd/RelationshipRemove on the port, untracked: a tagged port 
 to a run.
 
 The rows (one per device, the MLAG peers of a tagged device included even with no port of the segment, so a dual-homed
-port-channel is tagged on both; generators/vlan_domain.py) decide which switches route the segment, so the same reconcile
+port-channel is tagged on both; generators/segment_vlan.py) decide which switches route the segment, so the same reconcile
 ends with the VRF instances and SVIs of every device the segment's rows were on before or are on after (a switch that
 lost its row included): generators/helpers/vrf.py, inside the segment lock (lock order: segment, then the device locks).
 
 A deleted segment is not reconciled (nothing to read its rows from, and no trigger runs on a delete). Its rows and
-SVIs go by the schema's cascade, not by this code: ``SegmentDeployment.vlan_domain_segments`` is ``on_delete: cascade``
+SVIs go by the schema's cascade, not by this code: ``SegmentDeployment.vlans`` is ``on_delete: cascade``
 and so is the row's ``svi``; whether the server also removes the deployment with the segment is not proven (its
 ``segment`` is a mandatory attribute-kind relationship with no cascade of its own). What can linger converges later:
 the next ``reconcile_vrfs`` of each switch (any segment, circuit or context run that touches it) deletes an SVI whose
@@ -48,7 +48,7 @@ from ..far_end import far_end_interfaces
 from ..helpers.edge_source import add_edges_with_source, current_account_id, remove_edges
 from ..helpers.vrf import VrfMixin
 from ..protocols import DcimPhysicalInterface
-from ..vlan_domain import VlanDomainMixin, segment_lock_key
+from ..segment_vlan import SegmentVlanMixin, segment_lock_key
 from .endpoint import ENDPOINT_NIC_ROLES
 
 _SWITCHED_PORT_KINDS = frozenset({"DcimPhysicalInterface", "DcimLAGInterface"})
@@ -57,10 +57,10 @@ _SWITCHED_PORT_KINDS = frozenset({"DcimPhysicalInterface", "DcimLAGInterface"})
 _SEGMENT_COMPONENTS_QUERY_PATH = Path(__file__).resolve().parents[2] / "queries/topology/add/segment_components.gql"
 
 
-class SegmentPortTagMixin(VrfMixin, VlanDomainMixin):
+class SegmentPortTagMixin(VrfMixin, SegmentVlanMixin):
     """Mixin providing the segment's port tags and, for a VXLAN segment, its VLAN rows and what routes on them.
 
-    Expects the host class to provide what VlanDomainMixin does.
+    Expects the host class to provide what SegmentVlanMixin does.
     """
 
     _account_id_cache: str | None = None
@@ -84,7 +84,7 @@ class SegmentPortTagMixin(VrfMixin, VlanDomainMixin):
             if added or removed:
                 state = await self._fetch_segment_vlan_state(segment_id)
             before = self._row_device_ids(state)
-            if await self._reconcile_segment_vlan_domains_locked(segment_id, segment_name, state):
+            if await self._reconcile_segment_vlans_locked(segment_id, segment_name, state):
                 state = await self._fetch_segment_vlan_state(segment_id)
             await self.reconcile_vrfs(before | self._row_device_ids(state))
         return added, removed
@@ -95,7 +95,7 @@ class SegmentPortTagMixin(VrfMixin, VlanDomainMixin):
 
         The ports of the context's ``capabilities`` that are a switch port or a LAG with the firewall service role:
         the border leaf ports facing the HA pair (the members' own sub-interfaces are virtual interfaces).
-        ``segment`` is the cleaned state segment (queries/topology/add/segment_vlan_domains.gql).
+        ``segment`` is the cleaned state segment (queries/topology/add/segment_vlans.gql).
         """
         context = segment.get("terminated_on") or {}
         return {
@@ -141,7 +141,7 @@ class SegmentPortTagMixin(VrfMixin, VlanDomainMixin):
         whose source is that account and that no instance lands on any more (an
         instance that moved, a component that left, a segment no longer terminated). ``ports`` are the ports
         on the segment today, ``{"id", "source_id", ...}``
-        (VlanDomainMixin._segment_ports). An edge with another source or none is
+        (SegmentVlanMixin._segment_ports). An edge with another source or none is
         never removed (a person's port stays, even with no component on the
         segment), and a port already on the segment is not written again, so a
         person's edge on a derived port keeps its (empty) source. Written with

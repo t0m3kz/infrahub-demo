@@ -225,7 +225,7 @@ class TestCampusRoles:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("role", ["access-switch", "distribution-switch"])
-    async def test_a_campus_switch_is_created_without_a_vlan_domain_record(self, role: str) -> None:
+    async def test_a_campus_switch_is_created_without_a_segment_vlan_record(self, role: str) -> None:
         """Only the device is created: no MLAG, no per-device VLAN domain."""
         gen = _make_generator()
         gen.client.create = AsyncMock(

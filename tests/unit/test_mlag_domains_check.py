@@ -15,7 +15,7 @@ from checks.mlag_domains import (
 )
 from tests.unit.query_shape_helpers import query_tree, unselected
 from utils.data_cleaning import clean_data
-from utils.vlan_domain import mlag_peer_devices
+from utils.segment_vlan import mlag_peer_devices
 
 
 def _domain(name: str, *devices: str, peer_devices: str | None = None) -> dict[str, Any]:
@@ -35,7 +35,7 @@ def _domain(name: str, *devices: str, peer_devices: str | None = None) -> dict[s
 
 
 def _row(row_id: str, device: str, vlan_id: int, deployment: str = "sd-web", segment: str = "web") -> dict[str, Any]:
-    """One raw ManagedVlanDomainSegment edge."""
+    """One raw ManagedSegmentVlan edge."""
     return {
         "node": {
             "id": row_id,
@@ -75,14 +75,14 @@ def _raw(
     """The raw query response."""
     return {
         "ManagedMLAG": {"edges": list(domains)},
-        "ManagedVlanDomainSegment": {"edges": list(rows)},
+        "ManagedSegmentVlan": {"edges": list(rows)},
         "DcimLAGInterface": {"edges": list(lags)},
     }
 
 
 def _rows(*rows: dict[str, Any]) -> list[dict[str, Any]]:
     """The rows as the check sees them, after clean_data."""
-    return clean_data(_raw(rows=rows))["ManagedVlanDomainSegment"]
+    return clean_data(_raw(rows=rows))["ManagedSegmentVlan"]
 
 
 def _lags(*lags: dict[str, Any]) -> list[dict[str, Any]]:
@@ -277,7 +277,7 @@ def test_the_fixtures_only_emit_fields_the_query_selects() -> None:
     raw = _raw(_PAIR, rows=(_row("r1", "a", 100),), lags=(_lag(1, "a"),))
     assert unselected(raw, tree) == []
     # the pair rule needs the segment deployment, the row's device and the LAG's MLAG
-    assert {"segment_deployment", "device", "vlan_id"} <= set(tree["ManagedVlanDomainSegment"]["edges"]["node"])
+    assert {"segment_deployment", "device", "vlan_id"} <= set(tree["ManagedSegmentVlan"]["edges"]["node"])
     assert {"lag_id", "lacp_mode", "minimum_links", "role", "mlag_domain"} <= set(
         tree["DcimLAGInterface"]["edges"]["node"]
     )

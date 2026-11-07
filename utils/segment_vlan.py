@@ -1,8 +1,8 @@
 """MLAG pair helpers shared by generators, transforms and checks.
 
-There is no VLAN domain object: a segment's VLAN ID is a row on ONE device (``ManagedVlanDomainSegment.device``,
+There is no VLAN domain object: a segment's VLAN ID is a row on ONE device (``ManagedSegmentVlan.device``,
 unique on [device, vlan_id]). The two peers of an MLAG pair must carry the same VLAN ID for a segment (a dual-homed
-port-channel is one L2 broadcast domain): the allocator (generators/vlan_domain.py) gives them one id and
+port-channel is one L2 broadcast domain): the allocator (generators/segment_vlan.py) gives them one id and
 checks/mlag_domains.py reports a pair whose rows differ. The generator reads the capabilities as SDK peers and the
 checks as cleaned query data; both pass ``(typename, id)`` pairs here.
 """
