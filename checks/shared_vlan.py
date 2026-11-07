@@ -1,8 +1,8 @@
 """A segment with vlan_scope shared has one VLAN id on every switch, derived from its VNI (rule SV1).
 
 ``vlan_scope: shared`` is for L2 that is trunked between switches that cannot do VXLAN: the id is the same on both
-ends of a trunk, so it cannot be a per-switch local choice. The id is VLAN = VNI - ``SHARED_VLAN_VNI_OFFSET`` (the
-shared band, ``utils/limits.py``); ``generators/segment_vlan.py`` writes it and this check reports a row that differs
+ends of a trunk, so it cannot be a per-switch local choice. The id is ``SHARED_VLAN_ID_MIN`` + (VNI - ``GLOBAL_L2_VNI_START``) (the shared band,
+``utils/limits.py``; the VNI is the one the global pool hands out); ``generators/segment_vlan.py`` writes it and this check reports a row that differs
 (a hand edit), a VNI outside the band, or two VNIs in the deployments of one segment.
 """
 
@@ -12,8 +12,7 @@ from typing import Any
 
 from checks.base import WarningCheck
 from utils.data_cleaning import clean_data
-from utils.limits import SHARED_VLAN_ID_MAX, SHARED_VLAN_ID_MIN, SHARED_VLAN_VNI_OFFSET
-from utils.segment_vlan import shared_vlan_id
+from utils.segment_vlan import shared_vlan_id, shared_vni_band
 
 SHARED = "shared"
 
@@ -27,7 +26,7 @@ def shared_vlan_errors(segments: list[dict[str, Any]], deployments: list[dict[st
         if segment.get("id") in shared:
             by_segment.setdefault(segment["id"], []).append(item)
     errors: list[tuple[str, str]] = []
-    band = f"VNI {SHARED_VLAN_ID_MIN + SHARED_VLAN_VNI_OFFSET}-{SHARED_VLAN_ID_MAX + SHARED_VLAN_VNI_OFFSET}"
+    band = f"VNI {shared_vni_band()}"
     for segment_id, name in shared.items():
         items = by_segment.get(segment_id, [])
         vnis = {item["vni"] for item in items if item.get("vni") is not None}

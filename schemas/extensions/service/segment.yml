@@ -73,7 +73,7 @@ nodes:
             color: "#7FBF7F"
           - name: shared
             label: Shared
-            description: "One VLAN id on every switch, derived from the VNI (VLAN = VNI - 10000, VNI 12500-12999): for L2 trunked between switches that cannot do VXLAN"  # yamllint disable-line rule:line-length
+            description: "One VLAN id on every switch, derived from the segment's one VNI of the global pool (VNI 40000-40499 gives VLAN 2500-2999): for L2 trunked between switches that cannot do VXLAN"  # yamllint disable-line rule:line-length
             color: "#E67E22"
     relationships:
       # TopologyDeployment, not TopologyCustomer: a TopologyCustomerOffice hosts

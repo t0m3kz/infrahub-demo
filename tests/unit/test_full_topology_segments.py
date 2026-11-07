@@ -67,7 +67,7 @@ def test_each_dc_declares_its_deployment_with_the_same_vlan_on_both_leaves() -> 
 
 
 def test_the_stretched_segment_is_shared_one_vni_and_the_vlan_it_gives_on_every_leaf_of_both_dcs() -> None:
-    """c900-sync-p: two realizations (KTW1, WAW1) with ONE VNI, and on all eight switches (leaves and border leaves) the VLAN id VNI - 10000."""
+    """c900-sync-p: two realizations (KTW1, WAW1) with ONE VNI, and on all eight switches (leaves and border leaves) the VLAN id 2500 + VNI - 40000."""
     rows = [row for row in _deployment_rows() if row["segment"] == _STRETCHED]
     assert sorted(row["deployment"] for row in rows) == ["DC-KTW1", "DC-WAW1"]
     vnis = {row["vni"] for row in rows}

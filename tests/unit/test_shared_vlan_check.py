@@ -51,12 +51,12 @@ def _run(segments: list[dict[str, Any]], deployments: list[dict[str, Any]]) -> l
 
 def test_rows_with_the_id_of_the_vni_pass_in_every_deployment() -> None:
     assert (
-        _run([_segment()], [_deployment(12500, ("a", 2500)), _deployment(12500, ("b", 2500), name="c900-sync-p")]) == []
+        _run([_segment()], [_deployment(40000, ("a", 2500)), _deployment(40000, ("b", 2500), name="c900-sync-p")]) == []
     )
 
 
 def test_a_row_with_another_id_is_reported_with_the_expected_one() -> None:
-    findings = _run([_segment()], [_deployment(12500, ("a", 2500), ("b", 2501))])
+    findings = _run([_segment()], [_deployment(40000, ("a", 2500), ("b", 2501))])
 
     assert len(findings) == 1
     assert "2501 on 'b'" in findings[0]["message"] and "gives VLAN 2500" in findings[0]["message"]
@@ -65,7 +65,7 @@ def test_a_row_with_another_id_is_reported_with_the_expected_one() -> None:
 
 def test_a_vni_outside_the_shared_band_or_two_vnis_are_reported_once_per_segment() -> None:
     assert len(_run([_segment()], [_deployment(10100, ("a", 100))])) == 1
-    assert len(_run([_segment()], [_deployment(12500, ("a", 2500)), _deployment(12501, ("b", 2501))])) == 1
+    assert len(_run([_segment()], [_deployment(40000, ("a", 2500)), _deployment(40001, ("b", 2501))])) == 1
     assert len(_run([_segment()], [_deployment(None, ("a", 2500))])) == 1
 
 
@@ -76,7 +76,7 @@ def test_a_local_segment_is_not_judged() -> None:
 def test_the_pure_function_and_the_check_agree() -> None:
     errors = shared_vlan_errors(
         [{"id": "s", "name": "x", "vlan_scope": "shared"}],
-        [{"segment": {"id": "s"}, "vni": 12600, "vlans": [{"id": "r", "vlan_id": 7, "device": {"name": "sw"}}]}],
+        [{"segment": {"id": "s"}, "vni": 40010, "vlans": [{"id": "r", "vlan_id": 7, "device": {"name": "sw"}}]}],
     )
     assert [object_id for _, object_id in errors] == ["r"]
 
@@ -84,7 +84,7 @@ def test_the_pure_function_and_the_check_agree() -> None:
 def test_the_fixtures_emit_only_fields_the_query_selects() -> None:
     tree = query_tree(QUERY)
     assert unselected([_segment()], tree["ManagedVxlanSegment"]["edges"]["node"]) == []
-    assert unselected([_deployment(12500, ("a", 2500))], tree["ManagedSegmentDeployment"]["edges"]["node"]) == []
+    assert unselected([_deployment(40000, ("a", 2500))], tree["ManagedSegmentDeployment"]["edges"]["node"]) == []
 
 
 def test_the_check_and_its_query_are_registered() -> None:

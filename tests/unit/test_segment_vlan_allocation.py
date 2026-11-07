@@ -65,13 +65,13 @@ def _run_shared(world: VlanWorld, segment: str, switches: Sequence[str], *, vni:
 
 
 class TestShared:
-    """vlan_scope shared: the VLAN id is derived from the VNI (VLAN = VNI - 10000) and is the same on every switch."""
+    """vlan_scope shared: the VLAN id is derived from the VNI (VLAN = 2500 + VNI - 40000) and is the same on every switch."""
 
     def test_every_switch_gets_the_id_of_the_vni_whatever_is_free(self) -> None:
         world = _standalone_world("a", "b")
         world.add("other", "sw-a", CUSTOMER_VLAN_ID_MIN)
 
-        _run_shared(world, "seg-1", ["a", "b"], vni=12500)
+        _run_shared(world, "seg-1", ["a", "b"], vni=40000)
 
         assert {c["device"]["id"]: c["vlan_id"] for c in world.created} == {"sw-a": 2500, "sw-b": 2500}
 
@@ -81,11 +81,11 @@ class TestShared:
         world.add("other", "sw-b", 2500)
 
         with pytest.raises(GeneratorError, match="sw-b"):
-            _run_shared(world, "seg-1", ["a", "b"], vni=12500)
+            _run_shared(world, "seg-1", ["a", "b"], vni=40000)
 
         assert world.created == []
 
-    @pytest.mark.parametrize("vni", [None, 10100, 13000])
+    @pytest.mark.parametrize("vni", [None, 10100, 40500])
     def test_a_vni_outside_the_shared_band_fails(self, vni: int | None) -> None:
         world = _standalone_world("a")
 

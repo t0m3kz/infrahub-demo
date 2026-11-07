@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from utils.limits import SHARED_VLAN_ID_MAX, SHARED_VLAN_ID_MIN, SHARED_VLAN_VNI_OFFSET
+from utils.limits import GLOBAL_L2_VNI_START, SHARED_VLAN_COUNT, SHARED_VLAN_ID_MIN
 
 MLAG_KIND = "ManagedMLAG"
 
@@ -38,10 +38,15 @@ def mlag_peer_devices(names: Iterable[str]) -> str:
 def shared_vlan_id(vni: int | None) -> int | None:
     """The VLAN id a SHARED segment (vlan_scope shared) has on every switch, derived from its VNI.
 
-    VLAN = VNI - SHARED_VLAN_VNI_OFFSET, and only when that falls in the shared band; None for a VNI outside it (or
-    no VNI), which the generator and the check report. One rule for both, so they cannot drift.
+    VLAN = SHARED_VLAN_ID_MIN + (VNI - GLOBAL_L2_VNI_START): the segment's one VNI from the global pool maps onto the
+    shared band, and only when it falls in the first SHARED_VLAN_COUNT numbers of that pool; None for any other VNI (or
+    none), which the generator and the check report. One rule for both, so they cannot drift.
     """
-    if vni is None:
+    if vni is None or not 0 <= vni - GLOBAL_L2_VNI_START < SHARED_VLAN_COUNT:
         return None
-    vlan_id = vni - SHARED_VLAN_VNI_OFFSET
-    return vlan_id if SHARED_VLAN_ID_MIN <= vlan_id <= SHARED_VLAN_ID_MAX else None
+    return SHARED_VLAN_ID_MIN + (vni - GLOBAL_L2_VNI_START)
+
+
+def shared_vni_band() -> str:
+    """The VNIs a shared segment may have, for messages."""
+    return f"{GLOBAL_L2_VNI_START}-{GLOBAL_L2_VNI_START + SHARED_VLAN_COUNT - 1}"

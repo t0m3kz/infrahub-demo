@@ -36,12 +36,16 @@ CUSTOMER_VLAN_ID_MIN = 100
 CUSTOMER_VLAN_ID_MAX = 2999
 # The customer band is split: the generator draws a LOCAL id of a segment (vlan_scope local) from 100-2499; a SHARED
 # segment (vlan_scope shared: one id on every switch, for L2 that is trunked between switches that cannot do VXLAN) has
-# the id derived from its VNI, VLAN = VNI - SHARED_VLAN_VNI_OFFSET, in 2500-2999 (VNI 12500-12999). The bands never
-# overlap, so a shared id is never taken by a local allocation.
+# the id derived from its VNI, VLAN = SHARED_VLAN_ID_MIN + (VNI - GLOBAL_L2_VNI_START), in 2500-2999. The VNI is the ONE
+# a stretched segment draws from the GLOBAL-L2VNI pool (data/bootstrap/18_vni_pools.yml, which starts at
+# GLOBAL_L2_VNI_START and is handed out in order), so the first SHARED_VLAN_COUNT such segments can be shared and a shared
+# VNI never collides with a site pool (10001-39999). The bands never overlap, so a shared id is never taken by a local
+# allocation.
 LOCAL_VLAN_ID_MAX = 2499
 SHARED_VLAN_ID_MIN = LOCAL_VLAN_ID_MAX + 1
 SHARED_VLAN_ID_MAX = CUSTOMER_VLAN_ID_MAX
-SHARED_VLAN_VNI_OFFSET = 10000
+SHARED_VLAN_COUNT = SHARED_VLAN_ID_MAX - SHARED_VLAN_ID_MIN + 1
+GLOBAL_L2_VNI_START = 40000
 FW_CONTEXT_VLAN_START = 3000
 FW_CONTEXT_VLAN_END = 3099
 LB_CONTEXT_VLAN_START = 3100

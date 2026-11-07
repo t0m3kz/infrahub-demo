@@ -53,11 +53,8 @@ from utils.limits import (
     GROUP_PROVIDER_STUBS,
     GROUP_SDWAN_GATEWAYS,
     LOCAL_VLAN_ID_MAX,
-    SHARED_VLAN_ID_MAX,
-    SHARED_VLAN_ID_MIN,
-    SHARED_VLAN_VNI_OFFSET,
 )
-from utils.segment_vlan import mlag_id, shared_vlan_id
+from utils.segment_vlan import mlag_id, shared_vlan_id, shared_vni_band
 
 from .protocols import DcimPhysicalDevice, ManagedMLAG, ManagedSegmentVlan
 
@@ -378,7 +375,7 @@ class SegmentVlanMixin:
 
     def _shared_vlan_id(self, segment_name: str, state: dict[str, Any]) -> int | None:
         """The VLAN id of a segment with vlan_scope shared (from its VNI), None for a local one; fails the run when a
-        shared segment has no VNI yet, two, or one outside the shared band (VLAN = VNI - SHARED_VLAN_VNI_OFFSET)."""
+        shared segment has no VNI yet, two, or one outside the shared band (VLAN = SHARED_VLAN_ID_MIN + VNI - GLOBAL_L2_VNI_START)."""
         if (state["segment"].get("vlan_scope") or "local") != "shared":
             return None
         vnis = {item["vni"] for item in state["deployments"] if item.get("vni") is not None}
@@ -386,8 +383,7 @@ class SegmentVlanMixin:
         if len(vnis) != 1 or None in vlan_ids:
             self.fail(
                 f"Segment {segment_name} is shared: it needs ONE VNI in its deployments within the shared band "
-                f"(VNI {SHARED_VLAN_ID_MIN + SHARED_VLAN_VNI_OFFSET}-{SHARED_VLAN_ID_MAX + SHARED_VLAN_VNI_OFFSET}), "
-                f"found {sorted(vnis) or 'none'}"
+                f"(VNI {shared_vni_band()}, the first numbers of the global pool), found {sorted(vnis) or 'none'}"
             )
         return next(iter(vlan_ids))
 

@@ -165,7 +165,8 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, SegmentPortTagMixin, Common
             target_deployments = self._resolve_target_deployments(segment, segment_name)
 
         stretch_scope = segment.get("stretch_scope") or "local"
-        stretched = stretch_scope != "local"
+        # A shared segment (one VLAN id everywhere, derived from its VNI) draws the ONE global VNI too, even in one DC.
+        stretched = stretch_scope != "local" or (segment.get("vlan_scope") or "local") == "shared"
         self.logger.info(f"Segment {segment_name}: stretch_scope={stretch_scope}")
 
         stretched_vni_pool: dict[str, Any] | None = None
