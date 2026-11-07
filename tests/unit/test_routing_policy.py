@@ -67,15 +67,18 @@ def test_a_direction_with_no_policy_has_nothing_to_compose() -> None:
     assert compose_user_maps({"name": "s"}, IN, [], []) is None
 
 
-def test_every_term_matches_the_guard_so_a_policy_never_widens_what_the_model_allows() -> None:
+def test_the_first_term_denies_everything_outside_the_guard_so_a_policy_never_widens_what_the_model_allows() -> None:
+    """A route-map is read in order: what the guard does not allow is denied before any user term can permit it."""
     policies = normalize_policies([_policy("p", _term(10, match_community_list=_clist(), set_local_pref=300))])
     composed = compose_user_maps({"name": "s", "local_pref": 100}, IN, policies, [_guard()])
 
     assert composed
     (rmap,) = composed["maps"]
     assert rmap["family"] == "ipv4" and rmap["filter"] == {"direction": "in", "family": "ipv4"}
-    assert all(term["match"]["guard"] for term in rmap["terms"])
-    assert rmap["closing"]["match"]["guard"] is True
+    first, second = rmap["terms"]
+    assert first["outside_guard"] is True and first["action"] == "deny" and first["seq"] == 10
+    assert second["outside_guard"] is False and second["seq"] == 20 and second["policy"] == "p"
+    assert rmap["closing"]["seq"] == 30
 
 
 def test_a_permit_term_inherits_the_session_sets_unless_it_sets_its_own() -> None:
@@ -86,6 +89,7 @@ def test_a_permit_term_inherits_the_session_sets_unless_it_sets_its_own() -> Non
     (rmap,) = composed["maps"]
     first, second, third = rmap["terms"]
     assert first["set"]["local_pref"] == 300 and second["set"]["local_pref"] == 100 and third["set"] == {}
+    assert [t["seq"] for t in rmap["terms"]] == [10, 20, 30] and rmap["closing"]["seq"] == 40
     assert rmap["closing"]["set"]["local_pref"] == 100
 
 
@@ -97,8 +101,9 @@ def test_the_map_has_one_family_per_guard_and_a_term_with_another_family_list_is
     assert composed
     by_family = {m["family"]: m for m in composed["maps"]}
     assert set(by_family) == {"ipv4", "ipv6"}
-    assert [t["match"]["prefix_list"]["name"] for t in by_family["ipv4"]["terms"]] == ["PL4"]
-    assert [t["match"]["prefix_list"]["name"] for t in by_family["ipv6"]["terms"]] == ["PL6"]
+    user_terms = {f: [t for t in m["terms"] if not t["outside_guard"]] for f, m in by_family.items()}
+    assert [t["match"]["prefix_list"]["name"] for t in user_terms["ipv4"]] == ["PL4"]
+    assert [t["match"]["prefix_list"]["name"] for t in user_terms["ipv6"]] == ["PL6"]
     assert {m["name"] for m in composed["maps"]} == {"RM-USER-s-OUT-IPV4", "RM-USER-s-OUT-IPV6"}
 
 
@@ -109,7 +114,8 @@ def test_a_guard_that_is_not_attached_yet_is_not_put_in_the_terms() -> None:
 
     assert composed
     (rmap,) = composed["maps"]
-    assert rmap["family"] is None and rmap["filter"] is None and rmap["terms"][0]["match"]["guard"] is False
+    assert rmap["family"] is None and rmap["filter"] is None
+    assert not any(term["outside_guard"] for term in rmap["terms"])
 
 
 def test_one_policy_that_denies_by_default_closes_the_map_with_the_implicit_deny() -> None:
@@ -150,14 +156,54 @@ def test_the_lists_the_terms_name_are_defined_once_by_name() -> None:
     assert [c["name"] for c in composed["lists"]["community"]] == ["CL-TRANSIT"]
 
 
-def test_compose_policy_makes_the_neighbour_name_the_user_maps_instead_of_its_own_ones() -> None:
+def test_compose_policy_takes_the_own_map_off_the_neighbour_when_a_user_map_holds_its_sets() -> None:
+    """The neighbour names the user maps (a template macro, per family), not the own map of the direction."""
     session = {
         "name": "up-1",
         "local_pref": 200,
+        "med": 20,
         "routing_policies": {IN: normalize_policies([_policy("p", _term(10, add_communities=["64500:1"]))]), OUT: []},
     }
     policy = compose_policy(session)
 
-    assert [(a["map"], a["direction"]) for a in policy["attach"]] == [("RM-USER-up-1-IN", "in")]
-    assert policy["user"][0]["maps"][0]["terms"][0]["set"]["add_communities"] == ["64500:1"]
-    assert policy["inbound"]["own"]["local_pref"] == 200  # the session's own map still exists: nothing else changes
+    assert [(a["map"], a["direction"]) for a in policy["attach"]] == [("up-1-MED-OUT", "out")]
+    (composed,) = policy["user"]
+    assert composed["direction"] == "in"
+    assert composed["maps"][0]["terms"][0]["set"]["add_communities"] == ["64500:1"]
+    assert composed["maps"][0]["closing"]["set"]["local_pref"] == 200
+
+
+def test_a_skipped_direction_keeps_its_own_and_shared_maps() -> None:
+    session = {
+        "name": "fab-1",
+        "export_local_only": True,
+        "routing_policies": {IN: [], OUT: normalize_policies([_policy("p", _term(10))])},
+    }
+    policy = compose_policy(session)
+
+    assert [(a["map"], a["direction"]) for a in policy["attach"]] == [("RM-FABRIC-OUT", "out")]
+    assert policy["user"][0]["skipped"] == "export_local_only"
+
+
+def test_standard_and_large_communities_added_by_a_term_are_set_separately() -> None:
+    policies = normalize_policies([_policy("p", _term(10, add_communities=["64500:1", "no-export", "64500:1:2"]))])
+    composed = compose_user_maps({"name": "s"}, IN, policies, [])
+
+    assert composed
+    sets = composed["maps"][0]["terms"][0]["set"]
+    assert sets["add_communities"] == ["64500:1", "no-export"] and sets["add_large_communities"] == ["64500:1:2"]
+
+
+def test_the_evpn_filter_is_not_a_guard_of_a_user_map() -> None:
+    policies = normalize_policies([_policy("p", _term(10))])
+    composed = compose_user_maps({"name": "s"}, IN, policies, [_guard("in", "evpn"), _guard("in", "ipv4")])
+
+    assert composed
+    assert [m["family"] for m in composed["maps"]] == ["ipv4"]
+
+
+def test_a_session_with_only_an_evpn_guard_takes_no_policy() -> None:
+    policies = normalize_policies([_policy("p", _term(10))])
+    composed = compose_user_maps({"name": "s"}, IN, policies, [_guard("in", "evpn")])
+
+    assert composed and composed["maps"] == [] and composed["skipped"] == "evpn"

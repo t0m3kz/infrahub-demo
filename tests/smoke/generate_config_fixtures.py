@@ -29,6 +29,7 @@ from tests.smoke.fixture_builders import (
     mlag,
     office,
     routing_identity,
+    routing_policy,
     routing_protection,
     transit,
 )
@@ -49,6 +50,7 @@ WRITERS: list[tuple[str | None, Callable[[], tuple[int, int]]]] = [
     (None, group_policy.write_fixtures),
     (None, routing_identity.write_fixtures),
     (None, routing_protection.write_fixtures),
+    (None, routing_policy.write_fixtures),
 ]
 
 

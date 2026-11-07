@@ -3,22 +3,24 @@
 A person or a generator attaches ``RoutingPolicy`` objects to a peering, one set per direction. This module turns them
 into the maps the templates render, under one rule that no policy can break: **a policy sets and tightens, it never
 widens.** The prefix filter derived by ``utils/bgp_expectation.py`` (``session["policy"]["filters"]``) is the guard of
-its direction and family; every term of a user map matches the guard AND what the term itself matches, so a route the
-model does not allow never reaches a ``permit`` term, whatever a policy says.
+its direction and family. The first term of a user map denies everything OUTSIDE the guard, so the terms after it only
+ever see a route the model allows (a route-map is evaluated in order; two matches of one type in a term are an OR on
+every platform, so the guard cannot be a second match of a term).
 
 ``normalize_policies`` reads the cleaned ``import_policies`` / ``export_policies`` of a peering. ``compose_user_maps``
 makes, per direction, one map per address family that has a guard (a map names one address family's lists), or a
 single map when the direction has none:
 
-- the terms of the attached policies in order (priority, name, seq), renumbered 10, 20, ... in the map;
+- when there is a guard, the term ``outside_guard`` (deny) first;
+- the terms of the attached policies in order (priority, name, seq), renumbered in the map;
 - a permit term inherits the session's own sets (local-preference inbound, MED outbound, no-export) unless it sets its own;
-- a closing term: the guard permit with the session's sets (a route inside the guard that no term matched) when the
-  policies' combined default is ``permit`` (``deny`` as soon as one policy says so), else nothing, and a route-map
-  ends in an implicit deny.
+- a closing term, a permit with the session's sets, when the policies' combined default is ``permit`` (``deny`` as soon
+  as one policy says so, then nothing: a route-map ends in an implicit deny).
 
 A term whose prefix list is of another family than the map's is left out of that map; a term with no prefix list
 belongs to every family map. A direction that already names a map a template defines (``RM-FABRIC-OUT``, ``RM-DCI-IN``:
-the internal fabric) cannot name a second one, so its policies are reported in ``skipped`` and not composed.
+the internal fabric) cannot name a second one, and an EVPN-only session has no policy match on any platform, so their policies are
+reported in ``skipped`` and not composed.
 """
 
 from __future__ import annotations
@@ -104,7 +106,9 @@ def _term_sets(term: dict[str, Any], base: dict[str, Any], direction: str) -> di
         sets["local_pref"] = term["local_pref"]
     if term["med"] is not None:
         sets["med"] = term["med"]
-    sets["add_communities"] = term["add_communities"]
+    # a large community has two colons (ASN:value:value): a template sets the two kinds with two commands
+    sets["add_communities"] = [c for c in term["add_communities"] if str(c).count(":") != 2]
+    sets["add_large_communities"] = [c for c in term["add_communities"] if str(c).count(":") == 2]
     sets["delete_communities"] = term["delete_communities"]
     sets["prepend"] = term["prepend"]
     return sets
@@ -118,9 +122,21 @@ def _family_map(
     base: dict[str, Any],
     guard: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    """One map: the terms of the policies (those of the family), then the closing term."""
+    """One map: the guard term, the terms of the policies (those of the family), then the closing term."""
     name = f"RM-USER-{session_name}-{direction.upper()}" + (f"-{family.upper()}" if family else "")
     terms: list[dict[str, Any]] = []
+    if guard:
+        terms.append(
+            {
+                "seq": 10,
+                "policy": None,
+                "source_seq": None,
+                "action": DENY,
+                "outside_guard": True,
+                "match": {},
+                "set": {},
+            }
+        )
     for policy in policies:
         for term in policy["terms"]:
             plist = term["prefix_list"]
@@ -132,16 +148,13 @@ def _family_map(
                     "policy": policy["name"],
                     "source_seq": term["seq"],
                     "action": term["action"],
-                    "match": {"prefix_list": plist, "community_list": term["community_list"], "guard": bool(guard)},
+                    "outside_guard": False,
+                    "match": {"prefix_list": plist, "community_list": term["community_list"]},
                     "set": _term_sets(term, base, direction),
                 }
             )
     permit = all(policy["default_action"] == PERMIT for policy in policies)
-    closing = (
-        {"seq": 10 * (len(terms) + 1), "action": PERMIT, "match": {"guard": bool(guard)}, "set": dict(base)}
-        if permit
-        else None
-    )
+    closing = {"seq": 10 * (len(terms) + 1), "action": PERMIT, "match": {}, "set": dict(base)} if permit else None
     return {
         "name": name,
         "direction": direction,
@@ -165,8 +178,16 @@ def compose_user_maps(
         return None
     if session.get(SHARED_MAP_FLAGS[direction]):
         return {"direction": direction, "maps": [], "skipped": SHARED_MAP_FLAGS[direction], "lists": _lists([])}
+    families = {f.get("family") for f in filters if f.get("direction") == direction}
+    if families == {"evpn"}:  # an overlay session carries EVPN only: no platform has a policy match for it
+        return {"direction": direction, "maps": [], "skipped": "evpn", "lists": _lists([])}
     base = _base_sets(session, direction)
-    guards = {f["family"]: f for f in filters if f.get("direction") == direction and f.get("attached")}
+    # The EVPN filter is not a unicast guard: a policy has no EVPN match on any platform, the filter stays as it is.
+    guards = {
+        f["family"]: f
+        for f in filters
+        if f.get("direction") == direction and f.get("attached") and f.get("family") != "evpn"
+    }
     name = str(session.get("name"))
     if guards:
         maps = [_family_map(name, direction, family, policies, base, guard) for family, guard in sorted(guards.items())]

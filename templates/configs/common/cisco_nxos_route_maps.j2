@@ -25,8 +25,9 @@ route-map {{ session.policy.outbound.own.name }} permit 10
 {%- endfor %}
 {#- The route protection's prefix-lists and route-maps (session.policy.filters): common/bgp_filter_objects.j2, which
     carries the evidence of every line. The EVPN ones (U) only when attached. #}
-{%- from 'common/bgp_filter_objects.j2' import bgp_filter_objects %}
+{%- from 'common/bgp_filter_objects.j2' import bgp_filter_objects, bgp_user_objects %}
 {{- bgp_filter_objects(bgp, '  ', true) }}
+{{- bgp_user_objects(bgp, '  ', 'nxos') }}
 {%- endif %}
 route-map RM-CONN-2-BGP permit 10
   match interface {{ ([loopback_name] + (vxlan.multisite.advertise_interfaces if vxlan and vxlan.multisite else [])) | unique | join(' ') }}

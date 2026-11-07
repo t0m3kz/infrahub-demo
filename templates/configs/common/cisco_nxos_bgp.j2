@@ -1,5 +1,5 @@
 {%- if capabilities is not defined or capabilities.bgp_enabled is not defined or capabilities.bgp_enabled %}
-{%- from 'common/bgp_filter_objects.j2' import bgp_filter_attachments %}
+{%- from 'common/bgp_filter_objects.j2' import bgp_filter_attachments, bgp_user_attachments %}
 {%- for bgp_config in bgp %}
 router bgp {{ bgp_config.local_as.asn }}
   router-id {{ bgp_config.router_ip }}
@@ -137,6 +137,7 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- endfor %}
 {%- endif %}
 {{- bgp_filter_attachments(session, _af, '      ', true) }}
+{{- bgp_user_attachments(session, _af, '      ') }}
     !
 {%- endfor %}
 {%- endfor %}
@@ -223,6 +224,7 @@ router bgp {{ bgp_config.local_as.asn }}
         route-map RM-{{ session.name }}-OUT out
 {%- endif %}
 {{- bgp_filter_attachments(session, _af, '        ', true) }}
+{{- bgp_user_attachments(session, _af, '        ') }}
 {%- endfor %}
   !
 {%- endfor %}

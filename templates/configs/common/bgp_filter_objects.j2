@@ -70,7 +70,9 @@ route-map {{ flt.map }} deny 10
     each line: EOS, IOS). A staged EVPN filter is not even rendered (U), a staged unicast one is. -#}
 {%- macro bgp_filter_attachments(session, family, indent, evpn=false, prefix='') -%}
 {%- for flt in session.policy.filters if flt.family == family %}
-{%- if flt.attached and (flt.family != 'evpn' or evpn) %}
+{%- if flt.get('replaced_by') %}
+{{ indent }}! route-map {{ flt.map }} {{ flt.direction }} is replaced by the routing policy map {{ flt.replaced_by }}, which holds it as its first term
+{%- elif flt.attached and (flt.family != 'evpn' or evpn) %}
 {{ indent }}{{ prefix }}route-map {{ flt.map }} {{ flt.direction }}
 {%- elif flt.family == 'evpn' %}
 {{ indent }}! staged or unsupported: the derived EVPN filter {{ flt.map }} ({{ flt.direction }}) is not rendered (U)
@@ -78,4 +80,114 @@ route-map {{ flt.map }} deny 10
 {{ indent }}! staged (routing_filter_enforce false): route-map {{ flt.map }} {{ flt.direction }} is not attached
 {%- endif %}
 {%- endfor %}
+{%- endmacro %}
+
+
+{#- The routing policies a person or a generator attached to the sessions (session.policy.user, composed by
+    transforms/helpers/routing_policy.py), for NX-OS (`dialect` nxos), Arista EOS (eos) and IOS XE (ios). Defined at column
+    0 BEFORE `router bgp`, once per name. A user map first denies what the route protection does not allow (the
+    complement of its prefix-list, `<list>-OUTSIDE`: every entry denied, everything else permitted), so the terms after it
+    only see a route the model allows: two `match ip address prefix-list` in one term would be an OR, not an AND.
+
+    Evidence (per line):
+    - I: `ip|ipv6 prefix-list <n> seq <s> permit|deny <prefix> [ge <g>] [le <l>]`; `ip community-list [standard] <n>
+      permit <community>` (EOS has no `standard` keyword; several members on one line must ALL be carried, one per line
+      is an OR); `route-map <n> permit|deny <seq>` with `match ip|ipv6 address prefix-list`, `match community`, `set
+      local-preference`, `set metric`, `set community <c> additive`, `set as-path prepend <asn> ...` (the local AS repeated),
+      `set comm-list <n> delete` (NX-OS, IOS XE) and `set community community-list <n> delete` (EOS). The same family of
+      constructs the route protection above and the NX-OS maps already carry; not checked against the guides here.
+    - U: large communities (`ip large-community-list`, `match large-community`, `set large-community ... additive`): their
+      spelling and support per release need a lab; they are rendered, never relied upon. -#}
+{%- macro _user_sets(sets, indent, dialect, local_as) -%}
+{%- if sets.get('local_pref') is not none %}
+{{ indent }}set local-preference {{ sets.local_pref }}
+{%- endif %}
+{%- if sets.get('med') is not none %}
+{{ indent }}set metric {{ sets.med }}
+{%- endif %}
+{%- set _std = (sets.get('add_communities') or []) + (['no-export'] if sets.get('no_export') else []) %}
+{%- if _std %}
+{{ indent }}set community {{ _std | join(' ') }} additive
+{%- endif %}
+{%- if sets.get('add_large_communities') %}
+{{ indent }}set large-community {{ sets.add_large_communities | join(' ') }} additive
+{%- endif %}
+{%- if sets.get('delete_communities') %}
+{{ indent }}{{ 'set community community-list ' ~ sets.delete_communities.name ~ ' delete' if dialect == 'eos' else 'set comm-list ' ~ sets.delete_communities.name ~ ' delete' }}
+{%- endif %}
+{%- if sets.get('prepend') %}
+{{ indent }}set as-path prepend {{ ([local_as] * sets.prepend) | join(' ') }}
+{%- endif %}
+{%- endmacro %}
+
+{%- macro bgp_user_objects(bgp, indent, dialect) -%}
+{%- set _seen = namespace(names=[]) -%}
+{%- for bgp_config in bgp or [] %}
+{%- for session in bgp_config.sessions %}
+{%- for composed in session.policy.user if composed.maps %}
+{%- for plist in composed.lists.prefix if ('P:' ~ plist.name) not in _seen.names %}
+{%- set _seen.names = _seen.names + ['P:' ~ plist.name] %}
+{%- for e in plist.entries %}
+{{ 'ipv6' if plist.family == 'ipv6' else 'ip' }} prefix-list {{ plist.name }} seq {{ e.seq }} {{ e.action }} {{ e.prefix }}{{ ' ge ' ~ e.min_length if e.min_length is not none }}{{ ' le ' ~ e.max_length if e.max_length is not none }}
+{%- endfor %}
+{%- endfor %}
+{%- for clist in composed.lists.community if ('C:' ~ clist.name) not in _seen.names %}
+{%- set _seen.names = _seen.names + ['C:' ~ clist.name] %}
+{%- set _kw = ('ip large-community-list' if clist.community_type == 'large' else 'ip community-list') ~ (' standard' if dialect != 'eos' else '') %}
+{%- if clist.match == 'all' %}
+{{ _kw }} {{ clist.name }} permit {{ clist.members | join(' ') }}
+{%- else %}
+{%- for member in clist.members %}
+{{ _kw }} {{ clist.name }} permit {{ member }}
+{%- endfor %}
+{%- endif %}
+{%- endfor %}
+{%- for rmap in composed.maps %}
+{%- set _v6 = rmap.family == 'ipv6' %}
+{%- if rmap.filter %}
+{%- set _flt = (session.policy.filters | selectattr('direction', 'equalto', rmap.direction) | selectattr('family', 'equalto', rmap.family) | list | first) %}
+{%- set _guard = _flt.list6 if _v6 else _flt.list %}
+{%- for e in _flt.entries if e.family == rmap.family %}
+{{ 'ipv6' if _v6 else 'ip' }} prefix-list {{ _guard }}-OUTSIDE seq {{ loop.index * 10 }} deny {{ e.prefix }}{{ ' le ' ~ e.le if e.le is not none }}
+{%- endfor %}
+{{ 'ipv6' if _v6 else 'ip' }} prefix-list {{ _guard }}-OUTSIDE seq 65000 permit {{ '::/0 le 128' if _v6 else '0.0.0.0/0 le 32' }}
+{%- endif %}
+{%- for term in rmap.terms %}
+route-map {{ rmap.name }} {{ term.action }} {{ term.seq }}
+{%- if term.outside_guard %}
+{{ indent }}match {{ 'ipv6' if _v6 else 'ip' }} address prefix-list {{ _guard }}-OUTSIDE
+{%- else %}
+{%- if term.match.prefix_list %}
+{{ indent }}match {{ 'ipv6' if term.match.prefix_list.family == 'ipv6' else 'ip' }} address prefix-list {{ term.match.prefix_list.name }}
+{%- endif %}
+{%- if term.match.community_list %}
+{{ indent }}match {{ 'large-community' if term.match.community_list.community_type == 'large' else 'community' }} {{ term.match.community_list.name }}
+{%- endif %}
+{{- _user_sets(term.set, indent, dialect, bgp_config.local_as.asn) }}
+{%- endif %}
+{%- endfor %}
+{%- if rmap.closing %}
+route-map {{ rmap.name }} permit {{ rmap.closing.seq }}
+{{- _user_sets(rmap.closing.set, indent, dialect, bgp_config.local_as.asn) }}
+{%- endif %}
+!
+{%- endfor %}
+{%- endfor %}
+{%- endfor %}
+{%- endfor %}
+{%- endmacro %}
+
+{#- The neighbour lines of one unicast address family for the user maps: a map of that family (or of none: both), and a
+    comment where a direction cannot take a policy (it already names a map a template defines). -#}
+{%- macro bgp_user_attachments(session, family, indent, prefix='') -%}
+{%- if family != 'evpn' %}
+{%- for composed in session.policy.user %}
+{%- if composed.skipped %}
+{{ indent }}! routing policy ({{ composed.direction }}) not attached: {{ 'an EVPN session takes no policy' if composed.skipped == 'evpn' else 'the session already names a shared map (' ~ composed.skipped ~ ')' }}
+{%- endif %}
+{%- for rmap in composed.maps if rmap.family is none or rmap.family == family %}
+{{ indent }}{{ prefix }}route-map {{ rmap.name }} {{ rmap.direction }}
+{%- endfor %}
+{%- endfor %}
+{%- endif %}
 {%- endmacro %}

@@ -166,13 +166,21 @@ def compose_policy(
         for direction in (IN, OUT)
         if (composed := compose_user_maps(session, direction, attached.get(direction) or [], filters))
     ]
-    # The maps of a direction with user policies: the neighbour names them, not its own or the filter's (they hold their sets).
+    # A direction with user maps names those (common/bgp_filter_objects.j2 bgp_user_attachments, per address family) and
+    # not its own, the filter's or a shared one: the user map holds the session's sets and the guard.
     for composed in user:
-        attach[:] = [a for a in attach if a["direction"] != composed["direction"]]
-        attach += [
-            {"map": m["name"], "direction": composed["direction"], "own": True, "user": True, "family": m["family"]}
-            for m in composed["maps"]
-        ]
+        if composed["maps"]:
+            attach[:] = [a for a in attach if a["direction"] != composed["direction"]]
+        # The user map of a family holds the guard (its first term), so the filter map of that direction and family is
+        # not attached: a neighbour names one map per direction and family.
+        for rmap in composed["maps"]:
+            for flt in filters:
+                if (
+                    rmap["filter"]
+                    and flt["direction"] == rmap["filter"]["direction"]
+                    and flt["family"] == rmap["filter"]["family"]
+                ):
+                    flt["replaced_by"] = rmap["name"]
     return {
         "inbound": {"own": own_in if "in" not in replaced else None},
         "outbound": {"own": own_out if "out" not in replaced else None},

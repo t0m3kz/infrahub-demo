@@ -1,0 +1,2252 @@
+{
+  "DcimDevice": {
+    "edges": [
+      {
+        "node": {
+          "__typename": "DcimPhysicalDevice",
+          "id": "dev-dc1-leaf-01",
+          "name": {
+            "value": "dc1-leaf-01"
+          },
+          "role": {
+            "value": "leaf"
+          },
+          "platform": {
+            "node": {
+              "id": "plat-arista_eos",
+              "name": {
+                "value": "arista_eos"
+              }
+            }
+          },
+          "primary_address": {
+            "node": {
+              "address": {
+                "value": "10.0.0.1/32"
+              },
+              "ip_namespace": {
+                "node": {
+                  "name": {
+                    "value": "default"
+                  }
+                }
+              }
+            }
+          },
+          "tags": {
+            "edges": []
+          },
+          "capabilities": {
+            "edges": [
+              {
+                "node": {
+                  "__typename": "ManagedBGP",
+                  "name": {
+                    "value": "bgp-underlay"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "multipath": {
+                    "value": true
+                  },
+                  "graceful_restart": {
+                    "value": true
+                  },
+                  "confederation_identifier": {
+                    "value": null
+                  },
+                  "local_as": {
+                    "node": {
+                      "asn": {
+                        "value": 65001
+                      }
+                    }
+                  },
+                  "router_id": {
+                    "node": {
+                      "address": {
+                        "value": "10.0.0.1/32"
+                      }
+                    }
+                  },
+                  "peerings": {
+                    "edges": [
+                      {
+                        "node": {
+                          "id": "peering-dc1-leaf-01-spine-01-ebgp",
+                          "name": {
+                            "value": "peer-dc1-leaf-01-spine-01-ebgp"
+                          },
+                          "session_type": {
+                            "value": "EBGP"
+                          },
+                          "bfd_enabled": {
+                            "value": true
+                          },
+                          "send_community": {
+                            "value": true
+                          },
+                          "send_extended_community": {
+                            "value": false
+                          },
+                          "local_pref": {
+                            "value": null
+                          },
+                          "med": {
+                            "value": null
+                          },
+                          "remove_private_as": {
+                            "value": false
+                          },
+                          "password": {
+                            "node": null
+                          },
+                          "ttl": {
+                            "value": 1
+                          },
+                          "route_reflector_client": {
+                            "value": false
+                          },
+                          "capabilities": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "__typename": "DcimPhysicalInterface",
+                                  "name": {
+                                    "value": "Ethernet1"
+                                  },
+                                  "ip_address": {
+                                    "node": {
+                                      "address": {
+                                        "value": "10.1.0.1/31"
+                                      }
+                                    }
+                                  },
+                                  "device": {
+                                    "node": {
+                                      "name": {
+                                        "value": "dc1-leaf-01"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "node": {
+                                  "__typename": "DcimPhysicalInterface",
+                                  "name": {
+                                    "value": "Ethernet1/1"
+                                  },
+                                  "ip_address": {
+                                    "node": {
+                                      "address": {
+                                        "value": "10.1.0.0/31"
+                                      }
+                                    }
+                                  },
+                                  "device": {
+                                    "node": {
+                                      "name": {
+                                        "value": "spine-01"
+                                      },
+                                      "role": {
+                                        "value": "spine"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "bgp_processes": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "id": "bgp-dc1-leaf-01",
+                                  "capabilities": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "name": {
+                                            "value": "dc1-leaf-01"
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  "router_id": {
+                                    "node": {
+                                      "address": {
+                                        "value": "10.1.0.1/31"
+                                      }
+                                    }
+                                  },
+                                  "local_as": {
+                                    "node": {
+                                      "asn": {
+                                        "value": 65001
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "node": {
+                                  "id": "bgp-spine-01",
+                                  "capabilities": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "name": {
+                                            "value": "spine-01"
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  "router_id": {
+                                    "node": {
+                                      "address": {
+                                        "value": "10.1.0.0/31"
+                                      }
+                                    }
+                                  },
+                                  "local_as": {
+                                    "node": {
+                                      "asn": {
+                                        "value": 65100
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "import_policies": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "name": {
+                                    "value": "transit-in"
+                                  },
+                                  "origin": {
+                                    "value": "manual"
+                                  },
+                                  "priority": {
+                                    "value": 100
+                                  },
+                                  "default_action": {
+                                    "value": "permit"
+                                  },
+                                  "terms": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "seq": {
+                                            "value": 10
+                                          },
+                                          "action": {
+                                            "value": "permit"
+                                          },
+                                          "set_local_pref": {
+                                            "value": 300
+                                          },
+                                          "set_med": {
+                                            "value": null
+                                          },
+                                          "add_communities": {
+                                            "value": [
+                                              "64500:100"
+                                            ]
+                                          },
+                                          "prepend_count": {
+                                            "value": null
+                                          },
+                                          "match_prefix_list": {
+                                            "node": null
+                                          },
+                                          "match_community_list": {
+                                            "node": {
+                                              "name": {
+                                                "value": "CL-LEARNED"
+                                              },
+                                              "community_type": {
+                                                "value": "standard"
+                                              },
+                                              "members": {
+                                                "value": [
+                                                  "64500:100"
+                                                ]
+                                              },
+                                              "match": {
+                                                "value": "any"
+                                              }
+                                            }
+                                          },
+                                          "delete_community_list": {
+                                            "node": null
+                                          }
+                                        }
+                                      },
+                                      {
+                                        "node": {
+                                          "seq": {
+                                            "value": 20
+                                          },
+                                          "action": {
+                                            "value": "permit"
+                                          },
+                                          "set_local_pref": {
+                                            "value": null
+                                          },
+                                          "set_med": {
+                                            "value": null
+                                          },
+                                          "add_communities": {
+                                            "value": [
+                                              "64500:200",
+                                              "64500:1:2"
+                                            ]
+                                          },
+                                          "prepend_count": {
+                                            "value": null
+                                          },
+                                          "match_prefix_list": {
+                                            "node": {
+                                              "name": {
+                                                "value": "PL-OWN"
+                                              },
+                                              "family": {
+                                                "value": "ipv4"
+                                              },
+                                              "entries": {
+                                                "edges": [
+                                                  {
+                                                    "node": {
+                                                      "seq": {
+                                                        "value": 10
+                                                      },
+                                                      "action": {
+                                                        "value": "permit"
+                                                      },
+                                                      "prefix": {
+                                                        "value": "10.0.0.0/8"
+                                                      },
+                                                      "min_length": {
+                                                        "value": null
+                                                      },
+                                                      "max_length": {
+                                                        "value": 32
+                                                      }
+                                                    }
+                                                  }
+                                                ]
+                                              }
+                                            }
+                                          },
+                                          "match_community_list": {
+                                            "node": null
+                                          },
+                                          "delete_community_list": {
+                                            "node": null
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "export_policies": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "name": {
+                                    "value": "transit-out"
+                                  },
+                                  "origin": {
+                                    "value": "manual"
+                                  },
+                                  "priority": {
+                                    "value": 100
+                                  },
+                                  "default_action": {
+                                    "value": "deny"
+                                  },
+                                  "terms": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "seq": {
+                                            "value": 10
+                                          },
+                                          "action": {
+                                            "value": "deny"
+                                          },
+                                          "set_local_pref": {
+                                            "value": null
+                                          },
+                                          "set_med": {
+                                            "value": null
+                                          },
+                                          "add_communities": {
+                                            "value": []
+                                          },
+                                          "prepend_count": {
+                                            "value": null
+                                          },
+                                          "match_prefix_list": {
+                                            "node": null
+                                          },
+                                          "match_community_list": {
+                                            "node": {
+                                              "name": {
+                                                "value": "CL-LEARNED"
+                                              },
+                                              "community_type": {
+                                                "value": "standard"
+                                              },
+                                              "members": {
+                                                "value": [
+                                                  "64500:100"
+                                                ]
+                                              },
+                                              "match": {
+                                                "value": "any"
+                                              }
+                                            }
+                                          },
+                                          "delete_community_list": {
+                                            "node": null
+                                          }
+                                        }
+                                      },
+                                      {
+                                        "node": {
+                                          "seq": {
+                                            "value": 20
+                                          },
+                                          "action": {
+                                            "value": "permit"
+                                          },
+                                          "set_local_pref": {
+                                            "value": null
+                                          },
+                                          "set_med": {
+                                            "value": null
+                                          },
+                                          "add_communities": {
+                                            "value": [
+                                              "no-export"
+                                            ]
+                                          },
+                                          "prepend_count": {
+                                            "value": 2
+                                          },
+                                          "match_prefix_list": {
+                                            "node": {
+                                              "name": {
+                                                "value": "PL-OWN"
+                                              },
+                                              "family": {
+                                                "value": "ipv4"
+                                              },
+                                              "entries": {
+                                                "edges": [
+                                                  {
+                                                    "node": {
+                                                      "seq": {
+                                                        "value": 10
+                                                      },
+                                                      "action": {
+                                                        "value": "permit"
+                                                      },
+                                                      "prefix": {
+                                                        "value": "10.0.0.0/8"
+                                                      },
+                                                      "min_length": {
+                                                        "value": null
+                                                      },
+                                                      "max_length": {
+                                                        "value": 32
+                                                      }
+                                                    }
+                                                  }
+                                                ]
+                                              }
+                                            }
+                                          },
+                                          "match_community_list": {
+                                            "node": null
+                                          },
+                                          "delete_community_list": {
+                                            "node": {
+                                              "name": {
+                                                "value": "CL-INTERNAL"
+                                              },
+                                              "community_type": {
+                                                "value": "standard"
+                                              },
+                                              "members": {
+                                                "value": [
+                                                  "64500:900",
+                                                  "64500:901"
+                                                ]
+                                              },
+                                              "match": {
+                                                "value": "any"
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      {
+                        "node": {
+                          "id": "peering-dc1-leaf-01-spine-02-ebgp",
+                          "name": {
+                            "value": "peer-dc1-leaf-01-spine-02-ebgp"
+                          },
+                          "session_type": {
+                            "value": "EBGP"
+                          },
+                          "bfd_enabled": {
+                            "value": true
+                          },
+                          "send_community": {
+                            "value": true
+                          },
+                          "send_extended_community": {
+                            "value": false
+                          },
+                          "local_pref": {
+                            "value": null
+                          },
+                          "med": {
+                            "value": null
+                          },
+                          "remove_private_as": {
+                            "value": false
+                          },
+                          "password": {
+                            "node": null
+                          },
+                          "ttl": {
+                            "value": 1
+                          },
+                          "route_reflector_client": {
+                            "value": false
+                          },
+                          "capabilities": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "__typename": "DcimPhysicalInterface",
+                                  "name": {
+                                    "value": "Ethernet2"
+                                  },
+                                  "ip_address": {
+                                    "node": {
+                                      "address": {
+                                        "value": "10.1.0.3/31"
+                                      }
+                                    }
+                                  },
+                                  "device": {
+                                    "node": {
+                                      "name": {
+                                        "value": "dc1-leaf-01"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "node": {
+                                  "__typename": "DcimPhysicalInterface",
+                                  "name": {
+                                    "value": "Ethernet1/2"
+                                  },
+                                  "ip_address": {
+                                    "node": {
+                                      "address": {
+                                        "value": "10.1.0.2/31"
+                                      }
+                                    }
+                                  },
+                                  "device": {
+                                    "node": {
+                                      "name": {
+                                        "value": "spine-02"
+                                      },
+                                      "role": {
+                                        "value": "spine"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "bgp_processes": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "id": "bgp-dc1-leaf-01",
+                                  "capabilities": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "name": {
+                                            "value": "dc1-leaf-01"
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  "router_id": {
+                                    "node": {
+                                      "address": {
+                                        "value": "10.1.0.3/31"
+                                      }
+                                    }
+                                  },
+                                  "local_as": {
+                                    "node": {
+                                      "asn": {
+                                        "value": 65001
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "node": {
+                                  "id": "bgp-spine-02",
+                                  "capabilities": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "name": {
+                                            "value": "spine-02"
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  "router_id": {
+                                    "node": {
+                                      "address": {
+                                        "value": "10.1.0.2/31"
+                                      }
+                                    }
+                                  },
+                                  "local_as": {
+                                    "node": {
+                                      "asn": {
+                                        "value": 65101
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "ManagedBGP",
+                  "name": {
+                    "value": "bgp-overlay"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "multipath": {
+                    "value": true
+                  },
+                  "graceful_restart": {
+                    "value": true
+                  },
+                  "confederation_identifier": {
+                    "value": null
+                  },
+                  "local_as": {
+                    "node": {
+                      "asn": {
+                        "value": 65001
+                      }
+                    }
+                  },
+                  "router_id": {
+                    "node": {
+                      "address": {
+                        "value": "10.0.0.1/32"
+                      }
+                    }
+                  },
+                  "peerings": {
+                    "edges": [
+                      {
+                        "node": {
+                          "id": "peering-dc1-leaf-01-spine-01-ebgp",
+                          "name": {
+                            "value": "peer-dc1-leaf-01-spine-01-ebgp"
+                          },
+                          "session_type": {
+                            "value": "EBGP"
+                          },
+                          "bfd_enabled": {
+                            "value": true
+                          },
+                          "send_community": {
+                            "value": true
+                          },
+                          "send_extended_community": {
+                            "value": true
+                          },
+                          "local_pref": {
+                            "value": null
+                          },
+                          "med": {
+                            "value": null
+                          },
+                          "remove_private_as": {
+                            "value": false
+                          },
+                          "password": {
+                            "node": null
+                          },
+                          "ttl": {
+                            "value": 2
+                          },
+                          "route_reflector_client": {
+                            "value": false
+                          },
+                          "capabilities": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "__typename": "DcimVirtualInterface",
+                                  "name": {
+                                    "value": "Loopback0"
+                                  },
+                                  "ip_address": {
+                                    "node": {
+                                      "address": {
+                                        "value": "10.0.0.1/32"
+                                      }
+                                    }
+                                  },
+                                  "device": {
+                                    "node": {
+                                      "name": {
+                                        "value": "dc1-leaf-01"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "node": {
+                                  "__typename": "DcimVirtualInterface",
+                                  "name": {
+                                    "value": "Loopback0"
+                                  },
+                                  "ip_address": {
+                                    "node": {
+                                      "address": {
+                                        "value": "10.0.0.100/32"
+                                      }
+                                    }
+                                  },
+                                  "device": {
+                                    "node": {
+                                      "name": {
+                                        "value": "spine-01"
+                                      },
+                                      "role": {
+                                        "value": "spine"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "bgp_processes": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "id": "bgp-dc1-leaf-01",
+                                  "capabilities": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "name": {
+                                            "value": "dc1-leaf-01"
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  "router_id": {
+                                    "node": {
+                                      "address": {
+                                        "value": "10.0.0.1/32"
+                                      }
+                                    }
+                                  },
+                                  "local_as": {
+                                    "node": {
+                                      "asn": {
+                                        "value": 65001
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "node": {
+                                  "id": "bgp-spine-01",
+                                  "capabilities": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "name": {
+                                            "value": "spine-01"
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  "router_id": {
+                                    "node": {
+                                      "address": {
+                                        "value": "10.0.0.100/32"
+                                      }
+                                    }
+                                  },
+                                  "local_as": {
+                                    "node": {
+                                      "asn": {
+                                        "value": 65100
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "import_policies": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "name": {
+                                    "value": "transit-in"
+                                  },
+                                  "origin": {
+                                    "value": "manual"
+                                  },
+                                  "priority": {
+                                    "value": 100
+                                  },
+                                  "default_action": {
+                                    "value": "permit"
+                                  },
+                                  "terms": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "seq": {
+                                            "value": 10
+                                          },
+                                          "action": {
+                                            "value": "permit"
+                                          },
+                                          "set_local_pref": {
+                                            "value": 300
+                                          },
+                                          "set_med": {
+                                            "value": null
+                                          },
+                                          "add_communities": {
+                                            "value": [
+                                              "64500:100"
+                                            ]
+                                          },
+                                          "prepend_count": {
+                                            "value": null
+                                          },
+                                          "match_prefix_list": {
+                                            "node": null
+                                          },
+                                          "match_community_list": {
+                                            "node": {
+                                              "name": {
+                                                "value": "CL-LEARNED"
+                                              },
+                                              "community_type": {
+                                                "value": "standard"
+                                              },
+                                              "members": {
+                                                "value": [
+                                                  "64500:100"
+                                                ]
+                                              },
+                                              "match": {
+                                                "value": "any"
+                                              }
+                                            }
+                                          },
+                                          "delete_community_list": {
+                                            "node": null
+                                          }
+                                        }
+                                      },
+                                      {
+                                        "node": {
+                                          "seq": {
+                                            "value": 20
+                                          },
+                                          "action": {
+                                            "value": "permit"
+                                          },
+                                          "set_local_pref": {
+                                            "value": null
+                                          },
+                                          "set_med": {
+                                            "value": null
+                                          },
+                                          "add_communities": {
+                                            "value": [
+                                              "64500:200",
+                                              "64500:1:2"
+                                            ]
+                                          },
+                                          "prepend_count": {
+                                            "value": null
+                                          },
+                                          "match_prefix_list": {
+                                            "node": {
+                                              "name": {
+                                                "value": "PL-OWN"
+                                              },
+                                              "family": {
+                                                "value": "ipv4"
+                                              },
+                                              "entries": {
+                                                "edges": [
+                                                  {
+                                                    "node": {
+                                                      "seq": {
+                                                        "value": 10
+                                                      },
+                                                      "action": {
+                                                        "value": "permit"
+                                                      },
+                                                      "prefix": {
+                                                        "value": "10.0.0.0/8"
+                                                      },
+                                                      "min_length": {
+                                                        "value": null
+                                                      },
+                                                      "max_length": {
+                                                        "value": 32
+                                                      }
+                                                    }
+                                                  }
+                                                ]
+                                              }
+                                            }
+                                          },
+                                          "match_community_list": {
+                                            "node": null
+                                          },
+                                          "delete_community_list": {
+                                            "node": null
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "export_policies": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "name": {
+                                    "value": "transit-out"
+                                  },
+                                  "origin": {
+                                    "value": "manual"
+                                  },
+                                  "priority": {
+                                    "value": 100
+                                  },
+                                  "default_action": {
+                                    "value": "deny"
+                                  },
+                                  "terms": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "seq": {
+                                            "value": 10
+                                          },
+                                          "action": {
+                                            "value": "deny"
+                                          },
+                                          "set_local_pref": {
+                                            "value": null
+                                          },
+                                          "set_med": {
+                                            "value": null
+                                          },
+                                          "add_communities": {
+                                            "value": []
+                                          },
+                                          "prepend_count": {
+                                            "value": null
+                                          },
+                                          "match_prefix_list": {
+                                            "node": null
+                                          },
+                                          "match_community_list": {
+                                            "node": {
+                                              "name": {
+                                                "value": "CL-LEARNED"
+                                              },
+                                              "community_type": {
+                                                "value": "standard"
+                                              },
+                                              "members": {
+                                                "value": [
+                                                  "64500:100"
+                                                ]
+                                              },
+                                              "match": {
+                                                "value": "any"
+                                              }
+                                            }
+                                          },
+                                          "delete_community_list": {
+                                            "node": null
+                                          }
+                                        }
+                                      },
+                                      {
+                                        "node": {
+                                          "seq": {
+                                            "value": 20
+                                          },
+                                          "action": {
+                                            "value": "permit"
+                                          },
+                                          "set_local_pref": {
+                                            "value": null
+                                          },
+                                          "set_med": {
+                                            "value": null
+                                          },
+                                          "add_communities": {
+                                            "value": [
+                                              "no-export"
+                                            ]
+                                          },
+                                          "prepend_count": {
+                                            "value": 2
+                                          },
+                                          "match_prefix_list": {
+                                            "node": {
+                                              "name": {
+                                                "value": "PL-OWN"
+                                              },
+                                              "family": {
+                                                "value": "ipv4"
+                                              },
+                                              "entries": {
+                                                "edges": [
+                                                  {
+                                                    "node": {
+                                                      "seq": {
+                                                        "value": 10
+                                                      },
+                                                      "action": {
+                                                        "value": "permit"
+                                                      },
+                                                      "prefix": {
+                                                        "value": "10.0.0.0/8"
+                                                      },
+                                                      "min_length": {
+                                                        "value": null
+                                                      },
+                                                      "max_length": {
+                                                        "value": 32
+                                                      }
+                                                    }
+                                                  }
+                                                ]
+                                              }
+                                            }
+                                          },
+                                          "match_community_list": {
+                                            "node": null
+                                          },
+                                          "delete_community_list": {
+                                            "node": {
+                                              "name": {
+                                                "value": "CL-INTERNAL"
+                                              },
+                                              "community_type": {
+                                                "value": "standard"
+                                              },
+                                              "members": {
+                                                "value": [
+                                                  "64500:900",
+                                                  "64500:901"
+                                                ]
+                                              },
+                                              "match": {
+                                                "value": "any"
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      {
+                        "node": {
+                          "id": "peering-dc1-leaf-01-spine-02-ebgp",
+                          "name": {
+                            "value": "peer-dc1-leaf-01-spine-02-ebgp"
+                          },
+                          "session_type": {
+                            "value": "EBGP"
+                          },
+                          "bfd_enabled": {
+                            "value": true
+                          },
+                          "send_community": {
+                            "value": true
+                          },
+                          "send_extended_community": {
+                            "value": true
+                          },
+                          "local_pref": {
+                            "value": null
+                          },
+                          "med": {
+                            "value": null
+                          },
+                          "remove_private_as": {
+                            "value": false
+                          },
+                          "password": {
+                            "node": null
+                          },
+                          "ttl": {
+                            "value": 2
+                          },
+                          "route_reflector_client": {
+                            "value": false
+                          },
+                          "capabilities": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "__typename": "DcimVirtualInterface",
+                                  "name": {
+                                    "value": "Loopback0"
+                                  },
+                                  "ip_address": {
+                                    "node": {
+                                      "address": {
+                                        "value": "10.0.0.1/32"
+                                      }
+                                    }
+                                  },
+                                  "device": {
+                                    "node": {
+                                      "name": {
+                                        "value": "dc1-leaf-01"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "node": {
+                                  "__typename": "DcimVirtualInterface",
+                                  "name": {
+                                    "value": "Loopback0"
+                                  },
+                                  "ip_address": {
+                                    "node": {
+                                      "address": {
+                                        "value": "10.0.0.101/32"
+                                      }
+                                    }
+                                  },
+                                  "device": {
+                                    "node": {
+                                      "name": {
+                                        "value": "spine-02"
+                                      },
+                                      "role": {
+                                        "value": "spine"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "bgp_processes": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "id": "bgp-dc1-leaf-01",
+                                  "capabilities": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "name": {
+                                            "value": "dc1-leaf-01"
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  "router_id": {
+                                    "node": {
+                                      "address": {
+                                        "value": "10.0.0.1/32"
+                                      }
+                                    }
+                                  },
+                                  "local_as": {
+                                    "node": {
+                                      "asn": {
+                                        "value": 65001
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "node": {
+                                  "id": "bgp-spine-02",
+                                  "capabilities": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "name": {
+                                            "value": "spine-02"
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  "router_id": {
+                                    "node": {
+                                      "address": {
+                                        "value": "10.0.0.101/32"
+                                      }
+                                    }
+                                  },
+                                  "local_as": {
+                                    "node": {
+                                      "asn": {
+                                        "value": 65101
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          "interfaces": {
+            "edges": [
+              {
+                "node": {
+                  "__typename": "DcimVirtualInterface",
+                  "name": {
+                    "value": "Loopback0"
+                  },
+                  "description": {
+                    "value": "Router ID"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "loopback"
+                  },
+                  "ip_address": {
+                    "node": {
+                      "address": {
+                        "value": "10.0.0.1/32"
+                      },
+                      "ip_namespace": {
+                        "node": {
+                          "name": {
+                            "value": "default"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "capabilities": {
+                    "edges": []
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimPhysicalInterface",
+                  "name": {
+                    "value": "Ethernet1"
+                  },
+                  "description": {
+                    "value": "to spine-01"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "spine"
+                  },
+                  "interface_type": {
+                    "value": "10gbase-x-sfpp"
+                  },
+                  "mtu": {
+                    "value": 9000
+                  },
+                  "ip_address": {
+                    "node": {
+                      "address": {
+                        "value": "10.1.0.1/31"
+                      },
+                      "ip_namespace": {
+                        "node": {
+                          "name": {
+                            "value": "default"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "cable": {
+                    "node": {
+                      "id": "cable-Ethernet1",
+                      "endpoints": {
+                        "edges": [
+                          {
+                            "node": {
+                              "__typename": "DcimPhysicalInterface",
+                              "name": {
+                                "value": "Ethernet1"
+                              },
+                              "ip_address": {
+                                "node": {
+                                  "address": {
+                                    "value": "10.1.0.1/31"
+                                  }
+                                }
+                              },
+                              "device": {
+                                "node": {
+                                  "name": {
+                                    "value": "dc1-leaf-01"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "node": {
+                              "__typename": "DcimPhysicalInterface",
+                              "name": {
+                                "value": "Ethernet1/1"
+                              },
+                              "ip_address": {
+                                "node": {
+                                  "address": {
+                                    "value": "10.1.0.0/31"
+                                  }
+                                }
+                              },
+                              "device": {
+                                "node": {
+                                  "name": {
+                                    "value": "spine-01"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "segments": {
+                    "edges": []
+                  },
+                  "capabilities": {
+                    "edges": []
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimPhysicalInterface",
+                  "name": {
+                    "value": "Ethernet2"
+                  },
+                  "description": {
+                    "value": "to spine-02"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "spine"
+                  },
+                  "interface_type": {
+                    "value": "10gbase-x-sfpp"
+                  },
+                  "mtu": {
+                    "value": 9000
+                  },
+                  "ip_address": {
+                    "node": {
+                      "address": {
+                        "value": "10.1.0.3/31"
+                      },
+                      "ip_namespace": {
+                        "node": {
+                          "name": {
+                            "value": "default"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "cable": {
+                    "node": {
+                      "id": "cable-Ethernet2",
+                      "endpoints": {
+                        "edges": [
+                          {
+                            "node": {
+                              "__typename": "DcimPhysicalInterface",
+                              "name": {
+                                "value": "Ethernet2"
+                              },
+                              "ip_address": {
+                                "node": {
+                                  "address": {
+                                    "value": "10.1.0.3/31"
+                                  }
+                                }
+                              },
+                              "device": {
+                                "node": {
+                                  "name": {
+                                    "value": "dc1-leaf-01"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "node": {
+                              "__typename": "DcimPhysicalInterface",
+                              "name": {
+                                "value": "Ethernet1/2"
+                              },
+                              "ip_address": {
+                                "node": {
+                                  "address": {
+                                    "value": "10.1.0.2/31"
+                                  }
+                                }
+                              },
+                              "device": {
+                                "node": {
+                                  "name": {
+                                    "value": "spine-02"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "segments": {
+                    "edges": []
+                  },
+                  "capabilities": {
+                    "edges": []
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimPhysicalInterface",
+                  "name": {
+                    "value": "Ethernet10"
+                  },
+                  "description": {
+                    "value": "to server-01"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "server"
+                  },
+                  "interface_type": {
+                    "value": "10gbase-x-sfpp"
+                  },
+                  "mtu": {
+                    "value": 9000
+                  },
+                  "ip_address": {
+                    "node": null
+                  },
+                  "cable": {
+                    "node": null
+                  },
+                  "segments": {
+                    "edges": [
+                      {
+                        "node": {
+                          "id": "seg-seg-100",
+                          "__typename": "ManagedVxlanSegment",
+                          "name": {
+                            "value": "seg-100"
+                          },
+                          "customer_name": {
+                            "value": "Customer-A"
+                          },
+                          "arp_suppression": {
+                            "value": true
+                          },
+                          "security_zone": {
+                            "node": null
+                          },
+                          "gateway": {
+                            "node": {
+                              "address": {
+                                "value": "10.100.0.1/24"
+                              },
+                              "ip_prefix": {
+                                "node": {
+                                  "prefix": {
+                                    "value": "10.100.0.0/24"
+                                  },
+                                  "ip_namespace": {
+                                    "node": {
+                                      "name": {
+                                        "value": "VRF_A"
+                                      },
+                                      "l3_vni": {
+                                        "value": 50001
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "segment_deployments": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "vni": {
+                                    "value": 10100
+                                  },
+                                  "vlan_domain_segments": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "vlan_id": {
+                                            "value": 100
+                                          },
+                                          "device": {
+                                            "node": {
+                                              "id": "dev-dc1-leaf-01"
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "deployments": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "id": "fake-dc-0"
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      {
+                        "node": {
+                          "id": "seg-seg-200",
+                          "__typename": "ManagedVxlanSegment",
+                          "name": {
+                            "value": "seg-200"
+                          },
+                          "customer_name": {
+                            "value": "Customer-A"
+                          },
+                          "arp_suppression": {
+                            "value": true
+                          },
+                          "security_zone": {
+                            "node": null
+                          },
+                          "gateway": {
+                            "node": {
+                              "address": {
+                                "value": "10.200.0.1/24"
+                              },
+                              "ip_prefix": {
+                                "node": {
+                                  "prefix": {
+                                    "value": "10.200.0.0/24"
+                                  },
+                                  "ip_namespace": {
+                                    "node": {
+                                      "name": {
+                                        "value": "default"
+                                      },
+                                      "l3_vni": {
+                                        "value": null
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "segment_deployments": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "vni": {
+                                    "value": 10200
+                                  },
+                                  "vlan_domain_segments": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "vlan_id": {
+                                            "value": 200
+                                          },
+                                          "device": {
+                                            "node": {
+                                              "id": "dev-dc1-leaf-01"
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "deployments": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "id": "fake-dc-0"
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "capabilities": {
+                    "edges": []
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimVirtualInterface",
+                  "name": {
+                    "value": "Vlan100"
+                  },
+                  "description": {
+                    "value": ""
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "svi"
+                  },
+                  "ip_address": {
+                    "node": null
+                  },
+                  "vrf": {
+                    "node": {
+                      "namespace": {
+                        "node": {
+                          "name": {
+                            "value": "VRF_A"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "capabilities": {
+                    "edges": []
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimVirtualInterface",
+                  "name": {
+                    "value": "Vlan200"
+                  },
+                  "description": {
+                    "value": ""
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "svi"
+                  },
+                  "ip_address": {
+                    "node": null
+                  },
+                  "vrf": {
+                    "node": null
+                  },
+                  "capabilities": {
+                    "edges": []
+                  }
+                }
+              }
+            ]
+          },
+          "deployment": {
+            "node": {
+              "id": "dc-1",
+              "name": {
+                "value": "DC-1"
+              },
+              "evpn_rt_as": {
+                "node": {
+                  "asn": {
+                    "value": 65000
+                  }
+                }
+              },
+              "segment_deployments": {
+                "edges": [
+                  {
+                    "node": {
+                      "vlan_id": {
+                        "value": 100
+                      },
+                      "vni": {
+                        "value": 10100
+                      },
+                      "status": {
+                        "value": "active"
+                      },
+                      "vlan_domain_segments": {
+                        "edges": [
+                          {
+                            "node": {
+                              "vlan_id": {
+                                "value": 100
+                              },
+                              "device": {
+                                "node": {
+                                  "id": "dev-dc1-leaf-01"
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      "segment": {
+                        "node": {
+                          "id": "seg-seg-100",
+                          "__typename": "ManagedVxlanSegment",
+                          "name": {
+                            "value": "seg-100"
+                          },
+                          "customer_name": {
+                            "value": "Customer-A"
+                          },
+                          "arp_suppression": {
+                            "value": true
+                          },
+                          "security_zone": {
+                            "node": null
+                          },
+                          "gateway": {
+                            "node": {
+                              "address": {
+                                "value": "10.100.0.1/24"
+                              },
+                              "ip_prefix": {
+                                "node": {
+                                  "prefix": {
+                                    "value": "10.100.0.0/24"
+                                  },
+                                  "ip_namespace": {
+                                    "node": {
+                                      "name": {
+                                        "value": "VRF_A"
+                                      },
+                                      "l3_vni": {
+                                        "value": 50001
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "segment_deployments": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "vni": {
+                                    "value": 10100
+                                  },
+                                  "vlan_domain_segments": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "vlan_id": {
+                                            "value": 100
+                                          },
+                                          "device": {
+                                            "node": {
+                                              "id": "dev-dc1-leaf-01"
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "deployments": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "id": "fake-dc-0"
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "node": {
+                      "vlan_id": {
+                        "value": 200
+                      },
+                      "vni": {
+                        "value": 10200
+                      },
+                      "status": {
+                        "value": "active"
+                      },
+                      "vlan_domain_segments": {
+                        "edges": [
+                          {
+                            "node": {
+                              "vlan_id": {
+                                "value": 200
+                              },
+                              "device": {
+                                "node": {
+                                  "id": "dev-dc1-leaf-01"
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      "segment": {
+                        "node": {
+                          "id": "seg-seg-200",
+                          "__typename": "ManagedVxlanSegment",
+                          "name": {
+                            "value": "seg-200"
+                          },
+                          "customer_name": {
+                            "value": "Customer-A"
+                          },
+                          "arp_suppression": {
+                            "value": true
+                          },
+                          "security_zone": {
+                            "node": null
+                          },
+                          "gateway": {
+                            "node": {
+                              "address": {
+                                "value": "10.200.0.1/24"
+                              },
+                              "ip_prefix": {
+                                "node": {
+                                  "prefix": {
+                                    "value": "10.200.0.0/24"
+                                  },
+                                  "ip_namespace": {
+                                    "node": {
+                                      "name": {
+                                        "value": "default"
+                                      },
+                                      "l3_vni": {
+                                        "value": null
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "segment_deployments": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "vni": {
+                                    "value": 10200
+                                  },
+                                  "vlan_domain_segments": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "vlan_id": {
+                                            "value": 200
+                                          },
+                                          "device": {
+                                            "node": {
+                                              "id": "dev-dc1-leaf-01"
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "deployments": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "id": "fake-dc-0"
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              "routing_filter_enforce": {
+                "value": false
+              },
+              "loopback_pool": {
+                "node": {
+                  "resources": {
+                    "edges": [
+                      {
+                        "node": {
+                          "prefix": {
+                            "value": "10.0.0.0/24"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "shared_capabilities": {
+            "edges": [
+              {
+                "node": {
+                  "__typename": "ManagedVRF",
+                  "namespace": {
+                    "node": {
+                      "name": {
+                        "value": "VRF_A"
+                      },
+                      "l3_vni": {
+                        "value": 50001
+                      },
+                      "namespace_type": {
+                        "value": "prod"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "environment_prefixes_prod": {
+    "edges": [
+      {
+        "node": {
+          "prefix": {
+            "value": "10.100.0.0/24"
+          },
+          "ip_namespace": {
+            "node": {
+              "name": {
+                "value": "VRF_A"
+              },
+              "namespace_type": {
+                "value": "prod"
+              }
+            }
+          }
+        }
+      },
+      {
+        "node": {
+          "prefix": {
+            "value": "10.100.8.0/24"
+          },
+          "ip_namespace": {
+            "node": {
+              "name": {
+                "value": "VRF_A"
+              },
+              "namespace_type": {
+                "value": "prod"
+              }
+            }
+          }
+        }
+      }
+    ]
+  },
+  "environment_prefixes_non_prod": {
+    "edges": []
+  },
+  "environment_prefixes_internet": {
+    "edges": [
+      {
+        "node": {
+          "prefix": {
+            "value": "203.0.113.0/24"
+          },
+          "ip_namespace": {
+            "node": {
+              "name": {
+                "value": "INTERNET"
+              },
+              "namespace_type": {
+                "value": "internet"
+              }
+            }
+          }
+        }
+      }
+    ]
+  },
+  "environment_prefixes_management": {
+    "edges": []
+  },
+  "ManagedVRF": {
+    "edges": [
+      {
+        "node": {
+          "namespace": {
+            "node": {
+              "name": {
+                "value": "VRF_A"
+              },
+              "namespace_type": {
+                "value": "prod"
+              }
+            }
+          },
+          "shared_devices": {
+            "edges": [
+              {
+                "node": {
+                  "name": {
+                    "value": "dc1-leaf-01"
+                  },
+                  "role": {
+                    "value": "leaf"
+                  }
+                }
+              },
+              {
+                "node": {
+                  "name": {
+                    "value": "dc1-border-01"
+                  },
+                  "role": {
+                    "value": "border-leaf"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "node": {
+          "namespace": {
+            "node": {
+              "name": {
+                "value": "INTERNET"
+              },
+              "namespace_type": {
+                "value": "internet"
+              }
+            }
+          },
+          "shared_devices": {
+            "edges": [
+              {
+                "node": {
+                  "name": {
+                    "value": "dc1-border-01"
+                  },
+                  "role": {
+                    "value": "border-leaf"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "ManagedVxlanSegment": {
+    "edges": [
+      {
+        "node": {
+          "id": "segment-1"
+        }
+      },
+      {
+        "node": {
+          "id": "segment-2"
+        }
+      }
+    ]
+  },
+  "DcimVirtualInterface": {
+    "edges": [
+      {
+        "node": {
+          "ip_address": {
+            "node": {
+              "address": {
+                "value": "10.0.0.250/32"
+              }
+            }
+          },
+          "device": {
+            "node": {
+              "name": {
+                "value": "dc1-border-01"
+              },
+              "role": {
+                "value": "border-leaf"
+              },
+              "interfaces": {
+                "edges": [
+                  {
+                    "node": {
+                      "role": {
+                        "value": "loopback"
+                      },
+                      "ip_address": {
+                        "node": {
+                          "address": {
+                            "value": "10.0.0.50/32"
+                          }
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    ]
+  }
+}
