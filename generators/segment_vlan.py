@@ -48,6 +48,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from utils.data_cleaning import clean_data
+from utils.fabric_roles import VTEP_ROLES
 from utils.limits import (
     CUSTOMER_VLAN_ID_MIN,
     GROUP_PROVIDER_STUBS,
@@ -62,12 +63,10 @@ if TYPE_CHECKING:
     from .common import CommonGenerator
     from .pools import PoolMixin
 
-# Devices that act as a deployment's EVPN Multi-Site border gateway for a
-# stretched segment: the DC's border leaves and the colocation edges. `edge` is
-# also the on-ramp router of a colocation zone or virtual colocation — its only
-# VTEP, so it is both the metro site's border gateway and (via AppInstance resolution, not here) where
-# a stretched segment's customer ports land.
-BORDER_GATEWAY_ROLES = frozenset({"border-leaf", "edge"})
+# The devices a STRETCHED segment is realized on, whether or not a port of theirs carries it: every VTEP of the hosting
+# parents (utils/fabric_roles.py VTEP_ROLES): the leaves and top-of-rack switches a workload can land on (the anycast
+# gateway must be on each, so a host keeps its gateway when it moves between the DCs) and the border gateways of the
+# EVPN Multi-Site site (a DC's border leaves, `edge` of a colocation zone, also its only VTEP).
 # An SD-WAN gateway, and a provider stub modelled inside the zone (an Equinix Fabric port, a Megaport MCR:
 # `provider_stubs`), also carries the `edge` role and is deployed into the same colocation zone as the on-ramp
 # router, so the zone lookup finds it. Neither terminates VXLAN segments and no generator gives it a VLAN domain,
@@ -322,7 +321,7 @@ class SegmentVlanMixin:
     async def _segment_vlan_devices(self, segment: dict[str, Any]) -> list[Any]:
         """Every device that needs a row of the segment, capabilities and deployment
         included: the devices of the switch ports tagged with it, plus — for
-        a stretched segment — every border gateway of each hosting parent, plus the MLAG peer of each of them
+        a stretched segment — every VTEP of each hosting parent (leaves and border gateways), plus the MLAG peer of each of them
         (a peer with no port of the segment still carries its VLAN: a dual-homed port-channel is on both)."""
         tagged_device_ids = sorted({port["device_id"] for port in segment.get("ports") or [] if port.get("device_id")})
         devices: dict[str, Any] = {}
@@ -342,7 +341,7 @@ class SegmentVlanMixin:
                 for device in await self.client.filters(
                     kind=DcimPhysicalDevice,
                     deployment__ids=list(dict.fromkeys(deployment_ids)),
-                    role__values=sorted(BORDER_GATEWAY_ROLES),
+                    role__values=sorted(VTEP_ROLES),
                     include=["capabilities", "member_of_groups", "deployment"],
                 ):
                     if not NON_BORDER_GATEWAY_GROUPS.isdisjoint(self._group_names(device)):
@@ -390,7 +389,7 @@ class SegmentVlanMixin:
     async def _reconcile_segment_vlans_locked(
         self, segment_id: str, segment_name: str, state: dict[str, Any] | None = None
     ) -> bool:
-        """Desired rows = every switch with a port carrying the segment, plus every border gateway when the
+        """Desired rows = every switch with a port carrying the segment, plus every VTEP of the hosting parents when the
         segment is stretched, plus the MLAG peer of each (a pair shares one VLAN id), each under the segment's
         deployment its switch sits in. Rows on devices that no longer need the segment (or that moved to
         another deployment) are deleted (freeing their ids); missing ones are

@@ -716,8 +716,9 @@ class MyCheck(InfrahubCheck):
   above the local band 100-2499 (`utils/limits.py`, `utils/segment_vlan.py` `shared_vlan_id`; a test ties the start to
   the pool). A third DC joins with one more realization under the same VNI and so the same id. The generator gives a
   shared segment that id on every row and fails when a switch already uses it; `checks/shared_vlan.py` (SV1) reports a
-  row that differs, a VNI outside the band or two VNIs. A stretched segment (`stretch_scope` not `local`) also has a
-  row, and so an SVI, on the border leaves of each DC.
+  row that differs, a VNI outside the band or two VNIs. A stretched segment (`stretch_scope` not `local`) is realized on every VTEP of its hosting
+  parents (leaves, ToRs and border gateways, `VTEP_ROLES`), with or without a port of it: each has a row and an SVI carrying the
+  same anycast gateway, so a host keeps its gateway when it moves between the DCs.
   A routed row (a gateway, and no `terminated_on`: a terminated segment is pure L2 on the fabric) is realized on its switch as ONE SVI: a `DcimVirtualInterface` with role
   `svi` named `Vlan<vlan_id>`, a Component of the row (`svi`, `on_delete: cascade`), with no address (the anycast
   gateway is `segment.gateway`) and with `vrf` pointing at the `ManagedVRF` of its device's topology; the SVI is not a

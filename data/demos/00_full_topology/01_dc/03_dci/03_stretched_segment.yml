@@ -2,14 +2,14 @@
 # A segment stretched over the DCI: c900-sync-p lives in DC-KTW1 and DC-WAW1 at once (`stretch_scope: dc_pair`), one
 # L2 domain over EVPN between the two DCs (the overlay sessions of 02_dci_peerings.yml). Its VLAN scope is `shared`:
 # its ONE VNI 40000 (the first of the global pool, the same in every DC it reaches) gives the VLAN id 2500, the SAME
-# on all eight switches, which is what a trunk to a switch that cannot do VXLAN needs (the local ids of c900-web-p and
-# c900-app-p are per switch). A third DC joins with one more realization under the same VNI and the same id.
+# on all eight switches, which is what a trunk to a switch that cannot do VXLAN needs (the local ids of c900-web-p
+# and c900-app-p are per switch). A third DC joins with one more realization under the same VNI and the same id.
 # The anycast gateway 10.94.1.1/24 is the same in both DCs.
 #
-# It loads after both DCs: its footprints, switches and VRFs exist. A stretched segment is realized on the border
-# leaves of each DC as well as on the leaves with a port of it (generators/segment_vlan.py), so there are eight SVIs.
-# First the SVIs (the rows below point at them), then the segment, its two realizations with a VLAN row per switch, and
-# the port-channel of each DC's server vPC carrying it next to its own segment (the edge is a list, so it names both).
+# It loads after both DCs: its footprints, switches and VRFs exist. The server vPC of each DC carries it next to the
+# DC's own segment (the `segments` edge is a list, so it names both), so the leaves have a row; a stretched segment is
+# realized on the border leaves of each DC as well (generators/segment_vlan.py), so there are eight SVIs and eight rows.
+# Every SVI has the anycast gateway above, which is why a host keeps its gateway when it moves between the DCs.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
