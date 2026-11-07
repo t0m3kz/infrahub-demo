@@ -6,10 +6,11 @@
 # and c900-app-p are per switch). A third DC joins with one more realization under the same VNI and the same id.
 # The anycast gateway 10.94.1.1/24 is the same in both DCs.
 #
-# It loads after both DCs: its footprints, switches and VRFs exist. The server vPC of each DC carries it next to the
-# DC's own segment (the `segments` edge is a list, so it names both), so the leaves have a row; a stretched segment is
-# realized on the border leaves of each DC as well (generators/segment_vlan.py), so there are eight SVIs and eight rows.
-# Every SVI has the anycast gateway above, which is why a host keeps its gateway when it moves between the DCs.
+# It loads after both DCs: its footprints, switches and VRFs exist. A stretched segment is realized on every VTEP of
+# each hosting DC, with or without a port of it (generators/segment_vlan.py), so the leaves and the border leaves have a
+# row and an SVI each: eight in all. Every SVI has the anycast gateway above, which is why a host keeps its gateway when
+# it moves between the DCs. No workload is attached yet: tagging a port with the segment (`segments` on a LAG or port)
+# is all a host needs.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -71,13 +72,3 @@ spec:
           - {device: waw1-leaf-02, vlan_id: 2500, svi: ["waw1-leaf-02", "Vlan2500"]}
           - {device: waw1-bl-01, vlan_id: 2500, svi: ["waw1-bl-01", "Vlan2500"]}
           - {device: waw1-bl-02, vlan_id: 2500, svi: ["waw1-bl-02", "Vlan2500"]}
----
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: DcimLAGInterface
-  data:
-    - {device: ktw1-leaf-01, name: Port-Channel10, lag_id: 10, segments: ["c900-web-p", "c900-sync-p"]}
-    - {device: ktw1-leaf-02, name: Port-Channel10, lag_id: 10, segments: ["c900-web-p", "c900-sync-p"]}
-    - {device: waw1-leaf-01, name: Port-Channel10, lag_id: 10, segments: ["c900-app-p", "c900-sync-p"]}
-    - {device: waw1-leaf-02, name: Port-Channel10, lag_id: 10, segments: ["c900-app-p", "c900-sync-p"]}

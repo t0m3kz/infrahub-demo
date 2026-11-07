@@ -236,7 +236,11 @@ async def trace_leg(
                 found.append([*before, first, *reversed(after)])
                 continue
             sub = await _search(client, first, last, layer, max_paths, branch, include)
-            leg.truncated_at = sub.truncated_at if leg.truncated_at is None else leg.truncated_at
+            if (
+                sub.truncated_at is not None
+            ):  # the server's depth is of the segment-to-segment search: add the hops around it
+                depth = sub.truncated_at + len(before) + len(after)
+                leg.truncated_at = depth if leg.truncated_at is None else min(leg.truncated_at, depth)
             leg.capped = leg.capped or sub.capped
             found += [[*before, *p, *reversed(after)] for p in sub.paths]
     leg.paths = sorted(found, key=len)
