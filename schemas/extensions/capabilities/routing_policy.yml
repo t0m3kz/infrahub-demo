@@ -1,0 +1,392 @@
+---
+version: "1.0"
+
+# ============================================================================
+# Routing — routing policy
+# Prefix lists, community lists and policies (ordered terms) that shape what a BGP session accepts and announces. A
+# policy is a shared object: many peerings name it, one per direction (`import_policies`, `export_policies`); a
+# generator writes the ones it derives (`origin: generated`) and a person the others (`origin: manual`), and neither
+# touches the other's. A policy never replaces the protection derived from the model (utils/bgp_expectation.py): the
+# composition (transforms/helpers/routing_policy.py) puts that guard in every term, so a policy can set attributes and
+# tighten what the model allows, never widen it.
+# ============================================================================
+
+nodes:
+  - name: PrefixList
+    namespace: Routing
+    description: "An ordered list of prefixes, each permitted or denied, with an optional length range."
+    label: Prefix List
+    icon: mdi:file-document-edit-outline
+    include_in_menu: false
+    uniqueness_constraints:
+      - ["name__value"]
+    human_friendly_id:
+      - name__value
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 100
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 150
+      - name: family
+        kind: Dropdown
+        optional: false
+        order_weight: 200
+        description: "The address family of every entry"
+        choices:
+          - name: ipv4
+            label: IPv4
+            color: "#7FBF7F"
+          - name: ipv6
+            label: IPv6
+            color: "#3498DB"
+    relationships:
+      - name: entries
+        peer: RoutingPrefixListEntry
+        label: Entries
+        kind: Component
+        cardinality: many
+        optional: true
+        on_delete: cascade
+        identifier: prefix_list__entries
+        order_weight: 1000
+
+  - name: PrefixListEntry
+    namespace: Routing
+    description: "One line of a prefix list: a prefix, its action and, optionally, the range of lengths it matches."
+    label: Prefix List Entry
+    icon: mdi:file-document-edit-outline
+    include_in_menu: false
+    uniqueness_constraints:
+      - ["prefix_list", "seq__value"]
+    human_friendly_id:
+      - prefix_list__name__value
+      - seq__value
+    order_by:
+      - prefix_list__name__value
+      - seq__value
+    display_label: "{{ seq__value }} {{ action__value }} {{ prefix__value }}"
+    attributes:
+      - name: seq
+        kind: Number
+        label: Sequence
+        order_weight: 100
+        parameters:
+          min_value: 1
+          max_value: 65535
+      - name: action
+        kind: Dropdown
+        optional: false
+        default_value: permit
+        order_weight: 150
+        choices:
+          - name: permit
+            label: Permit
+            color: "#7FBF7F"
+          - name: deny
+            label: Deny
+            color: "#E06666"
+      - name: prefix
+        kind: Text
+        order_weight: 200
+        description: "The prefix in CIDR form, of the family of the list"
+      - name: min_length
+        kind: Number
+        label: Minimum Length
+        optional: true
+        order_weight: 250
+        description: "Match prefixes at least this long (default: the length of the prefix)"
+        parameters:
+          min_value: 1
+          max_value: 128
+      - name: max_length
+        kind: Number
+        label: Maximum Length
+        optional: true
+        order_weight: 260
+        description: "Match prefixes up to this long (default: the length of the prefix, so an exact match)"
+        parameters:
+          min_value: 1
+          max_value: 128
+    relationships:
+      - name: prefix_list
+        peer: RoutingPrefixList
+        label: Prefix List
+        kind: Parent
+        cardinality: one
+        optional: false
+        identifier: prefix_list__entries
+        order_weight: 50
+
+  - name: CommunityList
+    namespace: Routing
+    description: "A set of BGP communities a route is matched against, or a set to delete from it."
+    label: Community List
+    icon: mdi:tag-outline
+    include_in_menu: false
+    uniqueness_constraints:
+      - ["name__value"]
+    human_friendly_id:
+      - name__value
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 100
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 150
+      - name: community_type
+        kind: Dropdown
+        optional: false
+        default_value: standard
+        order_weight: 200
+        description: "The kind of community the list holds"
+        choices:
+          - name: standard
+            label: Standard
+            description: "ASN:value, or a well-known community (no-export, no-advertise, local-AS)"
+            color: "#7FBF7F"
+          - name: large
+            label: Large
+            description: "ASN:value:value (RFC 8092)"
+            color: "#3498DB"
+      - name: members
+        kind: List
+        label: Communities
+        order_weight: 250
+        description: "The communities of the list, e.g. 64500:100, no-export, or 64500:1:2 for a large one"
+      - name: match
+        kind: Dropdown
+        optional: false
+        default_value: any
+        order_weight: 300
+        description: "A route matches when it carries any of the members, or all of them"
+        choices:
+          - name: any
+            label: Any
+            color: "#7FBF7F"
+          - name: all
+            label: All
+            color: "#E67E22"
+
+  - name: Policy
+    namespace: Routing
+    description: "An ordered set of terms applied to the routes of a BGP session, in one direction."
+    label: Routing Policy
+    icon: mdi:routes
+    include_in_menu: false
+    uniqueness_constraints:
+      - ["name__value"]
+    human_friendly_id:
+      - name__value
+    order_by:
+      - priority__value
+      - name__value
+    display_label: "{{ name__value }}"
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 100
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 150
+      - name: origin
+        kind: Dropdown
+        optional: false
+        default_value: manual
+        order_weight: 200
+        description: "Who owns the policy: a generator writes and removes its own, a person's is never touched"
+        choices:
+          - name: manual
+            label: Manual
+            color: "#7FBF7F"
+          - name: generated
+            label: Generated
+            color: "#3498DB"
+      - name: priority
+        kind: Number
+        label: Priority
+        optional: false
+        default_value: 100
+        order_weight: 250
+        description: "Policies of one direction apply in this order (lowest first), then by name"
+        parameters:
+          min_value: 1
+          max_value: 1000
+      - name: default_action
+        kind: Dropdown
+        optional: false
+        default_value: permit
+        order_weight: 300
+        description: "What happens to a route no term of any policy of the direction matches"
+        choices:
+          - name: permit
+            label: Permit
+            color: "#7FBF7F"
+          - name: deny
+            label: Deny
+            color: "#E06666"
+    relationships:
+      - name: terms
+        peer: RoutingPolicyTerm
+        label: Terms
+        kind: Component
+        cardinality: many
+        optional: true
+        on_delete: cascade
+        identifier: policy__terms
+        order_weight: 1000
+      - name: import_peerings
+        peer: ManagedBGPPeering
+        label: Imported By
+        kind: Generic
+        cardinality: many
+        optional: true
+        identifier: bgppeering__import_policies
+        order_weight: 1500
+      - name: export_peerings
+        peer: ManagedBGPPeering
+        label: Exported By
+        kind: Generic
+        cardinality: many
+        optional: true
+        identifier: bgppeering__export_policies
+        order_weight: 1510
+
+  - name: PolicyTerm
+    namespace: Routing
+    description: "One term of a policy: what it matches, what it sets and whether it permits or denies the route."
+    label: Routing Policy Term
+    icon: mdi:hexagon-outline
+    include_in_menu: false
+    uniqueness_constraints:
+      - ["policy", "seq__value"]
+    human_friendly_id:
+      - policy__name__value
+      - seq__value
+    order_by:
+      - policy__name__value
+      - seq__value
+    display_label: "{{ policy__name__value }} {{ seq__value }} {{ action__value }}"
+    attributes:
+      - name: seq
+        kind: Number
+        label: Sequence
+        order_weight: 100
+        parameters:
+          min_value: 1
+          max_value: 65535
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 120
+      - name: action
+        kind: Dropdown
+        optional: false
+        default_value: permit
+        order_weight: 150
+        choices:
+          - name: permit
+            label: Permit
+            color: "#7FBF7F"
+          - name: deny
+            label: Deny
+            color: "#E06666"
+      - name: set_local_pref
+        kind: Number
+        label: Set Local Preference
+        optional: true
+        order_weight: 300
+        parameters:
+          min_value: 0
+          max_value: 4294967295
+      - name: set_med
+        kind: Number
+        label: Set MED
+        optional: true
+        order_weight: 310
+        parameters:
+          min_value: 0
+          max_value: 4294967295
+      - name: add_communities
+        kind: List
+        label: Add Communities
+        optional: true
+        order_weight: 320
+        description: "Communities added to the route (standard, well-known or large)"
+      - name: prepend_count
+        kind: Number
+        label: AS Path Prepend
+        optional: true
+        order_weight: 330
+        description: "Times the local AS is prepended to the path"
+        parameters:
+          min_value: 1
+          max_value: 10
+    relationships:
+      - name: policy
+        peer: RoutingPolicy
+        label: Policy
+        kind: Parent
+        cardinality: one
+        optional: false
+        identifier: policy__terms
+        order_weight: 50
+      - name: match_prefix_list
+        peer: RoutingPrefixList
+        label: Match Prefix List
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: policy_term__match_prefix_list
+        order_weight: 200
+      - name: match_community_list
+        peer: RoutingCommunityList
+        label: Match Community List
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: policy_term__match_community_list
+        order_weight: 210
+      - name: delete_community_list
+        peer: RoutingCommunityList
+        label: Delete Communities
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: policy_term__delete_community_list
+        order_weight: 340
+        description: "The communities of this list are removed from the route"
+
+extensions:
+  nodes:
+    - kind: ManagedBGPPeering
+      relationships:
+        - name: import_policies
+          peer: RoutingPolicy
+          label: Import Policies
+          kind: Generic
+          cardinality: many
+          optional: true
+          identifier: bgppeering__import_policies
+          order_weight: 5200
+          description: "Applied to the routes the session receives, inside the guard derived from the model"
+        - name: export_policies
+          peer: RoutingPolicy
+          label: Export Policies
+          kind: Generic
+          cardinality: many
+          optional: true
+          identifier: bgppeering__export_policies
+          order_weight: 5210
+          description: "Applied to the routes the session announces, inside the guard derived from the model"
