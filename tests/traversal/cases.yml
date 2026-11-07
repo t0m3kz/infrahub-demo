@@ -261,6 +261,23 @@ cases:
       - src: ManagedVxlanSegment:c900-web-p
         dst: CloudNetworkSegment:c900-isolated-p
         expect_unreachable: true
+      # ---- L2: two switches are in one broadcast domain when a chain of segment rows joins them (utils/path_trace.py,
+      # the `l2` layer: segment, its realization per DC, the VLAN row per switch). The stretched segment c900-sync-p
+      # joins the leaves of the two DCs it is stretched over, with the SAME VLAN id on both (vlan_scope shared); the
+      # leaves of one DC share two segments, so there are two equal-cost chains; a DC the segment does not reach is in
+      # no common domain.
+      - src: DcimPhysicalDevice:ktw1-leaf-01
+        dst: DcimPhysicalDevice:waw1-leaf-01
+        layers: [l2]
+        golden: full_topology__l2__ktw1-waw1.txt
+      - src: DcimPhysicalDevice:ktw1-leaf-01
+        dst: DcimPhysicalDevice:ktw1-leaf-02
+        layers: [l2]
+        golden: full_topology__l2__ktw1-pair.txt
+      - src: DcimPhysicalDevice:ktw1-leaf-01
+        dst: DcimPhysicalDevice:gdn1-leaf-01
+        layers: [l2]
+        expect_unreachable: true
       # ---- the three sites of the sample: the office (its SD-WAN edge), the colocation cage (its edge) and the DC
       # (its tenant segment), and their way to the INTERNET and to the cloud. L1 is cabled and carried, L3 is routed.
       # office <-> DC: L1 through the internet access of both (one ISP router), L3 over the SD-WAN tunnel to the DC edge

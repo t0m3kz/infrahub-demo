@@ -38,6 +38,10 @@ LAYERS: dict[str, tuple[str, ...]] = {
            "TopologyInternetInterface", "TopologyProviderConnect", "TopologyProviderInterface"),
     "l3": ("DcimPhysicalDevice", "DcimPhysicalInterface", "DcimLAGInterface", "DcimVirtualInterface", "ManagedBGP",
            "ManagedBGPPeering", "TopologySessionCircuit"),
+    # L2 is one broadcast domain: a segment, its realization in each DC (the VNI) and the VLAN row of each switch. Two
+    # switches are in one domain when a chain of rows joins them through a segment, however far apart (a segment stretched
+    # over the DCI is one domain; the local VLAN ids differ and do not matter). Not cabling and not routing.
+    "l2": ("DcimPhysicalDevice", "ManagedSegmentVlan", "ManagedSegmentDeployment", "ManagedVxlanSegment"),
 }  # fmt: skip
 # Crossed in both layers: a transport, its peering interfaces, and the cloud chain behind them.
 CLOUD = ("CloudDirectConnect", "CloudPeeringInterface", "CloudGateway", "CloudGatewayAttachment",
@@ -234,7 +238,7 @@ async def main() -> int:
     ap.add_argument(
         "dst", help="e.g. CloudDirectConnect:dx-30all-euc1-fr2, DcimPhysicalInterface:eg-fr201/Ethernet1/13"
     )
-    ap.add_argument("--layer", choices=("l1", "l3", "both"), default="both")
+    ap.add_argument("--layer", choices=("l1", "l2", "l3", "both"), default="both", help="both = l1 and l3")
     ap.add_argument("--max-paths", type=int, default=MAX_PATHS, help="paths the server returns per leg (1..100)")
     ap.add_argument("--via", help="a node the path must cross: two legs, src -> via and via -> dst")
     ap.add_argument(
