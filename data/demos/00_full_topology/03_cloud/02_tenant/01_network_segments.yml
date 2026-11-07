@@ -12,7 +12,7 @@ spec:
       virtual_network: "vpc-c900-prod"
       availability_zone: ["eu-central-1", "eu-central-1a"]
       cidr_block: "10.200.1.0/24"
-      customer_deployment: "C900-DEMO-AWS-EU-CENTRAL-1"
+      customer_deployment: "C900-P-DEMO-AWS-EU-CENTRAL-1"
 ---
 # Two more cloud segments for the extra pairs of the traversal check. The spoke segment sits in the Azure spoke VNet,
 # which only peers with the hub VNet the ExpressRoute gateway is attached to: the DC reaches it across `peers`. The
@@ -29,7 +29,7 @@ spec:
       virtual_network: "vnet-c900-weu-spoke"
       availability_zone: ["westeurope", "westeurope-1"]
       cidr_block: "10.203.1.0/24"
-      customer_deployment: "C900-DEMO-AZURE-WESTEUROPE"
+      customer_deployment: "C900-P-DEMO-AZURE-WESTEUROPE"
     - owner: "C900"
       customer_name: "isolated"
       environment: "p"
@@ -37,7 +37,7 @@ spec:
       virtual_network: "vpc-c900-isolated"
       availability_zone: ["eu-central-1", "eu-central-1a"]
       cidr_block: "10.204.1.0/24"
-      customer_deployment: "C900-DEMO-AWS-EU-CENTRAL-1"
+      customer_deployment: "C900-P-DEMO-AWS-EU-CENTRAL-1"
 ---
 # A subnet in each spoke account. AWS: reached through the transit gateway; Azure: across the hub VNet's peering and
 # its ExpressRoute gateway.
@@ -53,7 +53,7 @@ spec:
       virtual_network: "vpc-c900-payments"
       availability_zone: ["eu-central-1", "eu-central-1a"]
       cidr_block: "10.205.1.0/24"
-      customer_deployment: "C900-PAYMENTS-AWS-EU-CENTRAL-1"
+      customer_deployment: "C900-P-PAYMENTS-AWS-EU-CENTRAL-1"
     - owner: "C900"
       customer_name: "analytics-aws"
       environment: "p"
@@ -61,7 +61,7 @@ spec:
       virtual_network: "vpc-c900-analytics"
       availability_zone: ["eu-central-1", "eu-central-1a"]
       cidr_block: "10.206.1.0/24"
-      customer_deployment: "C900-ANALYTICS-AWS-EU-CENTRAL-1"
+      customer_deployment: "C900-P-ANALYTICS-AWS-EU-CENTRAL-1"
     - owner: "C900"
       customer_name: "shared-aws"
       environment: "p"
@@ -69,7 +69,7 @@ spec:
       virtual_network: "vpc-c900-shared"
       availability_zone: ["eu-central-1", "eu-central-1a"]
       cidr_block: "10.207.1.0/24"
-      customer_deployment: "C900-SHARED-AWS-EU-CENTRAL-1"
+      customer_deployment: "C900-P-SHARED-AWS-EU-CENTRAL-1"
     - owner: "C900"
       customer_name: "payments-azure"
       environment: "p"
@@ -77,7 +77,7 @@ spec:
       virtual_network: "vnet-c900-payments-weu"
       availability_zone: ["westeurope", "westeurope-1"]
       cidr_block: "10.208.1.0/24"
-      customer_deployment: "C900-PAYMENTS-AZURE-WESTEUROPE"
+      customer_deployment: "C900-P-PAYMENTS-AZURE-WESTEUROPE"
     - owner: "C900"
       customer_name: "analytics-azure"
       environment: "p"
@@ -85,7 +85,7 @@ spec:
       virtual_network: "vnet-c900-analytics-weu"
       availability_zone: ["westeurope", "westeurope-1"]
       cidr_block: "10.209.1.0/24"
-      customer_deployment: "C900-ANALYTICS-AZURE-WESTEUROPE"
+      customer_deployment: "C900-P-ANALYTICS-AZURE-WESTEUROPE"
     - owner: "C900"
       customer_name: "identity-azure"
       environment: "p"
@@ -93,4 +93,4 @@ spec:
       virtual_network: "vnet-c900-identity-weu"
       availability_zone: ["westeurope", "westeurope-1"]
       cidr_block: "10.210.1.0/24"
-      customer_deployment: "C900-IDENTITY-AZURE-WESTEUROPE"
+      customer_deployment: "C900-P-IDENTITY-AZURE-WESTEUROPE"

@@ -27,8 +27,8 @@ _TOPOLOGY_KINDS = (
     "TopologyCustomerCloud",
 )
 
-# An office is always production (it has no environment attribute); a cloud footprint is not environment-scoped
-# (its accounts and segments carry the environment). Only DC/colocation footprints read `environment` from the node.
+# An office is always production (it has no environment attribute); every other footprint (DC, colocation, cloud)
+# reads `environment` from the node.
 _OFFICE_ENVIRONMENT = "p"
 
 

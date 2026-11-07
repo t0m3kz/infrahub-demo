@@ -1,5 +1,5 @@
 ---
-# C004 cloud footprint in westeurope (data/demos/11_cloud/), named C004-PEAKORA-AZURE-WESTEUROPE.
+# C004 cloud footprint in westeurope (data/demos/11_cloud/), named C004-P-PEAKORA-AZURE-WESTEUROPE.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

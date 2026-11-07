@@ -112,7 +112,7 @@ class TestTopologyOrchestratorRoutingGenerator:
                 {
                     "id": "dep-1",
                     "typename": "TopologyCustomerCloud",
-                    "name": "C003-VAULTEX-AWS-EU-CENTRAL-1",
+                    "name": "C003-P-VAULTEX-AWS-EU-CENTRAL-1",
                     "infrastructure_orchestrator": "github_actions",
                 }
             ]

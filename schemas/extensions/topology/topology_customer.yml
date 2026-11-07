@@ -430,7 +430,7 @@ nodes:
         order_weight: 100
         computed_attribute:
           kind: Jinja2
-          jinja2_template: "{{ owner__org_id__value|upper }}-{{ customer_name__value|upper }}-{{ parent__name__value|upper }}"  # yamllint disable-line rule:line-length
+          jinja2_template: "{{ owner__org_id__value|upper }}-{{ environment__value|upper }}-{{ customer_name__value|upper }}-{{ parent__name__value|upper }}"  # yamllint disable-line rule:line-length
         read_only: true
         optional: false
       - name: customer_name

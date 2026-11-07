@@ -109,11 +109,11 @@ def test_no_two_footprint_declarations_of_30_all_compute_the_same_name() -> None
     ("kind", "pattern"),
     [
         ("TopologyCustomerOffice", "{owner}-OFFICE"),
-        ("TopologyCustomerCloud", "{owner}-{customer_name}-{parent}"),
+        ("TopologyCustomerCloud", "{owner}-{environment}-{customer_name}-{parent}"),
     ],
 )
-def test_office_and_cloud_names_carry_no_environment(kind: str, pattern: str) -> None:
-    """C005-OFFICE, C003-VAULTEX-AWS-EU-CENTRAL-1: no `-P-` in the name, though a cloud footprint states one."""
+def test_office_and_cloud_names_follow_their_pattern(kind: str, pattern: str) -> None:
+    """C005-OFFICE (no environment), C003-P-VAULTEX-AWS-EU-CENTRAL-1 (the environment after the owner, as a DC's)."""
     footprints = [obj for obj in _footprints(_ALL_DEMO) if obj.kind == kind]
     assert footprints
     for obj in footprints:
@@ -121,7 +121,10 @@ def test_office_and_cloud_names_carry_no_environment(kind: str, pattern: str) ->
             assert "environment" not in obj.item, _rel(obj.path)
         owner = str(obj.item["owner"])
         expected = pattern.format(
-            owner=owner, customer_name=obj.item.get("customer_name", ""), parent=obj.item["parent"]
+            owner=owner,
+            environment=obj.item.get("environment", ""),
+            customer_name=obj.item.get("customer_name", ""),
+            parent=obj.item["parent"],
         ).upper()
         assert name(obj) == expected
 

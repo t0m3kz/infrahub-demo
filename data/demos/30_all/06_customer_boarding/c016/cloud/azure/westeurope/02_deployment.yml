@@ -1,5 +1,5 @@
 ---
-# C016 cloud footprint in westeurope (data/demos/11_cloud/), named C016-DATHREX-AZURE-WESTEUROPE.
+# C016 cloud footprint in westeurope (data/demos/11_cloud/), named C016-P-DATHREX-AZURE-WESTEUROPE.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
