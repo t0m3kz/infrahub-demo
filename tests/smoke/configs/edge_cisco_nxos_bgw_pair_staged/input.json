@@ -1970,7 +1970,7 @@
                                   "vni": {
                                     "value": 10150
                                   },
-                                  "vlan_domain_segments": {
+                                  "vlans": {
                                     "edges": [
                                       {
                                         "node": {
@@ -2321,7 +2321,7 @@
                       "status": {
                         "value": "active"
                       },
-                      "vlan_domain_segments": {
+                      "vlans": {
                         "edges": [
                           {
                             "node": {
@@ -2363,7 +2363,7 @@
                                   "vni": {
                                     "value": 10150
                                   },
-                                  "vlan_domain_segments": {
+                                  "vlans": {
                                     "edges": [
                                       {
                                         "node": {

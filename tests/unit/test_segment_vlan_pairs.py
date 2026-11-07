@@ -1,4 +1,4 @@
-"""MLAG pairs in the per-device VLAN rows (generators/vlan_domain.py).
+"""MLAG pairs in the per-device VLAN rows (generators/segment_vlan.py).
 
 A device that needs a segment brings its MLAG peer with it (a dual-homed port-channel is tagged on both peers, so a
 peer with no port of the segment still gets a row), and a pair shares ONE vlan_id. A late pairing whose existing rows
@@ -11,8 +11,8 @@ import asyncio
 from collections.abc import Sequence
 from typing import Any
 
-from generators.protocols import DcimPhysicalDevice, ManagedMLAG, ManagedVlanDomainSegment
-from tests.unit.vlan_domain_helpers import VlanWorld, make_device, reconcile
+from generators.protocols import DcimPhysicalDevice, ManagedMLAG, ManagedSegmentVlan
+from tests.unit.segment_vlan_helpers import VlanWorld, make_device, reconcile
 
 _PORT = "DcimPhysicalInterface"
 
@@ -114,6 +114,34 @@ class TestPeerExpansion:
         )
 
         assert world.vlan_ids("seg-1") == {"bl-1": 100, "bl-2": 100}
+
+
+class TestStretchedSegmentIsOnEveryVtep:
+    """A stretched segment is realized on the leaves too (the anycast gateway is on every VTEP), not only on the border
+    gateways and the switches with a port of it."""
+
+    @staticmethod
+    def _role_queries(world: VlanWorld, **state: Any) -> list[list[str]]:
+        gen = world.gen([make_device("bl-1", "bl-1")], interfaces=[], **state)
+        asyncio.run(reconcile(gen, "seg-1", "name-seg-1"))
+        return [
+            kw["role__values"] for kw in (c.kwargs for c in gen.client.filters.call_args_list) if "role__values" in kw
+        ]
+
+    def test_a_stretched_segment_asks_for_leaves_tors_and_border_gateways(self) -> None:
+        queries = self._role_queries(
+            VlanWorld(),
+            stretch_scope="dc_pair",
+            customer_deployments=[
+                {"node": {"id": "cust-1", "parent": {"node": {"id": "dc-1", "children": {"edges": []}}}}}
+            ],
+        )
+
+        assert len(queries) == 1
+        assert {"leaf", "tor", "access-leaf", "border-leaf", "border-spine", "edge"} <= set(queries[0])
+
+    def test_a_local_segment_asks_for_no_role_at_all(self) -> None:
+        assert self._role_queries(VlanWorld()) == []
 
 
 class TestPairIds:
@@ -231,7 +259,7 @@ class TestLocksAndIdempotency:
             "vlan-device-ids-z1",
             "vlan-device-ids-z2",
         ]
-        reads = world.reads(ManagedVlanDomainSegment)
+        reads = world.reads(ManagedSegmentVlan)
         assert len(reads) == 1 and reads[0]["device__ids"] == ["m1", "m2", "z1", "z2"]
 
     def test_a_rerun_writes_and_locks_nothing_more(self) -> None:

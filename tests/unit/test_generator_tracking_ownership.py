@@ -205,7 +205,7 @@ class TestDeviceGroupOwnership:
         group.save.assert_awaited_once_with(**UNTRACKED_UPSERT)
 
 
-class TestVlanDomains:
+class TestSegmentVlans:
     """A VLAN domain is an MLAG pair or a device on its own: only the pair is a record."""
 
     @pytest.mark.asyncio

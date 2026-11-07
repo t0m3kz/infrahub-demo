@@ -491,7 +491,12 @@ class OrganizationCustomer(OrganizationGeneric, OrganizationEntity):
 
 
 class TopologyCustomerCloud(
-    TopologyCustomer, TopologyDeployment, TopologyCloudHosting, TopologyApplianceHosting, TopologyConnectableLocation
+    TopologyCustomer,
+    TopologyEnvironmentScoped,
+    TopologyDeployment,
+    TopologyCloudHosting,
+    TopologyApplianceHosting,
+    TopologyConnectableLocation,
 ):
     customer_name: String
     name: StringOptional
@@ -788,7 +793,7 @@ class TopologyCarrierCircuit(TopologyCircuit, ManagedGeneric, ManagedGenericInte
 
 
 class DcimPhysicalDevice(CoreArtifactTarget, DcimDevice, DcimDeviceManaged, DcimCapabilities, AppInstance):
-    vlan_domain_segments: RelationshipManager[ManagedVlanDomainSegment]
+    vlans: RelationshipManager[ManagedSegmentVlan]
     position: IntegerOptional
     rack_face: Dropdown
     serial: StringOptional
@@ -973,10 +978,10 @@ class ManagedSegmentDeployment(CoreNode):
     vni: IntegerOptional
     deployment: RelationshipAttribute[TopologySegmentHosting]
     segment: RelationshipAttribute[ManagedNetworkSegment]
-    vlan_domain_segments: RelationshipManager[ManagedVlanDomainSegment]
+    vlans: RelationshipManager[ManagedSegmentVlan]
 
 
-class ManagedVlanDomainSegment(CoreNode):
+class ManagedSegmentVlan(CoreNode):
     vlan_id: Integer
     segment_deployment: RelationshipAttribute[ManagedSegmentDeployment]
     device: RelationshipAttribute[DcimPhysicalDevice]
@@ -1064,7 +1069,7 @@ class DcimVirtualDevice(CoreArtifactTarget, DcimDevice, DcimDeviceManaged, DcimC
 
 
 class DcimVirtualInterface(DcimInterface, DcimHasSubInterface, DcimHasIPAddress, DcimSubInterface):
-    vlan_domain_segment: RelationshipAttribute[ManagedVlanDomainSegment]
+    segment_vlan: RelationshipAttribute[ManagedSegmentVlan]
     vrf: RelationshipAttribute[ManagedVRF]
 
 

@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from tests.integration.segment_helpers import fetch_vlan_domain_segments
+from tests.integration.segment_helpers import fetch_segment_vlans
 from tests.integration.service_inventory_helpers import (
     fetch_tenant_services,
     fetch_transit_inventory,
@@ -115,12 +115,12 @@ def test_scope_tenant_services_keeps_unresolved_cluster() -> None:
 
 
 # ---------------------------------------------------------------------------
-# VLAN domain segments query (test_19)
+# segment VLANs query (test_19)
 # ---------------------------------------------------------------------------
 
 
-def _vlan_domain_client() -> MagicMock:
-    """A client returning one segment deployment with one ManagedVlanDomainSegment row under it."""
+def _segment_vlan_client() -> MagicMock:
+    """A client returning one segment deployment with one ManagedSegmentVlan row under it."""
     client = MagicMock()
     client.execute_graphql = AsyncMock(
         return_value={
@@ -131,7 +131,7 @@ def _vlan_domain_client() -> MagicMock:
                             "id": "sd-1",
                             "vni": {"value": 10100},
                             "segment": {"node": {"id": "seg-1", "name": {"value": "web-app"}}},
-                            "vlan_domain_segments": {
+                            "vlans": {
                                 "edges": [
                                     {
                                         "node": {
@@ -151,11 +151,11 @@ def _vlan_domain_client() -> MagicMock:
     return client
 
 
-async def test_fetch_vlan_domain_segments_unfiltered_declares_no_variable() -> None:
+async def test_fetch_segment_vlans_unfiltered_declares_no_variable() -> None:
     """Without a segment filter the query declares no $segment_id: GraphQL rejects unused variables."""
-    client = _vlan_domain_client()
+    client = _segment_vlan_client()
 
-    result = await fetch_vlan_domain_segments(client=client, branch="dc6-segments", expected_count=1)
+    result = await fetch_segment_vlans(client=client, branch="dc6-segments", expected_count=1)
 
     query = client.execute_graphql.await_args.kwargs["query"]
     assert "$segment_id" not in query
@@ -175,14 +175,14 @@ async def test_fetch_vlan_domain_segments_unfiltered_declares_no_variable() -> N
     }
 
 
-async def test_fetch_vlan_domain_segments_filtered_declares_and_uses_variable() -> None:
+async def test_fetch_segment_vlans_filtered_declares_and_uses_variable() -> None:
     """A segment filter declares $segment_id and uses it in the segment__ids filter."""
-    client = _vlan_domain_client()
+    client = _segment_vlan_client()
 
-    await fetch_vlan_domain_segments(client=client, branch="dc6-segments", segment_id="seg-1")
+    await fetch_segment_vlans(client=client, branch="dc6-segments", segment_id="seg-1")
 
     query = client.execute_graphql.await_args.kwargs["query"]
-    assert "GetVlanDomainSegments($segment_id: [ID])" in query
+    assert "GetSegmentVlans($segment_id: [ID])" in query
     assert "ManagedSegmentDeployment(segment__ids: $segment_id)" in query
     assert client.execute_graphql.await_args.kwargs["variables"] == {"segment_id": ["seg-1"]}
 

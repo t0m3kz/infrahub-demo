@@ -78,7 +78,7 @@ def _svi(device: str, name: str, segment: str | None, vrf_id: str | None, role: 
         "vrf": {"node": {"id": vrf_id, "namespace": {"node": {"name": _name(SEGMENT_NAMESPACE)}}}}
         if vrf_id
         else {"node": None},
-        "vlan_domain_segment": row,
+        "segment_vlan": row,
     }
 
 
@@ -175,7 +175,7 @@ def test_an_svi_of_another_segment_in_the_namespace_is_foreign_demand() -> None:
 
 
 def test_an_svi_without_a_row_is_foreign_not_a_crash() -> None:
-    """A null vlan_domain_segment (an SVI no row backs) cannot belong to the segment."""
+    """A null segment_vlan (an SVI no row backs) cannot belong to the segment."""
     result = _healthy()
     result["DcimVirtualInterface"]["edges"].append({"node": _svi("leaf-b", "Vlan300", None, DC_VRF)})
     assert _state(result)["leaf-b"]["foreign"] == ["Vlan300 (virtual)"]

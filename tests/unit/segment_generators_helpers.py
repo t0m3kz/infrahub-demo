@@ -28,7 +28,7 @@ def _make_gen() -> Any:
     # wait) — no in-flight parent in these unit tests, so no-op.
     gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
     # The port tag and VLAN row reconciliation has its own tests
-    # (tests/unit/test_vlan_domain_reconcile.py, test_app_instance_segment_generator.py) — stubbed at the boundary.
+    # (tests/unit/test_segment_vlan_reconcile.py, test_app_instance_segment_generator.py) — stubbed at the boundary.
     gen.reconcile_vxlan_segment = AsyncMock()
     # Tenant addressing has its own test class (TestEnsureSegmentAddressing).
     gen.ensure_segment_addressing = AsyncMock()

@@ -410,3 +410,23 @@ class TestNoShadowDefinitions:
                 ]
 
         assert not redefined, "defined in utils/limits.py and again in: " + "; ".join(redefined)
+
+
+class TestSharedVlanBand:
+    """The shared VLAN band is the first SHARED_VLAN_COUNT numbers of the GLOBAL-L2VNI pool, above the local band."""
+
+    def test_the_global_vni_start_is_the_start_of_the_bootstrap_pool(self, root_dir: Path) -> None:
+        """Change the pool and ``GLOBAL_L2_VNI_START`` (or the other way) and a shared VNI stops mapping to its VLAN."""
+        documents = yaml.safe_load_all((root_dir / "data" / "bootstrap" / "18_vni_pools.yml").read_text())
+        pool = next(
+            item
+            for doc in documents
+            for item in (doc.get("spec") or {}).get("data") or []
+            if item.get("name") == "GLOBAL-L2VNI"
+        )
+        assert pool["start_range"] == limits.GLOBAL_L2_VNI_START
+        assert limits.GLOBAL_L2_VNI_START + limits.SHARED_VLAN_COUNT - 1 <= pool["end_range"]
+
+    def test_the_bands_are_ordered_and_do_not_overlap(self) -> None:
+        assert limits.CUSTOMER_VLAN_ID_MIN < limits.LOCAL_VLAN_ID_MAX < limits.SHARED_VLAN_ID_MIN
+        assert limits.SHARED_VLAN_ID_MAX == limits.CUSTOMER_VLAN_ID_MAX < limits.FW_CONTEXT_VLAN_START

@@ -41,7 +41,7 @@ def _as_vrf_instances_node(device: dict[str, Any]) -> dict[str, Any]:
         if act.get("vlan_id")
     ]
     capabilities = [dict(cap) for cap in device.get("capabilities") or []]
-    node = {**device, "capabilities": capabilities, "member_of_groups": [], "vlan_domain_segments": rows}
+    node = {**device, "capabilities": capabilities, "member_of_groups": [], "vlans": rows}
     return node
 
 

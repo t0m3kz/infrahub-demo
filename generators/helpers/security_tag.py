@@ -119,7 +119,7 @@ async def ensure_segment_tag(client: Any, lock: Lock, *, segment: dict[str, Any]
     contracts between segment tags are its rules (transforms/helpers/
     group_policy.py). MANAGEMENT, Cloud and gateway-less
     segments are never tagged. Must not run under a segment lock
-    (generators/vlan_domain.segment_lock_key): it takes its own.
+    (generators/segment_vlan.segment_lock_key): it takes its own.
     """
     if not is_routed_tenant_segment(segment):
         return None

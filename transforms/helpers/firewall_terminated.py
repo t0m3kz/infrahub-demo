@@ -43,7 +43,7 @@ def _facing_device_ids(interfaces: list[dict[str, Any]], trunk_name: str, device
 def _row_vlan(segment: dict[str, Any], device_ids: set[str]) -> int | None:
     """The VLAN id of the segment's row on one of the devices, None when it has none there."""
     for deployment in segment.get("segment_deployments") or []:
-        for row in deployment.get("vlan_domain_segments") or []:
+        for row in deployment.get("vlans") or []:
             if (row.get("device") or {}).get("id") in device_ids and isinstance(row.get("vlan_id"), int):
                 return row["vlan_id"]
     return None

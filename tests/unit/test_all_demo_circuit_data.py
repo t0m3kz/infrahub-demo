@@ -446,7 +446,7 @@ def _assert_party_processes(parties: set[str]) -> None:
 
 def test_provider_stubs_deployed_to_a_zone_are_in_the_provider_stubs_group() -> None:
     """A stub router in a colocation zone has the `edge` role of its template: only the group keeps it out of the
-    border-gateway lookup of generators/vlan_domain.py (a stretched segment would demand a VLAN domain for it)."""
+    border-gateway lookup of generators/segment_vlan.py (a stretched segment would demand a VLAN domain for it)."""
     zones = {
         name(zone) for kind in ("TopologyColocationZone", "TopologyVirtualColocation") for zone in declared(kind, _ALL)
     }

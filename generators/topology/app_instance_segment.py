@@ -77,7 +77,7 @@ class AppInstanceSegmentGenerator(PoolMixin, SegmentPortTagMixin, CommonGenerato
     written untracked and reconciled explicitly — tags via
     RelationshipAdd/RelationshipRemove on the port (with this run's account
     as the source), rows via
-    VlanDomainMixin — under the per-segment lock. This generator saves
+    SegmentVlanMixin — under the per-segment lock. This generator saves
     nothing into its own tracking group.
     """
 

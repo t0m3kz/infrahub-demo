@@ -12,12 +12,12 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from infrahub_sdk.generator import InfrahubGenerator
 
+from generators.segment_vlan import segment_lock_key
 from generators.topology.circuit import CarrierCircuitGenerator
 from generators.topology.customer_dc import CustomerDeploymentDCExchangeGenerator
 from generators.topology.segment import VxlanSegmentGenerator
 from generators.topology.segment_ports import SegmentPortTagMixin
 from generators.topology.virtual_circuit import VirtualCircuitSessionGenerator
-from generators.vlan_domain import segment_lock_key
 from tests.unit.customer_generator_helpers import make_generator
 from tests.unit.simulators.circuit_fakes import (
     FakeClient,
@@ -65,9 +65,7 @@ class TestSegmentReconcile:
         gen._fetch_segment_vlan_state = AsyncMock(
             side_effect=[_state("dev-lost", "dev-kept"), _state("dev-kept", "dev-new")]
         )
-        gen._reconcile_segment_vlan_domains_locked = AsyncMock(
-            side_effect=lambda *_a: gen.events.append("rows") or True
-        )
+        gen._reconcile_segment_vlans_locked = AsyncMock(side_effect=lambda *_a: gen.events.append("rows") or True)
         gen.reconcile_vrfs = AsyncMock(side_effect=lambda ids: gen.events.append("vrfs"))
 
         asyncio.run(gen.reconcile_vxlan_segment("seg-1", "seg"))
@@ -82,7 +80,7 @@ class TestSegmentReconcile:
         """No row written: the state read before serves as the 'after' too (one read)."""
         gen = _segment_gen()
         gen._fetch_segment_vlan_state = AsyncMock(return_value=_state("d1"))
-        gen._reconcile_segment_vlan_domains_locked = AsyncMock(return_value=False)
+        gen._reconcile_segment_vlans_locked = AsyncMock(return_value=False)
         gen.reconcile_vrfs = AsyncMock()
 
         asyncio.run(gen.reconcile_vxlan_segment("seg-1", "seg"))
@@ -102,7 +100,7 @@ class TestSegmentReconcile:
         assert SegmentPortTagMixin._row_device_ids(None) == set()
 
     def test_the_state_reads_the_row_device_off_the_query(self) -> None:
-        """segment_vlan_domains.gql returns the device with the row: no further read."""
+        """segment_vlans.gql returns the device with the row: no further read."""
         gen = _segment_gen()
         rows = [
             {"node": {"id": "r1", "vlan_id": {"value": 100}, "device": {"node": {"id": "m1"}}}},
@@ -117,7 +115,7 @@ class TestSegmentReconcile:
                             "node": {
                                 "id": "sd-1",
                                 "deployment": {"node": {"id": "dc"}},
-                                "vlan_domain_segments": {"edges": rows},
+                                "vlans": {"edges": rows},
                             }
                         }
                     ]

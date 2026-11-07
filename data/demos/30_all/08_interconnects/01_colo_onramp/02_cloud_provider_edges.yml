@@ -1,7 +1,7 @@
 ---
 # The provider edges we meet in the cages, as seen from our side of the handoffs and carriers. They are the provider's
 # kit, not ours: owned by the provider, in no device group (the two physical stubs deployed to a colocation zone are in
-# `provider_stubs`, which keeps them out of the border-gateway lookup of generators/vlan_domain.py: they carry the
+# `provider_stubs`, which keeps them out of the border-gateway lookup of generators/segment_vlan.py: they carry the
 # `edge` role of their template), so no config artifact or device check targets them. They exist, like the ISP provider
 # edges in ../06_internet/02_devices.yml, so a carrier, a cable or a handoff circuit has a second endpoint (and, for the
 # Megaport Cloud Router, a remote AS).

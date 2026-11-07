@@ -1,5 +1,5 @@
-# Per-segment desired state for ManagedVlanDomainSegment reconciliation
-# (generators/vlan_domain.py, SegmentPortTagMixin.reconcile_vxlan_segment),
+# Per-segment desired state for ManagedSegmentVlan reconciliation
+# (generators/segment_vlan.py, SegmentPortTagMixin.reconcile_vxlan_segment),
 # shared by add_vxlan_segment and add_app_component_segment. Read by id from
 # Python, not a generator definition's own query.
 #   - ManagedSegmentDeployment: the segment's realization in each DC or metro
@@ -18,12 +18,13 @@
 #   - terminated_on: the firewall context terminating the segment and its `capabilities`, among which the border
 #     service ports (role firewall, a physical port or a LAG of the border leaf) facing its HA pair: those carry the
 #     segment as a VLAN like a customer port does (SegmentPortTagMixin).
-query segment_vlan_domains($segment_id: ID!) {
+query segment_vlans($segment_id: ID!) {
   ManagedVxlanSegment(ids: [$segment_id]) {
     edges {
       node {
         id
         stretch_scope { value }
+        vlan_scope { value }
         terminated_on {
           node {
             id
@@ -56,7 +57,7 @@ query segment_vlan_domains($segment_id: ID!) {
                 # id alone fails server-side ("Unable to identify the type of
                 # the instance"); select a field, as vxlan_segment.gql does.
                 # The edges are deployed into the metro's zones and virtual
-                # colocations, not the metro (generators/vlan_domain.py's
+                # colocations, not the metro (generators/segment_vlan.py's
                 # _device_deployment_ids).
                 parent {
                   node {
@@ -85,8 +86,9 @@ query segment_vlan_domains($segment_id: ID!) {
     edges {
       node {
         id
+        vni { value }
         deployment { node { id } }
-        vlan_domain_segments {
+        vlans {
           edges {
             node {
               id

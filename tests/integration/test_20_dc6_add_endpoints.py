@@ -19,7 +19,7 @@ Steps:
 2.  Wait for event-triggered generators to complete and verify no failures
 3.  Verify endpoint growth in DC6 and that every loaded server is cabled
 3b. Load the AppComponent; 3c. run add_app_component_segment over it
-3d. Verify the segment's ManagedVlanDomainSegment and switch-port tagging
+3d. Verify the segment's ManagedSegmentVlan and switch-port tagging
 3e. A port a person tags by hand survives a rerun of the segment reconcile
 4.  Create proposed change
 5.  Wait for validations, verify diff and artifacts
@@ -39,7 +39,7 @@ from .branch_helpers import fetch_artifacts, fetch_proposed_change_diff
 from .conftest import TestInfrahubDockerWithClient
 from .dc_topology_helpers import snapshot_dc_device_counts_by_role
 from .endpoint_app_helpers import fetch_endpoint_cabling
-from .segment_helpers import fetch_segment_ports, fetch_vlan_domain_segments
+from .segment_helpers import fetch_segment_ports, fetch_segment_vlans
 from .suite_constants import (
     DEMO_SERVERS_DATA,
     SCENARIO_DC_NAME,
@@ -324,7 +324,7 @@ class TestDC6AddEndpoints(TestInfrahubDockerWithClient):
 
     @pytest.mark.order(253)
     @pytest.mark.dependency(
-        scope="session", name="dc6_add_ep_verify_vlan_domain", depends=["dc6_add_ep_component_segment"]
+        scope="session", name="dc6_add_ep_verify_segment_vlan", depends=["dc6_add_ep_component_segment"]
     )
     @pytest.mark.asyncio
     async def test_03d_verify_segment_realized_on_server_switches(
@@ -343,12 +343,12 @@ class TestDC6AddEndpoints(TestInfrahubDockerWithClient):
         assert segments, f"Segment '{SCENARIO_ENDPOINT_SEGMENT}' not found on '{scenario_branch}'"
         segment = segments[0]["node"]
 
-        vlan_domain_result = await fetch_vlan_domain_segments(
+        segment_vlan_result = await fetch_segment_vlans(
             client=async_client_main, branch=scenario_branch, expected_count=1, segment_id=segment["id"]
         )
-        records = vlan_domain_result["records"]
+        records = segment_vlan_result["records"]
         assert records, (
-            f"No ManagedVlanDomainSegment for '{SCENARIO_ENDPOINT_SEGMENT}' although an AppComponent "
+            f"No ManagedSegmentVlan for '{SCENARIO_ENDPOINT_SEGMENT}' although an AppComponent "
             f"instance ({SCENARIO_ENDPOINT_SERVER}) is cabled to the fabric"
         )
         without_vlan = [r for r in records if r["vlan_id"] is None]
@@ -374,7 +374,7 @@ class TestDC6AddEndpoints(TestInfrahubDockerWithClient):
         )
 
     @pytest.mark.order(253)
-    @pytest.mark.dependency(scope="session", name="dc6_add_ep_person_edge", depends=["dc6_add_ep_verify_vlan_domain"])
+    @pytest.mark.dependency(scope="session", name="dc6_add_ep_person_edge", depends=["dc6_add_ep_verify_segment_vlan"])
     @pytest.mark.asyncio
     async def test_03e_a_port_set_by_a_person_survives_the_segment_reconcile(
         self,
@@ -460,7 +460,7 @@ class TestDC6AddEndpoints(TestInfrahubDockerWithClient):
     @pytest.mark.dependency(
         scope="session",
         name="dc6_add_ep_create_pc",
-        depends=["dc6_add_ep_verify_vlan_domain"],
+        depends=["dc6_add_ep_verify_segment_vlan"],
     )
     def test_04_create_proposed_change(
         self,

@@ -1,4 +1,4 @@
-"""Mixin realizing a segment's LOCAL VLAN ID per device (a ManagedVlanDomainSegment row is on ONE device).
+"""Mixin realizing a segment's LOCAL VLAN ID per device (a ManagedSegmentVlan row is on ONE device).
 
 Shared by VxlanSegmentGenerator (generators/topology/segment.py, border
 gateway realization for a stretched segment) and AppInstanceSegmentGenerator
@@ -26,7 +26,7 @@ the pair is reported and left as it is.
 Local significance and consistency: an IEEE 802.1Q VLAN ID only has to be
 unique within one device (the real DC-wide segment identity is the VNI,
 allocated in segment.py), so a device never gives one id to two segments
-(ManagedVlanDomainSegment is unique on [device, vlan_id]). But a
+(ManagedSegmentVlan is unique on [device, vlan_id]). But a
 virtualisation cluster spans racks served by different switches and wants ONE
 VLAN id per port group, so the id is chosen, not drawn from a per-device pool:
 a segment keeps the id it already has elsewhere (a pair follows its existing member); a segment with
@@ -48,28 +48,32 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from utils.data_cleaning import clean_data
-from utils.limits import CUSTOMER_VLAN_ID_MAX, CUSTOMER_VLAN_ID_MIN, GROUP_PROVIDER_STUBS, GROUP_SDWAN_GATEWAYS
-from utils.vlan_domain import mlag_id
+from utils.fabric_roles import VTEP_ROLES
+from utils.limits import (
+    CUSTOMER_VLAN_ID_MIN,
+    GROUP_PROVIDER_STUBS,
+    GROUP_SDWAN_GATEWAYS,
+    LOCAL_VLAN_ID_MAX,
+)
+from utils.segment_vlan import mlag_id, shared_vlan_id, shared_vni_band
 
-from .protocols import DcimPhysicalDevice, ManagedMLAG, ManagedVlanDomainSegment
+from .protocols import DcimPhysicalDevice, ManagedMLAG, ManagedSegmentVlan
 
 if TYPE_CHECKING:
     from .common import CommonGenerator
     from .pools import PoolMixin
 
-# Devices that act as a deployment's EVPN Multi-Site border gateway for a
-# stretched segment: the DC's border leaves and the colocation edges. `edge` is
-# also the on-ramp router of a colocation zone or virtual colocation — its only
-# VTEP, so it is both the metro site's border gateway and (via AppInstance resolution, not here) where
-# a stretched segment's customer ports land.
-BORDER_GATEWAY_ROLES = frozenset({"border-leaf", "edge"})
+# The devices a STRETCHED segment is realized on, whether or not a port of theirs carries it: every VTEP of the hosting
+# parents (utils/fabric_roles.py VTEP_ROLES): the leaves and top-of-rack switches a workload can land on (the anycast
+# gateway must be on each, so a host keeps its gateway when it moves between the DCs) and the border gateways of the
+# EVPN Multi-Site site (a DC's border leaves, `edge` of a colocation zone, also its only VTEP).
 # An SD-WAN gateway, and a provider stub modelled inside the zone (an Equinix Fabric port, a Megaport MCR:
 # `provider_stubs`), also carries the `edge` role and is deployed into the same colocation zone as the on-ramp
 # router, so the zone lookup finds it. Neither terminates VXLAN segments and no generator gives it a VLAN domain,
 # so it is never a border gateway. (The missing-domain error for a real border gateway stays.)
 NON_BORDER_GATEWAY_GROUPS = frozenset({GROUP_SDWAN_GATEWAYS, GROUP_PROVIDER_STUBS})
 
-_SEGMENT_VLAN_DOMAINS_QUERY_PATH = Path(__file__).resolve().parents[1] / "queries/topology/add/segment_vlan_domains.gql"
+_SEGMENT_VLAN_DOMAINS_QUERY_PATH = Path(__file__).resolve().parents[1] / "queries/topology/add/segment_vlans.gql"
 
 
 def vlan_device_lock_key(device_id: str) -> str:
@@ -85,7 +89,7 @@ def segment_lock_key(segment_id: str) -> str:
     return f"segment-vlan-domains-{segment_id}"
 
 
-class VlanDomainMixin:
+class SegmentVlanMixin:
     """Mixin providing (segment, VLAN domain) -> local VLAN ID realization.
 
     Expects the host class to provide: ``client``, ``logger``,
@@ -108,6 +112,7 @@ class VlanDomainMixin:
         taken: dict[str, set[int]],
         held: dict[str, int],
         preferred: int | None,
+        fixed: int | None = None,
     ) -> dict[str, int]:
         """The vlan_id for each device in ``new`` (a device that needs a new row of the segment).
 
@@ -118,8 +123,21 @@ class VlanDomainMixin:
         on every device of every group: when that is free on all its members. Otherwise the group takes the lowest
         id free on its members, with a WARNING; a member left with no common free id takes its own lowest free id
         (WARNING; the pair's rows then differ and the check reports it); a device with no free id fails the run.
+
+        ``fixed`` is the id of a SHARED segment (vlan_scope shared, derived from its VNI): every new row takes it, and
+        a device that already uses it for another segment fails the run (no fallback: the point of a shared id is
+        that it is the same everywhere).
         """
-        band = range(CUSTOMER_VLAN_ID_MIN, CUSTOMER_VLAN_ID_MAX + 1)
+        if fixed is not None:
+            for group in groups:
+                clash = [device_id for device_id in group if fixed in taken[device_id]]
+                if clash:
+                    self.fail(
+                        f"Segment {segment_name} is shared: VLAN ID {fixed} (from its VNI) is already used by another "
+                        f"segment on {', '.join(clash)}"
+                    )
+            return {device_id: fixed for group in groups for device_id in group if device_id in new}
+        band = range(CUSTOMER_VLAN_ID_MIN, LOCAL_VLAN_ID_MAX + 1)
         default = preferred
         if default is None:
             busy = set().union(*(taken[device_id] for group in groups for device_id in group))
@@ -150,7 +168,7 @@ class VlanDomainMixin:
                 own = next((vlan_id for vlan_id in band if vlan_id not in taken[device_id]), None)
                 if own is None:
                     self.fail(
-                        f"Device {device_id} has no free VLAN ID in {CUSTOMER_VLAN_ID_MIN}-{CUSTOMER_VLAN_ID_MAX} "
+                        f"Device {device_id} has no free VLAN ID in {CUSTOMER_VLAN_ID_MIN}-{LOCAL_VLAN_ID_MAX} "
                         f"for segment {segment_name}"
                     )
                 self.logger.warning(
@@ -160,15 +178,16 @@ class VlanDomainMixin:
                 chosen[device_id] = own
         return chosen
 
-    async def _create_vlan_domain_segments(
+    async def _create_segment_vlans(
         self,
         segment_name: str,
         segment_deployment_ids: list[str],
         new: dict[str, str],
         groups: list[tuple[str, ...]],
         kept_devices: list[str],
+        fixed: int | None = None,
     ) -> None:
-        """Create the missing rows of the segment, choosing each vlan_id.
+        """Create the missing rows of the segment, choosing each vlan_id (``fixed``: a shared segment's id).
 
         ``new`` is {device id: id of the segment deployment its row goes
         under}; only rows that do not exist yet, so an existing row's vlan_id
@@ -189,7 +208,7 @@ class VlanDomainMixin:
             for device_id in members:
                 await stack.enter_async_context(self.resource_lock(vlan_device_lock_key(device_id)))
             rows = await self.client.filters(
-                kind=ManagedVlanDomainSegment,
+                kind=ManagedSegmentVlan,
                 device__ids=sorted({*members, *kept_devices}),
                 include=["segment_deployment", "device"],
             )
@@ -203,11 +222,13 @@ class VlanDomainMixin:
                     held[device_id] = row.vlan_id.value
                 elif device_id in taken:
                     taken[device_id].add(row.vlan_id.value)
-            chosen = self._choose_vlan_ids(segment_name, groups, set(new), taken, held, min(own_ids, default=None))
+            chosen = self._choose_vlan_ids(
+                segment_name, groups, set(new), taken, held, min(own_ids, default=None), fixed
+            )
             for device_id in sorted(chosen):
                 vlan_id = chosen[device_id]
                 row = await self.client.create(
-                    kind=ManagedVlanDomainSegment,
+                    kind=ManagedSegmentVlan,
                     data={
                         "segment_deployment": {"id": new[device_id]},
                         "device": {"id": device_id},
@@ -230,7 +251,7 @@ class VlanDomainMixin:
         return [hosting_parent["id"], *pod_ids]
 
     async def _fetch_segment_vlan_state(self, segment_id: str) -> dict[str, Any] | None:
-        """The segment's reconciliation inputs (segment_vlan_domains.gql), as
+        """The segment's reconciliation inputs (segment_vlans.gql), as
         {"segment": cleaned segment, "deployments": [{"id", "deployment_id",
         "rows": {device id: {"id", "vlan_id"}}}]}, one entry per ManagedSegmentDeployment; None when ``segment_id`` is not a
         ManagedVxlanSegment."""
@@ -246,13 +267,14 @@ class VlanDomainMixin:
         for segment_deployment in cleaned.get("ManagedSegmentDeployment") or []:
             rows = {
                 device_id: {"id": row["id"], "vlan_id": row.get("vlan_id")}
-                for row in segment_deployment.get("vlan_domain_segments") or []
+                for row in segment_deployment.get("vlans") or []
                 if (device_id := (row.get("device") or {}).get("id"))
             }
             deployments.append(
                 {
                     "id": segment_deployment["id"],
                     "deployment_id": (segment_deployment.get("deployment") or {}).get("id"),
+                    "vni": segment_deployment.get("vni"),
                     "rows": rows,
                 }
             )
@@ -299,7 +321,7 @@ class VlanDomainMixin:
     async def _segment_vlan_devices(self, segment: dict[str, Any]) -> list[Any]:
         """Every device that needs a row of the segment, capabilities and deployment
         included: the devices of the switch ports tagged with it, plus — for
-        a stretched segment — every border gateway of each hosting parent, plus the MLAG peer of each of them
+        a stretched segment — every VTEP of each hosting parent (leaves and border gateways), plus the MLAG peer of each of them
         (a peer with no port of the segment still carries its VLAN: a dual-homed port-channel is on both)."""
         tagged_device_ids = sorted({port["device_id"] for port in segment.get("ports") or [] if port.get("device_id")})
         devices: dict[str, Any] = {}
@@ -319,7 +341,7 @@ class VlanDomainMixin:
                 for device in await self.client.filters(
                     kind=DcimPhysicalDevice,
                     deployment__ids=list(dict.fromkeys(deployment_ids)),
-                    role__values=sorted(BORDER_GATEWAY_ROLES),
+                    role__values=sorted(VTEP_ROLES),
                     include=["capabilities", "member_of_groups", "deployment"],
                 ):
                     if not NON_BORDER_GATEWAY_GROUPS.isdisjoint(self._group_names(device)):
@@ -350,14 +372,28 @@ class VlanDomainMixin:
         """Names of the groups a device was fetched with (a group's HFID is its name)."""
         return {peer.hfid[0] for peer in device.member_of_groups.peers if peer.hfid}
 
-    async def _reconcile_segment_vlan_domains_locked(
+    def _shared_vlan_id(self, segment_name: str, state: dict[str, Any]) -> int | None:
+        """The VLAN id of a segment with vlan_scope shared (from its VNI), None for a local one; fails the run when a
+        shared segment has no VNI yet, two, or one outside the shared band (VLAN = SHARED_VLAN_ID_MIN + VNI - GLOBAL_L2_VNI_START)."""
+        if (state["segment"].get("vlan_scope") or "local") != "shared":
+            return None
+        vnis = {item["vni"] for item in state["deployments"] if item.get("vni") is not None}
+        vlan_ids = {shared_vlan_id(vni) for vni in vnis}
+        if len(vnis) != 1 or None in vlan_ids:
+            self.fail(
+                f"Segment {segment_name} is shared: it needs ONE VNI in its deployments within the shared band "
+                f"(VNI {shared_vni_band()}, the first numbers of the global pool), found {sorted(vnis) or 'none'}"
+            )
+        return next(iter(vlan_ids))
+
+    async def _reconcile_segment_vlans_locked(
         self, segment_id: str, segment_name: str, state: dict[str, Any] | None = None
     ) -> bool:
-        """Desired rows = every switch with a port carrying the segment, plus every border gateway when the
+        """Desired rows = every switch with a port carrying the segment, plus every VTEP of the hosting parents when the
         segment is stretched, plus the MLAG peer of each (a pair shares one VLAN id), each under the segment's
         deployment its switch sits in. Rows on devices that no longer need the segment (or that moved to
         another deployment) are deleted (freeing their ids); missing ones are
-        created (untracked, vlan_id chosen — see _create_vlan_domain_segments);
+        created (untracked, vlan_id chosen — see _create_segment_vlans);
         existing ones keep their vlan_id, so a re-run writes nothing.
 
         A device the segment has no deployment for (a port in a DC the segment
@@ -432,7 +468,7 @@ class VlanDomainMixin:
             if device_id not in undecided and desired.get(device_id) != deployment_id
         )
         for row_id in stale:
-            await self.client.delete(kind=ManagedVlanDomainSegment, id=row_id)
+            await self.client.delete(kind=ManagedSegmentVlan, id=row_id)
 
         # After the deletes: the ids they held are free for the new rows below.
         new = {
@@ -442,12 +478,13 @@ class VlanDomainMixin:
         }
         if new:
             kept_devices = sorted(set(desired) & existing.keys() - new.keys())
-            await self._create_vlan_domain_segments(
+            await self._create_segment_vlans(
                 segment_name,
                 [item["id"] for item in state["deployments"]],
                 new,
                 [group for group in groups if not new.keys().isdisjoint(group)],
                 kept_devices,
+                self._shared_vlan_id(segment_name, state),
             )
 
         self.logger.info(

@@ -1,4 +1,4 @@
-"""Shared builders for the VLAN domain reconciliation and allocation unit tests (generators/vlan_domain.py)."""
+"""Shared builders for the VLAN domain reconciliation and allocation unit tests (generators/segment_vlan.py)."""
 
 from __future__ import annotations
 
@@ -7,13 +7,13 @@ from contextlib import asynccontextmanager
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from generators.protocols import DcimPhysicalDevice, ManagedMLAG, ManagedVlanDomainSegment
+from generators.protocols import DcimPhysicalDevice, ManagedMLAG, ManagedSegmentVlan
+from generators.segment_vlan import segment_lock_key
 from generators.topology.segment import VxlanSegmentGenerator
-from generators.vlan_domain import segment_lock_key
 
 
 def make_gen() -> Any:
-    """A VxlanSegmentGenerator (a real VlanDomainMixin host) with a mocked
+    """A VxlanSegmentGenerator (a real SegmentVlanMixin host) with a mocked
     client/logger and a resource_lock that records the keys it was taken for."""
     gen: Any = VxlanSegmentGenerator.__new__(VxlanSegmentGenerator)
     gen.client = AsyncMock()
@@ -57,10 +57,12 @@ def raw_state(
     rows: Sequence[tuple[str, str, int, str]] = (),
     deployments: Sequence[tuple[str, str]] | None = None,
     stretch_scope: str = "local",
+    vlan_scope: str = "local",
+    vni: int | None = None,
     customer_deployments: list[dict[str, Any]] | None = None,
     sources: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    """A raw segment_vlan_domains.gql response: interfaces are (id, typename, device id) and ``sources`` maps a port id
+    """A raw segment_vlans.gql response: interfaces are (id, typename, device id) and ``sources`` maps a port id
     to the account that wrote its edge to the segment (none: a person's edge); deployments are
     (segment deployment id, hosting deployment id), by default one in ``dc-1``; rows are (row id, device id,
     vlan id, segment deployment id)."""
@@ -99,6 +101,7 @@ def raw_state(
                     "node": {
                         "id": segment_id,
                         "stretch_scope": {"value": stretch_scope},
+                        "vlan_scope": {"value": vlan_scope},
                         "customer_deployments": {"edges": customer_deployments or []},
                     }
                 }
@@ -110,7 +113,8 @@ def raw_state(
                     "node": {
                         "id": sd_id,
                         "deployment": {"node": {"id": hosting_id}},
-                        "vlan_domain_segments": {
+                        "vni": {"value": vni},
+                        "vlans": {
                             "edges": [
                                 {
                                     "node": {
@@ -132,7 +136,7 @@ def raw_state(
 
 
 class _Row:
-    """A ManagedVlanDomainSegment as the SDK returns it, and the node a create() builds (written on save)."""
+    """A ManagedSegmentVlan as the SDK returns it, and the node a create() builds (written on save)."""
 
     def __init__(self, world: VlanWorld, row_id: str, sd: str, device: str, vlan: int) -> None:
         self.id = row_id
@@ -149,7 +153,7 @@ class _Row:
 
 
 class VlanWorld:
-    """An in-memory server for the reconciliation: the stored ManagedVlanDomainSegment rows, shared by every
+    """An in-memory server for the reconciliation: the stored ManagedSegmentVlan rows, shared by every
     generator built from it (so two segments see each other). A segment's realization is ``sd-<segment>`` in
     ``dc-1`` unless the test names others."""
 
@@ -183,13 +187,13 @@ class VlanWorld:
         self.filter_kinds.append(kind)
         self.filter_kwargs.append(kwargs)
         self.events.append(f"read:{kind.__name__}")
-        if kind is ManagedVlanDomainSegment:
+        if kind is ManagedSegmentVlan:
             device_ids = set(kwargs["device__ids"])
             return [r for r in self.rows if r.device.id in device_ids]
         raise AssertionError(f"unexpected filters kind {kind}")
 
     async def _create(self, kind: Any, data: dict[str, Any]) -> _Row:
-        assert kind is ManagedVlanDomainSegment
+        assert kind is ManagedSegmentVlan
         self.created.append(data)
         self.events.append(f"create:{data['device']['id']}")
         self._counter += 1
@@ -198,7 +202,7 @@ class VlanWorld:
         )
 
     async def _delete(self, kind: Any, id: str) -> None:  # noqa: A002 - the SDK's own keyword
-        assert kind is ManagedVlanDomainSegment
+        assert kind is ManagedSegmentVlan
         self.deleted.append(id)
         self.events.append(f"delete:{id}")
         self.rows = [r for r in self.rows if r.id != id]
@@ -263,4 +267,4 @@ class VlanWorld:
 async def reconcile(gen: Any, segment_id: str, segment_name: str) -> None:
     """The VLAN row reconcile of a segment under its segment lock, as the segment generators run it."""
     async with gen.resource_lock(segment_lock_key(segment_id)):
-        await gen._reconcile_segment_vlan_domains_locked(segment_id, segment_name)
+        await gen._reconcile_segment_vlans_locked(segment_id, segment_name)

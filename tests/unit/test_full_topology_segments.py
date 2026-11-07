@@ -1,6 +1,6 @@
 """The realization of a segment in a DC is data of its own, so a second load of the sample updates it.
 
-``ManagedSegmentDeployment`` is named by its segment and its deployment and ``ManagedVlanDomainSegment`` by its device and
+``ManagedSegmentDeployment`` is named by its segment and its deployment and ``ManagedSegmentVlan`` by its device and
 VLAN id (schemas/extensions/service/segment.yml). A deployment nested under its segment (``segment_deployments``) has no
 name to match an existing one by, so a second load would create it again and break its uniqueness: the sample declares
 it as a row of its own.
@@ -13,12 +13,17 @@ from typing import Any
 
 import yaml
 
+from utils.segment_vlan import shared_vlan_id
+
 _DATA = Path(__file__).parents[2] / "data" / "demos" / "00_full_topology"
 _SCHEMA = Path(__file__).parents[2] / "schemas" / "extensions" / "service" / "segment.yml"
 
 
 def _documents() -> list[tuple[Path, dict[str, Any]]]:
     return [(path, doc) for path in sorted(_DATA.rglob("*.yml")) for doc in yaml.safe_load_all(path.read_text()) if doc]
+
+
+_STRETCHED = "c900-sync-p"
 
 
 def _nodes() -> dict[str, dict[str, Any]]:
@@ -29,7 +34,7 @@ def test_the_realization_and_the_vlan_row_are_named_by_their_parents() -> None:
     """The names an object file upserts by: segment + deployment, and device + VLAN id (each backed by a uniqueness)."""
     nodes = _nodes()
     assert nodes["SegmentDeployment"]["human_friendly_id"] == ["segment__name__value", "deployment__name__value"]
-    assert nodes["VlanDomainSegment"]["human_friendly_id"] == ["device__name__value", "vlan_id__value"]
+    assert nodes["SegmentVlan"]["human_friendly_id"] == ["device__name__value", "vlan_id__value"]
 
 
 def test_no_segment_nests_its_deployment() -> None:
@@ -42,16 +47,66 @@ def test_no_segment_nests_its_deployment() -> None:
     assert nesting == []
 
 
-def test_each_dc_declares_its_deployment_with_the_same_vlan_on_both_leaves() -> None:
-    """One deployment row per DC, with a VLAN row for each leaf of the MLAG pair under one VLAN id."""
-    rows = [
-        (path, row)
-        for path, doc in _documents()
+def _deployment_rows() -> list[dict]:
+    return [
+        row
+        for _, doc in _documents()
         if (doc.get("spec") or {}).get("kind") == "ManagedSegmentDeployment"
         for row in doc["spec"]["data"]
     ]
-    assert sorted(row["deployment"] for _, row in rows) == ["DC-GDN1", "DC-KTW1", "DC-WAW1"]
-    for _, row in rows:
-        vlans = row["vlan_domain_segments"]["data"]
+
+
+def test_each_dc_declares_its_deployment_with_the_same_vlan_on_both_leaves() -> None:
+    """One deployment row per DC for its own (local) segment, a VLAN row for each leaf of the MLAG pair under one id."""
+    rows = [row for row in _deployment_rows() if row["segment"] != _STRETCHED and row["deployment"].startswith("DC-")]
+    assert sorted(row["deployment"] for row in rows) == ["DC-GDN1", "DC-KTW1", "DC-WAW1"]
+    for row in rows:
+        vlans = row["vlans"]["data"]
         assert len(vlans) == 2 and len({vlan["vlan_id"] for vlan in vlans}) == 1
         assert {vlan["device"].split("-")[0] for vlan in vlans} == {row["deployment"].split("-")[1].lower()}
+
+
+def test_the_stretched_segment_is_shared_one_vni_and_the_vlan_it_gives_on_every_leaf_of_both_dcs() -> None:
+    """c900-sync-p: two realizations (KTW1, WAW1) with ONE VNI, and on the eight VTEPs (leaves and border leaves, no port needed) the VLAN id 2500 + VNI - 40000."""
+    rows = [row for row in _deployment_rows() if row["segment"] == _STRETCHED]
+    assert sorted(row["deployment"] for row in rows) == ["DC-KTW1", "DC-WAW1"]
+    vnis = {row["vni"] for row in rows}
+    assert len(vnis) == 1 and shared_vlan_id(vnis.pop()) is not None
+    assert {vlan["vlan_id"] for row in rows for vlan in row["vlans"]["data"]} == {shared_vlan_id(rows[0]["vni"])}
+    assert len([vlan for row in rows for vlan in row["vlans"]["data"]]) == 8
+    segment = next(
+        item
+        for _, doc in _documents()
+        if (doc.get("spec") or {}).get("kind") == "ManagedVxlanSegment"
+        for item in doc["spec"]["data"]
+        if item.get("customer_name") == "sync"
+    )
+    assert segment["vlan_scope"] == "shared" and segment["stretch_scope"] == "dc_pair"
+    assert len(segment["customer_deployments"]) == 2
+
+
+def test_the_office_wifi_segments_are_a_guest_and_a_staff_one_on_the_access_switches() -> None:
+    """Both segments are realized in the office on both access switches (same VLAN id on the pair), and the guest one has
+    no permit rule but the one to the internet."""
+    rows = {row["segment"]: row for row in _deployment_rows() if row["deployment"] == "C900-OFFICE"}
+    assert set(rows) == {"c900-wifi-guest-p", "c900-wifi-corp-p"}
+    for row in rows.values():
+        vlans = row["vlans"]["data"]
+        assert {vlan["device"] for vlan in vlans} == {"bcn-office-as-01", "bcn-office-as-02"}
+        assert len({vlan["vlan_id"] for vlan in vlans}) == 1
+
+    policies = {
+        item["segment"]: item
+        for _, doc in _documents()
+        if (doc.get("spec") or {}).get("kind") == "SecurityPolicy"
+        for item in doc["spec"]["data"]
+        if item["segment"].startswith("c900-wifi")
+    }
+    guest = policies["c900-wifi-guest-p"]["rules"]["data"]
+    assert [(rule["action"], rule.get("destination_zone"), rule.get("destination_segment")) for rule in guest] == [
+        ("permit", "INTERNET-ZONE", None)
+    ]
+    assert policies["c900-wifi-guest-p"]["default_action"] == "deny"
+    assert any(
+        rule.get("destination_segment") == "c900-web-p" for rule in policies["c900-wifi-corp-p"]["rules"]["data"]
+    )

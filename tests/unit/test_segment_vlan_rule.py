@@ -1,12 +1,12 @@
-"""utils/vlan_domain.mlag_id: the MLAG a device is a member of, from its (typename, id) capabilities.
+"""utils/segment_vlan.mlag_id: the MLAG a device is a member of, from its (typename, id) capabilities.
 
-The generator (generators/vlan_domain.py) and the check (checks/mlag_domains.py) both call it; two peers of one MLAG get
+The generator (generators/segment_vlan.py) and the check (checks/mlag_domains.py) both call it; two peers of one MLAG get
 the same answer, which is how a pair is found.
 """
 
 from __future__ import annotations
 
-from utils.vlan_domain import mlag_id
+from utils.segment_vlan import mlag_id
 
 
 def test_a_device_in_an_mlag_gets_its_id() -> None:

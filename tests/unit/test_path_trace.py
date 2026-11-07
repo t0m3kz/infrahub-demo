@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import re
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from infrahub_sdk.graph_traversal import Path, PathHop, PathNode, PathRelationship, PathTraversalResult
@@ -135,20 +135,20 @@ def test_chain_and_ecmp_summary_fold_the_differing_positions() -> None:
 
 
 def test_layer_kinds_add_the_end_kinds_only_where_measured() -> None:
-    """A segment end adds its rows to L3 only; the ends themselves are never in the filter."""
+    """A segment end adds nothing in L3: it reaches its switches through the ports that carry it, and a row or a
+    deployment would join two switches of one segment in a hop that is no route. The ends are never in the filter."""
     assert layer_kinds("l1", "ManagedVxlanSegment", DX) == [*LAYERS["l1"], *CLOUD]
     l3 = layer_kinds("l3", "ManagedVxlanSegment", "CloudNetworkSegment")
-    assert l3[-2:] == ["ManagedSegmentDeployment", "ManagedVlanDomainSegment"]
+    assert "ManagedSegmentDeployment" not in l3 and "ManagedSegmentVlan" not in l3
     assert "ManagedVxlanSegment" not in l3 and "CloudNetworkSegment" not in l3
     assert "CloudNetworkSegment" in layer_kinds("l1", "CloudInstance", DEV)
 
 
-def test_a_vm_end_routes_through_its_component_and_segment_in_l3_only() -> None:
-    """A VM end adds its component and its segment's chain to L3; its L1 is its NIC and the host port (no addition)."""
-    l3 = layer_kinds("l3", "DcimVirtualDevice", "CloudNetworkSegment")
-    assert l3[-4:] == ["AppComponent", "ManagedVxlanSegment", "ManagedSegmentDeployment", "ManagedVlanDomainSegment"]
+def test_a_vm_end_adds_no_kind_a_foreign_segment_could_cross() -> None:
+    """The VM is replaced by the segment of its component (trace_leg), so no segment node is ever in an L3 filter."""
+    assert layer_kinds("l3", "DcimVirtualDevice", "CloudNetworkSegment") == [*LAYERS["l3"], *CLOUD, *pt.OPT_IN_KINDS]
+    assert "ManagedVxlanSegment" not in layer_kinds("l3", "DcimVirtualDevice", DEV)
     assert layer_kinds("l1", "DcimVirtualDevice", DEV) == [*LAYERS["l1"], *CLOUD]
-    assert "AppComponent" not in layer_kinds("l3", "ManagedVxlanSegment", DEV)
 
 
 # ------------------------------------------------------------------ one leg
@@ -301,3 +301,54 @@ def test_the_vpn_is_crossed_only_when_a_trace_asks_for_it() -> None:
     asked = layer_kinds("l1", "DcimPhysicalDevice", "CloudNetworkSegment", include=("CloudVPNConnection",))
     assert asked.count("CloudVPNConnection") == 1
     assert set(layer_kinds("l1", "DcimPhysicalDevice", "CloudNetworkSegment")) <= set(asked)
+
+
+async def test_a_vm_in_l3_is_traced_from_the_segment_of_its_component_and_the_chain_is_completed() -> None:
+    """VM -> AppComponent -> segment ... segment -> AppComponent -> VM: the search runs between the two SEGMENTS, so a
+    third segment carried on the same ports can never be a hop in it."""
+    vm_a, vm_b = node("DcimVirtualDevice", "vm-a"), node("DcimVirtualDevice", "vm-b")
+    seg_a, seg_b = node("ManagedVxlanSegment", "seg-a"), node("ManagedVxlanSegment", "seg-b")
+    comp_a, comp_b = node("AppComponent", "comp-a"), node("AppComponent", "comp-b")
+    leaf = node(DEV, "leaf-1")
+    client = FakeClient([result(path(seg_a, leaf, seg_b), src=seg_a, dst=seg_b)])
+    segments = {vm_a.id: (comp_a, seg_a), vm_b.id: (comp_b, seg_b)}
+
+    async def graphql(query: str, branch_name: str | None = None) -> dict[str, Any]:
+        match = re.search(r'instances__ids: \["([^"]+)"\]', query)
+        assert match
+        vm_id = match.group(1)
+        component, segment = segments[vm_id]
+        row = {"id": component.id, "hfid": component.hfid, "display_label": component.display_label,
+               "__typename": component.kind,
+               "network_segment": {"node": {"id": segment.id, "hfid": segment.hfid,
+                                            "display_label": segment.display_label, "__typename": segment.kind}}}  # fmt: skip
+        return {"c": {"edges": [{"node": row}]}}
+
+    cast(Any, client).execute_graphql = graphql
+
+    leg = await pt.trace_leg(client, vm_a, vm_b, "l3")  # ty: ignore[invalid-argument-type]
+
+    assert [pt.label(n) for n in leg.paths[0]] == [
+        pt.label(x) for x in (vm_a, comp_a, seg_a, leaf, seg_b, comp_b, vm_b)
+    ]
+    assert (client.calls[0]["source"], client.calls[0]["destination"]) == (seg_a.id, seg_b.id)
+    assert "ManagedVxlanSegment" not in client.calls[0]["kind_filter"]
+
+
+async def test_a_vm_in_the_same_segment_as_the_other_end_needs_no_search() -> None:
+    vm_a, vm_b = node("DcimVirtualDevice", "vm-a"), node("DcimVirtualDevice", "vm-b")
+    seg, comp = node("ManagedVxlanSegment", "seg"), node("AppComponent", "comp")
+    client = FakeClient([])
+
+    async def graphql(query: str, branch_name: str | None = None) -> dict[str, Any]:
+        row = {"id": comp.id, "hfid": comp.hfid, "display_label": comp.display_label, "__typename": comp.kind,
+               "network_segment": {"node": {"id": seg.id, "hfid": seg.hfid, "display_label": seg.display_label,
+                                            "__typename": seg.kind}}}  # fmt: skip
+        return {"c": {"edges": [{"node": row}]}}
+
+    cast(Any, client).execute_graphql = graphql
+
+    leg = await pt.trace_leg(client, vm_a, vm_b, "l3")  # ty: ignore[invalid-argument-type]
+
+    assert [pt.label(n) for n in leg.paths[0]] == [pt.label(x) for x in (vm_a, comp, seg, comp, vm_b)]
+    assert client.calls == []

@@ -165,7 +165,8 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, SegmentPortTagMixin, Common
             target_deployments = self._resolve_target_deployments(segment, segment_name)
 
         stretch_scope = segment.get("stretch_scope") or "local"
-        stretched = stretch_scope != "local"
+        # A shared segment (one VLAN id everywhere, derived from its VNI) draws the ONE global VNI too, even in one DC.
+        stretched = stretch_scope != "local" or (segment.get("vlan_scope") or "local") == "shared"
         self.logger.info(f"Segment {segment_name}: stretch_scope={stretch_scope}")
 
         stretched_vni_pool: dict[str, Any] | None = None
@@ -389,7 +390,7 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, SegmentPortTagMixin, Common
         reusable_vni: int | None = None,
     ) -> bool:
         """Create or upsert one SegmentDeployment record (VNI-and-status only —
-        local VLAN ID realization is per device, a ManagedVlanDomainSegment
+        local VLAN ID realization is per device, a ManagedSegmentVlan
         under this record, see SegmentPortTagMixin.reconcile_vxlan_segment).
 
         VNI is allocated from vni_pool, a {"id": ..., "name": ...} dict: for a

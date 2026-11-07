@@ -25,7 +25,7 @@ from utils.exchange_transit import SERVICE_CONTEXT_ROLES
 
 from .conftest import TestInfrahubDockerWithClient
 from .demo_data import ROOT, declared, name
-from .segment_helpers import fetch_segment_ports, fetch_vlan_domain_segments
+from .segment_helpers import fetch_segment_ports, fetch_segment_vlans
 from .snapshot_helpers import render_device_config
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -139,7 +139,7 @@ class TestAllDemoTerminatedSegment(TestInfrahubDockerWithClient):
             segment = await self._segment(async_client_main, scenario_branch, segment_name)
             ports = await fetch_segment_ports(async_client_main, scenario_branch, segment["id"])
             rows = (
-                await fetch_vlan_domain_segments(
+                await fetch_segment_vlans(
                     client=async_client_main, branch=scenario_branch, segment_id=segment["id"], max_attempts=1
                 )
             )["records"]
@@ -180,7 +180,7 @@ class TestAllDemoTerminatedSegment(TestInfrahubDockerWithClient):
         for segment_name in _terminated_segment_names():
             segment = await self._segment(async_client_main, scenario_branch, segment_name)
             rows = (
-                await fetch_vlan_domain_segments(
+                await fetch_segment_vlans(
                     client=async_client_main, branch=scenario_branch, segment_id=segment["id"], max_attempts=1
                 )
             )["records"]

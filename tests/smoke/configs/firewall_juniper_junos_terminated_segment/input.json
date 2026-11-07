@@ -258,7 +258,7 @@
                                     "edges": [
                                       {
                                         "node": {
-                                          "vlan_domain_segments": {
+                                          "vlans": {
                                             "edges": [
                                               {
                                                 "node": {
@@ -486,7 +486,7 @@
                                     "edges": [
                                       {
                                         "node": {
-                                          "vlan_domain_segments": {
+                                          "vlans": {
                                             "edges": [
                                               {
                                                 "node": {
@@ -714,7 +714,7 @@
                                     "edges": [
                                       {
                                         "node": {
-                                          "vlan_domain_segments": {
+                                          "vlans": {
                                             "edges": [
                                               {
                                                 "node": {
@@ -942,7 +942,7 @@
                                     "edges": [
                                       {
                                         "node": {
-                                          "vlan_domain_segments": {
+                                          "vlans": {
                                             "edges": [
                                               {
                                                 "node": {

@@ -46,6 +46,7 @@ query topology_orchestrator_routing_data($name: String!) {
         id
         name { value }
         infrastructure_orchestrator { value }
+        environment { value }
         owner { node { org_id { value } } }
         parent { node { name { value } } }
       }

@@ -279,7 +279,7 @@ def _segment_port(vlan: int, seg_id: str = "seg-1", name: str = "web") -> dict:
                 "id": seg_id,
                 "name": name,
                 "status": "active",
-                "segment_deployments": [{"vni": 10100, "vlan_domain_segments": [row]}],
+                "segment_deployments": [{"vni": 10100, "vlans": [row]}],
             }
         ],
         "capabilities": [],

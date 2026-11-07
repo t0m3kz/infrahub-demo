@@ -149,9 +149,9 @@ def _environment_of(builder: type[InfrahubTransform], rendered: str) -> str | No
     return payload["inputs"].get("environment")
 
 
-class TestOfficeAndCloudCarryNoEnvironmentAttribute:
-    """An office is always production and a cloud footprint is not environment-scoped (its accounts and
-    segments carry the environment): neither node has an `environment` field to read."""
+class TestOfficeCarriesNoEnvironmentAttribute:
+    """An office is always production: the node has no `environment` field to read. Every other footprint (DC,
+    colocation, cloud) states its own."""
 
     def test_an_office_is_rendered_as_environment_p_by_all_three_builders(self) -> None:
         """The transform supplies `p` for the office (_OFFICE_ENVIRONMENT); the node has no environment."""
@@ -177,36 +177,35 @@ class TestOfficeAndCloudCarryNoEnvironmentAttribute:
 
         assert "    parent: \n" in _render(TopologyOrchestratorAnsible, data)
 
-    def test_a_cloud_footprint_omits_the_environment_in_all_three_builders(self) -> None:
-        """No `environment:` line, `environment = ` assignment, label or input at all (not an empty one)."""
+    def test_a_cloud_footprint_carries_its_environment_in_all_three_builders(self) -> None:
+        """The cloud footprint states an environment like a DC's: it is rendered, not left out."""
         for builder, orchestrator in _BUILDERS:
             data = _raw_deployment(
                 "TopologyCustomerCloud",
-                "C003-VAULTEX-AWS-EU-CENTRAL-1",
+                "C003-P-VAULTEX-AWS-EU-CENTRAL-1",
                 orchestrator,
                 org_id="C003",
-                environment=None,
+                environment="n",
                 parent_name="eu-central-1",
             )
             rendered = _render(builder, data)
 
             assert rendered, builder.__name__
-            assert _environment_of(builder, rendered) is None, builder.__name__
-            assert "environment" not in rendered, builder.__name__
+            assert _environment_of(builder, rendered) == "n", builder.__name__
 
     def test_a_cloud_footprint_keeps_its_owner_and_parent(self) -> None:
-        """Dropping the environment must not drop the rest of the cloud manifest."""
+        """The rest of the cloud manifest is unchanged by its environment."""
         data = _raw_deployment(
             "TopologyCustomerCloud",
-            "C003-VAULTEX-AWS-EU-CENTRAL-1",
+            "C003-P-VAULTEX-AWS-EU-CENTRAL-1",
             "ansible_automation_platform",
             org_id="C003",
-            environment=None,
+            environment="p",
             parent_name="eu-central-1",
         )
         result = _render(TopologyOrchestratorAnsible, data)
 
-        assert "c003_vaultex_aws_eu_central_1:" in result
+        assert "c003_p_vaultex_aws_eu_central_1:" in result
         assert "owner_org_id: C003" in result
         assert "parent: eu-central-1" in result
 
@@ -221,7 +220,7 @@ class TestOfficeAndCloudCarryNoEnvironmentAttribute:
 class TestOrchestratorQuerySelectsNoRemovedFields:
     """queries/topology/add/topology_orchestrator_routing_data.gql selects only fields the schema has."""
 
-    def test_only_dc_and_colocation_select_environment_and_the_office_selects_its_owner_directly(self) -> None:
+    def test_every_customer_footprint_selects_environment_and_the_office_selects_its_owner_directly(self) -> None:
         query = (ROOT / "queries" / "topology" / "add" / "topology_orchestrator_routing_data.gql").read_text()
         blocks = {
             kind: query.split(f"  {kind}(name__value: $name) {{", 1)[1].split("\n  }\n", 1)[0]
@@ -235,8 +234,8 @@ class TestOrchestratorQuerySelectsNoRemovedFields:
 
         assert "environment { value }" in blocks["TopologyCustomerDC"]
         assert "environment { value }" in blocks["TopologyCustomerColocation"]
+        assert "environment { value }" in blocks["TopologyCustomerCloud"]
         assert "environment" not in blocks["TopologyCustomerOffice"]
-        assert "environment" not in blocks["TopologyCustomerCloud"]
         assert "owner { node { org_id { value } } }" in blocks["TopologyCustomerOffice"]
         assert "OfficeCustomer" not in query
 

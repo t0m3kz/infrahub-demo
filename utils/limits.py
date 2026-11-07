@@ -21,7 +21,8 @@ from dataclasses import dataclass
 
 # VLAN bands of a border leaf's VLAN table (get_vlans de-duplicates by VLAN ID, so no two bands may overlap):
 #
-#   100-2999    customer VLANs of every local VLAN domain (generators/vlan_domain.py). 3968-4094 is NX-OS's default
+#   100-2999    customer VLANs: 100-2499 local ids drawn per switch, 2500-2999 shared ids derived from a VNI (below;
+#               generators/segment_vlan.py). 3968-4094 is NX-OS's default
 #               internally reserved band (4094 the conventional vPC peer-keepalive VLAN), so the space above 2999
 #               is not customer space.
 #   3000-3099   FirewallContext VLANs (one context = one VLAN on the firewall uplink and the border-leaf service port)
@@ -33,6 +34,18 @@ from dataclasses import dataclass
 #               above all of the above and below NX-OS's reserved 3968-4094
 CUSTOMER_VLAN_ID_MIN = 100
 CUSTOMER_VLAN_ID_MAX = 2999
+# The customer band is split: the generator draws a LOCAL id of a segment (vlan_scope local) from 100-2499; a SHARED
+# segment (vlan_scope shared: one id on every switch, for L2 that is trunked between switches that cannot do VXLAN) has
+# the id derived from its VNI, VLAN = SHARED_VLAN_ID_MIN + (VNI - GLOBAL_L2_VNI_START), in 2500-2999. The VNI is the ONE
+# a stretched segment draws from the GLOBAL-L2VNI pool (data/bootstrap/18_vni_pools.yml, which starts at
+# GLOBAL_L2_VNI_START and is handed out in order), so the first SHARED_VLAN_COUNT such segments can be shared and a shared
+# VNI never collides with a site pool (10001-39999). The bands never overlap, so a shared id is never taken by a local
+# allocation.
+LOCAL_VLAN_ID_MAX = 2499
+SHARED_VLAN_ID_MIN = LOCAL_VLAN_ID_MAX + 1
+SHARED_VLAN_ID_MAX = CUSTOMER_VLAN_ID_MAX
+SHARED_VLAN_COUNT = SHARED_VLAN_ID_MAX - SHARED_VLAN_ID_MIN + 1
+GLOBAL_L2_VNI_START = 40000
 FW_CONTEXT_VLAN_START = 3000
 FW_CONTEXT_VLAN_END = 3099
 LB_CONTEXT_VLAN_START = 3100

@@ -269,8 +269,8 @@ class MyCheck(InfrahubCheck):
   `TopologyCustomerCloud`) — not a separate `Customer.*` namespace; these inherit `TopologyConnectableLocation`
   alongside the facility nodes so a circuit endpoint is one shared relationship, not a duplicated model. The
   `TopologyCustomer` generic carries only the owner-derived `name`, `infrastructure_orchestrator` and `owner`.
-  `TopologyEnvironmentScoped` adds the required `environment` and only DC and Colocation footprints inherit it;
-  a cloud footprint has no environment (`CloudAccount.environment` and the segments carry it). A cloud footprint
+  `TopologyEnvironmentScoped` adds the required `environment`, which every footprint inherits (DC, Colocation and
+  Cloud; a cloud footprint's must be its `CloudAccount.environment`, `checks/customer_cloud_account.py` CA3). A cloud footprint
   has exactly one `account` (required, unique: one footprint per account); `checks/customer_cloud_account.py` pins
   that the footprint's owner is the account's owner (CA1) and that its cloud segments use virtual networks of that
   account (CA2).
@@ -463,8 +463,16 @@ class MyCheck(InfrahubCheck):
   footprint of its source segment: `checks/internet_egress.py` requires a complete firewall pair, an INTERNET leg with
   an address per member, the exchange to INTERNET, the tagged border service ports and a `snat_address` per serving
   context (a colocation metro: each zone with firewalls, or a complete provider-hosted pair of its virtual colocation).
-  Cloud and office egress is an accepted gap, not checked. Towards a public SaaS or cloud service the path is the
+  Cloud and office egress is an accepted gap, not checked (the office has a policy artifact, below, but no check). Towards a public SaaS or cloud service the path is the
   L1 of THE INTERNET (see **Circuit placement**) and L3 in the `INTERNET` namespace; no rule of this check judges it.
+- **Office firewall policy**: an office has no firewall context (`served_deployments` is for DC and colocation footprints);
+  its SD-WAN edge (an appliance with no CLI template, `platform linux`) enforces a stateful policy that the orchestrator
+  applies. The artifact `office_firewall_policy` (target group `customer_deployments_office`, JSON, query
+  `office_firewall_policy`, `transforms/topology/office_firewall_policy.py`) is built from the segments the office hosts with
+  the SAME functions as a firewall rule table (`segment_rule_policies`, `get_zone_policies`): zones, one flat ordered rule
+  table closed by one implicit deny, and each segment's `default_action`. A guest Wi-Fi segment is a segment whose only
+  permit rule is to `INTERNET-ZONE`; a corporate one adds the segments and prefixes it may reach. A dedicated guest zone is
+  not modelled: the office is PROD, and the exchange zones are tied to the namespaces.
 - **DC service tier**: `TopologyCustomerTemplateDC` (referenced by the footprint's `design`, for example `M_DC`)
   holds `dedicated_firewall`, `dedicated_loadbalancer`, `max_segments`, `ports_25g` and `ports_100g` (0 = no
   host-facing ports of that speed). `checks/customer_quota.py` enforces the segment and port numbers; a footprint
@@ -498,7 +506,7 @@ class MyCheck(InfrahubCheck):
   `terminated_on { node { id } }` (`tests/unit/test_terminated_on_queries.py`), else the segment reads as routed.
   - **Ports**: `add_vxlan_segment` and `add_app_component_segment` tag the border service ports of the context (the
     `capabilities` of the context that are a physical port or a LAG with the firewall service role, read by
-    `queries/topology/add/segment_vlan_domains.gql`) with the segment as generated `segments` edges, in the SAME
+    `queries/topology/add/segment_vlans.gql`) with the segment as generated `segments` edges, in the SAME
     reconcile as the component ports (same provenance: an account as `source`, removed only by that account). The ports
     are not host-facing: `checks/customer_quota.py` does not count them. A change of `terminated_on` re-runs
     `add_vxlan_segment` (`data/events/99_actions.yml`).
@@ -677,7 +685,7 @@ class MyCheck(InfrahubCheck):
   impossible by schema (`ManagedVxlanSegment` is not on the interface edge).
 - **VLAN rows**: a VLAN ID is local to a switch. There is no VLAN domain object and no marker generic: the row
   points straight at its device. The chain is segment -> `ManagedSegmentDeployment` (the realization in a DC, metro or
-  office, with the VNI) -> `ManagedVlanDomainSegment` (the realization on ONE switch, with the `vlan_id`): the row is a
+  office, with the VNI) -> `ManagedSegmentVlan` (the realization on ONE switch, with the `vlan_id`): the row is a
   `Parent`-mandatory child of the deployment its switch sits in (`device.deployment` is the hosting parent or one of its
   pods and zones) and goes with it (`on_delete: cascade`), so the VLAN and the VNI of a port come from one lineage; its
   `device` is an Attribute (mandatory), unique on [segment_deployment, device] and [device, vlan_id]. The row is an
@@ -701,7 +709,17 @@ class MyCheck(InfrahubCheck):
   no trigger follows it: a port a person adds gets its VLAN row at the next run of either generator on the segment. A switch with no deployment of the segment, or a pair whose members map to two deployments, is a WARNING and its
   rows are left alone (the next run converges once the deployment exists). The rows are untracked and their deployment
   tracked: a deployment that is not re-saved by its run is deleted with its rows; the rows of a device that is gone or
-  no longer needs the segment are deleted by the next reconcile (check rule S2 reports them meanwhile). A routed row (a gateway, and no `terminated_on`: a terminated segment is pure L2 on the fabric) is realized on its switch as ONE SVI: a `DcimVirtualInterface` with role
+  no longer needs the segment are deleted by the next reconcile (check rule S2 reports them meanwhile). **VLAN scope**: `ManagedVxlanSegment.vlan_scope` is `local` (the default: each switch has its own id, the VNI is the identity) or
+  `shared` (one id on every switch, for L2 trunked between switches that cannot do VXLAN). A shared segment draws the ONE
+  VNI of the `GLOBAL-L2VNI` pool like any stretched segment (even in one DC), and its id is derived from it:
+  VLAN = 2500 + (VNI - 40000), so the first 500 numbers of that pool (VNI 40000-40499) give the shared band 2500-2999,
+  above the local band 100-2499 (`utils/limits.py`, `utils/segment_vlan.py` `shared_vlan_id`; a test ties the start to
+  the pool). A third DC joins with one more realization under the same VNI and so the same id. The generator gives a
+  shared segment that id on every row and fails when a switch already uses it; `checks/shared_vlan.py` (SV1) reports a
+  row that differs, a VNI outside the band or two VNIs. A stretched segment (`stretch_scope` not `local`) is realized on every VTEP of its hosting
+  parents (leaves, ToRs and border gateways, `VTEP_ROLES`), with or without a port of it: each has a row and an SVI carrying the
+  same anycast gateway, so a host keeps its gateway when it moves between the DCs.
+  A routed row (a gateway, and no `terminated_on`: a terminated segment is pure L2 on the fabric) is realized on its switch as ONE SVI: a `DcimVirtualInterface` with role
   `svi` named `Vlan<vlan_id>`, a Component of the row (`svi`, `on_delete: cascade`), with no address (the anycast
   gateway is `segment.gateway`) and with `vrf` pointing at the `ManagedVRF` of its device's topology; the SVI is not a
   port. `generators/helpers/svi.py` writes it in the VRF pass of the segment reconcile, upserted by (device, `Vlan<id>`), and
@@ -763,7 +781,7 @@ class MyCheck(InfrahubCheck):
   (`uv run invoke clean-testcontainers`, or `check-model --rebuild`).
 - **MLAG peer pair uniqueness is an attribute, the rest are checks**: a uniqueness constraint cannot use a many
   relationship, so the pair is mirrored into the unique Text attribute `ManagedMLAG.peer_devices` (the sorted member
-  names joined with a comma, `mlag_peer_devices` in `utils/vlan_domain.py`), written by `generators/domain_pairing.py`.
+  names joined with a comma, `mlag_peer_devices` in `utils/segment_vlan.py`), written by `generators/domain_pairing.py`.
   `checks/mlag_domains.py` enforces M1 (a device is in at most one domain: the attribute alone does not stop a-b plus
   a-c), M2 (exactly two distinct members: `min_count` is only enforced on update), M3 (`peer_devices` equals the
   sorted member names), M4 (both members have a VLAN row with the same `vlan_id` for every segment either has one for,

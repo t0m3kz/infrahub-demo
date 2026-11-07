@@ -1,6 +1,7 @@
-# The rows of checks/customer_cloud_account.py (rules CA1 and CA2), one global query:
+# The rows of checks/customer_cloud_account.py (rules CA1, CA2 and CA3), one global query:
 #
-# - TopologyCustomerCloud: its owner and its account (one footprint per account) with the account's owner.
+# - TopologyCustomerCloud: its owner, its environment and its account (one footprint per account) with the account's
+#   owner and environment.
 # - CloudNetworkSegment: its customer footprint and the account of the virtual network it uses.
 query customer_cloud_account {
   TopologyCustomerCloud {
@@ -8,11 +9,13 @@ query customer_cloud_account {
       node {
         id
         name { value }
+        environment { value }
         owner { node { id org_id { value } } }
         account {
           node {
             id
             name { value }
+            environment { value }
             owner { node { id org_id { value } } }
           }
         }

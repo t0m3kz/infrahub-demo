@@ -1,8 +1,8 @@
 """MLAG pair helpers shared by generators, transforms and checks.
 
-There is no VLAN domain object: a segment's VLAN ID is a row on ONE device (``ManagedVlanDomainSegment.device``,
+There is no VLAN domain object: a segment's VLAN ID is a row on ONE device (``ManagedSegmentVlan.device``,
 unique on [device, vlan_id]). The two peers of an MLAG pair must carry the same VLAN ID for a segment (a dual-homed
-port-channel is one L2 broadcast domain): the allocator (generators/vlan_domain.py) gives them one id and
+port-channel is one L2 broadcast domain): the allocator (generators/segment_vlan.py) gives them one id and
 checks/mlag_domains.py reports a pair whose rows differ. The generator reads the capabilities as SDK peers and the
 checks as cleaned query data; both pass ``(typename, id)`` pairs here.
 """
@@ -10,6 +10,8 @@ checks as cleaned query data; both pass ``(typename, id)`` pairs here.
 from __future__ import annotations
 
 from collections.abc import Iterable
+
+from utils.limits import GLOBAL_L2_VNI_START, SHARED_VLAN_COUNT, SHARED_VLAN_ID_MIN
 
 MLAG_KIND = "ManagedMLAG"
 
@@ -31,3 +33,20 @@ def mlag_peer_devices(names: Iterable[str]) -> str:
     use a many relationship. The generator writes it and ``checks/mlag_domains.py`` compares against it.
     """
     return ",".join(sorted(names))
+
+
+def shared_vlan_id(vni: int | None) -> int | None:
+    """The VLAN id a SHARED segment (vlan_scope shared) has on every switch, derived from its VNI.
+
+    VLAN = SHARED_VLAN_ID_MIN + (VNI - GLOBAL_L2_VNI_START): the segment's one VNI from the global pool maps onto the
+    shared band, and only when it falls in the first SHARED_VLAN_COUNT numbers of that pool; None for any other VNI (or
+    none), which the generator and the check report. One rule for both, so they cannot drift.
+    """
+    if vni is None or not 0 <= vni - GLOBAL_L2_VNI_START < SHARED_VLAN_COUNT:
+        return None
+    return SHARED_VLAN_ID_MIN + (vni - GLOBAL_L2_VNI_START)
+
+
+def shared_vni_band() -> str:
+    """The VNIs a shared segment may have, for messages."""
+    return f"{GLOBAL_L2_VNI_START}-{GLOBAL_L2_VNI_START + SHARED_VLAN_COUNT - 1}"

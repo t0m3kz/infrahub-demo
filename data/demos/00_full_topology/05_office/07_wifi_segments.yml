@@ -1,0 +1,149 @@
+---
+# The Wi-Fi of the office: two segments on the access switches, the guests (internet only) and the staff (the intranet
+# and the internet). Both are VXLAN segments hosted by the office (`customer_deployments: C900-OFFICE`), routed on the
+# access switches (the fabric edge of the office), in the PROD VRF of the office. What each may reach is its policy, not
+# its zone: the office is PROD, so both are in PROD-ZONE, and the guest segment has no permit rule but the one to the
+# internet. The policies are enforced by the stateful firewall of the SD-WAN edge (the artifact office_firewall_policy,
+# transforms/topology/office_firewall_policy.py).
+#
+# Loads after the access switches (05_switches_and_aps.yml) and the DC segments (01_dc): first the VRF and the SVIs,
+# then the segments, their policies, their realization (the VNI and the VLAN row of each access switch, with its SVI)
+# and the AP-facing ports of both access switches, which trunk the two SSIDs.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVRF
+  data:
+    - name: "c900-office-vrf-prod"
+      namespace: "PROD"
+      deployment: "C900-OFFICE"
+      shared_devices:
+        - "bcn-office-as-01"
+        - "bcn-office-as-02"
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - {name: Vlan110, device: bcn-office-as-01, role: svi, status: active, vrf: ["C900-OFFICE", "PROD"]}
+    - {name: Vlan110, device: bcn-office-as-02, role: svi, status: active, vrf: ["C900-OFFICE", "PROD"]}
+    - {name: Vlan120, device: bcn-office-as-01, role: svi, status: active, vrf: ["C900-OFFICE", "PROD"]}
+    - {name: Vlan120, device: bcn-office-as-02, role: svi, status: active, vrf: ["C900-OFFICE", "PROD"]}
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVxlanSegment
+  data:
+    - owner: C900
+      customer_name: wifi-corp
+      environment: p
+      description: "Staff Wi-Fi: the intranet and the internet"
+      customer_deployments: ["C900-OFFICE"]
+      security_zone: PROD-ZONE
+      gateway:
+        data:
+          address: "10.96.2.1/24"
+          description: Gateway of c900-wifi-corp-p
+          ip_namespace: PROD
+          ip_prefix:
+            kind: IpamPrefix
+            data:
+              prefix: "10.96.2.0/24"
+              ip_namespace: PROD
+              status: active
+              description: Office segment c900-wifi-corp-p
+    - owner: C900
+      customer_name: wifi-guest
+      environment: p
+      description: "Guest Wi-Fi: the internet and nothing else"
+      customer_deployments: ["C900-OFFICE"]
+      security_zone: PROD-ZONE
+      gateway:
+        data:
+          address: "10.96.1.1/24"
+          description: Gateway of c900-wifi-guest-p
+          ip_namespace: PROD
+          ip_prefix:
+            kind: IpamPrefix
+            data:
+              prefix: "10.96.1.0/24"
+              ip_namespace: PROD
+              status: active
+              description: Office segment c900-wifi-guest-p
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityPolicy
+  data:
+    - name: seg-c900-wifi-corp-p-egress
+      description: "Egress contract of c900-wifi-corp-p: the web tier of the DC and the internet"
+      segment: "c900-wifi-corp-p"
+      default_action: deny
+      enabled: true
+      rules:
+        data:
+          - index: 10
+            name: wifi-corp-to-web
+            action: permit
+            protocol: tcp
+            port_start: 443
+            source_segment: "c900-wifi-corp-p"
+            destination_segment: "c900-web-p"
+            log: false
+            description: "Staff to the web tier of the DC over the SD-WAN tunnel"
+          - index: 20
+            name: wifi-corp-to-internet
+            action: permit
+            protocol: any
+            source_segment: "c900-wifi-corp-p"
+            destination_zone: "INTERNET-ZONE"
+            log: false
+            description: "Staff to the internet"
+    - name: seg-c900-wifi-guest-p-egress
+      description: "Egress contract of c900-wifi-guest-p: the internet only, so it reaches no internal prefix"
+      segment: "c900-wifi-guest-p"
+      default_action: deny
+      enabled: true
+      rules:
+        data:
+          - index: 10
+            name: wifi-guest-to-internet
+            action: permit
+            protocol: any
+            source_segment: "c900-wifi-guest-p"
+            destination_zone: "INTERNET-ZONE"
+            log: false
+            description: "Guests to the internet"
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedSegmentDeployment
+  data:
+    - segment: c900-wifi-corp-p
+      deployment: C900-OFFICE
+      vni: 10110
+      vlans:
+        data:
+          - {device: bcn-office-as-01, vlan_id: 110, svi: ["bcn-office-as-01", "Vlan110"]}
+          - {device: bcn-office-as-02, vlan_id: 110, svi: ["bcn-office-as-02", "Vlan110"]}
+    - segment: c900-wifi-guest-p
+      deployment: C900-OFFICE
+      vni: 10120
+      vlans:
+        data:
+          - {device: bcn-office-as-01, vlan_id: 120, svi: ["bcn-office-as-01", "Vlan120"]}
+          - {device: bcn-office-as-02, vlan_id: 120, svi: ["bcn-office-as-02", "Vlan120"]}
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - {device: bcn-office-as-01, name: TenGigabitEthernet1/0/1, segments: ["c900-wifi-corp-p", "c900-wifi-guest-p"]}
+    - {device: bcn-office-as-01, name: TenGigabitEthernet1/0/2, segments: ["c900-wifi-corp-p", "c900-wifi-guest-p"]}
+    - {device: bcn-office-as-02, name: TenGigabitEthernet1/0/1, segments: ["c900-wifi-corp-p", "c900-wifi-guest-p"]}
+    - {device: bcn-office-as-02, name: TenGigabitEthernet1/0/2, segments: ["c900-wifi-corp-p", "c900-wifi-guest-p"]}

@@ -1,0 +1,29 @@
+# The rows of transforms/topology/office_firewall_policy.py: an office's segments with their security zone and rules, the
+# input of the stateful firewall policy of its SD-WAN edge (applied by the SD-WAN orchestrator). The office is the artifact
+# target (customer_deployments_office), so the query takes its name. The fragments are spread at the node of the segment,
+# not inside an inline fragment (Infrahub resolves a named fragment nested in one to nulls: queries/fragments/network_segment.gql).
+query office_firewall_policy($name: String!) {
+  TopologyCustomerOffice(name__value: $name) {
+    edges {
+      node {
+        __typename
+        id
+        name { value }
+        owner { node { org_id { value } } }
+        network_segments {
+          edges {
+            node {
+              id
+              name { value }
+              customer_name { value }
+              environment { value }
+              gateway { node { ip_prefix { node { prefix { value } } } } }
+              ...SegmentSecurityZoneFields
+              ...SegmentRulesFields
+            }
+          }
+        }
+      }
+    }
+  }
+}

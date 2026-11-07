@@ -1,10 +1,10 @@
-"""Unit tests for how VlanDomainMixin chooses a segment's local VLAN ID per device (generators/vlan_domain.py).
+"""Unit tests for how SegmentVlanMixin chooses a segment's local VLAN ID per device (generators/segment_vlan.py).
 
 No pool: the id is the lowest one free on every device the segment lands on, the segment's existing id wins when it
 is free on a new device, a device that cannot take it falls back to its own lowest free id (WARNING), and a device
-with no free id fails. An MLAG pair shares one id (tests/unit/test_vlan_domain_pairs.py). Devices are locked in sorted
+with no free id fails. An MLAG pair shares one id (tests/unit/test_segment_vlan_pairs.py). Devices are locked in sorted
 order around the one batched read of the ids in use and the writes. Runs against an in-memory server
-(tests/unit/vlan_domain_helpers.py) shared by the segments of a test.
+(tests/unit/segment_vlan_helpers.py) shared by the segments of a test.
 """
 
 from __future__ import annotations
@@ -18,10 +18,10 @@ import pytest
 import yaml
 
 from generators.logger import GeneratorError
-from generators.protocols import ManagedVlanDomainSegment
-from generators.vlan_domain import segment_lock_key, vlan_device_lock_key
-from tests.unit.vlan_domain_helpers import VlanWorld, make_device, reconcile
-from utils.limits import CUSTOMER_VLAN_ID_MAX, CUSTOMER_VLAN_ID_MIN
+from generators.protocols import ManagedSegmentVlan
+from generators.segment_vlan import segment_lock_key, vlan_device_lock_key
+from tests.unit.segment_vlan_helpers import VlanWorld, make_device, reconcile, segment_deployment_id
+from utils.limits import CUSTOMER_VLAN_ID_MIN, LOCAL_VLAN_ID_MAX
 
 _PORT = "DcimPhysicalInterface"
 
@@ -51,6 +51,57 @@ def _run(
     gen = world.gen(devices, segment=segment, interfaces=_ports(*switches))
     asyncio.run(reconcile(gen, segment, f"name-{segment}"))
     return gen
+
+
+def _run_shared(world: VlanWorld, segment: str, switches: Sequence[str], *, vni: int | None) -> Any:
+    """Reconcile a segment with vlan_scope shared, realized in dc-1 (sw-a) and dc-2 (sw-b)."""
+    devices = [make_device(f"sw-{x}", deployment_id=f"dc-{n}") for n, x in enumerate(switches, start=1)]
+    deployments = [(f"{segment_deployment_id(segment)}-{n}", f"dc-{n}") for n, _ in enumerate(switches, start=1)]
+    gen = world.gen(
+        devices, segment=segment, interfaces=_ports(*switches), deployments=deployments, vlan_scope="shared", vni=vni
+    )
+    asyncio.run(reconcile(gen, segment, f"name-{segment}"))
+    return gen
+
+
+class TestShared:
+    """vlan_scope shared: the VLAN id is derived from the VNI (VLAN = 2500 + VNI - 40000) and is the same on every switch."""
+
+    def test_every_switch_gets_the_id_of_the_vni_whatever_is_free(self) -> None:
+        world = _standalone_world("a", "b")
+        world.add("other", "sw-a", CUSTOMER_VLAN_ID_MIN)
+
+        _run_shared(world, "seg-1", ["a", "b"], vni=40000)
+
+        assert {c["device"]["id"]: c["vlan_id"] for c in world.created} == {"sw-a": 2500, "sw-b": 2500}
+
+    def test_a_device_that_already_uses_the_id_fails_and_creates_nothing(self) -> None:
+        """No fallback to another id: the point of a shared id is that it is the same everywhere."""
+        world = _standalone_world("a", "b")
+        world.add("other", "sw-b", 2500)
+
+        with pytest.raises(GeneratorError, match="sw-b"):
+            _run_shared(world, "seg-1", ["a", "b"], vni=40000)
+
+        assert world.created == []
+
+    @pytest.mark.parametrize("vni", [None, 10100, 40500])
+    def test_a_vni_outside_the_shared_band_fails(self, vni: int | None) -> None:
+        world = _standalone_world("a")
+
+        with pytest.raises(GeneratorError, match="shared"):
+            _run_shared(world, "seg-1", ["a"], vni=vni)
+
+        assert world.created == []
+
+    def test_a_local_segment_never_draws_from_the_shared_band(self) -> None:
+        """The local band ends below the shared one, so a local allocation cannot take a shared id."""
+        world = _standalone_world("a")
+        for vlan in range(CUSTOMER_VLAN_ID_MIN, LOCAL_VLAN_ID_MAX + 1):
+            world.add(f"fill-{vlan}", "sw-a", vlan)
+
+        with pytest.raises(GeneratorError, match="sw-a"):
+            _run(world, "seg-1", ["a"])
 
 
 class TestChoice:
@@ -128,7 +179,7 @@ class TestChoice:
     def test_no_single_id_for_all_new_devices_falls_back_per_device(self) -> None:
         """Two devices whose free ids never overlap in the band: each gets its own lowest, with a WARNING."""
         world = _standalone_world("a", "b")
-        for vlan in range(CUSTOMER_VLAN_ID_MIN, CUSTOMER_VLAN_ID_MAX + 1):
+        for vlan in range(CUSTOMER_VLAN_ID_MIN, LOCAL_VLAN_ID_MAX + 1):
             world.add(f"fill-a-{vlan}" if vlan % 2 else f"fill-b-{vlan}", "sw-a" if vlan % 2 else "sw-b", vlan)
 
         gen = _run(world, "seg-1", ["a", "b"])
@@ -139,7 +190,7 @@ class TestChoice:
     def test_device_without_a_free_id_fails_loudly_and_creates_nothing(self) -> None:
         """The customer band is exhausted on the device: the run fails, no pair is written."""
         world = _standalone_world("a", "b")
-        for vlan in range(CUSTOMER_VLAN_ID_MIN, CUSTOMER_VLAN_ID_MAX + 1):
+        for vlan in range(CUSTOMER_VLAN_ID_MIN, LOCAL_VLAN_ID_MAX + 1):
             world.add(f"fill-{vlan}", "sw-b", vlan)
 
         with pytest.raises(GeneratorError, match="sw-b"):
@@ -150,12 +201,12 @@ class TestChoice:
     def test_last_free_id_of_the_band_is_taken(self) -> None:
         """The band's top is usable, one past it is not."""
         world = _standalone_world("a")
-        for vlan in range(CUSTOMER_VLAN_ID_MIN, CUSTOMER_VLAN_ID_MAX):
+        for vlan in range(CUSTOMER_VLAN_ID_MIN, LOCAL_VLAN_ID_MAX):
             world.add(f"fill-{vlan}", "sw-a", vlan)
 
         _run(world, "seg-1", ["a"])
 
-        assert world.vlan_ids("seg-1") == {"sw-a": CUSTOMER_VLAN_ID_MAX}
+        assert world.vlan_ids("seg-1") == {"sw-a": LOCAL_VLAN_ID_MAX}
 
 
 class TestIsolation:
@@ -190,13 +241,13 @@ class TestIsolation:
 
         _run(world, "seg-1", ["b"])
 
-        assert world.events.index(f"delete:{stale}") < world.events.index("read:ManagedVlanDomainSegment")
+        assert world.events.index(f"delete:{stale}") < world.events.index("read:ManagedSegmentVlan")
         assert world.vlan_ids("seg-1") == {"sw-b": 100}
 
     def test_uniqueness_is_enforced_by_the_schema_too(self, root_dir: Path) -> None:
         """The DB-level backstop: a VLAN id is unique per device, and there is no VLAN domain generic any more."""
         segment_schema = yaml.safe_load((root_dir / "schemas/extensions/service/segment.yml").read_text())
-        node = next(n for n in segment_schema["nodes"] if n["name"] == "VlanDomainSegment")
+        node = next(n for n in segment_schema["nodes"] if n["name"] == "SegmentVlan")
         assert ["segment_deployment", "device"] in node["uniqueness_constraints"]
         assert ["device", "vlan_id__value"] in node["uniqueness_constraints"]
         dcim_schema = yaml.safe_load((root_dir / "schemas/base/dcim.yml").read_text())
@@ -208,11 +259,11 @@ class TestIdempotency:
         """Existing rows keep their id: the second run creates nothing, deletes nothing, and takes no device lock."""
         world = _standalone_world("a", "b")
         _run(world, "seg-1", ["a", "b"])
-        before = (list(world.created), list(world.deleted), len(world.reads(ManagedVlanDomainSegment)))
+        before = (list(world.created), list(world.deleted), len(world.reads(ManagedSegmentVlan)))
 
         gen = _run(world, "seg-1", ["a", "b"])
 
-        assert (world.created, world.deleted, len(world.reads(ManagedVlanDomainSegment))) == before
+        assert (world.created, world.deleted, len(world.reads(ManagedSegmentVlan))) == before
         assert gen.locked_keys == [segment_lock_key("seg-1")]
         assert world.vlan_ids("seg-1") == {"sw-a": 100, "sw-b": 100}
 
@@ -236,7 +287,7 @@ class TestReadsAndLocks:
 
         _run(world, "seg-1", ["a", "b", "m"], mlag={"m": "mlag-1", "n": "mlag-1"}, peers=["n"])
 
-        used = world.reads(ManagedVlanDomainSegment)
+        used = world.reads(ManagedSegmentVlan)
         assert len(used) == 1
         assert used[0]["device__ids"] == ["sw-a", "sw-b", "sw-m", "sw-n"]
 
@@ -247,7 +298,7 @@ class TestReadsAndLocks:
 
         _run(world, "seg-1", ["a", "b"])
 
-        used = world.reads(ManagedVlanDomainSegment)
+        used = world.reads(ManagedSegmentVlan)
         assert len(used) == 1
         assert used[0]["device__ids"] == ["sw-a", "sw-b"]
 
@@ -274,7 +325,7 @@ class TestReadsAndLocks:
             "lock:segment-vlan-domains-seg-1",
             "lock:vlan-device-ids-sw-a",
             "lock:vlan-device-ids-sw-b",
-            "read:ManagedVlanDomainSegment",
+            "read:ManagedSegmentVlan",
             "create:sw-a",
             "create:sw-b",
             "unlock:vlan-device-ids-sw-b",

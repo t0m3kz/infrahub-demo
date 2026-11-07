@@ -1,20 +1,6 @@
 ---
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: ManagedBGPPeering
-  data:
-    - name: "BGP-KTW1-LEAF01-EDGE01"
-      description: "EVPN overlay between the leaf (owner of the segment SVI) and the edge"
-      session_type: EBGP
-      peering_role: overlay
-      address_families:
-        - ["l2vpn", "evpn"]
-      bgp_processes:
-        - "ktw1-leaf-01-bgp"
-        - "ktw1-edge-01-bgp"
----
-# The EVPN overlay sessions leaf-01/02 - spine - border leaves - edge. The direct leaf-01 - edge session stays.
+# The EVPN overlay sessions leaf-01/02 - spine - border leaves - edge: a leaf talks to its spine and the border leaves
+# to the edge, as in a real fabric; there is no session from a leaf straight to the edge.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

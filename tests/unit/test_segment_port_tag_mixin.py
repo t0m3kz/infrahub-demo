@@ -17,10 +17,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from generators.segment_vlan import segment_lock_key
 from generators.topology.app_instance_segment import AppInstanceSegmentGenerator
 from generators.topology.segment import VxlanSegmentGenerator
 from generators.topology.segment_ports import SegmentPortTagMixin
-from generators.vlan_domain import segment_lock_key
 
 
 def _gen() -> Any:
@@ -267,7 +267,7 @@ class TestReconcileVxlanSegment:
         gen._reconcile_segment_interface_tags = AsyncMock(
             side_effect=lambda **_: gen.events.append("tags") or ((1, 0) if changed else (0, 0))
         )
-        gen._reconcile_segment_vlan_domains_locked = AsyncMock(
+        gen._reconcile_segment_vlans_locked = AsyncMock(
             side_effect=lambda *_a, **_k: gen.events.append("rows") or False
         )
         # The VRF pass over the domains' devices has its own tests (test_vrf_callers.py).
@@ -313,8 +313,8 @@ class TestReconcileVxlanSegment:
         gen = _gen()
         gen._fetch_segment_vlan_state = AsyncMock(return_value=None)
         gen._reconcile_segment_interface_tags = AsyncMock()
-        gen._reconcile_segment_vlan_domains_locked = AsyncMock()
+        gen._reconcile_segment_vlans_locked = AsyncMock()
 
         assert asyncio.run(gen.reconcile_vxlan_segment("seg-1", "seg")) is None
         gen._reconcile_segment_interface_tags.assert_not_awaited()
-        gen._reconcile_segment_vlan_domains_locked.assert_not_awaited()
+        gen._reconcile_segment_vlans_locked.assert_not_awaited()

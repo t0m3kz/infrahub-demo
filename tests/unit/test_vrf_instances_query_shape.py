@@ -57,7 +57,7 @@ def _everything() -> dict[str, Any]:
 def test_the_query_tree_resolves_the_in_file_fragments() -> None:
     """The fragments contribute their fields under the paths that spread them."""
     device = _query_tree()["DcimDevice"]["edges"]["node"]
-    assert "segment_deployment" in device["vlan_domain_segments"]["edges"]["node"]
+    assert "segment_deployment" in device["vlans"]["edges"]["node"]
     assert (
         "ip_address"
         in device["interfaces"]["edges"]["node"]["capabilities"]["edges"]["node"]["capabilities"]["edges"]["node"]

@@ -140,9 +140,7 @@ def _graph(cables: list = CABLES, vlans: dict | None = None, mlag_members: list 
     rows = [
         {"device": _node(name=_v(leaf)), "vlan_id": _v(v)} for leaf, v in (vlans or dict.fromkeys(LEAVES, 100)).items()
     ]
-    d["seg"] = [
-        {"id": "seg", "name": _v("seg"), "segment_deployments": _edges({"vlan_domain_segments": _edges(*rows)})}
-    ]
+    d["seg"] = [{"id": "seg", "name": _v("seg"), "segment_deployments": _edges({"vlans": _edges(*rows)})}]
     members = mlag_members if mlag_members is not None else LEAVES
     d["mlag"] = [
         {

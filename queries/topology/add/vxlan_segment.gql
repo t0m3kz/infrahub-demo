@@ -16,6 +16,7 @@ query vxlan_segment_data($name: String!) {
         # Its routing tag, likewise (generators/helpers/routing_tag.py).
         routing_tag { value }
         stretch_scope { value }
+        vlan_scope { value }
         arp_suppression { value }
         customer_deployments {
           edges {

@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from .pools import PoolMixin
 
 from utils.limits import GROUP_HA_DOMAINS, GROUP_MLAG_DOMAINS
-from utils.vlan_domain import mlag_peer_devices
+from utils.segment_vlan import mlag_peer_devices
 
 from .helpers.cable_attributes import cable_attributes, endpoint_label
 from .helpers.pairing import pair_device_names

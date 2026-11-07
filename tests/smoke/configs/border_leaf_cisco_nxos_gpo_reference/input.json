@@ -1020,7 +1020,7 @@
                                   "vni": {
                                     "value": 10110
                                   },
-                                  "vlan_domain_segments": {
+                                  "vlans": {
                                     "edges": [
                                       {
                                         "node": {
@@ -1098,7 +1098,7 @@
                                   "vni": {
                                     "value": 10120
                                   },
-                                  "vlan_domain_segments": {
+                                  "vlans": {
                                     "edges": [
                                       {
                                         "node": {
@@ -1176,7 +1176,7 @@
                                   "vni": {
                                     "value": 10130
                                   },
-                                  "vlan_domain_segments": {
+                                  "vlans": {
                                     "edges": [
                                       {
                                         "node": {
@@ -1254,7 +1254,7 @@
                                   "vni": {
                                     "value": 10210
                                   },
-                                  "vlan_domain_segments": {
+                                  "vlans": {
                                     "edges": [
                                       {
                                         "node": {
@@ -1332,7 +1332,7 @@
                                   "vni": {
                                     "value": 10220
                                   },
-                                  "vlan_domain_segments": {
+                                  "vlans": {
                                     "edges": [
                                       {
                                         "node": {

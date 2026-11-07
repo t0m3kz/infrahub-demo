@@ -243,7 +243,7 @@ class TestTransformDataRouting:
 
 
 # ---------------------------------------------------------------------------
-# _collect_activations_from_interfaces (the domain rule itself: tests/unit/test_vlan_domain_rule.py)
+# _collect_activations_from_interfaces (the domain rule itself: tests/unit/test_segment_vlan_rule.py)
 # ---------------------------------------------------------------------------
 
 
@@ -262,7 +262,7 @@ class TestCollectActivationsOwnRow:
                     "segment_deployments": [
                         {
                             "vni": 10100,
-                            "vlan_domain_segments": [{"device": {"id": row_device_id}, "vlan_id": vlan_id}],
+                            "vlans": [{"device": {"id": row_device_id}, "vlan_id": vlan_id}],
                         }
                     ],
                 }
@@ -288,7 +288,7 @@ class TestCollectActivationsOwnRow:
                     "segment_deployments": [
                         {
                             "vni": 10100,
-                            "vlan_domain_segments": [
+                            "vlans": [
                                 {"device": {"id": "dev-leaf-02"}, "vlan_id": 250},
                                 {"device": {"id": "dev-leaf-01"}, "vlan_id": 150},
                             ],
@@ -312,10 +312,10 @@ class TestCollectActivationsOwnRow:
                     "id": "seg-1",
                     "name": "tenant-a-web",
                     "segment_deployments": [
-                        {"vni": 10100, "vlan_domain_segments": [{"device": {"id": "other"}, "vlan_id": 100}]},
+                        {"vni": 10100, "vlans": [{"device": {"id": "other"}, "vlan_id": 100}]},
                         {
                             "vni": 20200,
-                            "vlan_domain_segments": [{"device": {"id": "dev-leaf-01"}, "vlan_id": 120}],
+                            "vlans": [{"device": {"id": "dev-leaf-01"}, "vlan_id": 120}],
                         },
                     ],
                 }

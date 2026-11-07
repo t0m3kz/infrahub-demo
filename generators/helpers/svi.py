@@ -1,7 +1,7 @@
 """The segment SVIs of a device: one ``DcimVirtualInterface`` (role ``svi``) per routed row of the device.
 
 The SVI carries no address (the anycast gateway stays ``segment.gateway``); it is the object a row is realized by on a
-switch (``vlan_domain_segment``) and the VRF the switch routes it in (``vrf``). What a device needs is derived by
+switch (``segment_vlan``) and the VRF the switch routes it in (``vrf``). What a device needs is derived by
 ``utils.vrf_demand.device_vrf_facts``; this module only turns the difference with what exists into writes.
 
 Identity: an SVI is found by its own uniqueness, (device, ``Vlan<vlan id>``), among the device's role-svi interfaces.
@@ -114,7 +114,7 @@ class SviMixin:
                 "device": {"id": facts.id},
                 "role": SVI_ROLE,
                 "status": "active",
-                "vlan_domain_segment": {"id": write.row_id},
+                "segment_vlan": {"id": write.row_id},
             }
             if write.vrf_id:
                 data["vrf"] = {"id": write.vrf_id}

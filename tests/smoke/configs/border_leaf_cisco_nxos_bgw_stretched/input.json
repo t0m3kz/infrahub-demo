@@ -1927,7 +1927,7 @@
                       "status": {
                         "value": "active"
                       },
-                      "vlan_domain_segments": {
+                      "vlans": {
                         "edges": [
                           {
                             "node": {
@@ -1993,7 +1993,7 @@
                                   "vni": {
                                     "value": 10100
                                   },
-                                  "vlan_domain_segments": {
+                                  "vlans": {
                                     "edges": [
                                       {
                                         "node": {
@@ -2097,7 +2097,7 @@
                       "status": {
                         "value": "active"
                       },
-                      "vlan_domain_segments": {
+                      "vlans": {
                         "edges": [
                           {
                             "node": {
@@ -2163,7 +2163,7 @@
                                   "vni": {
                                     "value": 10110
                                   },
-                                  "vlan_domain_segments": {
+                                  "vlans": {
                                     "edges": [
                                       {
                                         "node": {

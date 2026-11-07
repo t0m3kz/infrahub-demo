@@ -10,8 +10,8 @@ bonded/lag far ends, dedup, one batch for all the devices) and
 _customer_facing_target_id.
 
 The VLAN domain activation reconcile this generator shares with
-VxlanSegmentGenerator (VlanDomainMixin) is covered by
-tests/unit/test_vlan_domain_reconcile.py — only stubbed here.
+VxlanSegmentGenerator (SegmentVlanMixin) is covered by
+tests/unit/test_segment_vlan_reconcile.py — only stubbed here.
 """
 
 from __future__ import annotations
@@ -99,7 +99,7 @@ class TestGenerate:
             return_value={"segment": {"id": "seg-1", "ports": []}, "activations": {}}
         )
         gen._reconcile_segment_interface_tags = AsyncMock(return_value=(added, removed))
-        gen._reconcile_segment_vlan_domains_locked = AsyncMock(return_value=False)
+        gen._reconcile_segment_vlans_locked = AsyncMock(return_value=False)
         # The VRF pass over the domains' devices has its own tests (test_vrf_callers.py).
         gen.reconcile_vrfs = AsyncMock()
         gen._domain_member_device_ids = AsyncMock(return_value=[])
@@ -126,7 +126,7 @@ class TestGenerate:
         asyncio.run(gen.generate(data))
 
         gen._reconcile_segment_interface_tags.assert_awaited_once()
-        gen._reconcile_segment_vlan_domains_locked.assert_awaited_once()
+        gen._reconcile_segment_vlans_locked.assert_awaited_once()
         gen.logger.error.assert_not_called()
 
     def test_missing_vxlan_segment_is_skipped_without_error(self) -> None:
@@ -140,7 +140,7 @@ class TestGenerate:
         asyncio.run(gen.generate(data))
 
         gen._reconcile_segment_interface_tags.assert_not_awaited()
-        gen._reconcile_segment_vlan_domains_locked.assert_not_awaited()
+        gen._reconcile_segment_vlans_locked.assert_not_awaited()
         gen.client.get.assert_not_awaited()
         gen.logger.error.assert_not_called()
 
@@ -175,8 +175,8 @@ class TestGenerate:
         assert kwargs["ports"] == []
         # Tags changed: the state is re-read before the domains are reconciled.
         assert gen._fetch_segment_vlan_state.await_count == 2
-        gen._reconcile_segment_vlan_domains_locked.assert_awaited_once()
-        assert gen._reconcile_segment_vlan_domains_locked.call_args.args[:2] == ("seg-1", "c001-web-p")
+        gen._reconcile_segment_vlans_locked.assert_awaited_once()
+        assert gen._reconcile_segment_vlans_locked.call_args.args[:2] == ("seg-1", "c001-web-p")
 
     def test_unchanged_tags_reuse_the_state(self) -> None:
         """No tag change: one state read serves both reconciliations."""

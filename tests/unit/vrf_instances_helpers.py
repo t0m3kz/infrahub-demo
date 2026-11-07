@@ -34,7 +34,7 @@ def address(addr: str, namespace: str, namespace_type: str | None = None) -> dic
 def raw_row(
     row_id: str, vlan_id: int, namespace: str | None = "PROD", segment: str = "seg", *, terminated: bool = False
 ) -> dict[str, Any]:
-    """A ManagedVlanDomainSegment row; ``namespace`` None means a segment without a gateway (pure L2).
+    """A ManagedSegmentVlan row; ``namespace`` None means a segment without a gateway (pure L2).
 
     ``terminated`` is a segment terminated on a firewall context: it keeps its gateway (the pair's VIP) and is pure
     L2 on the fabric all the same."""
@@ -135,7 +135,7 @@ def raw_svi(
         if vrf_id
         else None
     )
-    node["vlan_domain_segment"] = {"node": {"id": row_id}} if row_id else None
+    node["segment_vlan"] = {"node": {"id": row_id}} if row_id else None
     return node
 
 
@@ -195,7 +195,7 @@ def raw_device(
         "member_of_groups": edges(*({"name": {"value": group}} for group in groups)),
         "shared_capabilities": edges(*members, *({"__typename": kind} for kind in shared_others or [])),
         "deployment": raw_deployment(deployment_kind, hosting_id),
-        "vlan_domain_segments": edges(*(rows or [])),
+        "vlans": edges(*(rows or [])),
         "interfaces": edges(*(interfaces or [])),
     }
     if status:

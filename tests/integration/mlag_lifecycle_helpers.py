@@ -1,6 +1,6 @@
 """The pure readers and judges of test_66's MLAG scenario (test_05), and the reads that feed them.
 
-Option (d) of the VLAN rows: a ManagedVlanDomainSegment points straight at its DEVICE, so the ManagedMLAG pairing two
+Option (d) of the VLAN rows: a ManagedSegmentVlan points straight at its DEVICE, so the ManagedMLAG pairing two
 access-leafs owns no row. Deleting the MLAG, and building it again, must therefore leave every row (id, VLAN id, SVI)
 alone. These functions say what changed; tests/unit/test_integration_mlag_lifecycle.py runs them on canned payloads.
 """
@@ -49,7 +49,7 @@ query {
 
 ROWS_QUERY = """
 query ($devices: [ID]) {
-  ManagedVlanDomainSegment(device__ids: $devices) {
+  ManagedSegmentVlan(device__ids: $devices) {
     edges {
       node {
         id
@@ -103,7 +103,7 @@ def parse_candidates(result: dict[str, Any]) -> list[dict[str, Any]]:
 def parse_rows(result: dict[str, Any]) -> tuple[Rows, Svis]:
     """The rows and the role-svi interfaces of a ``ROWS_QUERY`` result, grouped by device id."""
     rows: Rows = {}
-    for edge in (result.get("ManagedVlanDomainSegment") or {}).get("edges", []):
+    for edge in (result.get("ManagedSegmentVlan") or {}).get("edges", []):
         node = _node(edge)
         device, deployment = _id(node, "device"), _id(node, "segment_deployment")
         if device and deployment:
@@ -132,7 +132,7 @@ def candidate_errors(candidate: dict[str, Any], rows: Rows) -> list[str]:
         if not member["rack_id"]:
             errors.append(f"{member['name']} is in no rack: add_rack cannot rebuild its pair")
         if not rows.get(member["id"]):
-            errors.append(f"{member['name']} has no ManagedVlanDomainSegment row")
+            errors.append(f"{member['name']} has no ManagedSegmentVlan row")
     return errors
 
 

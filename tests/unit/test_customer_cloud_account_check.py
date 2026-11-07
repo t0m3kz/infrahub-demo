@@ -11,18 +11,30 @@ def _org(org_id: str | None) -> dict[str, Any]:
     return {"node": {"id": f"id-{org_id}", "org_id": {"value": org_id}} if org_id else None}
 
 
-def _account(name: str, owner: str | None) -> dict[str, Any]:
-    return {"node": {"id": f"id-{name}", "name": {"value": name}, "owner": _org(owner)}}
+def _account(name: str, owner: str | None, environment: str | None = "p") -> dict[str, Any]:
+    return {
+        "node": {
+            "id": f"id-{name}",
+            "name": {"value": name},
+            "environment": {"value": environment},
+            "owner": _org(owner),
+        }
+    }
 
 
 def _footprint(
-    owner: str | None = "C003", account: str = "acct-1", account_owner: str | None = "C003"
+    owner: str | None = "C003",
+    account: str = "acct-1",
+    account_owner: str | None = "C003",
+    environment: str | None = "p",
+    account_environment: str | None = "p",
 ) -> dict[str, Any]:
     return {
         "id": "id-fp",
         "name": {"value": "C003-CLOUD"},
+        "environment": {"value": environment},
         "owner": _org(owner),
-        "account": _account(account, account_owner),
+        "account": _account(account, account_owner, account_environment),
     }
 
 
@@ -82,3 +94,19 @@ class TestCa2Segments:
 
     def test_segment_of_no_footprint_is_not_judged(self) -> None:
         assert _run([_footprint()], [_segment("acct-2", footprint=None)]) == []
+
+
+class TestEnvironment:
+    """CA3: the footprint states the environment of its account."""
+
+    def test_same_environment_passes(self) -> None:
+        assert _run([_footprint(environment="n", account_environment="n")], []) == []
+
+    def test_other_environment_fails_and_names_both(self) -> None:
+        errors = _run([_footprint(environment="p", account_environment="n")], [])
+
+        assert len(errors) == 1 and "CA3" in errors[0] and "'p'" in errors[0] and "'n'" in errors[0]
+
+    def test_a_missing_environment_on_either_side_is_not_judged(self) -> None:
+        assert _run([_footprint(environment=None)], []) == []
+        assert _run([_footprint(account_environment=None)], []) == []
