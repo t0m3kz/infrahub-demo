@@ -184,6 +184,10 @@ nodes:
     label: Routing Policy
     icon: mdi:routes
     include_in_menu: false
+    # The interface-side capability edge: a pbr policy is applied on interfaces through `capabilities`, like a peering
+    # or a circuit (the interface lists it in its own `capabilities`).
+    inherit_from:
+      - ManagedGenericInterfaces
     uniqueness_constraints:
       - ["name__value"]
     human_friendly_id:
@@ -269,15 +273,6 @@ nodes:
         optional: true
         identifier: policy__customer_deployment
         order_weight: 1480
-      - name: interfaces
-        peer: DcimInterface
-        label: Applied On Interfaces
-        description: "A pbr policy: the interfaces (an SVI, a DCI port) whose ingress traffic it steers"
-        kind: Generic
-        cardinality: many
-        optional: true
-        identifier: policy__interfaces
-        order_weight: 1490
       - name: import_peerings
         peer: ManagedBGPPeering
         label: Imported By

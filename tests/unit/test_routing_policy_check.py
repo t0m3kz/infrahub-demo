@@ -203,7 +203,7 @@ def test_a_pbr_policy_is_judged_by_its_interfaces_not_by_peerings() -> None:
     on_interface = {
         "name": "pbr-a",
         "kind": "pbr",
-        "interfaces": [{"id": "svi-1"}],
+        "capabilities": [{"id": "svi-1"}],
         "customer_deployment": {"id": "c-1"},
         "terms": [],
     }

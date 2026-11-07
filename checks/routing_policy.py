@@ -78,7 +78,7 @@ def routing_policy_warnings(cleaned: dict[str, Any]) -> list[str]:
     used_community: set[str] = set()
     for policy in cleaned.get("RoutingPolicy") or []:
         if policy.get("kind") == "pbr":
-            if not policy.get("interfaces"):
+            if not policy.get("capabilities"):
                 warnings.append(f"RP5: policy '{policy.get('name')}' is applied on no interface.")
             if not policy.get("customer_deployment"):
                 warnings.append(f"RP5: pbr policy '{policy.get('name')}' names no customer deployment.")
