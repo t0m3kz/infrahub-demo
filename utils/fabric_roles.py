@@ -2,6 +2,16 @@
 
 from __future__ import annotations
 
+INTERNAL_FIREWALL_ROLE = "firewall"
+"""The role of an internal firewall: east-west and the customers' contexts. (The name predates the external pair.)"""
+
+EXTERNAL_FIREWALL_ROLE = "external-firewall"
+"""The role of an Internet-facing firewall: the Internet edge context of one or more topologies
+(``TopologySegmentHosting.internet_edge_contexts``). No customer context is built on it."""
+
+FIREWALL_ROLES = frozenset({INTERNAL_FIREWALL_ROLE, EXTERNAL_FIREWALL_ROLE})
+"""Any firewall pair, for code that means both."""
+
 RR_ROLES = frozenset({"spine", "border-spine", "super-spine", "hyper-spine"})
 """Roles that act as overlay route reflectors."""
 

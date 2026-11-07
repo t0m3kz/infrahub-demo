@@ -133,8 +133,12 @@ generics:
             color: "#e8e7ad"
           - name: firewall
             label: Firewall
-            description: "Security boundary with external network"
+            description: "Internal firewall: east-west and the customers' contexts"
             color: "#6e5abd"
+          - name: external-firewall
+            label: External Firewall
+            description: "Internet-facing firewall: the Internet edge of one or more topologies"
+            color: "#a35abd"
           - name: firewall-active
             label: Firewall (Active)
             description: "Active member of a redundant firewall HA pair"

@@ -10,7 +10,8 @@ an ERROR that blocks the proposed change. One finding per rule, footprint, conte
 A DC footprint (``serving_firewall_context``), and each firewall context of a colocation footprint
 (``serving_firewall_contexts``), needs:
 
-1. a cluster (``ManagedFirewallHA``) of exactly two member devices, both with role ``firewall``;
+1. a cluster (``ManagedFirewallHA``) of exactly two member devices, both with role ``firewall`` (``external-firewall``
+   for the context a topology names as its Internet edge);
 2. for every member, an INTERNET leg: a sub-interface of the context named ``<port>.<vlan>`` (the transit VLAN of the
    INTERNET slot, utils/exchange_transit.py) with an address in the INTERNET namespace;
 3. a ``TopologyRoutedExchange`` of the context between the tenant VRF and INTERNET, with every INTERNET leg linked to
@@ -47,7 +48,7 @@ from infrahub_sdk.checks import InfrahubCheck
 from transforms.helpers.policy import rule_enabled
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import INTERNET_TYPE, INTERNET_ZONE, namespace_type_for_environment, transit_vlan
-from utils.fabric_roles import CARRIER_ROLES
+from utils.fabric_roles import CARRIER_ROLES, EXTERNAL_FIREWALL_ROLE
 
 DC_KIND = "TopologyCustomerDC"
 COLOCATION_KIND = "TopologyCustomerColocation"
@@ -157,13 +158,19 @@ def _leg_gaps(
     return []
 
 
-def context_gaps(context: dict[str, Any], exchanges: list[dict[str, Any]]) -> list[Gap]:
-    """What a firewall context lacks to enforce the internet egress, one gap per missing element."""
+def context_gaps(
+    context: dict[str, Any], exchanges: list[dict[str, Any]], member_role: str = FIREWALL_ROLE
+) -> list[Gap]:
+    """What a firewall context lacks to enforce the internet egress, one gap per missing element.
+
+    ``member_role`` is the device role of the pair: ``firewall`` for a serving context, ``external-firewall`` for the
+    context a topology names as its Internet edge.
+    """
     label = _name(context)
     cluster = context.get("cluster")
     cluster = cluster if isinstance(cluster, dict) else {}
     members = _members(cluster)
-    firewalls = [member for member in members if member.get("role") == FIREWALL_ROLE]
+    firewalls = [member for member in members if member.get("role") == member_role]
     gaps: list[str] = []
 
     if not cluster:
@@ -171,7 +178,7 @@ def context_gaps(context: dict[str, Any], exchanges: list[dict[str, Any]]) -> li
     elif len(members) != PAIR_SIZE or len(firewalls) != PAIR_SIZE:
         gaps.append(
             f"cluster '{_name(cluster)}' has {len(members)} member device(s), {len(firewalls)} with role "
-            f"{FIREWALL_ROLE}: a complete pair is exactly {PAIR_SIZE} firewalls"
+            f"{member_role}: a complete pair is exactly {PAIR_SIZE} firewalls"
         )
 
     vlan = context.get("vlan_id")
@@ -345,7 +352,10 @@ def _egress_gaps(
     kind: str, footprint: dict[str, Any], egress: dict[str, Any], exchanges: list[dict[str, Any]]
 ) -> list[Gap]:
     """The elements of the egress context, and the public address a dedicated serving context translates to."""
-    gaps = [Gap(gap.context, f"egress context: {gap.missing}") for gap in context_gaps(egress, exchanges)]
+    gaps = [
+        Gap(gap.context, f"egress context: {gap.missing}")
+        for gap in context_gaps(egress, exchanges, EXTERNAL_FIREWALL_ROLE)
+    ]
     serving = footprint.get("serving_firewall_context") if kind == DC_KIND else None
     if isinstance(serving, dict) and _id(serving) != _id(egress) and not _id(serving.get("snat_address")):
         gaps.append(
