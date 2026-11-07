@@ -185,7 +185,8 @@ nodes:
     icon: mdi:routes
     include_in_menu: false
     # The interface-side capability edge: a pbr policy is applied on interfaces through `capabilities`, like a peering
-    # or a circuit (the interface lists it in its own `capabilities`).
+    # or a circuit (the interface lists it in its own `capabilities`). A pbr policy has no terms: the ACL, the bypass
+    # and the next hop (the virtual IP of the leg of the customer's serving context) are derived at render time.
     inherit_from:
       - ManagedGenericInterfaces
     uniqueness_constraints:
@@ -223,7 +224,7 @@ nodes:
         optional: false
         default_value: bgp
         order_weight: 220
-        description: "bgp: a session's routes; pbr: policy-based routing on interfaces, redirecting to a next hop"
+        description: "bgp: a session's routes; pbr: interfaces that redirect to the customer's firewall"
         choices:
           - name: bgp
             label: BGP
@@ -351,18 +352,6 @@ nodes:
         optional: true
         order_weight: 320
         description: "Communities added to the route (standard, well-known or large)"
-      - name: set_next_hop
-        kind: Text
-        label: Set Next Hop
-        optional: true
-        order_weight: 325
-        description: "A pbr term: the address matching traffic is redirected to, reachable in the interface's VRF"
-      - name: match_acl
-        kind: Text
-        label: Match ACL
-        optional: true
-        order_weight: 326
-        description: "A pbr term: the name of the ACL that selects the traffic (its entries are derived)"
       - name: prepend_count
         kind: Number
         label: AS Path Prepend
