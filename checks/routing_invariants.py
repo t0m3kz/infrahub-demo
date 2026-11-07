@@ -68,6 +68,10 @@ rendered config; each is a property of data that spans topologies.
    unreachable from the rest of its owner's network.
 
 A missing evpn_rt_as on an eBGP-overlay fabric is checked by CheckEvpnFabric.
+9. On-prem segments. Inside one namespace the routed prefixes behind the gateways of two segments overlap
+   whoever owns them: customer networks are never translated, so two overlapping ranges cannot both be routed in a
+   shared VRF. A container prefix (the pool a segment's subnet is allocated from) may contain a segment's prefix, and
+   a segment stretched over several sites is one object.
 """
 
 from __future__ import annotations
@@ -134,6 +138,7 @@ class CheckRoutingInvariants(WarningCheck):
         aggregates = _vpc_aggregates(networks) + _office_aggregates(offices) + _tunnel_aggregates(tunnels)
         self._validate_aggregate_namespaces(aggregates)
         self._validate_subnets_in_vpc(networks, cleaned.get("CloudNetworkSegment") or [])
+        self._validate_segment_overlaps(cleaned.get("ManagedNetworkSegment") or [])
         self._validate_aggregate_overlaps(aggregates, cleaned.get("ManagedNetworkSegment") or [])
         legs = cloud_legs(cleaned.get("CloudPeeringInterface"), cleaned.get("CloudGatewayAttachment"))
         self._validate_registered_prefix_owners(networks, offices, tunnels, legs)
@@ -268,19 +273,31 @@ class CheckRoutingInvariants(WarningCheck):
                     )
                 )
 
+    def _validate_segment_overlaps(self, segments: list[dict[str, Any]]) -> None:
+        """Within one namespace the routed prefixes of two on-prem segments never overlap, whoever owns them.
+
+        Customer networks are not translated, so two segments with overlapping prefixes cannot both be routed in a
+        shared VRF. Only a container prefix (the pool a segment's /24 is allocated from) may contain another; a
+        segment stretched over several sites is one object and appears once.
+        """
+        routed = _onprem_prefixes(segments)
+        for index, (name, owner, prefix, net) in enumerate(routed):
+            namespace = _namespace_key(prefix)
+            for other_name, other_owner, other_prefix, other_net in routed[index + 1 :]:
+                if _namespace_key(other_prefix) == namespace and _overlap(net, other_net):
+                    self.log_error(
+                        message=(
+                            f"On-prem segment '{name}' ({_describe_owner(owner)}) {net} overlaps segment "
+                            f"'{other_name}' ({_describe_owner(other_owner)}) {other_net} in namespace "
+                            f"'{(prefix.get('ip_namespace') or {}).get('name')}'"
+                        )
+                    )
+
     def _validate_aggregate_overlaps(self, aggregates: list[_Aggregate], segments: list[dict[str, Any]]) -> None:
         """Within one namespace an aggregate overlaps neither another aggregate nor an on-prem prefix."""
         routed = [(agg, net) for agg in aggregates if (net := _network(agg.prefix.get("prefix")))]
 
-        onprem: list[tuple[str, dict[str, Any], ipaddress.IPv4Network | ipaddress.IPv6Network]] = []
-        for segment in segments:
-            if segment.get("typename") == "CloudNetworkSegment":
-                continue
-            prefix = (segment.get("gateway") or {}).get("ip_prefix") or {}
-            if prefix.get("member_type") == "prefix":
-                continue  # a container, not a routed subnet
-            if net := _network(prefix.get("prefix")):
-                onprem.append((str(segment.get("name")), prefix, net))
+        onprem = [(name, prefix, net) for name, _owner, prefix, net in _onprem_prefixes(segments)]
 
         for index, (agg, net) in enumerate(routed):
             namespace = _namespace_key(agg.prefix)
@@ -405,6 +422,22 @@ class CheckRoutingInvariants(WarningCheck):
                         "prefix (no lan_prefixes, no segment it hosts): the gateway session accepts nothing of it"
                     )
                 )
+
+
+def _onprem_prefixes(
+    segments: list[dict[str, Any]],
+) -> list[tuple[str, dict[str, Any] | None, dict[str, Any], ipaddress.IPv4Network | ipaddress.IPv6Network]]:
+    """(name, owner, prefix, network) of the routed prefix behind each on-prem segment's gateway."""
+    found = []
+    for segment in segments:
+        if segment.get("typename") == "CloudNetworkSegment":
+            continue
+        prefix = (segment.get("gateway") or {}).get("ip_prefix") or {}
+        if prefix.get("member_type") == "prefix":
+            continue  # a container, not a routed subnet
+        if net := _network(prefix.get("prefix")):
+            found.append((str(segment.get("name")), segment.get("owner"), prefix, net))
+    return found
 
 
 def _vpc_aggregates(networks: list[dict[str, Any]]) -> list[_Aggregate]:
