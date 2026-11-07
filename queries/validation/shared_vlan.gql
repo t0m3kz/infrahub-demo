@@ -15,7 +15,7 @@ query shared_vlan {
       node {
         id
         vni { value }
-        segment { node { id vlan_scope { value } } }
+        segment { node { id ... on ManagedVxlanSegment { vlan_scope { value } } } }
         deployment { node { id display_label } }
         vlans {
           edges {
