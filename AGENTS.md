@@ -636,8 +636,8 @@ class MyCheck(InfrahubCheck):
   `PREFIX`, `BGP_NEIGHBOR_AF`; every line evidence U) except large communities, which have no known field there: a
   large list is not defined, a term that matches one is left out and a large community a term adds is not set.
   **Transit**: `add_transit_policy` (`generators/topology/transit_policy.py`, the group trigger of `transit_peerings`, which
-  every upstream peering of the internet topology declares: `06_internet` in the demo data, guarded by
-  `tests/unit/test_event_rules.py`) writes the shared `generated` policies `transit-in` (default route only, local-pref
+  every upstream peering of `30_all` declares, guarded by `tests/unit/test_event_rules.py`; `00_full_topology`
+  authors the same objects as plain data, held equal to the spec by `tests/unit/test_transit_policy.py`) writes the shared `generated` policies `transit-in` (default route only, local-pref
   below 100, the tag `TRANSIT_COMMUNITY`) and `transit-out` (deny what carries the tag, announce the public space of the
   INTERNET namespace) from the one spec `utils/transit_policy.py` and adds them to the peering; a policy a person attached
   stays, a list entry the public space lost is deleted. There are no fixed transit maps: a transit

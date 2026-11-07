@@ -159,3 +159,46 @@ async def test_a_response_without_the_peering_fails_the_run() -> None:
     generator, _, _ = _generator()
     with pytest.raises(GeneratorError):
         await generator.generate({"ManagedBGPPeering": {"edges": []}})
+
+
+def test_the_full_topology_data_is_the_spec_of_the_generator() -> None:
+    """00_full_topology authors the transit policies as plain objects (its peering is in no generator group): they must
+    stay what utils/transit_policy.py derives from the public ranges of the data."""
+    import yaml  # noqa: PLC0415
+
+    from tests.integration.demo_data import ROOT  # noqa: PLC0415
+
+    folder = ROOT / "data" / "demos" / "00_full_topology" / "06_internet"
+    documents = [
+        doc for doc in yaml.safe_load_all((folder / "03_routing" / "03_routing_policies.yml").read_text()) if doc
+    ]
+    by_kind = {doc["spec"]["kind"]: doc["spec"]["data"] for doc in documents}
+    public = [
+        item["prefix"]
+        for doc in yaml.safe_load_all((folder / "00_addressing" / "01_prefixes.yml").read_text())
+        if doc
+        for item in doc["spec"]["data"]
+        if item.get("role") == "public" and ":" not in item["prefix"]
+    ]
+    spec = transit_spec(sorted(public))
+
+    lists = {item["name"]: item for item in by_kind["RoutingPrefixList"] if item["name"] != "PL-OBJECT-STORE-PUBLIC"}
+    assert set(lists) == {item["name"] for item in spec["prefix_lists"]}
+    for item in spec["prefix_lists"]:
+        assert [(e["seq"], e["action"], e["prefix"]) for e in lists[item["name"]]["entries"]["data"]] == [
+            (e["seq"], e["action"], e["prefix"]) for e in item["entries"]
+        ]
+    community = by_kind["RoutingCommunityList"][0]
+    assert (community["name"], community["members"]) == (
+        spec["community_lists"][0]["name"],
+        spec["community_lists"][0]["members"],
+    )
+    policies = {p["name"]: p for p in by_kind["RoutingPolicy"] if p["origin"] == "generated"}
+    assert set(policies) == {p["name"] for p in spec["policies"]}
+    for item in spec["policies"]:
+        authored = policies[item["name"]]
+        assert authored["default_action"] == item["default_action"]
+        assert [
+            (t["seq"], t["action"], t.get("set_local_pref"), t.get("add_communities") or [])
+            for t in authored["terms"]["data"]
+        ] == [(t["seq"], t["action"], t.get("local_pref"), t.get("add_communities") or []) for t in item["terms"]]
