@@ -7,7 +7,7 @@ from typing import Any, cast
 import pytest
 import yaml
 
-from checks.routing_policy import CheckRoutingPolicy, routing_policy_errors
+from checks.routing_policy import CheckRoutingPolicy, routing_policy_errors, routing_policy_warnings
 from tests.integration.demo_data import ROOT
 from tests.unit.query_shape_helpers import query_tree, unselected
 from utils.routing_policy import any_community_error, community_error, prefix_entry_errors
@@ -87,6 +87,7 @@ def test_the_check_logs_one_error_per_problem() -> None:
     check = cast(Any, CheckRoutingPolicy.__new__(CheckRoutingPolicy))
     logged: list[dict[str, Any]] = []
     check.log_error = lambda **kwargs: logged.append(kwargs)
+    check.log_info = lambda **kwargs: None  # the unused-list warning of this answer
     answer = {
         "RoutingPrefixList": {"edges": []},
         "RoutingCommunityList": {
@@ -124,3 +125,74 @@ def test_the_check_and_its_query_are_registered() -> None:
 
     assert checks["validate_routing_policy"]["class_name"] == "CheckRoutingPolicy"
     assert CheckRoutingPolicy.query == "routing_policy" and (ROOT / queries["routing_policy"]).is_file()
+
+
+def _used_answer() -> dict[str, Any]:
+    """Two terms (a match, then a catch-all), both lists named, the policy attached."""
+    return {
+        "RoutingPrefixList": [{"id": "pl", "name": "PL-A", "family": "ipv4", "entries": []}],
+        "RoutingCommunityList": [{"id": "cl", "name": "CL-A", "community_type": "standard", "members": []}],
+        "RoutingPolicy": [
+            {
+                "id": "p",
+                "name": "P-A",
+                "import_peerings": [{"id": "peer"}],
+                "export_peerings": [],
+                "terms": [
+                    {"id": "t2", "seq": 20, "match_prefix_list": None, "match_community_list": None},
+                    {"id": "t1", "seq": 10, "match_prefix_list": {"id": "pl"}, "delete_community_list": {"id": "cl"}},
+                ],
+            }
+        ],
+    }
+
+
+def test_a_used_policy_with_a_catch_all_last_reports_nothing() -> None:
+    answer = _used_answer()
+    assert routing_policy_errors(answer) == [] and routing_policy_warnings(answer) == []
+
+
+def test_a_term_after_a_catch_all_is_unreachable() -> None:
+    answer = _used_answer()
+    answer["RoutingPolicy"][0]["terms"].append({"id": "t3", "seq": 30, "match_prefix_list": {"id": "pl"}})
+    errors = routing_policy_errors(answer)
+
+    assert [(m[:3], obj) for m, obj, _ in errors] == [("RP4", "t3")]
+
+
+def test_a_policy_on_no_peering_and_a_list_no_term_names_are_warnings() -> None:
+    answer = _used_answer()
+    answer["RoutingPolicy"][0]["import_peerings"] = []
+    answer["RoutingPolicy"][0]["terms"][1].pop("delete_community_list")
+    warnings = routing_policy_warnings(answer)
+
+    assert [w[:3] for w in warnings] == ["RP5", "RP6"] and "CL-A" in warnings[1]
+
+
+def test_the_check_logs_warnings_without_failing() -> None:
+    check = cast(Any, CheckRoutingPolicy.__new__(CheckRoutingPolicy))
+    errors: list[Any] = []
+    infos: list[Any] = []
+    check.log_error = lambda **kwargs: errors.append(kwargs)
+    check.log_info = lambda **kwargs: infos.append(kwargs)
+    check.validate(
+        {
+            "RoutingPrefixList": {"edges": []},
+            "RoutingCommunityList": {"edges": []},
+            "RoutingPolicy": {
+                "edges": [
+                    {
+                        "node": {
+                            "id": "p",
+                            "name": _v("P"),
+                            "import_peerings": {"edges": []},
+                            "export_peerings": {"edges": []},
+                            "terms": {"edges": []},
+                        }
+                    }
+                ]
+            },
+        }
+    )
+
+    assert not errors and len(infos) == 1 and "RP5" in infos[0]["message"]

@@ -627,7 +627,8 @@ class MyCheck(InfrahubCheck):
   map closes with the guard permit when every policy's `default_action` is permit, else with the implicit deny. While the
   deployment stages the protection (`routing_filter_enforce` false) the guard is not part of the terms. A direction that
   already names a map a template defines (`RM-FABRIC-OUT`, `RM-DCI-IN`: the internal fabric) takes no policy (`skipped`).
-  `checks/routing_policy.py` (RP1-RP3) holds the community syntax and the prefix list entries.
+  `checks/routing_policy.py` holds the community syntax and the prefix list entries (RP1-RP3), a term after a term
+  that matches every route (RP4, ERROR), a policy on no peering (RP5) and a list no term names (RP6, WARNINGs).
   Rendered by NX-OS, EOS and IOS XE (`common/bgp_filter_objects.j2` `bgp_user_objects` and `bgp_user_attachments`): the
   guard is the first, `deny`, term of the user map (a match on the complement list `<list>-OUTSIDE`), and the filter map
   of that direction and family is then not attached (`replaced_by`). Large communities are evidence U.

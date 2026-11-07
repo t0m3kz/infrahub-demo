@@ -1,4 +1,4 @@
-# The rows of checks/routing_policy.py (rules RP1 to RP3): every prefix list with its entries, every community list and
+# The rows of checks/routing_policy.py (rules RP1 to RP6): every prefix list with its entries, every community list and
 # every policy with its terms, the communities they add and the lists they name.
 query routing_policy {
   RoutingPrefixList {
@@ -36,11 +36,14 @@ query routing_policy {
       node {
         id
         name { value }
+        import_peerings { edges { node { id } } }
+        export_peerings { edges { node { id } } }
         terms {
           edges {
             node {
               id
               seq { value }
+              action { value }
               add_communities { value }
               match_prefix_list { node { id name { value } } }
               match_community_list { node { id name { value } } }
