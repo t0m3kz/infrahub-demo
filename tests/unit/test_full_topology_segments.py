@@ -58,7 +58,7 @@ def _deployment_rows() -> list[dict]:
 
 def test_each_dc_declares_its_deployment_with_the_same_vlan_on_both_leaves() -> None:
     """One deployment row per DC for its own (local) segment, a VLAN row for each leaf of the MLAG pair under one id."""
-    rows = [row for row in _deployment_rows() if row["segment"] != _STRETCHED]
+    rows = [row for row in _deployment_rows() if row["segment"] != _STRETCHED and row["deployment"].startswith("DC-")]
     assert sorted(row["deployment"] for row in rows) == ["DC-GDN1", "DC-KTW1", "DC-WAW1"]
     for row in rows:
         vlans = row["vlans"]["data"]
@@ -83,3 +83,30 @@ def test_the_stretched_segment_is_shared_one_vni_and_the_vlan_it_gives_on_every_
     )
     assert segment["vlan_scope"] == "shared" and segment["stretch_scope"] == "dc_pair"
     assert len(segment["customer_deployments"]) == 2
+
+
+def test_the_office_wifi_segments_are_a_guest_and_a_staff_one_on_the_access_switches() -> None:
+    """Both segments are realized in the office on both access switches (same VLAN id on the pair), and the guest one has
+    no permit rule but the one to the internet."""
+    rows = {row["segment"]: row for row in _deployment_rows() if row["deployment"] == "C900-OFFICE"}
+    assert set(rows) == {"c900-wifi-guest-p", "c900-wifi-corp-p"}
+    for row in rows.values():
+        vlans = row["vlans"]["data"]
+        assert {vlan["device"] for vlan in vlans} == {"bcn-office-as-01", "bcn-office-as-02"}
+        assert len({vlan["vlan_id"] for vlan in vlans}) == 1
+
+    policies = {
+        item["segment"]: item
+        for _, doc in _documents()
+        if (doc.get("spec") or {}).get("kind") == "SecurityPolicy"
+        for item in doc["spec"]["data"]
+        if item["segment"].startswith("c900-wifi")
+    }
+    guest = policies["c900-wifi-guest-p"]["rules"]["data"]
+    assert [(rule["action"], rule.get("destination_zone"), rule.get("destination_segment")) for rule in guest] == [
+        ("permit", "INTERNET-ZONE", None)
+    ]
+    assert policies["c900-wifi-guest-p"]["default_action"] == "deny"
+    assert any(
+        rule.get("destination_segment") == "c900-web-p" for rule in policies["c900-wifi-corp-p"]["rules"]["data"]
+    )
