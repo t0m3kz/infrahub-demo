@@ -16,6 +16,7 @@ Per leg (a context's VLAN sub-interface in one VRF):
 from __future__ import annotations
 
 import ipaddress
+from collections.abc import Mapping
 from typing import Any, TypedDict
 
 from utils.fabric_roles import EXTERNAL_FIREWALL_ROLE, INTERNAL_FIREWALL_ROLE
@@ -257,3 +258,43 @@ def transit_addresses(prefix: str) -> TransitAddresses:
         "vip": str(network[OFFSET_VIP]),
         "members": [str(network[OFFSET_MEMBER_A]), str(network[OFFSET_MEMBER_B])],
     }
+
+
+def exchange_route_specs(
+    tenant_leg: Mapping[str, Any],
+    peer_leg: Mapping[str, Any],
+    *,
+    shared: bool,
+    snat: str | None,
+    export_tenant_default: bool = True,
+) -> list[dict[str, Any]]:
+    """The static routes one exchange of a firewall context needs on a border device.
+
+    ``tenant_leg`` and ``peer_leg`` are the two legs of the exchange (``namespace``, ``l3_vni``, ``ns_type``, ``vip``).
+    The tenant VRF gets ``0.0.0.0/0`` to the tenant leg's VIP when the context is the shared one; a dedicated context
+    steers its tenant by leaf PBR. The INTERNET VRF gets the context's SNAT /32 to the INTERNET leg's VIP, the return
+    path of its translated flows. The single rule: the transform that derives routes
+    (transforms/helpers/firewall.py get_exchange_routes) and the generator that writes them as objects both call it.
+    """
+    routes: list[dict[str, Any]] = []
+    if shared:
+        routes.append(
+            {
+                "namespace": tenant_leg["namespace"],
+                "l3_vni": tenant_leg.get("l3_vni"),
+                "prefix": "0.0.0.0/0",
+                "nexthop": tenant_leg["vip"],
+                "local_only": not export_tenant_default,
+            }
+        )
+    if snat and peer_leg["ns_type"] == INTERNET_TYPE:
+        routes.append(
+            {
+                "namespace": peer_leg["namespace"],
+                "l3_vni": peer_leg.get("l3_vni"),
+                "prefix": f"{snat}/32",
+                "nexthop": peer_leg["vip"],
+                "local_only": False,
+            }
+        )
+    return routes

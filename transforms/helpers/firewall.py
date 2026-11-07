@@ -9,8 +9,8 @@ from transforms.helpers.policy import active_rules, enabled_policies, rule_endpo
 from utils.exchange_transit import (
     EXCHANGE_PEERS,
     FIREWALL_CONTEXT_KIND,
-    INTERNET_TYPE,
     LOADBALANCER_CONTEXT_KIND,
+    exchange_route_specs,
     service_context_caps,
     transit_addresses,
     transit_leg_namespace,
@@ -395,10 +395,15 @@ def get_exchange_routes(
             if leg_z["ns_type"] not in EXCHANGE_PEERS.get(leg_a["ns_type"], ()):
                 continue
             gateway = exchange.get("gateway") or {}
-            if not (gateway.get("tenant") or ctx.get("tenant")):
-                _add(leg_a, "0.0.0.0/0", leg_a["vip"], local_only=not export_tenant_default)
-            if snat and leg_z["ns_type"] == INTERNET_TYPE:
-                _add(leg_z, f"{snat}/32", leg_z["vip"])
+            for spec in exchange_route_specs(
+                leg_a,
+                leg_z,
+                shared=not (gateway.get("tenant") or ctx.get("tenant")),
+                snat=snat,
+                export_tenant_default=export_tenant_default,
+            ):
+                leg = leg_a if spec["namespace"] == leg_a["namespace"] else leg_z
+                _add(leg, spec["prefix"], spec["nexthop"], local_only=spec["local_only"])
     return sorted(routes.values(), key=lambda r: (r["vrf"], r["prefix"], r["nexthop"]))
 
 

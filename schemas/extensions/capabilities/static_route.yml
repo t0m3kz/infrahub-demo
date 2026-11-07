@@ -44,6 +44,13 @@ nodes:
         parameters:
           min_value: 1
           max_value: 255
+      - name: exported
+        kind: Boolean
+        label: Exported
+        optional: false
+        default_value: true
+        order_weight: 1575
+        description: "Redistributed into EVPN; false keeps the route in the VRF of the device only"
       - name: origin
         kind: Dropdown
         optional: false
