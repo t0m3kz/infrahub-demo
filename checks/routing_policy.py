@@ -80,6 +80,8 @@ def routing_policy_warnings(cleaned: dict[str, Any]) -> list[str]:
         if policy.get("kind") == "pbr":
             if not policy.get("interfaces"):
                 warnings.append(f"RP5: policy '{policy.get('name')}' is applied on no interface.")
+            if not policy.get("customer_deployment"):
+                warnings.append(f"RP5: pbr policy '{policy.get('name')}' names no customer deployment.")
         elif not policy.get("import_peerings") and not policy.get("export_peerings"):
             warnings.append(f"RP5: policy '{policy.get('name')}' is attached to no peering.")
         for term in policy.get("terms") or []:

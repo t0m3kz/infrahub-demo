@@ -260,6 +260,15 @@ nodes:
         on_delete: cascade
         identifier: policy__terms
         order_weight: 1000
+      - name: customer_deployment
+        peer: TopologyCustomer
+        label: Customer Deployment
+        description: "A pbr policy: the customer deployment whose traffic it steers; empty for bgp"
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: policy__customer_deployment
+        order_weight: 1480
       - name: interfaces
         peer: DcimInterface
         label: Applied On Interfaces
