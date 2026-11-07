@@ -37,7 +37,8 @@ LAYERS: dict[str, tuple[str, ...]] = {
            "DcimFrontPatchPanelPort", "DcimRearPatchPanelPort", "TopologyCarrierCircuit",
            "TopologyInternetInterface", "TopologyProviderConnect", "TopologyProviderInterface"),
     "l3": ("DcimPhysicalDevice", "DcimPhysicalInterface", "DcimLAGInterface", "DcimVirtualInterface", "ManagedBGP",
-           "ManagedBGPPeering", "TopologySessionCircuit"),
+           "ManagedBGPPeering", "TopologySessionCircuit",
+           "ManagedStaticRoute"),
     # L2 is one broadcast domain: a segment, its realization in each DC (the VNI) and the VLAN row of each switch. Two
     # switches are in one domain when a chain of rows joins them through a segment, however far apart (a segment stretched
     # over the DCI is one domain; the local VLAN ids differ and do not matter). Not cabling and not routing.

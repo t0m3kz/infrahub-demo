@@ -33,7 +33,7 @@ class ContextRoutesGenerator(ExchangeRoutesMixin, VrfMixin, PoolMixin, CommonGen
         if context is None:
             self.fail("No service context in the GraphQL response")
         load_balancer = LOADBALANCER_KIND in cleaned and bool(cleaned[LOADBALANCER_KIND])
-        legs, devices = self._legs_and_devices(context)
+        legs, devices, leg_interfaces = self._legs_and_devices(context)
         if not legs or not devices:
             self.logger.info(f"{context['name']}: no leg or no tagged border port yet - no routes")
             return
@@ -59,12 +59,21 @@ class ContextRoutesGenerator(ExchangeRoutesMixin, VrfMixin, PoolMixin, CommonGen
         # The devices are in their VRF instances before a route points at one (idempotent; no context lock is held).
         await self.reconcile_vrfs(sorted(devices))
         async with self.resource_lock(f"context-routes-{context['id']}"):
-            await self.write_routes(context=context, device_ids=sorted(devices), specs_for=specs)
+            await self.write_routes(
+                context=context, device_ids=sorted(devices), specs_for=specs, leg_interfaces=leg_interfaces
+            )
 
     @staticmethod
-    def _legs_and_devices(context: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], set[str]]:
-        """{namespace type: leg} from the virtual interfaces and the ids of the border devices of the other ports."""
+    def _legs_and_devices(
+        context: dict[str, Any],
+    ) -> tuple[dict[str, dict[str, Any]], set[str], dict[str, str]]:
+        """{namespace type: leg}, the ids of the border devices of the other ports, and {VRF name: interface id}.
+
+        The interface is the leg of the first member (by device name) in that VRF: the interface that owns the next hop
+        of a route there (the pair's floating address has no interface of its own), where a path through the
+        firewall enters."""
         legs: dict[str, dict[str, Any]] = {}
+        interfaces: dict[str, tuple[str, str]] = {}
         devices: set[str] = set()
         for cap in context.get("capabilities") or []:
             if cap.get("typename") == _LEG_KIND:
@@ -80,6 +89,9 @@ class ContextRoutesGenerator(ExchangeRoutesMixin, VrfMixin, PoolMixin, CommonGen
                             "vip": transit_addresses(address)["vip"],
                         },
                     )
+                    member = (cap.get("device") or {}).get("name") or ""
+                    if namespace["name"] not in interfaces or member < interfaces[namespace["name"]][0]:
+                        interfaces[namespace["name"]] = (member, cap["id"])
             elif (cap.get("device") or {}).get("id"):
                 devices.add(cap["device"]["id"])
-        return legs, devices
+        return legs, devices, {name: leg_id for name, (_, leg_id) in interfaces.items()}

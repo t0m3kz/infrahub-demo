@@ -60,7 +60,12 @@ class ExchangeRoutesMixin:
         return {"namespace": leg["namespace"], "prefix": vip_prefix, "nexthop": leg["vip"], "local_only": False}
 
     async def write_routes(
-        self, *, context: Mapping[str, Any], device_ids: list[str], specs_for: Mapping[bool, list[dict[str, Any]]]
+        self,
+        *,
+        context: Mapping[str, Any],
+        device_ids: list[str],
+        specs_for: Mapping[bool, list[dict[str, Any]]],
+        leg_interfaces: Mapping[str, str],
     ) -> None:
         """Save each route on its device in the device's VRF instance; every one is tracked by the run.
 
@@ -88,6 +93,11 @@ class ExchangeRoutesMixin:
                             "exported": not spec["local_only"],
                             "status": "active",
                             "vrf": {"id": vrf_id},
+                            **(
+                                {"next_hop_interface": {"id": leg_interfaces[spec["namespace"]]}}
+                                if spec["namespace"] in leg_interfaces
+                                else {}
+                            ),
                             "capabilities": [{"id": device.id}],
                         },
                     )

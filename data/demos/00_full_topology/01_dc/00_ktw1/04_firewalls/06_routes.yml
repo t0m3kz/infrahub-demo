@@ -30,6 +30,9 @@ spec:
       exported: true
       status: active
       vrf: ["DC-KTW1", "PROD"]
+      next_hop_interface:
+        kind: DcimVirtualInterface
+        data: {device: ktw1-xfw-01, name: "ethernet1/1.3001"}
       capabilities: ["ktw1-bl-01"]
     - name: ktw1-bl-02-prod-default
       prefix: "0.0.0.0/0"
@@ -37,6 +40,9 @@ spec:
       exported: true
       status: active
       vrf: ["DC-KTW1", "PROD"]
+      next_hop_interface:
+        kind: DcimVirtualInterface
+        data: {device: ktw1-xfw-01, name: "ethernet1/1.3001"}
       capabilities: ["ktw1-bl-02"]
     - name: ktw1-bl-01-internet-snat
       prefix: "192.0.2.20/32"
@@ -44,6 +50,9 @@ spec:
       exported: true
       status: active
       vrf: ["DC-KTW1", "INTERNET"]
+      next_hop_interface:
+        kind: DcimVirtualInterface
+        data: {device: ktw1-xfw-01, name: "ethernet1/1.3401"}
       capabilities: ["ktw1-bl-01"]
     - name: ktw1-bl-02-internet-snat
       prefix: "192.0.2.20/32"
@@ -51,4 +60,7 @@ spec:
       exported: true
       status: active
       vrf: ["DC-KTW1", "INTERNET"]
+      next_hop_interface:
+        kind: DcimVirtualInterface
+        data: {device: ktw1-xfw-01, name: "ethernet1/1.3401"}
       capabilities: ["ktw1-bl-02"]
