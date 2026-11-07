@@ -20,6 +20,7 @@ def test_a_session_without_policy_attributes_attaches_nothing() -> None:
         "max_total": None,
         "enforced": False,
         "filters": [],
+        "user": [],
     }
 
 

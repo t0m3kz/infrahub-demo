@@ -1,0 +1,48 @@
+# The routing policies of a BGP peering, one direction: the policy with its ordered terms, what each term matches (a
+# prefix list, a community list) and what it sets or deletes. Read by transforms/helpers/routing_policy.py, which
+# composes them with the guard derived from the model. Spread at the node of `import_policies` / `export_policies`
+# (a named fragment nested in an inline fragment resolves to nulls in Infrahub).
+fragment RoutingPrefixListFields on RoutingPrefixList {
+  name { value }
+  family { value }
+  entries {
+    edges {
+      node {
+        seq { value }
+        action { value }
+        prefix { value }
+        min_length { value }
+        max_length { value }
+      }
+    }
+  }
+}
+
+fragment RoutingCommunityListFields on RoutingCommunityList {
+  name { value }
+  community_type { value }
+  members { value }
+  match { value }
+}
+
+fragment RoutingPolicyFields on RoutingPolicy {
+  name { value }
+  origin { value }
+  priority { value }
+  default_action { value }
+  terms {
+    edges {
+      node {
+        seq { value }
+        action { value }
+        set_local_pref { value }
+        set_med { value }
+        add_communities { value }
+        prepend_count { value }
+        match_prefix_list { node { ...RoutingPrefixListFields } }
+        match_community_list { node { ...RoutingCommunityListFields } }
+        delete_community_list { node { ...RoutingCommunityListFields } }
+      }
+    }
+  }
+}

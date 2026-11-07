@@ -615,6 +615,19 @@ class MyCheck(InfrahubCheck):
   gate and nothing filters on a community. A customer or segment without a tag renders no community.
   `checks/routing_tags.py` requires a tag on each routed tenant segment and its owner, in range and unique. Not
   `unique: true` in the schema: an optional attribute collides on the second unset value.
+- **Routing policy**: `RoutingPolicy` (ordered `RoutingPolicyTerm`s), `RoutingPrefixList` (`RoutingPrefixListEntry`) and
+  `RoutingCommunityList` (standard, well-known and large communities) in `schemas/extensions/capabilities/routing_policy.yml`.
+  A policy is a SHARED object: many peerings name it per direction (`ManagedBGPPeering.import_policies` /
+  `export_policies`), ordered by `priority`, then name, then term `seq`. `origin` says who owns it: a generator writes and
+  removes only `generated` ones, a person's `manual` ones are never touched. A term matches a prefix list and/or a community
+  list and sets local-preference, MED, communities to add or delete (a list) and a prepend. **A policy sets and tightens, it
+  never widens**: `transforms/helpers/routing_policy.py` composes the attached policies with the guard derived from the
+  model (the filter of `session["policy"]["filters"]`) so every term matches the guard AND its own match, per address
+  family (a route-map names one family's lists); a permit term inherits the session's own sets unless it sets its own; the
+  map closes with the guard permit when every policy's `default_action` is permit, else with the implicit deny. While the
+  deployment stages the protection (`routing_filter_enforce` false) the guard is not part of the terms. A direction that
+  already names a map a template defines (`RM-FABRIC-OUT`, `RM-DCI-IN`: the internal fabric) takes no policy (`skipped`).
+  `checks/routing_policy.py` (RP1-RP3) holds the community syntax and the prefix list entries. Not rendered yet.
 - **Route protection**: every BGP session is protected against a neighbour announcing what it must not, internal
   sessions included (external and transit keep `utils/ownership.py exchange_policies`). ONE derivation,
   `utils/bgp_expectation.py` (pure; the transform renders it and `checks/bgp_expectations.py` compares it): a session

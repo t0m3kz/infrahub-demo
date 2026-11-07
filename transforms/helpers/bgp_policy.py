@@ -36,6 +36,7 @@ import hashlib
 from ipaddress import ip_network
 from typing import Any
 
+from transforms.helpers.routing_policy import IN, OUT, compose_user_maps
 from utils.bgp_expectation import (
     DCI,
     DCI_UNDERLAY,
@@ -159,6 +160,19 @@ def compose_policy(
     if session.get("dci_inbound") and "in" not in replaced:
         attach.append({"map": DCI_IN_MAP, "direction": "in", "own": False})
     limits, total = _maximums(expectation, enforce)
+    attached = session.get("routing_policies") or {}
+    user = [
+        composed
+        for direction in (IN, OUT)
+        if (composed := compose_user_maps(session, direction, attached.get(direction) or [], filters))
+    ]
+    # The maps of a direction with user policies: the neighbour names them, not its own or the filter's (they hold their sets).
+    for composed in user:
+        attach[:] = [a for a in attach if a["direction"] != composed["direction"]]
+        attach += [
+            {"map": m["name"], "direction": composed["direction"], "own": True, "user": True, "family": m["family"]}
+            for m in composed["maps"]
+        ]
     return {
         "inbound": {"own": own_in if "in" not in replaced else None},
         "outbound": {"own": own_out if "out" not in replaced else None},
@@ -167,6 +181,7 @@ def compose_policy(
         "max_total": total,
         "enforced": enforce,
         "filters": filters,
+        "user": user,
     }
 
 

@@ -21,6 +21,8 @@ fragment ManagedBGPServiceFields on ManagedBGP {
         password { node { password { value } } }
         ttl { value }
         route_reflector_client { value }
+        import_policies { edges { node { ...RoutingPolicyFields } } }
+        export_policies { edges { node { ...RoutingPolicyFields } } }
         address_families {
           edges {
             node {
