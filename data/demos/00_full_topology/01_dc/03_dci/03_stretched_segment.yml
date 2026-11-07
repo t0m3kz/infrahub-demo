@@ -1,0 +1,83 @@
+---
+# A segment stretched over the DCI: c900-sync-p lives in DC-KTW1 and DC-WAW1 at once (`stretch_scope: dc_pair`), one
+# L2 domain over EVPN between the two DCs (the overlay sessions of 02_dci_peerings.yml). Its VLAN scope is `shared`:
+# the VNI 12500 gives the VLAN id 2500 (VLAN = VNI - 10000, utils/segment_vlan.py), the SAME on all eight switches,
+# which is what a trunk to a switch that cannot do VXLAN needs (the local ids of c900-web-p and c900-app-p are per
+# switch).
+# The anycast gateway 10.94.1.1/24 is the same in both DCs.
+#
+# It loads after both DCs: its footprints, switches and VRFs exist. A stretched segment is realized on the border
+# leaves of each DC as well as on the leaves with a port of it (generators/segment_vlan.py), so there are eight SVIs.
+# First the SVIs (the rows below point at them), then the segment, its two realizations with a VLAN row per switch, and
+# the port-channel of each DC's server vPC carrying it next to its own segment (the edge is a list, so it names both).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - {name: Vlan2500, device: ktw1-leaf-01, role: svi, status: active, vrf: ["DC-KTW1", "PROD"]}
+    - {name: Vlan2500, device: ktw1-leaf-02, role: svi, status: active, vrf: ["DC-KTW1", "PROD"]}
+    - {name: Vlan2500, device: waw1-leaf-01, role: svi, status: active, vrf: ["DC-WAW1", "PROD"]}
+    - {name: Vlan2500, device: waw1-leaf-02, role: svi, status: active, vrf: ["DC-WAW1", "PROD"]}
+    - {name: Vlan2500, device: ktw1-bl-01, role: svi, status: active, vrf: ["DC-KTW1", "PROD"]}
+    - {name: Vlan2500, device: ktw1-bl-02, role: svi, status: active, vrf: ["DC-KTW1", "PROD"]}
+    - {name: Vlan2500, device: waw1-bl-01, role: svi, status: active, vrf: ["DC-WAW1", "PROD"]}
+    - {name: Vlan2500, device: waw1-bl-02, role: svi, status: active, vrf: ["DC-WAW1", "PROD"]}
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVxlanSegment
+  data:
+    - owner: C900
+      customer_name: sync
+      environment: p
+      stretch_scope: dc_pair
+      vlan_scope: shared
+      customer_deployments: ["C900-P-DC-KTW1", "C900-P-DC-WAW1"]
+      gateway:
+        data:
+          address: "10.94.1.1/24"
+          description: Gateway of c900-sync-p (anycast, the same in both DCs)
+          ip_namespace: PROD
+          ip_prefix:
+            kind: IpamPrefix
+            data:
+              prefix: "10.94.1.0/24"
+              ip_namespace: PROD
+              status: active
+              description: Stretched DC segment c900-sync-p
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedSegmentDeployment
+  data:
+    - segment: c900-sync-p
+      deployment: DC-KTW1
+      vni: 12500
+      vlans:
+        data:
+          - {device: ktw1-leaf-01, vlan_id: 2500, svi: ["ktw1-leaf-01", "Vlan2500"]}
+          - {device: ktw1-leaf-02, vlan_id: 2500, svi: ["ktw1-leaf-02", "Vlan2500"]}
+          - {device: ktw1-bl-01, vlan_id: 2500, svi: ["ktw1-bl-01", "Vlan2500"]}
+          - {device: ktw1-bl-02, vlan_id: 2500, svi: ["ktw1-bl-02", "Vlan2500"]}
+    - segment: c900-sync-p
+      deployment: DC-WAW1
+      vni: 12500
+      vlans:
+        data:
+          - {device: waw1-leaf-01, vlan_id: 2500, svi: ["waw1-leaf-01", "Vlan2500"]}
+          - {device: waw1-leaf-02, vlan_id: 2500, svi: ["waw1-leaf-02", "Vlan2500"]}
+          - {device: waw1-bl-01, vlan_id: 2500, svi: ["waw1-bl-01", "Vlan2500"]}
+          - {device: waw1-bl-02, vlan_id: 2500, svi: ["waw1-bl-02", "Vlan2500"]}
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimLAGInterface
+  data:
+    - {device: ktw1-leaf-01, name: Port-Channel10, segments: ["c900-web-p", "c900-sync-p"]}
+    - {device: ktw1-leaf-02, name: Port-Channel10, segments: ["c900-web-p", "c900-sync-p"]}
+    - {device: waw1-leaf-01, name: Port-Channel10, segments: ["c900-app-p", "c900-sync-p"]}
+    - {device: waw1-leaf-02, name: Port-Channel10, segments: ["c900-app-p", "c900-sync-p"]}

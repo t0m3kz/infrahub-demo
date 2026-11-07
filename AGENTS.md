@@ -701,7 +701,13 @@ class MyCheck(InfrahubCheck):
   no trigger follows it: a port a person adds gets its VLAN row at the next run of either generator on the segment. A switch with no deployment of the segment, or a pair whose members map to two deployments, is a WARNING and its
   rows are left alone (the next run converges once the deployment exists). The rows are untracked and their deployment
   tracked: a deployment that is not re-saved by its run is deleted with its rows; the rows of a device that is gone or
-  no longer needs the segment are deleted by the next reconcile (check rule S2 reports them meanwhile). A routed row (a gateway, and no `terminated_on`: a terminated segment is pure L2 on the fabric) is realized on its switch as ONE SVI: a `DcimVirtualInterface` with role
+  no longer needs the segment are deleted by the next reconcile (check rule S2 reports them meanwhile). **VLAN scope**: `ManagedVxlanSegment.vlan_scope` is `local` (the default: each switch has its own id, the VNI is the identity) or
+  `shared` (one id on every switch, for L2 trunked between switches that cannot do VXLAN): the id is derived from the VNI,
+  VLAN = VNI - 10000, and lives in the shared band 2500-2999 (VNI 12500-12999), above the local band 100-2499
+  (`utils/limits.py`, `utils/segment_vlan.py` `shared_vlan_id`). The generator gives a shared segment that id on every row and
+  fails when a switch already uses it; `checks/shared_vlan.py` (SV1) reports a row that differs, a VNI outside the band or two
+  VNIs. A stretched segment (`stretch_scope` not `local`) also has a row, and so an SVI, on the border leaves of each DC.
+  A routed row (a gateway, and no `terminated_on`: a terminated segment is pure L2 on the fabric) is realized on its switch as ONE SVI: a `DcimVirtualInterface` with role
   `svi` named `Vlan<vlan_id>`, a Component of the row (`svi`, `on_delete: cascade`), with no address (the anycast
   gateway is `segment.gateway`) and with `vrf` pointing at the `ManagedVRF` of its device's topology; the SVI is not a
   port. `generators/helpers/svi.py` writes it in the VRF pass of the segment reconcile, upserted by (device, `Vlan<id>`), and
