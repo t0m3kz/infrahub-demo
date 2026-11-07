@@ -57,6 +57,8 @@ def raw_state(
     rows: Sequence[tuple[str, str, int, str]] = (),
     deployments: Sequence[tuple[str, str]] | None = None,
     stretch_scope: str = "local",
+    vlan_scope: str = "local",
+    vni: int | None = None,
     customer_deployments: list[dict[str, Any]] | None = None,
     sources: dict[str, str] | None = None,
 ) -> dict[str, Any]:
@@ -99,6 +101,7 @@ def raw_state(
                     "node": {
                         "id": segment_id,
                         "stretch_scope": {"value": stretch_scope},
+                        "vlan_scope": {"value": vlan_scope},
                         "customer_deployments": {"edges": customer_deployments or []},
                     }
                 }
@@ -110,6 +113,7 @@ def raw_state(
                     "node": {
                         "id": sd_id,
                         "deployment": {"node": {"id": hosting_id}},
+                        "vni": {"value": vni},
                         "vlans": {
                             "edges": [
                                 {

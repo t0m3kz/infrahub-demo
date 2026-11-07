@@ -462,6 +462,14 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
+    resource_name: shared_vlan
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/shared_vlan.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
     resource_name: software_lifecycle
     tests:
       - name: syntax_check

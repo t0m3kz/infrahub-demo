@@ -48,8 +48,16 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from utils.data_cleaning import clean_data
-from utils.limits import CUSTOMER_VLAN_ID_MAX, CUSTOMER_VLAN_ID_MIN, GROUP_PROVIDER_STUBS, GROUP_SDWAN_GATEWAYS
-from utils.segment_vlan import mlag_id
+from utils.limits import (
+    CUSTOMER_VLAN_ID_MIN,
+    GROUP_PROVIDER_STUBS,
+    GROUP_SDWAN_GATEWAYS,
+    LOCAL_VLAN_ID_MAX,
+    SHARED_VLAN_ID_MAX,
+    SHARED_VLAN_ID_MIN,
+    SHARED_VLAN_VNI_OFFSET,
+)
+from utils.segment_vlan import mlag_id, shared_vlan_id
 
 from .protocols import DcimPhysicalDevice, ManagedMLAG, ManagedSegmentVlan
 
@@ -108,6 +116,7 @@ class SegmentVlanMixin:
         taken: dict[str, set[int]],
         held: dict[str, int],
         preferred: int | None,
+        fixed: int | None = None,
     ) -> dict[str, int]:
         """The vlan_id for each device in ``new`` (a device that needs a new row of the segment).
 
@@ -118,8 +127,21 @@ class SegmentVlanMixin:
         on every device of every group: when that is free on all its members. Otherwise the group takes the lowest
         id free on its members, with a WARNING; a member left with no common free id takes its own lowest free id
         (WARNING; the pair's rows then differ and the check reports it); a device with no free id fails the run.
+
+        ``fixed`` is the id of a SHARED segment (vlan_scope shared, derived from its VNI): every new row takes it, and
+        a device that already uses it for another segment fails the run (no fallback: the point of a shared id is
+        that it is the same everywhere).
         """
-        band = range(CUSTOMER_VLAN_ID_MIN, CUSTOMER_VLAN_ID_MAX + 1)
+        if fixed is not None:
+            for group in groups:
+                clash = [device_id for device_id in group if fixed in taken[device_id]]
+                if clash:
+                    self.fail(
+                        f"Segment {segment_name} is shared: VLAN ID {fixed} (from its VNI) is already used by another "
+                        f"segment on {', '.join(clash)}"
+                    )
+            return {device_id: fixed for group in groups for device_id in group if device_id in new}
+        band = range(CUSTOMER_VLAN_ID_MIN, LOCAL_VLAN_ID_MAX + 1)
         default = preferred
         if default is None:
             busy = set().union(*(taken[device_id] for group in groups for device_id in group))
@@ -150,7 +172,7 @@ class SegmentVlanMixin:
                 own = next((vlan_id for vlan_id in band if vlan_id not in taken[device_id]), None)
                 if own is None:
                     self.fail(
-                        f"Device {device_id} has no free VLAN ID in {CUSTOMER_VLAN_ID_MIN}-{CUSTOMER_VLAN_ID_MAX} "
+                        f"Device {device_id} has no free VLAN ID in {CUSTOMER_VLAN_ID_MIN}-{LOCAL_VLAN_ID_MAX} "
                         f"for segment {segment_name}"
                     )
                 self.logger.warning(
@@ -167,8 +189,9 @@ class SegmentVlanMixin:
         new: dict[str, str],
         groups: list[tuple[str, ...]],
         kept_devices: list[str],
+        fixed: int | None = None,
     ) -> None:
-        """Create the missing rows of the segment, choosing each vlan_id.
+        """Create the missing rows of the segment, choosing each vlan_id (``fixed``: a shared segment's id).
 
         ``new`` is {device id: id of the segment deployment its row goes
         under}; only rows that do not exist yet, so an existing row's vlan_id
@@ -203,7 +226,9 @@ class SegmentVlanMixin:
                     held[device_id] = row.vlan_id.value
                 elif device_id in taken:
                     taken[device_id].add(row.vlan_id.value)
-            chosen = self._choose_vlan_ids(segment_name, groups, set(new), taken, held, min(own_ids, default=None))
+            chosen = self._choose_vlan_ids(
+                segment_name, groups, set(new), taken, held, min(own_ids, default=None), fixed
+            )
             for device_id in sorted(chosen):
                 vlan_id = chosen[device_id]
                 row = await self.client.create(
@@ -253,6 +278,7 @@ class SegmentVlanMixin:
                 {
                     "id": segment_deployment["id"],
                     "deployment_id": (segment_deployment.get("deployment") or {}).get("id"),
+                    "vni": segment_deployment.get("vni"),
                     "rows": rows,
                 }
             )
@@ -349,6 +375,21 @@ class SegmentVlanMixin:
     def _group_names(device: Any) -> set[str]:
         """Names of the groups a device was fetched with (a group's HFID is its name)."""
         return {peer.hfid[0] for peer in device.member_of_groups.peers if peer.hfid}
+
+    def _shared_vlan_id(self, segment_name: str, state: dict[str, Any]) -> int | None:
+        """The VLAN id of a segment with vlan_scope shared (from its VNI), None for a local one; fails the run when a
+        shared segment has no VNI yet, two, or one outside the shared band (VLAN = VNI - SHARED_VLAN_VNI_OFFSET)."""
+        if (state["segment"].get("vlan_scope") or "local") != "shared":
+            return None
+        vnis = {item["vni"] for item in state["deployments"] if item.get("vni") is not None}
+        vlan_ids = {shared_vlan_id(vni) for vni in vnis}
+        if len(vnis) != 1 or None in vlan_ids:
+            self.fail(
+                f"Segment {segment_name} is shared: it needs ONE VNI in its deployments within the shared band "
+                f"(VNI {SHARED_VLAN_ID_MIN + SHARED_VLAN_VNI_OFFSET}-{SHARED_VLAN_ID_MAX + SHARED_VLAN_VNI_OFFSET}), "
+                f"found {sorted(vnis) or 'none'}"
+            )
+        return next(iter(vlan_ids))
 
     async def _reconcile_segment_vlans_locked(
         self, segment_id: str, segment_name: str, state: dict[str, Any] | None = None
@@ -448,6 +489,7 @@ class SegmentVlanMixin:
                 new,
                 [group for group in groups if not new.keys().isdisjoint(group)],
                 kept_devices,
+                self._shared_vlan_id(segment_name, state),
             )
 
         self.logger.info(

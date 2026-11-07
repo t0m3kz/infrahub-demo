@@ -24,6 +24,7 @@ query segment_vlans($segment_id: ID!) {
       node {
         id
         stretch_scope { value }
+        vlan_scope { value }
         terminated_on {
           node {
             id
@@ -85,6 +86,7 @@ query segment_vlans($segment_id: ID!) {
     edges {
       node {
         id
+        vni { value }
         deployment { node { id } }
         vlans {
           edges {

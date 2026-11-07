@@ -1,0 +1,32 @@
+# The rows of checks/shared_vlan.py (rule SV1): every segment with vlan_scope shared, with the VNI of each of its
+# deployments and the VLAN id of each row under them. The expected id is derived from the VNI (utils/segment_vlan.py).
+query shared_vlan {
+  ManagedVxlanSegment(vlan_scope__value: "shared") {
+    edges {
+      node {
+        id
+        name { value }
+        vlan_scope { value }
+      }
+    }
+  }
+  ManagedSegmentDeployment {
+    edges {
+      node {
+        id
+        vni { value }
+        segment { node { id vlan_scope { value } } }
+        deployment { node { id display_label } }
+        vlans {
+          edges {
+            node {
+              id
+              vlan_id { value }
+              device { node { id name { value } } }
+            }
+          }
+        }
+      }
+    }
+  }
+}

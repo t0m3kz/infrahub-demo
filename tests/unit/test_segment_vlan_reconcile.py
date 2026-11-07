@@ -59,8 +59,8 @@ class TestFetchSegmentVlanState:
 
         assert state is not None
         assert state["deployments"] == [
-            {"id": "sd-a", "deployment_id": "dc-1", "rows": {"sw-1": {"id": "row-1", "vlan_id": 120}}},
-            {"id": "sd-b", "deployment_id": "dc-2", "rows": {}},
+            {"id": "sd-a", "deployment_id": "dc-1", "vni": None, "rows": {"sw-1": {"id": "row-1", "vlan_id": 120}}},
+            {"id": "sd-b", "deployment_id": "dc-2", "vni": None, "rows": {}},
         ]
         assert state["segment"]["id"] == "seg-1"
         assert gen.client.execute_graphql.call_args.kwargs["variables"] == {"segment_id": "seg-1"}

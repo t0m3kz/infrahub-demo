@@ -59,6 +59,22 @@ nodes:
             label: Global
             description: "Stretched across multiple metros/regions"
             color: "#E67E22"
+      - name: vlan_scope
+        kind: Dropdown
+        label: VLAN Scope
+        optional: false
+        default_value: local
+        order_weight: 13
+        description: "Whether the VLAN id is local to each switch or the same on all of them"
+        choices:
+          - name: local
+            label: Local
+            description: "Each switch has its own VLAN id for the segment (VXLAN fabric: the VNI is the identity)"
+            color: "#7FBF7F"
+          - name: shared
+            label: Shared
+            description: "One VLAN id on every switch, derived from the VNI (VLAN = VNI - 10000, VNI 12500-12999): for L2 trunked between switches that cannot do VXLAN"  # yamllint disable-line rule:line-length
+            color: "#E67E22"
     relationships:
       # TopologyDeployment, not TopologyCustomer: a TopologyCustomerOffice hosts
       # its own segments (it is TopologySegmentHosting) but is not a

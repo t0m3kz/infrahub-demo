@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+from utils.limits import SHARED_VLAN_ID_MAX, SHARED_VLAN_ID_MIN, SHARED_VLAN_VNI_OFFSET
+
 MLAG_KIND = "ManagedMLAG"
 
 
@@ -31,3 +33,15 @@ def mlag_peer_devices(names: Iterable[str]) -> str:
     use a many relationship. The generator writes it and ``checks/mlag_domains.py`` compares against it.
     """
     return ",".join(sorted(names))
+
+
+def shared_vlan_id(vni: int | None) -> int | None:
+    """The VLAN id a SHARED segment (vlan_scope shared) has on every switch, derived from its VNI.
+
+    VLAN = VNI - SHARED_VLAN_VNI_OFFSET, and only when that falls in the shared band; None for a VNI outside it (or
+    no VNI), which the generator and the check report. One rule for both, so they cannot drift.
+    """
+    if vni is None:
+        return None
+    vlan_id = vni - SHARED_VLAN_VNI_OFFSET
+    return vlan_id if SHARED_VLAN_ID_MIN <= vlan_id <= SHARED_VLAN_ID_MAX else None
