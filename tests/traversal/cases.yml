@@ -22,7 +22,7 @@ cases:
       - server: ktw1-srv-01
         bond: bond0
         leaves: [ktw1-leaf-01, ktw1-leaf-02]
-        leaves_to_edge: [ktw1-leaf-01]
+        leaves_to_edge: []
         border_leaves: [ktw1-bl-01, ktw1-bl-02]
         edge: ktw1-edge-01
         segment: c900-web-p

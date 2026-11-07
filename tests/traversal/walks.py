@@ -216,8 +216,8 @@ def pod_path_rows(
 
 
 def overlay_rows(d: dict, cfg: dict) -> list[Row]:
-    """The overlay sessions (attribute read): the leaves of `leaves_to_edge` have one to the edge, every other leaf
-    only upwards (DC-KTW1 keeps the direct session of its first leaf, a newer pod has none)."""
+    """The overlay sessions (attribute read): the leaves of `leaves_to_edge` (none in this sample: a leaf never talks
+    straight to the edge) have one to the edge, every other leaf only upwards, to its spine."""
     proc_dev = {p["id"]: next(iter(rel(p, "capabilities")), {}).get("display_label") for p in d["bgp"]}
     neighbours: dict[str, set[str]] = {leaf: set() for leaf in cfg["leaves"]}
     for pe in d["peering"]:
