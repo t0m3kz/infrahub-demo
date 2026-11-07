@@ -77,7 +77,6 @@ spec:
       account: "net-hub-azure-prod"
       region: "westeurope"
 ---
----
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
