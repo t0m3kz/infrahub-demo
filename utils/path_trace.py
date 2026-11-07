@@ -53,13 +53,12 @@ OPT_IN_KINDS = ("CloudVPNConnection",)
 # An end of this kind is reached only through these kinds (crossed only when that kind is an end, so a segment's rows
 # or a cloud segment never become a shortcut between two other nodes).
 END_KINDS: dict[tuple[str, str], tuple[str, ...]] = {
-    ("l3", "ManagedVxlanSegment"): ("ManagedSegmentDeployment", "ManagedSegmentVlan"),
+    # A segment reaches its switches in L3 through the ports that carry it (the `segments` edge of a port or LAG), never
+    # through its realization: a row and its deployment join two switches of one segment (a leaf and a border leaf of a
+    # stretched one) in a single hop and skip the BGP peerings between them. A segment with rows but no port is reached
+    # by nothing in L3.
     ("l1", "CloudInstance"): ("CloudNetworkSegment",),
     ("l3", "CloudInstance"): ("CloudNetworkSegment",),
-    # A VM is in the segment of its application component (AppComponent.network_segment, from which the generators
-    # derive the host port's segment and the VM's address), so it routes through that segment like a segment end.
-    ("l3", "DcimVirtualDevice"): ("AppComponent", "ManagedVxlanSegment", "ManagedSegmentDeployment",
-                                  "ManagedSegmentVlan"),
 }  # fmt: skip
 # Where a bare name is looked up (by `name`).
 NAME_KINDS = ("DcimPhysicalDevice", "DcimVirtualDevice", "CloudDirectConnect", "CloudVPNConnection",
@@ -67,6 +66,7 @@ NAME_KINDS = ("DcimPhysicalDevice", "DcimVirtualDevice", "CloudDirectConnect", "
               "CloudGatewayAttachment", "CloudInstance", "CloudServiceEndpoint", "TopologySaasRegion",
               "TopologyCarrierCircuit", "TopologySessionCircuit", "ManagedBGP", "ManagedBGPPeering")  # fmt: skip
 NODE = "edges { node { id hfid display_label __typename } }"
+VM_KIND = "DcimVirtualDevice"
 
 
 class ResolveError(ValueError):
@@ -165,15 +165,39 @@ def layer_kinds(layer: str, *ends: str, include: tuple[str, ...] = ()) -> list[A
     return [*LAYERS[layer], *CLOUD, *opt_in, *(k for end in ends for k in END_KINDS.get((layer, end), ()))]
 
 
-async def trace_leg(
-    client: InfrahubClient,
-    src: PathNode,
-    dst: PathNode,
-    layer: str,
-    max_paths: int = MAX_PATHS,
-    branch: str | None = None,
-    include: tuple[str, ...] = (),
-) -> Leg:
+def _node(raw: dict[str, Any]) -> PathNode:
+    return PathNode(
+        id=raw["id"], kind=raw["__typename"], label=raw["__typename"], display_label=raw["display_label"],
+        hfid=raw["hfid"] or [],
+    )  # fmt: skip
+
+
+async def _vm_anchors(
+    client: InfrahubClient, vm: PathNode, branch: str | None
+) -> list[tuple[list[PathNode], PathNode]]:
+    """The segments a VM is in, as (the nodes before the segment, the segment): VM -> AppComponent -> segment.
+
+    L3 starts from the segment of the VM's component, not from the VM: if the search could cross any segment node, two
+    segments carried on the ports of one switch would join them in a hop that is no route.
+    """
+    data = await client.execute_graphql(
+        query="{ c: AppComponent(instances__ids: [" + json.dumps(vm.id) + "]) { edges { node { id hfid display_label "
+        "__typename network_segment { node { id hfid display_label __typename } } } } } }",
+        branch_name=branch,
+    )
+    anchors = []
+    for edge in data["c"]["edges"]:
+        component = edge["node"]
+        segment = (component.get("network_segment") or {}).get("node")
+        if segment:
+            anchors.append(([vm, _node(component)], _node(segment)))
+    return anchors
+
+
+async def _search(
+    client: InfrahubClient, src: PathNode, dst: PathNode, layer: str, max_paths: int, branch: str | None,
+    include: tuple[str, ...],
+) -> Leg:  # fmt: skip
     """One server traversal; when it finds nothing because the budget ran out, the same search from the other end."""
     leg = Leg(layer, src, dst)
     for a, b in ((src, dst), (dst, src)):
@@ -186,6 +210,36 @@ async def trace_leg(
         leg.truncated_at, leg.capped, leg.reversed = result.truncated_at_depth, len(paths) >= max_paths, a is dst
         if leg.paths or result.truncated_at_depth is None:
             break
+    return leg
+
+
+async def trace_leg(
+    client: InfrahubClient,
+    src: PathNode,
+    dst: PathNode,
+    layer: str,
+    max_paths: int = MAX_PATHS,
+    branch: str | None = None,
+    include: tuple[str, ...] = (),
+) -> Leg:
+    """One traversal. In L3 a VM end is replaced by the segment of its component (_vm_anchors) and the chain is
+    completed with VM -> AppComponent in front and AppComponent -> VM behind; the shortest of all pairs is kept."""
+    if layer != "l3" or VM_KIND not in (src.kind, dst.kind):
+        return await _search(client, src, dst, layer, max_paths, branch, include)
+    starts = await _vm_anchors(client, src, branch) if src.kind == VM_KIND else [([], src)]
+    ends = await _vm_anchors(client, dst, branch) if dst.kind == VM_KIND else [([], dst)]
+    leg = Leg(layer, src, dst)
+    found: list[list[PathNode]] = []
+    for before, first in starts:
+        for after, last in ends:
+            if first.id == last.id:
+                found.append([*before, first, *reversed(after)])
+                continue
+            sub = await _search(client, first, last, layer, max_paths, branch, include)
+            leg.truncated_at = sub.truncated_at if leg.truncated_at is None else leg.truncated_at
+            leg.capped = leg.capped or sub.capped
+            found += [[*before, *p, *reversed(after)] for p in sub.paths]
+    leg.paths = sorted(found, key=len)
     return leg
 
 
