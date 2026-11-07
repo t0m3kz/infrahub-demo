@@ -4,6 +4,7 @@ Split out of ``transforms.helpers.firewall`` (the context leg lookup ``_context_
 exchange transits); the context list is built in ``transforms.helpers.firewall_contexts``.
 """
 
+from ipaddress import IPv4Network, collapse_addresses
 from typing import Any
 
 from transforms.helpers.firewall import _context_leg_ip
@@ -99,9 +100,25 @@ def _needs_firewall(
     return peer_nexthop == own_nexthop
 
 
+def _inspected_prefixes(namespace_prefixes: list[str], via_firewall: set[str]) -> list[str]:
+    """The modeled destinations of a segment in a DC with an Internet edge that go through its firewall context.
+
+    Every prefix registered in the segment's namespace (the tenant segments, the offices, the cloud blocks, the tunnel
+    ranges), merged into the fewest covering networks, plus the prefixes a rule forces through the firewall. A
+    bypassed prefix is matched before this list. What is in none of them (the Internet) follows normal routing, whose
+    default route is the Internet edge context's.
+    """
+    networks = [
+        IPv4Network(prefix, strict=False) for prefix in {*namespace_prefixes, *via_firewall} if ":" not in prefix
+    ]
+    return [str(network) for network in collapse_addresses(networks)]
+
+
 def get_customer_pbr_rules(
     activations: list[dict[str, Any]] | None,
     firewall_contexts: list[dict[str, Any]] | None,
+    edge_contexts: list[dict[str, Any]] | None = None,
+    namespace_prefixes: dict[str, list[str]] | None = None,
 ) -> list[dict[str, Any]]:
     """Build PBR rules that redirect all traffic to the firewall by default.
 
@@ -157,6 +174,10 @@ def get_customer_pbr_rules(
 
     if not any(_has_firewall_leg(ctx) for ctx in firewall_contexts or []):
         return []
+
+    # A DC with an Internet edge (``edge_contexts``, the contexts its hosting names) sends no Internet traffic through
+    # the customer context: a segment whose namespace has an edge leg redirects only its inspected destinations
+    # (``fw_redirect_prefixes``) and leaves the rest to normal routing (the edge's default route).
 
     # Nexthop maps per VRF namespace: a segment is redirected to the VIP of the
     # context's leg in the segment's own namespace.
@@ -239,8 +260,18 @@ def get_customer_pbr_rules(
         # traffic to it through the firewall, the same on both leaves.
         bypass_prefixes = bypass - via_firewall
 
+        edge_hosted = any(_context_leg_ip(edge, own_namespace) for edge in edge_contexts or [])
         rules.append(
             {
+                **(
+                    {
+                        "fw_redirect_prefixes": _inspected_prefixes(
+                            (namespace_prefixes or {}).get(str(own_namespace), []), via_firewall
+                        )
+                    }
+                    if edge_hosted
+                    else {}
+                ),
                 "vlan_id": vlan_id,
                 "segment_name": seg.get("customer_name") or seg.get("name") or f"VLAN_{vlan_id}",
                 "bypass_prefixes": sorted(bypass_prefixes),

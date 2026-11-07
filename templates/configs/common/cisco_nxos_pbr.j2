@@ -1,0 +1,31 @@
+{%- if leaf_pbr_rules %}
+!
+! Leaf PBR — permitted firewall bypass first (the LB is SNAT automap, so no return-path PBR: the firewall PBR is the only one),
+! otherwise redirect to the firewall when a context is present.
+! TODO(lab): TCAM carving for PBR (ing-sup / ifacl region) is platform-dependent
+!
+{%- for rule in leaf_pbr_rules %}
+! Customer: {{ rule.customer_name or 'any' }}/{{ rule.environment or 'any' }}
+{%- if rule.fw_nexthop %}
+{%- if rule.bypass_prefixes %}
+ip access-list PBR-BYPASS-VLAN{{ rule.vlan_id }}
+{%- for prefix in rule.bypass_prefixes %}
+  permit ip any {{ prefix }}
+{%- endfor %}
+!
+! documented: deny sequence = forward by normal route lookup (NX-OS PBR); documented-not-lab-verified for VXLAN-routed traffic
+route-map RM-LEAF-PBR-VLAN{{ rule.vlan_id }} deny 20
+  match ip address PBR-BYPASS-VLAN{{ rule.vlan_id }}
+!
+{%- endif %}
+! documented-not-lab-verified: the next hop is the VIP of the local transit leg (connected anycast SVI, resolved over the L2VNI);
+! PBR falls back to normal routing when it is unresolved (fail-open), tracking over VXLAN needs lab validation
+route-map RM-LEAF-PBR-VLAN{{ rule.vlan_id }} permit 30
+  set ip next-hop {{ rule.fw_nexthop }}
+!
+{%- endif %}
+interface Vlan{{ rule.vlan_id }}
+  ip policy route-map RM-LEAF-PBR-VLAN{{ rule.vlan_id }}
+!
+{%- endfor %}
+{%- endif -%}
