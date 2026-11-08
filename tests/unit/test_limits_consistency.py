@@ -345,7 +345,9 @@ class TestUnderlayMtu:
             lines = golden.read_text().splitlines()
             for index, line in enumerate(lines):
                 if line.startswith("  description L3VNI transit SVI for VRF"):
-                    window = lines[index : index + 4]
+                    # the whole interface block: its lines are indented (a PBR policy line may sit before the mtu)
+                    end = next((i for i in range(index, len(lines)) if not lines[i].startswith("  ")), len(lines))
+                    window = lines[index:end]
                     assert f"  mtu {limits.UNDERLAY_MTU}" in window, (
                         f"{golden.relative_to(root_dir)}: the L3 VNI SVI does not render mtu {limits.UNDERLAY_MTU} "
                         "(utils/limits.py UNDERLAY_MTU, templates/configs/common/cisco_nxos_l3vni_svi.j2)"
