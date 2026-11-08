@@ -34,6 +34,7 @@ class _Writer(PbrMixin):
         self.removed: list[tuple[str, list[str]]] = []
         self.policies = policies or []
         self.locks: list[str] = []
+        self.footprint_names = {"fp-a": "C005-P-DC10", "fp-b": "C006-P-DC11"}
         owner = self
 
         @contextlib.asynccontextmanager
@@ -53,6 +54,8 @@ class _Writer(PbrMixin):
             return node
 
         async def filters(kind: Any, **kw: Any) -> list[Any]:
+            if kind.__name__ == "TopologyCustomer":
+                return [SimpleNamespace(id=i, name=SimpleNamespace(value=owner.footprint_names[i])) for i in kw["ids"]]
             if kind.__name__ == "DcimVirtualInterface":
                 return [SimpleNamespace(id=i, name=SimpleNamespace(value=n)) for i, n in svis]
             return [
@@ -174,3 +177,18 @@ async def test_a_policy_created_in_this_pass_is_attached_without_reading_it_back
     writer.client.get = get
     await writer.sync_pbr(_facts())
     assert writer.added == [("new-pbr-fp-a", ["svi-1"])] and reads == []
+
+
+async def test_a_policy_created_by_a_border_leaf_is_named_after_its_footprint() -> None:
+    """The border leaf has no row of the footprint: the name comes from the footprint, not from its id."""
+    from tests.unit.test_pbr_facts import _firewall_context
+    from tests.unit.vrf_instances_helpers import raw_interface
+
+    port = raw_interface(
+        "p1", "Ethernet1/25", "firewall", None, [_firewall_context(None, ["fp-a"])], "DcimPhysicalInterface"
+    )
+    l3vni = raw_svi("l3-1", 3900, None, name="Vlan3900")
+    l3vni["role"] = {"value": "l3vni"}
+    writer = _Writer([("l3-1", "Vlan3900")])
+    await writer.sync_pbr(facts_of(raw_device("d1", "bl-1", role="border-leaf", interfaces=[port, l3vni])))
+    assert [d["name"] for d in writer.created] == ["pbr-c005-p-dc10"]

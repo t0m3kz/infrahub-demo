@@ -9,11 +9,12 @@ context lock), and only additively or for this device's own SVIs.
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from typing import Any
 
 from utils.vrf_demand import L3VNI_ROLE, SVI_ROLE, DeviceVrfFacts
 
-from ..protocols import DcimVirtualInterface, RoutingPolicy
+from ..protocols import DcimVirtualInterface, RoutingPolicy, TopologyCustomer
 from .pbr_attach import GENERATED, PBR_KIND, PbrPolicyFact, plan_pbr_attachments, policy_name
 
 
@@ -50,7 +51,7 @@ class PbrMixin:
         plan = plan_pbr_attachments(desired, await self._policy_facts(facts, wanted_footprints, owned), owned)
         if not plan:
             return
-        names = await self._footprint_names(facts, wanted_footprints)
+        names = await self._footprint_names(facts, plan.create)
         # The node a create returns is used as it is: a read by name right after the write can miss it on the other
         # replica (NodeNotFoundError), so only the policies that existed before are read, by their footprint.
         created: dict[str, Any] = {}
@@ -117,9 +118,18 @@ class PbrMixin:
             )
         return list(facts_out.values())
 
-    async def _footprint_names(self, facts: DeviceVrfFacts, footprints: list[str]) -> dict[str, str]:
-        """Footprint id -> name, from the rows' footprints of the device."""
-        return {fp.id: fp.name for row in facts.routed_rows for fp in row.footprints if fp.id in footprints and fp.name}
+    async def _footprint_names(self, facts: DeviceVrfFacts, footprints: Iterable[str]) -> dict[str, str]:
+        """Footprint id -> name, for the footprints a policy is created for: from the rows' footprints of the device, and
+        for the ones it has no row of (a border leaf serves a footprint through its context, not through a segment) one
+        read of the footprints, so a policy is named after its footprint whichever device creates it first."""
+        wanted = set(footprints)
+        names = {fp.id: fp.name for row in facts.routed_rows for fp in row.footprints if fp.id in wanted and fp.name}
+        missing = sorted(wanted - names.keys())
+        if missing:
+            names.update(
+                {node.id: node.name.value for node in await self.client.filters(kind=TopologyCustomer, ids=missing)}
+            )
+        return names
 
     async def _ensure_policy(self, footprint: str, footprint_name: str) -> Any:
         """The generated pbr policy of the footprint, created when it is missing; the caller holds its lock."""
