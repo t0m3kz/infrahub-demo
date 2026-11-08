@@ -29,6 +29,7 @@ from functools import cached_property
 from typing import Any
 
 from utils.exchange_transit import INTERNET_TYPE, service_context_caps, transit_leg_namespace
+from utils.fabric_roles import BORDER_ROLES
 from utils.limits import DEFAULT_NAMESPACE, GROUP_PROVIDER_STUBS
 from utils.segment_addressing import hosting_deployment, routed_segment_namespace
 
@@ -258,7 +259,13 @@ class DeviceVrfFacts:
         An SVI is steered for the footprint of its segment that stands in the device's hosting deployment (its DC or
         metro) and has a firewall context; none, or no such footprint, means no steering. The lowest id decides when a
         segment has two footprints there (the same every run). Keyed by name because an SVI the run has just created
-        has no id in these facts."""
+        has no id in these facts.
+
+        A border leaf or border spine steers nothing: its templates render no PBR (and its transform refuses a PBR rule,
+        transforms/common.py), so a policy on its SVI would say the segment is steered while the config does not. The
+        segment SVI of a border leaf is steered once those templates render it."""
+        if self.inputs.role in BORDER_ROLES:
+            return dict.fromkeys(self.desired_svis())
         return {
             name: next(
                 iter(sorted(fp.id for fp in row.footprints if fp.has_context and fp.parent_id == self.hosting_id)), None

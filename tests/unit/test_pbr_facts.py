@@ -61,3 +61,20 @@ def test_rule_s4_accepts_a_pbr_policy_but_not_another_capability() -> None:
     other = {"__typename": "ManagedBGPPeering", "id": "x"}
     with_other = _device(rows, [raw_svi("svi-1", 100, "r1", capabilities=[_policy(), other])])
     assert "a capability other than a pbr policy" in svi_content_errors(with_other)[0]
+
+
+def test_a_border_leaf_steers_nothing_until_its_templates_render_pbr() -> None:
+    """The SVI of a stretched segment on a border leaf has a footprint with a context, but the border templates render
+    no PBR: it is not steered, so no policy claims a steering the config does not have."""
+    rows = [raw_row("r1", 100, "PROD", footprints=[raw_footprint("fp-a")])]
+    leaf = facts_of(raw_device("d1", "leaf-1", rows=rows, interfaces=[raw_svi("svi-1", 100, "r1")]))
+    border = facts_of(raw_device("d1", "bl-1", role="border-leaf", rows=rows, interfaces=[raw_svi("svi-1", 100, "r1")]))
+    assert leaf.pbr_footprints_by_name() == {"Vlan100": "fp-a"}
+    assert border.pbr_footprints_by_name() == {"Vlan100": None}
+
+
+def test_a_terminated_segment_is_no_svi_and_so_not_steered() -> None:
+    """A segment terminated on a firewall stays L2 on the fabric: no routed row, no SVI, no steering."""
+    rows = [raw_row("r1", 100, "PROD", terminated=True, footprints=[raw_footprint("fp-a")])]
+    facts = facts_of(raw_device("d1", "leaf-1", rows=rows))
+    assert facts.pbr_footprints_by_name() == {}
