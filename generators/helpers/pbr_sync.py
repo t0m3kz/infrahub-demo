@@ -51,14 +51,29 @@ class PbrMixin:
         if not plan:
             return
         names = await self._footprint_names(facts, wanted_footprints)
+        # The node a create returns is used as it is: a read by name right after the write can miss it on the other
+        # replica (NodeNotFoundError), so only the policies that existed before are read, by their footprint.
+        created: dict[str, Any] = {}
         for footprint in plan.create:
             async with self.resource_lock(pbr_lock_key(footprint)):
-                await self._ensure_policy(footprint, names.get(footprint) or footprint)
-        for footprint, ids in plan.add.items():
-            async with self.resource_lock(pbr_lock_key(footprint)):
-                policy = await self.client.get(
-                    kind=RoutingPolicy, name__value=policy_name(names.get(footprint) or footprint)
+                created[footprint] = await self._ensure_policy(footprint, names.get(footprint) or footprint)
+        older = [footprint for footprint in plan.add if footprint not in created]
+        existing = (
+            {
+                node.customer_deployment.id: node
+                for node in await self.client.filters(
+                    kind=RoutingPolicy,
+                    customer_deployment__ids=older,
+                    kind__value=PBR_KIND,
+                    origin__value=GENERATED,
                 )
+            }
+            if older
+            else {}
+        )
+        for footprint, ids in plan.add.items():
+            policy = created.get(footprint) or existing[footprint]
+            async with self.resource_lock(pbr_lock_key(footprint)):
                 await policy.add_relationships(relation_to_update="capabilities", related_nodes=list(ids))
         for policy_id, ids in plan.remove.items():
             policy = await self.client.get(kind=RoutingPolicy, id=policy_id)

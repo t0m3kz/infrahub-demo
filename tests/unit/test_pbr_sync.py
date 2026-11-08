@@ -43,10 +43,23 @@ class _Writer(PbrMixin):
 
         self.resource_lock = lock
 
+        def recorded(node: Any) -> Any:
+            node.add_relationships = AsyncMock(
+                side_effect=lambda **a: owner.added.append((node.id, a["related_nodes"]))
+            )
+            node.remove_relationships = AsyncMock(
+                side_effect=lambda **a: owner.removed.append((node.id, a["related_nodes"]))
+            )
+            return node
+
         async def filters(kind: Any, **kw: Any) -> list[Any]:
             if kind.__name__ == "DcimVirtualInterface":
                 return [SimpleNamespace(id=i, name=SimpleNamespace(value=n)) for i, n in svis]
-            return [p for p in owner.policies if p.customer_deployment.id in kw.get("customer_deployment__ids", [])]
+            return [
+                recorded(p)
+                for p in owner.policies
+                if p.customer_deployment.id in kw.get("customer_deployment__ids", [])
+            ]
 
         async def get(kind: Any, **kw: Any) -> _Node:
             found = next(
@@ -63,7 +76,7 @@ class _Writer(PbrMixin):
 
         async def create(kind: Any, data: dict[str, Any]) -> Any:
             owner.created.append(data)
-            return SimpleNamespace(save=AsyncMock())
+            return recorded(SimpleNamespace(id=f"new-{data['name']}", save=AsyncMock()))
 
         self.client.filters, self.client.get, self.client.create = filters, get, create
 
@@ -92,7 +105,7 @@ async def test_the_first_svi_creates_the_policy_and_is_attached_under_the_footpr
     assert writer.created == [
         {"name": "pbr-fp-a", "kind": "pbr", "origin": "generated", "customer_deployment": {"id": "fp-a"}}
     ]
-    assert writer.added == [("new", ["svi-1"])] and writer.locks == ["pbr-fp-a", "pbr-fp-a"]
+    assert writer.added == [("new-pbr-fp-a", ["svi-1"])] and writer.locks == ["pbr-fp-a", "pbr-fp-a"]
 
 
 async def test_an_existing_svi_is_attached_to_an_existing_policy() -> None:
@@ -146,3 +159,18 @@ async def test_a_border_leaf_attaches_every_served_footprint_to_its_l3_vni_svi()
     await writer.sync_pbr(facts)
     assert sorted(d["customer_deployment"]["id"] for d in writer.created) == ["fp-a", "fp-b"]
     assert sorted(ids for _, ids in writer.added) == [["l3-1"], ["l3-1"]]
+
+
+async def test_a_policy_created_in_this_pass_is_attached_without_reading_it_back_by_name() -> None:
+    """A read by name right after the create can miss the node on the other replica: the created node is used."""
+    writer = _Writer([("svi-1", "Vlan100")])
+    reads: list[str] = []
+    original = writer.client.get
+
+    async def get(kind: Any, **kw: Any) -> Any:
+        reads.append(str(kw))
+        return await original(kind=kind, **kw)
+
+    writer.client.get = get
+    await writer.sync_pbr(_facts())
+    assert writer.added == [("new-pbr-fp-a", ["svi-1"])] and reads == []
