@@ -51,6 +51,13 @@ CLOUD = ("CloudDirectConnect", "CloudPeeringInterface", "CloudGateway", "CloudGa
 # links lead on to the private transports, so in every trace it would be a shortcut from the internet to a Direct
 # Connect port through the cloud's inside, a route nobody can use.
 OPT_IN_KINDS = ("CloudVPNConnection",)
+# Crossed in layer 3 only when asked for (`--with firewall`): the steering of a segment to its firewall. An SVI carries a
+# pbr policy (a capability), the policy names the customer footprint, and the footprint its serving firewall context,
+# whose tagged border ports and legs lead on. Opt-in because these nodes join every SVI of a footprint to the others'
+# through one object: in a plain trace they would be a shortcut between two leaves that no packet takes.
+FIREWALL_KINDS = ("RoutingPolicy", "TopologyCustomerDC", "TopologyCustomerColocation", "ManagedFirewallContext",
+                  "ManagedLoadbalancerContext")  # fmt: skip
+INCLUDE_CHOICES = ("CloudVPNConnection", "firewall")
 # An end of this kind is reached only through these kinds (crossed only when that kind is an end, so a segment's rows
 # or a cloud segment never become a shortcut between two other nodes).
 END_KINDS: dict[tuple[str, str], tuple[str, ...]] = {
@@ -162,7 +169,9 @@ async def resolve(client: InfrahubClient, spec: str, branch: str | None = None) 
 def layer_kinds(layer: str, *ends: str, include: tuple[str, ...] = ()) -> list[Any]:
     """The kind_filter of a layer for these two end kinds."""
     # the VPN is a routed transport: layer 3 always crosses it, layer 1 only on request
-    opt_in = OPT_IN_KINDS if layer != "l1" else include
+    opt_in = OPT_IN_KINDS if layer != "l1" else tuple(k for k in include if k != "firewall")
+    if layer == "l3" and "firewall" in include:
+        opt_in = (*opt_in, *FIREWALL_KINDS)
     return [*LAYERS[layer], *CLOUD, *opt_in, *(k for end in ends for k in END_KINDS.get((layer, end), ()))]
 
 
@@ -301,8 +310,9 @@ async def main() -> int:
     ap.add_argument("--max-paths", type=int, default=MAX_PATHS, help="paths the server returns per leg (1..100)")
     ap.add_argument("--via", help="a node the path must cross: two legs, src -> via and via -> dst")
     ap.add_argument(
-        "--with", dest="include", action="append", default=[], choices=OPT_IN_KINDS,
-        help="a kind a path may cross that is not crossed by default (the VPN: the way in over the internet)",
+        "--with", dest="include", action="append", default=[], choices=INCLUDE_CHOICES,
+        help="a kind a path may cross that is not crossed by default (the VPN: the way in over the internet in L1; "
+        "firewall: the pbr policy, footprint and firewall context of a steered segment in L3)",
     )  # fmt: skip
     ap.add_argument("--branch", default="main")
     a = ap.parse_args()
