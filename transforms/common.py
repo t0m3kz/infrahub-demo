@@ -16,7 +16,7 @@ from transforms.helpers.firewall import (
     get_leaf_firewall_transits,
 )
 from transforms.helpers.firewall_contexts import _flatten_deployment_firewall_contexts
-from transforms.helpers.firewall_pbr import get_customer_pbr_rules
+from transforms.helpers.firewall_pbr import get_customer_pbr_rules, pbr_steered_vlans
 from transforms.helpers.group_policy import GPO_CONFIG_KEYS, group_policy_device_view
 from transforms.helpers.lisp import build_lisp_inputs, get_lisp_config
 from transforms.helpers.mlag import get_mlag, get_sonic_mlag_config
@@ -580,7 +580,9 @@ class BaseDeviceTransform(InfrahubTransform):
         next hop has none); every other role gets no leaf transits.
         """
         firewall_contexts = _flatten_deployment_firewall_contexts(data.get("deployment"))
-        rules = get_customer_pbr_rules(routed, firewall_contexts)
+        rules = get_customer_pbr_rules(
+            routed, firewall_contexts, steered_vlans=pbr_steered_vlans(data.get("interfaces"))
+        )
         if self.device_role not in self._LEAF_ROLES:
             return rules, []
         return rules, get_leaf_firewall_transits(rules, firewall_contexts, device_name=data.get("name", ""))

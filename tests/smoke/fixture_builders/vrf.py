@@ -73,7 +73,20 @@ def _svi_node(vlan_id: int, namespace_name: str | None) -> dict[str, Any]:
         "vrf": {"node": {"namespace": {"node": {"name": _value(namespace_name)}}}}
         if namespace_name
         else {"node": None},
-        "capabilities": {"edges": []},
+        # The pbr policy the VRF pass of the device attaches to every steered SVI (generators/helpers/pbr_sync.py): the
+        # fixture steers all of them, the transform still applies its own conditions (policies, a context with a leg).
+        "capabilities": {
+            "edges": [
+                {
+                    "node": {
+                        "__typename": "RoutingPolicy",
+                        "kind": _value("pbr"),
+                        "origin": _value("generated"),
+                        "customer_deployment": {"node": {"id": "fixture-footprint"}},
+                    }
+                }
+            ]
+        },
     }
 
 

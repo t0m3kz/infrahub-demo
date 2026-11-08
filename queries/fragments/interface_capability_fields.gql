@@ -49,6 +49,8 @@ fragment InterfaceCapabilitiesFields on DcimInterface {
       node {
         __typename
         ...OspfInterfaceCapabilityFields
+        # The pbr policy applied on an SVI: the SVI is steered to the firewall of its footprint.
+        ... on RoutingPolicy { kind { value } origin { value } customer_deployment { node { id } } }
       }
     }
   }

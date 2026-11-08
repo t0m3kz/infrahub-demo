@@ -12,6 +12,7 @@ from transforms.helpers.policy import rule_selector, segment_flows
 from utils.exchange_transit import MANAGEMENT_TYPE, exchange_peer_zones
 from utils.fabric_roles import INTERNAL_FIREWALL_ROLE
 from utils.segment_addressing import is_terminated, segment_namespace, segment_prefix
+from utils.vrf_demand import SVI_ROLE, svi_vlan_id
 
 
 def _segment_deployment_ids(segment: dict[str, Any]) -> list[str]:
@@ -114,11 +115,30 @@ def _inspected_prefixes(namespace_prefixes: list[str], via_firewall: set[str]) -
     return [str(network) for network in collapse_addresses(networks)]
 
 
+def pbr_steered_vlans(interfaces: list[dict[str, Any]] | None) -> set[int]:
+    """The VLANs of the device's SVIs that carry a pbr policy: only these are steered to the firewall.
+
+    The policy is attached by the VRF pass of the device (generators/helpers/pbr_sync.py); an SVI without one is
+    routed normally even when its segment has policies."""
+    steered: set[int] = set()
+    for iface in interfaces or []:
+        vlan_id = svi_vlan_id(iface.get("name"))
+        if iface.get("role") != SVI_ROLE or vlan_id is None:
+            continue
+        if any(
+            cap.get("typename") == "RoutingPolicy" and cap.get("kind") == "pbr"
+            for cap in iface.get("capabilities") or []
+        ):
+            steered.add(vlan_id)
+    return steered
+
+
 def get_customer_pbr_rules(
     activations: list[dict[str, Any]] | None,
     firewall_contexts: list[dict[str, Any]] | None,
     edge_contexts: list[dict[str, Any]] | None = None,
     namespace_prefixes: dict[str, list[str]] | None = None,
+    steered_vlans: set[int] | None = None,
 ) -> list[dict[str, Any]]:
     """Build PBR rules that redirect all traffic to the firewall by default.
 
@@ -199,6 +219,8 @@ def get_customer_pbr_rules(
     for act in activations:
         vlan_id = act.get("vlan_id")
         if not vlan_id or vlan_id in seen_vlans:
+            continue
+        if steered_vlans is not None and vlan_id not in steered_vlans:
             continue
         seg = act.get("segment") or {}
         if "security_policy" not in seg:
