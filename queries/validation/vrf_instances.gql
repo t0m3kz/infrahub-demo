@@ -94,7 +94,7 @@ query vrf_instances($device_ids: [ID], $with_instances: Boolean = true) {
                         # The footprints the context serves: their pbr policy is applied on the L3 VNI SVI of the
                         # tenant VRF of the legs (PBR of the traffic that enters the VRF from the overlay).
                         tenant { node { id } }
-                        served_deployments { edges { node { id name { value } } } }
+                        served_deployments { edges { node { id } } }
                         capabilities { edges { node { ...VrfDemandLegFields } } }
                       }
                       ... on ManagedLoadbalancerContext {
