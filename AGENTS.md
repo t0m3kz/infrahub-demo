@@ -654,8 +654,7 @@ class MyCheck(InfrahubCheck):
   footprint in the device's DC has a context; a manual policy and a border role are never touched) and a leaf steers an
   SVI only when it carries the policy (`pbr_steered_vlans`). Two uses, one contract: PBR of the segment on the ingress of
   its SVI, and PBR 2 at the point where traffic enters the VRF after decapsulation, selecting the prefixes of the
-  footprint (the L3VNI SVI on NX-OS; never the underlay port, which sees only the outer header: lab
-  `.dev/lab/interdc`, `test_vxlan.sh`). Same rules on every platform: inspection, allowed bypass, symmetry (both
+  footprint (the L3VNI SVI on NX-OS; never the underlay port, which sees only the outer header). Same rules on every platform: inspection, allowed bypass, symmetry (both
   directions cross the same firewall) and no re-steering of what returns from the firewall; the attachment and the syntax
   may differ. Each vendor needs its own confirmation of both kinds, the full render of definition and attachment, the
   behaviour with the next hop unavailable, and a documentation or lab proof. A platform that does not meet the contract
