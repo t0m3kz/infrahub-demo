@@ -1,0 +1,10 @@
+---
+# The HA pair of the external firewalls; the context (04_contexts.yml) lives on it.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedFirewallHA
+  data:
+    - name: par-colo1-xfw-ha
+      group_id: 4
+      capabilities: ["par-colo1-xfw-01", "par-colo1-xfw-02"]

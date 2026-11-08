@@ -610,7 +610,7 @@ class TestOverMaxEntries:
         return [entry["template"]["id"] for entry in entries]
 
     def test_role_total_exactly_at_the_maximum_is_kept(self) -> None:
-        entries = [_entry("edge", 2, "t-edge"), _entry("firewall", 2, "t-fw", _EDGE_TEMPLATE)]
+        entries = [_entry("edge", 2, "t-edge"), _entry("internal-firewall", 2, "t-fw", _EDGE_TEMPLATE)]
         gen = self._zone_with(entries, colo_zone_design("EDGE_FW"))
 
         assert gen._valid_fabric_templates() == entries
@@ -620,7 +620,7 @@ class TestOverMaxEntries:
         """Edge, firewall and load-balancer totals do not share a budget."""
         entries = [
             _entry("edge", 2, "t-edge"),
-            _entry("firewall", 2, "t-fw", _EDGE_TEMPLATE),
+            _entry("internal-firewall", 2, "t-fw", _EDGE_TEMPLATE),
             _entry("load-balancer", 2, "t-lb", _EDGE_TEMPLATE),
         ]
         gen = self._zone_with(entries, colo_zone_design("EDGE_FW_LB"))
@@ -632,10 +632,10 @@ class TestOverMaxEntries:
         ("role", "design_name", "key", "maximum"),
         [
             ("edge", "EDGE", "max_edges", 2),
-            ("firewall", "EDGE_FW", "max_firewalls", 2),
+            ("internal-firewall", "EDGE_FW", "max_firewalls", 2),
             ("load-balancer", "EDGE_FW_LB", "max_load_balancers", 2),
             ("load-balancer", "EDGE_FW", "max_load_balancers", 0),
-            ("firewall", "EDGE", "max_firewalls", 0),
+            ("internal-firewall", "EDGE", "max_firewalls", 0),
         ],
     )
     def test_one_entry_past_the_maximum_is_skipped_with_a_warning_naming_the_limit(

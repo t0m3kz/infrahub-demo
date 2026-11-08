@@ -145,7 +145,7 @@ def _make_smoke_data(platform: str) -> dict[str, Any]:
                 {
                     "node": {
                         "name": {"value": f"fw-{platform}"},
-                        "role": {"value": "firewall"},
+                        "role": {"value": "internal-firewall"},
                         "platform": {
                             "node": {
                                 "name": {"value": platform},

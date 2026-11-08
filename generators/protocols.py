@@ -189,6 +189,16 @@ class ManagedGenericInterfaces(CoreNode):
     capabilities: RelationshipManager[DcimInterface]
 
 
+class RoutingPolicy(ManagedGenericInterfaces):
+    name: String
+    description: StringOptional
+    origin: Dropdown
+    kind: Dropdown
+    priority: Integer
+    default_action: Dropdown
+    customer_deployment: RelationshipAttribute[TopologyCustomer]
+
+
 class ManagedHA(CoreNode):
     group_id: IntegerOptional
     mode: Dropdown
@@ -752,6 +762,15 @@ class ManagedOSPF(ManagedGeneric, ManagedGenericDevice):
     version: Dropdown
     peerings: RelationshipManager[ManagedOSPFPeering]
     router_id: RelationshipAttribute[IpamIPAddress]
+
+
+class ManagedStaticRoute(ManagedGeneric, ManagedGenericDevice):
+    prefix: String
+    next_hop: String
+    distance: Integer
+    exported: Boolean
+    vrf: RelationshipAttribute[ManagedVRF]
+    next_hop_interface: RelationshipAttribute[DcimInterface]
 
 
 class RoutingOSPFArea(CoreNode):

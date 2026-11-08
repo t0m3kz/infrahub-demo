@@ -69,6 +69,7 @@ class _World:
                 id=_NAMESPACES[ns_type][1],
                 name=SimpleNamespace(value=_NAMESPACES[ns_type][0]),
                 namespace_type=SimpleNamespace(value=ns_type),
+                l3_vni=SimpleNamespace(value=3900),
             )
             for ns_type in namespaces
         }
@@ -109,6 +110,7 @@ class _World:
         self.uplinks: dict[str, Any] = {device_id: self.uplink(device_id) for device_id in self.bl_ports}
         self.contexts: dict[str, Any] = {}
         self.exchanges: dict[str, Any] = {}
+        self.group_adds: list[tuple[str, list[str]]] = []
         self.sub_interfaces: dict[tuple[str, str], Any] = {}
         self.addresses: dict[tuple[str, str], Any] = {}
         self.saves: list[tuple[str, str, dict[str, Any]]] = []
@@ -170,6 +172,8 @@ class _World:
         if name == "ManagedLoadbalancerHA":
             return [self.lb_cluster]
         if name in _CONTEXT_KINDS:
+            if "ids" in kwargs:
+                return [ctx for ctx in self.contexts.values() if ctx.id in kwargs["ids"] and ctx.kind == name]
             context = self.contexts.get(kwargs["name__value"])
             return [context] if context and context.kind == name else []
         if name == "DcimPhysicalInterface":
@@ -184,7 +188,14 @@ class _World:
             if "address__values" in kwargs:  # CablingMixin._find_addresses: one read for a prefix's addresses
                 wanted = {(address, ns) for address in kwargs["address__values"] for ns in kwargs["ip_namespace__ids"]}
                 return [ip for key, ip in self.addresses.items() if key in wanted]
-            return [ip for ip in self.addresses.values() if ip.id in kwargs["ids"]]
+            # the SDK hands out parsed values (IPv4Interface), not the strings the data carries
+            return [
+                SimpleNamespace(
+                    **{**vars(ip), "address": SimpleNamespace(value=ipaddress.ip_interface(ip.address.value))}
+                )
+                for ip in [*self.addresses.values(), *self.snat_allocations.values()]
+                if ip.id in kwargs["ids"]
+            ]
         raise AssertionError(f"unexpected filters({name})")
 
     async def get(self, *, kind: Any, **kwargs: Any) -> Any:
@@ -197,6 +208,8 @@ class _World:
             return SimpleNamespace(id=kwargs["name__value"])
         if name in _CONTEXT_KINDS:
             return next(ctx for ctx in self.contexts.values() if ctx.id == kwargs["id"])
+        if name == "CoreStandardGroup":
+            return SimpleNamespace(id="group-service-contexts")
         if name == "CoreIPAddressPool":
             if not self.snat_pool:
                 raise RuntimeError("pool not found")
@@ -296,16 +309,20 @@ class _World:
         raise AssertionError(f"unexpected create({name})")
 
     def _context(self, kind: str, name: str) -> Any:
-        return SimpleNamespace(
+        """A context as the SDK returns it: a firewall context has a SNAT address, a load balancer's a VIP prefix."""
+        context = SimpleNamespace(
             id=f"ctx-{len(self.contexts)}",
             kind=kind,
             name=SimpleNamespace(value=name),
             vlan_id=SimpleNamespace(value=None),
             tenant_id=None,
-            snat_address=SimpleNamespace(id=None),
-            vip_prefix=SimpleNamespace(id=None),
             add_relationships=None,
         )
+        if kind == "ManagedLoadbalancerContext":
+            context.vip_prefix = SimpleNamespace(id=None)
+        else:
+            context.snat_address = SimpleNamespace(id=None)
+        return context
 
     def _take_vlan(self, pool: str) -> int:
         vlan = self.vlan_pools[pool]
@@ -327,6 +344,9 @@ class _World:
         if kind in _CONTEXT_KINDS and backing is not None:
 
             async def add_relationships(*, relation_to_update: str, related_nodes: list[str]) -> None:
+                if relation_to_update == "member_of_groups":  # the context joins service_contexts
+                    world.group_adds.append((backing.id, list(related_nodes)))
+                    return
                 assert relation_to_update == "capabilities"
                 world.tags.append((backing.id, list(related_nodes)))
                 for port in world.bl_ports.values():

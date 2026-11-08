@@ -20,7 +20,7 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 from utils.limits import DEFAULT_NAMESPACE
-from utils.vrf_demand import SVI_ROLE, DeviceVrfFacts, RoutedRow
+from utils.vrf_demand import L3VNI_ROLE, SVI_ROLE, DeviceVrfFacts, RoutedRow
 
 from ..protocols import DcimVirtualInterface
 
@@ -80,6 +80,50 @@ def plan_svis(facts: DeviceVrfFacts, instance_ids: Mapping[str, str]) -> SviPlan
     return SviPlan(tuple(writes), tuple(sorted(recreate)), tuple(stale))
 
 
+@dataclass(frozen=True)
+class L3vniWrite:
+    """One L3 VNI SVI to write: ``existing_id`` is set for an in-place update (a VRF instance that moved)."""
+
+    name: str
+    vrf_id: str
+    existing_id: str | None = None
+
+
+@dataclass(frozen=True)
+class L3vniPlan:
+    """What to do to a device's L3 VNI SVIs: the writes, and the ids deleted after them."""
+
+    writes: tuple[L3vniWrite, ...] = ()
+    stale_ids: tuple[str, ...] = ()
+
+    def __bool__(self) -> bool:
+        return bool(self.writes or self.stale_ids)
+
+
+def plan_l3vni_svis(
+    facts: DeviceVrfFacts, namespaces: Mapping[str, Mapping[str, Any]], instance_ids: Mapping[str, str]
+) -> L3vniPlan:
+    """The writes that make the device's role-l3vni interfaces exactly the VRFs it terminates.
+
+    ``instance_ids`` maps a namespace name to the id of its instance in the device's hosting deployment. An SVI
+    that is on the right instance is left alone, one on another instance is moved, one for a VRF the device no longer
+    terminates is deleted."""
+    desired = facts.desired_l3vni_svis(namespaces)
+    existing = {svi.name: svi for svi in facts.l3vni_svis}
+    writes: list[L3vniWrite] = []
+    for name, namespace in desired.items():
+        vrf_id = instance_ids.get(namespace)
+        if vrf_id is None:
+            continue
+        current = existing.get(name)
+        if current is None:
+            writes.append(L3vniWrite(name, vrf_id))
+        elif current.vrf_id != vrf_id:
+            writes.append(L3vniWrite(name, vrf_id, existing_id=current.id))
+    stale = sorted(svi.id for name, svi in existing.items() if name not in desired)
+    return L3vniPlan(tuple(writes), tuple(stale))
+
+
 def taken_svi_names(facts: DeviceVrfFacts) -> dict[str, str | None]:
     """The desired SVI names an interface of another role already has (the MLAG control ``Vlan4094``, a hand-made
     ``VlanN``) -> that role. Creating the SVI by name would overwrite that interface."""
@@ -91,6 +135,38 @@ class SviMixin:
 
     client: Any
     logger: logging.Logger
+
+    async def sync_l3vni_svis(
+        self, facts: DeviceVrfFacts, namespaces: Mapping[str, Mapping[str, Any]], instance_ids: Mapping[str, str]
+    ) -> None:
+        """Create, move and delete the device's L3 VNI SVIs (nothing when they already match).
+
+        The caller holds the device's VRF lock and has created the instances. The SVI has no address and no row: it is
+        the realization of the VRF on the device (symmetric IRB), not of a segment. Written untracked, like the SVIs."""
+        plan = plan_l3vni_svis(facts, namespaces, instance_ids)
+        taken = {w.name for w in plan.writes if w.name in facts.other_interfaces}
+        for name in sorted(taken):
+            self.logger.warning(
+                f"  {facts.name}: cannot create L3 VNI SVI {name}: an interface of that name exists - skipped"
+            )
+        for write in plan.writes:
+            if write.name in taken:
+                continue
+            data: dict[str, Any] = {
+                "name": write.name,
+                "device": {"id": facts.id},
+                "role": L3VNI_ROLE,
+                "status": "active",
+                "vrf": {"id": write.vrf_id},
+            }
+            if write.existing_id:
+                data["id"] = write.existing_id
+            svi = await self.client.create(kind=DcimVirtualInterface, data=data)
+            await svi.save(allow_upsert=True, update_group_context=False)
+        for svi_id in plan.stale_ids:
+            await self.client.delete(kind=DcimVirtualInterface, id=svi_id)
+        if plan:
+            self.logger.info(f"  {facts.name}: L3 VNI SVIs written {len(plan.writes)}, deleted {len(plan.stale_ids)}")
 
     async def sync_svis(self, facts: DeviceVrfFacts, instance_ids: Mapping[str, str]) -> None:
         """Create, move and delete the device's SVIs (nothing when they already match).

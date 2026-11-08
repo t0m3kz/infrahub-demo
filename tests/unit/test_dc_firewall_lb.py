@@ -245,7 +245,7 @@ class TestCreateFirewallAndLoadBalancerDevices:
         the mixin only needs to set the right kind per role."""
         gen = _make_generator()
         gen.create_devices = AsyncMock(return_value=["fw-01", "fw-02"])
-        entries = [_entry("firewall", 2, _FW_TEMPLATE)]
+        entries = [_entry("internal-firewall", 2, _FW_TEMPLATE)]
 
         await self._create(gen, entries)
 
@@ -264,7 +264,11 @@ class TestCreateFirewallAndLoadBalancerDevices:
         assert create_kwargs["options"]["ha_kind"] == "ManagedLoadbalancerHA"
 
 
-_BL_ROLE_FOR = {"firewall": "firewall", "load-balancer": "load-balancer"}
+_BL_ROLE_FOR = {
+    "internal-firewall": "firewall",
+    "external-firewall": "firewall",
+    "load-balancer": "load-balancer",
+}
 
 
 class TestCableBorderServices:
@@ -368,7 +372,7 @@ class TestGenerateDcScopedFabricDevices:
         gen._cable_border_services = AsyncMock()
         gen.ensure_context_vlan_pool = AsyncMock()
         gen.data["fabric_templates"] = [
-            _entry("firewall", 1, _FW_TEMPLATE),
+            _entry("internal-firewall", 1, _FW_TEMPLATE),
             _entry("load-balancer", 1, _LB_TEMPLATE),
         ]
 
@@ -381,7 +385,11 @@ class TestGenerateDcScopedFabricDevices:
             {"name": "dc1", "spec": LOADBALANCER_CONTEXT},
         ]
         gen._cable_border_services.assert_awaited_once_with(
-            border_role_for={"firewall": "firewall", "load-balancer": "load-balancer"},
+            border_role_for={
+                "internal-firewall": "firewall",
+                "external-firewall": "firewall",
+                "load-balancer": "load-balancer",
+            },
             connectivity_mode=gen.data["connectivity_mode"],
             border_names=["bl-01"],
             firewall_names=["fw-01"],
@@ -451,3 +459,70 @@ class TestEnsureFirewallContextPools:
         await gen.ensure_context_vlan_pool(name="dc1", spec=FIREWALL_CONTEXT)
 
         assert calls == ["acquire:fw-context-pools-dc1", "release:lock-id"]
+
+
+class TestExternalFirewallPair:
+    """The DC's Internet edge pair: its own devices, its own cabling on the border leaves' free firewall ports."""
+
+    @pytest.mark.asyncio
+    async def test_only_the_external_entries_are_created_with_the_external_role(self) -> None:
+        gen = _make_generator()
+        gen.create_ha_role_devices = AsyncMock(return_value=[({}, ["xf-01", "xf-02"])])
+        external = _entry("external-firewall", 2, _FW_TEMPLATE)
+
+        names = await gen.create_external_firewall_devices(
+            fabric_templates=[_entry("internal-firewall", 2, _FW_TEMPLATE), external],
+            deployment_id="dc-1",
+            naming_convention="hierarchical",
+            indexes=[1],
+        )
+
+        assert names == ["xf-01", "xf-02"]
+        await_args = gen.create_ha_role_devices.await_args
+        assert await_args is not None
+        kwargs = await_args.kwargs
+        assert kwargs["role"] == "external-firewall" and kwargs["entries"] == [external]
+
+    @pytest.mark.asyncio
+    async def test_the_pair_is_cabled_after_the_internal_one_and_never_inline(self) -> None:
+        gen = _make_generator()
+        gen.data["connectivity_mode"] = "inline"
+        gen._create_border_leaf_devices = AsyncMock(return_value=["bl-01", "bl-02"])
+        gen.create_firewall_and_load_balancer_devices = AsyncMock(return_value=(["fw-01"], ["lb-01"]))
+        gen.create_external_firewall_devices = AsyncMock(return_value=["xf-01", "xf-02"])
+        gen._cable_border_services = AsyncMock()
+        gen.ensure_context_vlan_pool = AsyncMock()
+
+        await gen._generate_dc_scoped_fabric_devices()
+
+        internal, external = (call.kwargs for call in gen._cable_border_services.await_args_list)
+        assert internal["firewall_names"] == ["fw-01"] and internal["connectivity_mode"] == "inline"
+        assert external["firewall_names"] == ["xf-01", "xf-02"]
+        assert external["load_balancer_names"] == [] and external["connectivity_mode"] == "pbr"
+        assert external["border_names"] == ["bl-01", "bl-02"]
+
+    @pytest.mark.asyncio
+    async def test_the_pair_alone_gives_the_dc_its_firewall_context_pool(self) -> None:
+        gen = _make_generator()
+        gen._create_border_leaf_devices = AsyncMock(return_value=["bl-01"])
+        gen.create_firewall_and_load_balancer_devices = AsyncMock(return_value=([], []))
+        gen.create_external_firewall_devices = AsyncMock(return_value=["xf-01"])
+        gen._cable_border_services = AsyncMock()
+        gen.ensure_context_vlan_pool = AsyncMock()
+
+        await gen._generate_dc_scoped_fabric_devices()
+
+        assert [call.kwargs["spec"] for call in gen.ensure_context_vlan_pool.await_args_list] == [FIREWALL_CONTEXT]
+
+    @pytest.mark.asyncio
+    async def test_a_dc_without_the_pair_cables_once(self) -> None:
+        gen = _make_generator()
+        gen._create_border_leaf_devices = AsyncMock(return_value=["bl-01"])
+        gen.create_firewall_and_load_balancer_devices = AsyncMock(return_value=(["fw-01"], []))
+        gen.create_external_firewall_devices = AsyncMock(return_value=[])
+        gen._cable_border_services = AsyncMock()
+        gen.ensure_context_vlan_pool = AsyncMock()
+
+        await gen._generate_dc_scoped_fabric_devices()
+
+        assert gen._cable_border_services.await_count == 1

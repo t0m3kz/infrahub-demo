@@ -550,6 +550,14 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
+    resource_name: context_routes
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/context_routes.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
     resource_name: cloud_connection
     tests:
       - name: syntax_check

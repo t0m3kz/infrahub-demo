@@ -1,0 +1,25 @@
+---
+# C900's web segment may reach the internet over https. The rule names the internet zone as its destination and no
+# segment: the Internet edge context of KTW1 holds it (the internal context holds none, the DC has an edge), and the
+# edge translates the segment's source to its public address.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityPolicy
+  data:
+    - name: seg-c900-web-p-egress
+      description: "Egress contract of c900-web-p: https to the internet"
+      segment: "c900-web-p"
+      default_action: deny
+      enabled: true
+      rules:
+        data:
+          - index: 10
+            name: web-to-internet
+            action: permit
+            protocol: tcp
+            port_start: 443
+            source_segment: "c900-web-p"
+            destination_zone: "INTERNET-ZONE"
+            log: false
+            description: "https from the web tier to the internet"

@@ -73,7 +73,7 @@ def _iface(role: str, vrf_namespace: str | None = None, contexts: list[dict[str,
 def _leg_context(namespace: str, ns_type: str) -> dict[str, Any]:
     """A raw firewall context with one transit leg on a firewall member."""
     leg = {
-        "device": {"node": {"role": {"value": "firewall"}}},
+        "device": {"node": {"role": {"value": "internal-firewall"}}},
         "ip_address": {
             "node": {
                 "address": {"value": "10.1.0.1/29"},

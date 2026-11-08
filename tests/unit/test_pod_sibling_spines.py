@@ -167,7 +167,7 @@ class TestPodSpineSlotDeviceNames:
             "fabric_templates": [
                 {"role": "border-spine", "quantity": 2, "template": {}},
                 {"role": "border-spine", "quantity": 2, "template": {}},
-                {"role": "firewall", "quantity": 2, "template": {}},
+                {"role": "internal-firewall", "quantity": 2, "template": {}},
             ],
         }
 

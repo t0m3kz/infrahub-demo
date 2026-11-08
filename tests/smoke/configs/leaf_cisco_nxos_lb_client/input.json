@@ -1492,7 +1492,24 @@
                     }
                   },
                   "capabilities": {
-                    "edges": []
+                    "edges": [
+                      {
+                        "node": {
+                          "__typename": "RoutingPolicy",
+                          "kind": {
+                            "value": "pbr"
+                          },
+                          "origin": {
+                            "value": "generated"
+                          },
+                          "customer_deployment": {
+                            "node": {
+                              "id": "fixture-footprint"
+                            }
+                          }
+                        }
+                      }
+                    ]
                   }
                 }
               },
@@ -1526,7 +1543,24 @@
                     }
                   },
                   "capabilities": {
-                    "edges": []
+                    "edges": [
+                      {
+                        "node": {
+                          "__typename": "RoutingPolicy",
+                          "kind": {
+                            "value": "pbr"
+                          },
+                          "origin": {
+                            "value": "generated"
+                          },
+                          "customer_deployment": {
+                            "node": {
+                              "id": "fixture-footprint"
+                            }
+                          }
+                        }
+                      }
+                    ]
                   }
                 }
               }
@@ -1587,7 +1621,7 @@
                                                     "value": "dc1-fw-01"
                                                   },
                                                   "role": {
-                                                    "value": "firewall"
+                                                    "value": "internal-firewall"
                                                   }
                                                 }
                                               },
@@ -1624,7 +1658,7 @@
                                                     "value": "dc1-fw-02"
                                                   },
                                                   "role": {
-                                                    "value": "firewall"
+                                                    "value": "internal-firewall"
                                                   }
                                                 }
                                               },

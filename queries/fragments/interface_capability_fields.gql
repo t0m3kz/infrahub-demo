@@ -43,12 +43,20 @@ fragment ExchangeGatewayInterfaceCapabilityFields on TopologyExchangeGateway {
   }
 }
 
+# The pbr policy applied on an SVI: the SVI is steered to the firewall of its footprint (generators/helpers/pbr_sync.py).
+fragment PbrPolicyInterfaceCapabilityFields on RoutingPolicy {
+  kind { value }
+  origin { value }
+  customer_deployment { node { id } }
+}
+
 fragment InterfaceCapabilitiesFields on DcimInterface {
   capabilities {
     edges {
       node {
         __typename
         ...OspfInterfaceCapabilityFields
+        ...PbrPolicyInterfaceCapabilityFields
       }
     }
   }
@@ -150,6 +158,7 @@ fragment InterfaceCapabilitiesWithSegmentFields on DcimInterface {
         ...ExchangeGatewayInterfaceCapabilityFields
         ...FirewallContextInterfaceCapabilityFields
         ...LoadbalancerContextInterfaceCapabilityFields
+        ...PbrPolicyInterfaceCapabilityFields
       }
     }
   }

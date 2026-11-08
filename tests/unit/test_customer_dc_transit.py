@@ -151,7 +151,11 @@ class TestFreshSharedBoarding:
 
         assert events == [f"acquire:fw-context-{_SHARED}", "release"]
         gen.link_serving_context.assert_awaited_once_with(
-            FIREWALL_CONTEXT, customer_id="cust-1", context_id=world.contexts[_SHARED].id, current_ids=[]
+            FIREWALL_CONTEXT,
+            customer_id="cust-1",
+            context_id=world.contexts[_SHARED].id,
+            current_ids=[],
+            parent_id="dc10-id",
         )
 
     @pytest.mark.asyncio
@@ -182,6 +186,7 @@ class TestDcServingLinkIsReplacedNotPruned:
             customer_id="cust-1",
             context_id=world.contexts[_SHARED].id,
             current_ids=["ctx-dedicated"],
+            parent_id="dc10-id",
         )
         gen.unlink_stale_serving_contexts.assert_not_awaited()
 
@@ -232,7 +237,11 @@ class TestRerunAndSecondCustomer:
         assert world.writes == before
         assert events == []
         gen.link_serving_context.assert_awaited_with(
-            FIREWALL_CONTEXT, customer_id="cust-2", context_id=world.contexts[_SHARED].id, current_ids=[]
+            FIREWALL_CONTEXT,
+            customer_id="cust-2",
+            context_id=world.contexts[_SHARED].id,
+            current_ids=[],
+            parent_id="dc10-id",
         )
 
     @pytest.mark.asyncio
@@ -599,7 +608,7 @@ class TestTransitMemberResolution:
         assert messages == [
             f"DC10-FW1: uplink Ethernet1/25 is not cabled to a firewall service port for '{_SHARED}'",
             "DC10-FW2: no role=uplink interface found — cannot create a context sub-interface",
-            f"{_SHARED}: no firewall member has an uplink cabled to a border service port",
+            f"{_SHARED}: no internal-firewall member has an uplink cabled to a border service port",
         ]
         assert world.writes == 0
 
@@ -615,7 +624,7 @@ class TestTransitMemberResolution:
         assert messages == [
             "Error resolving uplink interface on DC10-FW1: uplink lookup failed",
             "Error resolving uplink interface on DC10-FW2: uplink lookup failed",
-            f"{_SHARED}: no firewall member has an uplink cabled to a border service port",
+            f"{_SHARED}: no internal-firewall member has an uplink cabled to a border service port",
         ]
         assert "DcimCable" not in world.executed_filters
         assert world.writes == 0

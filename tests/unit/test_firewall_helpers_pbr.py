@@ -23,7 +23,10 @@ def _make_context_leg(
     role="firewall"."""
     ctx: dict = {
         "capabilities": [
-            {"device": {"role": "firewall"}, "ip_address": {"address": fw_ip, "ip_namespace": {"name": "PROD"}}}
+            {
+                "device": {"role": "internal-firewall"},
+                "ip_address": {"address": fw_ip, "ip_namespace": {"name": "PROD"}},
+            }
         ],
     }
     if tenant_id:
@@ -189,7 +192,7 @@ class TestGetCustomerPbrRules:
         """inline connectivity_mode never allocates an IP on the firewall leg —
         a context with no addressed firewall-role leg contributes no nexthop."""
         activations = [_make_pbr_activation(deployment_id="dep-a", security_policies=[])]
-        contexts = [{"capabilities": [{"device": {"role": "firewall"}, "ip_address": {}}]}]
+        contexts = [{"capabilities": [{"device": {"role": "internal-firewall"}, "ip_address": {}}]}]
         assert get_customer_pbr_rules(activations, contexts) == []
 
     def test_permit_rule_becomes_bypass_prefix(self) -> None:

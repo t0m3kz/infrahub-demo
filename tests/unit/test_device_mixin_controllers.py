@@ -42,7 +42,7 @@ class TestResolveRoleController:
     def test_no_controllers_set_returns_none(self) -> None:
         gen = self._gen()  # _all_controllers never set
 
-        controller = gen._resolve_role_controller(device_role="firewall", template={})
+        controller = gen._resolve_role_controller(device_role="internal-firewall", template={})
 
         assert controller is None
 
@@ -76,7 +76,7 @@ class TestResolveRoleController:
         gen = self._gen(controllers=[panorama])
 
         controller = gen._resolve_role_controller(
-            device_role="firewall", template={"platform": {"id": "plat-checkpoint"}}
+            device_role="internal-firewall", template={"platform": {"id": "plat-checkpoint"}}
         )
 
         assert controller is None
@@ -87,7 +87,7 @@ class TestResolveRoleController:
         gen = self._gen(controllers=[cp_sms])
 
         controller = gen._resolve_role_controller(
-            device_role="firewall", template={"platform": {"id": "plat-checkpoint"}}
+            device_role="internal-firewall", template={"platform": {"id": "plat-checkpoint"}}
         )
 
         assert controller is cp_sms
@@ -106,7 +106,7 @@ class TestResolveRoleController:
         gen = self._gen(controllers=[])
 
         controller = gen._resolve_role_controller(
-            device_role="firewall", template={"platform": {"id": "plat-checkpoint"}}
+            device_role="internal-firewall", template={"platform": {"id": "plat-checkpoint"}}
         )
 
         assert controller is None
@@ -133,7 +133,7 @@ class TestCreateDevicesControllerRouting:
         gen.client.create = AsyncMock(return_value=created_device)
 
         await gen.create_devices(
-            device_role="firewall",
+            device_role="internal-firewall",
             quantity=1,
             deployment_id="dc-1",
             template={"device_type": {"id": "dt-1"}, "platform": {"id": "plat-checkpoint"}},
@@ -166,7 +166,7 @@ class TestCreateDevicesControllerRouting:
         gen.client.create = AsyncMock(return_value=created_device)
 
         await gen.create_devices(
-            device_role="firewall",
+            device_role="internal-firewall",
             quantity=1,
             deployment_id="dc-1",
             template={"device_type": {"id": "dt-1"}, "platform": {"id": "plat-checkpoint"}},
@@ -181,7 +181,7 @@ class TestCreateDevicesControllerRouting:
         gen.client.create = AsyncMock(return_value=created_device)
 
         await gen.create_devices(
-            device_role="firewall",
+            device_role="internal-firewall",
             quantity=1,
             deployment_id="dc-1",
             template={"device_type": {"id": "dt-1"}, "platform": {"id": "plat-checkpoint"}},
@@ -195,7 +195,7 @@ class TestCreateDevicesControllerRouting:
         ("role", "group"),
         [
             ("load-balancer", "loadbalancers"),
-            ("firewall", "firewalls"),
+            ("internal-firewall", "firewalls"),
             ("access-switch", "access-switches"),
             ("distribution-switch", "distribution-switches"),
         ],

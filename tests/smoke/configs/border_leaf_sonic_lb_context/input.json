@@ -713,6 +713,74 @@
                     ]
                   }
                 }
+              },
+              {
+                "node": {
+                  "__typename": "ManagedStaticRoute",
+                  "name": {
+                    "value": "rt-PROD-100.66.96.0/26"
+                  },
+                  "prefix": {
+                    "value": "100.66.96.0/26"
+                  },
+                  "next_hop": {
+                    "value": "100.66.64.4"
+                  },
+                  "distance": {
+                    "value": 1
+                  },
+                  "exported": {
+                    "value": true
+                  },
+                  "vrf": {
+                    "node": {
+                      "namespace": {
+                        "node": {
+                          "name": {
+                            "value": "PROD"
+                          },
+                          "l3_vni": {
+                            "value": 60000
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "ManagedStaticRoute",
+                  "name": {
+                    "value": "rt-NON-PROD-100.66.112.0/26"
+                  },
+                  "prefix": {
+                    "value": "100.66.112.0/26"
+                  },
+                  "next_hop": {
+                    "value": "100.66.80.4"
+                  },
+                  "distance": {
+                    "value": 1
+                  },
+                  "exported": {
+                    "value": true
+                  },
+                  "vrf": {
+                    "node": {
+                      "namespace": {
+                        "node": {
+                          "name": {
+                            "value": "NON-PROD"
+                          },
+                          "l3_vni": {
+                            "value": 60001
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
               }
             ]
           },

@@ -7,16 +7,13 @@ from typing import Any
 from transforms.helpers.acl import _PROTO_MAP, _port_match
 from transforms.helpers.policy import active_rules, enabled_policies, rule_endpoint, rule_zone
 from utils.exchange_transit import (
-    EXCHANGE_PEERS,
     FIREWALL_CONTEXT_KIND,
-    INTERNET_TYPE,
-    LOADBALANCER_CONTEXT_KIND,
-    service_context_caps,
     transit_addresses,
     transit_leg_namespace,
     transit_vlan,
     transit_vni,
 )
+from utils.fabric_roles import FIREWALL_ROLES
 from utils.limits import ACL_CLOSING_SEQ, DEFAULT_NAMESPACE, VLAN_NAME_MAX
 from utils.segment_addressing import segment_prefix
 
@@ -201,7 +198,7 @@ def _context_leg_ip(ctx: dict[str, Any], namespace: str | None = None) -> str | 
     nexthop. None without a transit leg in ``namespace``.
     """
     for leg in ctx.get("capabilities") or []:
-        if (leg.get("device") or {}).get("role") != "firewall":
+        if (leg.get("device") or {}).get("role") not in FIREWALL_ROLES:
             continue
         ip_obj = leg.get("ip_address") or {}
         address = ip_obj.get("address")
@@ -317,88 +314,6 @@ def _snat_host(cap: dict[str, Any]) -> str | None:
     """The context's SNAT address without its mask (``snat_address`` is a /32), or None."""
     address = (cap.get("snat_address") or {}).get("address")
     return str(ip_interface(address).ip) if address else None
-
-
-def get_exchange_routes(
-    interfaces: list[dict[str, Any]] | None, *, export_tenant_default: bool = True
-) -> list[dict[str, Any]]:
-    """Static routes of the inter-VRF exchange through each firewall context on this device.
-
-    Per exchange (tenant VRF A -> exchange peer Z) of a context tagged on a firewall port:
-
-    - VRF A: ``0.0.0.0/0`` -> the context's A-leg VIP, only when the context is the
-      shared one (no tenant). A dedicated context steers its tenant by leaf PBR.
-    - VRF Z (INTERNET only): the context's SNAT address ``/32`` -> the context's
-      Z-leg VIP, the return path of its translated flows. Another peer
-      (MANAGEMENT) is source-NATed to its own leg's VIP, a /29 address the border
-      leaves already connect, so it needs no route and no tenant prefix. INTERNET carries only public and
-      transit space, so no tenant prefix goes in; a context without a SNAT address
-      emits nothing there. No default route in INTERNET: its upstream is the
-      edge's EVPN type-5 default.
-
-    With ``export_tenant_default=False`` the tenant-VRF default route is marked
-    ``local_only``: it stays a static inside the VRF but is not redistributed
-    into EVPN (a colocation edge resolves the VIP over its own transit L2VNI;
-    exporting would make a DC import another site's PROD default).
-
-    A load-balancer context tagged on a load-balancer port adds its routed VIP
-    range: ``vip_prefix`` -> the floating .4 of its one leg, in the leg's
-    (tenant) VRF, always exported, so every VTEP of the VRF reaches the VIPs
-    through this border. Raises when the context has legs in more than one VRF:
-    the one-arm LB lives in one routing table.
-
-    Returns [{vrf, l3_vni, prefix, nexthop}] sorted (+ ``local_only: True`` when not exported).
-    """
-    routes: dict[tuple[str, str, str], dict[str, Any]] = {}
-
-    def _add(leg: dict[str, Any], prefix: str, nexthop: str, *, local_only: bool = False) -> None:
-        routes[(leg["namespace"], prefix, nexthop)] = {
-            "vrf": leg["namespace"],
-            "l3_vni": leg["l3_vni"],
-            "prefix": prefix,
-            "nexthop": nexthop,
-            **({"local_only": True} if local_only else {}),
-        }
-
-    for ctx in service_context_caps(interfaces):
-        legs = transit_legs(ctx)
-        if ctx.get("typename") == LOADBALANCER_CONTEXT_KIND:
-            vip_prefix = (ctx.get("vip_prefix") or {}).get("prefix")
-            if not vip_prefix:
-                continue
-            if len(legs) > 1:
-                raise ValueError(
-                    f"load-balancer context '{ctx.get('name')}' has legs in {len(legs)} VRFs ({', '.join(sorted(legs))}): "
-                    f"a one-arm context lives in one tenant VRF; refusing to route its VIP range {vip_prefix} into each"
-                )
-            for leg in legs.values():
-                _add(leg, vip_prefix, leg["vip"])
-            continue
-        snat = _snat_host(ctx)
-        # An exchange's sides are the namespaces of the legs carrying it: its own
-        # namespace_a / namespace_z come back null through capabilities.
-        exchanges: dict[str, dict[str, Any]] = {}
-        sides: dict[str, set[str]] = {}
-        for leg in ctx.get("capabilities") or []:
-            leg_ns = ((leg.get("ip_address") or {}).get("ip_namespace") or {}).get("name")
-            for exchange in leg.get("capabilities") or []:
-                if exchange.get("id") and leg_ns in legs:
-                    exchanges.setdefault(exchange["id"], exchange)
-                    sides.setdefault(exchange["id"], set()).add(leg_ns)
-        for exchange_id, exchange in exchanges.items():
-            if len(sides[exchange_id]) != 2:
-                continue
-            # the tenant VRF is the side that has EXCHANGE_PEERS
-            a_name, z_name = sorted(sides[exchange_id], key=lambda n: legs[n]["ns_type"] not in EXCHANGE_PEERS)
-            leg_a, leg_z = legs[a_name], legs[z_name]
-            if leg_z["ns_type"] not in EXCHANGE_PEERS.get(leg_a["ns_type"], ()):
-                continue
-            gateway = exchange.get("gateway") or {}
-            if not (gateway.get("tenant") or ctx.get("tenant")):
-                _add(leg_a, "0.0.0.0/0", leg_a["vip"], local_only=not export_tenant_default)
-            if snat and leg_z["ns_type"] == INTERNET_TYPE:
-                _add(leg_z, f"{snat}/32", leg_z["vip"])
-    return sorted(routes.values(), key=lambda r: (r["vrf"], r["prefix"], r["nexthop"]))
 
 
 def get_zone_policies(policies_data: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:

@@ -713,6 +713,142 @@
                     ]
                   }
                 }
+              },
+              {
+                "node": {
+                  "__typename": "ManagedStaticRoute",
+                  "name": {
+                    "value": "rt-PROD-0.0.0.0/0"
+                  },
+                  "prefix": {
+                    "value": "0.0.0.0/0"
+                  },
+                  "next_hop": {
+                    "value": "100.66.0.4"
+                  },
+                  "distance": {
+                    "value": 1
+                  },
+                  "exported": {
+                    "value": true
+                  },
+                  "vrf": {
+                    "node": {
+                      "namespace": {
+                        "node": {
+                          "name": {
+                            "value": "PROD"
+                          },
+                          "l3_vni": {
+                            "value": 50001
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "ManagedStaticRoute",
+                  "name": {
+                    "value": "rt-INTERNET-192.0.2.5/32"
+                  },
+                  "prefix": {
+                    "value": "192.0.2.5/32"
+                  },
+                  "next_hop": {
+                    "value": "100.66.32.4"
+                  },
+                  "distance": {
+                    "value": 1
+                  },
+                  "exported": {
+                    "value": true
+                  },
+                  "vrf": {
+                    "node": {
+                      "namespace": {
+                        "node": {
+                          "name": {
+                            "value": "INTERNET"
+                          },
+                          "l3_vni": {
+                            "value": 50003
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "ManagedStaticRoute",
+                  "name": {
+                    "value": "rt-PROD-0.0.0.0/0"
+                  },
+                  "prefix": {
+                    "value": "0.0.0.0/0"
+                  },
+                  "next_hop": {
+                    "value": "100.66.0.4"
+                  },
+                  "distance": {
+                    "value": 1
+                  },
+                  "exported": {
+                    "value": true
+                  },
+                  "vrf": {
+                    "node": {
+                      "namespace": {
+                        "node": {
+                          "name": {
+                            "value": "PROD"
+                          },
+                          "l3_vni": {
+                            "value": 50001
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "ManagedStaticRoute",
+                  "name": {
+                    "value": "rt-INTERNET-192.0.2.6/32"
+                  },
+                  "prefix": {
+                    "value": "192.0.2.6/32"
+                  },
+                  "next_hop": {
+                    "value": "100.66.32.12"
+                  },
+                  "distance": {
+                    "value": 1
+                  },
+                  "exported": {
+                    "value": true
+                  },
+                  "vrf": {
+                    "node": {
+                      "namespace": {
+                        "node": {
+                          "name": {
+                            "value": "INTERNET"
+                          },
+                          "l3_vni": {
+                            "value": 50003
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
               }
             ]
           },
@@ -1141,7 +1277,7 @@
                                         "value": "dc1-fw-01"
                                       },
                                       "role": {
-                                        "value": "firewall"
+                                        "value": "internal-firewall"
                                       }
                                     }
                                   },
@@ -1208,7 +1344,7 @@
                                         "value": "dc1-fw-02"
                                       },
                                       "role": {
-                                        "value": "firewall"
+                                        "value": "internal-firewall"
                                       }
                                     }
                                   },
@@ -1275,7 +1411,7 @@
                                         "value": "dc1-fw-01"
                                       },
                                       "role": {
-                                        "value": "firewall"
+                                        "value": "internal-firewall"
                                       }
                                     }
                                   },
@@ -1329,7 +1465,7 @@
                                         "value": "dc1-fw-02"
                                       },
                                       "role": {
-                                        "value": "firewall"
+                                        "value": "internal-firewall"
                                       }
                                     }
                                   },
@@ -1383,7 +1519,7 @@
                                         "value": "dc1-fw-01"
                                       },
                                       "role": {
-                                        "value": "firewall"
+                                        "value": "internal-firewall"
                                       }
                                     }
                                   },
@@ -1437,7 +1573,7 @@
                                         "value": "dc1-fw-02"
                                       },
                                       "role": {
-                                        "value": "firewall"
+                                        "value": "internal-firewall"
                                       }
                                     }
                                   },
@@ -1528,7 +1664,7 @@
                                         "value": "dc1-fw-01"
                                       },
                                       "role": {
-                                        "value": "firewall"
+                                        "value": "internal-firewall"
                                       }
                                     }
                                   },
@@ -1599,7 +1735,7 @@
                                         "value": "dc1-fw-02"
                                       },
                                       "role": {
-                                        "value": "firewall"
+                                        "value": "internal-firewall"
                                       }
                                     }
                                   },
@@ -1670,7 +1806,7 @@
                                         "value": "dc1-fw-01"
                                       },
                                       "role": {
-                                        "value": "firewall"
+                                        "value": "internal-firewall"
                                       }
                                     }
                                   },
@@ -1726,7 +1862,7 @@
                                         "value": "dc1-fw-02"
                                       },
                                       "role": {
-                                        "value": "firewall"
+                                        "value": "internal-firewall"
                                       }
                                     }
                                   },
@@ -1782,7 +1918,7 @@
                                         "value": "dc1-fw-01"
                                       },
                                       "role": {
-                                        "value": "firewall"
+                                        "value": "internal-firewall"
                                       }
                                     }
                                   },
@@ -1838,7 +1974,7 @@
                                         "value": "dc1-fw-02"
                                       },
                                       "role": {
-                                        "value": "firewall"
+                                        "value": "internal-firewall"
                                       }
                                     }
                                   },
@@ -1921,7 +2057,24 @@
                     }
                   },
                   "capabilities": {
-                    "edges": []
+                    "edges": [
+                      {
+                        "node": {
+                          "__typename": "RoutingPolicy",
+                          "kind": {
+                            "value": "pbr"
+                          },
+                          "origin": {
+                            "value": "generated"
+                          },
+                          "customer_deployment": {
+                            "node": {
+                              "id": "fixture-footprint"
+                            }
+                          }
+                        }
+                      }
+                    ]
                   }
                 }
               }

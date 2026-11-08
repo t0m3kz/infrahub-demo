@@ -131,18 +131,14 @@ generics:
             label: Console Server
             description: Console server part of a Fabric.
             color: "#e8e7ad"
-          - name: firewall
-            label: Firewall
-            description: "Security boundary with external network"
+          - name: internal-firewall
+            label: Internal Firewall
+            description: "Internal firewall: east-west and the customers' contexts"
             color: "#6e5abd"
-          - name: firewall-active
-            label: Firewall (Active)
-            description: "Active member of a redundant firewall HA pair"
-            color: "#6e5abd"
-          - name: firewall-passive
-            label: Firewall (Passive / Standby)
-            description: "Passive/standby member of a redundant firewall HA pair — carries no traffic"
-            color: "#9e8acd"
+          - name: external-firewall
+            label: External Firewall
+            description: "Internet-facing firewall: the Internet edge of one or more topologies"
+            color: "#a35abd"
           - name: load-balancer
             label: Load Balancer
             description: Load Balancer part of a Fabric.
@@ -432,6 +428,10 @@ generics:
             label: SVI
             description: "Routed VLAN interface of a segment on a fabric switch, generated from its VLAN-domain row"
             color: "#FBBF24"
+          - name: l3vni
+            label: L3 VNI SVI
+            description: "Routed VLAN interface of a VRF the switch terminates (L3 VNI, symmetric IRB), no address"
+            color: "#F59E0B"
           - name: firewall
             label: Firewall
             description: "Dedicated port for firewall attachment on a border-leaf"

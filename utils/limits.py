@@ -187,11 +187,16 @@ GROUP_SDWAN_GATEWAYS = "sdwan_gateways"
 GROUP_PROVIDER_STUBS = "provider_stubs"
 # Every DcimPatchPanel: the target group of add_patch_panel, whose group trigger builds the ports (each panel declares it).
 GROUP_PATCH_PANELS = "patch_panels"
+# Every firewall and load-balancer context: the target group of add_context_routes. The context generators add each
+# context they build; the group trigger starts the route generator.
+GROUP_SERVICE_CONTEXTS = "service_contexts"
 
 # device_role -> the group its devices join, for roles whose group does not follow the f"{device_role}s" convention.
 # One map for every create_devices() caller: a group created on a branch because a caller missed it collides with
 # every other branch that creates it when both merge.
 ROLE_GROUP_NAMES: dict[str, str] = {
+    "internal-firewall": "firewalls",
+    "external-firewall": "firewalls",
     "load-balancer": "loadbalancers",
     "access-switch": "access-switches",
     "distribution-switch": "distribution-switches",

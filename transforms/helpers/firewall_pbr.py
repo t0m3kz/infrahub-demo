@@ -4,12 +4,15 @@ Split out of ``transforms.helpers.firewall`` (the context leg lookup ``_context_
 exchange transits); the context list is built in ``transforms.helpers.firewall_contexts``.
 """
 
+from ipaddress import IPv4Network, collapse_addresses
 from typing import Any
 
 from transforms.helpers.firewall import _context_leg_ip
 from transforms.helpers.policy import rule_selector, segment_flows
 from utils.exchange_transit import MANAGEMENT_TYPE, exchange_peer_zones
+from utils.fabric_roles import INTERNAL_FIREWALL_ROLE
 from utils.segment_addressing import is_terminated, segment_namespace, segment_prefix
+from utils.vrf_demand import L3VNI_ROLE, SVI_ROLE, svi_vlan_id
 
 
 def _segment_deployment_ids(segment: dict[str, Any]) -> list[str]:
@@ -28,7 +31,7 @@ def _segment_deployment_ids(segment: dict[str, Any]) -> list[str]:
 def _has_firewall_leg(ctx: dict[str, Any]) -> bool:
     """True when the context has an addressed leg on a firewall member (inline contexts have none)."""
     return any(
-        (leg.get("device") or {}).get("role") == "firewall" and (leg.get("ip_address") or {}).get("address")
+        (leg.get("device") or {}).get("role") == INTERNAL_FIREWALL_ROLE and (leg.get("ip_address") or {}).get("address")
         for leg in ctx.get("capabilities") or []
     )
 
@@ -98,9 +101,44 @@ def _needs_firewall(
     return peer_nexthop == own_nexthop
 
 
+def _inspected_prefixes(namespace_prefixes: list[str], via_firewall: set[str]) -> list[str]:
+    """The modeled destinations of a segment in a DC with an Internet edge that go through its firewall context.
+
+    Every prefix registered in the segment's namespace (the tenant segments, the offices, the cloud blocks, the tunnel
+    ranges), merged into the fewest covering networks, plus the prefixes a rule forces through the firewall. A
+    bypassed prefix is matched before this list. What is in none of them (the Internet) follows normal routing, whose
+    default route is the Internet edge context's.
+    """
+    networks = [
+        IPv4Network(prefix, strict=False) for prefix in {*namespace_prefixes, *via_firewall} if ":" not in prefix
+    ]
+    return [str(network) for network in collapse_addresses(networks)]
+
+
+def pbr_steered_vlans(interfaces: list[dict[str, Any]] | None) -> set[int]:
+    """The VLANs of the device's SVIs that carry a pbr policy: only these are steered to the firewall.
+
+    The policy is attached by the VRF pass of the device (generators/helpers/pbr_sync.py); an SVI without one is
+    routed normally even when its segment has policies."""
+    steered: set[int] = set()
+    for iface in interfaces or []:
+        vlan_id = svi_vlan_id(iface.get("name"))
+        if iface.get("role") != SVI_ROLE or vlan_id is None:
+            continue
+        if any(
+            cap.get("typename") == "RoutingPolicy" and cap.get("kind") == "pbr"
+            for cap in iface.get("capabilities") or []
+        ):
+            steered.add(vlan_id)
+    return steered
+
+
 def get_customer_pbr_rules(
     activations: list[dict[str, Any]] | None,
     firewall_contexts: list[dict[str, Any]] | None,
+    edge_contexts: list[dict[str, Any]] | None = None,
+    namespace_prefixes: dict[str, list[str]] | None = None,
+    steered_vlans: set[int] | None = None,
 ) -> list[dict[str, Any]]:
     """Build PBR rules that redirect all traffic to the firewall by default.
 
@@ -157,6 +195,10 @@ def get_customer_pbr_rules(
     if not any(_has_firewall_leg(ctx) for ctx in firewall_contexts or []):
         return []
 
+    # A DC with an Internet edge (``edge_contexts``, the contexts its hosting names) sends no Internet traffic through
+    # the customer context: a segment whose namespace has an edge leg redirects only its inspected destinations
+    # (``fw_redirect_prefixes``) and leaves the rest to normal routing (the edge's default route).
+
     # Nexthop maps per VRF namespace: a segment is redirected to the VIP of the
     # context's leg in the segment's own namespace.
     nexthops_by_namespace: dict[str | None, tuple[dict[str, str], str | None, dict[str, str]]] = {}
@@ -177,6 +219,8 @@ def get_customer_pbr_rules(
     for act in activations:
         vlan_id = act.get("vlan_id")
         if not vlan_id or vlan_id in seen_vlans:
+            continue
+        if steered_vlans is not None and vlan_id not in steered_vlans:
             continue
         seg = act.get("segment") or {}
         if "security_policy" not in seg:
@@ -238,8 +282,18 @@ def get_customer_pbr_rules(
         # traffic to it through the firewall, the same on both leaves.
         bypass_prefixes = bypass - via_firewall
 
+        edge_hosted = any(_context_leg_ip(edge, own_namespace) for edge in edge_contexts or [])
         rules.append(
             {
+                **(
+                    {
+                        "fw_redirect_prefixes": _inspected_prefixes(
+                            (namespace_prefixes or {}).get(str(own_namespace), []), via_firewall
+                        )
+                    }
+                    if edge_hosted
+                    else {}
+                ),
                 "vlan_id": vlan_id,
                 "segment_name": seg.get("customer_name") or seg.get("name") or f"VLAN_{vlan_id}",
                 "bypass_prefixes": sorted(bypass_prefixes),
@@ -252,3 +306,65 @@ def get_customer_pbr_rules(
 
     rules.sort(key=lambda r: r["vlan_id"])
     return rules
+
+
+def get_overlay_pbr_rules(
+    interfaces: list[dict[str, Any]] | None,
+    firewall_contexts: list[dict[str, Any]] | None,
+    deployment: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    """PBR of the traffic that enters a VRF from the overlay: the rules of the L3 VNI SVIs of a border leaf.
+
+    Each L3 VNI SVI (role ``l3vni``) carries the pbr policies of the footprints whose firewall context is tagged on the
+    device (generators/helpers/pbr_sync.py). The traffic that arrives decapsulated on it and is bound for a segment of a
+    footprint is redirected to that footprint's firewall context, so the context sees the direction the segment's own
+    PBR does not. The destinations are the prefixes of the footprint's routed segments in the VRF of the SVI (the VRF is
+    shared by every footprint, so the interface is never steered as a whole), the next hop the VIP of the leg of the
+    footprint's serving context in that VRF. What returns from the firewall arrives on the transit SVI, which carries no
+    policy, so it is not steered again. A footprint with no context leg or no routed segment in the VRF yields nothing.
+
+    Returns ``[{vlan_id, vrf, steers: [{footprint, acl, prefixes, fw_nexthop}]}]`` sorted by VLAN.
+    """
+    segments = [
+        sd.get("segment") or {} for sd in ((deployment or {}).get("segment_deployments") or []) if sd.get("segment")
+    ]
+    rules: list[dict[str, Any]] = []
+    for iface in interfaces or []:
+        vlan_id = svi_vlan_id(iface.get("name"))
+        vrf = ((iface.get("vrf") or {}).get("namespace") or {}).get("name")
+        if iface.get("role") != L3VNI_ROLE or vlan_id is None or not vrf:
+            continue
+        footprints = sorted(
+            {
+                str(footprint)
+                for cap in iface.get("capabilities") or []
+                if cap.get("typename") == "RoutingPolicy"
+                and cap.get("kind") == "pbr"
+                and (footprint := (cap.get("customer_deployment") or {}).get("id"))
+            }
+        )
+        serving = _serving_context_nexthops(firewall_contexts, vrf)
+        steers = []
+        for footprint in footprints:
+            prefixes = sorted(
+                {
+                    prefix
+                    for seg in segments
+                    if footprint in _segment_deployment_ids(seg)
+                    and not is_terminated(seg)
+                    and segment_namespace(seg).get("name") == vrf
+                    and (prefix := segment_prefix(seg))
+                }
+            )
+            if footprint in serving and prefixes:
+                steers.append(
+                    {
+                        "footprint": footprint,
+                        "acl": f"PBR-OVERLAY-VLAN{vlan_id}-{len(steers) + 1}",
+                        "prefixes": prefixes,
+                        "fw_nexthop": serving[footprint],
+                    }
+                )
+        if steers:
+            rules.append({"vlan_id": vlan_id, "vrf": vrf, "steers": steers})
+    return sorted(rules, key=lambda rule: rule["vlan_id"])

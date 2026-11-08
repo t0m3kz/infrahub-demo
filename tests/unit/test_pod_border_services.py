@@ -74,7 +74,7 @@ class TestGeneratePodScopedBorderServices:
     async def test_creates_pod_scoped_devices_and_cables_to_border_spines(self) -> None:
         gen = _make_generator()
         gen.data["fabric_templates"] = [
-            _entry("firewall", 1, _FW_TEMPLATE),
+            _entry("internal-firewall", 1, _FW_TEMPLATE),
             _entry("load-balancer", 1, _LB_TEMPLATE),
         ]
         gen.create_devices = AsyncMock(side_effect=[["fw-01"], ["lb-01"]])
@@ -96,7 +96,7 @@ class TestGeneratePodScopedBorderServices:
     async def test_firewall_passes_ha_kind_through_options(self) -> None:
         """HA pairing itself is create_devices()'s job (DeviceOptions.ha_kind)."""
         gen = _make_generator()
-        gen.data["fabric_templates"] = [_entry("firewall", 2, _FW_TEMPLATE)]
+        gen.data["fabric_templates"] = [_entry("internal-firewall", 2, _FW_TEMPLATE)]
         gen.create_devices = AsyncMock(return_value=["fw-01", "fw-02"])
 
         await gen._generate_pod_scoped_border_services(spines=["bs-01"])
@@ -109,7 +109,7 @@ class TestGeneratePodScopedBorderServices:
         gen = _make_generator()
         gen.data["parent"]["connectivity_mode"] = "inline"
         gen.data["fabric_templates"] = [
-            _entry("firewall", 1, _FW_TEMPLATE),
+            _entry("internal-firewall", 1, _FW_TEMPLATE),
             _entry("load-balancer", 1, _LB_TEMPLATE),
         ]
         gen.create_devices = AsyncMock(side_effect=[["fw-01"], ["lb-01"]])

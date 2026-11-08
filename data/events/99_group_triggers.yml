@@ -154,6 +154,12 @@ spec:
       group: virtual_circuits
       action: run-virtual-circuit-generator
 
+    - name: trigger-context-routes-on-added
+      branch_scope: "other_branches"
+      member_update: added
+      group: service_contexts
+      action: run-context-routes-generator
+
     - name: trigger-patch-panel-on-added
       branch_scope: "other_branches"
       member_update: added

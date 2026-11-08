@@ -196,3 +196,23 @@ def test_the_check_logs_warnings_without_failing() -> None:
     )
 
     assert not errors and len(infos) == 1 and "RP5" in infos[0]["message"]
+
+
+def test_a_pbr_policy_is_judged_by_its_interfaces_not_by_peerings() -> None:
+    """RP5: a pbr policy on an interface is used, one on none is not; a bgp policy keeps the peering test."""
+    on_interface = {
+        "name": "pbr-a",
+        "kind": "pbr",
+        "capabilities": [{"id": "svi-1"}],
+        "customer_deployment": {"id": "c-1"},
+        "terms": [],
+    }
+    nowhere = {"name": "pbr-b", "kind": "pbr", "terms": []}
+    on_peering = {"name": "bgp-a", "kind": "bgp", "import_peerings": [{"id": "p"}], "terms": []}
+    idle = {"name": "bgp-b", "kind": "bgp", "terms": []}
+    warnings = routing_policy_warnings({"RoutingPolicy": [on_interface, nowhere, on_peering, idle]})
+    assert warnings == [
+        "RP5: policy 'pbr-b' is applied on no interface.",
+        "RP5: pbr policy 'pbr-b' names no customer deployment.",
+        "RP5: policy 'bgp-b' is attached to no peering.",
+    ]

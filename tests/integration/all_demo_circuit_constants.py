@@ -491,7 +491,7 @@ def _site(deployment: Declared) -> str:
 
 def _zone_has_firewalls(zone: Declared) -> bool:
     """Whether a colocation zone declares a firewall pair in its fabric_templates."""
-    return any(template[1] == "firewall" for template in zone.item.get("fabric_templates") or [])
+    return any(template[1] == "internal-firewall" for template in zone.item.get("fabric_templates") or [])
 
 
 # Metro -> its zones that declare a firewall pair (a virtual colocation is never one). A colocation footprint is named

@@ -144,7 +144,7 @@ set network interface ethernet {{ nat.egress.parent_interface.name }} layer3 uni
 {%- for leg in nat.tenant_legs %}
 set vsys {{ context.name }} rulebase nat rules snat-{{ leg.zone }}{{ nat.suffix }} from {{ leg.zone }}
 set vsys {{ context.name }} rulebase nat rules snat-{{ leg.zone }}{{ nat.suffix }} to {{ nat.egress.zone }}
-set vsys {{ context.name }} rulebase nat rules snat-{{ leg.zone }}{{ nat.suffix }} source any
+set vsys {{ context.name }} rulebase nat rules snat-{{ leg.zone }}{{ nat.suffix }} source {{ ('[ ' ~ nat.sources | join(' ') ~ ' ]') if nat.get('sources') else 'any' }}
 set vsys {{ context.name }} rulebase nat rules snat-{{ leg.zone }}{{ nat.suffix }} destination any
 set vsys {{ context.name }} rulebase nat rules snat-{{ leg.zone }}{{ nat.suffix }} service any
 set vsys {{ context.name }} rulebase nat rules snat-{{ leg.zone }}{{ nat.suffix }} source-translation dynamic-ip-and-port translated-address {{ nat.address }}

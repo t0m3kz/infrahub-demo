@@ -149,7 +149,10 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         )
 
         devices = await async_client_main.filters(
-            kind=DcimPhysicalDevice, role__value="firewall", capabilities__ids=[cluster_id], branch=scenario_branch
+            kind=DcimPhysicalDevice,
+            role__value="internal-firewall",
+            capabilities__ids=[cluster_id],
+            branch=scenario_branch,
         )
         assert devices, f"no firewall device in cluster {cluster_id} on branch '{scenario_branch}'"
         members = sorted(device.name.value for device in devices)

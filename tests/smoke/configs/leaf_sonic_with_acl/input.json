@@ -1302,7 +1302,24 @@
                     }
                   },
                   "capabilities": {
-                    "edges": []
+                    "edges": [
+                      {
+                        "node": {
+                          "__typename": "RoutingPolicy",
+                          "kind": {
+                            "value": "pbr"
+                          },
+                          "origin": {
+                            "value": "generated"
+                          },
+                          "customer_deployment": {
+                            "node": {
+                              "id": "fixture-footprint"
+                            }
+                          }
+                        }
+                      }
+                    ]
                   }
                 }
               },
@@ -1328,7 +1345,24 @@
                     "node": null
                   },
                   "capabilities": {
-                    "edges": []
+                    "edges": [
+                      {
+                        "node": {
+                          "__typename": "RoutingPolicy",
+                          "kind": {
+                            "value": "pbr"
+                          },
+                          "origin": {
+                            "value": "generated"
+                          },
+                          "customer_deployment": {
+                            "node": {
+                              "id": "fixture-footprint"
+                            }
+                          }
+                        }
+                      }
+                    ]
                   }
                 }
               }

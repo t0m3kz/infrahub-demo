@@ -506,7 +506,7 @@ class PodTopologyGenerator(
         neither (the common case for a plain-spine pod, and legal even for
         a border-spine pod with no FW/LB of its own)."""
         fabric_templates = self.data.get("fabric_templates", [])
-        firewall_entries = templates_by_role(fabric_templates, "firewall")
+        firewall_entries = templates_by_role(fabric_templates, "internal-firewall")
         load_balancer_entries = templates_by_role(fabric_templates, "load-balancer")
         if not firewall_entries and not load_balancer_entries:
             return

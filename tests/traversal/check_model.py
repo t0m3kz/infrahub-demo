@@ -228,13 +228,20 @@ async def check_pairs(
 REACH_ATTEMPTS = 3  # a far-end trace whose search ran out of budget is asked again, up to this many times
 
 
-def reach_jobs(cfg: dict) -> list[tuple[str, str, str, str | None]]:
+def _via(entry: dict) -> str | tuple[str, ...] | None:
+    """The waypoint(s) of a far-end entry: one node, or several in order (a tuple, so it can key a dict)."""
+    via = entry.get("via")
+    return tuple(via) if isinstance(via, list) else via
+
+
+def reach_jobs(cfg: dict) -> list[tuple[str, str, str, str | tuple[str, ...] | None]]:
     """The traces of the far-end matrix: every pair of `l3` ends in L3, and each `l1` pair (with its waypoint, when the
     tracer's depth limit needs one) in L1."""
-    jobs: list[tuple[str, str, str, str | None]] = [
+    jobs: list[tuple[str, str, str, str | tuple[str, ...] | None]] = [
         ("l3", a, b, None) for a, b in itertools.combinations(cfg.get("l3") or [], 2)
     ]
     jobs += [("l1", p["src"], p["dst"], p.get("via")) for p in cfg.get("l1") or []]
+    jobs += [("l3", p["src"], p["dst"], _via(p)) for p in cfg.get("firewall") or []]
     return jobs
 
 
@@ -248,10 +255,14 @@ async def check_reachability(
     # a pair may name a node its shortest chain must cross (`through`: the way in over the internet is the VPN, not the cage)
     must_cross = {(p["src"], p["dst"], p.get("via")): p["through"] for p in cfg.get("l1") or [] if p.get("through")}
     opt_in = {(p["src"], p["dst"], p.get("via")): tuple(p["with"]) for p in cfg.get("l1") or [] if p.get("with")}
+    # a firewall pair is traced in L3 with the firewall kinds and its chain must cross each node of `crosses`
+    opt_in |= {(p["src"], p["dst"], _via(p)): ("firewall",) for p in cfg.get("firewall") or []}
+    crosses = {(p["src"], p["dst"], _via(p)): p.get("crosses") or [] for p in cfg.get("firewall") or []}
 
-    async def one(layer: str, src: str, dst: str, via: str | None) -> Report:
+    async def one(layer: str, src: str, dst: str, via: str | tuple[str, ...] | None) -> Report:
         part = Report()
-        title = f"reach {layer.upper()}: {src} -> {dst}" + (f" via {via}" if via else "")
+        shown = ", ".join(via) if isinstance(via, tuple) else via
+        title = f"reach {layer.upper()}: {src} -> {dst}" + (f" via {shown}" if via else "")
         async with gate:
             for _attempt in range(REACH_ATTEMPTS):
                 legs = await traced(
@@ -267,6 +278,13 @@ async def check_reachability(
             budget = [str(leg.truncated_at) for leg in legs if not leg.paths and leg.truncated_at]
             note = f"no path for {missing}" + (f" (budget ran out at depth {budget})" if budget else "")
             part.add(title, bool(legs) and not missing, note)
+            for node in crosses.get((src, dst, via), []) if layer == "l3" else []:
+                chain_labels = {path_trace.label(n) for leg in legs for n in (leg.equal_cost[0] if leg.paths else [])}
+                part.add(
+                    f"{title} crosses {node}",
+                    node in chain_labels,
+                    "" if node in chain_labels else "the shortest chain does not cross it",
+                )
             needed = must_cross.get((src, dst, via)) if layer == "l1" else None
             if needed:
                 crossed = any(

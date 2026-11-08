@@ -53,10 +53,14 @@ nodes:
             label: Border Leaf Switch
             description: Border Leaf providing external connectivity in a Pod.
             color: "#dda0dd"
-          - name: firewall
-            label: Firewall
-            description: "Security boundary with external network"
+          - name: internal-firewall
+            label: Internal Firewall
+            description: "Internal firewall: east-west and the customers' contexts"
             color: "#6e5abd"
+          - name: external-firewall
+            label: External Firewall
+            description: "Internet-facing firewall: the Internet edge of one or more topologies"
+            color: "#a35abd"
           - name: load-balancer
             label: Load Balancer
             description: Load Balancer part of a Fabric.

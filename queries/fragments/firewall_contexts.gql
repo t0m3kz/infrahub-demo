@@ -28,7 +28,7 @@ fragment FirewallContextLegFields on ManagedFirewallContext {
 }
 
 fragment FirewallContextsOnDeviceHostingFields on TopologyDeviceHosting {
-  devices(role__value: "firewall") {
+  devices(role__value: "internal-firewall") {
     edges {
       node {
         ... on DcimPhysicalDevice {
@@ -120,8 +120,38 @@ fragment FirewallContextConfigFields on ManagedFirewallContext {
         # network_segments is declared per footprint kind (schemas/extensions/service/segment.yml), not on the
         # TopologyCustomer generic: a context serves a DC or a colocation footprint, both with VXLAN segments, so
         # the two spreads select the same field of the same peer type.
-        ... on TopologyCustomerDC { network_segments { edges { node { id ...ContextServedSegmentFields } } } }
+        ... on TopologyCustomerDC {
+          # The DC names its Internet edge when it has an external-firewall pair: this (internal) context then keeps no
+          # Internet rule (transforms/helpers/firewall_contexts.py).
+          parent { node { id ... on TopologySegmentHosting { internet_edge_contexts { edges { node { id } } } } } }
+          network_segments { edges { node { id ...ContextServedSegmentFields } } }
+        }
         ... on TopologyCustomerColocation { network_segments { edges { node { id ...ContextServedSegmentFields } } } }
+      }
+    }
+  }
+  # The topologies whose Internet traffic this context enforces and translates (an external-firewall pair's context):
+  # their DC footprints, with the segments whose Internet rules it holds and the serving context whose public address a
+  # dedicated customer is translated to.
+  internet_edge_hostings {
+    edges {
+      node {
+        id
+        ... on TopologyDataCenter {
+          children {
+            edges {
+              node {
+                id
+                ... on TopologyCustomerDC {
+                  name { value }
+                  environment { value }
+                  network_segments { edges { node { id ...ContextServedSegmentFields } } }
+                  serving_firewall_context { node { id tenant { node { id } } snat_address { node { address { value } } } } }
+                }
+              }
+            }
+          }
+        }
       }
     }
   }

@@ -45,7 +45,7 @@ def _context(
             iface_caps.append(
                 {
                     "name": "eth1.3000",
-                    "device": {"role": "firewall"},
+                    "device": {"role": "internal-firewall"},
                     "ip_address": {"address": f"{network}.{host}/29", "ip_namespace": namespace},
                 }
             )
@@ -88,7 +88,16 @@ def _device(contexts: list[dict], activations: list[dict], *, name: str = "leaf-
     return {
         "name": name,
         "role": "leaf",
-        "interfaces": [],
+        # the pbr policy the VRF pass attaches to every steered SVI: each activation's SVI carries one
+        "interfaces": [
+            {
+                "name": f"Vlan{act['vlan_id']}",
+                "role": "svi",
+                "capabilities": [{"typename": "RoutingPolicy", "kind": "pbr"}],
+            }
+            for act in activations
+            if act.get("vlan_id")
+        ],
         "capabilities": [],
         "deployment": _deployment(contexts),
         "segment_deployments": activations,
@@ -242,6 +251,23 @@ class TestLeafExtraConfig:
         assert 3000 in {v["vlan_id"] for v in config["vlans"]}
         assert {m["vlan_id"]: m["vni"] for m in config["vxlan"]["l2_vni_mappings"]}[3000] == 64000
         assert config["leaf_transit_prefixes"] == ["100.66.0.0/29"]
+
+    def test_an_svi_without_a_pbr_policy_is_not_steered_and_holds_no_transit_leg(self) -> None:
+        """The policy is the switch: the segment has rules and a context, the SVI has none, so it routes normally."""
+        device = _device([_context()], [_activation()])
+        for iface in device["interfaces"]:
+            iface["capabilities"] = []
+        config = _transform()._extra_config(device, "cisco_nxos")
+        assert config["leaf_pbr_rules"] == []
+        assert "leaf_transit_prefixes" not in config or config["leaf_transit_prefixes"] == []
+        assert 3000 not in {v["vlan_id"] for v in config["vlans"]}
+
+    def test_only_the_svi_with_the_policy_is_steered(self) -> None:
+        """Two segments of the leaf, one policy: just that SVI gets a rule."""
+        device = _device([_context()], [_activation(), _activation(vlan=101)])
+        device["interfaces"][1]["capabilities"] = []
+        config = _transform()._extra_config(device, "cisco_nxos")
+        assert {r["vlan_id"] for r in config["leaf_pbr_rules"]} == {100}
 
     def test_transit_is_never_acl_or_pbr_input(self) -> None:
         """AC5: the transit VLAN gets no ACL and no PBR rule."""

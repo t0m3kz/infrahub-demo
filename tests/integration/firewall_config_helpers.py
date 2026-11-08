@@ -73,7 +73,7 @@ query ($segment: String!) {
                         edges {
                           node {
                             ... on TopologyColocationZone {
-                              devices(role__value: "firewall") { edges { node { name { value } } } }
+                              devices(role__value: "internal-firewall") { edges { node { name { value } } } }
                             }
                           }
                         }
@@ -94,7 +94,7 @@ query ($segment: String!) {
 
 FIREWALLS_QUERY = """
 query {
-  DcimPhysicalDevice(role__value: "firewall") {
+  DcimPhysicalDevice(role__value: "internal-firewall") {
     edges { node { name { value } platform { node { name { value } } } } }
   }
 }

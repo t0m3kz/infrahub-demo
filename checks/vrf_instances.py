@@ -244,12 +244,12 @@ def svi_vrf_errors(facts: DeviceVrfFacts) -> list[str]:
 
 
 def svi_content_errors(facts: DeviceVrfFacts) -> list[str]:
-    """S4 an SVI has no address and no capabilities (a decommissioned device's leftovers are S2's warning)."""
+    """S4 an SVI has no address and no capability but a pbr policy (a decommissioned device's leftovers are S2's warning)."""
     if _decommissioned(facts):
         return []
     return [
         f"SVI (S4): svi interface '{svi.name}' on device '{facts.name}' has "
-        + ("an address" if svi.has_address else "capabilities")
+        + ("an address" if svi.has_address else "a capability other than a pbr policy")
         + " (the anycast gateway is segment.gateway and a port carries the segment, not its SVI). Remove it."
         for svi in facts.svis
         if svi.has_address or svi.has_capabilities

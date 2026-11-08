@@ -143,7 +143,7 @@ def test_an_instance_on_a_device_that_never_carries_one_is_an_error() -> None:
     """(e) spine, firewall, party device."""
     for device in (
         raw_device("d1", "spine-1", role="spine", capabilities=[raw_instance("v1", "spine-1", "PROD")]),
-        raw_device("d2", "fw-1", role="firewall", capabilities=[raw_instance("v2", "fw-1", "PROD")]),
+        raw_device("d2", "fw-1", role="internal-firewall", capabilities=[raw_instance("v2", "fw-1", "PROD")]),
         raw_device(
             "d3",
             "pe-1",

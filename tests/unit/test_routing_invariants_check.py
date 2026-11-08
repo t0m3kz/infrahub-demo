@@ -76,7 +76,8 @@ class TestInternetVrf:
             InternetPhysicalInterfaces=[
                 _interface("edge", "uplink"),
                 _interface("provider", "customer"),
-                _interface("firewall-active", None),
+                _interface("internal-firewall", None),
+                _interface("external-firewall", None),
             ]
         )
         assert check._captured_errors == []

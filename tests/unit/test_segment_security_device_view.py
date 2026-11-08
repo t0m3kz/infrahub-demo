@@ -171,7 +171,9 @@ class TestGate:
     def test_every_data_center_vtep_role_renders(self, role: str) -> None:
         assert _view(_roots(), role=role) is not None
 
-    @pytest.mark.parametrize("role", ["spine", "super-spine", "hyper-spine", "l2-leaf", "edge", "firewall", ""])
+    @pytest.mark.parametrize(
+        "role", ["spine", "super-spine", "hyper-spine", "l2-leaf", "edge", "internal-firewall", ""]
+    )
     def test_other_roles_render_nothing(self, role: str) -> None:
         assert _view(_roots(), role=role) is None
 

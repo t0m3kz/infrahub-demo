@@ -38,7 +38,7 @@ query customer_colocation($name: String!) {
                     ... on TopologyColocationZone {
                       id
                       name { value }
-                      firewall_devices: devices(role__value: "firewall") {
+                      firewall_devices: devices(role__value: "internal-firewall") {
                         edges {
                           node {
                             id

@@ -87,8 +87,14 @@ query vrf_instances($device_ids: [ID], $with_instances: Boolean = true) {
                     node {
                       __typename
                       id
+                      # The pbr policy applied on an SVI (an SVI has no other capability, check rule S4).
+                      ... on RoutingPolicy { kind { value } origin { value } customer_deployment { node { id } } }
                       ... on ManagedFirewallContext {
                         vlan_id { value }
+                        # The footprints the context serves: their pbr policy is applied on the L3 VNI SVI of the
+                        # tenant VRF of the legs (PBR of the traffic that enters the VRF from the overlay).
+                        tenant { node { id } }
+                        served_deployments { edges { node { id } } }
                         capabilities { edges { node { ...VrfDemandLegFields } } }
                       }
                       ... on ManagedLoadbalancerContext {
@@ -139,6 +145,18 @@ fragment VrfDemandRowFields on ManagedSegmentVlan {
             name { value }
             # A terminated segment is pure L2 on the fabric: its row is no routed row (utils/vrf_demand.py).
             terminated_on { node { id } }
+            # The footprints of the segment: the pbr policy of the one in the device's DC steers its SVI.
+            customer_deployments {
+              edges {
+                node {
+                  id
+                  name { value }
+                  parent { node { __typename id } }
+                  ... on TopologyCustomerDC { serving_firewall_context { node { id } } }
+                  ... on TopologyCustomerColocation { serving_firewall_contexts { edges { node { id } } } }
+                }
+              }
+            }
           }
           gateway { node { address { value } ip_prefix { node { ip_namespace { node { name { value } } } } } } }
         }

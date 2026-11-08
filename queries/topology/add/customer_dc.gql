@@ -24,7 +24,7 @@ query customer_dc($name: String!) {
             ... on TopologyDataCenter {
               connectivity_mode { value }
               design { node { name { value } } }
-              firewall_devices: devices(role__value: "firewall") {
+              firewall_devices: devices(role__value: "internal-firewall") {
                 edges {
                   node {
                     id
@@ -36,6 +36,19 @@ query customer_dc($name: String!) {
                   }
                 }
               }
+              external_firewall_devices: devices(role__value: "external-firewall") {
+                edges {
+                  node {
+                    id
+                    kind: __typename
+                    name { value }
+                    ... on DcimPhysicalDevice {
+                      platform { node { name { value } } }
+                    }
+                  }
+                }
+              }
+              internet_edge_contexts { edges { node { id } } }
               loadbalancer_devices: devices(role__value: "load-balancer") {
                 edges {
                   node {

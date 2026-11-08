@@ -12,12 +12,11 @@ from transforms.helpers.bgp import get_bgp_profile
 from transforms.helpers.bgp_facts import annotate_bgp_policy
 from transforms.helpers.cisco_xe import get_cisco_xe_acls, get_cisco_xe_vrf_routes, refuse_unfiltered_ipv6
 from transforms.helpers.firewall import (
-    get_exchange_routes,
     get_exchange_transits,
     get_leaf_firewall_transits,
 )
 from transforms.helpers.firewall_contexts import _flatten_deployment_firewall_contexts
-from transforms.helpers.firewall_pbr import get_customer_pbr_rules
+from transforms.helpers.firewall_pbr import get_customer_pbr_rules, get_overlay_pbr_rules, pbr_steered_vlans
 from transforms.helpers.group_policy import GPO_CONFIG_KEYS, group_policy_device_view
 from transforms.helpers.lisp import build_lisp_inputs, get_lisp_config
 from transforms.helpers.mlag import get_mlag, get_sonic_mlag_config
@@ -25,6 +24,7 @@ from transforms.helpers.origination import get_origination
 from transforms.helpers.ospf import get_ospf, refuse_unrenderable_ospf_auth
 from transforms.helpers.overlay import OVERLAY_CONFIG_KEYS, OVERLAY_RENDERERS
 from transforms.helpers.segments import get_vlans, interface_segments, routed_activations
+from transforms.helpers.static_routes import get_static_routes
 from transforms.helpers.templates import load_template
 from transforms.helpers.vrf import VrfRealizationError, l3_vrf_names, svi_vrfs, unrealized_vrfs
 from transforms.helpers.vxlan import get_interfaces, get_vxlan_config
@@ -34,7 +34,7 @@ from utils.exchange_transit import service_context_caps
 from utils.fabric_roles import BORDER_ROLES, OFFICE_LISP_ROLES
 from utils.limits import UNDERLAY_MTU
 from utils.segment_addressing import segment_hosting_candidates
-from utils.vrf_demand import SVI_ROLE
+from utils.vrf_demand import L3VNI_ROLE, SVI_ROLE
 
 _log = logging.getLogger(__name__)
 
@@ -45,7 +45,7 @@ UNFILTERED_BANNER_PLATFORMS = frozenset({"cisco_ios", "cisco_xe"})
 # Interface roles the generic interface loop does not render: the MLAG control SVI is rendered by the platform's MLAG
 # include (it needs the peer-link VLAN/trunk group around it), a segment SVI (role svi, an object since the VRF
 # instances) by the VLAN loop from its segment (get_vlans), and neither is a port.
-_NON_TEMPLATE_INTERFACE_ROLES = frozenset({"mlag-control", SVI_ROLE})
+_NON_TEMPLATE_INTERFACE_ROLES = frozenset({"mlag-control", SVI_ROLE, L3VNI_ROLE})
 
 
 def _fabric_rt_asn(deployment: Any) -> int | None:
@@ -159,9 +159,6 @@ class BaseDeviceTransform(InfrahubTransform):
 
     template_subdir: str = ""
     device_role: str = ""
-    # Whether the shared firewall context's tenant-VRF 0/0 -> VIP static is
-    # redistributed into EVPN (see get_exchange_routes); Edge turns it off.
-    export_tenant_default_to_evpn: bool = True
     # Resolve a VxlanSegment's local VLAN from this device's own row of the segment deployment.
     resolve_vlan_row: bool = True
     # The platforms whose template defines the RM-<session>-IN/-OUT maps of an external BGP session
@@ -342,7 +339,7 @@ class BaseDeviceTransform(InfrahubTransform):
         if self.device_role not in self._CISCO_XE_FABRIC_ROLES:
             return
         vxlan = config.get("vxlan") or {}
-        unsupported = [key for key in ("leaf_pbr_rules", "mlag") if config.get(key)]
+        unsupported = [key for key in ("leaf_pbr_rules", "overlay_pbr_rules", "mlag") if config.get(key)]
         if vxlan.get("multisite"):
             unsupported.append("multisite")
         if vxlan.get("enabled") and not (vxlan.get("evpn") or {}).get("enabled"):
@@ -504,11 +501,9 @@ class BaseDeviceTransform(InfrahubTransform):
         transits = (data.get("exchange_transits") or []) + leaf_transits
         vlans = get_vlans(activations=(activations or []) + transits, svi_vrfs=svi_vrfs(data.get("interfaces")))
 
-        # Inter-VRF exchange routes through the firewall context(s) tagged on
-        # this device's service ports (statics in the VRF, redistributed to EVPN).
-        vrf_routes = get_exchange_routes(
-            data.get("interfaces"), export_tenant_default=self.export_tenant_default_to_evpn
-        )
+        # The static routes of the device (ManagedStaticRoute capabilities): the inter-VRF exchange through the firewall
+        # context(s) tagged on its service ports, written by the context generator.
+        vrf_routes = get_static_routes(data.get("capabilities"))
 
         acls = get_acls(activations=routed)
         acl_names = {acl["vlan_id"]: acl["name"] for acl in acls}
@@ -517,6 +512,7 @@ class BaseDeviceTransform(InfrahubTransform):
 
         if self.device_role in BORDER_ROLES:
             self._refuse_unprotected_tenant_svis(self.device_role, platform_name, acls, leaf_pbr_rules)
+        overlay_pbr_rules = self._overlay_pbr(data, platform_name)
 
         lisp = None
         if self.device_role in OFFICE_LISP_ROLES:
@@ -548,6 +544,8 @@ class BaseDeviceTransform(InfrahubTransform):
             "acls": acls,
             "vrf_routes": vrf_routes,
             "leaf_pbr_rules": leaf_pbr_rules,
+            # PBR of the traffic that enters a VRF from the overlay (a border leaf's L3 VNI SVI); empty elsewhere.
+            "overlay_pbr_rules": overlay_pbr_rules,
             # The leaf's own transit /29s: kept out of the direct-to-EVPN redistribution
             # so only the borders originate them as type-5 routes.
             "leaf_transit_prefixes": sorted({t["segment"]["gateway"]["ip_prefix"]["prefix"] for t in leaf_transits}),
@@ -585,10 +583,33 @@ class BaseDeviceTransform(InfrahubTransform):
         next hop has none); every other role gets no leaf transits.
         """
         firewall_contexts = _flatten_deployment_firewall_contexts(data.get("deployment"))
-        rules = get_customer_pbr_rules(routed, firewall_contexts)
+        rules = get_customer_pbr_rules(
+            routed, firewall_contexts, steered_vlans=pbr_steered_vlans(data.get("interfaces"))
+        )
         if self.device_role not in self._LEAF_ROLES:
             return rules, []
         return rules, get_leaf_firewall_transits(rules, firewall_contexts, device_name=data.get("name", ""))
+
+    # The platforms whose border leaf template renders the PBR of the overlay ingress (the L3 VNI SVI): NX-OS only,
+    # documented and not yet lab-verified on a switch. Any other platform refuses it (a missing PBR would leave the
+    # direction the segment's PBR does not cover unprotected).
+    _OVERLAY_PBR_PLATFORMS: ClassVar[frozenset[str]] = frozenset({"cisco_nxos"})
+
+    def _overlay_pbr(self, data: dict, platform_name: str) -> list[dict[str, Any]]:
+        """The overlay-ingress PBR rules of a border device, refused on a platform that cannot render them."""
+        if self.device_role not in BORDER_ROLES:
+            return []
+        rules = get_overlay_pbr_rules(
+            data.get("interfaces"),
+            _flatten_deployment_firewall_contexts(data.get("deployment")),
+            data.get("deployment"),
+        )
+        if rules and platform_name not in self._OVERLAY_PBR_PLATFORMS:
+            raise ValueError(
+                f"{platform_name} {self.device_role} cannot render the PBR of the overlay ingress for VLANs "
+                f"{sorted(rule['vlan_id'] for rule in rules)}; refusing unprotected config"
+            )
+        return rules
 
     @staticmethod
     def _refuse_unprotected_tenant_svis(

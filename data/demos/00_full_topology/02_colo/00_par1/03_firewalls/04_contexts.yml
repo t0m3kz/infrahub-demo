@@ -1,0 +1,51 @@
+---
+# The Internet edge context of the PAR-COLO1 cage, with a PROD leg and an INTERNET leg, joined by the routed exchange
+# below, and the public address (SNAT) of what the cage sends to the Internet. It lists its legs and the firewall ports
+# of the cage edge as its capabilities. Data here; a generator builds the same objects on 30_all.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedFirewallContext
+  data:
+    - name: shared-par-xfw-ha-prod
+      cluster: par-colo1-xfw-ha
+      vlan_id: 3001
+      snat_address:
+        data:
+          address: "192.0.2.30/32"
+          description: "SNAT address of shared-par-xfw-ha-prod"
+          ip_namespace: INTERNET
+      capabilities:
+        - kind: DcimVirtualInterface
+          data: {device: par-colo1-xfw-01, name: "ethernet1/1.3001"}
+        - kind: DcimVirtualInterface
+          data: {device: par-colo1-xfw-02, name: "ethernet1/1.3001"}
+        - kind: DcimVirtualInterface
+          data: {device: par-colo1-xfw-01, name: "ethernet1/1.3401"}
+        - kind: DcimVirtualInterface
+          data: {device: par-colo1-xfw-02, name: "ethernet1/1.3401"}
+        - kind: DcimPhysicalInterface
+          data: {device: par-colo1-edge-01, name: "Ethernet1/2"}
+        - kind: DcimPhysicalInterface
+          data: {device: par-colo1-edge-01, name: "Ethernet1/13"}
+---
+# The routed exchange of the context between the PROD VRF and INTERNET; both members' legs are linked to it.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyRoutedExchange
+  data:
+    - name: shared-par-xfw-ha-prod-PROD-INTERNET
+      gateway: shared-par-xfw-ha-prod
+      namespace_a: PROD
+      namespace_z: INTERNET
+      status: active
+      capabilities:
+        - kind: DcimVirtualInterface
+          data: {device: par-colo1-xfw-01, name: "ethernet1/1.3001"}
+        - kind: DcimVirtualInterface
+          data: {device: par-colo1-xfw-02, name: "ethernet1/1.3001"}
+        - kind: DcimVirtualInterface
+          data: {device: par-colo1-xfw-01, name: "ethernet1/1.3401"}
+        - kind: DcimVirtualInterface
+          data: {device: par-colo1-xfw-02, name: "ethernet1/1.3401"}

@@ -1,0 +1,82 @@
+---
+version: "1.0"
+# A static route of a device, in the default routing table or in a VRF. A device capability like OSPF: it belongs to the
+# device (the device edge, cascades with it) and names the interface it leaves by. It does not take the interface edge
+# as well: a kind cannot inherit both. docs/routing_capabilities_plan.md holds the model.
+
+nodes:
+  - name: StaticRoute
+    namespace: Managed
+    description: "A static route of a device: a prefix and its next hop, in a VRF instance or in the default table."
+    label: Static Route
+    icon: mdi:routes
+    menu_placement: ManagedGeneric
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    inherit_from:
+      - ManagedGeneric
+      - ManagedGenericDevice
+    uniqueness_constraints:
+      - ["name__value"]
+    display_label: "{{ name__value }}"
+    order_by:
+      - name__value
+    attributes:
+      - name: prefix
+        kind: Text
+        label: Prefix
+        optional: false
+        order_weight: 1450
+        description: "Destination in CIDR notation; 0.0.0.0/0 is the default route"
+      - name: next_hop
+        kind: Text
+        label: Next Hop
+        optional: false
+        order_weight: 1500
+        description: "IP address of the next hop, reachable in the route's VRF"
+      - name: distance
+        kind: Number
+        label: Administrative Distance
+        optional: false
+        default_value: 1
+        order_weight: 1550
+        parameters:
+          min_value: 1
+          max_value: 255
+      - name: exported
+        kind: Boolean
+        label: Exported
+        optional: false
+        default_value: true
+        order_weight: 1575
+        description: "Redistributed into EVPN; false keeps the route in the VRF of the device only"
+    relationships:
+      - name: interface
+        peer: DcimInterface
+        label: Interface
+        description: "The interface the route leaves by"
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: static_route__interface
+        order_weight: 1650
+      - name: vrf
+        peer: ManagedVRF
+        label: VRF
+        description: "The VRF instance of the device's topology the route sits in; empty is the default table"
+        kind: Attribute
+        cardinality: one
+        optional: true
+        on_delete: no-action
+        identifier: static_route__vrf
+        order_weight: 1700
+      - name: next_hop_interface
+        peer: DcimInterface
+        label: Next Hop Interface
+        description: "The interface at the far end that owns the next hop (the tracer's second end of the hop)"
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: static_route__next_hop_interface
+        order_weight: 1750

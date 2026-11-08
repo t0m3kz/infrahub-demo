@@ -531,7 +531,7 @@ class TestEnsureDedicatedDevicePair:
         """No parent design: logger.error (raises in production), None, nothing looked up."""
         gen = self._make_gen()
         result = await gen._ensure_dedicated_device_pair(
-            role="firewall",
+            role="internal-firewall",
             ha_kind="ManagedFirewallHA",
             physical_devices=self._physical_pair(),
             parent_id="dc-1",
@@ -553,7 +553,7 @@ class TestEnsureDedicatedDevicePair:
         physical = [_fw_device(id=f"fw-{n}", name=f"DC10-FW{n}", platform="checkpoint_gaia") for n in range(peers)]
 
         result = await gen._ensure_dedicated_device_pair(
-            role="firewall",
+            role="internal-firewall",
             ha_kind="ManagedFirewallHA",
             physical_devices=physical,
             parent_id="dc-1",
@@ -575,7 +575,7 @@ class TestEnsureDedicatedDevicePair:
         physical = self._physical_pair(platform="unknown_os")
 
         result = await gen._ensure_dedicated_device_pair(
-            role="firewall",
+            role="internal-firewall",
             ha_kind="ManagedFirewallHA",
             physical_devices=physical,
             parent_id="dc-1",
@@ -597,7 +597,7 @@ class TestEnsureDedicatedDevicePair:
         gen.client.filters = AsyncMock(return_value=[])
 
         result = await gen._ensure_dedicated_device_pair(
-            role="firewall",
+            role="internal-firewall",
             ha_kind="ManagedFirewallHA",
             physical_devices=physical,
             parent_id="dc-1",
@@ -635,7 +635,7 @@ class TestEnsureDedicatedDevicePair:
         gen.create_devices = AsyncMock(side_effect=[["virt-name-1"], ["virt-name-2"]])
 
         result = await gen._ensure_dedicated_device_pair(
-            role="firewall",
+            role="internal-firewall",
             ha_kind="ManagedFirewallHA",
             physical_devices=physical,
             parent_id="dc-1",
@@ -661,7 +661,7 @@ class TestEnsureDedicatedDevicePair:
         gen.create_devices = AsyncMock(side_effect=[["c005-DC10-FW1-non-prod"], ["c005-DC10-FW2-non-prod"]])
 
         await gen._ensure_dedicated_device_pair(
-            role="firewall",
+            role="internal-firewall",
             ha_kind="ManagedFirewallHA",
             physical_devices=list(reversed(self._physical_pair())),
             parent_id="dc-1",
@@ -804,7 +804,9 @@ class TestLoadbalancerContextTarget:
 
         await gen.generate(_dc_payload_with_parent(dedicated_firewall=True, lb_devices=self._LBS))
 
-        assert [call.kwargs["role"] for call in gen._ensure_dedicated_device_pair.await_args_list] == ["firewall"]
+        assert [call.kwargs["role"] for call in gen._ensure_dedicated_device_pair.await_args_list] == [
+            "internal-firewall"
+        ]
         (target,) = self._lb_targets(gen)
         assert target.track is False
 

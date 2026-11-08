@@ -30,7 +30,9 @@ SEGMENT = {"id": "seg-1", "name": "c006-nordix-prod-p"}
 METRO = {"id": "metro-fr", "name": "FR"}
 
 
-def _device(device_id: str, role: str = "firewall", kind: str = "DcimPhysicalDevice", **extra: Any) -> dict[str, Any]:
+def _device(
+    device_id: str, role: str = "internal-firewall", kind: str = "DcimPhysicalDevice", **extra: Any
+) -> dict[str, Any]:
     """A cluster member / zone device as the query returns it, cleaned."""
     return {"id": device_id, "typename": kind, "name": device_id, "role": role, **extra}
 
@@ -57,7 +59,7 @@ def _leg(
         "typename": "DcimVirtualInterface",
         "name": f"{port}.{vlan}",
         "role": "firewall",
-        "device": {"id": device, "name": device, "role": "firewall"},
+        "device": {"id": device, "name": device, "role": "internal-firewall"},
         "ip_address": address,
         "capabilities": [{"typename": "TopologyRoutedExchange", "id": exchange, "name": "ex"}] if exchange else [],
     }
@@ -74,7 +76,9 @@ def _port(port_id: str, device_role: str = "border-leaf", role: str = "firewall"
     }
 
 
-def _context(prefix: str = "dc", members: tuple[str, str] = ("fw-1", "fw-2")) -> dict[str, Any]:
+def _context(
+    prefix: str = "dc", members: tuple[str, str] = ("fw-1", "fw-2"), role: str = "internal-firewall"
+) -> dict[str, Any]:
     """A complete shared context: pair, INTERNET legs, border ports, SNAT. Ids are prefixed per facility."""
     ids = [f"{prefix}-{member}" for member in members]
     return {
@@ -82,7 +86,7 @@ def _context(prefix: str = "dc", members: tuple[str, str] = ("fw-1", "fw-2")) ->
         "name": f"shared-{prefix}-prod",
         "vlan_id": VLAN,
         "snat_address": {"id": f"snat-{prefix}", "address": "198.51.100.1/32"},
-        "cluster": {"id": f"ha-{prefix}", "name": f"ha-{prefix}", "capabilities": [_device(i) for i in ids]},
+        "cluster": {"id": f"ha-{prefix}", "name": f"ha-{prefix}", "capabilities": [_device(i, role) for i in ids]},
         "capabilities": [
             *(_leg(i, exchange=f"ex-{prefix}") for i in ids),
             *(_leg(i, vlan=VLAN, namespace=("PROD", "prod"), exchange=None) for i in ids),
@@ -227,14 +231,14 @@ class TestDataCenter:
         context = _context()
         context["cluster"]["capabilities"].pop()
         (finding,) = egress_findings(_cleaned([_dc([context])]))
-        assert "has 1 member device(s), 1 with role firewall" in finding
+        assert "has 1 member device(s), 1 with role internal-firewall" in finding
 
     def test_member_with_another_role(self) -> None:
         """Two members of which one is no firewall are not a firewall pair."""
         context = _context()
         context["cluster"]["capabilities"][1]["role"] = "load-balancer"
         findings = egress_findings(_cleaned([_dc([context])]))
-        assert any("2 member device(s), 1 with role firewall" in finding for finding in findings)
+        assert any("2 member device(s), 1 with role internal-firewall" in finding for finding in findings)
 
     def test_member_without_internet_leg(self) -> None:
         """A member with no sub-interface in INTERNET leaves half of the pair without a path."""
@@ -499,7 +503,12 @@ def _raw_payload(snat: bool) -> dict[str, Any]:
     """A raw GraphQL response (queries/validation/internet_egress.gql) of a complete DC context."""
     value = lambda v: {"value": v}  # noqa: E731
     members = [
-        {"id": f"fw-{n}", "__typename": "DcimPhysicalDevice", "name": value(f"fw-{n}"), "role": value("firewall")}
+        {
+            "id": f"fw-{n}",
+            "__typename": "DcimPhysicalDevice",
+            "name": value(f"fw-{n}"),
+            "role": value("internal-firewall"),
+        }
         for n in (1, 2)
     ]
     legs = [
@@ -508,7 +517,7 @@ def _raw_payload(snat: bool) -> dict[str, Any]:
             "__typename": "DcimVirtualInterface",
             "name": value(f"eth1.{INTERNET_VLAN}"),
             "role": value("firewall"),
-            "device": {"node": {"id": f"fw-{n}", "name": value(f"fw-{n}"), "role": value("firewall")}},
+            "device": {"node": {"id": f"fw-{n}", "name": value(f"fw-{n}"), "role": value("internal-firewall")}},
             "ip_address": {
                 "node": {
                     "id": f"ip-{n}",
@@ -602,3 +611,88 @@ class TestCheckClass:
         """A missing element is logged as an error."""
         (error,) = self._run(_raw_payload(snat=False))
         assert "no snat_address" in error
+
+
+def _hosting(contexts: list[dict[str, Any]]) -> dict[str, Any]:
+    """A DC that names the given contexts as its Internet egress."""
+    return {"id": "dc-11", "name": "DC11", "internet_edge_contexts": contexts}
+
+
+def _dedicated(snat: bool = True) -> dict[str, Any]:
+    """A dedicated customer context with no Internet leg: only its own public address, when it has one."""
+    return {
+        "id": "ctx-ded",
+        "name": "c006-dedicated-prod",
+        "snat_address": {"id": "snat-ded", "address": "198.51.100.9/32"} if snat else None,
+    }
+
+
+def _assigned_dc(
+    egress: list[dict[str, Any]], serving: dict[str, Any] | None = None, environment: str = "p"
+) -> dict[str, Any]:
+    """A DC footprint of an environment whose DC names ``egress`` and whose serving context is ``serving``."""
+    footprint = _dc([serving if serving is not None else _dedicated()])
+    footprint.update(parent=_hosting(egress), environment=environment)
+    return footprint
+
+
+class TestEgressAssignment:
+    """A DC that names its Internet egress: the footprint is checked against that context, not its serving one."""
+
+    def test_dedicated_context_without_legs_passes_when_the_egress_is_complete(self) -> None:
+        cleaned = _cleaned([_assigned_dc([_context("eg", role="external-firewall")])], exchanges=[_exchange("eg")])
+        assert egress_findings(cleaned) == []
+
+    def test_the_egress_context_is_held_to_every_element(self) -> None:
+        egress = _context("eg", role="external-firewall")
+        egress["snat_address"] = None
+        findings = egress_findings(_cleaned([_assigned_dc([egress])], exchanges=[_exchange("eg")]))
+        assert len(findings) == 1
+        assert "egress context: no snat_address" in findings[0] and "shared-eg-prod" in findings[0]
+
+    def test_a_dedicated_context_needs_its_own_public_address(self) -> None:
+        cleaned = _cleaned(
+            [_assigned_dc([_context("eg", role="external-firewall")], _dedicated(snat=False))],
+            exchanges=[_exchange("eg")],
+        )
+        findings = egress_findings(cleaned)
+        assert len(findings) == 1 and "c006-dedicated-prod" in findings[0] and "no snat_address" in findings[0]
+
+    def test_the_egress_serving_the_footprint_itself_needs_no_second_address(self) -> None:
+        egress = _context("eg", role="external-firewall")
+        cleaned = _cleaned([_assigned_dc([egress], egress)], exchanges=[_exchange("eg")])
+        assert egress_findings(cleaned) == []
+
+    def test_an_edge_on_internal_firewalls_is_refused(self) -> None:
+        """The context a topology names as its Internet edge stands on an external-firewall pair."""
+        findings = egress_findings(_cleaned([_assigned_dc([_context("eg")])], exchanges=[_exchange("eg")]))
+        assert findings and all("external-firewall" in finding for finding in findings)
+
+    def test_two_contexts_for_one_environment_are_an_error(self) -> None:
+        second = _context("eg2", role="external-firewall")
+        exchanges = [_exchange("eg"), _exchange("eg2")]
+        findings = egress_findings(
+            _cleaned([_assigned_dc([_context("eg", role="external-firewall"), second])], exchanges=exchanges)
+        )
+        assert len(findings) == 1 and "2 Internet egress contexts for prod" in findings[0]
+
+    def test_a_context_for_another_environment_leaves_the_footprint_on_its_serving_context(self) -> None:
+        """The DC names only a NON-PROD egress: a PROD footprint keeps the elements on its own serving context."""
+        non_prod = _exchange("eg")
+        non_prod["namespace_a"] = {"id": "ns-np", "name": "NON-PROD", "namespace_type": "non_prod"}
+        findings = egress_findings(
+            _cleaned(
+                [_assigned_dc([_context("eg", role="external-firewall")], _context())],
+                exchanges=[non_prod, _exchange()],
+            )
+        )
+        assert findings == []
+
+    def test_an_egress_without_an_exchange_cannot_be_matched_and_is_reported(self) -> None:
+        findings = egress_findings(_cleaned([_assigned_dc([_context("eg", role="external-firewall")])], exchanges=[]))
+        assert any("no exchange between a tenant VRF and INTERNET" in finding for finding in findings)
+
+    def test_a_footprint_whose_dc_names_none_is_unchanged(self) -> None:
+        footprint = _dc()
+        footprint.update(parent=_hosting([]), environment="p")
+        assert egress_findings(_cleaned([footprint])) == []

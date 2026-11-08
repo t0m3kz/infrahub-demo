@@ -20,10 +20,6 @@ class Edge(BaseDeviceTransform):
     # gateway: get_vxlan_config returns None without stretched-segment
     # activations, so every other edge renders exactly as before.
     device_role = "edge"
-    # The shared firewall context's tenant 0/0 -> VIP stays a local static: each
-    # edge resolves the VIP over the transit L2VNI, and exporting it as type-5
-    # would let a DC import another site's PROD default via a stretched segment.
-    export_tenant_default_to_evpn = False
     # Only edges/cisco_nxos.j2 defines the RM-<session>-IN/-OUT maps of an external session.
     external_policy_platforms: ClassVar[frozenset[str]] = frozenset({"cisco_nxos"})
 

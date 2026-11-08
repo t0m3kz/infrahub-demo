@@ -176,7 +176,7 @@ class TestLeafPbrRules:
         return (
             patch(
                 "transforms.common.get_customer_pbr_rules",
-                side_effect=lambda acts, _ctx: [
+                side_effect=lambda acts, _ctx, **_: [
                     {"vlan_id": a["vlan_id"], "bypass_prefixes": [], "fw_nexthop": "10.0.0.2"} for a in acts
                 ],
             ),

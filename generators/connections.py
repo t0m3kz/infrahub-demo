@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 
 from utils.limits import DEFAULT_NAMESPACE, WAIT_FOR_PEER_GENERATOR
 
+from .far_end import ports_free_for
 from .helpers import CableTypeDetector, CablingPlanner
 from .helpers.cable_attributes import RackPosition, cable_attributes, endpoint_label
 from .helpers.common import save_with_node_not_found_retry
@@ -39,7 +40,11 @@ from .types import CablingOptions, ChainHop
 # colocation_fabric.py (zone edge) instead of each inlining its own copy — a caller
 # whose border tier uses a different port-naming convention should build and
 # pass its own dict instead of reusing this one.
-BORDER_ROLE_FOR_SERVICES: dict[str, str] = {"firewall": "firewall", "load-balancer": "load-balancer"}
+BORDER_ROLE_FOR_SERVICES: dict[str, str] = {
+    "internal-firewall": "firewall",
+    "external-firewall": "firewall",
+    "load-balancer": "load-balancer",
+}
 
 
 def tracked_save_kwargs(track: bool) -> dict[str, Any]:
@@ -506,6 +511,10 @@ class CablingMixin:
                     include=["cable"],
                 ),
             )
+            top_interfaces, bottom_interfaces = (
+                await ports_free_for(self.client, list(top_interfaces), {i.device.id for i in bottom_interfaces}),
+                await ports_free_for(self.client, list(bottom_interfaces), {i.device.id for i in top_interfaces}),
+            )
             if not top_interfaces or not bottom_interfaces:
                 self.logger.error(
                     f"create_chain_cabling: cannot cable {sorted(top_devices)}<->{sorted(bottom_devices)} — "
@@ -673,7 +682,7 @@ class CablingMixin:
         No-ops for any leg with nothing to cable (create_chain_cabling's own
         empty-devices handling).
         """
-        border_to_firewall = ChainHop(devices=border_names, down_role=border_role_for["firewall"])
+        border_to_firewall = ChainHop(devices=border_names, down_role=border_role_for["internal-firewall"])
         firewall_hop = ChainHop(devices=firewall_names, up_role="uplink")
         await self.create_chain_cabling([border_to_firewall, firewall_hop])
 

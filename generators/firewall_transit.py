@@ -195,6 +195,7 @@ class TransitLegsMixin:
         exchange_specs: list[tuple[str, str, str]],
         *,
         fresh_ports: bool,
+        needs_snat: bool | None = None,
     ) -> _TransitState:
         """Read-only completeness check of a context's legs.
 
@@ -213,7 +214,9 @@ class TransitLegsMixin:
         vlan_id = getattr(context.vlan_id, "value", None)
         if incomplete.untagged_port_ids or not vlan_id:
             return incomplete
-        if INTERNET_TYPE in leg_types and not getattr(context.snat_address, "id", None):
+        if (INTERNET_TYPE in leg_types if needs_snat is None else needs_snat) and not getattr(
+            context.snat_address, "id", None
+        ):
             return incomplete
         if spec.vip_pool_name is not None and not getattr(context.vip_prefix, "id", None):
             return incomplete

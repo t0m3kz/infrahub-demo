@@ -678,3 +678,28 @@ spec:
         data:
           - attribute_name: panel_type
             value_match: any
+
+    # A context is built in steps (VLAN, SNAT or VIP prefix, legs, then its border ports are tagged last): a route needs
+    # the whole of it, so every change of its capabilities re-runs the route generator (an incomplete context writes
+    # nothing). Both kinds are members of service_contexts.
+    - name: trigger-firewall-context-routes-on-capabilities
+      branch_scope: "other_branches"
+      node_kind: ManagedFirewallContext
+      mutation_action: "updated"
+      action: run-context-routes-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: capabilities
+            modification_type: updated
+
+    - name: trigger-loadbalancer-context-routes-on-capabilities
+      branch_scope: "other_branches"
+      node_kind: ManagedLoadbalancerContext
+      mutation_action: "updated"
+      action: run-context-routes-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: capabilities
+            modification_type: updated

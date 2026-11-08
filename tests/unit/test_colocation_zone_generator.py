@@ -115,7 +115,7 @@ class TestFabricTemplateValidation:
         gen.logger.error.assert_not_called()
 
     def test_one_bad_entry_does_not_drop_the_good_ones(self) -> None:
-        good = {"role": "firewall", "quantity": 2, "template": _EDGE_TEMPLATE}
+        good = {"role": "internal-firewall", "quantity": 2, "template": _EDGE_TEMPLATE}
         gen = _made_zone(fabric_templates=[{"role": "border-leaf", "quantity": 2, "template": _EDGE_TEMPLATE}, good])
 
         assert gen._valid_fabric_templates() == [good]
@@ -124,7 +124,7 @@ class TestFabricTemplateValidation:
         """Every colocation role is valid given an edge template with the matching ports."""
         entries = [
             {"role": "edge", "quantity": 2, "template": _EDGE_TEMPLATE_WITH_ALL_SERVICE_PORTS},
-            {"role": "firewall", "quantity": 2, "template": _EDGE_TEMPLATE},
+            {"role": "internal-firewall", "quantity": 2, "template": _EDGE_TEMPLATE},
             {"role": "load-balancer", "quantity": 2, "template": _EDGE_TEMPLATE},
         ]
         gen = _made_zone(fabric_templates=entries)
@@ -175,7 +175,10 @@ class TestTemplateKindGating:
         """Mixed kinds in one zone: the virtual entry is dropped, the physical one survives."""
         physical = {"role": "edge", "quantity": 2, "template": _EDGE_TEMPLATE}
         gen = _made_zone(
-            fabric_templates=[physical, {"role": "firewall", "quantity": 2, "template": _VIRTUAL_EDGE_TEMPLATE}]
+            fabric_templates=[
+                physical,
+                {"role": "internal-firewall", "quantity": 2, "template": _VIRTUAL_EDGE_TEMPLATE},
+            ]
         )
 
         assert gen._valid_fabric_templates() == [physical]
@@ -211,7 +214,7 @@ class TestUncablableServiceEntries:
     def test_service_role_with_a_matching_edge_port_is_kept(self) -> None:
         entries = [
             {"role": "edge", "quantity": 2, "template": _EDGE_TEMPLATE_WITH_FIREWALL_PORTS},
-            {"role": "firewall", "quantity": 2, "template": _EDGE_TEMPLATE},
+            {"role": "internal-firewall", "quantity": 2, "template": _EDGE_TEMPLATE},
         ]
         gen = _made_zone(fabric_templates=entries)
 
@@ -220,7 +223,7 @@ class TestUncablableServiceEntries:
 
     def test_no_physical_edge_entry_at_all_is_not_this_checks_concern(self) -> None:
         """A zone can declare a service role with no edge pair; _cable_services's own no-op guard covers that."""
-        entries = [{"role": "firewall", "quantity": 2, "template": _EDGE_TEMPLATE}]
+        entries = [{"role": "internal-firewall", "quantity": 2, "template": _EDGE_TEMPLATE}]
         gen = _made_zone(fabric_templates=entries)
 
         assert gen._valid_fabric_templates() == entries
@@ -230,7 +233,7 @@ class TestUncablableServiceEntries:
         """A virtual firewall in a virtual colocation is never cabled, so a missing edge port is irrelevant."""
         entries = [
             {"role": "edge", "quantity": 2, "template": _VIRTUAL_EDGE_TEMPLATE},
-            {"role": "firewall", "quantity": 2, "template": _VIRTUAL_EDGE_TEMPLATE},
+            {"role": "internal-firewall", "quantity": 2, "template": _VIRTUAL_EDGE_TEMPLATE},
         ]
         gen = _made_virtual(fabric_templates=entries)
 
@@ -389,7 +392,7 @@ class TestGenerateEntry:
     @pytest.mark.parametrize(
         ("physical_names_by_role", "expected"),
         [
-            ({"edge": ["eg-fr201", "eg-fr202"], "firewall": ["fw-fr201", "fw-fr202"]}, True),
+            ({"edge": ["eg-fr201", "eg-fr202"], "internal-firewall": ["fw-fr201", "fw-fr202"]}, True),
             # No firewalls, or only virtual ones (never registered as physical): no context can be created.
             ({"edge": ["eg-fr201", "eg-fr202"]}, False),
         ],

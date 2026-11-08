@@ -1,0 +1,13 @@
+---
+# The HA pair of each firewall pair. The members are the two devices; the contexts (03_contexts.yml) live on them.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedFirewallHA
+  data:
+    - name: ktw1-fw-ha
+      group_id: 1
+      capabilities: ["ktw1-fw-01", "ktw1-fw-02"]
+    - name: ktw1-xfw-ha
+      group_id: 2
+      capabilities: ["ktw1-xfw-01", "ktw1-xfw-02"]

@@ -63,7 +63,7 @@ builds it:
   member_of_groups: [colocation_zones]
   fabric_templates:
     - ["2", "edge", "N9K-C9316D-GX_EDGE"]
-    - ["2", "firewall", "PA-5260_FIREWALL"]
+    - ["2", "internal-firewall", "PA-5260_FIREWALL"]
 ```
 
 From that the generator creates, per zone:

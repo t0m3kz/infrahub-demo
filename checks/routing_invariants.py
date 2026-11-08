@@ -90,6 +90,7 @@ from transforms.helpers.bgp_external import (
 from utils.circuit_underlay import SESSION_CIRCUIT
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import INTERNET_TYPE, PROD_TYPE, namespace_type_for_environment
+from utils.fabric_roles import FIREWALL_ROLES
 from utils.ownership import CircuitOwnerError, customer_owner, ownership_conflicts
 from utils.segment_addressing import segment_namespace
 
@@ -97,9 +98,7 @@ from .base import WarningCheck
 
 # Devices that may legitimately hold an address in the INTERNET VRF: the transit
 # edge, the ISP side, and firewall legs.
-_INTERNET_DEVICE_ROLES = frozenset(
-    {"edge", "core", "border-leaf", "provider", "firewall", "firewall-active", "firewall-passive"}
-)
+_INTERNET_DEVICE_ROLES = frozenset({"edge", "core", "border-leaf", "provider"}) | FIREWALL_ROLES
 
 _INTERNET_INTERFACE_KEYS = ("InternetPhysicalInterfaces", "InternetVirtualInterfaces", "InternetLagInterfaces")
 

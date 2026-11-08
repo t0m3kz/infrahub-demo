@@ -9,7 +9,7 @@ spec:
       device_type: SRX-1500
       platform: juniper_junos
       software_image: juniper_junos-23.4R2
-      role: firewall
+      role: internal-firewall
       status: provisioning
       interfaces:
         kind: TemplateDcimPhysicalInterface
@@ -30,7 +30,7 @@ spec:
       device_type: SRX-1500
       platform: juniper_junos
       software_image: juniper_junos-23.4R2
-      role: firewall
+      role: internal-firewall
       status: provisioning
       interfaces:
         kind: TemplateDcimPhysicalInterface

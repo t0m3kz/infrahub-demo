@@ -180,10 +180,15 @@ nodes:
 
   - name: Policy
     namespace: Routing
-    description: "An ordered set of terms applied to the routes of a BGP session, in one direction."
+    description: "An ordered set of terms: for the routes of a BGP session in one direction, or for the traffic of an interface (PBR)."  # yamllint disable-line rule:line-length
     label: Routing Policy
     icon: mdi:routes
     include_in_menu: false
+    # The interface-side capability edge: a pbr policy is applied on interfaces through `capabilities`, like a peering
+    # or a circuit (the interface lists it in its own `capabilities`). A pbr policy has no terms: the ACL, the bypass
+    # and the next hop (the virtual IP of the leg of the customer's serving context) are derived at render time.
+    inherit_from:
+      - ManagedGenericInterfaces
     uniqueness_constraints:
       - ["name__value"]
     human_friendly_id:
@@ -213,6 +218,20 @@ nodes:
           - name: generated
             label: Generated
             color: "#3498DB"
+      - name: kind
+        kind: Dropdown
+        label: Kind
+        optional: false
+        default_value: bgp
+        order_weight: 220
+        description: "bgp: a session's routes; pbr: interfaces that redirect to the customer's firewall"
+        choices:
+          - name: bgp
+            label: BGP
+            color: "#3498DB"
+          - name: pbr
+            label: PBR
+            color: "#E69138"
       - name: priority
         kind: Number
         label: Priority
@@ -246,6 +265,15 @@ nodes:
         on_delete: cascade
         identifier: policy__terms
         order_weight: 1000
+      - name: customer_deployment
+        peer: TopologyCustomer
+        label: Customer Deployment
+        description: "A pbr policy: the customer deployment whose traffic it steers; empty for bgp"
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: policy__customer_deployment
+        order_weight: 1480
       - name: import_peerings
         peer: ManagedBGPPeering
         label: Imported By

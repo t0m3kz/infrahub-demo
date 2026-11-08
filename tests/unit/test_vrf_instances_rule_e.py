@@ -45,7 +45,7 @@ def _with_instance(**kwargs: Any) -> dict[str, Any]:
 
 def test_the_schema_scan_finds_the_roles_and_kinds() -> None:
     """The parametrisation below is not empty: carrying roles and kinds are all in the schema."""
-    assert VRF_ROLES <= set(_device_roles()) and {"spine", "firewall", "controller", "provider"} <= set(
+    assert VRF_ROLES <= set(_device_roles()) and {"spine", "internal-firewall", "controller", "provider"} <= set(
         NON_CARRYING_ROLES
     )
     assert VRF_DEVICE_KINDS <= set(_device_kinds())

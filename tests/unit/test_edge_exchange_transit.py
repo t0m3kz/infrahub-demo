@@ -20,7 +20,6 @@ import pytest
 
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.edge import Edge
-from transforms.helpers.firewall import get_exchange_routes
 
 _ROOT = Path(__file__).parent.parent.parent
 _CONFIGS = _ROOT / "tests" / "smoke" / "configs"
@@ -85,20 +84,10 @@ class TestEdgeExchangeTransit:
         assert "route-map RM-VRF-STATIC-2-EVPN-INTERNET permit 10" in out
 
     def test_tenant_default_is_redistributed_on_a_border_leaf(self) -> None:
-        data = _load(_EDGE_FIXTURE)
-        # same exchange wiring on the border leaf transform: the default is exported
-        out = _render(BorderLeaf, data)
+        # the same exchange on a border leaf: the generator marks the default exported, the edge keeps it local
+        out = _render(BorderLeaf, _load("border_leaf_cisco_nxos_exchange_transit"))
         assert "redistribute static route-map RM-VRF-STATIC-2-EVPN-PROD" in out
         assert "ip prefix-list PL-VRF-STATIC-PROD seq 10 permit 0.0.0.0/0" in out
-
-    def test_edge_routes_keep_the_default_static_but_mark_it_local(self) -> None:
-        interfaces = [e["node"] for e in _load(_EDGE_FIXTURE)["DcimDevice"]["edges"][0]["node"]["interfaces"]["edges"]]
-        cleaned = [_flatten(i) for i in interfaces]
-        exported = get_exchange_routes(cleaned)
-        local = get_exchange_routes(cleaned, export_tenant_default=False)
-        assert {(r["vrf"], r["prefix"]) for r in exported} == {(r["vrf"], r["prefix"]) for r in local}
-        assert [r["prefix"] for r in local if r.get("local_only")] == ["0.0.0.0/0"]
-        assert not any(r.get("local_only") for r in exported)
 
     @pytest.mark.parametrize("name", [_EDGE_FIXTURE, "edge_cisco_nxos_bgw_pair", "edge_cisco_nxos_internet_bgw"])
     def test_every_referenced_route_map_is_defined(self, name: str) -> None:

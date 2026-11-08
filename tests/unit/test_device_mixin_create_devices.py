@@ -58,7 +58,7 @@ class TestDeviceMixinCreateDevices:
         gen.client.create = AsyncMock(return_value=created_device)
 
         await gen.create_devices(
-            device_role="firewall",
+            device_role="internal-firewall",
             quantity=1,
             deployment_id="dep-1",
             template={"device_type": {"id": "dt-1"}, "platform": {"name": "nxos"}, "owner": {"id": "owner-0"}},
@@ -131,7 +131,7 @@ class TestDeviceMixinCreateDevices:
             gen.client.create = AsyncMock(return_value=_mock_created_device(expected.__name__, "x-01"))
 
             await gen.create_devices(
-                device_role="firewall",
+                device_role="internal-firewall",
                 quantity=1,
                 deployment_id="dep-1",
                 template={"device_type": {"id": "dt-1"}, "platform": {"name": "linux"}},
@@ -147,7 +147,7 @@ class TestDeviceMixinCreateDevices:
         gen.client.create = AsyncMock(return_value=created_device)
 
         names = await gen.create_devices(
-            device_role="firewall",
+            device_role="internal-firewall",
             quantity=1,
             deployment_id="dep-1",
             template={"device_type": {"id": "dt-1"}, "platform": {"name": "checkpoint_gaia"}},
@@ -173,7 +173,7 @@ class TestDeviceMixinCreateDevices:
         gen.client.create = AsyncMock(return_value=created_device)
 
         await gen.create_devices(
-            device_role="firewall",
+            device_role="internal-firewall",
             quantity=1,
             deployment_id="dep-1",
             template={"device_type": {"id": "dt-1"}, "platform": {"name": "nxos"}},
@@ -190,7 +190,7 @@ class TestDeviceMixinCreateDevices:
 
         with pytest.raises(ValueError, match="name_override is only valid with quantity=1"):
             await gen.create_devices(
-                device_role="firewall",
+                device_role="internal-firewall",
                 quantity=2,
                 deployment_id="dep-1",
                 template={"device_type": {"id": "dt-1"}, "platform": {"name": "checkpoint_gaia"}},
@@ -247,7 +247,7 @@ class TestCreateDevicesPairingDispatch:
         gen.client.create = AsyncMock(return_value=_mock_created_device(DcimPhysicalDevice.__name__, "sw-01"))
 
         await gen.create_devices(
-            device_role="firewall",
+            device_role="internal-firewall",
             quantity=1,
             deployment_id="dep-1",
             template={"device_type": {"id": "dt-1"}, "platform": {"name": "nxos"}},
@@ -275,7 +275,7 @@ class TestCreateDevicesPairingDispatch:
         gen.client.get = AsyncMock(side_effect=[_mock_group(), _mock_group()])
 
         await gen.create_devices(
-            device_role="firewall",
+            device_role="internal-firewall",
             quantity=2,
             deployment_id="dep-1",
             template={"device_type": {"id": "dt-1"}, "platform": {"name": "nxos"}},

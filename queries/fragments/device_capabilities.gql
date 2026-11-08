@@ -90,6 +90,14 @@ fragment DeviceCapabilitiesFields on DcimCapabilities {
           router_id { node { address { value } } }
         }
 
+        ... on ManagedStaticRoute {
+          prefix { value }
+          next_hop { value }
+          distance { value }
+          exported { value }
+          vrf { node { namespace { node { name { value } l3_vni { value } } } } }
+        }
+
         ... on ManagedMLAG {
           id
           domain_id { value }

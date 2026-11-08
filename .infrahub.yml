@@ -631,6 +631,8 @@ queries:
     file_path: queries/topology/add/virtual_circuit.gql
   - name: patch_panel_data
     file_path: queries/topology/add/patch_panel.gql
+  - name: context_routes
+    file_path: queries/topology/add/context_routes.gql
   - name: segment_placement
     file_path: queries/validation/segment_placement.gql
   - name: segment_security
@@ -822,6 +824,15 @@ generator_definitions:
     targets: virtual_circuits
     query: virtual_circuit_data
     class_name: VirtualCircuitSessionGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: add_context_routes
+    file_path: generators/topology/context_routes.py
+    targets: service_contexts
+    query: context_routes
+    class_name: ContextRoutesGenerator
     execute_in_proposed_change: false
     execute_after_merge: false
     parameters:

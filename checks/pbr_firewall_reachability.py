@@ -8,7 +8,7 @@ from infrahub_sdk.checks import InfrahubCheck
 
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import TENANT_NAMESPACE_TYPES
-from utils.fabric_roles import CARRIER_ROLES
+from utils.fabric_roles import CARRIER_ROLES, INTERNAL_FIREWALL_ROLE
 
 PORT_KEYS = ("FirewallPhysicalPorts", "FirewallVirtualPorts")
 
@@ -60,7 +60,7 @@ class CheckPbrFirewallReachability(InfrahubCheck):
             {
                 leg["ip_address"]["ip_namespace"]["name"]
                 for leg in ctx.get("capabilities") or []
-                if (leg.get("device") or {}).get("role") == "firewall"
+                if (leg.get("device") or {}).get("role") == INTERNAL_FIREWALL_ROLE
                 and ((leg.get("ip_address") or {}).get("ip_namespace") or {}).get("namespace_type")
                 in TENANT_NAMESPACE_TYPES
             }

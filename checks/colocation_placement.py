@@ -52,7 +52,7 @@ NAMESPACED_KINDS = (METRO, ZONE, VIRTUAL_COLOCATION)
 FABRIC_KINDS = (ZONE, VIRTUAL_COLOCATION)
 """The kinds that declare kit and carry a zone design (the ColocationFabric generic)."""
 
-ROLE_LIMIT = {"edge": "max_edges", "firewall": "max_firewalls", "load-balancer": "max_load_balancers"}
+ROLE_LIMIT = {"edge": "max_edges", "internal-firewall": "max_firewalls", "load-balancer": "max_load_balancers"}
 """The design attribute that caps the total quantity of each kit role."""
 
 
