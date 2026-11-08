@@ -22,3 +22,27 @@ spec:
           data:
             device: EXT-ISP-A-PE1
             name: et-0/0/0
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGPPeering
+  data:
+    - name: "BGP-PAR1-EDGE01-ISP-B"
+      description: "eBGP transit of the cage to the second ISP: default route in, our public prefixes out"
+      session_type: EBGP
+      peering_role: regular
+      address_families:
+        - ["ipv4", "unicast"]
+      bgp_processes:
+        - "par-colo1-edge-01-inet-bgp"
+        - "EXT-ISP-B-PE1-bgp"
+      capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: par-colo1-edge-01
+            name: Ethernet1/14
+        - kind: DcimPhysicalInterface
+          data:
+            device: EXT-ISP-B-PE1
+            name: et-0/0/1

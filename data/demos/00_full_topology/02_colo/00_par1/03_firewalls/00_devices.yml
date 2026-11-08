@@ -1,0 +1,25 @@
+---
+# The external firewall pair of the PAR-COLO1 cage, from the PA-5260 template (their interfaces come with it): the
+# Internet edge of what the cage routes. They sit in the cage rack, cabled to the cage edge (01_cables.yml).
+# Nothing generated.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: par-colo1-xfw-01
+      object_template: PA-5260_FIREWALL
+      role: external-firewall
+      description: "External firewall 1 of the cage: the Internet edge context, uplink to the cage edge"
+      deployment: PAR-COLO1
+      rack: par-colo1-rack-01
+      position: 10
+      rack_face: front
+    - name: par-colo1-xfw-02
+      object_template: PA-5260_FIREWALL
+      role: external-firewall
+      description: "External firewall 2 of the cage: the Internet edge context, uplink to the cage edge"
+      deployment: PAR-COLO1
+      rack: par-colo1-rack-01
+      position: 12
+      rack_face: front

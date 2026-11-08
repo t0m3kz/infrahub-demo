@@ -1,0 +1,23 @@
+---
+# The internal firewall pair of DC-WAW1, from the PA-5260 template (their interfaces come with it): C900's context
+# lives on it. They sit in the border rack, cabled to the firewall ports of the two border leaves (01_cables.yml).
+# Nothing generated.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: waw1-fw-01
+      object_template: PA-5260_FIREWALL
+      description: "Internal firewall 1: C900's context, uplink to border leaf 1"
+      deployment: DC-WAW1
+      rack: waw1-rack-01
+      position: 10
+      rack_face: front
+    - name: waw1-fw-02
+      object_template: PA-5260_FIREWALL
+      description: "Internal firewall 2: C900's context, uplink to border leaf 2"
+      deployment: DC-WAW1
+      rack: waw1-rack-01
+      position: 12
+      rack_face: front

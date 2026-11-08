@@ -1,0 +1,10 @@
+---
+# The HA pair of the internal firewalls; the context (04_contexts.yml) lives on it.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedFirewallHA
+  data:
+    - name: waw1-fw-ha
+      group_id: 3
+      capabilities: ["waw1-fw-01", "waw1-fw-02"]

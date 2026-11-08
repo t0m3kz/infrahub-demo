@@ -144,6 +144,22 @@ cases:
           crosses:
             - RoutingPolicy:pbr-c900-p-dc-ktw1
             - TopologyCustomerDC:C900-P-DC-KTW1
+        # a server of DC-KTW1 to a server of DC-WAW1 (another segment): each DC steers its segment to its own firewall
+        # (the SVI carries the pbr policy of the footprint, whose context is tagged on the border leaf), so the chain
+        # crosses the context of KTW1 and then the context of WAW1, in that order
+        - src: DcimVirtualDevice:ktw1-vm-01
+          dst: DcimVirtualDevice:waw1-vm-01
+          via:
+            - ManagedFirewallContext:shared-ktw1-fw-ha-prod
+            - ManagedFirewallContext:shared-waw1-fw-ha-prod
+        # a server of DC-WAW1 to the second ISP: WAW1 has no access of its own, the Internet is the cage's (a dark fibre
+        # to the PAR-COLO1 edge, the eBGP session of the edge to ISP-B). The segment is steered to the firewall of WAW1,
+        # and what the cage sends out leaves through its external firewall pair
+        - src: DcimVirtualDevice:waw1-vm-01
+          dst: DcimPhysicalDevice:EXT-ISP-B-PE1
+          via:
+            - ManagedFirewallContext:shared-waw1-fw-ha-prod
+            - DcimPhysicalDevice:par-colo1-xfw-01
       l3:
         - DcimVirtualDevice:ktw1-vm-01
         - DcimVirtualDevice:waw1-vm-01

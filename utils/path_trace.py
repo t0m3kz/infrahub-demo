@@ -20,6 +20,7 @@ import difflib
 import json
 import os
 import sys
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -262,14 +263,15 @@ async def trace(
     src: str,
     dst: str,
     layers: tuple[str, ...] = ("l1", "l3"),
-    via: str | None = None,
+    via: str | Sequence[str] | None = None,
     max_paths: int = MAX_PATHS,
     branch: str | None = None,
     include: tuple[str, ...] = (),
 ) -> list[Leg]:
     """Resolve the ends (and the waypoint) and trace every layer: one Leg per layer, two per layer with `via`. `include`
     adds kinds of OPT_IN_KINDS to the kinds a path may cross."""
-    ends = [await resolve(client, spec, branch) for spec in (src, *([via] if via else []), dst)]
+    waypoints = [via] if isinstance(via, str) else list(via or [])
+    ends = [await resolve(client, spec, branch) for spec in (src, *waypoints, dst)]
     hops = list(zip(ends, ends[1:], strict=False))
     return list(
         await asyncio.gather(
@@ -308,7 +310,11 @@ async def main() -> int:
     )
     ap.add_argument("--layer", choices=("l1", "l2", "l3", "both"), default="both", help="both = l1 and l3")
     ap.add_argument("--max-paths", type=int, default=MAX_PATHS, help="paths the server returns per leg (1..100)")
-    ap.add_argument("--via", help="a node the path must cross: two legs, src -> via and via -> dst")
+    ap.add_argument(
+        "--via",
+        action="append",
+        help="a node the path must cross, in order (repeat for several): src -> via -> ... -> dst",
+    )
     ap.add_argument(
         "--with", dest="include", action="append", default=[], choices=INCLUDE_CHOICES,
         help="a kind a path may cross that is not crossed by default (the VPN: the way in over the internet in L1; "

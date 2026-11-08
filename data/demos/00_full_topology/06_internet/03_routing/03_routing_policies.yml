@@ -70,6 +70,7 @@ spec:
       default_action: deny
       import_peerings:
         - "BGP-KTW1-EDGE01-ISP-A"
+        - "BGP-PAR1-EDGE01-ISP-B"
       terms:
         data:
           - seq: 10
@@ -83,6 +84,7 @@ spec:
       default_action: deny
       export_peerings:
         - "BGP-KTW1-EDGE01-ISP-A"
+        - "BGP-PAR1-EDGE01-ISP-B"
       terms:
         data:
           - seq: 10

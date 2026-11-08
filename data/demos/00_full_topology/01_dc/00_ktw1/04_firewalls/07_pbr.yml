@@ -1,6 +1,7 @@
 ---
 # The PBR of C900 in DC-KTW1: the two SVIs of its segment c900-web-p are steered to the firewall that serves the
-# footprint (shared-ktw1-fw-ha-prod, 04_contexts.yml). The policy holds no next hop, ACL or bypass: the transform
+# footprint (shared-ktw1-fw-ha-prod, 04_contexts.yml), and the L3 VNI SVIs of the PROD VRF on the border leaves steer
+# what enters the VRF from the overlay to it. The policy holds no next hop, ACL or bypass: the transform
 # derives them from the footprint's context and the segment's policies. The interfaces are its capabilities, like a
 # peering's. Authored here, so `origin` is manual; on 30_all the VRF pass of the device writes the same object
 # (generators/helpers/pbr_sync.py).
@@ -19,3 +20,7 @@ spec:
           data: {device: ktw1-leaf-01, name: Vlan100}
         - kind: DcimVirtualInterface
           data: {device: ktw1-leaf-02, name: Vlan100}
+        - kind: DcimVirtualInterface
+          data: {device: ktw1-bl-01, name: Vlan3900}
+        - kind: DcimVirtualInterface
+          data: {device: ktw1-bl-02, name: Vlan3900}

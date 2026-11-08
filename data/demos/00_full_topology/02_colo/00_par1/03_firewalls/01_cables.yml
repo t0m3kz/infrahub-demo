@@ -1,0 +1,43 @@
+---
+# The edge template has two `firewall` ports (Ethernet1/15-16), both taken by the DCI to DC-GDN1 in this sample, and no
+# other free port of that role. Two free ports of the cage edge (Ethernet1/2, a partner port, and Ethernet1/13, an
+# uplink) are therefore set to the `firewall` role here, which is what a context tags and the leaves read. A port role
+# in data overrides the template's for that port only.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - device: par-colo1-edge-01
+      name: Ethernet1/2
+      role: firewall
+      status: active
+      description: "Firewall port: par-colo1-xfw-01"
+    - device: par-colo1-edge-01
+      name: Ethernet1/13
+      role: firewall
+      status: active
+      description: "Firewall port: par-colo1-xfw-02"
+---
+# Each firewall's uplink ethernet1/1 to a firewall port of the cage edge. Cables in data are never generated.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+    - name: "CBL-PAR1-XFW01-EDGE01"
+      type: smf
+      deployment: "PAR-COLO1"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data: {device: "par-colo1-xfw-01", name: "ethernet1/1"}
+        - kind: DcimPhysicalInterface
+          data: {device: "par-colo1-edge-01", name: "Ethernet1/2"}
+    - name: "CBL-PAR1-XFW02-EDGE01"
+      type: smf
+      deployment: "PAR-COLO1"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data: {device: "par-colo1-xfw-02", name: "ethernet1/1"}
+        - kind: DcimPhysicalInterface
+          data: {device: "par-colo1-edge-01", name: "Ethernet1/13"}
