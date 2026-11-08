@@ -252,21 +252,25 @@ class DeviceVrfFacts:
         inputs = self.inputs
         return carries_vrfs(inputs.kind, inputs.role, inputs.groups, inputs.deployment_kind, inputs.status)
 
-    def pbr_footprints(self) -> dict[str, str | None]:
-        """SVI id -> the footprint whose pbr policy it belongs to, None when it is not steered.
+    def pbr_footprints_by_name(self) -> dict[str, str | None]:
+        """``Vlan<id>`` -> the footprint whose pbr policy the SVI of that name belongs to, None when it is not steered.
 
         An SVI is steered for the footprint of its segment that stands in the device's hosting deployment (its DC or
         metro) and has a firewall context; none, or no such footprint, means no steering. The lowest id decides when a
-        segment has two footprints there (the same every run). Only the device's own SVIs are in the answer."""
-        desired = self.desired_svis()
-        result: dict[str, str | None] = {}
-        for svi in self.svis:
-            row = desired.get(svi.name)
-            candidates = sorted(
-                fp.id for fp in (row.footprints if row else ()) if fp.has_context and fp.parent_id == self.hosting_id
+        segment has two footprints there (the same every run). Keyed by name because an SVI the run has just created
+        has no id in these facts."""
+        return {
+            name: next(
+                iter(sorted(fp.id for fp in row.footprints if fp.has_context and fp.parent_id == self.hosting_id)), None
             )
-            result[svi.id] = candidates[0] if candidates else None
-        return result
+            for name, row in self.desired_svis().items()
+        }
+
+    def pbr_footprints(self) -> dict[str, str | None]:
+        """SVI id -> the footprint whose pbr policy it belongs to (see ``pbr_footprints_by_name``), for the SVIs that
+        exist; one that is no longer desired is not steered."""
+        by_name = self.pbr_footprints_by_name()
+        return {svi.id: by_name.get(svi.name) for svi in self.svis}
 
     def desired_svis(self) -> dict[str, RoutedRow]:
         """``Vlan<id>`` -> the routed row it realizes; empty for a device that carries no VRF."""

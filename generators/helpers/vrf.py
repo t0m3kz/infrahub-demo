@@ -61,6 +61,7 @@ from utils.vrf_demand import (
 )
 
 from ..protocols import DcimVirtualInterface, ManagedVRF
+from .pbr_sync import PbrMixin
 from .svi import SviMixin
 
 if TYPE_CHECKING:
@@ -80,7 +81,7 @@ def vrf_instance_lock_key(deployment_id: str, namespace: str) -> str:
     return f"vrf-{deployment_id}-{namespace}"
 
 
-class VrfMixin(SviMixin):
+class VrfMixin(PbrMixin, SviMixin):
     """Mixin converging the VRF instances, their members and the SVIs of devices.
 
     Expects the host class to provide ``client``, ``logger``, ``resource_lock`` (PoolMixin) and ``fail``
@@ -187,6 +188,8 @@ class VrfMixin(SviMixin):
                     instance_ids[name] = await self._join_instance(facts, hosting[0], hosting[1], namespaces[name])
 
         await self.sync_svis(facts, instance_ids)
+        # The SVIs now exist: attach them to the pbr policy of their footprint (and detach the ones no longer steered).
+        await self.sync_pbr(facts)
 
         if prune:
             for key in drop:

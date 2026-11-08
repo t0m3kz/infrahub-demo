@@ -189,6 +189,16 @@ class ManagedGenericInterfaces(CoreNode):
     capabilities: RelationshipManager[DcimInterface]
 
 
+class RoutingPolicy(ManagedGenericInterfaces):
+    name: String
+    description: StringOptional
+    origin: Dropdown
+    kind: Dropdown
+    priority: Integer
+    default_action: Dropdown
+    customer_deployment: RelationshipAttribute[TopologyCustomer]
+
+
 class ManagedHA(CoreNode):
     group_id: IntegerOptional
     mode: Dropdown
