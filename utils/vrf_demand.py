@@ -28,13 +28,14 @@ from dataclasses import dataclass, field
 from functools import cached_property
 from typing import Any
 
-from utils.exchange_transit import INTERNET_TYPE, service_context_caps, transit_leg_namespace
+from utils.exchange_transit import INTERNET_TYPE, l3vni_svi_vlan, service_context_caps, transit_leg_namespace
 from utils.fabric_roles import BORDER_ROLES
 from utils.limits import DEFAULT_NAMESPACE, GROUP_PROVIDER_STUBS
 from utils.segment_addressing import hosting_deployment, routed_segment_namespace
 
 VRF_KIND = "ManagedVRF"
 SVI_ROLE = "svi"
+L3VNI_ROLE = "l3vni"
 """DcimInterface role of a segment SVI (schemas/base/dcim.yml)."""
 SVI_NAME_PREFIX = "Vlan"
 """A segment SVI is named ``Vlan<vlan_id>`` (``svi_name``)."""
@@ -238,6 +239,8 @@ class DeviceVrfFacts:
     # The device's hosting deployment (utils/segment_addressing.py hosting_deployment): where its instances live.
     hosting_id: str | None = None
     hosting_name: str | None = None
+    # The role-l3vni interfaces of the device (the L3 VNI SVI of each VRF it terminates; none when the writer has not run).
+    l3vni_svis: tuple[SviFacts, ...] = field(default=())
     # Interface name -> role of every interface that is not a segment SVI: an SVI name must not collide with one
     # (the MLAG control SVI Vlan4094, a hand-made VlanN).
     other_interfaces: Mapping[str, str | None] = field(default_factory=dict)
@@ -252,6 +255,23 @@ class DeviceVrfFacts:
         """Whether the device can carry instances and SVIs at all (in service, one of our routing devices)."""
         inputs = self.inputs
         return carries_vrfs(inputs.kind, inputs.role, inputs.groups, inputs.deployment_kind, inputs.status)
+
+    def desired_l3vni_svis(self, namespaces: Mapping[str, Mapping[str, Any]]) -> dict[str, str]:
+        """``Vlan<slot>`` -> the namespace whose L3 VNI the device terminates, for a device that carries VRFs.
+
+        A VRF is terminated (symmetric IRB: an L3 VNI SVI with ``ip forward``) where the device routes a segment or a
+        transit leg in it, the same realization the overlay renders (transforms/helpers/overlay.py ``_l3_instances``); a
+        namespace with no ``l3_vni`` or no slot for its type has none. The name is the fixed slot of the namespace type
+        (``utils.exchange_transit.l3vni_svi_vlan``), so a VRF keeps it whatever else the device carries."""
+        if not self.carries_vrfs:
+            return {}
+        desired: dict[str, str] = {}
+        for name in sorted((self.inputs.row_namespaces | self.inputs.leg_namespaces) - {DEFAULT_NAMESPACE}):
+            namespace = namespaces.get(name) or {}
+            vlan = l3vni_svi_vlan(namespace.get("namespace_type"))
+            if namespace.get("l3_vni") and vlan is not None:
+                desired[svi_name(vlan)] = name
+        return desired
 
     def pbr_footprints_by_name(self) -> dict[str, str | None]:
         """``Vlan<id>`` -> the footprint whose pbr policy the SVI of that name belongs to, None when it is not steered.
@@ -370,6 +390,7 @@ def device_vrf_facts(device: dict[str, Any]) -> DeviceVrfFacts:
     row_facts = [(row, _routed_row(row)) for row in rows]
     routed = [routed_row for _, routed_row in row_facts if routed_row]
     svis = tuple(_svi(iface) for iface in interfaces if iface.get("role") == SVI_ROLE)
+    l3vni_svis = tuple(_svi(iface) for iface in interfaces if iface.get("role") == L3VNI_ROLE)
     hosting = hosting_deployment(device.get("deployment")) or {}
     inputs = VrfDemandInputs(
         kind=device.get("typename"),
@@ -390,10 +411,11 @@ def device_vrf_facts(device: dict[str, Any]) -> DeviceVrfFacts:
         routed_rows=tuple(routed),
         unrouted_row_ids=frozenset(row["id"] for row, routed_row in row_facts if row.get("id") and routed_row is None),
         svis=svis,
+        l3vni_svis=l3vni_svis,
         other_interfaces={
             iface["name"]: iface.get("role")
             for iface in interfaces
-            if iface.get("name") and iface.get("role") != SVI_ROLE
+            if iface.get("name") and iface.get("role") not in (SVI_ROLE, L3VNI_ROLE)
         },
         instances=tuple(instance_facts(vrf) for vrf in device_memberships(device)),
         hosting_id=hosting.get("id"),

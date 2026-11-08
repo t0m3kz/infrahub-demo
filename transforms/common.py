@@ -34,7 +34,7 @@ from utils.exchange_transit import service_context_caps
 from utils.fabric_roles import BORDER_ROLES, OFFICE_LISP_ROLES
 from utils.limits import UNDERLAY_MTU
 from utils.segment_addressing import segment_hosting_candidates
-from utils.vrf_demand import SVI_ROLE
+from utils.vrf_demand import L3VNI_ROLE, SVI_ROLE
 
 _log = logging.getLogger(__name__)
 
@@ -45,7 +45,7 @@ UNFILTERED_BANNER_PLATFORMS = frozenset({"cisco_ios", "cisco_xe"})
 # Interface roles the generic interface loop does not render: the MLAG control SVI is rendered by the platform's MLAG
 # include (it needs the peer-link VLAN/trunk group around it), a segment SVI (role svi, an object since the VRF
 # instances) by the VLAN loop from its segment (get_vlans), and neither is a port.
-_NON_TEMPLATE_INTERFACE_ROLES = frozenset({"mlag-control", SVI_ROLE})
+_NON_TEMPLATE_INTERFACE_ROLES = frozenset({"mlag-control", SVI_ROLE, L3VNI_ROLE})
 
 
 def _fabric_rt_asn(deployment: Any) -> int | None:

@@ -428,6 +428,10 @@ generics:
             label: SVI
             description: "Routed VLAN interface of a segment on a fabric switch, generated from its VLAN-domain row"
             color: "#FBBF24"
+          - name: l3vni
+            label: L3 VNI SVI
+            description: "Routed VLAN interface of a VRF the switch terminates (L3 VNI, symmetric IRB), no address"
+            color: "#F59E0B"
           - name: firewall
             label: Firewall
             description: "Dedicated port for firewall attachment on a border-leaf"

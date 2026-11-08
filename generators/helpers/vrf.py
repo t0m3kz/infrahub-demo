@@ -188,6 +188,7 @@ class VrfMixin(PbrMixin, SviMixin):
                     instance_ids[name] = await self._join_instance(facts, hosting[0], hosting[1], namespaces[name])
 
         await self.sync_svis(facts, instance_ids)
+        await self.sync_l3vni_svis(facts, namespaces, instance_ids)
         # The SVIs now exist: attach them to the pbr policy of their footprint (and detach the ones no longer steered).
         await self.sync_pbr(facts)
 
