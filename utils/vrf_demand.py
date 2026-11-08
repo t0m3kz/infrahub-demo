@@ -162,6 +162,17 @@ def vrf_demand(inputs: VrfDemandInputs) -> frozenset[str]:
 
 
 @dataclass(frozen=True)
+class Footprint:
+    """A customer footprint of a segment: where it stands (``parent_id``, its DC or metro) and whether a firewall
+    context serves it (the pbr policy steers to that context)."""
+
+    id: str
+    name: str | None
+    parent_id: str | None
+    has_context: bool
+
+
+@dataclass(frozen=True)
 class RoutedRow:
     """A routed segment row of the device's VLAN domain: the device needs its SVI and (unless default) its VRF."""
 
@@ -169,6 +180,17 @@ class RoutedRow:
     vlan_id: int
     namespace: str
     segment_name: str | None
+    footprints: tuple[Footprint, ...] = ()
+
+
+@dataclass(frozen=True)
+class SviPolicy:
+    """A pbr policy applied on an SVI (the SVI's ``capabilities``)."""
+
+    id: str
+    kind: str | None
+    origin: str | None
+    customer_id: str | None
 
 
 @dataclass(frozen=True)
@@ -183,6 +205,7 @@ class SviFacts:
     row_id: str | None
     has_address: bool
     has_capabilities: bool
+    policies: tuple[SviPolicy, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -229,6 +252,22 @@ class DeviceVrfFacts:
         inputs = self.inputs
         return carries_vrfs(inputs.kind, inputs.role, inputs.groups, inputs.deployment_kind, inputs.status)
 
+    def pbr_footprints(self) -> dict[str, str | None]:
+        """SVI id -> the footprint whose pbr policy it belongs to, None when it is not steered.
+
+        An SVI is steered for the footprint of its segment that stands in the device's hosting deployment (its DC or
+        metro) and has a firewall context; none, or no such footprint, means no steering. The lowest id decides when a
+        segment has two footprints there (the same every run). Only the device's own SVIs are in the answer."""
+        desired = self.desired_svis()
+        result: dict[str, str | None] = {}
+        for svi in self.svis:
+            row = desired.get(svi.name)
+            candidates = sorted(
+                fp.id for fp in (row.footprints if row else ()) if fp.has_context and fp.parent_id == self.hosting_id
+            )
+            result[svi.id] = candidates[0] if candidates else None
+        return result
+
     def desired_svis(self) -> dict[str, RoutedRow]:
         """``Vlan<id>`` -> the routed row it realizes; empty for a device that carries no VRF."""
         if not self.carries_vrfs:
@@ -242,11 +281,40 @@ def _routed_row(row: dict[str, Any]) -> RoutedRow | None:
     namespace = routed_segment_namespace(segment).get("name")
     if not namespace or not row.get("id") or not isinstance(row.get("vlan_id"), int):
         return None
-    return RoutedRow(id=row["id"], vlan_id=row["vlan_id"], namespace=namespace, segment_name=segment.get("name"))
+    return RoutedRow(
+        id=row["id"],
+        vlan_id=row["vlan_id"],
+        namespace=namespace,
+        segment_name=segment.get("name"),
+        footprints=tuple(
+            Footprint(
+                id=fp["id"],
+                name=fp.get("name"),
+                parent_id=(fp.get("parent") or {}).get("id"),
+                has_context=bool(fp.get("serving_firewall_context") or fp.get("serving_firewall_contexts")),
+            )
+            for fp in segment.get("customer_deployments") or []
+            if fp.get("id")
+        ),
+    )
+
+
+PBR_POLICY_KIND = "pbr"
 
 
 def _svi(iface: dict[str, Any]) -> SviFacts:
     vrf = iface.get("vrf") or {}
+    capabilities = iface.get("capabilities") or []
+    policies = tuple(
+        SviPolicy(
+            id=cap.get("id") or "",
+            kind=cap.get("kind"),
+            origin=cap.get("origin"),
+            customer_id=(cap.get("customer_deployment") or {}).get("id"),
+        )
+        for cap in capabilities
+        if cap.get("typename") == "RoutingPolicy"
+    )
     return SviFacts(
         id=iface.get("id") or "",
         name=iface.get("name") or "",
@@ -255,7 +323,9 @@ def _svi(iface: dict[str, Any]) -> SviFacts:
         vrf_deployment_id=(vrf.get("deployment") or {}).get("id"),
         row_id=(iface.get("segment_vlan") or {}).get("id"),
         has_address=bool((iface.get("ip_address") or {}).get("address")),
-        has_capabilities=bool(iface.get("capabilities")),
+        # A pbr policy is the only capability an SVI may have (rule S4 judges the rest).
+        has_capabilities=any(cap.get("typename") != "RoutingPolicy" for cap in capabilities),
+        policies=policies,
     )
 
 

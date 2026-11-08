@@ -31,8 +31,24 @@ def address(addr: str, namespace: str, namespace_type: str | None = None) -> dic
     return {"node": {"address": {"value": addr}, "ip_namespace": namespace_ref(namespace, namespace_type)}}
 
 
+def raw_footprint(footprint_id: str, parent_id: str = HOSTING_ID, *, context: bool = True) -> dict[str, Any]:
+    """A customer footprint of a segment: in a DC, with or without a serving firewall context."""
+    return {
+        "id": footprint_id,
+        "name": {"value": footprint_id},
+        "parent": {"node": {"id": parent_id}},
+        "serving_firewall_context": {"node": {"id": "ctx-1"}} if context else {"node": None},
+    }
+
+
 def raw_row(
-    row_id: str, vlan_id: int, namespace: str | None = "PROD", segment: str = "seg", *, terminated: bool = False
+    row_id: str,
+    vlan_id: int,
+    namespace: str | None = "PROD",
+    segment: str = "seg",
+    *,
+    terminated: bool = False,
+    footprints: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """A ManagedSegmentVlan row; ``namespace`` None means a segment without a gateway (pure L2).
 
@@ -44,6 +60,7 @@ def raw_row(
         "name": {"value": segment},
         "gateway": None,
         "terminated_on": {"node": {"id": "ctx-1"}} if terminated else None,
+        "customer_deployments": edges(*(footprints or [])),
     }
     if namespace:
         seg["gateway"] = {
