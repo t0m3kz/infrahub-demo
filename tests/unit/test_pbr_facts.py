@@ -78,3 +78,40 @@ def test_a_terminated_segment_is_no_svi_and_so_not_steered() -> None:
     rows = [raw_row("r1", 100, "PROD", terminated=True, footprints=[raw_footprint("fp-a")])]
     facts = facts_of(raw_device("d1", "leaf-1", rows=rows))
     assert facts.pbr_footprints_by_name() == {}
+
+
+def _firewall_context(
+    tenant: str | None, served: list[str], namespace: str = "PROD", ctx_id: str = "ctx-1"
+) -> dict[str, Any]:
+    """A firewall context on a service port: a leg in the tenant VRF and one in INTERNET, served footprints."""
+    from tests.unit.vrf_instances_helpers import edges, raw_context
+
+    ctx = raw_context(
+        "ManagedFirewallContext",
+        3000,
+        ("internal-firewall", namespace, "prod"),
+        ("internal-firewall", "INTERNET", "internet"),
+    )
+    ctx["id"] = ctx_id
+    ctx["tenant"] = {"node": {"id": tenant}} if tenant else {"node": None}
+    ctx["served_deployments"] = edges(*({"id": fp, "name": {"value": fp}} for fp in served))
+    return ctx
+
+
+def _border(contexts: list[dict[str, Any]], role: str = "border-leaf") -> Any:
+    from tests.unit.vrf_instances_helpers import raw_interface
+
+    port = raw_interface("p1", "Ethernet1/25", "firewall", None, contexts, "DcimPhysicalInterface")
+    return facts_of(raw_device("d1", "bl-1", role=role, interfaces=[port]))
+
+
+def test_a_border_leaf_steers_the_footprints_its_contexts_serve_through_the_l3_vni_svi() -> None:
+    """The shared context serves two footprints and a dedicated one its tenant: all land on the PROD L3 VNI SVI."""
+    facts = _border([_firewall_context(None, ["fp-a", "fp-b"]), _firewall_context("fp-c", [], ctx_id="ctx-2")])
+    assert facts.pbr_overlay_footprints_by_name() == {"Vlan3900": frozenset({"fp-a", "fp-b", "fp-c"})}
+
+
+def test_only_a_border_role_steers_the_overlay_ingress() -> None:
+    """A leaf has no context on a service port; any other role gets no overlay steering."""
+    assert _border([_firewall_context(None, ["fp-a"])], role="leaf").pbr_overlay_footprints_by_name() == {}
+    assert _border([], role="border-leaf").pbr_overlay_footprints_by_name() == {}

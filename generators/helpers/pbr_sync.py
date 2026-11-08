@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from utils.vrf_demand import SVI_ROLE, DeviceVrfFacts
+from utils.vrf_demand import L3VNI_ROLE, SVI_ROLE, DeviceVrfFacts
 
 from ..protocols import DcimVirtualInterface, RoutingPolicy
 from .pbr_attach import GENERATED, PBR_KIND, PbrPolicyFact, plan_pbr_attachments, policy_name
@@ -31,11 +31,19 @@ class PbrMixin:
 
     async def sync_pbr(self, facts: DeviceVrfFacts) -> None:
         """Make the pbr policies hold exactly the device's steered SVIs (nothing when they already do)."""
-        by_name = facts.pbr_footprints_by_name()
-        wanted_footprints = sorted({footprint for footprint in by_name.values() if footprint})
-        if not wanted_footprints and not any(svi.policies for svi in facts.svis):
+        by_name: dict[str, str | frozenset[str] | None] = {
+            **facts.pbr_footprints_by_name(),
+            **facts.pbr_overlay_footprints_by_name(),
+        }
+        held = [*facts.svis, *facts.l3vni_svis]
+        wanted_footprints = sorted(
+            {fp for value in by_name.values() for fp in ((value,) if isinstance(value, str) else (value or ()))}
+        )
+        if not wanted_footprints and not any(svi.policies for svi in held):
             return
-        svis = await self.client.filters(kind=DcimVirtualInterface, device__ids=[facts.id], role__value=SVI_ROLE)
+        svis = await self.client.filters(
+            kind=DcimVirtualInterface, device__ids=[facts.id], role__values=[SVI_ROLE, L3VNI_ROLE]
+        )
         svi_ids = {svi.name.value: svi.id for svi in svis}
         desired = {svi_ids[name]: footprint for name, footprint in by_name.items() if name in svi_ids}
         owned = set(svi_ids.values())
@@ -65,7 +73,7 @@ class PbrMixin:
     ) -> list[PbrPolicyFact]:
         """The pbr policies that hold a SVI of the device (from its facts) and those of the wanted footprints."""
         held: dict[str, dict[str, Any]] = {}
-        for svi in facts.svis:
+        for svi in [*facts.svis, *facts.l3vni_svis]:
             for policy in svi.policies:
                 entry = held.setdefault(policy.id, {"fact": policy, "attached": set()})
                 if svi.id in owned:

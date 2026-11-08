@@ -129,3 +129,20 @@ async def test_a_device_with_no_steered_svi_and_no_policy_reads_nothing() -> Non
     writer.client.filters = AsyncMock(side_effect=AssertionError("must not read"))
     rows = [raw_row("r1", 100, "PROD")]
     await writer.sync_pbr(facts_of(raw_device("d1", "leaf-1", rows=rows, interfaces=[raw_svi("svi-1", 100, "r1")])))
+
+
+async def test_a_border_leaf_attaches_every_served_footprint_to_its_l3_vni_svi() -> None:
+    """The context on a service port serves two footprints: both policies are created and hold the L3 VNI SVI."""
+    from tests.unit.test_pbr_facts import _firewall_context
+    from tests.unit.vrf_instances_helpers import raw_interface
+
+    port = raw_interface(
+        "p1", "Ethernet1/25", "firewall", None, [_firewall_context(None, ["fp-a", "fp-b"])], "DcimPhysicalInterface"
+    )
+    l3vni = raw_svi("l3-1", 3900, None, name="Vlan3900")
+    l3vni["role"] = {"value": "l3vni"}
+    facts = facts_of(raw_device("d1", "bl-1", role="border-leaf", interfaces=[port, l3vni]))
+    writer = _Writer([("l3-1", "Vlan3900")])
+    await writer.sync_pbr(facts)
+    assert sorted(d["customer_deployment"]["id"] for d in writer.created) == ["fp-a", "fp-b"]
+    assert sorted(ids for _, ids in writer.added) == [["l3-1"], ["l3-1"]]

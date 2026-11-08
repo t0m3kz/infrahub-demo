@@ -94,3 +94,15 @@ def test_two_svis_of_one_footprint_create_the_policy_once() -> None:
 def test_an_svi_the_caller_does_not_own_is_ignored() -> None:
     """The plan only covers the interfaces the caller reconciles."""
     assert not plan_pbr_attachments({"svi-x": "fp-a"}, [], ["svi-1"])
+
+
+def test_one_interface_can_be_steered_for_several_footprints() -> None:
+    """The L3 VNI SVI of a VRF is shared: each footprint's policy is attached to it."""
+    plan = plan_pbr_attachments({"l3": {"fp-a", "fp-b"}}, [_policy("p-a", "fp-a")], ["l3"])
+    assert plan == PbrPlan(create=("fp-b",), add={"fp-a": ("l3",), "fp-b": ("l3",)})
+
+
+def test_a_footprint_that_left_the_shared_interface_is_detached_and_the_others_stay() -> None:
+    """Only the policy of the footprint that is no longer served by the device loses the interface."""
+    both = [_policy("p-a", "fp-a", ("l3",)), _policy("p-b", "fp-b", ("l3",))]
+    assert plan_pbr_attachments({"l3": {"fp-a"}}, both, ["l3"]) == PbrPlan(remove={"p-b": ("l3",)})

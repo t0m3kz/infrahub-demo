@@ -16,7 +16,7 @@ the device's DC) and the generated pbr policies already holding some of the devi
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Collection, Iterable, Mapping
 from dataclasses import dataclass, field
 
 PBR_KIND = "pbr"
@@ -57,35 +57,46 @@ class PbrPlan:
         return bool(self.create or self.add or self.remove)
 
 
-def plan_pbr_attachments(
-    desired: Mapping[str, str | None], policies: Iterable[PbrPolicyFact], owned: Iterable[str]
-) -> PbrPlan:
-    """The attachments that make the device's SVIs exactly the desired ones.
+def _footprints(value: str | Collection[str] | None) -> frozenset[str]:
+    """The footprints an interface is steered for: one (an SVI of a segment), several (the L3 VNI SVI of a VRF, shared by
+    every footprint whose context is tagged on the device) or none."""
+    if not value:
+        return frozenset()
+    return frozenset({value}) if isinstance(value, str) else frozenset(value)
 
-    ``desired``: SVI id -> the footprint it is steered for, None for an SVI that is not steered (no footprint, or the
-    footprint has no firewall context). ``owned``: the ids of the SVIs this caller reconciles. ``policies``: every pbr
-    policy that holds, or may hold, one of them.
+
+def plan_pbr_attachments(
+    desired: Mapping[str, str | Collection[str] | None], policies: Iterable[PbrPolicyFact], owned: Iterable[str]
+) -> PbrPlan:
+    """The attachments that make the device's steered interfaces exactly the desired ones.
+
+    ``desired``: interface id -> the footprint(s) it is steered for, empty or None for an interface that is not steered
+    (no footprint, or the footprint has no firewall context). ``owned``: the ids of the interfaces this caller
+    reconciles. ``policies``: every pbr policy that holds, or may hold, one of them.
     """
     ours = {policy.customer_id: policy for policy in policies if policy.ours and policy.customer_id}
     owned_ids = frozenset(owned)
-    wanted = {svi: footprint for svi, footprint in desired.items() if footprint and svi in owned_ids}
+    wanted = {iface: _footprints(value) for iface, value in desired.items() if iface in owned_ids}
     create: list[str] = []
     add: dict[str, list[str]] = {}
-    for svi, footprint in sorted(wanted.items()):
-        policy = ours.get(footprint)
-        if policy is None:
-            if footprint not in create:
-                create.append(footprint)
-            add.setdefault(footprint, []).append(svi)
-        elif svi not in policy.attached:
-            add.setdefault(footprint, []).append(svi)
+    for iface, footprints in sorted(wanted.items()):
+        for footprint in sorted(footprints):
+            policy = ours.get(footprint)
+            if policy is None:
+                if footprint not in create:
+                    create.append(footprint)
+                add.setdefault(footprint, []).append(iface)
+            elif iface not in policy.attached:
+                add.setdefault(footprint, []).append(iface)
     remove: dict[str, list[str]] = {}
     for policy in ours.values():
-        stale = sorted(svi for svi in policy.attached & owned_ids if wanted.get(svi) != policy.customer_id)
+        stale = sorted(
+            iface for iface in policy.attached & owned_ids if policy.customer_id not in wanted.get(iface, frozenset())
+        )
         if stale:
             remove[policy.id] = stale
     return PbrPlan(
         create=tuple(create),
-        add={footprint: tuple(svis) for footprint, svis in add.items()},
-        remove={policy: tuple(svis) for policy, svis in remove.items()},
+        add={footprint: tuple(ifaces) for footprint, ifaces in add.items()},
+        remove={policy: tuple(ifaces) for policy, ifaces in remove.items()},
     )

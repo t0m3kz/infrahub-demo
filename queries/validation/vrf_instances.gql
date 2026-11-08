@@ -91,6 +91,10 @@ query vrf_instances($device_ids: [ID], $with_instances: Boolean = true) {
                       ... on RoutingPolicy { kind { value } origin { value } customer_deployment { node { id } } }
                       ... on ManagedFirewallContext {
                         vlan_id { value }
+                        # The footprints the context serves: their pbr policy is applied on the L3 VNI SVI of the
+                        # tenant VRF of the legs (PBR of the traffic that enters the VRF from the overlay).
+                        tenant { node { id } }
+                        served_deployments { edges { node { id name { value } } } }
                         capabilities { edges { node { ...VrfDemandLegFields } } }
                       }
                       ... on ManagedLoadbalancerContext {
