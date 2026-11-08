@@ -234,6 +234,53 @@ def build_exchange_transit_bl_data(
     return data
 
 
+def build_overlay_pbr_bl_data(*, device_name: str, platform: str) -> dict:
+    """The exchange-transit border leaf with the PBR of the overlay ingress on its PROD L3 VNI SVI.
+
+    The shared context serves footprint dep-shared (segment seg-shared, 10.1.0.0/24) and the dedicated one dep-acme
+    (seg-acme, 10.2.0.0/24); both are tagged on the firewall port, so the SVI Vlan3900 of PROD carries the pbr policy of
+    each. The DC-wide contexts are those of the port (what the border leaf reads of its deployment). Each footprint is
+    steered to the VIP of its own context in PROD (100.66.0.4 and 100.66.0.12), by the prefix of its segment only."""
+    data = build_exchange_transit_bl_data(device_name=device_name, platform=platform, with_customer_port=False)
+    node = data["DcimDevice"]["edges"][0]["node"]
+    fw_port = next(e["node"] for e in node["interfaces"]["edges"] if e["node"]["role"] == _v("firewall"))
+    node["deployment"]["node"]["devices"] = {
+        "edges": [
+            {
+                "node": {
+                    "capabilities": _edges([{"__typename": "ManagedFirewallHA", "contexts": fw_port["capabilities"]}])
+                }
+            }
+        ]
+    }
+    policies = [
+        {
+            "node": {
+                "__typename": "RoutingPolicy",
+                "kind": _v("pbr"),
+                "origin": _v("generated"),
+                "customer_deployment": _node({"id": footprint}),
+            }
+        }
+        for footprint in ("dep-shared", "dep-acme")
+    ]
+    node["interfaces"]["edges"].append(
+        {
+            "node": {
+                "__typename": "DcimVirtualInterface",
+                "name": _v("Vlan3900"),
+                "description": _v(""),
+                "status": _v("active"),
+                "role": _v("l3vni"),
+                "ip_address": _node(None),
+                "vrf": _node({"namespace": _node({"name": _v("PROD")})}),
+                "capabilities": {"edges": policies},
+            }
+        }
+    )
+    return data
+
+
 def build_edge_exchange_transit_data(*, device_name: str, platform: str) -> dict:
     """A colocation edge BGW whose firewall port is tagged with the shared and a dedicated context.
 
@@ -693,6 +740,17 @@ def write_fixtures() -> tuple[int, int]:
             build_exchange_transit_bl_data(device_name="dc1-border-leaf-01", platform=platform),
         )
         for platform in ["cisco_nxos", "arista_eos", "sonic", "dell_sonic"]
+    )
+    generated += g
+    errors += e
+
+    # PBR of the overlay ingress on the L3 VNI SVI of a border leaf (NX-OS renders it; the other platforms refuse it,
+    # tests/unit/test_overlay_pbr.py).
+    print("\nGenerating overlay PBR fixture (border-leaf):")
+    g, e = _write_data_fixture(
+        BorderLeaf,
+        "border_leaf_cisco_nxos_overlay_pbr",
+        build_overlay_pbr_bl_data(device_name="dc1-border-leaf-01", platform="cisco_nxos"),
     )
     generated += g
     errors += e

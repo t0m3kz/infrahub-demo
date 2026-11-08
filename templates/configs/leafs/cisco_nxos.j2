@@ -21,7 +21,7 @@ feature lacp
 feature vpc
 feature lldp
 {%- include 'common/cisco_nxos_feature_evpn.j2' %}
-{%- if leaf_pbr_rules %}
+{%- if leaf_pbr_rules or overlay_pbr_rules %}
 feature pbr
 {%- endif %}
 {%- if group_policy %}

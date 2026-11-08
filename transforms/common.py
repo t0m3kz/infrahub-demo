@@ -16,7 +16,7 @@ from transforms.helpers.firewall import (
     get_leaf_firewall_transits,
 )
 from transforms.helpers.firewall_contexts import _flatten_deployment_firewall_contexts
-from transforms.helpers.firewall_pbr import get_customer_pbr_rules, pbr_steered_vlans
+from transforms.helpers.firewall_pbr import get_customer_pbr_rules, get_overlay_pbr_rules, pbr_steered_vlans
 from transforms.helpers.group_policy import GPO_CONFIG_KEYS, group_policy_device_view
 from transforms.helpers.lisp import build_lisp_inputs, get_lisp_config
 from transforms.helpers.mlag import get_mlag, get_sonic_mlag_config
@@ -339,7 +339,7 @@ class BaseDeviceTransform(InfrahubTransform):
         if self.device_role not in self._CISCO_XE_FABRIC_ROLES:
             return
         vxlan = config.get("vxlan") or {}
-        unsupported = [key for key in ("leaf_pbr_rules", "mlag") if config.get(key)]
+        unsupported = [key for key in ("leaf_pbr_rules", "overlay_pbr_rules", "mlag") if config.get(key)]
         if vxlan.get("multisite"):
             unsupported.append("multisite")
         if vxlan.get("enabled") and not (vxlan.get("evpn") or {}).get("enabled"):
@@ -512,6 +512,7 @@ class BaseDeviceTransform(InfrahubTransform):
 
         if self.device_role in BORDER_ROLES:
             self._refuse_unprotected_tenant_svis(self.device_role, platform_name, acls, leaf_pbr_rules)
+        overlay_pbr_rules = self._overlay_pbr(data, platform_name)
 
         lisp = None
         if self.device_role in OFFICE_LISP_ROLES:
@@ -543,6 +544,8 @@ class BaseDeviceTransform(InfrahubTransform):
             "acls": acls,
             "vrf_routes": vrf_routes,
             "leaf_pbr_rules": leaf_pbr_rules,
+            # PBR of the traffic that enters a VRF from the overlay (a border leaf's L3 VNI SVI); empty elsewhere.
+            "overlay_pbr_rules": overlay_pbr_rules,
             # The leaf's own transit /29s: kept out of the direct-to-EVPN redistribution
             # so only the borders originate them as type-5 routes.
             "leaf_transit_prefixes": sorted({t["segment"]["gateway"]["ip_prefix"]["prefix"] for t in leaf_transits}),
@@ -586,6 +589,27 @@ class BaseDeviceTransform(InfrahubTransform):
         if self.device_role not in self._LEAF_ROLES:
             return rules, []
         return rules, get_leaf_firewall_transits(rules, firewall_contexts, device_name=data.get("name", ""))
+
+    # The platforms whose border leaf template renders the PBR of the overlay ingress (the L3 VNI SVI): NX-OS only,
+    # documented and not yet lab-verified on a switch. Any other platform refuses it (a missing PBR would leave the
+    # direction the segment's PBR does not cover unprotected).
+    _OVERLAY_PBR_PLATFORMS: ClassVar[frozenset[str]] = frozenset({"cisco_nxos"})
+
+    def _overlay_pbr(self, data: dict, platform_name: str) -> list[dict[str, Any]]:
+        """The overlay-ingress PBR rules of a border device, refused on a platform that cannot render them."""
+        if self.device_role not in BORDER_ROLES:
+            return []
+        rules = get_overlay_pbr_rules(
+            data.get("interfaces"),
+            _flatten_deployment_firewall_contexts(data.get("deployment")),
+            data.get("deployment"),
+        )
+        if rules and platform_name not in self._OVERLAY_PBR_PLATFORMS:
+            raise ValueError(
+                f"{platform_name} {self.device_role} cannot render the PBR of the overlay ingress for VLANs "
+                f"{sorted(rule['vlan_id'] for rule in rules)}; refusing unprotected config"
+            )
+        return rules
 
     @staticmethod
     def _refuse_unprotected_tenant_svis(

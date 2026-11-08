@@ -12,7 +12,7 @@ from transforms.helpers.policy import rule_selector, segment_flows
 from utils.exchange_transit import MANAGEMENT_TYPE, exchange_peer_zones
 from utils.fabric_roles import INTERNAL_FIREWALL_ROLE
 from utils.segment_addressing import is_terminated, segment_namespace, segment_prefix
-from utils.vrf_demand import SVI_ROLE, svi_vlan_id
+from utils.vrf_demand import L3VNI_ROLE, SVI_ROLE, svi_vlan_id
 
 
 def _segment_deployment_ids(segment: dict[str, Any]) -> list[str]:
@@ -306,3 +306,65 @@ def get_customer_pbr_rules(
 
     rules.sort(key=lambda r: r["vlan_id"])
     return rules
+
+
+def get_overlay_pbr_rules(
+    interfaces: list[dict[str, Any]] | None,
+    firewall_contexts: list[dict[str, Any]] | None,
+    deployment: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    """PBR of the traffic that enters a VRF from the overlay: the rules of the L3 VNI SVIs of a border leaf.
+
+    Each L3 VNI SVI (role ``l3vni``) carries the pbr policies of the footprints whose firewall context is tagged on the
+    device (generators/helpers/pbr_sync.py). The traffic that arrives decapsulated on it and is bound for a segment of a
+    footprint is redirected to that footprint's firewall context, so the context sees the direction the segment's own
+    PBR does not. The destinations are the prefixes of the footprint's routed segments in the VRF of the SVI (the VRF is
+    shared by every footprint, so the interface is never steered as a whole), the next hop the VIP of the leg of the
+    footprint's serving context in that VRF. What returns from the firewall arrives on the transit SVI, which carries no
+    policy, so it is not steered again. A footprint with no context leg or no routed segment in the VRF yields nothing.
+
+    Returns ``[{vlan_id, vrf, steers: [{footprint, acl, prefixes, fw_nexthop}]}]`` sorted by VLAN.
+    """
+    segments = [
+        sd.get("segment") or {} for sd in ((deployment or {}).get("segment_deployments") or []) if sd.get("segment")
+    ]
+    rules: list[dict[str, Any]] = []
+    for iface in interfaces or []:
+        vlan_id = svi_vlan_id(iface.get("name"))
+        vrf = ((iface.get("vrf") or {}).get("namespace") or {}).get("name")
+        if iface.get("role") != L3VNI_ROLE or vlan_id is None or not vrf:
+            continue
+        footprints = sorted(
+            {
+                str(footprint)
+                for cap in iface.get("capabilities") or []
+                if cap.get("typename") == "RoutingPolicy"
+                and cap.get("kind") == "pbr"
+                and (footprint := (cap.get("customer_deployment") or {}).get("id"))
+            }
+        )
+        serving = _serving_context_nexthops(firewall_contexts, vrf)
+        steers = []
+        for footprint in footprints:
+            prefixes = sorted(
+                {
+                    prefix
+                    for seg in segments
+                    if footprint in _segment_deployment_ids(seg)
+                    and not is_terminated(seg)
+                    and segment_namespace(seg).get("name") == vrf
+                    and (prefix := segment_prefix(seg))
+                }
+            )
+            if footprint in serving and prefixes:
+                steers.append(
+                    {
+                        "footprint": footprint,
+                        "acl": f"PBR-OVERLAY-VLAN{vlan_id}-{len(steers) + 1}",
+                        "prefixes": prefixes,
+                        "fw_nexthop": serving[footprint],
+                    }
+                )
+        if steers:
+            rules.append({"vlan_id": vlan_id, "vrf": vrf, "steers": steers})
+    return sorted(rules, key=lambda rule: rule["vlan_id"])

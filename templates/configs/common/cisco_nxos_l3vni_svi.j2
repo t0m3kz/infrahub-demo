@@ -24,10 +24,31 @@ vlan {{ mapping.svi_vlan_id }}
   name L3VNI_{{ mapping.vrf_name }}
   vn-segment {{ mapping.l3_vni }}
 !
+{%- set overlay = overlay_pbr_rules | default([]) | selectattr('vlan_id', 'equalto', mapping.svi_vlan_id) | list %}
+{%- if overlay %}
+! PBR of the traffic that enters VRF {{ mapping.vrf_name }} from the overlay: bound for a segment of a footprint, it goes to
+! that footprint's firewall context (the prefixes of its segments only; the VRF is shared by every footprint).
+! What returns from the firewall arrives on the transit SVI, which has no policy. documented-not-lab-verified: NX-OS
+! support of PBR on the L3 VNI SVI for decapsulated traffic depends on the platform and the release.
+{%- for steer in overlay[0].steers %}
+ip access-list {{ steer.acl }}
+{%- for prefix in steer.prefixes %}
+  permit ip any {{ prefix }}
+{%- endfor %}
+!
+route-map RM-OVERLAY-PBR-VLAN{{ mapping.svi_vlan_id }} permit {{ loop.index * 10 }}
+  match ip address {{ steer.acl }}
+  set ip next-hop {{ steer.fw_nexthop }}
+!
+{%- endfor %}
+{%- endif %}
 interface Vlan{{ mapping.svi_vlan_id }}
   description L3VNI transit SVI for VRF {{ mapping.vrf_name }}
   vrf member {{ mapping.vrf_name }}
   ip forward
+{%- if overlay %}
+  ip policy route-map RM-OVERLAY-PBR-VLAN{{ mapping.svi_vlan_id }}
+{%- endif %}
   mtu {{ underlay_mtu }}
   no shutdown
 !
