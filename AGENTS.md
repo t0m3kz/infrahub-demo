@@ -646,6 +646,21 @@ class MyCheck(InfrahubCheck):
   (`UngovernedTransitError`, `BaseDeviceTransform._refuse_ungoverned_transit_sessions`, on every platform). Any
   platform that renders user policies in its VRF address family renders a transit session; the golden is
   `edge_cisco_nxos_internet_bgw`.
+- **PBR (steering to the firewall)**: one vendor-neutral model, one behaviour, a renderer per platform. A `RoutingPolicy`
+  of `kind: pbr` per customer footprint in a DC (`customer_deployment`), applied on interfaces through the interface
+  `capabilities` edge; it has no terms, ACL, bypass or next hop: those are derived when the device is rendered, from the
+  footprint's `serving_firewall_context` and the segment policies (`transforms/helpers/firewall_pbr.py`). The VRF pass of a
+  device writes the attachments (`generators/helpers/pbr_sync.py`, planned by `pbr_attach.py`: an SVI of a segment whose
+  footprint in the device's DC has a context; a manual policy and a border role are never touched) and a leaf steers an
+  SVI only when it carries the policy (`pbr_steered_vlans`). Two uses, one contract: PBR of the segment on the ingress of
+  its SVI, and PBR 2 at the point where traffic enters the VRF after decapsulation, selecting the prefixes of the
+  footprint (the L3VNI SVI on NX-OS; never the underlay port, which sees only the outer header: lab
+  `.dev/lab/interdc`, `test_vxlan.sh`). Same rules on every platform: inspection, allowed bypass, symmetry (both
+  directions cross the same firewall) and no re-steering of what returns from the firewall; the attachment and the syntax
+  may differ. Each vendor needs its own confirmation of both kinds, the full render of definition and attachment, the
+  behaviour with the next hop unavailable, and a documentation or lab proof. A platform that does not meet the contract
+  makes the transform refuse the config (`_refuse_unprotected_tenant_svis`), never skip PBR or fall back to plain routing.
+  A border leaf steers no segment SVI until its templates render PBR (`DeviceVrfFacts.pbr_footprints_by_name`).
 - **Firewall roles**: a device is an `internal-firewall` (east-west and the customers' contexts) or an `external-firewall`
   (the Internet edge of one or more topologies, named by `TopologySegmentHosting.internet_edge_contexts`, see
   `checks/internet_egress.py`). `utils/fabric_roles.py` holds the roles once (`INTERNAL_FIREWALL_ROLE`,
