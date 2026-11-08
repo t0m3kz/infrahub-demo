@@ -147,7 +147,7 @@ fragment VrfDemandRowFields on ManagedSegmentVlan {
                 node {
                   id
                   name { value }
-                  parent { node { id } }
+                  parent { node { __typename id } }
                   ... on TopologyCustomerDC { serving_firewall_context { node { id } } }
                   ... on TopologyCustomerColocation { serving_firewall_contexts { edges { node { id } } } }
                 }
