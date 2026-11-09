@@ -859,6 +859,109 @@
                                                         }
                                                       }
                                                     }
+                                                  },
+                                                  {
+                                                    "node": {
+                                                      "id": "rule-c006-b-internet-to-b",
+                                                      "index": {
+                                                        "value": 20
+                                                      },
+                                                      "name": {
+                                                        "value": "internet-to-b"
+                                                      },
+                                                      "action": {
+                                                        "value": "permit"
+                                                      },
+                                                      "protocol": {
+                                                        "value": "tcp"
+                                                      },
+                                                      "port_start": {
+                                                        "value": 443
+                                                      },
+                                                      "port_end": {
+                                                        "value": null
+                                                      },
+                                                      "log": {
+                                                        "value": false
+                                                      },
+                                                      "disabled": {
+                                                        "value": false
+                                                      },
+                                                      "description": {
+                                                        "value": ""
+                                                      },
+                                                      "apply_on_switch": {
+                                                        "value": false
+                                                      },
+                                                      "source_segment": {
+                                                        "node": null
+                                                      },
+                                                      "destination_segment": {
+                                                        "node": {
+                                                          "id": "seg-10-2-0-0-24",
+                                                          "__typename": "ManagedVxlanSegment",
+                                                          "name": {
+                                                            "value": "seg-10-2-0-0-24"
+                                                          },
+                                                          "security_zone": {
+                                                            "node": {
+                                                              "id": "fixture-zone-PROD",
+                                                              "name": {
+                                                                "value": "PROD"
+                                                              },
+                                                              "vrf_type": {
+                                                                "value": "prod"
+                                                              },
+                                                              "l3_vni": {
+                                                                "value": 60000
+                                                              },
+                                                              "trust_level": {
+                                                                "value": 50
+                                                              },
+                                                              "description": {
+                                                                "value": ""
+                                                              }
+                                                            }
+                                                          },
+                                                          "gateway": {
+                                                            "node": {
+                                                              "ip_prefix": {
+                                                                "node": {
+                                                                  "prefix": {
+                                                                    "value": "10.2.0.0/24"
+                                                                  }
+                                                                }
+                                                              }
+                                                            }
+                                                          },
+                                                          "customer_deployments": {
+                                                            "edges": []
+                                                          }
+                                                        }
+                                                      },
+                                                      "source_prefixes": {
+                                                        "edges": []
+                                                      },
+                                                      "destination_prefixes": {
+                                                        "edges": []
+                                                      },
+                                                      "source_ip_addresses": {
+                                                        "edges": []
+                                                      },
+                                                      "destination_ip_addresses": {
+                                                        "edges": []
+                                                      },
+                                                      "security_profile": {
+                                                        "node": null
+                                                      },
+                                                      "source_zone": {
+                                                        "node": {
+                                                          "name": {
+                                                            "value": "INTERNET"
+                                                          }
+                                                        }
+                                                      }
+                                                    }
                                                   }
                                                 ]
                                               }
@@ -1017,6 +1120,131 @@
                                                           "id": "seg-10-1-0-0-24",
                                                           "name": {
                                                             "value": "seg-10-1-0-0-24"
+                                                          }
+                                                        }
+                                                      }
+                                                    }
+                                                  }
+                                                }
+                                              },
+                                              {
+                                                "node": {
+                                                  "id": "rule-c006-b-internet-to-b",
+                                                  "index": {
+                                                    "value": 20
+                                                  },
+                                                  "name": {
+                                                    "value": "internet-to-b"
+                                                  },
+                                                  "action": {
+                                                    "value": "permit"
+                                                  },
+                                                  "protocol": {
+                                                    "value": "tcp"
+                                                  },
+                                                  "port_start": {
+                                                    "value": 443
+                                                  },
+                                                  "port_end": {
+                                                    "value": null
+                                                  },
+                                                  "log": {
+                                                    "value": false
+                                                  },
+                                                  "disabled": {
+                                                    "value": false
+                                                  },
+                                                  "description": {
+                                                    "value": ""
+                                                  },
+                                                  "apply_on_switch": {
+                                                    "value": false
+                                                  },
+                                                  "source_segment": {
+                                                    "node": null
+                                                  },
+                                                  "destination_segment": {
+                                                    "node": {
+                                                      "id": "seg-10-2-0-0-24",
+                                                      "__typename": "ManagedVxlanSegment",
+                                                      "name": {
+                                                        "value": "seg-10-2-0-0-24"
+                                                      },
+                                                      "security_zone": {
+                                                        "node": {
+                                                          "id": "fixture-zone-PROD",
+                                                          "name": {
+                                                            "value": "PROD"
+                                                          },
+                                                          "vrf_type": {
+                                                            "value": "prod"
+                                                          },
+                                                          "l3_vni": {
+                                                            "value": 60000
+                                                          },
+                                                          "trust_level": {
+                                                            "value": 50
+                                                          },
+                                                          "description": {
+                                                            "value": ""
+                                                          }
+                                                        }
+                                                      },
+                                                      "gateway": {
+                                                        "node": {
+                                                          "ip_prefix": {
+                                                            "node": {
+                                                              "prefix": {
+                                                                "value": "10.2.0.0/24"
+                                                              }
+                                                            }
+                                                          }
+                                                        }
+                                                      },
+                                                      "customer_deployments": {
+                                                        "edges": []
+                                                      }
+                                                    }
+                                                  },
+                                                  "source_prefixes": {
+                                                    "edges": []
+                                                  },
+                                                  "destination_prefixes": {
+                                                    "edges": []
+                                                  },
+                                                  "source_ip_addresses": {
+                                                    "edges": []
+                                                  },
+                                                  "destination_ip_addresses": {
+                                                    "edges": []
+                                                  },
+                                                  "security_profile": {
+                                                    "node": null
+                                                  },
+                                                  "source_zone": {
+                                                    "node": {
+                                                      "name": {
+                                                        "value": "INTERNET"
+                                                      }
+                                                    }
+                                                  },
+                                                  "policy": {
+                                                    "node": {
+                                                      "id": "policy-c006-b",
+                                                      "name": {
+                                                        "value": "c006-b"
+                                                      },
+                                                      "enabled": {
+                                                        "value": true
+                                                      },
+                                                      "default_action": {
+                                                        "value": "deny"
+                                                      },
+                                                      "segment": {
+                                                        "node": {
+                                                          "id": "seg-10-2-0-0-24",
+                                                          "name": {
+                                                            "value": "seg-10-2-0-0-24"
                                                           }
                                                         }
                                                       }

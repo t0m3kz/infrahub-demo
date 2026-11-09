@@ -10,7 +10,7 @@ from typing import Any
 from transforms.helpers.addressing import sub_interface_parent
 from transforms.helpers.firewall import _snat_host
 from transforms.helpers.ha import leg_virtual_ip
-from transforms.helpers.policy import is_internet_destination, segment_rule_policies
+from transforms.helpers.policy import is_internet_rule, segment_rule_policies
 from utils.exchange_transit import (
     FIREWALL_CONTEXT_KIND,
     INTERNET_TYPE,
@@ -210,16 +210,16 @@ def _zone_member_segments(segments: list[dict[str, Any]]) -> list[dict[str, Any]
 def _context_policies(context: dict[str, Any]) -> list[dict[str, Any]]:
     """The policies of one context's table: its segments' rules, split by where the Internet is enforced.
 
-    An Internet edge context holds only the rules whose destination is the internet (the east-west rules and the rules
-    into a segment stay on the internal pair); a context whose DC has an Internet edge holds none of them (it has no
-    INTERNET zone).
+    An Internet edge context holds only the rules that cross the internet, to it or from it (``is_internet_rule``; the
+    east-west rules and the rules between segments stay on the internal pair); a context whose DC has an Internet edge
+    holds none of them (it has no INTERNET zone).
     """
     policies = segment_rule_policies(context.get("segments") or [])
     if not context.get("edge_hostings") and not context.get("edge_hosted"):
         return policies
     keep_internet = bool(context.get("edge_hostings"))
     split = [
-        {**policy, "rules": [rule for rule in policy["rules"] if is_internet_destination(rule) == keep_internet]}
+        {**policy, "rules": [rule for rule in policy["rules"] if is_internet_rule(rule) == keep_internet]}
         for policy in policies
     ]
     return [policy for policy in split if policy["rules"]]

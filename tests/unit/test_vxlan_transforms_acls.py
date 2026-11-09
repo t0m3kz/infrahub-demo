@@ -331,9 +331,43 @@ class TestGetAclsInternetBand:
         assert [r["name"] for r in rules] == ["default-permit-all"]
 
     def test_a_rule_to_the_internet_zone_has_no_return_leg(self) -> None:
-        """It is in no segment's inbound_rules (no destination segment): inbound from outside is DNAT, out of scope."""
+        """It is in no segment's inbound_rules (no destination segment), so it has no reply leg."""
         rules = self._rules([_internet_rule(src=self.SRC)])
         assert not [r for r in rules if r["name"].startswith("return-to-")]
+
+
+class TestGetAclsFromTheInternet:
+    """A rule from the internet into the segment, held in its own policy: only its reply leg is on the SVI."""
+
+    @staticmethod
+    def _inbound() -> dict:
+        return {
+            **_rule(index=20, port_start=443),
+            "source_zone": {"name": "INTERNET"},
+            "destination_segment": {"id": "seg-a"},
+            "policy": {"enabled": True},
+        }
+
+    def _rules(self) -> list[dict]:
+        inbound = self._inbound()
+        act = _make_acl_activation(
+            seg_id="seg-a",
+            prefix="10.1.0.0/24",
+            security_policies=[_policy(rules=[inbound])],
+            inbound_rules=[inbound],
+        )
+        return get_acls(activations=[act])[0]["rules"]
+
+    def test_it_is_not_rendered_as_traffic_the_segment_sends(self) -> None:
+        """No `permit any -> own prefix` at the rule's own index: the SVI ingress ACL sees the segment's own hosts."""
+        assert not [r for r in self._rules() if r["seq"] == 20 or r["dst"] == "10.1.0.0/24"]
+
+    def test_its_reply_leg_returns_to_any_established(self) -> None:
+        """The hosts answer from the published port to the outside client: own prefix -> any, tcp established."""
+        returns = [r for r in self._rules() if r["name"].startswith("return-to-")]
+        assert [(r["src"], r["src_port"], r["dst"], r["established"]) for r in returns] == [
+            ("10.1.0.0/24", "eq 443", "any", True)
+        ]
 
 
 class TestGetAclsDefaultAction:

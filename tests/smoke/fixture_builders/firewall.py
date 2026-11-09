@@ -123,13 +123,15 @@ def _make_segment_rule(
     src_segment: dict | None,
     dst_segment: dict | None = None,
     dst_zone: str | None = None,
+    src_zone: str | None = None,
     log: bool = False,
     description: str = "",
     security_profile: str | None = None,
 ) -> dict:
     """A SecurityPolicyRule (SecurityPolicyRuleFields) of ``policy``, the policy of ``src_segment``.
 
-    ``dst_zone`` is the rule's own ``destination_zone`` (the internet), set instead of ``dst_segment``.
+    ``dst_zone`` is the rule's own ``destination_zone`` (the internet), set instead of ``dst_segment``; ``src_zone``
+    its ``source_zone`` (the internet), set instead of ``src_segment``.
     """
     return {
         "id": f"rule-{policy}-{name}",
@@ -151,6 +153,7 @@ def _make_segment_rule(
         "destination_ip_addresses": _edges([]),
         "security_profile": _node({"name": _v(security_profile)} if security_profile else None),
         **({"destination_zone": _node({"name": _v(dst_zone)})} if dst_zone else {}),
+        **({"source_zone": _node({"name": _v(src_zone)})} if src_zone else {}),
     }
 
 

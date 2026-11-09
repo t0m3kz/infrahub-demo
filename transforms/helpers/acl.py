@@ -2,7 +2,13 @@
 
 from typing import Any
 
-from transforms.helpers.policy import is_internet_destination, rule_endpoint, rule_zone, segment_flows
+from transforms.helpers.policy import (
+    is_internet_destination,
+    is_internet_source,
+    rule_endpoint,
+    rule_zone,
+    segment_flows,
+)
 from utils.internet_space import NON_INTERNET_PREFIXES
 from utils.limits import ACL_CLOSING_SEQ, ACL_INTERNET_BAND_SEQ_START, ACL_RETURN_LEG_SEQ_START
 from utils.segment_addressing import segment_prefix
@@ -164,8 +170,10 @@ def get_acls(activations: list[dict[str, Any]] | None = None) -> list[dict[str, 
        same-VRF destination. It follows the return legs (seq 6000+) as a deny
        for each NON_INTERNET_PREFIXES entry, then the permit to any. Under a
        default permit it is dropped as redundant. A rule to the internet is in no
-       segment's ``inbound_rules``, so it has no return leg (inbound from
-       outside is DNAT, out of scope).
+       segment's ``inbound_rules``, so it has no return leg. A rule FROM the
+       internet (``source_zone`` INTERNET, ``is_internet_source``) into the
+       segment is not one of its own rules even when its own policy holds it:
+       only its reply leg renders here (to any, ``established`` for tcp).
 
     4. **Zone support**: the source/destination segments' security_zone names are passed
        through as ``src_zone`` / ``dst_zone`` fields for templates to render as remarks/comments
@@ -233,6 +241,10 @@ def get_acls(activations: list[dict[str, Any]] | None = None) -> list[dict[str, 
         # nothing, and the denies of its band would close the internal space.
         outside_permits: list[dict[str, Any]] = []
         for rule in egress["rules"]:
+            if is_internet_source(rule):
+                # Traffic INTO the segment from outside, held in its own policy: not something its hosts send. Its
+                # reply leg comes from the segment's inbound_rules below, like any rule into the segment.
+                continue
             if rule.get("action") == "permit" and is_internet_destination(rule):
                 if not default_permit:
                     outside_permits.append(rule)

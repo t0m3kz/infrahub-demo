@@ -491,8 +491,9 @@ def build_firewall_internet_edge_data(*, device_name: str, platform: str) -> dic
 
     The context has a PROD and an INTERNET leg and names the DC (``internet_edge_hostings``) whose footprints it serves:
     C005 on a shared context (seg-a, 10.1.0.0/24, a rule to the internet and one to seg-b) and C006 on a dedicated one
-    with its own public address 198.51.100.9 (seg-b, 10.2.0.0/24, a rule to the internet). The edge holds the two
-    internet rules only; the east-west rule stays on the internal pair. A pod of the DC carries no segments.
+    with its own public address 198.51.100.9 (seg-b, 10.2.0.0/24, a rule to the internet and one from it). The edge
+    holds the three internet rules only, both directions; the east-west rule stays on the internal pair. A pod of the
+    DC carries no segments.
     """
     from tests.smoke.fixture_builders.firewall import (  # noqa: PLC0415 - firewall.py imports this module's package
         _make_policy_header,
@@ -520,7 +521,17 @@ def build_firewall_internet_edge_data(*, device_name: str, platform: str) -> dic
     rules_b = [
         _make_segment_rule(
             policy="c006-b", index=10, name="b-to-internet", port_start=80, src_segment=seg_b, dst_zone="INTERNET"
-        )
+        ),
+        # Inbound from the internet, held in the destination segment's own policy: the edge renders it too.
+        _make_segment_rule(
+            policy="c006-b",
+            index=20,
+            name="internet-to-b",
+            port_start=443,
+            src_segment=None,
+            src_zone="INTERNET",
+            dst_segment=seg_b,
+        ),
     ]
     by_id = _make_rule_bearing_segments([seg_a, seg_b], [(header_a, rules_a), (header_b, rules_b)])
 

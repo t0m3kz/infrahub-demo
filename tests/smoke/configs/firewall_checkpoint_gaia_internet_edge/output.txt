@@ -37,6 +37,10 @@ add service-tcp name svc-tcp-80 port 80
 add access-rule layer "Network" position 20 name "b-to-internet" action accept source 10.2.0.0/24 destination Any service svc-tcp-80 track None
 set access-rule layer "Network" name "b-to-internet" source PROD
 set access-rule layer "Network" name "b-to-internet" destination INTERNET
+add service-tcp name svc-tcp-443 port 443
+add access-rule layer "Network" position 30 name "internet-to-b" action accept source Any destination 10.2.0.0/24 service svc-tcp-443 track None
+set access-rule layer "Network" name "internet-to-b" source INTERNET
+set access-rule layer "Network" name "internet-to-b" destination PROD
 add access-rule layer "Network" position 9990 name "implicit-deny-all" action drop source Any destination Any service Any track Log
 !
 !

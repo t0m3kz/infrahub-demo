@@ -66,6 +66,14 @@ set vsys shared-dc1-xfw-prod rulebase security rules b-to-internet application a
 set vsys shared-dc1-xfw-prod service svc-tcp-80 protocol tcp port 80
 set vsys shared-dc1-xfw-prod rulebase security rules b-to-internet service svc-tcp-80
 set vsys shared-dc1-xfw-prod rulebase security rules b-to-internet action allow
+set vsys shared-dc1-xfw-prod rulebase security rules internet-to-b from INTERNET
+set vsys shared-dc1-xfw-prod rulebase security rules internet-to-b to PROD
+set vsys shared-dc1-xfw-prod rulebase security rules internet-to-b source any
+set vsys shared-dc1-xfw-prod rulebase security rules internet-to-b destination 10.2.0.0/24
+set vsys shared-dc1-xfw-prod rulebase security rules internet-to-b application any
+set vsys shared-dc1-xfw-prod service svc-tcp-443 protocol tcp port 443
+set vsys shared-dc1-xfw-prod rulebase security rules internet-to-b service svc-tcp-443
+set vsys shared-dc1-xfw-prod rulebase security rules internet-to-b action allow
 set vsys shared-dc1-xfw-prod rulebase security rules implicit-deny-all from any
 set vsys shared-dc1-xfw-prod rulebase security rules implicit-deny-all to any
 set vsys shared-dc1-xfw-prod rulebase security rules implicit-deny-all source any

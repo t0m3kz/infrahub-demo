@@ -116,6 +116,22 @@ def is_internet_destination(rule: dict[str, Any]) -> bool:
     return zone == INTERNET_ZONE and rule_endpoint(rule, "destination") is None
 
 
+def is_internet_source(rule: dict[str, Any]) -> bool:
+    """Whether the rule's source is the internet: ``source_zone`` is INTERNET and no source segment.
+
+    A source selector (``source_prefixes`` / ``source_ip_addresses``) only narrows WHICH outside addresses: the rule
+    still enters from the internet. Such a rule sits in the policy of a segment it reaches (usually its destination
+    segment's own policy: a rule needs a policy with a segment to be placed, ``segment_rule_policies``).
+    """
+    zone = (rule.get("source_zone") or {}).get("name")
+    return zone == INTERNET_ZONE and not (rule.get("source_segment") or {}).get("id")
+
+
+def is_internet_rule(rule: dict[str, Any]) -> bool:
+    """Whether the rule crosses the internet edge, in either direction (to or from INTERNET)."""
+    return is_internet_destination(rule) or is_internet_source(rule)
+
+
 def segment_flows(segment: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """The segment's rule view: ``(egress, ingress)``.
 
