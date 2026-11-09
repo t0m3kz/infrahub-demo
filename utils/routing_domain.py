@@ -66,7 +66,9 @@ def interface_security_zone(interface: Mapping[str, Any], *, required: bool = Fa
     different VRFs. A remote deployment realizes the same zone in a different instance.
     """
     vrf = interface.get("vrf")
-    capabilities = interface.get("capabilities") or []
+    # One relationship under two response keys: queries/fragments/routing_zone.gql selects the circuits under the alias
+    # `zone_capabilities` so they never collide with a query's own `capabilities` selection.
+    capabilities = [*(interface.get("capabilities") or []), *(interface.get("zone_capabilities") or [])]
     circuits = [
         cap
         for cap in capabilities

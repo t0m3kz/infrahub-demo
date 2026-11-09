@@ -579,13 +579,17 @@ query routing_invariants {
           edges {
             node {
               __typename
-              ...CircuitRoutingVrfFields
               ... on TopologySessionCircuit {
                 name {
                   value
                 }
                 circuit_type {
                   value
+                }
+                vrf {
+                  node {
+                    ...RoutingVrfFields
+                  }
                 }
                 capabilities {
                   edges {
@@ -598,6 +602,11 @@ query routing_invariants {
                           name {
                             value
                           }
+                        }
+                      }
+                      vrf {
+                        node {
+                          ...RoutingVrfFields
                         }
                       }
                     }

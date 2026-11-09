@@ -37,21 +37,13 @@ fragment SecurityTagGroupPolicyFields on SecurityTag {
   id
   name { value }
   group_id { value }
-  components {
-    edges {
-      node {
-        fqdn { value }
-        network_segment { node { id } }
-      }
-    }
-  }
 }
 
 # Where the instances of each component of a tag sit (transforms/helpers/group_policy.py
 # component_coverage: a component group is classified by `match vlan <VLAN> interface
 # <port>` on the VTEP port its instances' hosts are cabled to). Spread next to
-# SecurityTagGroupPolicyFields (its `components` merge with this one) by the VTEP
-# configs only: the reference_fabric check does not need it.
+# SecurityTagGroupPolicyFields by the VTEP configs only, and it holds the tag's ONE `components` selection (the
+# server answers only the first selection of a field, so the two fragments cannot each select it).
 #
 # Per instance: a physical device/controller is its own host; a virtual one walks
 # hosting_device (utils/app_instances.physical_host). The host's uplink/lag NICs are
@@ -93,9 +85,13 @@ fragment HostNicFields on DcimInterface {
 }
 
 fragment SecurityTagPlacementFields on SecurityTag {
+  # The one `components` selection of a tag: the policy fields (fqdn, segment) sit here too, because a second
+  # `components` selection on the same tag (SecurityTagGroupPolicyFields) is not answered by the server.
   components {
     edges {
       node {
+        fqdn { value }
+        network_segment { node { id } }
         instances {
           edges {
             node {
@@ -172,14 +168,16 @@ fragment SegmentGroupPolicyFields on ManagedNetworkSegment {
   __typename
   name { value }
   isolation_mode { value }
-  owner { node { org_id { value } } }
+  # owner and gateway are the first selection of these fields in queries/validation/segment_security.gql: they carry
+  # what that query reads too (the server answers only the first selection of a field).
+  owner { node { __typename display_label org_id { value } } }
   security_zone { node { ...RoutingZoneFields } }
   security_tag { node { id name { value } group_id { value } } }
   gateway {
     node {
       ip_prefix {
         node {
-
+          id
           prefix { value }
           ip_namespace { node { name { value }  } }
         }

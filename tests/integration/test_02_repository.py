@@ -15,10 +15,13 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
+import yaml
+from graphql import IntrospectionQuery, build_client_schema, get_introspection_query
 from infrahub_sdk import InfrahubClient, InfrahubClientSync
 from infrahub_sdk.testing.repository import GitRepo
 
 from .conftest import PROJECT_DIRECTORY, TestInfrahubDockerWithClient
+from .query_field_collisions import query_collisions
 from .suite_constants import REPO_SYNC_MAX_ATTEMPTS, REPO_SYNC_POLL_INTERVAL, TRIGGER_ACTIVATION_DELAY
 from .wait_helpers import wait_for_condition
 
@@ -187,3 +190,22 @@ class TestRepository(TestInfrahubDockerWithClient):
         """
         logging.info("Waiting %ds for trigger automations to activate", TRIGGER_ACTIVATION_DELAY)
         await asyncio.sleep(TRIGGER_ACTIVATION_DELAY)
+
+    @pytest.mark.order(10)
+    @pytest.mark.dependency(scope="session", depends=["repository_sync"])
+    def test_05_no_query_selects_a_field_twice_on_one_object(self, client_main: InfrahubClientSync) -> None:
+        """Every registered query selects each field once per object (tests/integration/query_field_collisions.py).
+
+        The server answers only the first selection of a field; a later one comes back null, silently. Checked against
+        the live schema, which is what decides whether two inline fragments can meet on one object.
+        """
+        introspection = cast(IntrospectionQuery, client_main.execute_graphql(query=get_introspection_query()))
+        schema = build_client_schema(introspection)
+        fragments = [path.read_text() for path in sorted((PROJECT_DIRECTORY / "queries/fragments").glob("*.gql"))]
+        registered = yaml.safe_load((PROJECT_DIRECTORY / ".infrahub.yml").read_text())["queries"]
+        collisions = sorted(
+            (c.query, c.path, c.lost)
+            for query in registered
+            for c in query_collisions(schema, PROJECT_DIRECTORY / query["file_path"], fragments)
+        )
+        assert collisions == [], "\n".join(f"{q}: {p} loses {lost}" for q, p, lost in collisions)

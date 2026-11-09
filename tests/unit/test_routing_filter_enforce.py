@@ -54,8 +54,11 @@ def test_the_device_queries_carry_the_vip_root_and_the_hosting_facts(root_dir: P
     """transforms/helpers/bgp_facts.py reads the VIP root and, through the fragment, the pool and the switch."""
     text = (root_dir / f"queries/config/{query}.gql").read_text()
     assert 'DcimVirtualInterface(role__value: "multisite-vip")' in text
-    if query != "edge":
+    if query in ("spine", "super_spine"):
         assert "...EvpnRtAsOnDeploymentFields" in text
+    elif query != "edge":
+        # The fabric switches read the same EVPN facts through the combined deployment fragment.
+        assert "...SwitchDeploymentFields" in text
     fragment = (root_dir / "queries/fragments/evpn_fabric.gql").read_text()
     assert "routing_filter_enforce { value }" in fragment
     assert fragment.count("loopback_pool {") == 2

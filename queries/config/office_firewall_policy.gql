@@ -13,8 +13,6 @@ query office_firewall_policy($name: String!) {
         network_segments {
           edges {
             node {
- security_zone { node { ...RoutingZoneFields } }
-
               id
               name { value }
               customer_name { value }

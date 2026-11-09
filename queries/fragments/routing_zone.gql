@@ -11,25 +11,17 @@ fragment RoutingVrfFields on ManagedVRF {
   security_zone { node { ...RoutingZoneFields } }
 }
 
-fragment CircuitRoutingVrfFields on TopologySessionCircuit {
-  vrf { node { ...RoutingVrfFields } }
-  capabilities {
-    edges {
-      node {
-        vrf { node { ...RoutingVrfFields } }
-      }
-    }
-  }
-}
-
 fragment SegmentRoutingPrefixFields on ManagedNetworkSegment {
   security_zone { node { ...RoutingZoneFields } }
   gateway { node { ip_prefix { node { id prefix { value } } } } }
 }
 
+# The circuits are selected under the alias `zone_capabilities`: a query that also selects the interface's own
+# `capabilities` would otherwise select that field twice on one object, and the server answers only the first
+# selection of a field (the later one's sub-fields come back null). utils/routing_domain.py reads both keys.
 fragment InterfaceRoutingZoneFields on DcimInterface {
   vrf { node { ...RoutingVrfFields } }
-  capabilities {
+  zone_capabilities: capabilities {
     edges {
       node {
         __typename

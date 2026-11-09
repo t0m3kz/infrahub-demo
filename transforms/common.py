@@ -488,7 +488,7 @@ class BaseDeviceTransform(InfrahubTransform):
         # segment's owner; a SecurityPolicyRule permit is the only bypass.
         # ManagedFirewallContext is reached via a device-scoped traversal —
         # this device's own `deployment` (queries/fragments/firewall_contexts.gql's
-        # FirewallContextsOnDeploymentFields), not a global query root — no
+        # SwitchDeploymentFields), not a global query root — no
         # leaf ever owns a FirewallContext interface itself, only the
         # firewall/border-leaf do. Computed before the VLANs: a leaf's PBR next
         # hops decide which transit legs it holds locally.

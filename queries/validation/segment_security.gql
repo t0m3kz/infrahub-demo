@@ -554,13 +554,17 @@ query segment_security {
           edges {
             node {
               __typename
-              ...CircuitRoutingVrfFields
               ... on TopologySessionCircuit {
                 name {
                   value
                 }
                 circuit_type {
                   value
+                }
+                vrf {
+                  node {
+                    ...RoutingVrfFields
+                  }
                 }
                 capabilities {
                   edges {
@@ -573,6 +577,11 @@ query segment_security {
                           name {
                             value
                           }
+                        }
+                      }
+                      vrf {
+                        node {
+                          ...RoutingVrfFields
                         }
                       }
                     }

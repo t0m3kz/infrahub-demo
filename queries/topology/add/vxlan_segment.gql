@@ -9,7 +9,6 @@ query vxlan_segment_data($name: String!) {
         security_zone { node { ...RoutingZoneFields } }
         # Whether it is a routed tenant segment, and its group tag: present
         # means nothing is written (generators/helpers/security_tag.py).
-        gateway { node { ip_prefix { node { ip_namespace { node { name { value }  } } } } } }
         # terminated_on: a segment a firewall context terminates has no SVI, so no group or routing tag.
         terminated_on { node { id } }
         security_tag { node { id } }
@@ -64,8 +63,7 @@ query vxlan_segment_data($name: String!) {
           node {
             id
             address { value }
-            ip_prefix { node {
- id prefix { value } ip_namespace { node { id } } } }
+            ip_prefix { node { id prefix { value } ip_namespace { node { id name { value } } } } }
           }
         }
       }

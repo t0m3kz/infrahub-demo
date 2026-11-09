@@ -79,12 +79,31 @@ fragment FirewallContextsOnDeviceHostingFields on TopologyDeviceHosting {
   }
 }
 
-fragment FirewallContextsOnDeploymentFields on TopologyDeployment {
+# The deployment of a fabric switch: its EVPN facts and the firewall contexts of its hosting facility, both read on the
+# deployment and, for a pod, on its DC. ONE `parent` hop per kind: a second `... on TopologyPod { parent }` selection
+# of the same field (two fragments each with their own) would be answered only for the first, the server drops the rest.
+fragment SwitchDeploymentFields on TopologyDeployment {
+  ...EvpnRtAsOnSegmentHostingFields
   ...FirewallContextsOnDeviceHostingFields
   ... on TopologyPod {
     parent {
       node {
+        ...EvpnRtAsOnSegmentHostingFields
         ...FirewallContextsOnDeviceHostingFields
+      }
+    }
+  }
+  ... on TopologyColocationZone {
+    parent {
+      node {
+        ...EvpnRtAsOnSegmentHostingFields
+      }
+    }
+  }
+  ... on TopologyVirtualColocation {
+    parent {
+      node {
+        ...EvpnRtAsOnSegmentHostingFields
       }
     }
   }

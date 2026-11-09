@@ -275,7 +275,7 @@ def _flatten_deployment_firewall_contexts(deployment: dict[str, Any] | None) -> 
 
     `deployment` is this device's own `deployment` field (already cleaned),
     shaped by queries/fragments/firewall_contexts.gql's
-    FirewallContextsOnDeploymentFields fragment: deployment.devices
+    SwitchDeploymentFields fragment: deployment.devices
     (pre-filtered to role="internal-firewall") -> each device's shared capabilities
     of typename ManagedFirewallContext (the contexts it is a member of).
     Pod-tier devices (leaf/tor/access-leaf) have their deployment set to the

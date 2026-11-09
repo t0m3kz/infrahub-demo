@@ -89,7 +89,9 @@ def test_the_query_selects_memberships_hosting_and_the_vrf_root() -> None:
     interface = device["interfaces"]["edges"]["node"]
     assert "security_zone" not in interface
     assert set(interface["vrf"]["node"]["security_zone"]["node"]) == {"id", "name", "vrf_type", "l3_vni"}
-    circuit = interface["capabilities"]["edges"]["node"]
+    # The circuits are read under the alias `zone_capabilities` (queries/fragments/routing_zone.gql): the interface's own
+    # `capabilities` selection must stay the only one of that field.
+    circuit = interface["zone_capabilities"]["edges"]["node"]
     assert set(circuit["vrf"]["node"]["security_zone"]["node"]) == {"id", "name", "vrf_type", "l3_vni"}
     registry_address = interface["ip_address"]["node"]
     assert set(registry_address) == {"address", "ip_namespace"}

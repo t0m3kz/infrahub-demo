@@ -46,8 +46,7 @@ query leaf_config($device: String!) {
         ... on DcimPhysicalDevice {
           deployment {
             node {
-              ...EvpnRtAsOnDeploymentFields
-              ...FirewallContextsOnDeploymentFields
+              ...SwitchDeploymentFields
             }
           }
         }

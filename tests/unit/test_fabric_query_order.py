@@ -30,7 +30,15 @@ def test_evpn_fabric_fragment_is_spread_first(query: str) -> None:
     route-targets from its own ASN, while the border-leafs used the fabric's.
     """
     spreads = _deployment_spreads(query)
-    assert spreads[0] == "EvpnRtAsOnDeploymentFields", spreads
+    assert spreads[0] == "SwitchDeploymentFields", spreads
+    # The combined fragment reads the EVPN fields first, on the deployment and on its one `parent` hop.
+    fragment = (QUERIES / "fragments" / "firewall_contexts.gql").read_text()
+    body = fragment.split("fragment SwitchDeploymentFields", 1)[1].split("\nfragment ", 1)[0]
+    assert re.findall(r"\.\.\.(\w+)", body)[:2] == [
+        "EvpnRtAsOnSegmentHostingFields",
+        "FirewallContextsOnDeviceHostingFields",
+    ]
+    assert body.count("parent {") == 3, "one parent hop per kind (pod, zone, virtual colocation)"
 
 
 def test_the_pod_tier_query_reads_the_dc_fields_from_a_single_segment_hosting_fragment() -> None:
@@ -52,11 +60,11 @@ def test_the_pod_tier_query_reads_the_dc_fields_from_a_single_segment_hosting_fr
 def test_office_switch_queries_read_the_lisp_inputs_from_the_office(query: str) -> None:
     """The office is the LISP site: its name, key, map-servers and WAN edge come from one office-typed fragment.
 
-    Spread right after the EVPN fragment, before any DeviceHosting one, so a sibling-fragment quirk of the
-    direct hop could not null the key the switch refuses to render without.
+    Spread right after the deployment fragment (EVPN facts first), so a sibling-fragment quirk of the direct hop
+    could not null the key the switch refuses to render without.
     """
     spreads = _deployment_spreads(query)
-    assert spreads[:2] == ["EvpnRtAsOnDeploymentFields", "LispSiteOnOfficeFields"], spreads
+    assert spreads[:2] == ["SwitchDeploymentFields", "LispSiteOnOfficeFields"], spreads
     # No fleet roots: an office has no data center, reference fabric or group policy.
     text = (QUERIES / "config" / f"{query}.gql").read_text()
     assert "TopologyDataCenter" not in text and "DcimGroupPolicyProfile" not in text

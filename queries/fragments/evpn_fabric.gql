@@ -37,7 +37,7 @@ fragment EvpnRtAsOnSegmentHostingFields on TopologySegmentHosting {
 # access-leaf) whose deployment IS the pod, and a colocation edge whose deployment IS its
 # zone or virtual colocation, need one `parent` hop to reach the DC or the metro (the
 # metro is the Multi-Site site, so it keeps evpn_rt_as). Same two-shape traversal as
-# FirewallContextsOnDeploymentFields in queries/fragments/firewall_contexts.gql.
+# SwitchDeploymentFields in queries/fragments/firewall_contexts.gql, which the fabric switches spread instead.
 fragment EvpnRtAsOnDeploymentFields on TopologyDeployment {
   ...EvpnRtAsOnSegmentHostingFields
   ... on TopologyPod {

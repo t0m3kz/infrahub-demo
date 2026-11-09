@@ -46,9 +46,8 @@ query access_switch_config($device: String!) {
         ... on DcimPhysicalDevice {
           deployment {
             node {
-              ...EvpnRtAsOnDeploymentFields
+              ...SwitchDeploymentFields
               ...LispSiteOnOfficeFields
-              ...FirewallContextsOnDeploymentFields
             }
           }
         }
